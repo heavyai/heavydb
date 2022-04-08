@@ -377,7 +377,6 @@ set(TEST_PROGRAMS
   ThreadingTestSTD
   CalciteOptimizeTest
   JoinHashTableTest
-  CachedHashTableTest
   StringFunctionsTest
   StringDictionaryTest
   CommandLineTest

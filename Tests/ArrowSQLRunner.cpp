@@ -78,7 +78,7 @@ class ArrowSQLRunnerImpl {
     storage_->appendJsonData(values, table_name);
   }
 
-  std::unique_ptr<RelAlgExecutor> makeRelAlgExecutor(const std::string& sql) {
+  std::string getSqlQueryRelAlg(const std::string& sql) {
     std::string schema_json;
     std::string query_ra;
 
@@ -90,6 +90,12 @@ class ArrowSQLRunnerImpl {
           calcite_->process("admin", "test_db", pg_shim(sql), schema_json, "", {}, true)
               .plan_result;
     });
+
+    return query_ra;
+  }
+
+  std::unique_ptr<RelAlgExecutor> makeRelAlgExecutor(const std::string& sql) {
+    std::string query_ra = getSqlQueryRelAlg(sql);
 
     auto dag =
         std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, storage_, nullptr);
@@ -320,6 +326,10 @@ void insertCsvValues(const std::string& table_name, const std::string& values) {
 
 void insertJsonValues(const std::string& table_name, const std::string& values) {
   ArrowSQLRunnerImpl::get()->insertJsonValues(table_name, values);
+}
+
+std::string getSqlQueryRelAlg(const std::string& query_str) {
+  return ArrowSQLRunnerImpl::get()->getSqlQueryRelAlg(query_str);
 }
 
 ExecutionResult runSqlQuery(const std::string& sql,

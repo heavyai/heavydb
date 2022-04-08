@@ -14,15 +14,20 @@
  * limitations under the License.
  */
 
-#include "Catalog/Catalog.h"
-#include "Logger/Logger.h"
-#include "QueryEngine/Execute.h"
-#include "QueryEngine/JoinHashTable/PerfectHashTable.h"
-#include "QueryEngine/MurmurHash1Inl.h"
-#include "QueryEngine/ResultSet.h"
-#include "QueryRunner/QueryRunner.h"
-#include "Shared/SystemParameters.h"
+#include "ArrowSQLRunner.h"
 #include "TestHelpers.h"
+
+#include "Logger/Logger.h"
+#include "QueryEngine/DataRecycler/HashtableRecycler.h"
+#include "QueryEngine/Execute.h"
+#include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/PerfectHashTable.h"
+#include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
+#include "QueryEngine/MurmurHash1Inl.h"
+#include "QueryEngine/QueryPlanDagExtractor.h"
+#include "QueryEngine/RelAlgExecutor.h"
+#include "QueryEngine/ResultSet.h"
+#include "Shared/SystemParameters.h"
 
 #include <gtest/gtest.h>
 #include <boost/filesystem/operations.hpp>
@@ -35,21 +40,15 @@
 
 namespace po = boost::program_options;
 
-#ifndef BASE_PATH
-#define BASE_PATH "./tmp"
-#endif
-
-using namespace Catalog_Namespace;
 using namespace TestHelpers;
-
-using QR = QueryRunner::QueryRunner;
+using namespace TestHelpers::ArrowSQLRunner;
 
 const int kNoMatch = -1;
 const int kNotPresent = -2;
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
-  return device_type == ExecutorDeviceType::GPU && !(QR::get()->gpusPresent());
+  return device_type == ExecutorDeviceType::GPU && !(gpusPresent());
 #else
   return device_type == ExecutorDeviceType::GPU;
 #endif
@@ -66,13 +65,91 @@ extern bool g_enable_overlaps_hashjoin;
 
 namespace {
 
-inline void run_ddl_statement(const std::string& create_table_stmt) {
-  QR::get()->runDDLStatement(create_table_stmt);
+size_t getNumberOfCachedPerfectHashTables() {
+  auto hash_table_cache = PerfectJoinHashTable::getHashTableCache();
+  CHECK(hash_table_cache);
+  return hash_table_cache->getCurrentNumCachedItems(
+      CacheItemType::PERFECT_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+};
+
+size_t getNumberOfCachedBaselineJoinHashTables() {
+  auto hash_table_cache = BaselineJoinHashTable::getHashTableCache();
+  CHECK(hash_table_cache);
+  return hash_table_cache->getCurrentNumCachedItems(
+      CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
 }
 
-std::shared_ptr<ResultSet> run_query(const std::string& query_str,
-                                     const ExecutorDeviceType device_type) {
-  return QR::get()->runSQL(query_str, device_type, true, true);
+std::tuple<QueryPlanHash,
+           std::shared_ptr<HashTable>,
+           std::optional<HashtableCacheMetaInfo>>
+getCachedHashtableWithoutCacheKey(std::set<size_t>& visited,
+                                  CacheItemType hash_table_type,
+                                  DeviceIdentifier device_identifier) {
+  HashtableRecycler* hash_table_cache{nullptr};
+  switch (hash_table_type) {
+    case CacheItemType::PERFECT_HT: {
+      hash_table_cache = PerfectJoinHashTable::getHashTableCache();
+      break;
+    }
+    case CacheItemType::BASELINE_HT: {
+      hash_table_cache = BaselineJoinHashTable::getHashTableCache();
+      break;
+    }
+    default: {
+      UNREACHABLE();
+      break;
+    }
+  }
+  CHECK(hash_table_cache);
+  return hash_table_cache->getCachedHashtableWithoutCacheKey(
+      visited, hash_table_type, device_identifier);
+}
+
+struct QueryPlanDagInfo {
+  std::shared_ptr<const RelAlgNode> root_node;
+  std::vector<unsigned> left_deep_trees_id;
+  std::unordered_map<unsigned, JoinQualsPerNestingLevel> left_deep_trees_info;
+  std::shared_ptr<RelAlgTranslator> rel_alg_translator;
+};
+
+QueryPlanDagInfo getQueryInfoForDataRecyclerTest(const std::string& query_str) {
+  const auto query_ra = getSqlQueryRelAlg(query_str);
+  auto executor = Executor::getExecutor(
+      Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  executor->setSchemaProvider(getStorage());
+  executor->setDatabaseId(TEST_DB_ID);
+  auto dag =
+      std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, getStorage(), nullptr);
+  auto ra_executor = RelAlgExecutor(executor.get(),
+                                    TEST_DB_ID,
+                                    getStorage(),
+                                    getDataMgr()->getDataProvider(),
+                                    std::move(dag));
+  // note that we assume the test for data recycler that needs to have join_info
+  // does not contain any ORDER BY clause; this is necessary to create work_unit
+  // without actually performing the query
+  auto root_node_shared_ptr = ra_executor.getRootRelAlgNodeShPtr();
+  auto join_info = ra_executor.getJoinInfo(root_node_shared_ptr.get());
+  auto relAlgTranslator = ra_executor.getRelAlgTranslator(root_node_shared_ptr.get());
+  return {root_node_shared_ptr, join_info.first, join_info.second, relAlgTranslator};
+}
+
+ExtractedPlanDag extractQueryPlanDag(const std::string& query_str) {
+  auto query_dag_info = getQueryInfoForDataRecyclerTest(query_str);
+  auto data_mgr = getDataMgr();
+  auto executor =
+      Executor::getExecutor(
+          Executor::UNITARY_EXECUTOR_ID, data_mgr, data_mgr->getBufferProvider())
+          .get();
+  auto extracted_dag_info =
+      QueryPlanDagExtractor::extractQueryPlanDag(query_dag_info.root_node.get(),
+                                                 executor->getSchemaProvider(),
+                                                 std::nullopt,
+                                                 query_dag_info.left_deep_trees_info,
+                                                 *executor->getTemporaryTables(),
+                                                 executor,
+                                                 *query_dag_info.rel_alg_translator);
+  return extracted_dag_info;
 }
 
 struct HashtableInfo {
@@ -315,73 +392,46 @@ bool check_one_to_one_baseline_hashtable(std::vector<std::vector<int32_t>>& inse
 }
 
 void import_tables_cache_invalidation_for_CPU_one_to_one_join(bool reverse) {
-  const std::string drop_table_t1{"DROP TABLE IF EXISTS cache_invalid_t1;"};
-  run_ddl_statement(drop_table_t1);
-
-  const std::string drop_table_t2{"DROP TABLE IF EXISTS cache_invalid_t2;"};
-  run_ddl_statement(drop_table_t2);
-
-  const std::string create_t1{
-      "CREATE TABLE cache_invalid_t1 (id1 int, id2 int, des text encoding dict(32)) with "
-      "(fragment_size=2000000);"};
-  run_ddl_statement(create_t1);
-
-  const std::string create_t2{
-      "CREATE TABLE cache_invalid_t2 (id1 int, id2 int, des text "
-      "encoding dict(32)) with (fragment_size=2000000);"};
-  run_ddl_statement(create_t2);
-
-  std::vector<std::string> row_insert_sql;
+  dropTable("cache_invalid_t1");
+  createTable(
+      "cache_invalid_t1",
+      {{"id1", SQLTypeInfo(kINT)}, {"id2", SQLTypeInfo(kINT)}, {"des", dictType()}},
+      {2000000});
   if (reverse) {
-    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (1, 1, 'row-0');");
-    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 'row-1');");
+    insertCsvValues("cache_invalid_t1", "1,1,row-0\n0,0,row-1");
   } else {
-    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 'row-0');");
-    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (1, 1, 'row-1');");
+    insertCsvValues("cache_invalid_t1", "0,0,row-0\n1,1,row-1");
   }
-  row_insert_sql.emplace_back("INSERT INTO cache_invalid_t2 VALUES (1, 1, 'row-0');");
-  row_insert_sql.emplace_back("INSERT INTO cache_invalid_t2 VALUES (1, 1, 'row-1');");
-  row_insert_sql.emplace_back("INSERT INTO cache_invalid_t2 VALUES (1, 1, 'row-2');");
-  for (std::string insert_str : row_insert_sql) {
-    run_query(insert_str, ExecutorDeviceType::CPU);
-  }
+
+  dropTable("cache_invalid_t2");
+  createTable(
+      "cache_invalid_t2",
+      {{"id1", SQLTypeInfo(kINT)}, {"id2", SQLTypeInfo(kINT)}, {"des", dictType()}},
+      {2000000});
+  insertCsvValues("cache_invalid_t2", "1,1,row-0\n1,1,row-1\n1,1,row-2");
 }
 
 void import_tables_cache_invalidation_for_CPU_one_to_many_join(bool reverse) {
-  const std::string drop_table_t1{"DROP TABLE IF EXISTS cache_invalid_t1;"};
-  run_ddl_statement(drop_table_t1);
-
-  const std::string drop_table_t2{"DROP TABLE IF EXISTS cache_invalid_t2;"};
-  run_ddl_statement(drop_table_t2);
-
-  const std::string create_t1{
-      "CREATE TABLE cache_invalid_t1 (k1 int, k2 int, v1 int, v2 int);"};
-  run_ddl_statement(create_t1);
-
-  const std::string create_t2{"CREATE TABLE cache_invalid_t2 (k1 int, k2 int);"};
-  run_ddl_statement(create_t2);
-
-  std::vector<std::string> row_insert_sql;
+  dropTable("cache_invalid_t1");
+  createTable("cache_invalid_t1",
+              {{"k1", SQLTypeInfo(kINT)},
+               {"k2", SQLTypeInfo(kINT)},
+               {"v1", SQLTypeInfo(kINT)},
+               {"v2", SQLTypeInfo(kINT)}});
   if (reverse) {
-    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (1, 1, 1, 2);");
-    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 1, 2);");
-    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 2, 1);");
+    insertCsvValues("cache_invalid_t1", "1,1,1,2\n0,0,1,2\n0,0,2,1");
   } else {
-    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 1, 2);");
-    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 2, 1);");
-    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (1, 1, 1, 2);");
+    insertCsvValues("cache_invalid_t1", "0,0,1,2\n0,0,2,1\n1,1,1,2");
   }
-  for (size_t i = 0; i < 6; ++i) {
-    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t2 VALUES (1, 1);");
-  }
-  for (std::string insert_str : row_insert_sql) {
-    run_query(insert_str, ExecutorDeviceType::CPU);
-  }
+
+  dropTable("cache_invalid_t2");
+  createTable("cache_invalid_t2", {{"k1", SQLTypeInfo(kINT)}, {"k2", SQLTypeInfo(kINT)}});
+  insertCsvValues("cache_invalid_t2", "1,1\n1,1\n1,1\n1,1\n1,1\n1,1");
 }
 
 std::shared_ptr<HashTable> getCachedHashTable(std::set<QueryPlanHash>& already_visited,
                                               CacheItemType cache_item_type) {
-  auto cached_ht = QR::get()->getCachedHashtableWithoutCacheKey(
+  auto cached_ht = getCachedHashtableWithoutCacheKey(
       already_visited, cache_item_type, 0 /* CPU_DEVICE_IDENTIFIER*/);
   auto cache_key = std::get<0>(cached_ht);
   already_visited.insert(cache_key);
@@ -398,11 +448,11 @@ TEST(Select, DropAndReCreate_OneToOne_HashTable_WithReversedTupleInsertion) {
   const auto q1 =
       "SELECT t1.id1, t2.id1 FROM cache_invalid_t1 t1 join cache_invalid_t2 t2 on t1.id1 "
       "= t2.id1 and t1.id2 = t2.id2;";
-  run_query(q1, ExecutorDeviceType::CPU);
+  run_multiple_agg(q1, ExecutorDeviceType::CPU);
   std::vector<std::vector<int32_t>> baseline_hashtable_first_run;
   baseline_hashtable_first_run.push_back(std::vector<int32_t>{0, 0});
   baseline_hashtable_first_run.push_back(std::vector<int32_t>{1, 1});
-  CHECK_EQ(QR::get()->getNumberOfCachedBaselineJoinHashTables(), (unsigned long)1);
+  CHECK_EQ(getNumberOfCachedBaselineJoinHashTables(), (unsigned long)1);
   std::shared_ptr<BaselineHashTable> cached_q1_ht =
       std::dynamic_pointer_cast<BaselineHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT));
@@ -413,11 +463,11 @@ TEST(Select, DropAndReCreate_OneToOne_HashTable_WithReversedTupleInsertion) {
   const auto q2 =
       "SELECT t1.id1, t2.id1 FROM cache_invalid_t1 t1 join cache_invalid_t2 t2 on t1.id1 "
       "= t2.id1;";
-  run_query(q2, ExecutorDeviceType::CPU);
+  run_multiple_agg(q2, ExecutorDeviceType::CPU);
   std::shared_ptr<PerfectHashTable> cached_q2_ht =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+  CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)1);
   std::vector<int32_t> perfect_hashtable_first_run{0, 1};
   CHECK(check_one_to_one_join_hashtable(perfect_hashtable_first_run,
                                         (int32_t*)cached_q2_ht->getCpuBuffer()));
@@ -425,11 +475,11 @@ TEST(Select, DropAndReCreate_OneToOne_HashTable_WithReversedTupleInsertion) {
   const auto q3 =
       "SELECT t1.id1, t2.id1 FROM cache_invalid_t1 t1 join cache_invalid_t2 t2 on t1.id2 "
       "= t2.id2";
-  run_query(q3, ExecutorDeviceType::CPU);
+  run_multiple_agg(q3, ExecutorDeviceType::CPU);
   std::shared_ptr<PerfectHashTable> cached_q3_ht =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)2);
+  CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)2);
   CHECK(check_one_to_one_join_hashtable(perfect_hashtable_first_run,
                                         (int32_t*)cached_q3_ht->getCpuBuffer()));
 
@@ -437,43 +487,43 @@ TEST(Select, DropAndReCreate_OneToOne_HashTable_WithReversedTupleInsertion) {
   import_tables_cache_invalidation_for_CPU_one_to_one_join(true);
 
   // make sure we invalidate all cached hashtables after tables are dropped
-  CHECK_EQ(QR::get()->getNumberOfCachedBaselineJoinHashTables(), (unsigned long)0);
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)0);
+  CHECK_EQ(getNumberOfCachedBaselineJoinHashTables(), (unsigned long)0);
+  CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)0);
   visited_hashtable_key.clear();
 
   // (a) baseline hash join, the second run] tuple insertion order: (1, 1) -> (0, 0)
-  run_query(q1, ExecutorDeviceType::CPU);
+  run_multiple_agg(q1, ExecutorDeviceType::CPU);
   std::shared_ptr<BaselineHashTable> cached_q1_ht_v2 =
       std::dynamic_pointer_cast<BaselineHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT));
   std::vector<std::vector<int32_t>> baseline_hashtable_second_run;
   baseline_hashtable_second_run.push_back(std::vector<int32_t>{1, 1});
   baseline_hashtable_second_run.push_back(std::vector<int32_t>{0, 0});
-  CHECK_EQ(QR::get()->getNumberOfCachedBaselineJoinHashTables(), (unsigned long)1);
+  CHECK_EQ(getNumberOfCachedBaselineJoinHashTables(), (unsigned long)1);
   CHECK(check_one_to_one_baseline_hashtable(baseline_hashtable_second_run,
                                             cached_q1_ht_v2->getCpuBuffer(),
                                             cached_q1_ht_v2->getEntryCount()));
 
   // (a) perfect hash join, the second run] tuple insertion order: 1 -> 0
-  run_query(q2, ExecutorDeviceType::CPU);
+  run_multiple_agg(q2, ExecutorDeviceType::CPU);
   std::shared_ptr<PerfectHashTable> cached_q2_ht_v2 =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+  CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)1);
   std::vector<int32_t> perfect_hashtable_second_run{1, 0};
   CHECK(check_one_to_one_join_hashtable(perfect_hashtable_second_run,
                                         (int32_t*)cached_q2_ht_v2->getCpuBuffer()));
 
-  run_query(q3, ExecutorDeviceType::CPU);
+  run_multiple_agg(q3, ExecutorDeviceType::CPU);
   std::shared_ptr<PerfectHashTable> cached_q3_ht_v2 =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)2);
+  CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)2);
   CHECK(check_one_to_one_join_hashtable(perfect_hashtable_second_run,
                                         (int32_t*)cached_q3_ht_v2->getCpuBuffer()));
 
-  run_ddl_statement("DROP TABLE cache_invalid_t1;");
-  run_ddl_statement("DROP TABLE cache_invalid_t2;");
+  dropTable("cache_invalid_t1");
+  dropTable("cache_invalid_t2");
 }
 
 TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
@@ -486,16 +536,16 @@ TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
   const auto q1 =
       "select * from cache_invalid_t1 t0, cache_invalid_t2 t1 where t0.k1 = t1.k1 and "
       "t0.k2 = t1.k2;";
-  run_query(q1, ExecutorDeviceType::CPU);
+  run_multiple_agg(q1, ExecutorDeviceType::CPU);
   std::shared_ptr<BaselineHashTable> cached_q1_ht =
       std::dynamic_pointer_cast<BaselineHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT));
-  CHECK_EQ(QR::get()->getNumberOfCachedBaselineJoinHashTables(), (unsigned long)1);
+  CHECK_EQ(getNumberOfCachedBaselineJoinHashTables(), (unsigned long)1);
   std::vector<std::vector<int32_t>> baseline_hashtable_first_run;
   baseline_hashtable_first_run.push_back(std::vector<int32_t>{0, 0});
   baseline_hashtable_first_run.push_back(std::vector<int32_t>{0, 0});
   baseline_hashtable_first_run.push_back(std::vector<int32_t>{1, 1});
-  auto q1_dag_info = QR::get()->extractQueryPlanDag(q1);
+  auto q1_dag_info = extractQueryPlanDag(q1);
   CHECK(check_one_to_many_baseline_hashtable(baseline_hashtable_first_run,
                                              cached_q1_ht->getCpuBuffer(),
                                              cached_q1_ht->getEntryCount()));
@@ -503,24 +553,24 @@ TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
   // (b) perfect hash join, the first run] tuple insertion order: 0 -> 0 -> 1
   const auto q2 =
       "select * from cache_invalid_t1 t0, cache_invalid_t2 t1 where t0.k1 = t1.k1;";
-  run_query(q2, ExecutorDeviceType::CPU);
+  run_multiple_agg(q2, ExecutorDeviceType::CPU);
   std::shared_ptr<PerfectHashTable> cached_q2_ht =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  auto q2_dag_info = QR::get()->extractQueryPlanDag(q2);
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+  auto q2_dag_info = extractQueryPlanDag(q2);
+  CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)1);
   std::vector<int32_t> perfect_hashtable_first_run{0, 0, 1};
   CHECK(check_one_to_many_join_hashtable(perfect_hashtable_first_run,
                                          (int32_t*)cached_q2_ht->getCpuBuffer()));
 
   const auto q3 =
       "select * from cache_invalid_t1 t0, cache_invalid_t2 t1 where t0.k2 = t1.k2;";
-  run_query(q3, ExecutorDeviceType::CPU);
+  run_multiple_agg(q3, ExecutorDeviceType::CPU);
   std::shared_ptr<PerfectHashTable> cached_q3_ht =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  auto q3_dag_info = QR::get()->extractQueryPlanDag(q3);
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)2);
+  auto q3_dag_info = extractQueryPlanDag(q3);
+  CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)2);
   CHECK(check_one_to_many_join_hashtable(perfect_hashtable_first_run,
                                          (int32_t*)cached_q3_ht->getCpuBuffer()));
 
@@ -529,16 +579,16 @@ TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
   visited_hashtable_key.clear();
 
   // make sure we invalidate all cached hashtables after tables are dropped
-  CHECK_EQ(QR::get()->getNumberOfCachedBaselineJoinHashTables(), (unsigned long)0);
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)0);
+  CHECK_EQ(getNumberOfCachedBaselineJoinHashTables(), (unsigned long)0);
+  CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)0);
 
   // (a) baseline hash join, the second run] tuple insertion order: (1, 1) -> (0, 0) ->
   // (0, 0)
-  run_query(q1, ExecutorDeviceType::CPU);
+  run_multiple_agg(q1, ExecutorDeviceType::CPU);
   std::shared_ptr<BaselineHashTable> cached_q1_ht_v2 =
       std::dynamic_pointer_cast<BaselineHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT));
-  CHECK_EQ(QR::get()->getNumberOfCachedBaselineJoinHashTables(), (unsigned long)1);
+  CHECK_EQ(getNumberOfCachedBaselineJoinHashTables(), (unsigned long)1);
   std::vector<std::vector<int32_t>> baseline_hashtable_second_run;
   baseline_hashtable_second_run.push_back(std::vector<int32_t>{1, 1});
   baseline_hashtable_second_run.push_back(std::vector<int32_t>{0, 0});
@@ -548,72 +598,60 @@ TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
                                              cached_q1_ht_v2->getEntryCount()));
 
   // (b) perfect hash join, the second run] tuple insertion order: 1 -> 0 -> 0
-  run_query(q2, ExecutorDeviceType::CPU);
+  run_multiple_agg(q2, ExecutorDeviceType::CPU);
   std::shared_ptr<PerfectHashTable> cached_q2_ht_v2 =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+  CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)1);
   std::vector<int32_t> perfect_hashtable_second_run{1, 0, 0};
   CHECK(check_one_to_many_join_hashtable(perfect_hashtable_second_run,
                                          (int32_t*)cached_q2_ht_v2->getCpuBuffer()));
 
-  run_query(q3, ExecutorDeviceType::CPU);
+  run_multiple_agg(q3, ExecutorDeviceType::CPU);
   std::shared_ptr<PerfectHashTable> cached_q3_ht_v2 =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)2);
+  CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)2);
   CHECK(check_one_to_many_join_hashtable(perfect_hashtable_second_run,
                                          (int32_t*)cached_q3_ht_v2->getCpuBuffer()));
 
-  run_ddl_statement("DROP TABLE cache_invalid_t1;");
-  run_ddl_statement("DROP TABLE cache_invalid_t2;");
+  dropTable("cache_invalid_t1");
+  dropTable("cache_invalid_t2");
 }
 
 TEST(Truncate, JoinCacheInvalidationTest) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_t1;");
-    run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_t2;");
+    dropTable("cache_invalid_t1");
+    createTable("cache_invalid_t1", {{"k1", dictType()}});
+    insertCsvValues("cache_invalid_t1", "1\n2\n3\n4\n5");
 
-    run_ddl_statement("create table cache_invalid_t1 (k1 text encoding dict(32));");
-    run_ddl_statement("create table cache_invalid_t2 (k2 text encoding dict(32));");
-    std::vector<std::string> t1_col_val{"1", "2", "3", "4", "5"};
-    std::vector<std::string> t2_col_val{"0", "0", "0", "0", "0", "1", "2", "3", "4", "5"};
-    for (auto& t1_val : t1_col_val) {
-      run_query("insert into cache_invalid_t1 values ('" + t1_val + "');",
-                ExecutorDeviceType::CPU);
-    }
-    for (auto& t2_val : t2_col_val) {
-      run_query("insert into cache_invalid_t2 values ('" + t2_val + "');",
-                ExecutorDeviceType::CPU);
-    }
+    dropTable("cache_invalid_t2");
+    createTable("cache_invalid_t2", {{"k2", dictType()}});
+    insertCsvValues("cache_invalid_t2", "0\n0\n0\n0\n0\n1\n2\n3\n4\n5");
 
-    auto res_before_truncate = QR::get()->runSQL(
+    auto res_before_truncate = run_multiple_agg(
         "select * from cache_invalid_t1, cache_invalid_t2 where k1 = k2;", dt);
     ASSERT_EQ(static_cast<uint32_t>(5), res_before_truncate->rowCount());
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+    CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)1);
 
-    run_ddl_statement("truncate table cache_invalid_t2;");
-    auto res_after_truncate = QR::get()->runSQL(
+    dropTable("cache_invalid_t2");
+    createTable("cache_invalid_t2", {{"k2", dictType()}});
+    auto res_after_truncate = run_multiple_agg(
         "select * from cache_invalid_t1, cache_invalid_t2 where k1 = k2;", dt);
     ASSERT_EQ(static_cast<uint32_t>(0), res_after_truncate->rowCount());
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)0);
+    CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)0);
 
-    std::vector<std::string> t2_col_val_v2{
-        "1", "2", "3", "4", "5", "0", "0", "0", "0", "0"};
-    for (auto& t2_val : t2_col_val) {
-      run_query("insert into cache_invalid_t2 values ('" + t2_val + "');",
-                ExecutorDeviceType::CPU);
-    }
+    insertCsvValues("cache_invalid_t2", "1\n2\n3\n4\n5\n0\n0\n0\n0\n0");
 
-    auto res_before_truncate_v2 = QR::get()->runSQL(
+    auto res_before_truncate_v2 = run_multiple_agg(
         "select * from cache_invalid_t1, cache_invalid_t2 where k1 = k2;", dt);
     ASSERT_EQ(static_cast<uint32_t>(5), res_before_truncate_v2->rowCount());
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+    CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)1);
 
-    run_ddl_statement("DROP TABLE cache_invalid_t1;");
-    run_ddl_statement("DROP TABLE cache_invalid_t2;");
+    dropTable("cache_invalid_t1");
+    dropTable("cache_invalid_t2");
   }
 }
 
@@ -623,40 +661,32 @@ TEST(Delete, JoinCacheInvalidationTest_DropTable) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_t1;");
-    run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_t2;");
-    run_ddl_statement("create table cache_invalid_t1 (k1 text encoding dict(32));");
-    run_ddl_statement("create table cache_invalid_t2 (k2 text encoding dict(32));");
+    dropTable("cache_invalid_t1");
+    createTable("cache_invalid_t1", {{"k1", dictType()}});
+    insertCsvValues("cache_invalid_t1", "1\n2\n3\n4\n5");
 
-    std::vector<std::string> t1_col_val{"1", "2", "3", "4", "5"};
-    std::vector<std::string> t2_col_val{"0", "0", "0", "0", "0", "1", "2", "3", "4", "5"};
-    for (auto& t1_val : t1_col_val) {
-      run_query("insert into cache_invalid_t1 values ('" + t1_val + "');",
-                ExecutorDeviceType::CPU);
-    }
-    for (auto& t2_val : t2_col_val) {
-      run_query("insert into cache_invalid_t2 values ('" + t2_val + "');",
-                ExecutorDeviceType::CPU);
-    }
+    dropTable("cache_invalid_t2");
+    createTable("cache_invalid_t2", {{"k2", dictType()}});
+    insertCsvValues("cache_invalid_t2", "0\n0\n0\n0\n0\n1\n2\n3\n4\n5");
 
-    auto res = QR::get()->runSQL(
+    auto res = run_multiple_agg(
         "select * from cache_invalid_t1, cache_invalid_t2 where k1 = k2;", dt);
     ASSERT_EQ(static_cast<uint32_t>(5), res->rowCount());
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+    CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)1);
 
     // add and drop dummy table
-    run_ddl_statement("create table cache_invalid_t3 (dummy text encoding dict(32));");
-    run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_t3;");
+    createTable("cache_invalid_t3", {{"dummy", dictType()}});
+    dropTable("cache_invalid_t3");
     // we should have no cached hashtable after dropping a table
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)0);
+    CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)0);
 
-    auto res_v2 = QR::get()->runSQL(
+    auto res_v2 = run_multiple_agg(
         "select * from cache_invalid_t1, cache_invalid_t2 where k1 = k2;", dt);
     ASSERT_EQ(static_cast<uint32_t>(5), res_v2->rowCount());
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+    CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)1);
 
-    run_ddl_statement("DROP TABLE cache_invalid_t1;");
-    run_ddl_statement("DROP TABLE cache_invalid_t2;");
+    dropTable("cache_invalid_t1");
+    dropTable("cache_invalid_t2");
   }
 }
 
@@ -664,7 +694,7 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
-  QR::init(BASE_PATH);
+  init();
 
   int err{0};
 
@@ -677,6 +707,6 @@ int main(int argc, char** argv) {
     LOG(ERROR) << e.what();
   }
 
-  QR::reset();
+  reset();
   return err;
 }

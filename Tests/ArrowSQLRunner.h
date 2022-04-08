@@ -55,6 +55,8 @@ void insertCsvValues(const std::string& table_name, const std::string& values);
 
 void insertJsonValues(const std::string& table_name, const std::string& values);
 
+std::string getSqlQueryRelAlg(const std::string& query_str);
+
 ExecutionResult runSqlQuery(const std::string& sql,
                             const CompilationOptions& co,
                             const ExecutionOptions& eo);
