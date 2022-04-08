@@ -804,11 +804,6 @@ endif()
 set(initdb_source_files initdb.cpp)
 add_executable(initdb ${initdb_source_files})
 
-set(omnisci_server_source_files MapDServer.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
-
-add_executable(omnisci_server ${omnisci_server_source_files})
-set_target_properties(omnisci_server PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")
-
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/omnisci.thrift
     OUTPUT
@@ -865,9 +860,6 @@ add_custom_target(rerun_cmake ALL
   COMMAND cmake .
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   )
-add_dependencies(omnisci_server rerun_cmake)
-
-target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG} ${VT_LIBS})
 
 target_link_libraries(initdb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
     ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
@@ -1040,7 +1032,7 @@ add_custom_target(maven_populate_cache
 
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${ADDITIONAL_MAKE_CLEAN_FILES}")
 
-install(TARGETS initdb omnisci_server DESTINATION bin COMPONENT "exe")
+install(TARGETS initdb DESTINATION bin COMPONENT "exe")
 install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION "." COMPONENT "doc")
 if(ENABLE_CUDA)
   install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.fatbin DESTINATION QueryEngine COMPONENT "exe")
