@@ -52,7 +52,6 @@ add_executable(ThreadingTest Shared/ThreadingTest.cpp)
 add_executable(ThreadingTestSTD Shared/ThreadingTestStd.cpp)
 add_executable(JoinHashTableTest JoinHashTableTest.cpp)
 add_executable(CachedHashTableTest CachedHashTableTest.cpp)
-add_executable(RuntimeInterruptTest RuntimeInterruptTest.cpp)
 add_executable(ColumnarResultsTest ColumnarResultsTest.cpp ResultSetTestUtils.cpp)
 add_executable(SQLHintTest SQLHintTest.cpp)
 if(NOT MSVC)
@@ -132,7 +131,6 @@ target_link_libraries(ThreadingTest gtest Logger Shared ${LLVM_LINKER_FLAGS} ${T
 target_link_libraries(ThreadingTestSTD gtest Logger Shared ${LLVM_LINKER_FLAGS})
 target_link_libraries(JoinHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CachedHashTableTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(RuntimeInterruptTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UtilTest OSDependent)
 target_link_libraries(EncoderTest gtest ${Arrow_LIBRARIES} Catalog ImportExport Parser DataMgr Logger)
 #Requires thrift_handler for DBHandler test fixture
@@ -192,7 +190,6 @@ add_test(DateTimeUtilsTest DateTimeUtilsTest ${TEST_ARGS})
 add_test(ThreadingTest ThreadingTest ${TEST_ARGS})
 add_test(ThreadingTestSTD ThreadingTestSTD ${TEST_ARGS})
 add_test(JoinHashTableTest JoinHashTableTest ${TEST_ARGS})
-add_tesT(RuntimeInterruptTest RuntimeInterruptTest ${TEST_ARGS})
 add_test(EncoderTest EncoderTest ${TEST_ARGS})
 add_test(SQLHintTest SQLHintTest ${TEST_ARGS})
 add_test(DataRecyclerTest DataRecyclerTest ${TEST_ARGS})
@@ -309,7 +306,7 @@ add_custom_target(all_tests
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                 ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS ${TEST_PROGRAMS} UtilTest StringDictionaryTest StringTransformTest RuntimeInterruptTest
+    DEPENDS ${TEST_PROGRAMS} UtilTest StringDictionaryTest StringTransformTest
     USES_TERMINAL)
 
 add_custom_target(topk_tests
