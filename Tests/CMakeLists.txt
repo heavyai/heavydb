@@ -78,7 +78,7 @@ endif()
 
 # Tests + Microbenchmarks
 
-set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt TestHelpers ArrowStorage ${MAPD_LIBRARIES} ${Arrow_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+set(EXECUTE_TEST_LIBS gtest mapd_thrift fmt::fmt TestHelpers ArrowStorage ${MAPD_LIBRARIES} ${Arrow_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 set(THRIFT_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
 
 # Replace Licensing library with TestLicensing library

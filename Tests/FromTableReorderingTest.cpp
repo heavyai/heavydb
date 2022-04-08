@@ -22,7 +22,6 @@
 #include "../QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "../QueryEngine/Execute.h"
 #include "../QueryEngine/FromTableReordering.h"
-#include "../QueryRunner/QueryRunner.h"
 #include "../Shared/Compressor.h"
 #include "../Shared/scope.h"
 #include "../SqliteConnector/SqliteConnector.h"

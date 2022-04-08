@@ -5629,13 +5629,4 @@ std::unique_ptr<Parser::DDLStmt> create_ddl_from_calcite(const std::string& quer
   return std::unique_ptr<Parser::DDLStmt>(stmt);
 }
 
-void execute_ddl_from_calcite(
-    const std::string& query_json,
-    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr) {
-  std::unique_ptr<Parser::DDLStmt> stmt = create_ddl_from_calcite(query_json);
-  if (stmt != nullptr) {
-    (*stmt).execute(*session_ptr);
-  }
-}
-
 }  // namespace Parser

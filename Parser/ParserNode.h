@@ -2172,10 +2172,6 @@ struct ShouldInvalidateSessionsByUser<RenameUserStmt> : public std::true_type {}
  */
 std::unique_ptr<Parser::DDLStmt> create_ddl_from_calcite(const std::string& query_json);
 
-void execute_ddl_from_calcite(
-    const std::string& query_json,
-    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
-
 }  // namespace Parser
 
 #endif  // PARSERNODE_H_

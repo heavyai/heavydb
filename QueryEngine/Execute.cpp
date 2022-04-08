@@ -4390,21 +4390,6 @@ bool Executor::checkIsQuerySessionEnrolled(
   return !query_session.empty() && queries_session_map_.count(query_session);
 }
 
-void Executor::enableRuntimeQueryInterrupt(
-    const double runtime_query_check_freq,
-    const unsigned pending_query_check_freq) const {
-  // The only one scenario that we intentionally call this function is
-  // to allow runtime query interrupt in QueryRunner for test cases.
-  // Because test machine's default setting does not allow runtime query interrupt,
-  // so we have to turn it on within test code if necessary.
-  g_enable_runtime_query_interrupt = true;
-  g_pending_query_interrupt_freq = pending_query_check_freq;
-  g_running_query_interrupt_freq = runtime_query_check_freq;
-  if (g_running_query_interrupt_freq) {
-    g_running_query_interrupt_freq = 0.5;
-  }
-}
-
 void Executor::addToCardinalityCache(const std::string& cache_key,
                                      const size_t cache_value) {
   if (g_use_estimator_result_cache) {
