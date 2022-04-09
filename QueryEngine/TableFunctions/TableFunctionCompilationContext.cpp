@@ -286,6 +286,24 @@ llvm::Value* alloc_column_list(std::string col_list_name,
   return col_list_ptr;
 }
 
+static bool columnTypeRequiresCasting(const SQLTypeInfo& ti) {
+  /*
+  Returns whether a column requires casting before table function execution based on its
+  underlying SQL type
+  */
+
+  if (!ti.is_column()) {
+    return false;
+  }
+
+  // TIMESTAMP columns should always have nanosecond precision
+  if (ti.get_subtype() == kTIMESTAMP && ti.get_precision() != 9) {
+    return true;
+  }
+
+  return false;
+}
+
 llvm::Value* cast_value(llvm::Value* value,
                         SQLTypeInfo& orig_ti,
                         SQLTypeInfo& dest_ti,
@@ -548,6 +566,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
   // passed by reference, see rbc issues 200 and 289.
   auto pass_column_by_value = passColumnsByValue(exe_unit);
   std::vector<llvm::Value*> func_args;
+  std::vector<std::pair<llvm::Value*, const SQLTypeInfo>> columns_to_cast;
   size_t func_arg_index = 0;
   if (exe_unit.table_func.usesManager()) {
     func_args.push_back(mgr_ptr);
@@ -616,6 +635,11 @@ void TableFunctionCompilationContext::generateEntryPoint(
                                ? cgen_state->ir_builder_.CreateLoad(
                                      col->getType()->getPointerElementType(), col)
                                : col_ptr));
+
+      if (columnTypeRequiresCasting(ti) &&
+          exe_unit.table_func.mayRequireCastingInputTypes()) {
+        columns_to_cast.push_back(std::make_pair(col_ptr, ti));
+      }
       CHECK_EQ(col_index, -1);
     } else if (ti.is_column_list()) {
       if (col_index == -1) {
@@ -709,7 +733,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
   }
 
   if (exe_unit.table_func.mayRequireCastingInputTypes() && !emit_only_preflight_fn) {
-    generateCastsForInputTypes(exe_unit, func_args);
+    generateCastsForInputTypes(exe_unit, columns_to_cast, mgr_ptr);
   }
 
   generateTableFunctionCall(
@@ -724,7 +748,8 @@ void TableFunctionCompilationContext::generateEntryPoint(
 
 void TableFunctionCompilationContext::generateCastsForInputTypes(
     const TableFunctionExecutionUnit& exe_unit,
-    const std::vector<llvm::Value*>& func_args) {
+    const std::vector<std::pair<llvm::Value*, const SQLTypeInfo>>& columns_to_cast,
+    llvm::Value* mgr_ptr) {
   auto* cgen_state = executor_->getCgenStatePtr();
   llvm::LLVMContext& ctx = cgen_state->context_;
   llvm::IRBuilder<>* ir_builder = &cgen_state->ir_builder_;
@@ -733,22 +758,11 @@ void TableFunctionCompilationContext::generateCastsForInputTypes(
   cgen_state->current_func_ =
       entry_point_func_;  // update cgen_state current func for CodeGenerator
 
-  size_t func_arg_index = 0;
-  if (exe_unit.table_func.usesManager()) {
-    ++func_arg_index;
-  }
-  for (size_t i = 0; i < exe_unit.input_exprs.size(); ++i, ++func_arg_index) {
-    const auto& ti = exe_unit.input_exprs[i]->get_type_info();
+  for (unsigned i = 0; i < columns_to_cast.size(); ++i) {
+    auto [col_ptr, ti] = columns_to_cast[i];
 
-    // skip over column list args
-    if (ti.is_column_list()) {
-      i += (ti.get_dimension() - 1);
-      continue;
-    }
-
-    // TIMESTAMP columns should always have nanosecond precision
     if (ti.is_column() && ti.get_subtype() == kTIMESTAMP && ti.get_precision() != 9) {
-      llvm::Value* col_ptr = func_args[func_arg_index];
+      // TIMESTAMP columns should always have nanosecond precision
       SQLTypeInfo orig_ti = SQLTypeInfo(
           ti.get_subtype(), ti.get_precision(), ti.get_dimension(), ti.get_notnull());
       SQLTypeInfo dest_ti =
@@ -757,7 +771,7 @@ void TableFunctionCompilationContext::generateCastsForInputTypes(
                   entry_point_func_,
                   orig_ti,
                   dest_ti,
-                  std::to_string(func_arg_index + 1),
+                  std::to_string(i + 1),
                   *ir_builder,
                   ctx,
                   codeGenerator);
@@ -799,7 +813,6 @@ void TableFunctionCompilationContext::generateCastsForInputTypes(
         "Underflow or overflow during casting of input types!", "cast_err_str");
     llvm::Value* error_call;
     if (exe_unit.table_func.usesManager()) {
-      llvm::Value* mgr_ptr = func_args[0];
       error_call = cgen_state->emitExternalCall("TableFunctionManager_error_message",
                                                 ir_builder->getInt32Ty(),
                                                 {mgr_ptr, err_msg});

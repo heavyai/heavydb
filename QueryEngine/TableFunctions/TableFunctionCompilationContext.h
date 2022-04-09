@@ -47,8 +47,10 @@ class TableFunctionCompilationContext {
                                  llvm::BasicBlock* bb_exit,
                                  llvm::Value* output_row_count_ptr,
                                  bool emit_only_preflight_fn);
-  void generateCastsForInputTypes(const TableFunctionExecutionUnit& exe_unit,
-                                  const std::vector<llvm::Value*>& func_args);
+  void generateCastsForInputTypes(
+      const TableFunctionExecutionUnit& exe_unit,
+      const std::vector<std::pair<llvm::Value*, const SQLTypeInfo>>& columns_to_cast,
+      llvm::Value* mgr_ptr);
   void generateGpuKernel();
   bool passColumnsByValue(const TableFunctionExecutionUnit& exe_unit);
 
