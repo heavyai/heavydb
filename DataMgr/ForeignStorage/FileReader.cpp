@@ -70,7 +70,7 @@ size_t get_data_size(size_t file_size, size_t header_size) {
 }  // namespace
 
 SingleFileReader::SingleFileReader(const std::string& file_path,
-                                   const import_export::CopyParams& copy_params)
+                                   const CopyParams& copy_params)
     : FileReader(file_path, copy_params) {}
 
 FirstLineByFilePath SingleFileReader::getFirstLineForEachFile() const {
@@ -82,7 +82,7 @@ bool SingleFileReader::isEndOfLastFile() {
 }
 
 SingleTextFileReader::SingleTextFileReader(const std::string& file_path,
-                                           const import_export::CopyParams& copy_params)
+                                           const CopyParams& copy_params)
     : SingleFileReader(file_path, copy_params)
     , scan_finished_(false)
     , header_offset_(0)
@@ -106,7 +106,7 @@ SingleTextFileReader::SingleTextFileReader(const std::string& file_path,
 }
 
 SingleTextFileReader::SingleTextFileReader(const std::string& file_path,
-                                           const import_export::CopyParams& copy_params,
+                                           const CopyParams& copy_params,
                                            const rapidjson::Value& value)
     : SingleFileReader(file_path, copy_params)
     , scan_finished_(true)
@@ -162,7 +162,7 @@ void SingleTextFileReader::checkForMoreRows(size_t file_offset,
 }
 
 void SingleTextFileReader::skipHeader() {
-  if (copy_params_.has_header != import_export::ImportHeaderRow::NO_HEADER) {
+  if (copy_params_.has_header != ImportHeaderRow::NO_HEADER) {
     header_offset_ = getFirstLine().length() + 1;
   }
 }
@@ -237,7 +237,7 @@ void ArchiveWrapper::fetchBlock() {
 }
 
 CompressedFileReader::CompressedFileReader(const std::string& file_path,
-                                           const import_export::CopyParams& copy_params)
+                                           const CopyParams& copy_params)
     : SingleFileReader(file_path, copy_params)
     , archive_(file_path)
     , initial_scan_(true)
@@ -249,7 +249,7 @@ CompressedFileReader::CompressedFileReader(const std::string& file_path,
 }
 
 CompressedFileReader::CompressedFileReader(const std::string& file_path,
-                                           const import_export::CopyParams& copy_params,
+                                           const CopyParams& copy_params,
                                            const rapidjson::Value& value)
     : CompressedFileReader(file_path, copy_params) {
   scan_finished_ = true;
@@ -357,7 +357,7 @@ void CompressedFileReader::nextEntry() {
  * Skip file header
  */
 void CompressedFileReader::skipHeader() {
-  if (copy_params_.has_header != import_export::ImportHeaderRow::NO_HEADER) {
+  if (copy_params_.has_header != ImportHeaderRow::NO_HEADER) {
     std::optional<std::string> str = std::nullopt;
     consumeFirstLine(str);
   }
@@ -517,14 +517,14 @@ void CompressedFileReader::serialize(
 };
 
 MultiFileReader::MultiFileReader(const std::string& file_path,
-                                 const import_export::CopyParams& copy_params)
+                                 const CopyParams& copy_params)
     : FileReader(file_path, copy_params)
     , current_index_(0)
     , current_offset_(0)
     , is_end_of_last_file_(false) {}
 
 MultiFileReader::MultiFileReader(const std::string& file_path,
-                                 const import_export::CopyParams& copy_params,
+                                 const CopyParams& copy_params,
                                  const rapidjson::Value& value)
     : FileReader(file_path, copy_params)
     , current_index_(0)
@@ -589,7 +589,7 @@ bool MultiFileReader::isEndOfLastFile() {
 
 LocalMultiFileReader::LocalMultiFileReader(
     const std::string& file_path,
-    const import_export::CopyParams& copy_params,
+    const CopyParams& copy_params,
     const std::optional<std::string>& regex_path_filter,
     const std::optional<std::string>& file_sort_order_by,
     const std::optional<std::string>& file_sort_regex)
@@ -610,7 +610,7 @@ bool is_compressed_file(const std::string& location) {
 }  // namespace
 
 LocalMultiFileReader::LocalMultiFileReader(const std::string& file_path,
-                                           const import_export::CopyParams& copy_params,
+                                           const CopyParams& copy_params,
                                            const rapidjson::Value& value)
     : MultiFileReader(file_path, copy_params, value) {
   // Constructs file from files_metadata

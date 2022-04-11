@@ -5,4 +5,4 @@ set(arrow_storage_source_files
 
 add_library(ArrowStorage ${arrow_storage_source_files})
 
-target_link_libraries(ArrowStorage ImportExport $<$<BOOL:${ENABLE_FOLLY}>:${Folly_LIBRARIES}> Shared SchemaMgr ${Boost_THREAD_LIBRARY} ${TBB_LIBS} Utils ${CMAKE_DL_LIBS})
+target_link_libraries(ArrowStorage $<$<BOOL:${ENABLE_FOLLY}>:${Folly_LIBRARIES}> Shared SchemaMgr ${Parquet_LIBRARIES} ${Arrow_LIBRARIES} ${Boost_THREAD_LIBRARY} ${TBB_LIBS} Utils ${CMAKE_DL_LIBS})

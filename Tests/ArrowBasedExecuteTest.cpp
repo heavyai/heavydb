@@ -18,7 +18,6 @@
 #include "SQLiteComparator.h"
 #include "TestHelpers.h"
 
-#include "ImportExport/Importer.h"
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
@@ -32,6 +31,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <regex>
 
 using namespace std;
 using namespace TestHelpers;
@@ -65,14 +65,6 @@ extern bool g_enable_interop;
 extern bool g_enable_union;
 
 extern bool g_is_test_env;
-
-namespace import_export {
-
-ArrayDatum StringToArray(const std::string& s,
-                         const SQLTypeInfo& ti,
-                         const CopyParams& copy_params);
-
-}  // namespace import_export
 
 namespace {
 

@@ -22,7 +22,7 @@
 #include "rapidjson/document.h"
 
 #include "Archive/PosixFileArchive.h"
-#include "ImportExport/CopyParams.h"
+#include "Logger/Logger.h"
 
 namespace foreign_storage {
 
@@ -31,13 +31,20 @@ struct UserMapping;
 
 using FirstLineByFilePath = std::map<std::string, std::string>;
 
+enum class ImportHeaderRow { AUTODETECT, NO_HEADER, HAS_HEADER };
+
+struct CopyParams {
+  ImportHeaderRow has_header;
+  char line_delim;
+};
+
 // File reader
 // Supports an initial full scan with calls to read()
 // When the entire object has been read isScanFinished() returns true
 // Previously read data can then be re-read with readRegion()
 class FileReader {
  public:
-  FileReader(const std::string& file_path, const import_export::CopyParams& copy_params)
+  FileReader(const std::string& file_path, const CopyParams& copy_params)
       : copy_params_(copy_params), file_path_(file_path){};
   virtual ~FileReader() = default;
 
@@ -114,14 +121,13 @@ class FileReader {
   virtual bool isEndOfLastFile() = 0;
 
  protected:
-  import_export::CopyParams copy_params_;
+  CopyParams copy_params_;
   std::string file_path_;
 };
 
 class SingleFileReader : public FileReader {
  public:
-  SingleFileReader(const std::string& file_path,
-                   const import_export::CopyParams& copy_params);
+  SingleFileReader(const std::string& file_path, const CopyParams& copy_params);
 
   ~SingleFileReader() override = default;
 
@@ -139,10 +145,9 @@ class SingleFileReader : public FileReader {
 // Single uncompressed file, that supports FSEEK for faster random access
 class SingleTextFileReader : public SingleFileReader {
  public:
+  SingleTextFileReader(const std::string& file_path, const CopyParams& copy_params);
   SingleTextFileReader(const std::string& file_path,
-                       const import_export::CopyParams& copy_params);
-  SingleTextFileReader(const std::string& file_path,
-                       const import_export::CopyParams& copy_params,
+                       const CopyParams& copy_params,
                        const rapidjson::Value& value);
   ~SingleTextFileReader() override { fclose(file_); }
 
@@ -253,10 +258,9 @@ class ArchiveWrapper {
 // Single archive, does not support random access
 class CompressedFileReader : public SingleFileReader {
  public:
+  CompressedFileReader(const std::string& file_path, const CopyParams& copy_params);
   CompressedFileReader(const std::string& file_path,
-                       const import_export::CopyParams& copy_params);
-  CompressedFileReader(const std::string& file_path,
-                       const import_export::CopyParams& copy_params,
+                       const CopyParams& copy_params,
                        const rapidjson::Value& value);
   size_t read(void* buffer, size_t max_size) override;
 
@@ -329,10 +333,9 @@ class CompressedFileReader : public SingleFileReader {
 // Combines several archives into single object
 class MultiFileReader : public FileReader {
  public:
+  MultiFileReader(const std::string& file_path, const CopyParams& copy_params);
   MultiFileReader(const std::string& file_path,
-                  const import_export::CopyParams& copy_params);
-  MultiFileReader(const std::string& file_path,
-                  const import_export::CopyParams& copy_params,
+                  const CopyParams& copy_params,
                   const rapidjson::Value& value);
 
   size_t getRemainingSize() override;
@@ -370,13 +373,13 @@ class MultiFileReader : public FileReader {
 class LocalMultiFileReader : public MultiFileReader {
  public:
   LocalMultiFileReader(const std::string& file_path,
-                       const import_export::CopyParams& copy_params,
+                       const CopyParams& copy_params,
                        const std::optional<std::string>& regex_path_filter,
                        const std::optional<std::string>& file_sort_order_by,
                        const std::optional<std::string>& file_sort_regex);
 
   LocalMultiFileReader(const std::string& file_path,
-                       const import_export::CopyParams& copy_params,
+                       const CopyParams& copy_params,
                        const rapidjson::Value& value);
 
   void checkForMoreRows(size_t file_offset,

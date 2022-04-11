@@ -18,7 +18,6 @@
 #define TARGET_VALUE_CONVERTERS_IMPL_H_
 
 #include "Fragmenter/TargetValueConverters.h"
-#include "ImportExport/RenderGroupAnalyzer.h"
 #include "Shared/checked_alloc.h"
 #include "StringDictionary/StringDictionary.h"
 
