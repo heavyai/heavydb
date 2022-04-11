@@ -28,21 +28,6 @@ namespace TestHelpers {
 
 namespace {
 
-// Moved from TimeGM::parse_fractional_seconds().
-int parse_fractional_seconds(unsigned sfrac, const int ntotal, const SQLTypeInfo& ti) {
-  int dimen = ti.get_dimension();
-  int nfrac = log10(sfrac) + 1;
-  if (ntotal - nfrac > dimen) {
-    return 0;
-  }
-  if (ntotal >= 0 && ntotal < dimen) {
-    sfrac *= pow(10, dimen - ntotal);
-  } else if (ntotal > dimen) {
-    sfrac /= pow(10, ntotal - dimen);
-  }
-  return sfrac;
-}
-
 void checkTypeConsistency(const int ref_col_type, const SQLTypeInfo& omnisci_ti) {
   if (ref_col_type == SQLITE_NULL) {
     // TODO(alex): re-enable the check that omnisci_ti is nullable,

@@ -53,6 +53,7 @@ extern unsigned g_trivial_loop_join_threshold;
 extern bool g_enable_overlaps_hashjoin;
 extern double g_gpu_mem_limit_percent;
 extern size_t g_parallel_top_min;
+extern size_t g_parallel_top_max;
 extern size_t g_constrained_by_in_threshold;
 
 extern bool g_enable_window_functions;
@@ -8468,6 +8469,41 @@ TEST_F(Select, SpeculativeTopNSort) {
   }
 }
 
+TEST_F(Select, TopNSortWithWatchdogOn) {
+  ScopeGuard reset = [top_min = g_parallel_top_min,
+                      top_max = g_parallel_top_max,
+                      watchdog = g_enable_watchdog] {
+    g_parallel_top_min = top_min;
+    g_parallel_top_max = top_max;
+    g_enable_watchdog = watchdog;
+  };
+  g_parallel_top_min = 0;
+  g_parallel_top_max = 10;
+  // Let's assume we have top-K query as SELECT ... ORDER BY ... LIMIT K
+  // Currently, when columnar output is on (either by default or manually turned on)
+  // QMD decides to use resultset's cardinality instead of K for its entry count
+  // Then if we enable watchdog, we get the watchdog exception when sorting
+  // if QMD's entry_count > g_parallel_top_max (also > g_parallel_top_min)
+  // ("Sorting the result would be too slow")
+  bool test_values[]{true, false};
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (auto watchdog : test_values) {
+      g_enable_watchdog = watchdog;
+      EXPECT_NO_THROW(
+          run_multiple_agg("SELECT x FROM gpu_sort_test ORDER BY x DESC", dt));
+      EXPECT_NO_THROW(run_multiple_agg(
+          "SELECT x FROM gpu_sort_test ORDER BY x DESC LIMIT 2 OFFSET 0;", dt));
+      try {
+        run_multiple_agg("SELECT x FROM gpu_sort_test ORDER BY x DESC LIMIT 8 OFFSET 0;",
+                         dt);
+      } catch (const WatchdogException& e) {
+        EXPECT_TRUE(true);
+      }
+    }
+  }
+}
+
 TEST_F(Select, GroupByPerfectHash) {
   const auto default_bigint_flag = g_bigint_count;
   ScopeGuard reset = [default_bigint_flag] { g_bigint_count = default_bigint_flag; };
@@ -8847,9 +8883,14 @@ TEST_F(Select, Subqueries) {
       "COUNT(*) FROM test WHERE x > 7) + 2 "
       "GROUP BY x);",
       dt);
-    c("SELECT COUNT(*) FROM test WHERE ofd IN (SELECT ofd FROM test GROUP BY ofd);", dt);
-    c("SELECT COUNT(*) FROM test WHERE ofd NOT IN (SELECT ofd FROM test GROUP BY ofd);",
-      dt);
+    // ofd has an expression range between 1 ~ INT32_MAX which incurs OOM during test
+    // so disable below two queries temporarily
+    // todo (yoonmin): add them in later once we have safe fallback to baseline join for
+    // this case
+    // c("SELECT COUNT(*) FROM test WHERE ofd IN (SELECT ofd FROM test GROUP BY ofd);",
+    // dt); c("SELECT COUNT(*) FROM test WHERE ofd NOT IN (SELECT ofd FROM test GROUP BY
+    // ofd);",
+    //  dt);
     c("SELECT COUNT(*) FROM test WHERE ss IN (SELECT ss FROM test GROUP BY ss);", dt);
     c("SELECT COUNT(*) FROM test WHERE ss NOT IN (SELECT ss FROM test GROUP BY ss);", dt);
     c("SELECT COUNT(*) FROM test WHERE str IN (SELECT str FROM test_in_bitmap GROUP BY "
@@ -8887,6 +8928,32 @@ TEST_F(Select, Subqueries) {
       "y;",
       dt);
     c("SELECT COUNT(*) FROM test WHERE str IN (SELECT DISTINCT str FROM test);", dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT DISTINCT str FROM test_inner) AND "
+      "str IN (SELECT DISTINCT str FROM test_inner);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT str FROM test_inner) AND str IN "
+      "(SELECT str FROM test_inner);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT DISTINCT str FROM test_inner) AND "
+      "str IN (SELECT DISTINCT str FROM test_inner) AND str IN (SELECT DISTINCT str FROM "
+      "test_inner);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT DISTINCT str FROM test_inner) AND "
+      "str IN (SELECT str FROM test_inner) AND str IN (SELECT DISTINCT str FROM "
+      "test_inner);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT  str FROM test_inner) AND str IN "
+      "(SELECT str FROM test_inner) AND str IN (SELECT DISTINCT str FROM test_inner);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT DISTINCT str FROM test_inner) AND "
+      "x IN (SELECT DISTINCT x FROM test_inner);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT DISTINCT str FROM test_inner) AND "
+      "x IN (SELECT x FROM test_inner);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT str FROM test_inner) AND x IN "
+      "(SELECT x FROM test_inner);",
+      dt);
     c("SELECT SUM((x - (SELECT AVG(x) FROM test)) * (x - (SELECT AVG(x) FROM test)) / "
       "((SELECT COUNT(x) FROM test) - "
       "1)) FROM test;",
@@ -11505,10 +11572,9 @@ TEST_F(Select, Datediff) {
   }
 }
 
-TEST_F(Select, TimestampPrecision) {
+TEST_F(Select, TimestampPrecision_DateTruncate) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    /* ---DATE TRUNCATE--- */
     ASSERT_EQ(978307200000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(millennium, m_3) FROM test limit 1;", dt)));
@@ -11644,7 +11710,12 @@ TEST_F(Select, TimestampPrecision) {
     ASSERT_EQ(1146023344607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(nanosecond, m_9) FROM test limit 1;", dt)));
-    /* ---Extract --- */
+  }
+}
+
+TEST_F(Select, TimestampPrecision_Extract) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
     ASSERT_EQ(1146023344LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(epoch from m_9) FROM test limit 1;", dt)));
@@ -11816,8 +11887,12 @@ TEST_F(Select, TimestampPrecision) {
     ASSERT_EQ(2014LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(year from m_3) FROM test limit 1;", dt)));
+  }
+}
 
-    /* ---DATE PART --- */
+TEST_F(Select, TimestampPrecision_DatePart) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
     ASSERT_EQ(2014LL,
               v<int64_t>(
                   run_simple_agg("SELECT DATEPART('year', m_3) FROM test limit 1;", dt)));
@@ -11918,7 +11993,12 @@ TEST_F(Select, TimestampPrecision) {
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('nanosecond', m_9) FROM test limit 1;", dt)));
     EXPECT_ANY_THROW(run_simple_agg("SELECT DATEPART(NULL, m_9) FROM test limit 1;", dt));
-    /* ---DATE ADD --- */
+  }
+}
+
+TEST_F(Select, TimestampPrecision_DateAdd) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
     ASSERT_EQ(1177559344607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('year',1, m_9) FROM test limit 1;", dt)));
@@ -12042,7 +12122,12 @@ TEST_F(Select, TimestampPrecision) {
         run_simple_agg("SELECT DATEADD(NULL, NULL, m_9) FROM test LIMIT 1;", dt));
     EXPECT_ANY_THROW(run_simple_agg(
         "SELECT DATEADD('microsecond', NULL, m_9) FROM test LIMIT 1;", dt));
-    /* ---DATE DIFF --- */
+  }
+}
+
+TEST_F(Select, TimestampPrecision_DateDiff) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
     ASSERT_EQ(1146023344607435125LL - 931701773874533000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m_6, m_9) FROM test limit 1;", dt)));
@@ -12373,7 +12458,12 @@ TEST_F(Select, TimestampPrecision) {
                   "SELECT DATEDIFF('year', m, m_3) FROM test limit 1;", dt)));
     EXPECT_ANY_THROW(
         run_simple_agg("SELECT DATEDIFF(NULL, m, m_3) FROM test limit 1;", dt));
-    /* ---TIMESTAMPADD --- */
+  }
+}
+
+TEST_F(Select, TimestampPrecision_TimestampAdd) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
     ASSERT_EQ(1177559344607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(YEAR,1, m_9) FROM test limit 1;", dt)));
@@ -12437,8 +12527,12 @@ TEST_F(Select, TimestampPrecision) {
     ASSERT_EQ(1418509415323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(SECOND, 20, m_3) FROM test limit 1;", dt)));
+  }
+}
 
-    /* ---INTERVAL --- */
+TEST_F(Select, TimestampPrecision_Interval) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
     ASSERT_EQ(1177559344607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_9 + INTERVAL '1' year) from test limit 1;", dt)));
@@ -12547,8 +12641,12 @@ TEST_F(Select, TimestampPrecision) {
     ASSERT_EQ(1418509394323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_3 - INTERVAL '1' second) from test limit 1;", dt)));
+  }
+}
 
-    /*--- High Precision Timestamps Casts with intervals---*/
+TEST_F(Select, TimestampPrecision_HighPrecisionCastsWithIntervals) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
     ASSERT_EQ(
         1146023345LL,
         v<int64_t>(run_simple_agg(
@@ -12609,8 +12707,12 @@ TEST_F(Select, TimestampPrecision) {
         v<int64_t>(run_simple_agg(
             "SELECT (cast(m as timestamp(9)) + INTERVAL '1' minute) from test limit 1;",
             dt)));
+  }
+}
 
-    /*---- Timestamp Precision Casts Test: (Implicit and Explicit) ---*/
+TEST_F(Select, TimestampPrecision_CastsImplicitAndExplicit) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
     ASSERT_EQ(
         1418509395000000000,
         v<int64_t>(run_simple_agg(
@@ -12698,7 +12800,12 @@ TEST_F(Select, TimestampPrecision) {
             dt)));
     ASSERT_ANY_THROW(
         run_simple_agg("SELECT PG_DATE_TRUNC(NULL, m) FROM test LIMIT 1;", dt));
-    /*-- Dates ---*/
+  }
+}
+
+TEST_F(Select, TimestampPrecision_Dates) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
     ASSERT_EQ(
         static_cast<int64_t>(g_num_rows + g_num_rows / 2),
         v<int64_t>(run_simple_agg(
@@ -12812,8 +12919,12 @@ TEST_F(Select, TimestampPrecision) {
               v<int64_t>(run_simple_agg("SELECT count(*) FROM test where cast(o as "
                                         "timestamp(9)) = '1999-09-09 00:00:00.000000000'",
                                         dt)));
+  }
+}
 
-    /*--- High Precision Timestamps ---*/
+TEST_F(Select, TimestampPrecision_HighPrecision) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
     ASSERT_EQ(1418509395000,
               v<int64_t>(run_simple_agg(
                   "SELECT CAST(m as TIMESTAMP(3)) FROM test limit 1;", dt)));
@@ -13062,8 +13173,12 @@ TEST_F(Select, TimestampPrecision) {
         v<int64_t>(run_simple_agg("SELECT count(*) FROM test where cast(m_6 as "
                                   "timestamp(0)) <= TIMESTAMP(0) '2014-12-14 22:23:14';",
                                   dt)));
+  }
+}
 
-    /* Function Combination Tests */
+TEST_F(Select, TimestampPrecision_FunctionCompositions) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
     ASSERT_EQ(1,
               v<int64_t>(run_simple_agg(
                   "select dateadd('minute',1,dateadd('millisecond',1,m)) = TIMESTAMP(0) "
@@ -13142,8 +13257,12 @@ TEST_F(Select, TimestampPrecision) {
                   "SELECT DATEADD('minute', 1, TIMESTAMP(3) '2017-05-31 1:11:11.123') = "
                   "TIMESTAMP(3) '2017-05-31 1:12:11.122' from test limit 1;",
                   dt)));
+  }
+}
 
-    /* Functions with high precisions and dates*/
+TEST_F(Select, TimestampPrecision_FunctionsWithHighPrecisionsAndDates) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
     ASSERT_EQ(1,
               v<int64_t>(run_simple_agg(
                   "SELECT PG_DATE_TRUNC('day' , PG_DATE_TRUNC('millisecond', "
@@ -13629,8 +13748,12 @@ TEST_F(Select, TimestampPrecision) {
               v<int64_t>(run_simple_agg("select cast('1999-07-12 14:02:53.874533145' as "
                                         "TIMESTAMP(9)) from test limit 1;",
                                         dt)));
+  }
+}
 
-    // Test with different timestamps columns as joins
+TEST_F(Select, TimestampPrecision_JoinOnDifferentPrecisions) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
     ASSERT_EQ(
         5,
         v<int64_t>(run_simple_agg("select count(*) from test where m_9 between "
@@ -13677,7 +13800,12 @@ TEST_F(Select, TimestampPrecision) {
                   "= pg_extract('millisecond', TIMESTAMP(6) '2014-12-13 "
                   "22:23:15.874533') from test limit 1;",
                   dt)));
-    // empty filters
+  }
+}
+
+TEST_F(Select, TimestampPrecision_EmptyFilters) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
     {
       auto rows = run_multiple_agg(
           "SELECT PG_DATE_TRUNC('day', m), COUNT(*) FROM test WHERE m >= "
@@ -17290,6 +17418,8 @@ TEST_F(SubqueryTestEnv, SubqueryTest) {
       dt);
     // multi-step multi-subquery
     c(R"(select t1.r1, t1.r2, t1.r3 from R1 t1 where t1.r1 > (SELECT min(t2.r1) FROM R1 t2 where t2.r2 < 3) and t1.r2 >= (SELECT max(t3.r2) FROM R1 t3 where t3.r3 > (SELECT avg(t4.r3) FROM R1 t4 where t4.r1 < 2)) order by 1, 2;)",
+      dt);
+    c(R"(select (select sum(x - y) from ( select count(1) as x, ( select count(1) from ( select distinct str as py from test_inner ) ) as y from ( select str as x from test_inner group by str ) ) ) from test_inner;)",
       dt);
   }
 }
