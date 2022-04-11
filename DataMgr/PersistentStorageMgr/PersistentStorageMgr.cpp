@@ -15,35 +15,12 @@
  */
 
 #include "PersistentStorageMgr.h"
-#include "DataMgr/FileMgr/CachingGlobalFileMgr.h"
-#include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 
-PersistentStorageMgr::PersistentStorageMgr(
-    const std::string& data_dir,
-    const size_t num_reader_threads,
-    const File_Namespace::DiskCacheConfig& disk_cache_config)
-    : AbstractBufferMgr(0), disk_cache_config_(disk_cache_config) {
+PersistentStorageMgr::PersistentStorageMgr(const std::string& data_dir,
+                                           const size_t num_reader_threads)
+    : AbstractBufferMgr(0) {
   if (data_dir != "") {
-    fsi_ = std::make_shared<ForeignStorageInterface>();
-    ::registerArrowForeignStorage(fsi_);
-    ::registerArrowCsvForeignStorage(fsi_);
-
-    disk_cache_ =
-        disk_cache_config_.isEnabled()
-            ? std::make_unique<foreign_storage::ForeignStorageCache>(disk_cache_config)
-            : nullptr;
-    std::unique_ptr<File_Namespace::GlobalFileMgr> global_file_mgr;
-
-    if (disk_cache_config_.isEnabledForMutableTables()) {
-      CHECK(disk_cache_);
-      global_file_mgr = std::make_unique<File_Namespace::CachingGlobalFileMgr>(
-          0, fsi_, data_dir, num_reader_threads, disk_cache_.get());
-    } else {
-      global_file_mgr = std::make_unique<File_Namespace::GlobalFileMgr>(
-          0, fsi_, data_dir, num_reader_threads);
-    }
-    mgr_by_schema_id_[0] = std::move(global_file_mgr);
+    UNREACHABLE();
   }
 }
 
@@ -91,43 +68,43 @@ void PersistentStorageMgr::getChunkMetadataVecForKeyPrefix(
 }
 
 bool PersistentStorageMgr::isBufferOnDevice(const ChunkKey& chunk_key) {
-  return getGlobalFileMgr()->isBufferOnDevice(chunk_key);
+  UNREACHABLE();
 }
 
 std::string PersistentStorageMgr::printSlabs() {
-  return getGlobalFileMgr()->printSlabs();
+  UNREACHABLE();
 }
 
 size_t PersistentStorageMgr::getMaxSize() {
-  return getGlobalFileMgr()->getMaxSize();
+  UNREACHABLE();
 }
 
 size_t PersistentStorageMgr::getInUseSize() {
-  return getGlobalFileMgr()->getInUseSize();
+  UNREACHABLE();
 }
 
 size_t PersistentStorageMgr::getAllocated() {
-  return getGlobalFileMgr()->getAllocated();
+  UNREACHABLE();
 }
 
 bool PersistentStorageMgr::isAllocationCapped() {
-  return getGlobalFileMgr()->isAllocationCapped();
+  UNREACHABLE();
 }
 
 void PersistentStorageMgr::checkpoint() {
-  getGlobalFileMgr()->checkpoint();
+  UNREACHABLE();
 }
 
 void PersistentStorageMgr::checkpoint(const int db_id, const int tb_id) {
-  getGlobalFileMgr()->checkpoint(db_id, tb_id);
+  UNREACHABLE();
 }
 
 AbstractBuffer* PersistentStorageMgr::alloc(const size_t num_bytes) {
-  return getGlobalFileMgr()->alloc(num_bytes);
+  UNREACHABLE();
 }
 
 void PersistentStorageMgr::free(AbstractBuffer* buffer) {
-  getGlobalFileMgr()->free(buffer);
+  UNREACHABLE();
 }
 
 MgrType PersistentStorageMgr::getMgrType() {
@@ -139,14 +116,7 @@ std::string PersistentStorageMgr::getStringMgrType() {
 }
 
 size_t PersistentStorageMgr::getNumChunks() {
-  return getGlobalFileMgr()->getNumChunks();
-}
-
-File_Namespace::GlobalFileMgr* PersistentStorageMgr::getGlobalFileMgr() const {
-  if (mgr_by_schema_id_.count(0)) {
-    return dynamic_cast<File_Namespace::GlobalFileMgr*>(mgr_by_schema_id_.at(0).get());
-  }
-  return nullptr;
+  UNREACHABLE();
 }
 
 void PersistentStorageMgr::removeTableRelatedDS(const int db_id, const int table_id) {
@@ -172,10 +142,6 @@ AbstractBufferMgr* PersistentStorageMgr::getStorageMgrForTableKey(
 
 AbstractBufferMgr* PersistentStorageMgr::getStorageMgr(int db_id) const {
   return mgr_by_schema_id_.at(db_id >> 24).get();
-}
-
-foreign_storage::ForeignStorageCache* PersistentStorageMgr::getDiskCache() const {
-  return disk_cache_ ? disk_cache_.get() : nullptr;
 }
 
 void PersistentStorageMgr::registerDataProvider(

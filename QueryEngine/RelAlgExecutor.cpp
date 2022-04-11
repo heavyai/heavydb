@@ -15,8 +15,6 @@
  */
 
 #include "RelAlgExecutor.h"
-#include "DataMgr/ForeignStorage/ForeignStorageException.h"
-#include "DataMgr/ForeignStorage/MetadataPlaceholder.h"
 #include "QueryEngine/CalciteDeserializerUtils.h"
 #include "QueryEngine/CardinalityEstimator.h"
 #include "QueryEngine/ColumnFetcher.h"
@@ -2689,8 +2687,6 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_u
                                    false,
                                    data_provider_,
                                    column_cache);
-  } catch (const foreign_storage::ForeignStorageException& error) {
-    throw error;
   } catch (const QueryMustRunOnCpu&) {
     // force a retry of the top level query on CPU
     throw;

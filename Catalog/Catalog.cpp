@@ -58,9 +58,6 @@
 
 #include "Analyzer/Analyzer.h"
 #include "Calcite/Calcite.h"
-#include "DataMgr/FileMgr/FileMgr.h"
-#include "DataMgr/FileMgr/GlobalFileMgr.h"
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "Fragmenter/Fragmenter.h"
 #include "Fragmenter/SortedOrderFragmenter.h"
 #include "LockMgr/LockMgr.h"
@@ -1894,10 +1891,7 @@ void Catalog::createTable(
   list<ColumnDescriptor> columns;
 
   if (!td.storageType.empty()) {
-    if (td.persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
-      throw std::runtime_error("Only temporary tables can be backed by foreign storage.");
-    }
-    dataMgr_->getForeignStorageInterface()->prepareTable(getCurrentDB().dbId, td, cds);
+    UNREACHABLE();
   }
 
   for (auto cd : cds) {
@@ -2062,18 +2056,10 @@ void Catalog::createTable(
   }
 
   try {
-    auto cache = dataMgr_->getPersistentStorageMgr()->getDiskCache();
-    if (cache) {
-      CHECK(!cache->hasCachedMetadataForKeyPrefix({getCurrentDB().dbId, td.tableId}))
-          << "Disk cache at " + cache->getCacheDirectory()
-          << " contains preexisting data for new table.  Please "
-             "delete or clear cache before continuing";
-    }
-
     addTableToMap(&td, cds, dds);
     calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
     if (!td.storageType.empty()) {
-      dataMgr_->getForeignStorageInterface()->registerTable(this, td, cds);
+      UNREACHABLE();
     }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -2198,29 +2184,7 @@ int32_t Catalog::getTableEpoch(const int32_t db_id, const int32_t table_id) cons
 }
 
 void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) {
-  cat_read_lock read_lock(this);
-  LOG(INFO) << "Set table epoch db:" << db_id << " Table ID  " << table_id
-            << " back to new epoch " << new_epoch;
-  const auto td = getMetadataForTable(table_id, false);
-  if (!td) {
-    std::stringstream table_not_found_error_message;
-    table_not_found_error_message << "Table (" << db_id << "," << table_id
-                                  << ") not found";
-    throw std::runtime_error(table_not_found_error_message.str());
-  }
-  if (td->persistenceLevel != Data_Namespace::MemoryLevel::DISK_LEVEL) {
-    std::stringstream is_temp_table_error_message;
-    is_temp_table_error_message << "Cannot set epoch on temporary table";
-    throw std::runtime_error(is_temp_table_error_message.str());
-  }
-  File_Namespace::FileMgrParams file_mgr_params;
-  file_mgr_params.epoch = new_epoch;
-  file_mgr_params.max_rollback_epochs = td->maxRollbackEpochs;
-
-  // Should have table lock from caller so safe to do this after, avoids
-  // having to repopulate data on error
-  removeChunksUnlocked(table_id);
-  dataMgr_->getGlobalFileMgr()->setFileMgrParams(db_id, table_id, file_mgr_params);
+  UNREACHABLE();
 }
 
 void Catalog::alterPhysicalTableMetadata(
@@ -2266,86 +2230,17 @@ void Catalog::alterTableMetadata(const TableDescriptor* td,
 
 void Catalog::setMaxRollbackEpochs(const int32_t table_id,
                                    const int32_t max_rollback_epochs) {
-  // Must be called from AlterTableParamStmt or other method that takes executor and
-  // TableSchema locks
-  cat_write_lock write_lock(this);  // Consider only taking read lock for potentially
-                                    // heavy table storage metadata rolloff operations
-  if (max_rollback_epochs <= -1) {
-    throw std::runtime_error("Cannot set max_rollback_epochs < 0.");
-  }
-  const auto td = getMetadataForTable(
-      table_id, false);  // Deep copy as there will be gap between read and write locks
-  CHECK(td);             // Existence should have already been checked in
-                         // ParserNode::AlterTableParmStmt
-  TableDescriptorUpdateParams table_update_params(td);
-  table_update_params.max_rollback_epochs = max_rollback_epochs;
-  if (table_update_params == td) {  // Operator is overloaded to test for equality
-    LOG(INFO) << "Setting max_rollback_epochs for table " << table_id
-              << " to existing value, skipping operation";
-    return;
-  }
-  File_Namespace::FileMgrParams file_mgr_params;
-  file_mgr_params.epoch = -1;  // Use existing epoch
-  file_mgr_params.max_rollback_epochs = max_rollback_epochs;
-  setTableFileMgrParams(table_id, file_mgr_params);
-  // Unlock as alterTableCatalogMetadata will take write lock, and Catalog locks are not
-  // upgradeable Should be safe as we have schema lock on this table
-  /// read_lock.unlock();
-  alterTableMetadata(td, table_update_params);
+  UNREACHABLE();
 }
 
 void Catalog::setMaxRows(const int32_t table_id, const int64_t max_rows) {
-  if (max_rows < 0) {
-    throw std::runtime_error("Max rows cannot be a negative number.");
-  }
-  const auto td = getMetadataForTable(table_id);
-  CHECK(td);
-  TableDescriptorUpdateParams table_update_params(td);
-  table_update_params.max_rows = max_rows;
-  if (table_update_params == td) {
-    LOG(INFO) << "Max rows value of " << max_rows
-              << " is the same as the existing value. Skipping update.";
-    return;
-  }
-  alterTableMetadata(td, table_update_params);
-  CHECK(td->fragmenter);
-  td->fragmenter->dropFragmentsToSize(max_rows);
-}
-
-// For testing purposes only
-void Catalog::setUncappedTableEpoch(const std::string& table_name) {
-  cat_write_lock write_lock(this);
-  auto td_entry = tableDescriptorMap_.find(to_upper(table_name));
-  CHECK(td_entry != tableDescriptorMap_.end());
-  auto td = td_entry->second;
-  TableDescriptorUpdateParams table_update_params(td);
-  table_update_params.max_rollback_epochs = -1;
-  alterTableMetadata(td, table_update_params);
-
-  File_Namespace::FileMgrParams file_mgr_params;
-  file_mgr_params.max_rollback_epochs = -1;
-  setTableFileMgrParams(td->tableId, file_mgr_params);
+  UNREACHABLE();
 }
 
 void Catalog::setTableFileMgrParams(
     const int table_id,
     const File_Namespace::FileMgrParams& file_mgr_params) {
-  // Expects parent to have write lock
-  const auto td = getMetadataForTable(table_id, false);
-  const auto db_id = this->getDatabaseId();
-  if (!td) {
-    std::stringstream table_not_found_error_message;
-    table_not_found_error_message << "Table (" << db_id << "," << table_id
-                                  << ") not found";
-    throw std::runtime_error(table_not_found_error_message.str());
-  }
-  if (td->persistenceLevel != Data_Namespace::MemoryLevel::DISK_LEVEL) {
-    std::stringstream is_temp_table_error_message;
-    is_temp_table_error_message << "Cannot set storage params on temporary table";
-    throw std::runtime_error(is_temp_table_error_message.str());
-  }
-  removeChunksUnlocked(table_id);
-  dataMgr_->getGlobalFileMgr()->setFileMgrParams(db_id, table_id, file_mgr_params);
+  UNREACHABLE();
 }
 
 std::vector<TableEpochInfo> Catalog::getTableEpochs(const int32_t db_id,
@@ -2361,21 +2256,7 @@ std::vector<TableEpochInfo> Catalog::getTableEpochs(const int32_t db_id,
 
 void Catalog::setTableEpochs(const int32_t db_id,
                              const std::vector<TableEpochInfo>& table_epochs) const {
-  const auto td = getMetadataForTable(table_epochs[0].table_id, false);
-  CHECK(td);
-  File_Namespace::FileMgrParams file_mgr_params;
-  file_mgr_params.max_rollback_epochs = td->maxRollbackEpochs;
-
-  cat_read_lock read_lock(this);
-  for (const auto& table_epoch_info : table_epochs) {
-    removeChunksUnlocked(table_epoch_info.table_id);
-    file_mgr_params.epoch = table_epoch_info.table_epoch;
-    dataMgr_->getGlobalFileMgr()->setFileMgrParams(
-        db_id, table_epoch_info.table_id, file_mgr_params);
-    LOG(INFO) << "Set table epoch for db id: " << db_id
-              << ", table id: " << table_epoch_info.table_id
-              << ", back to epoch: " << table_epoch_info.table_epoch;
-  }
+  UNREACHABLE();
 }
 
 namespace {
@@ -3354,13 +3235,7 @@ void Catalog::setForReload(const int32_t tableId) {
 // get a table's data dirs
 std::vector<std::string> Catalog::getTableDataDirectories(
     const TableDescriptor* td) const {
-  const auto global_file_mgr = getDataMgr().getGlobalFileMgr();
-  std::vector<std::string> file_paths;
-  const auto file_mgr = dynamic_cast<File_Namespace::FileMgr*>(
-      global_file_mgr->getFileMgr(currentDB_.dbId, td->tableId));
-  boost::filesystem::path file_path(file_mgr->getFileMgrBasePath());
-  file_paths.push_back(file_path.filename().string());
-  return file_paths;
+  UNREACHABLE();
 }
 
 // get a column's dict dir basename

@@ -28,7 +28,6 @@
 
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/DataMgr.h"
-#include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "LockMgr/LockMgr.h"
 #include "Logger/Logger.h"
 
@@ -116,12 +115,7 @@ void InsertOrderFragmenter::conditionallyInstantiateFileMgrWithParams() {
   // storage per table
   if (!uses_foreign_storage_ &&
       defaultInsertLevel_ == Data_Namespace::MemoryLevel::DISK_LEVEL) {
-    const TableDescriptor* td =
-        catalog_->getMetadataForTable(physicalTableId_, false /*populateFragmenter*/);
-    File_Namespace::FileMgrParams fileMgrParams;
-    fileMgrParams.max_rollback_epochs = td->maxRollbackEpochs;
-    dataMgr_->getGlobalFileMgr()->setFileMgrParams(
-        chunkKeyPrefix_[0], chunkKeyPrefix_[1], fileMgrParams);
+    UNREACHABLE();
   }
 }
 

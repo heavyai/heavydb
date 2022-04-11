@@ -44,7 +44,6 @@
 
 namespace File_Namespace {
 class FileBuffer;
-class GlobalFileMgr;
 }  // namespace File_Namespace
 
 namespace CudaMgr_Namespace {
@@ -172,18 +171,13 @@ class ProcBuddyinfoParser {
 };
 
 class DataMgr {
-  friend class GlobalFileMgr;
-
  public:
-  explicit DataMgr(
-      const std::string& dataDir,
-      const SystemParameters& system_parameters,
-      std::unique_ptr<CudaMgr_Namespace::CudaMgr> cudaMgr,
-      const bool useGpus,
-      const size_t reservedGpuMem = (1 << 27),
-      const size_t numReaderThreads = 0, /* 0 means use default for # of reader threads */
-      const File_Namespace::DiskCacheConfig cacheConfig =
-          File_Namespace::DiskCacheConfig());
+  explicit DataMgr(const std::string& dataDir,
+                   const SystemParameters& system_parameters,
+                   std::unique_ptr<CudaMgr_Namespace::CudaMgr> cudaMgr,
+                   const bool useGpus,
+                   const size_t reservedGpuMem = (1 << 27),
+                   const size_t numReaderThreads = 0);
   ~DataMgr();
   AbstractBuffer* createChunkBuffer(const ChunkKey& key,
                                     const MemoryLevel memoryLevel,
@@ -220,8 +214,6 @@ class DataMgr {
   size_t getTableEpoch(const int db_id, const int tb_id);
 
   CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cudaMgr_.get(); }
-  File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;
-  std::shared_ptr<ForeignStorageInterface> getForeignStorageInterface() const;
 
   // database_id, table_id, column_id, fragment_id
   std::vector<int> levelSizes_;
@@ -240,8 +232,7 @@ class DataMgr {
   static size_t getTotalSystemMemory();
 
   PersistentStorageMgr* getPersistentStorageMgr() const;
-  void resetPersistentStorage(const File_Namespace::DiskCacheConfig& cache_config,
-                              const size_t num_reader_threads,
+  void resetPersistentStorage(const size_t num_reader_threads,
                               const SystemParameters& sys_params);
 
   // Used for testing.
@@ -259,8 +250,7 @@ class DataMgr {
 
  private:
   void populateMgrs(const SystemParameters& system_parameters,
-                    const size_t userSpecifiedNumReaderThreads,
-                    const File_Namespace::DiskCacheConfig& cache_config);
+                    const size_t userSpecifiedNumReaderThreads);
   void convertDB(const std::string basePath);
   void checkpoint();  // checkpoint for whole DB, called from convertDB proc only
   void createTopLevelMetadata() const;

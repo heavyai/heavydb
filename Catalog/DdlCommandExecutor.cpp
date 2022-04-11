@@ -55,20 +55,37 @@ get_table_descriptor_with_lock(const Catalog_Namespace::Catalog& cat,
   return std::make_tuple(td, std::move(td_with_lock));
 }
 
-struct AggregratedStorageStats : public File_Namespace::StorageStats {
+struct StorageStats {
+  int32_t epoch{0};
+  int32_t epoch_floor{0};
+  uint64_t metadata_file_count{0};
+  uint64_t total_metadata_file_size{0};
+  uint64_t total_metadata_page_count{0};
+  std::optional<uint64_t> total_free_metadata_page_count{};
+  uint64_t data_file_count{0};
+  uint64_t total_data_file_size{0};
+  uint64_t total_data_page_count{0};
+  std::optional<uint64_t> total_free_data_page_count{};
+
+  StorageStats() = default;
+  StorageStats(const StorageStats& storage_stats) = default;
+  virtual ~StorageStats() = default;
+};
+
+struct AggregratedStorageStats : public StorageStats {
   int32_t min_epoch;
   int32_t max_epoch;
   int32_t min_epoch_floor;
   int32_t max_epoch_floor;
 
-  AggregratedStorageStats(const File_Namespace::StorageStats& storage_stats)
-      : File_Namespace::StorageStats(storage_stats)
+  AggregratedStorageStats(const StorageStats& storage_stats)
+      : StorageStats(storage_stats)
       , min_epoch(storage_stats.epoch)
       , max_epoch(storage_stats.epoch)
       , min_epoch_floor(storage_stats.epoch_floor)
       , max_epoch_floor(storage_stats.epoch_floor) {}
 
-  void aggregate(const File_Namespace::StorageStats& storage_stats) {
+  void aggregate(const StorageStats& storage_stats) {
     metadata_file_count += storage_stats.metadata_file_count;
     total_metadata_file_size += storage_stats.total_metadata_file_size;
     total_metadata_page_count += storage_stats.total_metadata_page_count;
@@ -100,12 +117,7 @@ struct AggregratedStorageStats : public File_Namespace::StorageStats {
 
 AggregratedStorageStats get_agg_storage_stats(const TableDescriptor* td,
                                               const Catalog_Namespace::Catalog* catalog) {
-  const auto global_file_mgr = catalog->getDataMgr().getGlobalFileMgr();
-  std::optional<AggregratedStorageStats> agg_storage_stats;
-  agg_storage_stats =
-      global_file_mgr->getStorageStats(catalog->getDatabaseId(), td->tableId);
-  CHECK(agg_storage_stats.has_value());
-  return agg_storage_stats.value();
+  UNREACHABLE();
 }
 
 std::unique_ptr<RexLiteral> genLiteralStr(std::string val) {
@@ -563,39 +575,7 @@ std::vector<std::string> ShowDiskCacheUsageCommand::getFilteredTableNames() {
 }
 
 ExecutionResult ShowDiskCacheUsageCommand::execute() {
-  auto cat_ptr = session_ptr_->get_catalog_ptr();
-  auto table_names = getFilteredTableNames();
-
-  const auto disk_cache = cat_ptr->getDataMgr().getPersistentStorageMgr()->getDiskCache();
-  if (!disk_cache) {
-    throw std::runtime_error{"Disk cache not enabled.  Cannot show disk cache usage."};
-  }
-
-  // label_infos -> column labels
-  std::vector<std::string> labels{"table name", "current cache size"};
-  std::vector<TargetMetaInfo> label_infos;
-  label_infos.emplace_back(labels[0], SQLTypeInfo(kTEXT, true));
-  label_infos.emplace_back(labels[1], SQLTypeInfo(kBIGINT, true));
-
-  std::vector<RelLogicalValues::RowValues> logical_values;
-
-  for (auto& table_name : table_names) {
-    auto [td, td_with_lock] =
-        get_table_descriptor_with_lock<lockmgr::ReadLock>(*cat_ptr, table_name, false);
-
-    auto table_cache_size =
-        disk_cache->getSpaceReservedByTable(cat_ptr->getDatabaseId(), td->tableId);
-
-    // logical_values -> table data
-    logical_values.emplace_back(RelLogicalValues::RowValues{});
-    logical_values.back().emplace_back(genLiteralStr(table_name));
-    logical_values.back().emplace_back(genLiteralBigInt(table_cache_size));
-  }
-
-  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
-      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
-
-  return ExecutionResult(rSet, label_infos);
+  UNREACHABLE();
 }
 
 ShowUserDetailsCommand::ShowUserDetailsCommand(

@@ -12,21 +12,6 @@ set(datamgr_source_files
     DataMgrDataProvider.cpp
     Encoder.cpp
     StringNoneEncoder.cpp
-    FileMgr/CachingFileMgr.cpp
-    FileMgr/GlobalFileMgr.cpp
-    FileMgr/CachingGlobalFileMgr.cpp
-    FileMgr/FileMgr.cpp
-    FileMgr/FileBuffer.cpp
-    FileMgr/FileInfo.cpp
-    ForeignStorage/ArrowForeignStorage.cpp
-    ForeignStorage/CacheEvictionAlgorithms/LRUEvictionAlgorithm.cpp
-    ForeignStorage/ForeignStorageInterface.cpp
-    ForeignStorage/ForeignStorageBuffer.cpp
-    ForeignStorage/ForeignStorageCache.cpp
-    ForeignStorage/FsiChunkUtils.cpp
-    ForeignStorage/FsiJsonUtils.cpp
-    ForeignStorage/FileReader.cpp
-    ForeignStorage/FileRegions.cpp
     BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.cpp
     BufferMgr/GpuCudaBufferMgr/GpuCudaBuffer.cpp
     BufferMgr/CpuBufferMgr/CpuBufferMgr.cpp

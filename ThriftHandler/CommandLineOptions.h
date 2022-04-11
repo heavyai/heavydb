@@ -27,7 +27,6 @@
 #include <boost/program_options.hpp>
 
 #include "Catalog/AuthMetadata.h"
-#include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 #include "QueryEngine/ExtractFromTime.h"
 #include "QueryEngine/HyperLogLog.h"
 #include "Shared/SystemParameters.h"
@@ -46,7 +45,6 @@ class CommandLineOptions {
   int http_port = 6278;
   size_t reserved_gpu_mem = 384 * 1024 * 1024;
   std::string base_path;
-  File_Namespace::DiskCacheConfig disk_cache_config;
   std::string cluster_file = {"cluster.conf"};
   std::string cluster_topology_file = {"cluster_topology.conf"};
   std::string license_path = {""};

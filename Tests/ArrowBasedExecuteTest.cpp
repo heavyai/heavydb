@@ -17556,13 +17556,6 @@ int main(int argc, char** argv) {
   g_enable_window_functions = true;
   g_enable_interop = false;
 
-  File_Namespace::DiskCacheConfig disk_cache_config{};
-  if (vm.count("use-disk-cache")) {
-    disk_cache_config = File_Namespace::DiskCacheConfig{
-        File_Namespace::DiskCacheConfig::getDefaultPath(std::string(BASE_PATH)),
-        File_Namespace::DiskCacheLevel::all};
-  }
-
   init();
 
   int err{0};

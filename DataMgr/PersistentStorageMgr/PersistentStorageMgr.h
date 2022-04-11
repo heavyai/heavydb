@@ -17,16 +17,12 @@
 #pragma once
 
 #include "DataMgr/AbstractBufferMgr.h"
-#include "DataMgr/FileMgr/GlobalFileMgr.h"
-#include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 
 using namespace Data_Namespace;
 
 class PersistentStorageMgr : public AbstractBufferMgr {
  public:
-  PersistentStorageMgr(const std::string& data_dir,
-                       const size_t num_reader_threads,
-                       const File_Namespace::DiskCacheConfig& disk_cache_config);
+  PersistentStorageMgr(const std::string& data_dir, const size_t num_reader_threads);
 
   AbstractBuffer* createBuffer(const ChunkKey& chunk_key,
                                const size_t page_size,
@@ -65,16 +61,6 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   Fragmenter_Namespace::TableInfo getTableMetadata(int db_id,
                                                    int table_id) const override;
 
-  File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;
-  foreign_storage::ForeignStorageCache* getDiskCache() const;
-  inline const File_Namespace::DiskCacheConfig getDiskCacheConfig() const {
-    return disk_cache_config_;
-  }
-  inline const std::shared_ptr<ForeignStorageInterface> getForeignStorageInterface()
-      const {
-    return fsi_;
-  }
-
   void registerDataProvider(int schema_id, std::shared_ptr<AbstractBufferMgr>);
 
   std::shared_ptr<AbstractBufferMgr> getDataProvider(int schema_id) const;
@@ -86,8 +72,5 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   bool isChunkPrefixCacheable(const ChunkKey& chunk_prefix) const;
   int recoverDataWrapperIfCachedAndGetHighestFragId(const ChunkKey& table_key);
 
-  std::unique_ptr<foreign_storage::ForeignStorageCache> disk_cache_;
-  File_Namespace::DiskCacheConfig disk_cache_config_;
-  std::shared_ptr<ForeignStorageInterface> fsi_;
   std::unordered_map<int, std::shared_ptr<AbstractBufferMgr>> mgr_by_schema_id_;
 };

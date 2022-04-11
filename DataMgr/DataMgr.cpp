@@ -24,7 +24,6 @@
 #include "BufferMgr/CpuBufferMgr/TieredCpuBufferMgr.h"
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
 #include "CudaMgr/CudaMgr.h"
-#include "FileMgr/GlobalFileMgr.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
 
 #ifdef __APPLE__
@@ -48,8 +47,7 @@ DataMgr::DataMgr(const std::string& dataDir,
                  std::unique_ptr<CudaMgr_Namespace::CudaMgr> cudaMgr,
                  const bool useGpus,
                  const size_t reservedGpuMem,
-                 const size_t numReaderThreads,
-                 const File_Namespace::DiskCacheConfig cache_config)
+                 const size_t numReaderThreads)
     : cudaMgr_(std::move(cudaMgr))
     , dataDir_(dataDir)
     , hasGpus_(false)
@@ -73,7 +71,7 @@ DataMgr::DataMgr(const std::string& dataDir,
     hasGpus_ = false;
   }
 
-  populateMgrs(system_parameters, numReaderThreads, cache_config);
+  populateMgrs(system_parameters, numReaderThreads);
   createTopLevelMetadata();
 }
 
@@ -193,8 +191,7 @@ void DataMgr::allocateCpuBufferMgr(int32_t device_id,
 }
 
 // This function exists for testing purposes so that we can test a reset of the cache.
-void DataMgr::resetPersistentStorage(const File_Namespace::DiskCacheConfig& cache_config,
-                                     const size_t num_reader_threads,
+void DataMgr::resetPersistentStorage(const size_t num_reader_threads,
                                      const SystemParameters& sys_params) {
   int numLevels = bufferMgrs_.size();
   for (int level = numLevels - 1; level >= 0; --level) {
@@ -203,17 +200,16 @@ void DataMgr::resetPersistentStorage(const File_Namespace::DiskCacheConfig& cach
     }
   }
   bufferMgrs_.clear();
-  populateMgrs(sys_params, num_reader_threads, cache_config);
+  populateMgrs(sys_params, num_reader_threads);
   createTopLevelMetadata();
 }
 
 void DataMgr::populateMgrs(const SystemParameters& system_parameters,
-                           const size_t userSpecifiedNumReaderThreads,
-                           const File_Namespace::DiskCacheConfig& cache_config) {
+                           const size_t userSpecifiedNumReaderThreads) {
   // no need for locking, as this is only called in the constructor
   bufferMgrs_.resize(2);
   bufferMgrs_[0].push_back(
-      new PersistentStorageMgr(dataDir_, userSpecifiedNumReaderThreads, cache_config));
+      new PersistentStorageMgr(dataDir_, userSpecifiedNumReaderThreads));
 
   levelSizes_.push_back(1);
   size_t page_size{512};
@@ -291,50 +287,10 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
 }
 
 void DataMgr::convertDB(const std::string basePath) {
-  // no need for locking, as this is only called in the constructor
-
-  /* check that "mapd_data" directory exists and it's empty */
-  std::string mapdDataPath(basePath + "/../mapd_data/");
-  boost::filesystem::path path(mapdDataPath);
-  if (boost::filesystem::exists(path)) {
-    if (!boost::filesystem::is_directory(path)) {
-      LOG(FATAL) << "Path to directory mapd_data to convert DB is not a directory.";
-    }
-  } else {  // data directory does not exist
-    LOG(FATAL) << "Path to directory mapd_data to convert DB does not exist.";
-  }
-
-  File_Namespace::GlobalFileMgr* gfm{nullptr};
-  gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
-  CHECK(gfm);
-
-  size_t defaultPageSize = gfm->getDefaultPageSize();
-  LOG(INFO) << "Database conversion started.";
-  File_Namespace::FileMgr* fm_base_db = new File_Namespace::FileMgr(
-      gfm,
-      defaultPageSize,
-      basePath);  // this call also copies data into new DB structure
-  delete fm_base_db;
-
-  /* write content of DB into newly created/converted DB structure & location */
-  checkpoint();  // outputs data files as well as metadata files
-  LOG(INFO) << "Database conversion completed.";
+  UNREACHABLE();
 }
 
-void DataMgr::createTopLevelMetadata()
-    const {  // create metadata shared by all tables of all DBs
-  auto gfm = getGlobalFileMgr();
-  if (gfm) {
-    ChunkKey chunkKey(2);
-    chunkKey[0] = 0;  // top level db_id
-    chunkKey[1] = 0;  // top level tb_id
-
-    auto fm_top = gfm->getFileMgr(chunkKey);
-    if (dynamic_cast<File_Namespace::FileMgr*>(fm_top)) {
-      static_cast<File_Namespace::FileMgr*>(fm_top)->createTopLevelMetadata();
-    }
-  }
-}
+void DataMgr::createTopLevelMetadata() const {}
 
 std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
   std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
@@ -569,25 +525,11 @@ void DataMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
 }
 
 void DataMgr::setTableEpoch(const int db_id, const int tb_id, const int start_epoch) {
-  File_Namespace::GlobalFileMgr* gfm{nullptr};
-  gfm = getGlobalFileMgr();
-  CHECK(gfm);
-  gfm->setTableEpoch(db_id, tb_id, start_epoch);
+  UNREACHABLE();
 }
 
 size_t DataMgr::getTableEpoch(const int db_id, const int tb_id) {
-  File_Namespace::GlobalFileMgr* gfm{nullptr};
-  gfm = getGlobalFileMgr();
-  CHECK(gfm);
-  return gfm->getTableEpoch(db_id, tb_id);
-}
-
-File_Namespace::GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
-  return getPersistentStorageMgr()->getGlobalFileMgr();
-}
-
-std::shared_ptr<ForeignStorageInterface> DataMgr::getForeignStorageInterface() const {
-  return getPersistentStorageMgr()->getForeignStorageInterface();
+  UNREACHABLE();
 }
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage& mem_info) {

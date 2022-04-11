@@ -400,20 +400,6 @@ void CommandLineOptions::fillOptions() {
                           "Enable foreign storage interface based parquet import.");
 #endif
 
-  help_desc.add_options()("disk-cache-path",
-                          po::value<std::string>(&disk_cache_config.path),
-                          "Specify the path for the disk cache.");
-
-  help_desc.add_options()(
-      "disk-cache-level",
-      po::value<std::string>(&(disk_cache_level))->default_value("foreign_tables"),
-      "Specify level of disk cache. Valid options are 'foreign_tables', "
-      "'local_tables', 'none', and 'all'.");
-
-  help_desc.add_options()("disk-cache-size",
-                          po::value<size_t>(&(disk_cache_config.size_limit)),
-                          "Specify a maximum size for the disk cache in bytes.");
-
 #ifdef HAVE_AWS_S3
   help_desc.add_options()(
       "allow-s3-server-privileges",
@@ -982,39 +968,6 @@ void CommandLineOptions::validate() {
     g_enable_fsi = true;  // a requirement for FSI parquet import is for FSI to be enabled
   }
 #endif
-
-  if (disk_cache_level == "foreign_tables") {
-    if (g_enable_fsi) {
-      disk_cache_config.enabled_level = File_Namespace::DiskCacheLevel::fsi;
-      LOG(INFO) << "Disk cache enabled for foreign tables only";
-    } else {
-      LOG(INFO) << "Cannot enable disk cache for fsi when fsi is disabled.  Defaulted to "
-                   "disk cache disabled";
-    }
-  } else if (disk_cache_level == "all") {
-    disk_cache_config.enabled_level = File_Namespace::DiskCacheLevel::all;
-    LOG(INFO) << "Disk cache enabled for all tables";
-  } else if (disk_cache_level == "local_tables") {
-    disk_cache_config.enabled_level = File_Namespace::DiskCacheLevel::non_fsi;
-    LOG(INFO) << "Disk cache enabled for non-FSI tables";
-  } else if (disk_cache_level == "none") {
-    disk_cache_config.enabled_level = File_Namespace::DiskCacheLevel::none;
-    LOG(INFO) << "Disk cache disabled";
-  } else {
-    throw std::runtime_error{
-        "Unexpected \"disk-cache-level\" value: " + disk_cache_level +
-        ". Valid options are 'foreign_tables', "
-        "'local_tables', 'none', and 'all'."};
-  }
-
-  if (disk_cache_config.size_limit < File_Namespace::CachingFileMgr::getMinimumSize()) {
-    throw std::runtime_error{"disk-cache-size must be at least " +
-                             to_string(File_Namespace::CachingFileMgr::getMinimumSize())};
-  }
-
-  if (disk_cache_config.path.empty()) {
-    disk_cache_config.path = base_path + "/omnisci_disk_cache";
-  }
 }
 
 boost::optional<int> CommandLineOptions::parse_command_line(
