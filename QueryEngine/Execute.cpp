@@ -32,9 +32,9 @@
 #include <numeric>
 #include <thread>
 
-#include "Catalog/DictDescriptor.h"
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
+#include "DataProvider/DictDescriptor.h"
 #include "QueryEngine/AggregateUtils.h"
 #include "QueryEngine/AggregatedColRange.h"
 #include "QueryEngine/CodeGenerator.h"

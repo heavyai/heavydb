@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include "Catalog/DictDescriptor.h"
 #include "DataMgr/AbstractDataProvider.h"
+#include "DataProvider/DictDescriptor.h"
 #include "SchemaMgr/SimpleSchemaProvider.h"
 #include "Shared/mapd_shared_mutex.h"
 

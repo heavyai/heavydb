@@ -17,12 +17,12 @@
 
 #include <memory>
 
-#include "Catalog/DictDescriptor.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "DataMgr/MemoryLevel.h"
 #include "SchemaMgr/ColumnInfo.h"
 #include "Shared/types.h"
 
+#include "DictDescriptor.h"
 #include "TableFragmentsInfo.h"
 
 class DataProvider {

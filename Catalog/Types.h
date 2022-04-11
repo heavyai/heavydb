@@ -24,9 +24,9 @@
 #include "Catalog/ColumnDescriptor.h"
 #include "Catalog/CustomExpression.h"
 #include "Catalog/DashboardDescriptor.h"
-#include "Catalog/DictDescriptor.h"
 #include "Catalog/LinkDescriptor.h"
 #include "Catalog/TableDescriptor.h"
+#include "DataProvider/DictDescriptor.h"
 
 namespace Catalog_Namespace {
 
