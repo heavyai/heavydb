@@ -180,27 +180,13 @@ std::string SingleTextFileReader::getFirstLine() const {
  * Skip to entry in archive
  */
 void ArchiveWrapper::skipToEntry(int entry_number) {
-  if (current_entry_ >= entry_number) {
-    resetArchive();
-  }
-  while (current_entry_ < entry_number) {
-    if (arch_.get()->read_next_header()) {
-      current_entry_++;
-    } else {
-      throw std::runtime_error{"Invalid archive entry"};
-    }
-  }
-  fetchBlock();
+  UNREACHABLE();
 }
 
 // Go to next consecutive entry
 bool ArchiveWrapper::nextEntry() {
-  bool success = arch_.get()->read_next_header();
-  if (success) {
-    current_entry_++;
-    fetchBlock();
-  }
-  return success;
+  UNREACHABLE();
+  return false;
 }
 
 void ArchiveWrapper::consumeDataFromCurrentEntry(size_t size, char* dest_buffer) {
@@ -221,19 +207,11 @@ char ArchiveWrapper::ArchiveWrapper::peekNextChar() {
 }
 
 void ArchiveWrapper::resetArchive() {
-  arch_.reset(new PosixFileArchive(file_path_, false));
-  block_chars_remaining_ = 0;
-  // We will increment to 0 when reading first entry
-  current_entry_ = -1;
+  UNREACHABLE();
 }
 
 void ArchiveWrapper::fetchBlock() {
-  int64_t offset;
-  auto ok =
-      arch_.get()->read_data_block(&current_block_, &block_chars_remaining_, &offset);
-  if (!ok) {
-    block_chars_remaining_ = 0;
-  }
+  UNREACHABLE();
 }
 
 CompressedFileReader::CompressedFileReader(const std::string& file_path,

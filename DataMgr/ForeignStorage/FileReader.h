@@ -21,7 +21,6 @@
 #include <boost/filesystem.hpp>
 #include "rapidjson/document.h"
 
-#include "Archive/PosixFileArchive.h"
 #include "Logger/Logger.h"
 
 namespace foreign_storage {
@@ -236,7 +235,10 @@ class ArchiveWrapper {
   // Reset archive, start reading again from the first entry
   void resetArchive();
 
-  std::string entryName() { return arch_->entryName(); }
+  std::string entryName() {
+    UNREACHABLE();
+    return "";
+  }
 
  private:
   /**
@@ -244,7 +246,6 @@ class ArchiveWrapper {
    */
   void fetchBlock();
 
-  std::unique_ptr<Archive> arch_;
   // Pointer to current uncompressed block from the archive
   const void* current_block_;
   // Number of chars remaining in the current block
