@@ -97,7 +97,7 @@ class OverlapsJoinHashTable : public HashJoin {
   virtual void reifyWithLayout(const HashType layout);
 
   virtual void reifyImpl(std::vector<ColumnsForDevice>& columns_per_device,
-                         const Fragmenter_Namespace::TableInfo& query_info,
+                         const TableFragmentsInfo& query_info,
                          const HashType layout,
                          const size_t shard_count,
                          const size_t entry_count,
@@ -118,10 +118,9 @@ class OverlapsJoinHashTable : public HashJoin {
                                 size_t emitted_keys_count,
                                 size_t entry_count) const;
 
-  ColumnsForDevice fetchColumnsForDevice(
-      const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
-      const int device_id,
-      DeviceAllocator* dev_buff_owner);
+  ColumnsForDevice fetchColumnsForDevice(const std::vector<FragmentInfo>& fragments,
+                                         const int device_id,
+                                         DeviceAllocator* dev_buff_owner);
 
   // returns entry_count, emitted_keys_count
   virtual std::pair<size_t, size_t> approximateTupleCount(

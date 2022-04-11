@@ -29,7 +29,7 @@ std::shared_ptr<Chunk_NS::Chunk> DataMgrDataProvider::getChunk(
   return Chunk_NS::Chunk::getChunk(
       col_info, data_mgr_, key, memory_level, device_id, num_bytes, num_elems);
 }
-Fragmenter_Namespace::TableInfo DataMgrDataProvider::getTableMetadata(
+TableFragmentsInfo DataMgrDataProvider::getTableMetadata(
     int db_id,
     int table_id) const {
   return data_mgr_->getTableMetadata(db_id, table_id);

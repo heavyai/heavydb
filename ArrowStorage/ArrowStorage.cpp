@@ -209,8 +209,7 @@ void ArrowStorage::fetchVarLenArrayData(const TableData& table,
   }
 }
 
-Fragmenter_Namespace::TableInfo ArrowStorage::getTableMetadata(int db_id,
-                                                               int table_id) const {
+TableFragmentsInfo ArrowStorage::getTableMetadata(int db_id, int table_id) const {
   CHECK_EQ(db_id, db_id_);
   CHECK_EQ(tables_.count(table_id), (size_t)1);
   auto& table = *tables_.at(table_id);
@@ -219,7 +218,7 @@ Fragmenter_Namespace::TableInfo ArrowStorage::getTableMetadata(int db_id,
     return getEmptyTableMetadata(table_id);
   }
 
-  Fragmenter_Namespace::TableInfo res;
+  TableFragmentsInfo res;
   res.setPhysicalNumTuples(table.row_count);
   for (size_t frag_idx = 0; frag_idx < table.fragments.size(); ++frag_idx) {
     auto& frag = table.fragments[frag_idx];
@@ -237,12 +236,12 @@ Fragmenter_Namespace::TableInfo ArrowStorage::getTableMetadata(int db_id,
   return res;
 }
 
-Fragmenter_Namespace::TableInfo ArrowStorage::getEmptyTableMetadata(int table_id) const {
-  Fragmenter_Namespace::TableInfo res;
+TableFragmentsInfo ArrowStorage::getEmptyTableMetadata(int table_id) const {
+  TableFragmentsInfo res;
   res.setPhysicalNumTuples(0);
 
   // Executor requires dummy empty fragment for empty tables
-  Fragmenter_Namespace::FragmentInfo& empty_frag = res.fragments.emplace_back();
+  FragmentInfo& empty_frag = res.fragments.emplace_back();
   empty_frag.fragmentId = 0;
   empty_frag.shadowNumTuples = 0;
   empty_frag.setPhysicalNumTuples(0);

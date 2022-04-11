@@ -129,10 +129,9 @@ class PerfectJoinHashTable : public HashJoin {
   static constexpr size_t huge_join_hash_min_load_ = 10;
 
   // Equijoin API
-  ColumnsForDevice fetchColumnsForDevice(
-      const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
-      const int device_id,
-      DeviceAllocator* dev_buff_owner);
+  ColumnsForDevice fetchColumnsForDevice(const std::vector<FragmentInfo>& fragments,
+                                         const int device_id,
+                                         DeviceAllocator* dev_buff_owner);
 
   void reifyForDevice(const ChunkKey& hash_table_key,
                       const ColumnsForDevice& columns_for_device,
@@ -186,7 +185,7 @@ class PerfectJoinHashTable : public HashJoin {
     hash_tables_for_device_.resize(device_count_);
   }
 
-  ChunkKey genChunkKey(const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+  ChunkKey genChunkKey(const std::vector<FragmentInfo>& fragments,
                        const Analyzer::Expr* outer_col,
                        const Analyzer::ColumnVar* inner_col) const;
 

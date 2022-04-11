@@ -17,17 +17,14 @@
 #include "InputMetadata.h"
 #include "Execute.h"
 
-#include "../Fragmenter/Fragmenter.h"
-
 #include <future>
 
 InputTableInfoCache::InputTableInfoCache(Executor* executor) : executor_(executor) {}
 
 namespace {
 
-Fragmenter_Namespace::TableInfo copy_table_info(
-    const Fragmenter_Namespace::TableInfo& table_info) {
-  Fragmenter_Namespace::TableInfo table_info_copy;
+TableFragmentsInfo copy_table_info(const TableFragmentsInfo& table_info) {
+  TableFragmentsInfo table_info_copy;
   table_info_copy.chunkKeyPrefix = table_info.chunkKeyPrefix;
   table_info_copy.fragments = table_info.fragments;
   table_info_copy.setPhysicalNumTuples(table_info.getPhysicalNumTuples());
@@ -80,7 +77,7 @@ void TemporaryTable::setValidationOnlyRes() {
   }
 }
 
-Fragmenter_Namespace::TableInfo InputTableInfoCache::getTableInfo(const int table_id) {
+TableFragmentsInfo InputTableInfoCache::getTableInfo(const int table_id) {
   const auto it = cache_.find(table_id);
   if (it != cache_.end()) {
     const auto& table_info = it->second;
@@ -106,8 +103,8 @@ bool uses_int_meta(const SQLTypeInfo& col_ti) {
          (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT);
 }
 
-Fragmenter_Namespace::TableInfo synthesize_table_info(const TemporaryTable& table) {
-  std::vector<Fragmenter_Namespace::FragmentInfo> result;
+TableFragmentsInfo synthesize_table_info(const TemporaryTable& table) {
+  std::vector<FragmentInfo> result;
   bool non_empty = false;
   for (int frag_id = 0; frag_id < table.getFragCount(); ++frag_id) {
     result.emplace_back();
@@ -120,7 +117,7 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const TemporaryTable& tabl
                                                      : 0);
     non_empty |= (fragment.resultSet != nullptr);
   }
-  Fragmenter_Namespace::TableInfo table_info;
+  TableFragmentsInfo table_info;
   if (non_empty)
     table_info.fragments = std::move(result);
   return table_info;
@@ -265,8 +262,8 @@ ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
   return metadata_map;
 }
 
-Fragmenter_Namespace::TableInfo synthesize_table_info(const TemporaryTable& table) {
-  std::vector<Fragmenter_Namespace::FragmentInfo> result;
+TableFragmentsInfo synthesize_table_info(const TemporaryTable& table) {
+  std::vector<FragmentInfo> result;
   bool non_empty = false;
   for (int frag_id = 0; frag_id < table.getFragCount(); ++frag_id) {
     result.emplace_back();
@@ -279,7 +276,7 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const TemporaryTable& tabl
                                                      : 0);
     non_empty |= (fragment.resultSet != nullptr);
   }
-  Fragmenter_Namespace::TableInfo table_info;
+  TableFragmentsInfo table_info;
   if (non_empty)
     table_info.fragments = std::move(result);
   return table_info;
@@ -314,7 +311,7 @@ std::vector<InputTableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_un
   return table_infos;
 }
 
-const ChunkMetadataMap& Fragmenter_Namespace::FragmentInfo::getChunkMetadataMap() const {
+const ChunkMetadataMap& FragmentInfo::getChunkMetadataMap() const {
   if (resultSet && !synthesizedMetadataIsValid) {
     chunkMetadataMap = synthesize_metadata(resultSet);
     synthesizedMetadataIsValid = true;
@@ -322,8 +319,7 @@ const ChunkMetadataMap& Fragmenter_Namespace::FragmentInfo::getChunkMetadataMap(
   return chunkMetadataMap;
 }
 
-ChunkMetadataMap Fragmenter_Namespace::FragmentInfo::getChunkMetadataMapPhysicalCopy()
-    const {
+ChunkMetadataMap FragmentInfo::getChunkMetadataMapPhysicalCopy() const {
   ChunkMetadataMap metadata_map;
   for (const auto& [column_id, chunk_metadata] : chunkMetadataMap) {
     metadata_map[column_id] = std::make_shared<ChunkMetadata>(*chunk_metadata);
@@ -331,7 +327,7 @@ ChunkMetadataMap Fragmenter_Namespace::FragmentInfo::getChunkMetadataMapPhysical
   return metadata_map;
 }
 
-size_t Fragmenter_Namespace::FragmentInfo::getNumTuples() const {
+size_t FragmentInfo::getNumTuples() const {
   std::unique_ptr<std::lock_guard<std::mutex>> lock;
   if (resultSetMutex) {
     lock.reset(new std::lock_guard<std::mutex>(*resultSetMutex));
@@ -344,21 +340,21 @@ size_t Fragmenter_Namespace::FragmentInfo::getNumTuples() const {
   return numTuples;
 }
 
-size_t Fragmenter_Namespace::TableInfo::getNumTuples() const {
+size_t TableFragmentsInfo::getNumTuples() const {
   if (!fragments.empty() && fragments.front().resultSet) {
     return fragments.front().getNumTuples();
   }
   return numTuples;
 }
 
-size_t Fragmenter_Namespace::TableInfo::getNumTuplesUpperBound() const {
+size_t TableFragmentsInfo::getNumTuplesUpperBound() const {
   if (!fragments.empty() && fragments.front().resultSet) {
     return fragments.front().resultSet->entryCount();
   }
   return numTuples;
 }
 
-size_t Fragmenter_Namespace::TableInfo::getFragmentNumTuplesUpperBound() const {
+size_t TableFragmentsInfo::getFragmentNumTuplesUpperBound() const {
   if (!fragments.empty() && fragments.front().resultSet) {
     return fragments.front().resultSet->entryCount();
   }

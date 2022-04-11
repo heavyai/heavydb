@@ -18,7 +18,6 @@
 #define QUERYENGINE_INPUTMETADATA_H
 
 #include "DataProvider/DataProvider.h"
-#include "Fragmenter/Fragmenter.h"
 #include "QueryEngine/Descriptors/InputDescriptors.h"
 #include "QueryEngine/RelAlgExecutionUnit.h"
 
@@ -76,19 +75,19 @@ using TemporaryTables = std::unordered_map<int, TemporaryTable>;
 struct InputTableInfo {
   int db_id;
   int table_id;
-  Fragmenter_Namespace::TableInfo info;
+  TableFragmentsInfo info;
 };
 
 class InputTableInfoCache {
  public:
   InputTableInfoCache(Executor* executor);
 
-  Fragmenter_Namespace::TableInfo getTableInfo(const int table_id);
+  TableFragmentsInfo getTableInfo(const int table_id);
 
   void clear();
 
  private:
-  std::unordered_map<int, Fragmenter_Namespace::TableInfo> cache_;
+  std::unordered_map<int, TableFragmentsInfo> cache_;
   Executor* executor_;
 };
 

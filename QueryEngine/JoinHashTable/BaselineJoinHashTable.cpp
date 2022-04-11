@@ -430,7 +430,7 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
 }
 
 ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDevice(
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::vector<FragmentInfo>& fragments,
     const int device_id,
     DeviceAllocator* dev_buff_owner) {
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
@@ -637,10 +637,11 @@ int BaselineJoinHashTable::initHashTableForDevice(
       const auto gpu_buff = gpu_target_hash_table->getGpuBuffer();
       CHECK(gpu_buff);
       auto buffer_provider = executor_->getBufferProvider();
-      buffer_provider->copyToDevice(gpu_buff,
-                  cpu_source_hash_table->getCpuBuffer(),
-                  cpu_source_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
-                  device_id);
+      buffer_provider->copyToDevice(
+          gpu_buff,
+          cpu_source_hash_table->getCpuBuffer(),
+          cpu_source_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
+          device_id);
       hash_tables_for_device_[device_id] = std::move(gpu_target_hash_table);
 #else
       CHECK(false);

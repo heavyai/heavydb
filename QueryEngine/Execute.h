@@ -305,6 +305,7 @@ class StringConstInResultSet : public std::runtime_error {
 };
 
 class ExtensionFunction;
+struct ColumnDescriptor;
 
 using ColumnToFragmentsMap = std::map<const ColumnDescriptor*, std::set<int32_t>>;
 using TableToFragmentIds = std::map<int32_t, std::set<int32_t>>;
@@ -422,7 +423,7 @@ class Executor {
 
   const std::shared_ptr<RowSetMemoryOwner> getRowSetMemoryOwner() const;
 
-  Fragmenter_Namespace::TableInfo getTableInfo(const int table_id) const;
+  TableFragmentsInfo getTableInfo(const int table_id) const;
 
   const TableGeneration& getTableGeneration(const int table_id) const;
 
@@ -522,8 +523,7 @@ class Executor {
                                  const FragmentsList& selected_fragments,
                                  const Data_Namespace::MemoryLevel memory_level) const;
 
-  using PerFragmentCallBack =
-      std::function<void(ResultSetPtr, const Fragmenter_Namespace::FragmentInfo&)>;
+  using PerFragmentCallBack = std::function<void(ResultSetPtr, const FragmentInfo&)>;
 
   /**
    * @brief Compiles and dispatches a work unit per fragment processing results with the
@@ -626,8 +626,8 @@ class Executor {
       const std::unordered_map<int, const Analyzer::BinOper*>&
           inner_table_id_to_join_condition);
 
-  bool skipFragmentPair(const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
-                        const Fragmenter_Namespace::FragmentInfo& inner_fragment_info,
+  bool skipFragmentPair(const FragmentInfo& outer_fragment_info,
+                        const FragmentInfo& inner_fragment_info,
                         const int inner_table_id,
                         const std::unordered_map<int, const Analyzer::BinOper*>&
                             inner_table_id_to_join_condition,
@@ -930,15 +930,14 @@ class Executor {
                         SQLTypeInfo const& to_ti);
   llvm::Value* castToIntPtrTyIn(llvm::Value* val, const size_t bit_width);
 
-  FragmentSkipStatus canSkipFragmentForFpQual(
-      const Analyzer::BinOper* comp_expr,
-      const Analyzer::ColumnVar* lhs_col,
-      const Fragmenter_Namespace::FragmentInfo& fragment,
-      const Analyzer::Constant* rhs_const) const;
+  FragmentSkipStatus canSkipFragmentForFpQual(const Analyzer::BinOper* comp_expr,
+                                              const Analyzer::ColumnVar* lhs_col,
+                                              const FragmentInfo& fragment,
+                                              const Analyzer::Constant* rhs_const) const;
 
   std::pair<bool, int64_t> skipFragment(
       const InputDescriptor& table_desc,
-      const Fragmenter_Namespace::FragmentInfo& frag_info,
+      const FragmentInfo& frag_info,
       const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
       const std::vector<uint64_t>& frag_offsets,
       const size_t frag_idx);
@@ -946,7 +945,7 @@ class Executor {
   std::pair<bool, int64_t> skipFragmentInnerJoins(
       const InputDescriptor& table_desc,
       const RelAlgExecutionUnit& ra_exe_unit,
-      const Fragmenter_Namespace::FragmentInfo& fragment,
+      const FragmentInfo& fragment,
       const std::vector<uint64_t>& frag_offsets,
       const size_t frag_idx);
 

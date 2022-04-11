@@ -21,7 +21,6 @@
 #include <string>
 
 #include "DataMgr/MemoryLevel.h"
-#include "Fragmenter/AbstractFragmenter.h"
 #include "SchemaMgr/TableInfo.h"
 #include "Shared/sqldefs.h"
 
@@ -48,18 +47,13 @@ struct TableDescriptor {
   bool isView;
   std::string viewSQL;
   std::string fragments;  // placeholder for fragmentation information
-  Fragmenter_Namespace::FragmenterType
-      fragType;          // fragmentation type. Only INSERT_ORDER is supported now.
-  int32_t maxFragRows;   // max number of rows per fragment
-  int64_t maxChunkSize;  // max number of rows per fragment
-  int32_t fragPageSize;  // page size
-  int64_t maxRows;       // max number of rows in the table
+  int32_t maxFragRows;    // max number of rows per fragment
+  int64_t maxChunkSize;   // max number of rows per fragment
+  int32_t fragPageSize;   // page size
+  int64_t maxRows;        // max number of rows in the table
   std::string
       keyMetainfo;  // meta-information about shard keys and shared dictionary, as JSON
 
-  std::shared_ptr<Fragmenter_Namespace::AbstractFragmenter>
-      fragmenter;  // point to fragmenter object for the table.  it's instantiated upon
-                   // first use.
   int sortedColumnId;  // Id of the column to be sorted on
   Data_Namespace::MemoryLevel persistenceLevel;
   // Spi means Sequential Positional Index which is equivalent to the input index in a

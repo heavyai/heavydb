@@ -58,8 +58,7 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
                    Data_Namespace::AbstractBuffer* dest,
                    const size_t num_bytes = 0) override;
 
-  Fragmenter_Namespace::TableInfo getTableMetadata(int db_id,
-                                                   int table_id) const override;
+  TableFragmentsInfo getTableMetadata(int db_id, int table_id) const override;
 
   const DictDescriptor* getDictMetadata(int db_id,
                                         int dict_id,
@@ -161,7 +160,7 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
                                           const JsonParseOptions parse_options,
                                           const ColumnInfoList& col_infos = {});
   std::shared_ptr<arrow::Table> parseParquetFile(const std::string& file_name);
-  Fragmenter_Namespace::TableInfo getEmptyTableMetadata(int table_id) const;
+  TableFragmentsInfo getEmptyTableMetadata(int table_id) const;
   void fetchFixedLenData(const TableData& table,
                          size_t frag_idx,
                          size_t col_idx,

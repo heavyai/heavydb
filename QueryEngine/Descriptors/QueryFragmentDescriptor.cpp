@@ -431,10 +431,9 @@ bool QueryFragmentDescriptor::terminateDispatchMaybe(
   return false;
 }
 
-void QueryFragmentDescriptor::checkDeviceMemoryUsage(
-    const Fragmenter_Namespace::FragmentInfo& fragment,
-    const int device_id,
-    const size_t num_bytes_for_row) {
+void QueryFragmentDescriptor::checkDeviceMemoryUsage(const FragmentInfo& fragment,
+                                                     const int device_id,
+                                                     const size_t num_bytes_for_row) {
   CHECK_GE(device_id, 0);
   tuple_count_per_gpu_device_[device_id] += fragment.getNumTuples();
   const size_t gpu_bytes_limit =

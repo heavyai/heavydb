@@ -16,7 +16,7 @@
 
 namespace policy {
 SchedulingAssignment FragmentIDAssignmentExecutionPolicy::scheduleSingleFragment(
-    const Fragmenter_Namespace::FragmentInfo& fragment,
+    const FragmentInfo& fragment,
     size_t frag_id,
     size_t frag_num) const {
   auto memory_level = dt_ == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL

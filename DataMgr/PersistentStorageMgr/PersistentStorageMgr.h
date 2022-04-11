@@ -58,8 +58,7 @@ class PersistentStorageMgr : public AbstractBufferMgr {
                                         int dict_id,
                                         bool load_dict = true) override;
 
-  Fragmenter_Namespace::TableInfo getTableMetadata(int db_id,
-                                                   int table_id) const override;
+  TableFragmentsInfo getTableMetadata(int db_id, int table_id) const override;
 
   void registerDataProvider(int schema_id, std::shared_ptr<AbstractBufferMgr>);
 

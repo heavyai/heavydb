@@ -24,7 +24,8 @@
 #include <boost/preprocessor.hpp>
 #include "../Shared/types.h"
 #include "AbstractBuffer.h"
-#include "Fragmenter/Fragmenter.h"
+
+#include "DataProvider/TableFragmentsInfo.h"
 #include "SchemaMgr/ColumnInfo.h"
 // TODO: move this header to some other place.
 #include "QueryEngine/CompilationOptions.h"
@@ -105,8 +106,7 @@ class AbstractBufferMgr {
                                                 int dict_id,
                                                 bool load_dict = true) = 0;
 
-  virtual Fragmenter_Namespace::TableInfo getTableMetadata(int db_id,
-                                                           int table_id) const = 0;
+  virtual TableFragmentsInfo getTableMetadata(int db_id, int table_id) const = 0;
 
   // Buffer API
   virtual AbstractBuffer* alloc(const size_t numBytes = 0) = 0;

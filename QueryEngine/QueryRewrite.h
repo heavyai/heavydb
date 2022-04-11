@@ -15,7 +15,6 @@
  */
 
 #include "../Analyzer/Analyzer.h"
-#include "../Fragmenter/Fragmenter.h"
 #include "../QueryEngine/Execute.h"
 
 class QueryRewriter {

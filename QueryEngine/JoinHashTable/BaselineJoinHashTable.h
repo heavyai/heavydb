@@ -137,7 +137,7 @@ class BaselineJoinHashTable : public HashJoin {
   virtual void reifyWithLayout(const HashType layout);
 
   virtual ColumnsForDevice fetchColumnsForDevice(
-      const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+      const std::vector<FragmentInfo>& fragments,
       const int device_id,
       DeviceAllocator* dev_buff_owner);
 

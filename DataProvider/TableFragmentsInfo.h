@@ -14,58 +14,18 @@
  * limitations under the License.
  */
 
-#ifndef FRAGMENTER_H
-#define FRAGMENTER_H
+#pragma once
+
+#include "DataMgr/ChunkMetadata.h"
+#include "Shared/mapd_shared_mutex.h"
+#include "Shared/types.h"
 
 #include <deque>
 #include <list>
 #include <map>
 #include <mutex>
-#include "../Catalog/ColumnDescriptor.h"
-#include "../DataMgr/ChunkMetadata.h"
-#include "../Shared/mapd_shared_mutex.h"
-#include "../Shared/types.h"
-
-namespace Data_Namespace {
-class AbstractBuffer;
-}
 
 class ResultSet;
-
-namespace Fragmenter_Namespace {
-class InsertOrderFragmenter;
-
-/**
- * @enum FragmenterType
- * stores the type of a child class of
- * AbstractTableFragmenter
- */
-
-enum FragmenterType {
-  INSERT_ORDER = 0  // these values persist in catalog.  make explicit
-};
-
-/**
- * @struct InsertData
- * @brief The data to be inserted using the fragment manager.
- *
- * The data being inserted is assumed to be in columnar format, and so the offset
- * to the beginning of each column can be calculated by multiplying the column size
- * by the number of rows.
- *
- * @todo support for variable-length data types
- */
-
-struct InsertData {
-  int databaseId;  /// identifies the database into which the data is being inserted
-  int tableId;     /// identifies the table into which the data is being inserted
-  std::vector<int> columnIds;  /// a vector of column ids for the row(s) being inserted
-  size_t numRows;              /// the number of rows being inserted
-  std::vector<DataBlockPtr> data;  /// points to the start of the data block per column
-                                   /// for the row(s) being inserted
-  std::vector<bool> is_default;    /// data for such columns consist of a single
-                                   /// replicated element (NULL or DEFAULT)
-};
 
 /**
  * @class FragmentInfo
@@ -123,22 +83,11 @@ class FragmentInfo {
   mutable ChunkMetadataMap chunkMetadataMap;
   mutable bool synthesizedNumTuplesIsValid;
   mutable bool synthesizedMetadataIsValid;
-
-  friend class InsertOrderFragmenter;
 };
 
-/**
- * @struct QueryInfo
- * @brief returned by Fragmenter classes in
- * getFragmentsForQuery - tells Executor which
- * fragments to scan from which fragmenter
- * (fragmenter id and fragment id needed for building
- * ChunkKey)
- */
-
-class TableInfo {
+class TableFragmentsInfo {
  public:
-  TableInfo() : numTuples(0) {}
+  TableFragmentsInfo() : numTuples(0) {}
 
   size_t getNumTuples() const;
 
@@ -156,7 +105,3 @@ class TableInfo {
  private:
   mutable size_t numTuples;
 };
-
-}  // namespace Fragmenter_Namespace
-
-#endif  // FRAGMENTER_H

@@ -19,7 +19,7 @@ namespace policy {
 class FragmentIDAssignmentExecutionPolicy : public ExecutionPolicy {
  public:
   FragmentIDAssignmentExecutionPolicy(ExecutorDeviceType dt) : dt_(dt){};
-  SchedulingAssignment scheduleSingleFragment(const Fragmenter_Namespace::FragmentInfo&,
+  SchedulingAssignment scheduleSingleFragment(const FragmentInfo&,
                                               size_t frag_id,
                                               size_t frag_num) const override;
   std::vector<ExecutorDeviceType> devices() const override;

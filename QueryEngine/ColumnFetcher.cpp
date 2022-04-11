@@ -73,7 +73,7 @@ ColumnFetcher::ColumnFetcher(Executor* executor,
 std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
     Executor* executor,
     const Analyzer::ColumnVar& hash_col,
-    const Fragmenter_Namespace::FragmentInfo& fragment,
+    const FragmentInfo& fragment,
     const Data_Namespace::MemoryLevel effective_mem_lvl,
     const int device_id,
     DeviceAllocator* device_allocator,
@@ -160,7 +160,7 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
 JoinColumn ColumnFetcher::makeJoinColumn(
     Executor* executor,
     const Analyzer::ColumnVar& hash_col,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::vector<FragmentInfo>& fragments,
     const Data_Namespace::MemoryLevel effective_mem_lvl,
     const int device_id,
     DeviceAllocator* device_allocator,

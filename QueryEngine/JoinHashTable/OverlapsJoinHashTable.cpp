@@ -851,7 +851,7 @@ size_t OverlapsJoinHashTable::calculateHashTableSize(size_t number_of_dimensions
 }
 
 ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDevice(
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::vector<FragmentInfo>& fragments,
     const int device_id,
     DeviceAllocator* dev_buff_owner) {
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
@@ -1103,7 +1103,7 @@ void OverlapsJoinHashTable::reify(const HashType preferred_layout) {
 }
 
 void OverlapsJoinHashTable::reifyImpl(std::vector<ColumnsForDevice>& columns_per_device,
-                                      const Fragmenter_Namespace::TableInfo& query_info,
+                                      const TableFragmentsInfo& query_info,
                                       const HashType layout,
                                       const size_t shard_count,
                                       const size_t entry_count,

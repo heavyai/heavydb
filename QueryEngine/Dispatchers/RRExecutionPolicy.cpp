@@ -16,7 +16,7 @@
 
 namespace policy {
 SchedulingAssignment RoundRobinExecutionPolicy::scheduleSingleFragment(
-    const Fragmenter_Namespace::FragmentInfo& fragment,
+    const FragmentInfo& fragment,
     size_t frag_id,
     size_t frag_num) const {
   auto device_type = frag_id % 2 ? ExecutorDeviceType::GPU : ExecutorDeviceType::CPU;

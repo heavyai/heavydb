@@ -380,7 +380,7 @@ Data_Namespace::MemoryLevel PerfectJoinHashTable::getEffectiveMemoryLevel(
 }
 
 ColumnsForDevice PerfectJoinHashTable::fetchColumnsForDevice(
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::vector<FragmentInfo>& fragments,
     const int device_id,
     DeviceAllocator* dev_buff_owner) {
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
@@ -570,10 +570,11 @@ int PerfectJoinHashTable::initHashTableForDevice(
       // GPU size returns reserved size
       CHECK_LE(hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
                gpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::GPU));
-      buffer_provider->copyToDevice(gpu_buffer_ptr,
-                  hash_table->getCpuBuffer(),
-                  hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
-                  device_id);
+      buffer_provider->copyToDevice(
+          gpu_buffer_ptr,
+          hash_table->getCpuBuffer(),
+          hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
+          device_id);
       CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
       hash_tables_for_device_[device_id] = std::move(gpu_hash_table);
 #else
@@ -628,10 +629,9 @@ int PerfectJoinHashTable::initHashTableForDevice(
   return err;
 }
 
-ChunkKey PerfectJoinHashTable::genChunkKey(
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
-    const Analyzer::Expr* outer_col_expr,
-    const Analyzer::ColumnVar* inner_col) const {
+ChunkKey PerfectJoinHashTable::genChunkKey(const std::vector<FragmentInfo>& fragments,
+                                           const Analyzer::Expr* outer_col_expr,
+                                           const Analyzer::ColumnVar* inner_col) const {
   ChunkKey chunk_key{
       executor_->getDatabaseId(), inner_col->get_table_id(), inner_col->get_column_id()};
   const auto& ti = inner_col->get_type_info();

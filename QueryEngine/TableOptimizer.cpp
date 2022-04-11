@@ -185,87 +185,7 @@ void TableOptimizer::recomputeColumnMetadata(
     const ColumnDescriptor* cd,
     std::optional<Data_Namespace::MemoryLevel> memory_level,
     const std::set<size_t>& fragment_indexes) const {
-  const auto ti = cd->columnType;
-  if (ti.is_varlen()) {
-    LOG(INFO) << "Skipping varlen column " << cd->columnName;
-    return;
-  }
-
-  CHECK(!cd->isVirtualCol);
-  auto column_info = cd->makeInfo(cat_.getDatabaseId());
-  const auto input_col_desc = std::make_shared<const InputColDescriptor>(column_info, 0);
-  const auto col_expr = makeExpr<Analyzer::ColumnVar>(column_info, 0);
-  auto max_expr =
-      makeExpr<Analyzer::AggExpr>(cd->columnType, kMAX, col_expr, false, nullptr);
-  auto min_expr =
-      makeExpr<Analyzer::AggExpr>(cd->columnType, kMIN, col_expr, false, nullptr);
-  auto count_expr =
-      makeExpr<Analyzer::AggExpr>(cd->columnType, kCOUNT, col_expr, false, nullptr);
-
-  if (ti.is_string()) {
-    const SQLTypeInfo fun_ti(kINT);
-    const auto fun_expr = makeExpr<Analyzer::KeyForStringExpr>(col_expr);
-    max_expr = makeExpr<Analyzer::AggExpr>(fun_ti, kMAX, fun_expr, false, nullptr);
-    min_expr = makeExpr<Analyzer::AggExpr>(fun_ti, kMIN, fun_expr, false, nullptr);
-  }
-  const auto ra_exe_unit = build_ra_exe_unit(
-      input_col_desc, {min_expr.get(), max_expr.get(), count_expr.get()});
-  const auto table_infos = get_table_infos(ra_exe_unit, executor_);
-  CHECK_EQ(table_infos.size(), size_t(1));
-
-  const auto co = get_compilation_options(ExecutorDeviceType::CPU);
-  const auto eo = get_execution_options();
-
-  std::unordered_map</*fragment_id*/ int, ChunkStats> stats_map;
-
-  Executor::PerFragmentCallBack compute_metadata_callback =
-      [&stats_map, cd](ResultSetPtr results,
-                       const Fragmenter_Namespace::FragmentInfo& fragment_info) {
-        if (fragment_info.getPhysicalNumTuples() == 0) {
-          // TODO(adb): Should not happen, but just to be safe...
-          LOG(WARNING) << "Skipping completely empty fragment for column "
-                       << cd->columnName;
-          return;
-        }
-
-        const auto row = results->getNextRow(false, false);
-        CHECK_EQ(row.size(), size_t(3));
-
-        const auto& ti = cd->columnType;
-
-        auto chunk_metadata = std::make_shared<ChunkMetadata>();
-        chunk_metadata->sqlType = get_logical_type_info(ti);
-
-        const auto count_val = read_scalar_target_value<int64_t>(row[2]);
-        if (count_val == 0) {
-          // Assume chunk of all nulls, bail
-          return;
-        }
-
-        bool has_nulls =
-            !(static_cast<size_t>(count_val) == fragment_info.getPhysicalNumTuples());
-
-        if (!set_metadata_from_results(*chunk_metadata, row, ti, has_nulls)) {
-          LOG(WARNING) << "Unable to process new metadata values for column "
-                       << cd->columnName;
-          return;
-        }
-
-        stats_map.emplace(
-            std::make_pair(fragment_info.fragmentId, chunk_metadata->chunkStats));
-      };
-
-  executor_->executeWorkUnitPerFragment(ra_exe_unit,
-                                        table_infos[0],
-                                        co,
-                                        eo,
-                                        data_provider_,
-                                        compute_metadata_callback,
-                                        fragment_indexes);
-
-  auto* fragmenter = td->fragmenter.get();
-  CHECK(fragmenter);
-  fragmenter->updateChunkStats(cd, stats_map, memory_level);
+  UNREACHABLE();
 }
 
 // Returns the corresponding indexes for the given fragment ids in the list of fragments
@@ -273,13 +193,5 @@ void TableOptimizer::recomputeColumnMetadata(
 std::set<size_t> TableOptimizer::getFragmentIndexes(
     const TableDescriptor* td,
     const std::set<int>& fragment_ids) const {
-  CHECK(td->fragmenter);
-  auto table_info = td->fragmenter->getFragmentsForQuery();
-  std::set<size_t> fragment_indexes;
-  for (size_t i = 0; i < table_info.fragments.size(); i++) {
-    if (shared::contains(fragment_ids, table_info.fragments[i].fragmentId)) {
-      fragment_indexes.emplace(i);
-    }
-  }
-  return fragment_indexes;
+  UNREACHABLE();
 }

@@ -64,7 +64,7 @@ class TestTableData {
     memcpy(frag_data.data(), vals.data(), frag_data.size());
 
     if (info_.fragments.size() < data_[col_id - 1].size()) {
-      Fragmenter_Namespace::FragmentInfo& frag_info = info_.fragments.emplace_back();
+      FragmentInfo& frag_info = info_.fragments.emplace_back();
       frag_info.fragmentId = info_.fragments.size();
       frag_info.physicalTableId = info_.chunkKeyPrefix[CHUNK_KEY_TABLE_IDX];
       frag_info.setPhysicalNumTuples(vals.size());
@@ -97,12 +97,12 @@ class TestTableData {
     memcpy(dst, data_[col_id - 1][frag_id - 1].data(), size);
   }
 
-  const Fragmenter_Namespace::TableInfo& getTableInfo() const { return info_; }
+  const TableFragmentsInfo& getTableInfo() const { return info_; }
 
  private:
   TableRef ref_;
   std::vector<std::vector<std::vector<int8_t>>> data_;
-  Fragmenter_Namespace::TableInfo info_;
+  TableFragmentsInfo info_;
   std::unordered_map<int, SQLTypeInfo> col_types_;
 };
 
@@ -123,8 +123,7 @@ class TestDataProvider : public AbstractDataProvider {
                    numBytes);
   }
 
-  Fragmenter_Namespace::TableInfo getTableMetadata(int db_id,
-                                                   int table_id) const override {
+  TableFragmentsInfo getTableMetadata(int db_id, int table_id) const override {
     CHECK_EQ(db_id, db_id_);
     CHECK_EQ(tables_.count(table_id), (size_t)1);
     return tables_.at(table_id).getTableInfo();

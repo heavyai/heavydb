@@ -35,8 +35,7 @@ class DataMgrDataProvider : public DataProvider {
       const size_t num_bytes,
       const size_t num_elems) override;
 
-  Fragmenter_Namespace::TableInfo getTableMetadata(int db_id,
-                                                   int table_id) const override;
+  TableFragmentsInfo getTableMetadata(int db_id, int table_id) const override;
 
   const DictDescriptor* getDictMetadata(int db_id,
                                         int dict_id,

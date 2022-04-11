@@ -58,8 +58,6 @@
 
 #include "Analyzer/Analyzer.h"
 #include "Calcite/Calcite.h"
-#include "Fragmenter/Fragmenter.h"
-#include "Fragmenter/SortedOrderFragmenter.h"
 #include "LockMgr/LockMgr.h"
 #include "MigrationMgr/MigrationMgr.h"
 #include "QueryEngine/Execute.h"
@@ -76,8 +74,6 @@
 #include "SharedDictionaryValidator.h"
 
 using Chunk_NS::Chunk;
-using Fragmenter_Namespace::InsertOrderFragmenter;
-using Fragmenter_Namespace::SortedOrderFragmenter;
 using std::list;
 using std::map;
 using std::pair;
@@ -194,7 +190,6 @@ Catalog::~Catalog() {
   for (TableDescriptorMap::iterator tableDescIt = tableDescriptorMap_.begin();
        tableDescIt != tableDescriptorMap_.end();
        ++tableDescIt) {
-    tableDescIt->second->fragmenter = nullptr;
     delete tableDescIt->second;
   }
 
@@ -868,8 +863,6 @@ void Catalog::buildMaps() {
     td->nColumns = sqliteConnector_.getData<int>(r, 2);
     td->isView = sqliteConnector_.getData<bool>(r, 3);
     td->fragments = sqliteConnector_.getData<string>(r, 4);
-    td->fragType =
-        (Fragmenter_Namespace::FragmenterType)sqliteConnector_.getData<int>(r, 5);
     td->maxFragRows = sqliteConnector_.getData<int>(r, 6);
     td->maxChunkSize = sqliteConnector_.getData<int64_t>(r, 7);
     td->fragPageSize = sqliteConnector_.getData<int>(r, 8);
@@ -881,9 +874,6 @@ void Catalog::buildMaps() {
     td->userId = sqliteConnector_.getData<int>(r, 15);
     td->sortedColumnId =
         sqliteConnector_.isNull(r, 16) ? 0 : sqliteConnector_.getData<int>(r, 16);
-    if (!td->isView) {
-      td->fragmenter = nullptr;
-    }
     td->maxRollbackEpochs = sqliteConnector_.getData<int>(r, 18);
 
     tableDescriptorMap_[to_upper(td->tableName)] = td;
@@ -953,7 +943,6 @@ void Catalog::buildMaps() {
     int32_t tableId = sqliteConnector_.getData<int>(r, 0);
     TableDescriptor* td = tableDescriptorMapById_[tableId];
     td->viewSQL = sqliteConnector_.getData<string>(r, 1);
-    td->fragmenter = nullptr;
   }
 
   string frontendViewQuery(
@@ -1085,7 +1074,6 @@ void Catalog::removeTableFromMap(const string& tableName,
 
   tableDescriptorMapById_.erase(tableDescIt);
   tableDescriptorMap_.erase(to_upper(tableName));
-  td->fragmenter = nullptr;
 
   bool isTemp = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
   delete td;
@@ -1244,44 +1232,7 @@ void Catalog::addLinkToMap(LinkDescriptor& ld) {
 }
 
 void Catalog::instantiateFragmenter(TableDescriptor* td) const {
-  auto time_ms = measure<>::execution([&]() {
-    // instanciate table fragmenter upon first use
-    // assume only insert order fragmenter is supported
-    CHECK_EQ(td->fragType, Fragmenter_Namespace::FragmenterType::INSERT_ORDER);
-    vector<Chunk> chunkVec;
-    list<const ColumnDescriptor*> columnDescs;
-    getAllColumnMetadataForTableImpl(td, columnDescs, true, false, true);
-    for (auto& cd : columnDescs) {
-      chunkVec.emplace_back(cd->makeInfo(currentDB_.dbId));
-    }
-    ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
-    if (td->sortedColumnId > 0) {
-      td->fragmenter = std::make_shared<SortedOrderFragmenter>(chunkKeyPrefix,
-                                                               chunkVec,
-                                                               dataMgr_.get(),
-                                                               const_cast<Catalog*>(this),
-                                                               td->tableId,
-                                                               td->maxFragRows,
-                                                               td->maxChunkSize,
-                                                               td->fragPageSize,
-                                                               td->maxRows,
-                                                               td->persistenceLevel);
-    } else {
-      td->fragmenter = std::make_shared<InsertOrderFragmenter>(chunkKeyPrefix,
-                                                               chunkVec,
-                                                               dataMgr_.get(),
-                                                               const_cast<Catalog*>(this),
-                                                               td->tableId,
-                                                               td->maxFragRows,
-                                                               td->maxChunkSize,
-                                                               td->fragPageSize,
-                                                               td->maxRows,
-                                                               td->persistenceLevel,
-                                                               !td->storageType.empty());
-    }
-  });
-  LOG(INFO) << "Instantiating Fragmenter for table " << td->tableName << " took "
-            << time_ms << "ms";
+  UNREACHABLE();
 }
 
 const TableDescriptor* Catalog::getMetadataForTable(const string& tableName,
@@ -1295,9 +1246,6 @@ const TableDescriptor* Catalog::getMetadataForTable(const string& tableName,
   }
   TableDescriptor* td = tableDescIt->second;
   std::unique_lock<std::mutex> td_lock(*td->mutex_.get());
-  if (populateFragmenter && td->fragmenter == nullptr && !td->isView) {
-    instantiateFragmenter(td);
-  }
   return td;  // returns pointer to table descriptor
 }
 
@@ -1311,9 +1259,6 @@ const TableDescriptor* Catalog::getMetadataForTableImpl(
   TableDescriptor* td = tableDescIt->second;
   if (populateFragmenter) {
     std::unique_lock<std::mutex> td_lock(*td->mutex_.get());
-    if (td->fragmenter == nullptr && !td->isView) {
-      instantiateFragmenter(td);
-    }
   }
   return td;  // returns pointer to table descriptor
 }
@@ -1930,7 +1875,7 @@ void Catalog::createTable(
                                    std::to_string(td.nColumns),
                                    std::to_string(td.isView),
                                    "",
-                                   std::to_string(td.fragType),
+                                   "",
                                    std::to_string(td.maxFragRows),
                                    std::to_string(td.maxChunkSize),
                                    std::to_string(td.fragPageSize),
@@ -2452,13 +2397,6 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
   cat_write_lock write_lock(this);
 
   const int tableId = td->tableId;
-  // must destroy fragmenter before deleteChunks is called.
-  if (td->fragmenter != nullptr) {
-    auto tableDescIt = tableDescriptorMapById_.find(tableId);
-    CHECK(tableDescIt != tableDescriptorMapById_.end());
-    tableDescIt->second->fragmenter = nullptr;
-    CHECK(td->fragmenter == nullptr);
-  }
   ChunkKey chunkKeyPrefix = {currentDB_.dbId, tableId};
   // assuming deleteChunksWithPrefix is atomic
   dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix, MemoryLevel::CPU_LEVEL);
@@ -2519,33 +2457,12 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
 }
 
 void Catalog::removeFragmenterForTable(const int table_id) const {
-  cat_write_lock write_lock(this);
-  auto td = getMetadataForTable(table_id, false);
-  if (td->fragmenter != nullptr) {
-    auto tableDescIt = tableDescriptorMapById_.find(table_id);
-    CHECK(tableDescIt != tableDescriptorMapById_.end());
-    tableDescIt->second->fragmenter = nullptr;
-    CHECK(td->fragmenter == nullptr);
-  }
+  UNREACHABLE();
 }
 
 // used by rollback_table_epoch to clean up in memory artifacts after a rollback
 void Catalog::removeChunksUnlocked(const int table_id) const {
-  auto td = getMetadataForTable(table_id);
-  CHECK(td);
-
-  if (td->fragmenter != nullptr) {
-    auto tableDescIt = tableDescriptorMapById_.find(table_id);
-    CHECK(tableDescIt != tableDescriptorMapById_.end());
-    tableDescIt->second->fragmenter = nullptr;
-    CHECK(td->fragmenter == nullptr);
-  }
-
-  // remove the chunks from in memory structures
-  ChunkKey chunkKey = {currentDB_.dbId, table_id};
-
-  dataMgr_->deleteChunksWithPrefix(chunkKey, MemoryLevel::CPU_LEVEL);
-  dataMgr_->deleteChunksWithPrefix(chunkKey, MemoryLevel::GPU_LEVEL);
+  UNREACHABLE();
 }
 
 void Catalog::dropTable(const TableDescriptor* td) {
@@ -3197,15 +3114,6 @@ void Catalog::eraseDBData() {
 
 void Catalog::eraseTablePhysicalData(const TableDescriptor* td) {
   const int tableId = td->tableId;
-  // must destroy fragmenter before deleteChunks is called.
-  if (td->fragmenter != nullptr) {
-    auto tableDescIt = tableDescriptorMapById_.find(tableId);
-    CHECK(tableDescIt != tableDescriptorMapById_.end());
-    {
-      INJECT_TIMER(deleting_fragmenter);
-      tableDescIt->second->fragmenter = nullptr;
-    }
-  }
   ChunkKey chunkKeyPrefix = {currentDB_.dbId, tableId};
   {
     INJECT_TIMER(deleteChunksWithPrefix);
@@ -3986,12 +3894,8 @@ void Catalog::restoreOldOwnersInMemory(
 }
 
 TableInfoPtr Catalog::makeInfo(const TableDescriptor* td) const {
-  return std::make_shared<TableInfo>(getDatabaseId(),
-                                     td->tableId,
-                                     td->tableName,
-                                     td->isView,
-                                     td->persistenceLevel,
-                                     td->fragmenter->getNumFragments());
+  return std::make_shared<TableInfo>(
+      getDatabaseId(), td->tableId, td->tableName, td->isView, td->persistenceLevel, 0);
 }
 
 }  // namespace Catalog_Namespace

@@ -13,11 +13,11 @@
 
 #pragma once
 
-#include "Fragmenter/Fragmenter.h"
+#include "DataProvider/TableFragmentsInfo.h"
 #include "QueryEngine/CompilationOptions.h"
 
 namespace policy {
-using TableFragments = std::vector<Fragmenter_Namespace::FragmentInfo>;
+using TableFragments = std::vector<FragmentInfo>;
 
 struct SchedulingAssignment {
   ExecutorDeviceType dt;
@@ -26,10 +26,9 @@ struct SchedulingAssignment {
 
 class ExecutionPolicy {
  public:
-  virtual SchedulingAssignment scheduleSingleFragment(
-      const Fragmenter_Namespace::FragmentInfo&,
-      size_t frag_id,
-      size_t frag_num) const = 0;
+  virtual SchedulingAssignment scheduleSingleFragment(const FragmentInfo&,
+                                                      size_t frag_id,
+                                                      size_t frag_num) const = 0;
   virtual std::vector<ExecutorDeviceType> devices() const {
     return {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU};
   }

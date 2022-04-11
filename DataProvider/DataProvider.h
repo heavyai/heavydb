@@ -20,9 +20,10 @@
 #include "Catalog/DictDescriptor.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "DataMgr/MemoryLevel.h"
-#include "Fragmenter/Fragmenter.h"
 #include "SchemaMgr/ColumnInfo.h"
 #include "Shared/types.h"
+
+#include "TableFragmentsInfo.h"
 
 class DataProvider {
  public:
@@ -35,8 +36,7 @@ class DataProvider {
       const size_t num_bytes,
       const size_t num_elems) = 0;
 
-  virtual Fragmenter_Namespace::TableInfo getTableMetadata(int db_id,
-                                                           int table_id) const = 0;
+  virtual TableFragmentsInfo getTableMetadata(int db_id, int table_id) const = 0;
 
   virtual const DictDescriptor* getDictMetadata(int db_id,
                                                 int dict_id,

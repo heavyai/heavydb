@@ -295,7 +295,7 @@ const TemporaryTables* Executor::getTemporaryTables() const {
   return temporary_tables_;
 }
 
-Fragmenter_Namespace::TableInfo Executor::getTableInfo(const int table_id) const {
+TableFragmentsInfo Executor::getTableInfo(const int table_id) const {
   return input_table_info_cache_.getTableInfo(table_id);
 }
 
@@ -1119,7 +1119,6 @@ namespace {
 // other information than the number of tuples in each table and multiplying them
 // together.
 size_t compute_buffer_entry_guess(const std::vector<InputTableInfo>& query_infos) {
-  using Fragmenter_Namespace::FragmentInfo;
   // Check for overflows since we're multiplying potentially big table sizes.
   using checked_size_t = boost::multiprecision::number<
       boost::multiprecision::cpp_int_backend<64,
@@ -2631,14 +2630,13 @@ std::vector<size_t> Executor::getTableFragmentIndices(
 
 // Returns true iff the join between two fragments cannot yield any results, per
 // shard information. The pair can be skipped to avoid full broadcast.
-bool Executor::skipFragmentPair(
-    const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
-    const Fragmenter_Namespace::FragmentInfo& inner_fragment_info,
-    const int table_idx,
-    const std::unordered_map<int, const Analyzer::BinOper*>&
-        inner_table_id_to_join_condition,
-    const RelAlgExecutionUnit& ra_exe_unit,
-    const ExecutorDeviceType device_type) {
+bool Executor::skipFragmentPair(const FragmentInfo& outer_fragment_info,
+                                const FragmentInfo& inner_fragment_info,
+                                const int table_idx,
+                                const std::unordered_map<int, const Analyzer::BinOper*>&
+                                    inner_table_id_to_join_condition,
+                                const RelAlgExecutionUnit& ra_exe_unit,
+                                const ExecutorDeviceType device_type) {
   return false;
 }
 
@@ -3755,7 +3753,7 @@ std::tuple<bool, int64_t, int64_t> get_hpt_overflow_underflow_safe_scaled_values
 FragmentSkipStatus Executor::canSkipFragmentForFpQual(
     const Analyzer::BinOper* comp_expr,
     const Analyzer::ColumnVar* lhs_col,
-    const Fragmenter_Namespace::FragmentInfo& fragment,
+    const FragmentInfo& fragment,
     const Analyzer::Constant* rhs_const) const {
   const int col_id = lhs_col->get_column_id();
   auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
@@ -3814,7 +3812,7 @@ FragmentSkipStatus Executor::canSkipFragmentForFpQual(
 
 std::pair<bool, int64_t> Executor::skipFragment(
     const InputDescriptor& table_desc,
-    const Fragmenter_Namespace::FragmentInfo& fragment,
+    const FragmentInfo& fragment,
     const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
     const std::vector<uint64_t>& frag_offsets,
     const size_t frag_idx) {
@@ -3994,7 +3992,7 @@ std::pair<bool, int64_t> Executor::skipFragment(
 std::pair<bool, int64_t> Executor::skipFragmentInnerJoins(
     const InputDescriptor& table_desc,
     const RelAlgExecutionUnit& ra_exe_unit,
-    const Fragmenter_Namespace::FragmentInfo& fragment,
+    const FragmentInfo& fragment,
     const std::vector<uint64_t>& frag_offsets,
     const size_t frag_idx) {
   std::pair<bool, int64_t> skip_frag{false, -1};

@@ -18,7 +18,7 @@
 namespace policy {
 class RoundRobinExecutionPolicy : public ExecutionPolicy {
  public:
-  SchedulingAssignment scheduleSingleFragment(const Fragmenter_Namespace::FragmentInfo&,
+  SchedulingAssignment scheduleSingleFragment(const FragmentInfo&,
                                               size_t frag_id,
                                               size_t frag_num) const override;
 };

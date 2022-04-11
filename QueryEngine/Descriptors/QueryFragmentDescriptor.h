@@ -37,10 +37,6 @@
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/Dispatchers/ExecutionPolicy.h"
 
-namespace Fragmenter_Namespace {
-class FragmentInfo;
-}
-
 namespace Data_Namespace {
 struct MemoryInfo;
 }
@@ -56,7 +52,7 @@ struct FragmentsPerTable {
 };
 
 using FragmentsList = std::vector<FragmentsPerTable>;
-using TableFragments = std::vector<Fragmenter_Namespace::FragmentInfo>;
+using TableFragments = std::vector<FragmentInfo>;
 
 struct ExecutionKernelDescriptor {
   int device_id;
@@ -204,7 +200,7 @@ class QueryFragmentDescriptor {
                               const RelAlgExecutionUnit& ra_exe_unit,
                               const ExecutionKernelDescriptor& kernel) const;
 
-  void checkDeviceMemoryUsage(const Fragmenter_Namespace::FragmentInfo& fragment,
+  void checkDeviceMemoryUsage(const FragmentInfo& fragment,
                               const int device_id,
                               const size_t num_cols);
 };

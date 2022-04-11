@@ -162,10 +162,9 @@ class BufferMgr : public AbstractBufferMgr {  // implements
     return nullptr;
   }
 
-  Fragmenter_Namespace::TableInfo getTableMetadata(int db_id,
-                                                   int table_id) const override {
+  TableFragmentsInfo getTableMetadata(int db_id, int table_id) const override {
     UNREACHABLE();
-    return Fragmenter_Namespace::TableInfo{};
+    return TableFragmentsInfo{};
   }
 
   // Buffer API
