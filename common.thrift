@@ -1,5 +1,5 @@
 namespace java ai.heavy.thrift.server
-namespace py heavy.common
+namespace py heavydb.common
 
 enum TDeviceType {
   CPU,

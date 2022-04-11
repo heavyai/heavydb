@@ -1,15 +1,15 @@
 files: ^python/
 repos:
     - repo: https://github.com/psf/black
-      rev: 19.10b0
+      rev: 22.3.0
       hooks:
         - id: black
-          types:
-            - python
+          language_version: python3.10
+          args: [--config, "python/pyproject.toml"]
 
     - repo: https://gitlab.com/pycqa/flake8
-      rev: 3.7.9
+      rev: 4.0.1
       hooks:
         - id: flake8
-          types:
-            - python
+          types: [python]
+          args: [--config, "python/.flake8"]

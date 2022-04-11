@@ -1,6 +1,6 @@
 import pytest
-from heavy.cursor import Cursor, _bind_parameters
-from omnisci import connect
+from heavydb.cursor import Cursor, _bind_parameters
+from heavydb import connect
 
 
 @pytest.fixture

@@ -1,5 +1,5 @@
 namespace java ai.heavy.thrift.calciteserver
-namespace py heavy.extension_functions
+namespace py heavydb.extension_functions
 
 /* See QueryEngine/ExtensionFunctionsWhitelist.h for required values */
 enum TExtArgumentType {

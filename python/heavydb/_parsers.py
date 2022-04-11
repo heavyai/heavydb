@@ -1,11 +1,11 @@
 """
-Utility methods for parsing data returned from OmniSciDB
+Utility methods for parsing data returned from HeavyDB
 """
 
 import datetime
 from collections import namedtuple
 from sqlalchemy import text
-import heavy.common.ttypes as T
+import heavydb.common.ttypes as T
 from ._utils import seconds_to_time, datetime_in_precisions
 
 Description = namedtuple(

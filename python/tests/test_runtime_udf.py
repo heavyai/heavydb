@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 import numpy as np
-import pandas.util.testing as tm
+import pandas.testing as tm
 
 pytest.importorskip('rbc')
 
@@ -24,7 +24,7 @@ def catch_udf_support_disabled(mth):
     return new_mth
 
 
-@pytest.mark.usefixtures("omnisci_server")
+@pytest.mark.usefixtures("heavydb_server")
 class TestRuntimeUDF:
     def load_test_udf_incr(self, con):
         con.execute('drop table if exists test_udf_incr')

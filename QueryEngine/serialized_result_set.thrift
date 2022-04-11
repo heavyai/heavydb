@@ -1,5 +1,5 @@
 namespace java ai.heavy.thrift.server
-namespace py heavy.serialized_result_set
+namespace py heavydb.serialized_result_set
 
 include "../common.thrift"
 
