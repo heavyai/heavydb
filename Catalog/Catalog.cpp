@@ -59,7 +59,6 @@
 #include "Analyzer/Analyzer.h"
 #include "Calcite/Calcite.h"
 #include "LockMgr/LockMgr.h"
-#include "MigrationMgr/MigrationMgr.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
 #include "Shared/DateTimeParser.h"
@@ -700,12 +699,6 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
   }
 }
 
-void Catalog::checkDateInDaysColumnMigration() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
-  migrations::MigrationMgr::migrateDateInDaysMetadata(
-      tableDescriptorMapById_, getCurrentDB().dbId, this, sqliteConnector_);
-}
-
 void Catalog::createDashboardSystemRoles() {
   std::unordered_map<std::string, std::pair<int, std::string>> dashboards;
   std::vector<std::string> dashboard_ids;
@@ -799,7 +792,6 @@ void Catalog::CheckAndExecuteMigrations() {
 }
 
 void Catalog::CheckAndExecuteMigrationsPostBuildMaps() {
-  checkDateInDaysColumnMigration();
   createDashboardSystemRoles();
 }
 

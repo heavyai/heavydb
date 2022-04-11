@@ -406,7 +406,6 @@ class Catalog final {
   void updateFrontendViewsToDashboards();
   void updateCustomExpressionsSchema();
   void recordOwnershipOfObjectsInObjectPermissions();
-  void checkDateInDaysColumnMigration();
   void createDashboardSystemRoles();
   void buildMaps();
   void addTableToMap(const TableDescriptor* td,
