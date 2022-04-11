@@ -1,6 +1,9 @@
+import os
+import importlib_metadata
+
+
 def get_source_version():
-    import os
-    d = dict(MAJOR='5', MINOR='6', MICRO='0', EXTRA='none')
+    d = dict(MAJOR='6', MINOR='0', MICRO='0', EXTRA='none')
     here = os.path.abspath(os.path.dirname(__file__))
     try:
         f = open(os.path.join(here, '..', '..', 'CMakeLists.txt'))
@@ -15,9 +18,8 @@ def get_source_version():
 
 
 def get_package_version():
-    from pkg_resources import get_distribution, DistributionNotFound
     try:
-        return get_distribution(__name__).version
-    except DistributionNotFound:
+        return importlib_metadata.version(__name__)
+    except importlib_metadata.PackageNotFoundError:
         # package is not installed
         return get_source_version()

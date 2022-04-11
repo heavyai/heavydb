@@ -4,7 +4,7 @@ Define exceptions as specified by the DB API 2.0 spec.
 Includes some helper methods for translating thrift
 exceptions to the ones defined here.
 """
-from heavy.thrift.ttypes import TDBException
+from heavydb.thrift.ttypes import TDBException
 
 
 class Warning(Exception):

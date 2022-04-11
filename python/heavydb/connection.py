@@ -1,20 +1,17 @@
 """
 
-Connect to an OmniSci database.
+Connect to an HeavyDB database.
 """
 from collections import namedtuple
-import base64
 from sqlalchemy.engine.url import make_url
 from thrift.protocol import TBinaryProtocol, TJSONProtocol
 from thrift.transport import TSocket, TSSLSocket, THttpClient, TTransport
 from thrift.transport.TSocket import TTransportException
-from heavy.thrift.OmniSci import Client
-from heavy.thrift.ttypes import TDBException
+from heavydb.thrift.Heavy import Client
+from heavydb.thrift.ttypes import TDBException
 
 from .cursor import Cursor
 from .exceptions import _translate_exception, OperationalError
-
-from ._parsers import _extract_column_details
 
 from ._samlutils import get_saml_response
 
@@ -88,12 +85,12 @@ def connect(
     You can either pass a string ``uri``, all the individual components,
     or an existing sessionid excluding user, password, and database
 
-    >>> connect('mapd://admin:HyperInteractive@localhost:6274/omnisci?'
+    >>> connect('heavydb://admin:HyperInteractive@localhost:6274/heavyai?'
     ...         'protocol=binary')
     Connection(mapd://mapd:***@localhost:6274/mapd?protocol=binary)
 
     >>> connect(user='admin', password='HyperInteractive', host='localhost',
-    ...         port=6274, dbname='omnisci')
+    ...         port=6274, dbname='heavyai')
 
     >>> connect(user='admin', password='HyperInteractive', host='localhost',
     ...         port=443, idpurl='https://sso.localhost/logon',
@@ -170,7 +167,7 @@ def _parse_uri(uri):
 
 
 class Connection:
-    """Connect to your OmniSci database."""
+    """Connect to your HeavyDB database."""
 
     def __init__(
         self,
@@ -310,20 +307,20 @@ class Connection:
                 "http[s]"
             )
 
-        # if OmniSci version <4.6, raise RuntimeError, as data import can be
+        # if HeavyDB version <4.6, raise RuntimeError, as data import can be
         # incorrect for columnar date loads
         # Caused by https://github.com/omnisci/pymapd/pull/188
         semver = self._client.get_version()
         if Version(semver.split("-")[0]) < Version("4.6"):
             raise RuntimeError(
-                f"Version {semver} of OmniSci detected. "
+                f"Version {semver} of HeavyDB detected. "
                 "Please use pymapd <0.11. See release notes "
                 "for more details."
             )
 
     def __repr__(self):
         tpl = (
-            'Connection(omnisci://{user}:***@{host}:{port}/{dbname}?'
+            'Connection(heavydb://{user}:***@{host}:{port}/{dbname}?'
             'protocol={protocol})'
         )
         return tpl.format(
@@ -358,7 +355,7 @@ class Connection:
         self._rbc = None
 
     def commit(self):
-        """This is a noop, as OmniSci does not provide transactions.
+        """This is a noop, as HeavyDB does not provide transactions.
 
         Implemented to comply with the DBI specification.
         """
@@ -406,7 +403,7 @@ class Connection:
         return self._rbc(*args, **kwargs)
 
     def register_runtime_udfs(self):
-        """Register any bending Runtime UDF functions in OmniSci server.
+        """Register any bending Runtime UDF functions in HeavyDB server.
 
         If no Runtime UDFs have been defined, the call to this method
         is noop.

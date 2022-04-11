@@ -6,17 +6,18 @@ from uuid import uuid4
 import pytest
 from thrift.transport import TSocket, TTransport
 from thrift.transport.TSocket import TTransportException
-from omnisci import connect
+from heavydb import connect
 import random
 import string
 
-omniscihost = os.environ.get('OMNISCI_HOST', 'localhost')
+heavydb_host = os.environ.get('HEAVYDB_HOST', 'localhost')
+
 
 def _check_open():
     """
-    Test to see if OmniSci running on localhost and socket open
+    Test to see if HeavyDB running on localhost and socket open
     """
-    socket = TSocket.TSocket(omniscihost, 6274)
+    socket = TSocket.TSocket(heavydb_host, 6274)
     transport = TTransport.TBufferedTransport(socket)
 
     try:
@@ -27,8 +28,8 @@ def _check_open():
 
 
 @pytest.fixture(scope='session')
-def omnisci_server():
-    """Ensure an omnisci server is running, optionally starting one if none"""
+def heavydb_server():
+    """Ensure a HeavyDB server is running, optionally starting one if none"""
     if _check_open():
         # already running before pytest started
         pass
@@ -46,7 +47,6 @@ def omnisci_server():
                 '6274:6274',
                 '-p',
                 '9092:9092',
-                '--name=mapd',
                 'omnisci/core-os-cpu:latest',
             ]
         )
@@ -58,24 +58,24 @@ def omnisci_server():
 
 
 @pytest.fixture(scope='session')
-def con(omnisci_server):
+def con(heavydb_server):
     """
-    Fixture to provide Connection for tests run against live OmniSci instance
+    Fixture to provide Connection for tests run against live HeavyDB instance
     """
     return connect(
         user="admin",
         password='HyperInteractive',
-        host=omniscihost,
+        host=heavydb_host,
         port=6274,
         protocol='binary',
-        dbname='omnisci',
+        dbname='heavyai',
     )
 
 
 @pytest.fixture
 def mock_client(mocker):
-    """A magicmock for heavy.connection.Client"""
-    return mocker.patch("omnisci.connection.Client")
+    """A magicmock for heavydb.connection.Client"""
+    return mocker.patch("heavydb.connection.Client")
 
 
 def no_gpu():

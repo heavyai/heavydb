@@ -11,10 +11,10 @@ from thrift.protocol.TProtocol import TProtocolException
 from thrift.TRecursive import fix_spec
 
 import sys
-import heavy.common.ttypes
-import heavy.completion_hints.ttypes
-import heavy.serialized_result_set.ttypes
-import heavy.extension_functions.ttypes
+import heavydb.common.ttypes
+import heavydb.completion_hints.ttypes
+import heavydb.serialized_result_set.ttypes
+import heavydb.extension_functions.ttypes
 
 from thrift.transport import TTransport
 all_structs = []
@@ -651,7 +651,7 @@ class TColumnType(object):
                     iprot.skip(ftype)
             elif fid == 2:
                 if ftype == TType.STRUCT:
-                    self.col_type = heavy.common.ttypes.TTypeInfo()
+                    self.col_type = heavydb.common.ttypes.TTypeInfo()
                     self.col_type.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -1177,7 +1177,7 @@ class TStepResult(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.serialized_rows = heavy.serialized_result_set.ttypes.TSerializedRows()
+                    self.serialized_rows = heavydb.serialized_result_set.ttypes.TSerializedRows()
                     self.serialized_rows.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -3643,7 +3643,7 @@ class TTableMeta(object):
                     self.col_types = []
                     (_etype129, _size126) = iprot.readListBegin()
                     for _i130 in range(_size126):
-                        _elem131 = heavy.common.ttypes.TTypeInfo()
+                        _elem131 = heavydb.common.ttypes.TTypeInfo()
                         _elem131.read(iprot)
                         self.col_types.append(_elem131)
                     iprot.readListEnd()
@@ -7172,7 +7172,7 @@ all_structs.append(TColumnType)
 TColumnType.thrift_spec = (
     None,  # 0
     (1, TType.STRING, 'col_name', 'UTF8', None, ),  # 1
-    (2, TType.STRUCT, 'col_type', [heavy.common.ttypes.TTypeInfo, None], None, ),  # 2
+    (2, TType.STRUCT, 'col_type', [heavydb.common.ttypes.TTypeInfo, None], None,),  # 2
     (3, TType.BOOL, 'is_reserved_keyword', None, None, ),  # 3
     (4, TType.STRING, 'src_name', 'UTF8', None, ),  # 4
     (5, TType.BOOL, 'is_system', None, None, ),  # 5
@@ -7213,7 +7213,7 @@ TKrb5Session.thrift_spec = (
 all_structs.append(TStepResult)
 TStepResult.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'serialized_rows', [heavy.serialized_result_set.ttypes.TSerializedRows, None], None, ),  # 1
+    (1, TType.STRUCT, 'serialized_rows', [heavydb.serialized_result_set.ttypes.TSerializedRows, None], None,),  # 1
     (2, TType.BOOL, 'execution_finished', None, None, ),  # 2
     (3, TType.I32, 'merge_type', None, None, ),  # 3
     (4, TType.BOOL, 'sharded', None, None, ),  # 4
@@ -7428,7 +7428,7 @@ TTableMeta.thrift_spec = (
     (7, TType.I64, 'max_rows', None, None, ),  # 7
     (8, TType.I64, 'table_id', None, None, ),  # 8
     (9, TType.I64, 'max_table_id', None, None, ),  # 9
-    (10, TType.LIST, 'col_types', (TType.STRUCT, [heavy.common.ttypes.TTypeInfo, None], False), None, ),  # 10
+    (10, TType.LIST, 'col_types', (TType.STRUCT, [heavydb.common.ttypes.TTypeInfo, None], False), None,),  # 10
     (11, TType.LIST, 'col_names', (TType.STRING, 'UTF8', False), None, ),  # 11
 )
 all_structs.append(TTableRefreshInfo)

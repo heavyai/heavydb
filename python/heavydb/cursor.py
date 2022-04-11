@@ -1,4 +1,4 @@
-import heavy.thrift.ttypes as T
+import heavydb.thrift.ttypes as T
 from .exceptions import _translate_exception
 from ._parsers import _bind_parameters, _extract_description, _extract_col_vals
 

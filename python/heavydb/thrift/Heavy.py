@@ -13888,7 +13888,7 @@ class get_completion_hints_result(object):
                     self.success = []
                     (_etype370, _size367) = iprot.readListBegin()
                     for _i371 in range(_size367):
-                        _elem372 = heavy.completion_hints.ttypes.TCompletionHint()
+                        _elem372 = heavydb.completion_hints.ttypes.TCompletionHint()
                         _elem372.read(iprot)
                         self.success.append(_elem372)
                     iprot.readListEnd()
@@ -13938,7 +13938,7 @@ class get_completion_hints_result(object):
         return not (self == other)
 all_structs.append(get_completion_hints_result)
 get_completion_hints_result.thrift_spec = (
-    (0, TType.LIST, 'success', (TType.STRUCT, [heavy.completion_hints.ttypes.TCompletionHint, None], False), None, ),  # 0
+    (0, TType.LIST, 'success', (TType.STRUCT, [heavydb.completion_hints.ttypes.TCompletionHint, None], False), None,),  # 0
     (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
@@ -20166,7 +20166,7 @@ class broadcast_serialized_rows_args(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.serialized_rows = heavy.serialized_result_set.ttypes.TSerializedRows()
+                    self.serialized_rows = heavydb.serialized_result_set.ttypes.TSerializedRows()
                     self.serialized_rows.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -20248,7 +20248,7 @@ class broadcast_serialized_rows_args(object):
 all_structs.append(broadcast_serialized_rows_args)
 broadcast_serialized_rows_args.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'serialized_rows', [heavy.serialized_result_set.ttypes.TSerializedRows, None], None, ),  # 1
+    (1, TType.STRUCT, 'serialized_rows', [heavydb.serialized_result_set.ttypes.TSerializedRows, None], None,),  # 1
     (2, TType.LIST, 'row_desc', (TType.STRUCT, [TColumnType, None], False), None, ),  # 2
     (3, TType.I64, 'query_id', None, None, ),  # 3
     (4, TType.I64, 'subquery_id', None, None, ),  # 4
@@ -22707,7 +22707,7 @@ class register_runtime_extension_functions_args(object):
                     self.udfs = []
                     (_etype669, _size666) = iprot.readListBegin()
                     for _i670 in range(_size666):
-                        _elem671 = heavy.extension_functions.ttypes.TUserDefinedFunction()
+                        _elem671 = heavydb.extension_functions.ttypes.TUserDefinedFunction()
                         _elem671.read(iprot)
                         self.udfs.append(_elem671)
                     iprot.readListEnd()
@@ -22718,7 +22718,7 @@ class register_runtime_extension_functions_args(object):
                     self.udtfs = []
                     (_etype675, _size672) = iprot.readListBegin()
                     for _i676 in range(_size672):
-                        _elem677 = heavy.extension_functions.ttypes.TUserDefinedTableFunction()
+                        _elem677 = heavydb.extension_functions.ttypes.TUserDefinedTableFunction()
                         _elem677.read(iprot)
                         self.udtfs.append(_elem677)
                     iprot.readListEnd()
@@ -22791,8 +22791,8 @@ all_structs.append(register_runtime_extension_functions_args)
 register_runtime_extension_functions_args.thrift_spec = (
     None,  # 0
     (1, TType.STRING, 'session', 'UTF8', None, ),  # 1
-    (2, TType.LIST, 'udfs', (TType.STRUCT, [heavy.extension_functions.ttypes.TUserDefinedFunction, None], False), None, ),  # 2
-    (3, TType.LIST, 'udtfs', (TType.STRUCT, [heavy.extension_functions.ttypes.TUserDefinedTableFunction, None], False), None, ),  # 3
+    (2, TType.LIST, 'udfs', (TType.STRUCT, [heavydb.extension_functions.ttypes.TUserDefinedFunction, None], False), None,),  # 2
+    (3, TType.LIST, 'udtfs', (TType.STRUCT, [heavydb.extension_functions.ttypes.TUserDefinedTableFunction, None], False), None,),  # 3
     (4, TType.MAP, 'device_ir_map', (TType.STRING, 'UTF8', TType.STRING, 'UTF8', False), None, ),  # 4
 )
 
@@ -23254,7 +23254,7 @@ class get_table_function_details_result(object):
                     self.success = []
                     (_etype713, _size710) = iprot.readListBegin()
                     for _i714 in range(_size710):
-                        _elem715 = heavy.extension_functions.ttypes.TUserDefinedTableFunction()
+                        _elem715 = heavydb.extension_functions.ttypes.TUserDefinedTableFunction()
                         _elem715.read(iprot)
                         self.success.append(_elem715)
                     iprot.readListEnd()
@@ -23304,7 +23304,7 @@ class get_table_function_details_result(object):
         return not (self == other)
 all_structs.append(get_table_function_details_result)
 get_table_function_details_result.thrift_spec = (
-    (0, TType.LIST, 'success', (TType.STRUCT, [heavy.extension_functions.ttypes.TUserDefinedTableFunction, None], False), None, ),  # 0
+    (0, TType.LIST, 'success', (TType.STRUCT, [heavydb.extension_functions.ttypes.TUserDefinedTableFunction, None], False), None,),  # 0
     (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 fix_spec(all_structs)
