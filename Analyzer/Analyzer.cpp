@@ -33,6 +33,94 @@
 #include <iostream>
 #include <stdexcept>
 
+namespace {
+
+bool expr_is_null(const Analyzer::Expr* expr) {
+  if (expr->get_type_info().get_type() == kNULLT) {
+    return true;
+  }
+  const auto const_expr = dynamic_cast<const Analyzer::Constant*>(expr);
+  return const_expr && const_expr->get_is_null();
+}
+
+void check_like_expr(const std::string& like_str, char escape_char) {
+  if (like_str.back() == escape_char) {
+    throw std::runtime_error("LIKE pattern must not end with escape character.");
+  }
+}
+
+bool translate_to_like_pattern(std::string& pattern_str, char escape_char) {
+  char prev_char = '\0';
+  char prev_prev_char = '\0';
+  std::string like_str;
+  for (char& cur_char : pattern_str) {
+    if (prev_char == escape_char || isalnum(cur_char) || cur_char == ' ' ||
+        cur_char == '.') {
+      like_str.push_back((cur_char == '.') ? '_' : cur_char);
+      prev_prev_char = prev_char;
+      prev_char = cur_char;
+      continue;
+    }
+    if (prev_char == '.' && prev_prev_char != escape_char) {
+      if (cur_char == '*' || cur_char == '+') {
+        if (cur_char == '*') {
+          like_str.pop_back();
+        }
+        // .* --> %
+        // .+ --> _%
+        like_str.push_back('%');
+        prev_prev_char = prev_char;
+        prev_char = cur_char;
+        continue;
+      }
+    }
+    return false;
+  }
+  pattern_str = like_str;
+  return true;
+}
+
+bool test_is_simple_expr(const std::string& like_str, char escape_char) {
+  // if not bounded by '%' then not a simple string
+  if (like_str.size() < 2 || like_str[0] != '%' || like_str[like_str.size() - 1] != '%') {
+    return false;
+  }
+  // if the last '%' is escaped then not a simple string
+  if (like_str[like_str.size() - 2] == escape_char &&
+      like_str[like_str.size() - 3] != escape_char) {
+    return false;
+  }
+  for (size_t i = 1; i < like_str.size() - 1; i++) {
+    if (like_str[i] == '%' || like_str[i] == '_' || like_str[i] == '[' ||
+        like_str[i] == ']') {
+      if (like_str[i - 1] != escape_char) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+void erase_cntl_chars(std::string& like_str, char escape_char) {
+  char prev_char = '\0';
+  // easier to create new string of allowable chars
+  // rather than erase chars from
+  // existing string
+  std::string new_str;
+  for (char& cur_char : like_str) {
+    if (cur_char == '%' || cur_char == escape_char) {
+      if (prev_char != escape_char) {
+        prev_char = cur_char;
+        continue;
+      }
+    }
+    new_str.push_back(cur_char);
+    prev_char = cur_char;
+  }
+  like_str = new_str;
+}
+
+}  // namespace
+
 namespace Analyzer {
 
 Constant::~Constant() {
@@ -3311,6 +3399,346 @@ int32_t WidthBucketExpr::get_partition_count_val() const {
     default:
       return -1;
   }
+}
+
+std::shared_ptr<Analyzer::Expr> analyzeIntValue(const int64_t intval) {
+  SQLTypes t;
+  Datum d;
+  if (intval >= INT16_MIN && intval <= INT16_MAX) {
+    t = kSMALLINT;
+    d.smallintval = (int16_t)intval;
+  } else if (intval >= INT32_MIN && intval <= INT32_MAX) {
+    t = kINT;
+    d.intval = (int32_t)intval;
+  } else {
+    t = kBIGINT;
+    d.bigintval = intval;
+  }
+  return makeExpr<Analyzer::Constant>(t, false, d);
+}
+
+std::shared_ptr<Analyzer::Expr> analyzeFixedPtValue(const int64_t numericval,
+                                                    const int scale,
+                                                    const int precision) {
+  SQLTypeInfo ti(kNUMERIC, 0, 0, false);
+  ti.set_scale(scale);
+  ti.set_precision(precision);
+  Datum d;
+  d.bigintval = numericval;
+  return makeExpr<Analyzer::Constant>(ti, false, d);
+}
+
+std::shared_ptr<Analyzer::Expr> analyzeStringValue(const std::string& stringval) {
+  SQLTypeInfo ti(kVARCHAR, stringval.length(), 0, true);
+  Datum d;
+  d.stringval = new std::string(stringval);
+  return makeExpr<Analyzer::Constant>(ti, false, d);
+}
+
+std::shared_ptr<Analyzer::Expr> normalizeOperExpr(
+    const SQLOps optype,
+    const SQLQualifier qual,
+    std::shared_ptr<Analyzer::Expr> left_expr,
+    std::shared_ptr<Analyzer::Expr> right_expr) {
+  if (left_expr->get_type_info().is_date_in_days() ||
+      right_expr->get_type_info().is_date_in_days()) {
+    // Do not propogate encoding
+    left_expr = left_expr->decompress();
+    right_expr = right_expr->decompress();
+  }
+  const auto& left_type = left_expr->get_type_info();
+  auto right_type = right_expr->get_type_info();
+  if (qual != kONE) {
+    // subquery not supported yet.
+    CHECK(!std::dynamic_pointer_cast<Analyzer::Subquery>(right_expr));
+    if (right_type.get_type() != kARRAY) {
+      throw std::runtime_error(
+          "Existential or universal qualifiers can only be used in front of a subquery "
+          "or an "
+          "expression of array type.");
+    }
+    right_type = right_type.get_elem_type();
+  }
+  SQLTypeInfo new_left_type;
+  SQLTypeInfo new_right_type;
+  auto result_type = Analyzer::BinOper::analyze_type_info(
+      optype, left_type, right_type, &new_left_type, &new_right_type);
+  if (result_type.is_timeinterval()) {
+    return makeExpr<Analyzer::BinOper>(
+        result_type, false, optype, qual, left_expr, right_expr);
+  }
+  if (left_type != new_left_type) {
+    left_expr = left_expr->add_cast(new_left_type);
+  }
+  if (right_type != new_right_type) {
+    if (qual == kONE) {
+      right_expr = right_expr->add_cast(new_right_type);
+    } else {
+      right_expr = right_expr->add_cast(new_right_type.get_array_type());
+    }
+  }
+
+  if (IS_COMPARISON(optype)) {
+    if (new_left_type.get_compression() == kENCODING_DICT &&
+        new_right_type.get_compression() == kENCODING_DICT &&
+        new_left_type.get_comp_param() == new_right_type.get_comp_param()) {
+      // do nothing
+    } else if (new_left_type.get_compression() == kENCODING_DICT &&
+               new_right_type.get_compression() == kENCODING_NONE) {
+      SQLTypeInfo ti(new_right_type);
+      ti.set_compression(new_left_type.get_compression());
+      ti.set_comp_param(new_left_type.get_comp_param());
+      ti.set_fixed_size();
+      right_expr = right_expr->add_cast(ti);
+    } else if (new_right_type.get_compression() == kENCODING_DICT &&
+               new_left_type.get_compression() == kENCODING_NONE) {
+      SQLTypeInfo ti(new_left_type);
+      ti.set_compression(new_right_type.get_compression());
+      ti.set_comp_param(new_right_type.get_comp_param());
+      ti.set_fixed_size();
+      left_expr = left_expr->add_cast(ti);
+    } else {
+      left_expr = left_expr->decompress();
+      right_expr = right_expr->decompress();
+    }
+  } else {
+    left_expr = left_expr->decompress();
+    right_expr = right_expr->decompress();
+  }
+  bool has_agg = (left_expr->get_contains_agg() || right_expr->get_contains_agg());
+  return makeExpr<Analyzer::BinOper>(
+      result_type, has_agg, optype, qual, left_expr, right_expr);
+}
+
+std::shared_ptr<Analyzer::Expr> normalizeCaseExpr(
+    const std::list<std::pair<std::shared_ptr<Analyzer::Expr>,
+                              std::shared_ptr<Analyzer::Expr>>>& expr_pair_list,
+    const std::shared_ptr<Analyzer::Expr> else_e_in) {
+  SQLTypeInfo ti;
+  bool has_agg = false;
+  std::set<int> dictionary_ids;
+  bool has_none_encoded_str_projection = false;
+
+  for (auto& p : expr_pair_list) {
+    auto e1 = p.first;
+    CHECK(e1->get_type_info().is_boolean());
+    auto e2 = p.second;
+    if (e2->get_type_info().is_string()) {
+      if (e2->get_type_info().is_dict_encoded_string()) {
+        dictionary_ids.insert(e2->get_type_info().get_comp_param());
+        // allow literals to potentially fall down the transient path
+      } else if (std::dynamic_pointer_cast<const Analyzer::ColumnVar>(e2)) {
+        has_none_encoded_str_projection = true;
+      }
+    }
+
+    if (ti.get_type() == kNULLT) {
+      ti = e2->get_type_info();
+    } else if (e2->get_type_info().get_type() == kNULLT) {
+      ti.set_notnull(false);
+      e2->set_type_info(ti);
+    } else if (ti != e2->get_type_info()) {
+      if (ti.is_string() && e2->get_type_info().is_string()) {
+        ti = Analyzer::BinOper::common_string_type(ti, e2->get_type_info());
+      } else if (ti.is_number() && e2->get_type_info().is_number()) {
+        ti = Analyzer::BinOper::common_numeric_type(ti, e2->get_type_info());
+      } else if (ti.is_boolean() && e2->get_type_info().is_boolean()) {
+        ti = Analyzer::BinOper::common_numeric_type(ti, e2->get_type_info());
+      } else {
+        throw std::runtime_error(
+            "expressions in THEN clause must be of the same or compatible types.");
+      }
+    }
+    if (e2->get_contains_agg()) {
+      has_agg = true;
+    }
+  }
+  auto else_e = else_e_in;
+  if (else_e) {
+    if (else_e->get_contains_agg()) {
+      has_agg = true;
+    }
+    if (expr_is_null(else_e.get())) {
+      ti.set_notnull(false);
+      else_e->set_type_info(ti);
+    } else if (ti != else_e->get_type_info()) {
+      if (else_e->get_type_info().is_string()) {
+        if (else_e->get_type_info().is_dict_encoded_string()) {
+          dictionary_ids.insert(else_e->get_type_info().get_comp_param());
+          // allow literals to potentially fall down the transient path
+        } else if (std::dynamic_pointer_cast<const Analyzer::ColumnVar>(else_e)) {
+          has_none_encoded_str_projection = true;
+        }
+      }
+      ti.set_notnull(false);
+      if (ti.is_string() && else_e->get_type_info().is_string()) {
+        ti = Analyzer::BinOper::common_string_type(ti, else_e->get_type_info());
+      } else if (ti.is_number() && else_e->get_type_info().is_number()) {
+        ti = Analyzer::BinOper::common_numeric_type(ti, else_e->get_type_info());
+      } else if (ti.is_boolean() && else_e->get_type_info().is_boolean()) {
+        ti = Analyzer::BinOper::common_numeric_type(ti, else_e->get_type_info());
+      } else if (get_logical_type_info(ti) !=
+                 get_logical_type_info(else_e->get_type_info())) {
+        throw std::runtime_error(
+            // types differing by encoding will be resolved at decode
+
+            "expressions in ELSE clause must be of the same or compatible types as those "
+            "in the THEN clauses.");
+      }
+    }
+  }
+  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
+      cast_expr_pair_list;
+  for (auto p : expr_pair_list) {
+    ti.set_notnull(false);
+    cast_expr_pair_list.emplace_back(p.first, p.second->add_cast(ti));
+  }
+  if (else_e != nullptr) {
+    else_e = else_e->add_cast(ti);
+  } else {
+    Datum d;
+    // always create an else expr so that executor doesn't need to worry about it
+    ti.set_notnull(false);
+    else_e = makeExpr<Analyzer::Constant>(ti, true, d);
+  }
+  if (ti.get_type() == kNULLT) {
+    throw std::runtime_error(
+        "Can't deduce the type for case expressions, all branches null");
+  }
+
+  auto case_expr = makeExpr<Analyzer::CaseExpr>(ti, has_agg, cast_expr_pair_list, else_e);
+  if (ti.get_compression() != kENCODING_DICT && dictionary_ids.size() == 1 &&
+      *(dictionary_ids.begin()) > 0 && !has_none_encoded_str_projection) {
+    // the above logic makes two assumptions when strings are present. 1) that all types
+    // in the case statement are either null or strings, and 2) that none-encoded strings
+    // will always win out over dict encoding. If we only have one dictionary, and that
+    // dictionary is not a transient dictionary, we can cast the entire case to be dict
+    // encoded and use transient dictionaries for any literals
+    ti.set_compression(kENCODING_DICT);
+    ti.set_comp_param(*dictionary_ids.begin());
+    case_expr->add_cast(ti);
+  }
+  return case_expr;
+}
+
+void erase_cntl_chars(std::string& like_str, char escape_char) {
+  char prev_char = '\0';
+  // easier to create new string of allowable chars
+  // rather than erase chars from
+  // existing string
+  std::string new_str;
+  for (char& cur_char : like_str) {
+    if (cur_char == '%' || cur_char == escape_char) {
+      if (prev_char != escape_char) {
+        prev_char = cur_char;
+        continue;
+      }
+    }
+    new_str.push_back(cur_char);
+    prev_char = cur_char;
+  }
+  like_str = new_str;
+}
+
+std::shared_ptr<Analyzer::Expr> getLikeExpr(std::shared_ptr<Analyzer::Expr> arg_expr,
+                                            std::shared_ptr<Analyzer::Expr> like_expr,
+                                            std::shared_ptr<Analyzer::Expr> escape_expr,
+                                            const bool is_ilike,
+                                            const bool is_not) {
+  if (!arg_expr->get_type_info().is_string()) {
+    throw std::runtime_error("expression before LIKE must be of a string type.");
+  }
+  if (!like_expr->get_type_info().is_string()) {
+    throw std::runtime_error("expression after LIKE must be of a string type.");
+  }
+  char escape_char = '\\';
+  if (escape_expr != nullptr) {
+    if (!escape_expr->get_type_info().is_string()) {
+      throw std::runtime_error("expression after ESCAPE must be of a string type.");
+    }
+    if (!escape_expr->get_type_info().is_string()) {
+      throw std::runtime_error("expression after ESCAPE must be of a string type.");
+    }
+    auto c = std::dynamic_pointer_cast<Analyzer::Constant>(escape_expr);
+    if (c != nullptr && c->get_constval().stringval->length() > 1) {
+      throw std::runtime_error("String after ESCAPE must have a single character.");
+    }
+    escape_char = (*c->get_constval().stringval)[0];
+  }
+  auto c = std::dynamic_pointer_cast<Analyzer::Constant>(like_expr);
+  bool is_simple = false;
+  if (c != nullptr) {
+    std::string& pattern = *c->get_constval().stringval;
+    if (is_ilike) {
+      std::transform(pattern.begin(), pattern.end(), pattern.begin(), ::tolower);
+    }
+    check_like_expr(pattern, escape_char);
+    is_simple = test_is_simple_expr(pattern, escape_char);
+    if (is_simple) {
+      erase_cntl_chars(pattern, escape_char);
+    }
+  }
+  std::shared_ptr<Analyzer::Expr> result = makeExpr<Analyzer::LikeExpr>(
+      arg_expr->decompress(), like_expr, escape_expr, is_ilike, is_simple);
+  if (is_not) {
+    result = makeExpr<Analyzer::UOper>(kBOOLEAN, kNOT, result);
+  }
+  return result;
+}
+
+std::shared_ptr<Analyzer::Expr> getRegexpExpr(
+    std::shared_ptr<Analyzer::Expr> arg_expr,
+    std::shared_ptr<Analyzer::Expr> pattern_expr,
+    std::shared_ptr<Analyzer::Expr> escape_expr,
+    const bool is_not) {
+  if (!arg_expr->get_type_info().is_string()) {
+    throw std::runtime_error("expression before REGEXP must be of a string type.");
+  }
+  if (!pattern_expr->get_type_info().is_string()) {
+    throw std::runtime_error("expression after REGEXP must be of a string type.");
+  }
+  char escape_char = '\\';
+  if (escape_expr != nullptr) {
+    if (!escape_expr->get_type_info().is_string()) {
+      throw std::runtime_error("expression after ESCAPE must be of a string type.");
+    }
+    if (!escape_expr->get_type_info().is_string()) {
+      throw std::runtime_error("expression after ESCAPE must be of a string type.");
+    }
+    auto c = std::dynamic_pointer_cast<Analyzer::Constant>(escape_expr);
+    if (c != nullptr && c->get_constval().stringval->length() > 1) {
+      throw std::runtime_error("String after ESCAPE must have a single character.");
+    }
+    escape_char = (*c->get_constval().stringval)[0];
+    if (escape_char != '\\') {
+      throw std::runtime_error("Only supporting '\\' escape character.");
+    }
+  }
+  auto c = std::dynamic_pointer_cast<Analyzer::Constant>(pattern_expr);
+  if (c != nullptr) {
+    std::string& pattern = *c->get_constval().stringval;
+    if (translate_to_like_pattern(pattern, escape_char)) {
+      return getLikeExpr(arg_expr, pattern_expr, escape_expr, false, is_not);
+    }
+  }
+  std::shared_ptr<Analyzer::Expr> result =
+      makeExpr<Analyzer::RegexpExpr>(arg_expr->decompress(), pattern_expr, escape_expr);
+  if (is_not) {
+    result = makeExpr<Analyzer::UOper>(kBOOLEAN, kNOT, result);
+  }
+  return result;
+}
+
+std::shared_ptr<Analyzer::Expr> getUserLiteral(const std::string& user) {
+  Datum d;
+  d.stringval = new std::string(user);
+  return makeExpr<Analyzer::Constant>(kTEXT, false, d);
+}
+
+std::shared_ptr<Analyzer::Expr> getTimestampLiteral(const int64_t timestampval) {
+  Datum d;
+  d.bigintval = timestampval;
+  return makeExpr<Analyzer::Constant>(kTIMESTAMP, false, d);
 }
 
 }  // namespace Analyzer

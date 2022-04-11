@@ -17,7 +17,6 @@
 #ifndef IMPORT_HELPERS_H_
 #define IMPORT_HELPERS_H_
 
-#include <Parser/ReservedKeywords.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/regex.hpp>
@@ -25,8 +24,8 @@
 namespace ImportHelpers {
 
 inline bool is_reserved_name(const std::string& name) {
-  return reserved_keywords.find(boost::to_upper_copy<std::string>(name)) !=
-         reserved_keywords.end();
+  UNREACHABLE();
+  return false;
 }
 
 inline std::string sanitize_name(const std::string& name) {

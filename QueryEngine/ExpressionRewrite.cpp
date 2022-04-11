@@ -22,7 +22,6 @@
 
 #include "Analyzer/Analyzer.h"
 #include "Logger/Logger.h"
-#include "Parser/ParserNode.h"
 #include "QueryEngine/DeepCopyVisitor.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/RelAlgTranslator.h"
@@ -671,7 +670,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     const auto constant_arg_expr =
         dynamic_cast<const Analyzer::Constant*>(lower_expr->get_arg());
     if (constant_arg_expr) {
-      return Parser::StringLiteral::analyzeValue(
+      return Analyzer::analyzeStringValue(
           boost::locale::to_lower(*constant_arg_expr->get_constval().stringval));
     }
     return makeExpr<Analyzer::LowerExpr>(lower_expr->get_own_arg());

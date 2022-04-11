@@ -274,7 +274,6 @@ set(QUERY_ENGINE_LIBS
         Logger
         Shared
         SchemaMgr
-        Parser
         sqlite3
         ${Arrow_LIBRARIES}
         )

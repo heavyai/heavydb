@@ -35,7 +35,6 @@
 #include "Catalog/DictDescriptor.h"
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
-#include "Parser/ParserNode.h"
 #include "QueryEngine/AggregateUtils.h"
 #include "QueryEngine/AggregatedColRange.h"
 #include "QueryEngine/CodeGenerator.h"

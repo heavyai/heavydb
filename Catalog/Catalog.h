@@ -58,11 +58,11 @@
 
 enum GetTablesType { GET_PHYSICAL_TABLES_AND_VIEWS, GET_PHYSICAL_TABLES, GET_VIEWS };
 
-namespace Parser {
+namespace Analyzer {
 
 class SharedDictionaryDef;
 
-}  // namespace Parser
+}  // namespace Analyzer
 
 class TableArchiver;
 
@@ -129,12 +129,12 @@ class Catalog final {
 
   void createTable(TableDescriptor& td,
                    const std::list<ColumnDescriptor>& columns,
-                   const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs,
+                   const std::vector<Analyzer::SharedDictionaryDef>& shared_dict_defs,
                    bool isLogicalTable);
   void createShardedTable(
       TableDescriptor& td,
       const std::list<ColumnDescriptor>& columns,
-      const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs);
+      const std::vector<Analyzer::SharedDictionaryDef>& shared_dict_defs);
   int32_t createDashboard(DashboardDescriptor& vd);
   void replaceDashboard(DashboardDescriptor& vd);
   std::string createLink(LinkDescriptor& ld, size_t min_length);
@@ -408,14 +408,14 @@ class Catalog final {
                      const std::list<ColumnDescriptor>& columns,
                      const std::list<DictDescriptor>& dicts);
   void addReferenceToForeignDict(ColumnDescriptor& referencing_column,
-                                 Parser::SharedDictionaryDef shared_dict_def,
+                                 Analyzer::SharedDictionaryDef shared_dict_def,
                                  const bool persist_reference);
   bool setColumnSharedDictionary(
       ColumnDescriptor& cd,
       std::list<ColumnDescriptor>& cdd,
       std::list<DictDescriptor>& dds,
       const TableDescriptor td,
-      const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs);
+      const std::vector<Analyzer::SharedDictionaryDef>& shared_dict_defs);
   void setColumnDictionary(ColumnDescriptor& cd,
                            std::list<DictDescriptor>& dds,
                            const TableDescriptor& td,

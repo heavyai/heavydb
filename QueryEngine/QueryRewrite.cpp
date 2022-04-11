@@ -23,7 +23,6 @@
 #include "ExpressionRange.h"
 #include "ExpressionRewrite.h"
 #include "Logger/Logger.h"
-#include "Parser/ParserNode.h"
 #include "Shared/sqltypes.h"
 
 extern size_t g_constrained_by_in_threshold;

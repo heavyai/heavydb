@@ -3,7 +3,6 @@ set(utils_source_files
     Regexp.cpp
     ChunkIter.cpp
     ChunkAccessorTable.cpp
-    DdlUtils.cpp
 )
 
 add_library(Utils ${utils_source_files})

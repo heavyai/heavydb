@@ -18,7 +18,6 @@
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "DataMgr/ForeignStorage/MetadataPlaceholder.h"
 #include "ImportExport/ImportUtils.h"
-#include "Parser/ParserNode.h"
 #include "QueryEngine/CalciteDeserializerUtils.h"
 #include "QueryEngine/CardinalityEstimator.h"
 #include "QueryEngine/ColumnFetcher.h"
@@ -3549,7 +3548,7 @@ std::shared_ptr<Analyzer::Expr> build_logical_expression(
   CHECK(!factors.empty());
   auto acc = factors.front();
   for (size_t i = 1; i < factors.size(); ++i) {
-    acc = Parser::OperExpr::normalize(sql_op, kONE, acc, factors[i]);
+    acc = normalizeOperExpr(sql_op, kONE, acc, factors[i]);
   }
   return acc;
 }
@@ -3616,7 +3615,7 @@ std::shared_ptr<Analyzer::Expr> reverse_logical_distribution(
     return common_expr;
   }
   const auto remaining_expr = build_logical_expression(remaining_terms, kOR);
-  return Parser::OperExpr::normalize(kAND, kONE, common_expr, remaining_expr);
+  return normalizeOperExpr(kAND, kONE, common_expr, remaining_expr);
 }
 
 }  // namespace

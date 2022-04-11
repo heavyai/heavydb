@@ -56,6 +56,7 @@
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
 
+#include "Analyzer/Analyzer.h"
 #include "Calcite/Calcite.h"
 #include "DataMgr/FileMgr/FileMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
@@ -64,7 +65,6 @@
 #include "Fragmenter/SortedOrderFragmenter.h"
 #include "LockMgr/LockMgr.h"
 #include "MigrationMgr/MigrationMgr.h"
-#include "Parser/ParserNode.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
 #include "Shared/DateTimeParser.h"
@@ -1885,7 +1885,7 @@ void Catalog::roll(const bool forward) {
 void Catalog::createTable(
     TableDescriptor& td,
     const list<ColumnDescriptor>& cols,
-    const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs,
+    const std::vector<Analyzer::SharedDictionaryDef>& shared_dict_defs,
     bool isLogicalTable) {
   cat_write_lock write_lock(this);
   list<ColumnDescriptor> cds = cols;
@@ -2412,7 +2412,7 @@ namespace {
 
 const ColumnDescriptor* get_foreign_col(
     const Catalog& cat,
-    const Parser::SharedDictionaryDef& shared_dict_def) {
+    const Analyzer::SharedDictionaryDef& shared_dict_def) {
   const auto& table_name = shared_dict_def.get_foreign_table();
   const auto td = cat.getMetadataForTable(table_name);
   CHECK(td);
@@ -2423,7 +2423,7 @@ const ColumnDescriptor* get_foreign_col(
 }  // namespace
 
 void Catalog::addReferenceToForeignDict(ColumnDescriptor& referencing_column,
-                                        Parser::SharedDictionaryDef shared_dict_def,
+                                        Analyzer::SharedDictionaryDef shared_dict_def,
                                         const bool persist_reference) {
   cat_write_lock write_lock(this);
   const auto foreign_ref_col = get_foreign_col(*this, shared_dict_def);
@@ -2449,7 +2449,7 @@ bool Catalog::setColumnSharedDictionary(
     std::list<ColumnDescriptor>& cdd,
     std::list<DictDescriptor>& dds,
     const TableDescriptor td,
-    const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs) {
+    const std::vector<Analyzer::SharedDictionaryDef>& shared_dict_defs) {
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(getObjForLock());
 
@@ -2557,7 +2557,7 @@ void Catalog::setColumnDictionary(ColumnDescriptor& cd,
 void Catalog::createShardedTable(
     TableDescriptor& td,
     const list<ColumnDescriptor>& cols,
-    const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs) {
+    const std::vector<Analyzer::SharedDictionaryDef>& shared_dict_defs) {
   cat_write_lock write_lock(this);
   createTable(td, cols, shared_dict_defs, true);  // create logical table
 }
@@ -3480,8 +3480,6 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
   return os.str();
 }
 
-#include "Parser/ReservedKeywords.h"
-
 //! returns true if the string contains one or more spaces
 inline bool contains_spaces(std::string_view str) {
   return std::find_if(str.begin(), str.end(), [](const unsigned char& ch) {
@@ -3498,7 +3496,7 @@ inline bool contains_sql_reserved_chars(
 
 //! returns true if the string equals an OmniSci SQL reserved keyword
 inline bool is_reserved_sql_keyword(std::string_view str) {
-  return reserved_keywords.find(to_upper(std::string(str))) != reserved_keywords.end();
+  return false;
 }
 
 // returns a "CREATE TABLE" statement in a string for "SHOW CREATE TABLE"

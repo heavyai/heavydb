@@ -27,7 +27,6 @@
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "Shared/Compressor.h"
 #include "StringDictionary/StringDictionary.h"
-#include "Utils/DdlUtils.h"
 
 #ifdef _WIN32
 #include <io.h>
@@ -869,12 +868,6 @@ bool trim_and_check_file_exists(std::string& filename, const std::string desc) {
   return true;
 }
 
-void addOptionalFileToBlacklist(std::string& filename) {
-  if (!filename.empty()) {
-    ddl_utils::FilePathBlacklist::addToBlacklist(filename);
-  }
-}
-
 }  // namespace
 
 void CommandLineOptions::validate_base_path() {
@@ -981,13 +974,7 @@ void CommandLineOptions::validate() {
 
   LOG(INFO) << "Allowed import paths is set to " << allowed_import_paths;
   LOG(INFO) << "Allowed export paths is set to " << allowed_export_paths;
-  ddl_utils::FilePathWhitelist::initialize(
-      base_path, allowed_import_paths, allowed_export_paths);
 
-  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_catalogs");
-  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/temporary/mapd_catalogs");
-  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_data");
-  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_log");
   g_enable_s3_fsi = false;
 
 #ifdef ENABLE_IMPORT_PARQUET
@@ -1028,20 +1015,6 @@ void CommandLineOptions::validate() {
   if (disk_cache_config.path.empty()) {
     disk_cache_config.path = base_path + "/omnisci_disk_cache";
   }
-  ddl_utils::FilePathBlacklist::addToBlacklist(disk_cache_config.path);
-
-  ddl_utils::FilePathBlacklist::addToBlacklist("/etc/passwd");
-  ddl_utils::FilePathBlacklist::addToBlacklist("/etc/shadow");
-
-  // If passed in, blacklist all security config files
-  addOptionalFileToBlacklist(license_path);
-  addOptionalFileToBlacklist(system_parameters.ssl_cert_file);
-  addOptionalFileToBlacklist(authMetadata.ca_file_name);
-  addOptionalFileToBlacklist(system_parameters.ssl_trust_store);
-  addOptionalFileToBlacklist(system_parameters.ssl_keystore);
-  addOptionalFileToBlacklist(system_parameters.ssl_key_file);
-  addOptionalFileToBlacklist(system_parameters.ssl_trust_ca_file);
-  addOptionalFileToBlacklist(cluster_file);
 }
 
 boost::optional<int> CommandLineOptions::parse_command_line(

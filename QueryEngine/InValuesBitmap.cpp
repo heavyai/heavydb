@@ -20,11 +20,10 @@
 #ifdef HAVE_CUDA
 #include "GpuMemUtils.h"
 #endif  // HAVE_CUDA
-#include "../Parser/ParserNode.h"
-#include "../Shared/checked_alloc.h"
 #include "GroupByAndAggregate.h"
 #include "Logger/Logger.h"
 #include "RuntimeFunctions.h"
+#include "Shared/checked_alloc.h"
 
 #include <boost/multiprecision/cpp_int.hpp>
 #include <limits>
@@ -130,7 +129,7 @@ llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) co
   for (const auto bitset : bitsets_) {
     const int64_t bitset_handle = reinterpret_cast<int64_t>(bitset);
     const auto bitset_handle_literal = std::dynamic_pointer_cast<Analyzer::Constant>(
-        Parser::IntLiteral::analyzeValue(bitset_handle));
+        Analyzer::analyzeIntValue(bitset_handle));
     CHECK(bitset_handle_literal);
     CHECK_EQ(kENCODING_NONE, bitset_handle_literal->get_type_info().get_compression());
     constants_owned.push_back(bitset_handle_literal);

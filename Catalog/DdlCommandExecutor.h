@@ -24,7 +24,6 @@
 #include "Catalog/SessionInfo.h"
 #include "Catalog/TableDescriptor.h"
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
-#include "Utils/DdlUtils.h"
 
 // This class should be subclassed to cache additional 'internal' data
 //    useful for the implementation, but will avoid being exposed in the header

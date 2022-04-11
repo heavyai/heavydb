@@ -408,7 +408,6 @@ if(ENABLE_STANDALONE_CALCITE)
 endif()
 
 include_directories(${CMAKE_SOURCE_DIR}
-                    ${CMAKE_SOURCE_DIR}/Parser
                     ${CMAKE_CURRENT_BINARY_DIR})
 
 ## Dependencies
@@ -727,7 +726,6 @@ include_directories(${CalciteThrift_BINARY_DIR})
 
 add_subdirectory(ArrowStorage)
 add_subdirectory(Catalog)
-add_subdirectory(Parser)
 add_subdirectory(Analyzer)
 add_subdirectory(ImportExport)
 add_subdirectory(QueryEngine)
@@ -742,7 +740,6 @@ add_subdirectory(Shared)
 add_subdirectory(SchemaMgr)
 add_subdirectory(OSDependent)
 add_subdirectory(Utils)
-add_subdirectory(TableArchiver)
 add_subdirectory(ThriftHandler)
 add_subdirectory(Distributed)
 add_subdirectory(UdfCompiler)
@@ -752,7 +749,7 @@ if(ENABLE_ODBC)
   add_subdirectory(ODBC)
 endif()
 
-set(MAPD_LIBRARIES OSDependent Shared Catalog SqliteConnector MigrationMgr Parser TableArchiver Analyzer ImportExport QueryEngine QueryState LockMgr DataMgr Fragmenter Logger)
+set(MAPD_LIBRARIES OSDependent Shared Catalog SqliteConnector MigrationMgr Analyzer ImportExport QueryEngine QueryState LockMgr DataMgr Fragmenter Logger)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND MAPD_LIBRARIES Distributed)
@@ -764,7 +761,6 @@ endif()
 list(APPEND MAPD_LIBRARIES Calcite)
 
 if(ENABLE_RENDERING)
-  add_dependencies(QueryRenderer Parser)
   list(APPEND MAPD_LIBRARIES "${MAPD_RENDERING_LIBRARIES}")
 endif()
 

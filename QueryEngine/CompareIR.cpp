@@ -19,8 +19,6 @@
 
 #include <typeinfo>
 
-#include "../Parser/ParserNode.h"
-
 extern bool g_enable_watchdog;
 extern bool g_enable_overlaps_hashjoin;
 
@@ -137,10 +135,9 @@ std::shared_ptr<Analyzer::BinOper> lower_bw_eq(const Analyzer::BinOper* bw_eq) {
       std::make_shared<Analyzer::UOper>(kBOOLEAN, kISNULL, bw_eq->get_own_left_operand());
   const auto rhs_is_null = std::make_shared<Analyzer::UOper>(
       kBOOLEAN, kISNULL, bw_eq->get_own_right_operand());
-  const auto both_are_null =
-      Parser::OperExpr::normalize(kAND, kONE, lhs_is_null, rhs_is_null);
+  const auto both_are_null = normalizeOperExpr(kAND, kONE, lhs_is_null, rhs_is_null);
   const auto bw_eq_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(
-      Parser::OperExpr::normalize(kOR, kONE, eq_oper, both_are_null));
+      normalizeOperExpr(kOR, kONE, eq_oper, both_are_null));
   CHECK(bw_eq_oper);
   return bw_eq_oper;
 }
@@ -152,7 +149,7 @@ std::shared_ptr<Analyzer::BinOper> make_eq(const std::shared_ptr<Analyzer::Expr>
   // Sides of a tuple equality are stripped of cast operators to simplify the logic
   // in the hash table construction algorithm. Add them back here.
   auto eq_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(
-      Parser::OperExpr::normalize(optype, kONE, lhs, rhs));
+      normalizeOperExpr(optype, kONE, lhs, rhs));
   CHECK(eq_oper);
   return optype == kBW_EQ ? lower_bw_eq(eq_oper.get()) : eq_oper;
 }

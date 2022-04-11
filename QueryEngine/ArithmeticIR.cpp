@@ -17,8 +17,6 @@
 #include "CodeGenerator.h"
 #include "Execute.h"
 
-#include "Parser/ParserNode.h"
-
 // Code generation routines and helpers for basic arithmetic and unary minus.
 extern bool g_null_div_by_zero;
 extern bool g_inf_div_by_zero;
@@ -577,7 +575,7 @@ llvm::Value* CodeGenerator::codegenDeciDiv(const Analyzer::BinOper* bin_oper,
   auto lhs_lv = codegen(lhs, true, co).front();
   llvm::Value* rhs_lv{nullptr};
   if (rhs_constant) {
-    const auto rhs_lit = Parser::IntLiteral::analyzeValue(
+    const auto rhs_lit = Analyzer::analyzeIntValue(
         rhs_constant->get_constval().bigintval / exp_to_scale(rhs_type.get_scale()));
     auto rhs_lit_lv = CodeGenerator::codegenIntConst(
         dynamic_cast<const Analyzer::Constant*>(rhs_lit.get()), cgen_state_);

@@ -15,25 +15,23 @@
  */
 
 #include "RelAlgTranslator.h"
-#include "Shared/SqlTypesLayout.h"
-
 #include "CalciteDeserializerUtils.h"
 #include "DateTimePlusRewrite.h"
 #include "DateTimeTranslator.h"
-#include "Descriptors/RelAlgExecutionDescriptor.h"
 #include "ExpressionRewrite.h"
 #include "ExtensionFunctionsBinding.h"
 #include "ExtensionFunctionsWhitelist.h"
 #include "RelAlgDagBuilder.h"
 #include "WindowContext.h"
 
-#include <future>
-
 #include "Analyzer/Analyzer.h"
 #include "Catalog/SessionInfo.h"
-#include "Parser/ParserNode.h"
+#include "Descriptors/RelAlgExecutionDescriptor.h"
+#include "Shared/SqlTypesLayout.h"
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"
+
+#include <future>
 
 extern bool g_enable_watchdog;
 
@@ -293,12 +291,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
       if (target_ti.is_fp() && !scale) {
         return make_fp_constant(val, target_ti);
       }
-      auto lit_expr = scale ? Parser::FixedPtLiteral::analyzeValue(val, scale, precision)
-                            : Parser::IntLiteral::analyzeValue(val);
+      auto lit_expr = scale ? Analyzer::analyzeFixedPtValue(val, scale, precision)
+                            : Analyzer::analyzeIntValue(val);
       return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
     }
     case kTEXT: {
-      return Parser::StringLiteral::analyzeValue(rex_literal->getVal<std::string>());
+      return Analyzer::analyzeStringValue(rex_literal->getVal<std::string>());
     }
     case kBOOLEAN: {
       Datum d;
@@ -787,7 +785,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
       rhs = translateScalarRex(rhs_op);
     }
     CHECK(rhs);
-    lhs = Parser::OperExpr::normalize(sql_op, sql_qual, lhs, rhs);
+    lhs = normalizeOperExpr(sql_op, sql_qual, lhs, rhs);
   }
   return lhs;
 }
@@ -805,7 +803,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCase(
   if (rex_case->getElse()) {
     else_expr = translateScalarRex(rex_case->getElse());
   }
-  return Parser::CaseExpr::normalize(expr_list, else_expr);
+  return normalizeCaseExpr(expr_list, else_expr);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWidthBucket(
@@ -865,7 +863,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLike(
                           ? translateScalarRex(rex_function->getOperand(2))
                           : nullptr;
   const bool is_ilike = rex_function->getName() == "PG_ILIKE"sv;
-  return Parser::LikeExpr::get(arg, like, escape, is_ilike, false);
+  return Analyzer::getLikeExpr(arg, like, escape, is_ilike, false);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRegexp(
@@ -879,7 +877,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRegexp(
   const auto escape = (rex_function->size() == 3)
                           ? translateScalarRex(rex_function->getOperand(2))
                           : nullptr;
-  return Parser::RegexpExpr::get(arg, pattern, escape, false);
+  return Analyzer::getRegexpExpr(arg, pattern, escape, false);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLikely(
@@ -1143,7 +1141,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentUser(
   if (query_state_) {
     user = query_state_->getConstSessionInfo()->get_currentUser().userName;
   }
-  return Parser::UserLiteral::get(user);
+  return Analyzer::getUserLiteral(user);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLower(
@@ -1212,7 +1210,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentTime() const {
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentTimestamp() const {
-  return Parser::TimestampLiteral::get(now_);
+  return Analyzer::getTimestampLiteral(now_);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatetime(
@@ -1460,7 +1458,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     std::shared_ptr<Analyzer::Expr> lhs = translateScalarRex(rex_function->getOperand(0));
     std::shared_ptr<Analyzer::Expr> rhs = translateScalarRex(rex_function->getOperand(1));
     const auto rhs_lit = std::dynamic_pointer_cast<Analyzer::Constant>(rhs);
-    return Parser::OperExpr::normalize(kDIVIDE, kONE, lhs, rhs);
+    return normalizeOperExpr(kDIVIDE, kONE, lhs, rhs);
   }
   if (rex_function->getName() == "Reinterpret"sv) {
     CHECK_EQ(size_t(1), rex_function->size());

@@ -1785,6 +1785,120 @@ class Query {
   int64_t offset;                  // offset in OFFSET clause.  0 means no offset.
 };
 
+class Node {
+ public:
+  virtual ~Node() {}
+};
+
+/*
+ * @type TableElement
+ * @brief elements in table definition
+ */
+class TableElement : public Node {
+  // intentionally empty
+};
+
+/*
+ * @type TableConstraintDef
+ * @brief integrity constraint for table
+ */
+class TableConstraintDef : public TableElement {
+  // intentionally empty
+};
+
+std::shared_ptr<Analyzer::Expr> analyzeIntValue(const int64_t intval);
+
+std::shared_ptr<Analyzer::Expr> analyzeFixedPtValue(const int64_t numericval,
+                                                    const int scale,
+                                                    const int precision);
+
+std::shared_ptr<Analyzer::Expr> analyzeStringValue(const std::string& stringval);
+
+std::shared_ptr<Analyzer::Expr> normalizeOperExpr(
+    const SQLOps optype,
+    const SQLQualifier qual,
+    std::shared_ptr<Analyzer::Expr> left_expr,
+    std::shared_ptr<Analyzer::Expr> right_expr);
+
+std::shared_ptr<Analyzer::Expr> normalizeCaseExpr(
+    const std::list<
+        std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>&,
+    const std::shared_ptr<Analyzer::Expr>);
+
+std::shared_ptr<Analyzer::Expr> getLikeExpr(std::shared_ptr<Analyzer::Expr> arg_expr,
+                                            std::shared_ptr<Analyzer::Expr> like_expr,
+                                            std::shared_ptr<Analyzer::Expr> escape_expr,
+                                            const bool is_ilike,
+                                            const bool is_not);
+
+std::shared_ptr<Analyzer::Expr> getRegexpExpr(
+    std::shared_ptr<Analyzer::Expr> arg_expr,
+    std::shared_ptr<Analyzer::Expr> pattern_expr,
+    std::shared_ptr<Analyzer::Expr> escape_expr,
+    const bool is_not);
+
+std::shared_ptr<Analyzer::Expr> getUserLiteral(const std::string&);
+
+std::shared_ptr<Analyzer::Expr> getTimestampLiteral(const int64_t);
+
+/*
+ * @type ForeignKeyDef
+ * @brief foreign key constraint
+ */
+class ForeignKeyDef : public TableConstraintDef {
+ public:
+  ForeignKeyDef(std::list<std::string*>* cl, std::string* t, std::list<std::string*>* fcl)
+      : foreign_table_(t) {
+    CHECK(cl);
+    for (const auto s : *cl) {
+      column_list_.emplace_back(s);
+    }
+    delete cl;
+    if (fcl) {
+      for (const auto s : *fcl) {
+        foreign_column_list_.emplace_back(s);
+      }
+    }
+    delete fcl;
+  }
+  const std::list<std::unique_ptr<std::string>>& get_column_list() const {
+    return column_list_;
+  }
+  const std::string* get_foreign_table() const { return foreign_table_.get(); }
+  const std::list<std::unique_ptr<std::string>>& get_foreign_column_list() const {
+    return foreign_column_list_;
+  }
+
+ private:
+  std::list<std::unique_ptr<std::string>> column_list_;
+  std::unique_ptr<std::string> foreign_table_;
+  std::list<std::unique_ptr<std::string>> foreign_column_list_;
+};
+
+/*
+ * @type SharedDictionaryDef
+ * @brief Shared dictionary hint. The underlying string dictionary will be shared with the
+ * referenced column.
+ */
+class SharedDictionaryDef : public TableConstraintDef {
+ public:
+  SharedDictionaryDef(const std::string& column,
+                      const std::string& foreign_table,
+                      const std::string foreign_column)
+      : column_(column), foreign_table_(foreign_table), foreign_column_(foreign_column) {}
+
+  const std::string& get_column() const { return column_; }
+
+  const std::string& get_foreign_table() const { return foreign_table_; }
+
+  const std::string& get_foreign_column() const { return foreign_column_; }
+
+ private:
+  const std::string column_;
+  const std::string foreign_table_;
+  const std::string foreign_column_;
+};
+
 }  // namespace Analyzer
 
 inline std::shared_ptr<Analyzer::Var> var_ref(const Analyzer::Expr* expr,

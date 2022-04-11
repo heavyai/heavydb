@@ -19,23 +19,29 @@
 
 #include <vector>
 
-#include "../Catalog/ColumnDescriptor.h"
-#include "../Parser/ParserNode.h"
+#include "Analyzer/Analyzer.h"
+#include "Catalog/Catalog.h"
+#include "Catalog/ColumnDescriptor.h"
+
+namespace Parser {
+class CreateTableBaseStmt;
+class SharedDictionaryDef;
+}  // namespace Parser
 
 void validate_shared_dictionary(
     const Parser::CreateTableBaseStmt* stmt,
-    const Parser::SharedDictionaryDef* shared_dict_def,
+    const Analyzer::SharedDictionaryDef* shared_dict_def,
     const std::list<ColumnDescriptor>& columns,
-    const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs_so_far,
+    const std::vector<Analyzer::SharedDictionaryDef>& shared_dict_defs_so_far,
     const Catalog_Namespace::Catalog& catalog);
 
-const Parser::SharedDictionaryDef compress_reference_path(
-    Parser::SharedDictionaryDef cur_node,
-    const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs);
+const Analyzer::SharedDictionaryDef compress_reference_path(
+    Analyzer::SharedDictionaryDef cur_node,
+    const std::vector<Analyzer::SharedDictionaryDef>& shared_dict_defs);
 
 void validate_shared_dictionary_order(
     const Parser::CreateTableBaseStmt* stmt,
-    const Parser::SharedDictionaryDef* shared_dict_def,
-    const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs,
+    const Analyzer::SharedDictionaryDef* shared_dict_def,
+    const std::vector<Analyzer::SharedDictionaryDef>& shared_dict_defs,
     const std::list<ColumnDescriptor>& columns);
 #endif  // SHARED_DICTIONARY_VALIDATOR_H
