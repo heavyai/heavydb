@@ -33,8 +33,6 @@
 
 namespace po = boost::program_options;
 
-class LeafHostInfo;
-
 class CommandLineOptions {
  public:
   CommandLineOptions(char const* argv0, bool dist_v5_ = false)
@@ -124,8 +122,6 @@ class CommandLineOptions {
   po::positional_options_description positional_options;
 
  public:
-  std::vector<LeafHostInfo> db_leaves;
-  std::vector<LeafHostInfo> string_leaves;
   po::variables_map vm;
   std::string clusterIds_arg;
 

@@ -2058,32 +2058,6 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   check_sort_node_source_constraint(sort);
   const auto source = sort->getInput(0);
   const bool is_aggregate = node_is_aggregate(source);
-  auto it = leaf_results_.find(sort->getId());
-  if (it != leaf_results_.end()) {
-    // Add any transient string literals to the sdp on the agg
-    const auto source_work_unit = createSortInputWorkUnit(sort, eo);
-    executor_->addTransientStringLiterals(source_work_unit.exe_unit,
-                                          executor_->row_set_mem_owner_);
-    // Handle push-down for LIMIT for multi-node
-    auto& aggregated_result = it->second;
-    auto& result_rows = aggregated_result.rs;
-    const size_t limit = sort->getLimit();
-    const size_t offset = sort->getOffset();
-    const auto order_entries = get_order_entries(sort);
-    if (limit || offset) {
-      if (!order_entries.empty()) {
-        result_rows->sort(order_entries, limit + offset, executor_);
-      }
-      result_rows->dropFirstN(offset);
-      if (limit) {
-        result_rows->keepFirstN(limit);
-      }
-    }
-    ExecutionResult result(result_rows, aggregated_result.targets_meta);
-    sort->setOutputMetainfo(aggregated_result.targets_meta);
-    return result;
-  }
-
   std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
   bool is_desc{false};
 
@@ -2400,21 +2374,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   }
   const auto body = work_unit.body;
   CHECK(body);
-  auto it = leaf_results_.find(body->getId());
-  VLOG(3) << "body->getId()=" << body->getId() << " body->toString()=" << body->toString()
-          << " it==leaf_results_.end()=" << (it == leaf_results_.end());
-  if (it != leaf_results_.end()) {
-    executor_->addTransientStringLiterals(work_unit.exe_unit,
-                                          executor_->row_set_mem_owner_);
-    auto& aggregated_result = it->second;
-    auto& result_rows = aggregated_result.rs;
-    ExecutionResult result(result_rows, aggregated_result.targets_meta);
-    body->setOutputMetainfo(aggregated_result.targets_meta);
-    if (render_info) {
-      build_render_targets(*render_info, work_unit.exe_unit.target_exprs, targets_meta);
-    }
-    return result;
-  }
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 
   auto ra_exe_unit = decide_approx_count_distinct_implementation(

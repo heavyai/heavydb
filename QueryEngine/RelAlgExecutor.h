@@ -18,7 +18,6 @@
 #define QUERYENGINE_RELALGEXECUTOR_H
 
 #include "DataProvider/DataProvider.h"
-#include "Distributed/AggregatedResult.h"
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/InputMetadata.h"
@@ -109,11 +108,6 @@ class RelAlgExecutor {
                                                         const CompilationOptions& co,
                                                         const ExecutionOptions& eo,
                                                         RenderInfo* render_info);
-
-  void addLeafResult(const unsigned id, const AggregatedResult& result) {
-    const auto it_ok = leaf_results_.emplace(id, result);
-    CHECK(it_ok.second);
-  }
 
   const RelAlgNode& getRootRelAlgNode() const {
     CHECK(query_dag_);
@@ -378,7 +372,6 @@ class RelAlgExecutor {
   time_t now_;
   std::unordered_map<unsigned, JoinQualsPerNestingLevel> left_deep_join_info_;
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove
-  std::unordered_map<unsigned, AggregatedResult> leaf_results_;
   int64_t queue_time_ms_;
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;
 

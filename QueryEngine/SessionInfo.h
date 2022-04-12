@@ -33,8 +33,6 @@
 #include "Shared/Restriction.h"
 #include "SqliteConnector/SqliteConnector.h"
 
-#include "LeafHostInfo.h"
-
 /*
  * @type SessionInfo
  * @brief a user session

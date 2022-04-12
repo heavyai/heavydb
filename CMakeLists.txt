@@ -665,12 +665,6 @@ endif()
 
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
 
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  include_directories(Distributed/ee)
-else()
-  include_directories(Distributed/os)
-endif()
-
 set(MAPD_RENDERING_LIBRARIES "")
 if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
   option(ENABLE_RENDERING "Build backend renderer" OFF)
@@ -735,7 +729,6 @@ add_subdirectory(SchemaMgr)
 add_subdirectory(OSDependent)
 add_subdirectory(Utils)
 add_subdirectory(ThriftHandler)
-add_subdirectory(Distributed)
 add_subdirectory(UdfCompiler)
 
 option(ENABLE_ODBC "Build ODBC driver" OFF)
@@ -746,7 +739,6 @@ endif()
 set(MAPD_LIBRARIES OSDependent Shared SqliteConnector Analyzer QueryEngine QueryState LockMgr DataMgr Logger)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  list(APPEND MAPD_LIBRARIES Distributed)
   if(ENABLE_DISTRIBUTED_5_0)
     list(APPEND MAPD_LIBRARIES StringDictionaryThread)
   endif()

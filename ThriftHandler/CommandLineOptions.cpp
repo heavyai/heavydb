@@ -21,7 +21,6 @@
 #include <iostream>
 
 #include "CommandLineOptions.h"
-#include "LeafHostInfo.h"
 #include "MapDRelease.h"
 #include "OSDependent/omnisci_fs.h"
 #include "QueryEngine/GroupByAndAggregate.h"
