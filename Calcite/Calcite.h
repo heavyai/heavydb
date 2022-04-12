@@ -40,10 +40,7 @@ constexpr char const* kCalciteUserPassword = "HyperInteractive";
 }  // namespace
 
 class CalciteServerClient;
-
-namespace Catalog_Namespace {
 class SessionInfo;
-}  // namespace Catalog_Namespace
 
 namespace query_state {
 class QueryStateProxy;
@@ -70,12 +67,6 @@ class Calcite final {
   Calcite(const SystemParameters& db_parameters,
           const std::string& data_dir,
           const std::string& udf_filename = "");
-  // sql_string may differ from what is in query_state due to legacy_syntax option.
-  TPlanResult process(query_state::QueryStateProxy,
-                      std::string sql_string,
-                      const TQueryParsingOption& query_parsing_option,
-                      const TOptimizationOption& optimization_option,
-                      const std::string& calcite_session_id = "");
   TPlanResult process(const std::string& user,
                       const std::string& db_name,
                       const std::string& sql_string,
@@ -88,7 +79,7 @@ class Calcite final {
   void checkAccessedObjectsPrivileges(query_state::QueryStateProxy query_state_prox,
                                       TPlanResult plan) const;
   std::vector<TCompletionHint> getCompletionHints(
-      const Catalog_Namespace::SessionInfo& session_info,
+      const SessionInfo& session_info,
       const std::vector<std::string>& visible_tables,
       const std::string sql_string,
       const int cursor);
@@ -124,11 +115,6 @@ class Calcite final {
                  const std::string& data_dir,
                  const size_t calcite_max_mem,
                  const std::string& udf_filename);
-  TPlanResult processImpl(query_state::QueryStateProxy,
-                          std::string sql_string,
-                          const TQueryParsingOption& query_parsing_option,
-                          const TOptimizationOption& optimization_option,
-                          const std::string& calcite_session_id);
   std::vector<std::string> get_db_objects(const std::string ra);
   void inner_close_calcite_server(bool log);
   std::pair<std::shared_ptr<CalciteServerClient>, std::shared_ptr<TTransport>> getClient(

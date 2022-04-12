@@ -46,8 +46,8 @@ class RenderInfo {
              const RenderQueryOptions& in_render_query_opts,
              const bool force_non_in_situ_data = false);
 
-  const Catalog_Namespace::SessionInfo& getSessionInfo() const;
-  std::shared_ptr<Catalog_Namespace::SessionInfo const> getSessionInfoPtr() const;
+  const SessionInfo& getSessionInfo() const;
+  std::shared_ptr<SessionInfo const> getSessionInfoPtr() const;
   void setForceNonInSituData();
   bool queryRanWithInSituData() const;
   bool hasInSituData() const;

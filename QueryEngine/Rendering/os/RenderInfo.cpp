@@ -17,7 +17,7 @@
 #include "QueryEngine/Rendering/RenderInfo.h"
 #include "Shared/Rendering/RenderQueryOptions.h"
 
-#include "Catalog/SessionInfo.h"
+#include "QueryEngine/SessionInfo.h"
 
 RenderInfo::RenderInfo(const ::QueryRenderer::RenderSessionKey& in_render_session_key,
                        const RenderQueryOptions& in_render_query_opts,
@@ -27,18 +27,13 @@ RenderInfo::RenderInfo(const ::QueryRenderer::RenderSessionKey& in_render_sessio
   CHECK(false);
 }
 
-const Catalog_Namespace::SessionInfo& RenderInfo::getSessionInfo() const {
+const SessionInfo& RenderInfo::getSessionInfo() const {
   CHECK(false);
-  static const Catalog_Namespace::SessionInfo tmp(
-      nullptr,
-      Catalog_Namespace::UserMetadata(-1, "", "", false, -1, false, false),
-      ExecutorDeviceType::CPU,
-      "");
+  static const SessionInfo tmp(ExecutorDeviceType::CPU, "");
   return tmp;
 }
 
-std::shared_ptr<Catalog_Namespace::SessionInfo const> RenderInfo::getSessionInfoPtr()
-    const {
+std::shared_ptr<SessionInfo const> RenderInfo::getSessionInfoPtr() const {
   UNREACHABLE();
   return {};
 }

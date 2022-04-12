@@ -23,7 +23,6 @@
 #include "../Shared/Compressor.h"
 #include "../Shared/scope.h"
 #include "../SqliteConnector/SqliteConnector.h"
-#include "DistributedLoader.h"
 
 #include <gtest/gtest.h>
 

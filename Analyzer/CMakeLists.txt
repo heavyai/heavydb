@@ -10,4 +10,4 @@ set(analyzer_source_files
 
 add_library(Analyzer ${analyzer_source_files})
 
-target_link_libraries(Analyzer Catalog SchemaMgr)
+target_link_libraries(Analyzer SchemaMgr)

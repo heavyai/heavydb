@@ -666,10 +666,8 @@ endif()
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  include_directories(Catalog/ee)
   include_directories(Distributed/ee)
 else()
-  include_directories(Catalog/os)
   include_directories(Distributed/os)
 endif()
 
@@ -725,7 +723,6 @@ get_target_property(CalciteThrift_BINARY_DIR calciteserver_thrift BINARY_DIR)
 include_directories(${CalciteThrift_BINARY_DIR})
 
 add_subdirectory(ArrowStorage)
-add_subdirectory(Catalog)
 add_subdirectory(Analyzer)
 add_subdirectory(QueryEngine)
 add_subdirectory(DataMgr)
@@ -746,7 +743,7 @@ if(ENABLE_ODBC)
   add_subdirectory(ODBC)
 endif()
 
-set(MAPD_LIBRARIES OSDependent Shared Catalog SqliteConnector Analyzer QueryEngine QueryState LockMgr DataMgr Logger)
+set(MAPD_LIBRARIES OSDependent Shared SqliteConnector Analyzer QueryEngine QueryState LockMgr DataMgr Logger)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND MAPD_LIBRARIES Distributed)

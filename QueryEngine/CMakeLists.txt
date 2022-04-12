@@ -105,6 +105,7 @@ set(query_engine_source_files
     DynamicWatchdog.cpp
     ScalarCodeGenerator.cpp
     SerializeToSql.cpp
+    SessionInfo.cpp
     SpeculativeTopN.cpp
     StreamingTopN.cpp
     StringDictionaryGenerations.cpp
@@ -113,7 +114,6 @@ set(query_engine_source_files
     TableFunctions/TableFunctionsFactory.cpp
     TableFunctions/TableFunctionOps.cpp
     TableGenerations.cpp
-    TableOptimizer.cpp
     TargetExprBuilder.cpp
     Utils/DiamondCodegen.cpp
     StringFunctions.cpp
@@ -274,6 +274,7 @@ set(QUERY_ENGINE_LIBS
         Logger
         Shared
         SchemaMgr
+        SqliteConnector
         sqlite3
         ${Arrow_LIBRARIES}
         )

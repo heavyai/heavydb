@@ -18,7 +18,6 @@
 #define LEAFAGGREGATOR_H
 
 #include "../AggregatedResult.h"
-#include "Catalog/Catalog.h"
 #include "DataMgr/MemoryLevel.h"
 #include "LeafHostInfo.h"
 #include "QueryEngine/CompilationOptions.h"
@@ -27,9 +26,7 @@
 
 #include "Logger/Logger.h"
 
-namespace Catalog_Namespace {
 class SessionInfo;
-}  // namespace Catalog_Namespace
 
 class ResultSet;
 
@@ -37,7 +34,7 @@ class LeafAggregator {
  public:
   LeafAggregator(const std::vector<LeafHostInfo>& leaves) { CHECK(leaves.empty()); }
 
-  AggregatedResult execute(const Catalog_Namespace::SessionInfo& parent_session_info,
+  AggregatedResult execute(const SessionInfo& parent_session_info,
                            const std::string& query_ra,
                            const ExecutionOptions& eo,
                            const bool is_update_delete) {
@@ -45,69 +42,51 @@ class LeafAggregator {
     return {nullptr, {}};
   }
 
-  void leafCatalogConsistencyCheck(
-      const Catalog_Namespace::SessionInfo& parent_session_info) {
+  void leafCatalogConsistencyCheck(const SessionInfo& parent_session_info) {
     CHECK(false);
   }
 
   std::map<size_t, TQueryResult> forwardQueryToLeaves(
-      const Catalog_Namespace::SessionInfo& parent_session_info,
+      const SessionInfo& parent_session_info,
       const std::string& query_str) {
     CHECK(false);
     return {};
   }
 
-  TQueryResult forwardQueryToLeaf(
-      const Catalog_Namespace::SessionInfo& parent_session_info,
-      const std::string& query_str,
-      const size_t leaf_idx) {
+  TQueryResult forwardQueryToLeaf(const SessionInfo& parent_session_info,
+                                  const std::string& query_str,
+                                  const size_t leaf_idx) {
     CHECK(false);
     return {};
   }
 
-  void insertDataToLeaf(const Catalog_Namespace::SessionInfo& parent_session_info,
+  void insertDataToLeaf(const SessionInfo& parent_session_info,
                         const size_t leaf_idx,
                         const TInsertData& thrift_insert_data) {
     CHECK(false);
   }
 
-  void checkpointLeafShardsWithAutoRollback(
-      const Catalog_Namespace::SessionInfo& parent_session_info,
-      const int32_t db_id,
-      const int32_t table_id) {
+  void checkpointLeafShardsWithAutoRollback(const SessionInfo& parent_session_info,
+                                            const int32_t db_id,
+                                            const int32_t table_id) {
     CHECK(false);
   }
 
-  int32_t get_table_epochLeaf(const Catalog_Namespace::SessionInfo& parent_session_info,
+  int32_t get_table_epochLeaf(const SessionInfo& parent_session_info,
                               const int32_t db_id,
                               const int32_t table_id) {
     CHECK(false);
     return 0;
   }
 
-  void set_table_epochLeaf(const Catalog_Namespace::SessionInfo& parent_session_info,
+  void set_table_epochLeaf(const SessionInfo& parent_session_info,
                            const int32_t db_id,
                            const int32_t table_id,
                            const int32_t new_epoch) {
     CHECK(false);
   }
 
-  std::vector<Catalog_Namespace::TableEpochInfo> getLeafTableEpochs(
-      const Catalog_Namespace::SessionInfo& parent_session_info,
-      const int32_t db_id,
-      const int32_t table_id) {
-    CHECK(false);
-    return {};
-  }
-
-  void setLeafTableEpochs(
-      const Catalog_Namespace::SessionInfo& parent_session_info,
-      const int32_t db_id,
-      const std::vector<Catalog_Namespace::TableEpochInfo>& table_epochs) {
-    CHECK(false);
-  }
-
-  void connect(const Catalog_Namespace::SessionInfo& parent_session_info,
+  void connect(const SessionInfo& parent_session_info,
                const std::string& user,
                const std::string& passwd,
                const std::string& dbname) {
@@ -168,7 +147,7 @@ class LeafAggregator {
   }
 
   std::vector<size_t> query_get_outer_fragment_counts(
-      const Catalog_Namespace::SessionInfo& parent_session_info,
+      const SessionInfo& parent_session_info,
       std::string& sql_query) {
     CHECK(false);
     return {};

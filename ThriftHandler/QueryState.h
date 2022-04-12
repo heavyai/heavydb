@@ -78,9 +78,7 @@
  *    defining QueryId in Logger minimizes the coupling between Logger and QueryState.
  */
 
-namespace Catalog_Namespace {
 class SessionInfo;
-}
 
 namespace query_state {
 
@@ -114,13 +112,13 @@ class QueryStates;
 
 // SessionInfo can expire, so data is copied while available.
 struct SessionData {
-  std::weak_ptr<Catalog_Namespace::SessionInfo const> session_info;
+  std::weak_ptr<SessionInfo const> session_info;
   std::string db_name;
   std::string user_name;
   std::string public_session_id;
 
   SessionData() = default;
-  SessionData(std::shared_ptr<Catalog_Namespace::SessionInfo const> const&);
+  SessionData(std::shared_ptr<SessionInfo const> const&);
 };
 
 class Timer;
@@ -137,8 +135,7 @@ class QueryState : public std::enable_shared_from_this<QueryState> {
   void logCallStack(std::stringstream&, unsigned const depth, Events::iterator parent);
 
   // Only shared_ptr instances are allowed due to call to shared_from_this().
-  QueryState(std::shared_ptr<Catalog_Namespace::SessionInfo const> const&,
-             std::string query_str);
+  QueryState(std::shared_ptr<SessionInfo const> const&, std::string query_str);
 
  public:
   template <typename... ARGS>
@@ -156,7 +153,7 @@ class QueryState : public std::enable_shared_from_this<QueryState> {
   inline logger::QueryId getId() const { return id_; }
   inline std::string const& getQueryStr() const { return query_str_; }
   // Will throw exception if session_data_.session_info.expired().
-  std::shared_ptr<Catalog_Namespace::SessionInfo const> getConstSessionInfo() const;
+  std::shared_ptr<SessionInfo const> getConstSessionInfo() const;
   boost::optional<SessionData> const& getSessionData() const { return session_data_; }
   inline bool isLogged() const { return logged_.load(); }
   void logCallStack(std::stringstream&);
@@ -260,7 +257,7 @@ class StdLogData {
 };
 
 class StdLog : public StdLogData {
-  std::shared_ptr<Catalog_Namespace::SessionInfo> session_info_;
+  std::shared_ptr<SessionInfo> session_info_;
   std::shared_ptr<QueryState> query_state_;
   void log(logger::Severity, char const* label);
   void logCallStack(logger::Severity, char const* label);
@@ -271,7 +268,7 @@ class StdLog : public StdLogData {
   StdLog(char const* file,
          unsigned line,
          char const* func,
-         std::shared_ptr<Catalog_Namespace::SessionInfo> session_info,
+         std::shared_ptr<SessionInfo> session_info,
          Pairs&&... pairs)
       : StdLogData(file, line, func, std::forward<Pairs>(pairs)...)
       , session_info_(std::move(session_info)) {
@@ -282,7 +279,7 @@ class StdLog : public StdLogData {
   StdLog(char const* file,
          unsigned line,
          char const* func,
-         std::shared_ptr<Catalog_Namespace::SessionInfo> session_info,
+         std::shared_ptr<SessionInfo> session_info,
          std::shared_ptr<QueryState> query_state,
          Pairs&&... pairs)
       : StdLogData(file, line, func, std::forward<Pairs>(pairs)...)
@@ -320,10 +317,10 @@ class StdLog : public StdLogData {
   typename Units::rep duration() const {
     return std::chrono::duration_cast<Units>(Clock::now() - start_).count();
   }
-  std::shared_ptr<Catalog_Namespace::SessionInfo const> getConstSessionInfo() const;
-  std::shared_ptr<Catalog_Namespace::SessionInfo> getSessionInfo() const;
+  std::shared_ptr<SessionInfo const> getConstSessionInfo() const;
+  std::shared_ptr<SessionInfo> getSessionInfo() const;
   void setQueryState(std::shared_ptr<QueryState>);
-  void setSessionInfo(std::shared_ptr<Catalog_Namespace::SessionInfo>);
+  void setSessionInfo(std::shared_ptr<SessionInfo>);
 };
 
 }  // namespace query_state

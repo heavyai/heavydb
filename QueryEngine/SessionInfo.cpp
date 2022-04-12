@@ -17,25 +17,6 @@
 #include "SessionInfo.h"
 #include <iomanip>
 #include <sstream>
-#include "Catalog.h"
-
-namespace Catalog_Namespace {
-
-bool SessionInfo::checkDBAccessPrivileges(const DBObjectType& permissionType,
-                                          const AccessPrivileges& privs,
-                                          const std::string& objectName) const {
-  auto& cat = getCatalog();
-  // run flow with DB object level access permission checks
-  DBObject object(objectName, permissionType);
-  if (permissionType == DBObjectType::DatabaseDBObjectType) {
-    object.setName(cat.getCurrentDB().dbName);
-  }
-  object.loadKey(cat);
-  object.setPrivileges(privs);
-  std::vector<DBObject> privObjects;
-  privObjects.push_back(object);
-  return SysCatalog::instance().checkPrivileges(get_currentUser(), privObjects);
-}
 
 // start_time(3)-session_id(4) Example: 819-4RDo
 // This shows 4 chars of the secret session key,
@@ -58,5 +39,3 @@ std::ostream& operator<<(std::ostream& os, const SessionInfo& session_info) {
   os << session_info.get_public_session_id();
   return os;
 }
-
-}  // namespace Catalog_Namespace

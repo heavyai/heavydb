@@ -21,9 +21,7 @@
 
 class DistributedLoader {
  public:
-  DistributedLoader(const Catalog_Namespace::SessionInfo& parent_session_info,
-                    const TableDescriptor* t,
-                    LeafAggregator* aggregator) {
+  DistributedLoader(const SessionInfo& parent_session_info, LeafAggregator* aggregator) {
     CHECK(false);
   }
 };

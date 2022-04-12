@@ -20,10 +20,10 @@
 
 #include <iostream>
 
-#include "Catalog/SysCatalog.h"
 #include "CommandLineOptions.h"
 #include "LeafHostInfo.h"
 #include "MapDRelease.h"
+#include "OSDependent/omnisci_fs.h"
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "Shared/Compressor.h"
 #include "StringDictionary/StringDictionary.h"
@@ -907,17 +907,6 @@ void CommandLineOptions::validate() {
   if (db_query_file.length() > 0 && !boost::filesystem::exists(db_query_file)) {
     throw std::runtime_error("File containing DB queries " + db_query_file +
                              " does not exist.");
-  }
-  const auto db_file =
-      boost::filesystem::path(base_path) / "mapd_catalogs" / OMNISCI_SYSTEM_CATALOG;
-  if (!boost::filesystem::exists(db_file)) {
-    {  // check old system catalog existsense
-      const auto db_file = boost::filesystem::path(base_path) / "mapd_catalogs/mapd";
-      if (!boost::filesystem::exists(db_file)) {
-        throw std::runtime_error("OmniSci system catalog " + OMNISCI_SYSTEM_CATALOG +
-                                 " does not exist.");
-      }
-    }
   }
   if (license_path.length() == 0) {
     license_path = base_path + "/omnisci.license";

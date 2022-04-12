@@ -17,7 +17,6 @@
 #ifndef QUERYENGINE_RELALGEXECUTOR_H
 #define QUERYENGINE_RELALGEXECUTOR_H
 
-#include "Catalog/CatalogSchemaProvider.h"
 #include "DataProvider/DataProvider.h"
 #include "Distributed/AggregatedResult.h"
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
@@ -51,27 +50,9 @@ class RelAlgExecutor {
   using TargetInfoList = std::vector<TargetInfo>;
 
   RelAlgExecutor(Executor* executor,
-                 const Catalog_Namespace::Catalog* cat,
-                 SchemaProviderPtr schema_provider,
-                 DataProvider* data_provider,
-                 std::shared_ptr<const query_state::QueryState> query_state = nullptr);
-
-  RelAlgExecutor(Executor* executor,
                  int db_id,
                  SchemaProviderPtr schema_provider,
                  DataProvider* data_provider,
-                 std::shared_ptr<const query_state::QueryState> query_state = nullptr);
-
-  RelAlgExecutor(Executor* executor,
-                 const Catalog_Namespace::Catalog* cat,
-                 DataProvider* data_provider,
-                 const std::string& query_ra,
-                 std::shared_ptr<const query_state::QueryState> query_state = nullptr);
-
-  RelAlgExecutor(Executor* executor,
-                 const Catalog_Namespace::Catalog* cat,
-                 DataProvider* data_provider,
-                 std::unique_ptr<RelAlgDag> query_dag,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr);
 
   RelAlgExecutor(Executor* executor,
@@ -388,7 +369,6 @@ class RelAlgExecutor {
       const bool just_explain) const;
 
   Executor* executor_;
-  const Catalog_Namespace::Catalog* cat_;
   int db_id_;
   std::unique_ptr<RelAlgDag> query_dag_;
   std::shared_ptr<SchemaProvider> schema_provider_;

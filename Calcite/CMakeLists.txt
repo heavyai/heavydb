@@ -25,4 +25,4 @@ target_link_libraries(calciteserver_thrift ${Thrift_LIBRARIES})
 
 add_library(Calcite Calcite.cpp Calcite.h)
 
-target_link_libraries(Calcite Catalog calciteserver_thrift ${JAVA_JVM_LIBRARY})
+target_link_libraries(Calcite calciteserver_thrift ${JAVA_JVM_LIBRARY})

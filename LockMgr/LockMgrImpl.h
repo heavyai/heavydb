@@ -22,9 +22,12 @@
 #include <string>
 #include <type_traits>
 
-#include "Catalog/Catalog.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/types.h"
+
+namespace Catalog_Namespace {
+class Catalog;
+}
 
 namespace lockmgr {
 
@@ -154,7 +157,7 @@ class TableLockMgrImpl {
 
   static WriteLock getWriteLockForTable(const Catalog_Namespace::Catalog& cat,
                                         const std::string& table_name) {
-    return helpers::getLockForTableImpl<WriteLock, T>(cat, table_name);
+    UNREACHABLE();
   }
   static WriteLock getWriteLockForTable(const ChunkKey table_key) {
     auto& table_lock_mgr = T::instance();
@@ -163,7 +166,7 @@ class TableLockMgrImpl {
 
   static ReadLock getReadLockForTable(const Catalog_Namespace::Catalog& cat,
                                       const std::string& table_name) {
-    return helpers::getLockForTableImpl<ReadLock, T>(cat, table_name);
+    UNREACHABLE();
   }
   static ReadLock getReadLockForTable(const ChunkKey table_key) {
     auto& table_lock_mgr = T::instance();

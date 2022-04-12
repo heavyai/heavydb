@@ -33,12 +33,13 @@
 #include "QueryEngine/Rendering/RenderInfo.h"
 #include "QueryEngine/ResultSetBuilder.h"
 #include "QueryEngine/RexVisitor.h"
-#include "QueryEngine/TableOptimizer.h"
 #include "QueryEngine/WindowContext.h"
+#include "SessionInfo.h"
 #include "Shared/Globals.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
+#include "ThriftHandler/QueryState.h"
 
 #include <boost/algorithm/cxx11/any_of.hpp>
 #include <boost/range/adaptor/reversed.hpp>
@@ -118,26 +119,11 @@ class RelLeftDeepTreeIdsCollector : public RelAlgVisitor<std::vector<unsigned>> 
 }  // namespace
 
 RelAlgExecutor::RelAlgExecutor(Executor* executor,
-                               const Catalog_Namespace::Catalog* cat,
-                               SchemaProviderPtr schema_provider,
-                               DataProvider* data_provider,
-                               std::shared_ptr<const query_state::QueryState> query_state)
-    : executor_(executor)
-    , cat_(cat)
-    , db_id_(cat->getDatabaseId())
-    , schema_provider_(schema_provider)
-    , data_provider_(data_provider)
-    , query_state_(std::move(query_state))
-    , now_(0)
-    , queue_time_ms_(0) {}
-
-RelAlgExecutor::RelAlgExecutor(Executor* executor,
                                int db_id,
                                SchemaProviderPtr schema_provider,
                                DataProvider* data_provider,
                                std::shared_ptr<const query_state::QueryState> query_state)
     : executor_(executor)
-    , cat_(nullptr)
     , db_id_(db_id)
     , schema_provider_(schema_provider)
     , data_provider_(data_provider)
@@ -146,47 +132,12 @@ RelAlgExecutor::RelAlgExecutor(Executor* executor,
     , queue_time_ms_(0) {}
 
 RelAlgExecutor::RelAlgExecutor(Executor* executor,
-                               const Catalog_Namespace::Catalog* cat,
-                               DataProvider* data_provider,
-                               const std::string& query_ra,
-                               std::shared_ptr<const query_state::QueryState> query_state)
-    : executor_(executor)
-    , cat_(cat)
-    , db_id_(cat->getDatabaseId())
-    , query_dag_(std::make_unique<RelAlgDagBuilder>(
-          query_ra,
-          cat_->getDatabaseId(),
-          std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat),
-          nullptr))
-    , schema_provider_(std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
-    , data_provider_(data_provider)
-    , query_state_(std::move(query_state))
-    , now_(0)
-    , queue_time_ms_(0) {}
-
-RelAlgExecutor::RelAlgExecutor(Executor* executor,
-                               const Catalog_Namespace::Catalog* cat,
-                               DataProvider* data_provider,
-                               std::unique_ptr<RelAlgDag> query_dag,
-                               std::shared_ptr<const query_state::QueryState> query_state)
-    : executor_(executor)
-    , cat_(cat)
-    , db_id_(cat->getDatabaseId())
-    , query_dag_(std::move(query_dag))
-    , schema_provider_(std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
-    , data_provider_(data_provider)
-    , query_state_(std::move(query_state))
-    , now_(0)
-    , queue_time_ms_(0) {}
-
-RelAlgExecutor::RelAlgExecutor(Executor* executor,
                                int db_id,
                                SchemaProviderPtr schema_provider,
                                DataProvider* data_provider,
                                std::unique_ptr<RelAlgDag> query_dag,
                                std::shared_ptr<const query_state::QueryState> query_state)
     : executor_(executor)
-    , cat_(nullptr)
     , db_id_(db_id)
     , query_dag_(std::move(query_dag))
     , schema_provider_(std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
@@ -2061,54 +2012,6 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
 
   return {rs, tuple_type};
 }
-
-namespace {
-
-template <class T>
-int64_t insert_one_dict_str(T* col_data,
-                            const std::string& columnName,
-                            const SQLTypeInfo& columnType,
-                            const Analyzer::Constant* col_cv,
-                            const Catalog_Namespace::Catalog& catalog) {
-  if (col_cv->get_is_null()) {
-    *col_data = inline_fixed_encoding_null_val(columnType);
-  } else {
-    const int dict_id = columnType.get_comp_param();
-    const auto col_datum = col_cv->get_constval();
-    const auto& str = *col_datum.stringval;
-    const auto dd = catalog.getMetadataForDict(dict_id);
-    CHECK(dd && dd->stringDict);
-    int32_t str_id = dd->stringDict->getOrAdd(str);
-    if (!dd->dictIsTemp) {
-      const auto checkpoint_ok = dd->stringDict->checkpoint();
-      if (!checkpoint_ok) {
-        throw std::runtime_error("Failed to checkpoint dictionary for column " +
-                                 columnName);
-      }
-    }
-    const bool invalid = str_id > max_valid_int_value<T>();
-    if (invalid || str_id == inline_int_null_value<int32_t>()) {
-      if (invalid) {
-        LOG(ERROR) << "Could not encode string: " << str
-                   << ", the encoded value doesn't fit in " << sizeof(T) * 8
-                   << " bits. Will store NULL instead.";
-      }
-      str_id = inline_fixed_encoding_null_val(columnType);
-    }
-    *col_data = str_id;
-  }
-  return *col_data;
-}
-
-template <class T>
-int64_t insert_one_dict_str(T* col_data,
-                            const ColumnDescriptor* cd,
-                            const Analyzer::Constant* col_cv,
-                            const Catalog_Namespace::Catalog& catalog) {
-  return insert_one_dict_str(col_data, cd->columnName, cd->columnType, col_cv, catalog);
-}
-
-}  // namespace
 
 ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query) {
   UNREACHABLE();

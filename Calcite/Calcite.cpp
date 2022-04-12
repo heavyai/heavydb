@@ -22,7 +22,6 @@
  */
 
 #include "Calcite.h"
-#include "Catalog/Catalog.h"
 #include "Logger/Logger.h"
 #include "OSDependent/omnisci_path.h"
 #include "Shared/SystemParameters.h"
@@ -44,6 +43,7 @@
 
 #include "rapidjson/document.h"
 
+#include <iostream>
 #include <utility>
 
 using namespace rapidjson;
@@ -419,61 +419,6 @@ void Calcite::updateMetadata(std::string catalog, std::string table) {
   }
 }
 
-void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info,
-                              std::vector<std::vector<std::string>> tableOrViewNames,
-                              AccessPrivileges tablePrivs,
-                              AccessPrivileges viewPrivs) {
-  // TODO MAT this needs to be able to check privileges from other catalogs
-  Catalog_Namespace::Catalog& catalog = session_info.getCatalog();
-
-  for (auto tableOrViewName : tableOrViewNames) {
-    const TableDescriptor* tableMeta =
-        catalog.getMetadataForTable(tableOrViewName[0], false);
-
-    if (!tableMeta) {
-      throw std::runtime_error("unknown table of view: " + tableOrViewName[0]);
-    }
-
-    DBObjectKey key;
-    key.dbId = catalog.getCurrentDB().dbId;
-    key.permissionType = tableMeta->isView ? DBObjectType::ViewDBObjectType
-                                           : DBObjectType::TableDBObjectType;
-    key.objectId = tableMeta->tableId;
-    AccessPrivileges privs = tableMeta->isView ? viewPrivs : tablePrivs;
-    DBObject dbobject(key, privs, tableMeta->userId);
-    std::vector<DBObject> privObjects{dbobject};
-
-    if (!privs.hasAny()) {
-      throw std::runtime_error("Operation not supported for object " +
-                               tableOrViewName[0]);
-    }
-
-    if (!Catalog_Namespace::SysCatalog::instance().checkPrivileges(
-            session_info.get_currentUser(), privObjects)) {
-      throw std::runtime_error("Violation of access privileges: user " +
-                               session_info.get_currentUser().userLoggable() +
-                               " has no proper privileges for object " +
-                               tableOrViewName[0]);
-    }
-  }
-}
-
-TPlanResult Calcite::process(query_state::QueryStateProxy query_state_proxy,
-                             std::string sql_string,
-                             const TQueryParsingOption& query_parsing_option,
-                             const TOptimizationOption& optimization_option,
-                             const std::string& calcite_session_id) {
-  TPlanResult result = processImpl(query_state_proxy,
-                                   std::move(sql_string),
-                                   query_parsing_option,
-                                   optimization_option,
-                                   calcite_session_id);
-  if (query_parsing_option.check_privileges && !query_parsing_option.is_explain) {
-    checkAccessedObjectsPrivileges(query_state_proxy, result);
-  }
-  return result;
-}
-
 TPlanResult Calcite::process(
     const std::string& user,
     const std::string& db_name,
@@ -530,40 +475,16 @@ TPlanResult Calcite::process(
 void Calcite::checkAccessedObjectsPrivileges(
     query_state::QueryStateProxy query_state_proxy,
     TPlanResult plan) const {
-  AccessPrivileges NOOP;
-  // check the individual tables
-  auto const session_ptr = query_state_proxy.getQueryState().getConstSessionInfo();
-  checkPermissionForTables(*session_ptr,
-                           plan.primary_accessed_objects.tables_selected_from,
-                           AccessPrivileges::SELECT_FROM_TABLE,
-                           AccessPrivileges::SELECT_FROM_VIEW);
-  checkPermissionForTables(*session_ptr,
-                           plan.primary_accessed_objects.tables_inserted_into,
-                           AccessPrivileges::INSERT_INTO_TABLE,
-                           NOOP);
-  checkPermissionForTables(*session_ptr,
-                           plan.primary_accessed_objects.tables_updated_in,
-                           AccessPrivileges::UPDATE_IN_TABLE,
-                           NOOP);
-  checkPermissionForTables(*session_ptr,
-                           plan.primary_accessed_objects.tables_deleted_from,
-                           AccessPrivileges::DELETE_FROM_TABLE,
-                           NOOP);
+  UNREACHABLE();
 }
 
 std::vector<TCompletionHint> Calcite::getCompletionHints(
-    const Catalog_Namespace::SessionInfo& session_info,
+    const SessionInfo& session_info,
     const std::vector<std::string>& visible_tables,
     const std::string sql_string,
     const int cursor) {
+  UNREACHABLE();
   std::vector<TCompletionHint> hints;
-  auto& cat = session_info.getCatalog();
-  const auto user = session_info.get_currentUser().userName;
-  const auto session = session_info.get_session_id();
-  const auto catalog = cat.getCurrentDB().dbName;
-  auto client = getClient(remote_calcite_port_);
-  client.first->getCompletionHints(
-      hints, user, session, catalog, visible_tables, sql_string, cursor);
   return hints;
 }
 
@@ -584,68 +505,6 @@ std::vector<std::string> Calcite::get_db_objects(const std::string ra) {
   }
 
   return v_db_obj;
-}
-
-TPlanResult Calcite::processImpl(query_state::QueryStateProxy query_state_proxy,
-                                 const std::string sql_string,
-                                 const TQueryParsingOption& query_parsing_option,
-                                 const TOptimizationOption& optimization_option,
-                                 const std::string& calcite_session_id) {
-  query_state::Timer timer = query_state_proxy.createTimer(__func__);
-  const auto& user_session_info = query_state_proxy.getQueryState().getConstSessionInfo();
-  const auto& cat = user_session_info->getCatalog();
-  const std::string user = getInternalSessionProxyUserName();
-  const std::string catalog = cat.getCurrentDB().dbName;
-  LOG(INFO) << "User " << user << " catalog " << catalog << " sql '" << sql_string << "'";
-  LOG(IR) << "SQL query\n" << sql_string << "\nEnd of SQL query";
-  LOG(PTX) << "SQL query\n" << sql_string << "\nEnd of SQL query";
-
-  TRestriction restriction;
-  auto rest = user_session_info->get_restriction_ptr();
-  if (rest != nullptr && !rest->column.empty()) {
-    VLOG(1) << "This users session has a restriction : " << *rest;
-    restriction.column = rest->column;
-    restriction.values = rest->values;
-  }
-  TPlanResult ret;
-  if (server_available_) {
-    try {
-      // calcite_session_id would be an empty string when accessed by internal resources
-      // that would not access `process` through handler instance, like for eg: Unit
-      // Tests. In these cases we would use the session_id from query state.
-      auto ms = measure<>::execution([&]() {
-        auto clientP = getClient(remote_calcite_port_);
-        clientP.first->process(ret,
-                               user,
-                               calcite_session_id.empty()
-                                   ? user_session_info->get_session_id()
-                                   : calcite_session_id,
-                               catalog,
-                               sql_string,
-                               query_parsing_option,
-                               optimization_option,
-                               restriction,
-                               "");
-        clientP.second->close();
-      });
-
-      // LOG(INFO) << ret.plan_result;
-      LOG(INFO) << "Time in Thrift "
-                << (ms > ret.execution_time_ms ? ms - ret.execution_time_ms : 0)
-                << " (ms), Time in Java Calcite server " << ret.execution_time_ms
-                << " (ms)";
-    } catch (InvalidParseRequest& e) {
-      throw std::invalid_argument(e.whyUp);
-    } catch (const std::exception& ex) {
-      LOG(FATAL)
-          << "Error occurred trying to communicate with Calcite server, the error was: '"
-          << ex.what() << "', omnisci_server restart will be required";
-      return ret;  // satisfy return-type warning
-    }
-  } else {
-    LOG(FATAL) << "Not routing to Calcite, server is not up";
-  }
-  return ret;
 }
 
 std::string Calcite::getExtensionFunctionWhitelist() {

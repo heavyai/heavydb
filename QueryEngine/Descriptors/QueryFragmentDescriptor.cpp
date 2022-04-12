@@ -16,8 +16,6 @@
 
 #include "QueryFragmentDescriptor.h"
 
-#include "Catalog/ColumnDescriptor.h"
-#include "Catalog/TableDescriptor.h"
 #include "DataMgr/DataMgr.h"
 #include "QueryEngine/Execute.h"
 #include "Shared/misc.h"

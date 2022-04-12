@@ -1196,7 +1196,6 @@ class Executor {
   friend class QueryRewriter;
   friend class PendingExecutionClosure;
   friend class RelAlgExecutor;
-  friend class TableOptimizer;
   friend class TableFunctionCompilationContext;
   friend class TableFunctionExecutionContext;
   friend struct TargetExprCodegenBuilder;

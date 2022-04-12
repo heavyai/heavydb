@@ -21,8 +21,7 @@
  */
 
 #include "QueryState.h"
-#include "Catalog/Catalog.h"
-#include "Catalog/SessionInfo.h"
+#include "QueryEngine/SessionInfo.h"
 #include "Shared/nvtx_helpers.h"
 #include "Shared/toString.h"
 
@@ -52,19 +51,17 @@ void Event::stop() {
       << "stop() called more than once.";
 }
 
-SessionData::SessionData(
-    std::shared_ptr<Catalog_Namespace::SessionInfo const> const& session_info)
+SessionData::SessionData(std::shared_ptr<SessionInfo const> const& session_info)
     : session_info(session_info)
-    , db_name(session_info->getCatalog().getCurrentDB().dbName)
-    , user_name(session_info->get_currentUser().userLoggable())
+    , db_name("")
+    , user_name("")
     , public_session_id(session_info->get_public_session_id()) {}
 
 // The id to be given to the next QueryState.
 std::atomic<logger::QueryId> QueryState::s_next_id{1};
 
-QueryState::QueryState(
-    std::shared_ptr<Catalog_Namespace::SessionInfo const> const& session_info,
-    std::string query_str)
+QueryState::QueryState(std::shared_ptr<SessionInfo const> const& session_info,
+                       std::string query_str)
     : id_(s_next_id++)
     , session_data_(session_info ? boost::make_optional<SessionData>(session_info)
                                  : boost::none)
@@ -85,8 +82,7 @@ Timer QueryState::createTimer(char const* event_name, Events::iterator parent) {
   return Timer(shared_from_this(), events_.emplace(events_.end(), event_name, parent));
 }
 
-std::shared_ptr<Catalog_Namespace::SessionInfo const> QueryState::getConstSessionInfo()
-    const {
+std::shared_ptr<SessionInfo const> QueryState::getConstSessionInfo() const {
   if (!session_data_) {
     throw std::runtime_error("session_info_ was not set for this QueryState.");
   }
@@ -156,12 +152,11 @@ Timer::~Timer() {
 
 std::atomic<int64_t> StdLogData::s_match{0};
 
-std::shared_ptr<Catalog_Namespace::SessionInfo const> StdLog::getConstSessionInfo()
-    const {
+std::shared_ptr<SessionInfo const> StdLog::getConstSessionInfo() const {
   return session_info_;
 }
 
-std::shared_ptr<Catalog_Namespace::SessionInfo> StdLog::getSessionInfo() const {
+std::shared_ptr<SessionInfo> StdLog::getSessionInfo() const {
   return session_info_;
 }
 
@@ -184,14 +179,11 @@ std::ostream& operator<<(std::ostream& os, SessionData const& session_data) {
 }
 
 struct SessionInfoFormatter {
-  Catalog_Namespace::SessionInfo const& session_info;
+  SessionInfo const& session_info;
 };
 
 std::ostream& operator<<(std::ostream& os, SessionInfoFormatter const& formatter) {
-  return os << QuoteFormatter{formatter.session_info.getCatalog().getCurrentDB().dbName}
-            << ' '
-            << QuoteFormatter{formatter.session_info.get_currentUser().userLoggable()}
-            << ' ' << formatter.session_info.get_public_session_id();
+  return os << formatter.session_info.get_public_session_id();
 }
 
 // Default severity for logging stdlog_begin lines is DEBUG1.
@@ -283,8 +275,7 @@ void StdLog::setQueryState(std::shared_ptr<QueryState> query_state) {
   query_state_ = std::move(query_state);
 }
 
-void StdLog::setSessionInfo(
-    std::shared_ptr<Catalog_Namespace::SessionInfo> session_info) {
+void StdLog::setSessionInfo(std::shared_ptr<SessionInfo> session_info) {
   session_info_ = std::move(session_info);
 }
 

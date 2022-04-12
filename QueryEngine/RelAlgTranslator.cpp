@@ -25,8 +25,8 @@
 #include "WindowContext.h"
 
 #include "Analyzer/Analyzer.h"
-#include "Catalog/SessionInfo.h"
 #include "Descriptors/RelAlgExecutionDescriptor.h"
+#include "QueryEngine/SessionInfo.h"
 #include "Shared/SqlTypesLayout.h"
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"
@@ -1138,9 +1138,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSampleRatio(
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentUser(
     const RexFunctionOperator* rex_function) const {
   std::string user{"SESSIONLESS_USER"};
-  if (query_state_) {
-    user = query_state_->getConstSessionInfo()->get_currentUser().userName;
-  }
   return Analyzer::getUserLiteral(user);
 }
 

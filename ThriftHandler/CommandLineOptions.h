@@ -26,9 +26,9 @@
 #include <boost/make_shared.hpp>
 #include <boost/program_options.hpp>
 
-#include "Catalog/AuthMetadata.h"
 #include "QueryEngine/ExtractFromTime.h"
 #include "QueryEngine/HyperLogLog.h"
+#include "Shared/AuthMetadata.h"
 #include "Shared/SystemParameters.h"
 
 namespace po = boost::program_options;

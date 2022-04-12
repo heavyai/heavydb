@@ -18,7 +18,6 @@
 
 #include <string>
 
-#include "Catalog/Catalog.h"
 #include "LockMgr/LegacyLockMgr.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "Shared/types.h"
@@ -30,13 +29,7 @@ namespace helpers {
 
 ChunkKey chunk_key_for_table(const Catalog_Namespace::Catalog& cat,
                              const std::string& tableName) {
-  if (const auto tdp = cat.getMetadataForTable(tableName, false)) {
-    ChunkKey chunk_key{cat.getCurrentDB().dbId, tdp->tableId};
-    return chunk_key;
-  } else {
-    throw std::runtime_error("Table/View " + tableName + " for catalog " +
-                             cat.getCurrentDB().dbName + " does not exist");
-  }
+  UNREACHABLE();
 }
 
 }  // namespace helpers
