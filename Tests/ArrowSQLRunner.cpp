@@ -15,6 +15,7 @@
 #include "ArrowSQLRunner.h"
 
 #include "Calcite/Calcite.h"
+#include "Calcite/CalciteJNI.h"
 #include "DataMgr/DataMgr.h"
 #include "DataMgr/DataMgrDataProvider.h"
 #include "QueryEngine/CalciteAdapter.h"
@@ -89,6 +90,16 @@ class ArrowSQLRunnerImpl {
       query_ra =
           calcite_->process("admin", "test_db", pg_shim(sql), schema_json, "", {}, true)
               .plan_result;
+
+      try {
+        std::string exp =
+            calcite_jni_
+                ->process("admin", "test_db", pg_shim(sql), schema_json, "", {}, true)
+                .plan_result;
+        CHECK_EQ(exp, query_ra);
+      } catch (std::exception& e) {
+        LOG(FATAL) << "exception during procession of query: " << sql << ": " << e.what();
+      }
     });
 
     return query_ra;
@@ -276,12 +287,16 @@ class ArrowSQLRunnerImpl {
         table_functions::TableFunctionsFactory::get_table_funcs(/*is_runtime=*/false));
     std::vector<TUserDefinedFunction> udfs = {};
     calcite_->setRuntimeExtensionFunctions(udfs, udtfs, /*is_runtime=*/false);
+
+    calcite_jni_ = std::make_shared<CalciteJNI>(udf_filename, 1024);
+    calcite_jni_->setRuntimeExtensionFunctions(udfs, udtfs, /*is_runtime=*/false);
   }
 
   std::shared_ptr<DataMgr> data_mgr_;
   std::shared_ptr<ArrowStorage> storage_;
   std::shared_ptr<Executor> executor_;
   std::shared_ptr<Calcite> calcite_;
+  std::shared_ptr<CalciteJNI> calcite_jni_;
   SQLiteComparator sqlite_comparator_;
   int64_t schema_to_json_time_;
   int64_t calcite_time_;

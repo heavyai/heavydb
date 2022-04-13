@@ -15,6 +15,9 @@ add_library(calciteserver_thrift
     ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
 )
 
+find_package(JNI REQUIRED)
+include_directories(${JNI_INCLUDE_DIRS})
+
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 get_target_property(StringDictionary_BINARY_DIR StringDictionary BINARY_DIR)
@@ -23,6 +26,6 @@ ${StringDictionary_BINARY_DIR}/gen-cpp)
 
 target_link_libraries(calciteserver_thrift ${Thrift_LIBRARIES})
 
-add_library(Calcite Calcite.cpp Calcite.h)
+add_library(Calcite CalciteJNI.cpp Calcite.cpp Calcite.h)
 
 target_link_libraries(Calcite calciteserver_thrift ${JAVA_JVM_LIBRARY})

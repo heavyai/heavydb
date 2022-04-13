@@ -134,7 +134,6 @@ target_link_libraries(ArrowStorageSqlTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ParallelSortTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ResultSetArrowConversion ${EXECUTE_TEST_LIBS})
 
-
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   target_link_libraries(UdfTest gtest UdfCompiler ${EXECUTE_TEST_LIBS})
 endif()
