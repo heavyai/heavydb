@@ -22,6 +22,8 @@
 #include "QueryEngine/Execute.h"
 #include "Shared/misc.h"
 
+#include "QueryEngine/Dispatchers/DefaultExecutionPolicy.h"
+
 QueryFragmentDescriptor::QueryFragmentDescriptor(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos,
@@ -64,8 +66,8 @@ void QueryFragmentDescriptor::computeAllTablesFragments(
 void QueryFragmentDescriptor::buildFragmentKernelMap(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<uint64_t>& frag_offsets,
+    const policy::ExecutionPolicy* policy,
     const int device_count,
-    const ExecutorDeviceType& device_type,
     const bool enable_multifrag_kernels,
     const bool enable_inner_join_fragment_skipping,
     Executor* executor) {
@@ -81,27 +83,19 @@ void QueryFragmentDescriptor::buildFragmentKernelMap(
   const auto num_bytes_for_row = executor->getNumBytesForFetchedRow(lhs_table_ids);
 
   if (ra_exe_unit.union_all) {
-    buildFragmentPerKernelMapForUnion(ra_exe_unit,
-                                      frag_offsets,
-                                      device_count,
-                                      num_bytes_for_row,
-                                      device_type,
-                                      executor);
+    buildFragmentPerKernelMapForUnion(
+        ra_exe_unit, frag_offsets, policy, device_count, num_bytes_for_row, executor);
   } else if (enable_multifrag_kernels) {
     buildMultifragKernelMap(ra_exe_unit,
                             frag_offsets,
+                            policy,
                             device_count,
                             num_bytes_for_row,
-                            device_type,
                             enable_inner_join_fragment_skipping,
                             executor);
   } else {
-    buildFragmentPerKernelMap(ra_exe_unit,
-                              frag_offsets,
-                              device_count,
-                              num_bytes_for_row,
-                              device_type,
-                              executor);
+    buildFragmentPerKernelMap(
+        ra_exe_unit, frag_offsets, policy, device_count, num_bytes_for_row, executor);
   }
 }
 
@@ -111,10 +105,10 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
     const InputDescriptor& table_desc,
     const bool is_temporary_table,
     const std::vector<uint64_t>& frag_offsets,
+    const policy::ExecutionPolicy* policy,
     const int device_count,
     const size_t num_bytes_for_row,
     const std::optional<size_t> table_desc_offset,
-    const ExecutorDeviceType& device_type,
     Executor* executor) {
   auto get_fragment_tuple_count =
       [&is_temporary_table](const auto& fragment) -> std::optional<size_t> {
@@ -146,13 +140,12 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
       continue;
     }
     rowid_lookup_key_ = std::max(rowid_lookup_key_, skip_frag.second);
+
+    const auto [device_type, device_id] =
+        policy->scheduleSingleFragment(fragment, i, fragments->size());
     const int chosen_device_count =
         device_type == ExecutorDeviceType::CPU ? 1 : device_count;
     CHECK_GT(chosen_device_count, 0);
-    const auto memory_level = device_type == ExecutorDeviceType::GPU
-                                  ? Data_Namespace::GPU_LEVEL
-                                  : Data_Namespace::CPU_LEVEL;
-    const int device_id = fragment.deviceIds[static_cast<int>(memory_level)];
 
     if (device_type == ExecutorDeviceType::GPU) {
       checkDeviceMemoryUsage(fragment, device_id, num_bytes_for_row);
@@ -189,9 +182,9 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
       }
     }
 
-    auto itr = execution_kernels_per_device_.find(device_id);
-    if (itr == execution_kernels_per_device_.end()) {
-      auto const pair = execution_kernels_per_device_.insert(std::make_pair(
+    auto itr = execution_kernels_per_device_[device_type].find(device_id);
+    if (itr == execution_kernels_per_device_[device_type].end()) {
+      auto const pair = execution_kernels_per_device_[device_type].insert(std::make_pair(
           device_id,
           std::vector<ExecutionKernelDescriptor>{std::move(execution_kernel_desc)}));
       CHECK(pair.second);
@@ -204,9 +197,9 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
 void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<uint64_t>& frag_offsets,
+    const policy::ExecutionPolicy* policy,
     const int device_count,
     const size_t num_bytes_for_row,
-    const ExecutorDeviceType& device_type,
     Executor* executor) {
   const auto& schema_provider = executor->getSchemaProvider();
 
@@ -234,33 +227,45 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
                                    table_desc,
                                    is_temporary_table,
                                    frag_offsets,
+                                   policy,
                                    device_count,
                                    num_bytes_for_row,
                                    j,
-                                   device_type,
                                    executor);
 
-    std::vector<int> table_ids =
-        std::accumulate(execution_kernels_per_device_[0].begin(),
-                        execution_kernels_per_device_[0].end(),
+    std::vector<int> table_cpu_ids =
+        std::accumulate(execution_kernels_per_device_[ExecutorDeviceType::CPU][0].begin(),
+                        execution_kernels_per_device_[ExecutorDeviceType::CPU][0].end(),
                         std::vector<int>(),
                         [](auto&& vec, auto& exe_kern) {
                           vec.push_back(exe_kern.fragments[0].table_id);
                           return vec;
                         });
-    VLOG(1) << "execution_kernels_per_device_.size()="
-            << execution_kernels_per_device_.size()
-            << " execution_kernels_per_device_[0][*].fragments[0].table_id="
-            << shared::printContainer(table_ids);
+    std::vector<int> table_gpu_ids =
+        std::accumulate(execution_kernels_per_device_[ExecutorDeviceType::GPU][0].begin(),
+                        execution_kernels_per_device_[ExecutorDeviceType::GPU][0].end(),
+                        std::vector<int>(),
+                        [](auto&& vec, auto& exe_kern) {
+                          vec.push_back(exe_kern.fragments[0].table_id);
+                          return vec;
+                        });
+    VLOG(1) << "execution_kernels_per_device_[CPU].size()="
+            << execution_kernels_per_device_[ExecutorDeviceType::CPU].size()
+            << " execution_kernels_per_device_[CPU][0][*].fragments[0].table_id="
+            << shared::printContainer(table_cpu_ids);
+    VLOG(1) << "execution_kernels_per_device_[GPU].size()="
+            << execution_kernels_per_device_[ExecutorDeviceType::GPU].size()
+            << " execution_kernels_per_device_[GPU][0][*].fragments[0].table_id="
+            << shared::printContainer(table_gpu_ids);
   }
 }
 
 void QueryFragmentDescriptor::buildFragmentPerKernelMap(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<uint64_t>& frag_offsets,
+    const policy::ExecutionPolicy* policy,
     const int device_count,
     const size_t num_bytes_for_row,
-    const ExecutorDeviceType& device_type,
     Executor* executor) {
   const auto& outer_table_desc = ra_exe_unit.input_descs.front();
   const int outer_table_id = outer_table_desc.getTableId();
@@ -289,19 +294,19 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
                                  outer_table_desc,
                                  is_temporary_table,
                                  frag_offsets,
+                                 policy,
                                  device_count,
                                  num_bytes_for_row,
                                  std::nullopt,
-                                 device_type,
                                  executor);
 }
 
 void QueryFragmentDescriptor::buildMultifragKernelMap(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<uint64_t>& frag_offsets,
+    const policy::ExecutionPolicy* policy,
     const int device_count,
     const size_t num_bytes_for_row,
-    const ExecutorDeviceType& device_type,
     const bool enable_inner_join_fragment_skipping,
     Executor* executor) {
   // Allocate all the fragments of the tables involved in the query to available
@@ -341,7 +346,9 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
     if (skip_frag.first) {
       continue;
     }
-    const int device_id = fragment.deviceIds[static_cast<int>(Data_Namespace::GPU_LEVEL)];
+    auto [device_type, device_id] =
+        policy->scheduleSingleFragment(fragment, outer_frag_id, outer_fragments_size_);
+
     if (device_type == ExecutorDeviceType::GPU) {
       checkDeviceMemoryUsage(fragment, device_id, num_bytes_for_row);
     }
@@ -357,19 +364,20 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
                                             selected_tables_fragments_,
                                             inner_table_id_to_join_condition);
 
-      if (execution_kernels_per_device_.find(device_id) ==
-          execution_kernels_per_device_.end()) {
+      if (execution_kernels_per_device_[device_type].find(device_id) ==
+          execution_kernels_per_device_[device_type].end()) {
         std::vector<ExecutionKernelDescriptor> kernel_descs{
             ExecutionKernelDescriptor{device_id, FragmentsList{}, std::nullopt}};
-        CHECK(
-            execution_kernels_per_device_.insert(std::make_pair(device_id, kernel_descs))
-                .second);
+        CHECK(execution_kernels_per_device_[device_type]
+                  .insert(std::make_pair(device_id, kernel_descs))
+                  .second);
       }
 
       // Multifrag kernels only have one execution kernel per device. Grab the execution
       // kernel object and push back into its fragments list.
-      CHECK_EQ(execution_kernels_per_device_[device_id].size(), size_t(1));
-      auto& execution_kernel = execution_kernels_per_device_[device_id].front();
+      CHECK_EQ(execution_kernels_per_device_[device_type][device_id].size(), size_t(1));
+      auto& execution_kernel =
+          execution_kernels_per_device_[device_type][device_id].front();
 
       auto& kernel_frag_list = execution_kernel.fragments;
       if (kernel_frag_list.size() < j + 1) {
@@ -428,13 +436,13 @@ void QueryFragmentDescriptor::checkDeviceMemoryUsage(
     const int device_id,
     const size_t num_bytes_for_row) {
   CHECK_GE(device_id, 0);
-  tuple_count_per_device_[device_id] += fragment.getNumTuples();
+  tuple_count_per_gpu_device_[device_id] += fragment.getNumTuples();
   const size_t gpu_bytes_limit =
       available_gpu_mem_bytes_[device_id] * gpu_input_mem_limit_percent_;
-  if (tuple_count_per_device_[device_id] * num_bytes_for_row > gpu_bytes_limit) {
+  if (tuple_count_per_gpu_device_[device_id] * num_bytes_for_row > gpu_bytes_limit) {
     LOG(WARNING) << "Not enough memory on device " << device_id
                  << " for input chunks totaling "
-                 << tuple_count_per_device_[device_id] * num_bytes_for_row
+                 << tuple_count_per_gpu_device_[device_id] * num_bytes_for_row
                  << " bytes (available device memory: " << gpu_bytes_limit << " bytes)";
     throw QueryMustRunOnCpu();
   }

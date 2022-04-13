@@ -116,6 +116,11 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(system_parameters.cpu_only)
                               ->implicit_value(true),
                           "Run on CPU only, even if GPUs are available.");
+  help_desc.add_options()("enable-heterogeneous",
+                          po::value<bool>(&g_enable_heterogeneous_execution)
+                              ->default_value(g_enable_heterogeneous_execution)
+                              ->implicit_value(true),
+                          "Allow the engine to schedule kernels heterogeneously.");
   help_desc.add_options()("cuda-block-size",
                           po::value<size_t>(&system_parameters.cuda_block_size)
                               ->default_value(system_parameters.cuda_block_size),

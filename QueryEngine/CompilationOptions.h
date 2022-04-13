@@ -18,6 +18,7 @@
 #define QUERYENGINE_COMPILATIONOPTIONS_H
 
 #include <cstdio>
+#include <ostream>
 #include <vector>
 
 enum class ExecutorDeviceType { CPU, GPU };
@@ -27,6 +28,8 @@ enum class ExecutorOptLevel { Default, ReductionJIT };
 enum class ExecutorExplainType { Default, Optimized };
 
 enum class ExecutorDispatchMode { KernelPerFragment, MultifragmentKernel };
+
+std::ostream& operator<<(std::ostream& os, const ExecutorDeviceType& dt);
 
 struct CompilationOptions {
   ExecutorDeviceType device_type;

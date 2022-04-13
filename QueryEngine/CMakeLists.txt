@@ -26,6 +26,7 @@ set(query_engine_source_files
     ColumnFetcher.cpp
     ColumnIR.cpp
     CompareIR.cpp
+    CompilationOptions.cpp
     ConstantIR.cpp
     DateTimeIR.cpp
     DateTimePlusRewrite.cpp
@@ -36,6 +37,8 @@ set(query_engine_source_files
     Descriptors/QueryFragmentDescriptor.cpp
     Descriptors/QueryMemoryDescriptor.cpp
     Descriptors/RelAlgExecutionDescriptor.cpp
+    Dispatchers/DefaultExecutionPolicy.cpp
+    Dispatchers/RRExecutionPolicy.cpp
     EquiJoinCondition.cpp
     Execute.cpp
     ExecutionKernel.cpp

@@ -47,6 +47,7 @@ extern bool g_enable_left_join_filter_hoisting;
 extern bool g_from_table_reordering;
 extern bool g_inf_div_by_zero;
 extern bool g_null_div_by_zero;
+extern bool g_enable_heterogeneous_execution;
 
 extern size_t g_big_group_threshold;
 extern unsigned g_trivial_loop_join_threshold;
@@ -80,6 +81,8 @@ const size_t g_num_rows{10};
 
 class ExecuteTestBase {
  public:
+  static bool gpusPresent() { return gpusPresent(); }
+
   static void createEmptyTestTable() {
     createTable("empty_test_table",
                 {{"id", SQLTypeInfo(kINT)},
@@ -17509,6 +17512,11 @@ int main(int argc, char** argv) {
                          ->default_value(g_enable_bump_allocator)
                          ->implicit_value(true),
                      "Enable the bump allocator for projection queries on GPU.");
+  desc.add_options()("enable-heterogeneous",
+                     po::value<bool>(&g_enable_heterogeneous_execution)
+                         ->default_value(g_enable_heterogeneous_execution)
+                         ->implicit_value(true),
+                     "Allow heterogeneous execution.");
   desc.add_options()("dump-ir",
                      po::value<bool>()->default_value(false)->implicit_value(true),
                      "Dump IR and PTX for all executed queries to file."

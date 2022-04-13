@@ -42,6 +42,8 @@
 #include "QueryEngine/ColumnFetcher.h"
 #include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
 #include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
+#include "QueryEngine/Dispatchers/DefaultExecutionPolicy.h"
+#include "QueryEngine/Dispatchers/RRExecutionPolicy.h"
 #include "QueryEngine/DynamicWatchdog.h"
 #include "QueryEngine/EquiJoinCondition.h"
 #include "QueryEngine/ErrorHandling.h"
@@ -152,6 +154,8 @@ size_t g_max_log_length{500};
 
 extern bool g_cache_string_hash;
 bool g_enable_multifrag_rs{false};
+
+bool g_enable_heterogeneous_execution{false};
 
 int const Executor::max_gpu_count;
 
@@ -1608,6 +1612,7 @@ TemporaryTable Executor::executeWorkUnitImpl(
     DataProvider* data_provider,
     ColumnCacheMap& column_cache) {
   INJECT_TIMER(Exec_executeWorkUnit);
+  std::unique_ptr<policy::ExecutionPolicy> exe_policy;
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type);
   CHECK(!query_infos.empty());
   if (!max_groups_buffer_entry_guess) {
@@ -1616,6 +1621,15 @@ TemporaryTable Executor::executeWorkUnitImpl(
     // slots and run on the CPU.
     CHECK(device_type == ExecutorDeviceType::CPU);
     max_groups_buffer_entry_guess = compute_buffer_entry_guess(query_infos);
+    exe_policy = std::make_unique<policy::FragmentIDAssignmentExecutionPolicy>(
+        ExecutorDeviceType::CPU);
+  } else {
+    if (g_enable_heterogeneous_execution) {
+      exe_policy = std::make_unique<policy::RoundRobinExecutionPolicy>();
+    } else {
+      exe_policy =
+          std::make_unique<policy::FragmentIDAssignmentExecutionPolicy>(device_type);
+    }
   }
 
   int8_t crt_min_byte_width{MAX_BYTE_WIDTH_SUPPORTED};
@@ -1626,51 +1640,60 @@ TemporaryTable Executor::executeWorkUnitImpl(
       column_fetcher.freeLinearizedBuf();
       column_fetcher.freeTemporaryCpuLinearizedIdxBuf();
     };
-    auto query_comp_desc_owned = std::make_unique<QueryCompilationDescriptor>();
-    query_comp_desc_owned->setUseGroupByBufferDesc(co.use_groupby_buffer_desc);
-    std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
+    std::map<ExecutorDeviceType, std::unique_ptr<QueryCompilationDescriptor>>
+        query_comp_descs_owned;
+    std::map<ExecutorDeviceType, std::unique_ptr<QueryMemoryDescriptor>>
+        query_mem_descs_owned;
 
-    if (eo.executor_type == ExecutorType::Native) {
-      try {
-        INJECT_TIMER(query_step_compilation);
-        auto clock_begin = timer_start();
-        std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
-        compilation_queue_time_ms_ += timer_stop(clock_begin);
+    for (auto dt : exe_policy->devices()) {
+      auto query_comp_desc_owned = std::make_unique<QueryCompilationDescriptor>();
+      query_comp_desc_owned->setUseGroupByBufferDesc(co.use_groupby_buffer_desc);
+      std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
+      if (eo.executor_type == ExecutorType::Native) {
+        try {
+          INJECT_TIMER(query_step_compilation);
+          auto clock_begin = timer_start();
+          std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
+          compilation_queue_time_ms_ += timer_stop(clock_begin);
 
-        query_mem_desc_owned =
-            query_comp_desc_owned->compile(max_groups_buffer_entry_guess,
-                                           crt_min_byte_width,
-                                           has_cardinality_estimation,
-                                           ra_exe_unit,
-                                           query_infos,
-                                           column_fetcher,
-                                           {device_type,
-                                            co.hoist_literals,
-                                            co.opt_level,
-                                            co.with_dynamic_watchdog,
-                                            co.allow_lazy_fetch,
-                                            co.filter_on_deleted_column,
-                                            co.explain_type,
-                                            co.register_intel_jit_listener,
-                                            co.use_groupby_buffer_desc},
-                                           eo,
-                                           render_info,
-                                           this);
-        CHECK(query_mem_desc_owned);
-        crt_min_byte_width = query_comp_desc_owned->getMinByteWidth();
-      } catch (CompilationRetryNoCompaction&) {
-        crt_min_byte_width = MAX_BYTE_WIDTH_SUPPORTED;
-        continue;
+          query_mem_desc_owned =
+              query_comp_desc_owned->compile(max_groups_buffer_entry_guess,
+                                             crt_min_byte_width,
+                                             has_cardinality_estimation,
+                                             ra_exe_unit,
+                                             query_infos,
+                                             column_fetcher,
+                                             {dt,
+                                              co.hoist_literals,
+                                              co.opt_level,
+                                              co.with_dynamic_watchdog,
+                                              co.allow_lazy_fetch,
+                                              co.filter_on_deleted_column,
+                                              co.explain_type,
+                                              co.register_intel_jit_listener},
+                                             eo,
+                                             render_info,
+                                             this);
+          CHECK(query_mem_desc_owned);
+          crt_min_byte_width = query_comp_desc_owned->getMinByteWidth();
+        } catch (CompilationRetryNoCompaction&) {
+          crt_min_byte_width = MAX_BYTE_WIDTH_SUPPORTED;
+          continue;
+        }
+      } else {
+        plan_state_.reset(new PlanState(false, query_infos, this));
+        plan_state_->allocateLocalColumnIds(ra_exe_unit.input_col_descs);
+        CHECK(!query_mem_desc_owned);
+        query_mem_desc_owned.reset(
+            new QueryMemoryDescriptor(this, 0, QueryDescriptionType::Projection, false));
       }
-    } else {
-      plan_state_.reset(new PlanState(false, query_infos, this));
-      plan_state_->allocateLocalColumnIds(ra_exe_unit.input_col_descs);
-      CHECK(!query_mem_desc_owned);
-      query_mem_desc_owned.reset(
-          new QueryMemoryDescriptor(this, 0, QueryDescriptionType::Projection, false));
+
+      query_comp_descs_owned.insert(std::make_pair(dt, std::move(query_comp_desc_owned)));
+      query_mem_descs_owned.insert(std::make_pair(dt, std::move(query_mem_desc_owned)));
     }
+
     if (eo.just_explain) {
-      return {executeExplain(*query_comp_desc_owned)};
+      return {executeExplain(*query_comp_descs_owned.at(ExecutorDeviceType::CPU))};
     }
 
     for (const auto target_expr : ra_exe_unit.target_exprs) {
@@ -1680,26 +1703,44 @@ TemporaryTable Executor::executeWorkUnitImpl(
     if (!eo.just_validate) {
       int available_cpus = cpu_threads();
       auto available_gpus = get_available_gpus(data_mgr_);
+      const auto gpu_count = get_context_count(
+          ExecutorDeviceType::GPU, available_cpus, available_gpus.size());
+      const auto cpu_count = get_context_count(
+          ExecutorDeviceType::CPU, available_cpus, available_gpus.size());
 
-      const auto context_count =
-          get_context_count(device_type, available_cpus, available_gpus.size());
       try {
-        auto kernels = createKernels(shared_context,
-                                     ra_exe_unit,
-                                     column_fetcher,
-                                     query_infos,
-                                     eo,
-                                     co,
-                                     is_agg,
-                                     allow_single_frag_table_opt,
-                                     context_count,
-                                     *query_comp_desc_owned,
-                                     *query_mem_desc_owned,
-                                     render_info,
-                                     available_gpus,
-                                     available_cpus);
-        launchKernels(
-            shared_context, std::move(kernels), query_comp_desc_owned->getDeviceType());
+        std::vector<std::unique_ptr<ExecutionKernel>> kernels;
+        if (g_enable_heterogeneous_execution) {
+          kernels = createHeterogeneousKernels(shared_context,
+                                               ra_exe_unit,
+                                               column_fetcher,
+                                               query_infos,
+                                               eo,
+                                               is_agg,
+                                               allow_single_frag_table_opt,
+                                               query_comp_descs_owned,
+                                               query_mem_descs_owned,
+                                               exe_policy.get(),
+                                               render_info,
+                                               available_gpus,
+                                               available_cpus);
+        } else {
+          kernels = createKernels(shared_context,
+                                  ra_exe_unit,
+                                  column_fetcher,
+                                  query_infos,
+                                  eo,
+                                  co,
+                                  is_agg,
+                                  allow_single_frag_table_opt,
+                                  *query_comp_descs_owned[device_type].get(),
+                                  *query_mem_descs_owned[device_type].get(),
+                                  exe_policy.get(),
+                                  render_info,
+                                  available_gpus,
+                                  available_cpus);
+        }
+        launchKernels(shared_context, std::move(kernels), device_type);
       } catch (QueryExecutionError& e) {
         if (eo.with_dynamic_watchdog && interrupted_.load() &&
             e.getErrorCode() == ERR_OUT_OF_TIME) {
@@ -1737,10 +1778,14 @@ TemporaryTable Executor::executeWorkUnitImpl(
         }
       }
       try {
+        ExecutorDeviceType reduction_device_type = ExecutorDeviceType::CPU;
+        if (!g_enable_heterogeneous_execution) {
+          reduction_device_type = device_type;
+        }
         return collectAllDeviceResults(shared_context,
                                        ra_exe_unit,
-                                       *query_mem_desc_owned,
-                                       query_comp_desc_owned->getDeviceType(),
+                                       *query_mem_descs_owned[reduction_device_type],
+                                       reduction_device_type,
                                        row_set_mem_owner);
       } catch (ReductionRanOutOfSlots&) {
         throw QueryExecutionError(ERR_OUT_OF_SLOTS);
@@ -2269,9 +2314,9 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
     const CompilationOptions& co,
     const bool is_agg,
     const bool allow_single_frag_table_opt,
-    const size_t context_count,
     const QueryCompilationDescriptor& query_comp_desc,
     const QueryMemoryDescriptor& query_mem_desc,
+    policy::ExecutionPolicy* policy,
     RenderInfo* render_info,
     std::unordered_set<int>& available_gpus,
     int& available_cpus) {
@@ -2298,8 +2343,8 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
 
   fragment_descriptor.buildFragmentKernelMap(ra_exe_unit,
                                              shared_context.getFragOffsets(),
+                                             policy,
                                              device_count,
-                                             device_type,
                                              use_multifrag_kernel,
                                              g_inner_join_fragment_skipping,
                                              this);
@@ -2365,12 +2410,13 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
                                          &eo,
                                          &co,
                                          &frag_list_idx,
-                                         &device_type,
                                          &query_comp_desc,
                                          &query_mem_desc,
-                                         render_info](const int device_id,
-                                                      const FragmentsList& frag_list,
-                                                      const int64_t rowid_lookup_key) {
+                                         render_info](
+                                            const int device_id,
+                                            const FragmentsList& frag_list,
+                                            const int64_t rowid_lookup_key,
+                                            const ExecutorDeviceType device_type) {
       if (!frag_list.size()) {
         return;
       }
@@ -2397,6 +2443,101 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
   return execution_kernels;
 }
 
+// TODO: unify with createKernels.
+std::vector<std::unique_ptr<ExecutionKernel>> Executor::createHeterogeneousKernels(
+    SharedKernelContext& shared_context,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    ColumnFetcher& column_fetcher,
+    const std::vector<InputTableInfo>& table_infos,
+    const ExecutionOptions& eo,
+    const bool is_agg,
+    const bool allow_single_frag_table_opt,
+    const std::map<ExecutorDeviceType, std::unique_ptr<QueryCompilationDescriptor>>&
+        query_comp_descs,
+    const std::map<ExecutorDeviceType, std::unique_ptr<QueryMemoryDescriptor>>&
+        query_mem_descs,
+    policy::ExecutionPolicy* policy,
+    RenderInfo* render_info,
+    std::unordered_set<int>& available_gpus,
+    int& available_cpus) {
+  std::vector<std::unique_ptr<ExecutionKernel>> execution_kernels;
+
+  QueryFragmentDescriptor fragment_descriptor(
+      ra_exe_unit,
+      table_infos,
+      data_mgr_->getMemoryInfo(Data_Namespace::MemoryLevel::GPU_LEVEL),
+      eo.gpu_input_mem_limit_percent,
+      eo.outer_fragment_indices);
+
+  CHECK(!ra_exe_unit.input_descs.empty());
+
+  const bool uses_lazy_fetch_ = false;
+
+  fragment_descriptor.buildFragmentKernelMap(ra_exe_unit,
+                                             shared_context.getFragOffsets(),
+                                             policy,
+                                             available_cpus + available_gpus.size(),
+                                             false, /*multifrag policy unsupported yet*/
+                                             g_inner_join_fragment_skipping,
+                                             this);
+
+  if (!ra_exe_unit.use_bump_allocator && allow_single_frag_table_opt &&
+      query_mem_descs.count(ExecutorDeviceType::GPU) &&
+      (query_mem_descs.at(ExecutorDeviceType::GPU)->getQueryDescriptionType() ==
+       QueryDescriptionType::Projection) &&
+      table_infos.size() == 1 && table_infos.front().table_id > 0) {
+    const auto max_frag_size = table_infos.front().info.getFragmentNumTuplesUpperBound();
+    if (max_frag_size < query_mem_descs.at(ExecutorDeviceType::GPU)->getEntryCount()) {
+      LOG(INFO) << "Lowering scan limit from "
+                << query_mem_descs.at(ExecutorDeviceType::GPU)->getEntryCount()
+                << " to match max fragment size " << max_frag_size
+                << " for kernel per fragment execution path.";
+      throw CompilationRetryNewScanLimit(max_frag_size);
+    }
+  }
+
+  size_t frag_list_idx{0};
+  auto fragment_per_kernel_dispatch = [&ra_exe_unit,
+                                       &execution_kernels,
+                                       &column_fetcher,
+                                       &eo,
+                                       &frag_list_idx,
+                                       &query_comp_descs,
+                                       &query_mem_descs,
+                                       render_info](
+                                          const int device_id,
+                                          const FragmentsList& frag_list,
+                                          const int64_t rowid_lookup_key,
+                                          const ExecutorDeviceType device_type) {
+    if (!frag_list.size()) {
+      return;
+    }
+    CHECK_GE(device_id, 0);
+    CHECK(query_comp_descs.count(device_type));
+    CHECK(query_mem_descs.count(device_type));
+
+    execution_kernels.emplace_back(
+        std::make_unique<ExecutionKernel>(ra_exe_unit,
+                                          device_type,
+                                          device_id,
+                                          eo,
+                                          column_fetcher,
+                                          *query_comp_descs.at(device_type).get(),
+                                          *query_mem_descs.at(device_type).get(),
+                                          frag_list,
+                                          ExecutorDispatchMode::KernelPerFragment,
+                                          render_info,
+                                          rowid_lookup_key));
+    ++frag_list_idx;
+  };
+
+  fragment_descriptor.assignFragsToKernelDispatch(fragment_per_kernel_dispatch,
+                                                  ra_exe_unit);
+
+  return execution_kernels;
+}
+
+// TODO(Petr): remove device_type from function signature
 void Executor::launchKernels(SharedKernelContext& shared_context,
                              std::vector<std::unique_ptr<ExecutionKernel>>&& kernels,
                              const ExecutorDeviceType device_type) {
