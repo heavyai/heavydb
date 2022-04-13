@@ -1561,7 +1561,7 @@ public final class HeavyDBParser {
         targetCalls.add((SqlBasicCall) call);
       }
       for (SqlNode node : call.getOperandList()) {
-        if (!targetCalls.contains(node)) {
+        if (null != node && !targetCalls.contains(node)) {
           node.accept(this);
         }
       }
@@ -1570,10 +1570,12 @@ public final class HeavyDBParser {
 
     boolean containsExpression(SqlNode node) {
       try {
-        node.accept(this);
-        for (SqlBasicCall basicCall : targetCalls) {
-          if (isEqualityJoinOperator(basicCall)) {
-            throw Util.FoundOne.NULL;
+        if (null != node) {
+          node.accept(this);
+          for (SqlBasicCall basicCall : targetCalls) {
+            if (isEqualityJoinOperator(basicCall)) {
+              throw Util.FoundOne.NULL;
+            }
           }
         }
         return false;

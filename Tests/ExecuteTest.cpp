@@ -6750,6 +6750,29 @@ TEST(Select, In) {
     c("SELECT COUNT(*) FROM test WHERE x IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, "
       "14, 15, 16, 17, 18, 19, 20);",
       dt);
+    {
+      // we do not need to test this under the following cases
+      SKIP_ALL_ON_AGGREGATOR();
+      SKIP_WITH_TEMP_TABLES();
+      ScopeGuard reset_watchdog = [orig = g_enable_watchdog] {
+        g_enable_watchdog = orig;
+      };
+      g_enable_watchdog = true;
+      std::string test_query{
+          "SELECT COUNT(DISTINCT carrier_name) FROM data_types_basic6 WHERE carrier_name "
+          "IN (SELECT carrier_name FROM data_types_basic6 WHERE "
+          "data_types_basic6.dest_state in ( SELECT data_types_basic5.State from "
+          "data_types_basic5 WHERE ST_XMax(omnisci_geo_linestring) >= -129.175729531 AND "
+          "ST_XMin(omnisci_geo_linestring) <= -78.255440592 AND "
+          "ST_YMax(omnisci_geo_linestring) >= 17.203095214 AND "
+          "ST_YMin(omnisci_geo_linestring) <= 59.287209511) AND "
+          "data_types_basic6.dest_state in (SELECT data_types_basic5.State from "
+          "data_types_basic5 WHERE ST_XMax(omnisci_geo_multipolygon) >= -128.218701382 "
+          "AND ST_XMin(omnisci_geo_multipolygon) <= 29.142617274 AND "
+          "ST_YMax(omnisci_geo_multipolygon) >= -61.158575683 AND "
+          "ST_YMin(omnisci_geo_multipolygon) <= 69.16243808) GROUP BY carrier_name)"};
+      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_agg(test_query, dt)));
+    }
   }
 }
 
@@ -9416,6 +9439,102 @@ void import_union_all_tests() {
     g_sqlite_comparator.query(sql);
     EXPECT_NO_THROW(run_multiple_agg(sql, dt));
   }
+}
+
+void import_test_table_with_various_data_types() {
+  run_ddl_statement("DROP TABLE IF EXISTS data_types_basic5;");
+  std::string data_types_basic5_ddl{
+      "CREATE TABLE data_types_basic5 (\n"
+      "String_ TEXT ENCODING NONE,\n"
+      "Tiny_int TINYINT,\n"
+      "Small_int SMALLINT,\n"
+      "Int_ INTEGER,\n"
+      "Big_int BIGINT,\n"
+      "Float_ FLOAT,\n"
+      "Float_alt FLOAT,\n"
+      "Double_ DOUBLE,\n"
+      "Decimal_ DECIMAL(14,7),\n"
+      "Timestamp_ TIMESTAMP(0),\n"
+      "Timestamp_alt TIMESTAMP(0),\n"
+      "Date_ DATE ENCODING DAYS(32),\n"
+      "Date_alt DATE ENCODING DAYS(32),\n"
+      "Time_ TIME,\n"
+      "String_array TEXT ENCODING DICT(32),\n"
+      "Boolean_ BOOLEAN,\n"
+      "Longitude FLOAT,\n"
+      "Latitude FLOAT,\n"
+      "String_dict TEXT ENCODING DICT(32),\n"
+      "State TEXT ENCODING DICT(32),\n"
+      "Zip_code TEXT ENCODING DICT(32),\n"
+      "Fault_Type TEXT ENCODING DICT(32),\n"
+      "Fault_ID SMALLINT,\n"
+      "Fault_length FLOAT,\n"
+      "omnisci_geo_point GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32),\n"
+      "omnisci_geo_linestring GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32),\n"
+      "omnisci_geo_multipolygon GEOMETRY(MULTIPOLYGON, 4326) ENCODING COMPRESSED(32));"};
+  run_ddl_statement(data_types_basic5_ddl);
+  run_ddl_statement(
+      "COPY data_types_basic5 FROM "
+      "'../../Tests/Import/datafiles/data_types_basic5.csv.gz'");
+
+  run_ddl_statement("DROP TABLE IF EXISTS data_types_basic6;");
+  std::string data_types_basic6_ddl{
+      "CREATE TABLE data_types_basic6 (\n"
+      "FaultLine_id SMALLINT,\n"
+      "flight_year SMALLINT,\n"
+      "flight_month SMALLINT,\n"
+      "flight_dayofmonth SMALLINT,\n"
+      "flight_dayofweek SMALLINT,\n"
+      "deptime SMALLINT,\n"
+      "crsdeptime SMALLINT,\n"
+      "arrtime SMALLINT,\n"
+      "flightnum SMALLINT,\n"
+      "tailnum_string TEXT ENCODING NONE,\n"
+      "actualelapsedtime SMALLINT,\n"
+      "crselapsedtime SMALLINT,\n"
+      "airtime_sm_int SMALLINT,\n"
+      "arrdelay_sm_int SMALLINT,\n"
+      "depdelay_sm_int SMALLINT,\n"
+      "origin_dict_enc TEXT ENCODING DICT(32),\n"
+      "dest_dict_enc TEXT ENCODING DICT(32),\n"
+      "distance_sm_int SMALLINT,\n"
+      "cancelled BOOLEAN,\n"
+      "dep_timestamp TIMESTAMP(0),\n"
+      "arr_timestamp TIMESTAMP(0),\n"
+      "carrier_name TEXT ENCODING DICT(32),\n"
+      "plane_type TEXT ENCODING DICT(32),\n"
+      "plane_issue_date DATE ENCODING DAYS(32),\n"
+      "plane_model TEXT ENCODING DICT(32),\n"
+      "plane_aircraft_type TEXT ENCODING DICT(32),\n"
+      "plane_engine_type TEXT ENCODING DICT(32),\n"
+      "plane_year SMALLINT,\n"
+      "origin_name TEXT ENCODING DICT(32),\n"
+      "origin_city TEXT ENCODING DICT(32),\n"
+      "origin_state TEXT ENCODING DICT(32),\n"
+      "origin_country TEXT ENCODING DICT(32),\n"
+      "origin_lat FLOAT,\n"
+      "origin_lon FLOAT,\n"
+      "dest_name TEXT ENCODING DICT(32),\n"
+      "dest_city TEXT ENCODING DICT(32),\n"
+      "dest_state TEXT ENCODING DICT(32),\n"
+      "dest_country TEXT ENCODING DICT(32),\n"
+      "dest_lat FLOAT,\n"
+      "dest_lon FLOAT,\n"
+      "origin_merc_x FLOAT,\n"
+      "origin_merc_y FLOAT,\n"
+      "dest_merc_x FLOAT,\n"
+      "dest_merc_y FLOAT,\n"
+      "col_boolean_3 BOOLEAN,\n"
+      "col_integer_3 INTEGER,\n"
+      "col_decimal_3 DECIMAL(14,7),\n"
+      "col_big_3 BIGINT,\n"
+      "col_tiny_3 TINYINT,\n"
+      "col_double_3 DOUBLE,\n"
+      "col_date_3 DATE ENCODING DAYS(32));"};
+  run_ddl_statement(data_types_basic6_ddl);
+  run_ddl_statement(
+      "COPY data_types_basic6 FROM "
+      "'../../Tests/Import/datafiles/data_types_basic6.csv.gz'");
 }
 
 }  // namespace
@@ -24655,6 +24774,11 @@ int create_and_populate_tables(const bool use_temporary_tables,
     LOG(ERROR) << "Exception thrown from import_union_all_tests(): " << e.what();
   } catch (...) {
     LOG(ERROR) << "Unknown error in import_union_all_tests().";
+  }
+  try {
+    import_test_table_with_various_data_types();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'data_types_basic*'";
   }
   {
     std::string insert_query{"INSERT INTO test_in_bitmap VALUES('a');"};
