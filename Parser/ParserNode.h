@@ -1026,10 +1026,9 @@ class CreateTableStmt : public CreateTableBaseStmt {
   std::list<std::unique_ptr<NameValueAssign>> storage_options_;
 };
 
-struct DistributedConnector
-    : public Fragmenter_Namespace::InsertDataLoader::DistributedConnector {
-  ~DistributedConnector() override {}
-
+class QueryConnector : public Fragmenter_Namespace::InsertDataLoader::InsertConnector {
+ public:
+  ~QueryConnector() = default;
   virtual size_t getOuterFragmentCount(QueryStateProxy,
                                        std::string& sql_query_string) = 0;
   virtual std::vector<AggregatedResult> query(QueryStateProxy,
@@ -1038,9 +1037,9 @@ struct DistributedConnector
                                               bool allow_interrupt) = 0;
 };
 
-struct LocalConnector : public DistributedConnector {
-  ~LocalConnector() override {}
-
+class LocalQueryConnector : public QueryConnector,
+                            private Fragmenter_Namespace::LocalInsertConnector {
+ public:
   size_t getOuterFragmentCount(QueryStateProxy, std::string& sql_query_string) override;
 
   AggregatedResult query(QueryStateProxy,
@@ -1052,18 +1051,30 @@ struct LocalConnector : public DistributedConnector {
                                       std::string& sql_query_string,
                                       std::vector<size_t> outer_frag_indices,
                                       bool allow_interrupt) override;
-  size_t leafCount() override { return 1; };
-  void insertChunksToLeaf(
-      const Catalog_Namespace::SessionInfo& session,
-      const size_t leaf_idx,
-      const Fragmenter_Namespace::InsertChunks& insert_chunks) override;
-  void insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
-                        const size_t leaf_idx,
-                        Fragmenter_Namespace::InsertData& insert_data) override;
-  void checkpoint(const Catalog_Namespace::SessionInfo& session, int tableId) override;
-  void rollback(const Catalog_Namespace::SessionInfo& session, int tableId) override;
   std::list<ColumnDescriptor> getColumnDescriptors(AggregatedResult& result,
                                                    bool for_create);
+  size_t leafCount() override { return LocalInsertConnector::leafCount(); }
+  void insertChunksToLeaf(
+      const Catalog_Namespace::SessionInfo& parent_session_info,
+      const size_t leaf_idx,
+      const Fragmenter_Namespace::InsertChunks& insert_chunks) override {
+    return LocalInsertConnector::insertChunksToLeaf(
+        parent_session_info, leaf_idx, insert_chunks);
+  }
+  void insertDataToLeaf(const Catalog_Namespace::SessionInfo& parent_session_info,
+                        const size_t leaf_idx,
+                        Fragmenter_Namespace::InsertData& insert_data) override {
+    return LocalInsertConnector::insertDataToLeaf(
+        parent_session_info, leaf_idx, insert_data);
+  }
+  void checkpoint(const Catalog_Namespace::SessionInfo& parent_session_info,
+                  int tableId) override {
+    return LocalInsertConnector::checkpoint(parent_session_info, tableId);
+  }
+  void rollback(const Catalog_Namespace::SessionInfo& parent_session_info,
+                int tableId) override {
+    return LocalInsertConnector::rollback(parent_session_info, tableId);
+  }
 };
 
 /*
@@ -1139,7 +1150,7 @@ class InsertIntoTableAsSelectStmt : public DDLStmt {
 
   std::string& get_select_query() { return select_query_; }
 
-  DistributedConnector* leafs_connector_ = nullptr;
+  QueryConnector* leafs_connector_ = nullptr;
 
  protected:
   std::vector<std::unique_ptr<std::string>> column_list_;
@@ -1881,7 +1892,7 @@ class ExportQueryStmt : public DDLStmt {
   void execute(const Catalog_Namespace::SessionInfo& session) override;
   const std::string get_select_stmt() const { return *select_stmt_; }
 
-  DistributedConnector* leafs_connector_ = nullptr;
+  QueryConnector* leafs_connector_ = nullptr;
 
  private:
   std::unique_ptr<std::string> select_stmt_;
@@ -2066,6 +2077,25 @@ class InsertStmt : public DMLStmt {
   std::list<std::unique_ptr<std::string>> column_list_;
 };
 
+class ValuesList : public Node {
+ public:
+  ValuesList() = default;
+  ValuesList(std::list<Expr*>* values) {
+    CHECK(values);
+    for (const auto v : *values) {
+      value_list.emplace_back(v);
+    }
+    delete values;
+  }
+
+  void push_back(Expr* value) { value_list.emplace_back(value); }
+
+  const std::list<std::unique_ptr<Expr>>& get_value_list() const { return value_list; }
+
+ private:
+  std::list<std::unique_ptr<Expr>> value_list;
+};
+
 /*
  * @type InsertValuesStmt
  * @brief INSERT INTO ... VALUES ...
@@ -2076,22 +2106,21 @@ class InsertValuesStmt : public InsertStmt {
   InsertValuesStmt(std::string* t, std::list<std::string*>* c, std::list<Expr*>* v)
       : InsertStmt(t, c) {
     UNREACHABLE() << "Legacy inserts should not be called anymore";
-    CHECK(v);
-    for (const auto e : *v) {
-      value_list_.emplace_back(e);
-    }
-    delete v;
   }
-  const std::list<std::unique_ptr<Expr>>& get_value_list() const { return value_list_; }
+
+  const std::vector<std::unique_ptr<ValuesList>>& get_value_lists() const {
+    return values_lists_;
+  }
+
   void analyze(const Catalog_Namespace::Catalog& catalog,
                Analyzer::Query& query) const override;
 
-  size_t determineLeafIndex(const Catalog_Namespace::Catalog& catalog, size_t num_leafs);
-
   void execute(const Catalog_Namespace::SessionInfo& session);
 
+  Fragmenter_Namespace::InsertDataLoader::InsertConnector* leafs_connector_ = nullptr;
+
  private:
-  std::list<std::unique_ptr<Expr>> value_list_;
+  std::vector<std::unique_ptr<ValuesList>> values_lists_;
 };
 
 /*

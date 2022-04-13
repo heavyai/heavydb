@@ -37,8 +37,7 @@ class ForeignDataImporter : public AbstractImporter {
   static void setDefaultImportPath(const std::string& base_path);
 
  protected:
-  std::unique_ptr<Fragmenter_Namespace::InsertDataLoader::DistributedConnector>
-      connector_;
+  std::unique_ptr<Fragmenter_Namespace::InsertDataLoader::InsertConnector> connector_;
 
  private:
   void finalize(const Catalog_Namespace::SessionInfo& parent_session_info,

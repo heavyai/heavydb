@@ -89,7 +89,7 @@ void validate_copy_params(const import_export::CopyParams& copy_params) {
 
 import_export::ImportStatus import_foreign_data(
     const ChunkMetadataVector& metadata_vector,
-    Fragmenter_Namespace::InsertDataLoader::DistributedConnector* connector,
+    Fragmenter_Namespace::InsertDataLoader::InsertConnector* connector,
     Catalog_Namespace::Catalog& catalog,
     const TableDescriptor* table,
     foreign_storage::ForeignDataWrapper* data_wrapper,
@@ -285,7 +285,7 @@ ForeignDataImporter::ForeignDataImporter(const std::string& copy_from_source,
                                          const CopyParams& copy_params,
                                          const TableDescriptor* table)
     : copy_from_source_(copy_from_source), copy_params_(copy_params), table_(table) {
-  connector_ = std::make_unique<Parser::LocalConnector>();
+  connector_ = std::make_unique<Fragmenter_Namespace::LocalInsertConnector>();
 }
 
 void ForeignDataImporter::finalize(

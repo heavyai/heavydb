@@ -18,6 +18,7 @@
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "DataMgr/ForeignStorage/FsiChunkUtils.h"
 #include "DataMgr/ForeignStorage/MetadataPlaceholder.h"
+#include "Fragmenter/InsertDataLoader.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/CalciteDeserializerUtils.h"
 #include "QueryEngine/CardinalityEstimator.h"
@@ -2684,83 +2685,36 @@ ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
   return {rs, empty_targets};
 }
 
-namespace {
-int64_t int_value_from_numbers_ptr(const SQLTypeInfo& type_info, const int8_t* data) {
-  size_t sz = 0;
-  switch (type_info.get_type()) {
-    case kTINYINT:
-    case kSMALLINT:
-    case kINT:
-    case kBIGINT:
-    case kTIMESTAMP:
-    case kTIME:
-    case kDATE:
-      sz = type_info.get_logical_size();
-      break;
-    case kTEXT:
-    case kVARCHAR:
-    case kCHAR:
-      CHECK(type_info.get_compression() == kENCODING_DICT);
-      sz = type_info.get_size();
-      break;
-    default:
-      CHECK(false) << "Unexpected sharding key datatype";
-  }
-
-  switch (sz) {
-    case 1:
-      return *(reinterpret_cast<const int8_t*>(data));
-    case 2:
-      return *(reinterpret_cast<const int16_t*>(data));
-    case 4:
-      return *(reinterpret_cast<const int32_t*>(data));
-    case 8:
-      return *(reinterpret_cast<const int64_t*>(data));
-    default:
-      CHECK(false);
-      return 0;
-  }
-}
-
-const TableDescriptor* get_shard_for_key(const TableDescriptor* td,
-                                         const Catalog_Namespace::Catalog& cat,
-                                         const Fragmenter_Namespace::InsertData& data) {
-  auto shard_column_md = cat.getShardColumnMetadataForTable(td);
-  CHECK(shard_column_md);
-  auto sharded_column_id = shard_column_md->columnId;
-  const TableDescriptor* shard{nullptr};
-  for (size_t i = 0; i < data.columnIds.size(); ++i) {
-    if (data.columnIds[i] == sharded_column_id) {
-      const auto shard_tables = cat.getPhysicalTablesDescriptors(td);
-      const auto shard_count = shard_tables.size();
-      CHECK(data.data[i].numbersPtr);
-      auto value = int_value_from_numbers_ptr(shard_column_md->columnType,
-                                              data.data[i].numbersPtr);
-      const size_t shard_idx = SHARD_FOR_KEY(value, shard_count);
-      shard = shard_tables[shard_idx];
-      break;
-    }
-  }
-  return shard;
-}
-
-}  // namespace
-
-ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query) {
+ExecutionResult RelAlgExecutor::executeSimpleInsert(
+    const Analyzer::Query& query,
+    Fragmenter_Namespace::InsertDataLoader& inserter,
+    const Catalog_Namespace::SessionInfo& session) {
   // Note: We currently obtain an executor for this method, but we do not need it.
   // Therefore, we skip the executor state setup in the regular execution path. In the
   // future, we will likely want to use the executor to evaluate expressions in the insert
   // statement.
 
-  const auto& targets = query.get_targetlist();
+  const auto& values_lists = query.get_values_lists();
   const int table_id = query.get_result_table_id();
   const auto& col_id_list = query.get_result_col_list();
+  size_t rows_number = values_lists.size();
+  size_t leaf_count = inserter.getLeafCount();
+  const auto td = cat_.getMetadataForTable(table_id);
+  CHECK(td);
+  size_t rows_per_leaf = rows_number;
+  if (td->nShards == 0) {
+    rows_per_leaf =
+        ceil(static_cast<double>(rows_number) / static_cast<double>(leaf_count));
+  }
+  size_t max_number_of_rows_per_package =
+      std::max(1ul, std::min(rows_per_leaf, size_t(64 * 1024)));
 
   std::vector<const ColumnDescriptor*> col_descriptors;
   std::vector<int> col_ids;
   std::unordered_map<int, std::unique_ptr<uint8_t[]>> col_buffers;
   std::unordered_map<int, std::vector<std::string>> str_col_buffers;
   std::unordered_map<int, std::vector<ArrayDatum>> arr_col_buffers;
+  std::unordered_map<int, int> sequential_ids;
 
   for (const int col_id : col_id_list) {
     const auto cd = get_column_descriptor(col_id, table_id, cat_);
@@ -2777,7 +2731,9 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
           const auto dd = cat_.getMetadataForDict(cd->columnType.get_comp_param());
           CHECK(dd);
           const auto it_ok = col_buffers.emplace(
-              col_id, std::make_unique<uint8_t[]>(cd->columnType.get_size()));
+              col_id,
+              std::make_unique<uint8_t[]>(cd->columnType.get_size() *
+                                          max_number_of_rows_per_package));
           CHECK(it_ok.second);
           break;
         }
@@ -2795,235 +2751,262 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
     } else {
       const auto it_ok = col_buffers.emplace(
           col_id,
-          std::unique_ptr<uint8_t[]>(
-              new uint8_t[cd->columnType.get_logical_size()]()));  // changed to zero-init
-                                                                   // the buffer
+          std::unique_ptr<uint8_t[]>(new uint8_t[cd->columnType.get_logical_size() *
+                                                 max_number_of_rows_per_package]()));
       CHECK(it_ok.second);
     }
     col_descriptors.push_back(cd);
+    sequential_ids[col_id] = col_ids.size();
     col_ids.push_back(col_id);
   }
-  size_t col_idx = 0;
-  Fragmenter_Namespace::InsertData insert_data;
-  insert_data.databaseId = cat_.getCurrentDB().dbId;
-  insert_data.tableId = table_id;
 
   // mark the target table's cached item as dirty
-  std::vector<int> table_chunk_key_prefix{insert_data.databaseId, insert_data.tableId};
+  std::vector<int> table_chunk_key_prefix{cat_.getCurrentDB().dbId, table_id};
   auto table_key = boost::hash_value(table_chunk_key_prefix);
   ResultSetCacheInvalidator::invalidateCachesByTable(table_key);
   UpdateTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
 
-  for (auto target_entry : targets) {
-    auto col_cv = dynamic_cast<const Analyzer::Constant*>(target_entry->get_expr());
-    if (!col_cv) {
-      auto col_cast = dynamic_cast<const Analyzer::UOper*>(target_entry->get_expr());
-      CHECK(col_cast);
-      CHECK_EQ(kCAST, col_cast->get_optype());
-      col_cv = dynamic_cast<const Analyzer::Constant*>(col_cast->get_operand());
+  size_t start_row = 0;
+  size_t rows_left = rows_number;
+  while (rows_left != 0) {
+    // clear the buffers
+    for (const auto& kv : col_buffers) {
+      memset(kv.second.get(), 0, max_number_of_rows_per_package);
     }
-    CHECK(col_cv);
-    const auto cd = col_descriptors[col_idx];
-    auto col_datum = col_cv->get_constval();
-    auto col_type = cd->columnType.get_type();
-    uint8_t* col_data_bytes{nullptr};
-    if (!cd->columnType.is_array() && !cd->columnType.is_geometry() &&
-        (!cd->columnType.is_string() ||
-         cd->columnType.get_compression() == kENCODING_DICT)) {
-      const auto col_data_bytes_it = col_buffers.find(col_ids[col_idx]);
-      CHECK(col_data_bytes_it != col_buffers.end());
-      col_data_bytes = col_data_bytes_it->second.get();
+    for (auto& kv : str_col_buffers) {
+      kv.second.clear();
     }
-    switch (col_type) {
-      case kBOOLEAN: {
-        auto col_data = reinterpret_cast<int8_t*>(col_data_bytes);
-        auto null_bool_val =
-            col_datum.boolval == inline_fixed_encoding_null_val(cd->columnType);
-        *col_data = col_cv->get_is_null() || null_bool_val
-                        ? inline_fixed_encoding_null_val(cd->columnType)
-                        : (col_datum.boolval ? 1 : 0);
-        break;
-      }
-      case kTINYINT: {
-        auto col_data = reinterpret_cast<int8_t*>(col_data_bytes);
-        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
-                                          : col_datum.tinyintval;
-        break;
-      }
-      case kSMALLINT: {
-        auto col_data = reinterpret_cast<int16_t*>(col_data_bytes);
-        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
-                                          : col_datum.smallintval;
-        break;
-      }
-      case kINT: {
-        auto col_data = reinterpret_cast<int32_t*>(col_data_bytes);
-        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
-                                          : col_datum.intval;
-        break;
-      }
-      case kBIGINT:
-      case kDECIMAL:
-      case kNUMERIC: {
-        auto col_data = reinterpret_cast<int64_t*>(col_data_bytes);
-        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
-                                          : col_datum.bigintval;
-        break;
-      }
-      case kFLOAT: {
-        auto col_data = reinterpret_cast<float*>(col_data_bytes);
-        *col_data = col_datum.floatval;
-        break;
-      }
-      case kDOUBLE: {
-        auto col_data = reinterpret_cast<double*>(col_data_bytes);
-        *col_data = col_datum.doubleval;
-        break;
-      }
-      case kTEXT:
-      case kVARCHAR:
-      case kCHAR: {
-        switch (cd->columnType.get_compression()) {
-          case kENCODING_NONE:
-            str_col_buffers[col_ids[col_idx]].push_back(
-                col_datum.stringval ? *col_datum.stringval : "");
+    for (auto& kv : arr_col_buffers) {
+      kv.second.clear();
+    }
+
+    auto package_size = std::min(rows_left, max_number_of_rows_per_package);
+    // Note: if there will be use cases with batch inserts with lots of rows, it might be
+    // more efficient to do the loops below column by column instead of row by row.
+    // But for now I consider such a refactoring not worth investigating, as we have more
+    // efficient ways to insert many rows anyway.
+    for (size_t row_idx = 0; row_idx < package_size; ++row_idx) {
+      const auto& values_list = values_lists[row_idx + start_row];
+      for (size_t col_idx = 0; col_idx < col_descriptors.size(); ++col_idx) {
+        CHECK(values_list.size() == col_descriptors.size());
+        auto col_cv =
+            dynamic_cast<const Analyzer::Constant*>(values_list[col_idx]->get_expr());
+        if (!col_cv) {
+          auto col_cast =
+              dynamic_cast<const Analyzer::UOper*>(values_list[col_idx]->get_expr());
+          CHECK(col_cast);
+          CHECK_EQ(kCAST, col_cast->get_optype());
+          col_cv = dynamic_cast<const Analyzer::Constant*>(col_cast->get_operand());
+        }
+        CHECK(col_cv);
+        const auto cd = col_descriptors[col_idx];
+        auto col_datum = col_cv->get_constval();
+        auto col_type = cd->columnType.get_type();
+        uint8_t* col_data_bytes{nullptr};
+        if (!cd->columnType.is_array() && !cd->columnType.is_geometry() &&
+            (!cd->columnType.is_string() ||
+             cd->columnType.get_compression() == kENCODING_DICT)) {
+          const auto col_data_bytes_it = col_buffers.find(col_ids[col_idx]);
+          CHECK(col_data_bytes_it != col_buffers.end());
+          col_data_bytes = col_data_bytes_it->second.get();
+        }
+        switch (col_type) {
+          case kBOOLEAN: {
+            auto col_data = reinterpret_cast<int8_t*>(col_data_bytes);
+            auto null_bool_val =
+                col_datum.boolval == inline_fixed_encoding_null_val(cd->columnType);
+            col_data[row_idx] = col_cv->get_is_null() || null_bool_val
+                                    ? inline_fixed_encoding_null_val(cd->columnType)
+                                    : (col_datum.boolval ? 1 : 0);
             break;
-          case kENCODING_DICT: {
-            switch (cd->columnType.get_size()) {
-              case 1:
-                insert_one_dict_str(
-                    reinterpret_cast<uint8_t*>(col_data_bytes), cd, col_cv, cat_);
+          }
+          case kTINYINT: {
+            auto col_data = reinterpret_cast<int8_t*>(col_data_bytes);
+            col_data[row_idx] = col_cv->get_is_null()
+                                    ? inline_fixed_encoding_null_val(cd->columnType)
+                                    : col_datum.tinyintval;
+            break;
+          }
+          case kSMALLINT: {
+            auto col_data = reinterpret_cast<int16_t*>(col_data_bytes);
+            col_data[row_idx] = col_cv->get_is_null()
+                                    ? inline_fixed_encoding_null_val(cd->columnType)
+                                    : col_datum.smallintval;
+            break;
+          }
+          case kINT: {
+            auto col_data = reinterpret_cast<int32_t*>(col_data_bytes);
+            col_data[row_idx] = col_cv->get_is_null()
+                                    ? inline_fixed_encoding_null_val(cd->columnType)
+                                    : col_datum.intval;
+            break;
+          }
+          case kBIGINT:
+          case kDECIMAL:
+          case kNUMERIC: {
+            auto col_data = reinterpret_cast<int64_t*>(col_data_bytes);
+            col_data[row_idx] = col_cv->get_is_null()
+                                    ? inline_fixed_encoding_null_val(cd->columnType)
+                                    : col_datum.bigintval;
+            break;
+          }
+          case kFLOAT: {
+            auto col_data = reinterpret_cast<float*>(col_data_bytes);
+            col_data[row_idx] = col_datum.floatval;
+            break;
+          }
+          case kDOUBLE: {
+            auto col_data = reinterpret_cast<double*>(col_data_bytes);
+            col_data[row_idx] = col_datum.doubleval;
+            break;
+          }
+          case kTEXT:
+          case kVARCHAR:
+          case kCHAR: {
+            switch (cd->columnType.get_compression()) {
+              case kENCODING_NONE:
+                str_col_buffers[col_ids[col_idx]].push_back(
+                    col_datum.stringval ? *col_datum.stringval : "");
                 break;
-              case 2:
-                insert_one_dict_str(
-                    reinterpret_cast<uint16_t*>(col_data_bytes), cd, col_cv, cat_);
+              case kENCODING_DICT: {
+                switch (cd->columnType.get_size()) {
+                  case 1:
+                    insert_one_dict_str(
+                        &reinterpret_cast<uint8_t*>(col_data_bytes)[row_idx],
+                        cd,
+                        col_cv,
+                        cat_);
+                    break;
+                  case 2:
+                    insert_one_dict_str(
+                        &reinterpret_cast<uint16_t*>(col_data_bytes)[row_idx],
+                        cd,
+                        col_cv,
+                        cat_);
+                    break;
+                  case 4:
+                    insert_one_dict_str(
+                        &reinterpret_cast<int32_t*>(col_data_bytes)[row_idx],
+                        cd,
+                        col_cv,
+                        cat_);
+                    break;
+                  default:
+                    CHECK(false);
+                }
                 break;
-              case 4:
-                insert_one_dict_str(
-                    reinterpret_cast<int32_t*>(col_data_bytes), cd, col_cv, cat_);
-                break;
+              }
               default:
                 CHECK(false);
             }
             break;
           }
+          case kTIME:
+          case kTIMESTAMP:
+          case kDATE: {
+            auto col_data = reinterpret_cast<int64_t*>(col_data_bytes);
+            col_data[row_idx] = col_cv->get_is_null()
+                                    ? inline_fixed_encoding_null_val(cd->columnType)
+                                    : col_datum.bigintval;
+            break;
+          }
+          case kARRAY: {
+            const auto is_null = col_cv->get_is_null();
+            const auto size = cd->columnType.get_size();
+            const SQLTypeInfo elem_ti = cd->columnType.get_elem_type();
+            // POINT coords: [un]compressed coords always need to be encoded, even if NULL
+            const auto is_point_coords =
+                (cd->isGeoPhyCol && elem_ti.get_type() == kTINYINT);
+            if (is_null && !is_point_coords) {
+              if (size > 0) {
+                int8_t* buf = (int8_t*)checked_malloc(size);
+                put_null_array(static_cast<void*>(buf), elem_ti, "");
+                for (int8_t* p = buf + elem_ti.get_size(); (p - buf) < size;
+                     p += elem_ti.get_size()) {
+                  put_null(static_cast<void*>(p), elem_ti, "");
+                }
+                arr_col_buffers[col_ids[col_idx]].emplace_back(size, buf, is_null);
+              } else {
+                arr_col_buffers[col_ids[col_idx]].emplace_back(0, nullptr, is_null);
+              }
+              break;
+            }
+            const auto l = col_cv->get_value_list();
+            size_t len = l.size() * elem_ti.get_size();
+            if (size > 0 && static_cast<size_t>(size) != len) {
+              throw std::runtime_error("Array column " + cd->columnName + " expects " +
+                                       std::to_string(size / elem_ti.get_size()) +
+                                       " values, " + "received " +
+                                       std::to_string(l.size()));
+            }
+            if (elem_ti.is_string()) {
+              CHECK(kENCODING_DICT == elem_ti.get_compression());
+              CHECK(4 == elem_ti.get_size());
+
+              int8_t* buf = (int8_t*)checked_malloc(len);
+              int32_t* p = reinterpret_cast<int32_t*>(buf);
+
+              int elemIndex = 0;
+              for (auto& e : l) {
+                auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
+                CHECK(c);
+                insert_one_dict_str(
+                    &p[elemIndex], cd->columnName, elem_ti, c.get(), cat_);
+                elemIndex++;
+              }
+              arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, is_null));
+
+            } else {
+              int8_t* buf = (int8_t*)checked_malloc(len);
+              int8_t* p = buf;
+              for (auto& e : l) {
+                auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
+                CHECK(c);
+                p = append_datum(p, c->get_constval(), elem_ti);
+                CHECK(p);
+              }
+              arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, is_null));
+            }
+            break;
+          }
+          case kPOINT:
+          case kLINESTRING:
+          case kPOLYGON:
+          case kMULTIPOLYGON:
+            str_col_buffers[col_ids[col_idx]].push_back(
+                col_datum.stringval ? *col_datum.stringval : "");
+            break;
           default:
             CHECK(false);
         }
-        break;
       }
-      case kTIME:
-      case kTIMESTAMP:
-      case kDATE: {
-        auto col_data = reinterpret_cast<int64_t*>(col_data_bytes);
-        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
-                                          : col_datum.bigintval;
-        break;
-      }
-      case kARRAY: {
-        const auto is_null = col_cv->get_is_null();
-        const auto size = cd->columnType.get_size();
-        const SQLTypeInfo elem_ti = cd->columnType.get_elem_type();
-        // POINT coords: [un]compressed coords always need to be encoded, even if NULL
-        const auto is_point_coords = (cd->isGeoPhyCol && elem_ti.get_type() == kTINYINT);
-        if (is_null && !is_point_coords) {
-          if (size > 0) {
-            // NULL fixlen array: NULL_ARRAY sentinel followed by NULL sentinels
-            int8_t* buf = (int8_t*)checked_malloc(size);
-            put_null_array(static_cast<void*>(buf), elem_ti, "");
-            for (int8_t* p = buf + elem_ti.get_size(); (p - buf) < size;
-                 p += elem_ti.get_size()) {
-              put_null(static_cast<void*>(p), elem_ti, "");
-            }
-            arr_col_buffers[col_ids[col_idx]].emplace_back(size, buf, is_null);
-          } else {
-            arr_col_buffers[col_ids[col_idx]].emplace_back(0, nullptr, is_null);
-          }
-          break;
-        }
-        const auto l = col_cv->get_value_list();
-        size_t len = l.size() * elem_ti.get_size();
-        if (size > 0 && static_cast<size_t>(size) != len) {
-          throw std::runtime_error("Array column " + cd->columnName + " expects " +
-                                   std::to_string(size / elem_ti.get_size()) +
-                                   " values, " + "received " + std::to_string(l.size()));
-        }
-        if (elem_ti.is_string()) {
-          CHECK(kENCODING_DICT == elem_ti.get_compression());
-          CHECK(4 == elem_ti.get_size());
-
-          int8_t* buf = (int8_t*)checked_malloc(len);
-          int32_t* p = reinterpret_cast<int32_t*>(buf);
-
-          int elemIndex = 0;
-          for (auto& e : l) {
-            auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
-            CHECK(c);
-            insert_one_dict_str(&p[elemIndex], cd->columnName, elem_ti, c.get(), cat_);
-            elemIndex++;
-          }
-          arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, is_null));
-
-        } else {
-          int8_t* buf = (int8_t*)checked_malloc(len);
-          int8_t* p = buf;
-          for (auto& e : l) {
-            auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
-            CHECK(c);
-            p = append_datum(p, c->get_constval(), elem_ti);
-            CHECK(p);
-          }
-          arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, is_null));
-        }
-        break;
-      }
-      case kPOINT:
-      case kLINESTRING:
-      case kPOLYGON:
-      case kMULTIPOLYGON:
-        str_col_buffers[col_ids[col_idx]].push_back(
-            col_datum.stringval ? *col_datum.stringval : "");
-        break;
-      default:
-        CHECK(false);
     }
-    ++col_idx;
-  }
-  for (const auto& kv : col_buffers) {
-    insert_data.columnIds.push_back(kv.first);
-    DataBlockPtr p;
-    p.numbersPtr = reinterpret_cast<int8_t*>(kv.second.get());
-    insert_data.data.push_back(p);
-  }
-  for (auto& kv : str_col_buffers) {
-    insert_data.columnIds.push_back(kv.first);
-    DataBlockPtr p;
-    p.stringsPtr = &kv.second;
-    insert_data.data.push_back(p);
-  }
-  for (auto& kv : arr_col_buffers) {
-    insert_data.columnIds.push_back(kv.first);
-    DataBlockPtr p;
-    p.arraysPtr = &kv.second;
-    insert_data.data.push_back(p);
-  }
-  insert_data.numRows = 1;
-  auto data_memory_holder = import_export::fill_missing_columns(&cat_, insert_data);
-  const auto table_descriptor = cat_.getMetadataForTable(table_id);
-  CHECK(table_descriptor);
-  if (table_descriptor->nShards > 0) {
-    auto shard = get_shard_for_key(table_descriptor, cat_, insert_data);
-    CHECK(shard);
-    shard->fragmenter->insertDataNoCheckpoint(insert_data);
-  } else {
-    table_descriptor->fragmenter->insertDataNoCheckpoint(insert_data);
-  }
+    start_row += package_size;
+    rows_left -= package_size;
 
-  // Ensure checkpoint happens across all shards, if not in distributed
-  // mode (aggregator handles checkpointing in distributed mode)
-  if (!g_cluster &&
-      table_descriptor->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
-    const_cast<Catalog_Namespace::Catalog&>(cat_).checkpointWithAutoRollback(table_id);
+    Fragmenter_Namespace::InsertData insert_data;
+    insert_data.databaseId = cat_.getCurrentDB().dbId;
+    insert_data.tableId = table_id;
+    insert_data.data.resize(col_ids.size());
+    insert_data.columnIds = col_ids;
+    for (const auto& kv : col_buffers) {
+      DataBlockPtr p;
+      p.numbersPtr = reinterpret_cast<int8_t*>(kv.second.get());
+      insert_data.data[sequential_ids[kv.first]] = p;
+    }
+    for (auto& kv : str_col_buffers) {
+      DataBlockPtr p;
+      p.stringsPtr = &kv.second;
+      insert_data.data[sequential_ids[kv.first]] = p;
+    }
+    for (auto& kv : arr_col_buffers) {
+      DataBlockPtr p;
+      p.arraysPtr = &kv.second;
+      insert_data.data[sequential_ids[kv.first]] = p;
+    }
+    insert_data.numRows = package_size;
+    auto data_memory_holder = import_export::fill_missing_columns(&cat_, insert_data);
+    inserter.insertData(session, insert_data);
   }
 
   auto rs = std::make_shared<ResultSet>(TargetInfoList{},

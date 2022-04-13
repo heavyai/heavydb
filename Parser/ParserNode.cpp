@@ -2409,345 +2409,240 @@ InsertValuesStmt::InsertValuesStmt(const rapidjson::Value& payload)
   auto tuples = payload["values"].GetArray();
   if (tuples.Empty()) {
     throw std::runtime_error("Values statement cannot be empty");
-  } else if (tuples.Size() > 1) {
-    throw std::runtime_error("Batch inserts are not supported yet");
   }
-  CHECK(tuples[0].IsArray());
-  auto tuple = tuples[0].GetArray();
-  for (const auto& value : tuple) {
-    CHECK(value.IsObject());
-    if (value.HasMember("array")) {
-      value_list_.emplace_back(parse_insert_array_literal(value["array"]));
-    } else {
-      value_list_.emplace_back(parse_insert_literal(value));
-    }
-  }
-}
-
-size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& catalog,
-                                            size_t num_leafs) {
-  const TableDescriptor* td = catalog.getMetadataForTable(*table_);
-  if (td == nullptr) {
-    throw std::runtime_error("Table " + *table_ + " does not exist.");
-  }
-  if (td->isView) {
-    throw std::runtime_error("Insert to views is not supported yet.");
-  }
-  foreign_storage::validate_non_foreign_table_write(td);
-  if (td->partitions == "REPLICATED") {
-    throw std::runtime_error("Cannot determine leaf on replicated table.");
-  }
-
-  if (0 == td->nShards) {
-    std::random_device rd;
-    std::mt19937_64 gen(rd());
-    std::uniform_int_distribution<size_t> dis;
-    const auto leaf_idx = dis(gen) % num_leafs;
-    return leaf_idx;
-  }
-
-  size_t indexOfShardColumn = 0;
-  const ColumnDescriptor* shardColumn = catalog.getShardColumnMetadataForTable(td);
-  CHECK(shardColumn);
-  auto shard_count = td->nShards * num_leafs;
-  int64_t shardId = 0;
-
-  if (column_list_.empty()) {
-    auto all_cols =
-        catalog.getAllColumnMetadataForTable(td->tableId, false, false, false);
-    auto iter = std::find(all_cols.begin(), all_cols.end(), shardColumn);
-    CHECK(iter != all_cols.end());
-    indexOfShardColumn = std::distance(all_cols.begin(), iter);
-  } else {
-    for (auto& c : column_list_) {
-      if (*c == shardColumn->columnName) {
-        break;
+  values_lists_.reserve(tuples.Size());
+  for (const auto& json_tuple : tuples) {
+    auto values_list = std::make_unique<ValuesList>();
+    CHECK(json_tuple.IsArray());
+    auto tuple = json_tuple.GetArray();
+    for (const auto& value : tuple) {
+      CHECK(value.IsObject());
+      if (value.HasMember("array")) {
+        values_list->push_back(parse_insert_array_literal(value["array"]));
+      } else {
+        values_list->push_back(parse_insert_literal(value));
       }
-      indexOfShardColumn++;
     }
-
-    if (indexOfShardColumn == column_list_.size()) {
-      shardId = SHARD_FOR_KEY(inline_fixed_encoding_null_val(shardColumn->columnType),
-                              shard_count);
-      return shardId / td->nShards;
-    }
+    values_lists_.push_back(std::move(values_list));
   }
-
-  if (indexOfShardColumn >= value_list_.size()) {
-    throw std::runtime_error("No value defined for shard column.");
-  }
-
-  auto& shardColumnValueExpr = *(std::next(value_list_.begin(), indexOfShardColumn));
-
-  Analyzer::Query query;
-  auto e = shardColumnValueExpr->analyze(catalog, query);
-  e = e->add_cast(shardColumn->columnType);
-  const Analyzer::Constant* con = dynamic_cast<Analyzer::Constant*>(e.get());
-  if (!con) {
-    auto col_cast = dynamic_cast<const Analyzer::UOper*>(e.get());
-    CHECK(col_cast);
-    CHECK_EQ(kCAST, col_cast->get_optype());
-    con = dynamic_cast<const Analyzer::Constant*>(col_cast->get_operand());
-  }
-  CHECK(con);
-
-  Datum d = con->get_constval();
-  if (con->get_is_null()) {
-    shardId = SHARD_FOR_KEY(inline_fixed_encoding_null_val(shardColumn->columnType),
-                            shard_count);
-  } else if (shardColumn->columnType.is_string()) {
-    auto dictDesc =
-        catalog.getMetadataForDict(shardColumn->columnType.get_comp_param(), true);
-    auto str_id = dictDesc->stringDict->getOrAdd(*d.stringval);
-    bool invalid = false;
-
-    if (4 == shardColumn->columnType.get_size()) {
-      invalid = str_id > max_valid_int_value<int32_t>();
-    } else if (2 == shardColumn->columnType.get_size()) {
-      invalid = str_id > max_valid_int_value<uint16_t>();
-    } else if (1 == shardColumn->columnType.get_size()) {
-      invalid = str_id > max_valid_int_value<uint8_t>();
-    }
-
-    if (invalid || str_id == inline_int_null_value<int32_t>()) {
-      str_id = inline_fixed_encoding_null_val(shardColumn->columnType);
-    }
-    shardId = SHARD_FOR_KEY(str_id, shard_count);
-  } else {
-    switch (shardColumn->columnType.get_logical_size()) {
-      case 8:
-        shardId = SHARD_FOR_KEY(d.bigintval, shard_count);
-        break;
-      case 4:
-        shardId = SHARD_FOR_KEY(d.intval, shard_count);
-        break;
-      case 2:
-        shardId = SHARD_FOR_KEY(d.smallintval, shard_count);
-        break;
-      case 1:
-        shardId = SHARD_FOR_KEY(d.tinyintval, shard_count);
-        break;
-      default:
-        CHECK(false);
-    }
-  }
-
-  return shardId / td->nShards;
 }
 
 void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
                                Analyzer::Query& query) const {
   InsertStmt::analyze(catalog, query);
-  std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist =
-      query.get_targetlist_nonconst();
-  const auto tableId = query.get_result_table_id();
+  size_t list_size = values_lists_[0]->get_value_list().size();
   if (!column_list_.empty()) {
-    if (value_list_.size() != column_list_.size()) {
+    if (list_size != column_list_.size()) {
       throw std::runtime_error(
           "Numbers of columns and values don't match for the "
           "insert.");
     }
   } else {
+    const auto tableId = query.get_result_table_id();
     const std::list<const ColumnDescriptor*> non_phys_cols =
         catalog.getAllColumnMetadataForTable(tableId, false, false, false);
-    if (non_phys_cols.size() != value_list_.size()) {
+    if (non_phys_cols.size() != list_size) {
       throw std::runtime_error(
           "Number of columns in table does not match the list of values given in the "
           "insert.");
     }
   }
-  std::list<int>::const_iterator it = query.get_result_col_list().begin();
-  for (auto& v : value_list_) {
-    auto e = v->analyze(catalog, query);
-    const ColumnDescriptor* cd =
-        catalog.getMetadataForColumn(query.get_result_table_id(), *it);
+  std::vector<const ColumnDescriptor*> cds;
+  cds.reserve(query.get_result_col_list().size());
+  for (auto id : query.get_result_col_list()) {
+    const auto* cd = catalog.getMetadataForColumn(query.get_result_table_id(), id);
     CHECK(cd);
-    if (cd->columnType.get_notnull()) {
-      auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
-      if (c != nullptr && c->get_is_null()) {
-        throw std::runtime_error("Cannot insert NULL into column " + cd->columnName);
-      }
+    cds.push_back(cd);
+  }
+  auto& query_values_lists = query.get_values_lists();
+  query_values_lists.resize(values_lists_.size());
+  for (size_t i = 0; i < values_lists_.size(); ++i) {
+    const auto& values_list = values_lists_[i]->get_value_list();
+    if (values_list.size() != list_size) {
+      throw std::runtime_error(
+          "Insert values lists should be of the same size. Expected: " +
+          std::to_string(list_size) + ", Got: " + std::to_string(values_list.size()));
     }
-    e = e->add_cast(cd->columnType);
-    tlist.emplace_back(new Analyzer::TargetEntry("", e, false));
-    ++it;
+    auto& query_values_list = query_values_lists[i];
+    size_t cds_id = 0;
+    for (auto& v : values_list) {
+      auto e = v->analyze(catalog, query);
+      const auto* cd = cds[cds_id];
+      const auto& col_ti = cd->columnType;
+      if (col_ti.get_notnull()) {
+        auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
+        if (c != nullptr && c->get_is_null()) {
+          throw std::runtime_error("Cannot insert NULL into column " + cd->columnName);
+        }
+      }
+      e = e->add_cast(col_ti);
+      query_values_list.emplace_back(new Analyzer::TargetEntry("", e, false));
+      ++cds_id;
 
-    const auto& col_ti = cd->columnType;
-    if (col_ti.get_physical_cols() > 0) {
-      CHECK(cd->columnType.is_geometry());
-      auto c = dynamic_cast<const Analyzer::Constant*>(e.get());
-      if (!c) {
-        auto uoper = std::dynamic_pointer_cast<Analyzer::UOper>(e);
-        if (uoper && uoper->get_optype() == kCAST) {
-          c = dynamic_cast<const Analyzer::Constant*>(uoper->get_operand());
+      if (col_ti.get_physical_cols() > 0) {
+        CHECK(cd->columnType.is_geometry());
+        auto c = dynamic_cast<const Analyzer::Constant*>(e.get());
+        if (!c) {
+          auto uoper = std::dynamic_pointer_cast<Analyzer::UOper>(e);
+          if (uoper && uoper->get_optype() == kCAST) {
+            c = dynamic_cast<const Analyzer::Constant*>(uoper->get_operand());
+          }
         }
-      }
-      bool is_null = false;
-      std::string* geo_string{nullptr};
-      if (c) {
-        is_null = c->get_is_null();
-        if (!is_null) {
-          geo_string = c->get_constval().stringval;
+        bool is_null = false;
+        std::string* geo_string{nullptr};
+        if (c) {
+          is_null = c->get_is_null();
+          if (!is_null) {
+            geo_string = c->get_constval().stringval;
+          }
         }
-      }
-      if (!is_null && !geo_string) {
-        throw std::runtime_error("Expecting a WKT or WKB hex string for column " +
-                                 cd->columnName);
-      }
-      std::vector<double> coords;
-      std::vector<double> bounds;
-      std::vector<int> ring_sizes;
-      std::vector<int> poly_rings;
-      int render_group =
-          0;  // @TODO simon.eves where to get render_group from in this context?!
-      SQLTypeInfo import_ti{cd->columnType};
-      if (!is_null) {
-        if (!Geospatial::GeoTypesFactory::getGeoColumns(
-                *geo_string, import_ti, coords, bounds, ring_sizes, poly_rings)) {
-          throw std::runtime_error("Cannot read geometry to insert into column " +
+        if (!is_null && !geo_string) {
+          throw std::runtime_error("Expecting a WKT or WKB hex string for column " +
                                    cd->columnName);
         }
-        if (coords.empty()) {
-          // Importing from geo_string WKT resulted in empty coords: dealing with a NULL
-          is_null = true;
-        }
-        if (cd->columnType.get_type() != import_ti.get_type()) {
-          // allow POLYGON to be inserted into MULTIPOLYGON column
-          if (!(import_ti.get_type() == SQLTypes::kPOLYGON &&
-                cd->columnType.get_type() == SQLTypes::kMULTIPOLYGON)) {
-            throw std::runtime_error(
-                "Imported geometry doesn't match the type of column " + cd->columnName);
-          }
-        }
-      } else {
-        // Special case for NULL POINT, push NULL representation to coords
-        if (cd->columnType.get_type() == kPOINT) {
-          if (!coords.empty()) {
-            throw std::runtime_error("NULL POINT with unexpected coordinates in column " +
+        std::vector<double> coords;
+        std::vector<double> bounds;
+        std::vector<int> ring_sizes;
+        std::vector<int> poly_rings;
+        int render_group =
+            0;  // @TODO simon.eves where to get render_group from in this context?!
+        SQLTypeInfo import_ti{cd->columnType};
+        if (!is_null) {
+          if (!Geospatial::GeoTypesFactory::getGeoColumns(
+                  *geo_string, import_ti, coords, bounds, ring_sizes, poly_rings)) {
+            throw std::runtime_error("Cannot read geometry to insert into column " +
                                      cd->columnName);
           }
-          coords.push_back(NULL_ARRAY_DOUBLE);
-          coords.push_back(NULL_DOUBLE);
+          if (coords.empty()) {
+            // Importing from geo_string WKT resulted in empty coords: dealing with a NULL
+            is_null = true;
+          }
+          if (cd->columnType.get_type() != import_ti.get_type()) {
+            // allow POLYGON to be inserted into MULTIPOLYGON column
+            if (!(import_ti.get_type() == SQLTypes::kPOLYGON &&
+                  cd->columnType.get_type() == SQLTypes::kMULTIPOLYGON)) {
+              throw std::runtime_error(
+                  "Imported geometry doesn't match the type of column " + cd->columnName);
+            }
+          }
+        } else {
+          // Special case for NULL POINT, push NULL representation to coords
+          if (cd->columnType.get_type() == kPOINT) {
+            if (!coords.empty()) {
+              throw std::runtime_error(
+                  "NULL POINT with unexpected coordinates in column " + cd->columnName);
+            }
+            coords.push_back(NULL_ARRAY_DOUBLE);
+            coords.push_back(NULL_DOUBLE);
+          }
         }
-      }
 
-      // TODO: check if import SRID matches columns SRID, may need to transform before
-      // inserting
+        // TODO: check if import SRID matches columns SRID, may need to transform before
+        // inserting
 
-      int nextColumnOffset = 1;
-
-      const ColumnDescriptor* cd_coords = catalog.getMetadataForColumn(
-          query.get_result_table_id(), cd->columnId + nextColumnOffset);
-      CHECK(cd_coords);
-      CHECK_EQ(cd_coords->columnType.get_type(), kARRAY);
-      CHECK_EQ(cd_coords->columnType.get_subtype(), kTINYINT);
-      std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-      if (!is_null || cd->columnType.get_type() == kPOINT) {
-        auto compressed_coords = Geospatial::compress_coords(coords, col_ti);
-        for (auto cc : compressed_coords) {
-          Datum d;
-          d.tinyintval = cc;
-          auto e = makeExpr<Analyzer::Constant>(kTINYINT, false, d);
-          value_exprs.push_back(e);
-        }
-      }
-      tlist.emplace_back(new Analyzer::TargetEntry(
-          "",
-          makeExpr<Analyzer::Constant>(cd_coords->columnType, is_null, value_exprs),
-          false));
-      ++it;
-      nextColumnOffset++;
-
-      if (cd->columnType.get_type() == kPOLYGON ||
-          cd->columnType.get_type() == kMULTIPOLYGON) {
-        // Put ring sizes array into separate physical column
-        const ColumnDescriptor* cd_ring_sizes = catalog.getMetadataForColumn(
-            query.get_result_table_id(), cd->columnId + nextColumnOffset);
-        CHECK(cd_ring_sizes);
-        CHECK_EQ(cd_ring_sizes->columnType.get_type(), kARRAY);
-        CHECK_EQ(cd_ring_sizes->columnType.get_subtype(), kINT);
+        const auto* cd_coords = cds[cds_id];
+        CHECK_EQ(cd_coords->columnType.get_type(), kARRAY);
+        CHECK_EQ(cd_coords->columnType.get_subtype(), kTINYINT);
         std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-        if (!is_null) {
-          for (auto c : ring_sizes) {
+        if (!is_null || cd->columnType.get_type() == kPOINT) {
+          auto compressed_coords = Geospatial::compress_coords(coords, col_ti);
+          for (auto cc : compressed_coords) {
             Datum d;
-            d.intval = c;
-            auto e = makeExpr<Analyzer::Constant>(kINT, false, d);
+            d.tinyintval = cc;
+            auto e = makeExpr<Analyzer::Constant>(kTINYINT, false, d);
             value_exprs.push_back(e);
           }
         }
-        tlist.emplace_back(new Analyzer::TargetEntry(
+        query_values_list.emplace_back(new Analyzer::TargetEntry(
             "",
-            makeExpr<Analyzer::Constant>(cd_ring_sizes->columnType, is_null, value_exprs),
+            makeExpr<Analyzer::Constant>(cd_coords->columnType, is_null, value_exprs),
             false));
-        ++it;
-        nextColumnOffset++;
+        ++cds_id;
 
-        if (cd->columnType.get_type() == kMULTIPOLYGON) {
-          // Put poly_rings array into separate physical column
-          const ColumnDescriptor* cd_poly_rings = catalog.getMetadataForColumn(
-              query.get_result_table_id(), cd->columnId + nextColumnOffset);
-          CHECK(cd_poly_rings);
-          CHECK_EQ(cd_poly_rings->columnType.get_type(), kARRAY);
-          CHECK_EQ(cd_poly_rings->columnType.get_subtype(), kINT);
+        if (cd->columnType.get_type() == kPOLYGON ||
+            cd->columnType.get_type() == kMULTIPOLYGON) {
+          // Put ring sizes array into separate physical column
+          const auto* cd_ring_sizes = cds[cds_id];
+          CHECK(cd_ring_sizes);
+          CHECK_EQ(cd_ring_sizes->columnType.get_type(), kARRAY);
+          CHECK_EQ(cd_ring_sizes->columnType.get_subtype(), kINT);
           std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
           if (!is_null) {
-            for (auto c : poly_rings) {
+            for (auto c : ring_sizes) {
               Datum d;
               d.intval = c;
               auto e = makeExpr<Analyzer::Constant>(kINT, false, d);
               value_exprs.push_back(e);
             }
           }
-          tlist.emplace_back(new Analyzer::TargetEntry(
+          query_values_list.emplace_back(new Analyzer::TargetEntry(
               "",
               makeExpr<Analyzer::Constant>(
-                  cd_poly_rings->columnType, is_null, value_exprs),
+                  cd_ring_sizes->columnType, is_null, value_exprs),
               false));
-          ++it;
-          nextColumnOffset++;
-        }
-      }
+          ++cds_id;
 
-      if (cd->columnType.get_type() == kLINESTRING ||
-          cd->columnType.get_type() == kPOLYGON ||
-          cd->columnType.get_type() == kMULTIPOLYGON) {
-        const ColumnDescriptor* cd_bounds = catalog.getMetadataForColumn(
-            query.get_result_table_id(), cd->columnId + nextColumnOffset);
-        CHECK(cd_bounds);
-        CHECK_EQ(cd_bounds->columnType.get_type(), kARRAY);
-        CHECK_EQ(cd_bounds->columnType.get_subtype(), kDOUBLE);
-        std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-        if (!is_null) {
-          for (auto b : bounds) {
-            Datum d;
-            d.doubleval = b;
-            auto e = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
-            value_exprs.push_back(e);
+          if (cd->columnType.get_type() == kMULTIPOLYGON) {
+            // Put poly_rings array into separate physical column
+            const auto* cd_poly_rings = cds[cds_id];
+            CHECK(cd_poly_rings);
+            CHECK_EQ(cd_poly_rings->columnType.get_type(), kARRAY);
+            CHECK_EQ(cd_poly_rings->columnType.get_subtype(), kINT);
+            std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
+            if (!is_null) {
+              for (auto c : poly_rings) {
+                Datum d;
+                d.intval = c;
+                auto e = makeExpr<Analyzer::Constant>(kINT, false, d);
+                value_exprs.push_back(e);
+              }
+            }
+            query_values_list.emplace_back(new Analyzer::TargetEntry(
+                "",
+                makeExpr<Analyzer::Constant>(
+                    cd_poly_rings->columnType, is_null, value_exprs),
+                false));
+            ++cds_id;
           }
         }
-        tlist.emplace_back(new Analyzer::TargetEntry(
-            "",
-            makeExpr<Analyzer::Constant>(cd_bounds->columnType, is_null, value_exprs),
-            false));
-        ++it;
-        nextColumnOffset++;
-      }
 
-      if (cd->columnType.get_type() == kPOLYGON ||
-          cd->columnType.get_type() == kMULTIPOLYGON) {
-        // Put render group into separate physical column
-        const ColumnDescriptor* cd_render_group = catalog.getMetadataForColumn(
-            query.get_result_table_id(), cd->columnId + nextColumnOffset);
-        CHECK(cd_render_group);
-        CHECK_EQ(cd_render_group->columnType.get_type(), kINT);
-        Datum d;
-        d.intval = render_group;
-        tlist.emplace_back(new Analyzer::TargetEntry(
-            "",
-            makeExpr<Analyzer::Constant>(cd_render_group->columnType, is_null, d),
-            false));
-        ++it;
-        nextColumnOffset++;
+        if (cd->columnType.get_type() == kLINESTRING ||
+            cd->columnType.get_type() == kPOLYGON ||
+            cd->columnType.get_type() == kMULTIPOLYGON) {
+          const auto* cd_bounds = cds[cds_id];
+          CHECK(cd_bounds);
+          CHECK_EQ(cd_bounds->columnType.get_type(), kARRAY);
+          CHECK_EQ(cd_bounds->columnType.get_subtype(), kDOUBLE);
+          std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
+          if (!is_null) {
+            for (auto b : bounds) {
+              Datum d;
+              d.doubleval = b;
+              auto e = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
+              value_exprs.push_back(e);
+            }
+          }
+          query_values_list.emplace_back(new Analyzer::TargetEntry(
+              "",
+              makeExpr<Analyzer::Constant>(cd_bounds->columnType, is_null, value_exprs),
+              false));
+          ++cds_id;
+        }
+
+        if (cd->columnType.get_type() == kPOLYGON ||
+            cd->columnType.get_type() == kMULTIPOLYGON) {
+          // Put render group into separate physical column
+          const auto* cd_render_group = cds[cds_id];
+          CHECK(cd_render_group);
+          CHECK_EQ(cd_render_group->columnType.get_type(), kINT);
+          Datum d;
+          d.intval = render_group;
+          query_values_list.emplace_back(new Analyzer::TargetEntry(
+              "",
+              makeExpr<Analyzer::Constant>(cd_render_group->columnType, is_null, d),
+              false));
+          ++cds_id;
+        }
       }
     }
   }
@@ -2786,7 +2681,25 @@ void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   RelAlgExecutor ra_executor(executor.get(), catalog);
 
-  ra_executor.executeSimpleInsert(query);
+  Fragmenter_Namespace::LocalInsertConnector local_connector;
+  if (!leafs_connector_) {
+    leafs_connector_ = &local_connector;
+  }
+  Fragmenter_Namespace::InsertDataLoader insert_data_loader(*leafs_connector_);
+  try {
+    ra_executor.executeSimpleInsert(query, insert_data_loader, session);
+  } catch (...) {
+    try {
+      leafs_connector_->rollback(session, td->tableId);
+    } catch (std::exception& e) {
+      LOG(ERROR) << "An error occurred during insert rollback attempt. Table id: "
+                 << td->tableId << ", Error: " << e.what();
+    }
+    throw;
+  }
+  if (!td->isTemporaryTable()) {
+    leafs_connector_->checkpoint(session, td->tableId);
+  }
 }
 
 void UpdateStmt::analyze(const Catalog_Namespace::Catalog& catalog,
@@ -3511,8 +3424,8 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   return result.getRows();
 }
 
-size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
-                                             std::string& sql_query_string) {
+size_t LocalQueryConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
+                                                  std::string& sql_query_string) {
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto& catalog = session->getCatalog();
 
@@ -3557,11 +3470,11 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
   return ra_executor.getOuterFragmentCount(co, eo);
 }
 
-AggregatedResult LocalConnector::query(QueryStateProxy query_state_proxy,
-                                       std::string& sql_query_string,
-                                       std::vector<size_t> outer_frag_indices,
-                                       bool validate_only,
-                                       bool allow_interrupt) {
+AggregatedResult LocalQueryConnector::query(QueryStateProxy query_state_proxy,
+                                            std::string& sql_query_string,
+                                            std::vector<size_t> outer_frag_indices,
+                                            bool validate_only,
+                                            bool allow_interrupt) {
   // TODO(PS): Should we be using the shimmed query in getResultSet?
   std::string pg_shimmed_select_query = pg_shim(sql_query_string);
 
@@ -3587,7 +3500,7 @@ AggregatedResult LocalConnector::query(QueryStateProxy query_state_proxy,
   return res;
 }
 
-std::vector<AggregatedResult> LocalConnector::query(
+std::vector<AggregatedResult> LocalQueryConnector::query(
     QueryStateProxy query_state_proxy,
     std::string& sql_query_string,
     std::vector<size_t> outer_frag_indices,
@@ -3597,41 +3510,9 @@ std::vector<AggregatedResult> LocalConnector::query(
   return {res};
 }
 
-void LocalConnector::insertChunksToLeaf(
-    const Catalog_Namespace::SessionInfo& session,
-    const size_t leaf_idx,
-    const Fragmenter_Namespace::InsertChunks& insert_chunks) {
-  CHECK(leaf_idx == 0);
-  auto& catalog = session.getCatalog();
-  auto created_td = catalog.getMetadataForTable(insert_chunks.table_id);
-  created_td->fragmenter->insertChunksNoCheckpoint(insert_chunks);
-}
-
-void LocalConnector::insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
-                                      const size_t leaf_idx,
-                                      Fragmenter_Namespace::InsertData& insert_data) {
-  CHECK(leaf_idx == 0);
-  auto& catalog = session.getCatalog();
-  auto created_td = catalog.getMetadataForTable(insert_data.tableId);
-  created_td->fragmenter->insertDataNoCheckpoint(insert_data);
-}
-
-void LocalConnector::checkpoint(const Catalog_Namespace::SessionInfo& session,
-                                int table_id) {
-  auto& catalog = session.getCatalog();
-  catalog.checkpointWithAutoRollback(table_id);
-}
-
-void LocalConnector::rollback(const Catalog_Namespace::SessionInfo& session,
-                              int table_id) {
-  auto& catalog = session.getCatalog();
-  auto db_id = catalog.getDatabaseId();
-  auto table_epochs = catalog.getTableEpochs(db_id, table_id);
-  catalog.setTableEpochs(db_id, table_epochs);
-}
-
-std::list<ColumnDescriptor> LocalConnector::getColumnDescriptors(AggregatedResult& result,
-                                                                 bool for_create) {
+std::list<ColumnDescriptor> LocalQueryConnector::getColumnDescriptors(
+    AggregatedResult& result,
+    bool for_create) {
   std::list<ColumnDescriptor> column_descriptors;
   std::list<ColumnDescriptor> column_descriptors_for_create;
 
@@ -3701,7 +3582,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
   auto& catalog = session->getCatalog();
   foreign_storage::validate_non_foreign_table_write(td);
 
-  LocalConnector local_connector;
+  LocalQueryConnector local_connector;
   bool populate_table = false;
 
   if (leafs_connector_) {
@@ -4304,7 +4185,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
       &session_copy, boost::null_deleter());
   auto query_state = query_state::QueryState::create(session_ptr, select_query_);
   auto stdlog = STDLOG(query_state);
-  LocalConnector local_connector;
+  LocalQueryConnector local_connector;
   auto& catalog = session.getCatalog();
   bool create_table = nullptr == leafs_connector_;
 
@@ -6124,7 +6005,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto stdlog = STDLOG(query_state);
   auto query_state_proxy = query_state->createQueryStateProxy();
 
-  LocalConnector local_connector;
+  LocalQueryConnector local_connector;
 
   if (!leafs_connector_) {
     leafs_connector_ = &local_connector;

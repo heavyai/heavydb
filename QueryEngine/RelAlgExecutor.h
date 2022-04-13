@@ -45,6 +45,10 @@ struct QueryStepExecutionResult {
   bool is_outermost_query;
 };
 
+namespace Fragmenter_Namespace {
+struct InsertDataLoader;
+}
+
 class RelAlgExecutor : private StorageIOFacility {
  public:
   using TargetInfoList = std::vector<TargetInfo>;
@@ -168,7 +172,9 @@ class RelAlgExecutor : private StorageIOFacility {
     return query_dag_ ? std::make_optional(query_dag_->getGlobalHints()) : std::nullopt;
   }
 
-  ExecutionResult executeSimpleInsert(const Analyzer::Query& insert_query);
+  ExecutionResult executeSimpleInsert(const Analyzer::Query& insert_query,
+                                      Fragmenter_Namespace::InsertDataLoader& inserter,
+                                      const Catalog_Namespace::SessionInfo& session);
 
   AggregatedColRange computeColRangesCache();
   StringDictionaryGenerations computeStringDictionaryGenerations();

@@ -482,6 +482,7 @@ void InsertDataLoader::insertData(const Catalog_Namespace::SessionInfo& session_
 
           InsertData shardData = copyDataOfShard(
               cat, shardDataOwner, insert_data, stardTableIdx, rowIndicesOfShard);
+          CHECK(shardData.numRows > 0);
           connector_.insertDataToLeaf(session_info, shardLeafIdx, shardData);
         };
 
@@ -500,4 +501,38 @@ void InsertDataLoader::insertData(const Catalog_Namespace::SessionInfo& session_
     }
   }
 }
+
+void LocalInsertConnector::insertChunksToLeaf(
+    const Catalog_Namespace::SessionInfo& session,
+    const size_t leaf_idx,
+    const Fragmenter_Namespace::InsertChunks& insert_chunks) {
+  CHECK(leaf_idx == 0);
+  auto& catalog = session.getCatalog();
+  auto created_td = catalog.getMetadataForTable(insert_chunks.table_id);
+  created_td->fragmenter->insertChunksNoCheckpoint(insert_chunks);
+}
+
+void LocalInsertConnector::insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
+                                            const size_t leaf_idx,
+                                            InsertData& insert_data) {
+  CHECK(leaf_idx == 0);
+  auto& catalog = session.getCatalog();
+  auto created_td = catalog.getMetadataForTable(insert_data.tableId);
+  created_td->fragmenter->insertDataNoCheckpoint(insert_data);
+}
+
+void LocalInsertConnector::checkpoint(const Catalog_Namespace::SessionInfo& session,
+                                      int table_id) {
+  auto& catalog = session.getCatalog();
+  catalog.checkpointWithAutoRollback(table_id);
+}
+
+void LocalInsertConnector::rollback(const Catalog_Namespace::SessionInfo& session,
+                                    int table_id) {
+  auto& catalog = session.getCatalog();
+  auto db_id = catalog.getDatabaseId();
+  auto table_epochs = catalog.getTableEpochs(db_id, table_id);
+  catalog.setTableEpochs(db_id, table_epochs);
+}
+
 }  // namespace Fragmenter_Namespace

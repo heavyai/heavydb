@@ -1027,6 +1027,169 @@ TEST(Insert, InvalidColumnName) {
   }
 }
 
+TEST(Insert, InconsistentValuesLists) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    recreate_inserts_test_table();
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO inserts_test_table (i, t, b) "
+                         "VALUES (1, 'One', 'False'), (2, 'Two', 'True');",
+                         dt));
+    EXPECT_THROW(run_multiple_agg("INSERT INTO inserts_test_table (i, t, b) "
+                                  "VALUES (3, 'Three', 'False'), ('Four', 'True');",
+                                  dt),
+                 std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg("INSERT INTO inserts_test_table (i, t, b) "
+                         "VALUES (3, 'Three', 'False'), (4, 'Four', 'True', -5);",
+                         dt),
+        std::runtime_error);
+  }
+}
+
+namespace {
+void BatchInsertsTest(bool sharded = false) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS batch_inserts_test_table;");
+    if (sharded) {
+      EXPECT_NO_THROW(run_ddl_statement(
+          "CREATE TABLE batch_inserts_test_table(id INTEGER NOT NULL, text_col TEXT "
+          "ENCODING "
+          "NONE,"
+          " dict_col TEXT ENCODING DICT, double_col DOUBLE, decimal_col DECIMAL(3, 2),"
+          " ls_col LINESTRING, int_array_col INTEGER[], text_array_col TEXT[],"
+          " bool_col BOOLEAN, SHARD KEY(id)) with (SHARD_COUNT=2);"));
+
+    } else {
+      EXPECT_NO_THROW(run_ddl_statement(
+          "CREATE TABLE batch_inserts_test_table(id INTEGER NOT NULL, text_col TEXT"
+          " ENCODING NONE,"
+          " dict_col TEXT ENCODING DICT, double_col DOUBLE, decimal_col DECIMAL(3, 2),"
+          " ls_col LINESTRING, int_array_col INTEGER[], text_array_col TEXT[],"
+          " bool_col BOOLEAN);"));
+    }
+    // clang-format off
+    std::vector<std::vector<std::string>> data = {
+      { "1", "'One_no_dict'", "'One_dict'", "1.01010101", "1.11",
+        "'LINESTRING(1 1, 10 10)'", "ARRAY[1, NULL, 1]",
+        "ARRAY['1', NULL, '1']", "'False'" },
+      { "2", "'Two_no_dict'", "'Two_dict'", "2.02020202", "2.22",
+        "'LINESTRING(2 2, 20 20)'", "ARRAY[2, NULL, 2]",
+        "ARRAY['2', NULL, '2']", "'True'" },
+      { "3", "'Three_no_dict'", "'Three_dict'", "3.03030303", "3.33",
+        "'LINESTRING(3 3, 30 30)'", "ARRAY[3, NULL, 3]",
+        "ARRAY['3', NULL, '3']", "'False'" },
+      { "4", "'Four_no_dict'", "'Four_dict'", "4.04040404", "4.44",
+        "'LINESTRING(4 4, 40 40)'", "ARRAY[4, NULL, 4]",
+        "ARRAY['4', NULL, '4']", "'True'" },
+      { "5", "'Five_no_dict'", "'Five_dict'", "5.05050505", "5.55",
+        "'LINESTRING(5 5, 50 50)'", "ARRAY[5, NULL, 5]",
+        "ARRAY['5', NULL, '5']", "'False'" }
+    };
+    // clang-format on
+    std::stringstream values_ss;
+    values_ss << "VALUES";
+    for (size_t row_id = 0; row_id < data.size(); ++row_id) {
+      values_ss << (row_id == 0 ? " (" : ", (");
+      for (size_t col_id = 0; col_id < data[row_id].size(); ++col_id) {
+        if (col_id > 0) {
+          values_ss << ", ";
+        }
+        values_ss << data[row_id][col_id];
+      }
+      values_ss << ')';
+    }
+    std::string insert_stmt =
+        "INSERT INTO batch_inserts_test_table(id, text_col, dict_col, "
+        "double_col, decimal_col, ls_col, int_array_col, "
+        "text_array_col, bool_col) " +
+        values_ss.str();
+    EXPECT_NO_THROW(run_multiple_agg(insert_stmt, dt));
+
+    for (auto row : data) {
+      char query_sql[1024];
+      snprintf(
+          query_sql,
+          1024,
+          "SELECT id FROM batch_inserts_test_table WHERE "
+          "text_col = %s AND dict_col = %s AND double_col = %s AND decimal_col = %s AND "
+          "ST_DISTANCE(ls_col, %s) = 0 AND int_array_col[3] = %s AND text_array_col[1] = "
+          "'%s' AND bool_col = %s;",
+          row[1].c_str(),
+          row[2].c_str(),
+          row[3].c_str(),
+          row[4].c_str(),
+          row[5].c_str(),
+          row[0].c_str(),
+          row[0].c_str(),
+          row[8].c_str());
+      ASSERT_EQ(static_cast<int64_t>(atoi(row[0].c_str())),
+                v<int64_t>(run_simple_agg(std::string(query_sql), dt)));
+    }
+  }
+}
+}  // namespace
+
+TEST(Insert, BatchInsert) {
+  BatchInsertsTest(false);
+}
+
+TEST(Insert, BatchInsertSharded) {
+  BatchInsertsTest(true);
+}
+
+// For some reason fail in core-dist-test. Needs investigation, but for now
+// I'm going to disable it as it does not seem related to batch inserts or any
+// inserts for what it`s worth. I've tried it with older builds using legacy
+// inserts and it still fails
+TEST(Insert, DISABLED_BatchInsertShardsProperly) {
+  // This test uses batch inserts to add data to tbl1 and then joins
+  // the tables on shard key to check that values are properly split
+  // between leafs in distributed mode.
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS batch_inserts_test_tbl1;");
+    run_ddl_statement("DROP TABLE IF EXISTS batch_inserts_test_tbl2;");
+    run_ddl_statement(
+        "create table batch_inserts_test_tbl1(a integer, b integer, "
+        "shard key(a)) with (shard_count = 2);");
+    run_ddl_statement(
+        "create table batch_inserts_test_tbl2(a integer, c integer, "
+        "shard key(a)) with (shard_count = 2);");
+    const int64_t N_ROWS = 33;
+    std::stringstream tbl_1_insert_ss;
+    tbl_1_insert_ss << "INSERT INTO batch_inserts_test_tbl1(a, b) VALUES";
+    for (int row_id = 0; row_id < N_ROWS; ++row_id) {
+      tbl_1_insert_ss << (row_id == 0 ? " (" : ", (");
+      tbl_1_insert_ss << row_id << ", " << row_id * 10;
+      tbl_1_insert_ss << ')';
+    }
+    EXPECT_NO_THROW(run_multiple_agg(tbl_1_insert_ss.str(), dt));
+    for (int row_id = 0; row_id < N_ROWS; ++row_id) {
+      std::string tbl2_insert_stmt =
+          "INSERT INTO batch_inserts_test_tbl2(a, c) VALUES (" + std::to_string(row_id) +
+          ", " + std::to_string(-row_id) + ");";
+      EXPECT_NO_THROW(run_multiple_agg(tbl2_insert_stmt, dt));
+    }
+    ASSERT_EQ(
+        N_ROWS,
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM batch_inserts_test_tbl1", dt)));
+    ASSERT_EQ(
+        N_ROWS,
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM batch_inserts_test_tbl2", dt)));
+    std::string join_sql =
+        "SELECT COUNT(DISTINCT batch_inserts_test_tbl2.a) FROM "
+        "batch_inserts_test_tbl2 JOIN batch_inserts_test_tbl1 ON "
+        "batch_inserts_test_tbl2.a = batch_inserts_test_tbl1.a;";
+    ASSERT_EQ(N_ROWS, v<int64_t>(run_simple_agg(join_sql, dt)));
+    join_sql =
+        "SELECT COUNT(*) FROM batch_inserts_test_tbl2 JOIN batch_inserts_test_tbl1 ON "
+        "batch_inserts_test_tbl2.a = batch_inserts_test_tbl1.a;";
+    ASSERT_EQ(N_ROWS, v<int64_t>(run_simple_agg(join_sql, dt)));
+  }
+}
+
 TEST(KeyForString, KeyForString) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

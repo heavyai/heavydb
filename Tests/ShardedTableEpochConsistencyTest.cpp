@@ -341,6 +341,7 @@ class EpochRollbackTest : public EpochConsistencyTest,
   }
 
   CheckpointFailureMock* checkpoint_failure_mock_;
+  CheckpointFailureMock* checkpoint_failure_no_to_mock_;
 };
 
 TEST_P(EpochRollbackTest, Import) {

@@ -2433,6 +2433,12 @@ class Query {
   std::vector<std::shared_ptr<TargetEntry>>& get_targetlist_nonconst() {
     return targetlist;
   }
+  const std::vector<std::vector<std::shared_ptr<TargetEntry>>>& get_values_lists() const {
+    return values_lists;
+  }
+  std::vector<std::vector<std::shared_ptr<TargetEntry>>>& get_values_lists() {
+    return values_lists;
+  }
   const std::vector<RangeTableEntry*>& get_rangetable() const { return rangetable; }
   const Expr* get_where_predicate() const { return where_predicate.get(); }
   const std::list<std::shared_ptr<Analyzer::Expr>>& get_group_by() const {
@@ -2481,8 +2487,9 @@ class Query {
   int num_aggs;                    // number of aggregate functions in query
   int result_table_id;             // for INSERT statements only
   std::list<int> result_col_list;  // for INSERT statement only
-  int64_t limit;                   // row count for LIMIT clause.  0 means ALL
-  int64_t offset;                  // offset in OFFSET clause.  0 means no offset.
+  std::vector<std::vector<std::shared_ptr<TargetEntry>>> values_lists;  // for INSERT only
+  int64_t limit;   // row count for LIMIT clause.  0 means ALL
+  int64_t offset;  // offset in OFFSET clause.  0 means no offset.
 };
 
 class GeoExpr : public Expr {
