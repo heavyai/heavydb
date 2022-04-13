@@ -1008,7 +1008,7 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeCountDistinctCo
 double ResultSet::calculateQuantile(quantile::TDigest* const t_digest) {
   static_assert(sizeof(int64_t) == sizeof(quantile::TDigest*));
   CHECK(t_digest);
-  t_digest->mergeBuffer();
+  t_digest->mergeBufferFinal();
   double const quantile = t_digest->quantile();
   return boost::math::isnan(quantile) ? NULL_DOUBLE : quantile;
 }

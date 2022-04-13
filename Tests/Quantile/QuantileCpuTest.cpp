@@ -176,15 +176,16 @@ TEST(Quantile, Basic) {
     });
   }
   auto& digest = digests.front();  // The aggregated digest
+  auto const partial_sum = digest.partialSumOfCounts(buffer.counts().data());
   std::cout << msSince(start) << "ms" << std::endl;
 
   // Min/max should be exact
-  EXPECT_EQ(exact[0], digest.quantile(buffer.counts().data(), 0));
-  EXPECT_EQ(exact[nintervals], digest.quantile(buffer.counts().data(), 1));
+  EXPECT_EQ(exact[0], digest.quantile(partial_sum, 0));
+  EXPECT_EQ(exact[nintervals], digest.quantile(partial_sum, 1));
 
   for (int i = 1; i < nintervals; ++i) {
     Real const q = Real(i) / nintervals;
-    Real const approx = digest.quantile(buffer.counts().data(), q);
+    Real const approx = digest.quantile(partial_sum, q);
     EXPECT_NEAR(exact[i], approx, 1e-3 * exact[i]);
   }
 
@@ -193,7 +194,7 @@ TEST(Quantile, Basic) {
     Real const q = high_precision_quantiles[i].q;
     Real const err = high_precision_quantiles[i].err;
     Real const exact = exact_high_precision[i];
-    EXPECT_NEAR(exact, digest.quantile(buffer.counts().data(), q), err * exact)
+    EXPECT_NEAR(exact, digest.quantile(partial_sum, q), err * exact)
         << i << ' ' << q << ' ' << digest.centroids();
   }
 }
@@ -297,11 +298,12 @@ TEST(Quantile, TwoValues) {
       }
     });
   }
+  auto const partial_sum = digests.front().partialSumOfCounts(buffer.counts().data());
   std::cout << msSince(start) << "ms" << std::endl;
 
   std::cout << "\nCalculating quantile estimate... " << std::flush;
   start = std::chrono::steady_clock::now();
-  Real const estimated = digests.front().quantile(buffer.counts().data(), q);
+  Real const estimated = digests.front().quantile(partial_sum, q);
   std::cout << msSince(start) << "ms" << std::endl;
   std::cout.setf(std::ios::fixed);
   std::cout << "digests.front().quantile(" << q << ") = " << estimated << std::endl;
@@ -326,7 +328,7 @@ TEST(Quantile, Singletons) {
 
   constexpr double x = 10.0;
   t_digest0.add(x);
-  t_digest0.mergeBuffer();
+  t_digest0.mergeBufferFinal();
   EXPECT_EQ(x, t_digest0.quantile(0.0));
   EXPECT_EQ(x, t_digest0.quantile(0.5));
   EXPECT_EQ(x, t_digest0.quantile(1.0));
@@ -335,6 +337,7 @@ TEST(Quantile, Singletons) {
   TDigest t_digest1(memory1);
   t_digest1.mergeTDigest(t_digest0);
   t_digest1.setBuffer(buffer);
+  t_digest1.mergeBufferFinal();
   EXPECT_EQ(x, t_digest1.quantile(0.0));
   EXPECT_EQ(x, t_digest1.quantile(0.5));
   EXPECT_EQ(x, t_digest1.quantile(1.0));
@@ -347,7 +350,7 @@ TEST(Quantile, Pairs) {
 
   t_digest0.add(10);
   t_digest0.add(20);
-  t_digest0.mergeBuffer();
+  t_digest0.mergeBufferFinal();
   EXPECT_EQ(10, t_digest0.quantile(0.0));
   EXPECT_EQ(10, t_digest0.quantile(0.0001));
   EXPECT_EQ(10, t_digest0.quantile(0.4999));
@@ -360,6 +363,7 @@ TEST(Quantile, Pairs) {
   TDigest t_digest1(memory1);
   t_digest1.mergeTDigest(t_digest0);
   t_digest1.setBuffer(buffer);
+  t_digest1.mergeBufferFinal();
   EXPECT_EQ(10, t_digest1.quantile(0.0));
   EXPECT_EQ(10, t_digest1.quantile(0.0001));
   EXPECT_EQ(10, t_digest1.quantile(0.4999));
@@ -380,7 +384,7 @@ TEST(Quantile, SmallDataSetsAndMemory) {
       for (unsigned i = 0; i < N; ++i) {
         t_digest0.add(10 * (i + 1));
       }
-      t_digest0.mergeBuffer();
+      t_digest0.mergeBufferFinal();
       EXPECT_EQ(N, t_digest0.totalWeight());
 
       EXPECT_EQ(10, t_digest0.quantile(-0.00001));
