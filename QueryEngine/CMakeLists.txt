@@ -4,6 +4,8 @@ if(MSVC)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Wall")
 else()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Wall -Wno-attributes")
+# /opt/cuda/include/cub/detail/device_synchronize.cuh:33: warning: ignoring ‘#pragma nv_exec_check_disable ’
+set_source_files_properties(JoinHashTable/Runtime/HashJoinRuntime.cpp PROPERTIES COMPILE_OPTIONS "-Wno-unknown-pragmas")
 endif()
 
 set_source_files_properties(RuntimeFunctionsCodegenWithIncludes.cpp PROPERTIES COMPILE_FLAGS -O0)
