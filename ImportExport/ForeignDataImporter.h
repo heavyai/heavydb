@@ -36,6 +36,9 @@ class ForeignDataImporter : public AbstractImporter {
 
   static void setDefaultImportPath(const std::string& base_path);
 
+  // This parameter is publicly exposed for testing purposes only
+  static int32_t proxy_foreign_table_fragment_size_;
+
  protected:
   std::unique_ptr<Fragmenter_Namespace::InsertDataLoader::DistributedConnector>
       connector_;
@@ -65,7 +68,5 @@ class ForeignDataImporter : public AbstractImporter {
   CopyParams copy_params_;
   const TableDescriptor* table_;
   inline static std::string default_import_path_;
-
-  const static int32_t proxy_foreign_table_fragment_size_;
 };
 }  // namespace import_export

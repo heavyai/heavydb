@@ -1589,26 +1589,34 @@ void throw_missing_metadata_error(const int row_group_index,
       ", column index: " + std::to_string(column_index) + ", file path: " + file_path};
 }
 
-void throw_row_group_larger_than_fragment_size_error(const int row_group_index,
-                                                     const int64_t max_row_group_size,
-                                                     const int fragment_size,
-                                                     const std::string& file_path) {
+struct MaxRowGroupSizeStats {
+  int64_t max_row_group_size;
+  int64_t max_row_group_index;
+  std::string file_path;
+};
+
+void throw_row_group_larger_than_fragment_size_error(
+    const MaxRowGroupSizeStats max_row_group_stats,
+    const int fragment_size) {
   auto metadata_scan_exception = MetadataScanInfeasibleFragmentSizeException{
       "Parquet file has a row group size that is larger than the fragment size. "
       "Please set the table fragment size to a number that is larger than the "
       "row group size. Row group index: " +
-      std::to_string(row_group_index) +
-      ", row group size: " + std::to_string(max_row_group_size) +
-      ", fragment size: " + std::to_string(fragment_size) + ", file path: " + file_path};
-  metadata_scan_exception.min_feasible_fragment_size_ = max_row_group_size;
+      std::to_string(max_row_group_stats.max_row_group_index) +
+      ", row group size: " + std::to_string(max_row_group_stats.max_row_group_size) +
+      ", fragment size: " + std::to_string(fragment_size) +
+      ", file path: " + max_row_group_stats.file_path};
+  metadata_scan_exception.min_feasible_fragment_size_ =
+      max_row_group_stats.max_row_group_size;
   throw metadata_scan_exception;
 }
 
-void validate_column_mapping_and_row_group_metadata(
+MaxRowGroupSizeStats validate_column_mapping_and_row_group_metadata(
     const std::shared_ptr<parquet::FileMetaData>& file_metadata,
     const std::string& file_path,
     const ForeignTableSchema& schema) {
   auto column_it = schema.getLogicalColumns().begin();
+  MaxRowGroupSizeStats max_row_group_stats{0, 0};
   for (int i = 0; i < file_metadata->num_columns(); ++i, ++column_it) {
     const parquet::ColumnDescriptor* descr = file_metadata->schema()->Column(i);
     try {
@@ -1621,17 +1629,15 @@ void validate_column_mapping_and_row_group_metadata(
       throw std::runtime_error(error_message.str());
     }
 
-    auto fragment_size = schema.getForeignTable()->maxFragRows;
-    int64_t max_row_group_size = 0;
-    int max_row_group_index = 0;
     for (int r = 0; r < file_metadata->num_row_groups(); ++r) {
       auto group_metadata = file_metadata->RowGroup(r);
       auto num_rows = group_metadata->num_rows();
       if (num_rows == 0) {
         continue;
-      } else if (num_rows > max_row_group_size) {
-        max_row_group_size = num_rows;
-        max_row_group_index = r;
+      } else if (num_rows > max_row_group_stats.max_row_group_size) {
+        max_row_group_stats.max_row_group_size = num_rows;
+        max_row_group_stats.max_row_group_index = r;
+        max_row_group_stats.file_path = file_path;
       }
 
       auto column_chunk = group_metadata->ColumnChunk(i);
@@ -1653,20 +1659,16 @@ void validate_column_mapping_and_row_group_metadata(
         throw_missing_metadata_error(r, i, file_path);
       }
     }
-
-    if (max_row_group_size > fragment_size) {
-      throw_row_group_larger_than_fragment_size_error(
-          max_row_group_index, max_row_group_size, fragment_size, file_path);
-    }
   }
+  return max_row_group_stats;
 }
 
-void validate_parquet_metadata(
+MaxRowGroupSizeStats validate_parquet_metadata(
     const std::shared_ptr<parquet::FileMetaData>& file_metadata,
     const std::string& file_path,
     const ForeignTableSchema& schema) {
   validate_number_of_columns(file_metadata, file_path, schema);
-  validate_column_mapping_and_row_group_metadata(file_metadata, file_path, schema);
+  return validate_column_mapping_and_row_group_metadata(file_metadata, file_path, schema);
 }
 
 std::list<RowGroupMetadata> metadata_scan_rowgroup_interval(
@@ -2395,7 +2397,7 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
   // peel the first file_path out of the async loop below to perform population.
   const auto& first_path = *file_paths.begin();
   auto first_reader = file_reader_cache_->insert(first_path, file_system_);
-  validate_parquet_metadata(
+  auto max_row_group_stats = validate_parquet_metadata(
       first_reader->parquet_reader()->metadata(), first_path, schema);
   auto encoder_map = populate_encoder_map_for_metadata_scan(column_interval,
                                                             schema,
@@ -2420,23 +2422,31 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
 
   // Iterate asyncronously over any paths beyond the first.
   auto paths_per_thread = partition_for_threads(cache_subset, g_max_import_threads);
-  std::vector<std::future<std::list<RowGroupMetadata>>> futures;
+  std::vector<std::future<std::pair<std::list<RowGroupMetadata>, MaxRowGroupSizeStats>>>
+      futures;
   for (const auto& path_group : paths_per_thread) {
     futures.emplace_back(std::async(
         std::launch::async,
-        [&](const auto& paths, const auto& file_reader_cache) {
+        [&](const auto& paths, const auto& file_reader_cache)
+            -> std::pair<std::list<RowGroupMetadata>, MaxRowGroupSizeStats> {
           std::list<RowGroupMetadata> reduced_metadata;
+          MaxRowGroupSizeStats max_row_group_stats{0, 0};
           for (const auto& path : paths.get()) {
             auto reader = file_reader_cache.get().getOrInsert(path, file_system_);
             validate_equal_schema(first_reader, reader, first_path, path);
-            validate_parquet_metadata(reader->parquet_reader()->metadata(), path, schema);
+            auto local_max_row_group_stats = validate_parquet_metadata(
+                reader->parquet_reader()->metadata(), path, schema);
+            if (local_max_row_group_stats.max_row_group_size >
+                max_row_group_stats.max_row_group_size) {
+              max_row_group_stats = local_max_row_group_stats;
+            }
             const auto num_row_groups = get_parquet_table_size(reader).first;
             const auto interval = RowGroupInterval{path, 0, num_row_groups - 1};
             reduced_metadata.splice(
                 reduced_metadata.end(),
                 metadata_scan_rowgroup_interval(encoder_map, interval, reader, schema));
           }
-          return reduced_metadata;
+          return {reduced_metadata, max_row_group_stats};
         },
         std::ref(path_group),
         std::ref(*file_reader_cache_)));
@@ -2444,8 +2454,19 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
 
   // Reduce all the row_group results.
   for (auto& future : futures) {
-    row_group_metadata.splice(row_group_metadata.end(), future.get());
+    auto [metadata, local_max_row_group_stats] = future.get();
+    row_group_metadata.splice(row_group_metadata.end(), metadata);
+    if (local_max_row_group_stats.max_row_group_size >
+        max_row_group_stats.max_row_group_size) {
+      max_row_group_stats = local_max_row_group_stats;
+    }
   }
+
+  if (max_row_group_stats.max_row_group_size > schema.getForeignTable()->maxFragRows) {
+    throw_row_group_larger_than_fragment_size_error(
+        max_row_group_stats, schema.getForeignTable()->maxFragRows);
+  }
+
   return row_group_metadata;
 }
 
