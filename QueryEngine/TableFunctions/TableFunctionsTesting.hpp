@@ -1664,6 +1664,7 @@ ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
   UDTF: ct_require_and__cpu_(Column<int>, int i | require="i > 0 && i < 5") -> Column<int>
   UDTF: ct_require_or_str__cpu_(Column<int>, TextEncodingNone i | require="i == \"MAX\" || i == \"MIN\"") -> Column<int>
   UDTF: ct_require_str_diff__cpu_(Column<int>, TextEncodingNone i | require="i != \"MAX\"") -> Column<int>
+  UDTF: ct_require_text_enc_dict__cpu_(Cursor<Column<TextEncodingDict>>, int64_t x | require="x >= 1") -> Column<int64_t>
 */
 // clang-format on
 
@@ -1728,6 +1729,15 @@ EXTENSION_NOINLINE_HOST int32_t ct_require_str_diff__cpu_(const Column<int32_t>&
                                                           Column<int32_t>& out) {
   set_output_row_size(1);
   out[0] = 9;
+  return 1;
+}
+
+EXTENSION_NOINLINE_HOST int32_t
+ct_require_text_enc_dict__cpu_(const Column<TextEncodingDict>& input,
+                               const int64_t x,
+                               Column<int64_t>& out) {
+  set_output_row_size(1);
+  out[0] = 10;
   return 1;
 }
 
