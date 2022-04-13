@@ -2706,8 +2706,8 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(
     rows_per_leaf =
         ceil(static_cast<double>(rows_number) / static_cast<double>(leaf_count));
   }
-  size_t max_number_of_rows_per_package =
-      std::max(1ul, std::min(rows_per_leaf, size_t(64 * 1024)));
+  auto max_number_of_rows_per_package =
+      std::max(size_t(1), std::min(rows_per_leaf, size_t(64 * 1024)));
 
   std::vector<const ColumnDescriptor*> col_descriptors;
   std::vector<int> col_ids;
