@@ -806,6 +806,32 @@ TEST_F(ParquetImportErrorHandling, GreaterThanMaxReject) {
   validateImportStatus(file_path, get_copy_from_result_str(copy_from_result), 0, 0, true);
 }
 
+TEST_F(ParquetImportErrorHandling, IncreasingMaxRowGroupSizeAcrossFiles) {
+  auto saved_proxy_foreign_table_fragment_size =
+      import_export::ForeignDataImporter::proxy_foreign_table_fragment_size_;
+  import_export::ForeignDataImporter::proxy_foreign_table_fragment_size_ = 1;
+  sql("DROP TABLE IF EXISTS test_table;");
+  sql("CREATE TABLE test_table (i BIGINT);");
+  sql("COPY test_table FROM '" + fsi_file_base_dir +
+      "/increasing_row_group_sizes/' WITH (source_type='parquet_file');");
+  sqlAndCompareResult("SELECT * FROM test_table ORDER BY i;",
+                      {{100L},
+                       {100L},
+                       {100L},
+                       {200L},
+                       {200L},
+                       {200L},
+                       {300L},
+                       {300L},
+                       {300L},
+                       {400L},
+                       {400L},
+                       {400L}});
+  sql("DROP TABLE IF EXISTS test_table;");
+  import_export::ForeignDataImporter::proxy_foreign_table_fragment_size_ =
+      saved_proxy_foreign_table_fragment_size;
+}
+
 TEST_F(ParquetImportErrorHandling, MismatchNumberOfColumns) {
   sql("CREATE TABLE test_table (i INT);");
   queryAndAssertException(

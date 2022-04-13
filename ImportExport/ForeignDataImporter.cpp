@@ -341,7 +341,7 @@ void ForeignDataImporter::finalize(
 // TODO: the `proxy_foreign_table_fragment_size_` parameter controls the amount
 // of data buffered in memory while importing using the `ForeignDataImporter`
 // may need to be tuned or exposed as configurable parameter
-const int32_t ForeignDataImporter::proxy_foreign_table_fragment_size_ = 2000000;
+int32_t ForeignDataImporter::proxy_foreign_table_fragment_size_ = 2000000;
 
 ImportStatus ForeignDataImporter::importGeneral(
     const Catalog_Namespace::SessionInfo* session_info,
