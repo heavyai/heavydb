@@ -22,7 +22,7 @@ SchedulingAssignment RoundRobinExecutionPolicy::scheduleSingleFragment(
   auto device_type = frag_id % 2 ? ExecutorDeviceType::GPU : ExecutorDeviceType::CPU;
   auto memory_level = device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
                                                              : Data_Namespace::CPU_LEVEL;
-  unsigned device_id = fragment.deviceIds[static_cast<unsigned>(memory_level)];
+  int device_id = fragment.deviceIds[static_cast<int>(memory_level)];
   return {device_type, device_id};
 }
 }  // namespace policy

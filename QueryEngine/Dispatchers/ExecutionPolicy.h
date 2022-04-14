@@ -21,7 +21,7 @@ using TableFragments = std::vector<Fragmenter_Namespace::FragmentInfo>;
 
 struct SchedulingAssignment {
   ExecutorDeviceType dt;
-  unsigned device_id;
+  int device_id;
 };
 
 class ExecutionPolicy {

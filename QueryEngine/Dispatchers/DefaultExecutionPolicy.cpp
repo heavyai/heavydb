@@ -21,7 +21,7 @@ SchedulingAssignment FragmentIDAssignmentExecutionPolicy::scheduleSingleFragment
     size_t frag_num) const {
   auto memory_level = dt_ == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
                                                      : Data_Namespace::CPU_LEVEL;
-  unsigned device_id = fragment.deviceIds[static_cast<unsigned>(memory_level)];
+  int device_id = fragment.deviceIds[static_cast<int>(memory_level)];
   return {dt_, device_id};
 }
 std::vector<ExecutorDeviceType> FragmentIDAssignmentExecutionPolicy::devices() const {
