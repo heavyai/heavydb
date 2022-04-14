@@ -26,6 +26,6 @@ ${StringDictionary_BINARY_DIR}/gen-cpp)
 
 target_link_libraries(calciteserver_thrift ${Thrift_LIBRARIES})
 
-add_library(Calcite CalciteJNI.cpp Calcite.cpp Calcite.h)
+add_library(Calcite CalciteJNI.cpp)
 
 target_link_libraries(Calcite calciteserver_thrift ${JAVA_JVM_LIBRARY})
