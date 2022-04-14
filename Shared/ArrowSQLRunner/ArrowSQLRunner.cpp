@@ -282,9 +282,9 @@ class ArrowSQLRunnerImpl {
   std::shared_ptr<Executor> executor_;
   std::shared_ptr<CalciteJNI> calcite_;
   SQLiteComparator sqlite_comparator_;
-  int64_t schema_to_json_time_;
-  int64_t calcite_time_;
-  int64_t execution_time_;
+  int64_t schema_to_json_time_ = 0;
+  int64_t calcite_time_ = 0;
+  int64_t execution_time_ = 0;
 
   static std::unique_ptr<ArrowSQLRunnerImpl> instance_;
 };
