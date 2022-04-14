@@ -23,7 +23,7 @@
 
 #include "BufferPoolStats.h"
 
-class Calcite;
+class CalciteJNI;
 class Executor;
 class RelAlgExecutor;
 
@@ -33,8 +33,6 @@ extern bool g_hoist_literals;
 
 constexpr int TEST_SCHEMA_ID = 1;
 constexpr int TEST_DB_ID = (TEST_SCHEMA_ID << 24) + 1;
-
-constexpr int CALCITE_PORT = 3278;
 
 void init(size_t max_gpu_mem = 0, const std::string& udf_filename = "");
 
@@ -105,7 +103,7 @@ DataMgr* getDataMgr();
 
 Executor* getExecutor();
 
-std::shared_ptr<Calcite> getCalcite();
+std::shared_ptr<CalciteJNI> getCalcite();
 
 RegisteredQueryHint getParsedQueryHint(const std::string& query_str);
 
