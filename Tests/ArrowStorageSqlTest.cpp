@@ -13,7 +13,7 @@
  */
 
 #include "ArrowStorage/ArrowStorage.h"
-#include "Calcite/Calcite.h"
+#include "Calcite/CalciteJNI.h"
 #include "DataMgr/DataMgrBufferProvider.h"
 #include "DataMgr/DataMgrDataProvider.h"
 #include "QueryEngine/ArrowResultSet.h"
@@ -22,19 +22,16 @@
 
 #include "gen-cpp/CalciteServer.h"
 
+#include "ArrowSQLRunner.h"
 #include "ArrowTestHelpers.h"
 #include "SchemaJson.h"
 #include "TestHelpers.h"
 
 #include <gtest/gtest.h>
 
-constexpr int TEST_SCHEMA_ID = 1;
-constexpr int TEST_DB_ID = (TEST_SCHEMA_ID << 24) + 1;
-
-constexpr int CALCITE_PORT = 3278;
-
 using namespace std::string_literals;
 using ArrowTestHelpers::compare_res_data;
+using namespace TestHelpers::ArrowSQLRunner;
 
 namespace {
 
@@ -42,89 +39,33 @@ std::string getFilePath(const std::string& file_name) {
   return std::string("../../Tests/ArrowStorageDataFiles/") + file_name;
 }
 
+ExecutionResult runSqlQuery(const std::string& sql) {
+  return TestHelpers::ArrowSQLRunner::runSqlQuery(
+      sql, CompilationOptions(), ExecutionOptions());
+}
+
 }  // anonymous namespace
 
-class ArrowStorageTestBase {
- protected:
-  static void init() {
-    storage_ = std::make_shared<ArrowStorage>(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-
-    SystemParameters system_parameters;
-    data_mgr_ = std::make_shared<DataMgr>("", system_parameters, nullptr, false);
-    auto* ps_mgr = data_mgr_->getPersistentStorageMgr();
-    ps_mgr->registerDataProvider(TEST_SCHEMA_ID, storage_);
-
-    executor_ = std::make_shared<Executor>(0,
-                                           data_mgr_.get(),
-                                           data_mgr_->getBufferProvider(),
-                                           system_parameters.cuda_block_size,
-                                           system_parameters.cuda_grid_size,
-                                           system_parameters.max_gpu_slab_size,
-                                           "",
-                                           "");
-
-    calcite_ = std::make_shared<Calcite>(-1, CALCITE_PORT, "", 1024, 5000, true, "");
-  }
-
-  static void reset() {
-    data_mgr_.reset();
-    storage_.reset();
-    executor_.reset();
-    calcite_.reset();
-  }
-
-  ExecutionResult runSqlQuery(const std::string& sql) {
-    auto schema_json = schema_to_json(storage_);
-    const auto query_ra =
-        calcite_->process("admin", "test_db", pg_shim(sql), schema_json).plan_result;
-    auto dag =
-        std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, storage_, nullptr);
-    auto ra_executor = RelAlgExecutor(executor_.get(),
-                                      TEST_DB_ID,
-                                      storage_,
-                                      data_mgr_->getDataProvider(),
-                                      std::move(dag));
-    return ra_executor.executeRelAlgQuery(
-        CompilationOptions(), ExecutionOptions(), false, nullptr);
-  }
-
-  static std::shared_ptr<DataMgr> data_mgr_;
-  static std::shared_ptr<ArrowStorage> storage_;
-  static std::shared_ptr<Executor> executor_;
-  static std::shared_ptr<Calcite> calcite_;
-};
-
-std::shared_ptr<DataMgr> ArrowStorageTestBase::data_mgr_;
-
-std::shared_ptr<ArrowStorage> ArrowStorageTestBase::storage_;
-std::shared_ptr<Executor> ArrowStorageTestBase::executor_;
-std::shared_ptr<Calcite> ArrowStorageTestBase::calcite_;
-
-class ArrowStorageSqlTest : public ArrowStorageTestBase,
-                            public ::testing::Test,
+class ArrowStorageSqlTest : public ::testing::Test,
                             public testing::WithParamInterface<std::string> {
  protected:
   static void SetUpTestSuite() {
-    init();
-
     ArrowStorage::TableOptions small_frag_opts;
     small_frag_opts.fragment_size = 3;
-    storage_->importCsvFile(getFilePath("mixed_data.csv"),
-                            "mixed_data",
-                            {{"col1", SQLTypeInfo(kINT)},
-                             {"col2", SQLTypeInfo(kFLOAT)},
-                             {"col3", SQLTypeInfo(kTEXT, false, kENCODING_DICT)},
-                             {"col4", SQLTypeInfo(kTEXT)}});
-    storage_->importCsvFile(getFilePath("mixed_data.csv"),
-                            "mixed_data_multifrag",
-                            {{"col1", SQLTypeInfo(kINT)},
-                             {"col2", SQLTypeInfo(kFLOAT)},
-                             {"col3", SQLTypeInfo(kTEXT, false, kENCODING_DICT)},
-                             {"col4", SQLTypeInfo(kTEXT)}},
-                            small_frag_opts);
+    getStorage()->importCsvFile(getFilePath("mixed_data.csv"),
+                                "mixed_data",
+                                {{"col1", SQLTypeInfo(kINT)},
+                                 {"col2", SQLTypeInfo(kFLOAT)},
+                                 {"col3", SQLTypeInfo(kTEXT, false, kENCODING_DICT)},
+                                 {"col4", SQLTypeInfo(kTEXT)}});
+    getStorage()->importCsvFile(getFilePath("mixed_data.csv"),
+                                "mixed_data_multifrag",
+                                {{"col1", SQLTypeInfo(kINT)},
+                                 {"col2", SQLTypeInfo(kFLOAT)},
+                                 {"col3", SQLTypeInfo(kTEXT, false, kENCODING_DICT)},
+                                 {"col4", SQLTypeInfo(kTEXT)}},
+                                small_frag_opts);
   }
-
-  static void TearDownTestSuite() { reset(); }
 };
 
 TEST_P(ArrowStorageSqlTest, SimpleSelect) {
@@ -184,15 +125,13 @@ INSTANTIATE_TEST_SUITE_P(ArrowStorageSqlTest,
                          ArrowStorageSqlTest,
                          testing::Values("mixed_data"s, "mixed_data_multifrag"s));
 
-class ArrowStorageTaxiTest : public ArrowStorageTestBase, public ::testing::Test {
+class ArrowStorageTaxiTest : public ::testing::Test {
  protected:
   static void SetUpTestSuite() {
-    init();
-
     ArrowStorage::TableOptions table_options;
     ArrowStorage::CsvParseOptions parse_options;
     parse_options.header = false;
-    storage_->importCsvFile(
+    getStorage()->importCsvFile(
         getFilePath("taxi_sample.csv"),
         "trips",
         {{"trip_id", SQLTypeInfo(kINT)},
@@ -249,8 +188,6 @@ class ArrowStorageTaxiTest : public ArrowStorageTestBase, public ::testing::Test
         table_options,
         parse_options);
   }
-
-  static void TearDownTestSuite() { reset(); }
 };
 
 TEST_F(ArrowStorageTaxiTest, TaxiQuery1) {
@@ -294,12 +231,16 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
+  init();
+
   int err{0};
   try {
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
+
+  reset();
 
   return err;
 }

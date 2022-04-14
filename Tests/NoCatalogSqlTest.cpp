@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-#include "Calcite/Calcite.h"
+#include "Calcite/CalciteJNI.h"
 #include "DataMgr/DataMgrBufferProvider.h"
 #include "DataMgr/DataMgrDataProvider.h"
 #include "QueryEngine/ArrowResultSet.h"
@@ -184,8 +184,7 @@ class NoCatalogSqlTest : public ::testing::Test {
   }
 
   static void init_calcite(const std::string& udf_filename) {
-    calcite_ =
-        std::make_shared<Calcite>(-1, CALCITE_PORT, "", 1024, 5000, true, udf_filename);
+    calcite_ = std::make_shared<CalciteJNI>(udf_filename);
   }
 
   static void TearDownTestSuite() {
@@ -235,13 +234,13 @@ class NoCatalogSqlTest : public ::testing::Test {
   static std::shared_ptr<DataMgr> data_mgr_;
   static SchemaProviderPtr schema_provider_;
   static std::shared_ptr<Executor> executor_;
-  static std::shared_ptr<Calcite> calcite_;
+  static std::shared_ptr<CalciteJNI> calcite_;
 };
 
 std::shared_ptr<DataMgr> NoCatalogSqlTest::data_mgr_;
 SchemaProviderPtr NoCatalogSqlTest::schema_provider_;
 std::shared_ptr<Executor> NoCatalogSqlTest::executor_;
-std::shared_ptr<Calcite> NoCatalogSqlTest::calcite_;
+std::shared_ptr<CalciteJNI> NoCatalogSqlTest::calcite_;
 
 TEST_F(NoCatalogSqlTest, SelectSingleColumn) {
   auto res = runSqlQuery("SELECT col_i FROM test1;");
