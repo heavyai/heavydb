@@ -19,13 +19,13 @@
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/RelAlgExecutor.h"
 #include "SchemaMgr/SimpleSchemaProvider.h"
+#include "Shared/ArrowSQLRunner/SchemaJson.h"
 #include "Shared/Globals.h"
 #include "Shared/scope.h"
 
 #include "gen-cpp/CalciteServer.h"
 
 #include "ArrowTestHelpers.h"
-#include "SchemaJson.h"
 #include "TestDataProvider.h"
 #include "TestHelpers.h"
 #include "TestRelAlgDagBuilder.h"

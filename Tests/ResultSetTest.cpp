@@ -21,8 +21,8 @@
  *
  */
 
-#include "ArrowSQLRunner.h"
 #include "ResultSetTestUtils.h"
+#include "Shared/ArrowSQLRunner/ArrowSQLRunner.h"
 #include "TestHelpers.h"
 
 #include "DataMgr/DataMgrDataProvider.h"

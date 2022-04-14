@@ -24,7 +24,7 @@
 
 #include "ArrowSQLRunner.h"
 #include "ArrowTestHelpers.h"
-#include "SchemaJson.h"
+#include "Shared/ArrowSQLRunner/SchemaJson.h"
 #include "TestHelpers.h"
 
 #include <gtest/gtest.h>

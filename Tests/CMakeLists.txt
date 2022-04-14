@@ -6,14 +6,6 @@ add_definitions("-DBASE_PATH=\"${TEST_BASE_PATH}\"")
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/Udf/udf_sample.cpp DESTINATION ${CMAKE_BINARY_DIR}/Tests/Udf)
 
-set(test_helpers_files
-    ArrowSQLRunner.cpp
-    SchemaJson.cpp
-    SQLiteComparator.cpp
-)
-
-add_library(TestHelpers ${test_helpers_files})
-
 add_executable(CodeGeneratorTest CodeGeneratorTest.cpp)
 add_executable(ArrowBasedExecuteTest ArrowBasedExecuteTest.cpp)
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
@@ -76,7 +68,7 @@ endif()
 
 # Tests + Microbenchmarks
 
-set(EXECUTE_TEST_LIBS gtest mapd_thrift fmt::fmt TestHelpers ArrowStorage ${MAPD_LIBRARIES} ${Arrow_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+set(EXECUTE_TEST_LIBS gtest mapd_thrift fmt::fmt ArrowQueryRunner ArrowStorage ${MAPD_LIBRARIES} ${Arrow_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 
 if(ENABLE_L0)
   add_executable(L0MgrExecuteTest L0MgrExecuteTest.cpp)
