@@ -81,7 +81,7 @@ const size_t g_num_rows{10};
 
 class ExecuteTestBase {
  public:
-  static bool gpusPresent() { return gpusPresent(); }
+  static bool hasGpu() { return gpusPresent(); }
 
   static void createEmptyTestTable() {
     createTable("empty_test_table",
@@ -1570,7 +1570,7 @@ class ExecuteTestBase {
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
-  return device_type == ExecutorDeviceType::GPU && !(ExecuteTestBase::gpusPresent());
+  return device_type == ExecutorDeviceType::GPU && !(ExecuteTestBase::hasGpu());
 #else
   return device_type == ExecutorDeviceType::GPU;
 #endif
