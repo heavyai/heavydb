@@ -941,9 +941,10 @@ inline std::ostream& operator<<(std::ostream& os, const SQLTypeInfo& ti) {
 
 Datum StringToDatum(std::string_view s, SQLTypeInfo& ti);
 std::string DatumToString(Datum d, const SQLTypeInfo& ti);
+#endif
+
 int64_t extract_int_type_from_datum(const Datum datum, const SQLTypeInfo& ti);
 double extract_fp_type_from_datum(const Datum datum, const SQLTypeInfo& ti);
-#endif
 
 bool DatumEqual(const Datum, const Datum, const SQLTypeInfo& ti);
 int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
