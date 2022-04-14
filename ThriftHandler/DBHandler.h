@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,8 +96,8 @@
 
 using namespace std::string_literals;
 
-class MapDAggHandler;
-class MapDLeafHandler;
+class HeavyDBAggHandler;
+class HeavyDBLeafHandler;
 
 // Multiple concurrent requests for the same session can occur.  For that reason, each
 // request briefly takes a lock to make a copy of the appropriate SessionInfo object. Then
@@ -110,7 +110,7 @@ namespace dbhandler {
 bool is_info_schema_db(const std::string& db_name);
 
 void check_not_info_schema_db(const std::string& db_name,
-                              bool throw_mapd_exception = false);
+                              bool throw_db_exception = false);
 }  // namespace dbhandler
 
 class TrackingProcessor : public HeavyProcessor {
@@ -625,8 +625,8 @@ class DBHandler : public HeavyIf {
   SystemParameters& system_parameters_;
   std::shared_ptr<QueryEngine> query_engine_;
   std::unique_ptr<RenderHandler> render_handler_;
-  std::unique_ptr<MapDAggHandler> agg_handler_;
-  std::unique_ptr<MapDLeafHandler> leaf_handler_;
+  std::unique_ptr<HeavyDBAggHandler> agg_handler_;
+  std::unique_ptr<HeavyDBLeafHandler> leaf_handler_;
   std::shared_ptr<Calcite> calcite_;
   const bool legacy_syntax_;
 
@@ -1000,8 +1000,8 @@ class DBHandler : public HeavyIf {
                                  std::string query_file_path);
 
   friend class RenderHandler::Impl;
-  friend class MapDAggHandler;
-  friend class MapDLeafHandler;
+  friend class HeavyDBAggHandler;
+  friend class HeavyDBLeafHandler;
 
   std::map<const std::string, const PermissionFuncPtr> permissionFuncMap_ = {
       {"database"s, has_database_permission},

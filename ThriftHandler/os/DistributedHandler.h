@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,12 +25,12 @@
 
 #include "../DBHandler.h"
 
-class MapDAggHandler {
+class HeavyDBAggHandler {
  public:
-  ~MapDAggHandler() {}
+  ~HeavyDBAggHandler() {}
 
  private:
-  MapDAggHandler(DBHandler* mapd_handler) { CHECK(false); }
+  HeavyDBAggHandler(DBHandler* db_handler) { CHECK(false); }
 
   void cluster_execute(TQueryResult& _return,
                        QueryStateProxy,
@@ -45,12 +45,12 @@ class MapDAggHandler {
   friend class DBHandler;
 };
 
-class MapDLeafHandler {
+class HeavyDBLeafHandler {
  public:
-  ~MapDLeafHandler() {}
+  ~HeavyDBLeafHandler() {}
 
  private:
-  MapDLeafHandler(DBHandler* mapd_handler) { CHECK(false); }
+  HeavyDBLeafHandler(DBHandler* db_handler) { CHECK(false); }
 
   int64_t query_get_outer_fragment_count(const TSessionId& session,
                                          const std::string& select_query) {

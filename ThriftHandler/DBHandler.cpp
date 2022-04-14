@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -126,12 +126,12 @@ using Catalog_Namespace::SysCatalog;
 
 #define INVALID_SESSION_ID ""
 
-#define THROW_MAPD_EXCEPTION(errstr) \
-  {                                  \
-    TDBException ex;                 \
-    ex.error_msg = errstr;           \
-    LOG(ERROR) << ex.error_msg;      \
-    throw ex;                        \
+#define THROW_DB_EXCEPTION(errstr) \
+  {                                \
+    TDBException ex;               \
+    ex.error_msg = errstr;         \
+    LOG(ERROR) << ex.error_msg;    \
+    throw ex;                      \
   }
 
 thread_local std::string TrackingProcessor::client_address;
@@ -149,7 +149,7 @@ SessionMap::iterator get_session_from_map(const TSessionId& session,
                                           SessionMap& session_map) {
   auto session_it = session_map.find(session);
   if (session_it == session_map.end()) {
-    THROW_MAPD_EXCEPTION("Session not valid.");
+    THROW_DB_EXCEPTION("Session not valid.");
   }
   return session_it;
 }
@@ -172,7 +172,7 @@ SessionMap::iterator DBHandler::get_session_it_unsafe(
     mapd_unique_lock<mapd_shared_mutex> write_lock(sessions_mutex_);
     auto session_it2 = get_session_from_map(session, sessions_);
     disconnect_impl(session_it2, write_lock);
-    THROW_MAPD_EXCEPTION(e.what());
+    THROW_DB_EXCEPTION(e.what());
   }
   return session_it;
 }
@@ -186,7 +186,7 @@ SessionMap::iterator DBHandler::get_session_it_unsafe(
     check_session_exp_unsafe(session_it);
   } catch (const ForceDisconnect& e) {
     disconnect_impl(session_it, write_lock);
-    THROW_MAPD_EXCEPTION(e.what());
+    THROW_DB_EXCEPTION(e.what());
   }
   return session_it;
 }
@@ -221,7 +221,7 @@ void DBHandler::expire_idle_sessions_unsafe(
     write_lock.unlock();
     for (auto session_id : expired_sessions) {
       // NOTE: the render disconnect is done after the session lock is released to
-      // avoid a deadlock. See: https://omnisci.atlassian.net/browse/BE-3324
+      // avoid a deadlock. See: https://heavyai.atlassian.net/browse/BE-3324
       // This out-of-scope solution is a compromise for now until a better session
       // handling/locking mechanism is developed for the renderer. Note as well that the
       // session_id cannot be immediately reused. If a render request were to slip in
@@ -307,7 +307,7 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
     , clang_options_(clang_options)
 
 {
-  LOG(INFO) << "OmniSci Server " << MAPD_RELEASE;
+  LOG(INFO) << "HeavyDB Server " << MAPD_RELEASE;
   initialize(is_new_db);
 }
 
@@ -315,7 +315,7 @@ void DBHandler::initialize(const bool is_new_db) {
   if (!initialized_) {
     initialized_ = true;
   } else {
-    THROW_MAPD_EXCEPTION(
+    THROW_DB_EXCEPTION(
         "Server already initialized; service restart required to activate any new "
         "entitlements.");
     return;
@@ -473,13 +473,13 @@ void DBHandler::initialize(const bool is_new_db) {
 
   if (leaf_aggregator_.leafCount() > 0) {
     try {
-      agg_handler_.reset(new MapDAggHandler(this));
+      agg_handler_.reset(new HeavyDBAggHandler(this));
     } catch (const std::exception& e) {
       LOG(ERROR) << "Distributed aggregator support disabled: " << e.what();
     }
   } else if (g_cluster) {
     try {
-      leaf_handler_.reset(new MapDLeafHandler(this));
+      leaf_handler_.reset(new HeavyDBLeafHandler(this));
     } catch (const std::exception& e) {
       LOG(ERROR) << "Distributed leaf support disabled: " << e.what();
     }
@@ -499,7 +499,7 @@ DBHandler::~DBHandler() {
 
 void DBHandler::check_read_only(const std::string& str) {
   if (DBHandler::read_only_) {
-    THROW_MAPD_EXCEPTION(str + " disabled: server running in read-only mode.");
+    THROW_DB_EXCEPTION(str + " disabled: server running in read-only mode.");
   }
 }
 
@@ -558,7 +558,7 @@ void DBHandler::internal_connect(TSessionId& session,
     cat =
         SysCatalog::instance().login(dbname2, username2, std::string(), user_meta, false);
   } catch (std::exception& e) {
-    THROW_MAPD_EXCEPTION(e.what());
+    THROW_DB_EXCEPTION(e.what());
   }
 
   DBObject dbObject(dbname2, DatabaseDBObjectType);
@@ -567,8 +567,8 @@ void DBHandler::internal_connect(TSessionId& session,
   std::vector<DBObject> dbObjects;
   dbObjects.push_back(dbObject);
   if (!SysCatalog::instance().checkPrivileges(user_meta, dbObjects)) {
-    THROW_MAPD_EXCEPTION("Unauthorized Access: user " + user_meta.userLoggable() +
-                         " is not allowed to access database " + dbname2 + ".");
+    THROW_DB_EXCEPTION("Unauthorized Access: user " + user_meta.userLoggable() +
+                       " is not allowed to access database " + dbname2 + ".");
   }
   connect_impl(session, std::string(), dbname2, user_meta, cat, stdlog);
 }
@@ -580,7 +580,7 @@ bool DBHandler::isAggregator() const {
 void DBHandler::krb5_connect(TKrb5Session& session,
                              const std::string& inputToken,
                              const std::string& dbname) {
-  THROW_MAPD_EXCEPTION("Unauthrorized Access. Kerberos login not supported");
+  THROW_DB_EXCEPTION("Unauthrorized Access. Kerberos login not supported");
 }
 
 void DBHandler::connect(TSessionId& session,
@@ -598,7 +598,7 @@ void DBHandler::connect(TSessionId& session,
         dbname2, username2, passwd, user_meta, !super_user_rights_);
   } catch (std::exception& e) {
     stdlog.appendNameValuePairs("user", username, "db", dbname, "exception", e.what());
-    THROW_MAPD_EXCEPTION(e.what());
+    THROW_DB_EXCEPTION(e.what());
   }
 
   DBObject dbObject(dbname2, DatabaseDBObjectType);
@@ -609,8 +609,8 @@ void DBHandler::connect(TSessionId& session,
   if (!SysCatalog::instance().checkPrivileges(user_meta, dbObjects)) {
     stdlog.appendNameValuePairs(
         "user", username, "db", dbname, "exception", "Missing Privileges");
-    THROW_MAPD_EXCEPTION("Unauthorized Access: user " + user_meta.userLoggable() +
-                         " is not allowed to access database " + dbname2 + ".");
+    THROW_DB_EXCEPTION("Unauthorized Access: user " + user_meta.userLoggable() +
+                       " is not allowed to access database " + dbname2 + ".");
   }
   connect_impl(session, passwd, dbname2, user_meta, cat, stdlog);
 
@@ -650,7 +650,7 @@ void DBHandler::connect_impl(TSessionId& session,
     expire_idle_sessions_unsafe(write_lock);
     if (system_parameters_.num_sessions > 0 &&
         sessions_.size() + 1 > static_cast<size_t>(system_parameters_.num_sessions)) {
-      THROW_MAPD_EXCEPTION("Too many active sessions");
+      THROW_DB_EXCEPTION("Too many active sessions");
     }
   }
   {
@@ -735,7 +735,7 @@ void DBHandler::switch_database(const TSessionId& session, const std::string& db
       return;
     }
   } catch (std::exception& e) {
-    THROW_MAPD_EXCEPTION(e.what());
+    THROW_DB_EXCEPTION(e.what());
   }
 }
 
@@ -755,7 +755,7 @@ void DBHandler::clone_session(TSessionId& session2, const TSessionId& session1) 
       return;
     }
   } catch (std::exception& e) {
-    THROW_MAPD_EXCEPTION(e.what());
+    THROW_DB_EXCEPTION(e.what());
   }
 }
 
@@ -1266,13 +1266,12 @@ void DBHandler::sql_execute(TQueryResult& _return,
     };
 
     if (first_n >= 0 && at_most_n >= 0) {
-      THROW_MAPD_EXCEPTION(
-          std::string("At most one of first_n and at_most_n can be set"));
+      THROW_DB_EXCEPTION(std::string("At most one of first_n and at_most_n can be set"));
     }
 
     if (leaf_aggregator_.leafCount() > 0) {
       if (!agg_handler_) {
-        THROW_MAPD_EXCEPTION("Distributed support is disabled.");
+        THROW_DB_EXCEPTION("Distributed support is disabled.");
       }
       _return.total_time_ms = measure<>::execution([&]() {
         agg_handler_->cluster_execute(_return,
@@ -1310,13 +1309,13 @@ void DBHandler::sql_execute(TQueryResult& _return,
     VLOG(1) << "Table Data Locks:\n" << lockmgr::TableDataLockMgr::instance();
   } catch (const std::exception& e) {
     if (strstr(e.what(), "java.lang.NullPointerException")) {
-      THROW_MAPD_EXCEPTION("query failed from broken view or other schema related issue");
+      THROW_DB_EXCEPTION("query failed from broken view or other schema related issue");
     } else if (strstr(e.what(), "SQL Error: Encountered \";\"")) {
-      THROW_MAPD_EXCEPTION("multiple SQL statements not allowed");
+      THROW_DB_EXCEPTION("multiple SQL statements not allowed");
     } else if (strstr(e.what(), "SQL Error: Encountered \"<EOF>\" at line 0, column 0")) {
-      THROW_MAPD_EXCEPTION("empty SQL statment not allowed");
+      THROW_DB_EXCEPTION("empty SQL statment not allowed");
     } else {
-      THROW_MAPD_EXCEPTION(e.what());
+      THROW_DB_EXCEPTION(e.what());
     }
   }
 }
@@ -1345,8 +1344,7 @@ void DBHandler::sql_execute(ExecutionResult& _return,
     };
 
     if (first_n >= 0 && at_most_n >= 0) {
-      THROW_MAPD_EXCEPTION(
-          std::string("At most one of first_n and at_most_n can be set"));
+      THROW_DB_EXCEPTION(std::string("At most one of first_n and at_most_n can be set"));
     }
     auto total_time_ms = measure<>::execution([&]() {
       DBHandler::sql_execute_impl(_return,
@@ -1370,13 +1368,13 @@ void DBHandler::sql_execute(ExecutionResult& _return,
     VLOG(1) << "Table Data Locks:\n" << lockmgr::TableDataLockMgr::instance();
   } catch (const std::exception& e) {
     if (strstr(e.what(), "java.lang.NullPointerException")) {
-      THROW_MAPD_EXCEPTION("query failed from broken view or other schema related issue");
+      THROW_DB_EXCEPTION("query failed from broken view or other schema related issue");
     } else if (strstr(e.what(), "SQL Error: Encountered \";\"")) {
-      THROW_MAPD_EXCEPTION("multiple SQL statements not allowed");
+      THROW_DB_EXCEPTION("multiple SQL statements not allowed");
     } else if (strstr(e.what(), "SQL Error: Encountered \"<EOF>\" at line 0, column 0")) {
-      THROW_MAPD_EXCEPTION("empty SQL statment not allowed");
+      THROW_DB_EXCEPTION("empty SQL statment not allowed");
     } else {
-      THROW_MAPD_EXCEPTION(e.what());
+      THROW_DB_EXCEPTION(e.what());
     }
   }
 }
@@ -1428,23 +1426,23 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
 
   if (results_device_type == TDeviceType::GPU) {
     if (executor_device_type != ExecutorDeviceType::GPU) {
-      THROW_MAPD_EXCEPTION(std::string("GPU mode is not allowed in this session"));
+      THROW_DB_EXCEPTION(std::string("GPU mode is not allowed in this session"));
     }
     if (!data_mgr_->gpusPresent()) {
-      THROW_MAPD_EXCEPTION(std::string("No GPU is available in this server"));
+      THROW_DB_EXCEPTION(std::string("No GPU is available in this server"));
     }
     if (device_id < 0 || device_id >= data_mgr_->getCudaMgr()->getDeviceCount()) {
-      THROW_MAPD_EXCEPTION(
+      THROW_DB_EXCEPTION(
           std::string("Invalid device_id or unavailable GPU with this ID"));
     }
   }
   ParserWrapper pw{query_str};
   if (pw.getQueryType() != ParserWrapper::QueryType::Read) {
-    THROW_MAPD_EXCEPTION(std::string(
+    THROW_DB_EXCEPTION(std::string(
         "Only read queries supported for the Arrow sql_execute_df endpoint."));
   }
   if (pw.isCalciteExplain()) {
-    THROW_MAPD_EXCEPTION(std::string(
+    THROW_DB_EXCEPTION(std::string(
         "Explain is currently unsupported by the Arrow sql_execute_df endpoint."));
   }
 
@@ -1571,7 +1569,7 @@ void DBHandler::sql_validate(TRowDescriptor& _return,
     _return = fixup_row_descriptor(result.row_set.row_desc,
                                    query_state->getConstSessionInfo()->getCatalog());
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string(e.what()));
+    THROW_DB_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -1817,10 +1815,10 @@ bool DBHandler::has_role(const TSessionId& sessionId,
   if (!current_user.isSuper) {
     if (const auto* user = SysCatalog::instance().getUserGrantee(granteeName);
         user && current_user.userName != granteeName) {
-      THROW_MAPD_EXCEPTION("Only super users can check other user's roles.");
+      THROW_DB_EXCEPTION("Only super users can check other user's roles.");
     } else if (!SysCatalog::instance().isRoleGrantedToGrantee(
                    current_user.userName, granteeName, true)) {
-      THROW_MAPD_EXCEPTION(
+      THROW_DB_EXCEPTION(
           "Only super users can check roles assignment that have not been directly "
           "granted to a user.");
     }
@@ -1894,7 +1892,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
 bool DBHandler::has_database_permission(const AccessPrivileges& privs,
                                         const TDBObjectPermissions& permissions) {
   if (!permissions.__isset.database_permissions_) {
-    THROW_MAPD_EXCEPTION("Database permissions not set for check.")
+    THROW_DB_EXCEPTION("Database permissions not set for check.")
   }
   auto perms = permissions.database_permissions_;
   if ((perms.create_ && !privs.hasPermission(DatabasePrivileges::CREATE_DATABASE)) ||
@@ -1911,7 +1909,7 @@ bool DBHandler::has_database_permission(const AccessPrivileges& privs,
 bool DBHandler::has_table_permission(const AccessPrivileges& privs,
                                      const TDBObjectPermissions& permissions) {
   if (!permissions.__isset.table_permissions_) {
-    THROW_MAPD_EXCEPTION("Table permissions not set for check.")
+    THROW_DB_EXCEPTION("Table permissions not set for check.")
   }
   auto perms = permissions.table_permissions_;
   if ((perms.create_ && !privs.hasPermission(TablePrivileges::CREATE_TABLE)) ||
@@ -1931,7 +1929,7 @@ bool DBHandler::has_table_permission(const AccessPrivileges& privs,
 bool DBHandler::has_dashboard_permission(const AccessPrivileges& privs,
                                          const TDBObjectPermissions& permissions) {
   if (!permissions.__isset.dashboard_permissions_) {
-    THROW_MAPD_EXCEPTION("Dashboard permissions not set for check.")
+    THROW_DB_EXCEPTION("Dashboard permissions not set for check.")
   }
   auto perms = permissions.dashboard_permissions_;
   if ((perms.create_ && !privs.hasPermission(DashboardPrivileges::CREATE_DASHBOARD)) ||
@@ -1947,7 +1945,7 @@ bool DBHandler::has_dashboard_permission(const AccessPrivileges& privs,
 bool DBHandler::has_view_permission(const AccessPrivileges& privs,
                                     const TDBObjectPermissions& permissions) {
   if (!permissions.__isset.view_permissions_) {
-    THROW_MAPD_EXCEPTION("View permissions not set for check.")
+    THROW_DB_EXCEPTION("View permissions not set for check.")
   }
   auto perms = permissions.view_permissions_;
   if ((perms.create_ && !privs.hasPermission(ViewPrivileges::CREATE_VIEW)) ||
@@ -1987,7 +1985,7 @@ bool DBHandler::has_object_privilege(const TSessionId& sessionId,
   auto const& current_user = session_ptr->get_currentUser();
   if (!current_user.isSuper && !SysCatalog::instance().isRoleGrantedToGrantee(
                                    current_user.userName, granteeName, false)) {
-    THROW_MAPD_EXCEPTION(
+    THROW_DB_EXCEPTION(
         "Users except superusers can only check privileges for self or roles granted "
         "to "
         "them.")
@@ -1999,7 +1997,7 @@ bool DBHandler::has_object_privilege(const TSessionId& sessionId,
   }
   Grantee* grnt = SysCatalog::instance().getGrantee(granteeName);
   if (!grnt) {
-    THROW_MAPD_EXCEPTION("User or Role " + granteeName + " does not exist.")
+    THROW_DB_EXCEPTION("User or Role " + granteeName + " does not exist.")
   }
   DBObjectType type;
   std::string func_name;
@@ -2025,7 +2023,7 @@ bool DBHandler::has_object_privilege(const TSessionId& sessionId,
       func_name = "server";
       break;
     default:
-      THROW_MAPD_EXCEPTION("Invalid object type (" + std::to_string(objectType) + ").");
+      THROW_DB_EXCEPTION("Invalid object type (" + std::to_string(objectType) + ").");
   }
   DBObject req_object(objectName, type);
   req_object.loadKey(cat);
@@ -2063,7 +2061,7 @@ void DBHandler::get_db_objects_for_grantee(std::vector<TDBObject>& TDBObjectsFor
       TDBObjectsForRole.push_back(tdbObject);
     }
   } else {
-    THROW_MAPD_EXCEPTION("User or role " + roleName + " does not exist.");
+    THROW_DB_EXCEPTION("User or role " + roleName + " does not exist.");
   }
 }
 
@@ -2091,8 +2089,8 @@ void DBHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
       object_type = DBObjectType::ServerDBObjectType;
       break;
     default:
-      THROW_MAPD_EXCEPTION("Failed to get object privileges for " + objectName +
-                           ": unknown object type (" + std::to_string(type) + ").");
+      THROW_DB_EXCEPTION("Failed to get object privileges for " + objectName +
+                         ": unknown object type (" + std::to_string(type) + ").");
   }
   DBObject object_to_find(objectName, object_type);
 
@@ -2116,7 +2114,7 @@ void DBHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
     }
     object_to_find.loadKey(session_ptr->getCatalog());
   } catch (const std::exception&) {
-    THROW_MAPD_EXCEPTION("Object with name " + objectName + " does not exist.");
+    THROW_DB_EXCEPTION("Object with name " + objectName + " does not exist.");
   }
 
   // object type on database level
@@ -2165,7 +2163,7 @@ void DBHandler::getAllRolesForUserImpl(
       if (session_ptr->get_currentUser().userName == granteeName) {
         roles = grantee->getRoles(/*only_direct=*/!effective);
       } else {
-        THROW_MAPD_EXCEPTION(
+        THROW_DB_EXCEPTION(
             "Only a superuser is authorized to request list of roles granted to another "
             "user.");
       }
@@ -2177,11 +2175,11 @@ void DBHandler::getAllRolesForUserImpl(
               session_ptr->get_currentUser().userName, granteeName, false)) {
         roles = grantee->getRoles(/*only_direct=*/!effective);
       } else {
-        THROW_MAPD_EXCEPTION("A user can check only roles granted to him.");
+        THROW_DB_EXCEPTION("A user can check only roles granted to him.");
       }
     }
   } else {
-    THROW_MAPD_EXCEPTION("Grantee " + granteeName + " does not exist.");
+    THROW_DB_EXCEPTION("Grantee " + granteeName + " does not exist.");
   }
 }
 
@@ -2244,7 +2242,7 @@ void DBHandler::get_result_row_for_pixel(
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getSessionInfo();
   if (!render_handler_) {
-    THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
+    THROW_DB_EXCEPTION("Backend rendering is disabled.");
   }
 
   try {
@@ -2257,7 +2255,7 @@ void DBHandler::get_result_row_for_pixel(
                                               pixel_radius,
                                               nonce);
   } catch (std::exception& e) {
-    THROW_MAPD_EXCEPTION(e.what());
+    THROW_DB_EXCEPTION(e.what());
   }
 }
 
@@ -2292,7 +2290,7 @@ TColumnType DBHandler::populateThriftColumnType(const Catalog* cat,
     }
     auto dd = cat->getMetadataForDict(dict_id, false);
     if (!dd) {
-      THROW_MAPD_EXCEPTION("Dictionary doesn't exist");
+      THROW_DB_EXCEPTION("Dictionary doesn't exist");
     }
     col_type.col_type.comp_param = dd->dictNBits;
   } else {
@@ -2430,7 +2428,7 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
                    ? &session_info->getCatalog()
                    : SysCatalog::instance().getCatalog(database_name).get();
     if (!cat) {
-      THROW_MAPD_EXCEPTION("Database " + database_name + " does not exist.");
+      THROW_DB_EXCEPTION("Database " + database_name + " does not exist.");
     }
     const auto td_with_lock =
         lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
@@ -2521,7 +2519,7 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
     }
 
   } catch (const std::runtime_error& e) {
-    THROW_MAPD_EXCEPTION(std::string(e.what()));
+    THROW_DB_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -2534,7 +2532,7 @@ void DBHandler::get_link_view(TFrontendView& _return,
   auto const& cat = session_ptr->getCatalog();
   auto ld = cat.getMetadataForLink(std::to_string(cat.getCurrentDB().dbId) + link);
   if (!ld) {
-    THROW_MAPD_EXCEPTION("Link " + link + " is not valid.");
+    THROW_DB_EXCEPTION("Link " + link + " is not valid.");
   }
   _return.view_state = ld->viewState;
   _return.view_name = ld->link;
@@ -2569,7 +2567,7 @@ void DBHandler::get_tables_impl(std::vector<std::string>& table_names,
   } else {
     auto request_cat = SysCatalog::instance().getCatalog(database_name);
     if (!request_cat) {
-      THROW_MAPD_EXCEPTION("Database " + database_name + " does not exist.");
+      THROW_DB_EXCEPTION("Database " + database_name + " does not exist.");
     }
     table_names = request_cat->getTableNamesForUser(session_info.get_currentUser(),
                                                     get_tables_type);
@@ -2693,7 +2691,7 @@ void DBHandler::get_tables_meta_impl(std::vector<TTableMeta>& _return,
           continue;
         }
       } catch (const std::runtime_error& e) {
-        THROW_MAPD_EXCEPTION(e.what());
+        THROW_DB_EXCEPTION(e.what());
       }
     }
 
@@ -2720,7 +2718,7 @@ void DBHandler::get_tables_meta(std::vector<TTableMeta>& _return,
   try {
     get_tables_meta_impl(_return, query_state->createQueryStateProxy(), *session_ptr);
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(e.what());
+    THROW_DB_EXCEPTION(e.what());
   }
 }
 
@@ -2751,12 +2749,12 @@ void DBHandler::clear_gpu_memory(const TSessionId& session) {
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!session_ptr->get_currentUser().isSuper) {
-    THROW_MAPD_EXCEPTION("Superuser privilege is required to run clear_gpu_memory");
+    THROW_DB_EXCEPTION("Superuser privilege is required to run clear_gpu_memory");
   }
   try {
     Executor::clearMemory(Data_Namespace::MemoryLevel::GPU_LEVEL);
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(e.what());
+    THROW_DB_EXCEPTION(e.what());
   }
   if (render_handler_) {
     render_handler_->clear_gpu_memory();
@@ -2772,12 +2770,12 @@ void DBHandler::clear_cpu_memory(const TSessionId& session) {
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!session_ptr->get_currentUser().isSuper) {
-    THROW_MAPD_EXCEPTION("Superuser privilege is required to run clear_cpu_memory");
+    THROW_DB_EXCEPTION("Superuser privilege is required to run clear_cpu_memory");
   }
   try {
     Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL);
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(e.what());
+    THROW_DB_EXCEPTION(e.what());
   }
   if (render_handler_) {
     render_handler_->clear_cpu_memory();
@@ -2793,7 +2791,7 @@ void DBHandler::clearRenderMemory(const TSessionId& session) {
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!session_ptr->get_currentUser().isSuper) {
-    THROW_MAPD_EXCEPTION("Superuser privilege is required to run clear_render_memory");
+    THROW_DB_EXCEPTION("Superuser privilege is required to run clear_render_memory");
   }
   if (render_handler_) {
     render_handler_->clear_cpu_memory();
@@ -2929,7 +2927,7 @@ void check_valid_column_names(const std::list<const ColumnDescriptor*>& descs,
   for (const auto& name : column_names) {
     auto lower_name = to_lower(name);
     if (unique_names.find(lower_name) != unique_names.end()) {
-      THROW_MAPD_EXCEPTION("Column " + name + " is mentioned multiple times");
+      THROW_DB_EXCEPTION("Column " + name + " is mentioned multiple times");
     } else {
       unique_names.insert(lower_name);
     }
@@ -2941,7 +2939,7 @@ void check_valid_column_names(const std::list<const ColumnDescriptor*>& descs,
     }
   }
   if (!unique_names.empty()) {
-    THROW_MAPD_EXCEPTION("Column " + *unique_names.begin() + " does not exist");
+    THROW_DB_EXCEPTION("Column " + *unique_names.begin() + " does not exist");
   }
 }
 
@@ -2975,8 +2973,8 @@ std::vector<int> column_ids_by_names(const std::list<const ColumnDescriptor*>& d
           if (!cd->columnType.get_notnull()) {
             desc_to_column_ids.push_back(-1);
           } else {
-            THROW_MAPD_EXCEPTION("Column '" + cd->columnName +
-                                 "' cannot be omitted due to NOT NULL constraint");
+            THROW_DB_EXCEPTION("Column '" + cd->columnName +
+                               "' cannot be omitted due to NOT NULL constraint");
           }
         }
       }
@@ -3012,7 +3010,7 @@ void DBHandler::fillGeoColumns(
                                                   false)) {
     std::ostringstream oss;
     oss << "Invalid geometry in column " << cd->columnName;
-    THROW_MAPD_EXCEPTION(oss.str());
+    THROW_DB_EXCEPTION(oss.str());
   }
 
   // start or continue assigning render groups for poly columns?
@@ -3132,7 +3130,7 @@ void DBHandler::load_table_binary(const TSessionId& session,
     auto session_ptr = stdlog.getConstSessionInfo();
 
     if (rows.empty()) {
-      THROW_MAPD_EXCEPTION("No rows to insert");
+      THROW_DB_EXCEPTION("No rows to insert");
     }
 
     const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
@@ -3184,10 +3182,10 @@ void DBHandler::load_table_binary(const TSessionId& session,
     auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
         session_ptr->getCatalog(), table_name);
     if (!loader->load(import_buffers, rows.size(), session_ptr.get())) {
-      THROW_MAPD_EXCEPTION(loader->getErrorMessage());
+      THROW_DB_EXCEPTION(loader->getErrorMessage());
     }
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string(e.what()));
+    THROW_DB_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -3201,7 +3199,7 @@ DBHandler::prepare_loader_generic(
     const std::vector<std::string>& column_names,
     std::string load_type) {
   if (num_cols == 0) {
-    THROW_MAPD_EXCEPTION("No columns to insert");
+    THROW_DB_EXCEPTION("No columns to insert");
   }
   check_read_only(load_type);
   auto& cat = session_info.getCatalog();
@@ -3240,7 +3238,7 @@ DBHandler::prepare_loader_generic(
                                ")");
     }
   } else if (num_cols != column_names.size()) {
-    THROW_MAPD_EXCEPTION(
+    THROW_DB_EXCEPTION(
         "Number of columns specified does not match the "
         "number of columns given (" +
         std::to_string(num_cols) + " vs " + std::to_string(column_names.size()) + ")");
@@ -3301,7 +3299,7 @@ void DBHandler::loadTableBinaryColumnarInternal(
   if (assign_render_groups_mode == AssignRenderGroupsMode::kCleanUp) {
     // throw if the user tries to pass column data on a clean-up
     if (cols.size()) {
-      THROW_MAPD_EXCEPTION(
+      THROW_DB_EXCEPTION(
           "load_table_binary_columnar_polys: Column data must be empty when called with "
           "assign_render_groups = false");
     }
@@ -3357,7 +3355,7 @@ void DBHandler::loadTableBinaryColumnarInternal(
           oss << "load_table_binary_columnar: Inconsistent number of rows in column "
               << cd->columnName << " ,  expecting " << num_rows << " rows, column "
               << col_idx << " has " << col_rows << " rows";
-          THROW_MAPD_EXCEPTION(oss.str());
+          THROW_DB_EXCEPTION(oss.str());
         }
         // Advance to the next column in the table
         col_idx++;
@@ -3387,7 +3385,7 @@ void DBHandler::loadTableBinaryColumnarInternal(
     std::ostringstream oss;
     oss << "load_table_binary_columnar: Input exception thrown: " << e.what()
         << ". Issue at column : " << (col_idx + 1) << ". Import aborted";
-    THROW_MAPD_EXCEPTION(oss.str());
+    THROW_DB_EXCEPTION(oss.str());
   }
   fillMissingBuffers(session,
                      session_ptr->getCatalog(),
@@ -3400,7 +3398,7 @@ void DBHandler::loadTableBinaryColumnarInternal(
   auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
       session_ptr->getCatalog(), table_name);
   if (!loader->load(import_buffers, num_rows, session_ptr.get())) {
-    THROW_MAPD_EXCEPTION(loader->getErrorMessage());
+    THROW_DB_EXCEPTION(loader->getErrorMessage());
   }
 }
 
@@ -3459,7 +3457,7 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session,
   RecordBatchVector batches = loadArrowStream(arrow_stream);
   // Assuming have one batch for now
   if (batches.size() != 1) {
-    THROW_MAPD_EXCEPTION("Expected a single Arrow record batch. Import aborted");
+    THROW_DB_EXCEPTION("Expected a single Arrow record batch. Import aborted");
   }
 
   std::shared_ptr<arrow::RecordBatch> batch = batches[0];
@@ -3501,7 +3499,7 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session,
                << ". Issue at column : " << (col_idx + 1) << ". Import aborted";
     // TODO(tmostak): Go row-wise on binary columnar import to be consistent with our
     // other import paths
-    THROW_MAPD_EXCEPTION(e.what());
+    THROW_DB_EXCEPTION(e.what());
   }
   fillMissingBuffers(session,
                      session_ptr->getCatalog(),
@@ -3514,7 +3512,7 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session,
   auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
       session_ptr->getCatalog(), table_name);
   if (!loader->load(import_buffers, num_rows, session_ptr.get())) {
-    THROW_MAPD_EXCEPTION(loader->getErrorMessage());
+    THROW_DB_EXCEPTION(loader->getErrorMessage());
   }
 }
 
@@ -3528,7 +3526,7 @@ void DBHandler::load_table(const TSessionId& session,
     auto session_ptr = stdlog.getConstSessionInfo();
 
     if (rows.empty()) {
-      THROW_MAPD_EXCEPTION("No rows to insert");
+      THROW_DB_EXCEPTION("No rows to insert");
     }
 
     const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
@@ -3581,7 +3579,7 @@ void DBHandler::load_table(const TSessionId& session,
         LOG(ERROR) << "Input exception thrown: " << e.what()
                    << ". Row discarded, issue at column : " << (col_idx + 1)
                    << " data :" << row;
-        THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+        THROW_DB_EXCEPTION(std::string("Exception: ") + e.what());
       }
     }
     // do batch filling of geo columns separately
@@ -3619,7 +3617,7 @@ void DBHandler::load_table(const TSessionId& session,
         LOG(ERROR) << "Input exception thrown: " << e.what()
                    << ". Row discarded, issue at column : " << (col_idx + 1)
                    << " data :" << row;
-        THROW_MAPD_EXCEPTION(e.what());
+        THROW_DB_EXCEPTION(e.what());
       }
     }
     fillMissingBuffers(session,
@@ -3633,11 +3631,11 @@ void DBHandler::load_table(const TSessionId& session,
     auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
         session_ptr->getCatalog(), table_name);
     if (!loader->load(import_buffers, rows_completed, session_ptr.get())) {
-      THROW_MAPD_EXCEPTION(loader->getErrorMessage());
+      THROW_DB_EXCEPTION(loader->getErrorMessage());
     }
 
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string(e.what()));
+    THROW_DB_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -3742,10 +3740,10 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
       copy_params.source_type = import_export::SourceType::kParquetFile;
       break;
 #else
-      THROW_MAPD_EXCEPTION("Parquet not supported");
+      THROW_DB_EXCEPTION("Parquet not supported");
 #endif
     case TSourceType::ODBC:
-      THROW_MAPD_EXCEPTION("ODBC source not supported");
+      THROW_DB_EXCEPTION("ODBC source not supported");
     case TSourceType::RASTER_FILE:
       copy_params.source_type = import_export::SourceType::kRasterFile;
       break;
@@ -3761,8 +3759,8 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
       copy_params.geo_coords_encoding = kENCODING_NONE;
       break;
     default:
-      THROW_MAPD_EXCEPTION("Invalid geo_coords_encoding in TCopyParams: " +
-                           std::to_string((int)cp.geo_coords_encoding));
+      THROW_DB_EXCEPTION("Invalid geo_coords_encoding in TCopyParams: " +
+                         std::to_string((int)cp.geo_coords_encoding));
   }
   copy_params.geo_coords_comp_param = cp.geo_coords_comp_param;
   switch (cp.geo_coords_type) {
@@ -3773,8 +3771,8 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
       copy_params.geo_coords_type = kGEOMETRY;
       break;
     default:
-      THROW_MAPD_EXCEPTION("Invalid geo_coords_type in TCopyParams: " +
-                           std::to_string((int)cp.geo_coords_type));
+      THROW_DB_EXCEPTION("Invalid geo_coords_type in TCopyParams: " +
+                         std::to_string((int)cp.geo_coords_type));
   }
   switch (cp.geo_coords_srid) {
     case 4326:
@@ -3783,8 +3781,8 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
       copy_params.geo_coords_srid = cp.geo_coords_srid;
       break;
     default:
-      THROW_MAPD_EXCEPTION("Invalid geo_coords_srid in TCopyParams (" +
-                           std::to_string((int)cp.geo_coords_srid));
+      THROW_DB_EXCEPTION("Invalid geo_coords_srid in TCopyParams (" +
+                         std::to_string((int)cp.geo_coords_srid));
   }
   copy_params.sanitize_column_names = cp.sanitize_column_names;
   copy_params.geo_layer_name = cp.geo_layer_name;
@@ -3819,8 +3817,8 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
   }
   copy_params.raster_import_bands = cp.raster_import_bands;
   if (cp.raster_scanlines_per_thread < 0) {
-    THROW_MAPD_EXCEPTION("Invalid raster_scanlines_per_thread in TCopyParams (" +
-                         std::to_string((int)cp.raster_scanlines_per_thread));
+    THROW_DB_EXCEPTION("Invalid raster_scanlines_per_thread in TCopyParams (" +
+                       std::to_string((int)cp.raster_scanlines_per_thread));
   } else {
     copy_params.raster_scanlines_per_thread = cp.raster_scanlines_per_thread;
   }
@@ -3991,14 +3989,14 @@ void add_vsi_network_prefix(std::string& path) {
   // modify head of filename based on source location
   if (boost::istarts_with(path, "http://") || boost::istarts_with(path, "https://")) {
     if (!gdal_network) {
-      THROW_MAPD_EXCEPTION(
+      THROW_DB_EXCEPTION(
           "HTTP geo file import not supported! Update to GDAL 2.2 or later!");
     }
     // invoke GDAL CURL virtual file reader
     path = "/vsicurl/" + path;
   } else if (boost::istarts_with(path, "s3://")) {
     if (!gdal_network) {
-      THROW_MAPD_EXCEPTION(
+      THROW_DB_EXCEPTION(
           "S3 geo file import not supported! Update to GDAL 2.2 or later!");
     }
     // invoke GDAL S3 virtual file reader
@@ -4183,7 +4181,7 @@ void DBHandler::detect_column_types(TDetectResult& _return,
         // find the archive file
         add_vsi_network_prefix(file_name);
         if (!import_export::Importer::gdalFileExists(file_name, copy_params)) {
-          THROW_MAPD_EXCEPTION("Archive does not exist: " + file_name_in);
+          THROW_DB_EXCEPTION("Archive does not exist: " + file_name_in);
         }
         // find geo file in archive
         add_vsi_archive_prefix(file_name);
@@ -4217,14 +4215,14 @@ void DBHandler::detect_column_types(TDetectResult& _return,
           copy_params.source_type == import_export::SourceType::kRasterFile) {
         // check for geo or raster file
         if (!import_export::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
-          THROW_MAPD_EXCEPTION("File or directory \"" + file_path.string() +
-                               "\" does not exist.")
+          THROW_DB_EXCEPTION("File or directory \"" + file_path.string() +
+                             "\" does not exist.")
         }
       } else {
         // check for regular file
         if (!shared::file_or_glob_path_exists(file_path.string())) {
-          THROW_MAPD_EXCEPTION("File or directory \"" + file_path.string() +
-                               "\" does not exist.");
+          THROW_DB_EXCEPTION("File or directory \"" + file_path.string() +
+                             "\" does not exist.");
         }
       }
     }
@@ -4320,7 +4318,7 @@ void DBHandler::detect_column_types(TDetectResult& _return,
       _return.copy_params = copyparams_to_thrift(copy_params);
     }
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION("detect_column_types error: " + std::string(e.what()));
+    THROW_DB_EXCEPTION("detect_column_types error: " + std::string(e.what()));
   }
 }
 
@@ -4343,7 +4341,7 @@ void DBHandler::render_vega(TRenderResult& _return,
   stdlog.appendNameValuePairs("nonce", nonce);
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!render_handler_) {
-    THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
+    THROW_DB_EXCEPTION("Backend rendering is disabled.");
   }
 
   // cast away const-ness of incoming Thrift string ref
@@ -4360,7 +4358,7 @@ void DBHandler::render_vega(TRenderResult& _return,
                                    compression_level,
                                    nonce);
     } catch (std::exception& e) {
-      THROW_MAPD_EXCEPTION(e.what());
+      THROW_DB_EXCEPTION(e.what());
     }
   });
 }
@@ -4386,15 +4384,15 @@ std::unique_ptr<Catalog_Namespace::CustomExpression> create_custom_expr_from_thr
     const TCustomExpression& t_custom_expr,
     const Catalog& catalog) {
   if (t_custom_expr.data_source_name.empty()) {
-    THROW_MAPD_EXCEPTION("Custom expression data source name cannot be empty.")
+    THROW_DB_EXCEPTION("Custom expression data source name cannot be empty.")
   }
   CHECK(t_custom_expr.data_source_type == TDataSourceType::type::TABLE)
       << "Unexpected data source type: "
       << static_cast<int>(t_custom_expr.data_source_type);
   auto td = catalog.getMetadataForTable(t_custom_expr.data_source_name, false);
   if (!td) {
-    THROW_MAPD_EXCEPTION("Custom expression references a table \"" +
-                         t_custom_expr.data_source_name + "\" that does not exist.")
+    THROW_DB_EXCEPTION("Custom expression references a table \"" +
+                       t_custom_expr.data_source_name + "\" that does not exist.")
   }
   DataSourceType data_source_type = DataSourceType::TABLE;
   return std::make_unique<CustomExpression>(
@@ -4433,7 +4431,7 @@ int32_t DBHandler::create_custom_expression(const TSessionId& session,
 
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!session_ptr->get_currentUser().isSuper) {
-    THROW_MAPD_EXCEPTION("Custom expressions can only be created by super users.")
+    THROW_DB_EXCEPTION("Custom expressions can only be created by super users.")
   }
   auto& catalog = session_ptr->getCatalog();
   mapd_unique_lock<mapd_shared_mutex> write_lock(custom_expressions_mutex_);
@@ -4465,7 +4463,7 @@ void DBHandler::update_custom_expression(const TSessionId& session,
 
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!session_ptr->get_currentUser().isSuper) {
-    THROW_MAPD_EXCEPTION("Custom expressions can only be updated by super users.")
+    THROW_DB_EXCEPTION("Custom expressions can only be updated by super users.")
   }
   auto& catalog = session_ptr->getCatalog();
   mapd_unique_lock<mapd_shared_mutex> write_lock(custom_expressions_mutex_);
@@ -4482,7 +4480,7 @@ void DBHandler::delete_custom_expressions(
 
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!session_ptr->get_currentUser().isSuper) {
-    THROW_MAPD_EXCEPTION("Custom expressions can only be deleted by super users.")
+    THROW_DB_EXCEPTION("Custom expressions can only be deleted by super users.")
   }
   auto& catalog = session_ptr->getCatalog();
   mapd_unique_lock<mapd_shared_mutex> write_lock(custom_expressions_mutex_);
@@ -4500,13 +4498,13 @@ void DBHandler::get_dashboard(TDashboard& dashboard,
   Catalog_Namespace::UserMetadata user_meta;
   auto dash = cat.getMetadataForDashboard(dashboard_id);
   if (!dash) {
-    THROW_MAPD_EXCEPTION("Dashboard with dashboard id " + std::to_string(dashboard_id) +
-                         " doesn't exist");
+    THROW_DB_EXCEPTION("Dashboard with dashboard id " + std::to_string(dashboard_id) +
+                       " doesn't exist");
   }
   if (!is_allowed_on_dashboard(
           *session_ptr, dash->dashboardId, AccessPrivileges::VIEW_DASHBOARD)) {
-    THROW_MAPD_EXCEPTION("User has no view privileges for the dashboard with id " +
-                         std::to_string(dashboard_id));
+    THROW_DB_EXCEPTION("User has no view privileges for the dashboard with id " +
+                       std::to_string(dashboard_id));
   }
   user_meta.userName = "";
   SysCatalog::instance().getMetadataForUserById(dash->userId, user_meta);
@@ -4599,12 +4597,12 @@ bool is_info_schema_db(const std::string& db_name) {
           SysCatalog::instance().hasExecutedMigration(shared::kInfoSchemaMigrationName));
 }
 
-void check_not_info_schema_db(const std::string& db_name, bool throw_mapd_exception) {
+void check_not_info_schema_db(const std::string& db_name, bool throw_db_exception) {
   if (is_info_schema_db(db_name)) {
     std::string error_message{"Write requests/queries are not allowed in the " +
                               shared::kInfoSchemaDbName + " database."};
-    if (throw_mapd_exception) {
-      THROW_MAPD_EXCEPTION(error_message)
+    if (throw_db_exception) {
+      THROW_DB_EXCEPTION(error_message)
     } else {
       throw std::runtime_error(error_message);
     }
@@ -4629,11 +4627,11 @@ int32_t DBHandler::create_dashboard(const TSessionId& session,
 
   if (!session_ptr->checkDBAccessPrivileges(DBObjectType::DashboardDBObjectType,
                                             AccessPrivileges::CREATE_DASHBOARD)) {
-    THROW_MAPD_EXCEPTION("Not enough privileges to create a dashboard.");
+    THROW_DB_EXCEPTION("Not enough privileges to create a dashboard.");
   }
 
   if (dashboard_exists(cat, session_ptr->get_currentUser().userId, dashboard_name)) {
-    THROW_MAPD_EXCEPTION("Dashboard with name: " + dashboard_name + " already exists.");
+    THROW_DB_EXCEPTION("Dashboard with name: " + dashboard_name + " already exists.");
   }
 
   DashboardDescriptor dd;
@@ -4651,7 +4649,7 @@ int32_t DBHandler::create_dashboard(const TSessionId& session,
         session_ptr->get_currentUser(), dashboard_name, DashboardDBObjectType, cat, id);
     return id;
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(e.what());
+    THROW_DB_EXCEPTION(e.what());
   }
 }
 
@@ -4674,13 +4672,13 @@ void DBHandler::replace_dashboard(const TSessionId& session,
 
   if (!is_allowed_on_dashboard(
           *session_ptr, dashboard_id, AccessPrivileges::EDIT_DASHBOARD)) {
-    THROW_MAPD_EXCEPTION("Not enough privileges to replace a dashboard.");
+    THROW_DB_EXCEPTION("Not enough privileges to replace a dashboard.");
   }
 
   if (auto dash = cat.getMetadataForDashboard(
           std::to_string(session_ptr->get_currentUser().userId), dashboard_name)) {
     if (dash->dashboardId != dashboard_id) {
-      THROW_MAPD_EXCEPTION("Dashboard with name: " + dashboard_name + " already exists.");
+      THROW_DB_EXCEPTION("Dashboard with name: " + dashboard_name + " already exists.");
     }
   }
 
@@ -4691,8 +4689,8 @@ void DBHandler::replace_dashboard(const TSessionId& session,
   dd.dashboardMetadata = dashboard_metadata;
   Catalog_Namespace::UserMetadata user;
   if (!SysCatalog::instance().getMetadataForUser(dashboard_owner, user)) {
-    THROW_MAPD_EXCEPTION(std::string("Dashboard owner ") + dashboard_owner +
-                         " does not exist");
+    THROW_DB_EXCEPTION(std::string("Dashboard owner ") + dashboard_owner +
+                       " does not exist");
   }
   dd.userId = user.userId;
   dd.user = dashboard_owner;
@@ -4701,7 +4699,7 @@ void DBHandler::replace_dashboard(const TSessionId& session,
   try {
     cat.replaceDashboard(dd);
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(e.what());
+    THROW_DB_EXCEPTION(e.what());
   }
 }
 
@@ -4723,7 +4721,7 @@ void DBHandler::delete_dashboards(const TSessionId& session,
   try {
     cat.deleteMetadataForDashboards(dashboard_ids, session_ptr->get_currentUser());
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(e.what());
+    THROW_DB_EXCEPTION(e.what());
   }
 }
 
@@ -4734,8 +4732,8 @@ std::vector<std::string> DBHandler::get_valid_groups(const TSessionId& session,
   auto& cat = session_info.getCatalog();
   auto dash = cat.getMetadataForDashboard(dashboard_id);
   if (!dash) {
-    THROW_MAPD_EXCEPTION("Dashboard id " + std::to_string(dashboard_id) +
-                         " does not exist");
+    THROW_DB_EXCEPTION("Dashboard id " + std::to_string(dashboard_id) +
+                       " does not exist");
   } else if (session_info.get_currentUser().userId != dash->userId &&
              !session_info.get_currentUser().isSuper) {
     throw std::runtime_error(
@@ -4746,7 +4744,7 @@ std::vector<std::string> DBHandler::get_valid_groups(const TSessionId& session,
   for (auto& group : groups) {
     user_meta.isSuper = false;  // initialize default flag
     if (!SysCatalog::instance().getGrantee(group)) {
-      THROW_MAPD_EXCEPTION("User/Role " + group + " does not exist");
+      THROW_DB_EXCEPTION("User/Role " + group + " does not exist");
     } else if (!user_meta.isSuper) {
       valid_groups.push_back(group);
     }
@@ -4757,7 +4755,7 @@ std::vector<std::string> DBHandler::get_valid_groups(const TSessionId& session,
 void DBHandler::validateGroups(const std::vector<std::string>& groups) {
   for (auto const& group : groups) {
     if (!SysCatalog::instance().getGrantee(group)) {
-      THROW_MAPD_EXCEPTION("User/Role '" + group + "' does not exist");
+      THROW_DB_EXCEPTION("User/Role '" + group + "' does not exist");
     }
   }
 }
@@ -4783,7 +4781,7 @@ void DBHandler::validateDashboardIdsForSharing(
     for (const auto& [error, id_list] : errors) {
       error_stream << "Dashboard ids " << join(id_list, ", ") << ": " << error << "\n";
     }
-    THROW_MAPD_EXCEPTION(error_stream.str());
+    THROW_DB_EXCEPTION(error_stream.str());
   }
 }
 
@@ -4797,8 +4795,8 @@ void DBHandler::shareOrUnshareDashboards(const TSessionId& session,
   check_read_only(do_share ? "share_dashboards" : "unshare_dashboards");
   if (!permissions.create_ && !permissions.delete_ && !permissions.edit_ &&
       !permissions.view_) {
-    THROW_MAPD_EXCEPTION("At least one privilege should be assigned for " +
-                         std::string(do_share ? "grants" : "revokes"));
+    THROW_DB_EXCEPTION("At least one privilege should be assigned for " +
+                       std::string(do_share ? "grants" : "revokes"));
   }
   auto session_ptr = stdlog.getConstSessionInfo();
   auto const& catalog = session_ptr->getCatalog();
@@ -4874,11 +4872,11 @@ void DBHandler::get_dashboard_grantees(
   Catalog_Namespace::UserMetadata user_meta;
   auto dash = cat.getMetadataForDashboard(dashboard_id);
   if (!dash) {
-    THROW_MAPD_EXCEPTION("Dashboard id " + std::to_string(dashboard_id) +
-                         " does not exist");
+    THROW_DB_EXCEPTION("Dashboard id " + std::to_string(dashboard_id) +
+                       " does not exist");
   } else if (session_ptr->get_currentUser().userId != dash->userId &&
              !session_ptr->get_currentUser().isSuper) {
-    THROW_MAPD_EXCEPTION(
+    THROW_DB_EXCEPTION(
         "User should be either owner of dashboard or super user to access grantees");
   }
   std::vector<ObjectRoleDescriptor*> objectsList;
@@ -4925,7 +4923,7 @@ void DBHandler::create_link(std::string& _return,
   try {
     _return = cat.createLink(ld, 6);
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(e.what());
+    THROW_DB_EXCEPTION(e.what());
   }
 }
 
@@ -4970,9 +4968,9 @@ void DBHandler::create_table(const TSessionId& session,
   check_read_only("create_table");
 
   if (ImportHelpers::is_reserved_name(table_name)) {
-    THROW_MAPD_EXCEPTION("Invalid table name (reserved keyword): " + table_name);
+    THROW_DB_EXCEPTION("Invalid table name (reserved keyword): " + table_name);
   } else if (table_name != ImportHelpers::sanitize_name(table_name)) {
-    THROW_MAPD_EXCEPTION("Invalid characters in table name: " + table_name);
+    THROW_DB_EXCEPTION("Invalid characters in table name: " + table_name);
   }
 
   auto rds = rd;
@@ -4982,14 +4980,14 @@ void DBHandler::create_table(const TSessionId& session,
 
   for (auto col : rds) {
     if (ImportHelpers::is_reserved_name(col.col_name)) {
-      THROW_MAPD_EXCEPTION("Invalid column name (reserved keyword): " + col.col_name);
+      THROW_DB_EXCEPTION("Invalid column name (reserved keyword): " + col.col_name);
     } else if (col.col_name != ImportHelpers::sanitize_name(col.col_name)) {
-      THROW_MAPD_EXCEPTION("Invalid characters in column name: " + col.col_name);
+      THROW_DB_EXCEPTION("Invalid characters in column name: " + col.col_name);
     }
     if (col.col_type.type == TDatumType::INTERVAL_DAY_TIME ||
         col.col_type.type == TDatumType::INTERVAL_YEAR_MONTH) {
-      THROW_MAPD_EXCEPTION("Unsupported type: " + thrift_to_name(col.col_type) +
-                           " for column: " + col.col_name);
+      THROW_DB_EXCEPTION("Unsupported type: " + thrift_to_name(col.col_type) +
+                         " for column: " + col.col_name);
     }
 
     if (col.col_type.type == TDatumType::DECIMAL) {
@@ -5093,8 +5091,8 @@ void DBHandler::import_table(const TSessionId& session,
         file_name = file_path.string();
       }
       if (!shared::file_or_glob_path_exists(file_path.string())) {
-        THROW_MAPD_EXCEPTION("File or directory \"" + file_path.string() +
-                             "\" does not exist.");
+        THROW_DB_EXCEPTION("File or directory \"" + file_path.string() +
+                           "\" does not exist.");
       }
     }
     validate_import_file_path_if_local(file_name);
@@ -5119,7 +5117,7 @@ void DBHandler::import_table(const TSessionId& session,
   } catch (const TDBException& e) {
     throw;
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string(e.what()));
+    THROW_DB_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -5142,11 +5140,11 @@ std::string TTypeInfo_TypeToString(const TDatumType::type& t) {
 
 }  // namespace
 
-#define THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(attr, got, expected)                    \
-  THROW_MAPD_EXCEPTION("Could not append geo/raster file '" +                        \
-                       file_path.filename().string() + "' to table '" + table_name + \
-                       "'. Column '" + cd->columnName + "' " + attr +                \
-                       " mismatch (got '" + got + "', expected '" + expected + "')");
+#define THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(attr, got, expected)                        \
+  THROW_DB_EXCEPTION("Could not append geo/raster file '" +                              \
+                     file_path.filename().string() + "' to table '" + table_name +       \
+                     "'. Column '" + cd->columnName + "' " + attr + " mismatch (got '" + \
+                     got + "', expected '" + expected + "')");
 
 void DBHandler::import_geo_table(const TSessionId& session,
                                  const std::string& table_name,
@@ -5235,7 +5233,7 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
       // find the archive file
       add_vsi_network_prefix(file_name);
       if (!import_export::Importer::gdalFileExists(file_name, copy_params)) {
-        THROW_MAPD_EXCEPTION("Archive does not exist: " + file_name_in);
+        THROW_DB_EXCEPTION("Archive does not exist: " + file_name_in);
       }
       // find geo file in archive
       add_vsi_archive_prefix(file_name);
@@ -5255,8 +5253,7 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
     add_vsi_geo_prefix(file_name);
     is_raster = true;
   } else {
-    THROW_MAPD_EXCEPTION(
-        "import_geo_table called with file_type other than GEO or RASTER");
+    THROW_DB_EXCEPTION("import_geo_table called with file_type other than GEO or RASTER");
   }
 
   // log what we're about to try to do
@@ -5267,14 +5264,14 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
   // use GDAL to check the primary file exists (even if on S3 and/or in archive)
   auto file_path = boost::filesystem::path(file_name);
   if (!import_export::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
-    THROW_MAPD_EXCEPTION("File does not exist: " + file_path.filename().string());
+    THROW_DB_EXCEPTION("File does not exist: " + file_path.filename().string());
   }
 
   // use GDAL to check any dependent files exist (ditto)
   try {
     check_geospatial_files(file_path, copy_params);
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION("import_geo_table error: " + std::string(e.what()));
+    THROW_DB_EXCEPTION("import_geo_table error: " + std::string(e.what()));
   }
 
   // get layer info and deconstruct
@@ -5289,7 +5286,7 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
       layer_info =
           import_export::Importer::gdalGetLayersInGeoFile(file_name, copy_params);
     } catch (const std::exception& e) {
-      THROW_MAPD_EXCEPTION("import_geo_table error: " + std::string(e.what()));
+      THROW_DB_EXCEPTION("import_geo_table error: " + std::string(e.what()));
     }
   }
 
@@ -5325,7 +5322,7 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
 
   // if nothing is loadable, stop now
   if (!is_raster && load_layers.size() == 0) {
-    THROW_MAPD_EXCEPTION("import_geo_table: No loadable layers found, aborting!");
+    THROW_DB_EXCEPTION("import_geo_table: No loadable layers found, aborting!");
   }
 
   // if we've been given an explicit layer name, check that it exists and is loadable
@@ -5343,26 +5340,25 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
           break;
         } else if (layer.contents ==
                    import_export::Importer::GeoFileLayerContents::UNSUPPORTED_GEO) {
-          THROW_MAPD_EXCEPTION("import_geo_table: Explicit geo layer '" +
-                               copy_params.geo_layer_name +
-                               "' has unsupported geo type!");
+          THROW_DB_EXCEPTION("import_geo_table: Explicit geo layer '" +
+                             copy_params.geo_layer_name + "' has unsupported geo type!");
         } else if (layer.contents ==
                    import_export::Importer::GeoFileLayerContents::EMPTY) {
-          THROW_MAPD_EXCEPTION("import_geo_table: Explicit geo layer '" +
-                               copy_params.geo_layer_name + "' is empty!");
+          THROW_DB_EXCEPTION("import_geo_table: Explicit geo layer '" +
+                             copy_params.geo_layer_name + "' is empty!");
         }
       }
     }
     if (!found) {
-      THROW_MAPD_EXCEPTION("import_geo_table: Explicit geo layer '" +
-                           copy_params.geo_layer_name + "' not found!");
+      THROW_DB_EXCEPTION("import_geo_table: Explicit geo layer '" +
+                         copy_params.geo_layer_name + "' not found!");
     }
   }
 
   // Immerse import of multiple layers is not yet supported
   // @TODO fix this!
   if (!is_raster && row_desc.size() > 0 && load_layers.size() > 1) {
-    THROW_MAPD_EXCEPTION(
+    THROW_DB_EXCEPTION(
         "import_geo_table: Multi-layer geo import not yet supported from Immerse!");
   }
 
@@ -5389,8 +5385,8 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
 
       // table must not exist
       if (cat.getMetadataForTable(this_table_name)) {
-        THROW_MAPD_EXCEPTION("import_geo_table: Table '" + this_table_name +
-                             "' already exists, aborting!");
+        THROW_DB_EXCEPTION("import_geo_table: Table '" + this_table_name +
+                           "' already exists, aborting!");
       }
     }
   }
@@ -5633,7 +5629,7 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
       combined_exception_message += comma ? (", " + message) : message;
       comma = true;
     }
-    THROW_MAPD_EXCEPTION(combined_exception_message);
+    THROW_DB_EXCEPTION(combined_exception_message);
   } else {
     // report success and total time
     LOG(INFO) << "Import Successful!";
@@ -5678,7 +5674,7 @@ void DBHandler::get_first_geo_file_in_archive(std::string& _return,
     add_vsi_network_prefix(archive_path);
     if (!import_export::Importer::gdalFileExists(archive_path,
                                                  thrift_to_copyparams(copy_params))) {
-      THROW_MAPD_EXCEPTION("Archive does not exist: " + archive_path_in);
+      THROW_DB_EXCEPTION("Archive does not exist: " + archive_path_in);
     }
     // find geo file in archive
     add_vsi_archive_prefix(archive_path);
@@ -5720,7 +5716,7 @@ void DBHandler::get_all_files_in_archive(std::vector<std::string>& _return,
     add_vsi_network_prefix(archive_path);
     if (!import_export::Importer::gdalFileExists(archive_path,
                                                  thrift_to_copyparams(copy_params))) {
-      THROW_MAPD_EXCEPTION("Archive does not exist: " + archive_path_in);
+      THROW_DB_EXCEPTION("Archive does not exist: " + archive_path_in);
     }
     // find all files in archive
     add_vsi_archive_prefix(archive_path);
@@ -5758,7 +5754,7 @@ void DBHandler::get_layers_in_geo_file(std::vector<TGeoFileLayerInfo>& _return,
     // find the archive file
     add_vsi_network_prefix(file_name);
     if (!import_export::Importer::gdalFileExists(file_name, copy_params)) {
-      THROW_MAPD_EXCEPTION("Archive does not exist: " + file_name_in);
+      THROW_DB_EXCEPTION("Archive does not exist: " + file_name_in);
     }
     // find geo file in archive
     add_vsi_archive_prefix(file_name);
@@ -5775,7 +5771,7 @@ void DBHandler::get_layers_in_geo_file(std::vector<TGeoFileLayerInfo>& _return,
 
   // check the file actually exists
   if (!import_export::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
-    THROW_MAPD_EXCEPTION("Geo file/archive does not exist: " + file_name_in);
+    THROW_DB_EXCEPTION("Geo file/archive does not exist: " + file_name_in);
   }
 
   // find all layers
@@ -5810,11 +5806,11 @@ void DBHandler::start_heap_profile(const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
 #ifdef HAVE_PROFILER
   if (IsHeapProfilerRunning()) {
-    THROW_MAPD_EXCEPTION("Profiler already started");
+    THROW_DB_EXCEPTION("Profiler already started");
   }
   HeapProfilerStart("omnisci");
 #else
-  THROW_MAPD_EXCEPTION("Profiler not enabled");
+  THROW_DB_EXCEPTION("Profiler not enabled");
 #endif  // HAVE_PROFILER
 }
 
@@ -5822,11 +5818,11 @@ void DBHandler::stop_heap_profile(const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
 #ifdef HAVE_PROFILER
   if (!IsHeapProfilerRunning()) {
-    THROW_MAPD_EXCEPTION("Profiler not running");
+    THROW_DB_EXCEPTION("Profiler not running");
   }
   HeapProfilerStop();
 #else
-  THROW_MAPD_EXCEPTION("Profiler not enabled");
+  THROW_DB_EXCEPTION("Profiler not enabled");
 #endif  // HAVE_PROFILER
 }
 
@@ -5834,13 +5830,13 @@ void DBHandler::get_heap_profile(std::string& profile, const TSessionId& session
   auto stdlog = STDLOG(get_session_ptr(session));
 #ifdef HAVE_PROFILER
   if (!IsHeapProfilerRunning()) {
-    THROW_MAPD_EXCEPTION("Profiler not running");
+    THROW_DB_EXCEPTION("Profiler not running");
   }
   auto profile_buff = GetHeapProfile();
   profile = profile_buff;
   free(profile_buff);
 #else
-  THROW_MAPD_EXCEPTION("Profiler not enabled");
+  THROW_DB_EXCEPTION("Profiler not enabled");
 #endif  // HAVE_PROFILER
 }
 
@@ -5923,9 +5919,9 @@ void DBHandler::check_table_load_privileges(
   std::vector<DBObject> privObjects;
   privObjects.push_back(dbObject);
   if (!SysCatalog::instance().checkPrivileges(user_metadata, privObjects)) {
-    THROW_MAPD_EXCEPTION("Violation of access privileges: user " +
-                         user_metadata.userLoggable() +
-                         " has no insert privileges for table " + table_name + ".");
+    THROW_DB_EXCEPTION("Violation of access privileges: user " +
+                       user_metadata.userLoggable() +
+                       " has no insert privileges for table " + table_name + ".");
   }
 }
 
@@ -6087,8 +6083,8 @@ void DBHandler::convertRows(TQueryResult& _return,
       }
       ++fetched;
       if (at_most_n >= 0 && fetched > at_most_n) {
-        THROW_MAPD_EXCEPTION("The result contains more rows than the specified cap of " +
-                             std::to_string(at_most_n));
+        THROW_DB_EXCEPTION("The result contains more rows than the specified cap of " +
+                           std::to_string(at_most_n));
       }
       for (size_t i = 0; i < results.colCount(); ++i) {
         const auto agg_result = crt_row[i];
@@ -6107,8 +6103,8 @@ void DBHandler::convertRows(TQueryResult& _return,
       }
       ++fetched;
       if (at_most_n >= 0 && fetched > at_most_n) {
-        THROW_MAPD_EXCEPTION("The result contains more rows than the specified cap of " +
-                             std::to_string(at_most_n));
+        THROW_DB_EXCEPTION("The result contains more rows than the specified cap of " +
+                           std::to_string(at_most_n));
       }
       TRow trow;
       trow.cols.reserve(results.colCount());
@@ -6342,7 +6338,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
             output = validator.validate(query_state_proxy);
           }));
         } else {
-          THROW_MAPD_EXCEPTION("Validate command should be executed on the aggregator.");
+          THROW_DB_EXCEPTION("Validate command should be executed on the aggregator.");
         }
 
       } else {
@@ -6541,7 +6537,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
   boost::regex is_select{R"((\(*|\s*))SELECT.*)",
                          boost::regex::extended | boost::regex::icase};
   if (DBHandler::read_only_ && !boost::regex_match(query_str, is_select)) {
-    THROW_MAPD_EXCEPTION("This SQL command is not supported in read-only mode.");
+    THROW_DB_EXCEPTION("This SQL command is not supported in read-only mode.");
   }
 }
 
@@ -6749,12 +6745,12 @@ int64_t DBHandler::query_get_outer_fragment_count(const TSessionId& session,
                                                   const std::string& select_query) {
   auto stdlog = STDLOG(get_session_ptr(session));
   if (!leaf_handler_) {
-    THROW_MAPD_EXCEPTION("Distributed support is disabled.");
+    THROW_DB_EXCEPTION("Distributed support is disabled.");
   }
   try {
     return leaf_handler_->query_get_outer_fragment_count(session, select_query);
   } catch (std::exception& e) {
-    THROW_MAPD_EXCEPTION(e.what());
+    THROW_DB_EXCEPTION(e.what());
   }
 }
 
@@ -6763,12 +6759,12 @@ void DBHandler::check_table_consistency(TTableMeta& _return,
                                         const int32_t table_id) {
   auto stdlog = STDLOG(get_session_ptr(session));
   if (!leaf_handler_) {
-    THROW_MAPD_EXCEPTION("Distributed support is disabled.");
+    THROW_DB_EXCEPTION("Distributed support is disabled.");
   }
   try {
     leaf_handler_->check_table_consistency(_return, session, table_id);
   } catch (std::exception& e) {
-    THROW_MAPD_EXCEPTION(e.what());
+    THROW_DB_EXCEPTION(e.what());
   }
 }
 
@@ -6782,7 +6778,7 @@ void DBHandler::start_query(TPendingQuery& _return,
   auto stdlog = STDLOG(get_session_ptr(leaf_session));
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!leaf_handler_) {
-    THROW_MAPD_EXCEPTION("Distributed support is disabled.");
+    THROW_DB_EXCEPTION("Distributed support is disabled.");
   }
   LOG(INFO) << "start_query :" << *session_ptr << " :" << just_explain;
   auto time_ms = measure<>::execution([&]() {
@@ -6795,7 +6791,7 @@ void DBHandler::start_query(TPendingQuery& _return,
                                  just_explain,
                                  outer_fragment_indices);
     } catch (std::exception& e) {
-      THROW_MAPD_EXCEPTION(e.what());
+      THROW_DB_EXCEPTION(e.what());
     }
   });
   LOG(INFO) << "start_query-COMPLETED " << time_ms << "ms "
@@ -6807,7 +6803,7 @@ void DBHandler::execute_query_step(TStepResult& _return,
                                    const TSubqueryId subquery_id,
                                    const std::string& start_time_str) {
   if (!leaf_handler_) {
-    THROW_MAPD_EXCEPTION("Distributed support is disabled.");
+    THROW_DB_EXCEPTION("Distributed support is disabled.");
   }
   LOG(INFO) << "execute_query_step :  id:" << pending_query.id;
   auto time_ms = measure<>::execution([&]() {
@@ -6815,7 +6811,7 @@ void DBHandler::execute_query_step(TStepResult& _return,
       leaf_handler_->execute_query_step(
           _return, pending_query, subquery_id, start_time_str);
     } catch (std::exception& e) {
-      THROW_MAPD_EXCEPTION(e.what());
+      THROW_DB_EXCEPTION(e.what());
     }
   });
   LOG(INFO) << "execute_query_step-COMPLETED " << time_ms << "ms";
@@ -6827,7 +6823,7 @@ void DBHandler::broadcast_serialized_rows(const TSerializedRows& serialized_rows
                                           const TSubqueryId subquery_id,
                                           const bool is_final_subquery_result) {
   if (!leaf_handler_) {
-    THROW_MAPD_EXCEPTION("Distributed support is disabled.");
+    THROW_DB_EXCEPTION("Distributed support is disabled.");
   }
   LOG(INFO) << "BROADCAST-SERIALIZED-ROWS  id:" << query_id;
   auto time_ms = measure<>::execution([&]() {
@@ -6835,7 +6831,7 @@ void DBHandler::broadcast_serialized_rows(const TSerializedRows& serialized_rows
       leaf_handler_->broadcast_serialized_rows(
           serialized_rows, row_desc, query_id, subquery_id, is_final_subquery_result);
     } catch (std::exception& e) {
-      THROW_MAPD_EXCEPTION(e.what());
+      THROW_DB_EXCEPTION(e.what());
     }
   });
   LOG(INFO) << "BROADCAST-SERIALIZED-ROWS COMPLETED " << time_ms << "ms";
@@ -6894,7 +6890,7 @@ void DBHandler::insert_chunks(const TSessionId& session,
     td->fragmenter->insertChunksNoCheckpoint(insert_chunks);
 
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string(e.what()));
+    THROW_DB_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -7002,7 +6998,7 @@ void DBHandler::insert_data(const TSessionId& session,
     auto data_memory_holder = import_export::fill_missing_columns(&cat, insert_data);
     td->fragmenter->insertDataNoCheckpoint(insert_data);
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string(e.what()));
+    THROW_DB_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -7014,7 +7010,7 @@ void DBHandler::start_render_query(TPendingRenderQuery& _return,
   auto stdlog = STDLOG(get_session_ptr(session));
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!render_handler_) {
-    THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
+    THROW_DB_EXCEPTION("Backend rendering is disabled.");
   }
   LOG(INFO) << "start_render_query :" << *session_ptr << " :widget_id:" << widget_id
             << ":vega_json:" << vega_json;
@@ -7029,7 +7025,7 @@ void DBHandler::start_render_query(TPendingRenderQuery& _return,
       render_handler_->start_render_query(
           _return, session, widget_id, node_idx, std::move(non_const_vega_json));
     } catch (std::exception& e) {
-      THROW_MAPD_EXCEPTION(e.what());
+      THROW_DB_EXCEPTION(e.what());
     }
   });
   LOG(INFO) << "start_render_query-COMPLETED " << time_ms << "ms "
@@ -7040,7 +7036,7 @@ void DBHandler::execute_next_render_step(TRenderStepResult& _return,
                                          const TPendingRenderQuery& pending_render,
                                          const TRenderAggDataMap& merged_data) {
   if (!render_handler_) {
-    THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
+    THROW_DB_EXCEPTION("Backend rendering is disabled.");
   }
 
   LOG(INFO) << "execute_next_render_step: id:" << pending_render.id;
@@ -7048,7 +7044,7 @@ void DBHandler::execute_next_render_step(TRenderStepResult& _return,
     try {
       render_handler_->execute_next_render_step(_return, pending_render, merged_data);
     } catch (std::exception& e) {
-      THROW_MAPD_EXCEPTION(e.what());
+      THROW_DB_EXCEPTION(e.what());
     }
   });
   LOG(INFO) << "execute_next_render_step-COMPLETED id: " << pending_render.id
@@ -7086,7 +7082,7 @@ void DBHandler::set_table_epoch(const TSessionId& session,
     auto& cat = session_ptr->getCatalog();
     cat.setTableEpoch(db_id, table_id, new_epoch);
   } catch (const std::runtime_error& e) {
-    THROW_MAPD_EXCEPTION(std::string(e.what()));
+    THROW_DB_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -7120,7 +7116,7 @@ void DBHandler::set_table_epoch_by_name(const TSessionId& session,
   try {
     cat.setTableEpoch(db_id, td->tableId, new_epoch);
   } catch (const std::runtime_error& e) {
-    THROW_MAPD_EXCEPTION(std::string(e.what()));
+    THROW_DB_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -7144,7 +7140,7 @@ int32_t DBHandler::get_table_epoch(const TSessionId& session,
     auto const& cat = session_ptr->getCatalog();
     return cat.getTableEpoch(db_id, table_id);
   } catch (const std::runtime_error& e) {
-    THROW_MAPD_EXCEPTION(std::string(e.what()));
+    THROW_DB_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -7172,7 +7168,7 @@ int32_t DBHandler::get_table_epoch_by_name(const TSessionId& session,
   try {
     return cat.getTableEpoch(db_id, td->tableId);
   } catch (const std::runtime_error& e) {
-    THROW_MAPD_EXCEPTION(std::string(e.what()));
+    THROW_DB_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -7220,7 +7216,7 @@ void DBHandler::set_table_epochs(const TSessionId& session,
   // or aggregator (for distributed mode)
   if (!g_cluster || leaf_aggregator_.leafCount() > 0) {
     if (!session_ptr->get_currentUser().isSuper) {
-      THROW_MAPD_EXCEPTION("Only super users can set table epochs");
+      THROW_DB_EXCEPTION("Only super users can set table epochs");
     }
   }
   if (table_epochs.empty()) {
@@ -7231,7 +7227,7 @@ void DBHandler::set_table_epochs(const TSessionId& session,
   std::vector<Catalog_Namespace::TableEpochInfo> table_epochs_vector;
   for (const auto& table_epoch : table_epochs) {
     if (logical_table_id != cat.getLogicalTableId(table_epoch.table_id)) {
-      THROW_MAPD_EXCEPTION("Table epochs do not reference the same logical table");
+      THROW_DB_EXCEPTION("Table epochs do not reference the same logical table");
     }
     table_epochs_vector.emplace_back(
         table_epoch.table_id, table_epoch.table_epoch, table_epoch.leaf_index);
@@ -7258,7 +7254,7 @@ void DBHandler::set_license_key(TLicenseInfo& _return,
   auto stdlog = STDLOG(get_session_ptr(session));
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("set_license_key");
-  THROW_MAPD_EXCEPTION(std::string("Licensing not supported."));
+  THROW_DB_EXCEPTION(std::string("Licensing not supported."));
 }
 
 void DBHandler::get_license_claims(TLicenseInfo& _return,
@@ -7325,14 +7321,14 @@ void DBHandler::register_runtime_extension_functions(
 
   if (system_parameters_.runtime_udf_registration_policy ==
       SystemParameters::RuntimeUdfRegistrationPolicy::DISALLOWED) {
-    THROW_MAPD_EXCEPTION("Runtime UDF and UDTF function registration is disabled.");
+    THROW_DB_EXCEPTION("Runtime UDF and UDTF function registration is disabled.");
   }
 
   if (system_parameters_.runtime_udf_registration_policy ==
       SystemParameters::RuntimeUdfRegistrationPolicy::ALLOWED_SUPERUSERS_ONLY) {
     auto session_ptr = stdlog.getConstSessionInfo();
     if (!session_ptr->get_currentUser().isSuper) {
-      THROW_MAPD_EXCEPTION(
+      THROW_DB_EXCEPTION(
           "Server is configured to require superuser privilege to register UDFs and "
           "UDTFs.");
     }

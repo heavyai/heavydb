@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,7 +90,7 @@ std::shared_ptr<DBHandler> g_warmup_handler;
 // global "g_warmup_handler" needed to avoid circular dependency
 // between "DBHandler" & function "run_warmup_queries"
 
-std::shared_ptr<DBHandler> g_mapd_handler;
+std::shared_ptr<DBHandler> g_db_handler;
 
 void register_signal_handler(int signum, void (*handler)(int)) {
 #ifdef _WIN32
@@ -113,7 +113,7 @@ void register_signal_handler(int signum, void (*handler)(int)) {
 //   man 7 signal-safety
 //   man 7 signal
 //   https://en.wikipedia.org/wiki/Reentrancy_(computing)
-void omnisci_signal_handler(int signum) {
+void heavydb_signal_handler(int signum) {
   // Record the signal number for logging during shutdown.
   // Only records the first signal if called more than once.
   int expected_signal{-1};
@@ -163,14 +163,14 @@ void omnisci_signal_handler(int signum) {
 }
 
 void register_signal_handlers() {
-  register_signal_handler(SIGINT, omnisci_signal_handler);
+  register_signal_handler(SIGINT, heavydb_signal_handler);
 #ifndef _WIN32
-  register_signal_handler(SIGQUIT, omnisci_signal_handler);
-  register_signal_handler(SIGHUP, omnisci_signal_handler);
+  register_signal_handler(SIGQUIT, heavydb_signal_handler);
+  register_signal_handler(SIGHUP, heavydb_signal_handler);
 #endif
-  register_signal_handler(SIGTERM, omnisci_signal_handler);
-  register_signal_handler(SIGSEGV, omnisci_signal_handler);
-  register_signal_handler(SIGABRT, omnisci_signal_handler);
+  register_signal_handler(SIGTERM, heavydb_signal_handler);
+  register_signal_handler(SIGSEGV, heavydb_signal_handler);
+  register_signal_handler(SIGABRT, heavydb_signal_handler);
 #ifndef _WIN32
   // Thrift secure socket can cause problems with SIGPIPE
   register_signal_handler(SIGPIPE, SIG_IGN);
@@ -317,7 +317,7 @@ void heartbeat() {
   }
 #endif
 
-  // Sleep until omnisci_signal_handler or anything clears the g_running flag.
+  // Sleep until heavydb_signal_handler or anything clears the g_running flag.
   VLOG(1) << "heartbeat thread starting";
   while (::g_running) {
     using namespace std::chrono;
@@ -338,13 +338,13 @@ void heartbeat() {
 #endif
   ) {
     // Need to shut down calcite.
-    if (auto mapd_handler = g_mapd_handler; mapd_handler) {
-      mapd_handler->emergency_shutdown();
+    if (auto db_handler = g_db_handler; db_handler) {
+      db_handler->emergency_shutdown();
     }
     // Need to flush the logs for debugging.
     logger::shutdown();
     return;
-    // Core dump should begin soon after this. See omnisci_signal_handler().
+    // Core dump should begin soon after this. See heavydb_signal_handler().
     // We leave the rest of the server process as is for the core dump image.
   }
 
@@ -376,7 +376,8 @@ class UnboundedTHttpServerTransportFactory : public THttpServerTransportFactory 
 }  // namespace
 #endif
 
-int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server = true) {
+int startHeavyDBServer(CommandLineOptions& prog_config_opts,
+                       bool start_http_server = true) {
   // Prepare to launch the Thrift server.
   LOG(INFO) << "HeavyDB starting up";
   register_signal_handlers();
@@ -408,7 +409,7 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
 
     thrift_stop();
 
-    g_mapd_handler.reset();
+    g_db_handler.reset();
 
     wait_for_server_threads();
 
@@ -451,7 +452,7 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
   try {
     if (prog_config_opts.system_parameters.master_address.empty()) {
       // Handler for a single database server. (DBHandler)
-      g_mapd_handler =
+      g_db_handler =
           std::make_shared<DBHandler>(prog_config_opts.db_leaves,
                                       prog_config_opts.string_leaves,
                                       prog_config_opts.base_path,
@@ -545,7 +546,7 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
 
   // Thrift uses the same processor for both the TCP port and the HTTP port.
   std::shared_ptr<TProcessor> processor{std::make_shared<TrackingProcessor>(
-      g_mapd_handler, prog_config_opts.log_user_origin)};
+      g_db_handler, prog_config_opts.log_user_origin)};
 
   // Thrift TCP server launch.
   std::shared_ptr<TServerTransport> tcp_st = tcp_socket;
@@ -599,7 +600,7 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
 
   // Run warm up queries if any exist.
   run_warmup_queries(
-      g_mapd_handler, prog_config_opts.base_path, prog_config_opts.db_query_file);
+      g_db_handler, prog_config_opts.base_path, prog_config_opts.db_query_file);
   if (prog_config_opts.exit_after_warmup) {
     g_running = false;
   }
@@ -630,7 +631,7 @@ int main(int argc, char** argv) {
     if (!has_clust_topo) {
       prog_config_opts.validate_base_path();
       prog_config_opts.validate();
-      return (startMapdServer(prog_config_opts));
+      return (startHeavyDBServer(prog_config_opts));
     }
   } catch (std::runtime_error& e) {
     std::cerr << "Server Error: " << e.what() << std::endl;
