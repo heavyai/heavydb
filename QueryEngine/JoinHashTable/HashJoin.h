@@ -31,6 +31,10 @@
 #include "QueryEngine/JoinHashTable/HashTable.h"
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
 
+#ifdef HAVE_CUDA
+#include <cuda.h>
+#endif
+
 class TooManyHashEntries : public std::runtime_error {
  public:
   TooManyHashEntries()

@@ -1563,7 +1563,7 @@ class ExecuteTestBase {
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
-  return device_type == ExecutorDeviceType::GPU && !(ExecuteTestBase::hasGpu());
+  return device_type == ExecutorDeviceType::GPU && !gpusPresent();
 #else
   return device_type == ExecutorDeviceType::GPU;
 #endif
