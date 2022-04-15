@@ -31,8 +31,6 @@ import com.omnisci.thrift.calciteserver.TOptimizationOption;
 import com.omnisci.thrift.calciteserver.TPlanResult;
 import com.omnisci.thrift.calciteserver.TQueryParsingOption;
 import com.omnisci.thrift.calciteserver.TRestriction;
-import com.omnisci.thrift.calciteserver.TUserDefinedFunction;
-import com.omnisci.thrift.calciteserver.TUserDefinedTableFunction;
 
 import org.apache.calcite.prepare.MapDPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
@@ -47,8 +45,6 @@ import org.apache.calcite.tools.ValidationException;
 import org.apache.calcite.util.Pair;
 import org.apache.commons.pool.PoolableObjectFactory;
 import org.apache.commons.pool.impl.GenericObjectPool;
-import org.apache.thrift.TException;
-import org.apache.thrift.server.TServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,8 +60,6 @@ import java.util.Map;
  */
 public class CalciteServerHandler {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteServerHandler.class);
-  private TServer server;
-
   private final int mapdPort;
 
   private volatile long callCount;
@@ -135,7 +129,7 @@ public class CalciteServerHandler {
           TQueryParsingOption queryParsingOption,
           TOptimizationOption optimizationOption,
           TRestriction restriction,
-          String schemaJson) throws InvalidParseRequest, TException {
+          String schemaJson) throws InvalidParseRequest {
     long timer = System.currentTimeMillis();
     callCount++;
 
@@ -272,8 +266,8 @@ public class CalciteServerHandler {
     return this.udfRTSigsJson;
   }
 
-  public void setRuntimeExtensionFunctions(List<TUserDefinedFunction> udfs,
-          List<TUserDefinedTableFunction> udtfs,
+  public void setRuntimeExtensionFunctions(List<ExtensionFunction> udfs,
+          List<ExtensionFunction> udtfs,
           boolean isruntime) {
     if (isruntime) {
       // Clean up previously defined Runtime UDFs
@@ -285,12 +279,12 @@ public class CalciteServerHandler {
         udfRTSigs = new HashMap<String, ExtensionFunction>();
       }
 
-      for (TUserDefinedFunction udf : udfs) {
-        udfRTSigs.put(udf.name, toExtensionFunction(udf));
+      for (ExtensionFunction udf : udfs) {
+        udfRTSigs.put(udf.getName(), udf);
       }
 
-      for (TUserDefinedTableFunction udtf : udtfs) {
-        udfRTSigs.put(udtf.name, toExtensionFunction(udtf));
+      for (ExtensionFunction udtf : udtfs) {
+        udfRTSigs.put(udtf.getName(), udtf);
       }
 
       // Avoid overwritting compiled and Loadtime UDFs:
@@ -311,141 +305,14 @@ public class CalciteServerHandler {
         udtfSigs = new HashMap<String, ExtensionFunction>();
       }
 
-      for (TUserDefinedTableFunction udtf : udtfs) {
-        udtfSigs.put(udtf.name, toExtensionFunction(udtf));
+      for (ExtensionFunction udtf : udtfs) {
+        udtfSigs.put(udtf.getName(), udtf);
       }
 
       extSigs.putAll(udtfSigs);
     }
 
     calciteParserFactory.updateOperatorTable();
-  }
-
-  private static ExtensionFunction toExtensionFunction(TUserDefinedFunction udf) {
-    List<ExtensionFunction.ExtArgumentType> args =
-            new ArrayList<ExtensionFunction.ExtArgumentType>();
-    for (TExtArgumentType atype : udf.argTypes) {
-      final ExtensionFunction.ExtArgumentType arg_type = toExtArgumentType(atype);
-      if (arg_type != ExtensionFunction.ExtArgumentType.Void) {
-        args.add(arg_type);
-      }
-    }
-    return new ExtensionFunction(args, toExtArgumentType(udf.retType));
-  }
-
-  private static ExtensionFunction toExtensionFunction(TUserDefinedTableFunction udtf) {
-    int index = 0;
-    int out_index = 0;
-    List<String> names = new ArrayList<String>();
-    List<ExtensionFunction.ExtArgumentType> args =
-            new ArrayList<ExtensionFunction.ExtArgumentType>();
-    for (TExtArgumentType atype : udtf.sqlArgTypes) {
-      args.add(toExtArgumentType(atype));
-      Map<String, String> annot = udtf.annotations.get(index);
-      names.add(annot.getOrDefault("name", "inp" + index));
-      index++;
-    }
-    List<ExtensionFunction.ExtArgumentType> outs =
-            new ArrayList<ExtensionFunction.ExtArgumentType>();
-    for (TExtArgumentType otype : udtf.outputArgTypes) {
-      outs.add(toExtArgumentType(otype));
-      Map<String, String> annot = udtf.annotations.get(index);
-      names.add(annot.getOrDefault("name", "out" + out_index));
-      index++;
-      out_index++;
-    }
-    return new ExtensionFunction(args, outs, names);
-  }
-
-  private static ExtensionFunction.ExtArgumentType toExtArgumentType(
-          TExtArgumentType type) {
-    switch (type) {
-      case Int8:
-        return ExtensionFunction.ExtArgumentType.Int8;
-      case Int16:
-        return ExtensionFunction.ExtArgumentType.Int16;
-      case Int32:
-        return ExtensionFunction.ExtArgumentType.Int32;
-      case Int64:
-        return ExtensionFunction.ExtArgumentType.Int64;
-      case Float:
-        return ExtensionFunction.ExtArgumentType.Float;
-      case Double:
-        return ExtensionFunction.ExtArgumentType.Double;
-      case Void:
-        return ExtensionFunction.ExtArgumentType.Void;
-      case PInt8:
-        return ExtensionFunction.ExtArgumentType.PInt8;
-      case PInt16:
-        return ExtensionFunction.ExtArgumentType.PInt16;
-      case PInt32:
-        return ExtensionFunction.ExtArgumentType.PInt32;
-      case PInt64:
-        return ExtensionFunction.ExtArgumentType.PInt64;
-      case PFloat:
-        return ExtensionFunction.ExtArgumentType.PFloat;
-      case PDouble:
-        return ExtensionFunction.ExtArgumentType.PDouble;
-      case PBool:
-        return ExtensionFunction.ExtArgumentType.PBool;
-      case Bool:
-        return ExtensionFunction.ExtArgumentType.Bool;
-      case ArrayInt8:
-        return ExtensionFunction.ExtArgumentType.ArrayInt8;
-      case ArrayInt16:
-        return ExtensionFunction.ExtArgumentType.ArrayInt16;
-      case ArrayInt32:
-        return ExtensionFunction.ExtArgumentType.ArrayInt32;
-      case ArrayInt64:
-        return ExtensionFunction.ExtArgumentType.ArrayInt64;
-      case ArrayFloat:
-        return ExtensionFunction.ExtArgumentType.ArrayFloat;
-      case ArrayDouble:
-        return ExtensionFunction.ExtArgumentType.ArrayDouble;
-      case ArrayBool:
-        return ExtensionFunction.ExtArgumentType.ArrayBool;
-      case ColumnInt8:
-        return ExtensionFunction.ExtArgumentType.ColumnInt8;
-      case ColumnInt16:
-        return ExtensionFunction.ExtArgumentType.ColumnInt16;
-      case ColumnInt32:
-        return ExtensionFunction.ExtArgumentType.ColumnInt32;
-      case ColumnInt64:
-        return ExtensionFunction.ExtArgumentType.ColumnInt64;
-      case ColumnFloat:
-        return ExtensionFunction.ExtArgumentType.ColumnFloat;
-      case ColumnDouble:
-        return ExtensionFunction.ExtArgumentType.ColumnDouble;
-      case ColumnBool:
-        return ExtensionFunction.ExtArgumentType.ColumnBool;
-      case ColumnTextEncodingDict:
-        return ExtensionFunction.ExtArgumentType.ColumnTextEncodingDict;
-      case Cursor:
-        return ExtensionFunction.ExtArgumentType.Cursor;
-      case TextEncodingNone:
-        return ExtensionFunction.ExtArgumentType.TextEncodingNone;
-      case TextEncodingDict:
-        return ExtensionFunction.ExtArgumentType.TextEncodingDict;
-      case ColumnListInt8:
-        return ExtensionFunction.ExtArgumentType.ColumnListInt8;
-      case ColumnListInt16:
-        return ExtensionFunction.ExtArgumentType.ColumnListInt16;
-      case ColumnListInt32:
-        return ExtensionFunction.ExtArgumentType.ColumnListInt32;
-      case ColumnListInt64:
-        return ExtensionFunction.ExtArgumentType.ColumnListInt64;
-      case ColumnListFloat:
-        return ExtensionFunction.ExtArgumentType.ColumnListFloat;
-      case ColumnListDouble:
-        return ExtensionFunction.ExtArgumentType.ColumnListDouble;
-      case ColumnListBool:
-        return ExtensionFunction.ExtArgumentType.ColumnListBool;
-      case ColumnListTextEncodingDict:
-        return ExtensionFunction.ExtArgumentType.ColumnListTextEncodingDict;
-      default:
-        MAPDLOGGER.error("toExtArgumentType: unknown type " + type);
-        return null;
-    }
   }
 
   private static TCompletionHintType hintTypeToThrift(final SqlMonikerType type) {

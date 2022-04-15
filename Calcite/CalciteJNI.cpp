@@ -59,9 +59,8 @@ class CalciteJNI::Impl {
     findTQueryParsingOption();
     findTOptimizationOption();
     findTPlanResult();
-    findTExtArgumentType();
-    findTOutputBufferSizeType();
-    findTUserDefinedTableFunction();
+    findExtArgumentType();
+    findExtensionFunction();
     findInvalidParseRequest();
     findArrayList();
     findHashMap();
@@ -148,23 +147,24 @@ class CalciteJNI::Impl {
     return convertJavaString(java_res);
   }
 
-  void setRuntimeExtensionFunctions(const std::vector<TUserDefinedFunction>& udfs,
-                                    const std::vector<TUserDefinedTableFunction>& udtfs,
-                                    bool is_runtime) {
+  void setRuntimeExtensionFunctions(
+      const std::vector<ExtensionFunction>& udfs,
+      const std::vector<table_functions::TableFunction>& udtfs,
+      bool is_runtime) {
     jobject udfs_list = env_->NewObject(array_list_cls_, array_list_ctor_);
-    if (!udfs.empty()) {
-      std::runtime_error("TUserDefinedFunction is not yet supported in Calcite JNI");
+    for (auto& udf : udfs) {
+      env_->CallVoidMethod(udfs_list, array_list_add_, convertExtensionFunction(udf));
     }
 
     jobject udtfs_list = env_->NewObject(array_list_cls_, array_list_ctor_);
     for (auto& udtf : udtfs) {
-      env_->CallVoidMethod(
-          udtfs_list, array_list_add_, convertTUserDefinedTableFunction(udtf));
+      env_->CallVoidMethod(udtfs_list, array_list_add_, convertTableFunction(udtf));
     }
 
     env_->CallVoidMethod(
         handler_obj_, handler_set_rt_fns_, udfs_list, udtfs_list, (jboolean)is_runtime);
     if (env_->ExceptionCheck() != JNI_FALSE) {
+      env_->ExceptionDescribe();
       throw std::runtime_error("Failed Java call to setRuntimeExtensionFunctions");
     }
   }
@@ -288,120 +288,43 @@ class CalciteJNI::Impl {
     }
   }
 
-  void findTExtArgumentType() {
-    jclass cls = env_->FindClass("com/omnisci/thrift/calciteserver/TExtArgumentType");
-    if (!cls) {
-      throw std::runtime_error("cannot find Java enum TExtArgumentType");
-    }
-    for (int i = 0; i < 41; ++i) {
-      std::string val = to_string(static_cast<TExtArgumentType::type>(i));
-      jfieldID field = env_->GetStaticFieldID(
-          cls, val.c_str(), "Lcom/omnisci/thrift/calciteserver/TExtArgumentType;");
-      if (!field) {
-        throw std::runtime_error("cannot find Java enum TExtArgumentType::" + val +
-                                 " field");
-      }
-      ext_arg_type_vals_.push_back(env_->GetStaticObjectField(cls, field));
-    }
-  }
-
-  void findTOutputBufferSizeType() {
+  void findExtArgumentType() {
     jclass cls =
-        env_->FindClass("com/omnisci/thrift/calciteserver/TOutputBufferSizeType");
+        env_->FindClass("com/mapd/parser/server/ExtensionFunction$ExtArgumentType");
     if (!cls) {
-      throw std::runtime_error("cannot find Java enum TOutputBufferSizeType");
+      throw std::runtime_error("cannot find Java enum ExtArgumentType");
     }
-    for (int i = 0; i < 4; ++i) {
-      std::string val = to_string(static_cast<TOutputBufferSizeType::type>(i));
-      jfieldID field = env_->GetStaticFieldID(
-          cls, val.c_str(), "Lcom/omnisci/thrift/calciteserver/TOutputBufferSizeType;");
-      if (!field) {
-        throw std::runtime_error("cannot find Java enum TOutputBufferSizeType::" + val +
-                                 " field");
-      }
-      output_buffer_size_type_vals_.push_back(env_->GetStaticObjectField(cls, field));
+    jmethodID values_method = env_->GetStaticMethodID(
+        cls, "values", "()[Lcom/mapd/parser/server/ExtensionFunction$ExtArgumentType;");
+    if (!values_method) {
+      throw std::runtime_error("cannot find ExtArgumentType::values method");
+    }
+    jobjectArray values = (jobjectArray)env_->CallStaticObjectMethod(cls, values_method);
+    for (jsize i = 0; i < env_->GetArrayLength(values); i++) {
+      ext_arg_type_vals_.push_back(env_->GetObjectArrayElement(values, i));
+      CHECK(ext_arg_type_vals_.back());
     }
   }
 
-  void findTUserDefinedTableFunction() {
-    udtfn_cls_ =
-        env_->FindClass("com/omnisci/thrift/calciteserver/TUserDefinedTableFunction");
-    if (!udtfn_cls_) {
-      throw std::runtime_error("cannot find Java class TUserDefinedTableFunction");
+  void findExtensionFunction() {
+    extension_fn_cls_ = env_->FindClass("com/mapd/parser/server/ExtensionFunction");
+    if (!extension_fn_cls_) {
+      throw std::runtime_error("cannot find Java class ExtensionFunction");
     }
-    udtfn_ctor_ = env_->GetMethodID(udtfn_cls_, "<init>", "()V");
-    if (!udtfn_ctor_) {
-      throw std::runtime_error("cannot find TUserDefinedTableFunction ctor");
+    extension_fn_udf_ctor_ =
+        env_->GetMethodID(extension_fn_cls_,
+                          "<init>",
+                          "(Ljava/lang/String;Ljava/util/List;Lcom/mapd/parser/server/"
+                          "ExtensionFunction$ExtArgumentType;)V");
+    if (!extension_fn_udf_ctor_) {
+      throw std::runtime_error("cannot find ExtensionFunction (UDF) ctor");
     }
-    // com.omnisci.thrift.calciteserver.TUserDefinedTableFunction
-    // setName(java.lang.String);
-    udtfn_set_name_ =
-        env_->GetMethodID(udtfn_cls_,
-                          "setName",
-                          "(Ljava/lang/String;)Lcom/omnisci/thrift/calciteserver/"
-                          "TUserDefinedTableFunction;");
-    if (!udtfn_set_name_) {
-      throw std::runtime_error("cannot find TUserDefinedTableFunction::setName method");
-    }
-    // com.omnisci.thrift.calciteserver.TUserDefinedTableFunction
-    // setSizerType(com.omnisci.thrift.calciteserver.TOutputBufferSizeType);
-    udtfn_set_sizer_type_ = env_->GetMethodID(
-        udtfn_cls_,
-        "setSizerType",
-        "(Lcom/omnisci/thrift/calciteserver/TOutputBufferSizeType;)Lcom/omnisci/thrift/"
-        "calciteserver/TUserDefinedTableFunction;");
-    if (!udtfn_set_sizer_type_) {
-      throw std::runtime_error(
-          "cannot find TUserDefinedTableFunction::setSizerType method");
-    }
-    // com.omnisci.thrift.calciteserver.TUserDefinedTableFunction setSizerArgPos(int);
-    udtfn_set_sizer_arg_pos_ = env_->GetMethodID(
-        udtfn_cls_,
-        "setSizerArgPos",
-        "(I)Lcom/omnisci/thrift/calciteserver/TUserDefinedTableFunction;");
-    if (!udtfn_set_sizer_arg_pos_) {
-      throw std::runtime_error(
-          "cannot find TUserDefinedTableFunction::setSizerArgPos method");
-    }
-    // com.omnisci.thrift.calciteserver.TUserDefinedTableFunction
-    // setInputArgTypes(java.util.List<com.omnisci.thrift.calciteserver.TExtArgumentType>);
-    udtfn_set_input_arg_types_ = env_->GetMethodID(
-        udtfn_cls_,
-        "setInputArgTypes",
-        "(Ljava/util/List;)Lcom/omnisci/thrift/calciteserver/TUserDefinedTableFunction;");
-    if (!udtfn_set_input_arg_types_) {
-      throw std::runtime_error(
-          "cannot find TUserDefinedTableFunction::setInputArgTypes method");
-    }
-    // com.omnisci.thrift.calciteserver.TUserDefinedTableFunction
-    // setOutputArgTypes(java.util.List<com.omnisci.thrift.calciteserver.TExtArgumentType>);
-    udtfn_set_output_arg_types_ = env_->GetMethodID(
-        udtfn_cls_,
-        "setOutputArgTypes",
-        "(Ljava/util/List;)Lcom/omnisci/thrift/calciteserver/TUserDefinedTableFunction;");
-    if (!udtfn_set_output_arg_types_) {
-      throw std::runtime_error(
-          "cannot find TUserDefinedTableFunction::setOutputArgTypes method");
-    }
-    // com.omnisci.thrift.calciteserver.TUserDefinedTableFunction
-    // setSqlArgTypes(java.util.List<com.omnisci.thrift.calciteserver.TExtArgumentType>);
-    udtfn_set_sql_arg_types_ = env_->GetMethodID(
-        udtfn_cls_,
-        "setSqlArgTypes",
-        "(Ljava/util/List;)Lcom/omnisci/thrift/calciteserver/TUserDefinedTableFunction;");
-    if (!udtfn_set_sql_arg_types_) {
-      throw std::runtime_error(
-          "cannot find TUserDefinedTableFunction::setSqlArgTypes method");
-    }
-    // com.omnisci.thrift.calciteserver.TUserDefinedTableFunction
-    // setAnnotations(java.util.List<java.util.Map<java.lang.String, java.lang.String>>);
-    udtfn_set_annotations_ = env_->GetMethodID(
-        udtfn_cls_,
-        "setAnnotations",
-        "(Ljava/util/List;)Lcom/omnisci/thrift/calciteserver/TUserDefinedTableFunction;");
-    if (!udtfn_set_annotations_) {
-      throw std::runtime_error(
-          "cannot find TUserDefinedTableFunction::setAnnotations method");
+    extension_fn_udtf_ctor_ = env_->GetMethodID(
+        extension_fn_cls_,
+        "<init>",
+        "(Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;)V");
+    if (!extension_fn_udtf_ctor_) {
+      throw std::runtime_error("cannot find ExtensionFunction (UDTF) ctor");
     }
   }
 
@@ -470,53 +393,68 @@ class CalciteJNI::Impl {
     std::runtime_error("Unsupported enum value: " + to_string(val));
   }
 
-  jobject convertTOutputBufferSizeType(TOutputBufferSizeType::type val) {
-    return convertEnumValue(val, output_buffer_size_type_vals_);
-  }
-
-  jobject convertTExtArgumentType(TExtArgumentType::type val) {
-    return convertEnumValue(val, ext_arg_type_vals_);
-  }
-
-  jobject convertTExtArgumentTypes(const std::vector<TExtArgumentType::type>& vals) {
-    jobject res = env_->NewObject(array_list_cls_, array_list_ctor_);
-    for (auto& val : vals) {
-      env_->CallVoidMethod(res, array_list_add_, convertTExtArgumentType(val));
+  jobject convertExtArgumentType(ExtArgumentType val) {
+    size_t index = static_cast<size_t>(val);
+    if (index < ext_arg_type_vals_.size()) {
+      return ext_arg_type_vals_[index];
     }
-    return res;
+    throw std::runtime_error("ExtArgumentType enum value is out of range (" +
+                             to_string(index) + ")");
   }
 
-  jobject convertTUserDefinedTableFunction(const TUserDefinedTableFunction& udtf) {
-    jobject res = env_->NewObject(udtfn_cls_, udtfn_ctor_);
-    // java.lang.String name;
-    env_->CallObjectMethod(res, udtfn_set_name_, env_->NewStringUTF(udtf.name.c_str()));
-    // TOutputBufferSizeType sizerType;
-    env_->CallObjectMethod(
-        res, udtfn_set_sizer_type_, convertTOutputBufferSizeType(udtf.sizerType));
-    // int sizerArgPos;
-    env_->CallObjectMethod(res, udtfn_set_sizer_arg_pos_, (jint)udtf.sizerArgPos);
-    // java.util.List<TExtArgumentType> inputArgTypes;
-    env_->CallVoidMethod(
-        res, udtfn_set_input_arg_types_, convertTExtArgumentTypes(udtf.inputArgTypes));
-    // java.util.List<TExtArgumentType> outputArgTypes;
-    env_->CallVoidMethod(
-        res, udtfn_set_output_arg_types_, convertTExtArgumentTypes(udtf.outputArgTypes));
-    // java.util.List<TExtArgumentType> sqlArgTypes;
-    env_->CallVoidMethod(
-        res, udtfn_set_sql_arg_types_, convertTExtArgumentTypes(udtf.sqlArgTypes));
-    // java.util.List<java.util.Map<java.lang.String,java.lang.String>> annotations;
-    jobject annotations = env_->NewObject(array_list_cls_, array_list_ctor_);
-    for (auto& ann : udtf.annotations) {
-      jobject jmap = env_->NewObject(hash_map_cls_, hash_map_ctor_);
-      for (auto& [key, val] : ann) {
-        auto jkey = env_->NewStringUTF(key.c_str());
-        auto jval = env_->NewStringUTF(val.c_str());
-        env_->CallVoidMethod(jmap, hash_map_put_, jkey, jval);
+  void addArgTypesAndNames(
+      jobject types,
+      jobject names,
+      const std::vector<ExtArgumentType>& args,
+      const std::vector<std::map<std::string, std::string>>& annotations,
+      const std::string& prefix,
+      size_t ann_offset) {
+    size_t index = 0;
+    for (size_t index = 0; index < args.size(); ++index) {
+      env_->CallVoidMethod(types, array_list_add_, convertExtArgumentType(args[index]));
+      auto& ann = annotations[index + ann_offset];
+      if (ann.count("name")) {
+        env_->CallVoidMethod(
+            names, array_list_add_, env_->NewStringUTF(ann.at("name").c_str()));
+      } else {
+        env_->CallVoidMethod(
+            names,
+            array_list_add_,
+            env_->NewStringUTF((prefix + std::to_string(index)).c_str()));
       }
-      env_->CallVoidMethod(annotations, array_list_add_, jmap);
     }
-    env_->CallVoidMethod(res, udtfn_set_annotations_, annotations);
-    return res;
+  }
+
+  jobject convertExtensionFunction(const ExtensionFunction& udf) {
+    jstring name_arg = env_->NewStringUTF(udf.getName().c_str());
+    jobject args_arg = env_->NewObject(array_list_cls_, array_list_ctor_);
+    for (auto& arg : udf.getArgs()) {
+      env_->CallVoidMethod(args_arg, array_list_add_, convertExtArgumentType(arg));
+    }
+    jobject ret_arg = convertExtArgumentType(udf.getRet());
+    return env_->NewObject(
+        extension_fn_cls_, extension_fn_udf_ctor_, name_arg, args_arg, ret_arg);
+  }
+
+  jobject convertTableFunction(const table_functions::TableFunction& udtf) {
+    jstring name_arg = env_->NewStringUTF(udtf.getName().c_str());
+    jobject args_arg = env_->NewObject(array_list_cls_, array_list_ctor_);
+    jobject outs_arg = env_->NewObject(array_list_cls_, array_list_ctor_);
+    jobject names_arg = env_->NewObject(array_list_cls_, array_list_ctor_);
+    addArgTypesAndNames(
+        args_arg, names_arg, udtf.getSqlArgs(), udtf.getAnnotations(), "inp", 0);
+    addArgTypesAndNames(outs_arg,
+                        names_arg,
+                        udtf.getOutputArgs(),
+                        udtf.getAnnotations(),
+                        "out",
+                        udtf.getSqlArgs().size());
+    return env_->NewObject(extension_fn_cls_,
+                           extension_fn_udtf_ctor_,
+                           name_arg,
+                           args_arg,
+                           outs_arg,
+                           names_arg);
   }
 
   // Java machine and environment.
@@ -543,22 +481,13 @@ class CalciteJNI::Impl {
   jclass plan_result_cls_;
   jfieldID plan_result_plan_result_;
 
-  // com.omnisci.thrift.calciteserver.TExtArgumentType enum values
+  // com.mapd.parser.server.ExtensionFunction$ExtArgumentType enum values
   std::vector<jobject> ext_arg_type_vals_;
 
-  // com.omnisci.thrift.calciteserver.TOutputBufferSizeType enum values
-  std::vector<jobject> output_buffer_size_type_vals_;
-
-  // com.omnisci.thrift.calciteserver.TUserDefinedTableFunction class and methods
-  jclass udtfn_cls_;
-  jmethodID udtfn_ctor_;
-  jmethodID udtfn_set_name_;
-  jmethodID udtfn_set_sizer_type_;
-  jmethodID udtfn_set_sizer_arg_pos_;
-  jmethodID udtfn_set_input_arg_types_;
-  jmethodID udtfn_set_output_arg_types_;
-  jmethodID udtfn_set_sql_arg_types_;
-  jmethodID udtfn_set_annotations_;
+  // com.mapd.parser.server.ExtensionFunction class and methods
+  jclass extension_fn_cls_;
+  jmethodID extension_fn_udf_ctor_;
+  jmethodID extension_fn_udtf_ctor_;
 
   // com.omnisci.thrift.calciteserver.InvalidParseRequest class and fields
   jclass invalid_parse_req_cls_;
@@ -612,8 +541,8 @@ std::string CalciteJNI::getRuntimeExtensionFunctionWhitelist() {
   return impl_->getRuntimeExtensionFunctionWhitelist();
 }
 void CalciteJNI::setRuntimeExtensionFunctions(
-    const std::vector<TUserDefinedFunction>& udfs,
-    const std::vector<TUserDefinedTableFunction>& udtfs,
+    const std::vector<ExtensionFunction>& udfs,
+    const std::vector<table_functions::TableFunction>& udtfs,
     bool is_runtime) {
   return impl_->setRuntimeExtensionFunctions(udfs, udtfs, is_runtime);
 }

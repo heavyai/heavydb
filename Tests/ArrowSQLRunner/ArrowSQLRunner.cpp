@@ -269,9 +269,9 @@ class ArrowSQLRunnerImpl {
     }
 
     table_functions::TableFunctionsFactory::init();
-    auto udtfs = ThriftSerializers::to_thrift(
-        table_functions::TableFunctionsFactory::get_table_funcs(/*is_runtime=*/false));
-    std::vector<TUserDefinedFunction> udfs = {};
+    auto udtfs =
+        table_functions::TableFunctionsFactory::get_table_funcs(/*is_runtime=*/false);
+    std::vector<ExtensionFunction> udfs = {};
     calcite_->setRuntimeExtensionFunctions(udfs, udtfs, /*is_runtime=*/false);
   }
 

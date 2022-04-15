@@ -55,6 +55,7 @@ public class ExtensionFunction {
     ArrayFloat,
     ArrayDouble,
     ArrayBool,
+    Cursor,
     ColumnInt8,
     ColumnInt16,
     ColumnInt32,
@@ -62,7 +63,6 @@ public class ExtensionFunction {
     ColumnFloat,
     ColumnDouble,
     ColumnBool,
-    Cursor,
     TextEncodingNone,
     TextEncodingDict,
     ColumnListInt8,
@@ -77,7 +77,10 @@ public class ExtensionFunction {
   }
   ;
 
-  ExtensionFunction(final List<ExtArgumentType> args, final ExtArgumentType ret) {
+  ExtensionFunction(String name,
+          final List<ExtArgumentType> args,
+          final ExtArgumentType ret) {
+    this.name = name;
     this.args = args;
     this.ret = ret;
     this.outs = null;
@@ -85,14 +88,20 @@ public class ExtensionFunction {
     this.isRowUdf = true;
   }
 
-  ExtensionFunction(final List<ExtArgumentType> args,
+  ExtensionFunction(String name,
+          final List<ExtArgumentType> args,
           final List<ExtArgumentType> outs,
           final List<String> names) {
+    this.name = name;
     this.args = args;
     this.ret = null;
     this.outs = outs;
     this.names = names;
     this.isRowUdf = false;
+  }
+
+  public String getName() {
+    return this.name;
   }
 
   public List<ExtArgumentType> getArgs() {
@@ -271,6 +280,7 @@ public class ExtensionFunction {
   private final List<String> names;
   private final ExtArgumentType ret; // only used by UDFs
   private final boolean isRowUdf;
+  private final String name;
 
   public final java.util.List<SqlTypeFamily> toSqlSignature() {
     java.util.List<SqlTypeFamily> sql_sig = new java.util.ArrayList<SqlTypeFamily>();

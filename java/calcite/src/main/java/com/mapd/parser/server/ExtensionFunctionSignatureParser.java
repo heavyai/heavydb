@@ -149,7 +149,7 @@ class ExtensionFunctionSignatureParser {
       }
     }
     assert is_row_func;
-    return new ExtensionFunction(args, deserializeType(ret));
+    return new ExtensionFunction(null, args, deserializeType(ret));
   }
   private static ExtensionFunction.ExtArgumentType deserializeType(
           final String type_name) {
