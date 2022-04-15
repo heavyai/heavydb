@@ -50,7 +50,7 @@ std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
 
 }  // namespace
 
-bool skip_tests(const ExecutorDeviceType device_type) {
+bool skip_tests_no_gpu(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
   return device_type == ExecutorDeviceType::GPU && !(QR::get()->gpusPresent());
 #else
@@ -58,11 +58,25 @@ bool skip_tests(const ExecutorDeviceType device_type) {
 #endif
 }
 
+bool skip_tests_no_tbb() {
+#ifdef HAVE_TBB
+  return false;
+#else
+  return true;
+#endif
+}
+
 #define SKIP_NO_GPU()                                        \
-  if (skip_tests(dt)) {                                      \
+  if (skip_tests_no_gpu(dt)) {                               \
     CHECK(dt == ExecutorDeviceType::GPU);                    \
     LOG(WARNING) << "GPU not available, skipping GPU tests"; \
     continue;                                                \
+  }
+
+#define SKIP_NO_TBB()                                    \
+  if (skip_tests_no_tbb()) {                             \
+    LOG(WARNING) << "TBB not available, skipping tests"; \
+    continue;                                            \
   }
 
 class SystemTFs : public ::testing::Test {
@@ -72,6 +86,7 @@ class SystemTFs : public ::testing::Test {
 TEST_F(SystemTFs, GenerateSeries) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    SKIP_NO_TBB();
     {
       // Step of 0 is not permitted
       EXPECT_THROW(
@@ -225,6 +240,7 @@ TEST_F(SystemTFs, GenerateSeries) {
 TEST_F(SystemTFs, GenerateRandomStrings) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    SKIP_NO_TBB();
     {
       // num_strings must be >= 0
       EXPECT_THROW(
@@ -281,6 +297,9 @@ TEST_F(SystemTFs, GenerateRandomStrings) {
 TEST_F(SystemTFs, Mandelbrot) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    if (dt == ExecutorDeviceType::CPU) {
+      SKIP_NO_TBB();
+    }
     // We won't make the default on GPU for function `tf_mandelbrot` use CUDA
     // until code cacheing is introduced for table functions
     const std::string tf_name =
@@ -343,6 +362,7 @@ TEST_F(SystemTFs, GeoRasterize) {
       "15.0), (-0.4, 0.8, 40.0)) AS t(x, y, z))";
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    SKIP_NO_TBB();
     // tf_geo_rasterize requires bin_dim_meters to be > 0
     {
       EXPECT_THROW(

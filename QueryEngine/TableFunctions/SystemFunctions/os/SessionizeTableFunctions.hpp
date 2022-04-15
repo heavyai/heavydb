@@ -36,15 +36,16 @@ inline int32_t get_elapsed_seconds(const Timestamp& start, const Timestamp& end)
 /*
   UDTF: tf_compute_dwell_times__cpu_template(TableFunctionManager,
   Cursor<Column<I> entity_id, Column<S> session_id, Column<Timestamp> ts> data,
-  int64_t min_dwell_points,
-  int64_t min_dwell_seconds,
-  int64_t max_inactive_seconds) | filter_table_function_transpose=on ->
+  int64_t min_dwell_points | require="min_dwell_points >= 0",
+  int64_t min_dwell_seconds | require="min_dwell_seconds >= 0",
+  int64_t max_inactive_seconds | require="max_inactive_seconds >= 0") | filter_table_function_transpose=on ->
   Column<I> entity_id | input_id=args<0>, Column<S> site_id | input_id=args<1>, Column<S> prev_site_id | input_id=args<1>, 
   Column<S> next_site_id | input_id=args<1>, Column<int32_t> session_id, Column<int32_t> start_seq_id,
   Column<Timestamp> ts, Column<int32_t> dwell_time_sec, Column<int32_t> num_dwell_points, 
   I=[TextEncodingDict, int64_t], S=[TextEncodingDict, int64_t]
  */
 // clang-format on
+
 template <typename I, typename S>
 NEVER_INLINE HOST int32_t
 tf_compute_dwell_times__cpu_template(TableFunctionManager& mgr,
@@ -64,17 +65,6 @@ tf_compute_dwell_times__cpu_template(TableFunctionManager& mgr,
                                      Column<int32_t>& output_dwell_time_sec,
                                      Column<int32_t>& output_dwell_points) {
   auto func_timer = DEBUG_TIMER(__func__);
-  // Below error throws are temporary workaround for bug found when using annotation
-  // require syntax
-  if (min_dwell_points < 1) {
-    return mgr.ERROR_MESSAGE("tf_compute_dwell_times: min_dwell_points must be >= 1");
-  }
-  if (min_dwell_seconds < 0) {
-    return mgr.ERROR_MESSAGE("tf_compute_dwell_times: min_dwell_seconds must be >= 0");
-  }
-  if (max_inactive_seconds < 1) {
-    return mgr.ERROR_MESSAGE("tf_compute_dwell_times: max_inactive_seconds must be >= 1");
-  }
 
   const I id_null_val = inline_null_value<I>();
   const S site_id_null_val = inline_null_value<S>();
