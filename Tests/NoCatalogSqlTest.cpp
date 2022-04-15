@@ -12,6 +12,7 @@
  * limitations under the License.
  */
 
+#include "ArrowSQLRunner/SchemaJson.h"
 #include "Calcite/CalciteJNI.h"
 #include "DataMgr/DataMgrBufferProvider.h"
 #include "DataMgr/DataMgrDataProvider.h"
@@ -19,7 +20,6 @@
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/RelAlgExecutor.h"
 #include "SchemaMgr/SimpleSchemaProvider.h"
-#include "Shared/ArrowSQLRunner/SchemaJson.h"
 #include "Shared/Globals.h"
 #include "Shared/scope.h"
 

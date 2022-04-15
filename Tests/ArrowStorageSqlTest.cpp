@@ -22,9 +22,8 @@
 
 #include "gen-cpp/CalciteServer.h"
 
-#include "ArrowSQLRunner.h"
+#include "ArrowSQLRunner/ArrowSQLRunner.h"
 #include "ArrowTestHelpers.h"
-#include "Shared/ArrowSQLRunner/SchemaJson.h"
 #include "TestHelpers.h"
 
 #include <gtest/gtest.h>

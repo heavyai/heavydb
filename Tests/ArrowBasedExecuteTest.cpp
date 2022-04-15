@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "Shared/ArrowSQLRunner/ArrowSQLRunner.h"
-#include "Shared/ArrowSQLRunner/SQLiteComparator.h"
+#include "ArrowSQLRunner/ArrowSQLRunner.h"
+#include "ArrowSQLRunner/SQLiteComparator.h"
 #include "TestHelpers.h"
 
 #include "QueryEngine/ArrowResultSet.h"

@@ -19,7 +19,7 @@
  * @brief Test suite for string functions
  */
 
-#include "Shared/ArrowSQLRunner/ArrowSQLRunner.h"
+#include "ArrowSQLRunner/ArrowSQLRunner.h"
 #include "TestHelpers.h"
 
 #include <QueryEngine/ResultSet.h>
