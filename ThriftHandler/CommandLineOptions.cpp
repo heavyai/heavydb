@@ -988,6 +988,12 @@ void CommandLineOptions::fillAdvancedOptions() {
                               ->default_value(g_enable_assign_render_groups)
                               ->implicit_value(true),
                           "Enable Render Group assignment");
+
+  help_desc.add_options()("enable-query-engine-cuda-streams",
+                          po::value<bool>(&g_query_engine_cuda_streams)
+                              ->default_value(g_query_engine_cuda_streams)
+                              ->implicit_value(true),
+                          "Enable Query Engine CUDA streams");
 }
 
 namespace {

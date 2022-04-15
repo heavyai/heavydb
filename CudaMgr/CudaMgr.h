@@ -17,7 +17,6 @@
 
 #include <cstdlib>
 #include <mutex>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -92,18 +91,18 @@ class CudaMgr {
                         const int8_t* host_ptr,
                         const size_t num_bytes,
                         const int device_num,
-                        std::optional<CUstream> cuda_stream = {});
+                        CUstream cuda_stream = 0);
   void copyDeviceToHost(int8_t* host_ptr,
                         const int8_t* device_ptr,
                         const size_t num_bytes,
                         const int device_num,
-                        std::optional<CUstream> cuda_stream = {});
+                        CUstream cuda_stream = 0);
   void copyDeviceToDevice(int8_t* dest_ptr,
                           int8_t* src_ptr,
                           const size_t num_bytes,
                           const int dest_device_num,
                           const int src_device_num,
-                          std::optional<CUstream> cuda_stream = {});
+                          CUstream cuda_stream = 0);
 
   int8_t* allocatePinnedHostMem(const size_t num_bytes);
   int8_t* allocateDeviceMem(const size_t num_bytes, const int device_num);
@@ -112,12 +111,12 @@ class CudaMgr {
   void zeroDeviceMem(int8_t* device_ptr,
                      const size_t num_bytes,
                      const int device_num,
-                     std::optional<CUstream> cuda_stream = {});
+                     CUstream cuda_stream = 0);
   void setDeviceMem(int8_t* device_ptr,
                     const unsigned char uc,
                     const size_t num_bytes,
                     const int device_num,
-                    std::optional<CUstream> cuda_stream = {});
+                    CUstream cuda_stream = 0);
 
   size_t getMinSharedMemoryPerBlockForAllDevices() const {
     return min_shared_memory_per_block_for_all_devices;
