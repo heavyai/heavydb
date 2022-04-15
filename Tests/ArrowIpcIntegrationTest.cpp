@@ -50,8 +50,6 @@ using namespace std::literals;
 #include "Shared/ThriftClient.h"
 #include "Shared/scope.h"
 
-#include "gen-cpp/OmniSci.h"
-
 TSessionId g_session_id;
 std::shared_ptr<OmniSciClient> g_client;
 

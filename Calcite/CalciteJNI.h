@@ -19,8 +19,6 @@
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 
-#include "gen-cpp/calciteserver_types.h"
-
 struct FilterPushDownInfo {
   int input_prev;
   int input_start;

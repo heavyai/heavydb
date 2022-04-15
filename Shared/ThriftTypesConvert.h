@@ -17,8 +17,6 @@
 #ifndef THRIFT_TYPE_CONVERT_H
 #define THRIFT_TYPE_CONVERT_H
 
-#include "gen-cpp/omnisci_types.h"
-
 #include "Logger/Logger.h"
 
 #include <string>

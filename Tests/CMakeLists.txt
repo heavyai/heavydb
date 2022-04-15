@@ -36,9 +36,6 @@ add_executable(ArrayTest ArrayTest.cpp)
 add_executable(GroupByTest GroupByTest.cpp)
 add_executable(TopKTest TopKTest.cpp)
 add_executable(CorrelatedSubqueryTest CorrelatedSubqueryTest.cpp)
-if(NOT MSVC)
-  add_executable(CtasIntegrationTest CtasIntegrationTest.cpp)
-endif()
 add_executable(DateTimeUtilsTest Shared/DateTimeUtilsTest.cpp)
 add_executable(ThreadingTest Shared/ThreadingTest.cpp)
 add_executable(ThreadingTestSTD Shared/ThreadingTestStd.cpp)
@@ -68,7 +65,7 @@ endif()
 
 # Tests + Microbenchmarks
 
-set(EXECUTE_TEST_LIBS gtest mapd_thrift fmt::fmt ArrowQueryRunner ArrowStorage ${MAPD_LIBRARIES} ${Arrow_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+set(EXECUTE_TEST_LIBS gtest fmt::fmt ArrowQueryRunner ArrowStorage ${MAPD_LIBRARIES} ${Arrow_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 
 if(ENABLE_L0)
   add_executable(L0MgrExecuteTest L0MgrExecuteTest.cpp)
@@ -99,15 +96,12 @@ target_link_libraries(BumpAllocatorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TopKTest ${EXECUTE_TEST_LIBS})
 
 if(ENABLE_FOLLY) 
-  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary Logger Utils ${CMAKE_DL_LIBS} ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+  target_link_libraries(StringDictionaryTest gtest StringDictionary Logger Utils ${CMAKE_DL_LIBS} ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 else()
-  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary Logger Utils ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+  target_link_libraries(StringDictionaryTest gtest StringDictionary Logger Utils ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 endif()
 
 target_link_libraries(CorrelatedSubqueryTest ${EXECUTE_TEST_LIBS})
-if(NOT MSVC)
-  target_link_libraries(CtasIntegrationTest gtest Logger Shared mapd_thrift ThriftClient ${LLVM_LINKER_FLAGS})
-endif()
 target_link_libraries(DateTimeUtilsTest gtest Logger Shared ${LLVM_LINKER_FLAGS})
 target_link_libraries(ThreadingTest gtest Logger Shared ${LLVM_LINKER_FLAGS} ${TBB_LIBRARIES})
 target_link_libraries(ThreadingTestSTD gtest Logger Shared ${LLVM_LINKER_FLAGS})
@@ -197,7 +191,7 @@ endif()
 
 find_package(fmt REQUIRED)
 #add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
-#target_link_libraries(ArrowIpcIntegrationTest gtest fmt::fmt ThriftClient mapd_thrift Logger Shared ${CUDA_LIBRARIES} ${Arrow_LIBRARIES})
+#target_link_libraries(ArrowIpcIntegrationTest gtest fmt::fmt ThriftClient Logger Shared ${CUDA_LIBRARIES} ${Arrow_LIBRARIES})
 #add_test(ArrowIpcIntegrationTest ArrowIpcIntegrationTest ${TEST_ARGS})
 
 #parse s3 credentials

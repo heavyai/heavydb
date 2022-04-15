@@ -19,7 +19,6 @@
 #include "DataMgr/DataMgrDataProvider.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/RelAlgExecutor.h"
-#include "QueryEngine/ThriftSerializers.h"
 
 #include "SQLiteComparator.h"
 #include "SchemaJson.h"

@@ -108,7 +108,6 @@ if(PREFER_STATIC_LIBS)
   set(Arrow_USE_STATIC_LIBS ON)
   set(Boost_USE_STATIC_LIBS ON)
   set(OPENSSL_USE_STATIC_LIBS ON)
-  set(Thrift_USE_STATIC_LIBS ON)
   if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libgcc -static-libstdc++")
   endif()
@@ -255,21 +254,6 @@ include_directories(${OPENSSL_INCLUDE_DIR})
 
 if(MSVC)
   add_definitions(/bigobj)
-  find_package(Thrift CONFIG REQUIRED)
-  set(Thrift_INCLUDE_DIRS ${THRIFT_INCLUDE_DIR})
-  set(Thrift_EXECUTABLE "${THRIFT_BIN_DIR}/thrift.exe")
-  set(Thrift_LIBRARIES ${THRIFT_LIBRARIES})
-else()
-  find_package(Thrift REQUIRED)
-endif()
-include_directories(${Thrift_INCLUDE_DIRS})
-if("${Thrift_VERSION}" VERSION_LESS "0.13.0")
-  add_definitions("-DHAVE_THRIFT_PLATFORMTHREADFACTORY")
-else()
-  add_definitions("-DHAVE_THRIFT_THREADFACTORY")
-  if("${Thrift_VERSION}" VERSION_GREATER_EQUAL "0.14.0")
-    add_definitions("-DHAVE_THRIFT_MESSAGE_LIMIT")
-  endif()
 endif()
 
 find_package(Git)
@@ -643,27 +627,8 @@ set(gen_cpp_files
     ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.h
 )
-add_custom_command(
-  DEPENDS
-    ${CMAKE_SOURCE_DIR}/omnisci.thrift
-    ${CMAKE_SOURCE_DIR}/common.thrift
-    ${CMAKE_SOURCE_DIR}/completion_hints.thrift
-    ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
-    ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
-  OUTPUT ${gen_cpp_files}
-  COMMAND ${Thrift_EXECUTABLE}
-  ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/omnisci.thrift)
+
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
-
-add_custom_target(thrift_gen DEPENDS ${gen_cpp_files})
-
-add_library(mapd_thrift ${gen_cpp_files})
-
-if(NOT MSVC)
-  target_compile_options(mapd_thrift PRIVATE -fPIC)
-endif()
-
-target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
 
 set(MAPD_RENDERING_LIBRARIES "")
 if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
@@ -713,8 +678,6 @@ add_subdirectory(SqliteConnector)
 
 add_subdirectory(StringDictionary)
 add_subdirectory(Calcite)
-get_target_property(CalciteThrift_BINARY_DIR calciteserver_thrift BINARY_DIR)
-include_directories(${CalciteThrift_BINARY_DIR})
 
 add_subdirectory(ArrowStorage)
 add_subdirectory(Analyzer)
@@ -774,47 +737,12 @@ if (ENABLE_TESTS)
   enable_testing()
   add_subdirectory(Tests/ArrowSQLRunner)
   add_subdirectory(Tests)
-  add_subdirectory(SampleCode)
 endif()
 
 if(ENABLE_RENDERING AND ENABLE_RENDER_TESTS)
   enable_testing()
   add_subdirectory(Tests/RenderTests)
 endif()
-
-add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/omnisci.thrift
-    OUTPUT
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/OmniSci.java
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/TRow.java
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
-    COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/omnisci.thrift)
-
-add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/common.thrift
-    OUTPUT
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/common.java
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
-    COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/common.thrift)
-
-add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
-    OUTPUT
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/serialized_result_set.java
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
-    COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift)
-
-add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift ${CMAKE_SOURCE_DIR}/completion_hints.thrift ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
-    OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/calciteserver/CalciteServer.java
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
-    COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen java -r -I ${CMAKE_SOURCE_DIR} -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift)
-
-list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/)
 
 execute_process(
   COMMAND ${GIT_EXECUTABLE} rev-parse --short=10 HEAD
@@ -969,16 +897,13 @@ add_custom_command(
   OUTPUT
     ${CMAKE_BINARY_DIR}/bin/${OMNISCI_UTILITY_JAR}
     ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar
-    COMMAND ${MVN_PATH_COMMAND} ${MVN_EXECUTABLE} -l ${CMAKE_BINARY_DIR}/mvn_build.log -e clean install -Dthrift.version="${Thrift_VERSION}" -Dmaven.compiler.showDeprecation=true -Dmaven.compiler.showWarnings=true -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}" -Djava.net.preferIPv4Stack=true -Dmaven.wagon.http.retryHandler.count=3 -DMAPD_LOG_DIR="${CMAKE_BINARY_DIR}"
+    COMMAND ${MVN_PATH_COMMAND} ${MVN_EXECUTABLE} -l ${CMAKE_BINARY_DIR}/mvn_build.log -e clean install -Dmaven.compiler.showDeprecation=true -Dmaven.compiler.showWarnings=true -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}" -Djava.net.preferIPv4Stack=true -Dmaven.wagon.http.retryHandler.count=3 -DMAPD_LOG_DIR="${CMAKE_BINARY_DIR}"
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapd/target/${OMNISCI_UTILITY_JAR} ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   DEPENDS
-    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/OmniSci.java
-    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/calciteserver/CalciteServer.java
     ${CMAKE_SOURCE_DIR}/java/calcite/src/main/codegen/config.fmpp
     ${CMAKE_SOURCE_DIR}/java/pom.xml
-    ${CMAKE_SOURCE_DIR}/omnisci.thrift
     ${JAVA_POM}
     ${JAVA_SOURCES}
     ${JAVA_FTL}
@@ -1005,11 +930,6 @@ install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION "." COMPONENT "d
 if(ENABLE_CUDA)
   install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.fatbin DESTINATION QueryEngine COMPONENT "exe")
 endif()
-install(FILES completion_hints.thrift DESTINATION "." COMPONENT "thrift")
-install(FILES omnisci.thrift DESTINATION "." COMPONENT "thrift")
-install(FILES common.thrift DESTINATION "." COMPONENT "thrift")
-install(FILES QueryEngine/serialized_result_set.thrift DESTINATION "QueryEngine/" COMPONENT "thrift")
-install(FILES QueryEngine/extension_functions.thrift DESTINATION "QueryEngine/" COMPONENT "thrift")
 
 if(NOT PREFER_STATIC_LIBS AND NOT ENABLE_CONDA)
   install(FILES ${Boost_LIBRARIES} DESTINATION ThirdParty/lib)
