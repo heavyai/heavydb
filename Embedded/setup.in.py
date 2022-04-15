@@ -13,16 +13,16 @@ import pyarrow as pa
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# conda-forge packages omniscidbe and pyomniscidbe are built
-# separately. OMNISCI_ROOT_PATH is defined by the omniscidbe activate
+# conda-forge packages heavydbe and pypyheavydbe are built
+# separately. HEAVYDB_ROOT_PATH is defined by the heavydbe activate
 # script that determines the location of libDBEngine.so and is
-# required for linking Python extension module omniscidbe.
+# required for linking Python extension module heavydbe.
 extra_library_dirs = []
-if 'OMNISCI_ROOT_PATH' in os.environ:
-    extra_library_dirs.append(os.path.join(os.environ['OMNISCI_ROOT_PATH'], 'lib'))
+if 'HEAVYDB_ROOT_PATH' in os.environ:
+    extra_library_dirs.append(os.path.join(os.environ['HEAVYDB_ROOT_PATH'], 'lib'))
 
 dbe = Extension(
-    "omniscidbe",
+    "heavydbe",
     ["@CMAKE_CURRENT_SOURCE_DIR@/Python/dbe.pyx"],
     language="c++17",
     include_dirs=[
@@ -69,7 +69,7 @@ if False:  # TODO: implement an option?
     ]
 
 setup(
-    name="omniscidbe",
+    name="heavydbe",
     version="0.1",
     ext_modules=cythonize(
         dbe,
