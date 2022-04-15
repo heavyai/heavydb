@@ -2716,13 +2716,8 @@ namespace {
 
 void validate_shard_column_type(const ColumnDescriptor& cd) {
   const auto& col_ti = cd.columnType;
-  if (col_ti.is_integer() ||
-      (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT) ||
-      col_ti.is_time()) {
-    if (cd.default_value.has_value()) {
-      throw std::runtime_error("Default values for shard keys are not supported yet.");
-    }
-  } else {
+  if (!col_ti.is_integer() && !col_ti.is_time() &&
+      !(col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT)) {
     throw std::runtime_error("Cannot shard on type " + col_ti.get_type_name() +
                              ", encoding " + col_ti.get_compression_name());
   }

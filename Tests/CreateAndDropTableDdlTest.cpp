@@ -2092,12 +2092,13 @@ TEST_F(DefaultValuesTest, InsertAfterAlter) {
   verifyData();
 }
 
-TEST_F(DefaultValuesTest, ProhibitDefaultOnShardedKey) {
-  queryAndAssertException(
-      "CREATE TABLE defval_tbl (i INTEGER default -1, key text "
-      "default 'default', shard key(i)) with (shard_count = 2)",
-      "Default values for shard "
-      "keys are not supported yet.");
+TEST_F(DefaultValuesTest, AllowDefaultOnShardedKey) {
+  sql("CREATE TABLE defval_tbl (i INTEGER default -1, key text "
+      "default 'default', shard key(i)) with (shard_count = 2)");
+  sql("INSERT INTO defval_tbl(i, key) VALUES (1, 'Foo')");
+  sql("INSERT INTO defval_tbl(key) VALUES ('Bar')");
+  sqlAndCompareResult("SELECT i FROM defval_tbl WHERE key = 'Foo'", {{i(1)}});
+  sqlAndCompareResult("SELECT i FROM defval_tbl WHERE key = 'Bar'", {{i(-1)}});
 }
 
 TEST_F(DefaultValuesTest, DefaultAllowsNulls) {
