@@ -599,7 +599,7 @@ class Executor {
   void enableRuntimeQueryInterrupt(const double runtime_query_check_freq,
                                    const unsigned pending_query_check_freq) const;
 
-  static const size_t high_scan_limit{32000000};
+  static const size_t high_scan_limit{128000000};
 
   int8_t warpSize() const;
   unsigned gridSize() const;
