@@ -20,9 +20,8 @@
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/RelAlgExecutor.h"
 
-#include "gen-cpp/CalciteServer.h"
-
 #include "ArrowSQLRunner/ArrowSQLRunner.h"
+
 #include "ArrowTestHelpers.h"
 #include "TestHelpers.h"
 

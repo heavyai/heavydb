@@ -21,7 +21,6 @@ import com.mapd.calcite.parser.MapDParser;
 import com.mapd.calcite.parser.MapDParserOptions;
 import com.mapd.calcite.parser.MapDUser;
 import com.mapd.common.SockTransportProperties;
-import com.omnisci.thrift.calciteserver.CalciteServer;
 import com.omnisci.thrift.calciteserver.InvalidParseRequest;
 import com.omnisci.thrift.calciteserver.TAccessedQueryObjects;
 import com.omnisci.thrift.calciteserver.TCompletionHint;
@@ -63,7 +62,7 @@ import java.util.Map;
  *
  * @author michael
  */
-public class CalciteServerHandler implements CalciteServer.Iface {
+public class CalciteServerHandler {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteServerHandler.class);
   private TServer server;
 
@@ -129,12 +128,6 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     this.parserPool = new GenericObjectPool(calciteParserFactory);
   }
 
-  @Override
-  public void ping() throws TException {
-    MAPDLOGGER.debug("Ping hit");
-  }
-
-  @Override
   public TPlanResult process(String user,
           String session,
           String catalog,
@@ -267,111 +260,18 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     return result;
   }
 
-  @Override
-  public void shutdown() throws TException {
-    // received request to shutdown
-    MAPDLOGGER.debug("Shutdown calcite java server");
-    server.stop();
-  }
-
-  @Override
   public String getExtensionFunctionWhitelist() {
     return this.extSigsJson;
   }
 
-  @Override
   public String getUserDefinedFunctionWhitelist() {
     return this.udfSigsJson;
   }
 
-  @Override
   public String getRuntimeExtensionFunctionWhitelist() {
     return this.udfRTSigsJson;
   }
 
-  void setServer(TServer s) {
-    server = s;
-  }
-
-  @Override
-  public void updateMetadata(String catalog, String table) throws TException {
-    MAPDLOGGER.debug("Received invalidation from server for " + catalog + " : " + table);
-    long timer = System.currentTimeMillis();
-    callCount++;
-    MapDParser parser;
-    try {
-      parser = (MapDParser) parserPool.borrowObject();
-    } catch (Exception ex) {
-      String msg = "Could not get Parse Item from pool: " + ex.getMessage();
-      MAPDLOGGER.error(msg, ex);
-      return;
-    }
-    CURRENT_PARSER.set(parser);
-    try {
-      parser.updateMetaData(catalog, table);
-    } finally {
-      CURRENT_PARSER.set(null);
-      try {
-        // put parser object back in pool for others to use
-        MAPDLOGGER.debug("Returning object to pool");
-        parserPool.returnObject(parser);
-      } catch (Exception ex) {
-        String msg = "Could not return parse object: " + ex.getMessage();
-        MAPDLOGGER.error(msg, ex);
-      }
-    }
-  }
-
-  @Override
-  public List<TCompletionHint> getCompletionHints(String user,
-          String session,
-          String catalog,
-          List<String> visible_tables,
-          String sql,
-          int cursor) throws TException {
-    callCount++;
-    MapDParser parser;
-    try {
-      parser = (MapDParser) parserPool.borrowObject();
-    } catch (Exception ex) {
-      String msg = "Could not get Parse Item from pool: " + ex.getMessage();
-      MAPDLOGGER.error(msg, ex);
-      throw new TException(msg);
-    }
-    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort, null);
-    MAPDLOGGER.debug("getCompletionHints was called User: " + user
-            + " Catalog: " + catalog + " sql: " + sql);
-    parser.setUser(mapDUser);
-    CURRENT_PARSER.set(parser);
-
-    MapDPlanner.CompletionResult completion_result;
-    try {
-      completion_result = parser.getCompletionHints(sql, cursor, visible_tables);
-    } catch (Exception ex) {
-      String msg = "Could not retrieve completion hints: " + ex.getMessage();
-      MAPDLOGGER.error(msg, ex);
-      return new ArrayList<>();
-    } finally {
-      CURRENT_PARSER.set(null);
-      try {
-        // put parser object back in pool for others to use
-        parserPool.returnObject(parser);
-      } catch (Exception ex) {
-        String msg = "Could not return parse object: " + ex.getMessage();
-        MAPDLOGGER.error(msg, ex);
-        throw new InvalidParseRequest(-4, msg);
-      }
-    }
-    List<TCompletionHint> result = new ArrayList<>();
-    for (final SqlMoniker hint : completion_result.hints) {
-      result.add(new TCompletionHint(hintTypeToThrift(hint.getType()),
-              hint.getFullyQualifiedNames(),
-              completion_result.replaced));
-    }
-    return result;
-  }
-
-  @Override
   public void setRuntimeExtensionFunctions(List<TUserDefinedFunction> udfs,
           List<TUserDefinedTableFunction> udtfs,
           boolean isruntime) {

@@ -23,8 +23,6 @@
 #include "Shared/Globals.h"
 #include "Shared/scope.h"
 
-#include "gen-cpp/CalciteServer.h"
-
 #include "ArrowTestHelpers.h"
 #include "TestDataProvider.h"
 #include "TestHelpers.h"

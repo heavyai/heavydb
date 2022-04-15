@@ -46,25 +46,3 @@ struct TOptimizationOption {
   2: bool enable_watchdog;
   3: list<TFilterPushDownInfo> filter_push_down_info;
 }
-
-service CalciteServer {
-
-   void ping()
-   void shutdown()
-   TPlanResult process(1:string user, 
-                      2:string passwd, 
-                      3:string catalog, 
-                      4:string sql_text
-                      5:TQueryParsingOption query_parsing_option, 6:TOptimizationOption optimization_option,
-                      7:TRestriction restriction,
-                      8:string temp_tables_json)
-                      throws (1:InvalidParseRequest parseErr)
-   string getExtensionFunctionWhitelist()
-   string getUserDefinedFunctionWhitelist()
-   string getRuntimeExtensionFunctionWhitelist()
-   void setRuntimeExtensionFunctions(1: list<extension_functions.TUserDefinedFunction> udfs, 2: list<extension_functions.TUserDefinedTableFunction> udtfs, 3:bool isruntime)
-   void updateMetadata(1: string catalog, 2:string table)
-   list<completion_hints.TCompletionHint> getCompletionHints(1:string user, 2:string passwd, 3:string catalog,
-    4:list<string> visible_tables, 5:string sql, 6:i32 cursor)
-
-}

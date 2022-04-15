@@ -21,8 +21,6 @@
 #include "QueryEngine/RelAlgExecutor.h"
 #include "QueryEngine/ThriftSerializers.h"
 
-#include "gen-cpp/CalciteServer.h"
-
 #include "SQLiteComparator.h"
 #include "SchemaJson.h"
 
