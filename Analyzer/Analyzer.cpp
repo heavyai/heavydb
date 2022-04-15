@@ -3621,25 +3621,6 @@ std::shared_ptr<Analyzer::Expr> normalizeCaseExpr(
   return case_expr;
 }
 
-void erase_cntl_chars(std::string& like_str, char escape_char) {
-  char prev_char = '\0';
-  // easier to create new string of allowable chars
-  // rather than erase chars from
-  // existing string
-  std::string new_str;
-  for (char& cur_char : like_str) {
-    if (cur_char == '%' || cur_char == escape_char) {
-      if (prev_char != escape_char) {
-        prev_char = cur_char;
-        continue;
-      }
-    }
-    new_str.push_back(cur_char);
-    prev_char = cur_char;
-  }
-  like_str = new_str;
-}
-
 std::shared_ptr<Analyzer::Expr> getLikeExpr(std::shared_ptr<Analyzer::Expr> arg_expr,
                                             std::shared_ptr<Analyzer::Expr> like_expr,
                                             std::shared_ptr<Analyzer::Expr> escape_expr,

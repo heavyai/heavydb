@@ -41,6 +41,8 @@ class DataProvider {
   virtual const DictDescriptor* getDictMetadata(int db_id,
                                                 int dict_id,
                                                 bool load_dict = true) const = 0;
+
+  virtual ~DataProvider() = default;
 };
 
 using DataProviderPtr = std::shared_ptr<DataProvider>;

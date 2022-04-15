@@ -1488,7 +1488,6 @@ void fill_one_to_many_baseline_hash_table(
   std::vector<std::future<void>> counter_threads;
   for (size_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
     if (is_range_join) {
-      bool is_compressed = false;
       counter_threads.push_back(std::async(
           std::launch::async,
           [count_buff,
@@ -1496,7 +1495,6 @@ void fill_one_to_many_baseline_hash_table(
            &hash_entry_count,
            &join_buckets_per_key,
            &join_column_per_key,
-           &is_compressed,
            cpu_thread_idx,
            cpu_thread_count] {
             const auto key_handler = RangeKeyHandler(
@@ -1594,7 +1592,6 @@ void fill_one_to_many_baseline_hash_table(
   std::vector<std::future<void>> rowid_threads;
   for (size_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
     if (is_range_join) {
-      bool is_compressed = false;
       rowid_threads.push_back(std::async(
           std::launch::async,
           [buff,
@@ -1603,7 +1600,6 @@ void fill_one_to_many_baseline_hash_table(
            invalid_slot_val,
            &join_column_per_key,
            &join_buckets_per_key,
-           &is_compressed,
            cpu_thread_idx,
            cpu_thread_count] {
             const auto key_handler = RangeKeyHandler(

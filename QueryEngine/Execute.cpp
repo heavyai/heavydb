@@ -2366,7 +2366,6 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
                                       &eo,
                                       &query_comp_desc,
                                       &query_mem_desc,
-                                      &co,
                                       render_info](const int device_id,
                                                    const FragmentsList& frag_list,
                                                    const int64_t rowid_lookup_key) {
@@ -2406,7 +2405,6 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
                                          &execution_kernels,
                                          &column_fetcher,
                                          &eo,
-                                         &co,
                                          &frag_list_idx,
                                          &query_comp_desc,
                                          &query_mem_desc,
@@ -2468,8 +2466,6 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createHeterogeneousKerne
       eo.outer_fragment_indices);
 
   CHECK(!ra_exe_unit.input_descs.empty());
-
-  const bool uses_lazy_fetch_ = false;
 
   fragment_descriptor.buildFragmentKernelMap(ra_exe_unit,
                                              shared_context.getFragOffsets(),

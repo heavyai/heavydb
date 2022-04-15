@@ -530,6 +530,7 @@ void DataMgr::setTableEpoch(const int db_id, const int tb_id, const int start_ep
 
 size_t DataMgr::getTableEpoch(const int db_id, const int tb_id) {
   UNREACHABLE();
+  return 0;
 }
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage& mem_info) {

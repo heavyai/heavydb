@@ -32,6 +32,8 @@ class ExecutionPolicy {
   virtual std::vector<ExecutorDeviceType> devices() const {
     return {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU};
   }
+
+  virtual ~ExecutionPolicy() = default;
 };
 
 }  // namespace policy

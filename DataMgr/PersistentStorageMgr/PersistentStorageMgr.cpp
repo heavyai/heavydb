@@ -69,26 +69,32 @@ void PersistentStorageMgr::getChunkMetadataVecForKeyPrefix(
 
 bool PersistentStorageMgr::isBufferOnDevice(const ChunkKey& chunk_key) {
   UNREACHABLE();
+  return false;
 }
 
 std::string PersistentStorageMgr::printSlabs() {
   UNREACHABLE();
+  return "";
 }
 
 size_t PersistentStorageMgr::getMaxSize() {
   UNREACHABLE();
+  return 0;
 }
 
 size_t PersistentStorageMgr::getInUseSize() {
   UNREACHABLE();
+  return 0;
 }
 
 size_t PersistentStorageMgr::getAllocated() {
   UNREACHABLE();
+  return 0;
 }
 
 bool PersistentStorageMgr::isAllocationCapped() {
   UNREACHABLE();
+  return false;
 }
 
 void PersistentStorageMgr::checkpoint() {
@@ -101,6 +107,7 @@ void PersistentStorageMgr::checkpoint(const int db_id, const int tb_id) {
 
 AbstractBuffer* PersistentStorageMgr::alloc(const size_t num_bytes) {
   UNREACHABLE();
+  return nullptr;
 }
 
 void PersistentStorageMgr::free(AbstractBuffer* buffer) {
@@ -117,6 +124,7 @@ std::string PersistentStorageMgr::getStringMgrType() {
 
 size_t PersistentStorageMgr::getNumChunks() {
   UNREACHABLE();
+  return 0;
 }
 
 void PersistentStorageMgr::removeTableRelatedDS(const int db_id, const int table_id) {
