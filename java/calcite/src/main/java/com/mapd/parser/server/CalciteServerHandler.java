@@ -21,7 +21,6 @@ import com.mapd.calcite.parser.MapDParser;
 import com.mapd.calcite.parser.MapDParserOptions;
 import com.mapd.calcite.parser.MapDUser;
 import com.mapd.common.SockTransportProperties;
-import com.omnisci.thrift.calciteserver.InvalidParseRequest;
 import com.omnisci.thrift.calciteserver.TAccessedQueryObjects;
 import com.omnisci.thrift.calciteserver.TCompletionHint;
 import com.omnisci.thrift.calciteserver.TCompletionHintType;

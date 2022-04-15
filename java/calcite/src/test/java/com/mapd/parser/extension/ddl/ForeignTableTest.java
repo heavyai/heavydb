@@ -6,7 +6,7 @@ import static org.junit.Assert.fail;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.mapd.common.SockTransportProperties;
-import com.omnisci.thrift.calciteserver.InvalidParseRequest;
+import com.mapd.parser.server.InvalidParseRequest;
 import com.omnisci.thrift.calciteserver.TPlanResult;
 
 import org.junit.Test;

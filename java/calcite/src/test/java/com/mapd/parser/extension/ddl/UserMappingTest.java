@@ -3,7 +3,7 @@ package com.mapd.parser.extension.ddl;
 import static org.junit.Assert.assertEquals;
 
 import com.google.gson.JsonObject;
-import com.omnisci.thrift.calciteserver.InvalidParseRequest;
+import com.mapd.parser.server.InvalidParseRequest;
 import com.omnisci.thrift.calciteserver.TPlanResult;
 
 import org.junit.Test;

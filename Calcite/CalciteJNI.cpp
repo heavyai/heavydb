@@ -120,7 +120,7 @@ class CalciteJNI::Impl {
       } else {
         jthrowable e = env_->ExceptionOccurred();
         CHECK(e);
-        throw std::invalid_argument(readStringField(e, invalid_parse_req_why_));
+        throw std::invalid_argument(readStringField(e, invalid_parse_req_msg_));
       }
     }
 
@@ -330,14 +330,14 @@ class CalciteJNI::Impl {
 
   void findInvalidParseRequest() {
     invalid_parse_req_cls_ =
-        env_->FindClass("com/omnisci/thrift/calciteserver/InvalidParseRequest");
+        env_->FindClass("com/mapd/parser/server/InvalidParseRequest");
     if (!invalid_parse_req_cls_) {
       throw std::runtime_error("cannot find Java class InvalidParseRequest");
     }
-    invalid_parse_req_why_ =
-        env_->GetFieldID(invalid_parse_req_cls_, "whyUp", "Ljava/lang/String;");
-    if (!invalid_parse_req_why_) {
-      throw std::runtime_error("cannot find InvalidParseRequest::whyUp field");
+    invalid_parse_req_msg_ =
+        env_->GetFieldID(invalid_parse_req_cls_, "msg", "Ljava/lang/String;");
+    if (!invalid_parse_req_msg_) {
+      throw std::runtime_error("cannot find InvalidParseRequest::msg field");
     }
   }
 
@@ -489,9 +489,9 @@ class CalciteJNI::Impl {
   jmethodID extension_fn_udf_ctor_;
   jmethodID extension_fn_udtf_ctor_;
 
-  // com.omnisci.thrift.calciteserver.InvalidParseRequest class and fields
+  // com.mapd.parser.server.InvalidParseRequest class and fields
   jclass invalid_parse_req_cls_;
-  jfieldID invalid_parse_req_why_;
+  jfieldID invalid_parse_req_msg_;
 
   // java.util.ArrayList class and methods
   jclass array_list_cls_;
