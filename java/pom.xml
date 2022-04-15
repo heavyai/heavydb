@@ -13,7 +13,6 @@
   </repositories>
   <name>MapD Java</name>
   <modules>
-    <module>omniscijdbc</module>
     <module>calcite</module>
     <module>utility</module>
     <module>thrift</module>
