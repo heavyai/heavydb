@@ -56,8 +56,8 @@ class CalciteJNI::Impl {
     createCalciteServerHandler(udf_filename);
 
     // Prepare references to some Java classes and methods we will use for processing.
-    findTQueryParsingOption();
-    findTOptimizationOption();
+    findQueryParsingOption();
+    findOptimizationOption();
     findPlanResult();
     findExtArgumentType();
     findExtensionFunction();
@@ -73,7 +73,7 @@ class CalciteJNI::Impl {
                       const std::string& sql_string,
                       const std::string& schema_json,
                       const std::string& session_id,
-                      const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+                      const std::vector<FilterPushDownInfo>& filter_push_down_info,
                       const bool legacy_syntax,
                       const bool is_explain,
                       const bool is_view_optimize) {
@@ -87,12 +87,13 @@ class CalciteJNI::Impl {
                                                   (jboolean)is_explain,
                                                   /*check_privileges=*/(jboolean)(false));
     if (!arg_parsing_options) {
-      throw std::runtime_error("cannot create TQueryParsingOption object");
+      throw std::runtime_error("cannot create QueryParsingOption object");
     }
     jobject arg_filter_push_down_info =
         env_->NewObject(array_list_cls_, array_list_ctor_);
     if (!filter_push_down_info.empty()) {
-      throw std::runtime_error("Filter pushdown info is not supported in Calcite JNI.");
+      throw std::runtime_error(
+          "Filter pushdown info is not yet implemented in Calcite JNI client.");
     }
     jobject arg_optimization_options = env_->NewObject(optimization_opts_cls_,
                                                        optimization_opts_ctor_,
@@ -206,9 +207,9 @@ class CalciteJNI::Impl {
         handler_cls,
         "process",
         "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/"
-        "omnisci/thrift/calciteserver/TQueryParsingOption;Lcom/omnisci/thrift/"
-        "calciteserver/TOptimizationOption;Lcom/omnisci/thrift/calciteserver/"
-        "TRestriction;Ljava/lang/String;)Lcom/mapd/parser/server/PlanResult;");
+        "mapd/parser/server/QueryParsingOption;Lcom/mapd/parser/server/"
+        "OptimizationOption;Lorg/apache/calcite/rel/rules/Restriction;Ljava/lang/"
+        "String;)Lcom/mapd/parser/server/PlanResult;");
     if (!handler_process_) {
       throw std::runtime_error("cannot find CalciteServerHandler::process method");
     }
@@ -249,28 +250,26 @@ class CalciteJNI::Impl {
     }
   }
 
-  void findTQueryParsingOption() {
-    parsing_opts_cls_ =
-        env_->FindClass("com/omnisci/thrift/calciteserver/TQueryParsingOption");
+  void findQueryParsingOption() {
+    parsing_opts_cls_ = env_->FindClass("com/mapd/parser/server/QueryParsingOption");
     if (!parsing_opts_cls_) {
-      throw std::runtime_error("cannot find Java class TQueryParsingOption");
+      throw std::runtime_error("cannot find Java class QueryParsingOption");
     }
     parsing_opts_ctor_ = env_->GetMethodID(parsing_opts_cls_, "<init>", "(ZZZ)V");
     if (!parsing_opts_ctor_) {
-      throw std::runtime_error("cannot find TQueryParsingOption ctor");
+      throw std::runtime_error("cannot find QueryParsingOption ctor");
     }
   }
 
-  void findTOptimizationOption() {
-    optimization_opts_cls_ =
-        env_->FindClass("com/omnisci/thrift/calciteserver/TOptimizationOption");
+  void findOptimizationOption() {
+    optimization_opts_cls_ = env_->FindClass("com/mapd/parser/server/OptimizationOption");
     if (!optimization_opts_cls_) {
-      throw std::runtime_error("cannot find Java class TOptimizationOption");
+      throw std::runtime_error("cannot find Java class OptimizationOption");
     }
     optimization_opts_ctor_ =
         env_->GetMethodID(optimization_opts_cls_, "<init>", "(ZZLjava/util/List;)V");
     if (!optimization_opts_ctor_) {
-      throw std::runtime_error("cannot find TOptimizationOption ctor");
+      throw std::runtime_error("cannot find OptimizationOption ctor");
     }
   }
 
@@ -466,11 +465,11 @@ class CalciteJNI::Impl {
   jmethodID handlhandler_get_rt_fn_list_;
   jmethodID handler_set_rt_fns_;
 
-  // com.omnisci.thrift.calciteserver.TQueryParsingOption class and methods
+  // com.mapd.parser.server.QueryParsingOption class and methods
   jclass parsing_opts_cls_;
   jmethodID parsing_opts_ctor_;
 
-  // com.omnisci.thrift.calciteserver.TOptimizationOption class and methods
+  // com.mapd.parser.server.OptimizationOption class and methods
   jclass optimization_opts_cls_;
   jmethodID optimization_opts_ctor_;
 
@@ -513,7 +512,7 @@ std::string CalciteJNI::process(
     const std::string& sql_string,
     const std::string& schema_json,
     const std::string& session_id,
-    const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+    const std::vector<FilterPushDownInfo>& filter_push_down_info,
     const bool legacy_syntax,
     const bool is_explain,
     const bool is_view_optimize) {

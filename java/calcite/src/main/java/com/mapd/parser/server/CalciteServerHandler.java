@@ -21,14 +21,6 @@ import com.mapd.calcite.parser.MapDParser;
 import com.mapd.calcite.parser.MapDParserOptions;
 import com.mapd.calcite.parser.MapDUser;
 import com.mapd.common.SockTransportProperties;
-import com.omnisci.thrift.calciteserver.TAccessedQueryObjects;
-import com.omnisci.thrift.calciteserver.TCompletionHint;
-import com.omnisci.thrift.calciteserver.TCompletionHintType;
-import com.omnisci.thrift.calciteserver.TExtArgumentType;
-import com.omnisci.thrift.calciteserver.TFilterPushDownInfo;
-import com.omnisci.thrift.calciteserver.TOptimizationOption;
-import com.omnisci.thrift.calciteserver.TQueryParsingOption;
-import com.omnisci.thrift.calciteserver.TRestriction;
 
 import org.apache.calcite.prepare.MapDPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
@@ -124,9 +116,9 @@ public class CalciteServerHandler {
           String session,
           String catalog,
           String queryText,
-          TQueryParsingOption queryParsingOption,
-          TOptimizationOption optimizationOption,
-          TRestriction restriction,
+          QueryParsingOption queryParsingOption,
+          OptimizationOption optimizationOption,
+          Restriction restriction,
           String schemaJson) throws InvalidParseRequest {
     long timer = System.currentTimeMillis();
     callCount++;
@@ -140,11 +132,7 @@ public class CalciteServerHandler {
       MAPDLOGGER.error(msg, ex);
       throw new InvalidParseRequest(-1, msg);
     }
-    Restriction rest = null;
-    if (restriction != null && !restriction.column.isEmpty()) {
-      rest = new Restriction(restriction.column, restriction.values);
-    }
-    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort, rest);
+    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort, restriction);
     MAPDLOGGER.debug("process was called User: " + user + " Catalog: " + catalog
             + " sql: " + queryText);
     parser.setUser(mapDUser);
@@ -166,13 +154,7 @@ public class CalciteServerHandler {
     }
     String jsonResult;
     try {
-      final List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo =
-              new ArrayList<>();
-      for (final TFilterPushDownInfo req : optimizationOption.filter_push_down_info) {
-        filterPushDownInfo.add(new MapDParserOptions.FilterPushDownInfo(
-                req.input_prev, req.input_start, req.input_next));
-      }
-      MapDParserOptions parserOptions = new MapDParserOptions(filterPushDownInfo,
+      MapDParserOptions parserOptions = new MapDParserOptions(optimizationOption.filter_push_down_info,
               queryParsingOption.legacy_syntax,
               queryParsingOption.is_explain,
               optimizationOption.is_view_optimize,
@@ -290,28 +272,5 @@ public class CalciteServerHandler {
     }
 
     calciteParserFactory.updateOperatorTable();
-  }
-
-  private static TCompletionHintType hintTypeToThrift(final SqlMonikerType type) {
-    switch (type) {
-      case COLUMN:
-        return TCompletionHintType.COLUMN;
-      case TABLE:
-        return TCompletionHintType.TABLE;
-      case VIEW:
-        return TCompletionHintType.VIEW;
-      case SCHEMA:
-        return TCompletionHintType.SCHEMA;
-      case CATALOG:
-        return TCompletionHintType.CATALOG;
-      case REPOSITORY:
-        return TCompletionHintType.REPOSITORY;
-      case FUNCTION:
-        return TCompletionHintType.FUNCTION;
-      case KEYWORD:
-        return TCompletionHintType.KEYWORD;
-      default:
-        return null;
-    }
   }
 }

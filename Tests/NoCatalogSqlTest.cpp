@@ -38,8 +38,6 @@ constexpr int TEST2_TABLE_ID = 2;
 constexpr int TEST_AGG_TABLE_ID = 3;
 constexpr int TEST_STREAMING_TABLE_ID = 4;
 
-constexpr int CALCITE_PORT = 3278;
-
 using ArrowTestHelpers::compare_res_data;
 
 class TestSchemaProvider : public SimpleSchemaProvider {

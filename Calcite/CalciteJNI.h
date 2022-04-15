@@ -21,6 +21,12 @@
 
 #include "gen-cpp/calciteserver_types.h"
 
+struct FilterPushDownInfo {
+  int input_prev;
+  int input_start;
+  int input_next;
+};
+
 class CalciteJNI {
  public:
   CalciteJNI(const std::string& udf_filename = "", size_t calcite_max_mem_mb = 1024);
@@ -31,7 +37,7 @@ class CalciteJNI {
                       const std::string& sql_string,
                       const std::string& schema_json = "",
                       const std::string& session_id = "",
-                      const std::vector<TFilterPushDownInfo>& filter_push_down_info = {},
+                      const std::vector<FilterPushDownInfo>& filter_push_down_info = {},
                       const bool legacy_syntax = false,
                       const bool is_explain = false,
                       const bool is_view_optimize = false);

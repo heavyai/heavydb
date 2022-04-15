@@ -8,8 +8,8 @@ import com.google.gson.JsonObject;
 import com.mapd.common.SockTransportProperties;
 import com.mapd.parser.server.CalciteServerHandler;
 import com.mapd.parser.server.PlanResult;
-import com.omnisci.thrift.calciteserver.TOptimizationOption;
-import com.omnisci.thrift.calciteserver.TQueryParsingOption;
+import com.mapd.parser.server.OptimizationOption;
+import com.mapd.parser.server.QueryParsingOption;
 
 import org.junit.Before;
 
@@ -32,12 +32,12 @@ public class DDLTest {
   }
 
   PlanResult processDdlCommand(final String ddlCommand) throws Exception {
-    TQueryParsingOption queryParsingOption = new TQueryParsingOption();
+    QueryParsingOption queryParsingOption = new QueryParsingOption();
     queryParsingOption.legacy_syntax = false;
     queryParsingOption.is_explain = false;
     queryParsingOption.check_privileges = false;
 
-    TOptimizationOption optimizationOption = new TOptimizationOption();
+    OptimizationOption optimizationOption = new OptimizationOption();
     optimizationOption.is_view_optimize = false;
     optimizationOption.enable_watchdog = false;
     optimizationOption.filter_push_down_info = new ArrayList<>();
