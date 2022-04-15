@@ -58,7 +58,7 @@ class CalciteJNI::Impl {
     // Prepare references to some Java classes and methods we will use for processing.
     findTQueryParsingOption();
     findTOptimizationOption();
-    findTPlanResult();
+    findPlanResult();
     findExtArgumentType();
     findExtensionFunction();
     findInvalidParseRequest();
@@ -68,7 +68,7 @@ class CalciteJNI::Impl {
 
   ~Impl() { jvm_->DestroyJavaVM(); }
 
-  TPlanResult process(const std::string& user,
+  std::string process(const std::string& user,
                       const std::string& db_name,
                       const std::string& sql_string,
                       const std::string& schema_json,
@@ -124,9 +124,7 @@ class CalciteJNI::Impl {
       }
     }
 
-    TPlanResult res;
-    res.plan_result = readStringField(java_res, plan_result_plan_result_);
-    return res;
+    return readStringField(java_res, plan_result_plan_result_);
   }
 
   std::string getExtensionFunctionWhitelist() {
@@ -210,7 +208,7 @@ class CalciteJNI::Impl {
         "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/"
         "omnisci/thrift/calciteserver/TQueryParsingOption;Lcom/omnisci/thrift/"
         "calciteserver/TOptimizationOption;Lcom/omnisci/thrift/calciteserver/"
-        "TRestriction;Ljava/lang/String;)Lcom/omnisci/thrift/calciteserver/TPlanResult;");
+        "TRestriction;Ljava/lang/String;)Lcom/mapd/parser/server/PlanResult;");
     if (!handler_process_) {
       throw std::runtime_error("cannot find CalciteServerHandler::process method");
     }
@@ -276,15 +274,15 @@ class CalciteJNI::Impl {
     }
   }
 
-  void findTPlanResult() {
-    plan_result_cls_ = env_->FindClass("com/omnisci/thrift/calciteserver/TPlanResult");
+  void findPlanResult() {
+    plan_result_cls_ = env_->FindClass("com/mapd/parser/server/PlanResult");
     if (!plan_result_cls_) {
-      throw std::runtime_error("cannot find Java class TPlanResult");
+      throw std::runtime_error("cannot find Java class PlanResult");
     }
     plan_result_plan_result_ =
-        env_->GetFieldID(plan_result_cls_, "plan_result", "Ljava/lang/String;");
+        env_->GetFieldID(plan_result_cls_, "planResult", "Ljava/lang/String;");
     if (!plan_result_plan_result_) {
-      throw std::runtime_error("cannot find TPlanResult::plan_result field");
+      throw std::runtime_error("cannot find PlanResult::planResult field");
     }
   }
 
@@ -409,7 +407,6 @@ class CalciteJNI::Impl {
       const std::vector<std::map<std::string, std::string>>& annotations,
       const std::string& prefix,
       size_t ann_offset) {
-    size_t index = 0;
     for (size_t index = 0; index < args.size(); ++index) {
       env_->CallVoidMethod(types, array_list_add_, convertExtArgumentType(args[index]));
       auto& ann = annotations[index + ann_offset];
@@ -477,7 +474,7 @@ class CalciteJNI::Impl {
   jclass optimization_opts_cls_;
   jmethodID optimization_opts_ctor_;
 
-  // com.omnisci.thrift.calciteserver.TPlanResult class and fields
+  // com.mapd.parser.server.PlanResult class and fields
   jclass plan_result_cls_;
   jfieldID plan_result_plan_result_;
 
@@ -510,7 +507,7 @@ CalciteJNI::CalciteJNI(const std::string& udf_filename, size_t calcite_max_mem_m
 
 CalciteJNI::~CalciteJNI() {}
 
-TPlanResult CalciteJNI::process(
+std::string CalciteJNI::process(
     const std::string& user,
     const std::string& db_name,
     const std::string& sql_string,

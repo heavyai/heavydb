@@ -26,7 +26,7 @@ class CalciteJNI {
   CalciteJNI(const std::string& udf_filename = "", size_t calcite_max_mem_mb = 1024);
   ~CalciteJNI();
 
-  TPlanResult process(const std::string& user,
+  std::string process(const std::string& user,
                       const std::string& db_name,
                       const std::string& sql_string,
                       const std::string& schema_json = "",

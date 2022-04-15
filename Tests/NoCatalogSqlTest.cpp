@@ -195,7 +195,7 @@ class NoCatalogSqlTest : public ::testing::Test {
   ExecutionResult runSqlQuery(const std::string& sql) {
     auto schema_json = schema_to_json(schema_provider_);
     const auto query_ra =
-        calcite_->process("admin", "test_db", pg_shim(sql), schema_json).plan_result;
+        calcite_->process("admin", "test_db", pg_shim(sql), schema_json);
     auto dag = std::make_unique<RelAlgDagBuilder>(
         query_ra, TEST_DB_ID, schema_provider_, nullptr);
     auto ra_executor = RelAlgExecutor(executor_.get(),
@@ -212,7 +212,7 @@ class NoCatalogSqlTest : public ::testing::Test {
   RelAlgExecutor getExecutor(const std::string& sql) {
     auto schema_json = schema_to_json(schema_provider_);
     const auto query_ra =
-        calcite_->process("admin", "test_db", pg_shim(sql), schema_json).plan_result;
+        calcite_->process("admin", "test_db", pg_shim(sql), schema_json);
     auto dag = std::make_unique<RelAlgDagBuilder>(
         query_ra, TEST_DB_ID, schema_provider_, nullptr);
     return RelAlgExecutor(executor_.get(),

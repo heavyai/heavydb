@@ -27,7 +27,6 @@ import com.omnisci.thrift.calciteserver.TCompletionHintType;
 import com.omnisci.thrift.calciteserver.TExtArgumentType;
 import com.omnisci.thrift.calciteserver.TFilterPushDownInfo;
 import com.omnisci.thrift.calciteserver.TOptimizationOption;
-import com.omnisci.thrift.calciteserver.TPlanResult;
 import com.omnisci.thrift.calciteserver.TQueryParsingOption;
 import com.omnisci.thrift.calciteserver.TRestriction;
 
@@ -121,7 +120,7 @@ public class CalciteServerHandler {
     this.parserPool = new GenericObjectPool(calciteParserFactory);
   }
 
-  public TPlanResult process(String user,
+  public PlanResult process(String user,
           String session,
           String catalog,
           String queryText,
@@ -166,9 +165,6 @@ public class CalciteServerHandler {
       queryText = queryText.substring(0, queryText.length() - 1);
     }
     String jsonResult;
-    SqlIdentifierCapturer capturer;
-    TAccessedQueryObjects primaryAccessedObjects = new TAccessedQueryObjects();
-    TAccessedQueryObjects resolvedAccessedObjects = new TAccessedQueryObjects();
     try {
       final List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo =
               new ArrayList<>();
@@ -188,22 +184,6 @@ public class CalciteServerHandler {
 
         res = parser.process(queryText, parserOptions);
         jsonResult = res.left;
-        capturer = res.right;
-
-        primaryAccessedObjects.tables_selected_from = new ArrayList<>(capturer.selects);
-        primaryAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
-        primaryAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
-        primaryAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
-
-        // also resolve all the views in the select part
-        // resolution of the other parts is not
-        // necessary as these cannot be views
-        resolvedAccessedObjects.tables_selected_from =
-                new ArrayList<>(parser.resolveSelectIdentifiers(capturer));
-        resolvedAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
-        resolvedAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
-        resolvedAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
-
       } else {
         jsonResult = parser.optimizeRAQuery(queryText, parserOptions);
       }
@@ -244,11 +224,9 @@ public class CalciteServerHandler {
       }
     }
 
-    TPlanResult result = new TPlanResult();
-    result.primary_accessed_objects = primaryAccessedObjects;
-    result.resolved_accessed_objects = resolvedAccessedObjects;
-    result.plan_result = jsonResult;
-    result.execution_time_ms = System.currentTimeMillis() - timer;
+    PlanResult result = new PlanResult();
+    result.planResult = jsonResult;
+    result.executionTimeMs = System.currentTimeMillis() - timer;
 
     return result;
   }

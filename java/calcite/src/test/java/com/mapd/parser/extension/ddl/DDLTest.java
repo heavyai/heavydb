@@ -7,8 +7,8 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.mapd.common.SockTransportProperties;
 import com.mapd.parser.server.CalciteServerHandler;
+import com.mapd.parser.server.PlanResult;
 import com.omnisci.thrift.calciteserver.TOptimizationOption;
-import com.omnisci.thrift.calciteserver.TPlanResult;
 import com.omnisci.thrift.calciteserver.TQueryParsingOption;
 
 import org.junit.Before;
@@ -31,7 +31,7 @@ public class DDLTest {
             "");
   }
 
-  TPlanResult processDdlCommand(final String ddlCommand) throws Exception {
+  PlanResult processDdlCommand(final String ddlCommand) throws Exception {
     TQueryParsingOption queryParsingOption = new TQueryParsingOption();
     queryParsingOption.legacy_syntax = false;
     queryParsingOption.is_explain = false;
