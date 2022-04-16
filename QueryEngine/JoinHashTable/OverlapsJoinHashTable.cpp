@@ -654,6 +654,18 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
   hashtable_cache_meta_info_ = hashtable_access_path_info.meta_info;
   table_keys_ = hashtable_access_path_info.table_keys;
 
+  auto get_inner_table_id = [this]() {
+    return inner_outer_pairs_.front().first->get_table_id();
+  };
+
+  if (table_keys_.empty()) {
+    table_keys_ = DataRecyclerUtil::getAlternativeTableKeys(
+        composite_key_info_.cache_key_chunks,
+        executor_->getCatalog()->getDatabaseId(),
+        get_inner_table_id());
+  }
+  CHECK(!table_keys_.empty());
+
   if (overlaps_threshold_override) {
     // compute bucket sizes based on the user provided threshold
     BucketSizeTuner tuner(/*initial_threshold=*/*overlaps_threshold_override,
@@ -697,15 +709,9 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
                      {},
                      fragments_per_device,
                      device_count_);
-    std::vector<size_t> per_device_chunk_key(device_count_);
+    std::vector<size_t> per_device_chunk_key;
     if (HashtableRecycler::isInvalidHashTableCacheKey(hashtable_cache_key_) &&
-        inner_outer_pairs_.front().first->get_table_id() > 0) {
-      std::vector<int> alternative_table_key{
-          composite_key_info_.cache_key_chunks.front()[0],
-          composite_key_info_.cache_key_chunks.front()[1]};
-      const auto table_keys =
-          std::unordered_set<size_t>{boost::hash_value(alternative_table_key)};
-
+        get_inner_table_id() > 0) {
       for (int device_id = 0; device_id < device_count_; ++device_id) {
         auto chunk_key_hash = boost::hash_value(composite_key_info_.cache_key_chunks);
         boost::hash_combine(
@@ -722,7 +728,7 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
             {}};
         hashtable_cache_key_[device_id] = getAlternativeCacheKey(cache_key);
         hash_table_cache_->addQueryPlanDagForTableKeys(hashtable_cache_key_[device_id],
-                                                       table_keys);
+                                                       table_keys_);
       }
     }
 

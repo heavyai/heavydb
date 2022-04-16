@@ -398,7 +398,10 @@ void PerfectJoinHashTable::reify() {
   // CPU and then copy it to each device
   // 3. if cache key is not available? --> use alternative cache key
 
-  // retrieve fragment lists per device
+  // retrieve fragment lists and chunk key per device
+  std::vector<ChunkKey> chunk_key_per_device;
+  auto outer_col =
+      dynamic_cast<const Analyzer::ColumnVar*>(inner_outer_pairs_.front().second);
   for (int device_id = 0; device_id < device_count_; ++device_id) {
     fragments_per_device.emplace_back(
         shard_count
@@ -408,6 +411,9 @@ void PerfectJoinHashTable::reify() {
       dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(
           data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id)));
     }
+    const auto chunk_key =
+        genChunkKey(fragments_per_device[device_id], outer_col, inner_col);
+    chunk_key_per_device.emplace_back(std::move(chunk_key));
   }
 
   // try to extract cache key for hash table and its relevant info
@@ -425,15 +431,21 @@ void PerfectJoinHashTable::reify() {
   hashtable_cache_meta_info_ = hashtable_access_path_info.meta_info;
   table_keys_ = hashtable_access_path_info.table_keys;
 
+  if (table_keys_.empty()) {
+    // the actual chunks fetched per device can be different but they constitute the same
+    // table in the same db, so we can exploit this to create an alternative table key
+    table_keys_ = DataRecyclerUtil::getAlternativeTableKeys(
+        chunk_key_per_device,
+        executor_->getCatalog()->getDatabaseId(),
+        getInnerTableId());
+  }
+  CHECK(!table_keys_.empty());
+
   if (HashtableRecycler::isInvalidHashTableCacheKey(hashtable_cache_key_) &&
       getInnerTableId() > 0) {
     // sometimes we cannot retrieve query plan dag, so try to recycler cache
     // with the old-fashioned cache key if we deal with hashtable of non-temporary table
-    auto outer_col =
-        dynamic_cast<const Analyzer::ColumnVar*>(inner_outer_pairs_.front().second);
     for (int device_id = 0; device_id < device_count_; ++device_id) {
-      const auto chunk_key =
-          genChunkKey(fragments_per_device[device_id], outer_col, inner_col);
       const auto num_tuples = std::accumulate(
           fragments_per_device[device_id].begin(),
           fragments_per_device[device_id].end(),
@@ -443,16 +455,11 @@ void PerfectJoinHashTable::reify() {
                                                       inner_col,
                                                       outer_col ? outer_col : inner_col,
                                                       inner_outer_string_op_infos_,
-                                                      chunk_key,
+                                                      chunk_key_per_device[device_id],
                                                       num_tuples,
                                                       qual_bin_oper_->get_optype(),
                                                       join_type_};
       hashtable_cache_key_[device_id] = getAlternativeCacheKey(cache_key);
-      std::vector<int> alternative_table_key{chunk_key[0], chunk_key[1]};
-      if (table_keys_.empty()) {
-        table_keys_ =
-            std::unordered_set<size_t>{boost::hash_value(alternative_table_key)};
-      }
     }
   }
 
@@ -462,7 +469,6 @@ void PerfectJoinHashTable::reify() {
   const bool invalid_cache_key =
       HashtableRecycler::isInvalidHashTableCacheKey(hashtable_cache_key_);
   if (!invalid_cache_key) {
-    CHECK(!table_keys_.empty());
     if (!shard_count) {
       hash_table_cache_->addQueryPlanDagForTableKeys(hashtable_cache_key_.front(),
                                                      table_keys_);

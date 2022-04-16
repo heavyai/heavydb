@@ -161,6 +161,10 @@ class HashtableRecycler
       std::lock_guard<std::mutex>& lock,
       std::optional<HashtableCacheMetaInfo> meta_info = std::nullopt) override;
 
+  void removeCachedHashtableBuiltFromSyntheticTable(CacheItemType item_type,
+                                                    DeviceIdentifier device_identifier,
+                                                    std::lock_guard<std::mutex>& lock);
+
   // we maintain the mapping between a hashed table_key -> a set of hashed query plan dag
   // only in hashtable recycler to minimize memory footprint
   // so other types of data recycler related to hashtable cache

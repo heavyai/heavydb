@@ -320,9 +320,9 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
   auto entries_per_device =
       get_entries_per_device(total_entries, shard_count, device_count_, memory_level_);
   auto data_mgr = executor_->getDataMgr();
-
   // cached hash table lookup logic is similar with perfect join hash table
   // first, prepare fragment lists per device
+  std::vector<ChunkKey> chunk_key_per_device;
   for (int device_id = 0; device_id < device_count_; ++device_id) {
     fragments_per_device.emplace_back(
         shard_count
@@ -332,6 +332,8 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
       dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(
           data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id)));
     }
+    const auto chunk_key = genChunkKey(fragments_per_device[device_id]);
+    chunk_key_per_device.emplace_back(std::move(chunk_key));
   }
 
   // prepare per-device cache key
@@ -353,13 +355,21 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
   hashtable_cache_meta_info_ = hashtable_access_path_info.meta_info;
   table_keys_ = hashtable_access_path_info.table_keys;
 
-  auto table_keys = table_keys_;
+  // the actual chunks fetched per device can be different but they constitute the same
+  // table in the same db, so we can exploit this to create an alternative table key
+  if (table_keys_.empty()) {
+    table_keys_ = DataRecyclerUtil::getAlternativeTableKeys(
+        chunk_key_per_device,
+        executor_->getCatalog()->getDatabaseId(),
+        getInnerTableId());
+  }
+  CHECK(!table_keys_.empty());
+
   if (HashtableRecycler::isInvalidHashTableCacheKey(hashtable_cache_key_) &&
       getInnerTableId() > 0) {
     // sometimes we cannot retrieve query plan dag, so try to recycler cache
     // with the old-passioned cache key if we deal with hashtable of non-temporary table
     for (int device_id = 0; device_id < device_count_; ++device_id) {
-      const auto chunk_key = genChunkKey(fragments_per_device[device_id]);
       const auto num_tuples = std::accumulate(fragments_per_device[device_id].begin(),
                                               fragments_per_device[device_id].end(),
                                               size_t(0),
@@ -371,15 +381,8 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
                                                        num_tuples,
                                                        condition_->get_optype(),
                                                        join_type_,
-                                                       chunk_key};
+                                                       chunk_key_per_device[device_id]};
       hashtable_cache_key_[device_id] = getAlternativeCacheKey(cache_key);
-    }
-
-    if (table_keys_.empty()) {
-      std::vector<int> alternative_table_key{catalog_->getDatabaseId(),
-                                             getInnerTableId()};
-      CHECK(!alternative_table_key.empty());
-      table_keys_ = std::unordered_set<size_t>{boost::hash_value(alternative_table_key)};
     }
   }
 
@@ -404,11 +407,10 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
 
   // todo (yoonmin) : support dictionary proxy cache for join including string op(s)
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
-    const auto composite_key_info =
-        HashJoin::getCompositeKeyInfo(inner_outer_pairs_, executor_);
-
     std::unique_lock<std::mutex> str_proxy_translation_lock(str_proxy_translation_mutex_);
     if (str_proxy_translation_maps_.empty()) {
+      const auto composite_key_info = HashJoin::getCompositeKeyInfo(
+          inner_outer_pairs_, executor_, inner_outer_string_op_infos_pairs_);
       str_proxy_translation_maps_ = HashJoin::translateCompositeStrDictProxies(
           composite_key_info, inner_outer_string_op_infos_pairs_, executor_);
       CHECK_EQ(str_proxy_translation_maps_.size(), inner_outer_pairs_.size());

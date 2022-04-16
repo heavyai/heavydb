@@ -1331,6 +1331,40 @@ TEST(DataRecycler, Perfect_Hashtable_Cache_Maintanence) {
         EXPECT_TRUE(false);
       }
     }
+
+    {
+      // test 7. a join query using synthetically generated table
+      clearCaches();
+      auto q1 =
+          "with cte as (select s from table(generate_series(0, 10, 2)) as t(s)) select "
+          "count(1) from table(generate_series(0, 10, 1)) as ft(s), cte where ft.s = "
+          "cte.s;";
+      EXPECT_EQ(static_cast<int64_t>(6), v<int64_t>(run_simple_query(q1, dt)));
+      auto q2 =
+          "with cte as (select s from table(generate_series(0, 10, 3)) as t(s)) select "
+          "count(1) from table(generate_series(0, 10, 1)) as ft(s), cte where ft.s = "
+          "cte.s;";
+      EXPECT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                                 CacheItemType::PERFECT_HT));
+
+      // check whether hash tables generated from q1 and q2 are invalidated
+      auto q3 = "SELECT count(*) from t3 a, t3 b where a.x = b.x;";
+      EXPECT_EQ(static_cast<int64_t>(5), v<int64_t>(run_simple_query(q3, dt)));
+      EXPECT_EQ(static_cast<size_t>(3),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                                 CacheItemType::PERFECT_HT));
+
+      // there is no rows in t3 matching the filter condition
+      QR::get()->runSQL("update t3 set x = 1 where x > 999999999999;", dt);
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                                 CacheItemType::PERFECT_HT));
+    }
   }
 }
 

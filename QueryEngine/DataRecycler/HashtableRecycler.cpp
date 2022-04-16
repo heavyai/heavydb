@@ -272,6 +272,35 @@ void HashtableRecycler::markCachedItemAsDirty(size_t table_key,
   // we remove the mapping between the table_key -> hashed_query_plan_dag
   // since we do not need to care about "already marked" item in the cache
   removeTableKeyInfoFromQueryPlanDagMap(table_key);
+
+  // hash tables built from synthetically generated tables have no chance to be cleared
+  // since we assume their table keys as {-1, -1}
+  // this means that typically we do not have a chance to invalidate cached items
+  // by calling invalidation request with table key {-1, -1}
+  // thus, we manually invalidate them here to maintain cache space based on the
+  // assumption that synthetically generated table is not frequently used as typical
+  // tables do
+  removeCachedHashtableBuiltFromSyntheticTable(item_type, device_identifier, lock);
+}
+
+void HashtableRecycler::removeCachedHashtableBuiltFromSyntheticTable(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    std::lock_guard<std::mutex>& lock) {
+  auto hashtable_cache = getCachedItemContainer(item_type, device_identifier);
+  CHECK(hashtable_cache);
+  auto unitary_table_key = DataRecyclerUtil::getUnitaryTableKey();
+  auto key_set_it = table_key_to_query_plan_dag_map_.find(unitary_table_key);
+  if (key_set_it != table_key_to_query_plan_dag_map_.end()) {
+    auto& key_set = key_set_it->second;
+    for (auto key : key_set) {
+      removeItemFromCache(key, item_type, device_identifier, lock);
+    }
+    // after marking all cached hashtable having the given "table_key" as its one of
+    // input, we remove the mapping between the table_key -> hashed_query_plan_dag since
+    // we do not need to care about "already marked" item in the cache
+    removeTableKeyInfoFromQueryPlanDagMap(unitary_table_key);
+  }
 }
 
 std::string HashtableRecycler::toString() const {
