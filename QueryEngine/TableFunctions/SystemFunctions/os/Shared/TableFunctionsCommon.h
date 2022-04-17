@@ -28,13 +28,13 @@
 #include "QueryEngine/heavydbTypes.h"
 
 template <typename T>
-TEMPLATE_NOINLINE std::pair<T, T> get_column_min_max(const Column<T>& col);
+NEVER_INLINE HOST std::pair<T, T> get_column_min_max(const Column<T>& col);
 
-TEMPLATE_NOINLINE std::pair<int32_t, int32_t> get_column_min_max(
+NEVER_INLINE HOST std::pair<int32_t, int32_t> get_column_min_max(
     const Column<TextEncodingDict>& col);
 
 template <typename T1, typename T2>
-TEMPLATE_NOINLINE T1
+NEVER_INLINE HOST T1
 distance_in_meters(const T1 fromlon, const T1 fromlat, const T2 tolon, const T2 tolat);
 
 inline int64_t x_y_bin_to_bin_index(const int64_t x_bin,
@@ -112,11 +112,9 @@ enum BoundsType { Min, Max };
 enum IntervalType { Inclusive, Exclusive };
 
 template <typename T>
-bool is_valid_tf_input(const T input,
-                       const T bounds_val,
-                       const BoundsType bounds_type,
-                       const IntervalType interval_type);
-
-#include "TableFunctionsCommon.cpp"
+NEVER_INLINE HOST bool is_valid_tf_input(const T input,
+                                         const T bounds_val,
+                                         const BoundsType bounds_type,
+                                         const IntervalType interval_type);
 
 #endif  //__CUDACC__

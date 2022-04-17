@@ -16,6 +16,8 @@
 
 #ifndef __CUDACC__
 
+#include "TableFunctionsCommon.h"
+
 #include <cstring>  // std::memcpy
 #include <filesystem>
 #include <memory>
@@ -28,12 +30,10 @@
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
 
-#include "TableFunctionsCommon.h"
-
 #define NANOSECONDS_PER_SECOND 1000000000
 
 template <typename T>
-TEMPLATE_NOINLINE std::pair<T, T> get_column_min_max(const Column<T>& col) {
+NEVER_INLINE HOST std::pair<T, T> get_column_min_max(const Column<T>& col) {
   T col_min = std::numeric_limits<T>::max();
   T col_max = std::numeric_limits<T>::lowest();
   const int64_t num_rows = col.size();
@@ -85,6 +85,19 @@ TEMPLATE_NOINLINE std::pair<T, T> get_column_min_max(const Column<T>& col) {
   return std::make_pair(col_min, col_max);
 }
 
+template NEVER_INLINE HOST std::pair<int8_t, int8_t> get_column_min_max(
+    const Column<int8_t>& col);
+template NEVER_INLINE HOST std::pair<int16_t, int16_t> get_column_min_max(
+    const Column<int16_t>& col);
+template NEVER_INLINE HOST std::pair<int32_t, int32_t> get_column_min_max(
+    const Column<int32_t>& col);
+template NEVER_INLINE HOST std::pair<int64_t, int64_t> get_column_min_max(
+    const Column<int64_t>& col);
+template NEVER_INLINE HOST std::pair<float, float> get_column_min_max(
+    const Column<float>& col);
+template NEVER_INLINE HOST std::pair<double, double> get_column_min_max(
+    const Column<double>& col);
+
 std::pair<int32_t, int32_t> get_column_min_max(const Column<TextEncodingDict>& col) {
   Column<int32_t> int_alias_col;
   int_alias_col.ptr_ = reinterpret_cast<int32_t*>(col.ptr_);
@@ -93,7 +106,7 @@ std::pair<int32_t, int32_t> get_column_min_max(const Column<TextEncodingDict>& c
 }
 
 template <typename T1, typename T2>
-TEMPLATE_NOINLINE T1
+NEVER_INLINE HOST T1
 distance_in_meters(const T1 fromlon, const T1 fromlat, const T2 tolon, const T2 tolat) {
   T1 latitudeArc = (fromlat - tolat) * 0.017453292519943295769236907684886;
   T1 longitudeArc = (fromlon - tolon) * 0.017453292519943295769236907684886;
@@ -105,6 +118,26 @@ distance_in_meters(const T1 fromlon, const T1 fromlat, const T2 tolon, const T2 
            cos(tolat * 0.017453292519943295769236907684886);
   return 6372797.560856 * (2.0 * asin(sqrt(latitudeH + tmp * lontitudeH)));
 }
+
+template NEVER_INLINE HOST float distance_in_meters(const float fromlon,
+                                                    const float fromlat,
+                                                    const float tolon,
+                                                    const float tolat);
+
+template NEVER_INLINE HOST float distance_in_meters(const float fromlon,
+                                                    const float fromlat,
+                                                    const double tolon,
+                                                    const double tolat);
+
+template NEVER_INLINE HOST double distance_in_meters(const double fromlon,
+                                                     const double fromlat,
+                                                     const float tolon,
+                                                     const float tolat);
+
+template NEVER_INLINE HOST double distance_in_meters(const double fromlon,
+                                                     const double fromlat,
+                                                     const double tolon,
+                                                     const double tolat);
 
 bool DataBufferCache::isKeyCached(const std::string& key) const {
   std::shared_lock<std::shared_mutex> read_lock(cache_mutex_);
@@ -305,10 +338,10 @@ std::vector<std::filesystem::path> get_fs_paths(const std::string& file_or_direc
 }  // namespace FileUtilities
 
 template <typename T>
-bool is_valid_tf_input(const T input,
-                       const T bounds_val,
-                       const BoundsType bounds_type,
-                       const IntervalType interval_type) {
+NEVER_INLINE HOST bool is_valid_tf_input(const T input,
+                                         const T bounds_val,
+                                         const BoundsType bounds_type,
+                                         const IntervalType interval_type) {
   switch (bounds_type) {
     case BoundsType::Min:
       switch (interval_type) {
@@ -335,5 +368,25 @@ bool is_valid_tf_input(const T input,
   UNREACHABLE();
   return false;  // To address compiler warning
 }
+
+template NEVER_INLINE HOST bool is_valid_tf_input(const int32_t input,
+                                                  const int32_t bounds_val,
+                                                  const BoundsType bounds_type,
+                                                  const IntervalType interval_type);
+
+template NEVER_INLINE HOST bool is_valid_tf_input(const int64_t input,
+                                                  const int64_t bounds_val,
+                                                  const BoundsType bounds_type,
+                                                  const IntervalType interval_type);
+
+template NEVER_INLINE HOST bool is_valid_tf_input(const float input,
+                                                  const float bounds_val,
+                                                  const BoundsType bounds_type,
+                                                  const IntervalType interval_type);
+
+template NEVER_INLINE HOST bool is_valid_tf_input(const double input,
+                                                  const double bounds_val,
+                                                  const BoundsType bounds_type,
+                                                  const IntervalType interval_type);
 
 #endif  // #ifndef __CUDACC__
