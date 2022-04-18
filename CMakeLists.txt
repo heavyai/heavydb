@@ -722,6 +722,11 @@ if (ENABLE_TESTS)
   add_subdirectory(Tests)
 endif()
 
+option(ENABLE_BENCHMARKS "Build benchmarks" ON)
+if (ENABLE_BENCHMARKS)
+  add_subdirectory(Benchmarks/taxi)
+endif()
+
 if(ENABLE_RENDERING AND ENABLE_RENDER_TESTS)
   enable_testing()
   add_subdirectory(Tests/RenderTests)
