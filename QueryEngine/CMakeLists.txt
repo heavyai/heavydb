@@ -39,6 +39,7 @@ set(query_engine_source_files
     Descriptors/RelAlgExecutionDescriptor.cpp
     Dispatchers/DefaultExecutionPolicy.cpp
     Dispatchers/RRExecutionPolicy.cpp
+    Dispatchers/ProportionBasedExecutionPolicy.cpp
     EquiJoinCondition.cpp
     Execute.cpp
     ExecutionKernel.cpp
