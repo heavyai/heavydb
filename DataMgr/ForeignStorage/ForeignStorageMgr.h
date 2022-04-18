@@ -21,7 +21,7 @@
 
 #include "DataMgr/AbstractBufferMgr.h"
 #include "ForeignDataWrapper.h"
-#include "Shared/mapd_shared_mutex.h"
+#include "Shared/heavyai_shared_mutex.h"
 
 using namespace Data_Namespace;
 

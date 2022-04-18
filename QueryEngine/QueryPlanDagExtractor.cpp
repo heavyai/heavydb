@@ -90,7 +90,7 @@ ExtractedQueryPlanDag QueryPlanDagExtractor::extractQueryPlanDag(
     VLOG(1) << "Stop DAG extraction (" << dag_checker_res.second << ")";
     return {EMPTY_QUERY_PLAN, true};
   }
-  mapd_unique_lock<mapd_shared_mutex> lock(executor->getDataRecyclerLock());
+  heavyai::unique_lock<heavyai::shared_mutex> lock(executor->getDataRecyclerLock());
   auto& cached_dag = executor->getQueryPlanDagCache();
   QueryPlanDagExtractor dag_extractor(cached_dag, {}, executor, false);
   extractQueryPlanDagImpl(top_node, dag_extractor);
@@ -115,7 +115,7 @@ ExtractedJoinInfo QueryPlanDagExtractor::extractJoinInfo(
   if (top_node->getQueryPlanDagHash() == EMPTY_HASHED_PLAN_DAG_KEY) {
     return {};
   }
-  mapd_unique_lock<mapd_shared_mutex> lock(executor->getDataRecyclerLock());
+  heavyai::unique_lock<heavyai::shared_mutex> lock(executor->getDataRecyclerLock());
   auto& cached_dag = executor->getQueryPlanDagCache();
   QueryPlanDagExtractor dag_extractor(cached_dag, left_deep_tree_infos, executor, true);
   extractQueryPlanDagImpl(top_node, dag_extractor);

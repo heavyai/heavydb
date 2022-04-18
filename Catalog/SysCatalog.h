@@ -53,7 +53,7 @@
 
 #include "../Calcite/Calcite.h"
 #include "Shared/SysDefinitions.h"
-#include "Shared/mapd_shared_mutex.h"
+#include "Shared/heavyai_shared_mutex.h"
 
 class Calcite;
 
@@ -498,7 +498,7 @@ class SysCatalog : private CommonFileOperations {
 
  public:
   mutable std::mutex sqliteMutex_;
-  mutable mapd_shared_mutex sharedMutex_;
+  mutable heavyai::shared_mutex sharedMutex_;
   mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;
   mutable std::atomic<std::thread::id> thread_holding_write_lock;
   static thread_local bool thread_holds_read_lock;

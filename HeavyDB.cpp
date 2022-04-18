@@ -39,7 +39,7 @@
 #include "Logger/Logger.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/file_delete.h"
-#include "Shared/mapd_shared_mutex.h"
+#include "Shared/heavyai_shared_mutex.h"
 #include "Shared/scope.h"
 
 #include <boost/algorithm/string.hpp>

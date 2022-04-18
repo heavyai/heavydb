@@ -14,21 +14,19 @@
  * limitations under the License.
  */
 
-#include "OSDependent/omnisci_glob.h"
+#include "OSDependent/heavyai_hostname.h"
 
-#include <glob.h>
-#include <string>
-#include <vector>
+#include "Shared/clean_windows.h"
 
 namespace heavyai {
-std::vector<std::string> glob(const std::string& pattern) {
-  std::vector<std::string> results;
-  glob_t glob_result;
-  ::glob(pattern.c_str(), GLOB_BRACE | GLOB_TILDE, nullptr, &glob_result);
-  for (size_t i = 0; i < glob_result.gl_pathc; i++) {
-    results.emplace_back(glob_result.gl_pathv[i]);
+std::string get_hostname() {
+  static constexpr DWORD kSize = MAX_COMPUTERNAME_LENGTH + 1;
+  DWORD buffer_size = kSize;
+  char hostname[MAX_COMPUTERNAME_LENGTH + 1];
+  if (GetComputerNameA(hostname, &buffer_size)) {
+    return {hostname};
+  } else {
+    return {};
   }
-  globfree(&glob_result);
-  return results;
 }
 }  // namespace heavyai

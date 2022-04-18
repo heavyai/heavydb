@@ -24,7 +24,7 @@
 #include "Calcite.h"
 #include "Catalog/Catalog.h"
 #include "Logger/Logger.h"
-#include "OSDependent/omnisci_path.h"
+#include "OSDependent/heavyai_path.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/ThriftClient.h"

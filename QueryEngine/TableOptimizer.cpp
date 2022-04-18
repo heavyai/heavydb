@@ -131,7 +131,7 @@ inline ExecutionOptions get_execution_options() {
 
 void TableOptimizer::recomputeMetadata() const {
   auto timer = DEBUG_TIMER(__func__);
-  mapd_unique_lock<mapd_shared_mutex> lock(executor_->execute_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> lock(executor_->execute_mutex_);
 
   LOG(INFO) << "Recomputing metadata for " << td_->tableName;
 
@@ -515,7 +515,8 @@ void TableOptimizer::vacuumFragmentsAboveMinSelectivity(
 
     DeletedColumnStats deleted_column_stats;
     {
-      mapd_unique_lock<mapd_shared_mutex> executor_lock(executor_->execute_mutex_);
+      heavyai::unique_lock<heavyai::shared_mutex> executor_lock(
+          executor_->execute_mutex_);
       ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
       executor_->row_set_mem_owner_ =
           std::make_shared<RowSetMemoryOwner>(ROW_SET_SIZE, /*num_threads=*/1);

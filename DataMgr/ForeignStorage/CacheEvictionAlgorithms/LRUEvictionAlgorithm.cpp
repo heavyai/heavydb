@@ -25,7 +25,7 @@
 #include "LRUEvictionAlgorithm.h"
 
 const ChunkKey LRUEvictionAlgorithm::evictNextChunk() {
-  mapd_unique_lock<mapd_shared_mutex> lock(cache_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> lock(cache_mutex_);
   if (cache_items_list_.size() < 1) {
     throw NoEntryFoundException();
   }
@@ -36,7 +36,7 @@ const ChunkKey LRUEvictionAlgorithm::evictNextChunk() {
 }
 
 void LRUEvictionAlgorithm::touchChunk(const ChunkKey& key) {
-  mapd_unique_lock<mapd_shared_mutex> lock(cache_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> lock(cache_mutex_);
   auto it = cache_items_map_.find(key);
   if (it != cache_items_map_.end()) {
     cache_items_list_.erase(it->second);
@@ -47,7 +47,7 @@ void LRUEvictionAlgorithm::touchChunk(const ChunkKey& key) {
 }
 
 void LRUEvictionAlgorithm::removeChunk(const ChunkKey& key) {
-  mapd_unique_lock<mapd_shared_mutex> lock(cache_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> lock(cache_mutex_);
   auto it = cache_items_map_.find(key);
   if (it == cache_items_map_.end()) {
     return;
@@ -57,7 +57,7 @@ void LRUEvictionAlgorithm::removeChunk(const ChunkKey& key) {
 }
 
 std::string LRUEvictionAlgorithm::dumpEvictionQueue() {
-  mapd_shared_lock<mapd_shared_mutex> lock(cache_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> lock(cache_mutex_);
   std::string ret = "Eviction queue:\n{";
   for (auto chunk : cache_items_list_) {
     ret += show_chunk(chunk) + ", ";

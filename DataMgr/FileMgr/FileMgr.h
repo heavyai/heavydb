@@ -39,7 +39,7 @@
 #include "DataMgr/FileMgr/FileInfo.h"
 #include "DataMgr/FileMgr/Page.h"
 #include "Fragmenter/FragmentDefaultValues.h"
-#include "Shared/mapd_shared_mutex.h"
+#include "Shared/heavyai_shared_mutex.h"
 
 using namespace Data_Namespace;
 
@@ -408,10 +408,10 @@ class FileMgr : public AbstractBufferMgr {  // implements
   const int32_t latestFileMgrVersion_{2};
   FILE* DBMetaFile_ = nullptr;  /// pointer to DB level metadata
   std::mutex getPageMutex_;
-  mutable mapd_shared_mutex chunkIndexMutex_;
-  mutable mapd_shared_mutex files_rw_mutex_;
+  mutable heavyai::shared_mutex chunkIndexMutex_;
+  mutable heavyai::shared_mutex files_rw_mutex_;
 
-  mutable mapd_shared_mutex mutex_free_page_;
+  mutable heavyai::shared_mutex mutex_free_page_;
   std::vector<std::pair<FileInfo*, int32_t>> free_pages_;
   bool isFullyInitted_{false};
 

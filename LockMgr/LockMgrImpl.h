@@ -23,15 +23,15 @@
 #include <type_traits>
 
 #include "Catalog/Catalog.h"
-#include "Shared/mapd_shared_mutex.h"
+#include "Shared/heavyai_shared_mutex.h"
 #include "Shared/types.h"
 
 namespace lockmgr {
 
-using MutexTypeBase = mapd_shared_mutex;
+using MutexTypeBase = heavyai::shared_mutex;
 
-using WriteLockBase = mapd_unique_lock<MutexTypeBase>;
-using ReadLockBase = mapd_shared_lock<MutexTypeBase>;
+using WriteLockBase = heavyai::unique_lock<MutexTypeBase>;
+using ReadLockBase = heavyai::shared_lock<MutexTypeBase>;
 
 class MutexTracker {
  public:

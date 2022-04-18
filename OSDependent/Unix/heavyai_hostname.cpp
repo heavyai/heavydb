@@ -14,19 +14,15 @@
  * limitations under the License.
  */
 
-#include "OSDependent/omnisci_hostname.h"
+#include "OSDependent/heavyai_hostname.h"
 
-#include "Shared/clean_windows.h"
+#include <unistd.h>
+#include <climits>
 
 namespace heavyai {
 std::string get_hostname() {
-  static constexpr DWORD kSize = MAX_COMPUTERNAME_LENGTH + 1;
-  DWORD buffer_size = kSize;
-  char hostname[MAX_COMPUTERNAME_LENGTH + 1];
-  if (GetComputerNameA(hostname, &buffer_size)) {
-    return {hostname};
-  } else {
-    return {};
-  }
+  char hostname[_POSIX_HOST_NAME_MAX];
+  gethostname(hostname, _POSIX_HOST_NAME_MAX);
+  return {hostname};
 }
 }  // namespace heavyai

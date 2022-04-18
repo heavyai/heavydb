@@ -55,7 +55,7 @@
 #include "Catalog/Types.h"
 #include "DataMgr/DataMgr.h"
 #include "QueryEngine/CompilationOptions.h"
-#include "Shared/mapd_shared_mutex.h"
+#include "Shared/heavyai_shared_mutex.h"
 #include "SqliteConnector/SqliteConnector.h"
 
 #include "LeafHostInfo.h"
@@ -786,7 +786,7 @@ class Catalog final {
 
  public:
   mutable std::mutex sqliteMutex_;
-  mutable mapd_shared_mutex sharedMutex_;
+  mutable heavyai::shared_mutex sharedMutex_;
   mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;
   mutable std::atomic<std::thread::id> thread_holding_write_lock;
   // assuming that you never call into a catalog from another catalog via the same thread

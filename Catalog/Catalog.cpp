@@ -65,7 +65,7 @@
 #include "Fragmenter/SortedOrderFragmenter.h"
 #include "LockMgr/LockMgr.h"
 #include "MigrationMgr/MigrationMgr.h"
-#include "OSDependent/omnisci_path.h"
+#include "OSDependent/heavyai_path.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
@@ -3926,8 +3926,8 @@ void Catalog::renameTable(std::vector<std::pair<std::string, std::string>>& name
   //      but it's not clear if the access done there *requires* it out there
   //
   // Lock tables pre-execute (may/will be in different order than rename occurs)
-  // const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-  //     *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  // const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
+  //     *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
   //        legacylockmgr::ExecutorOuterLock, true));
 
   // acquire the locks for all tables being renamed

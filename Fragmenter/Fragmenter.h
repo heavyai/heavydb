@@ -24,7 +24,7 @@
 #include "../Catalog/ColumnDescriptor.h"
 #include "../DataMgr/Chunk/Chunk.h"
 #include "../DataMgr/ChunkMetadata.h"
-#include "../Shared/mapd_shared_mutex.h"
+#include "../Shared/heavyai_shared_mutex.h"
 #include "../Shared/types.h"
 
 namespace Data_Namespace {

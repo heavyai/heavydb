@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "OSDependent/omnisci_path.h"
+#include "OSDependent/heavyai_path.h"
 
 #ifdef __APPLE__
 #include <libproc.h>

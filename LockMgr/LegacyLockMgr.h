@@ -23,7 +23,7 @@
 #include <tuple>
 
 #include "Catalog/Catalog.h"
-#include "Shared/mapd_shared_mutex.h"
+#include "Shared/heavyai_shared_mutex.h"
 #include "Shared/types.h"
 #include "ThriftHandler/QueryState.h"
 

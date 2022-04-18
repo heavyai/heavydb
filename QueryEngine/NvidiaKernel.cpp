@@ -19,7 +19,7 @@
 #include "NvidiaKernel.h"
 
 #include "Logger/Logger.h"
-#include "OSDependent/omnisci_path.h"
+#include "OSDependent/heavyai_path.h"
 
 #include <boost/filesystem/operations.hpp>
 

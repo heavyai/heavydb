@@ -17,7 +17,7 @@
 #ifndef RW_LOCKS_H
 #define RW_LOCKS_H
 
-#include "../Shared/mapd_shared_mutex.h"
+#include "../Shared/heavyai_shared_mutex.h"
 
 namespace Catalog_Namespace {
 
@@ -36,7 +36,7 @@ namespace Catalog_Namespace {
 template <typename T>
 class read_lock {
   const T* catalog;
-  mapd_shared_lock<mapd_shared_mutex> lock;
+  heavyai::shared_lock<heavyai::shared_mutex> lock;
   bool holds_lock;
 
   template <typename inner_type>
@@ -44,7 +44,7 @@ class read_lock {
     std::thread::id tid = std::this_thread::get_id();
 
     if (cat->thread_holding_write_lock != tid && !inner_type::thread_holds_read_lock) {
-      lock = mapd_shared_lock<mapd_shared_mutex>(cat->sharedMutex_);
+      lock = heavyai::shared_lock<heavyai::shared_mutex>(cat->sharedMutex_);
       inner_type::thread_holds_read_lock = true;
       holds_lock = true;
     }
@@ -105,7 +105,7 @@ class sqlite_lock {
 template <typename T>
 class write_lock {
   const T* catalog;
-  mapd_unique_lock<mapd_shared_mutex> lock;
+  heavyai::unique_lock<heavyai::shared_mutex> lock;
   bool holds_lock;
 
   template <typename inner_type>
@@ -113,7 +113,7 @@ class write_lock {
     std::thread::id tid = std::this_thread::get_id();
 
     if (cat->thread_holding_write_lock != tid) {
-      lock = mapd_unique_lock<mapd_shared_mutex>(cat->sharedMutex_);
+      lock = heavyai::unique_lock<heavyai::shared_mutex>(cat->sharedMutex_);
       cat->thread_holding_write_lock = tid;
       holds_lock = true;
     }

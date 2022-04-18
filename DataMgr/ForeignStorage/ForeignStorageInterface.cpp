@@ -69,7 +69,7 @@ Data_Namespace::AbstractBuffer* ForeignStorageBufferMgr::createBuffer(
     const ChunkKey& key,
     const size_t pageSize,
     const size_t initialSize) {
-  mapd_unique_lock<mapd_shared_mutex> chunk_index_write_lock(chunk_index_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> chunk_index_write_lock(chunk_index_mutex_);
   const auto it_ok = chunk_index_.emplace(
       key, std::make_unique<ForeignStorageBuffer>(key, persistent_foreign_storage_));
   // this check fails if we create table, drop it and create again
@@ -80,7 +80,7 @@ Data_Namespace::AbstractBuffer* ForeignStorageBufferMgr::createBuffer(
 Data_Namespace::AbstractBuffer* ForeignStorageBufferMgr::getBuffer(
     const ChunkKey& key,
     const size_t numBytes) {
-  mapd_shared_lock<mapd_shared_mutex> chunk_index_write_lock(chunk_index_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> chunk_index_write_lock(chunk_index_mutex_);
   const auto it = chunk_index_.find(key);
   CHECK(it != chunk_index_.end());
   return it->second.get();
@@ -108,7 +108,7 @@ void ForeignStorageBufferMgr::fetchBuffer(const ChunkKey& key,
 void ForeignStorageBufferMgr::getChunkMetadataVecForKeyPrefix(
     ChunkMetadataVector& chunkMetadataVec,
     const ChunkKey& keyPrefix) {
-  mapd_unique_lock<mapd_shared_mutex> chunk_index_write_lock(
+  heavyai::unique_lock<heavyai::shared_mutex> chunk_index_write_lock(
       chunk_index_mutex_);  // is this guarding the right structure?  it look slike we
                             // oly read here for chunk
   auto chunk_it = chunk_index_.lower_bound(keyPrefix);

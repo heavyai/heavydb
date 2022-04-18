@@ -106,7 +106,8 @@ bool check_session_interrupted(const QuerySessionId& query_session, Executor* ex
   // we know the exact session info from a global session map object
   // in the executor
   if (g_enable_non_kernel_time_query_interrupt) {
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+    heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+        executor->getSessionLock());
     return executor->checkIsQuerySessionInterrupted(query_session, session_read_lock);
   }
   return false;
@@ -2649,8 +2650,8 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
 }
 
 void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
   const auto td_with_lock =
@@ -3234,8 +3235,8 @@ void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& sessio
 void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
   // check access privileges
@@ -3282,8 +3283,8 @@ CreateDataframeStmt::CreateDataframeStmt(const rapidjson::Value& payload) {
 void CreateDataframeStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
   // check access privileges
@@ -4136,8 +4137,8 @@ void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& 
   auto stdlog = STDLOG(query_state);
   auto& catalog = session_ptr->getCatalog();
 
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
   if (catalog.getMetadataForTable(table_name_) == nullptr) {
@@ -4186,8 +4187,8 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
   std::set<std::string> select_tables;
   if (create_table) {
-    const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+    const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
+        *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
             legacylockmgr::ExecutorOuterLock, true));
 
     // check access privileges
@@ -4300,8 +4301,8 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
   // note there is a time where we do not have any executor outer lock here. someone could
   // come along and mess with the data or other tables.
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
   auto locks = acquire_query_table_locks(
@@ -4331,8 +4332,8 @@ DropTableStmt::DropTableStmt(const rapidjson::Value& payload) {
 }
 
 void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
   const TableDescriptor* td{nullptr};
@@ -4486,8 +4487,8 @@ TruncateTableStmt::TruncateTableStmt(const rapidjson::Value& payload) {
 }
 
 void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
   const auto td_with_lock =
@@ -4552,8 +4553,8 @@ bool user_can_access_table(const Catalog_Namespace::SessionInfo& session_info,
 void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
   const auto td_with_lock =
@@ -4673,8 +4674,8 @@ void RenameDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   Catalog_Namespace::DBMetadata db;
 
   // TODO: use database lock instead
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
   if (!SysCatalog::instance().getMetadataForDB(*database_name_, db)) {
@@ -4783,8 +4784,8 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
   // TODO(adb): the catalog should be handling this locking (see AddColumStmt)
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
   // accumulated vector of table names: oldName->newName
@@ -4921,8 +4922,8 @@ void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& sessi
 
 void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   // TODO: Review add and drop column implementation
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
   const auto td_with_lock =
@@ -5068,8 +5069,8 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
 void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   // TODO: Review add and drop column implementation
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
   const auto td_with_lock =
@@ -5146,8 +5147,8 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
   const auto td_with_lock =
@@ -5174,8 +5175,8 @@ void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session)
       {"max_rollback_epochs", TableParamType::MaxRollbackEpochs},
       {"epoch", TableParamType::Epoch},
       {"max_rows", TableParamType::MaxRows}};
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
   const auto td_with_lock =
@@ -5277,8 +5278,8 @@ void CopyTableStmt::execute(
   size_t total_time = 0;
 
   // Prevent simultaneous import / truncate (see TruncateTableStmt::execute)
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
   const TableDescriptor* td{nullptr};
@@ -5946,8 +5947,8 @@ ShowCreateTableStmt::ShowCreateTableStmt(const rapidjson::Value& payload) {
 void ShowCreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   using namespace Catalog_Namespace;
 
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
   auto& catalog = session.getCatalog();
@@ -6037,8 +6038,8 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                                           ddl_utils::DataTransferType::EXPORT);
   }
 
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   auto locks = acquire_query_table_locks(
       session_ptr->getCatalog(), *select_stmt_, query_state_proxy);
@@ -6290,8 +6291,8 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                        calciteOptimizationOption);
 
   // Take write lock after the query is processed to ensure no deadlocks
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
   TableDescriptor td;
@@ -6329,8 +6330,8 @@ DropViewStmt::DropViewStmt(const rapidjson::Value& payload) {
 void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
   const TableDescriptor* td{nullptr};
@@ -6389,8 +6390,8 @@ void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         "CREATE DATABASE command can only be executed by super user.");
   }
 
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
   Catalog_Namespace::DBMetadata db_meta;
@@ -6429,8 +6430,8 @@ DropDBStmt::DropDBStmt(const rapidjson::Value& payload) {
 }
 
 void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
   Catalog_Namespace::DBMetadata db;
@@ -6677,8 +6678,8 @@ DumpTableStmt::DumpTableStmt(const rapidjson::Value& payload)
     : DumpRestoreTableStmtBase(payload, false) {}
 
 void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
   auto& catalog = session.getCatalog();

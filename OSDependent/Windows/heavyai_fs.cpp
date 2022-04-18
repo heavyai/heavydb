@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "OSDependent/omnisci_fs.h"
+#include "OSDependent/heavyai_fs.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>

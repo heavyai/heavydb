@@ -705,7 +705,7 @@ class DataStreamSink {
   const std::string file_path;
   FILE* p_file = nullptr;
   ImportStatus import_status_;
-  mapd_shared_mutex import_mutex_;
+  heavyai::shared_mutex import_mutex_;
   size_t total_file_size{0};
   std::vector<size_t> file_offsets;
   std::mutex file_offsets_mutex;

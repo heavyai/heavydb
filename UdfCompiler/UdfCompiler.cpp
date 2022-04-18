@@ -40,7 +40,7 @@
 #endif
 
 #include "Logger/Logger.h"
-#include "OSDependent/omnisci_fs.h"
+#include "OSDependent/heavyai_fs.h"
 
 using namespace clang;
 using namespace clang::tooling;

@@ -22,13 +22,13 @@
 #define DATAMGR_H
 
 #include "../Shared/SystemParameters.h"
-#include "../Shared/mapd_shared_mutex.h"
+#include "../Shared/heavyai_shared_mutex.h"
 #include "AbstractBuffer.h"
 #include "AbstractBufferMgr.h"
 #include "BufferMgr/Buffer.h"
 #include "BufferMgr/BufferMgr.h"
 #include "MemoryLevel.h"
-#include "OSDependent/omnisci_fs.h"
+#include "OSDependent/heavyai_fs.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
 
 #include <fstream>

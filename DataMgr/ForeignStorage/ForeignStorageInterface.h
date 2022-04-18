@@ -141,7 +141,8 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
   std::string getStringMgrType() override { return ToString(FILE_MGR); }
 
   size_t getNumChunks() override {
-    mapd_shared_lock<mapd_shared_mutex> chunk_index_write_lock(chunk_index_mutex_);
+    heavyai::shared_lock<heavyai::shared_mutex> chunk_index_write_lock(
+        chunk_index_mutex_);
     return chunk_index_.size();
   }
 
@@ -213,7 +214,7 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
  private:
   PersistentForeignStorageInterface* persistent_foreign_storage_;
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_index_;
-  mutable mapd_shared_mutex chunk_index_mutex_;
+  mutable heavyai::shared_mutex chunk_index_mutex_;
 };
 
 class ForeignStorageInterface {

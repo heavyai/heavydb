@@ -124,7 +124,7 @@ FileMgr::~FileMgr() {
 }
 
 bool FileMgr::coreInit() {
-  mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(files_rw_mutex_);
   const std::string fileMgrDirPrefix("table");
   const std::string FileMgrDirDelim("_");
   fileMgrBasePath_ = (gfm_->getBasePath() + fileMgrDirPrefix + FileMgrDirDelim +
@@ -336,7 +336,7 @@ StorageStats FileMgr::getStorageStats() const {
 }
 
 void FileMgr::setDataAndMetadataFileStats(StorageStats& storage_stats) const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(files_rw_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(files_rw_mutex_);
   if (!isFullyInitted_) {
     CHECK(!fileMgrBasePath_.empty());
     boost::filesystem::path path(fileMgrBasePath_);
@@ -397,7 +397,7 @@ void FileMgr::setDataAndMetadataFileStats(StorageStats& storage_stats) const {
 }
 
 uint32_t FileMgr::getFragmentCount() const {
-  mapd_shared_lock<mapd_shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
   std::set<int32_t> fragment_ids;
   for (const auto& [chunk_key, file_buffer] : chunkIndex_) {
     fragment_ids.emplace(chunk_key[CHUNK_KEY_FRAGMENT_IDX]);
@@ -564,7 +564,7 @@ void FileMgr::closePhysicalUnlocked() {
 }
 
 void FileMgr::closeRemovePhysical() {
-  mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(files_rw_mutex_);
   closePhysicalUnlocked();
   /* rename for later deletion the directory containing table related data */
   File_Namespace::renameForDelete(getFileMgrBasePath());
@@ -659,7 +659,7 @@ void FileMgr::writeAndSyncEpochToDisk() {
 }
 
 void FileMgr::freePagesBeforeEpoch(const int32_t min_epoch) {
-  mapd_shared_lock<mapd_shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
   freePagesBeforeEpochUnlocked(min_epoch, chunkIndex_.begin(), chunkIndex_.end());
 }
 
@@ -704,7 +704,7 @@ void FileMgr::checkpoint() {
 FileBuffer* FileMgr::createBuffer(const ChunkKey& key,
                                   const size_t page_size,
                                   const size_t num_bytes) {
-  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   CHECK(chunkIndex_.find(key) == chunkIndex_.end())
       << "Chunk already exists for key: " << show_chunk(key);
   return createBufferUnlocked(key, page_size, num_bytes);
@@ -726,7 +726,7 @@ FileBuffer* FileMgr::createBufferFromHeaders(
     const ChunkKey& key,
     const std::vector<HeaderInfo>::const_iterator& headerStartIt,
     const std::vector<HeaderInfo>::const_iterator& headerEndIt) {
-  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   CHECK(chunkIndex_.find(key) == chunkIndex_.end())
       << "Chunk already exists for key: " << show_chunk(key);
   chunkIndex_[key] = allocateBuffer(key, headerStartIt, headerEndIt);
@@ -734,12 +734,12 @@ FileBuffer* FileMgr::createBufferFromHeaders(
 }
 
 bool FileMgr::isBufferOnDevice(const ChunkKey& key) {
-  mapd_shared_lock<mapd_shared_mutex> chunkIndexReadLock(chunkIndexMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> chunkIndexReadLock(chunkIndexMutex_);
   return chunkIndex_.find(key) != chunkIndex_.end();
 }
 
 void FileMgr::deleteBuffer(const ChunkKey& key, const bool purge) {
-  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   auto chunk_it = chunkIndex_.find(key);
   CHECK(chunk_it != chunkIndex_.end())
       << "Chunk does not exist for key: " << show_chunk(key);
@@ -757,7 +757,7 @@ ChunkKeyToChunkMap::iterator FileMgr::deleteBufferUnlocked(
 }
 
 void FileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool purge) {
-  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.lower_bound(keyPrefix);
   if (chunkIt == chunkIndex_.end()) {
     return;  // should we throw?
@@ -772,7 +772,7 @@ void FileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool purg
 }
 
 FileBuffer* FileMgr::getBuffer(const ChunkKey& key, const size_t num_bytes) {
-  mapd_shared_lock<mapd_shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
   return getBufferUnlocked(key, num_bytes);
 }
 
@@ -942,7 +942,7 @@ FileInfo* FileMgr::openExistingFile(const std::string& path,
       this, fileId, f, pageSize, numPages, false);  // false means don't init file
 
   fInfo->openExistingFile(headerVec);
-  mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(files_rw_mutex_);
   files_[fileId] = fInfo;
   fileIndex_.insert(std::pair<size_t, int32_t>(pageSize, fileId));
   return fInfo;
@@ -968,7 +968,7 @@ FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
       new FileInfo(this, fileId, f, pageSize, numPages, true);  // true means init file
   CHECK(fInfo);
 
-  mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(files_rw_mutex_);
   // update file manager data structures
   files_[fileId] = fInfo;
   fileIndex_.insert(std::pair<size_t, int32_t>(pageSize, fileId));
@@ -983,14 +983,14 @@ FILE* FileMgr::getFileForFileId(const int32_t fileId) {
 }
 
 bool FileMgr::hasChunkMetadataForKeyPrefix(const ChunkKey& keyPrefix) {
-  mapd_shared_lock<mapd_shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.lower_bound(keyPrefix);
   return (chunkIt != chunkIndex_.end());
 }
 
 void FileMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                               const ChunkKey& keyPrefix) {
-  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.lower_bound(keyPrefix);
   if (chunkIt == chunkIndex_.end()) {
     return;  // throw?
@@ -1010,7 +1010,7 @@ void FileMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadata
 }
 
 size_t FileMgr::getNumUsedMetadataPagesForChunkKey(const ChunkKey& chunkKey) const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(chunkIndexMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(chunkIndexMutex_);
   const auto& chunkIt = chunkIndex_.find(chunkKey);
   if (chunkIt != chunkIndex_.end()) {
     return chunkIt->second->numMetadataPages();
@@ -1184,7 +1184,7 @@ void FileMgr::setEpoch(const int32_t newEpoch) {
 }
 
 void FileMgr::free_page(std::pair<FileInfo*, int32_t>&& page) {
-  std::unique_lock<mapd_shared_mutex> lock(mutex_free_page_);
+  std::unique_lock<heavyai::shared_mutex> lock(mutex_free_page_);
   free_pages_.push_back(page);
 }
 
@@ -1206,14 +1206,14 @@ void FileMgr::resumeFileCompaction(const std::string& status_file_name) {
     compactFiles();
   } else if (status_file_name == UPDATE_PAGE_VISIBILITY_STATUS) {
     // Execute second and third phases of data compaction
-    mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
+    heavyai::unique_lock<heavyai::shared_mutex> write_lock(files_rw_mutex_);
     auto page_mappings = readPageMappingsFromStatusFile();
     updateMappedPagesVisibility(page_mappings);
     renameCompactionStatusFile(UPDATE_PAGE_VISIBILITY_STATUS, DELETE_EMPTY_FILES_STATUS);
     deleteEmptyFiles();
   } else if (status_file_name == DELETE_EMPTY_FILES_STATUS) {
     // Execute last phase of data compaction
-    mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
+    heavyai::unique_lock<heavyai::shared_mutex> write_lock(files_rw_mutex_);
     deleteEmptyFiles();
   } else {
     UNREACHABLE() << "Unexpected status file name: " << status_file_name;
@@ -1248,7 +1248,7 @@ void FileMgr::resumeFileCompaction(const std::string& status_file_name) {
  * Delete status file.
  */
 void FileMgr::compactFiles() {
-  mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(files_rw_mutex_);
   if (files_.empty()) {
     return;
   }
@@ -1557,7 +1557,7 @@ void FileMgr::setNumPagesPerMetadataFile(size_t num_pages) {
 }
 
 void FileMgr::syncFilesToDisk() {
-  mapd_shared_lock<mapd_shared_mutex> files_read_lock(files_rw_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> files_read_lock(files_rw_mutex_);
   for (auto file_info_entry : files_) {
     int32_t status = file_info_entry.second->syncToDisk();
     CHECK(status == 0) << "Could not sync file to disk";
@@ -1576,7 +1576,7 @@ void FileMgr::initializeNumThreads(size_t num_reader_threads) {
 }
 
 void FileMgr::freePages() {
-  mapd_unique_lock<mapd_shared_mutex> free_pages_write_lock(mutex_free_page_);
+  heavyai::unique_lock<heavyai::shared_mutex> free_pages_write_lock(mutex_free_page_);
   for (auto& free_page : free_pages_) {
     free_page.first->freePageDeferred(free_page.second);
   }
@@ -1624,7 +1624,7 @@ bool FileMgr::updatePageIfDeleted(FileInfo* file_info,
 
 FileBuffer* FileMgr::getOrCreateBuffer(const ChunkKey& key) {
   FileBuffer* buf;
-  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   auto chunk_it = chunkIndex_.find(key);
   if (chunk_it == chunkIndex_.end()) {
     buf = createBufferUnlocked(key);
@@ -1635,7 +1635,7 @@ FileBuffer* FileMgr::getOrCreateBuffer(const ChunkKey& key) {
 }
 
 void FileMgr::writeDirtyBuffers() {
-  mapd_unique_lock<mapd_shared_mutex> chunk_index_write_lock(chunkIndexMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> chunk_index_write_lock(chunkIndexMutex_);
   for (auto [key, buf] : chunkIndex_) {
     if (buf->isDirty()) {
       buf->writeMetadata(epoch());
@@ -1645,7 +1645,7 @@ void FileMgr::writeDirtyBuffers() {
 }
 
 size_t FileMgr::getNumChunks() {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(chunkIndexMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(chunkIndexMutex_);
   return chunkIndex_.size();
 }
 

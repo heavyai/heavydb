@@ -48,7 +48,8 @@ void Executor::interrupt(const std::string& query_session,
     {
       // here we validate the requested query session is valid (is already enrolled)
       // if not, we skip the interrupt request
-      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+      heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+          executor_session_mutex_);
       if (!checkIsQuerySessionEnrolled(query_session, session_read_lock)) {
         VLOG(1) << "Skip the interrupt request (no query has been submitted from the "
                    "given query session)";
@@ -69,7 +70,8 @@ void Executor::interrupt(const std::string& query_session,
       // (or just false alarm that indicates unregistered session in a queue).
       // So we try to set a session has been interrupted once we confirm
       // the session has been enrolled and is not interrupted at this moment
-      mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor_session_mutex_);
+      heavyai::unique_lock<heavyai::shared_mutex> session_write_lock(
+          executor_session_mutex_);
       setQuerySessionAsInterrupted(query_session, session_write_lock);
     }
     if (!is_running_query) {

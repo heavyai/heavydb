@@ -33,7 +33,7 @@
 #include <cstddef>
 #include <list>
 #include "CacheEvictionAlgorithm.h"
-#include "Shared/mapd_shared_mutex.h"
+#include "Shared/heavyai_shared_mutex.h"
 
 class LRUEvictionAlgorithm : public CacheEvictionAlgorithm {
  public:
@@ -50,5 +50,5 @@ class LRUEvictionAlgorithm : public CacheEvictionAlgorithm {
  private:
   std::list<ChunkKey> cache_items_list_;
   std::map<const ChunkKey, std::list<ChunkKey>::iterator> cache_items_map_;
-  mutable mapd_shared_mutex cache_mutex_;
+  mutable heavyai::shared_mutex cache_mutex_;
 };

@@ -39,7 +39,7 @@
 #endif
 
 #include "Logger/Logger.h"
-#include "OSDependent/omnisci_fs.h"
+#include "OSDependent/heavyai_fs.h"
 #include "Shared/sqltypes.h"
 #include "Shared/thread_count.h"
 #include "StringDictionaryClient.h"

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "OSDependent/omnisci_glob.h"
+#include "OSDependent/heavyai_glob.h"
 
 #include <boost/filesystem.hpp>
 

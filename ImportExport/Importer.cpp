@@ -124,7 +124,8 @@ namespace {
 
 bool check_session_interrupted(const QuerySessionId& query_session, Executor* executor) {
   if (g_enable_non_kernel_time_query_interrupt && !query_session.empty()) {
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+    heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+        executor->getSessionLock());
     return executor->checkIsQuerySessionInterrupted(query_session, session_read_lock);
   }
   return false;
@@ -170,7 +171,7 @@ using FeaturePtrVector = std::vector<Geospatial::GDAL::FeatureUqPtr>;
 
 static constexpr bool PROMOTE_POLYGON_TO_MULTIPOLYGON = true;
 
-static mapd_shared_mutex status_mutex;
+static heavyai::shared_mutex status_mutex;
 static std::map<std::string, ImportStatus> import_status_map;
 
 Importer::Importer(Catalog_Namespace::Catalog& c,
@@ -233,12 +234,12 @@ Importer::~Importer() {
 }
 
 ImportStatus Importer::get_import_status(const std::string& import_id) {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(status_mutex);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(status_mutex);
   return import_status_map.at(import_id);
 }
 
 void Importer::set_import_status(const std::string& import_id, ImportStatus is) {
-  mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
+  heavyai::lock_guard<heavyai::shared_mutex> write_lock(status_mutex);
   is.end = std::chrono::steady_clock::now();
   is.elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(is.end - is.start);
   import_status_map[import_id] = is;
@@ -3232,7 +3233,7 @@ ImportStatus Detector::importDelimited(
   } catch (std::exception& e) {
   }
 
-  mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+  heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
   import_status_.load_failed = true;
 
   fclose(p_file);
@@ -3598,7 +3599,7 @@ void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& impor
                     size_t row_count,
                     const Catalog_Namespace::SessionInfo* session_info) {
   if (!loader->loadNoCheckpoint(import_buffers, row_count, session_info)) {
-    mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+    heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
     import_status_.load_failed = true;
     import_status_.load_msg = loader->getErrorMessage();
   }
@@ -3607,7 +3608,7 @@ void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& impor
 void Importer::checkpoint(
     const std::vector<Catalog_Namespace::TableEpochInfo>& table_epochs) {
   if (loader->getTableDesc()->storageType != StorageType::FOREIGN_TABLE) {
-    mapd_lock_guard<mapd_shared_mutex> read_lock(import_mutex_);
+    heavyai::lock_guard<heavyai::shared_mutex> read_lock(import_mutex_);
     if (import_status_.load_failed) {
       // rollback to starting epoch - undo all the added records
       loader->setTableEpochs(table_epochs);
@@ -3620,7 +3621,7 @@ void Importer::checkpoint(
       Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident
                                                   // tables
     auto ms = measure<>::execution([&]() {
-      mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+      heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
       if (!import_status_.load_failed) {
         for (auto& p : import_buffers_vec[0]) {
           if (!p->stringDictCheckpoint()) {
@@ -3842,7 +3843,7 @@ void Detector::import_local_parquet(const std::string& file_path,
         }
       }
       raw_data += copy_params.line_delim;
-      mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+      heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
       if (++import_status_.rows_completed >= 10000) {
         // as if load truncated
         import_status_.load_failed = true;
@@ -3949,7 +3950,7 @@ void Importer::import_local_parquet(const std::string& file_path,
   auto ms_load_a_file = measure<>::execution([&]() {
     for (int row_group = 0; row_group < num_row_groups; ++row_group) {
       {
-        mapd_shared_lock<mapd_shared_mutex> read_lock(import_mutex_);
+        heavyai::shared_lock<heavyai::shared_mutex> read_lock(import_mutex_);
         if (import_status_.load_failed) {
           break;
         }
@@ -3957,7 +3958,7 @@ void Importer::import_local_parquet(const std::string& file_path,
       // a sliced row group will be handled like a (logic) parquet file, with
       // a entirely clean set of bad_rows_tracker, import_buffers_vec, ... etc
       if (UNLIKELY(check_session_interrupted(query_session, executor))) {
-        mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+        heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
         import_status_.load_failed = true;
         import_status_.load_msg = "Table load was cancelled via Query Interrupt";
       }
@@ -3997,7 +3998,7 @@ void Importer::import_local_parquet(const std::string& file_path,
         ThreadController_NS::SimpleThreadController<void> thread_controller(num_slices);
         for (int slice = 0; slice < num_slices; ++slice) {
           if (UNLIKELY(check_session_interrupted(query_session, executor))) {
-            mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+            heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
             import_status_.load_failed = true;
             import_status_.load_msg = "Table load was cancelled via Query Interrupt";
           }
@@ -4048,7 +4049,7 @@ void Importer::import_local_parquet(const std::string& file_path,
       LOG(INFO) << "row group " << row_group << ": add " << nrow_imported
                 << " rows, drop " << nrow_dropped << " rows.";
       {
-        mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+        heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
         import_status_.rows_completed += nrow_imported;
         import_status_.rows_rejected += nrow_dropped;
         if (import_status_.rows_rejected > copy_params.max_reject) {
@@ -4138,7 +4139,7 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths,
           }
           throw;
         }
-        mapd_shared_lock<mapd_shared_mutex> read_lock(import_mutex_);
+        heavyai::shared_lock<heavyai::shared_mutex> read_lock(import_mutex_);
         if (import_status_.load_failed) {
           break;
         }
@@ -4149,12 +4150,12 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths,
       std::rethrow_exception(teptr);
     }
   } catch (const shared::NoRegexFilterMatchException& e) {
-    mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+    heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
     import_status_.load_failed = true;
     import_status_.load_msg = e.what();
     throw e;
   } catch (const std::exception& e) {
-    mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+    heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
     import_status_.load_failed = true;
     import_status_.load_msg = e.what();
   }
@@ -4358,7 +4359,7 @@ void DataStreamSink::import_compressed(
                 nremaining -= nwritten;
                 buf2 += nwritten;
                 // no exception when too many rejected
-                mapd_shared_lock<mapd_shared_mutex> read_lock(import_mutex_);
+                heavyai::shared_lock<heavyai::shared_mutex> read_lock(import_mutex_);
                 if (import_status_.load_failed) {
                   stop = true;
                   break;
@@ -4402,7 +4403,7 @@ void DataStreamSink::import_compressed(
         // when import is aborted because too many data errors or because end of a
         // detection, any exception thrown by s3 sdk or libarchive is okay and should be
         // suppressed.
-        mapd_shared_lock<mapd_shared_mutex> read_lock(import_mutex_);
+        heavyai::shared_lock<heavyai::shared_mutex> read_lock(import_mutex_);
         if (import_status_.load_failed) {
           break;
         }
@@ -4569,7 +4570,7 @@ ImportStatus Importer::importDelimited(
           if (p.wait_for(span) == std::future_status::ready) {
             auto ret_import_status = p.get();
             {
-              mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+              heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
               import_status_ += ret_import_status;
               if (ret_import_status.load_failed) {
                 set_import_status(import_id, import_status_);
@@ -4618,12 +4619,12 @@ ImportStatus Importer::importDelimited(
         if (threads.size() < max_threads) {
           break;
         }
-        mapd_shared_lock<mapd_shared_mutex> read_lock(import_mutex_);
+        heavyai::shared_lock<heavyai::shared_mutex> read_lock(import_mutex_);
         if (import_status_.load_failed) {
           break;
         }
       }
-      mapd_unique_lock<mapd_shared_mutex> write_lock(import_mutex_);
+      heavyai::unique_lock<heavyai::shared_mutex> write_lock(import_mutex_);
       if (import_status_.rows_rejected > copy_params.max_reject) {
         import_status_.load_failed = true;
         // todo use better message
@@ -5373,7 +5374,8 @@ ImportStatus Importer::importGDALGeo(
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   auto is_session_already_registered = false;
   {
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+    heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+        executor->getSessionLock());
     is_session_already_registered =
         executor->checkIsQuerySessionEnrolled(query_session, session_read_lock);
   }
@@ -5547,7 +5549,7 @@ ImportStatus Importer::importGDALGeo(
         if (p.wait_for(span) == std::future_status::ready) {
           auto ret_import_status = p.get();
           {
-            mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+            heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
             import_status_ += ret_import_status;
             import_status_.rows_estimated =
                 ((float)firstFeatureThisChunk / (float)numFeatures) *
@@ -5581,7 +5583,7 @@ ImportStatus Importer::importGDALGeo(
 
     // out of rows?
 
-    mapd_unique_lock<mapd_shared_mutex> write_lock(import_mutex_);
+    heavyai::unique_lock<heavyai::shared_mutex> write_lock(import_mutex_);
     if (import_status_.rows_rejected > copy_params.max_reject) {
       import_status_.load_failed = true;
       // todo use better message
@@ -5758,7 +5760,8 @@ ImportStatus Importer::importGDALRaster(
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   auto is_session_already_registered = false;
   {
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+    heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+        executor->getSessionLock());
     is_session_already_registered =
         executor->checkIsQuerySessionEnrolled(query_session, session_read_lock);
   }

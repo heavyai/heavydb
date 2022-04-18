@@ -2651,7 +2651,8 @@ TEST_F(ShowQueriesTest, NonAdminUser) {
   EXPECT_TRUE(!admin_res.row_set.columns[0].data.str_col.empty());
   EXPECT_TRUE(!own_res.row_set.columns[0].data.str_col.empty());
   {
-    mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor->getSessionLock());
+    heavyai::unique_lock<heavyai::shared_mutex> session_write_lock(
+        executor->getSessionLock());
     executor->removeFromQuerySessionList(query_session, "0", session_write_lock);
   }
 }

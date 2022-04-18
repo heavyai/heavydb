@@ -234,7 +234,7 @@ void InsertOrderFragmenter::getChunkMetadata() {
 }
 
 void InsertOrderFragmenter::dropFragmentsToSize(const size_t max_rows) {
-  mapd_unique_lock<mapd_shared_mutex> insert_lock(insertMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> insert_lock(insertMutex_);
   dropFragmentsToSizeNoInsertLock(max_rows);
 }
 
@@ -286,7 +286,7 @@ void InsertOrderFragmenter::deleteFragments(const vector<int>& dropFragIds) {
   const auto delete_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(chunkKeyPrefix);
 
-  mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> writeLock(fragmentInfoMutex_);
 
   for (const auto fragId : dropFragIds) {
     for (const auto& col : columnMap_) {
@@ -304,7 +304,7 @@ void InsertOrderFragmenter::updateColumnChunkMetadata(
     const int fragment_id,
     const std::shared_ptr<ChunkMetadata> metadata) {
   // synchronize concurrent accesses to fragmentInfoVec_
-  mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> writeLock(fragmentInfoMutex_);
 
   CHECK(metadata.get());
   auto fragment_info = getFragmentInfo(fragment_id);
@@ -317,7 +317,7 @@ void InsertOrderFragmenter::updateChunkStats(
     std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map,
     std::optional<Data_Namespace::MemoryLevel> memory_level) {
   // synchronize concurrent accesses to fragmentInfoVec_
-  mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> writeLock(fragmentInfoMutex_);
   /**
    * WARNING: This method is entirely unlocked. Higher level locks are expected to prevent
    * any table read or write during a chunk metadata update, since we need to modify
@@ -431,7 +431,7 @@ bool InsertOrderFragmenter::isAddingNewColumns(const InsertData& insert_data) co
 void InsertOrderFragmenter::insertChunks(const InsertChunks& insert_chunk) {
   try {
     // prevent two threads from trying to insert into the same table simultaneously
-    mapd_unique_lock<mapd_shared_mutex> insertLock(insertMutex_);
+    heavyai::unique_lock<heavyai::shared_mutex> insertLock(insertMutex_);
     insertChunksImpl(insert_chunk);
     if (defaultInsertLevel_ ==
         Data_Namespace::DISK_LEVEL) {  // only checkpoint if data is resident on disk
@@ -453,7 +453,7 @@ void InsertOrderFragmenter::insertChunks(const InsertChunks& insert_chunk) {
 void InsertOrderFragmenter::insertData(InsertData& insert_data_struct) {
   try {
     // prevent two threads from trying to insert into the same table simultaneously
-    mapd_unique_lock<mapd_shared_mutex> insertLock(insertMutex_);
+    heavyai::unique_lock<heavyai::shared_mutex> insertLock(insertMutex_);
     if (!isAddingNewColumns(insert_data_struct)) {
       insertDataImpl(insert_data_struct);
     } else {
@@ -478,7 +478,7 @@ void InsertOrderFragmenter::insertData(InsertData& insert_data_struct) {
 
 void InsertOrderFragmenter::insertChunksNoCheckpoint(const InsertChunks& insert_chunk) {
   // TODO: this local lock will need to be centralized when ALTER COLUMN is added, bc
-  mapd_unique_lock<mapd_shared_mutex> insertLock(
+  heavyai::unique_lock<heavyai::shared_mutex> insertLock(
       insertMutex_);  // prevent two threads from trying to insert into the same table
                       // simultaneously
   insertChunksImpl(insert_chunk);
@@ -486,7 +486,7 @@ void InsertOrderFragmenter::insertChunksNoCheckpoint(const InsertChunks& insert_
 
 void InsertOrderFragmenter::insertDataNoCheckpoint(InsertData& insert_data_struct) {
   // TODO: this local lock will need to be centralized when ALTER COLUMN is added, bc
-  mapd_unique_lock<mapd_shared_mutex> insertLock(
+  heavyai::unique_lock<heavyai::shared_mutex> insertLock(
       insertMutex_);  // prevent two threads from trying to insert into the same table
                       // simultaneously
   if (!isAddingNewColumns(insert_data_struct)) {
@@ -498,7 +498,7 @@ void InsertOrderFragmenter::insertDataNoCheckpoint(InsertData& insert_data_struc
 
 void InsertOrderFragmenter::addColumns(const InsertData& insertDataStruct) {
   // synchronize concurrent accesses to fragmentInfoVec_
-  mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> writeLock(fragmentInfoMutex_);
   size_t numRowsLeft = insertDataStruct.numRows;
   for (const auto columnId : insertDataStruct.columnIds) {
     CHECK(columnMap_.end() == columnMap_.find(columnId));
@@ -586,9 +586,9 @@ void InsertOrderFragmenter::addColumns(const InsertData& insertDataStruct) {
 
 void InsertOrderFragmenter::dropColumns(const std::vector<int>& columnIds) {
   // prevent concurrent insert rows and drop column
-  mapd_unique_lock<mapd_shared_mutex> insertLock(insertMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> insertLock(insertMutex_);
   // synchronize concurrent accesses to fragmentInfoVec_
-  mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> writeLock(fragmentInfoMutex_);
   for (auto const& fragmentInfo : fragmentInfoVec_) {
     fragmentInfo->shadowChunkMetadataMap =
         fragmentInfo->getChunkMetadataMapPhysicalCopy();
@@ -617,7 +617,7 @@ void InsertOrderFragmenter::dropColumns(const std::vector<int>& columnIds) {
 }
 
 bool InsertOrderFragmenter::hasDeletedRows(const int delete_column_id) {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(fragmentInfoMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(fragmentInfoMutex_);
 
   for (auto const& fragment : fragmentInfoVec_) {
     auto chunk_meta_it = fragment->getChunkMetadataMapPhysical().find(delete_column_id);
@@ -639,7 +639,7 @@ void InsertOrderFragmenter::insertChunksIntoFragment(
     size_t& num_rows_left,
     std::vector<size_t>& valid_row_indices,
     const size_t start_fragment) {
-  mapd_unique_lock<mapd_shared_mutex> write_lock(fragmentInfoMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(fragmentInfoMutex_);
   // for each column, append the data in the appropriate insert buffer
   auto insert_row_indices = valid_row_indices;
   CHECK_GE(insert_row_indices.size(), num_rows_to_insert);
@@ -889,7 +889,7 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insert_data) {
                                            // never be able to insert anything
 
     {
-      mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
+      heavyai::unique_lock<heavyai::shared_mutex> writeLock(fragmentInfoMutex_);
       // for each column, append the data in the appropriate insert buffer
       for (size_t i = 0; i < insert_data.columnIds.size(); ++i) {
         int columnId = insert_data.columnIds[i];
@@ -964,18 +964,18 @@ FragmentInfo* InsertOrderFragmenter::createNewFragment(
     colMapIt->second.initEncoder();
   }
 
-  mapd_lock_guard<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
+  heavyai::lock_guard<heavyai::shared_mutex> writeLock(fragmentInfoMutex_);
   fragmentInfoVec_.push_back(std::move(newFragmentInfo));
   return fragmentInfoVec_.back().get();
 }
 
 size_t InsertOrderFragmenter::getNumFragments() {
-  mapd_shared_lock<mapd_shared_mutex> readLock(fragmentInfoMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> readLock(fragmentInfoMutex_);
   return fragmentInfoVec_.size();
 }
 
 TableInfo InsertOrderFragmenter::getFragmentsForQuery() {
-  mapd_shared_lock<mapd_shared_mutex> readLock(fragmentInfoMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> readLock(fragmentInfoMutex_);
   TableInfo queryInfo;
   queryInfo.chunkKeyPrefix = chunkKeyPrefix_;
   // right now we don't test predicate, so just return (copy of) all fragments
@@ -1026,7 +1026,7 @@ TableInfo InsertOrderFragmenter::getFragmentsForQuery() {
 }
 
 void InsertOrderFragmenter::resetSizesFromFragments() {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(fragmentInfoMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(fragmentInfoMutex_);
   numTuples_ = 0;
   for (const auto& fragment_info : fragmentInfoVec_) {
     numTuples_ += fragment_info->getPhysicalNumTuples();

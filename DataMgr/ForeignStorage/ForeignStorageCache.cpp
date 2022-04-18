@@ -26,8 +26,8 @@
 #include "Shared/measure.h"
 
 namespace foreign_storage {
-using read_lock = mapd_shared_lock<mapd_shared_mutex>;
-using write_lock = mapd_unique_lock<mapd_shared_mutex>;
+using read_lock = heavyai::shared_lock<heavyai::shared_mutex>;
+using write_lock = heavyai::unique_lock<heavyai::shared_mutex>;
 
 namespace {
 template <typename Func, typename T>

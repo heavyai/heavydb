@@ -1936,7 +1936,8 @@ void Executor::createErrorCheckControlFlow(
 
   {
     // disable injecting query interrupt checker if the session info is invalid
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+    heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+        executor_session_mutex_);
     if (current_query_session_.empty()) {
       run_with_allowing_runtime_interrupt = false;
     }

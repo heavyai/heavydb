@@ -455,8 +455,8 @@ ExecutionResult DdlCommandExecutor::execute() {
 
   // the following commands require a global unique lock until proper table locking has
   // been implemented and/or verified
-  auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   // TODO(vancouver): add appropriate table locking
 

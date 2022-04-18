@@ -50,7 +50,7 @@
 #include "Geospatial/Types.h"
 #include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
-#include "OSDependent/omnisci_hostname.h"
+#include "OSDependent/heavyai_hostname.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/ReservedKeywords.h"
 #include "QueryEngine/ArrowResultSet.h"
@@ -70,8 +70,8 @@
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/file_path_util.h"
+#include "Shared/heavyai_shared_mutex.h"
 #include "Shared/import_helpers.h"
-#include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
 #include "Shared/scope.h"
@@ -163,13 +163,13 @@ struct ForceDisconnect : public std::runtime_error {
 template <>
 SessionMap::iterator DBHandler::get_session_it_unsafe(
     const TSessionId& session,
-    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+    heavyai::shared_lock<heavyai::shared_mutex>& read_lock) {
   auto session_it = get_session_from_map(session, sessions_);
   try {
     check_session_exp_unsafe(session_it);
   } catch (const ForceDisconnect& e) {
     read_lock.unlock();
-    mapd_unique_lock<mapd_shared_mutex> write_lock(sessions_mutex_);
+    heavyai::unique_lock<heavyai::shared_mutex> write_lock(sessions_mutex_);
     auto session_it2 = get_session_from_map(session, sessions_);
     disconnect_impl(session_it2, write_lock);
     THROW_DB_EXCEPTION(e.what());
@@ -180,7 +180,7 @@ SessionMap::iterator DBHandler::get_session_it_unsafe(
 template <>
 SessionMap::iterator DBHandler::get_session_it_unsafe(
     const TSessionId& session,
-    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+    heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
   auto session_it = get_session_from_map(session, sessions_);
   try {
     check_session_exp_unsafe(session_it);
@@ -193,7 +193,7 @@ SessionMap::iterator DBHandler::get_session_it_unsafe(
 
 template <>
 void DBHandler::expire_idle_sessions_unsafe(
-    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+    heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
   std::vector<std::string> expired_sessions;
   for (auto session_pair : sessions_) {
     auto session_it = get_session_from_map(session_pair.first, sessions_);
@@ -510,7 +510,7 @@ std::string const DBHandler::createInMemoryCalciteSession(
   // session would be under the name of a proxy user/password which would only persist
   // till server's lifetime or execution of calcite query(in memory) whichever is the
   // earliest.
-  mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+  heavyai::lock_guard<heavyai::shared_mutex> write_lock(sessions_mutex_);
   std::string session_id;
   do {
     session_id = generate_random_string(64);
@@ -539,7 +539,7 @@ bool DBHandler::isInMemoryCalciteSession(
 
 void DBHandler::removeInMemoryCalciteSession(const std::string& session_id) {
   // Remove InMemory calcite Session.
-  mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+  heavyai::lock_guard<heavyai::shared_mutex> write_lock(sessions_mutex_);
   const auto it = sessions_.find(session_id);
   CHECK(it != sessions_.end());
   sessions_.erase(it);
@@ -646,7 +646,7 @@ void DBHandler::connect_impl(TSessionId& session,
   // here when the cat parameter already provides cat->name()?
   // Should dbname and cat->name() ever differ?
   {
-    mapd_unique_lock<mapd_shared_mutex> write_lock(sessions_mutex_);
+    heavyai::unique_lock<heavyai::shared_mutex> write_lock(sessions_mutex_);
     expire_idle_sessions_unsafe(write_lock);
     if (system_parameters_.num_sessions > 0 &&
         sessions_.size() + 1 > static_cast<size_t>(system_parameters_.num_sessions)) {
@@ -654,7 +654,7 @@ void DBHandler::connect_impl(TSessionId& session,
     }
   }
   {
-    mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+    heavyai::lock_guard<heavyai::shared_mutex> write_lock(sessions_mutex_);
     auto session_ptr = create_new_session(session, dbname, user_meta, cat);
     stdlog.setSessionInfo(session_ptr);
     session_ptr->set_connection_info(getConnectionInfo().toString());
@@ -678,7 +678,7 @@ void DBHandler::disconnect(const TSessionId& session) {
   auto stdlog = STDLOG();
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
 
-  mapd_unique_lock<mapd_shared_mutex> write_lock(sessions_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(sessions_mutex_);
   auto session_it = get_session_it_unsafe(session, write_lock);
   stdlog.setSessionInfo(session_it->second);
   const auto dbname = session_it->second->getCatalog().getCurrentDB().dbName;
@@ -691,7 +691,7 @@ void DBHandler::disconnect(const TSessionId& session) {
 }
 
 void DBHandler::disconnect_impl(const SessionMap::iterator& session_it,
-                                mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+                                heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
   // session_it existence should already have been checked (i.e. called via
   // get_session_it_unsafe(...))
 
@@ -721,7 +721,7 @@ void DBHandler::disconnect_impl(const SessionMap::iterator& session_it,
 void DBHandler::switch_database(const TSessionId& session, const std::string& dbname) {
   auto stdlog = STDLOG(get_session_ptr(session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  mapd_unique_lock<mapd_shared_mutex> write_lock(sessions_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(sessions_mutex_);
   auto session_it = get_session_it_unsafe(session, write_lock);
 
   std::string dbname2 = dbname;  // switchDatabase() may reset dbname given as argument
@@ -742,7 +742,7 @@ void DBHandler::switch_database(const TSessionId& session, const std::string& db
 void DBHandler::clone_session(TSessionId& session2, const TSessionId& session1) {
   auto stdlog = STDLOG(get_session_ptr(session1));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  mapd_unique_lock<mapd_shared_mutex> write_lock(sessions_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(sessions_mutex_);
   auto session_it = get_session_it_unsafe(session1, write_lock);
 
   try {
@@ -771,7 +771,7 @@ void DBHandler::interrupt(const TSessionId& query_session,
       g_enable_runtime_query_interrupt || g_enable_non_kernel_time_query_interrupt;
   if (g_enable_dynamic_watchdog || allow_query_interrupt) {
     // Shared lock to allow simultaneous interrupts of multiple sessions
-    mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
+    heavyai::shared_lock<heavyai::shared_mutex> read_lock(sessions_mutex_);
 
     auto session_it = get_session_it_unsafe(interrupt_session, read_lock);
     auto& cat = session_it->second.get()->getCatalog();
@@ -787,7 +787,8 @@ void DBHandler::interrupt(const TSessionId& query_session,
     }
     auto target_executor_ids = executor->getExecutorIdsRunningQuery(query_session);
     if (target_executor_ids.empty()) {
-      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+      heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+          executor->getSessionLock());
       if (executor->checkIsQuerySessionEnrolled(query_session, session_read_lock)) {
         session_read_lock.unlock();
         VLOG(1) << "Received interrupt: "
@@ -1551,8 +1552,8 @@ void DBHandler::sql_validate(TRowDescriptor& _return,
       throw std::runtime_error("Can only validate SELECT statements.");
     }
 
-    const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+    const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+        *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
             legacylockmgr::ExecutorOuterLock, true));
 
     TPlanResult parse_result;
@@ -2331,8 +2332,8 @@ void DBHandler::get_table_details(TTableDetails& _return,
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
 
-  auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   get_table_details_impl(_return, stdlog, table_name, false, false);
 }
@@ -2344,8 +2345,8 @@ void DBHandler::get_table_details_for_database(TTableDetails& _return,
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
 
-  auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   get_table_details_impl(_return, stdlog, table_name, false, false, database_name);
 }
@@ -2711,8 +2712,8 @@ void DBHandler::get_tables_meta(std::vector<TTableMeta>& _return,
   auto query_state = create_query_state(session_ptr, "");
   stdlog.setQueryState(query_state);
 
-  auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
   try {
@@ -2899,7 +2900,7 @@ void DBHandler::set_execution_mode(const TSessionId& session,
                                    const TExecuteMode::type mode) {
   auto stdlog = STDLOG(get_session_ptr(session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  mapd_unique_lock<mapd_shared_mutex> write_lock(sessions_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(sessions_mutex_);
   auto session_it = get_session_it_unsafe(session, write_lock);
   if (leaf_aggregator_.leafCount() > 0) {
     leaf_aggregator_.set_execution_mode(session, mode);
@@ -3133,8 +3134,8 @@ void DBHandler::load_table_binary(const TSessionId& session,
       THROW_DB_EXCEPTION("No rows to insert");
     }
 
-    const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+    const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+        *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
             legacylockmgr::ExecutorOuterLock, true));
     std::unique_ptr<import_export::Loader> loader;
     std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
@@ -3321,8 +3322,8 @@ void DBHandler::loadTableBinaryColumnarInternal(
     return;
   }
 
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   std::unique_ptr<import_export::Loader> loader;
   std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
@@ -3467,8 +3468,8 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session,
   if (use_column_names) {
     column_names = batch->schema()->field_names();
   }
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   auto schema_read_lock =
       prepare_loader_generic(*session_ptr,
@@ -3529,8 +3530,8 @@ void DBHandler::load_table(const TSessionId& session,
       THROW_DB_EXCEPTION("No rows to insert");
     }
 
-    const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+    const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+        *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
             legacylockmgr::ExecutorOuterLock, true));
     std::unique_ptr<import_export::Loader> loader;
     std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
@@ -4434,7 +4435,7 @@ int32_t DBHandler::create_custom_expression(const TSessionId& session,
     THROW_DB_EXCEPTION("Custom expressions can only be created by super users.")
   }
   auto& catalog = session_ptr->getCatalog();
-  mapd_unique_lock<mapd_shared_mutex> write_lock(custom_expressions_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(custom_expressions_mutex_);
   return catalog.createCustomExpression(
       create_custom_expr_from_thrift_obj(t_custom_expr, catalog));
 }
@@ -4446,7 +4447,7 @@ void DBHandler::get_custom_expressions(std::vector<TCustomExpression>& _return,
 
   auto session_ptr = stdlog.getConstSessionInfo();
   auto& catalog = session_ptr->getCatalog();
-  mapd_shared_lock<mapd_shared_mutex> read_lock(custom_expressions_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(custom_expressions_mutex_);
   auto custom_expressions =
       catalog.getCustomExpressionsForUser(session_ptr->get_currentUser());
   for (const auto& custom_expression : custom_expressions) {
@@ -4466,7 +4467,7 @@ void DBHandler::update_custom_expression(const TSessionId& session,
     THROW_DB_EXCEPTION("Custom expressions can only be updated by super users.")
   }
   auto& catalog = session_ptr->getCatalog();
-  mapd_unique_lock<mapd_shared_mutex> write_lock(custom_expressions_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(custom_expressions_mutex_);
   catalog.updateCustomExpression(id, expression_json);
 }
 
@@ -4483,7 +4484,7 @@ void DBHandler::delete_custom_expressions(
     THROW_DB_EXCEPTION("Custom expressions can only be deleted by super users.")
   }
   auto& catalog = session_ptr->getCatalog();
-  mapd_unique_lock<mapd_shared_mutex> write_lock(custom_expressions_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(custom_expressions_mutex_);
   catalog.deleteCustomExpressions(custom_expression_ids, do_soft_delete);
 }
 
@@ -5054,8 +5055,8 @@ void DBHandler::import_table(const TSessionId& session,
     check_read_only("import_table");
     LOG(INFO) << "import_table " << table_name << " from " << file_name_in;
 
-    const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+    const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+        *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
             legacylockmgr::ExecutorOuterLock, true));
     auto& cat = session_ptr->getCatalog();
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
@@ -5460,8 +5461,8 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
     }
 
     // match locking sequence for CopyTableStmt::execute
-    mapd_shared_lock<mapd_shared_mutex> execute_read_lock(
-        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+    heavyai::shared_lock<heavyai::shared_mutex> execute_read_lock(
+        *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
             legacylockmgr::ExecutorOuterLock, true));
 
     const TableDescriptor* td{nullptr};
@@ -5874,7 +5875,7 @@ std::shared_ptr<const Catalog_Namespace::SessionInfo> DBHandler::get_const_sessi
 }
 
 Catalog_Namespace::SessionInfo DBHandler::get_session_copy(const TSessionId& session) {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(sessions_mutex_);
   return *get_session_it_unsafe(session, read_lock)->second;
 }
 
@@ -5886,7 +5887,7 @@ std::shared_ptr<Catalog_Namespace::SessionInfo> DBHandler::get_session_copy_ptr(
   // care about the changes then use `get_const_session_ptr` if you do then use this
   // function to get a copy. We should eventually aim to merge both
   // `get_const_session_ptr` and `get_session_copy_ptr`.
-  mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(sessions_mutex_);
   auto& session_info_ref = *get_session_it_unsafe(session, read_lock)->second;
   return std::make_shared<Catalog_Namespace::SessionInfo>(session_info_ref);
 }
@@ -5904,7 +5905,7 @@ std::shared_ptr<Catalog_Namespace::SessionInfo> DBHandler::get_session_ptr(
   if (session_id.empty()) {
     return {};
   }
-  mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(sessions_mutex_);
   return get_session_it_unsafe(session_id, read_lock)->second;
 }
 
@@ -6237,8 +6238,8 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
   // Call to DistributedValidate() below may change cat.
   auto& cat = session_ptr->getCatalog();
 
-  mapd_unique_lock<mapd_shared_mutex> executeWriteLock;
-  mapd_shared_lock<mapd_shared_mutex> executeReadLock;
+  heavyai::unique_lock<heavyai::shared_mutex> executeWriteLock;
+  heavyai::shared_lock<heavyai::shared_mutex> executeReadLock;
 
   ParserWrapper pw{query_str};
   if (!pw.isCalcitePathPermissable(true)) {
@@ -6320,8 +6321,8 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     auto validate_stmt = Parser::ValidateStmt(ddl_query["payload"].GetObject());
     _return.addExecutionTime(measure<>::execution([&]() {
       // Prevent any other query from running while doing validate
-      executeWriteLock = mapd_unique_lock<mapd_shared_mutex>(
-          *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+      executeWriteLock = heavyai::unique_lock<heavyai::shared_mutex>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
               legacylockmgr::ExecutorOuterLock, true));
 
       std::string output{"Result for validate"};
@@ -6401,8 +6402,8 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
       return;
     }
 
-    executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
-        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+    executeReadLock = heavyai::shared_lock<heavyai::shared_mutex>(
+        *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
             legacylockmgr::ExecutorOuterLock, true));
 
     std::string query_ra = query_str;
@@ -7069,8 +7070,8 @@ void DBHandler::set_table_epoch(const TSessionId& session,
   if (!session_ptr->get_currentUser().isSuper) {
     throw std::runtime_error("Only superuser can set_table_epoch");
   }
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   ChunkKey table_key{db_id, table_id};
   auto table_write_lock = lockmgr::TableSchemaLockMgr::getWriteLockForTable(table_key);
@@ -7097,8 +7098,8 @@ void DBHandler::set_table_epoch_by_name(const TSessionId& session,
     throw std::runtime_error("Only superuser can set_table_epoch");
   }
 
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   auto& cat = session_ptr->getCatalog();
   auto table_write_lock =
@@ -7127,8 +7128,8 @@ int32_t DBHandler::get_table_epoch(const TSessionId& session,
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
 
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   ChunkKey table_key{db_id, table_id};
   auto table_read_lock = lockmgr::TableSchemaLockMgr::getReadLockForTable(table_key);
@@ -7150,8 +7151,8 @@ int32_t DBHandler::get_table_epoch_by_name(const TSessionId& session,
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
 
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   auto const& cat = session_ptr->getCatalog();
   auto table_read_lock =
@@ -7180,8 +7181,8 @@ void DBHandler::get_table_epochs(std::vector<TTableEpochInfo>& _return,
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
 
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   ChunkKey table_key{db_id, table_id};
   auto table_read_lock = lockmgr::TableSchemaLockMgr::getReadLockForTable(table_key);
@@ -7233,8 +7234,8 @@ void DBHandler::set_table_epochs(const TSessionId& session,
         table_epoch.table_id, table_epoch.table_epoch, table_epoch.leaf_index);
   }
 
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
+      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   ChunkKey table_key{db_id, logical_table_id};
   ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
@@ -7472,7 +7473,7 @@ ExecutionResult DBHandler::getUserSessions(
     std::vector<RelLogicalValues::RowValues> logical_values;
 
     if (!sessions_.empty()) {
-      mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
+      heavyai::lock_guard<heavyai::shared_mutex> read_lock(sessions_mutex_);
 
       for (auto sessions = sessions_.begin(); sessions_.end() != sessions; sessions++) {
         const auto show_session_ptr = sessions->second;
@@ -7502,7 +7503,7 @@ ExecutionResult DBHandler::getQueries(
   auto current_user_name = session_ptr->get_currentUser().userName;
   auto is_super_user = session_ptr->get_currentUser().isSuper.load();
 
-  mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
+  heavyai::lock_guard<heavyai::shared_mutex> read_lock(sessions_mutex_);
   std::vector<std::string> labels{"query_session_id",
                                   "current_status",
                                   "executor_id",
@@ -7533,7 +7534,8 @@ ExecutionResult DBHandler::getQueries(
       }
       std::vector<QuerySessionStatus> query_infos;
       {
-        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+            executor->getSessionLock());
         query_infos = executor->getQuerySessionInfo(query_session_ptr->get_session_id(),
                                                     session_read_lock);
       }
@@ -7590,14 +7592,15 @@ void DBHandler::get_queries_info(std::vector<TQueryInfo>& _return,
                                         jit_debug_ ? "mapdquery" : "",
                                         system_parameters_);
   CHECK(executor);
-  mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
+  heavyai::lock_guard<heavyai::shared_mutex> read_lock(sessions_mutex_);
   for (auto session = sessions_.begin(); sessions_.end() != session; session++) {
     const auto id = session->first;
     const auto query_session_ptr = session->second;
     const auto query_session_user_name = query_session_ptr->get_currentUser().userName;
     std::vector<QuerySessionStatus> query_infos;
     {
-      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+      heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+          executor->getSessionLock());
       query_infos = executor->getQuerySessionInfo(query_session_ptr->get_session_id(),
                                                   session_read_lock);
     }
@@ -7697,7 +7700,8 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
       auto target_executor_ids =
           executor->getExecutorIdsRunningQuery(target_query_session);
       if (target_executor_ids.empty()) {
-        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+            executor->getSessionLock());
         if (executor->checkIsQuerySessionEnrolled(target_query_session,
                                                   session_read_lock)) {
           session_read_lock.unlock();

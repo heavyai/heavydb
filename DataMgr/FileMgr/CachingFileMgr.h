@@ -136,7 +136,7 @@ class TableFileMgr {
   bool is_checkpointed_ = true;
   FILE* epoch_file_ = nullptr;
 
-  mutable mapd_shared_mutex table_mutex_;
+  mutable heavyai::shared_mutex table_mutex_;
 };
 
 // Extension of FileBuffer with restricted behaviour.
@@ -479,7 +479,7 @@ class CachingFileMgr : public FileMgr {
       const ChunkKeyToChunkMap::iterator chunk_it,
       const bool purge = true) override;
 
-  mutable mapd_shared_mutex table_dirs_mutex_;  // mutex for table_dirs_.
+  mutable heavyai::shared_mutex table_dirs_mutex_;  // mutex for table_dirs_.
   // each table gest a separate epoch.  Uses pointers for move semantics.
   std::map<TablePair, std::unique_ptr<TableFileMgr>> table_dirs_;
 

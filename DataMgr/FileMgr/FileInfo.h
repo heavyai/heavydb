@@ -27,7 +27,7 @@
 
 #include "../../Shared/types.h"
 #include "Logger/Logger.h"
-#include "OSDependent/omnisci_fs.h"
+#include "OSDependent/heavyai_fs.h"
 #include "Page.h"
 extern bool g_read_only;
 namespace File_Namespace {

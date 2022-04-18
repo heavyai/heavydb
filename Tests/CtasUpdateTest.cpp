@@ -2987,7 +2987,8 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_ITAS) {
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
     while (!startITAS && !detect_time_out) {
       {
-        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+            executor->getSessionLock());
         query_status = executor->getQuerySessionInfo(session_id, session_read_lock);
       }
       if (query_status.size() == 1) {
@@ -3096,7 +3097,8 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_CTAS) {
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
     while (!startCTAS && !detect_time_out) {
       {
-        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+            executor->getSessionLock());
         query_status = executor->getQuerySessionInfo(session_id, session_read_lock);
       }
       if (query_status.size() == 1) {

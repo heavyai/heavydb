@@ -52,7 +52,7 @@
 #include "Shared/StringTransform.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/clean_boost_regex.hpp"
-#include "Shared/mapd_shared_mutex.h"
+#include "Shared/heavyai_shared_mutex.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
 #include "StringDictionary/StringDictionaryClient.h"
@@ -618,7 +618,7 @@ class DBHandler : public HeavyIf {
   const bool read_only_;
   const bool allow_loop_joins_;
   bool cpu_mode_only_;
-  mapd_shared_mutex sessions_mutex_;
+  heavyai::shared_mutex sessions_mutex_;
   std::mutex render_mutex_;
   int64_t start_time_;
   const AuthMetadata& authMetadata_;
@@ -671,7 +671,7 @@ class DBHandler : public HeavyIf {
                     std::shared_ptr<Catalog_Namespace::Catalog> cat,
                     query_state::StdLog& stdlog);
   void disconnect_impl(const SessionMap::iterator& session_it,
-                       mapd_unique_lock<mapd_shared_mutex>& write_lock);
+                       heavyai::unique_lock<heavyai::shared_mutex>& write_lock);
   void check_table_load_privileges(const TSessionId& session,
                                    const std::string& table_name);
   void check_table_load_privileges(const Catalog_Namespace::SessionInfo& session_info,
@@ -1079,7 +1079,7 @@ class DBHandler : public HeavyIf {
       std::unordered_map<TSessionId, RenderGroupAssignmentTableMap>;
   RenderGroupAnalyzerSessionMap render_group_assignment_map_;
   std::mutex render_group_assignment_mutex_;
-  mapd_shared_mutex custom_expressions_mutex_;
+  heavyai::shared_mutex custom_expressions_mutex_;
 
   void importGeoTableGlobFilterSort(const TSessionId& session,
                                     const std::string& table_name,

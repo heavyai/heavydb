@@ -14,22 +14,28 @@
  * limitations under the License.
  */
 
-#ifndef MAPD_SHARED_MUTEX
-#define MAPD_SHARED_MUTEX
+#pragma once
 
 #include <shared_mutex>
 
 #ifdef HAVE_FOLLY
 #include <folly/SharedMutex.h>
-using mapd_shared_mutex = folly::SharedMutex;
+namespace heavyai {
+using shared_mutex = folly::SharedMutex;
+}  // namespace heavyai
 // Folly includes windows.h and pollutes global namespace with macroses
 #include "cleanup_global_namespace.h"
 #else
-using mapd_shared_mutex = std::shared_timed_mutex;
+namespace heavyai {
+using shared_mutex = std::shared_timed_mutex;
+}  // namespace heavyai
 #endif  // HAVE_FOLLY
 
-#define mapd_lock_guard std::lock_guard
-#define mapd_unique_lock std::unique_lock
-#define mapd_shared_lock std::shared_lock
-
-#endif  // MAPD_SHARED_MUTEX
+namespace heavyai {
+template <typename T>
+using lock_guard = std::lock_guard<T>;
+template <typename T>
+using unique_lock = std::unique_lock<T>;
+template <typename T>
+using shared_lock = std::shared_lock<T>;
+}  // namespace heavyai

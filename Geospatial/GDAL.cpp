@@ -25,7 +25,7 @@
 
 #include <boost/filesystem.hpp>
 #include "Logger/Logger.h"
-#include "OSDependent/omnisci_path.h"
+#include "OSDependent/heavyai_path.h"
 #include "Shared/scope.h"
 
 #ifdef _WIN32

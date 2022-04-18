@@ -375,7 +375,8 @@ TEST(Interrupt, Kill_RunningQuery) {
       auto assigned_executor_ptr = Executor::getExecutor(assigned_executor_id);
       CHECK(assigned_executor_ptr);
       while (!startQueryExec) {
-        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+            executor->getSessionLock());
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         curRunningSession =
             assigned_executor_ptr->getCurrentQuerySession(session_read_lock);
@@ -460,7 +461,8 @@ TEST(Interrupt, Kill_PendingQuery) {
         Executor::getExecutor(assigned_executor_id_for_session1);
     CHECK(assigned_executor_ptr_for_session1);
     while (!startQueryExec) {
-      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+      heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+          executor->getSessionLock());
       curRunningSession =
           assigned_executor_ptr_for_session1->getCurrentQuerySession(session_read_lock);
       if (curRunningSession == session1) {
@@ -490,7 +492,8 @@ TEST(Interrupt, Kill_PendingQuery) {
     CHECK(assigned_executor_ptr_for_session2);
     while (!s2_enrolled) {
       {
-        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+            executor->getSessionLock());
         s2_enrolled = assigned_executor_ptr_for_session2->checkIsQuerySessionEnrolled(
             session2, session_read_lock);
       }
@@ -556,7 +559,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV) {
       int cnt = 0;
       while (cnt < 6000) {
         {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
               executor->getSessionLock());
           curRunningSessionStatus =
               executor->getQuerySessionStatus(session1, session_read_lock);
@@ -638,7 +641,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Parquet) {
       int cnt = 0;
       while (cnt < 6000) {
         {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
               executor->getSessionLock());
           curRunningSessionStatus =
               executor->getQuerySessionStatus(session1, session_read_lock);
@@ -721,7 +724,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV_Sharded) {
       int cnt = 0;
       while (cnt < 6000) {
         {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
               executor->getSessionLock());
           curRunningSessionStatus =
               executor->getQuerySessionStatus(session1, session_read_lock);
@@ -804,7 +807,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_GDAL) {
       int cnt = 0;
       while (cnt < 6000) {
         {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
               executor->getSessionLock());
           curRunningSessionStatus =
               executor->getQuerySessionStatus(session1, session_read_lock);
@@ -885,7 +888,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Geo) {
       int cnt = 0;
       while (cnt < 600) {
         {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
               executor->getSessionLock());
           curRunningSession = executor->getCurrentQuerySession(session_read_lock);
         }
@@ -981,7 +984,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_During_Reduction) {
       int cnt = 0;
       while (cnt < 6000) {
         {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
               executor->getSessionLock());
           curRunningSession =
               assigned_executor_ptr->getCurrentQuerySession(session_read_lock);

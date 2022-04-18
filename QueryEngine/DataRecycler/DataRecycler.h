@@ -23,7 +23,7 @@
 #include "QueryEngine/JoinHashTable/HashTable.h"
 #include "QueryEngine/RelAlgExecutionUnit.h"
 #include "QueryEngine/ResultSet.h"
-#include "Shared/mapd_shared_mutex.h"
+#include "Shared/heavyai_shared_mutex.h"
 #include "Shared/misc.h"
 
 #include <boost/functional/hash.hpp>

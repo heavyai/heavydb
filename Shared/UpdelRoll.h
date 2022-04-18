@@ -86,7 +86,7 @@ struct UpdelRoll {
                                Fragmenter_Namespace::FragmentInfo& fragment_info);
 
   // Used to guard internal data structures that track chunk/chunk metadata updates
-  mutable mapd_shared_mutex chunk_update_tracker_mutex;
+  mutable heavyai::shared_mutex chunk_update_tracker_mutex;
 
   // chunks changed during this query
   std::map<ChunkKey, std::shared_ptr<Chunk_NS::Chunk>> dirty_chunks;

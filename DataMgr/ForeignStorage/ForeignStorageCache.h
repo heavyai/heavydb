@@ -25,7 +25,7 @@
 
 #pragma once
 
-#include "../Shared/mapd_shared_mutex.h"
+#include "../Shared/heavyai_shared_mutex.h"
 #include "DataMgr/AbstractBufferMgr.h"
 #include "DataMgr/FileMgr/CachingFileMgr.h"
 #include "ForeignDataWrapper.h"

@@ -33,7 +33,7 @@
 #include <string>
 
 #include "Logger/Logger.h"
-#include "OSDependent/omnisci_fs.h"
+#include "OSDependent/heavyai_fs.h"
 
 #include <boost/filesystem.hpp>
 

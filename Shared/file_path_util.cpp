@@ -24,7 +24,7 @@
 #include "Shared/file_path_util.h"
 
 #include "Logger/Logger.h"
-#include "OSDependent/omnisci_glob.h"
+#include "OSDependent/heavyai_glob.h"
 #include "Shared/misc.h"
 
 namespace shared {

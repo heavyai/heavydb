@@ -38,7 +38,7 @@
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "DataMgr/ForeignStorage/FsiChunkUtils.h"
 #include "DataMgr/ForeignStorage/MetadataPlaceholder.h"
-#include "OSDependent/omnisci_path.h"
+#include "OSDependent/heavyai_path.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/AggregateUtils.h"
 #include "QueryEngine/AggregatedColRange.h"
@@ -487,7 +487,7 @@ std::shared_ptr<Executor> Executor::getExecutor(
     const SystemParameters& system_parameters) {
   INJECT_TIMER(getExecutor);
 
-  mapd_unique_lock<mapd_shared_mutex> write_lock(executors_cache_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(executors_cache_mutex_);
   auto it = executors_.find(executor_id);
   if (it != executors_.end()) {
     return it->second;
@@ -508,7 +508,7 @@ void Executor::clearMemory(const Data_Namespace::MemoryLevel memory_level) {
   switch (memory_level) {
     case Data_Namespace::MemoryLevel::CPU_LEVEL:
     case Data_Namespace::MemoryLevel::GPU_LEVEL: {
-      mapd_unique_lock<mapd_shared_mutex> flush_lock(
+      heavyai::unique_lock<heavyai::shared_mutex> flush_lock(
           execute_mutex_);  // Don't flush memory while queries are running
 
       if (memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
@@ -1935,7 +1935,8 @@ ResultSetPtr Executor::executeWorkUnitImpl(
         std::string curRunningQuerySubmittedTime{""};
         bool sessionEnrolled = false;
         {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+              executor_session_mutex_);
           curRunningSession = getCurrentQuerySession(session_read_lock);
           curRunningQuerySubmittedTime = ra_exe_unit.query_state->getQuerySubmittedTime();
           sessionEnrolled =
@@ -2961,7 +2962,8 @@ FetchResult Executor::fetchChunks(
       if (allow_runtime_interrupt) {
         bool isInterrupted = false;
         {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+              executor_session_mutex_);
           const auto query_session = getCurrentQuerySession(session_read_lock);
           isInterrupted =
               checkIsQuerySessionInterrupted(query_session, session_read_lock);
@@ -3134,7 +3136,8 @@ FetchResult Executor::fetchUnionChunks(
       if (allow_runtime_interrupt) {
         bool isInterrupted = false;
         {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+              executor_session_mutex_);
           const auto query_session = getCurrentQuerySession(session_read_lock);
           isInterrupted =
               checkIsQuerySessionInterrupted(query_session, session_read_lock);
@@ -3383,7 +3386,8 @@ int32_t Executor::executePlanWithoutGroupBy(
   if (allow_runtime_interrupt) {
     bool isInterrupted = false;
     {
-      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+      heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+          executor_session_mutex_);
       const auto query_session = getCurrentQuerySession(session_read_lock);
       isInterrupted = checkIsQuerySessionInterrupted(query_session, session_read_lock);
     }
@@ -3598,7 +3602,8 @@ int32_t Executor::executePlanWithGroupBy(
   if (allow_runtime_interrupt) {
     bool isInterrupted = false;
     {
-      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+      heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+          executor_session_mutex_);
       const auto query_session = getCurrentQuerySession(session_read_lock);
       isInterrupted = checkIsQuerySessionInterrupted(query_session, session_read_lock);
     }
@@ -4427,7 +4432,7 @@ void Executor::setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs
   table_generations_ = computeTableGenerations(phys_table_ids);
 }
 
-mapd_shared_mutex& Executor::getDataRecyclerLock() {
+heavyai::shared_mutex& Executor::getDataRecyclerLock() {
   return recycler_mutex_;
 }
 
@@ -4439,17 +4444,18 @@ ResultSetRecyclerHolder& Executor::getRecultSetRecyclerHolder() {
   return resultset_recycler_holder_;
 }
 
-mapd_shared_mutex& Executor::getSessionLock() {
+heavyai::shared_mutex& Executor::getSessionLock() {
   return executor_session_mutex_;
 }
 
 QuerySessionId& Executor::getCurrentQuerySession(
-    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+    heavyai::shared_lock<heavyai::shared_mutex>& read_lock) {
   return current_query_session_;
 }
 
-bool Executor::checkCurrentQuerySession(const QuerySessionId& candidate_query_session,
-                                        mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+bool Executor::checkCurrentQuerySession(
+    const QuerySessionId& candidate_query_session,
+    heavyai::shared_lock<heavyai::shared_mutex>& read_lock) {
   // if current_query_session is equal to the candidate_query_session,
   // or it is empty session we consider
   return !candidate_query_session.empty() &&
@@ -4459,7 +4465,7 @@ bool Executor::checkCurrentQuerySession(const QuerySessionId& candidate_query_se
 // used only for testing
 QuerySessionStatus::QueryStatus Executor::getQuerySessionStatus(
     const QuerySessionId& candidate_query_session,
-    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+    heavyai::shared_lock<heavyai::shared_mutex>& read_lock) {
   if (queries_session_map_.count(candidate_query_session) &&
       !queries_session_map_.at(candidate_query_session).empty()) {
     return queries_session_map_.at(candidate_query_session)
@@ -4470,7 +4476,7 @@ QuerySessionStatus::QueryStatus Executor::getQuerySessionStatus(
 }
 
 void Executor::invalidateRunningQuerySession(
-    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+    heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
   current_query_session_ = "";
 }
 
@@ -4480,7 +4486,7 @@ CurrentQueryStatus Executor::attachExecutorToQuerySession(
     const std::string& query_submitted_time) {
   if (!query_session_id.empty()) {
     // if session is valid, do update 1) the exact executor id and 2) query status
-    mapd_unique_lock<mapd_shared_mutex> write_lock(executor_session_mutex_);
+    heavyai::unique_lock<heavyai::shared_mutex> write_lock(executor_session_mutex_);
     updateQuerySessionExecutorAssignment(
         query_session_id, query_submitted_time, executor_id_, write_lock);
     updateQuerySessionStatusWithLock(query_session_id,
@@ -4494,7 +4500,7 @@ CurrentQueryStatus Executor::attachExecutorToQuerySession(
 void Executor::checkPendingQueryStatus(const QuerySessionId& query_session) {
   // check whether we are okay to execute the "pending" query
   // i.e., before running the query check if this query session is "ALREADY" interrupted
-  mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(executor_session_mutex_);
   if (query_session.empty()) {
     return;
   }
@@ -4519,7 +4525,7 @@ void Executor::checkPendingQueryStatus(const QuerySessionId& query_session) {
 
 void Executor::clearQuerySessionStatus(const QuerySessionId& query_session,
                                        const std::string& submitted_time_str) {
-  mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor_session_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> session_write_lock(executor_session_mutex_);
   // clear the interrupt-related info for a finished query
   if (query_session.empty()) {
     return;
@@ -4536,7 +4542,7 @@ void Executor::updateQuerySessionStatus(
     const std::string& submitted_time_str,
     const QuerySessionStatus::QueryStatus new_query_status) {
   // update the running query session's the current status
-  mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor_session_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> session_write_lock(executor_session_mutex_);
   if (query_session.empty()) {
     return;
   }
@@ -4554,7 +4560,7 @@ void Executor::enrollQuerySession(
     const size_t executor_id,
     const QuerySessionStatus::QueryStatus query_session_status) {
   // enroll the query session into the Executor's session map
-  mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor_session_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> session_write_lock(executor_session_mutex_);
   if (query_session.empty()) {
     return;
   }
@@ -4572,16 +4578,17 @@ void Executor::enrollQuerySession(
 }
 
 size_t Executor::getNumCurentSessionsEnrolled() const {
-  mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(executor_session_mutex_);
   return queries_session_map_.size();
 }
 
-bool Executor::addToQuerySessionList(const QuerySessionId& query_session,
-                                     const std::string& query_str,
-                                     const std::string& submitted_time_str,
-                                     const size_t executor_id,
-                                     const QuerySessionStatus::QueryStatus query_status,
-                                     mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+bool Executor::addToQuerySessionList(
+    const QuerySessionId& query_session,
+    const std::string& query_str,
+    const std::string& submitted_time_str,
+    const size_t executor_id,
+    const QuerySessionStatus::QueryStatus query_status,
+    heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
   // an internal API that enrolls the query session into the Executor's session map
   if (queries_session_map_.count(query_session)) {
     if (queries_session_map_.at(query_session).count(submitted_time_str)) {
@@ -4617,7 +4624,7 @@ bool Executor::updateQuerySessionStatusWithLock(
     const QuerySessionId& query_session,
     const std::string& submitted_time_str,
     const QuerySessionStatus::QueryStatus updated_query_status,
-    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+    heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
   // an internal API that updates query session status
   if (query_session.empty()) {
     return false;
@@ -4643,7 +4650,7 @@ bool Executor::updateQuerySessionExecutorAssignment(
     const QuerySessionId& query_session,
     const std::string& submitted_time_str,
     const size_t executor_id,
-    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+    heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
   // update the executor id of the query session
   if (query_session.empty()) {
     return false;
@@ -4667,7 +4674,7 @@ bool Executor::updateQuerySessionExecutorAssignment(
 bool Executor::removeFromQuerySessionList(
     const QuerySessionId& query_session,
     const std::string& submitted_time_str,
-    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+    heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
   if (query_session.empty()) {
     return false;
   }
@@ -4700,7 +4707,7 @@ bool Executor::removeFromQuerySessionList(
 
 void Executor::setQuerySessionAsInterrupted(
     const QuerySessionId& query_session,
-    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+    heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
   if (query_session.empty()) {
     return;
   }
@@ -4711,7 +4718,7 @@ void Executor::setQuerySessionAsInterrupted(
 
 bool Executor::checkIsQuerySessionInterrupted(
     const QuerySessionId& query_session,
-    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+    heavyai::shared_lock<heavyai::shared_mutex>& read_lock) {
   if (query_session.empty()) {
     return false;
   }
@@ -4722,7 +4729,7 @@ bool Executor::checkIsQuerySessionInterrupted(
 
 bool Executor::checkIsQuerySessionEnrolled(
     const QuerySessionId& query_session,
-    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+    heavyai::shared_lock<heavyai::shared_mutex>& read_lock) {
   if (query_session.empty()) {
     return false;
   }
@@ -4747,14 +4754,14 @@ void Executor::enableRuntimeQueryInterrupt(
 void Executor::addToCardinalityCache(const std::string& cache_key,
                                      const size_t cache_value) {
   if (g_use_estimator_result_cache) {
-    mapd_unique_lock<mapd_shared_mutex> lock(recycler_mutex_);
+    heavyai::unique_lock<heavyai::shared_mutex> lock(recycler_mutex_);
     cardinality_cache_[cache_key] = cache_value;
     VLOG(1) << "Put estimated cardinality to the cache";
   }
 }
 
 Executor::CachedCardinality Executor::getCachedCardinality(const std::string& cache_key) {
-  mapd_shared_lock<mapd_shared_mutex> lock(recycler_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> lock(recycler_mutex_);
   if (g_use_estimator_result_cache &&
       cardinality_cache_.find(cache_key) != cardinality_cache_.end()) {
     VLOG(1) << "Reuse cached cardinality";
@@ -4765,7 +4772,7 @@ Executor::CachedCardinality Executor::getCachedCardinality(const std::string& ca
 
 std::vector<QuerySessionStatus> Executor::getQuerySessionInfo(
     const QuerySessionId& query_session,
-    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+    heavyai::shared_lock<heavyai::shared_mutex>& read_lock) {
   if (!queries_session_map_.empty() && queries_session_map_.count(query_session)) {
     auto& query_infos = queries_session_map_.at(query_session);
     std::vector<QuerySessionStatus> ret;
@@ -4784,7 +4791,7 @@ std::vector<QuerySessionStatus> Executor::getQuerySessionInfo(
 const std::vector<size_t> Executor::getExecutorIdsRunningQuery(
     const QuerySessionId& interrupt_session) const {
   std::vector<size_t> res;
-  mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(executor_session_mutex_);
   auto it = queries_session_map_.find(interrupt_session);
   if (it != queries_session_map_.end()) {
     for (auto& kv : it->second) {
@@ -4804,7 +4811,7 @@ bool Executor::checkNonKernelTimeInterrupted() const {
   if (executor_id_ == UNITARY_EXECUTOR_ID) {
     return false;
   };
-  mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(executor_session_mutex_);
   auto flag_it = queries_interrupt_flag_.find(current_query_session_);
   return !current_query_session_.empty() && flag_it != queries_interrupt_flag_.end() &&
          flag_it->second;
@@ -4817,7 +4824,7 @@ void Executor::registerExtractedQueryPlanDag(const QueryPlanDAG& query_plan_dag)
 }
 
 const QueryPlanDAG Executor::getLatestQueryPlanDagExtracted() const {
-  mapd_shared_lock<mapd_shared_mutex> lock(recycler_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> lock(recycler_mutex_);
   return latest_query_plan_extracted_;
 }
 
@@ -4828,10 +4835,10 @@ InterruptFlagMap Executor::queries_interrupt_flag_;
 // contain a list of queries per query session
 QuerySessionMap Executor::queries_session_map_;
 // session lock
-mapd_shared_mutex Executor::executor_session_mutex_;
+heavyai::shared_mutex Executor::executor_session_mutex_;
 
-mapd_shared_mutex Executor::execute_mutex_;
-mapd_shared_mutex Executor::executors_cache_mutex_;
+heavyai::shared_mutex Executor::execute_mutex_;
+heavyai::shared_mutex Executor::executors_cache_mutex_;
 
 std::mutex Executor::gpu_active_modules_mutex_;
 uint32_t Executor::gpu_active_modules_device_mask_{0x0};
@@ -4841,7 +4848,7 @@ std::mutex Executor::register_runtime_extension_functions_mutex_;
 std::mutex Executor::kernel_mutex_;
 
 QueryPlanDagCache Executor::query_plan_dag_cache_;
-mapd_shared_mutex Executor::recycler_mutex_;
+heavyai::shared_mutex Executor::recycler_mutex_;
 std::unordered_map<std::string, size_t> Executor::cardinality_cache_;
 // Executor has a single global result set recycler holder
 // which contains two recyclers related to query resultset
