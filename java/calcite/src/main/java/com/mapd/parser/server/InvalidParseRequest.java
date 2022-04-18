@@ -4,8 +4,8 @@ public class InvalidParseRequest extends Exception {
   public int code;
   public String msg;
 
-  public InvalidParseRequest(int code_, String msg_) {
-    this.code = code_;
-    this.msg = msg_;
+  public InvalidParseRequest(int code, String msg) {
+    this.code = code;
+    this.msg = msg;
   }
 }

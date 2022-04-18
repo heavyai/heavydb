@@ -33,14 +33,14 @@ public class DDLTest {
 
   PlanResult processDdlCommand(final String ddlCommand) throws Exception {
     QueryParsingOption queryParsingOption = new QueryParsingOption();
-    queryParsingOption.legacy_syntax = false;
-    queryParsingOption.is_explain = false;
-    queryParsingOption.check_privileges = false;
+    queryParsingOption.legacySyntax = false;
+    queryParsingOption.isExplain = false;
+    queryParsingOption.checkPrivileges = false;
 
     OptimizationOption optimizationOption = new OptimizationOption();
-    optimizationOption.is_view_optimize = false;
-    optimizationOption.enable_watchdog = false;
-    optimizationOption.filter_push_down_info = new ArrayList<>();
+    optimizationOption.isViewOptimize = false;
+    optimizationOption.enableWatchdog = false;
+    optimizationOption.filterPushDownInfo = new ArrayList<>();
 
     return calciteServerHandler.process(
             "", "", "", ddlCommand, queryParsingOption, optimizationOption, null, null);

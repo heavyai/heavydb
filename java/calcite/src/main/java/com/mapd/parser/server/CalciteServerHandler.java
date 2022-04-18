@@ -154,11 +154,11 @@ public class CalciteServerHandler {
     }
     String jsonResult;
     try {
-      MapDParserOptions parserOptions = new MapDParserOptions(optimizationOption.filter_push_down_info,
-              queryParsingOption.legacy_syntax,
-              queryParsingOption.is_explain,
-              optimizationOption.is_view_optimize,
-              optimizationOption.enable_watchdog);
+      MapDParserOptions parserOptions = new MapDParserOptions(optimizationOption.filterPushDownInfo,
+              queryParsingOption.legacySyntax,
+              queryParsingOption.isExplain,
+              optimizationOption.isViewOptimize,
+              optimizationOption.enableWatchdog);
 
       if (!isRAQuery) {
         Pair<String, SqlIdentifierCapturer> res;
