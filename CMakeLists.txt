@@ -573,10 +573,6 @@ if(CURL_FOUND)
   endif()
 endif()
 
-# bcrypt
-include_directories(ThirdParty/bcrypt)
-add_subdirectory(ThirdParty/bcrypt)
-
 # PicoSHA2
 include_directories(ThirdParty/PicoSHA2)
 
