@@ -552,10 +552,6 @@ if(ENABLE_CANONICAL_RAFT)
   add_subdirectory(ThirdParty/raft/canonical)
 endif()
 
-# rdkafka
-find_package(RdKafka REQUIRED)
-include_directories(${RdKafka_INCLUDE_DIRS})
-
 # libarchive
 find_package(LibArchive REQUIRED)
 include_directories(${LibArchive_INCLUDE_DIRS})
