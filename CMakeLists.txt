@@ -546,12 +546,6 @@ add_definitions(-DRAPIDJSON_HAS_STDSTRING)
 include_directories(ThirdParty/sqlite3)
 add_subdirectory(ThirdParty/sqlite3)
 
-# raft/canonical
-option(ENABLE_CANONICAL_RAFT "Enable Canonical Raft" OFF)
-if(ENABLE_CANONICAL_RAFT)
-  add_subdirectory(ThirdParty/raft/canonical)
-endif()
-
 # libarchive
 find_package(LibArchive REQUIRED)
 include_directories(${LibArchive_INCLUDE_DIRS})
@@ -713,10 +707,6 @@ if(ENABLE_LICENSING_AWS)
 endif()
 
 list(APPEND MAPD_LIBRARIES ${TBB_LIBS})
-
-if(ENABLE_CANONICAL_RAFT)
-  list(APPEND MAPD_LIBRARIES raft_canonical)
-endif()
 
 option(ENABLE_TESTS "Build unit tests" ON)
 if (ENABLE_TESTS)
