@@ -154,6 +154,7 @@ extern bool g_cache_string_hash;
 bool g_enable_multifrag_rs{false};
 
 bool g_enable_heterogeneous_execution{false};
+bool g_enable_multifrag_heterogeneous_execution{false};
 
 int const Executor::max_gpu_count;
 

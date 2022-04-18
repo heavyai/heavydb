@@ -5,5 +5,5 @@ set(arrow_query_runner_files
 )
 
 add_library(ArrowQueryRunner ${arrow_query_runner_files})
-target_link_libraries(ArrowQueryRunner ${Boost_LIBRARIES})
+target_link_libraries(ArrowQueryRunner gtest ${Boost_LIBRARIES})
 
