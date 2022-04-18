@@ -481,9 +481,6 @@ include_directories(${Boost_INCLUDE_DIR})
 # Ex: raft/canonical/include/raft.h
 include_directories(ThirdParty/)
 
-# EGL
-include_directories(ThirdParty/egl)
-
 # Google Test and Google Mock
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_definitions("-DGTEST_USE_OWN_TR1_TUPLE=0")
