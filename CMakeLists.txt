@@ -833,8 +833,6 @@ if(MAPD_IMMERSE_DOWNLOAD)
   endif()
 endif()
 
-add_subdirectory(ThirdParty/generate_cert)
-
 # systemd
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
@@ -874,6 +872,7 @@ add_custom_command(
     ${CMAKE_BINARY_DIR}/bin/${OMNISCI_UTILITY_JAR}
     ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar
     COMMAND ${MVN_PATH_COMMAND} ${MVN_EXECUTABLE} -l ${CMAKE_BINARY_DIR}/mvn_build.log -e clean install -Dmaven.compiler.showDeprecation=true -Dmaven.compiler.showWarnings=true -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}" -Djava.net.preferIPv4Stack=true -Dmaven.wagon.http.retryHandler.count=3 -DMAPD_LOG_DIR="${CMAKE_BINARY_DIR}"
+    COMMAND mkdir -p ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapd/target/${OMNISCI_UTILITY_JAR} ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
