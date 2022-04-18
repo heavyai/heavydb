@@ -545,9 +545,6 @@ endif()
 include_directories(ThirdParty/rapidjson)
 add_definitions(-DRAPIDJSON_HAS_STDSTRING)
 
-# Linenoise
-add_subdirectory(ThirdParty/linenoise)
-
 # SQLite
 include_directories(ThirdParty/sqlite3)
 add_subdirectory(ThirdParty/sqlite3)
