@@ -39,4 +39,6 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: logs
-          path: build/*.log build/CMakeFiles/*.log
+          path: |
+            build/*.log
+            build/CMakeFiles/*.log
