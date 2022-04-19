@@ -84,7 +84,7 @@ class ArrowSQLRunnerImpl {
 
     calcite_time_ += measure<std::chrono::microseconds>::execution([&]() {
       query_ra =
-          calcite_->process("admin", "test_db", pg_shim(sql), schema_json, "", {}, true);
+          calcite_->process("admin", "test_db", pg_shim(sql), schema_json, {}, true);
     });
 
     return query_ra;

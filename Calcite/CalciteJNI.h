@@ -34,7 +34,6 @@ class CalciteJNI {
                       const std::string& db_name,
                       const std::string& sql_string,
                       const std::string& schema_json = "",
-                      const std::string& session_id = "",
                       const std::vector<FilterPushDownInfo>& filter_push_down_info = {},
                       const bool legacy_syntax = false,
                       const bool is_explain = false,

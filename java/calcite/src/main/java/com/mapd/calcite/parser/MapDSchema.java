@@ -5,7 +5,6 @@
  */
 package com.mapd.calcite.parser;
 
-import com.mapd.common.SockTransportProperties;
 import com.mapd.metadata.MetaConnect;
 
 import org.apache.calcite.linq4j.tree.Expression;
@@ -32,38 +31,22 @@ public class MapDSchema implements Schema {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDSchema.class);
 
   final private MetaConnect metaConnect;
-  private SockTransportProperties sock_transport_properties = null;
-  public MapDSchema(String dataDir,
-          MapDParser mp,
-          int mapdPort,
-          MapDUser mapdUser,
-          SockTransportProperties skT,
-          String db,
-          String schemaJson) {
+  public MapDSchema(MapDParser mp, MapDUser mapdUser, String db, String schemaJson) {
     System.setProperty(
             "saffron.default.charset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
     System.setProperty(
             "saffron.default.nationalcharset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
     System.setProperty("saffron.default.collation.name",
             ConversionUtil.NATIVE_UTF16_CHARSET_NAME + "$en_US");
-    metaConnect = new MetaConnect(mapdPort, dataDir, mapdUser, mp, skT, db, schemaJson);
+    metaConnect = new MetaConnect(mapdUser, mp, db, schemaJson);
   }
 
-  public MapDSchema(String dataDir,
-          MapDParser mp,
-          int mapdPort,
-          MapDUser mapdUser,
-          SockTransportProperties skT,
-          String db) {
-    this(dataDir, mp, mapdPort, mapdUser, skT, db, null);
+  public MapDSchema(MapDParser mp, MapDUser mapdUser, String db) {
+    this(mp, mapdUser, db, null);
   }
 
-  public MapDSchema(String dataDir,
-          MapDParser mp,
-          int mapdPort,
-          MapDUser mapdUser,
-          SockTransportProperties skT) {
-    this(dataDir, mp, mapdPort, mapdUser, skT, null, null);
+  public MapDSchema(MapDParser mp, MapDUser mapdUser) {
+    this(mp, mapdUser, null, null);
   }
 
   @Override
@@ -109,10 +92,6 @@ public class MapDSchema implements Schema {
   @Override
   public boolean isMutable() {
     throw new UnsupportedOperationException("Not supported yet.");
-  }
-
-  void updateMetaData(String schema, String table) {
-    metaConnect.updateMetaData(schema, table);
   }
 
   @Override

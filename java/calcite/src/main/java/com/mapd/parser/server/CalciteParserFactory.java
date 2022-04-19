@@ -17,7 +17,6 @@ package com.mapd.parser.server;
 
 import com.mapd.calcite.parser.MapDParser;
 import com.mapd.calcite.parser.MapDSqlOperatorTable;
-import com.mapd.common.SockTransportProperties;
 
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.util.ConversionUtil;
@@ -35,10 +34,7 @@ import java.util.function.Supplier;
 class CalciteParserFactory implements PoolableObjectFactory {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteParserFactory.class);
 
-  private final String dataDir;
   private final Map<String, ExtensionFunction> extSigs;
-  private final int mapdPort;
-  private final SockTransportProperties socket_transport_properties;
   private volatile MapDSqlOperatorTable tableOperator;
   private final Supplier<MapDSqlOperatorTable> tableOperatorSupplier =
           new Supplier<MapDSqlOperatorTable>() {
@@ -57,14 +53,8 @@ class CalciteParserFactory implements PoolableObjectFactory {
             ConversionUtil.NATIVE_UTF16_CHARSET_NAME + "$en_US");
   }
 
-  public CalciteParserFactory(String dataDir,
-          final Map<String, ExtensionFunction> extSigs,
-          int mapdPort,
-          SockTransportProperties skT) {
-    this.dataDir = dataDir;
+  public CalciteParserFactory(final Map<String, ExtensionFunction> extSigs) {
     this.extSigs = extSigs;
-    this.mapdPort = mapdPort;
-    this.socket_transport_properties = skT;
 
     updateOperatorTable();
   }
@@ -78,8 +68,7 @@ class CalciteParserFactory implements PoolableObjectFactory {
 
   @Override
   public Object makeObject() throws Exception {
-    MapDParser obj = new MapDParser(
-            dataDir, tableOperatorSupplier, mapdPort, socket_transport_properties);
+    MapDParser obj = new MapDParser(tableOperatorSupplier);
     return obj;
   }
 

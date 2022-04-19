@@ -20,7 +20,6 @@ import static com.mapd.calcite.parser.MapDParser.CURRENT_PARSER;
 import com.mapd.calcite.parser.MapDParser;
 import com.mapd.calcite.parser.MapDParserOptions;
 import com.mapd.calcite.parser.MapDUser;
-import com.mapd.common.SockTransportProperties;
 
 import org.apache.calcite.prepare.MapDPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
@@ -50,7 +49,6 @@ import java.util.Map;
  */
 public class CalciteServerHandler {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteServerHandler.class);
-  private final int mapdPort;
 
   private volatile long callCount;
 
@@ -67,20 +65,11 @@ public class CalciteServerHandler {
 
   Map<String, ExtensionFunction> udtfSigs = null;
 
-  private SockTransportProperties skT;
   private Map<String, ExtensionFunction> extSigs = null;
-  private String dataDir;
 
   // TODO MAT we need to merge this into common code base for these functions with
   // CalciteDirect since we are not deprecating this stuff yet
-  public CalciteServerHandler(int mapdPort,
-          String dataDir,
-          String extensionFunctionsAstFile,
-          SockTransportProperties skT,
-          String udfAstFile) {
-    this.mapdPort = mapdPort;
-    this.dataDir = dataDir;
-
+  public CalciteServerHandler(String extensionFunctionsAstFile, String udfAstFile) {
     Map<String, ExtensionFunction> udfSigs = null;
 
     try {
@@ -106,14 +95,13 @@ public class CalciteServerHandler {
       extSigs.putAll(udfSigs);
     }
 
-    calciteParserFactory = new CalciteParserFactory(dataDir, extSigs, mapdPort, skT);
+    calciteParserFactory = new CalciteParserFactory(extSigs);
 
     // GenericObjectPool::setFactory is deprecated
     this.parserPool = new GenericObjectPool(calciteParserFactory);
   }
 
   public PlanResult process(String user,
-          String session,
           String catalog,
           String queryText,
           QueryParsingOption queryParsingOption,
@@ -132,7 +120,7 @@ public class CalciteServerHandler {
       MAPDLOGGER.error(msg, ex);
       throw new InvalidParseRequest(-1, msg);
     }
-    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort, restriction);
+    MapDUser mapDUser = new MapDUser(user, catalog, restriction);
     MAPDLOGGER.debug("process was called User: " + user + " Catalog: " + catalog
             + " sql: " + queryText);
     parser.setUser(mapDUser);
@@ -154,11 +142,12 @@ public class CalciteServerHandler {
     }
     String jsonResult;
     try {
-      MapDParserOptions parserOptions = new MapDParserOptions(optimizationOption.filterPushDownInfo,
-              queryParsingOption.legacySyntax,
-              queryParsingOption.isExplain,
-              optimizationOption.isViewOptimize,
-              optimizationOption.enableWatchdog);
+      MapDParserOptions parserOptions =
+              new MapDParserOptions(optimizationOption.filterPushDownInfo,
+                      queryParsingOption.legacySyntax,
+                      queryParsingOption.isExplain,
+                      optimizationOption.isViewOptimize,
+                      optimizationOption.enableWatchdog);
 
       if (!isRAQuery) {
         Pair<String, SqlIdentifierCapturer> res;

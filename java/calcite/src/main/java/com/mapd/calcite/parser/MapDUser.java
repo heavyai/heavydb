@@ -24,19 +24,11 @@ import org.apache.calcite.rel.rules.Restriction;
 public class MapDUser {
   private final String user;
   private final String catalog;
-  private final int mapDPort;
-  private final String session;
   private final Restriction restriction;
 
-  public MapDUser(String user,
-          String session,
-          String catalog,
-          int mapDPort,
-          Restriction restriction) {
+  public MapDUser(String user, String catalog, Restriction restriction) {
     this.user = user;
     this.catalog = catalog;
-    this.mapDPort = mapDPort;
-    this.session = session;
     this.restriction = restriction;
   }
 
@@ -50,13 +42,5 @@ public class MapDUser {
 
   public String getUser() {
     return user;
-  }
-
-  public int getMapDPort() {
-    return mapDPort;
-  }
-
-  public String getSession() {
-    return session;
   }
 }

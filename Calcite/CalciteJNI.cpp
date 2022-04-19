@@ -72,13 +72,11 @@ class CalciteJNI::Impl {
                       const std::string& db_name,
                       const std::string& sql_string,
                       const std::string& schema_json,
-                      const std::string& session_id,
                       const std::vector<FilterPushDownInfo>& filter_push_down_info,
                       const bool legacy_syntax,
                       const bool is_explain,
                       const bool is_view_optimize) {
     jstring arg_user = env_->NewStringUTF(user.c_str());
-    jstring arg_session = env_->NewStringUTF(session_id.c_str());
     jstring arg_catalog = env_->NewStringUTF(db_name.c_str());
     jstring arg_query = env_->NewStringUTF(sql_string.c_str());
     jobject arg_parsing_options = env_->NewObject(parsing_opts_cls_,
@@ -106,7 +104,6 @@ class CalciteJNI::Impl {
     jobject java_res = env_->CallObjectMethod(handler_obj_,
                                               handler_process_,
                                               arg_user,
-                                              arg_session,
                                               arg_catalog,
                                               arg_query,
                                               arg_parsing_options,
@@ -175,29 +172,17 @@ class CalciteJNI::Impl {
       throw std::runtime_error("cannot find Java class CalciteServerHandler");
     }
 
-    jmethodID handler_ctor =
-        env_->GetMethodID(handler_cls,
-                          "<init>",
-                          "(ILjava/lang/String;Ljava/lang/String;Lcom/mapd/common/"
-                          "SockTransportProperties;Ljava/lang/String;)V");
+    jmethodID handler_ctor = env_->GetMethodID(
+        handler_cls, "<init>", "(Ljava/lang/String;Ljava/lang/String;)V");
     if (!handler_ctor) {
       throw std::runtime_error("cannot find CalciteServerHandler ctor");
     }
 
-    int port = -1;
-    jstring data_dir = env_->NewStringUTF("");
     auto root_abs_path = omnisci::get_root_abs_path();
     std::string ext_ast_path = root_abs_path + "/QueryEngine/ExtensionFunctions.ast";
     jstring ext_ast_file = env_->NewStringUTF(ext_ast_path.c_str());
-    jobject sock_transport_prop = nullptr;
     jstring udf_ast_file = env_->NewStringUTF(udf_filename.c_str());
-    handler_obj_ = env_->NewObject(handler_cls,
-                                   handler_ctor,
-                                   port,
-                                   data_dir,
-                                   ext_ast_file,
-                                   sock_transport_prop,
-                                   udf_ast_file);
+    handler_obj_ = env_->NewObject(handler_cls, handler_ctor, ext_ast_file, udf_ast_file);
     if (!handler_obj_) {
       throw std::runtime_error("cannot create CalciteServerHandler object");
     }
@@ -206,7 +191,7 @@ class CalciteJNI::Impl {
     handler_process_ = env_->GetMethodID(
         handler_cls,
         "process",
-        "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/"
+        "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/"
         "mapd/parser/server/QueryParsingOption;Lcom/mapd/parser/server/"
         "OptimizationOption;Lorg/apache/calcite/rel/rules/Restriction;Ljava/lang/"
         "String;)Lcom/mapd/parser/server/PlanResult;");
@@ -511,7 +496,6 @@ std::string CalciteJNI::process(
     const std::string& db_name,
     const std::string& sql_string,
     const std::string& schema_json,
-    const std::string& session_id,
     const std::vector<FilterPushDownInfo>& filter_push_down_info,
     const bool legacy_syntax,
     const bool is_explain,
@@ -520,7 +504,6 @@ std::string CalciteJNI::process(
                         db_name,
                         sql_string,
                         schema_json,
-                        session_id,
                         filter_push_down_info,
                         legacy_syntax,
                         is_explain,

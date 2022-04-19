@@ -4,7 +4,6 @@ import static org.junit.Assert.assertEquals;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.mapd.common.SockTransportProperties;
 import com.mapd.parser.server.PlanResult;
 
 import org.junit.Test;

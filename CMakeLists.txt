@@ -860,8 +860,6 @@ if("${MAPD_VERSION_EXTRA}" STREQUAL "dev")
   set (OMNISCI_JAR_RELEASE_VERSION "${OMNISCI_JAR_RELEASE_VERSION}-SNAPSHOT")
 endif()
 
-set (OMNISCI_UTILITY_JAR "omnisci-utility-${OMNISCI_JAR_RELEASE_VERSION}.jar")
-
 set(MVN_PATH_COMMAND "")
 if(NOT MSVC) 
     set(MVN_PATH_COMMAND "MVNPATH=${CMAKE_SOURCE_DIR}/java")
@@ -869,11 +867,9 @@ endif()
 
 add_custom_command(
   OUTPUT
-    ${CMAKE_BINARY_DIR}/bin/${OMNISCI_UTILITY_JAR}
     ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar
     COMMAND ${MVN_PATH_COMMAND} ${MVN_EXECUTABLE} -l ${CMAKE_BINARY_DIR}/mvn_build.log -e clean install -Dmaven.compiler.showDeprecation=true -Dmaven.compiler.showWarnings=true -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}" -Djava.net.preferIPv4Stack=true -Dmaven.wagon.http.retryHandler.count=3 -DMAPD_LOG_DIR="${CMAKE_BINARY_DIR}"
     COMMAND mkdir -p ${CMAKE_BINARY_DIR}/bin
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapd/target/${OMNISCI_UTILITY_JAR} ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   DEPENDS
@@ -884,14 +880,12 @@ add_custom_command(
     ${JAVA_FTL}
   )
 add_custom_target(mapd_java_components ALL DEPENDS
-  ${CMAKE_BINARY_DIR}/bin/${OMNISCI_UTILITY_JAR}
   ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar)
 add_custom_target(mapd_java_clean
   COMMAND ${MVN_PATH_COMMAND} ${MVN_EXECUTABLE} -q clean -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}"
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   )
 add_dependencies(clean-all mapd_java_clean)
-install(FILES ${CMAKE_SOURCE_DIR}/java/mapd/target/${OMNISCI_UTILITY_JAR} DESTINATION bin COMPONENT "jar")
 install(FILES ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin COMPONENT "jar")
 
 add_custom_target(maven_populate_cache

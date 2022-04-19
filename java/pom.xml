@@ -14,9 +14,5 @@
   <name>MapD Java</name>
   <modules>
     <module>calcite</module>
-    <module>utility</module>
-    <module>thrift</module>
-    <module>mapd</module>
-    <module>mapdcommon</module>
   </modules>
 </project>

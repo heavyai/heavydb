@@ -18,12 +18,10 @@ package com.mapd.calcite.parser;
 import static org.apache.calcite.sql.parser.SqlParserPos.ZERO;
 
 import com.google.common.collect.ImmutableList;
-import com.mapd.common.SockTransportProperties;
 import com.mapd.metadata.MetaConnect;
 import com.mapd.parser.extension.ddl.ExtendedSqlParser;
 import com.mapd.parser.extension.ddl.JsonSerializableDdl;
 import com.mapd.parser.hint.OmniSciHintStrategyTable;
-import com.omnisci.thrift.server.TTableDetails;
 
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.config.CalciteConnectionConfig;
@@ -94,25 +92,16 @@ public final class MapDParser {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDParser.class);
 
   private final Supplier<MapDSqlOperatorTable> mapDSqlOperatorTable;
-  private final String dataDir;
 
   private int callCount = 0;
-  private final int mapdPort;
   private MapDUser mapdUser;
   private String schemaJson;
-  private SockTransportProperties sock_transport_properties = null;
 
   private static Map<String, Boolean> SubqueryCorrMemo = new ConcurrentHashMap<>();
 
-  public MapDParser(String dataDir,
-          final Supplier<MapDSqlOperatorTable> mapDSqlOperatorTable,
-          int mapdPort,
-          SockTransportProperties skT) {
-    this.dataDir = dataDir;
+  public MapDParser(final Supplier<MapDSqlOperatorTable> mapDSqlOperatorTable) {
     this.mapDSqlOperatorTable = mapDSqlOperatorTable;
-    this.mapdPort = mapdPort;
-    this.sock_transport_properties = skT;
-    this.schemaJson = "";
+    this.schemaJson = "{}";
   }
 
   public void clearMemo() {
@@ -165,8 +154,8 @@ public final class MapDParser {
     }
 
     try {
-      MapDParser parser = new MapDParser(
-              dataDir, mapDSqlOperatorTable, mapdPort, sock_transport_properties);
+      MapDParser parser = new MapDParser(mapDSqlOperatorTable);
+      parser.setSchema(schemaJson);
       MapDParserOptions options = new MapDParserOptions();
       parser.setUser(mapdUser);
       parser.processSql(expression, options);
@@ -291,19 +280,12 @@ public final class MapDParser {
 
     // create the default schema
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
-    final MapDSchema defaultSchema = new MapDSchema(dataDir,
-            this,
-            mapdPort,
-            mapdUser,
-            sock_transport_properties,
-            null,
-            schemaJson);
+    final MapDSchema defaultSchema = new MapDSchema(this, mapdUser, null, schemaJson);
     final SchemaPlus defaultSchemaPlus = rootSchema.add(mapdUser.getDB(), defaultSchema);
 
     // add the other potential schemas
     // this is where the systyem schema would be added
-    final MetaConnect mc =
-            new MetaConnect(mapdPort, dataDir, mapdUser, this, sock_transport_properties);
+    final MetaConnect mc = new MetaConnect(mapdUser, this);
 
     // TODO MAT for this checkin we are not going to actually allow any additional
     // schemas
@@ -311,13 +293,7 @@ public final class MapDParser {
     if (false) {
       for (String db : mc.getDatabases()) {
         if (!db.toUpperCase().equals(mapdUser.getDB().toUpperCase())) {
-          rootSchema.add(db,
-                  new MapDSchema(dataDir,
-                          this,
-                          mapdPort,
-                          mapdUser,
-                          sock_transport_properties,
-                          db));
+          rootSchema.add(db, new MapDSchema(this, mapdUser, db));
         }
       }
     }
@@ -372,13 +348,7 @@ public final class MapDParser {
 
   public String optimizeRAQuery(String query, final MapDParserOptions parserOptions)
           throws IOException {
-    MapDSchema schema = new MapDSchema(dataDir,
-            this,
-            mapdPort,
-            mapdUser,
-            sock_transport_properties,
-            null,
-            schemaJson);
+    MapDSchema schema = new MapDSchema(this, mapdUser, null, schemaJson);
     MapDPlanner planner = getPlanner(true, parserOptions.isWatchdogEnabled());
 
     planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
@@ -431,13 +401,7 @@ public final class MapDParser {
 
   public HashSet<ImmutableList<String>> resolveSelectIdentifiers(
           SqlIdentifierCapturer capturer) {
-    MapDSchema schema = new MapDSchema(dataDir,
-            this,
-            mapdPort,
-            mapdUser,
-            sock_transport_properties,
-            null,
-            schemaJson);
+    MapDSchema schema = new MapDSchema(this, mapdUser, null, schemaJson);
     HashSet<ImmutableList<String>> resolved = new HashSet<ImmutableList<String>>();
 
     for (ImmutableList<String> names : capturer.selects) {
@@ -445,13 +409,7 @@ public final class MapDParser {
       if (null == table) {
         throw new RuntimeException("table/view not found: " + names.get(0));
       }
-
-      if (table instanceof MapDView) {
-        MapDView view = (MapDView) table;
-        resolved.addAll(resolveSelectIdentifiers(view.getAccessedObjects()));
-      } else {
-        resolved.add(names);
-      }
+      resolved.add(names);
     }
 
     return resolved;
@@ -616,19 +574,8 @@ public final class MapDParser {
         if (null != updateTargetTable && updateTargetTable instanceof SqlIdentifier) {
           SqlIdentifier targetTable = (SqlIdentifier) updateTargetTable;
           if (targetTable.names.size() == 2) {
-            final MetaConnect mc = new MetaConnect(mapdPort,
-                    dataDir,
-                    mapdUser,
-                    this,
-                    sock_transport_properties,
-                    targetTable.names.get(0),
-                    schemaJson);
-            TTableDetails updateTargetTableDetails =
-                    mc.get_table_details(targetTable.names.get(1));
-            if (null != updateTargetTableDetails
-                    && updateTargetTableDetails.is_temporary) {
-              allowSubqueryDecorrelation = false;
-            }
+            final MetaConnect mc =
+                    new MetaConnect(mapdUser, this, targetTable.names.get(0), schemaJson);
           }
         }
       }
@@ -856,41 +803,16 @@ public final class MapDParser {
       return relR;
     } else {
       // check to see if a view is involved in the query
-      boolean foundView = false;
-      MapDSchema schema = new MapDSchema(dataDir,
-              this,
-              mapdPort,
-              mapdUser,
-              sock_transport_properties,
-              null,
-              schemaJson);
+      MapDSchema schema = new MapDSchema(this, mapdUser, null, schemaJson);
       SqlIdentifierCapturer capturer = captureIdentifiers(sqlNode);
       for (ImmutableList<String> names : capturer.selects) {
         MapDTable table = (MapDTable) schema.getTable(names.get(0));
         if (null == table) {
           throw new RuntimeException("table/view not found: " + names.get(0));
         }
-        if (table instanceof MapDView) {
-          foundView = true;
-        }
       }
 
-      if (!foundView) {
-        return relR;
-      }
-
-      HepProgramBuilder builder = new HepProgramBuilder();
-      builder.addRuleInstance(CoreRules.JOIN_PROJECT_BOTH_TRANSPOSE_INCLUDE_OUTER);
-      builder.addRuleInstance(CoreRules.FILTER_MERGE);
-      builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
-      builder.addRuleInstance(CoreRules.PROJECT_MERGE);
-      builder.addRuleInstance(ProjectProjectRemoveRule.INSTANCE);
-      HepPlanner hepPlanner = MapDPlanner.getHepPlanner(builder.build(), true);
-      final RelNode root = relR.project();
-      hepPlanner.setRoot(root);
-      final RelNode newRel = hepPlanner.findBestExp();
-
-      return RelRoot.of(newRel, relR.kind);
+      return relR;
     }
   }
 
@@ -1462,13 +1384,6 @@ public final class MapDParser {
 
   public int getCallCount() {
     return callCount;
-  }
-
-  public void updateMetaData(String schema, String table) {
-    MAPDLOGGER.debug("schema :" + schema + " table :" + table);
-    MapDSchema mapd =
-            new MapDSchema(dataDir, this, mapdPort, null, sock_transport_properties);
-    mapd.updateMetaData(schema, table);
   }
 
   protected RelDataTypeSystem createTypeSystem() {

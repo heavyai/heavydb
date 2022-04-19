@@ -5,10 +5,9 @@ import static org.junit.Assert.fail;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.mapd.common.SockTransportProperties;
 import com.mapd.parser.server.CalciteServerHandler;
-import com.mapd.parser.server.PlanResult;
 import com.mapd.parser.server.OptimizationOption;
+import com.mapd.parser.server.PlanResult;
 import com.mapd.parser.server.QueryParsingOption;
 
 import org.junit.Before;
@@ -24,11 +23,8 @@ public class DDLTest {
 
   @Before
   public void setup() throws Exception {
-    calciteServerHandler = new CalciteServerHandler(0,
-            "",
-            resourceDirPath + "ast/test_extension_functions.ast",
-            SockTransportProperties.getUnencryptedClient(),
-            "");
+    calciteServerHandler = new CalciteServerHandler(
+            resourceDirPath + "ast/test_extension_functions.ast", "");
   }
 
   PlanResult processDdlCommand(final String ddlCommand) throws Exception {
@@ -43,7 +39,7 @@ public class DDLTest {
     optimizationOption.filterPushDownInfo = new ArrayList<>();
 
     return calciteServerHandler.process(
-            "", "", "", ddlCommand, queryParsingOption, optimizationOption, null, null);
+            "", "", ddlCommand, queryParsingOption, optimizationOption, null, null);
   }
 
   JsonObject getJsonFromFile(final String fileName) throws Exception {
