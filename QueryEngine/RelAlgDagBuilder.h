@@ -376,10 +376,7 @@ namespace std {
 
 template <>
 struct hash<RexInput> {
-  size_t operator()(const RexInput& rex_in) const {
-    auto addr = rex_in.getSourceNode();
-    return *reinterpret_cast<const size_t*>(may_alias_ptr(&addr)) ^ rex_in.getIndex();
-  }
+  size_t operator()(const RexInput& rex_in) const { return rex_in.toHash(); }
 };
 
 }  // namespace std

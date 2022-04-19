@@ -729,7 +729,9 @@ template <>
 struct hash<std::pair<const RelAlgNode*, int>> {
   size_t operator()(const std::pair<const RelAlgNode*, int>& input_col) const {
     auto ptr_val = reinterpret_cast<const int64_t*>(&input_col.first);
-    return static_cast<int64_t>(*ptr_val) ^ input_col.second;
+    auto h = static_cast<size_t>(*ptr_val);
+    boost::hash_combine(h, input_col.second);
+    return h;
   }
 };
 }  // namespace std
