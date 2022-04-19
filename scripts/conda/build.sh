@@ -36,6 +36,13 @@ export RUN_TESTS=${RUN_TESTS:-0}
 
 export INSTALL_BASE=. # was opt/omnisci-cpu
 
+if [[ "$cuda_compiler_version" == None ]] || [[ -z "$cuda_compiler_version" ]]
+then
+   export EXTRA_CMAKE_OPTIONS="$EXTRA_CMAKE_OPTIONS -DENABLE_CUDA=off -DENABLE_DBE=on"
+else
+   export EXTRA_CMAKE_OPTIONS="$EXTRA_CMAKE_OPTIONS -DENABLE_CUDA=on -DENABLE_DBE=off"
+fi
+
 if [[ "$RUN_TESTS" == "0" ]]
 then
    export EXTRA_CMAKE_OPTIONS="$EXTRA_CMAKE_OPTIONS -DENABLE_TESTS=off"
@@ -47,7 +54,7 @@ if [[ "$CMAKE_BUILD_TYPE" ]]
 then
     export BUILD_TYPE="$CMAKE_BUILD_TYPE"
 else
-    export BUILD_TYPE="release"
+   export BUILD_TYPE="release"
 fi
 
 export EXTRA_CMAKE_OPTIONS="$EXTRA_CMAKE_OPTIONS -DBoost_NO_BOOST_CMAKE=on"
@@ -77,7 +84,6 @@ cmake -Wno-dev \
     -DENABLE_JAVA_REMOTE_DEBUG=off \
     -DENABLE_PROFILER=off \
     -DPREFER_STATIC_LIBS=off \
-    -DENABLE_CUDA=off \
     -DENABLE_FSI=ON \
     -DENABLE_ITT=OFF \
     -DENABLE_JIT_DEBUG=OFF \
@@ -85,11 +91,13 @@ cmake -Wno-dev \
     $EXTRA_CMAKE_OPTIONS \
     ..
 
+
 make -j ${CPU_COUNT:-`nproc`} || make -j ${CPU_COUNT:-`nproc`} || make
 
 
 if [[ "$RUN_TESTS" == "2" ]]
 then
+    rm -rf tmp
     mkdir tmp
     $PREFIX/bin/initdb tmp
     make sanity_tests
@@ -97,3 +105,4 @@ then
 else
     echo "Skipping sanity tests"
 fi
+

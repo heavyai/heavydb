@@ -1,0 +1,41 @@
+name: Build docs and push to Pages
+on:
+  push:
+    paths:
+      - 'docs/**'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: mkdir build
+      - name: Install doxygen deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y doxygen graphviz plantuml
+      - name: Make Doxygen docs
+        working-directory: build
+        run: |
+          cmake ../docs
+          make doxygen
+      - name: Setup python
+        uses: actions/setup-python@v1
+        with:
+          python-version: "3.7"
+      - name: Setup requirements
+        working-directory: docs
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Build Sphinx docs
+        working-directory: docs
+        run: |
+          sed -i "/segment_analytics/s/^#//" source/conf.py
+          make html
+          touch build/html/.nojekyll
+      - name: Deploy to Pages
+        uses: JamesIves/github-pages-deploy-action@releases/v4
+        with:
+          # The branch the action should deploy from
+          BRANCH: gh-pages # The branch the action should deploy to
+          FOLDER: docs/build/html # The folder the action should deploy
