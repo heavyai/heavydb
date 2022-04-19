@@ -26,7 +26,7 @@ dependencies:
   - llvmdev     9.*
   - librdkafka
   - openjdk     8.*
-  - cmake       3.16
+  - cmake 
   - libpng
   - tbb-devel
   - cython
@@ -55,5 +55,5 @@ dependencies:
   - ittapi
   - pytest
   # when cuda is enabled, install also
-  - nvcc_linux-64
   #- arrow-cpp=0.16=*cuda
+  - binutils

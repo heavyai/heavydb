@@ -1,31 +1,29 @@
-name: Build the package
+name: Build the package [SH]
 on:
-  workflow_dispatch: []
-  push:
-    paths-ignore:
-      - 'docs/**'
+  workflow_dispatch
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted]
     env:
       cuda_compiler_version: None
-      RUN_TESTS: 1
       PREFIX: distr
+      CPU_COUNT: 4
+      RUN_TESTS: 1
     steps:
       - uses: actions/checkout@v2
       - name: Set the environment
         run: |
-          $CONDA/bin/conda env create -f scripts/mapd-deps-conda-dev-env.yml
+          $CONDA/bin/conda env create -f scripts/mapd-deps-conda-dev-env.yml --force
       - name: Build
         run: |
           mkdir -p ${{ env.PREFIX }}
+          rm -rf build
           $CONDA/bin/conda run -n omnisci-dev bash scripts/conda/build-install-all.sh
       - name: Test
         run: |
           BINPATH=$(cd ${{ env.PREFIX }}/bin; pwd -P)
           cd build
-          rm -rf tmp
-          mkdir tmp
+          mkdir -p tmp
           $CONDA/bin/conda run -n omnisci-dev $BINPATH/initdb tmp
           $CONDA/bin/conda run -n omnisci-dev make sanity_tests
           rm -rf tmp
@@ -34,9 +32,3 @@ jobs:
         with:
           name: result_packages
           path: ${{ env.PREFIX }}
-      - name: Upload logs
-        if: always()
-        uses: actions/upload-artifact@v2
-        with:
-          name: logs
-          path: build/*.log

@@ -3,7 +3,7 @@ project(NvidiaComputeCapability)
 
 include_directories(..)
 
-find_package(CUDA REQUIRED)
+enable_language(CUDA)
 include_directories(${CUDA_INCLUDE_DIRS})
 list(APPEND CUDA_LIBRARIES ${CUDA_CUDA_LIBRARY})
 
