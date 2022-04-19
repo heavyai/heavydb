@@ -608,7 +608,7 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
   std::unique_ptr<Parser::Stmt> stmt = Parser::create_stmt_for_query(schema_str, session);
   const auto create_table_stmt = dynamic_cast<Parser::CreateTableStmt*>(stmt.get());
   CHECK(create_table_stmt);
-  create_table_stmt->execute(session);
+  create_table_stmt->execute(session, false /*read-only*/);
 
   try {
     restoreTable(
@@ -619,7 +619,7 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
         Parser::create_stmt_for_query(schema_str, session);
     const auto drop_table_stmt = dynamic_cast<Parser::DropTableStmt*>(stmt.get());
     CHECK(drop_table_stmt);
-    drop_table_stmt->execute(session);
+    drop_table_stmt->execute(session, false /*read-only*/);
 
     throw;
   }

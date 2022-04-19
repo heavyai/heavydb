@@ -2649,7 +2649,11 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
   }
 }
 
-void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                               bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("INSERT values invalid in read only mode.");
+  }
   auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
       *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
@@ -3232,7 +3236,11 @@ void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& sessio
   td.keyMetainfo = serialize_key_metainfo(shard_key_def, shared_dict_defs);
 }
 
-void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                              bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE TABLE invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
 
   const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
@@ -3280,7 +3288,11 @@ CreateDataframeStmt::CreateDataframeStmt(const rapidjson::Value& payload) {
   parse_options(payload, storage_options_);
 }
 
-void CreateDataframeStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void CreateDataframeStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                  bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE DATAFRAME invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
 
   const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
@@ -4129,7 +4141,11 @@ lockmgr::LockedTableDescriptors acquire_query_table_locks(
 }
 }  // namespace
 
-void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                          bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("INSERT INTO TABLE invalid in read only mode.");
+  }
   auto session_copy = session;
   auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
       &session_copy, boost::null_deleter());
@@ -4175,7 +4191,11 @@ CreateTableAsSelectStmt::CreateTableAsSelectStmt(const rapidjson::Value& payload
   parse_options(payload, storage_options_);
 }
 
-void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                      bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE TABLE invalid in read only mode.");
+  }
   auto session_copy = session;
   auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
       &session_copy, boost::null_deleter());
@@ -4331,7 +4351,11 @@ DropTableStmt::DropTableStmt(const rapidjson::Value& payload) {
   }
 }
 
-void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                            bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("DROP TABLE invalid in read only mode.");
+  }
   const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
       *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
@@ -4375,7 +4399,8 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   catalog.dropTable(td);
 }
 
-void AlterTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {}
+void AlterTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                             bool read_only_mode) {}
 
 std::unique_ptr<DDLStmt> AlterTableStmt::delegate(const rapidjson::Value& payload) {
   CHECK(payload.HasMember("tableName"));
@@ -4486,7 +4511,11 @@ TruncateTableStmt::TruncateTableStmt(const rapidjson::Value& payload) {
   table_ = std::make_unique<std::string>(json_str(payload["tableName"]));
 }
 
-void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("TRUNCATE TABLE invalid in read only mode.");
+  }
   const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
       *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
@@ -4550,7 +4579,11 @@ bool user_can_access_table(const Catalog_Namespace::SessionInfo& session_info,
 };
 }  // namespace
 
-void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("OPTIMIZE TABLE invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
 
   const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
@@ -4650,7 +4683,11 @@ RenameUserStmt::RenameUserStmt(const rapidjson::Value& payload) {
   new_username_ = std::make_unique<std::string>(json_str(payload["newName"]));
 }
 
-void RenameUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void RenameUserStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                             bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("RENAME TABLE invalid in read only mode.");
+  }
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error("Only a super user can rename users.");
   }
@@ -4670,7 +4707,11 @@ RenameDBStmt::RenameDBStmt(const rapidjson::Value& payload) {
   new_database_name_ = std::make_unique<std::string>(json_str(payload["newName"]));
 }
 
-void RenameDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void RenameDBStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                           bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("RENAME DATABASE invalid in read only mode.");
+  }
   Catalog_Namespace::DBMetadata db;
 
   // TODO: use database lock instead
@@ -4780,7 +4821,11 @@ void disable_foreign_tables(const TableDescriptor* td) {
 }
 }  // namespace
 
-void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                              bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("RENAME TABLE invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
 
   // TODO(adb): the catalog should be handling this locking (see AddColumStmt)
@@ -4920,7 +4965,11 @@ void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& sessi
   }
 }
 
-void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                            bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("ADD COLUMN invalid in read only mode.");
+  }
   // TODO: Review add and drop column implementation
   const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
       *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
@@ -5067,7 +5116,11 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
 }
 
-void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                             bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("DROP COLUMN invalid in read only mode.");
+  }
   // TODO: Review add and drop column implementation
   const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
       *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
@@ -5144,7 +5197,11 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
 }
 
-void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                               bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("RENAME COLUMN invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
 
   const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
@@ -5169,7 +5226,11 @@ void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   catalog.renameColumn(td, cd, *new_column_name_);
 }
 
-void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                  bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("ALTER TABLE invalid in read only mode.");
+  }
   enum TableParamType { MaxRollbackEpochs, Epoch, MaxRows };
   static const std::unordered_map<std::string, TableParamType> param_map = {
       {"max_rollback_epochs", TableParamType::MaxRollbackEpochs},
@@ -5257,7 +5318,11 @@ CopyTableStmt::CopyTableStmt(const rapidjson::Value& payload) : success_(true) {
   parse_options(payload, options_);
 }
 
-void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                            bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("IMPORT invalid in read only mode.");
+  }
   auto importer_factory = [](Catalog_Namespace::Catalog& catalog,
                              const TableDescriptor* td,
                              const std::string& copy_from_source,
@@ -5265,16 +5330,21 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       -> std::unique_ptr<import_export::AbstractImporter> {
     return import_export::create_importer(catalog, td, copy_from_source, copy_params);
   };
-  return execute(session, importer_factory);
+  return execute(session, read_only_mode, importer_factory);
 }
 
 void CopyTableStmt::execute(
     const Catalog_Namespace::SessionInfo& session,
+    bool read_only_mode,
     const std::function<std::unique_ptr<import_export::AbstractImporter>(
         Catalog_Namespace::Catalog&,
         const TableDescriptor*,
         const std::string&,
         const import_export::CopyParams&)>& importer_factory) {
+  if (read_only_mode) {
+    throw std::runtime_error("COPY FROM invalid in read only mode.");
+  }
+
   size_t total_time = 0;
 
   // Prevent simultaneous import / truncate (see TruncateTableStmt::execute)
@@ -5431,7 +5501,11 @@ CreateRoleStmt::CreateRoleStmt(const rapidjson::Value& payload) {
   role_ = std::make_unique<std::string>(json_str(payload["role"]));
 }
 
-void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                             bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE ROLE invalid in read only mode.");
+  }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
     throw std::runtime_error("CREATE ROLE " + get_role() +
@@ -5452,7 +5526,11 @@ DropRoleStmt::DropRoleStmt(const rapidjson::Value& payload) {
   }
 }
 
-void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                           bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("DROP ROLE invalid in read only mode.");
+  }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
     throw std::runtime_error("DROP ROLE " + get_role() +
@@ -5678,7 +5756,11 @@ GrantPrivilegesStmt::GrantPrivilegesStmt(const rapidjson::Value& payload) {
   }
 }
 
-void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                  bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("GRANT invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
@@ -5741,7 +5823,11 @@ RevokePrivilegesStmt::RevokePrivilegesStmt(const rapidjson::Value& payload) {
   }
 }
 
-void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                   bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("REVOKE invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
@@ -5779,7 +5865,10 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
 
 // NOTE: not used currently, will we ever use it?
 // SHOW ON TABLE payroll_table FOR payroll_dept_role;
-void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                 bool read_only_mode) {
+  // valid in read_only_mode
+
   auto& catalog = session.getCatalog();
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
@@ -5891,7 +5980,11 @@ GrantRoleStmt::GrantRoleStmt(const rapidjson::Value& payload) {
   }
 }
 
-void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                            bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("GRANT ROLE invalid in read only mode.");
+  }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
     throw std::runtime_error(
@@ -5924,7 +6017,11 @@ RevokeRoleStmt::RevokeRoleStmt(const rapidjson::Value& payload) {
   }
 }
 
-void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                             bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("REVOKE ROLE invalid in read only mode.");
+  }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
     throw std::runtime_error(
@@ -5944,7 +6041,9 @@ ShowCreateTableStmt::ShowCreateTableStmt(const rapidjson::Value& payload) {
   table_ = std::make_unique<std::string>(json_str(payload["tableName"]));
 }
 
-void ShowCreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void ShowCreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                  bool read_only_mode) {
+  // valid in read_only_mode
   using namespace Catalog_Namespace;
 
   const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
@@ -5993,7 +6092,9 @@ ExportQueryStmt::ExportQueryStmt(const rapidjson::Value& payload) {
   parse_options(payload, options_);
 }
 
-void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                              bool read_only_mode) {
+  // valid in read_only_mode
   auto session_copy = session;
   auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
       &session_copy, boost::null_deleter());
@@ -6260,7 +6361,11 @@ CreateViewStmt::CreateViewStmt(const rapidjson::Value& payload) {
   }
 }
 
-void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                             bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE VIEW invalid in read only mode.");
+  }
   auto session_copy = session;
   auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
       &session_copy, boost::null_deleter());
@@ -6327,7 +6432,11 @@ DropViewStmt::DropViewStmt(const rapidjson::Value& payload) {
   }
 }
 
-void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                           bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("DROP VIEW invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
 
   const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
@@ -6384,7 +6493,11 @@ CreateDBStmt::CreateDBStmt(const rapidjson::Value& payload) {
   parse_options(payload, options_);
 }
 
-void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                           bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE DATABASE invalid in read only mode.");
+  }
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error(
         "CREATE DATABASE command can only be executed by super user.");
@@ -6429,7 +6542,11 @@ DropDBStmt::DropDBStmt(const rapidjson::Value& payload) {
   }
 }
 
-void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                         bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("DROP DATABASE invalid in read only mode.");
+  }
   const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
       *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
@@ -6473,7 +6590,11 @@ CreateUserStmt::CreateUserStmt(const rapidjson::Value& payload) {
   parse_options(payload, options_);
 }
 
-void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                             bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE USER invalid in read only mode.");
+  }
   Catalog_Namespace::UserAlterations alts;
   for (auto& p : options_) {
     if (boost::iequals(*p->get_name(), "password")) {
@@ -6508,7 +6629,11 @@ AlterUserStmt::AlterUserStmt(const rapidjson::Value& payload) {
   parse_options(payload, options_, true, false);
 }
 
-void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                            bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("ALTER USER invalid in read only mode.");
+  }
   // Parse the statement
   Catalog_Namespace::UserAlterations alts;
   for (auto& p : options_) {
@@ -6565,7 +6690,11 @@ DropUserStmt::DropUserStmt(const rapidjson::Value& payload) {
   }
 }
 
-void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                           bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("DROP USER invalid in read only mode.");
+  }
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error("Only super user can drop users.");
   }
@@ -6677,7 +6806,9 @@ std::string DumpRestoreTableStmtBase::tarCompressionStr(CompressionType compress
 DumpTableStmt::DumpTableStmt(const rapidjson::Value& payload)
     : DumpRestoreTableStmtBase(payload, false) {}
 
-void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                            bool read_only_mode) {
+  // valid in read_only_mode
   const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
       *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
@@ -6708,7 +6839,11 @@ void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 RestoreTableStmt::RestoreTableStmt(const rapidjson::Value& payload)
     : DumpRestoreTableStmtBase(payload, true) {}
 
-void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                               bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("RESTORE TABLE invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table_, false);
   if (td) {
@@ -6838,11 +6973,12 @@ std::unique_ptr<Parser::Stmt> create_stmt_for_json(const std::string& query_json
 
 void execute_stmt_for_json(
     const std::string& query_json,
-    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr) {
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr,
+    bool read_only_mode) {
   std::unique_ptr<Parser::Stmt> stmt = create_stmt_for_json(query_json);
   auto ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
   if (ddl != nullptr) {
-    (*ddl).execute(*session_ptr);
+    (*ddl).execute(*session_ptr, read_only_mode);
   }
 }
 

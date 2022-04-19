@@ -760,7 +760,8 @@ class DMLStmt : public Stmt {
 class ColumnDef;
 class DDLStmt : public Stmt {
  public:
-  virtual void execute(const Catalog_Namespace::SessionInfo& session) = 0;
+  virtual void execute(const Catalog_Namespace::SessionInfo& session,
+                       bool read_only_mode) = 0;
   void setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef);
 };
 
@@ -1012,7 +1013,8 @@ class CreateTableStmt : public CreateTableBaseStmt {
     return table_element_list_;
   }
 
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
   void executeDryRun(const Catalog_Namespace::SessionInfo& session,
                      TableDescriptor& td,
                      std::list<ColumnDescriptor>& columns,
@@ -1108,7 +1110,8 @@ class CreateDataframeStmt : public CreateTableBaseStmt {
     return table_element_list_;
   }
 
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> table_;
@@ -1144,7 +1147,8 @@ class InsertIntoTableAsSelectStmt : public DDLStmt {
                     const TableDescriptor* td,
                     bool validate_table,
                     bool for_CTAS = false);
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
   std::string& get_table() { return table_name_; }
 
@@ -1181,7 +1185,8 @@ class CreateTableAsSelectStmt : public InsertIntoTableAsSelectStmt {
     }
   }
 
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   bool is_temporary_;
@@ -1203,7 +1208,8 @@ class AlterTableStmt : public DDLStmt {
 
   const std::string* get_table() const { return table_.get(); }
 
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> table_;
@@ -1220,7 +1226,8 @@ class DropTableStmt : public DDLStmt {
   DropTableStmt(const rapidjson::Value& payload);
 
   const std::string* get_table() const { return table_.get(); }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> table_;
@@ -1236,7 +1243,8 @@ class TruncateTableStmt : public DDLStmt {
   TruncateTableStmt(std::string* tab) : table_(tab) {}
   TruncateTableStmt(const rapidjson::Value& payload);
   const std::string* get_table() const { return table_.get(); }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> table_;
@@ -1268,7 +1276,8 @@ class OptimizeTableStmt : public DDLStmt {
     return false;
   }
 
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> table_;
@@ -1284,7 +1293,10 @@ class ValidateStmt : public DDLStmt {
 
   const std::string getType() const { return *(type_.get()); }
 
-  void execute(const Catalog_Namespace::SessionInfo& session) override { UNREACHABLE(); }
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override {
+    UNREACHABLE();
+  }
 
  private:
   std::unique_ptr<std::string> type_;
@@ -1300,7 +1312,8 @@ class RenameDBStmt : public DDLStmt {
 
   auto const& getPreviousDatabaseName() { return database_name_; }
   auto const& getNewDatabaseName() { return new_database_name_; }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> database_name_;
@@ -1314,7 +1327,8 @@ class RenameUserStmt : public DDLStmt {
       : username_(username), new_username_(new_username) {}
   auto const& getOldUserName() { return username_; }
   auto const& getNewUserName() { return new_username_; }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> username_;
@@ -1335,7 +1349,8 @@ class RenameTableStmt : public DDLStmt {
   // to rename multiple tables
   RenameTableStmt(std::list<std::pair<std::string, std::string>> tableNames);
 
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::list<TableNamePair> tablesToRename_;
@@ -1345,7 +1360,8 @@ class RenameColumnStmt : public DDLStmt {
  public:
   RenameColumnStmt(std::string* tab, std::string* col, std::string* new_col_name)
       : table_(tab), column_(col), new_column_name_(new_col_name) {}
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> table_;
@@ -1362,7 +1378,8 @@ class AddColumnStmt : public DDLStmt {
     }
     delete coldefs;
   }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
   void check_executable(const Catalog_Namespace::SessionInfo& session,
                         const TableDescriptor* td);
   const std::string* get_table() const { return table_.get(); }
@@ -1381,7 +1398,8 @@ class DropColumnStmt : public DDLStmt {
     }
     delete cols;
   }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
   const std::string* get_table() const { return table_.get(); }
 
  private:
@@ -1392,7 +1410,8 @@ class DropColumnStmt : public DDLStmt {
 class AlterTableParamStmt : public DDLStmt {
  public:
   AlterTableParamStmt(std::string* tab, NameValueAssign* p) : table_(tab), param_(p) {}
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> table_;
@@ -1473,7 +1492,8 @@ class DumpTableStmt : public DumpRestoreTableStmtBase {
   DumpTableStmt(std::string* tab, std::string* path, std::list<NameValueAssign*>* options)
       : DumpRestoreTableStmtBase(tab, path, options, false) {}
   DumpTableStmt(const rapidjson::Value& payload);
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 };
 
 /*
@@ -1487,7 +1507,8 @@ class RestoreTableStmt : public DumpRestoreTableStmtBase {
                    std::list<NameValueAssign*>* options)
       : DumpRestoreTableStmtBase(tab, path, options, true) {}
   RestoreTableStmt(const rapidjson::Value& payload);
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 };
 
 /*
@@ -1499,8 +1520,10 @@ class CopyTableStmt : public DDLStmt {
   CopyTableStmt(std::string* t, std::string* f, std::list<NameValueAssign*>* o);
   CopyTableStmt(const rapidjson::Value& payload);
 
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
   void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode,
                const std::function<std::unique_ptr<import_export::AbstractImporter>(
                    Catalog_Namespace::Catalog&,
                    const TableDescriptor*,
@@ -1549,7 +1572,8 @@ class CreateRoleStmt : public DDLStmt {
   CreateRoleStmt(std::string* r) : role_(r) {}
   CreateRoleStmt(const rapidjson::Value& payload);
   const std::string& get_role() const { return *role_; }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> role_;
@@ -1564,7 +1588,8 @@ class DropRoleStmt : public DDLStmt {
   DropRoleStmt(std::string* r, bool e) : role_(r), if_exists_(e) {}
   DropRoleStmt(const rapidjson::Value& payload);
   const std::string& get_role() const { return *role_; }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> role_;
@@ -1601,7 +1626,8 @@ class GrantPrivilegesStmt : public DDLStmt {
   const std::string& get_object_type() const { return *type_; }
   const std::string& get_object() const { return *target_; }
   const std::vector<std::string>& get_grantees() const { return grantees_; }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::vector<std::string> privileges_;
@@ -1630,7 +1656,8 @@ class RevokePrivilegesStmt : public DDLStmt {
   const std::string& get_object_type() const { return *type_; }
   const std::string& get_object() const { return *target_; }
   const std::vector<std::string>& get_grantees() const { return grantees_; }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::vector<std::string> privileges_;
@@ -1650,7 +1677,8 @@ class ShowPrivilegesStmt : public DDLStmt {
   const std::string& get_object_type() const { return *object_type_; }
   const std::string& get_object() const { return *object_; }
   const std::string& get_role() const { return *role_; }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> object_type_;
@@ -1672,7 +1700,8 @@ class GrantRoleStmt : public DDLStmt {
 
   const std::vector<std::string>& get_roles() const { return roles_; }
   const std::vector<std::string>& get_grantees() const { return grantees_; }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::vector<std::string> roles_;
@@ -1693,7 +1722,8 @@ class RevokeRoleStmt : public DDLStmt {
 
   const std::vector<std::string>& get_roles() const { return roles_; }
   const std::vector<std::string>& get_grantees() const { return grantees_; }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::vector<std::string> roles_;
@@ -1866,7 +1896,8 @@ class ShowCreateTableStmt : public DDLStmt {
   ShowCreateTableStmt(const rapidjson::Value& payload);
 
   std::string getCreateStmt() { return create_stmt_; }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> table_;
@@ -1889,7 +1920,8 @@ class ExportQueryStmt : public DDLStmt {
     }
   }
   ExportQueryStmt(const rapidjson::Value& payload);
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
   const std::string get_select_stmt() const { return *select_stmt_; }
 
   QueryConnector* leafs_connector_ = nullptr;
@@ -1924,7 +1956,8 @@ class CreateViewStmt : public DDLStmt {
 
   const std::string& get_view_name() const { return view_name_; }
   const std::string& get_select_query() const { return select_query_; }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::string view_name_;
@@ -1942,7 +1975,8 @@ class DropViewStmt : public DDLStmt {
   DropViewStmt(const rapidjson::Value& payload);
 
   const std::string* get_view_name() const { return view_name_.get(); }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> view_name_;
@@ -1966,7 +2000,8 @@ class CreateDBStmt : public DDLStmt {
       delete l;
     }
   }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> db_name_;
@@ -1984,7 +2019,8 @@ class DropDBStmt : public DDLStmt {
 
   explicit DropDBStmt(std::string* n, bool i) : db_name_(n), if_exists_(i) {}
   auto const& getDatabaseName() { return db_name_; }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> db_name_;
@@ -2006,7 +2042,8 @@ class CreateUserStmt : public DDLStmt {
       delete l;
     }
   }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> user_name_;
@@ -2028,7 +2065,8 @@ class AlterUserStmt : public DDLStmt {
       delete l;
     }
   }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> user_name_;
@@ -2044,7 +2082,8 @@ class DropUserStmt : public DDLStmt {
   DropUserStmt(const rapidjson::Value& payload);
   DropUserStmt(std::string* n, bool e) : user_name_(n), if_exists_(e) {}
   auto const& getUserName() { return user_name_; }
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void execute(const Catalog_Namespace::SessionInfo& session,
+               bool read_only_mode) override;
 
  private:
   std::unique_ptr<std::string> user_name_;
@@ -2115,7 +2154,7 @@ class InsertValuesStmt : public InsertStmt {
   void analyze(const Catalog_Namespace::Catalog& catalog,
                Analyzer::Query& query) const override;
 
-  void execute(const Catalog_Namespace::SessionInfo& session);
+  void execute(const Catalog_Namespace::SessionInfo& session, bool read_only_mode);
 
   Fragmenter_Namespace::InsertDataLoader::InsertConnector* leafs_connector_ = nullptr;
 
@@ -2265,7 +2304,8 @@ std::unique_ptr<Parser::Stmt> create_stmt_for_json(const std::string& query_json
 
 void execute_stmt_for_json(
     const std::string& query_json,
-    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr,
+    bool read_only_mode);
 
 }  // namespace Parser
 

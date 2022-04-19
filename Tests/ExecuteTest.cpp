@@ -23530,7 +23530,7 @@ TEST(Select, UpdatePinnedBuffers) {
 TEST(Select, Explain_Query_Session) {
   // currently, QueryRunner only supports "EXPLAIN" query to get the IR of the given
   // SELECT query but since we check "ALL" EXPLAIN-type queries before registering the
-  // session in the queue, (see ParserWrapper::isSelectExplain()) we can expect that we do
+  // session in the queue, (see ExplainInfo::isSelectExplain()) we can expect that we do
   // not enroll query session for the rest of EXPLAIN-type queries
   SKIP_ALL_ON_AGGREGATOR();
   auto eo = QR::get()->defaultExecutionOptionsForRunSQL(false, true);

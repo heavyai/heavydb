@@ -66,7 +66,7 @@ class ExecutionResult {
            ::toString(targets_meta_) + ")";
   }
 
-  enum RType { QueryResult, SimpleResult, Explaination, CalciteDdl };
+  enum RType { QueryResult, SimpleResult, Explanation, CalciteDdl };
 
   std::string getExplanation();
   void updateResultSet(const std::string& query_ra, RType type, bool success = true);

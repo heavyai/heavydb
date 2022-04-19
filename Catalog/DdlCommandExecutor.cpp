@@ -331,122 +331,122 @@ DdlCommandExecutor::DdlCommandExecutor(
   ddl_command_ = payload["command"].GetString();
 }
 
-ExecutionResult DdlCommandExecutor::execute() {
+ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
   ExecutionResult result;
 
   // the following commands use parser node locking to ensure safe concurrent access
   if (ddl_command_ == "CREATE_TABLE") {
     auto create_table_stmt = Parser::CreateTableStmt(extractPayload(*ddl_data_));
-    create_table_stmt.execute(*session_ptr_);
+    create_table_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "CREATE_VIEW") {
     auto create_view_stmt = Parser::CreateViewStmt(extractPayload(*ddl_data_));
-    create_view_stmt.execute(*session_ptr_);
+    create_view_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "DROP_TABLE") {
     auto drop_table_stmt = Parser::DropTableStmt(extractPayload(*ddl_data_));
-    drop_table_stmt.execute(*session_ptr_);
+    drop_table_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "DROP_VIEW") {
     auto drop_view_stmt = Parser::DropViewStmt(extractPayload(*ddl_data_));
-    drop_view_stmt.execute(*session_ptr_);
+    drop_view_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "RENAME_TABLE") {
     auto rename_table_stmt = Parser::RenameTableStmt(extractPayload(*ddl_data_));
-    rename_table_stmt.execute(*session_ptr_);
+    rename_table_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "ALTER_TABLE") {
     auto stmt = Parser::AlterTableStmt::delegate(extractPayload(*ddl_data_));
     if (stmt != nullptr) {
-      stmt->execute(*session_ptr_);
+      stmt->execute(*session_ptr_, read_only_mode);
     }
     return result;
   } else if (ddl_command_ == "TRUNCATE_TABLE") {
     auto truncate_table_stmt = Parser::TruncateTableStmt(extractPayload(*ddl_data_));
-    truncate_table_stmt.execute(*session_ptr_);
+    truncate_table_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "DUMP_TABLE") {
     auto dump_table_stmt = Parser::DumpTableStmt(extractPayload(*ddl_data_));
-    dump_table_stmt.execute(*session_ptr_);
+    dump_table_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "RESTORE_TABLE") {
     auto restore_table_stmt = Parser::RestoreTableStmt(extractPayload(*ddl_data_));
-    restore_table_stmt.execute(*session_ptr_);
+    restore_table_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "OPTIMIZE_TABLE") {
     auto optimize_table_stmt = Parser::OptimizeTableStmt(extractPayload(*ddl_data_));
-    optimize_table_stmt.execute(*session_ptr_);
+    optimize_table_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "SHOW_CREATE_TABLE") {
     auto show_create_table_stmt = Parser::ShowCreateTableStmt(extractPayload(*ddl_data_));
-    show_create_table_stmt.execute(*session_ptr_);
+    show_create_table_stmt.execute(*session_ptr_, read_only_mode);
     const auto create_string = show_create_table_stmt.getCreateStmt();
     result.updateResultSet(create_string, ExecutionResult::SimpleResult);
     return result;
   } else if (ddl_command_ == "COPY_TABLE") {
     auto copy_table_stmt = Parser::CopyTableStmt(extractPayload(*ddl_data_));
-    copy_table_stmt.execute(*session_ptr_);
+    copy_table_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "EXPORT_QUERY") {
     auto export_query_stmt = Parser::ExportQueryStmt(extractPayload(*ddl_data_));
-    export_query_stmt.execute(*session_ptr_);
+    export_query_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "CREATE_DB") {
     auto create_db_stmt = Parser::CreateDBStmt(extractPayload(*ddl_data_));
-    create_db_stmt.execute(*session_ptr_);
+    create_db_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "DROP_DB") {
     auto drop_db_stmt = Parser::DropDBStmt(extractPayload(*ddl_data_));
-    drop_db_stmt.execute(*session_ptr_);
+    drop_db_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "RENAME_DB") {
     auto rename_db_stmt = Parser::RenameDBStmt(extractPayload(*ddl_data_));
-    rename_db_stmt.execute(*session_ptr_);
+    rename_db_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "CREATE_USER") {
     auto create_user_stmt = Parser::CreateUserStmt(extractPayload(*ddl_data_));
-    create_user_stmt.execute(*session_ptr_);
+    create_user_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "DROP_USER") {
     auto drop_user_stmt = Parser::DropUserStmt(extractPayload(*ddl_data_));
-    drop_user_stmt.execute(*session_ptr_);
+    drop_user_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "ALTER_USER") {
     auto alter_user_stmt = Parser::AlterUserStmt(extractPayload(*ddl_data_));
-    alter_user_stmt.execute(*session_ptr_);
+    alter_user_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "RENAME_USER") {
     auto rename_user_stmt = Parser::RenameUserStmt(extractPayload(*ddl_data_));
-    rename_user_stmt.execute(*session_ptr_);
+    rename_user_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "CREATE_ROLE") {
     auto create_role_stmt = Parser::CreateRoleStmt(extractPayload(*ddl_data_));
-    create_role_stmt.execute(*session_ptr_);
+    create_role_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "DROP_ROLE") {
     auto drop_role_stmt = Parser::DropRoleStmt(extractPayload(*ddl_data_));
-    drop_role_stmt.execute(*session_ptr_);
+    drop_role_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "GRANT_ROLE") {
     auto grant_role_stmt = Parser::GrantRoleStmt(extractPayload(*ddl_data_));
-    grant_role_stmt.execute(*session_ptr_);
+    grant_role_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "REVOKE_ROLE") {
     auto revoke_role_stmt = Parser::RevokeRoleStmt(extractPayload(*ddl_data_));
-    revoke_role_stmt.execute(*session_ptr_);
+    revoke_role_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "GRANT_PRIVILEGE") {
     auto grant_privilege_stmt = Parser::GrantPrivilegesStmt(extractPayload(*ddl_data_));
-    grant_privilege_stmt.execute(*session_ptr_);
+    grant_privilege_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "REVOKE_PRIVILEGE") {
     auto revoke_privileges_stmt =
         Parser::RevokePrivilegesStmt(extractPayload(*ddl_data_));
-    revoke_privileges_stmt.execute(*session_ptr_);
+    revoke_privileges_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "CREATE_DATAFRAME") {
     auto create_dataframe_stmt = Parser::CreateDataframeStmt(extractPayload(*ddl_data_));
-    create_dataframe_stmt.execute(*session_ptr_);
+    create_dataframe_stmt.execute(*session_ptr_, read_only_mode);
     return result;
   } else if (ddl_command_ == "VALIDATE_SYSTEM") {
     // VALIDATE should have been excuted in outer context before it reaches here
@@ -461,37 +461,38 @@ ExecutionResult DdlCommandExecutor::execute() {
   // TODO(vancouver): add appropriate table locking
 
   if (ddl_command_ == "CREATE_SERVER") {
-    result = CreateForeignServerCommand{*ddl_data_, session_ptr_}.execute();
+    result = CreateForeignServerCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "DROP_SERVER") {
-    result = DropForeignServerCommand{*ddl_data_, session_ptr_}.execute();
+    result = DropForeignServerCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "CREATE_FOREIGN_TABLE") {
-    result = CreateForeignTableCommand{*ddl_data_, session_ptr_}.execute();
+    result = CreateForeignTableCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "DROP_FOREIGN_TABLE") {
-    result = DropForeignTableCommand{*ddl_data_, session_ptr_}.execute();
+    result = DropForeignTableCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_TABLES") {
-    result = ShowTablesCommand{*ddl_data_, session_ptr_}.execute();
+    result = ShowTablesCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_TABLE_DETAILS") {
-    result = ShowTableDetailsCommand{*ddl_data_, session_ptr_}.execute();
+    result = ShowTableDetailsCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_DATABASES") {
-    result = ShowDatabasesCommand{*ddl_data_, session_ptr_}.execute();
+    result = ShowDatabasesCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_SERVERS") {
-    result = ShowForeignServersCommand{*ddl_data_, session_ptr_}.execute();
+    result = ShowForeignServersCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_TABLE_FUNCTIONS") {
-    result = ShowTableFunctionsCommand{*ddl_data_, session_ptr_}.execute();
+    result = ShowTableFunctionsCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "ALTER_SERVER") {
-    result = AlterForeignServerCommand{*ddl_data_, session_ptr_}.execute();
+    result = AlterForeignServerCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "ALTER_FOREIGN_TABLE") {
-    result = AlterForeignTableCommand{*ddl_data_, session_ptr_}.execute();
+    result = AlterForeignTableCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "REFRESH_FOREIGN_TABLES") {
-    result = RefreshForeignTablesCommand{*ddl_data_, session_ptr_}.execute();
+    result =
+        RefreshForeignTablesCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_DISK_CACHE_USAGE") {
-    result = ShowDiskCacheUsageCommand{*ddl_data_, session_ptr_}.execute();
+    result = ShowDiskCacheUsageCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_USER_DETAILS") {
-    result = ShowUserDetailsCommand{*ddl_data_, session_ptr_}.execute();
+    result = ShowUserDetailsCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_ROLES") {
-    result = ShowRolesCommand{*ddl_data_, session_ptr_}.execute();
+    result = ShowRolesCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "REASSIGN_OWNED") {
-    result = ReassignOwnedCommand{*ddl_data_, session_ptr_}.execute();
+    result = ReassignOwnedCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }
@@ -642,9 +643,12 @@ CreateForeignServerCommand::CreateForeignServerCommand(
   CHECK(ddl_payload["ifNotExists"].IsBool());
 }
 
-ExecutionResult CreateForeignServerCommand::execute() {
+ExecutionResult CreateForeignServerCommand::execute(bool read_only_mode) {
   ExecutionResult result;
 
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE FOREIGN SERVER invalid in read only mode.");
+  }
   auto& ddl_payload = extractPayload(ddl_data_);
   std::string server_name = ddl_payload["serverName"].GetString();
   if (is_default_server(server_name)) {
@@ -714,7 +718,10 @@ AlterForeignServerCommand::AlterForeignServerCommand(
   }
 }
 
-ExecutionResult AlterForeignServerCommand::execute() {
+ExecutionResult AlterForeignServerCommand::execute(bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("ALTER FOREIGN SERVER invalid in read only mode.");
+  }
   auto& ddl_payload = extractPayload(ddl_data_);
   std::string server_name = ddl_payload["serverName"].GetString();
   if (is_default_server(server_name)) {
@@ -853,7 +860,10 @@ DropForeignServerCommand::DropForeignServerCommand(
   CHECK(ddl_payload["ifExists"].IsBool());
 }
 
-ExecutionResult DropForeignServerCommand::execute() {
+ExecutionResult DropForeignServerCommand::execute(bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("DROP FOREIGN SERVER invalid in read only mode.");
+  }
   auto& ddl_payload = extractPayload(ddl_data_);
   std::string server_name = ddl_payload["serverName"].GetString();
   if (is_default_server(server_name)) {
@@ -1044,10 +1054,13 @@ CreateForeignTableCommand::CreateForeignTableCommand(
   CHECK(ddl_payload["columns"].IsArray());
 }
 
-ExecutionResult CreateForeignTableCommand::execute() {
+ExecutionResult CreateForeignTableCommand::execute(bool read_only_mode) {
   auto& catalog = session_ptr_->getCatalog();
   auto& ddl_payload = extractPayload(ddl_data_);
 
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE FOREIGN TABLE invalid in read only mode.");
+  }
   const std::string& table_name = ddl_payload["tableName"].GetString();
   if (!session_ptr_->checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
                                              AccessPrivileges::CREATE_TABLE)) {
@@ -1187,10 +1200,13 @@ DropForeignTableCommand::DropForeignTableCommand(
   CHECK(ddl_payload["ifExists"].IsBool());
 }
 
-ExecutionResult DropForeignTableCommand::execute() {
+ExecutionResult DropForeignTableCommand::execute(bool read_only_mode) {
   auto& catalog = session_ptr_->getCatalog();
   auto& ddl_payload = extractPayload(ddl_data_);
 
+  if (read_only_mode) {
+    throw std::runtime_error("DROP FOREIGN TABLE invalid in read only mode.");
+  }
   const std::string& table_name = ddl_payload["tableName"].GetString();
   const TableDescriptor* td{nullptr};
   std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>> td_with_lock;
@@ -1237,8 +1253,10 @@ ShowTablesCommand::ShowTablesCommand(
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
     : DdlCommand(ddl_data, session_ptr) {}
 
-ExecutionResult ShowTablesCommand::execute() {
+ExecutionResult ShowTablesCommand::execute(bool read_only_mode) {
   // Get all table names in the same way as OmniSql \t command
+
+  // valid in read_only_mode
 
   // label_infos -> column labels
   std::vector<std::string> labels{"table_name"};
@@ -1279,9 +1297,11 @@ ShowTableDetailsCommand::ShowTableDetailsCommand(
   }
 }
 
-ExecutionResult ShowTableDetailsCommand::execute() {
+ExecutionResult ShowTableDetailsCommand::execute(bool read_only_mode) {
   const auto catalog = session_ptr_->get_catalog_ptr();
   std::vector<std::string> filtered_table_names = getFilteredTableNames();
+
+  // valid in read_only_mode
 
   std::vector<TargetMetaInfo> label_infos;
   set_headers_with_type(label_infos,
@@ -1373,7 +1393,9 @@ ShowDatabasesCommand::ShowDatabasesCommand(
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
     : DdlCommand(ddl_data, session_ptr) {}
 
-ExecutionResult ShowDatabasesCommand::execute() {
+ExecutionResult ShowDatabasesCommand::execute(bool read_only_mode) {
+  // valid in read_only_mode
+
   // label_infos -> column labels
   std::vector<std::string> labels{"Database", "Owner"};
   std::vector<TargetMetaInfo> label_infos;
@@ -1406,7 +1428,9 @@ ShowTableFunctionsCommand::ShowTableFunctionsCommand(
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
     : DdlCommand(ddl_data, session_ptr) {}
 
-ExecutionResult ShowTableFunctionsCommand::execute() {
+ExecutionResult ShowTableFunctionsCommand::execute(bool read_only_mode) {
+  // valid in read_only_mode
+
   // Get all table functions in the same way as OmniSql \t command
   auto& ddl_payload = extractPayload(ddl_data_);
   std::vector<TargetMetaInfo> label_infos;
@@ -1515,7 +1539,9 @@ ShowForeignServersCommand::ShowForeignServersCommand(
   }
 }
 
-ExecutionResult ShowForeignServersCommand::execute() {
+ExecutionResult ShowForeignServersCommand::execute(bool read_only_mode) {
+  // valid in read_only_mode
+
   std::vector<TargetMetaInfo> label_infos;
   auto& ddl_payload = extractPayload(ddl_data_);
 
@@ -1566,7 +1592,11 @@ RefreshForeignTablesCommand::RefreshForeignTablesCommand(
   }
 }
 
-ExecutionResult RefreshForeignTablesCommand::execute() {
+ExecutionResult RefreshForeignTablesCommand::execute(bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("REFRESH FOREIGN TABLE invalid in read only mode.");
+  }
+
   bool evict_cached_entries{false};
   foreign_storage::OptionsContainer opt;
   auto& ddl_payload = extractPayload(ddl_data_);
@@ -1650,7 +1680,11 @@ AlterForeignTableCommand::AlterForeignTableCommand(
   }
 }
 
-ExecutionResult AlterForeignTableCommand::execute() {
+ExecutionResult AlterForeignTableCommand::execute(bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("ALTER FOREIGN TABLE invalid in read only mode.");
+  }
+
   auto& ddl_payload = extractPayload(ddl_data_);
   auto& catalog = session_ptr_->getCatalog();
   const std::string& table_name = ddl_payload["tableName"].GetString();
@@ -1767,7 +1801,9 @@ std::vector<std::string> ShowDiskCacheUsageCommand::getFilteredTableNames() {
   }
 }
 
-ExecutionResult ShowDiskCacheUsageCommand::execute() {
+ExecutionResult ShowDiskCacheUsageCommand::execute(bool read_only_mode) {
+  // valid in read_only_mode
+
   auto cat_ptr = session_ptr_->get_catalog_ptr();
   auto table_names = getFilteredTableNames();
 
@@ -1818,7 +1854,9 @@ ShowUserDetailsCommand::ShowUserDetailsCommand(
   CHECK(ddl_payload["all"].IsBool());
 }
 
-ExecutionResult ShowUserDetailsCommand::execute() {
+ExecutionResult ShowUserDetailsCommand::execute(bool read_only_mode) {
+  // valid in read_only_mode
+
   auto& ddl_payload = extractPayload(ddl_data_);
   auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
 
@@ -1924,7 +1962,9 @@ ShowRolesCommand::ShowRolesCommand(
   CHECK(ddl_payload["effective"].IsBool());
 }
 
-ExecutionResult ShowRolesCommand::execute() {
+ExecutionResult ShowRolesCommand::execute(bool read_only_mode) {
+  // valid in read_only_mode
+
   auto& ddl_payload = extractPayload(ddl_data_);
   auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
 
@@ -1994,7 +2034,10 @@ ReassignOwnedCommand::ReassignOwnedCommand(
   new_owner_ = ddl_payload["newOwner"].GetString();
 }
 
-ExecutionResult ReassignOwnedCommand::execute() {
+ExecutionResult ReassignOwnedCommand::execute(bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("REASSIGN OWNER invalid in read only mode.");
+  }
   if (!session_ptr_->get_currentUser().isSuper) {
     throw std::runtime_error{
         "Only super users can reassign ownership of database objects."};

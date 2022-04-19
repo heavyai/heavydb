@@ -1229,7 +1229,7 @@ void DBHandler::convertData(TQueryResult& _return,
     case ExecutionResult::SimpleResult:
       convertResult(_return, *result.getRows(), true);
       break;
-    case ExecutionResult::Explaination:
+    case ExecutionResult::Explanation:
       convertExplain(_return, *result.getRows(), true);
       break;
     case ExecutionResult::CalciteDdl:
@@ -1442,7 +1442,7 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
     THROW_DB_EXCEPTION(std::string(
         "Only read queries supported for the Arrow sql_execute_df endpoint."));
   }
-  if (pw.isCalciteExplain()) {
+  if (ExplainInfo(query_str).isCalciteExplain()) {
     THROW_DB_EXCEPTION(std::string(
         "Explain is currently unsupported by the Arrow sql_execute_df endpoint."));
   }
@@ -1547,8 +1547,7 @@ void DBHandler::sql_validate(TRowDescriptor& _return,
     stdlog.setQueryState(query_state);
 
     ParserWrapper pw{query_str};
-    if ((pw.getExplainType() != ParserWrapper::ExplainType::None) || pw.isDdl() ||
-        pw.is_update_dml) {
+    if (ExplainInfo(query_str).isExplain() || pw.is_ddl || pw.is_update_dml) {
       throw std::runtime_error("Can only validate SELECT statements.");
     }
 
@@ -1781,7 +1780,7 @@ TQueryResult DBHandler::validate_rel_alg(const std::string& query_ra,
                         -1,
                         /*just_validate=*/true,
                         /*find_filter_push_down_candidates=*/false,
-                        ExplainInfo::defaults(),
+                        ExplainInfo(),
                         executor_index);
       });
   CHECK(dispatch_queue_);
@@ -2658,7 +2657,7 @@ void DBHandler::get_tables_meta_impl(std::vector<TTableMeta>& _return,
                         -1,
                         /*just_validate=*/true,
                         /*find_push_down_candidates=*/false,
-                        ExplainInfo::defaults());
+                        ExplainInfo());
         TQueryResult result;
         DBHandler::convertData(
             result, ex_result, query_state_proxy, query_ra, true, -1, -1);
@@ -5985,15 +5984,16 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                            g_enable_dynamic_watchdog,
                            /*allow_lazy_fetch=*/true,
                            /*filter_on_deleted_column=*/true,
-                           explain_info.explain_optimized ? ExecutorExplainType::Optimized
-                                                          : ExecutorExplainType::Default,
+                           explain_info.isOptimizedExplain()
+                               ? ExecutorExplainType::Optimized
+                               : ExecutorExplainType::Default,
                            intel_jit_profile_};
   auto validate_or_explain_query =
-      explain_info.justExplain() || explain_info.justCalciteExplain() || just_validate;
+      explain_info.isJustExplain() || explain_info.isCalciteExplain() || just_validate;
   ExecutionOptions eo = {g_enable_columnar_output,
                          false,
                          allow_multifrag_,
-                         explain_info.justExplain(),
+                         explain_info.isJustExplain(),
                          allow_loop_joins_ || just_validate,
                          g_enable_watchdog,
                          jit_debug_,
@@ -6001,7 +6001,7 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                          g_enable_dynamic_watchdog,
                          g_dynamic_watchdog_time_limit,
                          find_push_down_candidates,
-                         explain_info.justCalciteExplain(),
+                         explain_info.isCalciteExplain(),
                          system_parameters_.gpu_input_mem_limit,
                          g_enable_runtime_query_interrupt && !validate_or_explain_query &&
                              !query_state_proxy.getQueryState()
@@ -6012,7 +6012,7 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                          g_pending_query_interrupt_freq};
   auto execution_time_ms = _return.getExecutionTime() + measure<>::execution([&]() {
                              _return = ra_executor.executeRelAlgQuery(
-                                 co, eo, explain_info.explain_plan, nullptr);
+                                 co, eo, explain_info.isPlanExplain(), nullptr);
                            });
   // reduce execution time by the time spent during queue waiting
   const auto rs = _return.getRows();
@@ -6025,9 +6025,9 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
   if (!filter_push_down_info.empty()) {
     return filter_push_down_info;
   }
-  if (explain_info.justExplain()) {
-    _return.setResultType(ExecutionResult::Explaination);
-  } else if (!explain_info.justCalciteExplain()) {
+  if (explain_info.isJustExplain()) {
+    _return.setResultType(ExecutionResult::Explanation);
+  } else if (!explain_info.isCalciteExplain()) {
     _return.setResultType(ExecutionResult::QueryResult);
   }
   return {};
@@ -6242,7 +6242,12 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
   heavyai::shared_lock<heavyai::shared_mutex> executeReadLock;
 
   ParserWrapper pw{query_str};
-  if (!pw.isCalcitePathPermissable(true)) {
+
+  // test to see if db/catalog is writable before execution of a writable SQL/DDL command
+  //   TODO: move to execute() (?)
+  //      instead of pre-filtering here based upon incomplete info ?
+  if (pw.getQueryType() != ParserWrapper::QueryType::Read &&
+      pw.getQueryType() != ParserWrapper::QueryType::SchemaRead) {
     dbhandler::check_not_info_schema_db(cat.name());
   }
 
@@ -6262,8 +6267,10 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     CHECK(ddl_query.HasMember("payload"));
     CHECK(ddl_query["payload"].IsObject());
     auto stmt = Parser::InsertIntoTableAsSelectStmt(ddl_query["payload"].GetObject());
-    _return.addExecutionTime(measure<>::execution([&]() { stmt.execute(*session_ptr); }));
+    _return.addExecutionTime(
+        measure<>::execution([&]() { stmt.execute(*session_ptr, read_only_); }));
     return;
+
   } else if (pw.is_ctas) {
     // ctas can attempt to execute here
     check_read_only("create_table_as");
@@ -6282,9 +6289,10 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
       CHECK(ddl_query["payload"].IsObject());
       auto stmt = Parser::CreateTableAsSelectStmt(ddl_query["payload"].GetObject());
       _return.addExecutionTime(
-          measure<>::execution([&]() { stmt.execute(*session_ptr); }));
+          measure<>::execution([&]() { stmt.execute(*session_ptr, read_only_); }));
     }
     return;
+
   } else if (pw.getDMLType() == ParserWrapper::DMLType::Insert) {
     check_read_only("insert_into_table");
     std::string query_ra;
@@ -6299,8 +6307,10 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     CHECK(ddl_query.HasMember("payload"));
     CHECK(ddl_query["payload"].IsObject());
     auto stmt = Parser::InsertValuesStmt(ddl_query["payload"].GetObject());
-    _return.addExecutionTime(measure<>::execution([&]() { stmt.execute(*session_ptr); }));
+    _return.addExecutionTime(
+        measure<>::execution([&]() { stmt.execute(*session_ptr, read_only_); }));
     return;
+
   } else if (pw.is_validate) {
     // check user is superuser
     if (!session_ptr->get_currentUser().isSuper) {
@@ -6351,7 +6361,6 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
       }
       _return.updateResultSet(output, ExecutionResult::SimpleResult);
     }));
-
     return;
 
   } else if (pw.is_copy && !pw.is_copy_to) {
@@ -6367,8 +6376,8 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
         _return.addExecutionTime(measure<>::execution(
             [&]() { execute_distributed_copy_statement(import_stmt, *session_ptr); }));
       } else {
-        _return.addExecutionTime(
-            measure<>::execution([&]() { import_stmt->execute(*session_ptr); }));
+        _return.addExecutionTime(measure<>::execution(
+            [&]() { import_stmt->execute(*session_ptr, read_only_); }));
       }
 
       // Read response message
@@ -6386,21 +6395,36 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
         deferred_copy_from_sessions.add(session_ptr->get_session_id(),
                                         deferred_copy_from_state);
       }
-      return;
+
+      // } else {
+      //   possibly a failure case:
+      //      CopyTableStmt failed to be created, or failed typecast
+      //      but historically just returned
+      // }
     }
-  } else if (pw.isCalcitePathPermissable(read_only_)) {
-    // run DDL before the locks as DDL statements should handle their own locking
-    if (pw.isDdl()) {
-      std::string query_ra;
-      _return.addExecutionTime(measure<>::execution([&]() {
-        TPlanResult result;
-        std::tie(result, locks) =
-            parse_to_ra(query_state_proxy, query_str, {}, false, system_parameters_);
-        query_ra = result.plan_result;
-      }));
-      executeDdl(_return, query_ra, session_ptr);
-      return;
-    }
+    return;
+
+  } else if (pw.is_ddl) {
+    std::string query_ra;
+    _return.addExecutionTime(measure<>::execution([&]() {
+      TPlanResult result;
+      std::tie(result, locks) =
+          parse_to_ra(query_state_proxy, query_str, {}, false, system_parameters_);
+      query_ra = result.plan_result;
+    }));
+    executeDdl(_return, query_ra, session_ptr);
+    return;
+
+  } else if (pw.is_other_explain) {
+    // does nothing
+    return;
+
+  } else {
+    // includes:
+    //    explain that is not 'other'
+    //    copy_to
+    //    DmlUpdate DmlDelete
+    //    anything else that failed to match
 
     executeReadLock = heavyai::shared_lock<heavyai::shared_mutex>(
         *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
@@ -6416,20 +6440,19 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
       }));
     }
     std::string query_ra_calcite_explain;
-    if (pw.isCalciteExplain() && (!g_enable_filter_push_down || g_cluster)) {
-      // return the ra as the result
-      _return.updateResultSet(query_ra, ExecutionResult::Explaination);
-      return;
-    } else if (pw.isCalciteExplain()) {
-      // removing the "explain calcite " from the beginning of the "query_str":
-      std::string temp_query_str =
-          query_str.substr(std::string("explain calcite ").length());
+    ExplainInfo explain(query_str);
+    if (explain.isCalciteExplain()) {
+      if (!g_enable_filter_push_down || g_cluster) {
+        // return the ra as the result
+        _return.updateResultSet(query_ra, ExecutionResult::Explanation);
+        return;
+      }
       CHECK(!locks.empty());
       query_ra_calcite_explain =
-          parse_to_ra(query_state_proxy, temp_query_str, {}, false, system_parameters_)
+          parse_to_ra(
+              query_state_proxy, explain.ActualQuery(), {}, false, system_parameters_)
               .first.plan_result;
     }
-    const auto explain_info = pw.getExplainInfo();
     std::vector<PushedDownFilterInfo> filter_push_down_requests;
     auto submitted_time_str = query_state_proxy.getQueryState().getQuerySubmittedTime();
     auto query_session = session_ptr ? session_ptr->get_session_id() : "";
@@ -6438,7 +6461,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
          &filter_push_down_requests,
          &_return,
          &query_state_proxy,
-         &explain_info,
+         &explain,
          &query_ra_calcite_explain,
          &query_ra,
          &query_str,
@@ -6454,20 +6477,20 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
           filter_push_down_requests = execute_rel_alg(
               _return,
               query_state_proxy,
-              explain_info.justCalciteExplain() ? query_ra_calcite_explain : query_ra,
+              explain.isCalciteExplain() ? query_ra_calcite_explain : query_ra,
               column_format,
               executor_device_type,
               first_n,
               at_most_n,
               /*just_validate=*/false,
               g_enable_filter_push_down && !g_cluster,
-              explain_info,
+              explain,
               executor_index);
-          if (explain_info.justCalciteExplain()) {
+          if (explain.isCalciteExplain()) {
             if (filter_push_down_requests.empty()) {
               // we only reach here if filter push down was enabled, but no filter
               // push down candidate was found
-              _return.updateResultSet(query_ra, ExecutionResult::Explaination);
+              _return.updateResultSet(query_ra, ExecutionResult::Explanation);
             } else {
               CHECK(!locks.empty());
               std::vector<TFilterPushDownInfo> filter_push_down_info;
@@ -6484,7 +6507,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
                                      false,
                                      system_parameters_)
                              .first.plan_result;
-              _return.updateResultSet(query_ra, ExecutionResult::Explaination);
+              _return.updateResultSet(query_ra, ExecutionResult::Explanation);
             }
           } else {
             if (!filter_push_down_requests.empty()) {
@@ -6496,8 +6519,8 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
                                                     executor_device_type,
                                                     first_n,
                                                     at_most_n,
-                                                    explain_info.justExplain(),
-                                                    explain_info.justCalciteExplain(),
+                                                    explain.isJustExplain(),
+                                                    explain.isCalciteExplain(),
                                                     filter_push_down_requests);
             }
           }
@@ -6505,7 +6528,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     CHECK(dispatch_queue_);
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
     if (g_enable_runtime_query_interrupt && !query_session.empty() &&
-        !pw.isSelectExplain()) {
+        !explain.isSelectExplain()) {
       executor->enrollQuerySession(query_session,
                                    query_str,
                                    submitted_time_str,
@@ -6532,14 +6555,6 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     result_future.get();
     return;
   }
-
-  // TODO: is this following check even necessary any more ?
-  //        -> specifically here ... at this point in the execution ?
-  boost::regex is_select{R"((\(*|\s*))SELECT.*)",
-                         boost::regex::extended | boost::regex::icase};
-  if (DBHandler::read_only_ && !boost::regex_match(query_str, is_select)) {
-    THROW_DB_EXCEPTION("This SQL command is not supported in read-only mode.");
-  }
 }
 
 void DBHandler::execute_rel_alg_with_filter_push_down(
@@ -6551,7 +6566,7 @@ void DBHandler::execute_rel_alg_with_filter_push_down(
     const int32_t first_n,
     const int32_t at_most_n,
     const bool just_explain,
-    const bool just_calcite_explain,
+    const bool is_calcite_explain,
     const std::vector<PushedDownFilterInfo>& filter_push_down_requests) {
   // collecting the selected filters' info to be sent to Calcite:
   std::vector<TFilterPushDownInfo> filter_push_down_info;
@@ -6572,15 +6587,14 @@ void DBHandler::execute_rel_alg_with_filter_push_down(
                    .first.plan_result;
   }));
 
-  if (just_calcite_explain) {
+  if (is_calcite_explain) {
     // return the new ra as the result
-    _return.updateResultSet(query_ra, ExecutionResult::Explaination);
+    _return.updateResultSet(query_ra, ExecutionResult::Explanation);
     return;
   }
 
   // execute the new relational algebra plan:
-  auto explain_info = ExplainInfo::defaults();
-  explain_info.explain = just_explain;
+  auto explain_info = ExplainInfo(ExplainInfo::ExplainType::IR);
   execute_rel_alg(_return,
                   query_state_proxy,
                   query_ra,
@@ -6596,18 +6610,6 @@ void DBHandler::execute_rel_alg_with_filter_push_down(
 void DBHandler::execute_distributed_copy_statement(
     Parser::CopyTableStmt* copy_stmt,
     const Catalog_Namespace::SessionInfo& session_info) {
-  auto importer_factory = [&session_info, this](
-                              const Catalog& catalog,
-                              const TableDescriptor* td,
-                              const std::string& file_path,
-                              const import_export::CopyParams& copy_params)
-      -> std::unique_ptr<import_export::AbstractImporter> {
-    return std::make_unique<import_export::Importer>(
-        new DistributedLoader(session_info, td, &leaf_aggregator_),
-        file_path,
-        copy_params);
-  };
-  copy_stmt->execute(session_info, importer_factory);
 }
 
 std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
@@ -6619,9 +6621,8 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
     bool check_privileges) {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
   ParserWrapper pw{query_str};
-  const std::string actual_query{pw.isSelectExplain() ? pw.ActualQuery() : query_str};
   TPlanResult result;
-  if (pw.isCalcitePathPermissable(read_only_)) {
+  if (pw.is_ddl || (!pw.is_validate && !pw.is_other_explain)) {
     auto cat = query_state_proxy.getQueryState().getConstSessionInfo()->get_catalog_ptr();
     auto session_cleanup_handler = [&](const auto& session_id) {
       removeInMemoryCalciteSession(session_id);
@@ -6629,8 +6630,11 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
     auto process_calcite_request = [&] {
       const auto& in_memory_session_id = createInMemoryCalciteSession(cat);
       try {
+        ExplainInfo explain(query_str);
+        const std::string actual_query{explain.isSelectExplain() ? explain.ActualQuery()
+                                                                 : query_str};
         auto query_parsing_option = calcite_->getCalciteQueryParsingOption(
-            legacy_syntax_, pw.isCalciteExplain(), check_privileges);
+            legacy_syntax_, explain.isCalciteExplain(), check_privileges);
         auto optimization_option = calcite_->getCalciteOptimizationOption(
             system_parameters.enable_calcite_view_optimize,
             g_enable_watchdog,
@@ -7769,7 +7773,7 @@ void DBHandler::executeDdl(
       }
     } else {
       _return.execution_time_ms +=
-          measure<>::execution([&]() { result = executor.execute(); });
+          measure<>::execution([&]() { result = executor.execute(read_only_); });
     }
 
     if (!result.empty()) {
@@ -7819,7 +7823,8 @@ void DBHandler::executeDdl(
         throw std::runtime_error("Unknwon cache type. Cannot clear");
       }
     } else {
-      execution_time_ms = measure<>::execution([&]() { _return = executor.execute(); });
+      execution_time_ms =
+          measure<>::execution([&]() { _return = executor.execute(read_only_); });
     }
     _return.setExecutionTime(execution_time_ms);
   }

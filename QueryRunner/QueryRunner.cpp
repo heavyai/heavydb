@@ -545,7 +545,7 @@ std::unique_ptr<Parser::Stmt> QueryRunner::createStatement(
   auto query_state = create_query_state(session_info_, stmt_str);
   auto stdlog = STDLOG(query_state);
 
-  if (pw.isDdl()) {
+  if (pw.is_ddl) {
     const auto& cat = session_info_->getCatalog();
     auto calcite_mgr = cat.getCalciteMgr();
     const auto calciteQueryParsingOption =
@@ -581,7 +581,7 @@ void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
   auto query_state = create_query_state(session_info_, stmt_str);
   auto stdlog = STDLOG(query_state);
 
-  if (pw.isDdl() || pw.getDMLType() == ParserWrapper::DMLType::Insert) {
+  if (pw.is_ddl || pw.getDMLType() == ParserWrapper::DMLType::Insert) {
     const auto& cat = session_info_->getCatalog();
     auto calcite_mgr = cat.getCalciteMgr();
     const auto calciteQueryParsingOption =
@@ -600,11 +600,11 @@ void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
       CHECK(ddl_query.HasMember("payload"));
       CHECK(ddl_query["payload"].IsObject());
       auto stmt = Parser::InsertValuesStmt(ddl_query["payload"].GetObject());
-      stmt.execute(*session_info_);
+      stmt.execute(*session_info_, false /* read only */);
       return;
     }
     DdlCommandExecutor executor = DdlCommandExecutor(query_ra, session_info_);
-    executor.execute();
+    executor.execute(false /* read only */);
     return;
   }
 }
@@ -616,18 +616,13 @@ std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
 
   ParserWrapper pw{query_str};
-  if (pw.isCalcitePathPermissable()) {
-    if (pw.getDMLType() == ParserWrapper::DMLType::Insert) {
-      runDDLStatement(query_str);
-      return nullptr;
-    }
-    const auto execution_result = runSelectQuery(query_str, std::move(co), std::move(eo));
-    VLOG(1) << session_info_->getCatalog().getDataMgr().getSystemMemoryUsage();
-    return execution_result->getRows();
+  if (pw.getDMLType() == ParserWrapper::DMLType::Insert) {
+    runDDLStatement(query_str);
+    return nullptr;
   }
-
-  UNREACHABLE();
-  return nullptr;
+  const auto execution_result = runSelectQuery(query_str, std::move(co), std::move(eo));
+  VLOG(1) << session_info_->getCatalog().getDataMgr().getSystemMemoryUsage();
+  return execution_result->getRows();
 }
 
 std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
@@ -761,7 +756,7 @@ std::vector<std::shared_ptr<ResultSet>> QueryRunner::runMultipleStatements(
     }
 
     ParserWrapper pw{text};
-    if (pw.isDdl() || pw.getDMLType() == ParserWrapper::DMLType::Insert) {
+    if (pw.is_ddl || pw.getDMLType() == ParserWrapper::DMLType::Insert) {
       runDDLStatement(text);
       results.push_back(nullptr);
     } else {
@@ -774,7 +769,7 @@ std::vector<std::shared_ptr<ResultSet>> QueryRunner::runMultipleStatements(
 
 void QueryRunner::runImport(Parser::CopyTableStmt* import_stmt) {
   CHECK(import_stmt);
-  import_stmt->execute(*session_info_);
+  import_stmt->execute(*session_info_, false /* read only */);
 }
 
 std::unique_ptr<import_export::Loader> QueryRunner::getLoader(
