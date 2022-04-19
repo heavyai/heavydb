@@ -23,8 +23,6 @@
 #include "HashTableDesc.h"
 #include "ResultSet.h"
 
-#include "Rendering/RenderAllocator.h"
-
 #include <memory>
 
 #ifdef HAVE_CUDA
@@ -47,8 +45,6 @@ class QueryMemoryInitializer {
                          const int64_t num_rows,
                          const std::vector<std::vector<const int8_t*>>& col_buffers,
                          const std::vector<std::vector<uint64_t>>& frag_offsets,
-                         RenderAllocatorMap* render_allocator_map,
-                         RenderInfo* render_info,
                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                          DeviceAllocator* gpu_allocator,
                          const size_t thread_idx,
@@ -198,8 +194,7 @@ class QueryMemoryInitializer {
       const unsigned grid_size_x,
       const int8_t warp_size,
       const bool can_sort_on_gpu,
-      const bool output_columnar,
-      RenderAllocator* render_allocator);
+      const bool output_columnar);
 #endif
 
   size_t computeNumberOfBuffers(const QueryMemoryDescriptor& query_mem_desc,
@@ -247,7 +242,6 @@ class QueryMemoryInitializer {
 
   DeviceAllocator* device_allocator_{nullptr};
   std::vector<Data_Namespace::AbstractBuffer*> temporary_buffers_;
-
 
   bool use_hash_table_desc_;
   const size_t thread_idx_;

@@ -53,7 +53,6 @@ class QueryCompilationDescriptor {
       const ColumnFetcher& column_fetcher,
       const CompilationOptions& co,
       const ExecutionOptions& eo,
-      RenderInfo* render_info,
       Executor* executor);
 
   auto getCompilationResult() const { return compilation_result_; }

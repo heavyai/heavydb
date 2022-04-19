@@ -196,7 +196,6 @@ class ResultSet {
   ResultSet(const std::string& explanation);
 
   ResultSet(int64_t queue_time_ms,
-            int64_t render_time_ms,
             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
   ~ResultSet();
@@ -375,7 +374,6 @@ class ResultSet {
   struct QueryExecutionTimings {
     // all in ms
     int64_t executor_queue_time{0};
-    int64_t render_time{0};
     int64_t compilation_queue_time{0};
     int64_t kernel_queue_time{0};
   };
@@ -385,7 +383,6 @@ class ResultSet {
   void addCompilationQueueTime(const int64_t compilation_queue_time);
 
   int64_t getQueueTime() const;
-  int64_t getRenderTime() const;
 
   void moveToBegin() const;
 

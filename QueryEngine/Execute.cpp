@@ -58,7 +58,6 @@
 #include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryEngine/QueryRewrite.h"
 #include "QueryEngine/QueryTemplateGenerator.h"
-#include "QueryEngine/Rendering/RenderInfo.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryEngine/SpeculativeTopN.h"
@@ -1407,7 +1406,6 @@ TemporaryTable Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                          const RelAlgExecutionUnit& ra_exe_unit_in,
                                          const CompilationOptions& co,
                                          const ExecutionOptions& eo,
-                                         RenderInfo* render_info,
                                          const bool has_cardinality_estimation,
                                          DataProvider* data_provider,
                                          ColumnCacheMap& column_cache) {
@@ -1431,7 +1429,6 @@ TemporaryTable Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                       co,
                                       eo,
                                       row_set_mem_owner_,
-                                      render_info,
                                       has_cardinality_estimation,
                                       data_provider,
                                       column_cache);
@@ -1451,7 +1448,6 @@ TemporaryTable Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                             co,
                             eo,
                             row_set_mem_owner_,
-                            render_info,
                             has_cardinality_estimation,
                             data_provider,
                             column_cache);
@@ -1497,7 +1493,6 @@ std::shared_ptr<StreamExecutionContext> Executor::prepareStreamingExecution(
                                                          co.explain_type,
                                                          co.register_intel_jit_listener},
                                                         eo,
-                                                        nullptr,
                                                         this);
 
   for (const auto target_expr : ra_exe_unit.target_exprs) {
@@ -1546,7 +1541,6 @@ ResultSetPtr Executor::runOnBatch(std::shared_ptr<StreamExecutionContext> ctx,
                                                   query_mem_desc,
                                                   fragments,
                                                   ExecutorDispatchMode::KernelPerFragment,
-                                                  nullptr,
                                                   -1  // TODO: rowid_lookup_key ???
   );
 
@@ -1605,7 +1599,6 @@ TemporaryTable Executor::executeWorkUnitImpl(
     const CompilationOptions& co,
     const ExecutionOptions& eo,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    RenderInfo* render_info,
     const bool has_cardinality_estimation,
     DataProvider* data_provider,
     ColumnCacheMap& column_cache) {
@@ -1670,7 +1663,6 @@ TemporaryTable Executor::executeWorkUnitImpl(
                                               co.explain_type,
                                               co.register_intel_jit_listener},
                                              eo,
-                                             render_info,
                                              this);
           CHECK(query_mem_desc_owned);
           crt_min_byte_width = query_comp_desc_owned->getMinByteWidth();
@@ -1719,7 +1711,6 @@ TemporaryTable Executor::executeWorkUnitImpl(
                                                query_comp_descs_owned,
                                                query_mem_descs_owned,
                                                exe_policy.get(),
-                                               render_info,
                                                available_gpus,
                                                available_cpus);
         } else {
@@ -1734,7 +1725,6 @@ TemporaryTable Executor::executeWorkUnitImpl(
                                   *query_comp_descs_owned[device_type].get(),
                                   *query_mem_descs_owned[device_type].get(),
                                   exe_policy.get(),
-                                  render_info,
                                   available_gpus,
                                   available_cpus);
         }
@@ -1847,7 +1837,6 @@ void Executor::executeWorkUnitPerFragment(
                                        column_fetcher,
                                        co,
                                        eo,
-                                       nullptr,
                                        this);
   }
   CHECK(query_mem_desc_owned);
@@ -1885,7 +1874,6 @@ void Executor::executeWorkUnitPerFragment(
                              *query_mem_desc_owned,
                              fragments_list,
                              ExecutorDispatchMode::KernelPerFragment,
-                             /*render_info=*/nullptr,
                              /*rowid_lookup_key=*/-1);
       kernel.run(this, 0, kernel_context);
     }
@@ -2315,7 +2303,6 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
     const QueryCompilationDescriptor& query_comp_desc,
     const QueryMemoryDescriptor& query_mem_desc,
     policy::ExecutionPolicy* policy,
-    RenderInfo* render_info,
     std::unordered_set<int>& available_gpus,
     int& available_cpus) {
   std::vector<std::unique_ptr<ExecutionKernel>> execution_kernels;
@@ -2365,10 +2352,9 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
                                       &column_fetcher,
                                       &eo,
                                       &query_comp_desc,
-                                      &query_mem_desc,
-                                      render_info](const int device_id,
-                                                   const FragmentsList& frag_list,
-                                                   const int64_t rowid_lookup_key) {
+                                      &query_mem_desc](const int device_id,
+                                                       const FragmentsList& frag_list,
+                                                       const int64_t rowid_lookup_key) {
       execution_kernels.emplace_back(
           std::make_unique<ExecutionKernel>(ra_exe_unit,
                                             ExecutorDeviceType::GPU,
@@ -2379,7 +2365,6 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
                                             query_mem_desc,
                                             frag_list,
                                             ExecutorDispatchMode::MultifragmentKernel,
-                                            render_info,
                                             rowid_lookup_key));
     };
     fragment_descriptor.assignFragsToMultiDispatch(multifrag_kernel_dispatch);
@@ -2407,8 +2392,7 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
                                          &eo,
                                          &frag_list_idx,
                                          &query_comp_desc,
-                                         &query_mem_desc,
-                                         render_info](
+                                         &query_mem_desc](
                                             const int device_id,
                                             const FragmentsList& frag_list,
                                             const int64_t rowid_lookup_key,
@@ -2427,7 +2411,6 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
                                             query_mem_desc,
                                             frag_list,
                                             ExecutorDispatchMode::KernelPerFragment,
-                                            render_info,
                                             rowid_lookup_key));
       ++frag_list_idx;
     };
@@ -2453,7 +2436,6 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createHeterogeneousKerne
     const std::map<ExecutorDeviceType, std::unique_ptr<QueryMemoryDescriptor>>&
         query_mem_descs,
     policy::ExecutionPolicy* policy,
-    RenderInfo* render_info,
     std::unordered_set<int>& available_gpus,
     int& available_cpus) {
   std::vector<std::unique_ptr<ExecutionKernel>> execution_kernels;
@@ -2497,8 +2479,7 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createHeterogeneousKerne
                                        &eo,
                                        &frag_list_idx,
                                        &query_comp_descs,
-                                       &query_mem_descs,
-                                       render_info](
+                                       &query_mem_descs](
                                           const int device_id,
                                           const FragmentsList& frag_list,
                                           const int64_t rowid_lookup_key,
@@ -2520,7 +2501,6 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createHeterogeneousKerne
                                           *query_mem_descs.at(device_type).get(),
                                           frag_list,
                                           ExecutorDispatchMode::KernelPerFragment,
-                                          render_info,
                                           rowid_lookup_key));
     ++frag_list_idx;
   };
@@ -3139,23 +3119,12 @@ int32_t Executor::executePlanWithoutGroupBy(
     const uint32_t start_rowid,
     const uint32_t num_tables,
     const bool allow_runtime_interrupt,
-    RenderInfo* render_info,
     const int64_t rows_to_process) {
   INJECT_TIMER(executePlanWithoutGroupBy);
   auto timer = DEBUG_TIMER(__func__);
   CHECK(!results || !(*results));
   if (col_buffers.empty()) {
     return 0;
-  }
-
-  RenderAllocatorMap* render_allocator_map_ptr = nullptr;
-  if (render_info) {
-    // TODO(adb): make sure that we either never get here in the CPU case, or if we do get
-    // here, we are in non-insitu mode.
-    CHECK(render_info->useCudaBuffers() || !render_info->isPotentialInSituRender())
-        << "CUDA disabled rendering in the executePlanWithoutGroupBy query path is "
-           "currently unsupported.";
-    render_allocator_map_ptr = render_info->render_allocator_map_ptr.get();
   }
 
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
@@ -3217,8 +3186,7 @@ int32_t Executor::executePlanWithoutGroupBy(
           &error_code,
           num_tables,
           allow_runtime_interrupt,
-          join_hash_table_ptrs,
-          render_allocator_map_ptr);
+          join_hash_table_ptrs);
       output_memory_scope.reset(new OutVecOwner(out_vec));
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
@@ -3352,7 +3320,6 @@ int32_t Executor::executePlanWithGroupBy(
     const uint32_t start_rowid,
     const uint32_t num_tables,
     const bool allow_runtime_interrupt,
-    RenderInfo* render_info,
     const int64_t rows_to_process) {
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(executePlanWithGroupBy);
@@ -3382,11 +3349,6 @@ int32_t Executor::executePlanWithGroupBy(
   }
   if (g_enable_dynamic_watchdog && interrupted_.load()) {
     return ERR_INTERRUPTED;
-  }
-
-  RenderAllocatorMap* render_allocator_map_ptr = nullptr;
-  if (render_info && render_info->useCudaBuffers()) {
-    render_allocator_map_ptr = render_info->render_allocator_map_ptr.get();
   }
 
   VLOG(2) << "bool(ra_exe_unit.union_all)=" << bool(ra_exe_unit.union_all)
@@ -3473,14 +3435,9 @@ int32_t Executor::executePlanWithGroupBy(
           &error_code,
           num_tables,
           allow_runtime_interrupt,
-          join_hash_table_ptrs,
-          render_allocator_map_ptr);
+          join_hash_table_ptrs);
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
-    } catch (const OutOfRenderMemory&) {
-      return ERR_OUT_OF_RENDER_MEM;
-    } catch (const StreamingTopNNotSupportedInRenderQuery&) {
-      return ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY;
     } catch (const std::exception& e) {
       LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
     }
@@ -3496,23 +3453,12 @@ int32_t Executor::executePlanWithGroupBy(
   }
 
   if (results && error_code != Executor::ERR_OVERFLOW_OR_UNDERFLOW &&
-      error_code != Executor::ERR_DIV_BY_ZERO && !render_allocator_map_ptr) {
+      error_code != Executor::ERR_DIV_BY_ZERO) {
     *results = query_exe_context->getRowSet(ra_exe_unit_copy,
                                             query_exe_context->query_mem_desc_);
     CHECK(*results);
     VLOG(2) << "results->rowCount()=" << (*results)->rowCount();
     (*results)->holdLiterals(hoist_buf);
-  }
-  if (error_code < 0 && render_allocator_map_ptr) {
-    auto const adjusted_scan_limit =
-        ra_exe_unit_copy.union_all ? ra_exe_unit_copy.scan_limit : scan_limit;
-    // More rows passed the filter than available slots. We don't have a count to check,
-    // so assume we met the limit if a scan limit is set
-    if (adjusted_scan_limit != 0) {
-      return 0;
-    } else {
-      return error_code;
-    }
   }
   if (results && error_code &&
       (!scan_limit || check_rows_less_than_needed(*results, scan_limit))) {

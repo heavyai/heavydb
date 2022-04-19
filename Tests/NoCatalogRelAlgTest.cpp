@@ -173,7 +173,7 @@ class NoCatalogRelAlgTest : public ::testing::Test {
 
   ExecutionResult runRelAlgQuery(const std::string& ra) {
     return runRelAlgQuery(
-        std::make_unique<RelAlgDagBuilder>(ra, TEST_DB_ID, schema_provider_, nullptr));
+        std::make_unique<RelAlgDagBuilder>(ra, TEST_DB_ID, schema_provider_));
   }
 
   ExecutionResult runRelAlgQuery(std::unique_ptr<RelAlgDag> dag) {
@@ -183,7 +183,7 @@ class NoCatalogRelAlgTest : public ::testing::Test {
                                       data_mgr_->getDataProvider(),
                                       std::move(dag));
     return ra_executor.executeRelAlgQuery(
-        CompilationOptions(), ExecutionOptions(), false, nullptr);
+        CompilationOptions(), ExecutionOptions(), false);
   }
 
   TestDataProvider& getDataProvider() {
@@ -325,8 +325,7 @@ TEST_F(NoCatalogRelAlgTest, StreamingAggregate) {
   ]
 })""";
 
-  auto dag =
-      std::make_unique<RelAlgDagBuilder>(ra, TEST_DB_ID, schema_provider_, nullptr);
+  auto dag = std::make_unique<RelAlgDagBuilder>(ra, TEST_DB_ID, schema_provider_);
   if (executor_.get() == nullptr) {
     std::cout << "** Error ** -- executor_ is nulltpr. Aborting." << std::endl;
     std::abort();
@@ -423,8 +422,7 @@ TEST_F(NoCatalogRelAlgTest, StreamingFilter) {
   ]
 })""";
 
-  auto dag =
-      std::make_unique<RelAlgDagBuilder>(ra, TEST_DB_ID, schema_provider_, nullptr);
+  auto dag = std::make_unique<RelAlgDagBuilder>(ra, TEST_DB_ID, schema_provider_);
   if (executor_.get() == nullptr) {
     std::cout << "** Error ** -- executor_ is nulltpr. Aborting." << std::endl;
     std::abort();

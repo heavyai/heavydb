@@ -34,8 +34,6 @@
 #include "BufferProvider/BufferProvider.h"
 #include "DataMgr/Allocators/DeviceAllocator.h"
 
-class RenderAllocator;
-
 class CudaAllocator : public DeviceAllocator {
  public:
   CudaAllocator(BufferProvider* buffer_provider, const int device_id);

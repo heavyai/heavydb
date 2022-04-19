@@ -65,8 +65,7 @@ class RelAlgExecutor {
 
   ExecutionResult executeRelAlgQuery(const CompilationOptions& co,
                                      const ExecutionOptions& eo,
-                                     const bool just_explain_plan,
-                                     RenderInfo* render_info);
+                                     const bool just_explain_plan);
 
   // does preparational stuff and compiles kernels
   void prepareStreamingExecution(const CompilationOptions& co,
@@ -81,7 +80,6 @@ class RelAlgExecutor {
   ExecutionResult executeRelAlgQueryWithFilterPushDown(const RaExecutionSequence& seq,
                                                        const CompilationOptions& co,
                                                        const ExecutionOptions& eo,
-                                                       RenderInfo* render_info,
                                                        const int64_t queue_time_ms);
 
   void prepareLeafExecution(
@@ -92,7 +90,6 @@ class RelAlgExecutor {
   ExecutionResult executeRelAlgSeq(const RaExecutionSequence& seq,
                                    const CompilationOptions& co,
                                    const ExecutionOptions& eo,
-                                   RenderInfo* render_info,
                                    const int64_t queue_time_ms,
                                    const bool with_existing_temp_tables = false);
 
@@ -100,14 +97,12 @@ class RelAlgExecutor {
                                       const std::pair<size_t, size_t> interval,
                                       const CompilationOptions& co,
                                       const ExecutionOptions& eo,
-                                      RenderInfo* render_info,
                                       const int64_t queue_time_ms);
 
   QueryStepExecutionResult executeRelAlgQuerySingleStep(const RaExecutionSequence& seq,
                                                         const size_t step_idx,
                                                         const CompilationOptions& co,
-                                                        const ExecutionOptions& eo,
-                                                        RenderInfo* render_info);
+                                                        const ExecutionOptions& eo);
 
   const RelAlgNode& getRootRelAlgNode() const {
     CHECK(query_dag_);
@@ -154,32 +149,27 @@ class RelAlgExecutor {
  private:
   ExecutionResult executeRelAlgQueryNoRetry(const CompilationOptions& co,
                                             const ExecutionOptions& eo,
-                                            const bool just_explain_plan,
-                                            RenderInfo* render_info);
+                                            const bool just_explain_plan);
 
   void executeRelAlgStep(const RaExecutionSequence& seq,
                          const size_t step_idx,
                          const CompilationOptions&,
                          const ExecutionOptions&,
-                         RenderInfo*,
                          const int64_t queue_time_ms);
 
   ExecutionResult executeCompound(const RelCompound*,
                                   const CompilationOptions&,
                                   const ExecutionOptions&,
-                                  RenderInfo*,
                                   const int64_t queue_time_ms);
 
   ExecutionResult executeAggregate(const RelAggregate* aggregate,
                                    const CompilationOptions& co,
                                    const ExecutionOptions& eo,
-                                   RenderInfo* render_info,
                                    const int64_t queue_time_ms);
 
   ExecutionResult executeProject(const RelProject*,
                                  const CompilationOptions&,
                                  const ExecutionOptions&,
-                                 RenderInfo*,
                                  const int64_t queue_time_ms,
                                  const std::optional<size_t> previous_count);
 
@@ -208,13 +198,11 @@ class RelAlgExecutor {
   ExecutionResult executeFilter(const RelFilter*,
                                 const CompilationOptions&,
                                 const ExecutionOptions&,
-                                RenderInfo*,
                                 const int64_t queue_time_ms);
 
   ExecutionResult executeSort(const RelSort*,
                               const CompilationOptions&,
                               const ExecutionOptions&,
-                              RenderInfo*,
                               const int64_t queue_time_ms);
 
   ExecutionResult executeLogicalValues(const RelLogicalValues*, const ExecutionOptions&);
@@ -223,7 +211,6 @@ class RelAlgExecutor {
                                const RaExecutionSequence&,
                                const CompilationOptions&,
                                const ExecutionOptions&,
-                               RenderInfo*,
                                const int64_t queue_time_ms);
 
   // TODO(alex): just move max_groups_buffer_entry_guess to RelAlgExecutionUnit once
@@ -259,7 +246,6 @@ class RelAlgExecutor {
       const bool is_agg,
       const CompilationOptions& co_in,
       const ExecutionOptions& eo_in,
-      RenderInfo*,
       const int64_t queue_time_ms,
       const std::optional<size_t> previous_count = std::nullopt);
 
@@ -291,7 +277,6 @@ class RelAlgExecutor {
                                          const bool is_agg,
                                          const CompilationOptions& co,
                                          const ExecutionOptions& eo,
-                                         RenderInfo* render_info,
                                          const bool was_multifrag_kernel_launch,
                                          const int64_t queue_time_ms);
 

@@ -878,9 +878,7 @@ class RelScan : public RelAlgNode {
     return column_infos_[col_idx]->type;
   }
 
-  ColumnInfoPtr getColumnInfoBySpi(int spi) const {
-    return column_infos_[spi - 1];
-  }
+  ColumnInfoPtr getColumnInfoBySpi(int spi) const { return column_infos_[spi - 1]; }
 
   std::string toString() const override {
     std::vector<std::string_view> field_names;
@@ -1960,8 +1958,6 @@ class RelAlgDag {
   std::unordered_map<size_t, RegisteredQueryHint> query_hint_;
 };
 
-class RenderInfo;
-
 /**
  * Builder class to create an in-memory, easy-to-navigate relational algebra DAG
  * interpreted from a JSON representation from Calcite. Also, applies high level
@@ -1979,12 +1975,11 @@ class RelAlgDagBuilder : public RelAlgDag, public boost::noncopyable {
    * Constructs a RelAlg DAG from a JSON representation.
    * @param query_ra A JSON string representation of an RA tree from Calcite.
    * @param db_id ID of the current database.
-   * @param render_opts Additional build options for render queries.
+   * @param schema_provider The source of schema information.
    */
   RelAlgDagBuilder(const std::string& query_ra,
                    int db_id,
-                   SchemaProviderPtr schema_provider,
-                   const RenderInfo* render_info);
+                   SchemaProviderPtr schema_provider);
 
   /**
    * Constructs a sub-DAG for any subqueries. Should only be called during DAG
@@ -1993,20 +1988,18 @@ class RelAlgDagBuilder : public RelAlgDag, public boost::noncopyable {
    * subqueries.
    * @param query_ast The current JSON node to build a DAG for.
    * @param db_id ID of the current database.
-   * @param render_opts Additional build options for render queries.
+   * @param schema_provider The source of schema information.
    */
   RelAlgDagBuilder(RelAlgDagBuilder& root_dag_builder,
                    const rapidjson::Value& query_ast,
                    int db_id,
-                   SchemaProviderPtr schema_provider,
-                   const RenderInfo* render_opts);
+                   SchemaProviderPtr schema_provider);
 
  private:
   void build(const rapidjson::Value& query_ast, RelAlgDagBuilder& root_dag_builder);
 
   int db_id_;
   SchemaProviderPtr schema_provider_;
-  const RenderInfo* render_info_;
 };
 
 using RANodeOutput = std::vector<RexInput>;

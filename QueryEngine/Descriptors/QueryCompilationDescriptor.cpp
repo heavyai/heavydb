@@ -29,7 +29,6 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
     const ColumnFetcher& column_fetcher,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
-    RenderInfo* render_info,
     Executor* executor) {
   compilation_device_type_ = co.device_type;
   hoist_literals_ = co.hoist_literals;
@@ -49,8 +48,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
         crt_min_byte_width,
         has_cardinality_estimation,
         column_fetcher.getDataProvider(),
-        column_fetcher.columnarized_table_cache_,
-        render_info);
+        column_fetcher.columnarized_table_cache_);
   } catch (const CompilationRetryNoLazyFetch&) {
     if (executor->cgen_state_->module_) {
       delete executor->cgen_state_->module_;
@@ -67,8 +65,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
                                   crt_min_byte_width,
                                   has_cardinality_estimation,
                                   column_fetcher.getDataProvider(),
-                                  column_fetcher.columnarized_table_cache_,
-                                  render_info);
+                                  column_fetcher.columnarized_table_cache_);
   }
   actual_min_byte_width_ =
       std::max(query_mem_desc->updateActualMinByteWidth(MAX_BYTE_WIDTH_SUPPORTED),

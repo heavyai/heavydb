@@ -455,7 +455,6 @@ class Executor {
                                  const RelAlgExecutionUnit&,
                                  const CompilationOptions&,
                                  const ExecutionOptions& options,
-                                 RenderInfo* render_info,
                                  const bool has_cardinality_estimation,
                                  DataProvider* data_provider,
                                  ColumnCacheMap& column_cache);
@@ -584,7 +583,6 @@ class Executor {
       const QueryCompilationDescriptor& query_comp_desc,
       const QueryMemoryDescriptor& query_mem_desc,
       policy::ExecutionPolicy* policy,
-      RenderInfo* render_info,
       std::unordered_set<int>& available_gpus,
       int& available_cpus);
 
@@ -605,7 +603,6 @@ class Executor {
       const std::map<ExecutorDeviceType, std::unique_ptr<QueryMemoryDescriptor>>&
           query_mem_descs,
       policy::ExecutionPolicy* policy,
-      RenderInfo* render_info,
       std::unordered_set<int>& available_gpus,
       int& available_cpus);
 
@@ -701,7 +698,6 @@ class Executor {
                                  const uint32_t start_rowid,
                                  const uint32_t num_tables,
                                  const bool allow_runtime_interrupt,
-                                 RenderInfo* render_info,
                                  const int64_t rows_to_process = -1);
   // pass nullptr to results if it shouldn't be extracted from the execution context
   int32_t executePlanWithoutGroupBy(
@@ -720,7 +716,6 @@ class Executor {
       const uint32_t start_rowid,
       const uint32_t num_tables,
       const bool allow_runtime_interrupt,
-      RenderInfo* render_info,
       const int64_t rows_to_process = -1);
 
  public:  // Temporary, ask saman about this
@@ -770,7 +765,6 @@ class Executor {
                                      const CompilationOptions&,
                                      const ExecutionOptions& options,
                                      std::shared_ptr<RowSetMemoryOwner>,
-                                     RenderInfo* render_info,
                                      const bool has_cardinality_estimation,
                                      DataProvider* data_provider,
                                      ColumnCacheMap& column_cache);
@@ -782,7 +776,6 @@ class Executor {
                                                   const CompilationOptions&,
                                                   const ExecutionOptions& options,
                                                   std::shared_ptr<RowSetMemoryOwner>,
-                                                  RenderInfo* render_info,
                                                   const bool has_cardinality_estimation,
                                                   DataProvider* data_provider,
                                                   ColumnCacheMap& column_cache);
@@ -814,8 +807,7 @@ class Executor {
       const int8_t crt_min_byte_width,
       const bool has_cardinality_estimation,
       DataProvider* data_provider,
-      ColumnCacheMap& column_cache,
-      RenderInfo* render_info = nullptr);
+      ColumnCacheMap& column_cache);
 
   std::vector<JoinLoop> buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
                                        const CompilationOptions& co,
@@ -1159,7 +1151,6 @@ class Executor {
   static const int32_t ERR_OUT_OF_GPU_MEM{2};
   static const int32_t ERR_OUT_OF_SLOTS{3};
   static const int32_t ERR_UNSUPPORTED_SELF_JOIN{4};
-  static const int32_t ERR_OUT_OF_RENDER_MEM{5};
   static const int32_t ERR_OUT_OF_CPU_MEM{6};
   static const int32_t ERR_OVERFLOW_OR_UNDERFLOW{7};
   static const int32_t ERR_OUT_OF_TIME{9};
@@ -1167,7 +1158,6 @@ class Executor {
   static const int32_t ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED{11};
   static const int32_t ERR_TOO_MANY_LITERALS{12};
   static const int32_t ERR_STRING_CONST_IN_RESULTSET{13};
-  static const int32_t ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY{14};
   static const int32_t ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES{15};
   static const int32_t ERR_WIDTH_BUCKET_INVALID_ARGUMENT{16};
 

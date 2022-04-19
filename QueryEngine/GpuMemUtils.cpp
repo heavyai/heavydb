@@ -81,7 +81,6 @@ GpuGroupByBuffers create_dev_group_by_buffers(
       mem_size = coalesced_size(query_mem_desc,
                                 groups_buffer_size,
                                 query_mem_desc.blocksShareMemory() ? 1 : grid_size_x);
-      // TODO(adb): render allocator support
       group_by_dev_buffers_mem =
           reinterpret_cast<CUdeviceptr>(cuda_allocator->alloc(mem_size));
     } else {
@@ -101,7 +100,6 @@ GpuGroupByBuffers create_dev_group_by_buffers(
                                     query_mem_desc.blocksShareMemory() ? 1 : grid_size_x);
           CHECK_LE(entry_count, std::numeric_limits<uint32_t>::max());
 
-          // TODO(adb): render allocator support
           group_by_dev_buffers_mem =
               reinterpret_cast<CUdeviceptr>(cuda_allocator->alloc(mem_size));
         } catch (const OutOfMemory& e) {

@@ -46,7 +46,6 @@
 
 class Executor;
 class QueryExecutionContext;
-class RenderInfo;
 class RowSetMemoryOwner;
 struct InputTableInfo;
 struct RelAlgExecutionUnit;
@@ -84,7 +83,6 @@ class QueryMemoryDescriptor {
                         const CountDistinctDescriptors count_distinct_descriptors,
                         const bool sort_on_gpu_hint,
                         const bool output_columnar,
-                        const bool render_output,
                         const bool must_use_baseline_sort,
                         const bool use_streaming_top_n);
 
@@ -117,7 +115,6 @@ class QueryMemoryDescriptor {
       const bool sort_on_gpu_hint,
       const size_t shard_count,
       const size_t max_groups_buffer_entry_count,
-      RenderInfo* render_info,
       const CountDistinctDescriptors count_distinct_descriptors,
       const bool must_use_baseline_sort,
       const bool output_columnar_hint,
@@ -136,8 +133,7 @@ class QueryMemoryDescriptor {
       std::shared_ptr<RowSetMemoryOwner>,
       const bool output_columnar,
       const bool sort_on_gpu,
-      const size_t thread_idx,
-      RenderInfo*) const;
+      const size_t thread_idx) const;
 
   static bool many_entries(const int64_t max_val,
                            const int64_t min_val,
@@ -371,7 +367,6 @@ class QueryMemoryDescriptor {
   CountDistinctDescriptors count_distinct_descriptors_;
   bool sort_on_gpu_;
   bool output_columnar_;
-  bool render_output_;
   bool must_use_baseline_sort_;
   bool is_table_function_;
   bool use_streaming_top_n_;

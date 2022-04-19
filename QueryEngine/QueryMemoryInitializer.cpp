@@ -25,8 +25,6 @@
 #include "ResultSet.h"
 #include "StreamingTopN.h"
 
-#include "QueryEngine/Rendering/RenderInfo.h"
-
 #include <Shared/Globals.h>
 #include <Shared/checked_alloc.h>
 #include <ThirdParty/robin_hood.h>
@@ -68,19 +66,9 @@ inline void check_total_bitmap_memory(const QueryMemoryDescriptor& query_mem_des
 }
 
 int64_t* alloc_group_by_buffer(const size_t numBytes,
-                               RenderAllocatorMap* render_allocator_map,
                                const size_t thread_idx,
                                RowSetMemoryOwner* mem_owner) {
-  if (render_allocator_map) {
-    // NOTE(adb): If we got here, we are performing an in-situ rendering query and are not
-    // using CUDA buffers. Therefore we need to allocate result set storage using CPU
-    // memory.
-    const auto gpu_idx = 0;  // Only 1 GPU supported in CUDA-disabled rendering mode
-    auto render_allocator_ptr = render_allocator_map->getRenderAllocator(gpu_idx);
-    return reinterpret_cast<int64_t*>(render_allocator_ptr->alloc(numBytes));
-  } else {
-    return reinterpret_cast<int64_t*>(mem_owner->allocate(numBytes, thread_idx));
-  }
+  return reinterpret_cast<int64_t*>(mem_owner->allocate(numBytes, thread_idx));
 }
 
 inline int64_t get_consistent_frag_size(const std::vector<uint64_t>& frag_offsets) {
@@ -247,8 +235,6 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     const int64_t num_rows,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
-    RenderAllocatorMap* render_allocator_map,
-    RenderInfo* render_info,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     DeviceAllocator* device_allocator,
     const size_t thread_idx,
@@ -280,12 +266,9 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     allocateCountDistinctGpuMem(query_mem_desc);
   }
 
-  if (render_allocator_map || !query_mem_desc.isGroupBy()) {
+  if (!query_mem_desc.isGroupBy()) {
     allocateCountDistinctBuffers(query_mem_desc, false, executor);
     allocateTDigests(query_mem_desc, false, executor);
-    if (render_info && render_info->useCudaBuffers()) {
-      return;
-    }
   }
 
   if (ra_exe_unit.estimator) {
@@ -353,10 +336,8 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   }
 
   for (size_t i = 0; i < group_buffers_count; i += step) {
-    auto group_by_buffer = alloc_group_by_buffer(actual_group_buffer_size,
-                                                 render_allocator_map,
-                                                 thread_idx_,
-                                                 row_set_mem_owner_.get());
+    auto group_by_buffer = alloc_group_by_buffer(
+        actual_group_buffer_size, thread_idx_, row_set_mem_owner_.get());
 
     if (!query_mem_desc.lazyInitGroups(device_type)) {
       if (group_by_buffer_template) {
@@ -467,7 +448,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
 
   CHECK_EQ(num_buffers_, size_t(1));
   auto group_by_buffer = alloc_group_by_buffer(
-      actual_group_buffer_size, nullptr, thread_idx_, row_set_mem_owner.get());
+      actual_group_buffer_size, thread_idx_, row_set_mem_owner.get());
   if (!query_mem_desc.lazyInitGroups(device_type)) {
     initColumnarGroups(
         query_mem_desc, group_by_buffer + index_buffer_qw, init_agg_vals_, executor);
@@ -967,12 +948,8 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     const unsigned grid_size_x,
     const int8_t warp_size,
     const bool can_sort_on_gpu,
-    const bool output_columnar,
-    RenderAllocator* render_allocator) {
+    const bool output_columnar) {
   if (query_mem_desc.useStreamingTopN()) {
-    if (render_allocator) {
-      throw StreamingTopNNotSupportedInRenderQuery();
-    }
     const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
     CHECK(!output_columnar);
 
@@ -993,7 +970,7 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
                                   false,
                                   ra_exe_unit.use_bump_allocator,
                                   query_mem_desc.hasVarlenOutput(),
-                                  render_allocator);
+                                  nullptr);
   if (query_mem_desc.hasVarlenOutput()) {
     CHECK(dev_group_by_buffers.varlen_output_buffer);
     varlen_output_buffer_ = dev_group_by_buffers.varlen_output_buffer;
@@ -1007,12 +984,7 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     varlen_output_info_->gpu_start_address = static_cast<int64_t>(varlen_output_buffer_);
     varlen_output_info_->cpu_buffer_ptr = varlen_output_buffer_host_ptr_;
   }
-  if (render_allocator) {
-    CHECK_EQ(size_t(0), render_allocator->getAllocatedSize() % 8);
-  }
   if (query_mem_desc.lazyInitGroups(ExecutorDeviceType::GPU)) {
-    CHECK(!render_allocator);
-
     const size_t step{query_mem_desc.threadsShareMemory() ? block_size_x : 1};
     size_t groups_buffer_size{query_mem_desc.getBufferSizeBytes(
         ExecutorDeviceType::GPU, dev_group_by_buffers.entry_count)};

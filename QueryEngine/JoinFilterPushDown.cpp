@@ -99,16 +99,8 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
   const size_t total_rows_upper_bound = table_infos.front().info.getNumTuplesUpperBound();
   try {
     ColumnCacheMap column_cache;
-    filtered_result = executor_->executeWorkUnit(one,
-                                                 true,
-                                                 table_infos,
-                                                 ra_exe_unit,
-                                                 co,
-                                                 eo,
-                                                 nullptr,
-                                                 false,
-                                                 data_provider_,
-                                                 column_cache);
+    filtered_result = executor_->executeWorkUnit(
+        one, true, table_infos, ra_exe_unit, co, eo, false, data_provider_, column_cache);
   } catch (...) {
     return {false, 1.0, 0};
   }
@@ -154,7 +146,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
     const RaExecutionSequence& seq,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
-    RenderInfo* render_info,
     const int64_t queue_time_ms) {
   // we currently do not fully support filter push down with
   // multi-step execution and/or with subqueries
@@ -188,14 +179,13 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
       const auto subquery_ra = subquery->getRelAlg();
       CHECK(subquery_ra);
       RaExecutionSequence subquery_seq(subquery_ra);
-      auto result =
-          ra_executor.executeRelAlgSeq(subquery_seq, co, eo_modified, nullptr, 0);
+      auto result = ra_executor.executeRelAlgSeq(subquery_seq, co, eo_modified, 0);
       subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
     }
-    return executeRelAlgSeq(seq, co, eo_modified, render_info, queue_time_ms);
+    return executeRelAlgSeq(seq, co, eo_modified, queue_time_ms);
   }
   // else
-  return executeRelAlgSeq(seq, co, eo, render_info, queue_time_ms);
+  return executeRelAlgSeq(seq, co, eo, queue_time_ms);
 }
 /**
  * The main purpose of this function is to prevent going through extra overhead of

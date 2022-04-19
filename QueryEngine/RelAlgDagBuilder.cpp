@@ -18,10 +18,8 @@
 #include "CalciteDeserializerUtils.h"
 #include "Descriptors/RelAlgExecutionDescriptor.h"
 #include "JsonAccessors.h"
-#include "QueryEngine/Rendering/RenderInfo.h"
 #include "RelAlgOptimizer.h"
 #include "RelLeftDeepInnerJoin.h"
-#include "Rendering/RenderRelAlgUtils.h"
 #include "RexVisitor.h"
 #include "Shared/sqldefs.h"
 
@@ -935,8 +933,7 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
   CHECK_GE(operands.Size(), unsigned(0));
   const auto& subquery_ast = field(expr, "subquery");
 
-  RelAlgDagBuilder subquery_dag(
-      root_dag_builder, subquery_ast, db_id, schema_provider, nullptr);
+  RelAlgDagBuilder subquery_dag(root_dag_builder, subquery_ast, db_id, schema_provider);
   auto subquery = std::make_shared<RexSubQuery>(subquery_dag.getRootNodeShPtr());
   root_dag_builder.registerSubquery(subquery);
   return subquery->deepCopy();
@@ -2785,17 +2782,15 @@ void RelAlgDag::resetQueryExecutionState() {
 RelAlgDagBuilder::RelAlgDagBuilder(RelAlgDagBuilder& root_dag_builder,
                                    const rapidjson::Value& query_ast,
                                    int db_id,
-                                   SchemaProviderPtr schema_provider,
-                                   const RenderInfo* render_info)
-    : db_id_(db_id), schema_provider_(schema_provider), render_info_(render_info) {
+                                   SchemaProviderPtr schema_provider)
+    : db_id_(db_id), schema_provider_(schema_provider) {
   build(query_ast, root_dag_builder);
 }
 
 RelAlgDagBuilder::RelAlgDagBuilder(const std::string& query_ra,
                                    int db_id,
-                                   SchemaProviderPtr schema_provider,
-                                   const RenderInfo* render_info)
-    : db_id_(db_id), schema_provider_(schema_provider), render_info_(render_info) {
+                                   SchemaProviderPtr schema_provider)
+    : db_id_(db_id), schema_provider_(schema_provider) {
   rapidjson::Document query_ast;
   query_ast.Parse(query_ra.c_str());
   VLOG(2) << "Parsing query RA JSON: " << query_ra;
@@ -2826,11 +2821,6 @@ void RelAlgDagBuilder::build(const rapidjson::Value& query_ast,
   CHECK(!nodes_.empty());
   bind_inputs(nodes_);
 
-  if (render_info_) {
-    // Alter the RA for render. Do this before any flattening/optimizations are done to
-    // the tree.
-    alterRAForRender(nodes_, *render_info_);
-  }
   handleQueryHint(nodes_, this);
   mark_nops(nodes_);
   simplify_sort(nodes_);

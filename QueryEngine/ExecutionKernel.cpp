@@ -24,7 +24,6 @@
 #include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExternalExecutor.h"
-#include "QueryEngine/Rendering/RenderInfo.h"
 #include "QueryEngine/SerializeToSql.h"
 
 extern size_t g_cpu_sub_task_size;
@@ -137,8 +136,6 @@ void ExecutionKernel::run(Executor* executor,
     throw QueryExecutionError(Executor::ERR_OUT_OF_CPU_MEM, e.what());
   } catch (const std::bad_alloc& e) {
     throw QueryExecutionError(Executor::ERR_OUT_OF_CPU_MEM, e.what());
-  } catch (const OutOfRenderMemory& e) {
-    throw QueryExecutionError(Executor::ERR_OUT_OF_RENDER_MEM, e.what());
   } catch (const OutOfMemory& e) {
     throw QueryExecutionError(
         Executor::ERR_OUT_OF_GPU_MEM,
@@ -263,7 +260,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                executor->row_set_mem_owner_,
                                                std::nullopt);
     const auto query_mem_desc =
-        group_by_and_aggregate.initQueryMemoryDescriptor(false, 0, 8, nullptr, false);
+        group_by_and_aggregate.initQueryMemoryDescriptor(false, 0, 8, false);
     device_results_ = run_query_external(
         query,
         *fetch_result,
@@ -278,7 +275,6 @@ void ExecutionKernel::runImpl(Executor* executor,
   }
   const CompilationResult& compilation_result = query_comp_desc.getCompilationResult();
   std::unique_ptr<QueryExecutionContext> query_exe_context_owned;
-  const bool do_render = render_info_ && render_info_->isPotentialInSituRender();
 
   int64_t total_num_input_rows{-1};
   if (kernel_dispatch_mode == ExecutorDispatchMode::KernelPerFragment &&
@@ -372,8 +368,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                   executor->getRowSetMemoryOwner(),
                                                   compilation_result.output_columnar,
                                                   query_mem_desc.sortOnGpu(),
-                                                  thread_idx,
-                                                  do_render ? render_info_ : nullptr);
+                                                  thread_idx);
     } catch (const OutOfHostMemory& e) {
       throw QueryExecutionError(Executor::ERR_OUT_OF_CPU_MEM);
     }
@@ -397,8 +392,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                               chosen_device_id,
                                               start_rowid,
                                               ra_exe_unit_.input_descs.size(),
-                                              eo.allow_runtime_query_interrupt,
-                                              do_render ? render_info_ : nullptr);
+                                              eo.allow_runtime_query_interrupt);
   } else {
     if (ra_exe_unit_.union_all) {
       VLOG(1) << "outer_table_id=" << outer_table_id
@@ -420,8 +414,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                            ra_exe_unit_.scan_limit,
                                            start_rowid,
                                            ra_exe_unit_.input_descs.size(),
-                                           eo.allow_runtime_query_interrupt,
-                                           do_render ? render_info_ : nullptr);
+                                           eo.allow_runtime_query_interrupt);
   }
   if (device_results_) {
     std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks_to_hold;
@@ -454,8 +447,6 @@ void KernelSubtask::run(Executor* executor) {
     throw QueryExecutionError(Executor::ERR_OUT_OF_CPU_MEM, e.what());
   } catch (const std::bad_alloc& e) {
     throw QueryExecutionError(Executor::ERR_OUT_OF_CPU_MEM, e.what());
-  } catch (const OutOfRenderMemory& e) {
-    throw QueryExecutionError(Executor::ERR_OUT_OF_RENDER_MEM, e.what());
   } catch (const OutOfMemory& e) {
     throw QueryExecutionError(
         Executor::ERR_OUT_OF_GPU_MEM,
@@ -476,8 +467,6 @@ void KernelSubtask::run(Executor* executor) {
 
 void KernelSubtask::runImpl(Executor* executor) {
   auto& query_exe_context_owned = shared_context_.getTlsExecutionContext().local();
-  const bool do_render =
-      kernel_.render_info_ && kernel_.render_info_->isPotentialInSituRender();
   const CompilationResult& compilation_result =
       kernel_.query_comp_desc.getCompilationResult();
 
@@ -505,8 +494,7 @@ void KernelSubtask::runImpl(Executor* executor) {
           compilation_result.output_columnar,
           kernel_.query_mem_desc.sortOnGpu(),
           // TODO: use TBB thread id to choose allocator
-          thread_idx_,
-          do_render ? kernel_.render_info_ : nullptr);
+          thread_idx_);
     } catch (const OutOfHostMemory& e) {
       throw QueryExecutionError(Executor::ERR_OUT_OF_CPU_MEM);
     }
@@ -538,7 +526,6 @@ void KernelSubtask::runImpl(Executor* executor) {
                                               start_rowid_,
                                               kernel_.ra_exe_unit_.input_descs.size(),
                                               kernel_.eo.allow_runtime_query_interrupt,
-                                              do_render ? kernel_.render_info_ : nullptr,
                                               start_rowid_ + num_rows_to_process_);
   } else {
     err = executor->executePlanWithGroupBy(kernel_.ra_exe_unit_,
@@ -558,7 +545,6 @@ void KernelSubtask::runImpl(Executor* executor) {
                                            start_rowid_,
                                            kernel_.ra_exe_unit_.input_descs.size(),
                                            kernel_.eo.allow_runtime_query_interrupt,
-                                           do_render ? kernel_.render_info_ : nullptr,
                                            start_rowid_ + num_rows_to_process_);
   }
 

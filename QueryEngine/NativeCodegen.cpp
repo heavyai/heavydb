@@ -69,7 +69,6 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #include "QueryEngine/Optimization/AnnotateInternalFunctionsPass.h"
 #include "QueryEngine/OutputBufferInitialization.h"
 #include "QueryEngine/QueryTemplateGenerator.h"
-#include "QueryEngine/Rendering/RenderInfo.h"
 #include "Shared/InlineNullValues.h"
 #include "Shared/MathUtils.h"
 #include "StreamingTopN.h"
@@ -2416,8 +2415,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                           const int8_t crt_min_byte_width,
                           const bool has_cardinality_estimation,
                           DataProvider* data_provider,
-                          ColumnCacheMap& column_cache,
-                          RenderInfo* render_info) {
+                          ColumnCacheMap& column_cache) {
   auto timer = DEBUG_TIMER(__func__);
 
   if (co.device_type == ExecutorDeviceType::GPU) {
@@ -2452,13 +2450,11 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       group_by_and_aggregate.initQueryMemoryDescriptor(eo.allow_multifrag,
                                                        max_groups_buffer_entry_guess,
                                                        crt_min_byte_width,
-                                                       render_info,
                                                        eo.output_columnar_hint);
 
   if (query_mem_desc->getQueryDescriptionType() ==
           QueryDescriptionType::GroupByBaselineHash &&
-      !has_cardinality_estimation &&
-      (!render_info || !render_info->isPotentialInSituRender()) && !eo.just_explain) {
+      !has_cardinality_estimation && !eo.just_explain) {
     const auto col_range_info = group_by_and_aggregate.getColRangeInfo();
     throw CardinalityEstimationRequired(col_range_info.max - col_range_info.min);
   }

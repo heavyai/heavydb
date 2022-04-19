@@ -27,7 +27,6 @@
 #include "LLVMFunctionAttributesUtil.h"
 #include "MaxwellCodegenPatch.h"
 #include "OutputBufferInitialization.h"
-#include "QueryEngine/Rendering/RenderInfo.h"
 #include "TargetExprBuilder.h"
 
 #include "../CudaMgr/CudaMgr.h"
@@ -651,7 +650,6 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
     const bool allow_multifrag,
     const size_t max_groups_buffer_entry_count,
     const int8_t crt_min_byte_width,
-    RenderInfo* render_info,
     const bool output_columnar_hint) {
   const auto shard_count =
       device_type_ == ExecutorDeviceType::GPU
@@ -672,7 +670,6 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                                                    max_groups_buffer_entry_count,
                                                    crt_min_byte_width,
                                                    sort_on_gpu_hint,
-                                                   render_info,
                                                    must_use_baseline_sort,
                                                    output_columnar_hint);
     CHECK(query_mem_desc);
@@ -694,7 +691,6 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
     const size_t max_groups_buffer_entry_count,
     const int8_t crt_min_byte_width,
     const bool sort_on_gpu_hint,
-    RenderInfo* render_info,
     const bool must_use_baseline_sort,
     const bool output_columnar_hint) {
   const bool is_group_by{!ra_exe_unit_.groupby_exprs.empty()};
@@ -751,7 +747,6 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                                        sort_on_gpu_hint,
                                        shard_count,
                                        max_groups_buffer_entry_count,
-                                       render_info,
                                        count_distinct_descriptors,
                                        must_use_baseline_sort,
                                        output_columnar_hint,
@@ -769,7 +764,6 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                                        sort_on_gpu_hint,
                                        shard_count,
                                        max_groups_buffer_entry_count,
-                                       render_info,
                                        count_distinct_descriptors,
                                        must_use_baseline_sort,
                                        output_columnar_hint,

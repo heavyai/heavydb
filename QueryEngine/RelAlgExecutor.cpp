@@ -30,7 +30,6 @@
 #include "QueryEngine/RelAlgDagBuilder.h"
 #include "QueryEngine/RelAlgTranslator.h"
 #include "QueryEngine/RelAlgVisitor.h"
-#include "QueryEngine/Rendering/RenderInfo.h"
 #include "QueryEngine/ResultSetBuilder.h"
 #include "QueryEngine/RexVisitor.h"
 #include "QueryEngine/WindowContext.h"
@@ -73,12 +72,8 @@ bool is_projection(const RelAlgExecutionUnit& ra_exe_unit) {
   return ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front();
 }
 
-bool should_output_columnar(const RelAlgExecutionUnit& ra_exe_unit,
-                            const RenderInfo* render_info) {
+bool should_output_columnar(const RelAlgExecutionUnit& ra_exe_unit) {
   if (!is_projection(ra_exe_unit)) {
-    return false;
-  }
-  if (render_info && render_info->isPotentialInSituRender()) {
     return false;
   }
   if (!ra_exe_unit.sort_info.order_entries.empty()) {
@@ -223,15 +218,13 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
 
 ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
                                                    const ExecutionOptions& eo,
-                                                   const bool just_explain_plan,
-                                                   RenderInfo* render_info) {
+                                                   const bool just_explain_plan) {
   CHECK(query_dag_);
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(executeRelAlgQuery);
 
   auto run_query = [&](const CompilationOptions& co_in) {
-    auto execution_result =
-        executeRelAlgQueryNoRetry(co_in, eo, just_explain_plan, render_info);
+    auto execution_result = executeRelAlgQueryNoRetry(co_in, eo, just_explain_plan);
     if (post_execution_callback_) {
       VLOG(1) << "Running post execution callback.";
       (*post_execution_callback_)();
@@ -249,9 +242,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
   LOG(INFO) << "Query unable to run in GPU mode, retrying on CPU";
   auto co_cpu = CompilationOptions::makeCpuOnly(co);
 
-  if (render_info) {
-    render_info->setForceNonInSituData();
-  }
   return run_query(co_cpu);
 }
 
@@ -449,8 +439,7 @@ ResultSetPtr RelAlgExecutor::finishStreamingExecution() {
 
 ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptions& co,
                                                           const ExecutionOptions& eo,
-                                                          const bool just_explain_plan,
-                                                          RenderInfo* render_info) {
+                                                          const bool just_explain_plan) {
   INJECT_TIMER(executeRelAlgQueryNoRetry);
   auto timer = DEBUG_TIMER(__func__);
   auto timer_setup = DEBUG_TIMER("Query pre-execution steps");
@@ -475,8 +464,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
 
   auto validate_or_explain_query =
       just_explain_plan || eo.just_validate || eo.just_explain || eo.just_calcite_explain;
-  auto interruptable = !render_info && !query_session.empty() &&
-                       eo.allow_runtime_query_interrupt && !validate_or_explain_query;
+  auto interruptable = !query_session.empty() && eo.allow_runtime_query_interrupt &&
+                       !validate_or_explain_query;
   if (interruptable) {
     // if we reach here, the current query which was waiting an idle executor
     // within the dispatch queue is now scheduled to the specific executor
@@ -576,21 +565,10 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     return {rs, {}};
   }
 
-  if (render_info) {
-    // set render to be non-insitu in certain situations.
-    if (!render_info->disallow_in_situ_only_if_final_ED_is_aggregate &&
-        ed_seq.size() > 1) {
-      // old logic
-      // disallow if more than one ED
-      render_info->setInSituDataIfUnset(false);
-    }
-  }
-
   if (eo.find_push_down_candidates) {
     // this extra logic is mainly due to current limitations on multi-step queries
     // and/or subqueries.
-    return executeRelAlgQueryWithFilterPushDown(
-        ed_seq, co, eo, render_info, queue_time_ms);
+    return executeRelAlgQueryWithFilterPushDown(ed_seq, co, eo, queue_time_ms);
   }
   timer_setup.stop();
 
@@ -605,10 +583,10 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     RelAlgExecutor ra_executor(
         executor_, db_id_, schema_provider_, data_provider_, query_state_);
     RaExecutionSequence subquery_seq(subquery_ra);
-    auto result = ra_executor.executeRelAlgSeq(subquery_seq, co, eo, nullptr, 0);
+    auto result = ra_executor.executeRelAlgSeq(subquery_seq, co, eo, 0);
     subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
   }
-  return executeRelAlgSeq(ed_seq, co, eo, render_info, queue_time_ms);
+  return executeRelAlgSeq(ed_seq, co, eo, queue_time_ms);
 }
 
 AggregatedColRange RelAlgExecutor::computeColRangesCache() {
@@ -665,8 +643,7 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
     const RaExecutionSequence& seq,
     const size_t step_idx,
     const CompilationOptions& co,
-    const ExecutionOptions& eo,
-    RenderInfo* render_info) {
+    const ExecutionOptions& eo) {
   INJECT_TIMER(executeRelAlgQueryStep);
 
   auto exe_desc_ptr = seq.getDescriptor(step_idx);
@@ -709,21 +686,16 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
             eo.executor_type,
         };
         // Use subseq to avoid clearing existing temporary tables
-        return {
-            executeRelAlgSubSeq(temp_seq, std::make_pair(0, 1), co, eo_copy, nullptr, 0),
-            merge_type(source),
-            source->getId(),
-            false};
+        return {executeRelAlgSubSeq(temp_seq, std::make_pair(0, 1), co, eo_copy, 0),
+                merge_type(source),
+                source->getId(),
+                false};
       }
     }
   }
   QueryStepExecutionResult result{
-      executeRelAlgSubSeq(seq,
-                          std::make_pair(step_idx, step_idx + 1),
-                          co,
-                          eo,
-                          render_info,
-                          queue_time_ms_),
+      executeRelAlgSubSeq(
+          seq, std::make_pair(step_idx, step_idx + 1), co, eo, queue_time_ms_),
       merge_type(exe_desc_ptr->getBody()),
       exe_desc_ptr->getBody()->getId(),
       false};
@@ -754,7 +726,6 @@ void RelAlgExecutor::prepareLeafExecution(
 ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
                                                  const CompilationOptions& co,
                                                  const ExecutionOptions& eo,
-                                                 RenderInfo* render_info,
                                                  const int64_t queue_time_ms,
                                                  const bool with_existing_temp_tables) {
   INJECT_TIMER(executeRelAlgSeq);
@@ -790,14 +761,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
   // this join info needs to be maintained throughout an entire query runtime
   for (size_t i = 0; i < exec_desc_count; i++) {
     VLOG(1) << "Executing query step " << i;
-    // only render on the last step
     try {
-      executeRelAlgStep(seq,
-                        i,
-                        co,
-                        eo,
-                        (i == exec_desc_count - 1) ? render_info : nullptr,
-                        queue_time_ms);
+      executeRelAlgStep(seq, i, co, eo, queue_time_ms);
     } catch (const QueryMustRunOnCpu&) {
       // Do not allow per-step retry if flag is off or in distributed mode
       // TODO(todd): Determine if and when we can relax this restriction
@@ -808,12 +773,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
       }
       LOG(INFO) << "Retrying current query step " << i << " on CPU";
       const auto co_cpu = CompilationOptions::makeCpuOnly(co);
-      executeRelAlgStep(seq,
-                        i,
-                        co_cpu,
-                        eo,
-                        (i == exec_desc_count - 1) ? render_info : nullptr,
-                        queue_time_ms);
+      executeRelAlgStep(seq, i, co_cpu, eo, queue_time_ms);
     } catch (const NativeExecutionError&) {
       if (!g_enable_interop) {
         throw;
@@ -827,12 +787,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
         LOG(INFO) << "Also failed to run the query using interoperability";
         throw;
       }
-      executeRelAlgStep(seq,
-                        i,
-                        co,
-                        eo_extern,
-                        (i == exec_desc_count - 1) ? render_info : nullptr,
-                        queue_time_ms);
+      executeRelAlgStep(seq, i, co, eo_extern, queue_time_ms);
     }
   }
 
@@ -844,7 +799,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
     const std::pair<size_t, size_t> interval,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
-    RenderInfo* render_info,
     const int64_t queue_time_ms) {
   INJECT_TIMER(executeRelAlgSubSeq);
   executor_->setDatabaseId(db_id_);
@@ -853,14 +807,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
   decltype(left_deep_join_info_)().swap(left_deep_join_info_);
   time(&now_);
   for (size_t i = interval.first; i < interval.second; i++) {
-    // only render on the last step
     try {
-      executeRelAlgStep(seq,
-                        i,
-                        co,
-                        eo,
-                        (i == interval.second - 1) ? render_info : nullptr,
-                        queue_time_ms);
+      executeRelAlgStep(seq, i, co, eo, queue_time_ms);
     } catch (const QueryMustRunOnCpu&) {
       // Do not allow per-step retry if flag is off or in distributed mode
       // TODO(todd): Determine if and when we can relax this restriction
@@ -871,12 +819,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
       }
       LOG(INFO) << "Retrying current query step " << i << " on CPU";
       const auto co_cpu = CompilationOptions::makeCpuOnly(co);
-      executeRelAlgStep(seq,
-                        i,
-                        co_cpu,
-                        eo,
-                        (i == interval.second - 1) ? render_info : nullptr,
-                        queue_time_ms);
+      executeRelAlgStep(seq, i, co_cpu, eo, queue_time_ms);
     }
   }
 
@@ -887,7 +830,6 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
                                        const size_t step_idx,
                                        const CompilationOptions& co,
                                        const ExecutionOptions& eo,
-                                       RenderInfo* render_info,
                                        const int64_t queue_time_ms) {
   INJECT_TIMER(executeRelAlgStep);
   auto timer = DEBUG_TIMER(__func__);
@@ -924,7 +866,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
     exec_desc.setResult(executeCompound(
-        compound, hint_applied.first, hint_applied.second, render_info, queue_time_ms));
+        compound, hint_applied.first, hint_applied.second, queue_time_ms));
     VLOG(3) << "Returned from executeCompound(), addTemporaryTable("
             << static_cast<int>(-compound->getId()) << ", ...)"
             << " exec_desc.getResult().getDataPtr()->rowCount()="
@@ -965,7 +907,6 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
         executeProject(project,
                        co,
                        eo_work_unit.with_multifrag_result(multifrag_result),
-                       render_info,
                        queue_time_ms,
                        prev_count));
     if (exec_desc.getResult().isFilterPushDownEnabled()) {
@@ -977,21 +918,21 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   const auto aggregate = dynamic_cast<const RelAggregate*>(body);
   if (aggregate) {
     exec_desc.setResult(executeAggregate(
-        aggregate, hint_applied.first, hint_applied.second, render_info, queue_time_ms));
+        aggregate, hint_applied.first, hint_applied.second, queue_time_ms));
     addTemporaryTable(-aggregate->getId(), exec_desc.getResult().getDataPtr());
     return;
   }
   const auto filter = dynamic_cast<const RelFilter*>(body);
   if (filter) {
-    exec_desc.setResult(executeFilter(
-        filter, hint_applied.first, hint_applied.second, render_info, queue_time_ms));
+    exec_desc.setResult(
+        executeFilter(filter, hint_applied.first, hint_applied.second, queue_time_ms));
     addTemporaryTable(-filter->getId(), exec_desc.getResult().getDataPtr());
     return;
   }
   const auto sort = dynamic_cast<const RelSort*>(body);
   if (sort) {
-    exec_desc.setResult(executeSort(
-        sort, hint_applied.first, hint_applied.second, render_info, queue_time_ms));
+    exec_desc.setResult(
+        executeSort(sort, hint_applied.first, hint_applied.second, queue_time_ms));
     if (exec_desc.getResult().isFilterPushDownEnabled()) {
       return;
     }
@@ -1006,12 +947,8 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   }
   const auto logical_union = dynamic_cast<const RelLogicalUnion*>(body);
   if (logical_union) {
-    exec_desc.setResult(executeUnion(logical_union,
-                                     seq,
-                                     co,
-                                     eo_work_unit.with_preserve_order(true),
-                                     render_info,
-                                     queue_time_ms));
+    exec_desc.setResult(executeUnion(
+        logical_union, seq, co, eo_work_unit.with_preserve_order(true), queue_time_ms));
     addTemporaryTable(-logical_union->getId(), exec_desc.getResult().getDataPtr());
     return;
   }
@@ -1640,7 +1577,6 @@ std::vector<TargetMetaInfo> get_targets_meta(
 ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
                                                 const CompilationOptions& co,
                                                 const ExecutionOptions& eo,
-                                                RenderInfo* render_info,
                                                 const int64_t queue_time_ms) {
   auto timer = DEBUG_TIMER(__func__);
   const auto work_unit =
@@ -1651,25 +1587,18 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
                          compound->isAggregate(),
                          co_compound,
                          eo,
-                         render_info,
                          queue_time_ms);
 }
 
 ExecutionResult RelAlgExecutor::executeAggregate(const RelAggregate* aggregate,
                                                  const CompilationOptions& co,
                                                  const ExecutionOptions& eo,
-                                                 RenderInfo* render_info,
                                                  const int64_t queue_time_ms) {
   auto timer = DEBUG_TIMER(__func__);
   const auto work_unit = createAggregateWorkUnit(
       aggregate, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
-  return executeWorkUnit(work_unit,
-                         aggregate->getOutputMetainfo(),
-                         true,
-                         co,
-                         eo,
-                         render_info,
-                         queue_time_ms);
+  return executeWorkUnit(
+      work_unit, aggregate->getOutputMetainfo(), true, co, eo, queue_time_ms);
 }
 
 namespace {
@@ -1689,7 +1618,6 @@ ExecutionResult RelAlgExecutor::executeProject(
     const RelProject* project,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
-    RenderInfo* render_info,
     const int64_t queue_time_ms,
     const std::optional<size_t> previous_count) {
   auto timer = DEBUG_TIMER(__func__);
@@ -1711,7 +1639,6 @@ ExecutionResult RelAlgExecutor::executeProject(
                          false,
                          co_project,
                          eo,
-                         render_info,
                          queue_time_ms,
                          previous_count);
 }
@@ -1911,13 +1838,12 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
 ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
                                               const CompilationOptions& co,
                                               const ExecutionOptions& eo,
-                                              RenderInfo* render_info,
                                               const int64_t queue_time_ms) {
   auto timer = DEBUG_TIMER(__func__);
   const auto work_unit =
       createFilterWorkUnit(filter, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   return executeWorkUnit(
-      work_unit, filter->getOutputMetainfo(), false, co, eo, render_info, queue_time_ms);
+      work_unit, filter->getOutputMetainfo(), false, co, eo, queue_time_ms);
 }
 
 bool sameTypeInfo(std::vector<TargetMetaInfo> const& lhs,
@@ -1937,7 +1863,6 @@ ExecutionResult RelAlgExecutor::executeUnion(const RelLogicalUnion* logical_unio
                                              const RaExecutionSequence& seq,
                                              const CompilationOptions& co,
                                              const ExecutionOptions& eo,
-                                             RenderInfo* render_info,
                                              const int64_t queue_time_ms) {
   auto timer = DEBUG_TIMER(__func__);
   if (!logical_union->isAll()) {
@@ -1962,7 +1887,6 @@ ExecutionResult RelAlgExecutor::executeUnion(const RelLogicalUnion* logical_unio
                          false,
                          CompilationOptions::makeCpuOnly(co),
                          eo,
-                         render_info,
                          queue_time_ms);
 }
 
@@ -2052,7 +1976,6 @@ bool first_oe_is_desc(const std::list<Analyzer::OrderEntry>& order_entries) {
 ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
                                             const CompilationOptions& co,
                                             const ExecutionOptions& eo,
-                                            RenderInfo* render_info,
                                             const int64_t queue_time_ms) {
   auto timer = DEBUG_TIMER(__func__);
   check_sort_node_source_constraint(sort);
@@ -2067,7 +1990,6 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
                              &is_aggregate,
                              &eo,
                              &co,
-                             render_info,
                              queue_time_ms,
                              &groupby_exprs,
                              &is_desc]() -> ExecutionResult {
@@ -2098,11 +2020,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
                                          is_aggregate,
                                          co,
                                          eo_copy,
-                                         render_info,
                                          queue_time_ms);
-    if (render_info && render_info->isPotentialInSituRender()) {
-      return source_result;
-    }
     if (source_result.isFilterPushDownEnabled()) {
       return source_result;
     }
@@ -2317,19 +2235,6 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
   return ra_exe_unit;
 }
 
-void build_render_targets(RenderInfo& render_info,
-                          const std::vector<Analyzer::Expr*>& work_unit_target_exprs,
-                          const std::vector<TargetMetaInfo>& targets_meta) {
-  CHECK_EQ(work_unit_target_exprs.size(), targets_meta.size());
-  render_info.targets.clear();
-  for (size_t i = 0; i < targets_meta.size(); ++i) {
-    render_info.targets.emplace_back(std::make_shared<Analyzer::TargetEntry>(
-        targets_meta[i].get_resname(),
-        work_unit_target_exprs[i]->get_shared_ptr(),
-        false));
-  }
-}
-
 inline bool can_use_bump_allocator(const RelAlgExecutionUnit& ra_exe_unit,
                                    const CompilationOptions& co,
                                    const ExecutionOptions& eo) {
@@ -2345,7 +2250,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     const bool is_agg,
     const CompilationOptions& co_in,
     const ExecutionOptions& eo_in,
-    RenderInfo* render_info,
     const int64_t queue_time_ms,
     const std::optional<size_t> previous_count) {
   INJECT_TIMER(executeWorkUnit);
@@ -2368,9 +2272,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     if (!selected_filters.empty() || eo.just_calcite_explain) {
       return ExecutionResult(selected_filters, eo.find_push_down_candidates);
     }
-  }
-  if (render_info && render_info->isPotentialInSituRender()) {
-    co.allow_lazy_fetch = false;
   }
   const auto body = work_unit.body;
   CHECK(body);
@@ -2398,8 +2299,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     if (previous_count && !exe_unit_has_quals(ra_exe_unit)) {
       ra_exe_unit.scan_limit = *previous_count;
     } else {
-      // TODO(adb): enable bump allocator path for render queries
-      if (can_use_bump_allocator(ra_exe_unit, co, eo) && !render_info) {
+      if (can_use_bump_allocator(ra_exe_unit, co, eo)) {
         ra_exe_unit.scan_limit = 0;
         ra_exe_unit.use_bump_allocator = true;
       } else if (eo.executor_type == ::ExecutorType::Extern) {
@@ -2414,7 +2314,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   }
 
   if (g_columnar_large_projections) {
-    const auto prefer_columnar = should_output_columnar(ra_exe_unit, render_info);
+    const auto prefer_columnar = should_output_columnar(ra_exe_unit);
     if (prefer_columnar) {
       VLOG(1) << "Using columnar layout for projection as output size of "
               << ra_exe_unit.scan_limit << " rows exceeds threshold of "
@@ -2448,7 +2348,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                                          ra_exe_unit,
                                          co,
                                          eo,
-                                         render_info,
                                          has_cardinality_estimation,
                                          data_provider_,
                                          column_cache),
@@ -2464,7 +2363,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
           is_agg,
           co,
           eo,
-          render_info,
           e.wasMultifragKernelLaunch(),
           queue_time_ms);
     }
@@ -2506,19 +2404,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   }
 
   result.setQueueTime(queue_time_ms);
-  if (render_info) {
-    build_render_targets(*render_info, work_unit.exe_unit.target_exprs, targets_meta);
-    if (render_info->isPotentialInSituRender()) {
-      // return an empty result (with the same queue time, and zero render time)
-      return {std::make_shared<ResultSet>(
-                  queue_time_ms,
-                  0,
-                  executor_->row_set_mem_owner_
-                      ? executor_->row_set_mem_owner_->cloneStrDictDataOnly()
-                      : nullptr),
-              {}};
-    }
-  }
   return result;
 }
 
@@ -2545,7 +2430,6 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_u
                                    count_all_exe_unit,
                                    co,
                                    eo,
-                                   nullptr,
                                    false,
                                    data_provider_,
                                    column_cache);
@@ -2605,7 +2489,6 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
     const bool is_agg,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
-    RenderInfo* render_info,
     const bool was_multifrag_kernel_launch,
     const int64_t queue_time_ms) {
   // Disable the bump allocator
@@ -2662,7 +2545,6 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                            ra_exe_unit,
                                            co,
                                            eo_no_multifrag,
-                                           nullptr,
                                            true,
                                            data_provider_,
                                            column_cache),
@@ -2672,10 +2554,6 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
       handlePersistentError(e.getErrorCode());
       LOG(WARNING) << "Kernel per fragment query ran out of memory, retrying on CPU.";
     }
-  }
-
-  if (render_info) {
-    render_info->setForceNonInSituData();
   }
 
   const auto co_cpu = CompilationOptions::makeCpuOnly(co);
@@ -2700,7 +2578,6 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                            ra_exe_unit,
                                            co_cpu,
                                            eo_no_multifrag,
-                                           nullptr,
                                            true,
                                            data_provider_,
                                            column_cache),
@@ -2789,14 +2666,6 @@ ErrorInfo getErrorDescription(const int32_t error_code) {
       return {.code = "ERR_STRING_CONST_IN_RESULTSET",
               .description =
                   "NONE ENCODED String types are not supported as input result set."};
-    case Executor::ERR_OUT_OF_RENDER_MEM:
-      return {.code = "ERR_OUT_OF_RENDER_MEM",
-              .description =
-                  "Insufficient GPU memory for query results in render output buffer "
-                  "sized by render-mem-bytes"};
-    case Executor::ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY:
-      return {.code = "ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY",
-              .description = "Streaming-Top-N not supported in Render Query"};
     case Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES:
       return {.code = "ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES",
               .description = "Multiple distinct values encountered"};

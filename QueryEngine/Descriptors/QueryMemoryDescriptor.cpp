@@ -23,8 +23,6 @@
 #include "../UsedColumnsVisitor.h"
 #include "ColSlotContext.h"
 
-#include "QueryEngine/Rendering/RenderInfo.h"
-
 #include <boost/algorithm/cxx11/any_of.hpp>
 
 bool g_enable_smem_group_by{true};
@@ -222,7 +220,6 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
     const bool sort_on_gpu_hint,
     const size_t shard_count,
     const size_t max_groups_buffer_entry_count,
-    RenderInfo* render_info,
     const CountDistinctDescriptors count_distinct_descriptors,
     const bool must_use_baseline_sort,
     const bool output_columnar_hint,
@@ -263,7 +260,6 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
         count_distinct_descriptors,
         false,
         output_columnar_hint,
-        render_info && render_info->isPotentialInSituRender(),
         must_use_baseline_sort,
         /*use_streaming_top_n=*/false);
   }
@@ -280,9 +276,6 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
 
   switch (col_range_info.hash_type_) {
     case QueryDescriptionType::GroupByPerfectHash: {
-      if (render_info) {
-        render_info->setInSituDataIfUnset(false);
-      }
       // keyless hash: whether or not group columns are stored at the beginning of the
       // output buffer
       keyless_hash =
@@ -335,9 +328,6 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       break;
     }
     case QueryDescriptionType::GroupByBaselineHash: {
-      if (render_info) {
-        render_info->setInSituDataIfUnset(false);
-      }
       entry_count = shard_count
                         ? (max_groups_buffer_entry_count + shard_count - 1) / shard_count
                         : max_groups_buffer_entry_count;
@@ -382,26 +372,24 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       UNREACHABLE() << "Unknown query type";
   }
 
-  return std::make_unique<QueryMemoryDescriptor>(
-      executor,
-      ra_exe_unit,
-      query_infos,
-      allow_multifrag,
-      keyless_hash,
-      interleaved_bins_on_gpu,
-      idx_target_as_key,
-      actual_col_range_info,
-      col_slot_context,
-      group_col_widths,
-      group_col_compact_width,
-      target_groupby_indices,
-      entry_count,
-      count_distinct_descriptors,
-      sort_on_gpu_hint,
-      output_columnar,
-      render_info && render_info->isPotentialInSituRender(),
-      must_use_baseline_sort,
-      streaming_top_n);
+  return std::make_unique<QueryMemoryDescriptor>(executor,
+                                                 ra_exe_unit,
+                                                 query_infos,
+                                                 allow_multifrag,
+                                                 keyless_hash,
+                                                 interleaved_bins_on_gpu,
+                                                 idx_target_as_key,
+                                                 actual_col_range_info,
+                                                 col_slot_context,
+                                                 group_col_widths,
+                                                 group_col_compact_width,
+                                                 target_groupby_indices,
+                                                 entry_count,
+                                                 count_distinct_descriptors,
+                                                 sort_on_gpu_hint,
+                                                 output_columnar,
+                                                 must_use_baseline_sort,
+                                                 streaming_top_n);
 }
 
 namespace {
@@ -430,7 +418,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     const CountDistinctDescriptors count_distinct_descriptors,
     const bool sort_on_gpu_hint,
     const bool output_columnar_hint,
-    const bool render_output,
     const bool must_use_baseline_sort,
     const bool use_streaming_top_n)
     : executor_(executor)
@@ -449,7 +436,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , has_nulls_(col_range_info.has_nulls)
     , count_distinct_descriptors_(count_distinct_descriptors)
     , output_columnar_(false)
-    , render_output_(render_output)
     , must_use_baseline_sort_(must_use_baseline_sort)
     , is_table_function_(false)
     , use_streaming_top_n_(use_streaming_top_n)
@@ -518,7 +504,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor()
     , has_nulls_(false)
     , sort_on_gpu_(false)
     , output_columnar_(false)
-    , render_output_(false)
     , must_use_baseline_sort_(false)
     , is_table_function_(false)
     , use_streaming_top_n_(false)
@@ -542,7 +527,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
     , has_nulls_(false)
     , sort_on_gpu_(false)
     , output_columnar_(false)
-    , render_output_(false)
     , must_use_baseline_sort_(false)
     , is_table_function_(is_table_function)
     , use_streaming_top_n_(false)
@@ -568,7 +552,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const QueryDescriptionType query_de
     , has_nulls_(false)
     , sort_on_gpu_(false)
     , output_columnar_(false)
-    , render_output_(false)
     , must_use_baseline_sort_(false)
     , is_table_function_(false)
     , use_streaming_top_n_(false)
@@ -651,8 +634,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool output_columnar,
     const bool sort_on_gpu,
-    const size_t thread_idx,
-    RenderInfo* render_info) const {
+    const size_t thread_idx) const {
   auto timer = DEBUG_TIMER(__func__);
   if (frag_offsets.empty()) {
     return nullptr;
@@ -671,8 +653,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
                                 row_set_mem_owner,
                                 output_columnar,
                                 sort_on_gpu,
-                                thread_idx,
-                                render_info));
+                                thread_idx));
 }
 
 int8_t QueryMemoryDescriptor::pick_target_compact_width(
@@ -1061,7 +1042,7 @@ bool QueryMemoryDescriptor::blocksShareMemory() const {
   if (!countDescriptorsLogicallyEmpty(count_distinct_descriptors_)) {
     return true;
   }
-  if (executor_->isCPUOnly() || render_output_ ||
+  if (executor_->isCPUOnly() ||
       query_desc_type_ == QueryDescriptionType::GroupByBaselineHash ||
       query_desc_type_ == QueryDescriptionType::Projection ||
       (query_desc_type_ == QueryDescriptionType::GroupByPerfectHash &&
@@ -1073,7 +1054,7 @@ bool QueryMemoryDescriptor::blocksShareMemory() const {
 }
 
 bool QueryMemoryDescriptor::lazyInitGroups(const ExecutorDeviceType device_type) const {
-  return device_type == ExecutorDeviceType::GPU && !render_output_ &&
+  return device_type == ExecutorDeviceType::GPU &&
          countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
 }
 
@@ -1187,7 +1168,6 @@ std::string QueryMemoryDescriptor::toString() const {
   str += "\tSort on GPU: " + ::toString(sort_on_gpu_) + "\n";
   str += "\tUse Streaming Top N: " + ::toString(use_streaming_top_n_) + "\n";
   str += "\tOutput Columnar: " + ::toString(output_columnar_) + "\n";
-  str += "\tRender Output: " + ::toString(render_output_) + "\n";
   str += "\tUse Baseline Sort: " + ::toString(must_use_baseline_sort_) + "\n";
   str += "\tIs Table Function: " + ::toString(is_table_function_) + "\n";
   return str;

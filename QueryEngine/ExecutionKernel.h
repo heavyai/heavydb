@@ -81,7 +81,6 @@ class ExecutionKernel {
                   const QueryMemoryDescriptor& query_mem_desc,
                   const FragmentsList& frag_list,
                   const ExecutorDispatchMode kernel_dispatch_mode,
-                  RenderInfo* render_info,
                   const int64_t rowid_lookup_key)
       : ra_exe_unit_(ra_exe_unit)
       , chosen_device_type(chosen_device_type)
@@ -92,7 +91,6 @@ class ExecutionKernel {
       , query_mem_desc(query_mem_desc)
       , frag_list(frag_list)
       , kernel_dispatch_mode(kernel_dispatch_mode)
-      , render_info_(render_info)
       , rowid_lookup_key(rowid_lookup_key) {}
 
   void run(Executor* executor,
@@ -110,7 +108,6 @@ class ExecutionKernel {
   const QueryMemoryDescriptor& query_mem_desc;
   const FragmentsList frag_list;
   const ExecutorDispatchMode kernel_dispatch_mode;
-  RenderInfo* render_info_;
   const int64_t rowid_lookup_key;
 
   ResultSetPtr device_results_;

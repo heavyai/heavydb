@@ -172,13 +172,12 @@ ResultSet::ResultSet(const std::string& explanation)
     , cached_row_count_(uninitialized_cached_row_count) {}
 
 ResultSet::ResultSet(int64_t queue_time_ms,
-                     int64_t render_time_ms,
                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
     : device_type_(ExecutorDeviceType::CPU)
     , device_id_(-1)
     , fetched_so_far_(0)
     , row_set_mem_owner_(row_set_mem_owner)
-    , timings_(QueryExecutionTimings{queue_time_ms, render_time_ms, 0, 0})
+    , timings_(QueryExecutionTimings{queue_time_ms, 0, 0})
     , separate_varlen_storage_valid_(false)
     , just_explain_(true)
     , for_validation_only_(false)
@@ -517,10 +516,6 @@ void ResultSet::addCompilationQueueTime(const int64_t compilation_queue_time) {
 int64_t ResultSet::getQueueTime() const {
   return timings_.executor_queue_time + timings_.kernel_queue_time +
          timings_.compilation_queue_time;
-}
-
-int64_t ResultSet::getRenderTime() const {
-  return timings_.render_time;
 }
 
 void ResultSet::moveToBegin() const {

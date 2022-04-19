@@ -118,8 +118,7 @@ QueryPlanDagInfo getQueryInfoForDataRecyclerTest(const std::string& query_str) {
       Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
   executor->setSchemaProvider(getStorage());
   executor->setDatabaseId(TEST_DB_ID);
-  auto dag =
-      std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, getStorage(), nullptr);
+  auto dag = std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, getStorage());
   auto ra_executor = RelAlgExecutor(executor.get(),
                                     TEST_DB_ID,
                                     getStorage(),

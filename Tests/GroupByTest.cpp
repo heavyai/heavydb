@@ -118,7 +118,6 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
                                 ra_exe_unit,
                                 CompilationOptions::defaults(ExecutorDeviceType::CPU),
                                 ExecutionOptions::defaults(),
-                                nullptr,
                                 /*has_cardinality_estimation=*/false,
                                 getDataMgr()->getDataProvider(),
                                 column_cache)[0];
@@ -215,7 +214,6 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
                                 ra_exe_unit,
                                 CompilationOptions::defaults(ExecutorDeviceType::CPU),
                                 ExecutionOptions::defaults(),
-                                nullptr,
                                 /*has_cardinality_estimation=*/false,
                                 getDataMgr()->getDataProvider(),
                                 column_cache),
@@ -228,7 +226,6 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
                                 ra_exe_unit,
                                 CompilationOptions::defaults(ExecutorDeviceType::CPU),
                                 ExecutionOptions::defaults(),
-                                nullptr,
                                 /*has_cardinality_estimation=*/true,
                                 getDataMgr()->getDataProvider(),
                                 column_cache)[0];
@@ -295,7 +292,6 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
                                 ra_exe_unit,
                                 CompilationOptions::defaults(ExecutorDeviceType::CPU),
                                 ExecutionOptions::defaults(),
-                                nullptr,
                                 /*has_cardinality_estimation=*/false,
                                 getDataMgr()->getDataProvider(),
                                 column_cache)[0];

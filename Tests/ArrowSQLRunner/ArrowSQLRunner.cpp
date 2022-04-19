@@ -93,8 +93,7 @@ class ArrowSQLRunnerImpl {
   std::unique_ptr<RelAlgExecutor> makeRelAlgExecutor(const std::string& sql) {
     std::string query_ra = getSqlQueryRelAlg(sql);
 
-    auto dag =
-        std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, storage_, nullptr);
+    auto dag = std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, storage_);
 
     return std::make_unique<RelAlgExecutor>(executor_.get(),
                                             TEST_DB_ID,
@@ -110,7 +109,7 @@ class ArrowSQLRunnerImpl {
     ExecutionResult res;
 
     execution_time_ += measure<std::chrono::microseconds>::execution(
-        [&]() { res = ra_executor->executeRelAlgQuery(co, eo, false, nullptr); });
+        [&]() { res = ra_executor->executeRelAlgQuery(co, eo, false); });
 
     return res;
   }

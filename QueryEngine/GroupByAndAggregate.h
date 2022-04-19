@@ -44,8 +44,6 @@
 extern bool g_enable_smem_group_by;
 extern bool g_bigint_count;
 
-class RenderInfo;
-
 struct ColRangeInfo {
   QueryDescriptionType hash_type_;
   int64_t min;
@@ -87,7 +85,6 @@ class GroupByAndAggregate {
       const bool allow_multifrag,
       const size_t max_groups_buffer_entry_count,
       const int8_t crt_min_byte_width,
-      RenderInfo* render_info,
       const bool output_columnar_hint);
 
   std::unique_ptr<QueryMemoryDescriptor> initQueryMemoryDescriptorImpl(
@@ -95,7 +92,6 @@ class GroupByAndAggregate {
       const size_t max_groups_buffer_entry_count,
       const int8_t crt_min_byte_width,
       const bool sort_on_gpu_hint,
-      RenderInfo* render_info,
       const bool must_use_baseline_sort,
       const bool output_columnar_hint);
 

@@ -21,7 +21,6 @@
 #include "Execute.h"
 #include "GpuInitGroups.h"
 #include "InPlaceSort.h"
-#include "QueryEngine/Rendering/RenderInfo.h"
 #include "QueryMemoryInitializer.h"
 #include "RelAlgExecutionUnit.h"
 #include "ResultSet.h"
@@ -48,8 +47,7 @@ QueryExecutionContext::QueryExecutionContext(
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool output_columnar,
     const bool sort_on_gpu,
-    const size_t thread_idx,
-    RenderInfo* render_info)
+    const size_t thread_idx)
     : query_mem_desc_(query_mem_desc)
     , executor_(executor)
     , device_type_(device_type)
@@ -62,9 +60,6 @@ QueryExecutionContext::QueryExecutionContext(
         std::make_unique<CudaAllocator>(executor->getBufferProvider(), device_id);
   }
 
-  auto render_allocator_map = render_info && render_info->isPotentialInSituRender()
-                                  ? render_info->render_allocator_map_ptr.get()
-                                  : nullptr;
   query_buffers_ = std::make_unique<QueryMemoryInitializer>(ra_exe_unit,
                                                             query_mem_desc,
                                                             device_id,
@@ -76,8 +71,6 @@ QueryExecutionContext::QueryExecutionContext(
                                                             num_rows,
                                                             col_buffers,
                                                             frag_offsets,
-                                                            render_allocator_map,
-                                                            render_info,
                                                             row_set_mem_owner,
                                                             gpu_allocator_.get(),
                                                             thread_idx,
@@ -229,8 +222,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     int32_t* error_code,
     const uint32_t num_tables,
     const bool allow_runtime_interrupt,
-    const std::vector<int64_t>& join_hash_tables,
-    RenderAllocatorMap* render_allocator_map) {
+    const std::vector<int64_t>& join_hash_tables) {
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(lauchGpuCode);
 #ifdef HAVE_CUDA
@@ -239,11 +231,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   const auto& init_agg_vals = query_buffers_->init_agg_vals_;
 
   bool is_group_by{query_mem_desc_.isGroupBy()};
-
-  RenderAllocator* render_allocator = nullptr;
-  if (render_allocator_map) {
-    render_allocator = render_allocator_map->getRenderAllocator(device_id);
-  }
 
   CHECK(cu_functions);
   const auto native_code = cu_functions->getNativeCode(device_id);
@@ -262,7 +249,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   cuEventCreate(&start2, 0);
   cuEventCreate(&stop2, 0);
 
-  if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
+  if (g_enable_dynamic_watchdog || (allow_runtime_interrupt)) {
     cuEventRecord(start0, 0);
   }
 
@@ -270,7 +257,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     initializeDynamicWatchdog(native_code.second, device_id);
   }
 
-  if (allow_runtime_interrupt && !render_allocator) {
+  if (allow_runtime_interrupt) {
     initializeRuntimeInterrupter(native_code.second, device_id);
   }
 
@@ -299,7 +286,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   const auto err_desc = kernel_params[ERROR_CODE];
 
   if (is_group_by) {
-    CHECK(!(query_buffers_->getGroupByBuffersSize() == 0) || render_allocator);
+    CHECK(!(query_buffers_->getGroupByBuffersSize() == 0));
     bool can_sort_on_gpu = query_mem_desc_.sortOnGpu();
     auto gpu_group_by_buffers =
         query_buffers_->createAndInitializeGroupByBufferGpu(ra_exe_unit,
@@ -311,8 +298,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                                             grid_size_x,
                                                             executor_->warpSize(),
                                                             can_sort_on_gpu,
-                                                            output_columnar_,
-                                                            render_allocator);
+                                                            output_columnar_);
     const auto max_matched = static_cast<int32_t>(gpu_group_by_buffers.entry_count);
     buffer_provider->copyToDevice(reinterpret_cast<int8_t*>(kernel_params[MAX_MATCHED]),
                                   reinterpret_cast<const int8_t*>(&max_matched),
@@ -325,7 +311,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       param_ptrs.push_back(&param);
     }
 
-    if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
+    if (g_enable_dynamic_watchdog || allow_runtime_interrupt) {
       cuEventRecord(stop0, 0);
       cuEventSynchronize(stop0);
       float milliseconds0 = 0;
@@ -362,7 +348,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                      &param_ptrs[0],
                                      nullptr));
     }
-    if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
+    if (g_enable_dynamic_watchdog || allow_runtime_interrupt) {
       executor_->registerActiveModule(native_code.second, device_id);
       cuEventRecord(stop1, 0);
       cuEventSynchronize(stop1);
@@ -383,77 +369,74 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       return {};
     }
 
-    if (!render_allocator) {
-      if (query_mem_desc_.useStreamingTopN()) {
-        query_buffers_->applyStreamingTopNOffsetGpu(buffer_provider,
-                                                    query_mem_desc_,
-                                                    gpu_group_by_buffers,
-                                                    ra_exe_unit,
-                                                    total_thread_count,
-                                                    device_id);
-      } else {
-        if (use_speculative_top_n(ra_exe_unit, query_mem_desc_)) {
-          try {
-            inplace_sort_gpu(ra_exe_unit.sort_info.order_entries,
-                             query_mem_desc_,
-                             gpu_group_by_buffers,
-                             buffer_provider,
-                             device_id);
-          } catch (const std::bad_alloc&) {
-            throw SpeculativeTopNFailed("Failed during in-place GPU sort.");
-          }
+    if (query_mem_desc_.useStreamingTopN()) {
+      query_buffers_->applyStreamingTopNOffsetGpu(buffer_provider,
+                                                  query_mem_desc_,
+                                                  gpu_group_by_buffers,
+                                                  ra_exe_unit,
+                                                  total_thread_count,
+                                                  device_id);
+    } else {
+      if (use_speculative_top_n(ra_exe_unit, query_mem_desc_)) {
+        try {
+          inplace_sort_gpu(ra_exe_unit.sort_info.order_entries,
+                           query_mem_desc_,
+                           gpu_group_by_buffers,
+                           buffer_provider,
+                           device_id);
+        } catch (const std::bad_alloc&) {
+          throw SpeculativeTopNFailed("Failed during in-place GPU sort.");
         }
-        if (query_mem_desc_.getQueryDescriptionType() ==
-            QueryDescriptionType::Projection) {
-          if (query_mem_desc_.didOutputColumnar()) {
-            query_buffers_->compactProjectionBuffersGpu(
-                query_mem_desc_,
-                buffer_provider,
-                gpu_group_by_buffers,
-                get_num_allocated_rows_from_gpu(
-                    buffer_provider, kernel_params[TOTAL_MATCHED], device_id),
-                device_id);
-          } else {
-            size_t num_allocated_rows{0};
-            if (ra_exe_unit.use_bump_allocator) {
-              num_allocated_rows = get_num_allocated_rows_from_gpu(
-                  buffer_provider, kernel_params[TOTAL_MATCHED], device_id);
-              // First, check the error code. If we ran out of slots, don't copy data back
-              // into the ResultSet or update ResultSet entry count
-              if (*error_code < 0) {
-                return {};
-              }
-            }
-            query_buffers_->copyGroupByBuffersFromGpu(
-                buffer_provider,
-                query_mem_desc_,
-                ra_exe_unit.use_bump_allocator ? num_allocated_rows
-                                               : query_mem_desc_.getEntryCount(),
-                gpu_group_by_buffers,
-                &ra_exe_unit,
-                block_size_x,
-                grid_size_x,
-                device_id,
-                can_sort_on_gpu && query_mem_desc_.hasKeylessHash());
-            if (num_allocated_rows) {
-              CHECK(ra_exe_unit.use_bump_allocator);
-              CHECK(!query_buffers_->result_sets_.empty());
-              query_buffers_->result_sets_.front()->updateStorageEntryCount(
-                  num_allocated_rows);
+      }
+      if (query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection) {
+        if (query_mem_desc_.didOutputColumnar()) {
+          query_buffers_->compactProjectionBuffersGpu(
+              query_mem_desc_,
+              buffer_provider,
+              gpu_group_by_buffers,
+              get_num_allocated_rows_from_gpu(
+                  buffer_provider, kernel_params[TOTAL_MATCHED], device_id),
+              device_id);
+        } else {
+          size_t num_allocated_rows{0};
+          if (ra_exe_unit.use_bump_allocator) {
+            num_allocated_rows = get_num_allocated_rows_from_gpu(
+                buffer_provider, kernel_params[TOTAL_MATCHED], device_id);
+            // First, check the error code. If we ran out of slots, don't copy data back
+            // into the ResultSet or update ResultSet entry count
+            if (*error_code < 0) {
+              return {};
             }
           }
-        } else {
           query_buffers_->copyGroupByBuffersFromGpu(
               buffer_provider,
               query_mem_desc_,
-              query_mem_desc_.getEntryCount(),
+              ra_exe_unit.use_bump_allocator ? num_allocated_rows
+                                             : query_mem_desc_.getEntryCount(),
               gpu_group_by_buffers,
               &ra_exe_unit,
               block_size_x,
               grid_size_x,
               device_id,
               can_sort_on_gpu && query_mem_desc_.hasKeylessHash());
+          if (num_allocated_rows) {
+            CHECK(ra_exe_unit.use_bump_allocator);
+            CHECK(!query_buffers_->result_sets_.empty());
+            query_buffers_->result_sets_.front()->updateStorageEntryCount(
+                num_allocated_rows);
+          }
         }
+      } else {
+        query_buffers_->copyGroupByBuffersFromGpu(
+            buffer_provider,
+            query_mem_desc_,
+            query_mem_desc_.getEntryCount(),
+            gpu_group_by_buffers,
+            &ra_exe_unit,
+            block_size_x,
+            grid_size_x,
+            device_id,
+            can_sort_on_gpu && query_mem_desc_.hasKeylessHash());
       }
     }
   } else {
@@ -500,7 +483,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       param_ptrs.push_back(&param);
     }
 
-    if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
+    if (g_enable_dynamic_watchdog || (allow_runtime_interrupt)) {
       cuEventRecord(stop0, 0);
       cuEventSynchronize(stop0);
       float milliseconds0 = 0;
@@ -537,7 +520,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                      nullptr));
     }
 
-    if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
+    if (g_enable_dynamic_watchdog || allow_runtime_interrupt) {
       executor_->registerActiveModule(native_code.second, device_id);
       cuEventRecord(stop1, 0);
       cuEventSynchronize(stop1);
@@ -596,7 +579,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
         device_id);
   }
 
-  if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
+  if (g_enable_dynamic_watchdog || allow_runtime_interrupt) {
     cuEventRecord(stop2, 0);
     cuEventSynchronize(stop2);
     float milliseconds2 = 0;
