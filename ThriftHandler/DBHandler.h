@@ -340,7 +340,7 @@ class DBHandler : public HeavyIf {
   void sql_validate(TRowDescriptor& _return,
                     const TSessionId& session,
                     const std::string& query) override;
-
+  TExecuteMode::type getExecutionMode(const TSessionId& session);
   void set_execution_mode(const TSessionId& session,
                           const TExecuteMode::type mode) override;
   void render_vega(TRenderResult& _return,
@@ -1056,6 +1056,16 @@ class DBHandler : public HeavyIf {
   // this function passes the interrupt request to the DB executor
   void interruptQuery(const Catalog_Namespace::SessionInfo& session_info,
                       const std::string& target_session);
+
+  void alterSystemClear(const std::string& sesson_id,
+                        ExecutionResult& result,
+                        const std::string& cache_type,
+                        int64_t& execution_time_ms);
+
+  void alterSession(const std::string& sesson_id,
+                    ExecutionResult& result,
+                    const std::pair<std::string, std::string>& session_parameter,
+                    int64_t& execution_time_ms);
 
   // render group assignment
 

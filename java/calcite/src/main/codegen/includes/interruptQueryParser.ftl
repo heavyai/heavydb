@@ -62,3 +62,30 @@ SqlDdl SqlAlterSystemClear(Span s) :
         return new SqlAlterSystemClear(s.end(this), cacheType);
     }
 }
+
+/*
+ * Set a parameter into the session
+ *
+ * ALTER SESSION SET parameter='string' or
+ * ALTER SESSION SET parameter='numeric';
+ */
+SqlDdl SqlAlterSessionSet(Span s) :
+{
+    final SqlIdentifier sessionParameter;
+    final SqlNode parameterValue;
+}
+{
+    <ALTER>
+    <SESSION>
+    <SET>
+    sessionParameter = CompoundIdentifier()
+    <EQ>
+    (
+        parameterValue = StringLiteral()
+    |
+        parameterValue = NumericLiteral()
+    )
+    {
+        return new SqlAlterSessionSet(s.end(this), sessionParameter.toString(),parameterValue.toString().replaceAll("^\'|\'$", ""));
+    }
+}

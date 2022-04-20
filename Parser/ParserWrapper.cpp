@@ -141,7 +141,7 @@ ParserWrapper::ParserWrapper(std::string query_string) {
         // needs to execute in a different context from other DDL
         is_validate = true;
       } else if (ddl == "ALTER") {
-        boost::regex alter_system_regex{R"(ALTER\s+(SYSTEM).*)",
+        boost::regex alter_system_regex{R"(ALTER\s+(SYSTEM|SESSION).*)",
                                         boost::regex::extended | boost::regex::icase};
         if (boost::regex_match(query_string, alter_system_regex)) {
           query_type_ = QueryType::Unknown;

@@ -2895,6 +2895,20 @@ void DBHandler::get_databases(std::vector<TDBInfo>& dbinfos, const TSessionId& s
   }
 }
 
+TExecuteMode::type DBHandler::getExecutionMode(const TSessionId& session) {
+  auto executor = get_session_ptr(session)->get_executor_device_type();
+  switch (executor) {
+    case ExecutorDeviceType::CPU:
+      return TExecuteMode::CPU;
+    case ExecutorDeviceType::GPU:
+      return TExecuteMode::GPU;
+    default:
+      UNREACHABLE();
+  }
+  UNREACHABLE();
+  return TExecuteMode::CPU;
+}
+
 void DBHandler::set_execution_mode(const TSessionId& session,
                                    const TExecuteMode::type mode) {
   auto stdlog = STDLOG(get_session_ptr(session));
@@ -7737,6 +7751,43 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
   }
 }
 
+void DBHandler::alterSystemClear(const std::string& session_id,
+                                 ExecutionResult& result,
+                                 const std::string& cache_type,
+                                 int64_t& execution_time_ms) {
+  result = ExecutionResult();
+  if (to_upper(cache_type) == "CPU") {
+    execution_time_ms = measure<>::execution([&]() { clear_cpu_memory(session_id); });
+  } else if (to_upper(cache_type) == "GPU") {
+    execution_time_ms = measure<>::execution([&]() { clear_gpu_memory(session_id); });
+  } else if (to_upper(cache_type) == "RENDER") {
+    execution_time_ms = measure<>::execution([&]() { clearRenderMemory(session_id); });
+  } else {
+    throw std::runtime_error("Invalid cache type. Valid values are CPU,GPU or RENDER");
+  }
+}
+
+void DBHandler::alterSession(const std::string& session_id,
+                             ExecutionResult& result,
+                             const std::pair<std::string, std::string>& session_parameter,
+                             int64_t& execution_time_ms) {
+  result = ExecutionResult();
+  if (session_parameter.first == "EXECUTOR_DEVICE") {
+    TExecuteMode::type executorType;
+    if (session_parameter.second == "GPU") {
+      executorType = TExecuteMode::type::GPU;
+    } else if (session_parameter.second == "CPU") {
+      executorType = TExecuteMode::type::CPU;
+    } else {
+      throw std::runtime_error("Cannot set the " + session_parameter.first + " to " +
+                               session_parameter.second +
+                               ". Valid options are CPU and GPU");
+    }
+    execution_time_ms =
+        measure<>::execution([&]() { set_execution_mode(session_id, executorType); });
+  }
+}
+
 void DBHandler::executeDdl(
     TQueryResult& _return,
     const std::string& query_ra,
@@ -7748,7 +7799,7 @@ void DBHandler::executeDdl(
     interruptQuery(*session_ptr, executor.getTargetQuerySessionToKill());
   } else {
     ExecutionResult result;
-
+    int64_t execution_time_ms;
     if (executor.isShowQueries()) {
       // getQueries still requires Thrift cannot be nested into DdlCommandExecutor
       _return.execution_time_ms +=
@@ -7758,19 +7809,18 @@ void DBHandler::executeDdl(
       _return.execution_time_ms +=
           measure<>::execution([&]() { result = getUserSessions(session_ptr); });
     } else if (executor.isAlterSystemClear()) {
-      result = ExecutionResult();
-      if (executor.returnCacheType() == "CPU") {
-        _return.execution_time_ms += measure<>::execution(
-            [&]() { clear_cpu_memory(session_ptr->get_session_id()); });
-      } else if (executor.returnCacheType() == "GPU") {
-        _return.execution_time_ms += measure<>::execution(
-            [&]() { clear_gpu_memory(session_ptr->get_session_id()); });
-      } else if (executor.returnCacheType() == "RENDER") {
-        _return.execution_time_ms += measure<>::execution(
-            [&]() { clearRenderMemory(session_ptr->get_session_id()); });
-      } else {
-        throw std::runtime_error("Unknwon cache type. Cannot clear");
-      }
+      alterSystemClear(session_ptr->get_session_id(),
+                       result,
+                       executor.returnCacheType(),
+                       execution_time_ms);
+      _return.execution_time_ms += execution_time_ms;
+
+    } else if (executor.isAlterSessionSet()) {
+      alterSession(session_ptr->get_session_id(),
+                   result,
+                   executor.getSessionParameter(),
+                   execution_time_ms);
+      _return.execution_time_ms += execution_time_ms;
     } else {
       _return.execution_time_ms +=
           measure<>::execution([&]() { result = executor.execute(read_only_); });
@@ -7809,19 +7859,15 @@ void DBHandler::executeDdl(
       execution_time_ms =
           measure<>::execution([&]() { _return = getUserSessions(session_ptr); });
     } else if (executor.isAlterSystemClear()) {
-      _return = ExecutionResult();
-      if (executor.returnCacheType() == "CPU") {
-        execution_time_ms = measure<>::execution(
-            [&]() { clear_cpu_memory(session_ptr->get_session_id()); });
-      } else if (executor.returnCacheType() == "GPU") {
-        execution_time_ms = measure<>::execution(
-            [&]() { clear_gpu_memory(session_ptr->get_session_id()); });
-      } else if (executor.returnCacheType() == "RENDER") {
-        execution_time_ms = measure<>::execution(
-            [&]() { clearRenderMemory(session_ptr->get_session_id()); });
-      } else {
-        throw std::runtime_error("Unknwon cache type. Cannot clear");
-      }
+      alterSystemClear(session_ptr->get_session_id(),
+                       _return,
+                       executor.returnCacheType(),
+                       execution_time_ms);
+    } else if (executor.isAlterSessionSet()) {
+      alterSession(session_ptr->get_session_id(),
+                   _return,
+                   executor.getSessionParameter(),
+                   execution_time_ms);
     } else {
       execution_time_ms =
           measure<>::execution([&]() { _return = executor.execute(read_only_); });

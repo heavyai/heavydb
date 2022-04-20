@@ -16,7 +16,7 @@
 
 /**
  * @file AlterSystemTest.cpp
- * @brief Test suite for ALTER SYSTEM DDL commands
+ * @brief Test suite for ALTER SYSTEM and ALTER SESSION DDL commands
  */
 
 #include <gtest/gtest.h>
@@ -229,6 +229,46 @@ TEST_F(AlterSystemTest, CLEAR_MEMORY_NOSUPER) {
   }
 
   logout(user_session);
+}
+
+TEST_F(AlterSystemTest, SET_EXECUTOR_CPU) {
+  TSessionId user_session;
+  TQueryResult result;
+  login("user1", "HyperInteractive", "db1", user_session);
+  auto* handler = getDbHandlerAndSessionId().first;
+  if (handler->cpu_mode_only_ == false) {
+    sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='GPU'", user_session);
+    ASSERT_EQ(TExecuteMode::GPU, handler->getExecutionMode(user_session));
+  }
+  sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='CPU'", user_session);
+  ASSERT_EQ(TExecuteMode::CPU, handler->getExecutionMode(user_session));
+}
+
+TEST_F(AlterSystemTest, SET_EXECUTOR_GPU) {
+  TSessionId user_session;
+  TQueryResult result;
+  auto* handler = getDbHandlerAndSessionId().first;
+  if (handler->cpu_mode_only_ == false) {
+    login("user1", "HyperInteractive", "db1", user_session);
+    sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='CPU'", user_session);
+    ASSERT_EQ(TExecuteMode::CPU, handler->getExecutionMode(user_session));
+    sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='GPU'", user_session);
+    ASSERT_EQ(TExecuteMode::GPU, handler->getExecutionMode(user_session));
+  }
+}
+
+TEST_F(AlterSystemTest, SET_EXECUTOR_GPU_CPUONLY) {
+  TSessionId user_session;
+  TQueryResult result;
+  login("user1", "HyperInteractive", "db1", user_session);
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto actual_cpu_mode = handler->cpu_mode_only_;
+  handler->cpu_mode_only_ = true;
+  queryAndAssertException(
+      "ALTER SESSION SET EXECUTOR_DEVICE='GPU'",
+      "TException - service has thrown: TDBException(error_msg=Cannot switch to "
+      "GPU mode in a server started in CPU-only mode.)");
+  handler->cpu_mode_only_ = actual_cpu_mode;
 }
 
 int main(int argc, char** argv) {

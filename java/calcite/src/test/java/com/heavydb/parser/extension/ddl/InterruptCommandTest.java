@@ -51,4 +51,26 @@ public class InterruptCommandTest extends DDLTest {
             gson.fromJson(result.plan_result, JsonObject.class);
     assertEquals(expectedJsonObject, actualJsonObject);
   }
+
+  @Test
+  public void alterSessionSetExecutor_cpu() throws Exception {
+    final JsonObject expectedJsonObject =
+            getJsonFromFile("alter_session_set_executor_cpu.json");
+    final TPlanResult result =
+            processDdlCommand("ALTER SESSION SET EXECUTOR_DEVICE='CPU';");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
+
+  @Test
+  public void alterSessionSetExecutor_gpu() throws Exception {
+    final JsonObject expectedJsonObject =
+            getJsonFromFile("alter_session_set_executor_gpu.json");
+    final TPlanResult result =
+            processDdlCommand("ALTER SESSION SET EXECUTOR_DEVICE='GPU';");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
 }

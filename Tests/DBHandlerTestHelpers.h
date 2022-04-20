@@ -662,6 +662,10 @@ class DBHandlerTestFixture : public testing::Test {
     return true;
   }
 
+  TExecuteMode::type getExecuteMode() {
+    return db_handler_->getExecutionMode(session_id_);
+  }
+
   void resizeDispatchQueue(size_t queue_size) {
     db_handler_->resizeDispatchQueue(queue_size);
   }

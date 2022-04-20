@@ -472,6 +472,7 @@ data: {
         "YEARS"
         "ZONE"
         "SYSTEM"
+        "SESSION"
       ]
 
       # List of non-reserved keywords to add;
@@ -556,6 +557,7 @@ data: {
         "SqlCopyTable(span())"
         "SqlValidateSystem(span())"
         "SqlAlterSystemClear(span())"
+        "SqlAlterSessionSet(span())"
       ]
 
       # List of methods for parsing custom literals.

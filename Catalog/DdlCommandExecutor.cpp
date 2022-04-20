@@ -520,6 +520,36 @@ bool DdlCommandExecutor::isAlterSystemClear() {
   return (ddl_command_ == "ALTER_SYSTEM_CLEAR");
 }
 
+bool DdlCommandExecutor::isAlterSessionSet() {
+  return (ddl_command_ == "ALTER_SESSION_SET");
+}
+
+std::pair<std::string, std::string> DdlCommandExecutor::getSessionParameter() {
+  enum SetParameterType { String_t, Numeric_t };
+  static const std::unordered_map<std::string, SetParameterType>
+      session_set_parameters_map = {{"EXECUTOR_DEVICE", SetParameterType::String_t}};
+
+  auto& ddl_payload = extractPayload(*ddl_data_);
+  CHECK(ddl_payload.HasMember("sessionParameter"));
+  CHECK(ddl_payload["sessionParameter"].IsString());
+  CHECK(ddl_payload.HasMember("parameterValue"));
+  CHECK(ddl_payload["parameterValue"].IsString());
+  std::string parameter_name = to_upper(ddl_payload["sessionParameter"].GetString());
+  std::string parameter_value = ddl_payload["parameterValue"].GetString();
+
+  const auto param_it = session_set_parameters_map.find(parameter_name);
+  if (param_it == session_set_parameters_map.end()) {
+    throw std::runtime_error(parameter_name + " is not a settable session parameter.");
+  }
+  if (param_it->second == SetParameterType::Numeric_t) {
+    if (!std::regex_match(parameter_value, std::regex("[(-|+)|][0-9]+"))) {
+      throw std::runtime_error("The value of session parameter " + param_it->first +
+                               " should be a numeric.");
+    }
+  }
+  return {parameter_name, parameter_value};
+}
+
 std::string DdlCommandExecutor::returnCacheType() {
   CHECK(ddl_command_ == "ALTER_SYSTEM_CLEAR");
   auto& ddl_payload = extractPayload(*ddl_data_);

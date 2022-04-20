@@ -290,10 +290,14 @@ class DdlCommandExecutor {
   bool isAlterSystemClear();
 
   /**
+   * Returns true if this command is ALTER SESSION SET
+   */
+  bool isAlterSessionSet();
+
+  /**
    * Returns which kind of caches if to clear
    * ALTER SYSTEM CLEAR
    */
-
   std::string returnCacheType();
 
   /**
@@ -312,6 +316,11 @@ class DdlCommandExecutor {
    * Returns command string, can be useful for logging, conversion
    */
   const std::string commandStr();
+
+  /**
+   * Returns name and value of a Session parameter
+   */
+  std::pair<std::string, std::string> getSessionParameter();
 
  private:
   std::string ddl_statement_;                 // incoming ddl_statement
