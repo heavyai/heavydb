@@ -97,10 +97,6 @@ class QueryMemoryDescriptor {
                         const bool has_nulls,
                         const std::vector<int8_t>& group_col_widths);
 
-  // Serialization
-  QueryMemoryDescriptor(const TResultSetBufferDescriptor& thrift_query_memory_descriptor);
-  static TResultSetBufferDescriptor toThrift(const QueryMemoryDescriptor&);
-
   bool operator==(const QueryMemoryDescriptor& other) const;
 
   static std::unique_ptr<QueryMemoryDescriptor> init(

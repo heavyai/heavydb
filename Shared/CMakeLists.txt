@@ -31,9 +31,3 @@ target_link_libraries(Shared OSDependent Logger ${BLOSC_LIBRARIES}
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   target_link_libraries(Shared ${OPENSSL_LIBRARIES})
 endif()
-
-# Required by ThriftClient.cpp
-add_definitions("-DTHRIFT_PACKAGE_VERSION=\"${Thrift_VERSION}\"")
-add_library(ThriftClient ThriftClient.cpp "cleanup_global_namespace.h"
-                         "boost_stacktrace.hpp")
-target_link_libraries(ThriftClient ${Thrift_LIBRARIES} ${Boost_LIBRARIES})

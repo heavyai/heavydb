@@ -190,9 +190,6 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
 endif()
 
 find_package(fmt REQUIRED)
-#add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
-#target_link_libraries(ArrowIpcIntegrationTest gtest fmt::fmt ThriftClient Logger Shared ${CUDA_LIBRARIES} ${Arrow_LIBRARIES})
-#add_test(ArrowIpcIntegrationTest ArrowIpcIntegrationTest ${TEST_ARGS})
 
 #parse s3 credentials
 file(READ aws/s3client.conf S3CLIENT_CONF)

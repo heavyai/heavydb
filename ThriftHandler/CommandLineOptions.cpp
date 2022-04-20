@@ -35,8 +35,6 @@ const std::string CommandLineOptions::nodeIds_token = {"node_id"};
 
 extern std::string cluster_command_line_arg;
 
-bool g_enable_thrift_logs{false};
-
 extern bool g_use_table_device_offset;
 extern float g_fraction_code_cache_to_evict;
 extern bool g_cache_string_hash;
@@ -237,12 +235,6 @@ void CommandLineOptions::fillOptions() {
             ->implicit_value(true),
         "Cache string hash values in the string dictionary server during import.");
   }
-  help_desc.add_options()(
-      "enable-thrift-logs",
-      po::value<bool>(&g_enable_thrift_logs)
-          ->default_value(g_enable_thrift_logs)
-          ->implicit_value(true),
-      "Enable writing messages directly from thrift to stdout/stderr.");
   help_desc.add_options()("enable-watchdog",
                           po::value<bool>(&enable_watchdog)
                               ->default_value(enable_watchdog)
