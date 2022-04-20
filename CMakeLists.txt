@@ -123,6 +123,11 @@ else()
   add_definitions("-DBOOST_LOG_DYN_LINK")
 endif()
 
+option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
+if(BUILD_SHARED_LIBS)
+  add_definitions("-DENABLE_SHARED_LIBS")
+endif()
+
 # Required for macOS with Boost 1.71.0+
 # See https://gitlab.kitware.com/cmake/cmake/issues/19714
 if(APPLE)

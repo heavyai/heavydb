@@ -51,6 +51,11 @@
 #define ALWAYS_INLINE
 #elif defined(_WIN32)
 #define ALWAYS_INLINE __inline
+#elif defined(ENABLE_SHARED_LIBS)
+// Protected visibility allows to inline non-private functions which can
+// be overwritten at dynamic link time with the default visibility.
+#define ALWAYS_INLINE \
+  __attribute__((always_inline)) __attribute__((__visibility__("protected")))
 #else
 #define ALWAYS_INLINE __attribute__((always_inline))
 #endif
