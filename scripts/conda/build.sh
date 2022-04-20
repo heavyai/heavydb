@@ -99,7 +99,7 @@ if [[ "$RUN_TESTS" == "2" ]]
 then
     rm -rf tmp
     mkdir tmp
-    $PREFIX/bin/initdb tmp
+    touch tmp/DictPayload
     make sanity_tests
     rm -rf tmp
 else

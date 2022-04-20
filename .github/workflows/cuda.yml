@@ -32,7 +32,7 @@ jobs:
           BINPATH=$(cd ${{ env.PREFIX }}/bin; pwd -P)
           cd build
           mkdir -p tmp
-          $CONDA/bin/conda run -n omnisci-dev $BINPATH/initdb tmp
+          touch tmp/DictPayload
           $CONDA/bin/conda run -n omnisci-dev make sanity_tests
           rm -rf tmp
       - name: Upload packages
