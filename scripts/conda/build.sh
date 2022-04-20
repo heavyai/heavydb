@@ -97,11 +97,7 @@ make -j ${CPU_COUNT:-`nproc`} || make -j ${CPU_COUNT:-`nproc`} || make
 
 if [[ "$RUN_TESTS" == "2" ]]
 then
-    rm -rf tmp
-    mkdir tmp
-    touch tmp/DictPayload
     make sanity_tests
-    rm -rf tmp
 else
     echo "Skipping sanity tests"
 fi

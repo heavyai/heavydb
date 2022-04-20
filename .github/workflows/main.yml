@@ -24,11 +24,7 @@ jobs:
         run: |
           BINPATH=$(cd ${{ env.PREFIX }}/bin; pwd -P)
           cd build
-          rm -rf tmp
-          mkdir tmp
-          touch tmp/DictPayload
           $CONDA/bin/conda run -n omnisci-dev make sanity_tests
-          rm -rf tmp
       - name: Upload packages
         uses: actions/upload-artifact@v2
         with:
