@@ -19,6 +19,7 @@
 #include <stdexcept>
 #include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 #include "Fragmenter/FragmentDefaultValues.h"
+#include "LockMgr/LockMgr.h"
 #include "Parser/ParserWrapper.h"
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/Execute.h"
@@ -210,8 +211,9 @@ class DBEngineImpl : public DBEngine {
                                                        0,
                                                        0),
                            {}};
+    lockmgr::LockedTableDescriptors locks;
     db_handler_->sql_execute(
-        result, session_id, query_str, column_format, first_n, at_most_n);
+        result, session_id, query_str, column_format, first_n, at_most_n, locks);
     auto& targets = result.getTargetsMeta();
     std::vector<std::string> col_names;
     for (const auto target : targets) {
