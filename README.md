@@ -338,6 +338,14 @@ Note: Apache Arrow, while available in the AUR, requires a few custom build flag
 
 ### CUDA
 
+To install CUDA toolchain for the build use the following.
+
+    conda install -n omnisci-dev -c conda-forge cudatoolkit-dev arrow-cpp-proc=3.0.0=cuda
+
+Set cuda_compiler_version variable to enable CUDA build:
+
+    cuda_compiler_version=11 conda run -n omnisci-dev bash scripts/conda/build-install-all.sh
+
 CUDA and the NVIDIA drivers may be installed using the following.
 
     yay -S \
