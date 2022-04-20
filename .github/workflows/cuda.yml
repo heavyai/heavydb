@@ -31,8 +31,7 @@ jobs:
         run: |
           BINPATH=$(cd ${{ env.PREFIX }}/bin; pwd -P)
           cd build
-          LD_LIBRARY_PATH=$CONDA/envs/omnisci-dev/pkgs/cuda-toolkit/targets/x86_64-linux/lib/stubs
-          $CONDA/bin/conda run -n omnisci-dev make sanity_tests
+          LD_LIBRARY_PATH=$CONDA/envs/omnisci-dev/pkgs/cuda-toolkit/targets/x86_64-linux/lib/stubs $CONDA/bin/conda run -n omnisci-dev make sanity_tests
       - name: Upload packages
         uses: actions/upload-artifact@v2
         with:
