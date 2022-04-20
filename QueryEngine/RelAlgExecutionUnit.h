@@ -33,7 +33,6 @@
 #include "Shared/toString.h"
 #include "TableFunctions/TableFunctionOutputBufferSizeType.h"
 #include "TableFunctions/TableFunctionsFactory.h"
-#include "ThriftHandler/QueryState.h"
 
 #include <boost/graph/adjacency_list.hpp>
 
@@ -147,7 +146,6 @@ struct RelAlgExecutionUnit {
   bool use_bump_allocator{false};
   // empty if not a UNION, true if UNION ALL, false if regular UNION
   const std::optional<bool> union_all;
-  std::shared_ptr<const query_state::QueryState> query_state;
 };
 
 std::ostream& operator<<(std::ostream& os, const RelAlgExecutionUnit& ra_exe_unit);

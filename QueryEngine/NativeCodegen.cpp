@@ -73,6 +73,8 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #include "Shared/MathUtils.h"
 #include "StreamingTopN.h"
 
+#include <boost/filesystem.hpp>
+
 float g_fraction_code_cache_to_evict = 0.2;
 
 std::unique_ptr<llvm::Module> udf_gpu_module;

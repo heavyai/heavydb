@@ -28,7 +28,6 @@
 #include "QueryEngine/SpeculativeTopN.h"
 #include "QueryEngine/StreamingTopN.h"
 #include "Shared/scope.h"
-#include "ThriftHandler/QueryState.h"
 
 #include <ctime>
 #include <sstream>
@@ -51,15 +50,13 @@ class RelAlgExecutor {
   RelAlgExecutor(Executor* executor,
                  int db_id,
                  SchemaProviderPtr schema_provider,
-                 DataProvider* data_provider,
-                 std::shared_ptr<const query_state::QueryState> query_state = nullptr);
+                 DataProvider* data_provider);
 
   RelAlgExecutor(Executor* executor,
                  int db_id,
                  SchemaProviderPtr schema_provider,
                  DataProvider* data_provider,
-                 std::unique_ptr<RelAlgDag> query_dag,
-                 std::shared_ptr<const query_state::QueryState> query_state = nullptr);
+                 std::unique_ptr<RelAlgDag> query_dag);
 
   size_t getOuterFragmentCount(const CompilationOptions& co, const ExecutionOptions& eo);
 
@@ -352,7 +349,6 @@ class RelAlgExecutor {
   std::unique_ptr<RelAlgDag> query_dag_;
   std::shared_ptr<SchemaProvider> schema_provider_;
   DataProvider* data_provider_;
-  std::shared_ptr<const query_state::QueryState> query_state_;
   TemporaryTables temporary_tables_;
   time_t now_;
   std::unordered_map<unsigned, JoinQualsPerNestingLevel> left_deep_join_info_;

@@ -1394,8 +1394,7 @@ RelAlgExecutionUnit replace_scan_limit(const RelAlgExecutionUnit& ra_exe_unit_in
           ra_exe_unit_in.hash_table_build_plan_dag,
           ra_exe_unit_in.table_id_to_node_map,
           ra_exe_unit_in.use_bump_allocator,
-          ra_exe_unit_in.union_all,
-          ra_exe_unit_in.query_state};
+          ra_exe_unit_in.union_all};
 }
 
 }  // namespace
@@ -1746,25 +1745,6 @@ TemporaryTable Executor::executeWorkUnitImpl(
       }
     }
     if (is_agg) {
-      if (eo.allow_runtime_query_interrupt && ra_exe_unit.query_state) {
-        // update query status to let user know we are now in the reduction phase
-        std::string curRunningSession{""};
-        std::string curRunningQuerySubmittedTime{""};
-        bool sessionEnrolled = false;
-        {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
-          curRunningSession = getCurrentQuerySession(session_read_lock);
-          curRunningQuerySubmittedTime = ra_exe_unit.query_state->getQuerySubmittedTime();
-          sessionEnrolled =
-              checkIsQuerySessionEnrolled(curRunningSession, session_read_lock);
-        }
-        if (!curRunningSession.empty() && !curRunningQuerySubmittedTime.empty() &&
-            sessionEnrolled) {
-          updateQuerySessionStatus(curRunningSession,
-                                   curRunningQuerySubmittedTime,
-                                   QuerySessionStatus::RUNNING_REDUCTION);
-        }
-      }
       try {
         ExecutorDeviceType reduction_device_type = ExecutorDeviceType::CPU;
         if (!g_enable_heterogeneous_execution) {

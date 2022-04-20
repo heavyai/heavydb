@@ -38,22 +38,14 @@ class SessionInfo;
 
 }  // namespace Catalog_Namespace
 
-namespace query_state {
-
-class QueryState;
-
-}  // namespace query_state
-
 class RelAlgTranslator {
  public:
-  RelAlgTranslator(std::shared_ptr<const query_state::QueryState> q_s,
-                   const Executor* executor,
+  RelAlgTranslator(const Executor* executor,
                    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
                    const std::vector<JoinType>& join_types,
                    const time_t now,
                    const bool just_explain)
-      : query_state_(q_s)
-      , executor_(executor)
+      : executor_(executor)
       , input_to_nest_level_(input_to_nest_level)
       , join_types_(join_types)
       , now_(now)
@@ -145,7 +137,6 @@ class RelAlgTranslator {
 
   Analyzer::ExpressionPtrVector translateFunctionArgs(const RexFunctionOperator*) const;
 
-  std::shared_ptr<const query_state::QueryState> query_state_;
   const Executor* executor_;
   const std::unordered_map<const RelAlgNode*, int> input_to_nest_level_;
   const std::vector<JoinType> join_types_;

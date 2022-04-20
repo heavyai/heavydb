@@ -679,7 +679,7 @@ if(ENABLE_ODBC)
   add_subdirectory(ODBC)
 endif()
 
-set(MAPD_LIBRARIES OSDependent Shared SqliteConnector Analyzer QueryEngine QueryState DataMgr Logger)
+set(MAPD_LIBRARIES OSDependent Shared SqliteConnector Analyzer QueryEngine DataMgr Logger)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   if(ENABLE_DISTRIBUTED_5_0)

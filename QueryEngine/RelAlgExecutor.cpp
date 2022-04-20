@@ -38,7 +38,6 @@
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
-#include "ThriftHandler/QueryState.h"
 
 #include <boost/algorithm/cxx11/any_of.hpp>
 #include <boost/range/adaptor/reversed.hpp>
@@ -116,13 +115,11 @@ class RelLeftDeepTreeIdsCollector : public RelAlgVisitor<std::vector<unsigned>> 
 RelAlgExecutor::RelAlgExecutor(Executor* executor,
                                int db_id,
                                SchemaProviderPtr schema_provider,
-                               DataProvider* data_provider,
-                               std::shared_ptr<const query_state::QueryState> query_state)
+                               DataProvider* data_provider)
     : executor_(executor)
     , db_id_(db_id)
     , schema_provider_(schema_provider)
     , data_provider_(data_provider)
-    , query_state_(std::move(query_state))
     , now_(0)
     , queue_time_ms_(0) {}
 
@@ -130,14 +127,12 @@ RelAlgExecutor::RelAlgExecutor(Executor* executor,
                                int db_id,
                                SchemaProviderPtr schema_provider,
                                DataProvider* data_provider,
-                               std::unique_ptr<RelAlgDag> query_dag,
-                               std::shared_ptr<const query_state::QueryState> query_state)
+                               std::unique_ptr<RelAlgDag> query_dag)
     : executor_(executor)
     , db_id_(db_id)
     , query_dag_(std::move(query_dag))
     , schema_provider_(std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
     , data_provider_(data_provider)
-    , query_state_(std::move(query_state))
     , now_(0)
     , queue_time_ms_(0) {}
 
@@ -288,33 +283,6 @@ void RelAlgExecutor::prepareStreamingExecution(const CompilationOptions& co,
   if (g_enable_dynamic_watchdog) {
     executor_->resetInterrupt();
   }
-  std::string query_session{""};
-  std::string query_str{"N/A"};
-  std::string query_submitted_time{""};
-  // gather necessary query's info
-  if (query_state_ != nullptr && query_state_->getConstSessionInfo() != nullptr) {
-    query_session = query_state_->getConstSessionInfo()->get_session_id();
-    query_str = query_state_->getQueryStr();
-    query_submitted_time = query_state_->getQuerySubmittedTime();
-  }
-
-  auto interruptable = !query_session.empty() && eo.allow_runtime_query_interrupt;
-  if (interruptable) {
-    // if we reach here, the current query which was waiting an idle executor
-    // within the dispatch queue is now scheduled to the specific executor
-    // (not UNITARY_EXECUTOR)
-    // so we update the query session's status with the executor that takes this query
-    std::tie(query_session, query_str) = executor_->attachExecutorToQuerySession(
-        query_session, query_str, query_submitted_time);
-
-    // now the query is going to be executed, so update the status as
-    // "RUNNING_QUERY_KERNEL"
-    executor_->updateQuerySessionStatus(
-        query_session,
-        query_submitted_time,
-        QuerySessionStatus::QueryStatus::RUNNING_QUERY_KERNEL);
-  }
-
   // so it should do cleanup session info after finishing its execution
   //  ScopeGuard clearQuerySessionInfo =
   //      [this, &query_session, &interruptable, &query_submitted_time] {
@@ -328,24 +296,6 @@ void RelAlgExecutor::prepareStreamingExecution(const CompilationOptions& co,
   // now we acquire executor lock in here to make sure that this executor holds
   // all necessary resources and at the same time protect them against other executor
   auto lock = executor_->acquireExecuteMutex();
-
-  if (interruptable) {
-    // check whether this query session is "already" interrupted
-    // this case occurs when there is very short gap between being interrupted and
-    // taking the execute lock
-    // if so we have to remove "all" queries initiated by this session and we do in here
-    // without running the query
-    try {
-      executor_->checkPendingQueryStatus(query_session);
-    } catch (QueryExecutionError& e) {
-      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
-        throw std::runtime_error("Query execution has been interrupted (pending query)");
-      }
-      throw e;
-    } catch (...) {
-      throw std::runtime_error("Checking pending query status failed: unknown error");
-    }
-  }
 
   //  ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
   const auto col_descs = get_physical_inputs(&ra);
@@ -452,45 +402,9 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   if (g_enable_dynamic_watchdog) {
     executor_->resetInterrupt();
   }
-  std::string query_session{""};
-  std::string query_str{"N/A"};
-  std::string query_submitted_time{""};
-  // gather necessary query's info
-  if (query_state_ != nullptr && query_state_->getConstSessionInfo() != nullptr) {
-    query_session = query_state_->getConstSessionInfo()->get_session_id();
-    query_str = query_state_->getQueryStr();
-    query_submitted_time = query_state_->getQuerySubmittedTime();
-  }
 
   auto validate_or_explain_query =
       just_explain_plan || eo.just_validate || eo.just_explain || eo.just_calcite_explain;
-  auto interruptable = !query_session.empty() && eo.allow_runtime_query_interrupt &&
-                       !validate_or_explain_query;
-  if (interruptable) {
-    // if we reach here, the current query which was waiting an idle executor
-    // within the dispatch queue is now scheduled to the specific executor
-    // (not UNITARY_EXECUTOR)
-    // so we update the query session's status with the executor that takes this query
-    std::tie(query_session, query_str) = executor_->attachExecutorToQuerySession(
-        query_session, query_str, query_submitted_time);
-
-    // now the query is going to be executed, so update the status as
-    // "RUNNING_QUERY_KERNEL"
-    executor_->updateQuerySessionStatus(
-        query_session,
-        query_submitted_time,
-        QuerySessionStatus::QueryStatus::RUNNING_QUERY_KERNEL);
-  }
-
-  // so it should do cleanup session info after finishing its execution
-  ScopeGuard clearQuerySessionInfo =
-      [this, &query_session, &interruptable, &query_submitted_time] {
-        // reset the runtime query interrupt status after the end of query execution
-        if (interruptable) {
-          // cleanup running session's info
-          executor_->clearQuerySessionStatus(query_session, query_submitted_time);
-        }
-      };
 
   auto acquire_execute_mutex = [](Executor * executor) -> auto {
     auto ret = executor->acquireExecuteMutex();
@@ -499,24 +413,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   // now we acquire executor lock in here to make sure that this executor holds
   // all necessary resources and at the same time protect them against other executor
   auto lock = acquire_execute_mutex(executor_);
-
-  if (interruptable) {
-    // check whether this query session is "already" interrupted
-    // this case occurs when there is very short gap between being interrupted and
-    // taking the execute lock
-    // if so we have to remove "all" queries initiated by this session and we do in here
-    // without running the query
-    try {
-      executor_->checkPendingQueryStatus(query_session);
-    } catch (QueryExecutionError& e) {
-      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
-        throw std::runtime_error("Query execution has been interrupted (pending query)");
-      }
-      throw e;
-    } catch (...) {
-      throw std::runtime_error("Checking pending query status failed: unknown error");
-    }
-  }
 
   int64_t queue_time_ms = timer_stop(clock_begin);
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
@@ -580,8 +476,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
       continue;
     }
     // Execute the subquery and cache the result.
-    RelAlgExecutor ra_executor(
-        executor_, db_id_, schema_provider_, data_provider_, query_state_);
+    RelAlgExecutor ra_executor(executor_, db_id_, schema_provider_, data_provider_);
     RaExecutionSequence subquery_seq(subquery_ra);
     auto result = ra_executor.executeRelAlgSeq(subquery_seq, co, eo, 0);
     subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
@@ -2113,8 +2008,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
                               source_exe_unit.hash_table_build_plan_dag,
                               source_exe_unit.table_id_to_node_map,
                               source_exe_unit.use_bump_allocator,
-                              source_exe_unit.union_all,
-                              source_exe_unit.query_state},
+                              source_exe_unit.union_all},
           source,
           max_groups_buffer_entry_guess,
           std::move(source_work_unit.query_rewriter),
@@ -2908,7 +2802,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
     }
   }
   RelAlgTranslator translator(
-      query_state_, executor_, input_to_nest_level, join_types, now_, eo.just_explain);
+      executor_, input_to_nest_level, join_types, now_, eo.just_explain);
   const auto scalar_sources =
       translate_scalar_sources(compound, translator, eo.executor_type);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
@@ -2942,8 +2836,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                         {},
                                         {},
                                         false,
-                                        std::nullopt,
-                                        query_state_};
+                                        std::nullopt};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta = get_targets_meta(compound, rewritten_exe_unit.target_exprs);
@@ -2981,7 +2874,7 @@ std::shared_ptr<RelAlgTranslator> RelAlgExecutor::getRelAlgTranslator(
   const auto join_types = left_deep_join ? left_deep_join_types(left_deep_join)
                                          : std::vector<JoinType>{get_join_type(node)};
   return std::make_shared<RelAlgTranslator>(
-      query_state_, executor_, input_to_nest_level, join_types, now_, false);
+      executor_, input_to_nest_level, join_types, now_, false);
 }
 
 namespace {
@@ -3085,7 +2978,7 @@ std::list<std::shared_ptr<Analyzer::Expr>> RelAlgExecutor::makeJoinQuals(
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
     const bool just_explain) const {
   RelAlgTranslator translator(
-      query_state_, executor_, input_to_nest_level, join_types, now_, just_explain);
+      executor_, input_to_nest_level, join_types, now_, just_explain);
   const auto rex_condition_cf = rex_to_conjunctive_form(join_condition);
   std::list<std::shared_ptr<Analyzer::Expr>> join_condition_quals;
   for (const auto rex_condition_component : rex_condition_cf) {
@@ -3192,7 +3085,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
   const auto join_type = get_join_type(aggregate);
 
   RelAlgTranslator translator(
-      query_state_, executor_, input_to_nest_level, {join_type}, now_, just_explain);
+      executor_, input_to_nest_level, {join_type}, now_, just_explain);
   CHECK_EQ(size_t(1), aggregate->inputCount());
   const auto source = aggregate->getInput(0);
   const auto& in_metainfo = source->getOutputMetainfo();
@@ -3232,8 +3125,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
                               dag_info.hash_table_plan_dag,
                               dag_info.table_id_to_node_map,
                               false,
-                              std::nullopt,
-                              query_state_},
+                              std::nullopt},
           aggregate,
           g_default_max_groups_buffer_entry_guess,
           nullptr};
@@ -3281,7 +3173,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
   }
 
   RelAlgTranslator translator(
-      query_state_, executor_, input_to_nest_level, join_types, now_, eo.just_explain);
+      executor_, input_to_nest_level, join_types, now_, eo.just_explain);
   const auto target_exprs_owned =
       translate_scalar_sources(project, translator, eo.executor_type);
   target_exprs_owned_.insert(
@@ -3309,8 +3201,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
                                         {},
                                         {},
                                         false,
-                                        std::nullopt,
-                                        query_state_};
+                                        std::nullopt};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta = get_targets_meta(project, rewritten_exe_unit.target_exprs);
@@ -3382,8 +3273,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
     VLOG(3) << "  (" << pair.first->toString() << ", " << pair.second << ')';
   }
 
-  RelAlgTranslator translator(
-      query_state_, executor_, input_to_nest_level, {}, now_, eo.just_explain);
+  RelAlgTranslator translator(executor_, input_to_nest_level, {}, now_, eo.just_explain);
 
   auto const input_exprs_owned = target_exprs_for_union(logical_union->getInput(0));
   CHECK(!input_exprs_owned.empty())
@@ -3416,8 +3306,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
                                         {},
                                         {},
                                         false,
-                                        logical_union->isAll(),
-                                        query_state_};
+                                        logical_union->isAll()};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
 
@@ -3466,8 +3355,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   std::tie(input_descs, input_col_descs, std::ignore) =
       get_input_desc(rel_table_func, input_to_nest_level, {});
   const auto query_infos = get_table_infos(input_descs, executor_);
-  RelAlgTranslator translator(
-      query_state_, executor_, input_to_nest_level, {}, now_, just_explain);
+  RelAlgTranslator translator(executor_, input_to_nest_level, {}, now_, just_explain);
   const auto input_exprs_owned = translate_scalar_sources(
       rel_table_func, translator, ::ExecutorType::TableFunctions);
   target_exprs_owned_.insert(
@@ -3678,7 +3566,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
       get_input_desc(filter, input_to_nest_level, {});
   const auto join_type = get_join_type(filter);
   RelAlgTranslator translator(
-      query_state_, executor_, input_to_nest_level, {join_type}, now_, just_explain);
+      executor_, input_to_nest_level, {join_type}, now_, just_explain);
   std::tie(in_metainfo, target_exprs_owned) =
       get_inputs_meta(filter, translator, used_inputs_owned, input_to_nest_level);
   const auto filter_expr = translator.translateScalarRex(filter->getCondition());
