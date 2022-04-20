@@ -119,7 +119,7 @@ void ArrowStorage::fetchFixedLenData(const TableData& table,
   // For fixed size arrays we simply use elem type in arrow and therefore have to scale
   // to get a proper slice.
   size_t elems = elem_size / arrow_elem_size;
-  CHECK_GT(elems, 0);
+  CHECK_GT(elems, (size_t)0);
   auto data_to_fetch =
       table.col_data[col_idx]->Slice(static_cast<int64_t>(frag.offset * elems),
                                      static_cast<int64_t>(rows_to_fetch * elems));

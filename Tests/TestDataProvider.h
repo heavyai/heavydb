@@ -131,7 +131,7 @@ class TestDataProvider : public AbstractDataProvider {
 
   template <typename T>
   void addTableColumn(int table_id, size_t col_id, const std::vector<T>& vals) {
-    CHECK_EQ(tables_.count(table_id), 1);
+    CHECK_EQ(tables_.count(table_id), (size_t)1);
     tables_.at(table_id).addColFragment<T>(col_id, vals);
   }
 

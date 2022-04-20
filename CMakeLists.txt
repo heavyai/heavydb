@@ -125,7 +125,9 @@ endif()
 
 # Required for macOS with Boost 1.71.0+
 # See https://gitlab.kitware.com/cmake/cmake/issues/19714
-set(Boost_NO_BOOST_CMAKE 1)
+if(APPLE)
+  set(Boost_NO_BOOST_CMAKE 1)
+endif()
 
 option(ENABLE_JAVA_REMOTE_DEBUG "Enable Java Remote Debug" OFF )
 if(ENABLE_JAVA_REMOTE_DEBUG)
@@ -477,6 +479,11 @@ endif(MSVC)
 # Boost
 find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale iostreams REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
+message(STATUS "Boost version is ${Boost_VERSION}")
+# Avoid spurios deprecation warnings, see https://github.com/boostorg/graph/issues/228
+if (${Boost_VERSION} VERSION_GREATER_EQUAL 1.74 AND ${Boost_VERSION} VERSION_LESS 1.78)
+  add_definitions("-DBOOST_ALLOW_DEPRECATED_HEADERS -DBOOST_BIND_GLOBAL_PLACEHOLDERS")
+endif()
 
 # Allow explicit include statements to access third party headers directly.
 # Ex: raft/canonical/include/raft.h

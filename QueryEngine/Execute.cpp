@@ -1692,10 +1692,6 @@ TemporaryTable Executor::executeWorkUnitImpl(
     if (!eo.just_validate) {
       int available_cpus = cpu_threads();
       auto available_gpus = get_available_gpus(data_mgr_);
-      const auto gpu_count = get_context_count(
-          ExecutorDeviceType::GPU, available_cpus, available_gpus.size());
-      const auto cpu_count = get_context_count(
-          ExecutorDeviceType::CPU, available_cpus, available_gpus.size());
 
       try {
         std::vector<std::unique_ptr<ExecutionKernel>> kernels;
