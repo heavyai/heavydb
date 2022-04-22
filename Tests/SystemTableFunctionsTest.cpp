@@ -568,6 +568,125 @@ TEST_F(SystemTFs, GeoRasterize) {
   }
 }
 
+TEST_F(SystemTFs, FeatureSimilarity) {
+  const std::string primary_features_sql =
+      "CURSOR(SELECT CAST(k AS INT), cast(f AS INT), CAST(cnt AS INT) "
+      "FROM(VALUES (1, 100, 2), (1, 101, 3), (1, 102, 2), "
+      "(2, 100, 2), (2, 104, 3))  AS t(k, f, cnt))";
+  const std::string comparison_features_sql =
+      "CURSOR(SELECT cast(f AS INT), CAST(cnt AS INT) "
+      "FROM(VALUES (100, 2), (101, 3), (102, 2)) "
+      "AS t(f, cnt))";
+  constexpr double max_epsilon = 0.01;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    SKIP_NO_TBB();
+    // idf normalization off
+    {
+      const std::string tf_similarity_query =
+          "SELECT * FROM TABLE(tf_feature_similarity(primary_features => " +
+          primary_features_sql + ", comparison_features => " + comparison_features_sql +
+          ", use_tf_idf => false)) "
+          "ORDER BY class ASC;";
+      const auto rows = run_multiple_agg(tf_similarity_query, dt);
+      ASSERT_EQ(rows->rowCount(), 2UL);
+      ASSERT_EQ(rows->colCount(), 2UL);
+      const std::vector<int64_t> expected_classes = {1, 2};
+
+      // Second similarity score is (2^2) /
+      // ((sqrt(2^2 + 3^2) * sqrt(2^2 + 3^2 + 2^2)) ~= 0.26907
+      const std::vector<double> expected_similarity_scores = {1.0, 0.2690691176};
+      for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(expected_classes[row_idx], TestHelpers::v<int64_t>(crt_row[0]));
+        EXPECT_GE(TestHelpers::v<float>(crt_row[1]),
+                  expected_similarity_scores[row_idx] - max_epsilon);
+        EXPECT_LE(TestHelpers::v<float>(crt_row[1]),
+                  expected_similarity_scores[row_idx] + max_epsilon);
+      }
+    }
+    // idf normalization on
+    {
+      const std::string tf_similarity_query =
+          "SELECT * FROM TABLE(tf_feature_similarity(primary_features => " +
+          primary_features_sql + ", comparison_features => " + comparison_features_sql +
+          ", use_tf_idf => true)) "
+          "ORDER BY class ASC;";
+      const auto rows = run_multiple_agg(tf_similarity_query, dt);
+      ASSERT_EQ(rows->rowCount(), 2UL);
+      ASSERT_EQ(rows->colCount(), 2UL);
+      const std::vector<int64_t> expected_classes = {1, 2};
+      const std::vector<double> expected_similarity_scores = {1.0, 0.141971051693};
+      for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(expected_classes[row_idx], TestHelpers::v<int64_t>(crt_row[0]));
+        EXPECT_GE(TestHelpers::v<float>(crt_row[1]),
+                  expected_similarity_scores[row_idx] - max_epsilon);
+        EXPECT_LE(TestHelpers::v<float>(crt_row[1]),
+                  expected_similarity_scores[row_idx] + max_epsilon);
+      }
+    }
+  }
+}
+
+TEST_F(SystemTFs, FeatureSelfSimilarity) {
+  const std::string primary_features_sql =
+      "CURSOR(SELECT CAST(k AS INT), cast(f AS INT), CAST(cnt AS INT) "
+      "FROM(VALUES (1, 100, 2), (1, 101, 3), (1, 102, 2), "
+      "(2, 100, 2), (2, 104, 3))  AS t(k, f, cnt))";
+  constexpr double max_epsilon = 0.01;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    SKIP_NO_TBB();
+    // idf normalization off
+    {
+      const std::string tf_similarity_query =
+          "SELECT * FROM TABLE(tf_feature_self_similarity(primary_features => " +
+          primary_features_sql +
+          ", use_tf_idf => false)) "
+          "ORDER BY class1 ASC, class2 ASC;";
+      const auto rows = run_multiple_agg(tf_similarity_query, dt);
+      ASSERT_EQ(rows->rowCount(), 3UL);
+      ASSERT_EQ(rows->colCount(), 3UL);
+      const std::vector<int64_t> expected_class_1 = {1, 1, 2};
+      const std::vector<int64_t> expected_class_2 = {1, 2, 2};
+      const std::vector<double> expected_similarity_scores = {1.0, 0.26906913519, 1.0};
+      for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(expected_class_1[row_idx], TestHelpers::v<int64_t>(crt_row[0]));
+        EXPECT_EQ(expected_class_2[row_idx], TestHelpers::v<int64_t>(crt_row[1]));
+        EXPECT_GE(TestHelpers::v<float>(crt_row[2]),
+                  expected_similarity_scores[row_idx] - max_epsilon);
+        EXPECT_LE(TestHelpers::v<float>(crt_row[2]),
+                  expected_similarity_scores[row_idx] + max_epsilon);
+      }
+    }
+    // idf normalization on
+    {
+      const std::string tf_similarity_query =
+          "SELECT * FROM TABLE(tf_feature_self_similarity(primary_features => " +
+          primary_features_sql +
+          ", use_tf_idf => true)) "
+          "ORDER BY class1 ASC, class2 ASC;";
+      const auto rows = run_multiple_agg(tf_similarity_query, dt);
+      ASSERT_EQ(rows->rowCount(), 3UL);
+      ASSERT_EQ(rows->colCount(), 3UL);
+      const std::vector<int64_t> expected_class_1 = {1, 1, 2};
+      const std::vector<int64_t> expected_class_2 = {1, 2, 2};
+      const std::vector<double> expected_similarity_scores = {1.0, 0.14197105169, 1.0};
+      for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(expected_class_1[row_idx], TestHelpers::v<int64_t>(crt_row[0]));
+        EXPECT_EQ(expected_class_2[row_idx], TestHelpers::v<int64_t>(crt_row[1]));
+        EXPECT_GE(TestHelpers::v<float>(crt_row[2]),
+                  expected_similarity_scores[row_idx] - max_epsilon);
+        EXPECT_LE(TestHelpers::v<float>(crt_row[2]),
+                  expected_similarity_scores[row_idx] + max_epsilon);
+      }
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

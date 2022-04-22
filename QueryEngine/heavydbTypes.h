@@ -81,6 +81,7 @@ struct TextEncodingDict {
 #endif
 
   operator int32_t() const { return value; }
+
   TextEncodingDict operator=(const int32_t other) {
     value = other;
     return *this;
@@ -89,14 +90,23 @@ struct TextEncodingDict {
   DEVICE ALWAYS_INLINE bool operator==(const TextEncodingDict& other) const {
     return value == other.value;
   }
-  DEVICE ALWAYS_INLINE bool operator==(const int32_t other) const {
+
+  DEVICE ALWAYS_INLINE bool operator==(const int32_t& other) const {
+    return value == other;
+  }
+
+  DEVICE ALWAYS_INLINE bool operator==(const int64_t& other) const {
     return value == other;
   }
 
   DEVICE ALWAYS_INLINE bool operator!=(const TextEncodingDict& other) const {
     return !operator==(other);
   }
-  DEVICE ALWAYS_INLINE bool operator!=(const int32_t other) const {
+  DEVICE ALWAYS_INLINE bool operator!=(const int32_t& other) const {
+    return !operator==(other);
+  }
+
+  DEVICE ALWAYS_INLINE bool operator!=(const int64_t& other) const {
     return !operator==(other);
   }
 
@@ -104,7 +114,13 @@ struct TextEncodingDict {
     return value < other.value;
   }
 
-  DEVICE ALWAYS_INLINE bool operator<(const int32_t other) const { return value < other; }
+  DEVICE ALWAYS_INLINE bool operator<(const int32_t& other) const {
+    return value < other;
+  }
+
+  DEVICE ALWAYS_INLINE bool operator<(const int64_t& other) const {
+    return value < other;
+  }
 };
 
 template <>

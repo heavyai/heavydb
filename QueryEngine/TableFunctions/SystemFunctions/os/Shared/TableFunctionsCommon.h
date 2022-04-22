@@ -22,6 +22,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -31,6 +32,12 @@ template <typename T>
 NEVER_INLINE HOST std::pair<T, T> get_column_min_max(const Column<T>& col);
 
 NEVER_INLINE HOST std::pair<int32_t, int32_t> get_column_min_max(
+    const Column<TextEncodingDict>& col);
+
+template <typename T>
+NEVER_INLINE HOST std::tuple<T, T, bool> get_column_metadata(const Column<T>& col);
+
+NEVER_INLINE HOST std::tuple<int32_t, int32_t, bool> get_column_metadata(
     const Column<TextEncodingDict>& col);
 
 template <typename T1, typename T2>

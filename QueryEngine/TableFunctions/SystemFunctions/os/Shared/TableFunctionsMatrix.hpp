@@ -27,6 +27,8 @@
 
 #include "QueryEngine/TableFunctions/SystemFunctions/os/Shared/TableFunctionsCommon.h"
 
+namespace TableFunctions_Namespace {
+
 struct ColumnMetadata {
   int64_t min;
   int64_t max;
@@ -65,20 +67,11 @@ struct KeyMetadata {
 template <typename T>
 inline ColumnMetadata get_integer_column_metadata(const Column<T>& col) {
   ColumnMetadata column_metadata;
-  const int64_t num_rows = col.size();
-  for (int64_t r = 0; r < num_rows; ++r) {
-    if (col.isNull(r)) {
-      column_metadata.has_nulls = true;
-      column_metadata.null_sentinel = col[r];
-      continue;
-    }
-    if (col[r] < column_metadata.min) {
-      column_metadata.min = col[r];
-    }
-    if (col[r] > column_metadata.max) {
-      column_metadata.max = col[r];
-    }
-  }
+  auto [col_min, col_max, has_nulls] = get_column_metadata(col);
+  column_metadata.min = col_min;
+  column_metadata.max = col_max;
+  column_metadata.has_nulls = has_nulls;
+  column_metadata.null_sentinel = inline_null_value<T>();
   return column_metadata;
 }
 
@@ -95,6 +88,27 @@ inline uint64_t map_to_compressed_range(
   uint64_t val = 0;
   const uint64_t num_keys = keys.numCols();
   for (uint64_t k = 0; k < num_keys; ++k) {
+    val +=
+        composite_key_metadata.keys_metadata[k].column_metadata.map_to_compressed_range(
+            keys[k][idx]) *
+        composite_key_metadata.keys_metadata[k].composite_prefix_range;
+  }
+  return val;
+}
+
+template <typename K>
+inline uint64_t map_to_compressed_range_separate_nulls(
+    const ColumnList<K>& keys,
+    const CompositeKeyMetadata& composite_key_metadata,
+    const int64_t idx,
+    const uint64_t separated_null_val) {
+  uint64_t val = 0;
+  const uint64_t num_keys = keys.numCols();
+  for (uint64_t k = 0; k < num_keys; ++k) {
+    const K key = keys[k][idx];
+    if (key == composite_key_metadata.keys_metadata[k].column_metadata.null_sentinel) {
+      return separated_null_val;
+    }
     val +=
         composite_key_metadata.keys_metadata[k].column_metadata.map_to_compressed_range(
             keys[k][idx]) *
@@ -264,11 +278,12 @@ SparseVector<U, S> pivot_table_to_sparse_vector(
   std::vector<uint64_t> sort_permutation(num_rows);
 
   const size_t loop_grain_size{4096};
+  const U separated_null_val = std::numeric_limits<U>::max();
   tbb::parallel_for(tbb::blocked_range<uint64_t>(0, num_rows, loop_grain_size),
                     [&](const tbb::blocked_range<uint64_t>& i) {
                       for (uint64_t r = i.begin(); r != i.end(); ++r) {
-                        compressed_keys[r] =
-                            map_to_compressed_range(key_col, key_metadata, r);
+                        compressed_keys[r] = map_to_compressed_range_separate_nulls(
+                            key_col, key_metadata, r, separated_null_val);
                         sort_permutation[r] = r;
                       }
                     });
@@ -279,8 +294,19 @@ SparseVector<U, S> pivot_table_to_sparse_vector(
                        return (compressed_keys[a] < compressed_keys[b]);
                      });
 
-  SparseVector<U, S> sparse_vector(num_rows);
-  tbb::parallel_for(tbb::blocked_range<uint64_t>(0, num_rows, loop_grain_size),
+  // Nulls will always be at end of permuted keys since they were mapped to max uint64_t
+  uint64_t num_nulls = 0;
+  for (; num_nulls < num_rows; num_nulls++) {
+    if (compressed_keys[sort_permutation[num_rows - num_nulls - 1]] !=
+        separated_null_val) {
+      break;
+    }
+  }
+
+  const uint64_t num_non_null_rows = num_rows - num_nulls;
+
+  SparseVector<U, S> sparse_vector(num_non_null_rows);
+  tbb::parallel_for(tbb::blocked_range<uint64_t>(0, num_non_null_rows, loop_grain_size),
                     [&](const tbb::blocked_range<uint64_t>& i) {
                       const uint64_t i_end{i.end()};
                       for (uint64_t r = i.begin(); r != i_end; ++r) {
@@ -292,6 +318,24 @@ SparseVector<U, S> pivot_table_to_sparse_vector(
 
   return sparse_vector;
 }
+
+// template <typename K, typename F, typename M, typename U, typename S>
+// SparseMatrixCsc<U, S> pivot_table_to_sparse_csc_matrix(
+//    const Column<K>& primary_key_col,
+//    const ColumnList<F>& secondary_key_cols,
+//    const Column<M>& metric_col,
+//    const CompositeKeyMetadata& primary_key_metadata,
+//    const CompositeKeyMetadata& secondary_key_metadata) {
+//  ColumnList<K> primary_key_cols;
+//  std::vector<int8_t*> ptrs (1);
+//  ptrs[0] = reinterpret_cast<int8_t*>(primary_key_col.ptr_);
+//  primary_key_cols.ptrs_ = ptrs.data();
+//
+//  primary_key_cols.num_cols_ = 1;
+//  primary_key_cols.size_ = primary_key_col.size_;
+//  return pivot_table_to_sparse_csc_matrix(primary_key_cols, secondary_key_cols,
+//  metric_col, primary_key_metadata, secondary_key_metadata);
+//}
 
 template <typename K, typename F, typename M, typename U, typename S>
 SparseMatrixCsc<U, S> pivot_table_to_sparse_csc_matrix(
@@ -536,5 +580,7 @@ DenseMatrix<S> multiply_matrix_by_transpose(const SparseMatrixCsc<U, S>& sparse_
   return similarity_matrix;
 }
 
-#endif  // #ifndef __CUDACC__
+}  // namespace TableFunctions_Namespace
+
 #endif  // #ifdef HAVE_TBB
+#endif  // #ifndef __CUDACC__
