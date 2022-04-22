@@ -822,7 +822,6 @@ void add_placeholder_metadata(
     chunk_metadata_map[chunk_key] = get_placeholder_metadata(column, num_elements);
   }
 }
-
 }  // namespace
 
 /**
@@ -846,11 +845,12 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
   CHECK(catalog);
   auto& parser = getFileBufferParser();
+  const auto file_path_options = getFilePathOptions(foreign_table_);
   auto& server_options = foreign_table_->foreign_server->options;
   if (foreign_table_->isAppendMode() && file_reader_ != nullptr) {
     parser.validateFiles(file_reader_.get(), foreign_table_);
     if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
-      file_reader_->checkForMoreRows(append_start_offset_);
+      file_reader_->checkForMoreRows(append_start_offset_, file_path_options);
     } else {
       UNREACHABLE();
     }
@@ -860,13 +860,7 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
     CHECK(fragment_id_to_file_regions_map_.empty());
     if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
       file_reader_ = std::make_unique<LocalMultiFileReader>(
-          file_path,
-          copy_params,
-          foreign_table_->getOption(
-              AbstractFileStorageDataWrapper::REGEX_PATH_FILTER_KEY),
-          foreign_table_->getOption(
-              AbstractFileStorageDataWrapper::FILE_SORT_ORDER_BY_KEY),
-          foreign_table_->getOption(AbstractFileStorageDataWrapper::FILE_SORT_REGEX_KEY));
+          file_path, copy_params, file_path_options);
     } else {
       UNREACHABLE();
     }

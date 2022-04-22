@@ -20,6 +20,8 @@ class AbstractFileStorageDataWrapper : public ForeignDataWrapper {
 
   const std::set<std::string_view>& getSupportedUserMappingOptions() const override;
 
+  static shared::FilePathOptions getFilePathOptions(const ForeignTable* foreign_table);
+
   inline static const std::string STORAGE_TYPE_KEY = "STORAGE_TYPE";
   inline static const std::string BASE_PATH_KEY = "BASE_PATH";
   inline static const std::string FILE_PATH_KEY = "FILE_PATH";

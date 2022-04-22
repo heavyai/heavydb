@@ -85,7 +85,7 @@ void S3Archive::init_for_read() {
         // Importer::import_compressed or else, depending on copy_params (eg. .is_parquet)
         auto object_list = list_objects_outcome.GetResult().GetContents();
         object_list = foreign_storage::s3_objects_filter_sort_files(
-            object_list, regex_path_filter, file_sort_order_by, file_sort_regex);
+            object_list, {regex_path_filter, file_sort_order_by, file_sort_regex});
 
         if (0 == object_list.size()) {
           if (objkeys.empty()) {

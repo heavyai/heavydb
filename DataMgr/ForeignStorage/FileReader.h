@@ -25,6 +25,10 @@
 #include "Catalog/ForeignTable.h"
 #include "ImportExport/CopyParams.h"
 
+namespace shared {
+struct FilePathOptions;
+}
+
 namespace foreign_storage {
 
 struct ForeignServer;
@@ -87,6 +91,7 @@ class FileReader {
    * @param user_mapping - only needed for S3 backed files
    */
   virtual void checkForMoreRows(size_t file_offset,
+                                const shared::FilePathOptions& options,
                                 const ForeignServer* server_options = nullptr,
                                 const UserMapping* user_mapping = nullptr) {
     throw std::runtime_error{"APPEND mode not yet supported for this table."};
@@ -176,7 +181,9 @@ class SingleTextFileReader : public SingleFileReader {
   size_t getRemainingSize() override { return data_size_ - total_bytes_read_; }
 
   bool isRemainingSizeKnown() override { return true; };
+
   void checkForMoreRows(size_t file_offset,
+                        const shared::FilePathOptions& options,
                         const ForeignServer* server_options,
                         const UserMapping* user_mapping) override;
 
@@ -278,6 +285,7 @@ class CompressedFileReader : public SingleFileReader {
   void resetArchive();
 
   void checkForMoreRows(size_t file_offset,
+                        const shared::FilePathOptions& options,
                         const ForeignServer* server_options,
                         const UserMapping* user_mapping) override;
 
@@ -372,15 +380,14 @@ class LocalMultiFileReader : public MultiFileReader {
  public:
   LocalMultiFileReader(const std::string& file_path,
                        const import_export::CopyParams& copy_params,
-                       const std::optional<std::string>& regex_path_filter,
-                       const std::optional<std::string>& file_sort_order_by,
-                       const std::optional<std::string>& file_sort_regex);
+                       const shared::FilePathOptions& options);
 
   LocalMultiFileReader(const std::string& file_path,
                        const import_export::CopyParams& copy_params,
                        const rapidjson::Value& value);
 
   void checkForMoreRows(size_t file_offset,
+                        const shared::FilePathOptions& options,
                         const ForeignServer* server_options,
                         const UserMapping* user_mapping) override;
 

@@ -91,22 +91,22 @@ inline void throw_no_filter_match(const std::string& pattern) {
                                     "\"."};
 }
 
-void validate_sort_options(const std::optional<std::string>& sort_by,
-                           const std::optional<std::string>& sort_regex);
+struct FilePathOptions {
+  std::optional<std::string> filter_regex{std::nullopt};
+  std::optional<std::string> sort_by{std::nullopt};
+  std::optional<std::string> sort_regex{std::nullopt};
+};
 
-std::vector<std::string> local_glob_filter_sort_files(
-    const std::string& file_path,
-    const std::optional<std::string>& filter_regex,
-    const std::optional<std::string>& sort_by,
-    const std::optional<std::string>& sort_regex,
-    const bool recurse = true);
+void validate_sort_options(const FilePathOptions& options);
+
+std::vector<std::string> local_glob_filter_sort_files(const std::string& file_path,
+                                                      const FilePathOptions& options,
+                                                      const bool recurse = true);
 
 #ifdef HAVE_AWS_S3
 std::vector<arrow::fs::FileInfo> arrow_fs_filter_sort_files(
     const std::vector<arrow::fs::FileInfo>& file_paths,
-    const std::optional<std::string>& filter_regex,
-    const std::optional<std::string>& sort_by,
-    const std::optional<std::string>& sort_regex);
+    const FilePathOptions& options);
 #endif  // HAVE_AWS_S3
 
 const std::function<bool(const std::string&, const std::string&)>
@@ -146,9 +146,8 @@ const std::function<bool(const std::string&, const std::string&)>
 template <class T>
 class FileOrderBase {
  public:
-  inline FileOrderBase(const std::optional<std::string>& sort_regex,
-                       const std::optional<std::string>& sort_by)
-      : sort_regex_(sort_regex), sort_by_(sort_by) {}
+  inline FileOrderBase(const FilePathOptions& options)
+      : sort_regex_(options.sort_regex), sort_by_(options.sort_by) {}
 
   virtual inline std::string concatCaptureGroups(const std::string& file_name) const {
     CHECK(sort_regex_.has_value());
@@ -178,9 +177,8 @@ class FileOrderBase {
 
 class FileOrderLocal : public FileOrderBase<LocalFileComparator> {
  public:
-  FileOrderLocal(const std::optional<std::string>& sort_regex,
-                 const std::optional<std::string>& sort_by)
-      : FileOrderBase<LocalFileComparator>(sort_regex, sort_by) {}
+  FileOrderLocal(const FilePathOptions& options)
+      : FileOrderBase<LocalFileComparator>(options) {}
 
   inline LocalFileComparator getFileComparator() override {
     auto comparator_pair = comparator_map_.find(getSortBy());
@@ -217,9 +215,8 @@ class FileOrderLocal : public FileOrderBase<LocalFileComparator> {
 
 class FileOrderArrow : public FileOrderBase<ArrowFsComparator> {
  public:
-  FileOrderArrow(const std::optional<std::string>& sort_regex,
-                 const std::optional<std::string>& sort_by)
-      : FileOrderBase<ArrowFsComparator>(sort_regex, sort_by) {}
+  FileOrderArrow(const FilePathOptions& options)
+      : FileOrderBase<ArrowFsComparator>(options) {}
 
   inline ArrowFsComparator getFileComparator() override {
     auto comparator_pair = comparator_map_.find(getSortBy());

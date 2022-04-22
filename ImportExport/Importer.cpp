@@ -3649,12 +3649,11 @@ ImportStatus DataStreamSink::archivePlumber(
 
   std::vector<std::string> file_paths;
   try {
-    shared::validate_sort_options(copy_params.file_sort_order_by,
-                                  copy_params.file_sort_regex);
-    file_paths = shared::local_glob_filter_sort_files(file_path,
-                                                      copy_params.regex_path_filter,
-                                                      copy_params.file_sort_order_by,
-                                                      copy_params.file_sort_regex);
+    const shared::FilePathOptions options{copy_params.regex_path_filter,
+                                          copy_params.file_sort_order_by,
+                                          copy_params.file_sort_regex};
+    shared::validate_sort_options(options);
+    file_paths = shared::local_glob_filter_sort_files(file_path, options);
   } catch (const shared::FileNotFoundException& e) {
     // After finding no matching files locally, file_path may still be an s3 url
     file_paths.push_back(file_path);

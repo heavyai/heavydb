@@ -138,6 +138,7 @@ void SingleTextFileReader::serialize(
 }
 
 void SingleTextFileReader::checkForMoreRows(size_t file_offset,
+                                            const shared::FilePathOptions& options,
                                             const ForeignServer* server_options,
                                             const UserMapping* user_mapping) {
   CHECK(isScanFinished());
@@ -415,6 +416,7 @@ void CompressedFileReader::skipBytes(size_t n_bytes) {
 }
 
 void CompressedFileReader::checkForMoreRows(size_t file_offset,
+                                            const shared::FilePathOptions& options,
                                             const ForeignServer* server_options,
                                             const UserMapping* user_mapping) {
   CHECK(initial_scan_ == false);
@@ -592,15 +594,11 @@ bool MultiFileReader::isEndOfLastFile() {
   return (isScanFinished() || is_end_of_last_file_);
 }
 
-LocalMultiFileReader::LocalMultiFileReader(
-    const std::string& file_path,
-    const import_export::CopyParams& copy_params,
-    const std::optional<std::string>& regex_path_filter,
-    const std::optional<std::string>& file_sort_order_by,
-    const std::optional<std::string>& file_sort_regex)
+LocalMultiFileReader::LocalMultiFileReader(const std::string& file_path,
+                                           const import_export::CopyParams& copy_params,
+                                           const shared::FilePathOptions& options)
     : MultiFileReader(file_path, copy_params) {
-  auto found_file_locations = shared::local_glob_filter_sort_files(
-      file_path, regex_path_filter, file_sort_order_by, file_sort_regex);
+  auto found_file_locations = shared::local_glob_filter_sort_files(file_path, options);
   for (const auto& location : found_file_locations) {
     insertFile(location);
   }
@@ -640,32 +638,27 @@ void LocalMultiFileReader::insertFile(std::string location) {
   }
 }
 
-void LocalMultiFileReader::checkForMoreRows(size_t file_offset,
-                                            const ForeignServer* server_options,
-                                            const UserMapping* user_mapping) {
+void LocalMultiFileReader::checkForMoreRows(
+    size_t file_offset,
+    const shared::FilePathOptions& file_path_options,
+    const ForeignServer* server_options,
+    const UserMapping* user_mapping) {
   // Look for new files
   std::set<std::string> new_locations;
   CHECK(isScanFinished());
   CHECK(file_offset == current_offset_);
   if (boost::filesystem::is_directory(file_path_)) {
     // Find all files in this directory
-    std::set<std::string> all_file_paths;
-    for (boost::filesystem::recursive_directory_iterator
-             it(file_path_, boost::filesystem::symlink_option::recurse),
-         eit;
-         it != eit;
-         ++it) {
-      bool new_file =
-          std::find(file_locations_.begin(), file_locations_.end(), it->path()) ==
-          file_locations_.end();
-      if (!boost::filesystem::is_directory(it->path()) && new_file) {
-        new_locations.insert(it->path().string());
+    auto all_file_paths =
+        shared::local_glob_filter_sort_files(file_path_, file_path_options);
+    for (const auto& path : all_file_paths) {
+      if (!shared::contains(file_locations_, path)) {
+        new_locations.insert(path);
       }
-      all_file_paths.emplace(it->path().string());
     }
 
     for (const auto& file_path : file_locations_) {
-      if (all_file_paths.find(file_path) == all_file_paths.end()) {
+      if (!shared::contains(all_file_paths, file_path)) {
         throw_removed_file_error(file_path);
       }
     }
@@ -676,7 +669,7 @@ void LocalMultiFileReader::checkForMoreRows(size_t file_offset,
     }
   } else if (files_.size() == 1) {
     // Single file, check if it has new data
-    files_[0].get()->checkForMoreRows(file_offset);
+    files_[0].get()->checkForMoreRows(file_offset, file_path_options);
     if (!files_[0].get()->isScanFinished()) {
       current_index_ = 0;
       cumulative_sizes_ = {};

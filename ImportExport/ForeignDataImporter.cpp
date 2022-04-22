@@ -423,8 +423,10 @@ ImportStatus ForeignDataImporter::importGeneralS3(
                              " or 'REGEX_PARSED_FILE'");
   }
 
-  shared::validate_sort_options(copy_params_.file_sort_order_by,
-                                copy_params_.file_sort_regex);
+  const shared::FilePathOptions options{copy_params_.regex_path_filter,
+                                        copy_params_.file_sort_order_by,
+                                        copy_params_.file_sort_regex};
+  shared::validate_sort_options(options);
 
 #ifdef HAVE_AWS_S3
 

@@ -29,9 +29,8 @@
 
 namespace shared {
 
-void validate_sort_options(const std::optional<std::string>& sort_by,
-                           const std::optional<std::string>& sort_regex) {
-  const auto sort_by_str = to_upper(sort_by.value_or(PATHNAME_ORDER_TYPE));
+void validate_sort_options(const FilePathOptions& options) {
+  const auto sort_by_str = to_upper(options.sort_by.value_or(PATHNAME_ORDER_TYPE));
 
   if (!shared::contains(supported_file_sort_order_types, sort_by_str)) {
     throw std::runtime_error{FILE_SORT_ORDER_BY_KEY +
@@ -40,13 +39,14 @@ void validate_sort_options(const std::optional<std::string>& sort_by,
   }
 
   if (shared::contains(non_regex_sort_order_types, sort_by_str) &&
-      sort_regex.has_value()) {
+      options.sort_regex.has_value()) {
     throw std::runtime_error{"Option \"" + FILE_SORT_REGEX_KEY +
                              "\" must not be set for selected option \"" +
                              FILE_SORT_ORDER_BY_KEY + "='" + sort_by_str + "'\"."};
   }
 
-  if (shared::contains(regex_sort_order_types, sort_by_str) && !sort_regex.has_value()) {
+  if (shared::contains(regex_sort_order_types, sort_by_str) &&
+      !options.sort_regex.has_value()) {
     throw std::runtime_error{"Option \"" + FILE_SORT_REGEX_KEY +
                              "\" must be set for selected option \"" +
                              FILE_SORT_ORDER_BY_KEY + "='" + sort_by_str + "'\"."};
@@ -106,23 +106,22 @@ std::vector<std::string> regex_file_filter(const std::string& pattern,
 
 }  // namespace
 
-std::vector<std::string> local_glob_filter_sort_files(
-    const std::string& file_path,
-    const std::optional<std::string>& filter_regex,
-    const std::optional<std::string>& sort_by,
-    const std::optional<std::string>& sort_regex,
-    const bool recurse) {
+std::vector<std::string> local_glob_filter_sort_files(const std::string& file_path,
+                                                      const FilePathOptions& options,
+                                                      const bool recurse) {
   auto result_files = glob_local_recursive_files(file_path, recurse);
-  if (filter_regex.has_value()) {
-    result_files = regex_file_filter(filter_regex.value(), result_files);
+  if (options.filter_regex.has_value()) {
+    result_files = regex_file_filter(options.filter_regex.value(), result_files);
   }
   // initial lexicographical order ensures a determinisitc ordering for files not matching
   // sort_regex
-  auto initial_file_order = FileOrderLocal(std::nullopt, PATHNAME_ORDER_TYPE);
+  FilePathOptions temp_options;
+  temp_options.sort_by = PATHNAME_ORDER_TYPE;
+  auto initial_file_order = FileOrderLocal(temp_options);
   auto lexi_comp = initial_file_order.getFileComparator();
   std::stable_sort(result_files.begin(), result_files.end(), lexi_comp);
 
-  auto file_order = FileOrderLocal(sort_regex, sort_by);
+  auto file_order = FileOrderLocal(options);
   auto comp = file_order.getFileComparator();
   std::stable_sort(result_files.begin(), result_files.end(), comp);
   return result_files;
@@ -151,19 +150,20 @@ std::vector<arrow::fs::FileInfo> arrow_fs_regex_file_filter(
 
 std::vector<arrow::fs::FileInfo> arrow_fs_filter_sort_files(
     const std::vector<arrow::fs::FileInfo>& file_paths,
-    const std::optional<std::string>& filter_regex,
-    const std::optional<std::string>& sort_by,
-    const std::optional<std::string>& sort_regex) {
-  auto result_files = filter_regex.has_value()
-                          ? arrow_fs_regex_file_filter(filter_regex.value(), file_paths)
-                          : file_paths;
+    const FilePathOptions& options) {
+  auto result_files =
+      options.filter_regex.has_value()
+          ? arrow_fs_regex_file_filter(options.filter_regex.value(), file_paths)
+          : file_paths;
   // initial lexicographical order ensures a determinisitc ordering for files not matching
   // sort_regex
-  auto initial_file_order = FileOrderArrow(std::nullopt, PATHNAME_ORDER_TYPE);
+  FilePathOptions temp_options;
+  temp_options.sort_by = PATHNAME_ORDER_TYPE;
+  auto initial_file_order = FileOrderArrow(temp_options);
   auto lexi_comp = initial_file_order.getFileComparator();
   std::stable_sort(result_files.begin(), result_files.end(), lexi_comp);
 
-  auto file_order = FileOrderArrow(sort_regex, sort_by);
+  auto file_order = FileOrderArrow(options);
   auto comp = file_order.getFileComparator();
   std::stable_sort(result_files.begin(), result_files.end(), comp);
   return result_files;

@@ -47,8 +47,7 @@ void AbstractFileStorageDataWrapper::validateTableOptions(
     const ForeignTable* foreign_table) const {
   validateFilePathOptionKey(foreign_table);
   validateFilePath(foreign_table);
-  shared::validate_sort_options(foreign_table->getOption(FILE_SORT_ORDER_BY_KEY),
-                                foreign_table->getOption(FILE_SORT_REGEX_KEY));
+  shared::validate_sort_options(getFilePathOptions(foreign_table));
 }
 
 const std::set<std::string_view>&
@@ -155,6 +154,14 @@ void AbstractFileStorageDataWrapper::validateFilePathOptionKey(
       UNREACHABLE() << "Unknown foreign storage type.";
     }
   }
+}
+
+shared::FilePathOptions AbstractFileStorageDataWrapper::getFilePathOptions(
+    const ForeignTable* foreign_table) {
+  return {
+      foreign_table->getOption(AbstractFileStorageDataWrapper::REGEX_PATH_FILTER_KEY),
+      foreign_table->getOption(AbstractFileStorageDataWrapper::FILE_SORT_ORDER_BY_KEY),
+      foreign_table->getOption(AbstractFileStorageDataWrapper::FILE_SORT_REGEX_KEY)};
 }
 
 const std::set<std::string_view> AbstractFileStorageDataWrapper::supported_table_options_{

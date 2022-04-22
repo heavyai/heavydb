@@ -303,14 +303,10 @@ std::vector<std::string> ParquetDataWrapper::getAllFilePaths() {
   auto timer = DEBUG_TIMER(__func__);
   std::vector<std::string> found_file_paths;
   auto file_path = getFullFilePath(foreign_table_);
-  const auto& regex_pattern = foreign_table_->getOption(REGEX_PATH_FILTER_KEY);
-  const auto& sort_by = foreign_table_->getOption(FILE_SORT_ORDER_BY_KEY);
-  const auto& sort_regex = foreign_table_->getOption(FILE_SORT_REGEX_KEY);
-
+  const auto file_path_options = getFilePathOptions(foreign_table_);
   auto& server_options = foreign_table_->foreign_server->options;
   if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
-    found_file_paths = shared::local_glob_filter_sort_files(
-        file_path, regex_pattern, sort_by, sort_regex);
+    found_file_paths = shared::local_glob_filter_sort_files(file_path, file_path_options);
   } else {
     UNREACHABLE();
   }

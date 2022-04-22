@@ -3794,12 +3794,14 @@ class DataWrapperAppendRefreshTest
     AppendRefreshBase::SetUp();
   }
 
-  void sqlCreateTestTable() {
+  void sqlCreateTestTable(const foreign_storage::OptionsMap& additional_options = {}) {
+    foreign_storage::OptionsMap options{{"FRAGMENT_SIZE", std::to_string(fragment_size_)},
+                                        {"REFRESH_UPDATE_TYPE", "APPEND"}};
+    options.insert(additional_options.begin(), additional_options.end());
     sql(createForeignTableQuery({{"i", "BIGINT"}},
                                 test_temp_dir + file_name_,
                                 wrapper_type_,
-                                {{"FRAGMENT_SIZE", std::to_string(fragment_size_)},
-                                 {"REFRESH_UPDATE_TYPE", "APPEND"}},
+                                options,
                                 table_name_,
                                 {},
                                 false,
@@ -3895,6 +3897,31 @@ TEST_P(DataWrapperAppendRefreshTest, MultifileAppendtoFile) {
   overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
   sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
+}
+
+TEST_P(DataWrapperAppendRefreshTest, SortedFiles) {
+  if (isOdbc(wrapper_type_)) {
+    GTEST_SKIP() << "This test case is not relevant to ODBC";
+  }
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file";
+  sqlCreateTestTable({{"FILE_SORT_ORDER_BY", "REGEX_NUMBER"},
+                      {"FILE_SORT_REGEX", "[^-]+_[^-]+_(\\d+)_.*"}});
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
+}
+
+TEST_P(DataWrapperAppendRefreshTest, FilteredFiles) {
+  if (isOdbc(wrapper_type_)) {
+    GTEST_SKIP() << "This test case is not relevant to ODBC";
+  }
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file";
+  sqlCreateTestTable({{"REGEX_PATH_FILTER", ".*two.*"}});
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(4)}, {i(5)}});
 }
 
 INSTANTIATE_TEST_SUITE_P(

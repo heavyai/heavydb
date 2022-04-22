@@ -748,8 +748,7 @@ std::vector<std::string> get_expanded_file_paths(
     const DataTransferType data_transfer_type) {
   std::vector<std::string> file_paths;
   if (data_transfer_type == DataTransferType::IMPORT) {
-    file_paths = shared::local_glob_filter_sort_files(
-        file_path, std::nullopt, std::nullopt, std::nullopt);
+    file_paths = shared::local_glob_filter_sort_files(file_path, {});
   } else {
     std::string path;
     if (!boost::filesystem::exists(file_path)) {

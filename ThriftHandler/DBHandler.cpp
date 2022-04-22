@@ -4178,12 +4178,10 @@ void DBHandler::detect_column_types(TDetectResult& _return,
     if ((copy_params.source_type == import_export::SourceType::kGeoFile ||
          copy_params.source_type == import_export::SourceType::kRasterFile) &&
         is_local_file(file_name)) {
-      auto file_paths =
-          shared::local_glob_filter_sort_files(file_name,
-                                               copy_params.regex_path_filter,
-                                               copy_params.file_sort_order_by,
-                                               copy_params.file_sort_regex,
-                                               false);
+      const shared::FilePathOptions options{copy_params.regex_path_filter,
+                                            copy_params.file_sort_order_by,
+                                            copy_params.file_sort_regex};
+      auto file_paths = shared::local_glob_filter_sort_files(file_name, options, false);
       // For geo and raster detect, pick the first file, if multiple files are provided
       // (e.g. through file globbing).
       CHECK(!file_paths.empty());
@@ -5185,13 +5183,11 @@ void DBHandler::importGeoTableGlobFilterSort(const TSessionId& session,
   // it DOES support the full FSI regex/filter/sort options
   std::vector<std::string> file_names;
   try {
-    shared::validate_sort_options(copy_params.file_sort_order_by,
-                                  copy_params.file_sort_regex);
-    file_names = shared::local_glob_filter_sort_files(file_name,
-                                                      copy_params.regex_path_filter,
-                                                      copy_params.file_sort_order_by,
-                                                      copy_params.file_sort_regex,
-                                                      false);
+    const shared::FilePathOptions options{copy_params.regex_path_filter,
+                                          copy_params.file_sort_order_by,
+                                          copy_params.file_sort_regex};
+    shared::validate_sort_options(options);
+    file_names = shared::local_glob_filter_sort_files(file_name, options, false);
   } catch (const shared::FileNotFoundException& e) {
     // no files match, just try the original filename, might be remote
     file_names.push_back(file_name);
