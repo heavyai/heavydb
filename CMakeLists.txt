@@ -723,7 +723,7 @@ if (ENABLE_TESTS)
 endif()
 
 option(ENABLE_BENCHMARKS "Build benchmarks" ON)
-if (ENABLE_BENCHMARKS)
+if (ENABLE_TESTS AND ENABLE_BENCHMARKS)
   add_subdirectory(Benchmarks/taxi)
 endif()
 
