@@ -43,6 +43,7 @@
 #include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
 #include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
 #include "QueryEngine/Dispatchers/DefaultExecutionPolicy.h"
+#include "QueryEngine/Dispatchers/ProportionBasedExecutionPolicy.h"
 #include "QueryEngine/Dispatchers/RRExecutionPolicy.h"
 #include "QueryEngine/DynamicWatchdog.h"
 #include "QueryEngine/EquiJoinCondition.h"
@@ -155,6 +156,10 @@ bool g_enable_multifrag_rs{false};
 
 bool g_enable_heterogeneous_execution{false};
 bool g_enable_multifrag_heterogeneous_execution{false};
+bool g_forced_heterogeneous_distribution{false};
+
+unsigned g_forced_cpu_proportion{1u};
+unsigned g_forced_gpu_proportion{0u};
 
 int const Executor::max_gpu_count;
 
@@ -1874,7 +1879,15 @@ TemporaryTable Executor::executeWorkUnitImpl(
         ExecutorDeviceType::CPU);
   } else {
     if (g_enable_heterogeneous_execution) {
-      exe_policy = std::make_unique<policy::RoundRobinExecutionPolicy>();
+      if (g_forced_heterogeneous_distribution) {
+        std::map<ExecutorDeviceType, unsigned> distribution{
+            {ExecutorDeviceType::CPU, g_forced_cpu_proportion},
+            {ExecutorDeviceType::GPU, g_forced_gpu_proportion}};
+        exe_policy = std::make_unique<policy::ProportionBasedExecutionPolicy>(
+            std::move(distribution));
+      } else {
+        exe_policy = std::make_unique<policy::RoundRobinExecutionPolicy>();
+      }
     } else {
       exe_policy =
           std::make_unique<policy::FragmentIDAssignmentExecutionPolicy>(device_type);
