@@ -50,6 +50,9 @@ extern bool g_from_table_reordering;
 extern bool g_inf_div_by_zero;
 extern bool g_null_div_by_zero;
 extern bool g_enable_heterogeneous_execution;
+extern bool g_forced_heterogeneous_distribution;
+extern unsigned g_forced_cpu_proportion;
+extern unsigned g_forced_gpu_proportion;
 
 extern size_t g_big_group_threshold;
 extern unsigned g_trivial_loop_join_threshold;
@@ -17899,6 +17902,12 @@ int main(int argc, char** argv) {
                          ->default_value(g_enable_heterogeneous_execution)
                          ->implicit_value(true),
                      "Allow heterogeneous execution.");
+  desc.add_options()("force-heterogeneous-distribution",
+                     po::value<bool>(&g_forced_heterogeneous_distribution)
+                         ->default_value(g_forced_heterogeneous_distribution)
+                         ->implicit_value(true));
+  desc.add_options()("cpu-prop", po::value<unsigned>(&g_forced_cpu_proportion));
+  desc.add_options()("gpu-prop", po::value<unsigned>(&g_forced_gpu_proportion));
   desc.add_options()("dump-ir",
                      po::value<bool>()->default_value(false)->implicit_value(true),
                      "Dump IR and PTX for all executed queries to file."
