@@ -2,7 +2,7 @@
 
 #include "Tests/ArrowSQLRunner/ArrowSQLRunner.h"
 
-#include <boost/filesystem/path.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 
 extern bool g_enable_heterogeneous_execution;
