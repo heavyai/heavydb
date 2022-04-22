@@ -1870,37 +1870,59 @@ TEST(Reduce, BaselineHashColumnar) {
 #ifndef HAVE_TSAN
 // The large buffers tests allocate too much memory to instrument under TSAN
 TEST(ReduceLargeBuffers, PerfectHashOne_Overflow32) {
-  const auto target_infos = generate_random_groups_nullable_target_infos();
-  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 222208903, {8});
-  EvenNumberGenerator gen1;
-  EvenNumberGenerator gen2;
-  test_reduce(target_infos, query_mem_desc, gen1, gen2, 2, false);
+  try {
+    const auto target_infos = generate_random_groups_nullable_target_infos();
+    auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 222208903, {8});
+    EvenNumberGenerator gen1;
+    EvenNumberGenerator gen2;
+    test_reduce(target_infos, query_mem_desc, gen1, gen2, 2, false);
+  } catch (std::bad_alloc e) {
+    LOG(WARNING) << "Out-of-memory for ReduceLargeBuffers.PerfectHashOne_Overflow32";
+    GTEST_SKIP();
+  }
 }
 
 TEST(ReduceLargeBuffers, PerfectHashColumnarOne_Overflow32) {
-  const auto target_infos = generate_random_groups_nullable_target_infos();
-  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 222208903, {8});
-  query_mem_desc.setOutputColumnar(true);
-  EvenNumberGenerator gen1;
-  EvenNumberGenerator gen2;
-  test_reduce(target_infos, query_mem_desc, gen1, gen2, 2, false);
+  try {
+    const auto target_infos = generate_random_groups_nullable_target_infos();
+    auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 222208903, {8});
+    query_mem_desc.setOutputColumnar(true);
+    EvenNumberGenerator gen1;
+    EvenNumberGenerator gen2;
+    test_reduce(target_infos, query_mem_desc, gen1, gen2, 2, false);
+  } catch (std::bad_alloc e) {
+    LOG(WARNING)
+        << "Out-of-memory for ReduceLargeBuffers.PerfectHashColumnarOne_Overflow32";
+    GTEST_SKIP();
+  }
 }
 
 TEST(ReduceLargeBuffers, BaselineHash_Overflow32) {
-  const auto target_infos = generate_random_groups_nullable_target_infos();
-  auto query_mem_desc = baseline_hash_two_col_desc_overflow32(target_infos, 8);
-  EvenNumberGenerator gen1;
-  EvenNumberGenerator gen2;
-  run_reduction(target_infos, query_mem_desc, gen1, gen2, 2);
+  try {
+    const auto target_infos = generate_random_groups_nullable_target_infos();
+    auto query_mem_desc = baseline_hash_two_col_desc_overflow32(target_infos, 8);
+    EvenNumberGenerator gen1;
+    EvenNumberGenerator gen2;
+    run_reduction(target_infos, query_mem_desc, gen1, gen2, 2);
+  } catch (std::bad_alloc e) {
+    LOG(WARNING) << "Out-of-memory for ReduceLargeBuffers.BaselineHash_Overflow32";
+    GTEST_SKIP();
+  }
 }
 
 TEST(ReduceLargeBuffers, BaselineHashColumnar_Overflow32) {
-  const auto target_infos = generate_random_groups_nullable_target_infos();
-  auto query_mem_desc = baseline_hash_two_col_desc_overflow32(target_infos, 8);
-  query_mem_desc.setOutputColumnar(true);
-  EvenNumberGenerator gen1;
-  EvenNumberGenerator gen2;
-  run_reduction(target_infos, query_mem_desc, gen1, gen2, 2);
+  try {
+    const auto target_infos = generate_random_groups_nullable_target_infos();
+    auto query_mem_desc = baseline_hash_two_col_desc_overflow32(target_infos, 8);
+    query_mem_desc.setOutputColumnar(true);
+    EvenNumberGenerator gen1;
+    EvenNumberGenerator gen2;
+    run_reduction(target_infos, query_mem_desc, gen1, gen2, 2);
+  } catch (const std::bad_alloc&) {
+    LOG(WARNING)
+        << "Out-of-memory for ReduceLargeBuffers.BaselineHashColumnar_Overflow32";
+    GTEST_SKIP();
+  }
 }
 #endif
 
