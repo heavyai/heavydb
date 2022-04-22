@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <mutex>
 #include <shared_mutex>
 
 #ifdef HAVE_FOLLY
