@@ -835,6 +835,7 @@ public final class HeavyDBParser {
     planner.close();
 
     HepProgramBuilder builder = new HepProgramBuilder();
+    builder.addRuleInstance(CoreRules.AGGREGATE_UNION_TRANSPOSE);
     if (!parserOptions.isViewOptimizeEnabled()) {
       builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
       builder.addRuleInstance(
