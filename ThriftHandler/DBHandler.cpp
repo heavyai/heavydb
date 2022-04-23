@@ -7773,10 +7773,11 @@ void DBHandler::alterSession(const std::string& session_id,
                              int64_t& execution_time_ms) {
   result = ExecutionResult();
   if (session_parameter.first == "EXECUTOR_DEVICE") {
+    std::string parameter_value = to_upper(session_parameter.second);
     TExecuteMode::type executorType;
-    if (session_parameter.second == "GPU") {
+    if (parameter_value == "GPU") {
       executorType = TExecuteMode::type::GPU;
-    } else if (session_parameter.second == "CPU") {
+    } else if (parameter_value == "CPU") {
       executorType = TExecuteMode::type::CPU;
     } else {
       throw std::runtime_error("Cannot set the " + session_parameter.first + " to " +

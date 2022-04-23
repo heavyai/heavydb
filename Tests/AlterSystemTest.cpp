@@ -271,6 +271,20 @@ TEST_F(AlterSystemTest, SET_EXECUTOR_GPU_CPUONLY) {
   handler->cpu_mode_only_ = actual_cpu_mode;
 }
 
+TEST_F(AlterSystemTest, SET_EXECUTOR_CASE_INSENSITIVE) {
+  TSessionId user_session;
+  TQueryResult result;
+  login("user1", "HyperInteractive", "db1", user_session);
+  try {
+    sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='cpu'", user_session);
+  } catch (const TDBException& e) {
+    if (e.error_msg ==
+        "Cannot set the EXECUTOR_DEVICE to cpu. Valid options are CPU and GPU") {
+      FAIL() << "The parameter EXECUTOR_DEVICE should be case insesitive";
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
