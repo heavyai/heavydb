@@ -329,9 +329,10 @@ int main(int argc, char** argv) {
 #ifdef HAVE_CUDA
   try {
     g_cuda_mgr.reset(new CudaMgr_Namespace::CudaMgr(0));
-    g_query_engine = QueryEngine::getInstance(g_cuda_mgr.get());
+    g_query_engine = QueryEngine::createInstance(g_cuda_mgr.get(), /*cpu_only=*/false);
   } catch (...) {
     LOG(WARNING) << "Could not instantiate CudaMgr, will run on CPU";
+    g_cuda_mgr.reset();
   }
 #endif  // HAVE_CUDA
 

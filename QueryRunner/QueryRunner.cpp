@@ -225,7 +225,7 @@ QueryRunner::QueryRunner(const char* db_path,
                mapd_params.aggregator,
                string_servers);
 
-  query_engine_ = QueryEngine::getInstance(data_mgr_->getCudaMgr());
+  query_engine_ = QueryEngine::createInstance(data_mgr_->getCudaMgr(), !uses_gpus);
 
   if (create_user) {
     if (!sys_cat.getMetadataForUser(user_name, user)) {

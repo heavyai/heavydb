@@ -9,7 +9,10 @@ inline bool g_query_engine_cuda_streams{true};
 
 class QueryEngine {
  public:
-  QueryEngine(CudaMgr_Namespace::CudaMgr* cuda_mgr) : cuda_mgr_(cuda_mgr) {
+  QueryEngine(CudaMgr_Namespace::CudaMgr* cuda_mgr, bool cpu_only) : cuda_mgr_(cuda_mgr) {
+    if (cpu_only) {
+      g_query_engine_cuda_streams = false;
+    }
 #ifdef HAVE_CUDA
     if (g_query_engine_cuda_streams) {
       // See:
@@ -66,12 +69,13 @@ class QueryEngine {
     }
   }
 
-  static std::shared_ptr<QueryEngine> getInstance(CudaMgr_Namespace::CudaMgr* cuda_mgr) {
+  static std::shared_ptr<QueryEngine> createInstance(CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                                                     bool cpu_only) {
     std::unique_lock lock(mutex_);
     if (auto s = instance_.lock()) {
       return s;
     } else {
-      s = std::make_shared<QueryEngine>(cuda_mgr);
+      s = std::make_shared<QueryEngine>(cuda_mgr, cpu_only);
       instance_ = s;
       return s;
     }

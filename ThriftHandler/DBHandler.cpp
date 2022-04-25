@@ -358,6 +358,7 @@ void DBHandler::initialize(const bool is_new_db) {
     } catch (const std::exception& e) {
       LOG(ERROR) << "Unable to instantiate CudaMgr, falling back to CPU-only mode. "
                  << e.what();
+      executor_device_type_ = ExecutorDeviceType::CPU;
       cpu_mode_only_ = true;
       is_rendering_enabled = false;
     }
@@ -469,7 +470,7 @@ void DBHandler::initialize(const bool is_new_db) {
     }
   }
 
-  query_engine_ = QueryEngine::getInstance(data_mgr_->getCudaMgr());
+  query_engine_ = QueryEngine::createInstance(data_mgr_->getCudaMgr(), cpu_mode_only_);
 
   if (leaf_aggregator_.leafCount() > 0) {
     try {
