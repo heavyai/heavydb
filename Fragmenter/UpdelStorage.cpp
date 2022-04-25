@@ -351,7 +351,11 @@ void InsertOrderFragmenter::updateColumns(
           case kPOLYGON:
             indexOfChunk += 4;
             break;
+          case kMULTILINESTRING:
+            indexOfChunk += 3;
+            break;
           case kLINESTRING:
+            // TODO: case kMULTIPOINT:
             indexOfChunk += 2;
             break;
           case kPOINT:

@@ -85,6 +85,7 @@ size_t size_of_raw_column(const Catalog_Namespace::Catalog& cat,
   switch (cd->columnType.get_type()) {
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
     case kARRAY:

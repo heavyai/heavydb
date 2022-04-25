@@ -3781,7 +3781,7 @@ std::shared_ptr<Analyzer::Constant> GeoConstant::makePhysicalConstant(
 
   std::vector<double> coords;
   std::vector<double> bounds;
-  std::vector<int> ring_sizes;
+  std::vector<int> ring_sizes;  // also linestring_sizes
   std::vector<int> poly_rings;
 
   Geospatial::GeoTypesFactory::getGeoColumns(

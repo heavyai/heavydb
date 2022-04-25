@@ -799,6 +799,86 @@ struct GeoLinestringValueConverter : public GeoPointValueConverter {
   }
 };
 
+struct GeoMultiLinestringValueConverter : public GeoPointValueConverter {
+  const ColumnDescriptor* linestring_sizes_column_descriptor_;
+  const ColumnDescriptor* bounds_column_descriptor_;
+
+  std::unique_ptr<std::vector<ArrayDatum>> linestring_sizes_data_;
+  std::unique_ptr<std::vector<ArrayDatum>> bounds_data_;
+
+  GeoMultiLinestringValueConverter(const Catalog_Namespace::Catalog& cat,
+                                   size_t num_rows,
+                                   const ColumnDescriptor* logicalColumnDescriptor)
+      : GeoPointValueConverter(cat, num_rows, logicalColumnDescriptor) {
+    linestring_sizes_column_descriptor_ = cat.getMetadataForColumn(
+        column_descriptor_->tableId, column_descriptor_->columnId + 2);
+    CHECK(linestring_sizes_column_descriptor_);
+    bounds_column_descriptor_ = cat.getMetadataForColumn(
+        column_descriptor_->tableId, column_descriptor_->columnId + 3);
+    CHECK(bounds_column_descriptor_);
+
+    if (num_rows) {
+      allocateColumnarData(num_rows);
+    }
+  }
+
+  ~GeoMultiLinestringValueConverter() override {}
+
+  void allocateColumnarData(size_t num_rows) override {
+    CHECK(num_rows > 0);
+    GeoPointValueConverter::allocateColumnarData(num_rows);
+    linestring_sizes_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
+    bounds_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
+  }
+
+  boost_variant_accessor<GeoMultiLineStringTargetValue>
+      GEO_MULTILINESTRING_VALUE_ACCESSOR;
+
+  void convertToColumnarFormat(size_t row, const TargetValue* value) override {
+    const auto geoValue =
+        checked_get<GeoTargetValue>(row, value, GEO_TARGET_VALUE_ACCESSOR);
+    CHECK(geoValue);
+    if (geoValue->is_initialized()) {
+      const auto geo = geoValue->get();
+      const auto geoMultiLinestring = checked_get<GeoMultiLineStringTargetValue>(
+          row, &geo, GEO_MULTILINESTRING_VALUE_ACCESSOR);
+
+      (*column_data_)[row] = "";
+      (*signed_compressed_coords_data_)[row] =
+          toCompressedCoords(geoMultiLinestring->coords);
+      (*linestring_sizes_data_)[row] =
+          to_array_datum(geoMultiLinestring->linestring_sizes);
+      auto bounds = compute_bounds_of_coords(geoMultiLinestring->coords);
+      (*bounds_data_)[row] = to_array_datum(bounds);
+    } else {
+      // NULL MultiLinestring
+      (*column_data_)[row] = "";
+      (*signed_compressed_coords_data_)[row] = ArrayDatum(0, nullptr, true);
+      (*linestring_sizes_data_)[row] = ArrayDatum(0, nullptr, true);
+      std::vector<double> bounds = {
+          NULL_ARRAY_DOUBLE, NULL_DOUBLE, NULL_DOUBLE, NULL_DOUBLE};
+      auto bounds_datum = to_array_datum(bounds);
+      bounds_datum.is_null = true;
+      (*bounds_data_)[row] = bounds_datum;
+    }
+  }
+
+  void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
+    GeoPointValueConverter::addDataBlocksToInsertData(insertData);
+
+    DataBlockPtr linestringSizes, bounds;
+
+    linestringSizes.arraysPtr = linestring_sizes_data_.get();
+    bounds.arraysPtr = bounds_data_.get();
+
+    insertData.data.emplace_back(linestringSizes);
+    insertData.columnIds.emplace_back(linestring_sizes_column_descriptor_->columnId);
+
+    insertData.data.emplace_back(bounds);
+    insertData.columnIds.emplace_back(bounds_column_descriptor_->columnId);
+  }
+};
+
 struct GeoPolygonRenderGroupManager {
  protected:
   GeoPolygonRenderGroupManager(RenderGroupAnalyzerMap* render_group_analyzer_map,

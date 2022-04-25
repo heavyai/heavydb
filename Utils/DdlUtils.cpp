@@ -189,6 +189,7 @@ void SqlType::check_type() {
       break;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       // Storing SRID in param1
@@ -583,6 +584,7 @@ void validate_literal(const std::string& val,
     }
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       if (val.empty()) {
@@ -603,6 +605,8 @@ void validate_literal(const std::string& val,
           if ((geo_type == Geospatial::GeoBase::GeoType::kPOINT && sql_type != kPOINT) ||
               (geo_type == Geospatial::GeoBase::GeoType::kLINESTRING &&
                sql_type != kLINESTRING) ||
+              (geo_type == Geospatial::GeoBase::GeoType::kMULTILINESTRING &&
+               sql_type != kMULTILINESTRING) ||
               (geo_type == Geospatial::GeoBase::GeoType::kPOLYGON &&
                sql_type != kPOLYGON) ||
               (geo_type == Geospatial::GeoBase::GeoType::kMULTIPOLYGON &&

@@ -101,6 +101,7 @@ void shuffleByIndexes(const ColumnDescriptor* cd,
       break;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       shuffleByIndexesImpl(indexes, *data.stringsPtr);

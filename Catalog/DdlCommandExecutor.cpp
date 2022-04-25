@@ -1043,6 +1043,9 @@ SQLTypes JsonColumnSqlType::getSqlType(const std::string& type) {
   if (boost::iequals(type, "LINESTRING")) {
     return kLINESTRING;
   }
+  if (boost::iequals(type, "MULTILINESTRING")) {
+    return kMULTILINESTRING;
+  }
   if (boost::iequals(type, "MULTIPOLYGON")) {
     return kMULTIPOLYGON;
   }
