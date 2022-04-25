@@ -45,7 +45,7 @@ SqlDdl SqlCustomShow(Span s) :
         |
         LOOKAHEAD(1) show = SqlShowDiskCacheUsage(s)
         |
-        LOOKAHEAD(1) show = SqlShowCreateTable(s)
+        LOOKAHEAD(1) show = SqlShowCreate(s)
         |
         LOOKAHEAD(2) show = SqlShowRoles(s)
         |
@@ -241,16 +241,25 @@ SqlDdl SqlShowTableFunctions(Span s) :
 /*
  * SHOW CREATE TABLE <table_name>
  */
-SqlDdl SqlShowCreateTable(Span s) :
+SqlDdl SqlShowCreate(Span s) :
 {
-    SqlIdentifier tableName = null;
+    SqlIdentifier name = null;
 }
 {
-    <CREATE> <TABLE>
-    tableName = CompoundIdentifier()
-    {
-        return new SqlShowCreateTable(s.end(this), tableName.toString());
-    }
+    <CREATE>
+    (
+        <TABLE>
+        name = CompoundIdentifier()
+        {
+            return new SqlShowCreateTable(s.end(this), name.toString());
+        }
+    |
+        <SERVER>
+        name = CompoundIdentifier()
+        {
+            return new SqlShowCreateServer(s.end(this), name.toString());
+        }
+    )
 }
 
 /*

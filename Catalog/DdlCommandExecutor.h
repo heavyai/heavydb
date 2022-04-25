@@ -132,6 +132,18 @@ class ShowForeignServersCommand : public DdlCommand {
   ExecutionResult execute(bool read_only_mode) override;
 };
 
+class ShowCreateServerCommand : public DdlCommand {
+ public:
+  ShowCreateServerCommand(
+      const DdlCommandData& ddl_data,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+
+ private:
+  std::string server_;
+};
+
 class ShowTablesCommand : public DdlCommand {
  public:
   ShowTablesCommand(const DdlCommandData& ddl_data,
@@ -267,60 +279,60 @@ class DdlCommandExecutor {
   /**
    * Returns true if this command is SHOW USER SESSIONS
    */
-  bool isShowUserSessions();
+  bool isShowUserSessions() const;
 
   /**
    * Returns true if this command is SHOW QUERIES
    */
-  bool isShowQueries();
+  bool isShowQueries() const;
 
   /**
    * Returns true if this command is SHOW CREATE TABLE
    */
-  bool isShowCreateTable();
+  bool isShowCreateTable() const;
 
   /**
    * Returns true if this command is KILL QUERY
    */
-  bool isKillQuery();
+  bool isKillQuery() const;
 
   /**
    * Returns true if this command is ALTER SYSTEM CLEAR
    */
-  bool isAlterSystemClear();
+  bool isAlterSystemClear() const;
 
   /**
    * Returns true if this command is ALTER SESSION SET
    */
-  bool isAlterSessionSet();
+  bool isAlterSessionSet() const;
 
   /**
    * Returns which kind of caches if to clear
    * ALTER SYSTEM CLEAR
    */
-  std::string returnCacheType();
+  std::string returnCacheType() const;
 
   /**
    * Returns target query session if this command is KILL QUERY
    */
-  const std::string getTargetQuerySessionToKill();
+  const std::string getTargetQuerySessionToKill() const;
 
   /**
    * Returns an object indicating where command execution should
    * take place and how results should be aggregated for
    * distributed setups.
    */
-  DistributedExecutionDetails getDistributedExecutionDetails();
+  DistributedExecutionDetails getDistributedExecutionDetails() const;
 
   /**
    * Returns command string, can be useful for logging, conversion
    */
-  const std::string commandStr();
+  const std::string commandStr() const;
 
   /**
    * Returns name and value of a Session parameter
    */
-  std::pair<std::string, std::string> getSessionParameter();
+  std::pair<std::string, std::string> getSessionParameter() const;
 
  private:
   std::string ddl_statement_;                 // incoming ddl_statement

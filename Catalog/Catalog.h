@@ -316,6 +316,8 @@ class Catalog final {
   std::optional<std::string> dumpCreateTable(int32_t table_id,
                                              bool multiline_formatting = true,
                                              bool dump_defaults = false) const;
+  std::string dumpCreateServer(const std::string& name,
+                               bool multiline_formatting = true) const;
 
   /**
    * Gets the DDL statement used to create a foreign table schema.

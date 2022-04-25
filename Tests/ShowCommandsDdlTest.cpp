@@ -37,6 +37,7 @@
 #endif
 
 extern bool g_enable_fsi;
+extern bool g_enable_s3_fsi;
 extern bool g_enable_system_tables;
 extern bool g_enable_table_functions;
 extern bool g_enable_dev_table_functions;
@@ -1281,22 +1282,22 @@ class ShowCreateTableTest : public DBHandlerTestFixture {
  public:
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
-    switchToAdmin();
-    sql("DROP TABLE IF EXISTS showcreatetabletest;");
-    sql("DROP TABLE IF EXISTS showcreatetabletest1;");
-    sql("DROP TABLE IF EXISTS showcreatetabletest2;");
-    sql("DROP VIEW IF EXISTS showcreateviewtest;");
-    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
+    dropTables();
   }
 
   void TearDown() override {
+    dropTables();
+    DBHandlerTestFixture::TearDown();
+  }
+
+ private:
+  void dropTables() {
     switchToAdmin();
     sql("DROP TABLE IF EXISTS showcreatetabletest;");
     sql("DROP TABLE IF EXISTS showcreatetabletest1;");
     sql("DROP TABLE IF EXISTS showcreatetabletest2;");
     sql("DROP VIEW IF EXISTS showcreateviewtest;");
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
-    DBHandlerTestFixture::TearDown();
   }
 };
 
@@ -1695,6 +1696,49 @@ TEST_F(SystemTablesShowCreateTableTest, StorageDetails) {
         "total_metadata_file_size BIGINT,\n  total_metadata_page_count BIGINT,\n  "
         "total_free_metadata_page_count BIGINT,\n  total_dictionary_data_file_size "
         "BIGINT);"}});
+}
+
+class ShowCreateServerTest : public DBHandlerTestFixture {
+ public:
+  void SetUp() override {
+    g_enable_fsi = true;
+    g_enable_s3_fsi = true;
+    DBHandlerTestFixture::SetUp();
+    dropServers();
+  }
+
+  void TearDown() override {
+    dropServers();
+    DBHandlerTestFixture::TearDown();
+  }
+
+ private:
+  void dropServers() {
+    switchToAdmin();
+    sql("DROP SERVER IF EXISTS show_create_test_server;");
+  }
+};
+
+TEST_F(ShowCreateServerTest, Identity) {
+  // clang-format off
+  std::vector<std::string> creates = {
+    "CREATE SERVER show_create_test_server FOREIGN DATA WRAPPER DELIMITED_FILE\nWITH (STORAGE_TYPE='LOCAL_FILE');",
+    "CREATE SERVER show_create_test_server FOREIGN DATA WRAPPER DELIMITED_FILE\nWITH (BASE_PATH='/test_path/', STORAGE_TYPE='LOCAL_FILE');"
+  };
+  // clang-format on
+
+  for (size_t i = 0; i < creates.size(); ++i) {
+    TQueryResult result;
+    sql(creates[i]);
+    sqlAndCompareResult("SHOW CREATE SERVER show_create_test_server;", {{creates[i]}});
+    sql("DROP SERVER IF EXISTS show_create_test_server;");
+  }
+}
+
+TEST_F(ShowCreateServerTest, ServerDoesNotExist) {
+  sql("DROP SERVER IF EXISTS show_create_test_server;");
+  queryAndAssertException("SHOW CREATE SERVER show_create_test_server",
+                          "Foreign server show_create_test_server does not exist.");
 }
 
 namespace {

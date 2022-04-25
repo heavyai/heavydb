@@ -133,7 +133,6 @@ ParserWrapper::ParserWrapper(std::string query_string) {
         }
       } else if (ddl == "SHOW") {
         query_type_ = QueryType::SchemaRead;
-
       } else if (ddl == "KILL") {
         query_type_ = QueryType::Unknown;
       } else if (ddl == "VALIDATE") {

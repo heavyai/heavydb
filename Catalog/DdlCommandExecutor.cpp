@@ -476,6 +476,8 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
     result = ShowDatabasesCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_SERVERS") {
     result = ShowForeignServersCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
+  } else if (ddl_command_ == "SHOW_CREATE_SERVER") {
+    result = ShowCreateServerCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_TABLE_FUNCTIONS") {
     result = ShowTableFunctionsCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "ALTER_SERVER") {
@@ -500,31 +502,31 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
   return result;
 }
 
-bool DdlCommandExecutor::isShowUserSessions() {
+bool DdlCommandExecutor::isShowUserSessions() const {
   return (ddl_command_ == "SHOW_USER_SESSIONS");
 }
 
-bool DdlCommandExecutor::isShowQueries() {
+bool DdlCommandExecutor::isShowQueries() const {
   return (ddl_command_ == "SHOW_QUERIES");
 }
 
-bool DdlCommandExecutor::isKillQuery() {
+bool DdlCommandExecutor::isKillQuery() const {
   return (ddl_command_ == "KILL_QUERY");
 }
 
-bool DdlCommandExecutor::isShowCreateTable() {
+bool DdlCommandExecutor::isShowCreateTable() const {
   return (ddl_command_ == "SHOW_CREATE_TABLE");
 }
 
-bool DdlCommandExecutor::isAlterSystemClear() {
+bool DdlCommandExecutor::isAlterSystemClear() const {
   return (ddl_command_ == "ALTER_SYSTEM_CLEAR");
 }
 
-bool DdlCommandExecutor::isAlterSessionSet() {
+bool DdlCommandExecutor::isAlterSessionSet() const {
   return (ddl_command_ == "ALTER_SESSION_SET");
 }
 
-std::pair<std::string, std::string> DdlCommandExecutor::getSessionParameter() {
+std::pair<std::string, std::string> DdlCommandExecutor::getSessionParameter() const {
   enum SetParameterType { String_t, Numeric_t };
   static const std::unordered_map<std::string, SetParameterType>
       session_set_parameters_map = {{"EXECUTOR_DEVICE", SetParameterType::String_t}};
@@ -550,7 +552,7 @@ std::pair<std::string, std::string> DdlCommandExecutor::getSessionParameter() {
   return {parameter_name, parameter_value};
 }
 
-std::string DdlCommandExecutor::returnCacheType() {
+std::string DdlCommandExecutor::returnCacheType() const {
   CHECK(ddl_command_ == "ALTER_SYSTEM_CLEAR");
   auto& ddl_payload = extractPayload(*ddl_data_);
   CHECK(ddl_payload.HasMember("cacheType"));
@@ -558,7 +560,7 @@ std::string DdlCommandExecutor::returnCacheType() {
   return ddl_payload["cacheType"].GetString();
 }
 
-DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails() {
+DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails() const {
   DistributedExecutionDetails execution_details;
   if (ddl_command_ == "CREATE_DATAFRAME" || ddl_command_ == "RENAME_TABLE" ||
       ddl_command_ == "ALTER_TABLE" || ddl_command_ == "CREATE_TABLE" ||
@@ -606,7 +608,7 @@ DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails()
   return execution_details;
 }
 
-const std::string DdlCommandExecutor::getTargetQuerySessionToKill() {
+const std::string DdlCommandExecutor::getTargetQuerySessionToKill() const {
   // caller should check whether DDL indicates KillQuery request
   // i.e., use isKillQuery() before calling this function
   auto& ddl_payload = extractPayload(*ddl_data_);
@@ -623,7 +625,7 @@ const std::string DdlCommandExecutor::getTargetQuerySessionToKill() {
   return query_session;
 }
 
-const std::string DdlCommandExecutor::commandStr() {
+const std::string DdlCommandExecutor::commandStr() const {
   return ddl_command_;
 }
 
@@ -1600,6 +1602,52 @@ ExecutionResult ShowForeignServersCommand::execute(bool read_only_mode) {
     logical_values.back().emplace_back(
         genLiteralStr(server_ptr->getOptionsAsJsonString()));
   }
+
+  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+  return ExecutionResult(rSet, label_infos);
+}
+
+ShowCreateServerCommand::ShowCreateServerCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {
+  if (!g_enable_fsi) {
+    throw std::runtime_error("Unsupported command: SHOW CREATE SERVER");
+  }
+  // Verify that members are valid
+  auto& payload = extractPayload(ddl_data_);
+  CHECK(payload.HasMember("serverName"));
+  CHECK(payload["serverName"].IsString());
+  server_ = (payload["serverName"].GetString());
+}
+
+ExecutionResult ShowCreateServerCommand::execute(bool read_only_mode) {
+  // valid in read_only_mode
+
+  using namespace Catalog_Namespace;
+  auto& catalog = session_ptr_->getCatalog();
+  const auto server = catalog.getForeignServer(server_);
+  if (!server) {
+    throw std::runtime_error("Foreign server " + server_ + " does not exist.");
+  }
+  DBObject dbObject(server_, ServerDBObjectType);
+  dbObject.loadKey(catalog);
+  std::vector<DBObject> privObjects = {dbObject};
+  if (!SysCatalog::instance().hasAnyPrivileges(session_ptr_->get_currentUser(),
+                                               privObjects)) {
+    throw std::runtime_error("Foreign server " + server_ + " does not exist.");
+  }
+  auto create_stmt = catalog.dumpCreateServer(server_);
+
+  std::vector<std::string> labels{"create_server_sql"};
+  std::vector<TargetMetaInfo> label_infos;
+  label_infos.emplace_back(labels[0], SQLTypeInfo(kTEXT, true));
+
+  std::vector<RelLogicalValues::RowValues> logical_values;
+  logical_values.emplace_back(RelLogicalValues::RowValues{});
+  logical_values.back().emplace_back(genLiteralStr(create_stmt));
 
   std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
       ResultSetLogicalValuesBuilder::create(label_infos, logical_values));

@@ -4966,6 +4966,32 @@ std::string Catalog::dumpCreateTableUnlocked(const TableDescriptor* td,
   return os.str();
 }
 
+std::string Catalog::dumpCreateServer(const std::string& name,
+                                      bool multiline_formatting) const {
+  cat_read_lock read_lock(this);
+  auto server_it = foreignServerMap_.find(name);
+  if (server_it == foreignServerMap_.end()) {
+    throw std::runtime_error("Foreign server " + name + " does not exist.");
+  }
+  auto server = server_it->second.get();
+  std::ostringstream os;
+  os << "CREATE SERVER " << name << " FOREIGN DATA WRAPPER " << server->data_wrapper_type;
+  std::vector<std::string> with_options;
+  for (const auto& [option, value] : server->options) {
+    with_options.emplace_back(option + "='" + value + "'");
+  }
+  if (!with_options.empty()) {
+    if (!multiline_formatting) {
+      os << " ";
+    } else {
+      os << "\n";
+    }
+    os << "WITH (" + boost::algorithm::join(with_options, ", ") + ")";
+  }
+  os << ";";
+  return os.str();
+}
+
 bool Catalog::validateNonExistentTableOrView(const std::string& name,
                                              const bool if_not_exists) {
   if (getMetadataForTable(name, false)) {

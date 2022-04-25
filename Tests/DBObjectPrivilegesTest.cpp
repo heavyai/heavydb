@@ -3705,6 +3705,16 @@ TEST_F(ServerPrivApiTest, UsageOnServerObjectPrivsSuper) {
                       TDBObjectType::ServerDBObjectType);
 }
 
+TEST_F(ServerPrivApiTest, ShowServerRequiresPermission) {
+  login("test_user", "test_pass");
+  queryAndAssertException("SHOW CREATE SERVER test_server",
+                          "Foreign server test_server does not exist.");
+  loginAdmin();
+  sql("GRANT USAGE ON SERVER test_server TO test_user;");
+  login("test_user", "test_pass");
+  ASSERT_NO_THROW(sql("SHOW CREATE SERVER test_server"));
+}
+
 TEST(Temporary, Users) {
   auto user_cleanup = [] {
     if (sys_cat.getMetadataForUser("username1", g_user)) {

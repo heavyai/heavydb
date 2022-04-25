@@ -46,6 +46,7 @@ data: {
         "com.mapd.parser.extension.ddl.SqlTruncateTable"
         "com.mapd.parser.extension.ddl.SqlOptimizeTable"
         "com.mapd.parser.extension.ddl.SqlShowCreateTable"
+        "com.mapd.parser.extension.ddl.SqlShowCreateServer"
         "com.mapd.parser.extension.ddl.SqlCreateView"
         "com.mapd.parser.extension.ddl.SqlCreateUserMapping"
         "com.mapd.parser.extension.ddl.SqlCreateUser"
