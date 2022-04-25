@@ -55,13 +55,6 @@ CMakeSettings.json
 # Emacs editor files
 *~
 
-# Thrift-generated files
-java/src/gen/
-gen-js/
-gen-py/
-java/target/
-java/**/mapd_log/
-
 # go files
 ThirdParty/go/bin/
 ThirdParty/go/pkg/
@@ -77,8 +70,7 @@ docs/sphinx-env
 docs/source/api/*
 
 # java-generated files
-java/**/target/
-java/thrift/src/
+Calcite/java/**/target/
 *.classpath
 *.project
 
