@@ -250,11 +250,19 @@ struct TextEncodingCastCounts {
       : text_decoding_casts(text_decoding_casts)
       , text_encoding_casts(text_encoding_casts) {}
 };
+
 class TextEncodingCastCountVisitor : public ScalarExprVisitor<TextEncodingCastCounts> {
+ public:
+  TextEncodingCastCountVisitor(const bool default_disregard_casts_to_none_encoding)
+      : default_disregard_casts_to_none_encoding_(
+            default_disregard_casts_to_none_encoding) {}
+
  protected:
   TextEncodingCastCounts visitUOper(const Analyzer::UOper* u_oper) const override {
     TextEncodingCastCounts result = defaultResult();
-    const bool disregard_cast_to_none_encoding = disregard_cast_to_none_encoding_;
+    // Save state of input disregard_casts_to_none_encoding_ as child node traversal
+    // will reset it
+    const bool disregard_casts_to_none_encoding = disregard_casts_to_none_encoding_;
     result = aggregateResult(result, visit(u_oper->get_operand()));
     if (u_oper->get_optype() != kCAST) {
       return result;
@@ -272,7 +280,7 @@ class TextEncodingCastCountVisitor : public ScalarExprVisitor<TextEncodingCastCo
       return aggregateResult(result, TextEncodingCastCounts(0UL, 1UL));
     }
     if (operand_ti.is_dict_encoded_string() && casted_ti.is_none_encoded_string()) {
-      if (!disregard_cast_to_none_encoding) {
+      if (!disregard_casts_to_none_encoding) {
         return aggregateResult(result, TextEncodingCastCounts(1UL, 0UL));
       } else {
         return result;
@@ -281,12 +289,56 @@ class TextEncodingCastCountVisitor : public ScalarExprVisitor<TextEncodingCastCo
     return result;
   }
 
+  TextEncodingCastCounts visitBinOper(const Analyzer::BinOper* bin_oper) const override {
+    TextEncodingCastCounts result = defaultResult();
+    // Currently the join framework handles casts between string types, and
+    // casts to none-encoded strings should be considered spurious, except
+    // when the join predicate is not a =/<> operator, in which case
+    // for both join predicates and all other instances we have to decode
+    // to a none-encoded string to do the comparison. The logic below essentially
+    // overrides the logic such as to always count none-encoded casts on strings
+    // that are children of binary operators other than =/<>
+    if (bin_oper->get_optype() != kEQ && bin_oper->get_optype() != kNE) {
+      // Override the global override so that join opers don't skip
+      // the check when there is an actual cast to none-encoded string
+      const auto prev_disregard_casts_to_none_encoding_state =
+          disregard_casts_to_none_encoding_;
+      const auto left_u_oper =
+          dynamic_cast<const Analyzer::UOper*>(bin_oper->get_left_operand());
+      if (left_u_oper && left_u_oper->get_optype() == kCAST) {
+        disregard_casts_to_none_encoding_ = false;
+        result = aggregateResult(result, visitUOper(left_u_oper));
+      } else {
+        disregard_casts_to_none_encoding_ = prev_disregard_casts_to_none_encoding_state;
+        result = aggregateResult(result, visit(bin_oper->get_left_operand()));
+      }
+
+      const auto right_u_oper =
+          dynamic_cast<const Analyzer::UOper*>(bin_oper->get_left_operand());
+      if (right_u_oper && right_u_oper->get_optype() == kCAST) {
+        disregard_casts_to_none_encoding_ = false;
+        result = aggregateResult(result, visitUOper(right_u_oper));
+      } else {
+        disregard_casts_to_none_encoding_ = prev_disregard_casts_to_none_encoding_state;
+        result = aggregateResult(result, visit(bin_oper->get_right_operand()));
+      }
+      disregard_casts_to_none_encoding_ = prev_disregard_casts_to_none_encoding_state;
+    } else {
+      result = aggregateResult(result, visit(bin_oper->get_left_operand()));
+      result = aggregateResult(result, visit(bin_oper->get_right_operand()));
+    }
+    return result;
+  }
+
   TextEncodingCastCounts visitLikeExpr(const Analyzer::LikeExpr* like) const override {
     TextEncodingCastCounts result = defaultResult();
     const auto u_oper = dynamic_cast<const Analyzer::UOper*>(like->get_arg());
+    const auto prev_disregard_casts_to_none_encoding_state =
+        disregard_casts_to_none_encoding_;
     if (u_oper && u_oper->get_optype() == kCAST) {
-      disregard_cast_to_none_encoding_ = true;
+      disregard_casts_to_none_encoding_ = true;
       result = aggregateResult(result, visitUOper(u_oper));
+      disregard_casts_to_none_encoding_ = prev_disregard_casts_to_none_encoding_state;
     } else {
       result = aggregateResult(result, visit(like->get_arg()));
     }
@@ -306,44 +358,55 @@ class TextEncodingCastCountVisitor : public ScalarExprVisitor<TextEncodingCastCo
     return result;
   }
 
-  void visitBegin() const override { disregard_cast_to_none_encoding_ = false; }
+  void visitBegin() const override {
+    disregard_casts_to_none_encoding_ = default_disregard_casts_to_none_encoding_;
+  }
 
   TextEncodingCastCounts defaultResult() const override {
     return TextEncodingCastCounts();
   }
 
  private:
-  mutable bool disregard_cast_to_none_encoding_ = false;
+  mutable bool disregard_casts_to_none_encoding_ = false;
+  const bool default_disregard_casts_to_none_encoding_;
 };
 
 TextEncodingCastCounts get_text_cast_counts(const RelAlgExecutionUnit& ra_exe_unit) {
   TextEncodingCastCounts cast_counts;
 
-  auto check_node_for_text_casts = [&cast_counts](const Analyzer::Expr* expr) {
+  auto check_node_for_text_casts = [&cast_counts](
+                                       const Analyzer::Expr* expr,
+                                       const bool disregard_casts_to_none_encoding) {
     if (!expr) {
       return;
     }
-    TextEncodingCastCountVisitor visitor;
+    TextEncodingCastCountVisitor visitor(disregard_casts_to_none_encoding);
     const auto this_node_cast_counts = visitor.visit(expr);
     cast_counts.text_encoding_casts += this_node_cast_counts.text_encoding_casts;
     cast_counts.text_decoding_casts += this_node_cast_counts.text_decoding_casts;
   };
 
   for (const auto& qual : ra_exe_unit.quals) {
-    check_node_for_text_casts(qual.get());
+    check_node_for_text_casts(qual.get(), false);
   }
   for (const auto& simple_qual : ra_exe_unit.simple_quals) {
-    check_node_for_text_casts(simple_qual.get());
+    check_node_for_text_casts(simple_qual.get(), false);
   }
   for (const auto& groupby_expr : ra_exe_unit.groupby_exprs) {
-    check_node_for_text_casts(groupby_expr.get());
+    check_node_for_text_casts(groupby_expr.get(), false);
   }
   for (const auto& target_expr : ra_exe_unit.target_exprs) {
-    check_node_for_text_casts(target_expr);
+    check_node_for_text_casts(target_expr, false);
   }
   for (const auto& join_condition : ra_exe_unit.join_quals) {
     for (const auto& join_qual : join_condition.quals) {
-      check_node_for_text_casts(join_qual.get());
+      // We currently need to not count casts to none-encoded strings for join quals,
+      // as analyzer will generate these but our join framework disregards them.
+      // Some investigation was done on having analyzer issue the correct inter-string
+      // dictionary casts, but this actually causes them to get executed and so the same
+      // work gets done twice.
+      check_node_for_text_casts(join_qual.get(),
+                                true /* disregard_casts_to_none_encoding */);
     }
   }
   return cast_counts;

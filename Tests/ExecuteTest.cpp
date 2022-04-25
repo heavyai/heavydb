@@ -4591,6 +4591,21 @@ TEST(Select, StringCompare) {
                                 dt),
                  std::runtime_error);
 
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(*) FROM test, test_inner WHERE "
+                                "test.shared_dict >= test_inner.str",
+                                dt),
+                 std::runtime_error);
+
+    EXPECT_NO_THROW(
+        c("SELECT COUNT(*) FROM test, test_inner WHERE "
+          "test.shared_dict = test_inner.str",
+          dt));
+
+    EXPECT_NO_THROW(
+        c("SELECT COUNT(*) FROM test, test_inner WHERE "
+          "test_inner.str = test.shared_dict",
+          dt));
+
     g_watchdog_none_encoded_string_translation_limit = 1000UL;
 
     THROW_ON_AGGREGATOR(
