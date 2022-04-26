@@ -38,8 +38,7 @@ class DataProvider {
 
   virtual TableFragmentsInfo getTableMetadata(int db_id, int table_id) const = 0;
 
-  virtual const DictDescriptor* getDictMetadata(int db_id,
-                                                int dict_id,
+  virtual const DictDescriptor* getDictMetadata(int dict_id,
                                                 bool load_dict = true) const = 0;
 
   virtual ~DataProvider() = default;

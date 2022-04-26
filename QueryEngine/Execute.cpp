@@ -475,7 +475,7 @@ StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
     const bool with_generation) {
   const int dict_id{dict_id_in < 0 ? REGULAR_DICT(dict_id_in) : dict_id_in};
   CHECK(data_provider_);
-  const auto dd = data_provider_->getDictMetadata(db_id, dict_id);
+  const auto dd = data_provider_->getDictMetadata(dict_id);
   if (dd) {
     CHECK(dd->stringDict);
     CHECK_LE(dd->dictNBits, 32);
@@ -4247,7 +4247,7 @@ StringDictionaryGenerations Executor::computeStringDictionaryGenerations(
                              : col_desc.getType();
     if (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT) {
       const int dict_id = col_ti.get_comp_param();
-      const auto dd = data_mgr_->getDictMetadata(db_id_, dict_id);
+      const auto dd = data_mgr_->getDictMetadata(dict_id);
       CHECK(dd && dd->stringDict);
       string_dictionary_generations.setGeneration(dict_id,
                                                   dd->stringDict->storageEntryCount());

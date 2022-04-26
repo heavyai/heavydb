@@ -54,9 +54,7 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   size_t getNumChunks() override;
   void removeTableRelatedDS(const int db_id, const int table_id) override;
 
-  const DictDescriptor* getDictMetadata(int db_id,
-                                        int dict_id,
-                                        bool load_dict = true) override;
+  const DictDescriptor* getDictMetadata(int dict_id, bool load_dict = true);
 
   TableFragmentsInfo getTableMetadata(int db_id, int table_id) const override;
 
@@ -68,6 +66,7 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   bool isForeignStorage(const ChunkKey& chunk_key) const;
   AbstractBufferMgr* getStorageMgrForTableKey(const ChunkKey& table_key) const;
   AbstractBufferMgr* getStorageMgr(int db_id) const;
+  bool hasStorageMgr(int db_id) const;
   bool isChunkPrefixCacheable(const ChunkKey& chunk_prefix) const;
   int recoverDataWrapperIfCachedAndGetHighestFragId(const ChunkKey& table_key);
 

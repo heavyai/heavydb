@@ -37,8 +37,7 @@ class DataMgrDataProvider : public DataProvider {
 
   TableFragmentsInfo getTableMetadata(int db_id, int table_id) const override;
 
-  const DictDescriptor* getDictMetadata(int db_id,
-                                        int dict_id,
+  const DictDescriptor* getDictMetadata(int dict_id,
                                         bool load_dict = true) const override;
 
  private:

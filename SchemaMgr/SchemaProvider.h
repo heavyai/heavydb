@@ -17,6 +17,27 @@
 #include "ColumnInfo.h"
 #include "TableInfo.h"
 
+constexpr int MIN_DB_ID = 0;
+constexpr int MAX_DB_ID = (1 << 24) - 1;
+constexpr int MIN_SCHEMA_ID = 0;
+constexpr int MAX_SCHEMA_ID = (1 << 7) - 1;
+
+constexpr int getSchemaId(int db_id) {
+  return db_id >> 24;
+}
+
+constexpr int addSchemaId(int db_id, int schema_id) {
+  return db_id | (schema_id << 24);
+}
+
+inline int addSchemaIdChecked(int db_id, int schema_id) {
+  CHECK_GE(db_id, MIN_DB_ID);
+  CHECK_LE(db_id, MAX_DB_ID);
+  CHECK_GE(schema_id, MIN_SCHEMA_ID);
+  CHECK_LE(schema_id, MAX_SCHEMA_ID);
+  return db_id | (schema_id << 24);
+}
+
 class SchemaProvider {
  public:
   virtual ~SchemaProvider() = default;

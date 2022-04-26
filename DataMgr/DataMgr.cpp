@@ -603,10 +603,8 @@ Buffer_Namespace::CpuBufferMgr* DataMgr::getCpuBufferMgr() const {
   return dynamic_cast<Buffer_Namespace::CpuBufferMgr*>(bufferMgrs_[1][0]);
 }
 
-const DictDescriptor* DataMgr::getDictMetadata(int db_id,
-                                               int dict_id,
-                                               bool load_dict) const {
-  return getPersistentStorageMgr()->getDictMetadata(db_id, dict_id, load_dict);
+const DictDescriptor* DataMgr::getDictMetadata(int dict_id, bool load_dict) const {
+  return getPersistentStorageMgr()->getDictMetadata(dict_id, load_dict);
 }
 
 TableFragmentsInfo DataMgr::getTableMetadata(int db_id, int table_id) const {

@@ -331,8 +331,7 @@ void checkStringDictColumnData(ArrowStorage& storage,
   size_t frag_rows = end_row - start_row;
 
   auto col_info = storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1);
-  auto& dict =
-      *storage.getDictMetadata(TEST_DB_ID, col_info->type.get_comp_param())->stringDict;
+  auto& dict = *storage.getDictMetadata(col_info->type.get_comp_param())->stringDict;
 
   std::vector<IndexType> expected_ids(frag_rows);
   for (size_t i = start_row; i < end_row; ++i) {
@@ -430,8 +429,7 @@ void checkChunkData(ArrowStorage& storage,
                     const std::vector<std::vector<std::string>>& expected) {
   CHECK_EQ(row_count, expected.size());
   auto col_info = storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1);
-  auto& dict =
-      *storage.getDictMetadata(TEST_DB_ID, col_info->type.get_comp_param())->stringDict;
+  auto& dict = *storage.getDictMetadata(col_info->type.get_comp_param())->stringDict;
 
   size_t start_row = frag_idx * fragment_size;
   size_t end_row = std::min(row_count, start_row + fragment_size);
@@ -690,14 +688,14 @@ TEST_F(ArrowStorageTest, CreateTable_SharedDict) {
                                     {"col4", type_dict1},
                                     {"col5", type_dict2}});
   auto col_infos = storage.listColumns(*tinfo);
-  CHECK_EQ(col_infos[0]->type.get_comp_param(), 1);
-  CHECK_EQ(col_infos[1]->type.get_comp_param(), 2);
-  CHECK_EQ(col_infos[2]->type.get_comp_param(), 3);
-  CHECK_EQ(col_infos[3]->type.get_comp_param(), 2);
-  CHECK_EQ(col_infos[4]->type.get_comp_param(), 3);
-  CHECK(storage.getDictMetadata(TEST_DB_ID, 1));
-  CHECK(storage.getDictMetadata(TEST_DB_ID, 2));
-  CHECK(storage.getDictMetadata(TEST_DB_ID, 3));
+  CHECK_EQ(col_infos[0]->type.get_comp_param(), addSchemaId(1, TEST_SCHEMA_ID));
+  CHECK_EQ(col_infos[1]->type.get_comp_param(), addSchemaId(2, TEST_SCHEMA_ID));
+  CHECK_EQ(col_infos[2]->type.get_comp_param(), addSchemaId(3, TEST_SCHEMA_ID));
+  CHECK_EQ(col_infos[3]->type.get_comp_param(), addSchemaId(2, TEST_SCHEMA_ID));
+  CHECK_EQ(col_infos[4]->type.get_comp_param(), addSchemaId(3, TEST_SCHEMA_ID));
+  CHECK(storage.getDictMetadata(addSchemaId(1, TEST_SCHEMA_ID)));
+  CHECK(storage.getDictMetadata(addSchemaId(2, TEST_SCHEMA_ID)));
+  CHECK(storage.getDictMetadata(addSchemaId(2, TEST_SCHEMA_ID)));
 }
 
 TEST_F(ArrowStorageTest, CreateTable_WrongDictId) {
@@ -719,8 +717,7 @@ TEST_F(ArrowStorageTest, DropTable) {
   for (auto& col_info : col_infos) {
     ASSERT_EQ(storage.getColumnInfo(*col_info), nullptr);
     if (col_info->type.is_dict_encoded_string()) {
-      ASSERT_EQ(storage.getDictMetadata(TEST_DB_ID, col_info->type.get_comp_param()),
-                nullptr);
+      ASSERT_EQ(storage.getDictMetadata(col_info->type.get_comp_param()), nullptr);
     }
   }
 }
@@ -746,10 +743,8 @@ TEST_F(ArrowStorageTest, DropTable_SharedDicts) {
     ASSERT_EQ(storage.getColumnInfo(*col_info), nullptr);
   }
 
-  ASSERT_NE(storage.getDictMetadata(TEST_DB_ID, col1_info->type.get_comp_param()),
-            nullptr);
-  ASSERT_EQ(storage.getDictMetadata(TEST_DB_ID, col2_info->type.get_comp_param()),
-            nullptr);
+  ASSERT_NE(storage.getDictMetadata(col1_info->type.get_comp_param()), nullptr);
+  ASSERT_EQ(storage.getDictMetadata(col2_info->type.get_comp_param()), nullptr);
 }
 
 void Test_ImportCsv_Numbers(const std::string& file_name,
@@ -1007,17 +1002,14 @@ void Test_ImportCsv_Dict(bool shared_dict,
 
   if (shared_dict) {
     auto col1_info = storage.getColumnInfo(*tinfo, "col1");
-    auto dict1 =
-        storage.getDictMetadata(TEST_DB_ID, col1_info->type.get_comp_param())->stringDict;
+    auto dict1 = storage.getDictMetadata(col1_info->type.get_comp_param())->stringDict;
     CHECK_EQ(dict1->storageEntryCount(), (size_t)10);
   } else {
     auto col1_info = storage.getColumnInfo(*tinfo, "col1");
-    auto dict1 =
-        storage.getDictMetadata(TEST_DB_ID, col1_info->type.get_comp_param())->stringDict;
+    auto dict1 = storage.getDictMetadata(col1_info->type.get_comp_param())->stringDict;
     CHECK_EQ(dict1->storageEntryCount(), (size_t)5);
     auto col2_info = storage.getColumnInfo(*tinfo, "col2");
-    auto dict2 =
-        storage.getDictMetadata(TEST_DB_ID, col2_info->type.get_comp_param())->stringDict;
+    auto dict2 = storage.getDictMetadata(col2_info->type.get_comp_param())->stringDict;
     CHECK_EQ(dict2->storageEntryCount(), (size_t)5);
   }
 

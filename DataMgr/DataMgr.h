@@ -244,9 +244,7 @@ class DataMgr {
   // Used for testing.
   Buffer_Namespace::CpuBufferMgr* getCpuBufferMgr() const;
 
-  const DictDescriptor* getDictMetadata(int db_id,
-                                        int dict_id,
-                                        bool load_dict = true) const;
+  const DictDescriptor* getDictMetadata(int dict_id, bool load_dict = true) const;
 
   TableFragmentsInfo getTableMetadata(int db_id, int table_id) const;
 

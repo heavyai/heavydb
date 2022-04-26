@@ -102,9 +102,7 @@ class AbstractBufferMgr {
   virtual void checkpoint(const int db_id, const int tb_id) = 0;
   virtual void removeTableRelatedDS(const int db_id, const int table_id) = 0;
 
-  virtual const DictDescriptor* getDictMetadata(int db_id,
-                                                int dict_id,
-                                                bool load_dict = true) = 0;
+  virtual const DictDescriptor* getDictMetadata(int dict_id, bool load_dict = true) = 0;
 
   virtual TableFragmentsInfo getTableMetadata(int db_id, int table_id) const = 0;
 

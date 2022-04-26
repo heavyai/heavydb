@@ -16,6 +16,8 @@
 
 #include "PersistentStorageMgr.h"
 
+#include "SchemaMgr/SchemaProvider.h"
+
 PersistentStorageMgr::PersistentStorageMgr(const std::string& data_dir,
                                            const size_t num_reader_threads)
     : AbstractBufferMgr(0) {
@@ -128,13 +130,14 @@ size_t PersistentStorageMgr::getNumChunks() {
 }
 
 void PersistentStorageMgr::removeTableRelatedDS(const int db_id, const int table_id) {
-  getStorageMgrForTableKey({db_id, table_id})->removeTableRelatedDS(db_id, table_id);
+  getStorageMgr(db_id)->removeTableRelatedDS(db_id, table_id);
 }
 
-const DictDescriptor* PersistentStorageMgr::getDictMetadata(int db_id,
-                                                            int dict_id,
-                                                            bool load_dict) {
-  return getStorageMgr(db_id)->getDictMetadata(db_id, dict_id, load_dict);
+const DictDescriptor* PersistentStorageMgr::getDictMetadata(int dict_id, bool load_dict) {
+  if (hasStorageMgr(dict_id)) {
+    return getStorageMgr(dict_id)->getDictMetadata(dict_id, load_dict);
+  }
+  return nullptr;
 }
 
 TableFragmentsInfo PersistentStorageMgr::getTableMetadata(int db_id, int table_id) const {
@@ -147,7 +150,11 @@ AbstractBufferMgr* PersistentStorageMgr::getStorageMgrForTableKey(
 }
 
 AbstractBufferMgr* PersistentStorageMgr::getStorageMgr(int db_id) const {
-  return mgr_by_schema_id_.at(db_id >> 24).get();
+  return mgr_by_schema_id_.at(getSchemaId(db_id)).get();
+}
+
+bool PersistentStorageMgr::hasStorageMgr(int db_id) const {
+  return mgr_by_schema_id_.count(getSchemaId(db_id));
 }
 
 void PersistentStorageMgr::registerDataProvider(
