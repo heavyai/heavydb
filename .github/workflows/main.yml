@@ -1,40 +1,18 @@
-name: Build the package
+name: Build
 on:
   workflow_dispatch: []
   push:
     paths-ignore:
       - 'docs/**'
+
 jobs:
   build:
-    runs-on: ubuntu-latest
-    env:
+    uses: ./.github/workflows/build.yml
+    with:
       cuda_compiler_version: None
-      RUN_TESTS: 1
-      PREFIX: distr
-    steps:
-      - uses: actions/checkout@v2
-      - name: Set the environment
-        run: |
-          $CONDA/bin/conda env create -f scripts/mapd-deps-conda-dev-env.yml
-      - name: Build
-        run: |
-          mkdir -p ${{ env.PREFIX }}
-          $CONDA/bin/conda run -n omnisci-dev bash scripts/conda/build-install-all.sh
-      - name: Test
-        run: |
-          BINPATH=$(cd ${{ env.PREFIX }}/bin; pwd -P)
-          cd build
-          $CONDA/bin/conda run -n omnisci-dev make sanity_tests
-      - name: Upload packages
-        uses: actions/upload-artifact@v2
-        with:
-          name: result_packages
-          path: ${{ env.PREFIX }}
-      - name: Upload logs
-        if: always()
-        uses: actions/upload-artifact@v2
-        with:
-          name: logs
-          path: |
-            build/*.log
-            build/CMakeFiles/*.log
+
+  build-cuda:
+    uses: ./.github/workflows/build.yml
+    with:
+      cuda_compiler_version: 11
+
