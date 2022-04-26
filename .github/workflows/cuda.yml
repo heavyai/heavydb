@@ -1,14 +1,14 @@
-name: Reusable build action
+name: Build the package 
 on:
-  workflow_call:
-    inputs:
-      cuda_compiler_version: string
-
+  workflow_dispatch: []
+  push:
+    paths-ignore:
+      - 'docs/**'      
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      cuda_compiler_version: ${{ inputs.cuda_compiler_version }}
+      cuda_compiler_version: 11
       PREFIX: distr
       CPU_COUNT: 4
       RUN_TESTS: 1
@@ -27,6 +27,11 @@ jobs:
           mkdir -p ${{ env.PREFIX }}
           rm -rf build
           $CONDA/bin/conda run -n omnisci-dev bash scripts/conda/build-install-all.sh
+      - name: Test
+        run: |
+          BINPATH=$(cd ${{ env.PREFIX }}/bin; pwd -P)
+          cd build
+          LD_LIBRARY_PATH=$CONDA/envs/omnisci-dev/pkgs/cuda-toolkit/targets/x86_64-linux/lib/stubs $CONDA/bin/conda run -n omnisci-dev make sanity_tests
       - name: Upload packages
         uses: actions/upload-artifact@v2
         with:
