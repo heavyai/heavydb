@@ -17,6 +17,8 @@ jobs:
       - uses: actions/checkout@v2
       - name: Set the environment
         run: |
+          free -h
+          cat /proc/cpuinfo
           conda update conda
           $CONDA/bin/conda env create -f scripts/mapd-deps-conda-dev-env.yml --force
       - name: Install nvidia-cuda-toolkit
