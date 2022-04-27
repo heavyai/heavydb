@@ -4,8 +4,6 @@ project(NvidiaComputeCapability)
 include_directories(..)
 
 enable_language(CUDA)
-include_directories(${CUDA_INCLUDE_DIRS})
-list(APPEND CUDA_LIBRARIES ${CUDA_CUDA_LIBRARY})
 
 add_executable(get_nvidia_compute_capability get_nvidia_compute_capability.cpp)
 set_source_files_properties(get_nvidia_compute_capability.cpp PROPERTIES LANGUAGE CUDA)
@@ -24,3 +22,4 @@ add_custom_command(
   VERBATIM
 )
 add_custom_target(NvidiaComputeCapability ALL DEPENDS ${CMAKE_BINARY_DIR}/../NvidiaComputeCapability.txt)
+

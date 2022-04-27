@@ -139,19 +139,20 @@ set(query_engine_source_files
     QueryTemplateGenerator.h
     TableFunctions/TableFunctionManager.h)
 
+set(query_engine_cuda_source_files
+    TopKSort.cu
+    InPlaceSortImpl.cu
+    ResultSetSortImpl.cu
+    GpuInitGroups.cu
+    JoinHashTable/Runtime/HashJoinRuntimeGpu.cu)
+
+
 set(group_by_hash_test_files
         GroupByHashTest.cpp
         MurmurHash.cpp
         DynamicWatchdog.cpp
         RuntimeFunctions.cpp
         )
-
-set(query_engine_cuda_source_files
-        TopKSort.cu
-        InPlaceSortImpl.cu
-        ResultSetSortImpl.cu
-        GpuInitGroups.cu
-        JoinHashTable/Runtime/HashJoinRuntimeGpu.cu)
 
 if (ENABLE_DECODERS_BOUNDS_CHECKING)
     list(APPEND MAPD_DEFINITIONS "-DWITH_DECODERS_BOUNDS_CHECKING")
@@ -181,6 +182,9 @@ if(MSVC)
   message(STATUS "MSVC BUILD removing RT_OPT_FLAGS")
   unset(RT_OPT_FLAGS)
 endif()
+
+add_library(QueryEngine ${query_engine_source_files} $<$<BOOL:ENABLE_CUDA>:${query_engine_cuda_source_files}>)
+add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineTableFunctionsFactory_init)
 
 add_custom_command(
         DEPENDS RuntimeFunctions.h RuntimeFunctions.cpp DecodersImpl.h JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
@@ -235,9 +239,6 @@ set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFa
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/OmniSciTypes.h DESTINATION ${CMAKE_BINARY_DIR}/QueryEngine/)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/OmniSciTypes.h ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast DESTINATION QueryEngine COMPONENT "QE")
 
-add_library(QueryEngine ${query_engine_source_files} $<$<BOOL:ENABLE_CUDA>:${query_engine_cuda_source_files}>)
-add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineTableFunctionsFactory_init)
-
 target_precompile_headers(QueryEngine PRIVATE
         [["QueryEngine/Execute.h"]]
         )
@@ -281,97 +282,12 @@ add_custom_command(
         -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu
 )
 
-add_custom_command(
-        DEPENDS TopKSort.cu
-        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o
-        COMMAND nvcc
-        ARGS
-        -I ${CMAKE_CURRENT_SOURCE_DIR}/../
-        ${MAPD_HOST_COMPILER_FLAG}
-        -Xcompiler -fPIC
-        -std=c++17
-        -D_FORCE_INLINES
-        ${MAPD_DEFINITIONS}
-        ${CUDA_COMPILATION_ARCH}
-        ${NVCC_BUILD_TYPE_ARGS}
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/TopKSort.cu
-)
-
-add_custom_command(
-        DEPENDS InPlaceSortImpl.cu
-        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o
-        COMMAND nvcc
-        ARGS
-        -I ${CMAKE_CURRENT_SOURCE_DIR}/../
-        ${MAPD_HOST_COMPILER_FLAG}
-        -Xcompiler -fPIC
-        -D_FORCE_INLINES
-        ${MAPD_DEFINITIONS}
-        ${CUDA_COMPILATION_ARCH}
-        -std=c++17
-        ${NVCC_BUILD_TYPE_ARGS}
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/InPlaceSortImpl.cu
-)
-
-add_custom_command(
-        DEPENDS ResultSetSortImpl.cu
-        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o
-        COMMAND nvcc
-        ARGS
-        -I ${CMAKE_CURRENT_SOURCE_DIR}/../
-        ${MAPD_HOST_COMPILER_FLAG}
-        -Xcompiler -fPIC
-        -std=c++17
-        -D_FORCE_INLINES
-        ${MAPD_DEFINITIONS}
-        ${CUDA_COMPILATION_ARCH}
-        ${NVCC_BUILD_TYPE_ARGS}
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/ResultSetSortImpl.cu
-)
-
-add_custom_command(
-        DEPENDS GpuInitGroups.cu
-        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o
-        COMMAND nvcc
-        ARGS
-        ${MAPD_HOST_COMPILER_FLAG}
-        -Xcompiler -fPIC
-        -D_FORCE_INLINES
-        ${MAPD_DEFINITIONS}
-        ${CUDA_COMPILATION_ARCH}
-        -std=c++17
-        ${NVCC_BUILD_TYPE_ARGS}
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuInitGroups.cu
-)
-
-add_custom_command(
-        DEPENDS JoinHashTable/Runtime/HashJoinRuntimeGpu.cu JoinHashTable/Runtime/HashJoinRuntime.cpp
-        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o
-        COMMAND nvcc
-        ARGS
-        -I ${CMAKE_CURRENT_SOURCE_DIR}/../
-        ${MAPD_HOST_COMPILER_FLAG}
-        -Xcompiler -fPIC
-        -D_FORCE_INLINES
-        ${MAPD_DEFINITIONS}
-        ${CUDA_COMPILATION_ARCH}
-        -std=c++17
-        ${NVCC_BUILD_TYPE_ARGS}
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/JoinHashTable/Runtime/HashJoinRuntimeGpu.cu
-)
-
 if(ENABLE_CUDA)
   add_custom_target(QueryEngineCudaTargets
-        ALL
-        DEPENDS
+    ALL
+    DEPENDS
         ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.fatbin
-        ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o
-        ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o
-        ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o
-        ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o
-        ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o
-        )
-
+    )
   string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPERCASE)
   if(CMAKE_BUILD_TYPE_UPPERCASE MATCHES DEBUG)
     if (ENABLE_CUDA_KERNEL_DEBUG)

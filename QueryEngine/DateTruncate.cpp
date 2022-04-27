@@ -302,13 +302,13 @@ int64_t DateTruncate(DatetruncField field, const int64_t timeval) {
 }
 
 // scale is 10^{3,6,9}
-inline int64_t DEVICE
+inline DEVICE int64_t
 truncate_high_precision_timestamp_to_date_impl(const int64_t timeval,
                                                const int64_t scale) {
   return floor_div(timeval, scale * kSecsPerDay) * kSecsPerDay;
 }
 
-int64_t DEVICE truncate_high_precision_timestamp_to_date(const int64_t timeval,
+DEVICE int64_t truncate_high_precision_timestamp_to_date(const int64_t timeval,
                                                          const int64_t scale) {
   return truncate_high_precision_timestamp_to_date_impl(timeval, scale);
 }
@@ -484,8 +484,9 @@ DateDiffHighPrecision(const DatetruncField datepart,
       // sub-second values must be accounted for when calling DateDiff. Examples:
       // 2000-02-15 12:00:00.006 to 2000-03-15 12:00:00.005 is 0 months.
       // 2000-02-15 12:00:00.006 to 2000-03-15 12:00:00.006 is 1 month.
-      int const adj_sec =
-          0 < delta_s && delta_ns < 0 ? -1 : delta_s < 0 && 0 < delta_ns ? 1 : 0;
+      int const adj_sec = 0 < delta_s && delta_ns < 0   ? -1
+                          : delta_s < 0 && 0 < delta_ns ? 1
+                                                        : 0;
       return DateDiff(datepart, start_seconds, end_seconds + adj_sec);
   }
 }

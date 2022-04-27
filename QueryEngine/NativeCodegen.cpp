@@ -1313,26 +1313,6 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
                                       row_func_not_inlined};
   std::shared_ptr<GpuCompilationContext> compilation_context;
 
-  if (check_module_requires_libdevice(module)) {
-    if (g_rt_libdevice_module == nullptr) {
-      // raise error
-      throw std::runtime_error(
-          "libdevice library is not available but required by the UDF module");
-    }
-
-    // Bind libdevice it to the current module
-    CodeGenerator::link_udf_module(g_rt_libdevice_module,
-                                   *module,
-                                   cgen_state_.get(),
-                                   llvm::Linker::Flags::OverrideFromSrc);
-
-    // activate nvvm-reflect-ftz flag on the module
-    module->addModuleFlag(llvm::Module::Override, "nvvm-reflect-ftz", (int)1);
-    for (llvm::Function& fn : *module) {
-      fn.addFnAttr("nvptx-f32ftz", "true");
-    }
-  }
-
   try {
     compilation_context = CodeGenerator::generateNativeGPUCode(this,
                                                                query_func,

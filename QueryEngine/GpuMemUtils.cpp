@@ -29,6 +29,29 @@ extern size_t g_max_memory_allocation_size;
 extern size_t g_min_memory_allocation_size;
 extern double g_bump_allocator_step_reduction;
 
+void copy_to_nvidia_gpu(Data_Namespace::DataMgr* data_mgr,
+
+                        CUdeviceptr dst,
+
+                        const void* src,
+
+                        const size_t num_bytes,
+
+                        const int device_id) {
+#ifdef HAVE_CUDA
+  if (!data_mgr) {  // only for unit tests
+    cuMemcpyHtoD(dst, src, num_bytes);
+    return;
+  }
+#endif  // HAVE_CUDA
+  const auto cuda_mgr = data_mgr->getCudaMgr();
+  CHECK(cuda_mgr);
+  cuda_mgr->copyHostToDevice(reinterpret_cast<int8_t*>(dst),
+                             static_cast<const int8_t*>(src),
+                             num_bytes,
+                             device_id);
+}
+
 namespace {
 
 inline size_t coalesced_size(const QueryMemoryDescriptor& query_mem_desc,

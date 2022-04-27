@@ -86,7 +86,7 @@ void StringDictionaryTranslationMgr::createKernelBuffers() {
                                             sizeof(int32_t)};
     for (int device_id = 0; device_id < device_count_; ++device_id) {
       device_buffers_.emplace_back(CudaAllocator::allocGpuAbstractBuffer(
-          data_mgr_, translation_map_size_bytes, device_id));
+          data_mgr_->getBufferProvider(), translation_map_size_bytes, device_id));
       auto device_buffer =
           reinterpret_cast<int32_t*>(device_buffers_.back()->getMemoryPtr());
       copy_to_nvidia_gpu(data_mgr_,

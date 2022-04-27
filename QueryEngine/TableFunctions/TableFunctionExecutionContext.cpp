@@ -513,9 +513,8 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   }
 
   // Get cu func
-  const auto gpu_context = compilation_context->getGpuCode();
-  CHECK(gpu_context);
-  const auto native_code = gpu_context->getNativeCode(device_id);
+  CHECK(compilation_context);
+  const auto native_code = compilation_context->getNativeCode(device_id);
   auto cu_func = static_cast<CUfunction>(native_code.first);
   checkCudaErrors(cuLaunchKernel(cu_func,
                                  grid_size_x,

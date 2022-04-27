@@ -33,6 +33,16 @@
 
 #include "BufferProvider/BufferProvider.h"
 
+namespace Data_Namespace {
+class DataMgr;
+}
+
+void copy_to_nvidia_gpu(Data_Namespace::DataMgr* data_mgr,
+                        CUdeviceptr dst,
+                        const void* src,
+                        const size_t num_bytes,
+                        const int device_id);
+
 struct GpuGroupByBuffers {
   CUdeviceptr ptrs;  // ptrs for individual outputs
   CUdeviceptr data;  // ptr to data allocation
