@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 /**
  * @file    TargetExprBuilder.cpp
- * @author  Alex Baden <alex.baden@omnisci.com>
  * @brief   Helpers for codegen of target expressions
+ *
  */
 
 #include "TargetExprBuilder.h"

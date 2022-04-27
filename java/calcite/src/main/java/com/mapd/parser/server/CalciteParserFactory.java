@@ -28,10 +28,6 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.function.Supplier;
 
-/**
- *
- * @author michael
- */
 class CalciteParserFactory implements PoolableObjectFactory {
   final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(CalciteParserFactory.class);
 

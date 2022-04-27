@@ -19,10 +19,6 @@ import org.apache.calcite.rel.rules.Restriction;
 
 import java.util.List;
 
-/**
- *
- * @author michael
- */
 public class HeavyDBUser {
   private final String user;
   private final String catalog;

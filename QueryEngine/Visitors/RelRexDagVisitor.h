@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-/*
- * @description Visit all RelAlgNode and RexScalar nodes in a RA/Rex DAG.
+/**
+ * @file    RelRexDagVistor.h
+ * @brief   Visit all RelAlgNode and RexScalar nodes in a RA/Rex DAG.
  * How to use:
  * 1) Inherit from RelRexDagVisitor as a public interface.
       Don't forget to add using RelRexDagVisitor::visit.

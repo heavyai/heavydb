@@ -27,10 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- *
- * @author alex
- */
 public class ExtensionFunction {
   final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(ExtensionFunction.class);
 

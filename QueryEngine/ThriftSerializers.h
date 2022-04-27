@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 /**
  * @file    ThriftSerializers.h
- * @author  Alex Baden <alex.baden@mapd.com>
  * @brief   Serializers for query engine types to/from thrift.
+ *
  */
 
 #ifndef QUERYENGINE_THRIFTSERIALIZERS_H

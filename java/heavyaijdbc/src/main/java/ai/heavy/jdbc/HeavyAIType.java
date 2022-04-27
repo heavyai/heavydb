@@ -13,16 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package ai.heavy.jdbc;
 
 import java.sql.DatabaseMetaData;
 
 import ai.heavy.thrift.server.TDatumType;
 
-/**
- *
- * @author michael
- */
 class HeavyAIType {
   protected String typeName; // String => Type name
   protected int dataType; // int => SQL data type from java.sql.Types

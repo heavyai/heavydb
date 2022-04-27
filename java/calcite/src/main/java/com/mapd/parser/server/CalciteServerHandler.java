@@ -60,10 +60,6 @@ import ai.heavy.thrift.calciteserver.TRestriction;
 import ai.heavy.thrift.calciteserver.TUserDefinedFunction;
 import ai.heavy.thrift.calciteserver.TUserDefinedTableFunction;
 
-/**
- *
- * @author michael
- */
 public class CalciteServerHandler implements CalciteServer.Iface {
   final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(CalciteServerHandler.class);
   private TServer server;

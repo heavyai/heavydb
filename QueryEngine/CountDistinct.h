@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,9 @@
 
 /**
  * @file    CountDistinct.h
- * @author  Alex Suhan <alex@mapd.com>
  * @brief   Functions used to work with (approximate) count distinct sets.
  *
- * Copyright (c) 2017 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
 
 #ifndef QUERYENGINE_COUNTDISTINCT_H
 #define QUERYENGINE_COUNTDISTINCT_H

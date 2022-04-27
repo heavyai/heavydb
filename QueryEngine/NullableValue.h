@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-/*
+/**
  * @file    NullableValue.h
- * @author  Dmitri Shtilman <d@mapd.com>
+ * @brief
  *
- * Copyright (c) 2016 MapD Technologies, Inc.  All rights reserved.
  */
 
 #ifndef NULLABLEVALUE_H

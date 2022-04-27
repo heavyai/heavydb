@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-/*
+/**
  * @file    StringDictionaryTranslationMgr.cpp
- * @author  Todd Mostak <todd@omnisci.com>
+ * @brief
  *
- * Copyright (c) 2021 OmniSci, Inc.  All rights reserved.
  */
 
 #include "StringDictionaryTranslationMgr.h"

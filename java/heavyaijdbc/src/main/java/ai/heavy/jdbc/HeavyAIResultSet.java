@@ -33,10 +33,6 @@ import ai.heavy.thrift.server.TDatumType;
 import ai.heavy.thrift.server.TQueryResult;
 import ai.heavy.thrift.server.TRowSet;
 
-/**
- *
- * @author michael
- */
 // Useful debug string
 // System.out.println("Entered " + " line:" + new
 // Throwable().getStackTrace()[0].getLineNumber() + " class:" + new

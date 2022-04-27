@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,8 @@
 
 /**
  * @file    ResultSetReduction.cpp
- * @author  Alex Suhan <alex@mapd.com>
  * @brief   Reduction part of the row set interface.
  *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  */
 
 #include "DynamicWatchdog.h"

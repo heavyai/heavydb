@@ -27,10 +27,6 @@ import java.sql.SQLException;
 import java.util.Properties;
 import java.util.logging.Logger;
 
-/**
- *
- * @author michael
- */
 public class HeavyAIDriver implements java.sql.Driver {
   static int DriverMajorVersion = -1;
   static int DriverMinorVersion = -1;

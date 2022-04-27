@@ -40,10 +40,6 @@ import ai.heavy.thrift.server.TRowSet;
 import ai.heavy.thrift.server.TTableDetails;
 import ai.heavy.thrift.server.TTypeInfo;
 
-/**
- *
- * @author michael
- */
 public class ThriftTester {
   final static Logger logger = LoggerFactory.getLogger(ThriftTester.class);
 

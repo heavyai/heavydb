@@ -55,11 +55,6 @@ import ai.heavy.thrift.server.TDatumType;
 import ai.heavy.thrift.server.TServerStatus;
 import sun.security.provider.X509Factory;
 
-/**
- *
- * @author michael
- */
-
 class KeyLoader {
   static class S_struct {
     public String cert;

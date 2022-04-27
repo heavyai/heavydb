@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci,Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,10 @@
 
 /**
  * @file    RelAlgExecutionUnit.h
- * @author  Todd Mostak <todd@omnisci.com>
  * @brief   Execution unit for relational algebra. It's a low-level description
  *          of any relational algebra operation in a format understood by our VM.
  *
- * Copyright (c) 2020 Omnisci, Inc.  All rights reserved.
- **/
+ */
 
 #pragma once
 

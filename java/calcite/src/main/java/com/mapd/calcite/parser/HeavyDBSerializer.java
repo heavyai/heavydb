@@ -24,10 +24,6 @@ import com.mapd.parser.extension.ddl.JsonSerializableDdl;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.externalize.HeavyDBRelJsonWriter;
 
-/**
- *
- * @author michael
- */
 public class HeavyDBSerializer {
   private static final Gson gson;
 

@@ -62,10 +62,6 @@ import ai.heavy.thrift.server.TEncodingType;
 import ai.heavy.thrift.server.TTableDetails;
 import ai.heavy.thrift.server.TTypeInfo;
 
-/**
- *
- * @author michael
- */
 public class MetaConnect {
   final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(MetaConnect.class);
   private final String dataDir;

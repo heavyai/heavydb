@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,9 @@
 
 /**
  * @file    CardinalityEstimator.h
- * @author  Alex Suhan <alex@mapd.com>
  * @brief   Estimators to be used when precise cardinality isn't useful.
  *
- * Copyright (c) 2016 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
 
 #ifndef QUERYENGINE_CARDINALITYESTIMATOR_H
 #define QUERYENGINE_CARDINALITYESTIMATOR_H

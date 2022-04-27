@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-/*
- * @description RexSubQueryIdCollector is a visitor class that collects all
+/**
+ * @file    RexSubQueryIdCollector.h
+ * @brief   RexSubQueryIdCollector is a visitor class that collects all
  * RexSubQuery::getId() values for all RexSubQuery nodes. This uses sorted arrays of
  * (hash_code, handler) pairs for tree navigation.
  */

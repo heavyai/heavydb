@@ -43,10 +43,6 @@ import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/**
- *
- * @author michael
- */
 public class tester {
   final static org.slf4j.Logger HEAVYDBLOGGER = LoggerFactory.getLogger(tester.class);
 

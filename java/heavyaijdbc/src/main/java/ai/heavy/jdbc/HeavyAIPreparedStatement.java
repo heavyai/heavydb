@@ -55,10 +55,6 @@ import ai.heavy.thrift.server.TStringRow;
 import ai.heavy.thrift.server.TStringValue;
 import ai.heavy.thrift.server.TTableDetails;
 
-/**
- *
- * @author michael
- */
 class HeavyAIPreparedStatement implements PreparedStatement {
   final static Logger HEAVYDBLOGGER =
           LoggerFactory.getLogger(HeavyAIPreparedStatement.class);

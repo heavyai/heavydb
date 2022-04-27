@@ -28,10 +28,6 @@ import org.slf4j.LoggerFactory;
 
 import ai.heavy.thrift.calciteserver.CalciteServer.Processor;
 
-/**
- *
- * @author michael
- */
 public class CalciteServerWrapper implements Runnable {
   private final static Logger HEAVYDBLOGGER =
           LoggerFactory.getLogger(CalciteServerWrapper.class);

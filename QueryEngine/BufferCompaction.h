@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,10 @@
  * limitations under the License.
  */
 
-/*
+/**
  * @file    BufferCompaction.h
- * @author  Minggang Yu <miyu@mapd.com>
  * @brief   Macros and functions for groupby buffer compaction
  *
- * Copyright (c) 2016 MapD Technologies, Inc.  All rights reserved.
  */
 
 #ifndef BUFFER_COMPACTION_H

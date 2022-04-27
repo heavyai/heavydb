@@ -24,10 +24,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- *
- * @author michael
- */
 public class HeavyDBSchema implements Schema {
   final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(HeavyDBSchema.class);
 

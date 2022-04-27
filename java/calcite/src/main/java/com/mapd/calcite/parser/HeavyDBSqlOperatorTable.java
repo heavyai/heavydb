@@ -98,10 +98,6 @@ class CaseInsensitiveListSqlOperatorTable extends ListSqlOperatorTable {
   }
 }
 
-/**
- *
- * @author michael
- */
 public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   public static final SqlArrayValueConstructorAllowingEmpty ARRAY_VALUE_CONSTRUCTOR =
           new SqlArrayValueConstructorAllowingEmpty();

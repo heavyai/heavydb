@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,9 @@
 
 /**
  * @file    GeoOps.cpp
- * @author  Alex Baden <alexb@omnisci.com>
  * @brief   Functions to support geospatial operations used by the executor.
  *
- **/
+ */
 
 #include "../Geospatial/Compression.h"
 #include "../Geospatial/Transforms.h"

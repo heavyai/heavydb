@@ -31,10 +31,6 @@ import ai.heavy.thrift.server.TDatumType;
 import ai.heavy.thrift.server.TTableDetails;
 import ai.heavy.thrift.server.TTypeInfo;
 
-/**
- *
- * @author michael
- */
 public class HeavyDBTable implements Table {
   private static final AtomicLong VERSION_PROVIDER = new AtomicLong();
 

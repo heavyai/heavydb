@@ -40,10 +40,6 @@ import ai.heavy.thrift.server.TTableDetails;
 import ai.heavy.thrift.server.TTablePermissions;
 import ai.heavy.thrift.server.TTypeInfo;
 
-/**
- *
- * @author michael
- */
 class HeavyAIDatabaseMetaData implements DatabaseMetaData {
   final static Logger HEAVYDBLOGGER =
           LoggerFactory.getLogger(HeavyAIDatabaseMetaData.class);

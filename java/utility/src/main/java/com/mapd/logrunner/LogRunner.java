@@ -55,10 +55,6 @@ import ai.heavy.thrift.server.TRow;
 import ai.heavy.thrift.server.TRowSet;
 import ai.heavy.thrift.server.TTableDetails;
 
-/**
- *
- * @author michael
- */
 public class LogRunner {
   final static Logger logger = LoggerFactory.getLogger(LogRunner.class);
   private HashMap<Integer, String> sqlquery;

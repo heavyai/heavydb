@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2493,7 +2493,7 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
    * for 32-bit integer arithmetic, along with native 32 or 64-bit compare-and-swap
    * (CAS)."
    *
-   **/
+   */
   if (!cuda_mgr->isArchMaxwellOrLaterForAll()) {
     return false;
   }

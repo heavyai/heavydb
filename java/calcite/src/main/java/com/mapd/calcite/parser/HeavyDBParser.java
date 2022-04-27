@@ -79,10 +79,6 @@ import java.util.stream.Stream;
 
 import ai.heavy.thrift.server.TTableDetails;
 
-/**
- *
- * @author michael
- */
 public final class HeavyDBParser {
   public static final ThreadLocal<HeavyDBParser> CURRENT_PARSER = new ThreadLocal<>();
   private static final EnumSet<SqlKind> SCALAR =

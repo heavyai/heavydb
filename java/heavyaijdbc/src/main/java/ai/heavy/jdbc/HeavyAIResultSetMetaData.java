@@ -25,10 +25,6 @@ import java.sql.SQLException;
 import ai.heavy.thrift.server.TDatumType;
 import ai.heavy.thrift.server.TQueryResult;
 
-/**
- *
- * @author michael
- */
 class HeavyAIResultSetMetaData implements ResultSetMetaData {
   final static Logger logger = LoggerFactory.getLogger(HeavyAIResultSetMetaData.class);
   final TQueryResult sqlResult;

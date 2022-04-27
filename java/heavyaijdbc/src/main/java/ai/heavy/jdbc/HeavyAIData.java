@@ -22,10 +22,6 @@ import ai.heavy.thrift.server.TColumn;
 import ai.heavy.thrift.server.TColumnData;
 import ai.heavy.thrift.server.TDatumType;
 
-/**
- *
- * @author michael
- */
 class HeavyAIData {
   final static Logger logger = LoggerFactory.getLogger(HeavyAIData.class);
   private TDatumType colType;

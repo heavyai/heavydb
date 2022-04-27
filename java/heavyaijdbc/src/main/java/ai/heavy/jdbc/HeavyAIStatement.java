@@ -29,10 +29,6 @@ import ai.heavy.thrift.server.Heavy;
 import ai.heavy.thrift.server.TDBException;
 import ai.heavy.thrift.server.TQueryResult;
 
-/**
- *
- * @author michael
- */
 public class HeavyAIStatement implements java.sql.Statement {
   final static org.slf4j.Logger logger = LoggerFactory.getLogger(HeavyAIStatement.class);
   public SQLWarning rootWarning = null;
