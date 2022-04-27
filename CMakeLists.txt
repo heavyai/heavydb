@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.17)
 
 # Required for LLVM / JIT, alternative to setting CMP0065 to OLD
 set(CMAKE_ENABLE_EXPORTS True)
@@ -148,15 +148,8 @@ endif()
 option(ENABLE_CUDA "Enable CUDA support" ON)
 if(ENABLE_CUDA)
   enable_language(CUDA)
-  if(ENABLE_CONDA)
-    find_library(CUDA_LIBRARY cuda HINTS "$ENV{CONDA_PREFIX}/pkgs/cuda-toolkit/targets/x86_64-linux/lib/stubs")
-    find_library(CUDART_LIBRARY cudart HINTS "$ENV{CONDA_PREFIX}/pkgs/cuda-toolkit/targets/x86_64-linux/lib")
-    list(APPEND CUDA_LIBRARIES)
-  else()
-    find_package(CUDA REQUIRED)
-    include_directories(${CUDA_INCLUDE_DIRS})
-    list(APPEND CUDA_LIBRARIES ${CUDA_CUDA_LIBRARY})
-  endif()
+  find_package(CUDAToolkit REQUIRED)
+  list(APPEND CUDA_LIBRARIES CUDA::cudart CUDA::cuda_driver)
   add_definitions("-DHAVE_CUDA")
 
 else()
