@@ -149,6 +149,8 @@ option(ENABLE_CUDA "Enable CUDA support" ON)
 if(ENABLE_CUDA)
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
+  # A temporary workaround for non-conda envs
+  include_directories(${CUDAToolkit_INCLUDE_DIRS})
   list(APPEND CUDA_LIBRARIES CUDA::cudart CUDA::cuda_driver)
   add_definitions("-DHAVE_CUDA")
 
