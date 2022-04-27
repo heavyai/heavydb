@@ -349,7 +349,7 @@ std::vector<TableFunction> TableFunctionsFactory::get_table_funcs(const std::str
   auto table_func_name = name;
   boost::algorithm::to_lower(table_func_name);
   for (const auto& pair : functions_) {
-    auto fname = drop_suffix_impl(pair.first);
+    auto fname = ExtensionFunction::drop_suffix(pair.first);
     if (fname == table_func_name &&
         (is_gpu ? pair.second.isGPU() : pair.second.isCPU())) {
       table_funcs.push_back(pair.second);

@@ -105,7 +105,6 @@ class ExtensionFunction {
     return (name_.find("_gpu_", name_.find("__")) == std::string::npos);
   }
 
- private:
   static std::string drop_suffix(const std::string& str) {
     const auto idx = str.find("__");
     if (idx == std::string::npos) {
@@ -115,6 +114,7 @@ class ExtensionFunction {
     return str.substr(0, idx);
   }
 
+ private:
   const std::string name_;
   const std::vector<ExtArgumentType> args_;
   const ExtArgumentType ret_;

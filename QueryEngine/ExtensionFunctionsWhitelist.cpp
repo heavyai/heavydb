@@ -652,7 +652,8 @@ void ExtensionFunctionsWhitelist::addCommon(SignatureMap& signatures,
          ++args_serialized_it) {
       args.push_back(deserialize_type(json_str(*args_serialized_it)));
     }
-    signatures[to_upper(drop_suffix(name))].emplace_back(name, args, ret);
+    signatures[to_upper(ExtensionFunction::drop_suffix(name))].emplace_back(
+        name, args, ret);
   }
 }
 

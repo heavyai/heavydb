@@ -171,7 +171,7 @@ class TableFunction {
   auto getOutputsSize() const { return output_args_.size(); }
 
   std::string getName(const bool drop_suffix = false, const bool lower = false) const {
-    std::string result = drop_suffix ? drop_suffix_impl(name_) : name_;
+    std::string result = drop_suffix ? ExtensionFunction::drop_suffix(name_) : name_;
     if (lower) {
       boost::algorithm::to_lower(result);
     }
@@ -314,15 +314,6 @@ class TableFunction {
   }
 
  private:
-  static std::string drop_suffix_impl(const std::string& str) {
-    const auto idx = str.find("__");
-    if (idx == std::string::npos) {
-      return str;
-    }
-    CHECK_GT(idx, std::string::size_type(0));
-    return str.substr(0, idx);
-  }
-
   const std::string name_;
   const TableFunctionOutputRowSizer output_sizer_;
   const std::vector<ExtArgumentType> input_args_;
