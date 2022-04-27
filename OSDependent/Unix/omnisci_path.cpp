@@ -22,14 +22,42 @@
 #include <linux/limits.h>
 #endif
 #include <unistd.h>
+#include <filesystem>
+#include <iostream>
 
 #include <boost/filesystem/path.hpp>
 
 #include "Logger/Logger.h"
 
+#ifdef ENABLE_SHARED_LIBS
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#include <dlfcn.h>
+#include <link.h>
+#endif
+
 namespace omnisci {
 
 std::string get_root_abs_path() {
+#ifdef ENABLE_SHARED_LIBS
+  void* const handle = dlopen(OSDEPENDENT_SHARED_OBJECT_NAME, RTLD_LAZY | RTLD_NOLOAD);
+  if (handle) {
+    /* In cast shared object is used, we want to use its path rather than
+       a binary path. */
+    const struct link_map* link_map = 0;
+    const int ret = dlinfo(handle, RTLD_DI_LINKMAP, &link_map);
+    CHECK_EQ(ret, 0);
+    CHECK(link_map);
+    /* Despite the dlinfo man page claim that l_name is absolute path,
+       it is so only when the location path to the library is absolute,
+       say, as specified in LD_LIBRARY_PATH. */
+    std::filesystem::path abs_exe_dir(std::filesystem::absolute(
+        std::filesystem::canonical(std::string(link_map->l_name))));
+    const auto mapd_root = abs_exe_dir.parent_path().parent_path();
+    return mapd_root.string();
+  }
+#endif
 #ifdef __APPLE__
   char abs_exe_path[PROC_PIDPATHINFO_MAXSIZE] = {0};
   auto path_len = proc_pidpath(getpid(), abs_exe_path, sizeof(abs_exe_path));
