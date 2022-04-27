@@ -30,6 +30,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "Logger/Logger.h"
 #include "Shared/sqltypes.h"
 #include "Shared/toString.h"
 
@@ -86,7 +87,9 @@ class ExtensionFunction {
                     const ExtArgumentType ret)
       : name_(name), args_(args), ret_(ret) {}
 
-  const std::string getName(bool keep_suffix = true) const;
+  const std::string getName(bool keep_suffix = true) const {
+    return (keep_suffix ? name_ : drop_suffix(name_));
+  }
 
   const std::vector<ExtArgumentType>& getArgs() const { return args_; }
   const std::vector<ExtArgumentType>& getInputArgs() const { return args_; }
@@ -103,6 +106,15 @@ class ExtensionFunction {
   }
 
  private:
+  static std::string drop_suffix(const std::string& str) {
+    const auto idx = str.find("__");
+    if (idx == std::string::npos) {
+      return str;
+    }
+    CHECK_GT(idx, std::string::size_type(0));
+    return str.substr(0, idx);
+  }
+
   const std::string name_;
   const std::vector<ExtArgumentType> args_;
   const ExtArgumentType ret_;

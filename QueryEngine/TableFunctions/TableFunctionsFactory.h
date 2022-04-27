@@ -19,6 +19,8 @@
 #include <string>
 #include <vector>
 
+#include <boost/algorithm/string.hpp>
+
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/TableFunctionHelper.h"
 #include "Shared/toString.h"
@@ -168,7 +170,13 @@ class TableFunction {
   auto getInputsSize() const { return input_args_.size(); }
   auto getOutputsSize() const { return output_args_.size(); }
 
-  std::string getName(const bool drop_suffix = false, const bool lower = false) const;
+  std::string getName(const bool drop_suffix = false, const bool lower = false) const {
+    std::string result = drop_suffix ? drop_suffix_impl(name_) : name_;
+    if (lower) {
+      boost::algorithm::to_lower(result);
+    }
+    return result;
+  }
 
   auto getSignature() const {
     return getName(/*drop_suffix=*/true, /*lower=*/true) + "(" +
@@ -306,6 +314,15 @@ class TableFunction {
   }
 
  private:
+  static std::string drop_suffix_impl(const std::string& str) {
+    const auto idx = str.find("__");
+    if (idx == std::string::npos) {
+      return str;
+    }
+    CHECK_GT(idx, std::string::size_type(0));
+    return str.substr(0, idx);
+  }
+
   const std::string name_;
   const TableFunctionOutputRowSizer output_sizer_;
   const std::vector<ExtArgumentType> input_args_;

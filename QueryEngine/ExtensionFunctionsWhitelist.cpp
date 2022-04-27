@@ -212,15 +212,6 @@ std::string serialize_type(const ExtArgumentType type,
   return "";
 }
 
-std::string drop_suffix(const std::string& str) {
-  const auto idx = str.find("__");
-  if (idx == std::string::npos) {
-    return str;
-  }
-  CHECK_GT(idx, std::string::size_type(0));
-  return str.substr(0, idx);
-}
-
 }  // namespace
 
 SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
@@ -441,10 +432,6 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       UNREACHABLE();
   }
   return "";
-}
-
-const std::string ExtensionFunction::getName(bool keep_suffix) const {
-  return (keep_suffix ? name_ : drop_suffix(name_));
 }
 
 std::string ExtensionFunction::toString() const {

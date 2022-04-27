@@ -16,7 +16,6 @@
 
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 
-#include <boost/algorithm/string.hpp>
 #include <mutex>
 
 extern bool g_enable_table_functions;
@@ -342,30 +341,6 @@ void TableFunctionsFactory::reset() {
       ++it;
     }
   }
-}
-
-namespace {
-
-std::string drop_suffix_impl(const std::string& str) {
-  const auto idx = str.find("__");
-  if (idx == std::string::npos) {
-    return str;
-  }
-  CHECK_GT(idx, std::string::size_type(0));
-  return str.substr(0, idx);
-}
-
-}  // namespace
-
-std::string TableFunction::getName(const bool drop_suffix, const bool lower) const {
-  std::string result = name_;
-  if (drop_suffix) {
-    result = drop_suffix_impl(result);
-  }
-  if (lower) {
-    boost::algorithm::to_lower(result);
-  }
-  return result;
 }
 
 std::vector<TableFunction> TableFunctionsFactory::get_table_funcs(const std::string& name,

@@ -75,7 +75,6 @@
 #include "Shared/threading.h"
 #include "ThirdParty/robin_hood.h"
 
-bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
 bool g_enable_cpu_sub_tasks{false};
 size_t g_cpu_sub_task_size{500'000};
