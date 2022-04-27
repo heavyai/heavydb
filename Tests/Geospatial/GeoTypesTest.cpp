@@ -152,6 +152,75 @@ TEST(GeoLineString, BadWktType) {
   }
 }
 
+struct SampleMultiLineStringData {
+  const std::vector<double> coords{1.0, 2.0, 3.0, 4.0, 3.1, 4.1, 3.2, 4.2, 5.1, 5.2};
+  const std::vector<int32_t> linestring_sizes{3, 2};
+  const std::vector<double> bounds{1.0, 2.0, 5.1, 5.2};
+  const std::string wkt{"MULTILINESTRING ((1 2,3 4,3.1 4.1),(3.2 4.2,5.1 5.2))"};
+};
+
+TEST(GeoMultiLineString, EmptyWKT) {
+  const auto gdal_wkt_multilinestr = GeoMultiLineString("MULTILINESTRING EMPTY");
+  const auto wkt_str = gdal_wkt_multilinestr.getWktString();
+  ASSERT_EQ(wkt_str, "MULTILINESTRING EMPTY");
+}
+
+TEST(GeoMultiLineString, EmptyCoords) {
+  const auto gdal_multilinestr =
+      GeoMultiLineString(std::vector<double>(), std::vector<int32_t>());
+  const auto wkt_str = gdal_multilinestr.getWktString();
+  ASSERT_EQ(wkt_str, "MULTILINESTRING EMPTY");
+}
+
+TEST(GeoMultiLineString, ImportWKT) {
+  const auto sample_multilinestr = SampleMultiLineStringData();
+  const auto gdal_multilinestr = GeoMultiLineString(sample_multilinestr.wkt);
+  const auto wkt_str = gdal_multilinestr.getWktString();
+  ASSERT_EQ(wkt_str, sample_multilinestr.wkt);
+}
+
+TEST(GeoMultiLineString, ExportWKT) {
+  const auto sample_multilinestr = SampleMultiLineStringData();
+  const auto gdal_multilinestr = GeoMultiLineString(sample_multilinestr.coords,
+                                                    sample_multilinestr.linestring_sizes);
+  const auto wkt_str = gdal_multilinestr.getWktString();
+  ASSERT_EQ(wkt_str, sample_multilinestr.wkt);
+}
+
+TEST(GeoMultiLineString, ExportColumns) {
+  const auto sample_multilinestr = SampleMultiLineStringData();
+  const auto gdal_multilinestr = GeoMultiLineString(sample_multilinestr.wkt);
+  std::vector<double> coords;
+  std::vector<int32_t> linestring_sizes;
+  std::vector<double> bounds;
+  gdal_multilinestr.getColumns(coords, linestring_sizes, bounds);
+  compare_arrays(coords, sample_multilinestr.coords);
+  compare_arrays(linestring_sizes, sample_multilinestr.linestring_sizes);
+  compare_arrays(bounds, sample_multilinestr.bounds);
+}
+
+TEST(GeoMultiLineString, EqualsOperator) {
+  const auto sample_multilinestr = SampleMultiLineStringData();
+  ASSERT_TRUE(GeoMultiLineString(sample_multilinestr.coords,
+                                 sample_multilinestr.linestring_sizes) ==
+              GeoMultiLineString(sample_multilinestr.wkt));
+}
+
+TEST(GeoMultiLineString, OGRError) {
+  EXPECT_THROW(GeoMultiLineString("MULTILINESTRING ((0))"), GeoTypesError);
+}
+
+TEST(GeoMultiLineString, BadWktType) {
+  try {
+    auto pt = GeoLineString("POINT (1 1)");
+  } catch (const GeoTypesError& e) {
+    ASSERT_STREQ("GeoLineString Error: Unexpected geometry type from WKT string: Point",
+                 e.what());
+  } catch (...) {
+    FAIL();
+  }
+}
+
 struct SamplePolygonData {
   const std::vector<double>
       coords{35, 10, 45, 45, 15, 40, 10, 20, 20, 30, 35, 35, 30, 20};
