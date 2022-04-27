@@ -164,6 +164,15 @@ class ShowTableDetailsCommand : public DdlCommand {
   std::vector<std::string> getFilteredTableNames();
 };
 
+class ShowCreateTableCommand : public DdlCommand {
+ public:
+  ShowCreateTableCommand(
+      const DdlCommandData& ddl_data,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+};
+
 class ShowDatabasesCommand : public DdlCommand {
  public:
   ShowDatabasesCommand(const DdlCommandData& ddl_data,
@@ -287,11 +296,6 @@ class DdlCommandExecutor {
   bool isShowQueries() const;
 
   /**
-   * Returns true if this command is SHOW CREATE TABLE
-   */
-  bool isShowCreateTable() const;
-
-  /**
    * Returns true if this command is KILL QUERY
    */
   bool isKillQuery() const;
@@ -307,8 +311,7 @@ class DdlCommandExecutor {
   bool isAlterSessionSet() const;
 
   /**
-   * Returns which kind of caches if to clear
-   * ALTER SYSTEM CLEAR
+   * Returns which kind of caches to clear if ALTER SYSTEM CLEAR
    */
   std::string returnCacheType() const;
 

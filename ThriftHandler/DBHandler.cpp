@@ -1201,14 +1201,13 @@ void DBHandler::sql_execute_local(
                                 use_calcite,
                                 locks);
     DBHandler::convertData(
-        _return, result, query_state_proxy, query_str, column_format, first_n, at_most_n);
+        _return, result, query_state_proxy, column_format, first_n, at_most_n);
   });
 }
 
 void DBHandler::convertData(TQueryResult& _return,
                             ExecutionResult& result,
                             const QueryStateProxy& query_state_proxy,
-                            const std::string& query_str,
                             const bool column_format,
                             const int32_t first_n,
                             const int32_t at_most_n) {
@@ -1788,7 +1787,7 @@ TQueryResult DBHandler::validate_rel_alg(const std::string& query_ra,
   dispatch_queue_->submit(execute_rel_alg_task, /*is_update_delete=*/false);
   auto result_future = execute_rel_alg_task->get_future();
   result_future.get();
-  DBHandler::convertData(_return, result, query_state_proxy, query_ra, true, -1, -1);
+  DBHandler::convertData(_return, result, query_state_proxy, true, -1, -1);
   return _return;
 }
 
@@ -2660,8 +2659,7 @@ void DBHandler::get_tables_meta_impl(std::vector<TTableMeta>& _return,
                         /*find_push_down_candidates=*/false,
                         ExplainInfo());
         TQueryResult result;
-        DBHandler::convertData(
-            result, ex_result, query_state_proxy, query_ra, true, -1, -1);
+        DBHandler::convertData(result, ex_result, query_state_proxy, true, -1, -1);
         num_cols = result.row_set.row_desc.size();
         for (const auto& col : result.row_set.row_desc) {
           if (col.is_physical) {
@@ -7453,10 +7451,9 @@ void DBHandler::convertResultSet(ExecutionResult& result,
   //   assume that heavydb should only return column format
   int32_t nRows = result.getDataPtr()->rowCount();
 
-  convertRows(_return,
+  convertData(_return,
+              result,
               qsp,
-              result.getTargetsMeta(),
-              *result.getDataPtr(),
               /*column_format=*/true,
               /*first_n=*/nRows,
               /*at_most_n=*/nRows);
@@ -7827,12 +7824,7 @@ void DBHandler::executeDdl(
     if (!result.empty()) {
       // reduce execution time by the time spent during queue waiting
       _return.execution_time_ms -= result.getRows()->getQueueTime();
-
-      if (executor.isShowCreateTable()) {
-        convertResult(_return, *result.getDataPtr(), true);
-      } else {
-        convertResultSet(result, *session_ptr, commandStr, _return);
-      }
+      convertResultSet(result, *session_ptr, commandStr, _return);
     }
   }
 }
@@ -7872,9 +7864,9 @@ void DBHandler::executeDdl(
     }
     _return.setExecutionTime(execution_time_ms);
   }
-  if (executor.isShowCreateTable()) {
-    _return.setResultType(ExecutionResult::SimpleResult);
-  } else {
+  if (_return.getResultType() == ExecutionResult::QueryResult) {
+    // ResultType defaults to QueryResult => which can limit
+    //   the number of lines output via ConvertRow... use CalciteDdl instead
     _return.setResultType(ExecutionResult::CalciteDdl);
   }
 }

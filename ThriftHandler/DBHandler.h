@@ -745,7 +745,6 @@ class DBHandler : public HeavyIf {
   static void convertData(TQueryResult& _return,
                           ExecutionResult& result,
                           const QueryStateProxy& query_state_proxy,
-                          const std::string& query_str,
                           const bool column_format,
                           const int32_t first_n,
                           const int32_t at_most_n);

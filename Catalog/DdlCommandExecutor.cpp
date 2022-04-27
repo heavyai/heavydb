@@ -377,12 +377,6 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
     auto optimize_table_stmt = Parser::OptimizeTableStmt(extractPayload(*ddl_data_));
     optimize_table_stmt.execute(*session_ptr_, read_only_mode);
     return result;
-  } else if (ddl_command_ == "SHOW_CREATE_TABLE") {
-    auto show_create_table_stmt = Parser::ShowCreateTableStmt(extractPayload(*ddl_data_));
-    show_create_table_stmt.execute(*session_ptr_, read_only_mode);
-    const auto create_string = show_create_table_stmt.getCreateStmt();
-    result.updateResultSet(create_string, ExecutionResult::SimpleResult);
-    return result;
   } else if (ddl_command_ == "COPY_TABLE") {
     auto copy_table_stmt = Parser::CopyTableStmt(extractPayload(*ddl_data_));
     copy_table_stmt.execute(*session_ptr_, read_only_mode);
@@ -472,6 +466,8 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
     result = ShowTablesCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_TABLE_DETAILS") {
     result = ShowTableDetailsCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
+  } else if (ddl_command_ == "SHOW_CREATE_TABLE") {
+    result = ShowCreateTableCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_DATABASES") {
     result = ShowDatabasesCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_SERVERS") {
@@ -512,10 +508,6 @@ bool DdlCommandExecutor::isShowQueries() const {
 
 bool DdlCommandExecutor::isKillQuery() const {
   return (ddl_command_ == "KILL_QUERY");
-}
-
-bool DdlCommandExecutor::isShowCreateTable() const {
-  return (ddl_command_ == "SHOW_CREATE_TABLE");
 }
 
 bool DdlCommandExecutor::isAlterSystemClear() const {
@@ -1418,6 +1410,51 @@ std::vector<std::string> ShowTableDetailsCommand::getFilteredTableNames() {
     }
   }
   return filtered_table_names;
+}
+
+ShowCreateTableCommand::ShowCreateTableCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {}
+
+ExecutionResult ShowCreateTableCommand::execute(bool read_only_mode) {
+  // valid in read_only_mode
+
+  auto& ddl_payload = extractPayload(ddl_data_);
+  CHECK(ddl_payload.HasMember("tableName"));
+  CHECK(ddl_payload["tableName"].IsString());
+  const std::string& table_name = ddl_payload["tableName"].GetString();
+
+  auto& catalog = session_ptr_->getCatalog();
+  auto table_read_lock =
+      lockmgr::TableSchemaLockMgr::getReadLockForTable(catalog, table_name);
+
+  const TableDescriptor* td = catalog.getMetadataForTable(table_name, false);
+  if (!td) {
+    throw std::runtime_error("Table/View " + table_name + " does not exist.");
+  }
+
+  DBObject dbObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType);
+  dbObject.loadKey(catalog);
+  std::vector<DBObject> privObjects = {dbObject};
+
+  if (!Catalog_Namespace::SysCatalog::instance().hasAnyPrivileges(
+          session_ptr_->get_currentUser(), privObjects)) {
+    throw std::runtime_error("Table/View " + table_name + " does not exist.");
+  }
+  if (td->isView && !session_ptr_->get_currentUser().isSuper) {
+    // TODO: we need to run a validate query to ensure the user has access to the
+    // underlying table, but we do not have any of the machinery in here. Disable
+    // for now, unless the current user is a super user.
+    throw std::runtime_error("SHOW CREATE TABLE not yet supported for views");
+  }
+
+  std::string str = catalog.dumpCreateTable(td);
+
+  // Construct
+  ExecutionResult result;
+  result.updateResultSet(str, ExecutionResult::SimpleResult);
+  return result;
 }
 
 ShowDatabasesCommand::ShowDatabasesCommand(

@@ -6036,46 +6036,6 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session,
   SysCatalog::instance().revokeRoleBatch(get_roles(), get_grantees());
 }
 
-ShowCreateTableStmt::ShowCreateTableStmt(const rapidjson::Value& payload) {
-  CHECK(payload.HasMember("tableName"));
-  table_ = std::make_unique<std::string>(json_str(payload["tableName"]));
-}
-
-void ShowCreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
-                                  bool read_only_mode) {
-  // valid in read_only_mode
-  using namespace Catalog_Namespace;
-
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
-
-  auto& catalog = session.getCatalog();
-  auto table_read_lock =
-      lockmgr::TableSchemaLockMgr::getReadLockForTable(catalog, *table_);
-
-  const TableDescriptor* td = catalog.getMetadataForTable(*table_, false);
-  if (!td) {
-    throw std::runtime_error("Table/View " + *table_ + " does not exist.");
-  }
-
-  DBObject dbObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType);
-  dbObject.loadKey(catalog);
-  std::vector<DBObject> privObjects = {dbObject};
-
-  if (!SysCatalog::instance().hasAnyPrivileges(session.get_currentUser(), privObjects)) {
-    throw std::runtime_error("Table/View " + *table_ + " does not exist.");
-  }
-  if (td->isView && !session.get_currentUser().isSuper) {
-    // TODO: we need to run a validate query to ensure the user has access to the
-    // underlying table, but we do not have any of the machinery in here. Disable
-    // for now, unless the current user is a super user.
-    throw std::runtime_error("SHOW CREATE TABLE not yet supported for views");
-  }
-
-  create_stmt_ = catalog.dumpCreateTable(td);
-}
-
 ExportQueryStmt::ExportQueryStmt(const rapidjson::Value& payload) {
   CHECK(payload.HasMember("filePath"));
   file_path_ = std::make_unique<std::string>(json_str(payload["filePath"]));
@@ -6924,8 +6884,6 @@ std::unique_ptr<Parser::Stmt> create_stmt_for_json(const std::string& query_json
     stmt = new Parser::RestoreTableStmt(payload);
   } else if (ddl_command == "OPTIMIZE_TABLE") {
     stmt = new Parser::OptimizeTableStmt(payload);
-  } else if (ddl_command == "SHOW_CREATE_TABLE") {
-    stmt = new Parser::ShowCreateTableStmt(payload);
   } else if (ddl_command == "COPY_TABLE") {
     stmt = new Parser::CopyTableStmt(payload);
   } else if (ddl_command == "EXPORT_QUERY") {

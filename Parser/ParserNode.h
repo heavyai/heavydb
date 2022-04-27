@@ -1887,24 +1887,6 @@ class SelectStmt : public DMLStmt {
 };
 
 /*
- * @type ShowCreateTableStmt
- * @brief shows create table statement to create table
- */
-class ShowCreateTableStmt : public DDLStmt {
- public:
-  ShowCreateTableStmt(std::string* tab) : table_(tab) {}
-  ShowCreateTableStmt(const rapidjson::Value& payload);
-
-  std::string getCreateStmt() { return create_stmt_; }
-  void execute(const Catalog_Namespace::SessionInfo& session,
-               bool read_only_mode) override;
-
- private:
-  std::unique_ptr<std::string> table_;
-  std::string create_stmt_;
-};
-
-/*
  * @type ExportQueryStmt
  * @brief COPY ( query ) TO file ...
  */
