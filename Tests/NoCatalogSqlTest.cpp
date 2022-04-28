@@ -12,7 +12,6 @@
  * limitations under the License.
  */
 
-#include "ArrowSQLRunner/SchemaJson.h"
 #include "Calcite/CalciteJNI.h"
 #include "DataMgr/DataMgrBufferProvider.h"
 #include "DataMgr/DataMgrDataProvider.h"
@@ -175,7 +174,7 @@ class NoCatalogSqlTest : public ::testing::Test {
   }
 
   static void init_calcite(const std::string& udf_filename) {
-    calcite_ = std::make_shared<CalciteJNI>(udf_filename);
+    calcite_ = std::make_shared<CalciteJNI>(schema_provider_, udf_filename);
   }
 
   static void TearDownTestSuite() {
@@ -186,9 +185,7 @@ class NoCatalogSqlTest : public ::testing::Test {
   }
 
   ExecutionResult runSqlQuery(const std::string& sql) {
-    auto schema_json = schema_to_json(schema_provider_);
-    const auto query_ra =
-        calcite_->process("admin", "test_db", pg_shim(sql), schema_json);
+    const auto query_ra = calcite_->process("admin", "test_db", pg_shim(sql));
     auto dag = std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, schema_provider_);
     auto ra_executor = RelAlgExecutor(executor_.get(),
                                       TEST_DB_ID,
@@ -202,9 +199,7 @@ class NoCatalogSqlTest : public ::testing::Test {
   }
 
   RelAlgExecutor getExecutor(const std::string& sql) {
-    auto schema_json = schema_to_json(schema_provider_);
-    const auto query_ra =
-        calcite_->process("admin", "test_db", pg_shim(sql), schema_json);
+    const auto query_ra = calcite_->process("admin", "test_db", pg_shim(sql));
     auto dag = std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, schema_provider_);
     return RelAlgExecutor(executor_.get(),
                           TEST_DB_ID,

@@ -15,6 +15,7 @@
  */
 
 #include "CalciteJNI.h"
+#include "SchemaJson.h"
 
 #include "Logger/Logger.h"
 #include "OSDependent/omnisci_path.h"
@@ -44,7 +45,10 @@ void createJVM(JavaVM** jvm, JNIEnv** env, const std::vector<std::string>& jvm_o
 
 class CalciteJNI::Impl {
  public:
-  Impl(const std::string& udf_filename, size_t calcite_max_mem_mb) {
+  Impl(SchemaProviderPtr schema_provider,
+       const std::string& udf_filename,
+       size_t calcite_max_mem_mb)
+      : schema_provider_(schema_provider) {
     // Initialize JVM.
     auto root_abs_path = omnisci::get_root_abs_path();
     std::string class_path_arg = "-Djava.class.path=" + root_abs_path +
@@ -71,7 +75,6 @@ class CalciteJNI::Impl {
   std::string process(const std::string& user,
                       const std::string& db_name,
                       const std::string& sql_string,
-                      const std::string& schema_json,
                       const std::vector<FilterPushDownInfo>& filter_push_down_info,
                       const bool legacy_syntax,
                       const bool is_explain,
@@ -99,6 +102,7 @@ class CalciteJNI::Impl {
                                                        (jboolean)g_enable_watchdog,
                                                        arg_filter_push_down_info);
     jobject arg_restriction = nullptr;
+    auto schema_json = schema_to_json(schema_provider_);
     jstring arg_schema = env_->NewStringUTF(schema_json.c_str());
 
     jobject java_res = env_->CallObjectMethod(handler_obj_,
@@ -438,6 +442,8 @@ class CalciteJNI::Impl {
                            names_arg);
   }
 
+  SchemaProviderPtr schema_provider_;
+
   // Java machine and environment.
   JavaVM* jvm_;
   JNIEnv* env_;
@@ -485,8 +491,10 @@ class CalciteJNI::Impl {
   jmethodID hash_map_put_;
 };
 
-CalciteJNI::CalciteJNI(const std::string& udf_filename, size_t calcite_max_mem_mb) {
-  impl_ = std::make_unique<Impl>(udf_filename, calcite_max_mem_mb);
+CalciteJNI::CalciteJNI(SchemaProviderPtr schema_provider,
+                       const std::string& udf_filename,
+                       size_t calcite_max_mem_mb) {
+  impl_ = std::make_unique<Impl>(schema_provider, udf_filename, calcite_max_mem_mb);
 }
 
 CalciteJNI::~CalciteJNI() {}
@@ -495,7 +503,6 @@ std::string CalciteJNI::process(
     const std::string& user,
     const std::string& db_name,
     const std::string& sql_string,
-    const std::string& schema_json,
     const std::vector<FilterPushDownInfo>& filter_push_down_info,
     const bool legacy_syntax,
     const bool is_explain,
@@ -503,7 +510,6 @@ std::string CalciteJNI::process(
   return impl_->process(user,
                         db_name,
                         sql_string,
-                        schema_json,
                         filter_push_down_info,
                         legacy_syntax,
                         is_explain,

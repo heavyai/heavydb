@@ -50,7 +50,7 @@ add_custom_target(maven_populate_cache
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/java
   )
 
-add_library(Calcite CalciteJNI.cpp)
+add_library(Calcite CalciteJNI.cpp SchemaJson.cpp)
 
 add_dependencies(Calcite calcite_java_lib)
 

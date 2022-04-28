@@ -21,7 +21,6 @@
 #include "QueryEngine/RelAlgExecutor.h"
 
 #include "SQLiteComparator.h"
-#include "SchemaJson.h"
 
 #include <gtest/gtest.h>
 
@@ -50,8 +49,6 @@ class ArrowSQLRunnerImpl {
   bool gpusPresent() { return data_mgr_->gpusPresent(); }
 
   void printStats() {
-    std::cout << "Total schema to JSON time: " << (schema_to_json_time_ / 1000) << "ms."
-              << std::endl;
     std::cout << "Total Calcite parsing time: " << (calcite_time_ / 1000) << "ms."
               << std::endl;
     std::cout << "Total execution time: " << (execution_time_ / 1000) << "ms."
@@ -78,15 +75,10 @@ class ArrowSQLRunnerImpl {
   }
 
   std::string getSqlQueryRelAlg(const std::string& sql) {
-    std::string schema_json;
     std::string query_ra;
 
-    schema_to_json_time_ += measure<std::chrono::microseconds>::execution(
-        [&]() { schema_json = schema_to_json(storage_); });
-
     calcite_time_ += measure<std::chrono::microseconds>::execution([&]() {
-      query_ra =
-          calcite_->process("admin", "test_db", pg_shim(sql), schema_json, {}, true);
+      query_ra = calcite_->process("admin", "test_db", pg_shim(sql), {}, true);
     });
 
     return query_ra;
@@ -367,7 +359,7 @@ class ArrowSQLRunnerImpl {
     executor_->setSchemaProvider(storage_);
     executor_->setDatabaseId(TEST_DB_ID);
 
-    calcite_ = std::make_shared<CalciteJNI>(udf_filename, 1024);
+    calcite_ = std::make_shared<CalciteJNI>(storage_, udf_filename, 1024);
     ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
     if (!udf_filename.empty()) {
       ExtensionFunctionsWhitelist::addUdfs(calcite_->getUserDefinedFunctionWhitelist());
@@ -385,7 +377,6 @@ class ArrowSQLRunnerImpl {
   std::shared_ptr<Executor> executor_;
   std::shared_ptr<CalciteJNI> calcite_;
   SQLiteComparator sqlite_comparator_;
-  int64_t schema_to_json_time_ = 0;
   int64_t calcite_time_ = 0;
   int64_t execution_time_ = 0;
 
