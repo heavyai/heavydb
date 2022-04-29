@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "DataMgr/GpuMgr.h"
 #include "Logger/Logger.h"
 #include "Shared/DeviceGroup.h"
 
@@ -77,39 +78,42 @@ struct DeviceProperties {
   int numCore;
 };
 
-class CudaMgr {
+class CudaMgr : public GpuMgr {
  public:
   CudaMgr(const int num_gpus, const int start_gpu = 0);
   ~CudaMgr();
 
-  void synchronizeDevices() const;
-  int getDeviceCount() const { return device_count_; }
+  void synchronizeDevices() const override;
+  int getDeviceCount() const override { return device_count_; }
   int getStartGpu() const { return start_gpu_; }
   const omnisci::DeviceGroup& getDeviceGroup() const { return device_group_; }
+  GpuMgrName getName() const override { return GpuMgrName::CUDA; }
 
   void copyHostToDevice(int8_t* device_ptr,
                         const int8_t* host_ptr,
                         const size_t num_bytes,
-                        const int device_num);
+                        const int device_num) override;
   void copyDeviceToHost(int8_t* host_ptr,
                         const int8_t* device_ptr,
                         const size_t num_bytes,
-                        const int device_num);
+                        const int device_num) override;
   void copyDeviceToDevice(int8_t* dest_ptr,
                           int8_t* src_ptr,
                           const size_t num_bytes,
                           const int dest_device_num,
-                          const int src_device_num);
+                          const int src_device_num) override;
 
   int8_t* allocatePinnedHostMem(const size_t num_bytes);
-  int8_t* allocateDeviceMem(const size_t num_bytes, const int device_num);
+  int8_t* allocateDeviceMem(const size_t num_bytes, const int device_num) override;
   void freePinnedHostMem(int8_t* host_ptr);
-  void freeDeviceMem(int8_t* device_ptr);
-  void zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes, const int device_num);
+  void freeDeviceMem(int8_t* device_ptr) override;
+  void zeroDeviceMem(int8_t* device_ptr,
+                     const size_t num_bytes,
+                     const int device_num) override;
   void setDeviceMem(int8_t* device_ptr,
                     const unsigned char uc,
                     const size_t num_bytes,
-                    const int device_num);
+                    const int device_num) override;
 
   size_t getMinSharedMemoryPerBlockForAllDevices() const {
     return min_shared_memory_per_block_for_all_devices;
@@ -196,7 +200,7 @@ class CudaMgr {
     }
   }
 
-  void setContext(const int device_num) const;
+  void setContext(const int device_num) const override;
 
 #ifdef HAVE_CUDA
 

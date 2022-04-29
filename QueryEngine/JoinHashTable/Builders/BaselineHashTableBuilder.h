@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "DataMgr/Allocators/CudaAllocator.h"
+#include "DataMgr/Allocators/GpuAllocator.h"
 #include "QueryEngine/JoinHashTable/BaselineHashTable.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinKeyHandlers.h"
@@ -551,7 +551,7 @@ class BaselineJoinHashTableBuilder {
       return 0;
     }
     auto buffer_provider = executor->getBufferProvider();
-    CudaAllocator allocator(buffer_provider, device_id);
+    GpuAllocator allocator(buffer_provider, device_id);
     auto dev_err_buff = reinterpret_cast<CUdeviceptr>(allocator.alloc(sizeof(int)));
     buffer_provider->copyToDevice(reinterpret_cast<int8_t*>(dev_err_buff),
                                   reinterpret_cast<const int8_t*>(&err),

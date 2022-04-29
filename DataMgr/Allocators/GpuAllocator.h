@@ -15,7 +15,7 @@
  */
 
 /**
- * @file    CudaAllocator.h
+ * @file    GpuAllocator.h
  * @author  Alex Baden <alex.baden@mapd.com>
  * @brief   Allocate GPU memory using GpuBuffers via DataMgr
  */
@@ -34,11 +34,11 @@
 #include "BufferProvider/BufferProvider.h"
 #include "DataMgr/Allocators/DeviceAllocator.h"
 
-class CudaAllocator : public DeviceAllocator {
+class GpuAllocator : public DeviceAllocator {
  public:
-  CudaAllocator(BufferProvider* buffer_provider, const int device_id);
+  GpuAllocator(BufferProvider* buffer_provider, const int device_id);
 
-  ~CudaAllocator() override;
+  ~GpuAllocator() override;
 
   static Data_Namespace::AbstractBuffer* allocGpuAbstractBuffer(
       BufferProvider* buffer_provider,

@@ -17,10 +17,7 @@
 #pragma once
 
 #include "DataMgr/BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
-
-namespace CudaMgr_Namespace {
-class CudaMgr;
-}
+#include "DataMgr/GpuMgr.h"
 
 namespace Data_Namespace {
 constexpr size_t numCpuTiers = 2;
@@ -34,7 +31,7 @@ class TieredCpuBufferMgr : public CpuBufferMgr {
  public:
   TieredCpuBufferMgr(const int device_id,
                      const size_t total_size,
-                     CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                     GpuMgr* gpu_mgr,
                      const size_t min_slab_size,
                      const size_t max_slab_size,
                      const size_t page_size,

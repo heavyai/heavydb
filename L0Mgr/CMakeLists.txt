@@ -5,6 +5,5 @@ else()
 endif()
 
 add_library(L0Mgr ${L0_SOURCES})
-target_include_directories(L0Mgr PRIVATE ${LevelZero_INCLUDE_DIRS})
 target_link_libraries(L0Mgr ${LevelZero_LIBRARIES})
 

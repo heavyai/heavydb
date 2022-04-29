@@ -24,7 +24,7 @@
 
 #include "ResultSetStorage.h"
 
-#include "DataMgr/Allocators/CudaAllocator.h"
+#include "DataMgr/Allocators/GpuAllocator.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Execute.h"
 #include "GpuMemUtils.h"

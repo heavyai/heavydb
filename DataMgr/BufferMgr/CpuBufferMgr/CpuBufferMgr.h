@@ -20,17 +20,13 @@
 
 #include "DataMgr/Allocators/ArenaAllocator.h"
 
-namespace CudaMgr_Namespace {
-class CudaMgr;
-}
-
 namespace Buffer_Namespace {
 
 class CpuBufferMgr : public BufferMgr {
  public:
   CpuBufferMgr(const int device_id,
                const size_t max_buffer_pool_size,
-               CudaMgr_Namespace::CudaMgr* cuda_mgr,
+               GpuMgr* gpu_mgr,
                const size_t min_slab_size,
                const size_t max_slab_size,
                const size_t page_size,
@@ -41,7 +37,7 @@ class CpuBufferMgr : public BufferMgr {
                   max_slab_size,
                   page_size,
                   parent_mgr)
-      , cuda_mgr_(cuda_mgr) {
+      , gpu_mgr_(gpu_mgr) {
     initializeMem();
   }
 
@@ -60,7 +56,7 @@ class CpuBufferMgr : public BufferMgr {
                       const size_t initial_size) override;
   virtual void initializeMem();
 
-  CudaMgr_Namespace::CudaMgr* cuda_mgr_;
+  GpuMgr* gpu_mgr_;
 
  private:
   std::unique_ptr<Arena> allocator_;

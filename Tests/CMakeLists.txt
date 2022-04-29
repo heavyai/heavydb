@@ -79,6 +79,10 @@ if(ENABLE_L0)
   target_link_libraries(L0MgrExecuteTest ${LLVMSPIRVLib_LIBRARIES} ${EXECUTE_TEST_LIBS})
 
   add_test(L0MgrExecuteTest L0MgrExecuteTest ${TEST_ARGS})
+
+  add_executable(DataMgrWithL0Test DataMgrWithL0Test.cpp)
+  target_link_libraries(DataMgrWithL0Test DataMgr ${EXECUTE_TEST_LIBS})
+  add_test(DataMgrWithL0Test DataMgrWithL0Test ${TEST_ARGS})
 endif()
 
 target_link_libraries(ResultSetTest ${EXECUTE_TEST_LIBS})

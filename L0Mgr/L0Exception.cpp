@@ -18,7 +18,7 @@
 #include <level_zero/ze_api.h>
 
 namespace l0 {
-L0Exception::L0Exception(L0result status) : status_(status) {}
+L0Exception::L0Exception(L0result status) : std::runtime_error(""), status_(status) {}
 
 const char* L0Exception::what() const noexcept {
   switch (status_) {

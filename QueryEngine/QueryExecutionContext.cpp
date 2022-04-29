@@ -57,7 +57,7 @@ QueryExecutionContext::QueryExecutionContext(
   CHECK(executor);
   if (device_type == ExecutorDeviceType::GPU) {
     gpu_allocator_ =
-        std::make_unique<CudaAllocator>(executor->getBufferProvider(), device_id);
+        std::make_unique<GpuAllocator>(executor->getBufferProvider(), device_id);
   }
 
   query_buffers_ = std::make_unique<QueryMemoryInitializer>(ra_exe_unit,

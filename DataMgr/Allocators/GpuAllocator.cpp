@@ -14,27 +14,29 @@
  * limitations under the License.
  */
 
-#include "DataMgr/Allocators/CudaAllocator.h"
+#include "DataMgr/Allocators/GpuAllocator.h"
 
 #include "Logger/Logger.h"
 #include "Shared/types.h"
 
-CudaAllocator::CudaAllocator(BufferProvider* buffer_provider, const int device_id)
+GpuAllocator::GpuAllocator(BufferProvider* buffer_provider, const int device_id)
     : buffer_provider_(buffer_provider), device_id_(device_id) {
   CHECK(buffer_provider_);
 #ifdef HAVE_CUDA
+  // TODO: remove as this context setting looks redundant (we pass an actual
+  // context in every Allocator's method anyway)
   buffer_provider_->setContext(device_id);
 #endif  // HAVE_CUDA
 }
 
-CudaAllocator::~CudaAllocator() {
+GpuAllocator::~GpuAllocator() {
   CHECK(buffer_provider_);
   for (auto& buffer_ptr : owned_buffers_) {
     buffer_provider_->free(buffer_ptr);
   }
 }
 
-Data_Namespace::AbstractBuffer* CudaAllocator::allocGpuAbstractBuffer(
+Data_Namespace::AbstractBuffer* GpuAllocator::allocGpuAbstractBuffer(
     BufferProvider* buffer_provider,
     const size_t num_bytes,
     const int device_id) {
@@ -44,35 +46,35 @@ Data_Namespace::AbstractBuffer* CudaAllocator::allocGpuAbstractBuffer(
   return ab;
 }
 
-int8_t* CudaAllocator::alloc(const size_t num_bytes) {
+int8_t* GpuAllocator::alloc(const size_t num_bytes) {
   CHECK(buffer_provider_);
   owned_buffers_.emplace_back(
-      CudaAllocator::allocGpuAbstractBuffer(buffer_provider_, num_bytes, device_id_));
+      GpuAllocator::allocGpuAbstractBuffer(buffer_provider_, num_bytes, device_id_));
   return owned_buffers_.back()->getMemoryPtr();
 }
 
-void CudaAllocator::free(Data_Namespace::AbstractBuffer* ab) const {
+void GpuAllocator::free(Data_Namespace::AbstractBuffer* ab) const {
   buffer_provider_->free(ab);
 }
 
-void CudaAllocator::copyToDevice(int8_t* device_dst,
-                                 const int8_t* host_src,
-                                 const size_t num_bytes) const {
+void GpuAllocator::copyToDevice(int8_t* device_dst,
+                                const int8_t* host_src,
+                                const size_t num_bytes) const {
   buffer_provider_->copyToDevice(device_dst, host_src, num_bytes, device_id_);
 }
 
-void CudaAllocator::copyFromDevice(int8_t* host_dst,
-                                   const int8_t* device_src,
-                                   const size_t num_bytes) const {
+void GpuAllocator::copyFromDevice(int8_t* host_dst,
+                                  const int8_t* device_src,
+                                  const size_t num_bytes) const {
   buffer_provider_->copyFromDevice(host_dst, device_src, num_bytes, device_id_);
 }
 
-void CudaAllocator::zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes) const {
+void GpuAllocator::zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes) const {
   buffer_provider_->zeroDeviceMem(device_ptr, num_bytes, device_id_);
 }
 
-void CudaAllocator::setDeviceMem(int8_t* device_ptr,
-                                 unsigned char uc,
-                                 const size_t num_bytes) const {
+void GpuAllocator::setDeviceMem(int8_t* device_ptr,
+                                unsigned char uc,
+                                const size_t num_bytes) const {
   buffer_provider_->setDeviceMem(device_ptr, uc, num_bytes, device_id_);
 }

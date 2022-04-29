@@ -19,6 +19,7 @@
 #include <memory>
 #include <vector>
 
+#include "DataMgr/GpuMgr.h"
 #include "L0Mgr/L0Exception.h"
 #include "L0Mgr/Utils.h"
 
@@ -173,35 +174,45 @@ class L0CommandList {
 
 void* allocate_device_mem(const size_t num_bytes, L0Device& device);
 
-class L0Manager {
+class L0Manager : public GpuMgr {
  public:
   L0Manager();
 
   void copyHostToDevice(int8_t* device_ptr,
                         const int8_t* host_ptr,
                         const size_t num_bytes,
-                        const int device_num);
+                        const int device_num) override;
   void copyDeviceToHost(int8_t* host_ptr,
                         const int8_t* device_ptr,
                         const size_t num_bytes,
-                        const int device_num);
+                        const int device_num) override;
   void copyDeviceToDevice(int8_t* dest_ptr,
                           int8_t* src_ptr,
                           const size_t num_bytes,
                           const int dest_device_num,
-                          const int src_device_num);
+                          const int src_device_num) override;
 
   int8_t* allocatePinnedHostMem(const size_t num_bytes);
-  int8_t* allocateDeviceMem(const size_t num_bytes, const int device_num);
+  int8_t* allocateDeviceMem(const size_t num_bytes, const int device_num) override;
   void freePinnedHostMem(int8_t* host_ptr);
-  void freeDeviceMem(int8_t* device_ptr);
-  void zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes, const int device_num);
+  void freeDeviceMem(int8_t* device_ptr) override;
+  void zeroDeviceMem(int8_t* device_ptr,
+                     const size_t num_bytes,
+                     const int device_num) override;
   void setDeviceMem(int8_t* device_ptr,
                     const unsigned char uc,
                     const size_t num_bytes,
-                    const int device_num);
+                    const int device_num) override;
 
-  void synchronizeDevices() const;
+  void synchronizeDevices() const override;
+  GpuMgrName getName() const override { return GpuMgrName::L0; }
+  int getDeviceCount() const override {
+    return drivers_.size() ? drivers_[0]->devices().size() : 0;
+  }
+  void setContext(const int device_num) const override{
+      // nothing to do here as the actual context is explicitly passed as a parameter
+      // to every manager's method
+  };
 
   const std::vector<std::shared_ptr<L0Driver>>& drivers() const;
 

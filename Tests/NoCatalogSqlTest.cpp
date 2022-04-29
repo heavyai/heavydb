@@ -161,7 +161,8 @@ class NoCatalogSqlTest : public ::testing::Test {
     schema_provider_ = std::make_shared<TestSchemaProvider>();
 
     SystemParameters system_parameters;
-    data_mgr_ = std::make_shared<DataMgr>("", system_parameters, nullptr, false);
+    data_mgr_ = std::make_shared<DataMgr>(
+        "", system_parameters, std::map<GpuMgrName, std::unique_ptr<GpuMgr>>(), false);
 
     auto* ps_mgr = data_mgr_->getPersistentStorageMgr();
     ps_mgr->registerDataProvider(TEST_SCHEMA_ID,

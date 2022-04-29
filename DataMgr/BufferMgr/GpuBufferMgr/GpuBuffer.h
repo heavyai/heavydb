@@ -17,20 +17,18 @@
 #pragma once
 
 #include "DataMgr/BufferMgr/Buffer.h"
+#include "DataMgr/GpuMgr.h"
 
-namespace CudaMgr_Namespace {
-class CudaMgr;
-}
 namespace Buffer_Namespace {
 
-class GpuCudaBuffer : public Buffer {
+class GpuBuffer : public Buffer {
  public:
-  GpuCudaBuffer(BufferMgr* bm,
-                BufferList::iterator seg_it,
-                const int device_id,
-                CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                const size_t page_size = 512,
-                const size_t num_bytes = 0);
+  GpuBuffer(BufferMgr* bm,
+            BufferList::iterator seg_it,
+            const int device_id,
+            GpuMgr* gpu_mgr,
+            const size_t page_size = 512,
+            const size_t num_bytes = 0);
   inline Data_Namespace::MemoryLevel getType() const override { return GPU_LEVEL; }
 
  private:
@@ -45,6 +43,6 @@ class GpuCudaBuffer : public Buffer {
                  const MemoryLevel src_buffer_type = CPU_LEVEL,
                  const int src_device_id = -1) override;
 
-  CudaMgr_Namespace::CudaMgr* cuda_mgr_;
+  GpuMgr* gpu_mgr_;
 };
 }  // namespace Buffer_Namespace

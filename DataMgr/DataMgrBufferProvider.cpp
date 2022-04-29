@@ -14,8 +14,6 @@
  */
 
 #include "DataMgr/DataMgrBufferProvider.h"
-
-#include "CudaMgr/CudaMgr.h"
 #include "DataMgr/DataMgr.h"
 
 using namespace Data_Namespace;
@@ -37,9 +35,9 @@ void DataMgrBufferProvider::copyToDevice(int8_t* device_ptr,
                                          const size_t num_bytes,
                                          const int device_id) const {
   CHECK(data_mgr_);
-  const auto cuda_mgr = data_mgr_->getCudaMgr();
-  CHECK(cuda_mgr);
-  cuda_mgr->copyHostToDevice(device_ptr, host_ptr, num_bytes, device_id);
+  const auto gpu_mgr = data_mgr_->getGpuMgr();
+  CHECK(gpu_mgr);
+  gpu_mgr->copyHostToDevice(device_ptr, host_ptr, num_bytes, device_id);
 }
 
 void DataMgrBufferProvider::copyFromDevice(int8_t* host_ptr,
@@ -47,18 +45,18 @@ void DataMgrBufferProvider::copyFromDevice(int8_t* host_ptr,
                                            const size_t num_bytes,
                                            const int device_id) const {
   CHECK(data_mgr_);
-  const auto cuda_mgr = data_mgr_->getCudaMgr();
-  CHECK(cuda_mgr);
-  cuda_mgr->copyDeviceToHost(host_ptr, device_ptr, num_bytes, device_id);
+  const auto gpu_mgr = data_mgr_->getGpuMgr();
+  CHECK(gpu_mgr);
+  gpu_mgr->copyDeviceToHost(host_ptr, device_ptr, num_bytes, device_id);
 }
 
 void DataMgrBufferProvider::zeroDeviceMem(int8_t* device_ptr,
                                           const size_t num_bytes,
                                           const int device_id) const {
   CHECK(data_mgr_);
-  const auto cuda_mgr = data_mgr_->getCudaMgr();
-  CHECK(cuda_mgr);
-  cuda_mgr->zeroDeviceMem(device_ptr, num_bytes, device_id);
+  const auto gpu_mgr = data_mgr_->getGpuMgr();
+  CHECK(gpu_mgr);
+  gpu_mgr->zeroDeviceMem(device_ptr, num_bytes, device_id);
 }
 
 void DataMgrBufferProvider::setDeviceMem(int8_t* device_ptr,
@@ -66,13 +64,13 @@ void DataMgrBufferProvider::setDeviceMem(int8_t* device_ptr,
                                          const size_t num_bytes,
                                          const int device_id) const {
   CHECK(data_mgr_);
-  const auto cuda_mgr = data_mgr_->getCudaMgr();
-  CHECK(cuda_mgr);
-  cuda_mgr->setDeviceMem(device_ptr, uc, num_bytes, device_id);
+  const auto gpu_mgr = data_mgr_->getGpuMgr();
+  CHECK(gpu_mgr);
+  gpu_mgr->setDeviceMem(device_ptr, uc, num_bytes, device_id);
 }
 
 void DataMgrBufferProvider::setContext(const int device_id) {
-  auto cuda_mgr = data_mgr_->getCudaMgr();
-  CHECK(cuda_mgr);
-  cuda_mgr->setContext(device_id);
+  auto gpu_mgr = data_mgr_->getGpuMgr();
+  CHECK(gpu_mgr);
+  gpu_mgr->setContext(device_id);
 }

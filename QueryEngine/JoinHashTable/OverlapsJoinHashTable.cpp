@@ -196,7 +196,7 @@ std::vector<double> compute_bucket_sizes(
   else {
     // Note that we compute the bucket sizes using only a single GPU
     const int device_id = 0;
-    CudaAllocator allocator(executor->getBufferProvider(), device_id);
+    GpuAllocator allocator(executor->getBufferProvider(), device_id);
     auto device_bucket_sizes_gpu =
         transfer_vector_of_flat_objects_to_gpu(bucket_sizes, allocator);
     auto join_column_gpu = transfer_flat_object_to_gpu(join_column, allocator);
@@ -583,11 +583,11 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
   }
 
   std::vector<ColumnsForDevice> columns_per_device;
-  std::vector<std::unique_ptr<CudaAllocator>> dev_buff_owners;
+  std::vector<std::unique_ptr<GpuAllocator>> dev_buff_owners;
   if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
     for (int device_id = 0; device_id < device_count_; ++device_id) {
       dev_buff_owners.emplace_back(
-          std::make_unique<CudaAllocator>(executor_->getBufferProvider(), device_id));
+          std::make_unique<GpuAllocator>(executor_->getBufferProvider(), device_id));
     }
   }
   const auto shard_count = shardCount();
@@ -994,7 +994,7 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
          buffer_provider,
          &host_hll_buffers,
          &emitted_keys_count_device_threads] {
-          CudaAllocator allocator(buffer_provider, device_id);
+          GpuAllocator allocator(buffer_provider, device_id);
           auto device_hll_buffer =
               allocator.alloc(count_distinct_desc.bitmapPaddedSizeBytes());
           buffer_provider->zeroDeviceMem(
@@ -1304,7 +1304,7 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnGpu(
   VLOG(1) << "Building overlaps join hash table on GPU.";
 
   BaselineJoinHashTableBuilder builder;
-  CudaAllocator allocator(executor_->getBufferProvider(), device_id);
+  GpuAllocator allocator(executor_->getBufferProvider(), device_id);
   auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(join_columns, allocator);
   CHECK_EQ(join_columns.size(), 1u);
   CHECK(!join_bucket_info.empty());

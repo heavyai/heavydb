@@ -176,11 +176,11 @@ void ExecutionKernel::runImpl(Executor* executor,
   auto chunk_iterators_ptr = std::make_shared<std::list<ChunkIter>>();
   std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks;
   std::unique_ptr<std::lock_guard<std::mutex>> gpu_lock;
-  std::unique_ptr<CudaAllocator> device_allocator;
+  std::unique_ptr<GpuAllocator> device_allocator;
   if (chosen_device_type == ExecutorDeviceType::GPU) {
     gpu_lock.reset(
         new std::lock_guard<std::mutex>(executor->gpu_exec_mutex_[chosen_device_id]));
-    device_allocator = std::make_unique<CudaAllocator>(buffer_provider, chosen_device_id);
+    device_allocator = std::make_unique<GpuAllocator>(buffer_provider, chosen_device_id);
   }
   std::shared_ptr<FetchResult> fetch_result(new FetchResult);
   try {

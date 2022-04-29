@@ -17,7 +17,7 @@
 /*
  * @file    ThrustAllocator.h
  * @author  Minggang Yu <miyu@mapd.com>
- * @brief   Allocate GPU memory using GpuBuffers via DataMgr. Unlike the CudaAllocator,
+ * @brief   Allocate GPU memory using GpuBuffers via DataMgr. Unlike the GpuAllocator,
  * these buffers are destroyed and memory is released when the parent object goes out of
  * scope.
  *

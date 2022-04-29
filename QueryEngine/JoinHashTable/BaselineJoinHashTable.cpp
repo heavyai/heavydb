@@ -18,7 +18,7 @@
 
 #include <future>
 
-#include "DataMgr/Allocators/CudaAllocator.h"
+#include "DataMgr/Allocators/GpuAllocator.h"
 #include "QueryEngine/CodeGenerator.h"
 #include "QueryEngine/ColumnFetcher.h"
 #include "QueryEngine/Execute.h"
@@ -244,11 +244,11 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
   }
 
   auto buffer_provider = executor_->getBufferProvider();
-  std::vector<std::unique_ptr<CudaAllocator>> dev_buff_owners;
+  std::vector<std::unique_ptr<GpuAllocator>> dev_buff_owners;
   if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
     for (int device_id = 0; device_id < device_count_; ++device_id) {
       dev_buff_owners.emplace_back(
-          std::make_unique<CudaAllocator>(buffer_provider, device_id));
+          std::make_unique<GpuAllocator>(buffer_provider, device_id));
     }
   }
   std::vector<ColumnsForDevice> columns_per_device;
@@ -378,7 +378,7 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
          &count_distinct_desc,
          buffer_provider,
          &host_hll_buffers] {
-          CudaAllocator allocator(buffer_provider, device_id);
+          GpuAllocator allocator(buffer_provider, device_id);
           auto device_hll_buffer =
               allocator.alloc(count_distinct_desc.bitmapPaddedSizeBytes());
           buffer_provider->zeroDeviceMem(
@@ -704,7 +704,7 @@ int BaselineJoinHashTable::initHashTableForDevice(
 #ifdef HAVE_CUDA
     BaselineJoinHashTableBuilder builder;
 
-    CudaAllocator allocator(executor_->getBufferProvider(), device_id);
+    GpuAllocator allocator(executor_->getBufferProvider(), device_id);
     auto join_column_types_gpu =
         transfer_vector_of_flat_objects_to_gpu(join_column_types, allocator);
     auto join_columns_gpu =

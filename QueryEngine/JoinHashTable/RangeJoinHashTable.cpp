@@ -77,11 +77,11 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
   ;
 
   auto buffer_provider = executor_->getBufferProvider();
-  std::vector<std::unique_ptr<CudaAllocator>> dev_buff_owners;
+  std::vector<std::unique_ptr<GpuAllocator>> dev_buff_owners;
   if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
     for (int device_id = 0; device_id < device_count_; ++device_id) {
       dev_buff_owners.emplace_back(
-          std::make_unique<CudaAllocator>(buffer_provider, device_id));
+          std::make_unique<GpuAllocator>(buffer_provider, device_id));
     }
   }
   const auto shard_count = shardCount();
@@ -212,7 +212,7 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnGpu(
   VLOG(1) << "Building range join hash table on GPU.";
 
   BaselineJoinHashTableBuilder builder;
-  CudaAllocator allocator(executor_->getBufferProvider(), device_id);
+  GpuAllocator allocator(executor_->getBufferProvider(), device_id);
   auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(join_columns, allocator);
   CHECK_EQ(join_columns.size(), 1u);
   CHECK(!join_bucket_info.empty());
@@ -463,7 +463,7 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
          &host_hll_buffers,
          &emitted_keys_count_device_threads,
          this] {
-          CudaAllocator allocator(buffer_provider, device_id);
+          GpuAllocator allocator(buffer_provider, device_id);
           auto device_hll_buffer =
               allocator.alloc(count_distinct_desc.bitmapPaddedSizeBytes());
           buffer_provider->zeroDeviceMem(

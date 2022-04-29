@@ -73,7 +73,7 @@ class PerfectJoinHashTableBuilder {
     auto timer = DEBUG_TIMER(__func__);
     auto buffer_provider = executor->getBufferProvider();
     Data_Namespace::AbstractBuffer* gpu_hash_table_err_buff =
-        CudaAllocator::allocGpuAbstractBuffer(buffer_provider, sizeof(int), device_id);
+        GpuAllocator::allocGpuAbstractBuffer(buffer_provider, sizeof(int), device_id);
     ScopeGuard cleanup_error_buff = [buffer_provider, gpu_hash_table_err_buff]() {
       buffer_provider->free(gpu_hash_table_err_buff);
     };

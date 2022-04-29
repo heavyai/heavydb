@@ -340,17 +340,20 @@ class ArrowSQLRunnerImpl {
   ArrowSQLRunnerImpl(size_t max_gpu_mem, const std::string& udf_filename) {
     storage_ = std::make_shared<ArrowStorage>(TEST_SCHEMA_ID, "test", TEST_DB_ID);
 
-    std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr;
+    std::map<GpuMgrName, std::unique_ptr<GpuMgr>> gpu_mgrs;
     bool uses_gpu = false;
 #ifdef HAVE_CUDA
-    cuda_mgr = std::make_unique<CudaMgr_Namespace::CudaMgr>(-1, 0);
+    gpu_mgrs[GpuMgrName::CUDA] = std::make_unique<CudaMgr_Namespace::CudaMgr>(-1, 0);
+    uses_gpu = true;
+#elif HAVE_L0
+    gpu_mgrs[GpuMgrName::L0] = std::make_unique<l0::L0Manager>();
     uses_gpu = true;
 #endif
 
     SystemParameters system_parameters;
     system_parameters.gpu_buffer_mem_bytes = max_gpu_mem;
     data_mgr_ =
-        std::make_shared<DataMgr>("", system_parameters, std::move(cuda_mgr), uses_gpu);
+        std::make_shared<DataMgr>("", system_parameters, std::move(gpu_mgrs), uses_gpu);
     auto* ps_mgr = data_mgr_->getPersistentStorageMgr();
     ps_mgr->registerDataProvider(TEST_SCHEMA_ID, storage_);
 

@@ -18,7 +18,7 @@
 #define QUERYENGINE_QUERYEXECUTIONCONTEXT_H
 
 #include "CompilationOptions.h"
-#include "DataMgr/Allocators/CudaAllocator.h"
+#include "DataMgr/Allocators/GpuAllocator.h"
 #include "GpuMemUtils.h"
 #include "ResultSet.h"
 
@@ -133,7 +133,7 @@ class QueryExecutionContext : boost::noncopyable {
 
   ResultSetPtr groupBufferToDeinterleavedResults(const size_t i) const;
 
-  std::unique_ptr<CudaAllocator> gpu_allocator_;
+  std::unique_ptr<GpuAllocator> gpu_allocator_;
 
   // TODO(adb): convert to shared_ptr
   QueryMemoryDescriptor query_mem_desc_;

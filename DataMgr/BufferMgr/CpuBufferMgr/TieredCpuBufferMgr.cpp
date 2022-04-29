@@ -15,9 +15,9 @@
  */
 
 #include "DataMgr/BufferMgr/CpuBufferMgr/TieredCpuBufferMgr.h"
-#include "CudaMgr/CudaMgr.h"
 #include "DataMgr/Allocators/ArenaAllocator.h"
 #include "DataMgr/BufferMgr/CpuBufferMgr/CpuBuffer.h"
+#include "DataMgr/GpuMgr.h"
 #include "Shared/misc.h"
 
 #include <iostream>
@@ -39,7 +39,7 @@ namespace Buffer_Namespace {
 
 TieredCpuBufferMgr::TieredCpuBufferMgr(const int device_id,
                                        const size_t total_size,
-                                       CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                                       GpuMgr* gpu_mgr,
                                        const size_t min_slab_size,
                                        const size_t max_slab_size,
                                        const size_t page_size,
@@ -47,7 +47,7 @@ TieredCpuBufferMgr::TieredCpuBufferMgr(const int device_id,
                                        AbstractBufferMgr* parent_mgr)
     : CpuBufferMgr(device_id,
                    total_size,
-                   cuda_mgr,
+                   gpu_mgr,
                    min_slab_size,
                    max_slab_size,
                    page_size,

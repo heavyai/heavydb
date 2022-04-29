@@ -18,7 +18,7 @@
 
 #include "BufferProvider/BufferProvider.h"
 #include "DataMgr/AbstractBuffer.h"
-#include "DataMgr/Allocators/CudaAllocator.h"
+#include "DataMgr/Allocators/GpuAllocator.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 
@@ -60,7 +60,7 @@ class BaselineHashTable : public HashTable {
       , emitted_keys_count_(emitted_keys_count) {
 #ifdef HAVE_CUDA
     CHECK(buffer_provider_);
-    gpu_hash_table_buff_ = CudaAllocator::allocGpuAbstractBuffer(
+    gpu_hash_table_buff_ = GpuAllocator::allocGpuAbstractBuffer(
         buffer_provider_, hash_table_size, device_id_);
 #else
     UNREACHABLE();

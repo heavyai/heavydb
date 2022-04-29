@@ -16,7 +16,7 @@
 #include "L0Exception.h"
 
 namespace l0 {
-L0Exception::L0Exception(L0result status) : status_(status) {}
+L0Exception::L0Exception(L0result status) : std::runtime_error(""), status_(status) {}
 
 const char* L0Exception::what() const noexcept {
   // avoid clang unused private member warning

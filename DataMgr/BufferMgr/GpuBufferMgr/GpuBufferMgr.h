@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 MapD Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,25 +17,22 @@
 #pragma once
 
 #include "DataMgr/BufferMgr/BufferMgr.h"
-
-namespace CudaMgr_Namespace {
-class CudaMgr;
-}
+#include "DataMgr/GpuMgr.h"
 
 namespace Buffer_Namespace {
 
-class GpuCudaBufferMgr : public BufferMgr {
+class GpuBufferMgr : public BufferMgr {
  public:
-  GpuCudaBufferMgr(const int device_id,
-                   const size_t max_buffer_pool_size,
-                   CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                   const size_t min_slab_size,
-                   const size_t max_slab_size,
-                   const size_t page_size,
-                   AbstractBufferMgr* parent_mgr = 0);
+  GpuBufferMgr(const int device_id,
+               const size_t max_buffer_pool_size,
+               GpuMgr* gpu_mgr,
+               const size_t min_slab_size,
+               const size_t max_slab_size,
+               const size_t page_size,
+               AbstractBufferMgr* parent_mgr = 0);
   inline MgrType getMgrType() override { return GPU_MGR; }
   inline std::string getStringMgrType() override { return ToString(GPU_MGR); }
-  ~GpuCudaBufferMgr() override;
+  ~GpuBufferMgr() override;
 
  private:
   void addSlab(const size_t slab_size) override;
@@ -43,7 +40,7 @@ class GpuCudaBufferMgr : public BufferMgr {
   void allocateBuffer(BufferList::iterator seg_it,
                       const size_t page_size,
                       const size_t initial_size) override;
-  CudaMgr_Namespace::CudaMgr* cuda_mgr_;
+  GpuMgr* gpu_mgr_;
 };
 
 }  // namespace Buffer_Namespace

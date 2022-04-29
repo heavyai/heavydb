@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 #pragma once
-#include <exception>
+#include <stdexcept>
 
 namespace l0 {
 using L0result = int;
 
-class L0Exception : public std::exception {
+class L0Exception : public std::runtime_error {
  public:
   L0Exception(L0result status);
 

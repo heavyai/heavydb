@@ -19,7 +19,7 @@
 #include <memory>
 #include <vector>
 
-#include "DataMgr/Allocators/CudaAllocator.h"
+#include "DataMgr/Allocators/GpuAllocator.h"
 #include "QueryEngine/JoinHashTable/HashTable.h"
 
 class PerfectHashTable : public HashTable {
@@ -57,7 +57,7 @@ class PerfectHashTable : public HashTable {
   void allocateGpuMemory(const size_t entries, const int device_id) {
     CHECK_GE(device_id, 0);
     CHECK(!gpu_hash_table_buff_);
-    gpu_hash_table_buff_ = CudaAllocator::allocGpuAbstractBuffer(
+    gpu_hash_table_buff_ = GpuAllocator::allocGpuAbstractBuffer(
         buffer_provider_, entries * sizeof(int32_t), device_id);
   }
 

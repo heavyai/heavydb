@@ -26,7 +26,7 @@
 #include "CodeGenerator.h"
 #include "Execute.h"
 #ifdef HAVE_CUDA
-#include "DataMgr/Allocators/CudaAllocator.h"
+#include "DataMgr/Allocators/GpuAllocator.h"
 #include "GpuMemUtils.h"
 #endif  // HAVE_CUDA
 #include "Analyzer/Analyzer.h"
@@ -85,7 +85,7 @@ void StringDictionaryTranslationMgr::createKernelBuffers() {
     const size_t translation_map_size_bytes{host_translation_map_->getVectorMap().size() *
                                             sizeof(int32_t)};
     for (int device_id = 0; device_id < device_count_; ++device_id) {
-      device_buffers_.emplace_back(CudaAllocator::allocGpuAbstractBuffer(
+      device_buffers_.emplace_back(GpuAllocator::allocGpuAbstractBuffer(
           data_mgr_->getBufferProvider(), translation_map_size_bytes, device_id));
       auto device_buffer =
           reinterpret_cast<int32_t*>(device_buffers_.back()->getMemoryPtr());

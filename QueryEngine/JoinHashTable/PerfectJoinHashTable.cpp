@@ -283,13 +283,13 @@ void PerfectJoinHashTable::reify() {
   CHECK_EQ(inner_outer_pairs_.size(), size_t(1));
 
   std::vector<ColumnsForDevice> columns_per_device;
-  std::vector<std::unique_ptr<CudaAllocator>> dev_buff_owners;
+  std::vector<std::unique_ptr<GpuAllocator>> dev_buff_owners;
   try {
     auto buffer_provider = executor_->getBufferProvider();
     if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
       for (int device_id = 0; device_id < device_count_; ++device_id) {
         dev_buff_owners.emplace_back(
-            std::make_unique<CudaAllocator>(buffer_provider, device_id));
+            std::make_unique<GpuAllocator>(buffer_provider, device_id));
       }
     }
     for (int device_id = 0; device_id < device_count_; ++device_id) {

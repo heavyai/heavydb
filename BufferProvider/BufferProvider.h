@@ -24,7 +24,7 @@ class BufferProvider {
  public:
   virtual ~BufferProvider() = default;
 
-  // allocator APIs (CudaAllocator, ThrustAllocator)
+  // allocator APIs (GpuAllocator, ThrustAllocator)
   virtual void free(AbstractBuffer* buffer) = 0;
   virtual AbstractBuffer* alloc(const MemoryLevel memory_level,
                                 const int device_id,
@@ -46,5 +46,8 @@ class BufferProvider {
                             unsigned char uc,
                             const size_t num_bytes,
                             const int device_id) const = 0;
+  // `setContext()` method seems redundant as we already pass an actual context via
+  // parameter `device_num` into every BufferProvider's method, maybe we should remove
+  // `setContext()`?
   virtual void setContext(const int device_id) = 0;
 };

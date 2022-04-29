@@ -21,7 +21,7 @@
 #include <cstdint>
 
 #include "CudaMgr/CudaMgr.h"
-#include "DataMgr/Allocators/CudaAllocator.h"
+#include "DataMgr/Allocators/GpuAllocator.h"
 #include "DataMgr/DataMgr.h"
 #include "Logger/Logger.h"
 #include "Shared/boost_stacktrace.hpp"
@@ -37,7 +37,7 @@ int8_t* ThrustAllocator::allocate(std::ptrdiff_t num_bytes) {
     return reinterpret_cast<int8_t*>(ptr);
   }
   Data_Namespace::AbstractBuffer* ab =
-      CudaAllocator::allocGpuAbstractBuffer(buffer_provider_, num_bytes, device_id_);
+      GpuAllocator::allocGpuAbstractBuffer(buffer_provider_, num_bytes, device_id_);
 #else
   Data_Namespace::AbstractBuffer* ab =
       buffer_provider_->alloc(MemoryLevel::CPU_LEVEL, device_id_, num_bytes);
@@ -73,7 +73,7 @@ int8_t* ThrustAllocator::allocateScopedBuffer(std::ptrdiff_t num_bytes) {
     return reinterpret_cast<int8_t*>(ptr);
   }
   Data_Namespace::AbstractBuffer* ab =
-      CudaAllocator::allocGpuAbstractBuffer(buffer_provider_, num_bytes, device_id_);
+      GpuAllocator::allocGpuAbstractBuffer(buffer_provider_, num_bytes, device_id_);
 #else
   Data_Namespace::AbstractBuffer* ab =
       buffer_provider_->alloc(MemoryLevel::CPU_LEVEL, device_id_, num_bytes);

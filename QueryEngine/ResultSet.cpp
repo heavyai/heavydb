@@ -21,7 +21,7 @@
  */
 
 #include "ResultSet.h"
-#include "DataMgr/Allocators/CudaAllocator.h"
+#include "DataMgr/Allocators/GpuAllocator.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Execute.h"
 #include "GpuMemUtils.h"
@@ -150,7 +150,7 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
     , for_validation_only_(false)
     , cached_row_count_(uninitialized_cached_row_count) {
   if (device_type == ExecutorDeviceType::GPU) {
-    device_estimator_buffer_ = CudaAllocator::allocGpuAbstractBuffer(
+    device_estimator_buffer_ = GpuAllocator::allocGpuAbstractBuffer(
         buffer_provider_, estimator_->getBufferSize(), device_id_);
     buffer_provider_->zeroDeviceMem(device_estimator_buffer_->getMemoryPtr(),
                                     estimator_->getBufferSize(),
@@ -1238,7 +1238,7 @@ void ResultSet::radixSortOnGpu(
     const std::list<Analyzer::OrderEntry>& order_entries) const {
   auto timer = DEBUG_TIMER(__func__);
   const int device_id{0};
-  CudaAllocator cuda_allocator(buffer_provider_, device_id);
+  GpuAllocator cuda_allocator(buffer_provider_, device_id);
   CHECK_GT(block_size_, 0);
   CHECK_GT(grid_size_, 0);
   std::vector<int64_t*> group_by_buffers(block_size_);

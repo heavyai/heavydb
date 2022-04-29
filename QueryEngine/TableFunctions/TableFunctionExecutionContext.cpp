@@ -30,7 +30,7 @@ template <typename T>
 const int8_t* create_literal_buffer(const T literal,
                                     const ExecutorDeviceType device_type,
                                     std::vector<std::unique_ptr<char[]>>& literals_owner,
-                                    CudaAllocator* gpu_allocator) {
+                                    GpuAllocator* gpu_allocator) {
   CHECK_LE(sizeof(T), sizeof(int64_t));  // pad to 8 bytes
   switch (device_type) {
     case ExecutorDeviceType::CPU: {
@@ -57,7 +57,7 @@ template <>
 const int8_t* create_literal_buffer(std::string* const literal,
                                     const ExecutorDeviceType device_type,
                                     std::vector<std::unique_ptr<char[]>>& literals_owner,
-                                    CudaAllocator* gpu_allocator) {
+                                    GpuAllocator* gpu_allocator) {
   const int64_t string_size = literal->size();
   const int64_t padded_string_size =
       (string_size + 7) / 8 * 8;  // round up to the next multiple of 8
@@ -128,9 +128,9 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   std::vector<std::unique_ptr<char[]>> literals_owner;
 
   const int device_id = 0;  // TODO(adb): support multi-gpu table functions
-  std::unique_ptr<CudaAllocator> device_allocator;
+  std::unique_ptr<GpuAllocator> device_allocator;
   if (device_type == ExecutorDeviceType::GPU) {
-    device_allocator.reset(new CudaAllocator(executor->getBufferProvider(), device_id));
+    device_allocator.reset(new GpuAllocator(executor->getBufferProvider(), device_id));
   }
   std::vector<const int8_t*> col_buf_ptrs;
   std::vector<int64_t> col_sizes;
@@ -424,7 +424,7 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
 
   auto num_out_columns = exe_unit.target_exprs.size();
   auto gpu_allocator =
-      std::make_unique<CudaAllocator>(executor->getBufferProvider(), device_id);
+      std::make_unique<GpuAllocator>(executor->getBufferProvider(), device_id);
   CHECK(gpu_allocator);
   std::vector<CUdeviceptr> kernel_params(KERNEL_PARAM_COUNT, 0);
 
