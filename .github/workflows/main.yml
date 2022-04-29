@@ -1,6 +1,11 @@
 name: Build
 on:
-  workflow_dispatch: []
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: string
+        default: DEV
+
   push:
     paths-ignore:
       - 'docs/**'
