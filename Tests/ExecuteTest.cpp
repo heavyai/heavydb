@@ -9822,6 +9822,12 @@ TEST(Select, ArrayUnnest) {
             R"(SELECT count(*) FROM (SELECT  unnest(arr_str), unnest(arr_float) FROM array_test GROUP BY 1, 2);)",
             dt)),
         int64_t(104));
+
+    EXPECT_ANY_THROW(
+        run_multiple_agg("SELECT COUNT(*), UNNEST(arr_str) AS a FROM array_test GROUP BY "
+                         "a ORDER BY KEY_FOR_STRING(a) "
+                         "DESC;",
+                         dt));
   }
 }
 

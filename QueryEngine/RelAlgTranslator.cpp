@@ -1296,6 +1296,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateKeyForString(
     throw std::runtime_error(rex_function->getName() +
                              " expects a dictionary encoded text column.");
   }
+  auto unnest_arg = dynamic_cast<Analyzer::UOper*>(expr);
+  if (unnest_arg && unnest_arg->get_optype() == SQLOps::kUNNEST) {
+    throw std::runtime_error(
+        rex_function->getName() +
+        " does not support unnest operator as its input expression.");
+  }
   return makeExpr<Analyzer::KeyForStringExpr>(args[0]);
 }
 
