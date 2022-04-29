@@ -4559,7 +4559,7 @@ TEST_F(PostGisSelectQueryTest, GeometryFromPostGisAsText) {
       {{"sql_select",
         "select id, ST_AsText(p) as p, ST_AsText(l) as l, ST_AsText(poly) as poly, "
         "ST_AsText(multipoly) as multipoly from "s +
-            default_table_name}},
+            getOdbcTableName(default_table_name, wrapper_type_)}},
       default_table_name,
       {{"id", "INT"},
        {"p", "TEXT"},
