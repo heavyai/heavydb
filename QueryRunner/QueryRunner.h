@@ -34,7 +34,7 @@
 #include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/QueryHint.h"
 #include "QueryEngine/QueryPlanDagExtractor.h"
-#include "QueryEngine/RelAlgDagBuilder.h"
+#include "QueryEngine/RelAlgDag.h"
 #include "QueryEngine/RelAlgExecutionUnit.h"
 #include "QueryEngine/RelAlgTranslator.h"
 #include "Shared/SysDefinitions.h"

@@ -17,7 +17,7 @@
 #ifndef QUERYENGINE_RELALGVISITOR_H
 #define QUERYENGINE_RELALGVISITOR_H
 
-#include "RelAlgDagBuilder.h"
+#include "RelAlgDag.h"
 
 template <class T>
 class RelAlgVisitor {

@@ -32,7 +32,7 @@
 #include "QueryEngine/QueryPhysicalInputsCollector.h"
 #include "QueryEngine/QueryPlanDagExtractor.h"
 #include "QueryEngine/RangeTableIndexVisitor.h"
-#include "QueryEngine/RelAlgDagBuilder.h"
+#include "QueryEngine/RelAlgDag.h"
 #include "QueryEngine/RelAlgTranslator.h"
 #include "QueryEngine/RelAlgVisitor.h"
 #include "QueryEngine/ResultSetBuilder.h"
@@ -537,6 +537,9 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
                                                    const bool just_explain_plan,
                                                    RenderInfo* render_info) {
   CHECK(query_dag_);
+  CHECK(query_dag_->getBuildState() == RelAlgDag::BuildState::kBuiltOptimized)
+      << static_cast<int>(query_dag_->getBuildState());
+
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(executeRelAlgQuery);
 

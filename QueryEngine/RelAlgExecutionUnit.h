@@ -26,7 +26,7 @@
 
 #include "Descriptors/InputDescriptors.h"
 #include "QueryHint.h"
-#include "RelAlgDagBuilder.h"
+#include "RelAlgDag.h"
 #include "Shared/sqldefs.h"
 #include "Shared/toString.h"
 #include "TableFunctions/TableFunctionOutputBufferSizeType.h"

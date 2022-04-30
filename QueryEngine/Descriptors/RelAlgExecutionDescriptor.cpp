@@ -17,7 +17,7 @@
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "QueryEngine/QueryPlanDagExtractor.h"
-#include "QueryEngine/RelAlgDagBuilder.h"
+#include "QueryEngine/RelAlgDag.h"
 
 #include <boost/graph/topological_sort.hpp>
 

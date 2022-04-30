@@ -16,7 +16,7 @@
 
 #include "QueryPhysicalInputsCollector.h"
 
-#include "RelAlgDagBuilder.h"
+#include "RelAlgDag.h"
 #include "RelAlgVisitor.h"
 #include "RexVisitor.h"
 #include "Visitors/RelRexDagVisitor.h"

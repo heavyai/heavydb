@@ -16,7 +16,7 @@
 
 #include "RelLeftDeepInnerJoin.h"
 #include "Logger/Logger.h"
-#include "RelAlgDagBuilder.h"
+#include "RelAlgDag.h"
 #include "RexVisitor.h"
 
 #include <numeric>
@@ -333,6 +333,6 @@ void create_left_deep_join(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
 
   // insert the new left join nodes to the front of the owned RelAlgNode list.
   // This is done to ensure all created RelAlgNodes exist in this list for later
-  // visitation, such as RelAlgDagBuilder::resetQueryExecutionState.
+  // visitation, such as RelAlgDag::resetQueryExecutionState.
   nodes.insert(nodes.begin(), new_nodes.begin(), new_nodes.end());
 }

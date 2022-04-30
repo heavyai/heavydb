@@ -25,7 +25,7 @@
 #include <memory>
 #include <vector>
 
-#include "RelAlgDagBuilder.h"
+#include "RelAlgDag.h"
 #include "RelAlgExecutionUnit.h"
 #include "ScalarExprVisitor.h"
 #include "Visitors/RelRexDagVisitor.h"

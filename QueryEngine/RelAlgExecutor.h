@@ -23,7 +23,7 @@
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/JoinFilterPushDown.h"
 #include "QueryEngine/QueryRewrite.h"
-#include "QueryEngine/RelAlgDagBuilder.h"
+#include "QueryEngine/RelAlgDag.h"
 #include "QueryEngine/SpeculativeTopN.h"
 #include "QueryEngine/StreamingTopN.h"
 #include "Shared/scope.h"
@@ -72,7 +72,7 @@ class RelAlgExecutor : private StorageIOFacility {
       : StorageIOFacility(executor, cat)
       , executor_(executor)
       , cat_(cat)
-      , query_dag_(std::make_unique<RelAlgDagBuilder>(query_ra, cat_, nullptr))
+      , query_dag_(RelAlgDagBuilder::buildDag(query_ra, cat, true))
       , query_state_(std::move(query_state))
       , now_(0)
       , queue_time_ms_(0) {
@@ -81,7 +81,7 @@ class RelAlgExecutor : private StorageIOFacility {
 
   RelAlgExecutor(Executor* executor,
                  const Catalog_Namespace::Catalog& cat,
-                 std::unique_ptr<RelAlgDagBuilder> query_dag,
+                 std::unique_ptr<RelAlgDag> query_dag,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
       : StorageIOFacility(executor, cat)
       , executor_(executor)
@@ -426,7 +426,7 @@ class RelAlgExecutor : private StorageIOFacility {
 
   Executor* executor_;
   const Catalog_Namespace::Catalog& cat_;
-  std::unique_ptr<RelAlgDagBuilder> query_dag_;
+  std::unique_ptr<RelAlgDag> query_dag_;
   std::shared_ptr<const query_state::QueryState> query_state_;
   TemporaryTables temporary_tables_;
   time_t now_;

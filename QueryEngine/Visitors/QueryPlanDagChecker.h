@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "QueryEngine/RelAlgDagBuilder.h"
+#include "QueryEngine/RelAlgDag.h"
 #include "QueryEngine/RelAlgTranslator.h"
 #include "RelRexDagVisitor.h"
 

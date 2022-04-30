@@ -27,7 +27,7 @@
 
 #pragma once
 
-#include "../RelAlgDagBuilder.h"
+#include "../RelAlgDag.h"
 #include "TypeHandler.h"
 
 #include <array>

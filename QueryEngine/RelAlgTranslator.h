@@ -18,7 +18,7 @@
 #define QUERYENGINE_RELALGTRANSLATOR_H
 
 #include "Execute.h"
-#include "RelAlgDagBuilder.h"
+#include "RelAlgDag.h"
 
 #include <ctime>
 #include <memory>

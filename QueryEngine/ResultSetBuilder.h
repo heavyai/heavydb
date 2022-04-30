@@ -23,7 +23,7 @@
 #ifndef QUERYENGINE_RESULTSETBUILDER_H
 #define QUERYENGINE_RESULTSETBUILDER_H
 
-#include "RelAlgDagBuilder.h"
+#include "RelAlgDag.h"
 #include "ResultSet.h"
 
 // ********************************************************

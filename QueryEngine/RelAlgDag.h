@@ -2249,41 +2249,17 @@ class QueryNotSupported : public std::runtime_error {
 };
 
 /**
- * Builder class to create an in-memory, easy-to-navigate relational algebra DAG
- * interpreted from a JSON representation from Calcite. Also, applies high level
- * optimizations which can be expressed through relational algebra extended with
- * RelCompound. The RelCompound node is an equivalent representation for sequences of
- * RelFilter, RelProject and RelAggregate nodes. This coalescing minimizes the amount of
- * intermediate buffers required to evaluate a query. Lower level optimizations are
- * taken care by lower levels, mainly RelAlgTranslator and the IR code generation.
+ * Class defining an in-memory, easy-to-navigate internal representation of a relational
+ * algebra DAG interpreted from a JSON provided by Calcite. Must be built through the
+ * RelAlgDagBuilder interface.
  */
-class RelAlgDagBuilder : public boost::noncopyable {
+class RelAlgDag : public boost::noncopyable {
  public:
-  RelAlgDagBuilder() = delete;
+  enum class BuildState { kNotBuilt, kBuiltNotOptimized, kBuiltOptimized };
 
-  /**
-   * Constructs a RelAlg DAG from a JSON representation.
-   * @param query_ra A JSON string representation of an RA tree from Calcite.
-   * @param cat DB catalog for the current user.
-   * @param render_opts Additional build options for render queries.
-   */
-  RelAlgDagBuilder(const std::string& query_ra,
-                   const Catalog_Namespace::Catalog& cat,
-                   const RenderInfo* render_info);
+  RelAlgDag() : build_state_{BuildState::kNotBuilt} {}
 
-  /**
-   * Constructs a sub-DAG for any subqueries. Should only be called during DAG
-   * building.
-   * @param root_dag_builder The root DAG builder. The root stores pointers to all
-   * subqueries.
-   * @param query_ast The current JSON node to build a DAG for.
-   * @param cat DB catalog for the current user.
-   * @param render_opts Additional build options for render queries.
-   */
-  RelAlgDagBuilder(RelAlgDagBuilder& root_dag_builder,
-                   const rapidjson::Value& query_ast,
-                   const Catalog_Namespace::Catalog& cat,
-                   const RenderInfo* render_opts);
+  BuildState getBuildState() const { return build_state_; }
 
   void eachNode(std::function<void(RelAlgNode const*)> const&) const;
 
@@ -2542,18 +2518,87 @@ class RelAlgDagBuilder : public boost::noncopyable {
   void resetQueryExecutionState();
 
  private:
-  void build(const rapidjson::Value& query_ast, RelAlgDagBuilder& root_dag_builder);
+  BuildState build_state_;
 
-  const Catalog_Namespace::Catalog& cat_;
   std::vector<std::shared_ptr<RelAlgNode>> nodes_;
   std::vector<std::shared_ptr<RexSubQuery>> subqueries_;
-  const RenderInfo* render_info_;
   // node hash --> {node id --> registered hint}
   // we additionally consider node id to recognize corresponding hint correctly
   // i.e., to recognize the correct hint when two subqueries are identical
   std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>
       query_hint_;
   RegisteredQueryHint global_hints_;
+
+  friend struct RelAlgDagModifier;
+};
+
+/**
+ * A middle-layer class that can be inherited from to gain modify rights to a RelAlgDag
+ * class. This provides a way to access private members of the RelAlgDag class without
+ * dirtying its public interface with non-const accessors that may only apply for very
+ * specific classes. Only classes/structs that inherit from this middle-layer class will
+ * have modify rights.
+ */
+struct RelAlgDagModifier {
+ protected:
+  static std::vector<std::shared_ptr<RelAlgNode>>& getNodes(RelAlgDag& rel_alg_dag) {
+    return rel_alg_dag.nodes_;
+  }
+
+  static std::vector<std::shared_ptr<RexSubQuery>>& getSubqueries(
+      RelAlgDag& rel_alg_dag) {
+    return rel_alg_dag.subqueries_;
+  }
+
+  static std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>&
+  getQueryHints(RelAlgDag& rel_alg_dag) {
+    return rel_alg_dag.query_hint_;
+  }
+
+  static void setBuildState(RelAlgDag& rel_alg_dag,
+                            const RelAlgDag::BuildState build_state) {
+    rel_alg_dag.build_state_ = build_state;
+  }
+};
+
+/**
+ * Builder struct to create a RelAlgDag instance. Can optionally apply high level
+ * optimizations which can be expressed through relational algebra extended with
+ * RelCompound. The RelCompound node is an equivalent representation for sequences of
+ * RelFilter, RelProject and RelAggregate nodes. This coalescing minimizes the amount of
+ * intermediate buffers required to evaluate a query. Lower level optimizations are
+ * taken care by lower levels, mainly RelAlgTranslator and the IR code generation.
+ */
+struct RelAlgDagBuilder : public RelAlgDagModifier {
+  /**
+   * Constructs a RelAlg DAG from a relative-algebra JSON representation.
+   * @param query_ra A JSON string representation of an RA tree from Calcite.
+   * @param cat DB catalog for the current user.
+   */
+  static std::unique_ptr<RelAlgDag> buildDag(const std::string& query_ra,
+                                             const Catalog_Namespace::Catalog& cat,
+                                             const bool optimize_dag);
+
+  /**
+   * Constructs a rel-alg DAG for any subqueries. Should only be called during DAG
+   * building.
+   * @param root_dag The root DAG builder. The root stores pointers to all
+   * subqueries.
+   * @param query_ast The current JSON node to build a DAG for.
+   * @param cat DB catalog for the current user.
+   */
+  static std::unique_ptr<RelAlgDag> buildDagForSubquery(
+      RelAlgDag& root_dag,
+      const rapidjson::Value& query_ast,
+      const Catalog_Namespace::Catalog& cat);
+
+  static void optimizeDag(RelAlgDag& rel_alg_dag);
+
+ private:
+  static std::unique_ptr<RelAlgDag> build(const rapidjson::Value& query_ast,
+                                          const Catalog_Namespace::Catalog& cat,
+                                          RelAlgDag* root_dag,
+                                          const bool optimize_dag);
 };
 
 using RANodeOutput = std::vector<RexInput>;
