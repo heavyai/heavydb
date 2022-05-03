@@ -849,11 +849,7 @@ std::shared_ptr<arrow::Table> ArrowStorage::parseCsv(
     std::shared_ptr<arrow::io::InputStream> input,
     const CsvParseOptions parse_options,
     const ColumnInfoList& col_infos) {
-#ifdef ENABLE_ARROW_4
   auto io_context = arrow::io::default_io_context();
-#else
-  auto io_context = arrow::default_memory_pool();
-#endif
 
   auto arrow_parse_options = arrow::csv::ParseOptions::Defaults();
   arrow_parse_options.quoting = false;

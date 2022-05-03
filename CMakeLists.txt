@@ -565,11 +565,6 @@ find_package(Arrow REQUIRED)
 add_definitions("-DARROW_NO_DEPRECATED_API")
 include_directories(${Arrow_INCLUDE_DIRS})
 
-option(ENABLE_ARROW_4 "Enable changes required to support Arrow 4.0+" "${HAVE_ARROW_4_IO_CONTEXT}")
-if(ENABLE_ARROW_4)
-  add_definitions("-DENABLE_ARROW_4")
-endif()
-
 option(ENABLE_IMPORT_PARQUET "Enable Parquet Importer support" ON)
 if(ENABLE_IMPORT_PARQUET)
   find_package(Parquet)
