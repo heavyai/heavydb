@@ -16,6 +16,7 @@
 
 #include "DataMgr/MemoryLevel.h"
 #include "Shared/sqltypes.h"
+#include "Shared/toString.h"
 
 #include <memory>
 #include <unordered_set>
