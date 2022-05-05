@@ -6256,7 +6256,8 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
   //   TODO: move to execute() (?)
   //      instead of pre-filtering here based upon incomplete info ?
   if (pw.getQueryType() != ParserWrapper::QueryType::Read &&
-      pw.getQueryType() != ParserWrapper::QueryType::SchemaRead) {
+      pw.getQueryType() != ParserWrapper::QueryType::SchemaRead &&
+      pw.getQueryType() != ParserWrapper::QueryType::Unknown) {
     dbhandler::check_not_info_schema_db(cat.name());
   }
 
@@ -7780,6 +7781,9 @@ void DBHandler::alterSession(const std::string& session_id,
     }
     execution_time_ms =
         measure<>::execution([&]() { set_execution_mode(session_id, executorType); });
+  } else if (session_parameter.first == "CURRENT_DATABASE") {
+    execution_time_ms = measure<>::execution(
+        [&]() { switch_database(session_id, session_parameter.second); });
   }
 }
 

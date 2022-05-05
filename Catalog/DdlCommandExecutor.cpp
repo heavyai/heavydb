@@ -521,7 +521,8 @@ bool DdlCommandExecutor::isAlterSessionSet() const {
 std::pair<std::string, std::string> DdlCommandExecutor::getSessionParameter() const {
   enum SetParameterType { String_t, Numeric_t };
   static const std::unordered_map<std::string, SetParameterType>
-      session_set_parameters_map = {{"EXECUTOR_DEVICE", SetParameterType::String_t}};
+      session_set_parameters_map = {{"EXECUTOR_DEVICE", SetParameterType::String_t},
+                                    {"CURRENT_DATABASE", SetParameterType::String_t}};
 
   auto& ddl_payload = extractPayload(*ddl_data_);
   CHECK(ddl_payload.HasMember("sessionParameter"));

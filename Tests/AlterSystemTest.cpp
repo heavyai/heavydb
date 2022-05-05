@@ -35,15 +35,20 @@ class AlterSystemTest : public DBHandlerTestFixture {
 
   static void SetUpTestSuite() {
     createDBHandler();
-    users_ = {"user1"};
+    users_ = {"user1", "user2"};
     superusers_ = {"super1"};
-    dbs_ = {"db1"};
+    dbs_ = {"db1", "db2"};
     createDBs();
     createUsers();
     createSuperUsers();
+    sql("GRANT ALL ON DATABASE db1 TO user1;");
+    sql("GRANT ALL ON DATABASE db2 TO user1;");
+    sql("GRANT ALL ON DATABASE db1 TO user2;");
+    sql("REVOKE ACCESS ON DATABASE db2 FROM user2;");
   }
 
   static void TearDownTestSuite() {
+    switchToAdmin();
     dropUsers();
     dropSuperUsers();
     dropDBs();
@@ -87,6 +92,7 @@ class AlterSystemTest : public DBHandlerTestFixture {
     if (em == TExecuteMode::GPU && setExecuteMode(em) == false) {
       // we haven't a GPU or the database is set in
       // cpu_only mode
+      sql(result, "DROP TABLE IF EXISTS clear_memory_table;", session);
       return;
     }
     setExecuteMode(em);
@@ -283,6 +289,31 @@ TEST_F(AlterSystemTest, SET_EXECUTOR_CASE_INSENSITIVE) {
       FAIL() << "The parameter EXECUTOR_DEVICE should be case insesitive";
     }
   }
+}
+
+TEST_F(AlterSystemTest, SET_CURRENT_DATABASE_SWITCH) {
+  TQueryResult result;
+  login("user1", "HyperInteractive", "db2");
+  sql("CREATE TABLE test_admin_db2 (id INTEGER)");
+  sql("ALTER SESSION SET CURRENT_DATABASE='db1'");
+  sql("CREATE TABLE test_admin_db1 (id INTEGER)");
+  sql("ALTER SESSION SET CURRENT_DATABASE='db2'");
+  sql(result, "SHOW TABLES");
+  assertResultSetEqual({{"test_admin_db2"}}, result);
+  sql("DROP TABLE test_admin_db2");
+  sql("ALTER SESSION SET CURRENT_DATABASE='db1'");
+  sql("DROP TABLE test_admin_db1");
+}
+
+TEST_F(AlterSystemTest, SET_CURRENT_DATABASE_PERMISSION) {
+  TQueryResult result;
+  login("user1", "HyperInteractive", "db1");
+  sql("ALTER SESSION SET CURRENT_DATABASE='db2'");
+  login("user2", "HyperInteractive", "db1");
+  queryAndAssertException(
+      "ALTER SESSION SET CURRENT_DATABASE='db2'",
+      "TException - service has thrown: TDBException(error_msg=Unauthorized Access: user "
+      "user2 is not allowed to access database db2.)");
 }
 
 int main(int argc, char** argv) {
