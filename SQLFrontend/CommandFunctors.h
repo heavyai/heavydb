@@ -231,51 +231,61 @@ StandardCommand(
     { returned_list_regex<kGET_VIEWS>(p, cmdContext(), output_stream); },
     RegexCmdDeterminant);
 
+// clang-format off
 StandardCommand(Help, {
-  std::cout << "\\u [regex] List all users, optionally matching regex.\n";
-  std::cout << "\\l List all databases.\n";
-  std::cout << "\\t [regex] List all tables, optionally matching regex.\n";
-  std::cout << "\\v [regex] List all views, optionally matching regex.\n";
-  std::cout << "\\d <table> List all columns of a table or a view.\n";
-  std::cout
-      << "\\c <database> <user> <password> Connect to database as different user.\n";
-  std::cout
-      << "\\db [database|...] Switch database. Use ... to switch to your default.\n";
-  std::cout << "\\dash List all dashboards accessible by user.\n";
-  std::cout << "\\o <table> Return a memory optimized schema based on current data "
-               "distribution in table.\n";
-  std::cout << "\\gpu Execute in GPU mode's.\n";
-  std::cout << "\\cpu Execute in CPU mode's.\n";
-  std::cout << "\\multiline Set multi-line command line mode.\n";
-  std::cout << "\\singleline Set single-line command line mode.\n";
-  std::cout << "\\historylen <number> Set history buffer size (default 100).\n";
-  std::cout << "\\timing Print timing information.\n";
-  std::cout << "\\notiming Do not print timing information.\n";
-  std::cout << "\\memory_summary Print memory usage summary.\n";
-  std::cout << "\\version Print HeavyDB Server version.\n";
-  std::cout << "\\copy <file path> <table> Copy data from file to table.\n";
-  std::cout << "\\status Get status of the server and the leaf nodes.\n";
-  std::cout << "\\export_dashboard <dashboard name> <filename> <optional: dashboard "
-               "owner name> Exports a dashboard to a "
-               "file.\n";
-  std::cout << "\\import_dashboard <dashboard name> <filename> Imports a dashboard from "
-               "a file\n";
-  std::cout << "\\roles Reports all roles.\n";
-  std::cout << "\\role_list <userName> Reports all roles granted to user.\n";
-  std::cout << "\\privileges {<roleName>|<userName>} Reports all database objects "
-               "privileges granted to role or "
-               "user.\n";
-  std::cout << "\\object_privileges {database|table|server} <object_name> Reports all "
-               "privileges granted to an object for all "
-               "roles and users.\n";
-  std::cout << "\\detect {parquet} <file_name|s3_details> Reads a sample of the "
-               "specified file and returns a CREATE TABLE statement\n";
-  std::cout << "\\clear_cpu Releases CPU memory held by HeavyDB server Data Manager\n";
-  std::cout << "\\clear_gpu Releases GPU memory held by HeavyDB server Data Manager\n";
+  std::cout << "\\c <database> <user> <password>\n";
+  std::cout <<  "                   - Connect to database as different user\n";
+  std::cout << "\\clear_cpu         - Releases CPU memory held by HeavyDB server Data Manager\n";
+  std::cout << "\\clear_gpu         - Releases GPU memory held by HeavyDB server Data Manager\n";
+  std::cout << "\\copy <file path> <table>\n";
+  std::cout <<  "                   - Copy data from file to table\n";
+  std::cout << "\\cpu               - Execute in CPU mode's\n";
+  std::cout << "\\d <table>         - List all columns of a table or a view.\n";
+  std::cout << "\\dash              - List all dashboards accessible by user\n";
+  std::cout << "\\db [database|...] - Switch database. Use ... to switch to your default\n";
+  std::cout << "\\detect {parquet} <file_name|s3_details>\n";
+  std::cout <<  "                   - Reads a sample of the specified file and returns a CREATE TABLE statement\n";
+  std::cout << "\\export_dashboard <dashboard name> <filename> <optional: dashboard owner name>\n";
+  std::cout <<  "                   - Exports a dashboard to a file\n";
+  std::cout << "\\gpu               - Execute in GPU mode's\n";
+  std::cout << "\\gte <table>       - Get table epoch\n";
+  std::cout << "\\get_license       - Print license information\n";
+  std::cout << "\\hardware_info     - Report hardware information\n";
+  std::cout << "\\historylen <number> - Set history buffer size (default 100)\n";
+  std::cout << "\\import_dashboard <dashboard name> <filename>\n";
+  std::cout <<  "                   - Imports a dashboard from a file\n";
+  std::cout << "\\interrupt         - Send interrupt to HeavyDB\n";
+  std::cout << "\\l                 - List all databases\n";
+  std::cout << "\\memory_cpu        - Report CPU memory usage\n";
+  std::cout << "\\memory_gpu        - Report GPU memory usage\n";
+  std::cout << "\\memory_summary    - Report CPU and GPU memory usage\n";
+  std::cout << "\\notiming          - Do not print timing information\n";
+  std::cout << "\\o <table>         - Return a memory optimized schema based on current data distribution in table\n";
+  std::cout << "\\object_privileges {database|table|server} <object_name>\n";
+  std::cout <<  "                   - Reports all privileges granted to an object for all roles and users\n";
+  std::cout << "\\privileges {<roleName>|<userName>}\n";
+  std::cout <<  "                   - Reports all database objects privileges granted to role or user\n";
+  std::cout << "\\q                 - Quit.\n";
+  std::cout << "\\roles             - Reports all roles\n";
+  std::cout << "\\role_list <userName>\n";
+  std::cout <<  "                   - Reports all roles granted to user\n";
+  std::cout << "\\status            - Get status of the server and the leaf nodes\n";
+  std::cout << "\\ste <db_id:table_id:epoch>\n";
+  std::cout <<  "                   - Set table epoch\n";
+  std::cout << "\\t [regex]         - List all tables, optionally matching regex\n";
+  std::cout << "\\timing            - Print timing information\n";
+  std::cout << "\\u [regex]         - List all users, optionally matching regex\n";
+  std::cout << "\\v [regex]         - List all views, optionally matching regex\n";
+  std::cout << "\\version           - Print HeavyDB Server version\n";
 
-  std::cout << "\\q Quit.\n";
+  // These are linenoise commands for debugging - for devs - not heavysql admins/users 
+  // std::cout << "\\key_codes - Set key-codes for command line\n";  
+  // std::cout << "\\multiline - Set multi-line command line mode\n";
+  // std::cout << "\\singleline - Set single-line command line mode\n";
+
   std::cout.flush();
 });
+// clang-format on
 
 StandardCommand(ListDatabases, {
   thrift_op<kGET_DATABASES>(cmdContext(), [&](ContextType& lambda_context) {

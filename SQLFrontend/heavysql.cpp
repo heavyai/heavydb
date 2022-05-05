@@ -1401,12 +1401,6 @@ int main(int argc, char** argv) {
       continue;
     } else if (!strncmp(line, "\\interrupt", 10)) {
       (void)thrift_with_retry(kINTERRUPT, context, nullptr);
-    } else if (!strncmp(line, "\\cpu", 4)) {
-      context.execution_mode = TExecuteMode::CPU;
-      (void)thrift_with_retry(kSET_EXECUTION_MODE, context, nullptr);
-    } else if (!strncmp(line, "\\gpu", 4)) {
-      context.execution_mode = TExecuteMode::GPU;
-      (void)thrift_with_retry(kSET_EXECUTION_MODE, context, nullptr);
     } else if (!strncmp(line, "\\hybrid", 5)) {
       std::cout << "Hybrid execution mode has been deprecated." << std::endl;
     } else if (!strncmp(line, "\\version", 8)) {
@@ -1415,24 +1409,32 @@ int main(int argc, char** argv) {
       } else {
         std::cout << "Cannot connect to HeavyDB Server." << std::endl;
       }
-    } else if (!strncmp(line, "\\memory_gpu", 11)) {
+    } else if (!strncmp(line, "\\gpu_memory", 11) || !strncmp(line, "\\memory_gpu", 11)) {
       if (thrift_with_retry(kGET_MEMORY_GPU, context, nullptr)) {
         print_memory_info(context, "gpu");
       } else {
         std::cout << "Cannot connect to HeavyDB Server." << std::endl;
       }
-    } else if (!strncmp(line, "\\memory_cpu", 11)) {
+    } else if (!strncmp(line, "\\cpu_memory", 11) || !strncmp(line, "\\memory_cpu", 11)) {
       if (thrift_with_retry(kGET_MEMORY_CPU, context, nullptr)) {
         print_memory_info(context, "cpu");
       }
-    } else if (!strncmp(line, "\\clear_gpu", 11)) {
+    } else if (!strncmp(line, "\\gpu_clear", 11) || !strncmp(line, "\\clear_gpu", 11)) {
       if (thrift_with_retry(kCLEAR_MEMORY_GPU, context, nullptr)) {
         std::cout << "HeavyDB Server GPU memory Cleared " << std::endl;
       }
-    } else if (!strncmp(line, "\\clear_cpu", 11)) {
+    } else if (!strncmp(line, "\\cpu_clear", 11) || !strncmp(line, "\\clear_cpu", 11)) {
       if (thrift_with_retry(kCLEAR_MEMORY_CPU, context, nullptr)) {
         std::cout << "HeavyDB Server CPU memory Cleared " << std::endl;
       }
+    } else if (!strncmp(line, "\\cpu", 4)) {
+      // match *after* longer strings cpu_xxxxx
+      context.execution_mode = TExecuteMode::CPU;
+      (void)thrift_with_retry(kSET_EXECUTION_MODE, context, nullptr);
+    } else if (!strncmp(line, "\\gpu", 4)) {
+      // match *after* longer strings gpu_xxxxx
+      context.execution_mode = TExecuteMode::GPU;
+      (void)thrift_with_retry(kSET_EXECUTION_MODE, context, nullptr);
     } else if (!strncmp(line, "\\memory_summary", 11)) {
       if (thrift_with_retry(kGET_MEMORY_SUMMARY, context, nullptr)) {
         print_memory_summary(context, "cpu");
