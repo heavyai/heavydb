@@ -6157,9 +6157,12 @@ ImportStatus Importer::importGDALRaster(
   auto const total_wall_s = TIMER_STOP(wall_timer);
 
   // report
-  auto const total_scanlines_per_second = band_size_y / total_wall_s;
-  auto const total_rows_per_second = (band_size_x * band_size_y) / total_wall_s;
-  LOG(INFO) << "Raster Importer: Imported " << band_size_x * band_size_y << " rows";
+  auto const total_scanlines_per_second = float(band_size_y) / total_wall_s;
+  auto const total_rows_per_second =
+      float(band_size_x) * float(band_size_y) / total_wall_s;
+  LOG(INFO) << "Raster Importer: Imported "
+            << static_cast<uint64_t>(band_size_x) * static_cast<uint64_t>(band_size_y)
+            << " rows";
   LOG(INFO) << "Raster Importer: Total Import Time " << total_wall_s << "s at "
             << total_scanlines_per_second << " scanlines/s and " << total_rows_per_second
             << " rows/s";
