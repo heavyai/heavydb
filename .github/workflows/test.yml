@@ -1,0 +1,37 @@
+name: Reusable test action
+on:
+  workflow_call: 
+    inputs:
+      cuda_compiler_version:
+        type: string
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 12
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: build
+
+      - name: Unpack build files
+        run: |
+          tar -zxf build.tgz
+
+      - name: Set the environment
+        run: |
+          df -h
+          free -h
+          cat /proc/cpuinfo
+          conda update conda
+          $CONDA/bin/conda env create -f scripts/mapd-deps-conda-dev-env.yml
+
+      - name: Run tests
+        run: |
+          sudo sh -c 'echo 2 >/proc/sys/vm/overcommit_memory'
+          $CONDA/bin/conda run -n omnisci-dev bash scripts/conda/test.sh
+
