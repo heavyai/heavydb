@@ -756,4 +756,7 @@ service Heavy {
   list<string> get_table_function_names(1: TSessionId session) throws (1: TDBException e)
   list<string> get_runtime_table_function_names(1: TSessionId session) throws (1: TDBException e)
   list<extension_functions.TUserDefinedTableFunction> get_table_function_details(1: TSessionId session, 2: list<string> udtf_names) throws (1: TDBException e)
+  list<string> get_function_names(1: TSessionId session) throws (1: TDBException e)
+  list<string> get_runtime_function_names(1: TSessionId session) throws (1: TDBException e)
+  list<extension_functions.TUserDefinedFunction> get_function_details(1: TSessionId session, 2: list<string> udf_names) throws (1: TDBException e)
 }

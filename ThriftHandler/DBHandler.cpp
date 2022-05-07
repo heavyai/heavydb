@@ -7404,6 +7404,36 @@ void DBHandler::register_runtime_extension_functions(
   });
 }
 
+void DBHandler::get_function_names(std::vector<std::string>& _return,
+                                   const TSessionId& session) {
+  for (auto udf_name :
+       ExtensionFunctionsWhitelist::get_udfs_name(/* is_runtime */ false)) {
+    if (std::find(_return.begin(), _return.end(), udf_name) == _return.end()) {
+      _return.emplace_back(udf_name);
+    }
+  }
+}
+
+void DBHandler::get_runtime_function_names(std::vector<std::string>& _return,
+                                           const TSessionId& session) {
+  for (auto udf_name :
+       ExtensionFunctionsWhitelist::get_udfs_name(/* is_runtime */ true)) {
+    if (std::find(_return.begin(), _return.end(), udf_name) == _return.end()) {
+      _return.emplace_back(udf_name);
+    }
+  }
+}
+
+void DBHandler::get_function_details(std::vector<TUserDefinedFunction>& _return,
+                                     const TSessionId& session,
+                                     const std::vector<std::string>& udf_names) {
+  for (const std::string& udf_name : udf_names) {
+    for (auto udf : ExtensionFunctionsWhitelist::get_ext_funcs(udf_name)) {
+      _return.emplace_back(ThriftSerializers::to_thrift(udf));
+    }
+  }
+}
+
 void DBHandler::get_table_function_names(std::vector<std::string>& _return,
                                          const TSessionId& session) {
   for (auto tf : table_functions::TableFunctionsFactory::get_table_funcs()) {

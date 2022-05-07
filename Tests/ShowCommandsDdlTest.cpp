@@ -2626,6 +2626,62 @@ TEST_F(ShowTableFunctionsTest, NonExistentTableFunction) {
   ASSERT_EQ(getRowCount(result), size_t(0));
 }
 
+class ShowRuntimeTableFunctionsTest : public DBHandlerTestFixture {
+  void SetUp() override { DBHandlerTestFixture::SetUp(); }
+
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+};
+
+TEST_F(ShowRuntimeTableFunctionsTest, RuntimeTableFunctionNames) {
+  TQueryResult result;
+  sql(result, "SHOW RUNTIME TABLE FUNCTIONS;");
+  ASSERT_EQ(getRowCount(result), size_t(0));
+}
+
+class ShowFunctionsFunctionsTest : public DBHandlerTestFixture {
+  void SetUp() override { DBHandlerTestFixture::SetUp(); }
+
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+};
+
+TEST_F(ShowFunctionsFunctionsTest, FunctionNames) {
+  TQueryResult result;
+  sql(result, "SHOW FUNCTIONS;");
+  ASSERT_GT(getRowCount(result), size_t(0));
+}
+
+TEST_F(ShowFunctionsFunctionsTest, FunctionDetails) {
+  {
+    TQueryResult result;
+    sql(result, "SHOW FUNCTIONS DETAILS Asin;");
+    ASSERT_GT(getRowCount(result), size_t(0));
+  }
+  // Test UDF defined directly on calcite
+  // {
+  //   TQueryResult result;
+  //   sql(result, "SHOW FUNCTIONS DETAILS sample_ratio;");
+  //   ASSERT_GT(getRowCount(result), size_t(0));
+  // }
+}
+
+TEST_F(ShowFunctionsFunctionsTest, NonExistentFunction) {
+  TQueryResult result;
+  sql(result, "SHOW FUNCTIONS DETAILS non_existent_udf_;");
+  ASSERT_EQ(getRowCount(result), size_t(0));
+}
+
+class ShowRuntimeFunctionsFunctionsTest : public DBHandlerTestFixture {
+  void SetUp() override { DBHandlerTestFixture::SetUp(); }
+
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+};
+
+TEST_F(ShowRuntimeFunctionsFunctionsTest, RuntimeFunctionNames) {
+  TQueryResult result;
+  sql(result, "SHOW RUNTIME FUNCTIONS;");
+  ASSERT_EQ(getRowCount(result), size_t(0));
+}
+
 class ShowQueriesTest : public DBHandlerTestFixture {
  public:
   static void SetUpTestSuite() {

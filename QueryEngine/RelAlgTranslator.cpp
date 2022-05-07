@@ -1814,7 +1814,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   try {
     auto ext_func_sig = bind_function(rex_function->getName(), arg_expr_list);
 
-    auto ext_func_args = ext_func_sig.getArgs();
+    auto ext_func_args = ext_func_sig.getInputArgs();
     CHECK_EQ(arg_expr_list.size(), ext_func_args.size());
     for (size_t i = 0; i < arg_expr_list.size(); i++) {
       // fold casts on constants

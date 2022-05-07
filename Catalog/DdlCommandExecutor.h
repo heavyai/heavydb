@@ -181,9 +181,35 @@ class ShowDatabasesCommand : public DdlCommand {
   ExecutionResult execute(bool read_only_mode) override;
 };
 
+class ShowFunctionsCommand : public DdlCommand {
+ public:
+  ShowFunctionsCommand(const DdlCommandData& ddl_data,
+                       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+};
+
+class ShowRuntimeFunctionsCommand : public DdlCommand {
+ public:
+  ShowRuntimeFunctionsCommand(
+      const DdlCommandData& ddl_data,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+};
+
 class ShowTableFunctionsCommand : public DdlCommand {
  public:
   ShowTableFunctionsCommand(
+      const DdlCommandData& ddl_data,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+};
+
+class ShowRuntimeTableFunctionsCommand : public DdlCommand {
+ public:
+  ShowRuntimeTableFunctionsCommand(
       const DdlCommandData& ddl_data,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 

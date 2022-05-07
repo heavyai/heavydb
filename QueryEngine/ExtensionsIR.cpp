@@ -1138,7 +1138,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(ext_func_sig);
-  const auto& ext_func_args = ext_func_sig->getArgs();
+  const auto& ext_func_args = ext_func_sig->getInputArgs();
   CHECK_LE(function_oper->getArity(), ext_func_args.size());
   const auto func_ti = function_oper->get_type_info();
   std::vector<llvm::Value*> args;

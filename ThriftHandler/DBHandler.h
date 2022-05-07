@@ -571,6 +571,25 @@ class DBHandler : public HeavyIf {
       const std::map<std::string, std::string>& device_ir_map) override;
 
   /*
+    Returns a list of User-Defined Function names available
+   */
+  void get_function_names(std::vector<std::string>& _return,
+                          const TSessionId& session) override;
+
+  /*
+    Returns a list of runtime User-Defined Function names available
+   */
+  void get_runtime_function_names(std::vector<std::string>& _return,
+                                  const TSessionId& session) override;
+
+  /*
+    Returns a list of runtime User-Defined Function names available
+   */
+  void get_function_details(std::vector<TUserDefinedFunction>& _return,
+                            const TSessionId& session,
+                            const std::vector<std::string>& udf_names) override;
+
+  /*
     Returns a list of User-Defined Table Function names available
    */
   void get_table_function_names(std::vector<std::string>& _return,

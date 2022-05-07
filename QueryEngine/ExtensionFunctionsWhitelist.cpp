@@ -33,6 +33,7 @@ std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get(
   }
   return &it->second;
 }
+
 std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get_udf(
     const std::string& name) {
   const auto it = udf_functions_.find(to_upper(name));
@@ -40,6 +41,38 @@ std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get_udf(
     return nullptr;
   }
   return &it->second;
+}
+
+// Get the list of all udfs
+std::unordered_set<std::string> ExtensionFunctionsWhitelist::get_udfs_name(
+    const bool is_runtime) {
+  std::unordered_set<std::string> names;
+  const auto collections = {&functions_, &udf_functions_, &rt_udf_functions_};
+  for (auto funcs : collections) {
+    for (auto& pair : *funcs) {
+      ExtensionFunction udf = pair.second.at(0);
+      if (udf.isRuntime() == is_runtime) {
+        names.insert(udf.getName(/* keep_suffix */ false));
+      }
+    }
+  }
+  return names;
+}
+
+std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
+    const std::string& name) {
+  std::vector<ExtensionFunction> ext_funcs = {};
+  const auto collections = {&functions_, &udf_functions_, &rt_udf_functions_};
+  const auto uname = to_upper(name);
+  for (auto funcs : collections) {
+    const auto it = funcs->find(uname);
+    if (it == funcs->end()) {
+      continue;
+    }
+    auto ext_func_sigs = it->second;
+    std::copy(ext_func_sigs.begin(), ext_func_sigs.end(), std::back_inserter(ext_funcs));
+  }
+  return ext_funcs;
 }
 
 std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
@@ -77,7 +110,7 @@ std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
     std::copy_if(ext_func_sigs.begin(),
                  ext_func_sigs.end(),
                  std::back_inserter(ext_funcs),
-                 [arity](auto sig) { return arity == sig.getArgs().size(); });
+                 [arity](auto sig) { return arity == sig.getInputArgs().size(); });
   }
   return ext_funcs;
 }
@@ -105,7 +138,7 @@ std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
                    // with multiple arguments, for instance, array
                    // argument is translated to data pointer and array
                    // size arguments.
-                   if (arity > sig.getArgs().size()) {
+                   if (arity > sig.getInputArgs().size()) {
                      return false;
                    }
                    auto rt = rtype.get_type();
@@ -477,13 +510,18 @@ const std::string ExtensionFunction::getName(bool keep_suffix) const {
 
 std::string ExtensionFunction::toString() const {
   return getName() + "(" + ExtensionFunctionsWhitelist::toString(args_) + ") -> " +
-         serialize_type(ret_, /* byval */ false, /* declare */ false);
+         ExtensionFunctionsWhitelist::toString({ret_});
 }
 
 std::string ExtensionFunction::toStringSQL() const {
   return getName(/* keep_suffix = */ false) + "(" +
          ExtensionFunctionsWhitelist::toStringSQL(args_) + ") -> " +
          ExtensionFunctionsWhitelist::toStringSQL(ret_);
+}
+
+std::string ExtensionFunction::toSignature() const {
+  return "(" + ExtensionFunctionsWhitelist::toString(args_) + ") -> " +
+         ExtensionFunctionsWhitelist::toString(ret_);
 }
 
 // Converts the extension function signatures to their LLVM representation.
@@ -514,7 +552,7 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
             serialize_type(signature.getRet(), /* byval */ true, /* declare */ true) +
             " @" + signature.getName();
       }
-      for (const auto arg : signature.getArgs()) {
+      for (const auto arg : signature.getInputArgs()) {
         arg_strs.push_back(serialize_type(arg, /* byval */ false, /* declare */ true));
       }
       declarations.push_back(decl_prefix + "(" + boost::algorithm::join(arg_strs, ", ") +
@@ -699,7 +737,8 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
 using SignatureMap = std::unordered_map<std::string, std::vector<ExtensionFunction>>;
 
 void ExtensionFunctionsWhitelist::addCommon(SignatureMap& signatures,
-                                            const std::string& json_func_sigs) {
+                                            const std::string& json_func_sigs,
+                                            const bool is_runtime) {
   rapidjson::Document func_sigs;
   func_sigs.Parse(json_func_sigs.c_str());
   CHECK(func_sigs.IsArray());
@@ -716,7 +755,7 @@ void ExtensionFunctionsWhitelist::addCommon(SignatureMap& signatures,
          ++args_serialized_it) {
       args.push_back(deserialize_type(json_str(*args_serialized_it)));
     }
-    signatures[to_upper(drop_suffix(name))].emplace_back(name, args, ret);
+    signatures[to_upper(drop_suffix(name))].emplace_back(name, args, ret, is_runtime);
   }
 }
 
@@ -737,12 +776,12 @@ void ExtensionFunctionsWhitelist::add(const std::string& json_func_sigs) {
   //    }
   // ]
 
-  addCommon(functions_, json_func_sigs);
+  addCommon(functions_, json_func_sigs, /* is_runtime */ false);
 }
 
 void ExtensionFunctionsWhitelist::addUdfs(const std::string& json_func_sigs) {
   if (!json_func_sigs.empty()) {
-    addCommon(udf_functions_, json_func_sigs);
+    addCommon(udf_functions_, json_func_sigs, /* is_runtime */ false);
   }
 }
 
@@ -752,7 +791,7 @@ void ExtensionFunctionsWhitelist::clearRTUdfs() {
 
 void ExtensionFunctionsWhitelist::addRTUdfs(const std::string& json_func_sigs) {
   if (!json_func_sigs.empty()) {
-    addCommon(rt_udf_functions_, json_func_sigs);
+    addCommon(rt_udf_functions_, json_func_sigs, /* is_runtime */ true);
   }
 }
 

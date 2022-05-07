@@ -35,7 +35,13 @@ SqlDdl SqlCustomShow(Span s) :
         |
         LOOKAHEAD(2) show = SqlShowTableDetails(s)
         |
+        LOOKAHEAD(1) show = SqlShowFunctions(s)
+        |
+        LOOKAHEAD(2) show = SqlShowRuntimeFunctions(s)
+        |
         LOOKAHEAD(2) show = SqlShowTableFunctions(s)
+        |
+        LOOKAHEAD(3) show = SqlShowRuntimeTableFunctions(s)
         |
         LOOKAHEAD(1) show = SqlShowDatabases(s)
         |
@@ -209,6 +215,49 @@ SqlDdl SqlShowTableDetails(Span s) :
 }
 
 /*
+ * SHOW FUNCTIONS [ DETAILS <scalar_fn_name>, <scalar_fn_name>, ...]
+ */
+SqlDdl SqlShowFunctions(Span s) :
+{
+    SqlIdentifier UdfName = null;
+    List<String> ScalarFnNames = null;
+}
+{
+    <FUNCTIONS>
+    [
+        <DETAILS>
+        UdfName = CompoundIdentifier()
+        {
+            ScalarFnNames = new ArrayList<String>();
+            ScalarFnNames.add(UdfName.toString());
+        }
+        (
+            <COMMA>
+            UdfName = CompoundIdentifier()
+            {
+                ScalarFnNames.add(UdfName.toString());
+            }
+        )*
+    ]
+    {
+        return new SqlShowFunctions(s.end(this), ScalarFnNames);
+    }
+}
+
+/*
+ * SHOW RUNTIME FUNCTIONS
+ */
+SqlDdl SqlShowRuntimeFunctions(Span s) :
+{
+}
+{
+    <RUNTIME> <FUNCTIONS>
+    {
+        return new SqlShowRuntimeFunctions(s.end(this));
+    }
+}
+
+/*
  * SHOW TABLE FUNCTIONS [ DETAILS <table_function_name>, <table_function_name>, ...]
  */
 SqlDdl SqlShowTableFunctions(Span s) :
@@ -235,6 +284,19 @@ SqlDdl SqlShowTableFunctions(Span s) :
     ]
     {
         return new SqlShowTableFunctions(s.end(this), tfNames);
+    }
+}
+
+/*
+ * SHOW RUNTIME TABLE FUNCTIONS
+ */
+SqlDdl SqlShowRuntimeTableFunctions(Span s) :
+{
+}
+{
+    <RUNTIME> <TABLE> <FUNCTIONS>
+    {
+        return new SqlShowRuntimeTableFunctions(s.end(this));
     }
 }
 

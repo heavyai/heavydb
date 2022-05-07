@@ -474,8 +474,16 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
     result = ShowForeignServersCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_CREATE_SERVER") {
     result = ShowCreateServerCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
+  } else if (ddl_command_ == "SHOW_FUNCTIONS") {
+    result = ShowFunctionsCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
+  } else if (ddl_command_ == "SHOW_RUNTIME_FUNCTIONS") {
+    result =
+        ShowRuntimeFunctionsCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_TABLE_FUNCTIONS") {
     result = ShowTableFunctionsCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
+  } else if (ddl_command_ == "SHOW_RUNTIME_TABLE_FUNCTIONS") {
+    result = ShowRuntimeTableFunctionsCommand{*ddl_data_, session_ptr_}.execute(
+        read_only_mode);
   } else if (ddl_command_ == "ALTER_SERVER") {
     result = AlterForeignServerCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "ALTER_FOREIGN_TABLE") {
@@ -1493,6 +1501,93 @@ ExecutionResult ShowDatabasesCommand::execute(bool read_only_mode) {
   return ExecutionResult(rSet, label_infos);
 }
 
+ShowFunctionsCommand::ShowFunctionsCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {}
+
+ExecutionResult ShowFunctionsCommand::execute(bool read_only_mode) {
+  // Get all row-wise functions in the same way as HeavySql \t command
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::vector<TargetMetaInfo> label_infos;
+  std::vector<RelLogicalValues::RowValues> logical_values;
+
+  if (ddl_payload.HasMember("ScalarFnNames")) {
+    // label_infos -> column labels
+    label_infos.emplace_back("name", SQLTypeInfo(kTEXT, true));
+    label_infos.emplace_back("signature", SQLTypeInfo(kTEXT, true));
+    label_infos.emplace_back("CPU", SQLTypeInfo(kBOOLEAN, true));
+    label_infos.emplace_back("GPU", SQLTypeInfo(kBOOLEAN, true));
+    label_infos.emplace_back("Runtime", SQLTypeInfo(kBOOLEAN, true));
+    for (const auto& udf_name_json : ddl_payload["ScalarFnNames"].GetArray()) {
+      std::string udf_name = udf_name_json.GetString();
+      std::vector<ExtensionFunction> ext_funcs =
+          ExtensionFunctionsWhitelist::get_ext_funcs(udf_name);
+
+      for (ExtensionFunction& fn : ext_funcs) {
+        logical_values.emplace_back(RelLogicalValues::RowValues{});
+        // Name
+        logical_values.back().emplace_back(genLiteralStr(udf_name));
+        // Signature
+        logical_values.back().emplace_back(genLiteralStr(fn.toSignature()));
+        // CPU?
+        logical_values.back().emplace_back(genLiteralBoolean(fn.isCPU()));
+        // GPU?
+        logical_values.back().emplace_back(genLiteralBoolean(fn.isGPU()));
+        // Runtime?
+        logical_values.back().emplace_back(genLiteralBoolean(fn.isRuntime()));
+      }
+    }
+
+  } else {
+    // label_infos -> column labels
+    for (const auto& label : {"Scalar UDF"}) {
+      label_infos.emplace_back(label, SQLTypeInfo(kTEXT, true));
+    }
+
+    // logical_values -> table data
+    for (auto name : ExtensionFunctionsWhitelist::get_udfs_name(/* is_runtime */ false)) {
+      logical_values.emplace_back(RelLogicalValues::RowValues{});
+      logical_values.back().emplace_back(genLiteralStr(name));
+    }
+  }
+
+  // Create ResultSet
+  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+  return ExecutionResult(rSet, label_infos);
+}
+
+ShowRuntimeFunctionsCommand::ShowRuntimeFunctionsCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {}
+
+ExecutionResult ShowRuntimeFunctionsCommand::execute(bool read_only_mode) {
+  // Get all runtime row-wise functions in the same way as HeavySql \t command
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::vector<TargetMetaInfo> label_infos;
+  std::vector<RelLogicalValues::RowValues> logical_values;
+
+  // label_infos -> column labels
+  for (const auto& label : {"Runtime Scalar UDF"}) {
+    label_infos.emplace_back(label, SQLTypeInfo(kTEXT, true));
+  }
+
+  // logical_values -> table data
+  for (auto name : ExtensionFunctionsWhitelist::get_udfs_name(/* is_runtime */ true)) {
+    logical_values.emplace_back(RelLogicalValues::RowValues{});
+    logical_values.back().emplace_back(genLiteralStr(name));
+  }
+
+  // Create ResultSet
+  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+  return ExecutionResult(rSet, label_infos);
+}
+
 ShowTableFunctionsCommand::ShowTableFunctionsCommand(
     const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
@@ -1501,7 +1596,7 @@ ShowTableFunctionsCommand::ShowTableFunctionsCommand(
 ExecutionResult ShowTableFunctionsCommand::execute(bool read_only_mode) {
   // valid in read_only_mode
 
-  // Get all table functions in the same way as OmniSql \t command
+  // Get all table functions in the same way as HeavySql \t command
   auto& ddl_payload = extractPayload(ddl_data_);
   std::vector<TargetMetaInfo> label_infos;
   std::vector<RelLogicalValues::RowValues> logical_values;
@@ -1516,7 +1611,7 @@ ExecutionResult ShowTableFunctionsCommand::execute(bool read_only_mode) {
     label_infos.emplace_back("output_types", SQLTypeInfo(kTEXT, true));
     label_infos.emplace_back("CPU", SQLTypeInfo(kBOOLEAN, true));
     label_infos.emplace_back("GPU", SQLTypeInfo(kBOOLEAN, true));
-    label_infos.emplace_back("runtime", SQLTypeInfo(kBOOLEAN, true));
+    label_infos.emplace_back("Runtime", SQLTypeInfo(kBOOLEAN, true));
     label_infos.emplace_back("filter_table_transpose", SQLTypeInfo(kBOOLEAN, true));
     // logical_values -> table data
     for (const auto& tf_name_json : ddl_payload["tfNames"].GetArray()) {
@@ -1554,19 +1649,57 @@ ExecutionResult ShowTableFunctionsCommand::execute(bool read_only_mode) {
     }
   } else {
     // label_infos -> column labels
-    for (const auto& label : {"UDTF"}) {
+    for (const auto& label : {"Tabel UDF"}) {
       label_infos.emplace_back(label, SQLTypeInfo(kTEXT, true));
     }
 
     // logical_values -> table data
     std::unordered_set<std::string> unique_names;
-    for (auto tf : table_functions::TableFunctionsFactory::get_table_funcs()) {
+    for (auto tf : table_functions::TableFunctionsFactory::get_table_funcs(
+             /* is_runtime */ false)) {
       std::string name = tf.getName(true, true);
       if (unique_names.find(name) == unique_names.end()) {
         unique_names.emplace(name);
         logical_values.emplace_back(RelLogicalValues::RowValues{});
         logical_values.back().emplace_back(genLiteralStr(name));
       }
+    }
+  }
+
+  // Create ResultSet
+  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+  return ExecutionResult(rSet, label_infos);
+}
+
+ShowRuntimeTableFunctionsCommand::ShowRuntimeTableFunctionsCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {}
+
+ExecutionResult ShowRuntimeTableFunctionsCommand::execute(bool read_only_mode) {
+  // valid in read_only_mode
+
+  // Get all runtime table functions in the same way as HeavySql \t command
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::vector<TargetMetaInfo> label_infos;
+  std::vector<RelLogicalValues::RowValues> logical_values;
+
+  // label_infos -> column labels
+  for (const auto& label : {"Runtime Table UDF"}) {
+    label_infos.emplace_back(label, SQLTypeInfo(kTEXT, true));
+  }
+
+  // logical_values -> table data
+  std::unordered_set<std::string> unique_names;
+  for (auto tf :
+       table_functions::TableFunctionsFactory::get_table_funcs(/* is_runtime */ true)) {
+    std::string name = tf.getName(true, true);
+    if (unique_names.find(name) == unique_names.end()) {
+      unique_names.emplace(name);
+      logical_values.emplace_back(RelLogicalValues::RowValues{});
+      logical_values.back().emplace_back(genLiteralStr(name));
     }
   }
 

@@ -622,6 +622,14 @@ inline TOutputBufferSizeType::type to_thrift(
   return TOutputBufferSizeType::type{};
 }
 
+inline TUserDefinedFunction to_thrift(const ExtensionFunction& udf) {
+  TUserDefinedFunction tfunc;
+  tfunc.name = udf.getName(/* keep_suffix */ true);
+  tfunc.argTypes = to_thrift(udf.getInputArgs());
+  tfunc.retType = to_thrift(udf.getRet());
+  return tfunc;
+}
+
 inline TUserDefinedTableFunction to_thrift(const table_functions::TableFunction& func) {
   TUserDefinedTableFunction tfunc;
   tfunc.name = func.getName();
