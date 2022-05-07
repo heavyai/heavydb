@@ -11,6 +11,15 @@ on:
       - 'docs/**'
 
 jobs:
+  clang-format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Check stlye
+        run: |
+          find . -name ThirdParty -prune -or \( -name '*.cpp' -or -name '*.h' \) | xargs clang-format --dry-run --Werror -style=file
+
   build:
     uses: ./.github/workflows/build.yml
     with:
@@ -20,4 +29,8 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       cuda_compiler_version: 11
+
+  test:
+    needs: build
+    uses: ./.github/workflows/test.yml
 

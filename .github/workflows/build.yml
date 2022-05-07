@@ -13,28 +13,39 @@ jobs:
       PREFIX: distr
       CPU_COUNT: 4
       RUN_TESTS: 1
+
     steps:
       - uses: actions/checkout@v2
+
       - name: Set the environment
         run: |
-          free -h
-          cat /proc/cpuinfo
           conda update conda
           $CONDA/bin/conda env create -f scripts/mapd-deps-conda-dev-env.yml --force
+
       - name: Install nvidia-cuda-toolkit
         run: |
           conda install -n omnisci-dev -c conda-forge cudatoolkit-dev arrow-cpp-proc=3.0.0=cuda
         if: ${{ env.cuda_compiler_version != 'None' }}
+
       - name: Build
         run: |
           mkdir -p ${{ env.PREFIX }}
           rm -rf build
           $CONDA/bin/conda run -n omnisci-dev bash scripts/conda/build-install-all.sh
+          tar -zcf /tmp/build.tgz .
+
       - name: Upload packages
         uses: actions/upload-artifact@v2
         with:
           name: result_packages
           path: ${{ env.PREFIX }}
+
+      - name: Upload build and src files
+        uses: actions/upload-artifact@v2
+        with:
+          name: build
+          path: /tmp/build.tgz
+
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v2
@@ -43,3 +54,4 @@ jobs:
           path: |
             build/*.log
             build/CMakeFiles/*.log
+
