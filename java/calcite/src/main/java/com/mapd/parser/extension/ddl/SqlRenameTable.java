@@ -2,9 +2,7 @@ package com.mapd.parser.extension.ddl;
 
 import com.google.gson.annotations.Expose;
 
-import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlDdl;
-import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperator;
@@ -14,7 +12,6 @@ import org.apache.calcite.util.EscapedStringJsonBuilder;
 import org.apache.calcite.util.JsonBuilder;
 import org.apache.calcite.util.Pair;
 
-import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -28,14 +25,11 @@ public class SqlRenameTable extends SqlDdl {
 
   @Expose
   private List<Pair<String, String>> tableNames = new ArrayList<Pair<String, String>>();
-  @Expose
-  private String command;
 
   public SqlRenameTable(
           final SqlParserPos pos, final List<Pair<String, String>> tableNamesIn) {
     super(OPERATOR, pos);
     this.tableNames = tableNamesIn;
-    this.command = OPERATOR.getName();
   }
 
   @Override

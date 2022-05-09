@@ -2,19 +2,19 @@ package com.mapd.parser.extension.ddl;
 import static java.util.Objects.requireNonNull;
 
 import com.google.gson.annotations.Expose;
-import com.mapd.parser.extension.ddl.heavysql.*;
+import com.mapd.parser.extension.ddl.heavysql.HeavySqlOptionsMap;
 
-import org.apache.calcite.sql.*;
+import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlOperator;
+import org.apache.calcite.sql.SqlSpecialOperator;
 import org.apache.calcite.sql.parser.SqlParserPos;
 
 import java.util.List;
 
-public class SqlRefreshForeignTables extends SqlDdl implements JsonSerializableDdl {
+public class SqlRefreshForeignTables extends SqlCustomDdl {
   private static final SqlOperator OPERATOR =
           new SqlSpecialOperator("REFRESH_FOREIGN_TABLES", SqlKind.OTHER_DDL);
 
-  @Expose
-  private String command;
   @Expose
   private List<String> tableNames;
   @Expose
@@ -24,18 +24,7 @@ public class SqlRefreshForeignTables extends SqlDdl implements JsonSerializableD
           final List<String> tableNames,
           final HeavySqlOptionsMap optionsMap) {
     super(OPERATOR, pos);
-    this.command = OPERATOR.getName();
     this.tableNames = tableNames;
     this.options = optionsMap;
   }
-
-  @Override
-  public List<SqlNode> getOperandList() {
-    return null;
-  }
-
-  @Override
-  public String toString() {
-    return toJsonString();
-  }
-} // SqlRefreshForeignTables
+}

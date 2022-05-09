@@ -17,6 +17,8 @@ public class HeavySqlSanitizedString {
     String sanitized_s = s;
     if (s.startsWith("'") && s.endsWith("'")) {
       sanitized_s = s.substring(1, s.length() - 1);
+    } else if (s.startsWith("\"") && s.endsWith("\"")) {
+      sanitized_s = s.substring(1, s.length() - 1);
     }
     sanitized_s = sanitized_s.replace("''", "'");
     return sanitized_s;

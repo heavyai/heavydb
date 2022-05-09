@@ -3,24 +3,18 @@ package com.mapd.parser.extension.ddl;
 import com.google.gson.annotations.Expose;
 import com.mapd.parser.extension.ddl.heavydb.HeavyDBOptionsMap;
 
-import org.apache.calcite.sql.SqlCreate;
 import org.apache.calcite.sql.SqlKind;
-import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlSpecialOperator;
 import org.apache.calcite.sql.parser.SqlParserPos;
 
-import java.util.List;
-
 /**
- * Class that encapsulates all information associated with a OPTIMIZE TABLE DDL command.
+ * Class that encapsulates all information associated with a VALIDATE DDL command.
  */
-public class SqlValidateSystem extends SqlCreate implements JsonSerializableDdl {
+public class SqlValidateSystem extends SqlCustomDdl {
   private static final SqlOperator OPERATOR =
           new SqlSpecialOperator("VALIDATE_SYSTEM", SqlKind.OTHER_DDL);
 
-  @Expose
-  private String command;
   @Expose
   private String type;
   @Expose
@@ -28,19 +22,8 @@ public class SqlValidateSystem extends SqlCreate implements JsonSerializableDdl 
 
   public SqlValidateSystem(
           final SqlParserPos pos, final String type, HeavyDBOptionsMap withOptions) {
-    super(OPERATOR, pos, false, false);
-    this.command = OPERATOR.getName();
+    super(OPERATOR, pos);
     this.type = type;
     this.options = withOptions;
-  }
-
-  @Override
-  public List<SqlNode> getOperandList() {
-    return null;
-  }
-
-  @Override
-  public String toString() {
-    return toJsonString();
   }
 }

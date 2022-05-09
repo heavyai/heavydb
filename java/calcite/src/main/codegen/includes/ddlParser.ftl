@@ -1379,7 +1379,7 @@ SqlDdl SqlReassignOwned(Span s) :
  *
  *		VALIDATE [CLUSTER [WITH options]]
  */
-SqlCreate SqlValidateSystem(Span s) :
+SqlDdl SqlValidateSystem(Span s) :
 {
     HeavyDBOptionsMap validateOptions = null;
     String type = "";

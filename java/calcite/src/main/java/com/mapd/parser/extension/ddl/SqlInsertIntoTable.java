@@ -2,10 +2,7 @@ package com.mapd.parser.extension.ddl;
 
 import com.google.gson.annotations.Expose;
 
-import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlDdl;
-import org.apache.calcite.sql.SqlIdentifier;
-import org.apache.calcite.sql.SqlInsert;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlNodeList;
@@ -17,12 +14,8 @@ import org.apache.calcite.sql.dialect.CalciteSqlDialect;
 import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.sql.pretty.SqlPrettyWriter;
 import org.apache.calcite.util.EscapedStringJsonBuilder;
-import org.apache.calcite.util.ImmutableNullableList;
 import org.apache.calcite.util.JsonBuilder;
-import org.apache.calcite.util.Pair;
 
-import java.io.*;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -48,7 +41,7 @@ public class SqlInsertIntoTable extends SqlDdl {
 
   @Override
   public List<SqlNode> getOperandList() {
-    return ImmutableNullableList.of(name, columnList, query);
+    return null;
   }
 
   @Override

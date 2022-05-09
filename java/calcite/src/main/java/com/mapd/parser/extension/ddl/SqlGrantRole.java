@@ -5,26 +5,22 @@ import static java.util.Objects.requireNonNull;
 import com.google.gson.annotations.Expose;
 
 import org.apache.calcite.sql.SqlDdl;
-import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlSpecialOperator;
-import org.apache.calcite.sql.parser.Span;
 import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.util.EscapedStringJsonBuilder;
 import org.apache.calcite.util.JsonBuilder;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 public class SqlGrantRole extends SqlDdl {
   private static final SqlOperator OPERATOR =
           new SqlSpecialOperator("GRANT_ROLE", SqlKind.OTHER_DDL);
-  @Expose
-  private String command;
+
   @Expose
   private SqlNodeList roles;
   @Expose
@@ -33,7 +29,6 @@ public class SqlGrantRole extends SqlDdl {
   public SqlGrantRole(SqlParserPos pos, SqlNodeList roles, SqlNodeList grantees) {
     super(OPERATOR, pos);
     requireNonNull(roles);
-    this.command = OPERATOR.getName();
     this.roles = roles;
     this.grantees = grantees;
   }

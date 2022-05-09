@@ -6,7 +6,6 @@ import com.google.gson.annotations.Expose;
 
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlDdl;
-import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlNodeList;
@@ -15,18 +14,14 @@ import org.apache.calcite.sql.SqlSpecialOperator;
 import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.util.EscapedStringJsonBuilder;
 import org.apache.calcite.util.JsonBuilder;
-import org.apache.calcite.util.Pair;
 
-import java.io.*;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 public class SqlRevokePrivilege extends SqlDdl {
   private static final SqlOperator OPERATOR =
           new SqlSpecialOperator("REVOKE_PRIVILEGE", SqlKind.OTHER_DDL);
-  @Expose
-  private String command;
+
   @Expose
   private SqlNodeList privileges;
   @Expose
@@ -43,7 +38,6 @@ public class SqlRevokePrivilege extends SqlDdl {
           SqlNodeList grantees) {
     super(OPERATOR, pos);
     requireNonNull(privileges);
-    this.command = OPERATOR.getName();
     this.privileges = privileges;
     this.type = type;
     this.target = target;

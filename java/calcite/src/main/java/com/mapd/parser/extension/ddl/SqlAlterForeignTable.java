@@ -2,21 +2,18 @@ package com.mapd.parser.extension.ddl;
 
 import com.google.gson.annotations.Expose;
 
-import org.apache.calcite.sql.SqlDdl;
 import org.apache.calcite.sql.SqlKind;
-import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlSpecialOperator;
 import org.apache.calcite.sql.parser.SqlParserPos;
 
-import java.util.List;
 import java.util.Map;
 
 /**
  * Class that encapsulates all information associated with a ALTER FOREIGN TABLE DDL
  * command.
  */
-public class SqlAlterForeignTable extends SqlDdl implements JsonSerializableDdl {
+public class SqlAlterForeignTable extends SqlCustomDdl {
   private static final SqlOperator OPERATOR =
           new SqlSpecialOperator("ALTER_FOREIGN_TABLE", SqlKind.OTHER_DDL);
 
@@ -86,8 +83,6 @@ public class SqlAlterForeignTable extends SqlDdl implements JsonSerializableDdl 
   @Expose
   private String newColumnName;
   @Expose
-  private String command;
-  @Expose
   private Map<String, String> options;
 
   public SqlAlterForeignTable(final SqlParserPos pos,
@@ -104,16 +99,5 @@ public class SqlAlterForeignTable extends SqlDdl implements JsonSerializableDdl 
     this.oldColumnName = oldColumnName;
     this.newColumnName = newColumnName;
     this.options = options;
-    this.command = OPERATOR.getName();
-  }
-
-  @Override
-  public List<SqlNode> getOperandList() {
-    return null;
-  }
-
-  @Override
-  public String toString() {
-    return toJsonString();
   }
 }
