@@ -79,7 +79,6 @@ std::shared_ptr<HashJoin> buildPerfect(std::string_view table1,
   CHECK(executor);
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
-  executor->setDatabaseId(TEST_DB_ID);
 
   auto memory_level =
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
@@ -89,7 +88,8 @@ std::shared_ptr<HashJoin> buildPerfect(std::string_view table1,
 
   ColumnCacheMap column_cache;
 
-  return HashJoin::getSyntheticInstance(table1,
+  return HashJoin::getSyntheticInstance(TEST_DB_ID,
+                                        table1,
                                         column1,
                                         table2,
                                         column2,
@@ -107,7 +107,6 @@ std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<Analyzer::BinOper> op) {
   CHECK(executor);
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
-  executor->setDatabaseId(TEST_DB_ID);
 
   auto memory_level =
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
@@ -133,7 +132,6 @@ std::pair<std::string, std::shared_ptr<HashJoin>> checkProperQualDetection(
   CHECK(executor);
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
-  executor->setDatabaseId(TEST_DB_ID);
 
   auto memory_level =
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
@@ -291,7 +289,6 @@ TEST(Build, detectProperJoinQual) {
   CHECK(executor);
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
-  executor->setDatabaseId(TEST_DB_ID);
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -319,30 +316,30 @@ TEST(Build, detectProperJoinQual) {
     // case 2: 1 = t12 AND t11 = t21
     // case 3: t22 = 1 AND t11 = t21
     // case 4: 1 = t22 AND t11 = t21
-    auto t11 = getSyntheticColumnVar("table1", "t11", 0, executor);
-    auto t21 = getSyntheticColumnVar("table2", "t21", 1, executor);
+    auto t11 = getSyntheticColumnVar(TEST_DB_ID, "table1", "t11", 0, executor);
+    auto t21 = getSyntheticColumnVar(TEST_DB_ID, "table2", "t21", 1, executor);
     auto qual2 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, t11, t21);
     auto create_join_qual = [&c, &executor](int case_num) {
       std::shared_ptr<Analyzer::ColumnVar> q1_lhs;
       std::shared_ptr<Analyzer::BinOper> qual1;
       switch (case_num) {
         case 1: {
-          q1_lhs = getSyntheticColumnVar("table1", "t12", 0, executor);
+          q1_lhs = getSyntheticColumnVar(TEST_DB_ID, "table1", "t12", 0, executor);
           qual1 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, c, q1_lhs);
           break;
         }
         case 2: {
-          q1_lhs = getSyntheticColumnVar("table1", "t12", 0, executor);
+          q1_lhs = getSyntheticColumnVar(TEST_DB_ID, "table1", "t12", 0, executor);
           qual1 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, q1_lhs, c);
           break;
         }
         case 3: {
-          q1_lhs = getSyntheticColumnVar("table2", "t22", 1, executor);
+          q1_lhs = getSyntheticColumnVar(TEST_DB_ID, "table2", "t22", 1, executor);
           qual1 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, c, q1_lhs);
           break;
         }
         case 4: {
-          q1_lhs = getSyntheticColumnVar("table2", "t22", 1, executor);
+          q1_lhs = getSyntheticColumnVar(TEST_DB_ID, "table2", "t22", 1, executor);
           qual1 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, q1_lhs, c);
           break;
         }
@@ -376,7 +373,6 @@ TEST(Build, KeyedOneToOne) {
   CHECK(executor);
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
-  executor->setDatabaseId(TEST_DB_ID);
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -393,9 +389,9 @@ TEST(Build, KeyedOneToOne) {
     createTable("table2", {{"b", SQLTypeInfo(kINT)}});
     insertCsvValues("table2", "0\n1\n3");
 
-    auto a1 = getSyntheticColumnVar("table1", "a1", 0, executor.get());
-    auto a2 = getSyntheticColumnVar("table1", "a2", 0, executor.get());
-    auto b = getSyntheticColumnVar("table2", "b", 1, executor.get());
+    auto a1 = getSyntheticColumnVar(TEST_DB_ID, "table1", "a1", 0, executor.get());
+    auto a2 = getSyntheticColumnVar(TEST_DB_ID, "table1", "a2", 0, executor.get());
+    auto b = getSyntheticColumnVar(TEST_DB_ID, "table2", "b", 1, executor.get());
 
     using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
     auto et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
@@ -422,7 +418,6 @@ TEST(Build, KeyedOneToMany) {
   CHECK(executor);
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
-  executor->setDatabaseId(TEST_DB_ID);
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -440,9 +435,9 @@ TEST(Build, KeyedOneToMany) {
     createTable("table2", {{"b", SQLTypeInfo(kINT)}});
     insertCsvValues("table2", "0\n1\n3\n3");
 
-    auto a1 = getSyntheticColumnVar("table1", "a1", 0, executor.get());
-    auto a2 = getSyntheticColumnVar("table1", "a2", 0, executor.get());
-    auto b = getSyntheticColumnVar("table2", "b", 1, executor.get());
+    auto a1 = getSyntheticColumnVar(TEST_DB_ID, "table1", "a1", 0, executor.get());
+    auto a2 = getSyntheticColumnVar(TEST_DB_ID, "table1", "a2", 0, executor.get());
+    auto b = getSyntheticColumnVar(TEST_DB_ID, "table2", "b", 1, executor.get());
 
     using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
     auto et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
@@ -544,7 +539,6 @@ TEST(MultiFragment, KeyedOneToOne) {
   CHECK(executor);
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
-  executor->setDatabaseId(TEST_DB_ID);
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -558,9 +552,9 @@ TEST(MultiFragment, KeyedOneToOne) {
     createTable("table2", {{"b", SQLTypeInfo(kINT)}});
     insertCsvValues("table2", "0\n1\n3");
 
-    auto a1 = getSyntheticColumnVar("table1", "a1", 0, executor.get());
-    auto a2 = getSyntheticColumnVar("table1", "a2", 0, executor.get());
-    auto b = getSyntheticColumnVar("table2", "b", 1, executor.get());
+    auto a1 = getSyntheticColumnVar(TEST_DB_ID, "table1", "a1", 0, executor.get());
+    auto a2 = getSyntheticColumnVar(TEST_DB_ID, "table1", "a2", 0, executor.get());
+    auto b = getSyntheticColumnVar(TEST_DB_ID, "table2", "b", 1, executor.get());
 
     using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
     auto et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
@@ -579,9 +573,9 @@ TEST(MultiFragment, KeyedOneToOne) {
     createTable("table4", {{"b", SQLTypeInfo(kINT)}}, {1});
     insertCsvValues("table4", "0\n1\n3");
 
-    a1 = getSyntheticColumnVar("table3", "a1", 0, executor.get());
-    a2 = getSyntheticColumnVar("table3", "a2", 0, executor.get());
-    b = getSyntheticColumnVar("table4", "b", 1, executor.get());
+    a1 = getSyntheticColumnVar(TEST_DB_ID, "table3", "a1", 0, executor.get());
+    a2 = getSyntheticColumnVar(TEST_DB_ID, "table3", "a2", 0, executor.get());
+    b = getSyntheticColumnVar(TEST_DB_ID, "table4", "b", 1, executor.get());
 
     et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
     et2 = std::make_shared<Analyzer::ExpressionTuple>(VE{b, b});
@@ -610,7 +604,6 @@ TEST(MultiFragment, KeyedOneToMany) {
   CHECK(executor);
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
-  executor->setDatabaseId(TEST_DB_ID);
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -624,9 +617,9 @@ TEST(MultiFragment, KeyedOneToMany) {
     createTable("table2", {{"b", SQLTypeInfo(kINT)}});
     insertCsvValues("table2", "0\n1\n3\n3");
 
-    auto a1 = getSyntheticColumnVar("table1", "a1", 0, executor.get());
-    auto a2 = getSyntheticColumnVar("table1", "a2", 0, executor.get());
-    auto b = getSyntheticColumnVar("table2", "b", 1, executor.get());
+    auto a1 = getSyntheticColumnVar(TEST_DB_ID, "table1", "a1", 0, executor.get());
+    auto a2 = getSyntheticColumnVar(TEST_DB_ID, "table1", "a2", 0, executor.get());
+    auto b = getSyntheticColumnVar(TEST_DB_ID, "table2", "b", 1, executor.get());
 
     using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
     auto et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
@@ -643,9 +636,9 @@ TEST(MultiFragment, KeyedOneToMany) {
     createTable("table4", {{"b", SQLTypeInfo(kINT)}}, {1});
     insertCsvValues("table4", "0\n1\n3\n3");
 
-    a1 = getSyntheticColumnVar("table3", "a1", 0, executor.get());
-    a2 = getSyntheticColumnVar("table3", "a2", 0, executor.get());
-    b = getSyntheticColumnVar("table4", "b", 1, executor.get());
+    a1 = getSyntheticColumnVar(TEST_DB_ID, "table3", "a1", 0, executor.get());
+    a2 = getSyntheticColumnVar(TEST_DB_ID, "table3", "a2", 0, executor.get());
+    b = getSyntheticColumnVar(TEST_DB_ID, "table4", "b", 1, executor.get());
 
     using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
     et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});

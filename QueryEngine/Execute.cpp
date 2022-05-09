@@ -552,8 +552,8 @@ const TemporaryTables* Executor::getTemporaryTables() const {
   return temporary_tables_;
 }
 
-TableFragmentsInfo Executor::getTableInfo(const int table_id) const {
-  return input_table_info_cache_.getTableInfo(table_id);
+TableFragmentsInfo Executor::getTableInfo(const int db_id, const int table_id) const {
+  return input_table_info_cache_.getTableInfo(db_id, table_id);
 }
 
 const TableGeneration& Executor::getTableGeneration(const int table_id) const {
@@ -1404,12 +1404,12 @@ size_t compute_buffer_entry_guess(const std::vector<InputTableInfo>& query_infos
   }
 }
 
-std::string get_table_name(int db_id,
-                           const InputDescriptor& input_desc,
+std::string get_table_name(const InputDescriptor& input_desc,
                            const SchemaProvider& schema_provider) {
   const auto source_type = input_desc.getSourceType();
   if (source_type == InputSourceType::TABLE) {
-    const auto tinfo = schema_provider.getTableInfo(db_id, input_desc.getTableId());
+    const auto tinfo =
+        schema_provider.getTableInfo(input_desc.getDatabaseId(), input_desc.getTableId());
     CHECK(tinfo);
     return tinfo->name;
   } else {
@@ -1427,7 +1427,6 @@ inline size_t getDeviceBasedScanLimit(const ExecutorDeviceType device_type,
 
 void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
                            const std::vector<InputTableInfo>& table_infos,
-                           const int db_id,
                            const SchemaProvider& schema_provider,
                            const ExecutorDeviceType device_type,
                            const int device_count) {
@@ -1453,7 +1452,7 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
     std::vector<std::string> table_names;
     const auto& input_descs = ra_exe_unit.input_descs;
     for (const auto& input_desc : input_descs) {
-      table_names.push_back(get_table_name(db_id, input_desc, schema_provider));
+      table_names.push_back(get_table_name(input_desc, schema_provider));
     }
     if (!ra_exe_unit.scan_limit) {
       throw WatchdogException(
@@ -1778,7 +1777,8 @@ ResultSetPtr Executor::runOnBatch(std::shared_ptr<StreamExecutionContext> ctx,
   auto query_mem_desc = *ctx->query_mem_desc;
 
   if (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) {
-    auto metadata = data_mgr_->getTableMetadata(db_id_, fragments[0].table_id);
+    auto metadata =
+        data_mgr_->getTableMetadata(fragments[0].db_id, fragments[0].table_id);
     // TODO: think about concurrent table metadata modification
 
     size_t num_tuples = 0;
@@ -2575,7 +2575,7 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
                                              this);
   if (eo.with_watchdog && fragment_descriptor.shouldCheckWorkUnitWatchdog()) {
     checkWorkUnitWatchdog(
-        ra_exe_unit, table_infos, db_id_, *schema_provider_, device_type, device_count);
+        ra_exe_unit, table_infos, *schema_provider_, device_type, device_count);
   }
 
   if (use_multifrag_kernel) {
@@ -4213,8 +4213,8 @@ AggregatedColRange Executor::computeColRangesCache(
   }
   std::vector<InputTableInfo> query_infos;
   for (auto& tref : phys_table_refs) {
-    query_infos.emplace_back(
-        InputTableInfo{tref.db_id, tref.table_id, getTableInfo(tref.table_id)});
+    query_infos.emplace_back(InputTableInfo{
+        tref.db_id, tref.table_id, getTableInfo(tref.db_id, tref.table_id)});
   }
   for (const auto& col_desc : col_descs) {
     if (ExpressionRange::typeSupportsRange(col_desc.getType())) {
@@ -4247,10 +4247,10 @@ StringDictionaryGenerations Executor::computeStringDictionaryGenerations(
 }
 
 TableGenerations Executor::computeTableGenerations(
-    std::unordered_set<int> phys_table_ids) {
+    std::unordered_set<std::pair<int, int>> phys_table_ids) {
   TableGenerations table_generations;
-  for (const int table_id : phys_table_ids) {
-    const auto table_info = getTableInfo(table_id);
+  for (auto [db_id, table_id] : phys_table_ids) {
+    const auto table_info = getTableInfo(db_id, table_id);
     table_generations.setGeneration(
         table_id,
         TableGeneration{static_cast<int64_t>(table_info.getPhysicalNumTuples()), 0});
@@ -4258,9 +4258,10 @@ TableGenerations Executor::computeTableGenerations(
   return table_generations;
 }
 
-void Executor::setupCaching(DataProvider* data_provider,
-                            const std::unordered_set<InputColDescriptor>& col_descs,
-                            const std::unordered_set<int>& phys_table_ids) {
+void Executor::setupCaching(
+    DataProvider* data_provider,
+    const std::unordered_set<InputColDescriptor>& col_descs,
+    const std::unordered_set<std::pair<int, int>>& phys_table_ids) {
   row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(
       data_provider, Executor::getArenaBlockSize(), cpu_threads());
   row_set_mem_owner_->setDictionaryGenerations(

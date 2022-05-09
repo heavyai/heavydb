@@ -48,12 +48,10 @@ class RelAlgExecutor {
   using TargetInfoList = std::vector<TargetInfo>;
 
   RelAlgExecutor(Executor* executor,
-                 int db_id,
                  SchemaProviderPtr schema_provider,
                  DataProvider* data_provider);
 
   RelAlgExecutor(Executor* executor,
-                 int db_id,
                  SchemaProviderPtr schema_provider,
                  DataProvider* data_provider,
                  std::unique_ptr<RelAlgDag> query_dag);
@@ -345,7 +343,6 @@ class RelAlgExecutor {
       const bool just_explain) const;
 
   Executor* executor_;
-  int db_id_;
   std::unique_ptr<RelAlgDag> query_dag_;
   std::shared_ptr<SchemaProvider> schema_provider_;
   DataProvider* data_provider_;

@@ -478,9 +478,6 @@ class Executor {
   SchemaProviderPtr getSchemaProvider() const { return schema_provider_; }
   void setSchemaProvider(SchemaProviderPtr provider) { schema_provider_ = provider; }
 
-  int getDatabaseId() const { return db_id_; }
-  void setDatabaseId(int db_id) { db_id_ = db_id; }
-
   Data_Namespace::DataMgr* getDataMgr() const {
     CHECK(data_mgr_);
     return data_mgr_;
@@ -493,7 +490,7 @@ class Executor {
 
   const std::shared_ptr<RowSetMemoryOwner> getRowSetMemoryOwner() const;
 
-  TableFragmentsInfo getTableInfo(const int table_id) const;
+  TableFragmentsInfo getTableInfo(const int db_id, const int table_id) const;
 
   const TableGeneration& getTableGeneration(const int table_id) const;
 
@@ -1016,12 +1013,13 @@ class Executor {
       const std::unordered_set<InputColDescriptor>& col_descs);
   StringDictionaryGenerations computeStringDictionaryGenerations(
       const std::unordered_set<InputColDescriptor>& col_descs);
-  TableGenerations computeTableGenerations(std::unordered_set<int> phys_table_ids);
+  TableGenerations computeTableGenerations(
+      std::unordered_set<std::pair<int, int>> phys_table_ids);
 
  public:
   void setupCaching(DataProvider* data_provider,
                     const std::unordered_set<InputColDescriptor>& col_descs,
-                    const std::unordered_set<int>& phys_table_ids);
+                    const std::unordered_set<std::pair<int, int>>& phys_table_ids);
 
   void setColRangeCache(const AggregatedColRange& aggregated_col_range) {
     agg_col_range_cache_ = aggregated_col_range;
@@ -1215,7 +1213,6 @@ class Executor {
   const std::string debug_file_;
 
   SchemaProviderPtr schema_provider_;
-  int db_id_ = -1;
   Data_Namespace::DataMgr* data_mgr_;
   BufferProvider* buffer_provider_;
   const TemporaryTables* temporary_tables_;

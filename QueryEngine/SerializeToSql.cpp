@@ -278,12 +278,11 @@ std::string group_by_to_string(const RelAlgExecutionUnit* ra_exe_unit,
 }
 
 std::string from_to_string(const RelAlgExecutionUnit* ra_exe_unit,
-                           int db_id,
                            SchemaProviderPtr schema_provider) {
   std::vector<std::string> from_strings;
   for (const auto& input_desc : ra_exe_unit->input_descs) {
-    const auto table_ref =
-        serialize_table_ref(db_id, input_desc.getTableId(), schema_provider);
+    const auto table_ref = serialize_table_ref(
+        input_desc.getDatabaseId(), input_desc.getTableId(), schema_provider);
     from_strings.push_back(table_ref);
   }
   return boost::algorithm::join(from_strings, ", ");
@@ -319,10 +318,9 @@ std::string serialize_column_ref(int db_id,
 }
 
 ExecutionUnitSql serialize_to_sql(const RelAlgExecutionUnit* ra_exe_unit,
-                                  int db_id,
                                   SchemaProviderPtr schema_provider) {
   const auto targets = targets_to_string(ra_exe_unit, schema_provider);
-  const auto from = from_to_string(ra_exe_unit, db_id, schema_provider);
+  const auto from = from_to_string(ra_exe_unit, schema_provider);
   const auto join_on = join_condition_to_string(ra_exe_unit, schema_provider);
   const auto where = where_to_string(ra_exe_unit, schema_provider);
   const auto group = group_by_to_string(ra_exe_unit, schema_provider);

@@ -661,7 +661,7 @@ ChunkKey PerfectJoinHashTable::genChunkKey(const std::vector<FragmentInfo>& frag
                                            const Analyzer::Expr* outer_col_expr,
                                            const Analyzer::ColumnVar* inner_col) const {
   ChunkKey chunk_key{
-      executor_->getDatabaseId(), inner_col->get_table_id(), inner_col->get_column_id()};
+      inner_col->get_db_id(), inner_col->get_table_id(), inner_col->get_column_id()};
   const auto& ti = inner_col->get_type_info();
   if (ti.is_string()) {
     CHECK_EQ(kENCODING_DICT, ti.get_compression());

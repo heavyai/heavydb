@@ -117,13 +117,9 @@ QueryPlanDagInfo getQueryInfoForDataRecyclerTest(const std::string& query_str) {
   auto executor = Executor::getExecutor(
       Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
   executor->setSchemaProvider(getStorage());
-  executor->setDatabaseId(TEST_DB_ID);
   auto dag = std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, getStorage());
-  auto ra_executor = RelAlgExecutor(executor.get(),
-                                    TEST_DB_ID,
-                                    getStorage(),
-                                    getDataMgr()->getDataProvider(),
-                                    std::move(dag));
+  auto ra_executor = RelAlgExecutor(
+      executor.get(), getStorage(), getDataMgr()->getDataProvider(), std::move(dag));
   // note that we assume the test for data recycler that needs to have join_info
   // does not contain any ORDER BY clause; this is necessary to create work_unit
   // without actually performing the query

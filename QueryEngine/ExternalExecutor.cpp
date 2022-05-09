@@ -348,8 +348,8 @@ sqlite3_module omnisci_module = {
 std::vector<TargetMetaInfo> create_table_schema(const PlanState* plan_state) {
   std::map<size_t, TargetMetaInfo> schema_map;
   auto schema_provider = plan_state->executor_->getSchemaProvider();
-  int db_id = plan_state->executor_->getDatabaseId();
   for (const auto& kv : plan_state->global_to_local_col_ids_) {
+    const int db_id = kv.first.getDatabaseId();
     const int table_id = kv.first.getTableId();
     const int column_id = kv.first.getColId();
     SQLTypeInfo column_type;

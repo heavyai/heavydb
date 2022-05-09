@@ -64,7 +64,6 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
       Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
-  executor->setDatabaseId(TEST_DB_ID);
 
   auto tinfo = storage->getTableInfo(TEST_DB_ID, "high_cardinality_str");
   auto colStrInfo = storage->getColumnInfo(*tinfo, "str");
@@ -74,8 +73,8 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
   InputColDescriptor filter_col_desc{colXInfo, 0};
 
   std::unordered_set<InputColDescriptor> col_descs{group_col_desc, filter_col_desc};
-  std::unordered_set<int> phys_table_ids;
-  phys_table_ids.insert(group_col_desc.getTableId());
+  std::unordered_set<std::pair<int, int>> phys_table_ids;
+  phys_table_ids.insert({group_col_desc.getDatabaseId(), group_col_desc.getTableId()});
   executor->setupCaching(getDataMgr()->getDataProvider(), col_descs, phys_table_ids);
 
   auto input_descs =
@@ -137,8 +136,8 @@ std::unordered_set<InputColDescriptor> setup_str_col_caching(
     DataProvider* data_provider,
     Executor* executor) {
   std::unordered_set<InputColDescriptor> col_descs{group_col_desc, filter_col_desc};
-  std::unordered_set<int> phys_table_ids;
-  phys_table_ids.insert(group_col_desc.getTableId());
+  std::unordered_set<std::pair<int, int>> phys_table_ids;
+  phys_table_ids.insert({group_col_desc.getDatabaseId(), group_col_desc.getTableId()});
   executor->setupCaching(data_provider, col_descs, phys_table_ids);
   auto filter_col_range =
       executor->getColRange({filter_col_desc.getColId(), filter_col_desc.getTableId()});
@@ -158,7 +157,6 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
       Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
-  executor->setDatabaseId(TEST_DB_ID);
 
   auto tinfo = storage->getTableInfo(TEST_DB_ID, "high_cardinality_str");
   auto colStrInfo = storage->getColumnInfo(*tinfo, "str");
@@ -244,7 +242,6 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
       Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
-  executor->setDatabaseId(TEST_DB_ID);
 
   auto tinfo = storage->getTableInfo(TEST_DB_ID, "high_cardinality_str");
   auto colStrInfo = storage->getColumnInfo(*tinfo, "str");
@@ -271,8 +268,7 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
 
   auto count_expr = makeExpr<Analyzer::AggExpr>(
       SQLTypeInfo(kBIGINT, false), kCOUNT, nullptr, false, nullptr);
-  auto group_expr = makeExpr<Analyzer::ColumnVar>(
-      colStrInfo->type, tinfo->table_id, colStrInfo->column_id, 0);
+  auto group_expr = makeExpr<Analyzer::ColumnVar>(colStrInfo, 0);
 
   RelAlgExecutionUnit ra_exe_unit{input_descs,
                                   input_col_descs,

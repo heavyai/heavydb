@@ -121,23 +121,19 @@ class RelLeftDeepTreeIdsCollector : public RelAlgVisitor<std::vector<unsigned>> 
 }  // namespace
 
 RelAlgExecutor::RelAlgExecutor(Executor* executor,
-                               int db_id,
                                SchemaProviderPtr schema_provider,
                                DataProvider* data_provider)
     : executor_(executor)
-    , db_id_(db_id)
     , schema_provider_(schema_provider)
     , data_provider_(data_provider)
     , now_(0)
     , queue_time_ms_(0) {}
 
 RelAlgExecutor::RelAlgExecutor(Executor* executor,
-                               int db_id,
                                SchemaProviderPtr schema_provider,
                                DataProvider* data_provider,
                                std::unique_ptr<RelAlgDag> query_dag)
     : executor_(executor)
-    , db_id_(db_id)
     , query_dag_(std::move(query_dag))
     , schema_provider_(std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
     , data_provider_(data_provider)
@@ -163,7 +159,6 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
   const auto col_descs = get_physical_inputs(&ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
-  executor_->setDatabaseId(db_id_);
   executor_->setSchemaProvider(schema_provider_);
   executor_->setupCaching(data_provider_, col_descs, phys_table_ids);
 
@@ -181,7 +176,6 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
 
   decltype(temporary_tables_)().swap(temporary_tables_);
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
-  executor_->setDatabaseId(db_id_);
   executor_->setSchemaProvider(schema_provider_);
   executor_->temporary_tables_ = &temporary_tables_;
 
@@ -199,7 +193,8 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
     auto work_unit =
         createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo);
 
-    return get_frag_count_of_table(work_unit.exe_unit.input_descs[0].getTableId(),
+    return get_frag_count_of_table(work_unit.exe_unit.input_descs[0].getDatabaseId(),
+                                   work_unit.exe_unit.input_descs[0].getTableId(),
                                    executor_);
   }
 
@@ -212,7 +207,8 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
     const auto work_unit =
         createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo);
 
-    return get_frag_count_of_table(work_unit.exe_unit.input_descs[0].getTableId(),
+    return get_frag_count_of_table(work_unit.exe_unit.input_descs[0].getDatabaseId(),
+                                   work_unit.exe_unit.input_descs[0].getTableId(),
                                    executor_);
   }
 
@@ -319,7 +315,6 @@ void RelAlgExecutor::prepareStreamingExecution(const CompilationOptions& co,
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
   decltype(left_deep_join_info_)().swap(left_deep_join_info_);
 
-  executor_->setDatabaseId(db_id_);
   executor_->setSchemaProvider(schema_provider_);
   executor_->setupCaching(data_provider_, col_descs, phys_table_ids);
   executor_->temporary_tables_ = &temporary_tables_;
@@ -432,7 +427,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
   const auto col_descs = get_physical_inputs(&ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
-  executor_->setDatabaseId(db_id_);
   executor_->setSchemaProvider(schema_provider_);
   executor_->setupCaching(data_provider_, col_descs, phys_table_ids);
 
@@ -490,7 +484,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
       continue;
     }
     // Execute the subquery and cache the result.
-    RelAlgExecutor ra_executor(executor_, db_id_, schema_provider_, data_provider_);
+    RelAlgExecutor ra_executor(executor_, schema_provider_, data_provider_);
     RaExecutionSequence subquery_seq(subquery_ra);
     auto result = ra_executor.executeRelAlgSeq(subquery_seq, co, eo, 0);
     subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
@@ -644,7 +638,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
   }
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
   decltype(left_deep_join_info_)().swap(left_deep_join_info_);
-  executor_->setDatabaseId(db_id_);
   executor_->setSchemaProvider(schema_provider_);
   executor_->temporary_tables_ = &temporary_tables_;
 
@@ -710,7 +703,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
     const ExecutionOptions& eo,
     const int64_t queue_time_ms) {
   INJECT_TIMER(executeRelAlgSubSeq);
-  executor_->setDatabaseId(db_id_);
   executor_->setSchemaProvider(schema_provider_);
   executor_->temporary_tables_ = &temporary_tables_;
   decltype(left_deep_join_info_)().swap(left_deep_join_info_);

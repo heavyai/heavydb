@@ -187,11 +187,8 @@ class NoCatalogSqlTest : public ::testing::Test {
   ExecutionResult runSqlQuery(const std::string& sql) {
     const auto query_ra = calcite_->process("admin", "test_db", pg_shim(sql));
     auto dag = std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, schema_provider_);
-    auto ra_executor = RelAlgExecutor(executor_.get(),
-                                      TEST_DB_ID,
-                                      schema_provider_,
-                                      data_mgr_->getDataProvider(),
-                                      std::move(dag));
+    auto ra_executor = RelAlgExecutor(
+        executor_.get(), schema_provider_, data_mgr_->getDataProvider(), std::move(dag));
 
     auto co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
     co.use_groupby_buffer_desc = g_use_groupby_buffer_desc;
@@ -201,11 +198,8 @@ class NoCatalogSqlTest : public ::testing::Test {
   RelAlgExecutor getExecutor(const std::string& sql) {
     const auto query_ra = calcite_->process("admin", "test_db", pg_shim(sql));
     auto dag = std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, schema_provider_);
-    return RelAlgExecutor(executor_.get(),
-                          TEST_DB_ID,
-                          schema_provider_,
-                          data_mgr_->getDataProvider(),
-                          std::move(dag));
+    return RelAlgExecutor(
+        executor_.get(), schema_provider_, data_mgr_->getDataProvider(), std::move(dag));
   }
 
   TestDataProvider& getDataProvider() {

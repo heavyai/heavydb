@@ -231,7 +231,7 @@ class RelAlgPhysicalTableInputsVisitor : public RelRexDagVisitor {
   RelAlgPhysicalTableInputsVisitor() {}
 
   using RelRexDagVisitor::visit;
-  using TableIds = std::unordered_set<int>;
+  using TableIds = std::unordered_set<std::pair<int, int>>;
 
   static TableIds getTableIds(RelAlgNode const* node) {
     RelAlgPhysicalTableInputsVisitor visitor;
@@ -242,7 +242,9 @@ class RelAlgPhysicalTableInputsVisitor : public RelRexDagVisitor {
  private:
   TableIds table_ids_;
 
-  void visit(RelScan const* scan) override { table_ids_.insert(scan->getTableId()); }
+  void visit(RelScan const* scan) override {
+    table_ids_.insert({scan->getDatabaseId(), scan->getTableId()});
+  }
 };
 
 class RelAlgPhysicalTableInfosVisitor
@@ -268,7 +270,7 @@ std::unordered_set<InputColDescriptor> get_physical_inputs(const RelAlgNode* ra)
   return phys_inputs_visitor.visit(ra);
 }
 
-std::unordered_set<int> get_physical_table_inputs(const RelAlgNode* ra) {
+std::unordered_set<std::pair<int, int>> get_physical_table_inputs(const RelAlgNode* ra) {
   return RelAlgPhysicalTableInputsVisitor::getTableIds(ra);
 }
 

@@ -89,11 +89,8 @@ class ArrowSQLRunnerImpl {
 
     auto dag = std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, storage_);
 
-    return std::make_unique<RelAlgExecutor>(executor_.get(),
-                                            TEST_DB_ID,
-                                            storage_,
-                                            data_mgr_->getDataProvider(),
-                                            std::move(dag));
+    return std::make_unique<RelAlgExecutor>(
+        executor_.get(), storage_, data_mgr_->getDataProvider(), std::move(dag));
   }
 
   ExecutionResult runSqlQuery(const std::string& sql,
@@ -357,7 +354,6 @@ class ArrowSQLRunnerImpl {
         "",
         system_parameters);
     executor_->setSchemaProvider(storage_);
-    executor_->setDatabaseId(TEST_DB_ID);
 
     calcite_ = std::make_shared<CalciteJNI>(storage_, udf_filename, 1024);
     ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());

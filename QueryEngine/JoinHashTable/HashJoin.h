@@ -192,6 +192,7 @@ class HashJoin {
 
   //! Make hash table from named tables and columns (such as for testing).
   static std::shared_ptr<HashJoin> getSyntheticInstance(
+      int db_id,
       std::string_view table1,
       std::string_view column1,
       std::string_view table2,
@@ -316,7 +317,8 @@ std::ostream& operator<<(std::ostream& os, const DecodedJoinHashBufferEntry& e);
 
 std::ostream& operator<<(std::ostream& os, const DecodedJoinHashBufferSet& s);
 
-std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(std::string_view table,
+std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(int db_id,
+                                                           std::string_view table,
                                                            std::string_view column,
                                                            int rte_idx,
                                                            Executor* executor);

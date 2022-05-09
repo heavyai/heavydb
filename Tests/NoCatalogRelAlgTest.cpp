@@ -172,11 +172,8 @@ class NoCatalogRelAlgTest : public ::testing::Test {
   }
 
   ExecutionResult runRelAlgQuery(std::unique_ptr<RelAlgDag> dag) {
-    auto ra_executor = RelAlgExecutor(executor_.get(),
-                                      TEST_DB_ID,
-                                      schema_provider_,
-                                      data_mgr_->getDataProvider(),
-                                      std::move(dag));
+    auto ra_executor = RelAlgExecutor(
+        executor_.get(), schema_provider_, data_mgr_->getDataProvider(), std::move(dag));
     return ra_executor.executeRelAlgQuery(
         CompilationOptions(), ExecutionOptions(), false);
   }
@@ -326,11 +323,8 @@ TEST_F(NoCatalogRelAlgTest, StreamingAggregate) {
     std::abort();
   }
 
-  auto ra_executor = RelAlgExecutor(executor_.get(),
-                                    TEST_DB_ID,
-                                    schema_provider_,
-                                    data_mgr_->getDataProvider(),
-                                    std::move(dag));
+  auto ra_executor = RelAlgExecutor(
+      executor_.get(), schema_provider_, data_mgr_->getDataProvider(), std::move(dag));
 
   ra_executor.prepareStreamingExecution(CompilationOptions(), ExecutionOptions());
 
@@ -423,11 +417,8 @@ TEST_F(NoCatalogRelAlgTest, StreamingFilter) {
     std::abort();
   }
 
-  auto ra_executor = RelAlgExecutor(executor_.get(),
-                                    TEST_DB_ID,
-                                    schema_provider_,
-                                    data_mgr_->getDataProvider(),
-                                    std::move(dag));
+  auto ra_executor = RelAlgExecutor(
+      executor_.get(), schema_provider_, data_mgr_->getDataProvider(), std::move(dag));
 
   ra_executor.prepareStreamingExecution(CompilationOptions(), ExecutionOptions());
 

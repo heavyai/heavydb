@@ -206,14 +206,14 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
 
   for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
     auto const& table_desc = ra_exe_unit.input_descs[j];
+    int db_id = table_desc.getDatabaseId();
     int const table_id = table_desc.getTableId();
     TableFragments const* fragments = selected_tables_fragments_.at(table_id);
 
     bool is_temporary_table = false;
     if (table_id > 0) {
       // Temporary tables will not have a table descriptor and not have deleted rows.
-      const auto table_info =
-          schema_provider->getTableInfo(executor->getDatabaseId(), table_id);
+      const auto table_info = schema_provider->getTableInfo(db_id, table_id);
       CHECK(table_info);
       if (table_info->isTemporary()) {
         // for temporary tables, we won't have delete column metadata available. However,
@@ -269,6 +269,7 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
     const size_t num_bytes_for_row,
     Executor* executor) {
   const auto& outer_table_desc = ra_exe_unit.input_descs.front();
+  const int db_id = outer_table_desc.getDatabaseId();
   const int outer_table_id = outer_table_desc.getTableId();
   auto it = selected_tables_fragments_.find(outer_table_id);
   CHECK(it != selected_tables_fragments_.end());
@@ -278,8 +279,7 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
   bool is_temporary_table = false;
   if (outer_table_id > 0) {
     auto schema_provider = executor->getSchemaProvider();
-    auto table_info =
-        schema_provider->getTableInfo(executor->getDatabaseId(), outer_table_id);
+    auto table_info = schema_provider->getTableInfo(db_id, outer_table_id);
     CHECK(table_info);
     // Temporary tables will not have a table descriptor and not have deleted rows.
     if (table_info->isTemporary()) {

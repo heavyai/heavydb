@@ -21,23 +21,7 @@
 #include "QueryEngine/ColumnarResults.h"
 #include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
-
-namespace std {
-template <>
-struct hash<std::vector<int>> {
-  size_t operator()(const std::vector<int>& vec) const {
-    return vec.size() ^ boost::hash_range(vec.begin(), vec.end());
-  }
-};
-
-template <>
-struct hash<std::pair<int, int>> {
-  size_t operator()(const std::pair<int, int>& p) const {
-    return boost::hash<std::pair<int, int>>()(p);
-  }
-};
-
-}  // namespace std
+#include "Shared/hash.h"
 
 struct FetchResult {
   std::vector<std::vector<const int8_t*>> col_buffers;

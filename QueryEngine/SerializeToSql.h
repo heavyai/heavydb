@@ -83,5 +83,4 @@ struct ExecutionUnitSql {
 };
 
 ExecutionUnitSql serialize_to_sql(const RelAlgExecutionUnit* ra_exe_unit,
-                                  int db_id,
                                   SchemaProviderPtr schema_provider);

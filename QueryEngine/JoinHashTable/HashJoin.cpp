@@ -371,14 +371,13 @@ CompositeKeyInfo HashJoin::getCompositeKeyInfo(
   std::vector<const void*> sd_inner_proxy_per_key;
   std::vector<const void*> sd_outer_proxy_per_key;
   std::vector<ChunkKey> cache_key_chunks;  // used for the cache key
-  const auto db_id = executor->getDatabaseId();
   for (const auto& inner_outer_pair : inner_outer_pairs) {
     const auto inner_col = inner_outer_pair.first;
     const auto outer_col = inner_outer_pair.second;
     const auto& inner_ti = inner_col->get_type_info();
     const auto& outer_ti = outer_col->get_type_info();
     ChunkKey cache_key_chunks_for_column{
-        db_id, inner_col->get_table_id(), inner_col->get_column_id()};
+        inner_col->get_db_id(), inner_col->get_table_id(), inner_col->get_column_id()};
     if (inner_ti.is_string() &&
         !(inner_ti.get_comp_param() == outer_ti.get_comp_param())) {
       CHECK(outer_ti.is_string());
@@ -432,13 +431,13 @@ HashJoin::translateCompositeStrDictProxies(const CompositeKeyInfo& composite_key
   return proxy_translation_maps;
 }
 
-std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(std::string_view table,
+std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(int db_id,
+                                                           std::string_view table,
                                                            std::string_view column,
                                                            int rte_idx,
                                                            Executor* executor) {
   auto schema_provider = executor->getSchemaProvider();
-  auto table_info =
-      schema_provider->getTableInfo(executor->getDatabaseId(), std::string(table));
+  auto table_info = schema_provider->getTableInfo(db_id, std::string(table));
   CHECK(table_info);
   auto col_info = schema_provider->getColumnInfo(*table_info, std::string(column));
   CHECK(col_info);
@@ -478,9 +477,9 @@ class AllColumnVarsVisitor
 void setupSyntheticCaching(DataProvider* data_provider,
                            std::set<const Analyzer::ColumnVar*> cvs,
                            Executor* executor) {
-  std::unordered_set<int> phys_table_ids;
+  std::unordered_set<std::pair<int, int>> phys_table_ids;
   for (auto cv : cvs) {
-    phys_table_ids.insert(cv->get_table_id());
+    phys_table_ids.insert({cv->get_db_id(), cv->get_table_id()});
   }
 
   std::unordered_set<InputColDescriptor> col_descs;
@@ -494,9 +493,9 @@ void setupSyntheticCaching(DataProvider* data_provider,
 std::vector<InputTableInfo> getSyntheticInputTableInfo(
     std::set<const Analyzer::ColumnVar*> cvs,
     Executor* executor) {
-  std::unordered_set<int> phys_table_ids;
+  std::unordered_set<std::pair<int, int>> phys_table_ids;
   for (auto cv : cvs) {
-    phys_table_ids.insert(cv->get_table_id());
+    phys_table_ids.insert({cv->get_db_id(), cv->get_table_id()});
   }
 
   // NOTE(sy): This vector ordering seems to work for now, but maybe we need to
@@ -504,10 +503,9 @@ std::vector<InputTableInfo> getSyntheticInputTableInfo(
   // and RelAlgExecutor.cpp and rte_idx there.
   std::vector<InputTableInfo> query_infos(phys_table_ids.size());
   size_t i = 0;
-  for (auto id : phys_table_ids) {
-    query_infos[i].table_id = id;
-    query_infos[i].info =
-        executor->getDataMgr()->getTableMetadata(executor->getDatabaseId(), id);
+  for (auto [db_id, table_id] : phys_table_ids) {
+    query_infos[i].table_id = table_id;
+    query_infos[i].info = executor->getDataMgr()->getTableMetadata(db_id, table_id);
     ++i;
   }
 
@@ -516,6 +514,7 @@ std::vector<InputTableInfo> getSyntheticInputTableInfo(
 
 //! Make hash table from named tables and columns (such as for testing).
 std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
+    int db_id,
     std::string_view table1,
     std::string_view column1,
     std::string_view table2,
@@ -526,8 +525,8 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
     DataProvider* data_provider,
     ColumnCacheMap& column_cache,
     Executor* executor) {
-  auto a1 = getSyntheticColumnVar(table1, column1, 0, executor);
-  auto a2 = getSyntheticColumnVar(table2, column2, 1, executor);
+  auto a1 = getSyntheticColumnVar(db_id, table1, column1, 0, executor);
+  auto a2 = getSyntheticColumnVar(db_id, table2, column2, 1, executor);
 
   auto qual_bin_oper = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, a1, a2);
 
@@ -702,8 +701,8 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
       throw HashJoinFail("Cannot use hash join for given expression");
     }
   }
-  // We need to fetch the actual type information from the schema provider since Analyzer
-  // always reports nullable as true for inner table columns in left joins.
+  // We need to fetch the actual type information from the schema provider since
+  // Analyzer always reports nullable as true for inner table columns in left joins.
   const auto inner_col_info =
       schema_provider->getColumnInfo(*inner_col->get_column_info());
   const auto inner_col_real_ti = get_column_type(inner_col->get_column_id(),

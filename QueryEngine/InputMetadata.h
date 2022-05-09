@@ -20,6 +20,7 @@
 #include "DataProvider/DataProvider.h"
 #include "QueryEngine/Descriptors/InputDescriptors.h"
 #include "QueryEngine/RelAlgExecutionUnit.h"
+#include "Shared/hash.h"
 
 #include <unordered_map>
 
@@ -82,18 +83,18 @@ class InputTableInfoCache {
  public:
   InputTableInfoCache(Executor* executor);
 
-  TableFragmentsInfo getTableInfo(const int table_id);
+  TableFragmentsInfo getTableInfo(int db_id, int table_id);
 
   void clear();
 
  private:
-  std::unordered_map<int, TableFragmentsInfo> cache_;
+  std::unordered_map<std::pair<int, int>, TableFragmentsInfo> cache_;
   Executor* executor_;
 };
 
 ChunkMetadataMap synthesize_metadata(const ResultSet* rows);
 
-size_t get_frag_count_of_table(const int table_id, Executor* executor);
+size_t get_frag_count_of_table(const int db_id, const int table_id, Executor* executor);
 
 std::vector<InputTableInfo> get_table_infos(
     const std::vector<InputDescriptor>& input_descs,

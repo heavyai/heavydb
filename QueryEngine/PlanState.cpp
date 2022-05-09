@@ -27,7 +27,7 @@ bool PlanState::isLazyFetchColumn(const Analyzer::Expr* target_expr) const {
   }
   if (do_not_fetch_column->get_table_id() > 0) {
     auto col_info = executor_->getSchemaProvider()->getColumnInfo(
-        executor_->getDatabaseId(),
+        do_not_fetch_column->get_db_id(),
         do_not_fetch_column->get_table_id(),
         do_not_fetch_column->get_column_id());
     CHECK(col_info);

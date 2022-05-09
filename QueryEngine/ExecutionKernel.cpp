@@ -248,8 +248,7 @@ void ExecutionKernel::runImpl(Executor* executor,
     if (ra_exe_unit_.input_descs.size() > 1) {
       throw std::runtime_error("Joins not supported through external execution");
     }
-    const auto query = serialize_to_sql(
-        &ra_exe_unit_, executor->getDatabaseId(), executor->getSchemaProvider());
+    const auto query = serialize_to_sql(&ra_exe_unit_, executor->getSchemaProvider());
     GroupByAndAggregate group_by_and_aggregate(executor,
                                                ExecutorDeviceType::CPU,
                                                ra_exe_unit_,
