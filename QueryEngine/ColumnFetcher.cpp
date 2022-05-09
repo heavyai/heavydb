@@ -296,6 +296,7 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
     const int device_id,
     DeviceAllocator* device_allocator,
     const size_t thread_idx) const {
+  int db_id = col_info->db_id;
   int table_id = col_info->table_id;
   int col_id = col_info->column_id;
   const auto fragments_it = all_tables_fragments.find(table_id);
@@ -304,7 +305,7 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
   const auto frag_count = fragments->size();
   std::vector<std::unique_ptr<ColumnarResults>> column_frags;
   const ColumnarResults* table_column = nullptr;
-  const InputDescriptor table_desc(table_id, int(0));
+  const InputDescriptor table_desc(db_id, table_id, int(0));
   CHECK(table_desc.getSourceType() == InputSourceType::TABLE);
   {
     std::lock_guard<std::mutex> columnar_conversion_guard(columnar_fetch_mutex_);
@@ -381,13 +382,14 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
     DeviceAllocator* device_allocator,
     const size_t thread_idx) const {
   auto timer = DEBUG_TIMER(__func__);
+  int db_id = col_info->db_id;
   int table_id = col_info->table_id;
   int col_id = col_info->column_id;
   const auto fragments_it = all_tables_fragments.find(table_id);
   CHECK(fragments_it != all_tables_fragments.end());
   const auto fragments = fragments_it->second;
   const auto frag_count = fragments->size();
-  InputDescriptor table_desc(table_id, 0);
+  InputDescriptor table_desc(db_id, table_id, 0);
   CHECK(table_desc.getSourceType() == InputSourceType::TABLE);
   CHECK_GT(table_id, 0);
   bool is_varlen_chunk = col_info->type.is_varlen() && !col_info->type.is_fixlen_array();

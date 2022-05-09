@@ -159,8 +159,10 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
                                             i,
                                             selected_tables_fragments_,
                                             executor->getInnerTabIdToJoinCond());
+      const auto db_id = ra_exe_unit.input_descs[*table_desc_offset].getDatabaseId();
       const auto table_id = ra_exe_unit.input_descs[*table_desc_offset].getTableId();
-      execution_kernel_desc.fragments.emplace_back(FragmentsPerTable{table_id, frag_ids});
+      execution_kernel_desc.fragments.emplace_back(
+          FragmentsPerTable{db_id, table_id, frag_ids});
 
     } else {
       for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
@@ -171,12 +173,13 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
                                               i,
                                               selected_tables_fragments_,
                                               executor->getInnerTabIdToJoinCond());
+        const auto db_id = ra_exe_unit.input_descs[j].getDatabaseId();
         const auto table_id = ra_exe_unit.input_descs[j].getTableId();
         auto table_frags_it = selected_tables_fragments_.find(table_id);
         CHECK(table_frags_it != selected_tables_fragments_.end());
 
         execution_kernel_desc.fragments.emplace_back(
-            FragmentsPerTable{table_id, frag_ids});
+            FragmentsPerTable{db_id, table_id, frag_ids});
       }
     }
 
@@ -351,6 +354,7 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
       checkDeviceMemoryUsage(fragment, device_id, num_bytes_for_row);
     }
     for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
+      const auto db_id = ra_exe_unit.input_descs[j].getDatabaseId();
       const auto table_id = ra_exe_unit.input_descs[j].getTableId();
       auto table_frags_it = selected_tables_fragments_.find(table_id);
       CHECK(table_frags_it != selected_tables_fragments_.end());
@@ -379,7 +383,7 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
 
       auto& kernel_frag_list = execution_kernel.fragments;
       if (kernel_frag_list.size() < j + 1) {
-        kernel_frag_list.emplace_back(FragmentsPerTable{table_id, frag_ids});
+        kernel_frag_list.emplace_back(FragmentsPerTable{db_id, table_id, frag_ids});
       } else {
         CHECK_EQ(kernel_frag_list[j].table_id, table_id);
         auto& curr_frag_ids = kernel_frag_list[j].fragment_ids;

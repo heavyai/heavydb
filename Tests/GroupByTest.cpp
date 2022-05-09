@@ -78,7 +78,8 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
   phys_table_ids.insert(group_col_desc.getTableId());
   executor->setupCaching(getDataMgr()->getDataProvider(), col_descs, phys_table_ids);
 
-  auto input_descs = std::vector<InputDescriptor>{InputDescriptor(tinfo->table_id, 0)};
+  auto input_descs =
+      std::vector<InputDescriptor>{InputDescriptor(tinfo->db_id, tinfo->table_id, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   input_col_descs.push_back(std::make_shared<InputColDescriptor>(colStrInfo, 0));
   input_col_descs.push_back(std::make_shared<InputColDescriptor>(colXInfo, 0));
@@ -174,7 +175,8 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
                                            getDataMgr()->getDataProvider(),
                                            executor.get());
 
-  auto input_descs = std::vector<InputDescriptor>{InputDescriptor(tinfo->table_id, 0)};
+  auto input_descs =
+      std::vector<InputDescriptor>{InputDescriptor(tinfo->db_id, tinfo->table_id, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   input_col_descs.push_back(std::make_shared<InputColDescriptor>(colStrInfo, 0));
   input_col_descs.push_back(std::make_shared<InputColDescriptor>(colXInfo, 0));
@@ -259,7 +261,8 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
                                            getDataMgr()->getDataProvider(),
                                            executor.get());
 
-  auto input_descs = std::vector<InputDescriptor>{InputDescriptor(tinfo->table_id, 0)};
+  auto input_descs =
+      std::vector<InputDescriptor>{InputDescriptor(tinfo->db_id, tinfo->table_id, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   input_col_descs.push_back(std::make_shared<InputColDescriptor>(colStrInfo, 0));
   input_col_descs.push_back(std::make_shared<InputColDescriptor>(colXInfo, 0));

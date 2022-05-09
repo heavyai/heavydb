@@ -27,12 +27,15 @@ enum class InputSourceType { TABLE, RESULT };
 
 class InputDescriptor {
  public:
-  InputDescriptor(const int table_id, const int nest_level)
-      : table_id_(table_id), nest_level_(nest_level) {}
+  InputDescriptor(int db_id, const int table_id, const int nest_level)
+      : db_id_(db_id), table_id_(table_id), nest_level_(nest_level) {}
 
   bool operator==(const InputDescriptor& that) const {
-    return table_id_ == that.table_id_ && nest_level_ == that.nest_level_;
+    return table_id_ == that.table_id_ && db_id_ == that.db_id_ &&
+           nest_level_ == that.nest_level_;
   }
+
+  int getDatabaseId() const { return db_id_; }
 
   int getTableId() const { return table_id_; }
 
@@ -48,6 +51,7 @@ class InputDescriptor {
   }
 
  private:
+  int db_id_;
   int table_id_;
   int nest_level_;
 };
@@ -84,7 +88,9 @@ class InputColDescriptor {
 
   int getNestLevel() const { return nest_level_; }
 
-  InputDescriptor getScanDesc() const { return {col_info_->table_id, nest_level_}; }
+  InputDescriptor getScanDesc() const {
+    return {col_info_->db_id, col_info_->table_id, nest_level_};
+  }
 
   InputSourceType getSourceType() const {
     return col_info_->table_id > 0 ? InputSourceType::TABLE : InputSourceType::RESULT;

@@ -47,6 +47,7 @@ struct InputTableInfo;
 struct RelAlgExecutionUnit;
 
 struct FragmentsPerTable {
+  int db_id;
   int table_id;
   std::vector<size_t> fragment_ids;
 };

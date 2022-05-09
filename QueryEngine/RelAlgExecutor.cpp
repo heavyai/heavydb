@@ -1052,6 +1052,14 @@ get_used_inputs(const RelLogicalUnion* logical_union) {
   return std::make_pair(std::move(used_inputs), std::move(used_inputs_owned));
 }
 
+int db_id_from_ra(const RelAlgNode* ra_node) {
+  const auto scan_ra = dynamic_cast<const RelScan*>(ra_node);
+  if (scan_ra) {
+    return scan_ra->getDatabaseId();
+  }
+  return 0;
+}
+
 int table_id_from_ra(const RelAlgNode* ra_node) {
   const auto scan_ra = dynamic_cast<const RelScan*>(ra_node);
   if (scan_ra) {
@@ -1171,8 +1179,9 @@ get_input_desc_impl(const RA* ra_node,
     const auto input_node_idx =
         input_permutation.empty() ? input_idx : input_permutation[input_idx];
     auto input_ra = data_sink_node->getInput(input_node_idx);
+    const int db_id = db_id_from_ra(input_ra);
     const int table_id = table_id_from_ra(input_ra);
-    input_descs.emplace_back(table_id, input_idx);
+    input_descs.emplace_back(db_id, table_id, input_idx);
   }
   std::sort(input_descs.begin(),
             input_descs.end(),
