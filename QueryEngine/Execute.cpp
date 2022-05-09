@@ -466,11 +466,10 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(
   CHECK(row_set_mem_owner);
   std::lock_guard<std::mutex> lock(
       str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
-  return row_set_mem_owner->getOrAddStringDictProxy(db_id_, dict_id_in, with_generation);
+  return row_set_mem_owner->getOrAddStringDictProxy(dict_id_in, with_generation);
 }
 
 StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
-    const int db_id,
     const int dict_id_in,
     const bool with_generation) {
   const int dict_id{dict_id_in < 0 ? REGULAR_DICT(dict_id_in) : dict_id_in};
@@ -504,7 +503,7 @@ const StringDictionaryProxy::IdMap* Executor::getStringProxyTranslationMap(
   std::lock_guard<std::mutex> lock(
       str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
   return row_set_mem_owner->getOrAddStringProxyTranslationMap(
-      db_id_, source_dict_id, dest_dict_id, with_generation, translation_type);
+      source_dict_id, dest_dict_id, with_generation, translation_type);
 }
 
 const StringDictionaryProxy::IdMap* Executor::getIntersectionStringProxyTranslationMap(
@@ -519,14 +518,12 @@ const StringDictionaryProxy::IdMap* Executor::getIntersectionStringProxyTranslat
 }
 
 const StringDictionaryProxy::IdMap* RowSetMemoryOwner::getOrAddStringProxyTranslationMap(
-    const int db_id,
     const int source_dict_id_in,
     const int dest_dict_id_in,
     const bool with_generation,
     const RowSetMemoryOwner::StringTranslationType translation_type) {
-  const auto source_proxy =
-      getOrAddStringDictProxy(db_id, source_dict_id_in, with_generation);
-  auto dest_proxy = getOrAddStringDictProxy(db_id, dest_dict_id_in, with_generation);
+  const auto source_proxy = getOrAddStringDictProxy(source_dict_id_in, with_generation);
+  auto dest_proxy = getOrAddStringDictProxy(dest_dict_id_in, with_generation);
   if (translation_type == RowSetMemoryOwner::StringTranslationType::SOURCE_INTERSECTION) {
     return addStringProxyIntersectionTranslationMap(source_proxy, dest_proxy);
   } else {
@@ -1145,7 +1142,6 @@ TemporaryTable Executor::resultsUnion(SharedKernelContext& shared_context,
                                        row_set_mem_owner_,
                                        data_mgr_,
                                        buffer_provider_,
-                                       db_id_,
                                        blockSize(),
                                        gridSize());
   }
@@ -1193,7 +1189,6 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
                                        nullptr,
                                        data_mgr_,
                                        buffer_provider_,
-                                       db_id_,
                                        blockSize(),
                                        gridSize());
   }
@@ -1265,7 +1260,6 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
                                                   row_set_mem_owner,
                                                   data_mgr_,
                                                   buffer_provider_,
-                                                  db_id_,
                                                   blockSize(),
                                                   gridSize());
     auto result_storage = reduced_results->allocateStorage(plan_state_->init_agg_vals_);
@@ -2050,7 +2044,6 @@ TemporaryTable Executor::executeWorkUnitImpl(
                                      nullptr,
                                      data_mgr_,
                                      buffer_provider_,
-                                     db_id_,
                                      blockSize(),
                                      gridSize());
 }
@@ -2156,7 +2149,6 @@ ResultSetPtr Executor::executeTableFunction(
         this->getRowSetMemoryOwner(),
         data_mgr_,
         buffer_provider_,
-        db_id_,
         this->blockSize(),
         this->gridSize());
   }
@@ -2338,7 +2330,6 @@ ResultSetPtr build_row_for_empty_input(
                                         row_set_mem_owner,
                                         executor->getDataMgr(),
                                         executor->getBufferProvider(),
-                                        executor->getDatabaseId(),
                                         executor->blockSize(),
                                         executor->gridSize());
   rs->allocateStorage();
@@ -2486,7 +2477,6 @@ ResultSetPtr Executor::collectAllDeviceShardedTopResults(
                                                     first_result_set->getRowSetMemOwner(),
                                                     data_mgr_,
                                                     buffer_provider_,
-                                                    db_id_,
                                                     blockSize(),
                                                     gridSize());
   auto top_storage = top_result_set->allocateStorage();

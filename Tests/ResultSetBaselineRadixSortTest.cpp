@@ -230,7 +230,6 @@ void SortBaselineIntegersTestImpl(const bool desc) {
                                               row_set_mem_owner,
                                               nullptr,
                                               nullptr,
-                                              -1,
                                               0,
                                               0));
   auto storage = rs->allocateStorage();
@@ -274,7 +273,6 @@ TEST(SortBaseline, Floats) {
                                                   row_set_mem_owner,
                                                   nullptr,
                                                   nullptr,
-                                                  -1,
                                                   0,
                                                   0));
       auto storage = rs->allocateStorage();
@@ -306,7 +304,6 @@ TEST(SortBaseline, FloatsNotNull) {
                                                   row_set_mem_owner,
                                                   nullptr,
                                                   nullptr,
-                                                  -1,
                                                   0,
                                                   0));
       auto storage = rs->allocateStorage();

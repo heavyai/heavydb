@@ -119,7 +119,6 @@ class RaExecutionDesc {
                                             nullptr,
                                             nullptr,
                                             nullptr,
-                                            -1,
                                             0,
                                             0),
                 {}) {}

@@ -173,8 +173,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     return it->second.get();
   }
 
-  StringDictionaryProxy* getOrAddStringDictProxy(const int db_id,
-                                                 const int dict_id_in,
+  StringDictionaryProxy* getOrAddStringDictProxy(const int dict_id_in,
                                                  const bool with_generation);
 
   void addLiteralStringDictProxy(
@@ -189,7 +188,6 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   }
 
   const StringDictionaryProxy::IdMap* getOrAddStringProxyTranslationMap(
-      const int db_id,
       const int source_dict_id_in,
       const int dest_dict_id_in,
       const bool with_generation,

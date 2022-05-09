@@ -1007,10 +1007,6 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets,
   for (const auto result_set : result_sets) {
     CHECK_EQ(row_set_mem_owner, result_set->row_set_mem_owner_);
   }
-  const auto db_id = result_rs->db_id_for_dict_;
-  for (const auto result_set : result_sets) {
-    CHECK_EQ(db_id, result_set->db_id_for_dict_);
-  }
   if (first_result.query_mem_desc_.getQueryDescriptionType() ==
       QueryDescriptionType::GroupByBaselineHash) {
     const auto total_entry_count =
@@ -1029,7 +1025,6 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets,
                             row_set_mem_owner,
                             result_rs->data_mgr_,
                             result_rs->buffer_provider_,
-                            db_id,
                             0,
                             0));
     auto result_storage = rs_->allocateStorage(first_result.target_init_vals_);

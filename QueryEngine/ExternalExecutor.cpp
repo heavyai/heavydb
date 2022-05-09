@@ -429,7 +429,6 @@ std::unique_ptr<ResultSet> SqliteMemDatabase::runSelect(
                                         output_spec.executor->getRowSetMemoryOwner(),
                                         nullptr,
                                         nullptr,
-                                        -1,
                                         0,
                                         0);
   const auto storage = rs->allocateStorage();

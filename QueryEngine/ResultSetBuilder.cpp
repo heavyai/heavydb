@@ -37,7 +37,6 @@ ResultSet* ResultSetBuilder::makeResultSet(
                        row_set_mem_owner,
                        executor ? executor->getDataMgr() : nullptr,
                        executor ? executor->getBufferProvider() : nullptr,
-                       executor ? executor->getDatabaseId() : -1,
                        executor ? executor->blockSize() : 0,
                        executor ? executor->gridSize() : 0);
 }

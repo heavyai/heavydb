@@ -1580,7 +1580,6 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
                                                      nullptr,
                                                      executor_->getDataMgr(),
                                                      executor_->getBufferProvider(),
-                                                     executor_->getDatabaseId(),
                                                      executor_->blockSize(),
                                                      executor_->gridSize()),
                          {}};
@@ -2237,7 +2236,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                                                      nullptr,
                                                      executor_->getDataMgr(),
                                                      executor_->getBufferProvider(),
-                                                     executor_->getDatabaseId(),
                                                      executor_->blockSize(),
                                                      executor_->gridSize()),
                          {}};
@@ -2413,7 +2411,6 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                                   nullptr,
                                                   executor_->getDataMgr(),
                                                   executor_->getBufferProvider(),
-                                                  executor_->getDatabaseId(),
                                                   executor_->blockSize(),
                                                   executor_->gridSize()),
                       {}};

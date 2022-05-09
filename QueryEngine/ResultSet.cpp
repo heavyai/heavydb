@@ -72,7 +72,6 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                      Data_Namespace::DataMgr* data_mgr,
                      BufferProvider* buffer_provider,
-                     const int db_id_for_dict,
                      const unsigned block_size,
                      const unsigned grid_size)
     : targets_(targets)
@@ -88,7 +87,6 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , grid_size_(grid_size)
     , data_mgr_(data_mgr)
     , buffer_provider_(buffer_provider)
-    , db_id_for_dict_(db_id_for_dict)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , for_validation_only_(false)
@@ -105,7 +103,6 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                      Data_Namespace::DataMgr* data_mgr,
                      BufferProvider* buffer_provider,
-                     const int db_id_for_dict,
                      const unsigned block_size,
                      const unsigned grid_size)
     : targets_(targets)
@@ -125,7 +122,6 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , consistent_frag_sizes_{consistent_frag_sizes}
     , data_mgr_(data_mgr)
     , buffer_provider_(buffer_provider)
-    , db_id_for_dict_(db_id_for_dict)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , for_validation_only_(false)
@@ -135,8 +131,7 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
                      const ExecutorDeviceType device_type,
                      const int device_id,
                      Data_Namespace::DataMgr* data_mgr,
-                     BufferProvider* buffer_provider,
-                     const int db_id_for_dict)
+                     BufferProvider* buffer_provider)
     : device_type_(device_type)
     , device_id_(device_id)
     , query_mem_desc_{}
@@ -144,7 +139,6 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
     , estimator_(estimator)
     , data_mgr_(data_mgr)
     , buffer_provider_(buffer_provider)
-    , db_id_for_dict_(db_id_for_dict)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , for_validation_only_(false)
@@ -335,8 +329,7 @@ SQLTypeInfo ResultSet::getColType(const size_t col_idx) const {
 
 StringDictionaryProxy* ResultSet::getStringDictionaryProxy(int const dict_id) const {
   constexpr bool with_generation = true;
-  return row_set_mem_owner_->getOrAddStringDictProxy(
-      db_id_for_dict_, dict_id, with_generation);
+  return row_set_mem_owner_->getOrAddStringDictProxy(dict_id, with_generation);
 }
 
 class ResultSet::CellCallback {
@@ -1318,8 +1311,8 @@ size_t ResultSet::getLimit() const {
 
 const std::vector<std::string> ResultSet::getStringDictionaryPayloadCopy(
     const int dict_id) const {
-  const auto sdp = row_set_mem_owner_->getOrAddStringDictProxy(
-      db_id_for_dict_, dict_id, /*with_generation=*/true);
+  const auto sdp =
+      row_set_mem_owner_->getOrAddStringDictProxy(dict_id, /*with_generation=*/true);
   CHECK(sdp);
   return sdp->getDictionary()->copyStrings();
 }
@@ -1353,8 +1346,7 @@ ResultSet::getUniqueStringsForDictEncodedTargetCol(const size_t col_idx) const {
   }
 
   const int32_t dict_id = col_type_info.get_comp_param();
-  const auto sdp = row_set_mem_owner_->getOrAddStringDictProxy(db_id_for_dict_,
-                                                               dict_id,
+  const auto sdp = row_set_mem_owner_->getOrAddStringDictProxy(dict_id,
                                                                /*with_generation=*/true);
   CHECK(sdp);
 
