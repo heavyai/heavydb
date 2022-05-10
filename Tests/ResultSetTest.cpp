@@ -1866,7 +1866,7 @@ TEST(ReduceLargeBuffers, PerfectHashOne_Overflow32) {
     EvenNumberGenerator gen1;
     EvenNumberGenerator gen2;
     test_reduce(target_infos, query_mem_desc, gen1, gen2, 2, false);
-  } catch (std::bad_alloc e) {
+  } catch (const std::bad_alloc&) {
     LOG(WARNING) << "Out-of-memory for ReduceLargeBuffers.PerfectHashOne_Overflow32";
     GTEST_SKIP();
   }
@@ -1880,7 +1880,7 @@ TEST(ReduceLargeBuffers, PerfectHashColumnarOne_Overflow32) {
     EvenNumberGenerator gen1;
     EvenNumberGenerator gen2;
     test_reduce(target_infos, query_mem_desc, gen1, gen2, 2, false);
-  } catch (std::bad_alloc e) {
+  } catch (const std::bad_alloc&) {
     LOG(WARNING)
         << "Out-of-memory for ReduceLargeBuffers.PerfectHashColumnarOne_Overflow32";
     GTEST_SKIP();
@@ -1894,7 +1894,7 @@ TEST(ReduceLargeBuffers, BaselineHash_Overflow32) {
     EvenNumberGenerator gen1;
     EvenNumberGenerator gen2;
     run_reduction(target_infos, query_mem_desc, gen1, gen2, 2);
-  } catch (std::bad_alloc e) {
+  } catch (const std::bad_alloc&) {
     LOG(WARNING) << "Out-of-memory for ReduceLargeBuffers.BaselineHash_Overflow32";
     GTEST_SKIP();
   }

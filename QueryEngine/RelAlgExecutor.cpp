@@ -412,9 +412,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     executor_->resetInterrupt();
   }
 
-  auto validate_or_explain_query =
-      just_explain_plan || eo.just_validate || eo.just_explain || eo.just_calcite_explain;
-
   auto acquire_execute_mutex = [](Executor * executor) -> auto {
     auto ret = executor->acquireExecuteMutex();
     return ret;

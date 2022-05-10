@@ -346,7 +346,7 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenArrayImpl(
     elems_count += offset_data[chunk->length()] - offset_data[0];
   }
 
-  if (elems_count > std::numeric_limits<int32_t>::max()) {
+  if (elems_count > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
     throw std::runtime_error("Input arrow array is too big for conversion.");
   }
 
@@ -529,7 +529,7 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenStringArrayImpl(
     elems_count += offset_data[chunk->length()] - offset_data[0];
   }
 
-  if (elems_count > std::numeric_limits<int32_t>::max()) {
+  if (elems_count > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
     throw std::runtime_error("Input arrow array is too big for conversion.");
   }
 

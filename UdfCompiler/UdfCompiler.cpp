@@ -16,9 +16,13 @@
 
 #include "UdfCompiler.h"
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstrict-aliasing"
+
 #include <clang/AST/AST.h>
 #include <clang/AST/ASTConsumer.h>
 #include <clang/AST/RecursiveASTVisitor.h>
+#include <clang/Basic/Version.h>
 #include <clang/Driver/Compilation.h>
 #include <clang/Driver/Driver.h>
 #include <clang/Frontend/CompilerInstance.h>
@@ -29,14 +33,16 @@
 #include <clang/Tooling/Tooling.h>
 #include <llvm/Support/Program.h>
 #include <llvm/Support/raw_ostream.h>
-#include <boost/process/search_path.hpp>
-#include <iterator>
-#include <memory>
-#include "clang/Basic/Version.h"
 
 #if LLVM_VERSION_MAJOR >= 11
 #include <llvm/Support/Host.h>
 #endif
+
+#pragma GCC diagnostic pop
+
+#include <boost/process/search_path.hpp>
+#include <iterator>
+#include <memory>
 
 #include "Logger/Logger.h"
 #include "OSDependent/omnisci_fs.h"

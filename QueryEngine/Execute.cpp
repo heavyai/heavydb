@@ -187,7 +187,8 @@ Executor::Executor(const ExecutorId executor_id,
                    const size_t max_gpu_slab_size,
                    const std::string& debug_dir,
                    const std::string& debug_file)
-    : context_(new llvm::LLVMContext())
+    : executor_id_(executor_id)
+    , context_(new llvm::LLVMContext())
     , cgen_state_(new CgenState({}, false, this))
     , s_stubs_cache(code_cache_size)
     , s_code_cache(code_cache_size)
@@ -198,7 +199,6 @@ Executor::Executor(const ExecutorId executor_id,
     , max_gpu_slab_size_(max_gpu_slab_size)
     , debug_dir_(debug_dir)
     , debug_file_(debug_file)
-    , executor_id_(executor_id)
     , data_mgr_(data_mgr)
     , buffer_provider_(buffer_provider)
     , temporary_tables_(nullptr)

@@ -443,7 +443,7 @@ GpuMgr* DataMgr::getGpuMgr(GpuMgrName name) const {
 }
 
 void DataMgr::setGpuMgrContext(GpuMgrName name) {
-  CHECK_LT(gpuMgrs_.size(), 2)
+  CHECK_LT(gpuMgrs_.size(), (size_t)2)
       << "Switching context with multiple GPU managers is not yet supported";
   GpuMgr* gpuMgr = getGpuMgr(name);
   CHECK(gpuMgr);

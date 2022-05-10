@@ -1,6 +1,10 @@
 set(udf_compiler_source_files
     UdfCompiler.cpp)
 
+# Suppress multi-line comment warning which is not disabled by a diagnostic pragma
+# for some reason.
+set_source_files_properties(UdfCompiler.cpp PROPERTIES COMPILE_OPTIONS "-Wno-comment")
+
 add_library(UdfCompiler ${udf_compiler_source_files})
 
 # Clang

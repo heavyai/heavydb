@@ -19,6 +19,9 @@
 #include "Shared/measure.h"
 #include "Shared/threading.h"
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 #include <arrow/csv/reader.h>
 #include <arrow/io/api.h>
 #include <arrow/json/reader.h>
@@ -26,6 +29,8 @@
 #include <arrow/util/value_parsing.h>
 #include <parquet/api/reader.h>
 #include <parquet/arrow/reader.h>
+
+#pragma GCC diagnostic pop
 
 using namespace std::string_literals;
 
