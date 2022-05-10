@@ -1517,7 +1517,7 @@ ShowFunctionsCommand::ShowFunctionsCommand(
     : DdlCommand(ddl_data, session_ptr) {}
 
 ExecutionResult ShowFunctionsCommand::execute(bool read_only_mode) {
-  // Get all row-wise functions in the same way as HeavySql \t command
+  // Get all row-wise functions
   auto& ddl_payload = extractPayload(ddl_data_);
   std::vector<TargetMetaInfo> label_infos;
   std::vector<RelLogicalValues::RowValues> logical_values;
@@ -1575,8 +1575,7 @@ ShowRuntimeFunctionsCommand::ShowRuntimeFunctionsCommand(
     : DdlCommand(ddl_data, session_ptr) {}
 
 ExecutionResult ShowRuntimeFunctionsCommand::execute(bool read_only_mode) {
-  // Get all runtime row-wise functions in the same way as HeavySql \t command
-  auto& ddl_payload = extractPayload(ddl_data_);
+  // Get all runtime row-wise functions
   std::vector<TargetMetaInfo> label_infos;
   std::vector<RelLogicalValues::RowValues> logical_values;
 
@@ -1606,7 +1605,7 @@ ShowTableFunctionsCommand::ShowTableFunctionsCommand(
 ExecutionResult ShowTableFunctionsCommand::execute(bool read_only_mode) {
   // valid in read_only_mode
 
-  // Get all table functions in the same way as HeavySql \t command
+  // Get all table functions
   auto& ddl_payload = extractPayload(ddl_data_);
   std::vector<TargetMetaInfo> label_infos;
   std::vector<RelLogicalValues::RowValues> logical_values;
@@ -1691,8 +1690,7 @@ ShowRuntimeTableFunctionsCommand::ShowRuntimeTableFunctionsCommand(
 ExecutionResult ShowRuntimeTableFunctionsCommand::execute(bool read_only_mode) {
   // valid in read_only_mode
 
-  // Get all runtime table functions in the same way as HeavySql \t command
-  auto& ddl_payload = extractPayload(ddl_data_);
+  // Get all runtime table functions
   std::vector<TargetMetaInfo> label_infos;
   std::vector<RelLogicalValues::RowValues> logical_values;
 
