@@ -453,8 +453,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                                 ExecutorDeviceType::GPU,
                                                 device_id,
                                                 data_mgr,
-                                                buffer_provider,
-                                                -1 /*FIXME*/));
+                                                buffer_provider));
       out_vec_dev_buffers.push_back(reinterpret_cast<CUdeviceptr>(
           estimator_result_set_->getDeviceEstimatorBuffer()));
     } else {
