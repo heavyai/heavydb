@@ -110,9 +110,6 @@ template <typename TYPE, typename VALUE_ARRAY_TYPE>
 void create_or_append_value(const ScalarTargetValue& val_cty,
                             std::shared_ptr<ValueArray>& values,
                             const size_t max_size) {
-  auto pval_cty = boost::get<VALUE_ARRAY_TYPE>(&val_cty);
-  CHECK(pval_cty);
-  auto val_ty = static_cast<TYPE>(*pval_cty);
   if (!values) {
     values = std::make_shared<ValueArray>(std::vector<TYPE>());
     boost::get<std::vector<TYPE>>(*values).reserve(max_size);
@@ -120,7 +117,19 @@ void create_or_append_value(const ScalarTargetValue& val_cty,
   CHECK(values);
   auto values_ty = boost::get<std::vector<TYPE>>(values.get());
   CHECK(values_ty);
-  values_ty->push_back(val_ty);
+
+  auto pval_cty = boost::get<VALUE_ARRAY_TYPE>(&val_cty);
+  CHECK(pval_cty);
+  if constexpr (std::is_same_v<VALUE_ARRAY_TYPE, NullableString>) {
+    if (auto str = boost::get<std::string>(pval_cty)) {
+      values_ty->push_back(*str);
+    } else {
+      values_ty->push_back("");
+    }
+  } else {
+    auto val_ty = static_cast<TYPE>(*pval_cty);
+    values_ty->push_back(val_ty);
+  }
 }
 
 template <typename TYPE>
@@ -135,18 +144,20 @@ void create_or_append_validity(const ScalarTargetValue& value,
   auto pvalue = boost::get<TYPE>(&value);
   CHECK(pvalue);
   bool is_valid = false;
-  if (col_type.is_boolean()) {
-    is_valid = inline_int_null_val(col_type) != static_cast<int8_t>(*pvalue);
-  } else if (col_type.is_dict_encoded_string()) {
-    is_valid = inline_int_null_val(col_type) != static_cast<int32_t>(*pvalue);
-  } else if (col_type.is_integer() || col_type.is_time()) {
-    is_valid = inline_int_null_val(col_type) != static_cast<int64_t>(*pvalue);
-  } else if (col_type.is_fp()) {
-    is_valid = inline_fp_null_val(col_type) != static_cast<double>(*pvalue);
-  } else if (col_type.is_decimal()) {
-    is_valid = inline_int_null_val(col_type) != static_cast<int64_t>(*pvalue);
+  if constexpr (std::is_same_v<TYPE, NullableString>) {
+    is_valid = boost::get<std::string>(pvalue) != nullptr;
   } else {
-    UNREACHABLE();
+    if (col_type.is_boolean()) {
+      is_valid = inline_int_null_val(col_type) != static_cast<int8_t>(*pvalue);
+    } else if (col_type.is_dict_encoded_string()) {
+      is_valid = inline_int_null_val(col_type) != static_cast<int32_t>(*pvalue);
+    } else if (col_type.is_integer() || col_type.is_time() || col_type.is_decimal()) {
+      is_valid = inline_int_null_val(col_type) != static_cast<int64_t>(*pvalue);
+    } else if (col_type.is_fp()) {
+      is_valid = inline_fp_null_val(col_type) != static_cast<double>(*pvalue);
+    } else {
+      UNREACHABLE();
+    }
   }
 
   if (!null_bitmap) {
@@ -748,6 +759,12 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
             create_or_append_validity<int64_t>(
                 *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
             break;
+          case kTEXT:
+            create_or_append_value<std::string, NullableString>(
+                *scalar_value, value_seg[j], local_entry_count);
+            create_or_append_validity<NullableString>(
+                *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
+            break;
           default:
             // TODO(miyu): support more scalar types.
             throw std::runtime_error(column.col_type.get_type_name() +
@@ -1250,6 +1267,32 @@ void appendToColumnBuilder<arrow::Decimal128Builder, int64_t>(
 }
 
 template <>
+void appendToColumnBuilder<arrow::StringBuilder, std::string>(
+    ArrowResultSetConverter::ColumnBuilder& column_builder,
+    const ValueArray& values,
+    const std::shared_ptr<std::vector<bool>>& is_valid) {
+  std::vector<std::string> vals = boost::get<std::vector<std::string>>(values);
+  auto typed_builder = dynamic_cast<arrow::StringBuilder*>(column_builder.builder.get());
+  CHECK(typed_builder);
+  CHECK_EQ(is_valid->size(), vals.size());
+
+  if (column_builder.field->nullable()) {
+    CHECK(is_valid.get());
+
+    // TODO: Generate this instead of the boolean bitmap
+    std::vector<uint8_t> transformed_bitmap;
+    transformed_bitmap.reserve(is_valid->size());
+    std::for_each(
+        is_valid->begin(), is_valid->end(), [&transformed_bitmap](const bool is_valid) {
+          transformed_bitmap.push_back(is_valid ? 1 : 0);
+        });
+    ARROW_THROW_NOT_OK(typed_builder->AppendValues(vals, transformed_bitmap.data()));
+  } else {
+    ARROW_THROW_NOT_OK(typed_builder->AppendValues(vals));
+  }
+}
+
+template <>
 void appendToColumnBuilder<arrow::StringDictionary32Builder, int32_t>(
     ArrowResultSetConverter::ColumnBuilder& column_builder,
     const ValueArray& values,
@@ -1351,6 +1394,9 @@ void ArrowResultSetConverter::append(
     case kCHAR:
     case kVARCHAR:
     case kTEXT:
+      appendToColumnBuilder<arrow::StringBuilder, std::string>(
+          column_builder, values, is_valid);
+      break;
     default:
       // TODO(miyu): support more scalar types.
       throw std::runtime_error(column_builder.col_type.get_type_name() +

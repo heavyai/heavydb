@@ -279,6 +279,32 @@ void test_scalar_values(const std::shared_ptr<arrow::RecordBatch>& read_batch) {
   }
 }
 
+void test_text_values(const std::shared_ptr<arrow::RecordBatch>& record_batch) {
+  using namespace std;
+
+  // string column
+  ASSERT_EQ(record_batch->schema()->num_fields(), 1);
+  auto column = record_batch->column(0);
+  const auto& string_array = static_cast<const arrow::StringArray&>(*column);
+
+  std::shared_ptr<arrow::StringArray> text_truth_array;
+  {
+    arrow::StringBuilder builder(arrow::default_memory_pool());
+    ARROW_THROW_NOT_OK(
+        builder.AppendValues(std::vector<std::string>{"hello", "", "world", "", "text"}));
+    ARROW_THROW_NOT_OK(builder.Finish(&text_truth_array));
+  }
+  std::vector<bool> null_strings{0, 1, 0, 1, 0};
+  for (int i = 0; i < string_array.length(); i++) {
+    if (null_strings[i]) {
+      ASSERT_TRUE(string_array.IsNull(i));
+    } else {
+      const auto str = string_array.GetString(i);
+      ASSERT_EQ(str, text_truth_array->GetString(i));
+    }
+  }
+}
+
 }  // namespace
 
 class ArrowIpcBasic : public ::testing::Test {
@@ -286,6 +312,7 @@ class ArrowIpcBasic : public ::testing::Test {
   void SetUp() override {
     run_ddl_statement("DROP TABLE IF EXISTS arrow_ipc_test;");
     run_ddl_statement("DROP TABLE IF EXISTS test_data_scalars;");
+    run_ddl_statement("DROP TABLE IF EXISTS test_data_text;");
 
     run_ddl_statement(R"(
       CREATE TABLE 
@@ -305,6 +332,11 @@ class ArrowIpcBasic : public ::testing::Test {
                             double_ DOUBLE);
     )");
 
+    run_ddl_statement(R"(
+        CREATE TABLE
+          test_data_text(text_ TEXT ENCODING NONE);
+    )");
+
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (1, 1.1, 'foo');");
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (2, 2.1, NULL);");
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (NULL, 3.1, 'bar');");
@@ -315,6 +347,12 @@ class ArrowIpcBasic : public ::testing::Test {
         "INSERT INTO test_data_scalars VALUES (1, 2, 3, 123.456, 0.1, 0.001);");
     run_ddl_statement(
         "INSERT INTO test_data_scalars VALUES (1, 2, 3, 345.678, 0.1, 0.001);");
+
+    run_ddl_statement("INSERT INTO test_data_text VALUES ('hello');");
+    run_ddl_statement("INSERT INTO test_data_text VALUES (NULL);");
+    run_ddl_statement("INSERT INTO test_data_text VALUES ('world');");
+    run_ddl_statement("INSERT INTO test_data_text VALUES ('');");
+    run_ddl_statement("INSERT INTO test_data_text VALUES ('text');");
   }
 
   void TearDown()
@@ -542,6 +580,20 @@ TEST_F(ArrowIpcBasic, IpcGpuScalarValues) {
   ASSERT_TRUE(false) << "Test should be skipped in CPU-only mode!";
 #endif
   deallocate_df(data_frame, ExecutorDeviceType::GPU);
+}
+
+TEST_F(ArrowIpcBasic, IpcCpuTextValues) {
+  auto data_frame =
+      execute_arrow_ipc("SELECT * FROM test_data_text;", ExecutorDeviceType::CPU);
+
+  ASSERT_TRUE(data_frame.df_size > 0);
+
+  auto df =
+      ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::SHARED_MEMORY);
+
+  test_text_values(df.record_batch);
+
+  deallocate_df(data_frame, ExecutorDeviceType::CPU);
 }
 
 TEST_F(ArrowIpcBasic, IpcGpu) {
