@@ -31,6 +31,9 @@ constexpr int TEST2_TABLE_ID = 2;
 constexpr int TEST_AGG_TABLE_ID = 3;
 constexpr int TEST_STREAMING_TABLE_ID = 4;
 
+constexpr int TEST_SCHEMA_ID2 = 2;
+constexpr int TEST_DB2_ID = (TEST_SCHEMA_ID2 << 24) + 1;
+
 using ArrowTestHelpers::compare_res_data;
 
 class TestSchemaProvider : public SimpleSchemaProvider {
@@ -69,6 +72,19 @@ class TestSchemaProvider : public SimpleSchemaProvider {
     addColumnInfo(
         TEST_DB_ID, TEST2_TABLE_ID, 4, "col_d", SQLTypeInfo(SQLTypes::kDOUBLE), false);
     addRowidColumn(TEST_DB_ID, TEST2_TABLE_ID);
+
+    // Table test2 in db2
+    addTableInfo(TEST_DB2_ID,
+                 TEST2_TABLE_ID,
+                 "db2.test2",
+                 false,
+                 Data_Namespace::MemoryLevel::CPU_LEVEL,
+                 1);
+    addColumnInfo(
+        TEST_DB2_ID, TEST2_TABLE_ID, 1, "col_bi", SQLTypeInfo(SQLTypes::kBIGINT), false);
+    addColumnInfo(
+        TEST_DB2_ID, TEST2_TABLE_ID, 2, "col_i", SQLTypeInfo(SQLTypes::kINT), false);
+    addRowidColumn(TEST_DB2_ID, TEST2_TABLE_ID);
 
     // Table test_agg
     addTableInfo(TEST_DB_ID,
@@ -148,6 +164,21 @@ class TestDataProvider : public TestHelpers::TestDataProvider {
   ~TestDataProvider() override = default;
 };
 
+class TestDataProvider2 : public TestHelpers::TestDataProvider {
+ public:
+  TestDataProvider2(SchemaProviderPtr schema_provider)
+      : TestHelpers::TestDataProvider(TEST_DB2_ID, schema_provider) {
+    TestHelpers::TestTableData test2(TEST_DB2_ID, TEST2_TABLE_ID, 2, schema_provider_);
+    test2.addColFragment<int64_t>(1, {1, 2, 3});
+    test2.addColFragment<int64_t>(1, {4, 5, 6});
+    test2.addColFragment<int32_t>(2, {111, 122, 133});
+    test2.addColFragment<int32_t>(2, {144, 155, 166});
+    tables_.emplace(std::make_pair(TEST2_TABLE_ID, test2));
+  }
+
+  ~TestDataProvider2() override = default;
+};
+
 class NoCatalogRelAlgTest : public ::testing::Test {
  protected:
   static void SetUpTestSuite() {
@@ -159,6 +190,8 @@ class NoCatalogRelAlgTest : public ::testing::Test {
     auto* ps_mgr = data_mgr_->getPersistentStorageMgr();
     ps_mgr->registerDataProvider(TEST_SCHEMA_ID,
                                  std::make_shared<TestDataProvider>(schema_provider_));
+    ps_mgr->registerDataProvider(TEST_SCHEMA_ID2,
+                                 std::make_shared<TestDataProvider2>(schema_provider_));
 
     executor_ = Executor::getExecutor(
         0, data_mgr_.get(), data_mgr_->getBufferProvider(), "", "", system_parameters);
@@ -263,6 +296,22 @@ TEST_F(NoCatalogRelAlgTest, InnerJoin) {
                    std::vector<int32_t>({110, 120, 130, 140, 150}),
                    std::vector<float>({101.1, 102.2, 103.3, 104.4, 105.5}),
                    std::vector<double>({110.1, 120.2, 130.3, 140.4, 150.5}));
+}
+
+TEST_F(NoCatalogRelAlgTest, InterDatabaseJoin) {
+  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_);
+  auto join = dag->addEquiJoin(dag->addScan(TEST_DB_ID, "test1"),
+                               dag->addScan(TEST_DB2_ID, "db2.test2"),
+                               JoinType::INNER,
+                               0,
+                               0);
+  dag->addProject(join, std::vector<int>({0, 1, 6}));
+  dag->finalize();
+  auto res = runRelAlgQuery(std::move(dag));
+  compare_res_data(res,
+                   std::vector<int64_t>({1, 2, 3, 4, 5}),
+                   std::vector<int32_t>({10, 20, 30, 40, 50}),
+                   std::vector<int32_t>({111, 122, 133, 144, 155}));
 }
 
 TEST_F(NoCatalogRelAlgTest, StreamingAggregate) {
