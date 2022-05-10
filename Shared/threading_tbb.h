@@ -1,10 +1,10 @@
 
-#include <functional>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
 #include <tbb/task_arena.h>
 #include <tbb/task_group.h>
+#include <functional>
 
 namespace threading_tbb {
 

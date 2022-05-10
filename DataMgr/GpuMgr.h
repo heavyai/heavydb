@@ -18,10 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 
-enum GpuMgrName {
-  CUDA,
-  L0
-};
+enum GpuMgrName { CUDA, L0 };
 
 struct GpuMgr {
   virtual ~GpuMgr() = default;
@@ -38,15 +35,18 @@ struct GpuMgr {
                                   const size_t num_bytes,
                                   const int dest_device_num,
                                   const int src_device_num) = 0;
-  virtual void zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes, const int device_num) = 0;
+  virtual void zeroDeviceMem(int8_t* device_ptr,
+                             const size_t num_bytes,
+                             const int device_num) = 0;
   virtual void setDeviceMem(int8_t* device_ptr,
-                    const unsigned char uc,
-                    const size_t num_bytes,
-                    const int device_num) = 0;
+                            const unsigned char uc,
+                            const size_t num_bytes,
+                            const int device_num) = 0;
   virtual int8_t* allocateDeviceMem(const size_t num_bytes, const int device_num) = 0;
   virtual void freeDeviceMem(int8_t* device_ptr) = 0;
-  // `setContext()` method seems redundant as we already pass an actual context via parameter `device_num`
-  // into every manager's method, maybe we should remove `setContext()`?
+  // `setContext()` method seems redundant as we already pass an actual context via
+  // parameter `device_num` into every manager's method, maybe we should remove
+  // `setContext()`?
   virtual void setContext(const int device_num) const = 0;
   virtual void synchronizeDevices() const = 0;
   virtual int getDeviceCount() const = 0;

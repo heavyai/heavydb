@@ -182,4 +182,3 @@ double ST_Length_LineString(int8_t* coords,
                             int32_t ic,
                             int32_t isr,
                             int32_t osr);
-

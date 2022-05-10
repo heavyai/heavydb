@@ -148,12 +148,24 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
     }
     return;
   } else {
-    permutation_ =
-        (key_bytewidth == 4)
-            ? baseline_sort<int32_t>(
-                  device_type, 0, buffer_provider_, groupby_buffer, pod_oe, layout, top_n, 0, 1)
-            : baseline_sort<int64_t>(
-                  device_type, 0, buffer_provider_, groupby_buffer, pod_oe, layout, top_n, 0, 1);
+    permutation_ = (key_bytewidth == 4) ? baseline_sort<int32_t>(device_type,
+                                                                 0,
+                                                                 buffer_provider_,
+                                                                 groupby_buffer,
+                                                                 pod_oe,
+                                                                 layout,
+                                                                 top_n,
+                                                                 0,
+                                                                 1)
+                                        : baseline_sort<int64_t>(device_type,
+                                                                 0,
+                                                                 buffer_provider_,
+                                                                 groupby_buffer,
+                                                                 pod_oe,
+                                                                 layout,
+                                                                 top_n,
+                                                                 0,
+                                                                 1);
   }
 }
 

@@ -83,12 +83,7 @@ inline TargetInfo get_target_info(const PointerType target_expr,
   if (!agg_expr) {
     auto target_ti = target_expr ? get_logical_type_info(target_expr->get_type_info())
                                  : SQLTypeInfo(kBIGINT, notnull);
-    return {false,
-            kMIN,
-            target_ti,
-            SQLTypeInfo(kNULLT, false),
-            false,
-            false};
+    return {false, kMIN, target_ti, SQLTypeInfo(kNULLT, false), false, false};
   }
   const auto agg_type = agg_expr->get_aggtype();
   const auto agg_arg = agg_expr->get_arg();

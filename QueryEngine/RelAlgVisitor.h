@@ -94,7 +94,7 @@ class RelAlgVisitor {
   virtual T visitSort(const RelSort*) const { return defaultResult(); }
 
   virtual T visitLogicalValues(const RelLogicalValues*) const { return defaultResult(); }
-  
+
   virtual T visitTableFunction(const RelTableFunction*) const { return defaultResult(); }
 
   virtual T visitLogicalUnion(const RelLogicalUnion*) const { return defaultResult(); }

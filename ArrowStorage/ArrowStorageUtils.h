@@ -35,7 +35,7 @@ std::shared_ptr<arrow::ChunkedArray> convertDecimalToInteger(
 std::shared_ptr<arrow::ChunkedArray> createDictionaryEncodedColumn(
     StringDictionary* dict,
     std::shared_ptr<arrow::ChunkedArray> arr,
-    const SQLTypeInfo &type);
+    const SQLTypeInfo& type);
 
 std::shared_ptr<arrow::ChunkedArray> convertArrowDictionary(
     StringDictionary* dict,
