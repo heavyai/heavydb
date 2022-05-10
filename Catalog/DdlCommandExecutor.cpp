@@ -1452,17 +1452,27 @@ ExecutionResult ShowCreateTableCommand::execute(bool read_only_mode) {
     throw std::runtime_error("Table/View " + table_name + " does not exist.");
   }
   if (td->isView && !session_ptr_->get_currentUser().isSuper) {
-    // TODO: we need to run a validate query to ensure the user has access to the
-    // underlying table, but we do not have any of the machinery in here. Disable
-    // for now, unless the current user is a super user.
-    throw std::runtime_error("SHOW CREATE TABLE not yet supported for views");
+    auto query_state = query_state::QueryState::create(session_ptr_, td->viewSQL);
+    auto query_state_proxy = query_state->createQueryStateProxy();
+    auto calcite_mgr = catalog.getCalciteMgr();
+    const auto calciteQueryParsingOption =
+        calcite_mgr->getCalciteQueryParsingOption(true, false, false);
+    const auto calciteOptimizationOption =
+        calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+    auto result = calcite_mgr->process(query_state_proxy,
+                                       td->viewSQL,
+                                       calciteQueryParsingOption,
+                                       calciteOptimizationOption);
+    try {
+      calcite_mgr->checkAccessedObjectsPrivileges(query_state_proxy, result);
+    } catch (const std::runtime_error&) {
+      throw std::runtime_error("Not enough privileges to show the view SQL");
+    }
   }
-
-  std::string str = catalog.dumpCreateTable(td);
-
   // Construct
+  auto create_table_sql = catalog.dumpCreateTable(td);
   ExecutionResult result;
-  result.updateResultSet(str, ExecutionResult::SimpleResult);
+  result.updateResultSet(create_table_sql, ExecutionResult::SimpleResult);
   return result;
 }
 

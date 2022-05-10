@@ -3082,6 +3082,12 @@ class TablePermissionsTest : public DBHandlerTestFixture {
     is_foreign_table_ = false;
   }
 
+  void createTestView() {
+    sql("DROP VIEW IF EXISTS test_view");
+    createTestTable();
+    sql("CREATE VIEW test_view AS SELECT * FROM test_table");
+  }
+
   void tearDownTable() {
     loginAdmin();
     if (is_foreign_table_) {
@@ -3090,6 +3096,7 @@ class TablePermissionsTest : public DBHandlerTestFixture {
       sql("DROP TABLE IF EXISTS test_table;");
     }
     sql("DROP TABLE IF EXISTS renamed_test_table;");
+    sql("DROP VIEW IF EXISTS test_view");
   }
 
   static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
@@ -3382,6 +3389,27 @@ TEST_F(TablePermissionsTest, TableAllPrivileges) {
   }
   runQuery("ALTER TABLE test_table RENAME COLUMN i TO j;");
   runQuery("DROP TABLE test_table;");
+}
+
+TEST_F(TablePermissionsTest, ShowCreateView) {
+  createTestView();
+  queryAsTestUserWithNoPrivilegeAndAssertException(
+      "SHOW CREATE TABLE test_view", "Table/View test_view does not exist.");
+  switchToAdmin();
+  sql("GRANT ALL ON VIEW test_view TO test_user;");
+  queryAsTestUserWithNoPrivilegeAndAssertException(
+      "SHOW CREATE TABLE test_view", "Not enough privileges to show the view SQL");
+  switchToAdmin();
+  sql("GRANT ALL ON TABLE test_table TO test_user;");
+  login("test_user", "test_pass");
+  TQueryResult result;
+  EXPECT_NO_THROW(sql(result, "SHOW CREATE TABLE test_view;"));
+  EXPECT_EQ("CREATE VIEW test_view AS SELECT * FROM test_table;",
+            result.row_set.columns[0].data.str_col[0]);
+  switchToAdmin();
+  sql("REVOKE ALL ON VIEW test_view FROM test_user;");
+  queryAsTestUserWithNoPrivilegeAndAssertException(
+      "SHOW CREATE TABLE test_view", "Table/View test_view does not exist.");
 }
 
 TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeCreateTablePrivilege) {
