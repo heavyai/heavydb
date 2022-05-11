@@ -3437,6 +3437,26 @@ class AppendRefreshBase : public RecoverCacheQueryTest, public TempDirManager {
     }
   }
 
+  void renameSourceDir(const std::string& new_dir_name) {
+    auto current_dir_path = boost::filesystem::path(test_temp_dir) / file_name_;
+    if (boost::filesystem::exists(current_dir_path)) {
+      boost::filesystem::remove_all(current_dir_path);
+    }
+    auto new_dir_path = boost::filesystem::path(test_temp_dir) / new_dir_name;
+    ASSERT_TRUE(boost::filesystem::exists(new_dir_path));
+    boost::filesystem::rename(new_dir_path, current_dir_path);
+  }
+
+  void renameToEmptyDir() {
+    auto current_dir_path = boost::filesystem::path(test_temp_dir) / file_name_;
+    if (boost::filesystem::exists(current_dir_path)) {
+      boost::filesystem::remove_all(current_dir_path);
+    }
+    auto empty_dir_path = boost::filesystem::path(test_temp_dir) / "empty_dir";
+    boost::filesystem::create_directory(empty_dir_path);
+    boost::filesystem::rename(empty_dir_path, current_dir_path);
+  }
+
   void recoverCacheIfSpecified() {
     if (recover_cache_) {
       resetPersistentStorageMgr({cache_path_, File_Namespace::DiskCacheLevel::fsi});
@@ -3808,6 +3828,17 @@ class DataWrapperAppendRefreshTest
                                 0));
   }
 
+  void sqlCreateTestTableWithRollOffOption() {
+    sqlCreateTestTable({{"ALLOW_FILE_ROLL_OFF", "TRUE"}});
+  }
+
+  std::string getRemovedFileErrorMessage(const std::string& missing_file_name) {
+    return "Refresh of foreign table created with \"APPEND\" update type failed as "
+           "file \"" +
+           test_temp_dir + file_name_ + "/" + missing_file_name +
+           wrapper_ext(wrapper_type_) + "\" was removed.";
+  }
+
   const std::string select_query = "SELECT * FROM "s + table_name_ + " ORDER BY i;";
 };
 
@@ -3877,12 +3908,21 @@ TEST_P(DataWrapperAppendRefreshTest, MissingFile) {
   sqlCreateTestTable();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
   overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
-  queryAndAssertException(
-      "REFRESH FOREIGN TABLES " + table_name_ + ";",
-      "Refresh of foreign table created with \"APPEND\" update type failed as "
-      "file \"" +
-          test_temp_dir + file_name_ + "/one_row_2" + wrapper_ext(wrapper_type_) +
-          "\" was removed.");
+  queryAndAssertException("REFRESH FOREIGN TABLES " + table_name_ + ";",
+                          getRemovedFileErrorMessage("one_row_2"));
+}
+
+TEST_P(DataWrapperAppendRefreshTest, MissingFileAlterFromAppendToAll) {
+  if (isOdbc(wrapper_type_)) {
+    GTEST_SKIP() << "This testcase is not relevant to ODBC";
+  }
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_missing_file";
+  sqlCreateTestTable();
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  sql("ALTER FOREIGN TABLE " + table_name_ + " SET (REFRESH_UPDATE_TYPE = 'ALL');");
+  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  sqlAndCompareResult(select_query, {{i(1)}});
 }
 
 // This tests the use case where there are multiple files in a
@@ -3922,6 +3962,186 @@ TEST_P(DataWrapperAppendRefreshTest, FilteredFiles) {
   overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
   sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(4)}, {i(5)}});
+}
+
+TEST_P(DataWrapperAppendRefreshTest, FileRollOffOnly) {
+  if (isOdbc(wrapper_type_)) {
+    GTEST_SKIP() << "This testcase is not relevant to ODBC";
+  }
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
+  fragment_size_ = DEFAULT_FRAGMENT_ROWS;
+  sqlCreateTestTableWithRollOffOption();
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_file_roll_off_only");
+  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  sqlAndCompareResult(select_query, {{i(3)}, {i(4)}});
+}
+
+TEST_P(DataWrapperAppendRefreshTest, FileRollOffAppend) {
+  if (isOdbc(wrapper_type_)) {
+    GTEST_SKIP() << "This testcase is not relevant to ODBC";
+  }
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
+  fragment_size_ = DEFAULT_FRAGMENT_ROWS;
+  sqlCreateTestTableWithRollOffOption();
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_file_roll_off_append");
+  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  sqlAndCompareResult(select_query, {{i(3)}, {i(4)}, {i(5)}});
+}
+
+TEST_P(DataWrapperAppendRefreshTest, AllFilesRolledOff) {
+  if (isOdbc(wrapper_type_)) {
+    GTEST_SKIP() << "This testcase is not relevant to ODBC";
+  }
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
+  fragment_size_ = DEFAULT_FRAGMENT_ROWS;
+  sqlCreateTestTableWithRollOffOption();
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  renameToEmptyDir();
+  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  sqlAndCompareResult(select_query, {});
+}
+
+TEST_P(DataWrapperAppendRefreshTest, AllFilesRolledOffAndNewFiles) {
+  if (isOdbc(wrapper_type_)) {
+    GTEST_SKIP() << "This testcase is not relevant to ODBC";
+  }
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
+  fragment_size_ = DEFAULT_FRAGMENT_ROWS;
+  sqlCreateTestTableWithRollOffOption();
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_file_roll_off_new_files");
+  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  sqlAndCompareResult(select_query, {{i(7)}, {i(8)}});
+}
+
+TEST_P(DataWrapperAppendRefreshTest, FileRollOffMultipleFragments) {
+  if (isOdbc(wrapper_type_)) {
+    GTEST_SKIP() << "This testcase is not relevant to ODBC";
+  }
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
+  fragment_size_ = 2;
+  sqlCreateTestTableWithRollOffOption();
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_file_roll_off_append");
+  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  sqlAndCompareResult(select_query, {{i(3)}, {i(4)}, {i(5)}});
+}
+
+TEST_P(DataWrapperAppendRefreshTest, FileRollOffOptionSetAndRegularAppend) {
+  if (isOdbc(wrapper_type_)) {
+    GTEST_SKIP() << "This testcase is not relevant to ODBC";
+  }
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_multi";
+  fragment_size_ = DEFAULT_FRAGMENT_ROWS;
+  sqlCreateTestTableWithRollOffOption();
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
+}
+
+TEST_P(DataWrapperAppendRefreshTest, FileRollOffOptionSetAndOldestFileNotRemoved) {
+  if (isOdbc(wrapper_type_)) {
+    GTEST_SKIP() << "This testcase is not relevant to ODBC";
+  }
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
+  sqlCreateTestTableWithRollOffOption();
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_middle_file_roll_off");
+  queryAndAssertException("REFRESH FOREIGN TABLES " + table_name_ + ";",
+                          getRemovedFileErrorMessage("2"));
+}
+
+TEST_P(DataWrapperAppendRefreshTest, AlterAddFileRollOff) {
+  if (isOdbc(wrapper_type_)) {
+    GTEST_SKIP() << "This testcase is not relevant to ODBC";
+  }
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
+  sqlCreateTestTable();
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_file_roll_off_only");
+  queryAndAssertException("REFRESH FOREIGN TABLES " + table_name_ + ";",
+                          getRemovedFileErrorMessage("1"));
+  sql("ALTER FOREIGN TABLE " + table_name_ + " SET (allow_file_roll_off = 'true');");
+  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  sqlAndCompareResult(select_query, {{i(3)}, {i(4)}});
+}
+
+TEST_P(DataWrapperAppendRefreshTest, AlterRemoveFileRollOff) {
+  if (isOdbc(wrapper_type_)) {
+    GTEST_SKIP() << "This testcase is not relevant to ODBC";
+  }
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
+  sqlCreateTestTableWithRollOffOption();
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_file_roll_off_only");
+  sql("ALTER FOREIGN TABLE " + table_name_ + " SET (allow_file_roll_off = 'false');");
+  queryAndAssertException("REFRESH FOREIGN TABLES " + table_name_ + ";",
+                          getRemovedFileErrorMessage("1"));
+}
+
+TEST_P(DataWrapperAppendRefreshTest, AppendToLastFile) {
+  if (isOdbc(wrapper_type_)) {
+    GTEST_SKIP() << "This testcase is not relevant to ODBC";
+  }
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_last_file_append";
+  fragment_size_ = 2;
+  sqlCreateTestTable();
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}});
+}
+
+TEST_P(DataWrapperAppendRefreshTest, AppendToLastFileThatSpansMultipleFragments) {
+  if (isOdbc(wrapper_type_)) {
+    GTEST_SKIP() << "This testcase is not relevant to ODBC";
+  }
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_last_file_append_multi_fragment";
+  fragment_size_ = 2;
+  sqlCreateTestTable();
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}, {i(6)}});
+}
+
+TEST_P(DataWrapperAppendRefreshTest, AppendToLastFileAndNewFileAdded) {
+  if (isOdbc(wrapper_type_)) {
+    GTEST_SKIP() << "This testcase is not relevant to ODBC";
+  }
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_last_file_append";
+  fragment_size_ = 2;
+  sqlCreateTestTable();
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_last_file_append_new_file");
+  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
+}
+
+TEST_P(DataWrapperAppendRefreshTest, AppendToLastFileAndRollOff) {
+  if (isOdbc(wrapper_type_)) {
+    GTEST_SKIP() << "This testcase is not relevant to ODBC";
+  }
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_last_file_append";
+  fragment_size_ = 2;
+  sqlCreateTestTableWithRollOffOption();
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_last_file_append_roll_off");
+  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  sqlAndCompareResult(select_query, {{i(2)}, {i(3)}, {i(4)}});
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -4033,11 +4253,13 @@ TEST_F(SelectQueryTest, CsvArrayEmptyText) {
 }
 
 TEST_F(SelectQueryTest, CsvMultipleFilesWithExpectedAndMismatchedColumns) {
-  auto file_path = getDataFilesPath() + "different_cols";
+  auto dir_path = getDataFilesPath() + "different_cols";
   sql("CREATE FOREIGN TABLE " + default_table_name +
       " (t TEXT, i1 BIGINT) SERVER default_local_delimited WITH ("
       "file_path = '" +
-      file_path + "');");
+      dir_path + "');");
+
+  auto file_path = dir_path + "/3_col_a_1_2.csv";
   queryAndAssertException("SELECT * FROM " + default_table_name + ";",
                           "Mismatched number of logical columns: (expected 2 "
                           "columns, has 3): in file '" +

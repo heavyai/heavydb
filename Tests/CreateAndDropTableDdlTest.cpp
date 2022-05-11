@@ -1433,6 +1433,16 @@ TEST_F(CreateForeignTableTest, TableDirectoryIsNotCreated) {
   ASSERT_FALSE(boost::filesystem::exists(getTableDirPath()));
 }
 
+TEST_F(CreateForeignTableTest, NonAppendModeWithFileRollOff) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
+                      "SERVER default_local_regex_parsed WITH ("
+                      "ALLOW_FILE_ROLL_OFF = 'true', "
+                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
+  queryAndAssertException(query,
+                          "The \"ALLOW_FILE_ROLL_OFF\" option can only be set to 'true' "
+                          "for foreign tables with append refresh updates.");
+}
+
 class CreateTableInThrift : public DBHandlerTestFixture {
  protected:
   void SetUp() override {

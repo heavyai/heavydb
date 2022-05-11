@@ -84,6 +84,7 @@ ParquetDataWrapper::ParquetDataWrapper(const ForeignTable* foreign_table,
     , last_fragment_index_(0)
     , last_fragment_row_count_(0)
     , total_row_count_(0)
+    , last_file_row_count_(0)
     , last_row_group_(0)
     , is_restored_(false)
     , file_system_(file_system)
@@ -98,6 +99,7 @@ ParquetDataWrapper::ParquetDataWrapper(const int db_id,
     , last_fragment_index_(0)
     , last_fragment_row_count_(0)
     , total_row_count_(0)
+    , last_file_row_count_(0)
     , last_row_group_(0)
     , is_restored_(false)
     , schema_(std::make_unique<ForeignTableSchema>(db_id, foreign_table))
@@ -118,6 +120,7 @@ void ParquetDataWrapper::resetParquetMetadata() {
   last_fragment_index_ = 0;
   last_fragment_row_count_ = 0;
   total_row_count_ = 0;
+  last_file_row_count_ = 0;
   file_reader_cache_->clear();
 }
 
@@ -207,6 +210,7 @@ void ParquetDataWrapper::addNewFragment(int row_group, const std::string& file_p
   last_fragment_row_count_ = 0;
   fragment_to_row_group_interval_map_[last_fragment_index_].emplace_back(
       RowGroupInterval{file_path, row_group});
+  setLastFileRowCount(file_path);
 }
 
 bool ParquetDataWrapper::isNewFile(const std::string& file_path) const {
@@ -216,7 +220,10 @@ bool ParquetDataWrapper::isNewFile(const std::string& file_path) const {
 
   // The entry for the first fragment starts out as an empty vector
   if (last_fragment_entry->second.empty()) {
-    CHECK_EQ(last_fragment_index_, 0);
+    // File roll off can result in empty older fragments.
+    if (!allowFileRollOff(foreign_table_)) {
+      CHECK_EQ(last_fragment_index_, 0);
+    }
     return true;
   } else {
     return (last_fragment_entry->second.back().file_path != file_path);
@@ -230,52 +237,67 @@ void ParquetDataWrapper::addNewFile(const std::string& file_path) {
 
   // The entry for the first fragment starts out as an empty vector
   if (last_fragment_entry->second.empty()) {
-    CHECK_EQ(last_fragment_index_, 0);
+    // File roll off can result in empty older fragments.
+    if (!allowFileRollOff(foreign_table_)) {
+      CHECK_EQ(last_fragment_index_, 0);
+    }
   } else {
     last_fragment_entry->second.back().end_index = last_row_group_;
   }
   last_fragment_entry->second.emplace_back(RowGroupInterval{file_path, 0});
+  setLastFileRowCount(file_path);
+}
+
+void ParquetDataWrapper::setLastFileRowCount(const std::string& file_path) {
+  auto reader = file_reader_cache_->getOrInsert(file_path, file_system_);
+  last_file_row_count_ = reader->parquet_reader()->metadata()->num_rows();
 }
 
 void ParquetDataWrapper::fetchChunkMetadata() {
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
   CHECK(catalog);
   std::vector<std::string> new_file_paths;
-  auto processed_file_paths = getProcessedFilePaths();
+  auto processed_file_paths = getOrderedProcessedFilePaths();
   if (foreign_table_->isAppendMode() && !processed_file_paths.empty()) {
     auto all_file_paths = getAllFilePaths();
+    if (allowFileRollOff(foreign_table_)) {
+      const auto rolled_off_files =
+          shared::check_for_rolled_off_file_paths(all_file_paths, processed_file_paths);
+      updateMetadataForRolledOffFiles(rolled_off_files);
+    }
+
     for (const auto& file_path : processed_file_paths) {
       if (!shared::contains(all_file_paths, file_path)) {
         throw_removed_file_error(file_path);
       }
     }
 
-    for (const auto& file_path : all_file_paths) {
-      if (!shared::contains(processed_file_paths, file_path)) {
-        new_file_paths.emplace_back(file_path);
+    // For multi-file appends, reprocess the last file in order to account for appends
+    // that may have occurred to this file. For single file appends, reprocess file if new
+    // rows have been added.
+    if (!processed_file_paths.empty()) {
+      // Single file append
+      if (all_file_paths.size() == 1) {
+        CHECK_EQ(processed_file_paths.size(), size_t(1));
+        CHECK_EQ(processed_file_paths[0], all_file_paths[0]);
+      }
+
+      const auto& last_file_path = processed_file_paths.back();
+      // Since an existing file is being appended to we need to update the cached
+      // FileReader as the existing one will be out of date.
+      auto reader = file_reader_cache_->insert(last_file_path, file_system_);
+      size_t row_count = reader->parquet_reader()->metadata()->num_rows();
+      if (row_count < last_file_row_count_) {
+        throw_removed_row_in_file_error(last_file_path);
+      } else if (row_count > last_file_row_count_) {
+        removeMetadataForLastFile(last_file_path);
+        new_file_paths.emplace_back(last_file_path);
       }
     }
 
-    // Single file append
-    // If an append occurs with multiple files, then we assume any existing files have
-    // not been altered.  If an append occurs on a single file, then we check to see if
-    // it has changed.
-    if (new_file_paths.empty() && all_file_paths.size() == 1) {
-      CHECK_EQ(processed_file_paths.size(), static_cast<size_t>(1));
-      const auto& file_path = *all_file_paths.begin();
-      CHECK_EQ(*processed_file_paths.begin(), file_path);
-
-      // Since an existing file is being appended to we need to update the cached
-      // FileReader as the existing one will be out of date.
-      auto reader = file_reader_cache_->insert(file_path, file_system_);
-      size_t row_count = reader->parquet_reader()->metadata()->num_rows();
-
-      if (row_count < total_row_count_) {
-        throw_removed_row_in_file_error(file_path);
-      } else if (row_count > total_row_count_) {
-        new_file_paths = all_file_paths;
-        chunk_metadata_map_.clear();
-        resetParquetMetadata();
+    for (const auto& file_path : all_file_paths) {
+      if (!shared::contains(processed_file_paths, file_path)) {
+        new_file_paths.emplace_back(file_path);
       }
     }
   } else {
@@ -289,11 +311,82 @@ void ParquetDataWrapper::fetchChunkMetadata() {
   }
 }
 
-std::set<std::string> ParquetDataWrapper::getProcessedFilePaths() {
-  std::set<std::string> file_paths;
+void ParquetDataWrapper::updateMetadataForRolledOffFiles(
+    const std::set<std::string>& rolled_off_files) {
+  if (!rolled_off_files.empty()) {
+    std::set<int32_t> deleted_fragment_ids;
+    std::optional<int32_t> partially_deleted_fragment_id;
+    std::vector<std::string> remaining_files_in_partially_deleted_fragment;
+    for (auto& [fragment_id, row_group_interval_vec] :
+         fragment_to_row_group_interval_map_) {
+      for (auto it = row_group_interval_vec.begin();
+           it != row_group_interval_vec.end();) {
+        if (shared::contains(rolled_off_files, it->file_path)) {
+          it = row_group_interval_vec.erase(it);
+        } else {
+          remaining_files_in_partially_deleted_fragment.emplace_back(it->file_path);
+          it++;
+        }
+      }
+      if (row_group_interval_vec.empty()) {
+        deleted_fragment_ids.emplace(fragment_id);
+      } else {
+        CHECK(!remaining_files_in_partially_deleted_fragment.empty());
+        partially_deleted_fragment_id = fragment_id;
+        break;
+      }
+    }
+
+    for (auto it = chunk_metadata_map_.begin(); it != chunk_metadata_map_.end();) {
+      const auto& chunk_key = it->first;
+      if (shared::contains(deleted_fragment_ids, chunk_key[CHUNK_KEY_FRAGMENT_IDX])) {
+        auto& chunk_metadata = it->second;
+        chunk_metadata->numElements = 0;
+        chunk_metadata->numBytes = 0;
+        it++;
+      } else if (partially_deleted_fragment_id.has_value() &&
+                 chunk_key[CHUNK_KEY_FRAGMENT_IDX] == partially_deleted_fragment_id) {
+        // Metadata for the partially deleted fragment will be re-populated.
+        it = chunk_metadata_map_.erase(it);
+      } else {
+        it++;
+      }
+    }
+
+    if (partially_deleted_fragment_id.has_value()) {
+      // Create map of row group to row group metadata for remaining files in the
+      // fragment.
+      auto row_group_metadata_map =
+          getRowGroupMetadataMap(remaining_files_in_partially_deleted_fragment);
+
+      // Re-populate metadata for remaining row groups in partially deleted fragment.
+      auto column_interval =
+          Interval<ColumnType>{schema_->getLogicalAndPhysicalColumns().front()->columnId,
+                               schema_->getLogicalAndPhysicalColumns().back()->columnId};
+      auto row_group_intervals = shared::get_from_map(
+          fragment_to_row_group_interval_map_, partially_deleted_fragment_id.value());
+      for (const auto& row_group_interval : row_group_intervals) {
+        for (auto row_group = row_group_interval.start_index;
+             row_group <= row_group_interval.end_index;
+             row_group++) {
+          const auto& row_group_metadata_item = shared::get_from_map(
+              row_group_metadata_map, {row_group_interval.file_path, row_group});
+          updateChunkMetadataForFragment(column_interval,
+                                         row_group_metadata_item.column_chunk_metadata,
+                                         partially_deleted_fragment_id.value());
+        }
+      }
+    }
+  }
+}
+
+std::vector<std::string> ParquetDataWrapper::getOrderedProcessedFilePaths() {
+  std::vector<std::string> file_paths;
   for (const auto& entry : fragment_to_row_group_interval_map_) {
     for (const auto& row_group_interval : entry.second) {
-      file_paths.emplace(row_group_interval.file_path);
+      if (file_paths.empty() || file_paths.back() != row_group_interval.file_path) {
+        file_paths.emplace_back(row_group_interval.file_path);
+      }
     }
   }
   return file_paths;
@@ -314,20 +407,20 @@ std::vector<std::string> ParquetDataWrapper::getAllFilePaths() {
 }
 
 void ParquetDataWrapper::metadataScanFiles(const std::vector<std::string>& file_paths) {
-  LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get(), nullptr);
-  auto row_group_metadata =
-      chunk_loader.metadataScan(file_paths, *schema_, do_metadata_stats_validation_);
+  auto row_group_metadata = getRowGroupMetadataForFilePaths(file_paths);
+  metadataScanRowGroupMetadata(row_group_metadata);
+}
+
+void ParquetDataWrapper::metadataScanRowGroupMetadata(
+    const std::list<RowGroupMetadata>& row_group_metadata) {
   auto column_interval =
       Interval<ColumnType>{schema_->getLogicalAndPhysicalColumns().front()->columnId,
                            schema_->getLogicalAndPhysicalColumns().back()->columnId};
-
   for (const auto& row_group_metadata_item : row_group_metadata) {
     const auto& column_chunk_metadata = row_group_metadata_item.column_chunk_metadata;
-    CHECK(static_cast<int>(column_chunk_metadata.size()) ==
-          schema_->numLogicalAndPhysicalColumns());
     auto column_chunk_metadata_iter = column_chunk_metadata.begin();
-    const int64_t import_row_count = (*column_chunk_metadata_iter)->numElements;
-    int row_group = row_group_metadata_item.row_group_index;
+    const auto import_row_count = (*column_chunk_metadata_iter)->numElements;
+    auto row_group = row_group_metadata_item.row_group_index;
     const auto& file_path = row_group_metadata_item.file_path;
     if (moveToNextFragment(import_row_count)) {
       addNewFragment(row_group, file_path);
@@ -336,30 +429,45 @@ void ParquetDataWrapper::metadataScanFiles(const std::vector<std::string>& file_
       addNewFile(file_path);
     }
     last_row_group_ = row_group;
+    updateChunkMetadataForFragment(
+        column_interval, column_chunk_metadata, last_fragment_index_);
 
-    for (int column_id = column_interval.start; column_id <= column_interval.end;
-         column_id++, column_chunk_metadata_iter++) {
-      CHECK(column_chunk_metadata_iter != column_chunk_metadata.end());
-      const auto column_descriptor = schema_->getColumnDescriptor(column_id);
-
-      const auto& type_info = column_descriptor->columnType;
-      ChunkKey chunk_key{
-          db_id_, foreign_table_->tableId, column_id, last_fragment_index_};
-      ChunkKey data_chunk_key = chunk_key;
-      if (type_info.is_varlen_indeed()) {
-        data_chunk_key.emplace_back(1);
-      }
-      std::shared_ptr<ChunkMetadata> chunk_metadata = *column_chunk_metadata_iter;
-      if (chunk_metadata_map_.find(data_chunk_key) == chunk_metadata_map_.end()) {
-        chunk_metadata_map_[data_chunk_key] = chunk_metadata;
-      } else {
-        reduce_metadata(chunk_metadata_map_[data_chunk_key], chunk_metadata);
-      }
-    }
     last_fragment_row_count_ += import_row_count;
     total_row_count_ += import_row_count;
   }
   finalizeFragmentMap();
+}
+
+std::list<RowGroupMetadata> ParquetDataWrapper::getRowGroupMetadataForFilePaths(
+    const std::vector<std::string>& file_paths) const {
+  LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get(), nullptr);
+  return chunk_loader.metadataScan(file_paths, *schema_, do_metadata_stats_validation_);
+}
+
+void ParquetDataWrapper::updateChunkMetadataForFragment(
+    const Interval<ColumnType>& column_interval,
+    const std::list<std::shared_ptr<ChunkMetadata>>& column_chunk_metadata,
+    int32_t fragment_id) {
+  CHECK_EQ(static_cast<int>(column_chunk_metadata.size()),
+           schema_->numLogicalAndPhysicalColumns());
+  auto column_chunk_metadata_iter = column_chunk_metadata.begin();
+  for (auto column_id = column_interval.start; column_id <= column_interval.end;
+       column_id++, column_chunk_metadata_iter++) {
+    CHECK(column_chunk_metadata_iter != column_chunk_metadata.end());
+    const auto column_descriptor = schema_->getColumnDescriptor(column_id);
+    const auto& type_info = column_descriptor->columnType;
+    ChunkKey chunk_key{db_id_, foreign_table_->tableId, column_id, fragment_id};
+    ChunkKey data_chunk_key = chunk_key;
+    if (type_info.is_varlen_indeed()) {
+      data_chunk_key.emplace_back(1);
+    }
+    std::shared_ptr<ChunkMetadata> chunk_metadata = *column_chunk_metadata_iter;
+    if (chunk_metadata_map_.find(data_chunk_key) == chunk_metadata_map_.end()) {
+      chunk_metadata_map_[data_chunk_key] = chunk_metadata;
+    } else {
+      reduce_metadata(chunk_metadata_map_[data_chunk_key], chunk_metadata);
+    }
+  }
 }
 
 bool ParquetDataWrapper::moveToNextFragment(size_t new_rows_count) const {
@@ -380,6 +488,13 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
     const int fragment_id,
     const ChunkToBufferMap& required_buffers,
     AbstractBuffer* delete_buffer) {
+  const auto& row_group_intervals =
+      shared::get_from_map(fragment_to_row_group_interval_map_, fragment_id);
+  // File roll off can lead to an empty row group interval vector.
+  if (row_group_intervals.empty()) {
+    return;
+  }
+
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
   CHECK(catalog);
   const ColumnDescriptor* logical_column =
@@ -390,9 +505,6 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
       logical_column_id,
       logical_column_id + logical_column->columnType.get_physical_cols()};
   initializeChunkBuffers(fragment_id, column_interval, required_buffers, true);
-
-  const auto& row_group_intervals =
-      shared::get_from_map(fragment_to_row_group_interval_map_, fragment_id);
 
   const bool is_dictionary_encoded_string_column =
       logical_column->columnType.is_dict_encoded_string() ||
@@ -574,6 +686,8 @@ std::string ParquetDataWrapper::getSerializedDataWrapper() const {
       d, last_fragment_row_count_, "last_fragment_row_count", d.GetAllocator());
   json_utils::add_value_to_object(
       d, total_row_count_, "total_row_count", d.GetAllocator());
+  json_utils::add_value_to_object(
+      d, last_file_row_count_, "last_file_row_count", d.GetAllocator());
   return json_utils::write_to_string(d);
 }
 
@@ -590,6 +704,9 @@ void ParquetDataWrapper::restoreDataWrapperInternals(
   json_utils::get_value_from_object(
       d, last_fragment_row_count_, "last_fragment_row_count");
   json_utils::get_value_from_object(d, total_row_count_, "total_row_count");
+  if (d.HasMember("last_file_row_count")) {
+    json_utils::get_value_from_object(d, last_file_row_count_, "last_file_row_count");
+  }
 
   CHECK(chunk_metadata_map_.empty());
   for (const auto& [chunk_key, chunk_metadata] : chunk_metadata_vector) {
@@ -636,4 +753,113 @@ void ParquetDataWrapper::createRenderGroupAnalyzers() {
   }
 }
 
+void ParquetDataWrapper::removeMetadataForLastFile(const std::string& last_file_path) {
+  std::optional<int32_t> first_deleted_fragment_id;
+  for (auto it = fragment_to_row_group_interval_map_.begin();
+       it != fragment_to_row_group_interval_map_.end();) {
+    const auto fragment_id = it->first;
+    const auto& row_group_intervals = it->second;
+    for (const auto& row_group_interval : row_group_intervals) {
+      if (first_deleted_fragment_id.has_value()) {
+        // All subsequent fragments should map to the last file.
+        CHECK_EQ(last_file_path, row_group_interval.file_path);
+      } else if (last_file_path == row_group_interval.file_path) {
+        first_deleted_fragment_id = fragment_id;
+      }
+    }
+    if (first_deleted_fragment_id.has_value() &&
+        first_deleted_fragment_id.value() < fragment_id) {
+      it = fragment_to_row_group_interval_map_.erase(it);
+    } else {
+      it++;
+    }
+  }
+  CHECK(first_deleted_fragment_id.has_value());
+
+  std::map<int32_t, size_t> remaining_fragments_row_counts;
+  for (auto it = chunk_metadata_map_.begin(); it != chunk_metadata_map_.end();) {
+    auto fragment_id = it->first[CHUNK_KEY_FRAGMENT_IDX];
+    if (fragment_id >= first_deleted_fragment_id.value()) {
+      it = chunk_metadata_map_.erase(it);
+    } else {
+      auto fragment_count_it = remaining_fragments_row_counts.find(fragment_id);
+      if (fragment_count_it == remaining_fragments_row_counts.end()) {
+        remaining_fragments_row_counts[fragment_id] = it->second->numElements;
+      } else {
+        CHECK_EQ(remaining_fragments_row_counts[fragment_id], it->second->numElements);
+      }
+      it++;
+    }
+  }
+
+  total_row_count_ = 0;
+  for (const auto [fragment_id, row_count] : remaining_fragments_row_counts) {
+    total_row_count_ += row_count;
+  }
+
+  // Re-populate metadata for last fragment with deleted rows, excluding metadata for the
+  // last file.
+  auto row_group_intervals_to_scan = shared::get_from_map(
+      fragment_to_row_group_interval_map_, first_deleted_fragment_id.value());
+  auto it = std::find_if(row_group_intervals_to_scan.begin(),
+                         row_group_intervals_to_scan.end(),
+                         [&last_file_path](const auto& row_group_interval) {
+                           return row_group_interval.file_path == last_file_path;
+                         });
+  CHECK(it != row_group_intervals_to_scan.end());
+  row_group_intervals_to_scan.erase(it, row_group_intervals_to_scan.end());
+
+  if (first_deleted_fragment_id.value() > 0) {
+    last_fragment_index_ = first_deleted_fragment_id.value() - 1;
+    last_fragment_row_count_ =
+        shared::get_from_map(remaining_fragments_row_counts, last_fragment_index_);
+    const auto& last_row_group_intervals =
+        shared::get_from_map(fragment_to_row_group_interval_map_, last_fragment_index_);
+    if (last_row_group_intervals.empty()) {
+      last_row_group_ = 0;
+    } else {
+      last_row_group_ = last_row_group_intervals.back().end_index;
+    }
+    fragment_to_row_group_interval_map_.erase(first_deleted_fragment_id.value());
+  } else {
+    CHECK_EQ(total_row_count_, size_t(0));
+    resetParquetMetadata();
+  }
+
+  if (!row_group_intervals_to_scan.empty()) {
+    metadataScanRowGroupIntervals(row_group_intervals_to_scan);
+  }
+}
+
+void ParquetDataWrapper::metadataScanRowGroupIntervals(
+    const std::vector<RowGroupInterval>& row_group_intervals) {
+  std::vector<std::string> file_paths;
+  for (const auto& row_group_interval : row_group_intervals) {
+    file_paths.emplace_back(row_group_interval.file_path);
+  }
+  auto row_group_metadata_map = getRowGroupMetadataMap(file_paths);
+  std::list<RowGroupMetadata> row_group_metadata;
+  for (const auto& row_group_interval : row_group_intervals) {
+    for (auto row_group = row_group_interval.start_index;
+         row_group <= row_group_interval.end_index;
+         row_group++) {
+      row_group_metadata.emplace_back(shared::get_from_map(
+          row_group_metadata_map, {row_group_interval.file_path, row_group}));
+    }
+  }
+  metadataScanRowGroupMetadata(row_group_metadata);
+}
+
+std::map<FilePathAndRowGroup, RowGroupMetadata>
+ParquetDataWrapper::getRowGroupMetadataMap(
+    const std::vector<std::string>& file_paths) const {
+  auto row_group_metadata = getRowGroupMetadataForFilePaths(file_paths);
+  std::map<FilePathAndRowGroup, RowGroupMetadata> row_group_metadata_map;
+  for (const auto& row_group_metadata_item : row_group_metadata) {
+    row_group_metadata_map[{row_group_metadata_item.file_path,
+                            row_group_metadata_item.row_group_index}] =
+        row_group_metadata_item;
+  }
+  return row_group_metadata_map;
+}
 }  // namespace foreign_storage

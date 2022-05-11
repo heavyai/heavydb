@@ -37,6 +37,8 @@ class FileSystem;
 
 namespace foreign_storage {
 
+using FilePathAndRowGroup = std::pair<std::string, int32_t>;
+
 class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
  public:
   ParquetDataWrapper();
@@ -88,7 +90,7 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
                                               const ChunkToBufferMap& required_buffers,
                                               AbstractBuffer* delete_buffer);
 
-  std::set<std::string> getProcessedFilePaths();
+  std::vector<std::string> getOrderedProcessedFilePaths();
   std::vector<std::string> getAllFilePaths();
 
   bool moveToNextFragment(size_t new_rows_count) const;
@@ -100,9 +102,32 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
 
   void addNewFile(const std::string& file_path);
 
+  void setLastFileRowCount(const std::string& file_path);
+
   void resetParquetMetadata();
 
   void metadataScanFiles(const std::vector<std::string>& file_paths);
+
+  void metadataScanRowGroupMetadata(
+      const std::list<RowGroupMetadata>& row_group_metadata);
+
+  std::list<RowGroupMetadata> getRowGroupMetadataForFilePaths(
+      const std::vector<std::string>& file_paths) const;
+
+  std::map<FilePathAndRowGroup, RowGroupMetadata> getRowGroupMetadataMap(
+      const std::vector<std::string>& file_paths) const;
+
+  void updateChunkMetadataForFragment(
+      const Interval<ColumnType>& column_interval,
+      const std::list<std::shared_ptr<ChunkMetadata>>& column_chunk_metadata,
+      int32_t fragment_id);
+
+  void metadataScanRowGroupIntervals(
+      const std::vector<RowGroupInterval>& row_group_intervals);
+
+  void updateMetadataForRolledOffFiles(const std::set<std::string>& rolled_off_files);
+
+  void removeMetadataForLastFile(const std::string& last_file_path);
 
   const bool do_metadata_stats_validation_;
   std::map<int, std::vector<RowGroupInterval>> fragment_to_row_group_interval_map_;
@@ -112,6 +137,7 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
   int last_fragment_index_;
   size_t last_fragment_row_count_;
   size_t total_row_count_;
+  size_t last_file_row_count_;
   int last_row_group_;
   bool is_restored_;
   std::unique_ptr<ForeignTableSchema> schema_;

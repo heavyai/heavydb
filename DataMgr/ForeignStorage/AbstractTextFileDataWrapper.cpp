@@ -274,8 +274,13 @@ void AbstractTextFileDataWrapper::populateChunks(
   const auto copy_params = getFileBufferParser().validateAndGetCopyParams(foreign_table_);
 
   CHECK(!column_id_to_chunk_map.empty());
-  const auto& file_regions = fragment_id_to_file_regions_map_[fragment_id];
-  CHECK(!file_regions.empty());
+  const auto& file_regions =
+      shared::get_from_map(fragment_id_to_file_regions_map_, fragment_id);
+
+  // File roll off can lead to empty file regions.
+  if (file_regions.empty()) {
+    return;
+  }
 
   const auto buffer_size = get_buffer_size(file_regions);
   const auto thread_count = get_thread_count(copy_params, file_regions);
@@ -454,7 +459,8 @@ void add_file_region(std::map<int, FileRegions>& fragment_id_to_file_regions_map
                      const std::string& file_path) {
   fragment_id_to_file_regions_map[fragment_id].emplace_back(
       // file naming is handled by FileReader
-      FileRegion(result.row_offsets.front(),
+      FileRegion(file_path,
+                 result.row_offsets.front(),
                  first_row_index,
                  result.row_count,
                  result.row_offsets.back() - result.row_offsets.front()));
@@ -730,6 +736,7 @@ void dispatch_metadata_scan_requests(
       }
     }
     auto request = get_request_from_pool(multi_threading_params);
+    request.full_path = file_reader.getCurrentFilePath();
     resize_buffer_if_needed(request.buffer, request.buffer_alloc_size, alloc_size);
 
     if (residual_buffer_size > 0) {
@@ -847,8 +854,13 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
   auto& parser = getFileBufferParser();
   const auto file_path_options = getFilePathOptions(foreign_table_);
   auto& server_options = foreign_table_->foreign_server->options;
+  std::set<std::string> rolled_off_files;
   if (foreign_table_->isAppendMode() && file_reader_ != nullptr) {
     parser.validateFiles(file_reader_.get(), foreign_table_);
+    auto multi_file_reader = dynamic_cast<MultiFileReader*>(file_reader_.get());
+    if (allowFileRollOff(foreign_table_) && multi_file_reader) {
+      rolled_off_files = multi_file_reader->checkForRolledOffFiles(file_path_options);
+    }
     if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
       file_reader_->checkForMoreRows(append_start_offset_, file_path_options);
     } else {
@@ -976,6 +988,8 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
     }
   }
 
+  updateRolledOffChunks(rolled_off_files, column_by_id);
+
   for (auto& [chunk_key, chunk_metadata] : chunk_metadata_map_) {
     chunk_metadata_vector.emplace_back(chunk_key, chunk_metadata);
   }
@@ -983,6 +997,51 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
   // Save chunk data
   if (foreign_table_->isAppendMode()) {
     chunk_encoder_buffers_ = std::move(multi_threading_params.chunk_encoder_buffers);
+  }
+}
+
+void AbstractTextFileDataWrapper::updateRolledOffChunks(
+    const std::set<std::string>& rolled_off_files,
+    const std::map<int32_t, const ColumnDescriptor*>& column_by_id) {
+  std::set<int32_t> deleted_fragment_ids;
+  std::optional<int32_t> partially_deleted_fragment_id;
+  std::optional<size_t> partially_deleted_fragment_row_count;
+  for (auto& [fragment_id, file_regions] : fragment_id_to_file_regions_map_) {
+    bool file_region_deleted{false};
+    for (auto it = file_regions.begin(); it != file_regions.end();) {
+      if (shared::contains(rolled_off_files, it->file_path)) {
+        it = file_regions.erase(it);
+        file_region_deleted = true;
+      } else {
+        it++;
+      }
+    }
+    if (file_regions.empty()) {
+      deleted_fragment_ids.emplace(fragment_id);
+    } else if (file_region_deleted) {
+      partially_deleted_fragment_id = fragment_id;
+      partially_deleted_fragment_row_count = 0;
+      for (const auto& file_region : file_regions) {
+        partially_deleted_fragment_row_count.value() += file_region.row_count;
+      }
+      break;
+    }
+  }
+
+  for (auto& [chunk_key, chunk_metadata] : chunk_metadata_map_) {
+    if (shared::contains(deleted_fragment_ids, chunk_key[CHUNK_KEY_FRAGMENT_IDX])) {
+      chunk_metadata->numElements = 0;
+      chunk_metadata->numBytes = 0;
+    } else if (chunk_key[CHUNK_KEY_FRAGMENT_IDX] == partially_deleted_fragment_id) {
+      CHECK(partially_deleted_fragment_row_count.has_value());
+      auto old_chunk_stats = chunk_metadata->chunkStats;
+      auto cd = shared::get_from_map(column_by_id, chunk_key[CHUNK_KEY_COLUMN_IDX]);
+      chunk_metadata =
+          get_placeholder_metadata(cd, partially_deleted_fragment_row_count.value());
+      // Old chunk stats will still be correct (since only row deletion is occurring) and
+      // more accurate than that of the placeholder metadata.
+      chunk_metadata->chunkStats = old_chunk_stats;
+    }
   }
 }
 

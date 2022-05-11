@@ -21,6 +21,14 @@
 #include "QueryEngine/ExternalCacheInvalidators.h"
 
 namespace foreign_storage {
+namespace {
+void clear_cpu_and_gpu_cache(Data_Namespace::DataMgr& data_mgr,
+                             const ChunkKey& key_prefix) {
+  data_mgr.deleteChunksWithPrefix(key_prefix, MemoryLevel::CPU_LEVEL);
+  data_mgr.deleteChunksWithPrefix(key_prefix, MemoryLevel::GPU_LEVEL);
+}
+}  // namespace
+
 void refresh_foreign_table_unlocked(Catalog_Namespace::Catalog& catalog,
                                     const ForeignTable& td,
                                     const bool evict_cached_entries) {
@@ -30,6 +38,7 @@ void refresh_foreign_table_unlocked(Catalog_Namespace::Catalog& catalog,
 
   catalog.removeFragmenterForTable(td.tableId);
 
+  std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> old_chunk_metadata_by_chunk_key;
   if (catalog.getForeignTable(td.tableId)->isAppendMode() && !evict_cached_entries) {
     ChunkMetadataVector metadata_vec;
     data_mgr.getChunkMetadataVecForKeyPrefix(metadata_vec, table_key);
@@ -38,16 +47,15 @@ void refresh_foreign_table_unlocked(Catalog_Namespace::Catalog& catalog,
       if (key[CHUNK_KEY_FRAGMENT_IDX] > last_fragment_id) {
         last_fragment_id = key[CHUNK_KEY_FRAGMENT_IDX];
       }
+      old_chunk_metadata_by_chunk_key[key] = metadata;
     }
     for (const auto& [key, metadata] : metadata_vec) {
       if (key[CHUNK_KEY_FRAGMENT_IDX] == last_fragment_id) {
-        data_mgr.deleteChunksWithPrefix(key, MemoryLevel::CPU_LEVEL);
-        data_mgr.deleteChunksWithPrefix(key, MemoryLevel::GPU_LEVEL);
+        clear_cpu_and_gpu_cache(data_mgr, key);
       }
     }
   } else {
-    data_mgr.deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
-    data_mgr.deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
+    clear_cpu_and_gpu_cache(data_mgr, table_key);
   }
 
   try {
@@ -56,7 +64,24 @@ void refresh_foreign_table_unlocked(Catalog_Namespace::Catalog& catalog,
     catalog.updateForeignTableRefreshTimes(td.tableId);
   } catch (PostEvictionRefreshException& e) {
     catalog.updateForeignTableRefreshTimes(td.tableId);
+    clear_cpu_and_gpu_cache(data_mgr, table_key);
     throw e.getOriginalException();
+  } catch (...) {
+    clear_cpu_and_gpu_cache(data_mgr, table_key);
+    throw;
+  }
+
+  // Delete cached rolled off/updated chunks.
+  if (!old_chunk_metadata_by_chunk_key.empty()) {
+    ChunkMetadataVector new_metadata_vec;
+    data_mgr.getChunkMetadataVecForKeyPrefix(new_metadata_vec, table_key);
+    for (const auto& [key, metadata] : new_metadata_vec) {
+      auto it = old_chunk_metadata_by_chunk_key.find(key);
+      if (it != old_chunk_metadata_by_chunk_key.end() &&
+          it->second->numElements != metadata->numElements) {
+        clear_cpu_and_gpu_cache(data_mgr, key);
+      }
+    }
   }
 }
 

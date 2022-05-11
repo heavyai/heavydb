@@ -32,9 +32,9 @@ void set_value(rapidjson::Value& json_val,
       json_val, file_region.region_size, "region_size", allocator);
   json_utils::add_value_to_object(
       json_val, file_region.row_count, "row_count", allocator);
-  if (file_region.filename.size()) {
+  if (file_region.file_path.size()) {
     json_utils::add_value_to_object(
-        json_val, file_region.filename, "filename", allocator);
+        json_val, file_region.file_path, "file_path", allocator);
   }
 }
 
@@ -46,8 +46,11 @@ void get_value(const rapidjson::Value& json_val, FileRegion& file_region) {
       json_val, file_region.first_row_index, "first_row_index");
   json_utils::get_value_from_object(json_val, file_region.region_size, "region_size");
   json_utils::get_value_from_object(json_val, file_region.row_count, "row_count");
-  if (json_val.HasMember("filename")) {
-    json_utils::get_value_from_object(json_val, file_region.filename, "filename");
+  if (json_val.HasMember("file_path")) {
+    json_utils::get_value_from_object(json_val, file_region.file_path, "file_path");
+  } else if (json_val.HasMember("filename")) {
+    // Handle legacy "filename" field name
+    json_utils::get_value_from_object(json_val, file_region.file_path, "filename");
   }
 }
 }  // namespace foreign_storage

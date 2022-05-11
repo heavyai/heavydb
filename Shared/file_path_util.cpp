@@ -175,4 +175,26 @@ bool file_or_glob_path_exists(const std::string& path) {
   return boost::filesystem::exists(path) || !heavyai::glob(path).empty();
 }
 
+std::set<std::string> check_for_rolled_off_file_paths(
+    const std::vector<std::string>& all_file_paths,
+    std::vector<std::string>& processed_file_paths) {
+  std::set<std::string> rolled_off_file_paths;
+  if (all_file_paths.empty()) {
+    // An empty all_file_paths vector implies that all files have been rolled off
+    rolled_off_file_paths.insert(processed_file_paths.begin(),
+                                 processed_file_paths.end());
+  } else {
+    auto roll_off_end_it = std::find(
+        processed_file_paths.begin(), processed_file_paths.end(), all_file_paths[0]);
+    for (auto it = processed_file_paths.begin(); it != roll_off_end_it; it++) {
+      rolled_off_file_paths.emplace(*it);
+    }
+  }
+  if (!rolled_off_file_paths.empty()) {
+    processed_file_paths.erase(
+        processed_file_paths.begin(),
+        processed_file_paths.begin() + rolled_off_file_paths.size());
+  }
+  return rolled_off_file_paths;
+}
 }  // namespace shared

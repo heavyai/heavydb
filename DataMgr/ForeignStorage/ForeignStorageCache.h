@@ -89,14 +89,13 @@ class ForeignStorageCache {
            File_Namespace::CachingFileMgr::WRAPPER_FILE_NAME;
   }
 
-  void cacheMetadataWithFragIdGreaterOrEqualTo(const ChunkMetadataVector& metadata_vec,
-                                               const int frag_id);
-
   inline uint64_t getSpaceReservedByTable(int db_id, int tb_id) const {
     return caching_file_mgr_->getSpaceReservedByTable(db_id, tb_id);
   }
 
   void storeDataWrapper(const std::string& doc, int32_t db_id, int32_t tb_id);
+
+  bool hasStoredDataWrapperMetadata(int32_t db_id, int32_t table_id) const;
 
   // Used for unit testing
   inline void setDataSizeLimit(size_t max) const {

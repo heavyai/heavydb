@@ -240,19 +240,6 @@ void ForeignStorageCache::validatePath(const std::string& base_path) const {
   }
 }
 
-void ForeignStorageCache::cacheMetadataWithFragIdGreaterOrEqualTo(
-    const ChunkMetadataVector& metadata_vec,
-    const int frag_id) {
-  // Only re-cache last fragment and above
-  ChunkMetadataVector new_metadata_vec;
-  for (const auto& chunk_metadata : metadata_vec) {
-    if (chunk_metadata.first[CHUNK_KEY_FRAGMENT_IDX] >= frag_id) {
-      new_metadata_vec.push_back(chunk_metadata);
-    }
-  }
-  cacheMetadataVec(new_metadata_vec);
-}
-
 ChunkToBufferMap ForeignStorageCache::getChunkBuffersForCaching(
     const std::set<ChunkKey>& keys) const {
   ChunkToBufferMap chunk_buffer_map;
@@ -285,6 +272,11 @@ void ForeignStorageCache::storeDataWrapper(const std::string& doc,
                                            int32_t db_id,
                                            int32_t tb_id) {
   caching_file_mgr_->writeWrapperFile(doc, db_id, tb_id);
+}
+
+bool ForeignStorageCache::hasStoredDataWrapperMetadata(int32_t db_id,
+                                                       int32_t table_id) const {
+  return caching_file_mgr_->hasWrapperFile(db_id, table_id);
 }
 
 }  // namespace foreign_storage

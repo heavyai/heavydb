@@ -48,6 +48,7 @@ void AbstractFileStorageDataWrapper::validateTableOptions(
   validateFilePathOptionKey(foreign_table);
   validateFilePath(foreign_table);
   shared::validate_sort_options(getFilePathOptions(foreign_table));
+  validateFileRollOffOption(foreign_table);
 }
 
 const std::set<std::string_view>&
@@ -164,11 +165,63 @@ shared::FilePathOptions AbstractFileStorageDataWrapper::getFilePathOptions(
       foreign_table->getOption(AbstractFileStorageDataWrapper::FILE_SORT_REGEX_KEY)};
 }
 
+namespace {
+std::optional<bool> get_file_roll_off_value(const ForeignTable* foreign_table) {
+  auto option =
+      foreign_table->getOption(AbstractFileStorageDataWrapper::ALLOW_FILE_ROLL_OFF_KEY);
+  if (option.has_value()) {
+    if (to_upper(option.value()) == "TRUE") {
+      return true;
+    } else if (to_upper(option.value()) == "FALSE") {
+      return false;
+    } else {
+      return {};
+    }
+  }
+  return false;
+}
+}  // namespace
+
+void AbstractFileStorageDataWrapper::validateFileRollOffOption(
+    const ForeignTable* foreign_table) {
+  auto allow_file_roll_off = get_file_roll_off_value(foreign_table);
+  if (allow_file_roll_off.has_value()) {
+    if (allow_file_roll_off.value() && !foreign_table->isAppendMode()) {
+      throw std::runtime_error{"The \"" + ALLOW_FILE_ROLL_OFF_KEY +
+                               "\" option can only be set to 'true' for foreign tables "
+                               "with append refresh updates."};
+    }
+  } else {
+    throw std::runtime_error{
+        "Invalid boolean value specified for \"" + ALLOW_FILE_ROLL_OFF_KEY +
+        "\" foreign table option. Value must be either 'true' or 'false'."};
+  }
+}
+
+bool AbstractFileStorageDataWrapper::allowFileRollOff(const ForeignTable* foreign_table) {
+  auto allow_file_roll_off = get_file_roll_off_value(foreign_table);
+  if (allow_file_roll_off.has_value()) {
+    return allow_file_roll_off.value();
+  } else {
+    auto option = foreign_table->getOption(ALLOW_FILE_ROLL_OFF_KEY);
+    CHECK(option.has_value());
+    UNREACHABLE() << "Unexpected " << ALLOW_FILE_ROLL_OFF_KEY
+                  << " value: " << option.value();
+    return false;
+  }
+}
+
+const std::set<std::string> AbstractFileStorageDataWrapper::getAlterableTableOptions()
+    const {
+  return {ALLOW_FILE_ROLL_OFF_KEY};
+}
+
 const std::set<std::string_view> AbstractFileStorageDataWrapper::supported_table_options_{
     FILE_PATH_KEY,
     REGEX_PATH_FILTER_KEY,
     FILE_SORT_ORDER_BY_KEY,
-    FILE_SORT_REGEX_KEY};
+    FILE_SORT_REGEX_KEY,
+    ALLOW_FILE_ROLL_OFF_KEY};
 
 const std::set<std::string_view>
     AbstractFileStorageDataWrapper::supported_server_options_{STORAGE_TYPE_KEY,

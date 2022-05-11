@@ -86,6 +86,10 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
   void updateMetadata(std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
                       int fragment_id);
 
+  void updateRolledOffChunks(
+      const std::set<std::string>& rolled_off_files,
+      const std::map<int32_t, const ColumnDescriptor*>& column_by_id);
+
   std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;
   std::map<int, FileRegions> fragment_id_to_file_regions_map_;
 

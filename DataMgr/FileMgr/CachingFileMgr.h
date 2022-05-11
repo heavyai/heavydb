@@ -128,6 +128,11 @@ class TableFileMgr {
    */
   void writeWrapperFile(const std::string& doc) const;
 
+  /**
+   * Checks if data wrapper file has been written to disk/cached.
+   */
+  bool hasWrapperFile() const;
+
  private:
   std::string table_path_;
   std::string epoch_file_path_;
@@ -322,6 +327,11 @@ class CachingFileMgr : public FileMgr {
    * @brief Writes a wrapper file to a table subdir.
    **/
   void writeWrapperFile(const std::string& doc, int32_t db, int32_t tb);
+
+  /**
+   * Checks if data wrapper file has been written to disk/cached.
+   */
+  bool hasWrapperFile(int32_t db_id, int32_t table_id) const;
 
   std::string getTableFileMgrPath(int32_t db, int32_t tb) const;
 

@@ -153,6 +153,14 @@ void CachingForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
     // possible.
     createDataWrapperIfNotExists(key_prefix);
     return;
+  } else if (dist::is_distributed() &&
+             disk_cache_->hasStoredDataWrapperMetadata(key_prefix[CHUNK_KEY_DB_IDX],
+                                                       key_prefix[CHUNK_KEY_TABLE_IDX])) {
+    // In distributed mode, it is possible to have all the chunk metadata filtered out for
+    // this node, after previously getting the chunk metadata from the wrapper and caching
+    // the wrapper metadata. In this case, return immediately and avoid doing a redundant
+    // metadata scan.
+    return;
   }
 
   // If we have no cached data then either the data was evicted, was never populated, or
@@ -259,7 +267,7 @@ void CachingForeignStorageMgr::refreshAppendTableInCache(
   ChunkMetadataVector storage_metadata;
   getChunkMetadataVecFromDataWrapper(storage_metadata, table_key);
   try {
-    disk_cache_->cacheMetadataWithFragIdGreaterOrEqualTo(storage_metadata, last_frag_id);
+    disk_cache_->cacheMetadataVec(storage_metadata);
     refreshChunksInCacheByFragment(old_chunk_keys, last_frag_id);
   } catch (std::runtime_error& e) {
     throw PostEvictionRefreshException(e);

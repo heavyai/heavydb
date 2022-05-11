@@ -664,6 +664,15 @@ void CachingFileMgr::writeWrapperFile(const std::string& doc, int32_t db, int32_
   table_dirs_.at({db, tb})->writeWrapperFile(doc);
 }
 
+bool CachingFileMgr::hasWrapperFile(int32_t db_id, int32_t table_id) const {
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(table_dirs_mutex_);
+  auto it = table_dirs_.find({db_id, table_id});
+  if (it != table_dirs_.end()) {
+    return it->second->hasWrapperFile();
+  }
+  return false;
+}
+
 /*
  * While the CFM allows for multiple tables to share the same allocated files for chunk
  * data and metadata, space cannot be reallocated between metadata files and data files
@@ -824,6 +833,11 @@ void TableFileMgr::writeWrapperFile(const std::string& doc) const {
                              "\". The error was: " + std::strerror(errno)};
   }
   ofs << doc;
+}
+
+bool TableFileMgr::hasWrapperFile() const {
+  heavyai::shared_lock<heavyai::shared_mutex> r_lock(table_mutex_);
+  return bf::exists(wrapper_file_path_);
 }
 
 }  // namespace File_Namespace
