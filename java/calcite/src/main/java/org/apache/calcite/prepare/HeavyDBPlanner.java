@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableSet;
 import com.mapd.calcite.parser.HeavyDBParserOptions;
 import com.mapd.calcite.parser.HeavyDBSchema;
 import com.mapd.calcite.parser.ProjectProjectRemoveRule;
+import com.mapd.calcite.rel.rules.FilterTableFunctionMultiInputTransposeRule;
 
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.config.CalciteConnectionConfigImpl;
@@ -176,13 +177,74 @@ public class HeavyDBPlanner extends PlannerImpl {
 
   @Override
   public RelRoot rel(SqlNode sql) {
-    RelRoot root = super.rel(sql);
-    if (restrictions != null) {
-      root = applyInjectFilterRule(root, restrictions);
+    return super.rel(sql);
+  }
+
+  public RelRoot getRelRoot(SqlNode sqlNode) {
+    return super.rel(sqlNode);
+  }
+
+  public RelNode optimizeRATree(
+          RelNode rootNode, boolean viewOptimizationEnabled, boolean foundView) {
+    HepProgramBuilder firstOptPhaseProgram = HepProgram.builder();
+    firstOptPhaseProgram.addRuleInstance(CoreRules.AGGREGATE_MERGE)
+            .addRuleInstance(
+                    new OuterJoinOptViaNullRejectionRule(RelFactories.LOGICAL_BUILDER))
+            .addRuleInstance(CoreRules.AGGREGATE_UNION_TRANSPOSE);
+    if (!viewOptimizationEnabled) {
+      firstOptPhaseProgram.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE)
+              .addRuleInstance(
+                      FilterTableFunctionMultiInputTransposeRule.Config.DEFAULT.toRule())
+              .addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
+    } else {
+      if (foundView) {
+        firstOptPhaseProgram.addRuleInstance(
+                CoreRules.JOIN_PROJECT_BOTH_TRANSPOSE_INCLUDE_OUTER);
+        firstOptPhaseProgram.addRuleInstance(CoreRules.FILTER_MERGE);
+      }
+      firstOptPhaseProgram.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
+      firstOptPhaseProgram.addRuleInstance(
+              FilterTableFunctionMultiInputTransposeRule.Config.DEFAULT.toRule());
+      firstOptPhaseProgram.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
+      if (foundView) {
+        firstOptPhaseProgram.addRuleInstance(CoreRules.PROJECT_MERGE);
+        firstOptPhaseProgram.addRuleInstance(ProjectProjectRemoveRule.INSTANCE);
+      }
     }
-    root = applyQueryOptimizationRules(root);
-    root = applyFilterPushdown(root);
-    return root;
+    HepProgram firstOptPhase = firstOptPhaseProgram.build();
+    HepPlanner firstPlanner = HeavyDBPlanner.getHepPlanner(firstOptPhase, true);
+    firstPlanner.setRoot(rootNode);
+    final RelNode firstOptimizedPlanRoot = firstPlanner.findBestExp();
+
+    boolean hasRLSFilter = null != restrictions && !restrictions.isEmpty();
+    boolean needsSecondOptPhase = hasRLSFilter || !filterPushDownInfo.isEmpty();
+    if (needsSecondOptPhase) {
+      HepProgramBuilder secondOptPhaseProgram = HepProgram.builder();
+      if (hasRLSFilter) {
+        final InjectFilterRule injectFilterRule =
+                InjectFilterRule.Config.DEFAULT.toRule(restrictions);
+        secondOptPhaseProgram.addRuleInstance(injectFilterRule);
+      }
+      if (!filterPushDownInfo.isEmpty()) {
+        final DynamicFilterJoinRule dynamicFilterJoinRule =
+                new DynamicFilterJoinRule(true,
+                        RelFactories.LOGICAL_BUILDER,
+                        FilterJoinRule.TRUE_PREDICATE,
+                        filterPushDownInfo);
+        secondOptPhaseProgram.addRuleInstance(dynamicFilterJoinRule);
+      }
+
+      HepProgram secondOptPhase = secondOptPhaseProgram.build();
+      HepPlanner secondPlanner = HeavyDBPlanner.getHepPlanner(secondOptPhase, false);
+      secondPlanner.setRoot(firstOptimizedPlanRoot);
+      final RelNode secondOptimizedPlanRoot = secondPlanner.findBestExp();
+      if (!filterPushDownInfo.isEmpty()) {
+        filterPushDownInfo.clear();
+      }
+      return secondOptimizedPlanRoot;
+    } else {
+      return firstOptimizedPlanRoot;
+    }
   }
 
   private RelRoot applyInjectFilterRule(RelRoot root, List<Restriction> restrictions) {
@@ -216,20 +278,6 @@ public class HeavyDBPlanner extends PlannerImpl {
     return root.withRel(rootRelNode);
   }
 
-  private RelRoot applyQueryOptimizationRules(RelRoot root) {
-    QueryOptimizationRules outerJoinOptRule =
-            new OuterJoinOptViaNullRejectionRule(RelFactories.LOGICAL_BUILDER);
-
-    HepProgram program = HepProgram.builder()
-                                 .addRuleInstance(CoreRules.AGGREGATE_MERGE)
-                                 .addRuleInstance(outerJoinOptRule)
-                                 .build();
-    HepPlanner prePlanner = HeavyDBPlanner.getHepPlanner(program, true);
-    prePlanner.setRoot(root.rel);
-    final RelNode rootRelNode = prePlanner.findBestExp();
-    return root.withRel(rootRelNode);
-  }
-
   private RelRoot applyOptimizationsRules(RelRoot root, ImmutableSet<RelOptRule> rules) {
     HepProgramBuilder programBuilder = new HepProgramBuilder();
     for (RelOptRule rule : rules) {
@@ -240,7 +288,8 @@ public class HeavyDBPlanner extends PlannerImpl {
     return root.withRel(hepPlanner.findBestExp());
   }
 
-  public RelRoot optimizeRaQuery(String query, HeavyDBSchema schema) throws IOException {
+  public RelRoot buildRATreeAndPerformQueryOptimization(
+          String query, HeavyDBSchema schema) throws IOException {
     ready();
     RexBuilder builder = new RexBuilder(getTypeFactory());
     RelOptCluster cluster = RelOptCluster.create(new VolcanoPlanner(), builder);
@@ -253,8 +302,10 @@ public class HeavyDBPlanner extends PlannerImpl {
     if (restrictions != null) {
       relR = applyInjectFilterRule(relR, restrictions);
     }
-
-    relR = applyQueryOptimizationRules(relR);
+    QueryOptimizationRules outerJoinOptRule =
+            new OuterJoinOptViaNullRejectionRule(RelFactories.LOGICAL_BUILDER);
+    relR = applyOptimizationsRules(
+            relR, ImmutableSet.of(CoreRules.AGGREGATE_MERGE, outerJoinOptRule));
     relR = applyFilterPushdown(relR);
     relR = applyOptimizationsRules(relR,
             ImmutableSet.of(CoreRules.JOIN_PROJECT_BOTH_TRANSPOSE_INCLUDE_OUTER,

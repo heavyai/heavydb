@@ -170,14 +170,15 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     parser.setUser(dbUser);
     CURRENT_PARSER.set(parser);
 
-    // need to trim the sql string as it seems it is not trimed prior to here
-    boolean isRAQuery = false;
-
+    // this code path is introduced to execute a query for intel-modin project
+    // they appended a special prefix "execute calcite" to distinguish their usage
+    boolean buildRATreeFromRAString = false;
     if (queryText.startsWith("execute calcite")) {
       queryText = queryText.replaceFirst("execute calcite", "");
-      isRAQuery = true;
+      buildRATreeFromRAString = true;
     }
 
+    // need to trim the sql string as it seems it is not trimed prior to here
     queryText = queryText.trim();
     // remove last charcter if it is a ;
     if (queryText.length() > 0 && queryText.charAt(queryText.length() - 1) == ';') {
@@ -200,7 +201,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
               optimizationOption.is_view_optimize,
               optimizationOption.enable_watchdog);
 
-      if (!isRAQuery) {
+      if (!buildRATreeFromRAString) {
         Pair<String, SqlIdentifierCapturer> res;
         SqlNode node;
 
@@ -223,7 +224,9 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         resolvedAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
 
       } else {
-        jsonResult = parser.optimizeRAQuery(queryText, parserOptions);
+        // exploit Calcite's query optimization rules for RA string
+        jsonResult =
+                parser.buildRATreeAndPerformQueryOptimization(queryText, parserOptions);
       }
     } catch (SqlParseException ex) {
       String msg = "SQL Error: " + ex.getMessage();

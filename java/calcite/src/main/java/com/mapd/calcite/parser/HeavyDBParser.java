@@ -360,14 +360,14 @@ public final class HeavyDBParser {
     return new Pair<String, SqlIdentifierCapturer>(res, capture);
   }
 
-  public String optimizeRAQuery(String query, final HeavyDBParserOptions parserOptions)
-          throws IOException {
+  public String buildRATreeAndPerformQueryOptimization(
+          String query, final HeavyDBParserOptions parserOptions) throws IOException {
     HeavyDBSchema schema =
             new HeavyDBSchema(dataDir, this, dbPort, dbUser, sock_transport_properties);
     HeavyDBPlanner planner = getPlanner(true, parserOptions.isWatchdogEnabled());
 
     planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
-    RelRoot optRel = planner.optimizeRaQuery(query, schema);
+    RelRoot optRel = planner.buildRATreeAndPerformQueryOptimization(query, schema);
     optRel = replaceIsTrue(planner.getTypeFactory(), optRel);
     return HeavyDBSerializer.toString(optRel.project());
   }
@@ -826,50 +826,31 @@ public final class HeavyDBParser {
 
     SqlNode validateR = planner.validate(node);
     planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
-    RelRoot relR = planner.rel(validateR);
-    relR = replaceIsTrue(planner.getTypeFactory(), relR);
-    planner.close();
-
-    HepProgramBuilder builder = new HepProgramBuilder();
-    builder.addRuleInstance(CoreRules.AGGREGATE_UNION_TRANSPOSE);
-    if (!parserOptions.isViewOptimizeEnabled()) {
-      builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
-      builder.addRuleInstance(
-              FilterTableFunctionMultiInputTransposeRule.Config.DEFAULT.toRule());
-      builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
-    } else {
-      // check to see if a view is involved in the query
-      boolean foundView = false;
-      HeavyDBSchema schema =
-              new HeavyDBSchema(dataDir, this, dbPort, dbUser, sock_transport_properties);
-      SqlIdentifierCapturer capturer = captureIdentifiers(sqlNode);
-      for (ImmutableList<String> names : capturer.selects) {
-        HeavyDBTable table = (HeavyDBTable) schema.getTable(names.get(0));
-        if (null == table) {
-          throw new RuntimeException("table/view not found: " + names.get(0));
-        }
-        if (table instanceof HeavyDBView) {
-          foundView = true;
-        }
+    // check to see if a view is involved in the query
+    boolean foundView = false;
+    HeavyDBSchema schema =
+            new HeavyDBSchema(dataDir, this, dbPort, dbUser, sock_transport_properties);
+    SqlIdentifierCapturer capturer = captureIdentifiers(sqlNode);
+    for (ImmutableList<String> names : capturer.selects) {
+      HeavyDBTable table = (HeavyDBTable) schema.getTable(names.get(0));
+      if (null == table) {
+        throw new RuntimeException("table/view not found: " + names.get(0));
       }
-      if (foundView) {
-        builder.addRuleInstance(CoreRules.JOIN_PROJECT_BOTH_TRANSPOSE_INCLUDE_OUTER);
-        builder.addRuleInstance(CoreRules.FILTER_MERGE);
-      }
-      builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
-      builder.addRuleInstance(
-              FilterTableFunctionMultiInputTransposeRule.Config.DEFAULT.toRule());
-      builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
-      if (foundView) {
-        builder.addRuleInstance(CoreRules.PROJECT_MERGE);
-        builder.addRuleInstance(ProjectProjectRemoveRule.INSTANCE);
+      if (table instanceof HeavyDBView) {
+        foundView = true;
       }
     }
-    HepPlanner hepPlanner = HeavyDBPlanner.getHepPlanner(builder.build(), true);
-    final RelNode root = relR.project();
-    hepPlanner.setRoot(root);
-    final RelNode newRel = hepPlanner.findBestExp();
-    return RelRoot.of(newRel, relR.kind);
+    RelRoot relRootNode = planner.getRelRoot(validateR);
+    relRootNode = replaceIsTrue(planner.getTypeFactory(), relRootNode);
+    RelNode rootNode = planner.optimizeRATree(
+            relRootNode.project(), parserOptions.isViewOptimizeEnabled(), foundView);
+    planner.close();
+    return new RelRoot(rootNode,
+            relRootNode.validatedRowType,
+            relRootNode.kind,
+            relRootNode.fields,
+            relRootNode.collation,
+            Collections.emptyList());
   }
 
   private RelRoot replaceIsTrue(final RelDataTypeFactory typeFactory, RelRoot root) {
