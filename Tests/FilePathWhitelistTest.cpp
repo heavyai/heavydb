@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
  * @brief Test suite for file path whitelist validation for COPY FROM, COPY TO, and CREATE
  * FOREIGN TABLE use cases
  */
+
 #include <fstream>
 
 #include <gtest/gtest.h>

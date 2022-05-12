@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,7 @@
  * @brief		singleton class to handle concurrancy and state for blosc library.
  *          A C++ wrapper over a pure C library.
  *
- * Copyright (c) 2018 OmniSci, Inc.  All rights reserved.
- **/
+ */
 
 #pragma once
 

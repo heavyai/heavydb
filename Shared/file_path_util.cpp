@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,11 @@
 
 /**
  * @file    file_path_util.cpp
- * @author  andrew.do@omnisci.com>
  * @brief   shared utility for globbing files, paths can be specified as either a single
  * file, directory or wildcards
  *
  */
+
 #include "Shared/file_path_util.h"
 
 #include "Logger/Logger.h"

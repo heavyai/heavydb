@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-/*
- * File:   DBHandler.cpp
- * Author: michael
+/**
+ * @file   DBHandler.cpp
+ * @brief
  *
- * Created on Jan 1, 2017, 12:40 PM
  */
 
 #include "DBHandler.h"

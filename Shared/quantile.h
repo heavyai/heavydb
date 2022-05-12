@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-/*
+/**
  * @file    quantile.h
- * @author  Matt Pulver <matt.pulver@omnisci.com>
- * @description Calculate approximate median and general quantiles, based on
+ * @brief Calculate approximate median and general quantiles, based on
  *   "Computing Extremely Accurate Quantiles Using t-Digests" by T. Dunning et al.
  *   https://arxiv.org/abs/1902.04023
  *

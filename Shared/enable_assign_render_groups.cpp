@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 /**
  * @file    enable_assign_render_groups.cpp
- * @author  simon.eves@omnisci.com
  * @brief   Global bool for controlling render group assignment, remove along with legacy
  * poly rendering
  *

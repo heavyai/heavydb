@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,7 @@
 
 /**
  * @file	FileMgr.h
- * @author	Steven Stewart <steve@map-d.com>
- * @author	Todd Mostak <todd@map-d.com>
+ * @brief
  *
  * This file includes the class specification for the FILE manager (FileMgr), and related
  * data structures and types.

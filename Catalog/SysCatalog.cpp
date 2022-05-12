@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,9 @@
 
 /**
  * @file		SysCatalog.cpp
- * @author	Todd Mostak <todd@map-d.com>, Wei Hong <wei@map-d.com>
  * @brief		Functions for System Catalog
  *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
 
 #include "SysCatalog.h"
 #include <algorithm>

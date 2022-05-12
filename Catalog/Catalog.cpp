@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,9 @@
 
 /**
  * @file		Catalog.cpp
- * @author	Todd Mostak <todd@map-d.com>, Wei Hong <wei@map-d.com>
  * @brief		Functions for database metadata access
  *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
 
 #include "Catalog/Catalog.h"
 

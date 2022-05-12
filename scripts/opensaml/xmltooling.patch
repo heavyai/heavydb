@@ -872,7 +872,7 @@ diff -ruN xmltooling-3.0.2/xmltooling/LogStubs.h xmltooling-3.0.2-nologs/xmltool
 +++ xmltooling-3.0.2-nologs/xmltooling/LogStubs.h	2018-09-18 15:45:13.713601000 +0300
 @@ -0,0 +1,235 @@
 +/*
-+ * Copyright 2018 MapD Technologies, Inc.
++ * Copyright 2022 HEAVY.AI, Inc.
 + *
 + * Licensed under the Apache License, Version 2.0 (the "License");
 + * you may not use this file except in compliance with the License.

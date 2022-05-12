@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-/*
- * File:   Calcite.cpp
- * Author: michael
+/**
+ * @file   Calcite.cpp
+ * @brief
  *
- * Created on November 23, 2015, 9:33 AM
  */
 
 #include "Calcite.h"

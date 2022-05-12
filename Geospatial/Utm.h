@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 /**
  * @file    Utm.h
- * @author  Matt Pulver <matt.pulver@omnisci.com>
  * @brief   Convert to/from WGS84 (long,lat) and UTM (x,y) given utm zone srid.
+ *
  */
 
 #include "Shared/math_consts.h"

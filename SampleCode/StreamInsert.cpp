@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@
 
 /**
  * @file    StreamInsert.cpp
- * @author  Wei Hong <wei@mapd.com>
  * @brief   Sample MapD Client code for inserting a stream of rows
  * with optional transformations from stdin to a MapD table.
- **/
+ *
+ */
 
 #ifdef HAVE_THRIFT_MESSAGE_LIMIT
 #include "Shared/ThriftConfig.h"

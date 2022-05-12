@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@
 
 /**
  * @file    File.cpp
- * @author  Steven Stewart <steve@map-d.com>
  * @brief   Implementation of helper methods for File I/O.
  *
  */
+
 #include "Shared/File.h"
 
 #include <algorithm>

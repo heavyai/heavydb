@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,9 @@
 
 /**
  * @file		PopulateTableRandom.h
- * @author	Wei Hong <wei@map-d.com>
  * @brief		Populate a table with random data
  *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
 
 #ifndef POPULATE_TABLE_RANDOM_H
 #define POPULATE_TABLE_RANDOM_H

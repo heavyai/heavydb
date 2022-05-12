@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 /**
  * @file    CudaAllocator.h
- * @author  Alex Baden <alex.baden@mapd.com>
  * @brief   Allocate GPU memory using GpuBuffers via DataMgr
  */
 

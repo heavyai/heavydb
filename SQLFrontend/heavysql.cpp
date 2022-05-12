@@ -16,10 +16,9 @@
 
 /**
  * @file    omnisql.cpp
- * @author  Wei Hong <wei@map-d.com>
  * @brief   HeavyDB SQL Client Tool
  *
- **/
+ */
 
 #include <rapidjson/document.h>
 #ifndef _WIN32

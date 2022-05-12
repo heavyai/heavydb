@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,14 @@
  * limitations under the License.
  */
 
-/*
- * File:   DBObject.h
- * Author: norair
+/**
+ * @file   DBObject.h
  * @brief  Class specification and related data structures for DBObject class.
  *
  * To support access privileges of DB users to DB entities (tables, columns, views, etc),
  * the users are granted roles and included in the corresponding object of the Role class,
  * and DB entities are being described as objects of DBObjects class
  *
- * Created on May 16, 2017, 03:30 PM
  */
 
 #ifndef DBOBJECT_H

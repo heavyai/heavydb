@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@
  * 2. get the table descriptor of <table>
  * 3. randomly generate tab-delimited data that can be imported to <table>
  * 4. disconnect from heavydb
- **/
+ */
 
 #ifdef HAVE_THRIFT_MESSAGE_LIMIT
 #include "Shared/ThriftConfig.h"

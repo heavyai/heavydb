@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,15 @@
  * limitations under the License.
  */
 
-#ifndef _ROWTOCOLUMNLOADER_H_
-#define _ROWTOCOLUMNLOADER_H_
-
 /**
  * @file    RowToColumnLoader.h
- * @author  Michael <michael@mapd.com>
  * @brief   Utility Function to convert rows to input columns for loading via
- *load_table_binary_columnar
+ * load_table_binary_columnar
  *
- * Copyright (c) 2017 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
+
+#ifndef _ROWTOCOLUMNLOADER_H_
+#define _ROWTOCOLUMNLOADER_H_
 
 #include "Logger/Logger.h"
 

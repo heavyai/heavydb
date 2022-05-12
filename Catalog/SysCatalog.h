@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 /**
  * @file    SysCatalog.h
- * @author  Todd Mostak <todd@map-d.com>, Wei Hong <wei@map-d.com>
  * @brief   This file contains the class specification and related data structures for
  * SysCatalog.
  *

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmnSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 
-/*
- * File:   RenderHandler.cpp
- * Author: Chris Root
- *
- * Created on Dec 18, 2019, 10:00 AM
+/**
+ * @file:   RenderHandler.cpp
+ * @brief
  */
 
 #include "ThriftHandler/RenderHandler.h"

@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,10 @@
 
 /**
  * @file		FixedLengthArrayNoneEncoder.h
- * @author		Dmitri Shtilman <d@mapd.com>
  * @brief		unencoded fixed length array encoder
  *
- * Copyright (c) 2018 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
+
 #ifndef FIXED_LENGTH_ARRAY_NONE_ENCODER_H
 #define FIXED_LENGTH_ARRAY_NONE_ENCODER_H
 

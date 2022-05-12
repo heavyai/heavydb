@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-/*
- * File:   DBHandler.h
- * Author: michael
+/**
+ * @file   DBHandler.h
+ * @brief
  *
- * Created on Jan 1, 2017, 12:40 PM
  */
 
 #pragma once

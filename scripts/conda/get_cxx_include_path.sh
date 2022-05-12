@@ -4,8 +4,6 @@
 #   source this file and call ${get_cxx_include_path} to get a full
 #   include path of ${CXX}
 #
-# Author: Pearu Peterson
-# Created: November 2019
 #
 function get_cxx_include_path() {
     local cplus_include_path=""

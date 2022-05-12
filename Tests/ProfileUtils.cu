@@ -1,10 +1,9 @@
 /**
  * @file    ProfileUtils.cu
- * @author  Minggang Yu <miyu@mapd.com>
  * @brief   Unit tests for microbenchmark.
  *
- * Copyright (c) 2016 MapD Technologies, Inc.  All rights reserved.
  */
+
 #include "ProfileTest.h"
 
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000

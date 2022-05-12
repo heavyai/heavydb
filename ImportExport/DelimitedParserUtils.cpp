@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 /*
  * @file DelimitedParserUtils.cpp
- * @author Mehmet Sariyuce <mehmet.sariyuce@omnisci.com>
  * @brief Implementation of delimited parser utils.
+ *
  */
 
 #include "ImportExport/DelimitedParserUtils.h"
