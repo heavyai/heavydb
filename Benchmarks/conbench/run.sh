@@ -31,4 +31,8 @@ cd Benchmarks/conbench
 
 ln -sf ~/.conbench .
 
-conbench StringDictionaryBenchmark --run-name "commit: $GIT_COMMIT"
+echo "Starting conbench StringDictionaryBenchmark"
+conbench StringDictionaryBenchmark --run-name "StringDictionaryBenchmark: $GIT_COMMIT"
+
+echo "Starting conbench TPC_DS_10GB"
+TPCDS_ASSETS_DIR=~/tpc-ds conbench TPC_DS_10GB --run-name "TPC_DS_10GB: $GIT_COMMIT"
