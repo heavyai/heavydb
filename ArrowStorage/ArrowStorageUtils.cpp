@@ -966,11 +966,7 @@ std::shared_ptr<arrow::DataType> getArrowImportType(const SQLTypeInfo type) {
     case kTIME:
       return timestamp(TimeUnit::SECOND);
     case kDATE:
-#ifdef HAVE_CUDA
-      return arrow::date64();
-#else
       return arrow::date32();
-#endif
     case kTIMESTAMP:
       switch (type.get_precision()) {
         case 0:
