@@ -868,30 +868,6 @@ inline std::vector<std::pair<const int8_t*, const int64_t>> make_vals_vector(
       std::make_pair(std::get<2 * indices>(tuple), std::get<2 * indices + 1>(tuple))...};
 }
 
-inline std::unique_ptr<ArrayDatum> lazy_fetch_chunk(const int8_t* ptr,
-                                                    const int64_t varlen_ptr) {
-  auto ad = std::make_unique<ArrayDatum>();
-  bool is_end;
-  ChunkIter_get_nth(reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(ptr)),
-                    varlen_ptr,
-                    ad.get(),
-                    &is_end);
-  CHECK(!is_end);
-  return ad;
-}
-
-inline std::unique_ptr<ArrayDatum> fetch_data_from_gpu(int64_t varlen_ptr,
-                                                       const int64_t length,
-                                                       BufferProvider* buffer_provider,
-                                                       const int device_id) {
-  auto cpu_buf =
-      std::shared_ptr<int8_t>(new int8_t[length], std::default_delete<int8_t[]>());
-  buffer_provider->copyFromDevice(
-      cpu_buf.get(), reinterpret_cast<const int8_t*>(varlen_ptr), length, device_id);
-  // Just fetching the data from gpu
-  return std::make_unique<ArrayDatum>(length, cpu_buf, false);
-}
-
 template <typename T>
 inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(
     const std::vector<std::vector<T>>& frag_offsets,
