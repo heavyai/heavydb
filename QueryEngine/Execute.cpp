@@ -2082,6 +2082,7 @@ void Executor::executeWorkUnitPerFragment(
   }
   CHECK(query_mem_desc_owned);
   CHECK_EQ(size_t(1), ra_exe_unit.input_descs.size());
+  const auto db_id = ra_exe_unit.input_descs[0].getDatabaseId();
   const auto table_id = ra_exe_unit.input_descs[0].getTableId();
   const auto& outer_fragments = table_info.info.fragments;
 
@@ -2105,7 +2106,7 @@ void Executor::executeWorkUnitPerFragment(
     for (auto fragment_index : fragment_indexes) {
       // We may want to consider in the future allowing this to execute on devices other
       // than CPU
-      FragmentsList fragments_list{{table_id, {fragment_index}}};
+      FragmentsList fragments_list{{db_id, table_id, {fragment_index}}};
       ExecutionKernel kernel(ra_exe_unit,
                              co.device_type,
                              /*device_id=*/0,
