@@ -73,6 +73,8 @@ docs/source/api/*
 Calcite/java/**/target/
 *.classpath
 *.project
+java/**/target/
+java/thrift/src/gen/
 
 ThirdParty/googlebenchmark
 data/
