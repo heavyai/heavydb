@@ -190,13 +190,17 @@ std::vector<std::string> split(std::string_view str,
   }
 }
 
-std::string strip(std::string_view str) {
+std::string_view sv_strip(std::string_view str) {
   std::string::size_type i, j;
   for (i = 0; i < str.size() && std::isspace(str[i]); ++i) {
   }
   for (j = str.size(); j > i && std::isspace(str[j - 1]); --j) {
   }
-  return std::string(str.substr(i, j - i));
+  return str.substr(i, j - i);
+}
+
+std::string strip(std::string_view str) {
+  return std::string(sv_strip(str));
 }
 
 std::optional<size_t> inside_string_literal(

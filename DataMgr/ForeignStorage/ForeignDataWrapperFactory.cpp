@@ -298,6 +298,9 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
         std::to_string(copy_params.buffer_size);
     foreign_table->options[TextFileBufferParser::THREADS_KEY] =
         std::to_string(copy_params.threads);
+
+    foreign_table->options[CsvFileBufferParser::TRIM_SPACES_KEY] =
+        bool_to_option_value(copy_params.trim_spaces);
   }
 
   foreign_table->initializeOptions();

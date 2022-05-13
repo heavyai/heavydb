@@ -225,7 +225,9 @@ const char* get_row(const char* buf,
       if (!in_quote) {
         if (!has_escape && !strip_quotes) {
           const char* field_end = p;
-          trim_space(field, field_end);
+          if (copy_params.trim_spaces) {
+            trim_space(field, field_end);
+          }
           row.emplace_back(field, field_end - field);
         } else {
           tmp_buffers.emplace_back(std::make_unique<char[]>(p - field + 1));
@@ -242,7 +244,9 @@ const char* get_row(const char* buf,
           }
           const char* field_begin = field_buf;
           const char* field_end = field_buf + j;
-          trim_space(field_begin, field_end);
+          if (copy_params.trim_spaces) {
+            trim_space(field_begin, field_end);
+          }
           trim_quotes(field_begin, field_end, copy_params);
           row.emplace_back(field_begin, field_end - field_begin);
         }

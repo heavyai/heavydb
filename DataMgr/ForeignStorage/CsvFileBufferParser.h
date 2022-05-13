@@ -60,5 +60,6 @@ class CsvFileBufferParser : public TextFileBufferParser {
       "GEO_ASSIGN_RENDER_GROUPS";
   inline static const std::string GEO_EXPLODE_COLLECTIONS_KEY = "GEO_EXPLODE_COLLECTIONS";
   inline static const std::string SOURCE_SRID_KEY = "SOURCE_SRID";
+  inline static const std::string TRIM_SPACES_KEY = "TRIM_SPACES";
 };
 }  // namespace foreign_storage

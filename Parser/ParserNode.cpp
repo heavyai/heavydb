@@ -1230,6 +1230,13 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
           throw std::runtime_error("plain_text option must be a boolean.");
         }
         copy_params.plain_text = bool_from_string_literal(str_literal);
+      } else if (boost::iequals(*p->get_name(), "trim_spaces")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("trim_spaces option must be a boolean.");
+        }
+        copy_params.trim_spaces = bool_from_string_literal(str_literal);
       } else if (boost::iequals(*p->get_name(), "array_marker")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());

@@ -56,6 +56,7 @@ struct CopyParams {
       max_reject;  // maximum number of records that can be rejected before copy is failed
   import_export::SourceType source_type;
   bool plain_text = false;
+  bool trim_spaces;
   // s3/parquet related params
   std::string s3_access_key;  // per-query credentials to override the
   std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
@@ -118,6 +119,7 @@ struct CopyParams {
       , threads(0)
       , max_reject(100000)
       , source_type(import_export::SourceType::kDelimitedFile)
+      , trim_spaces(true)
       , retry_count(100)
       , retry_wait(5)
       , batch_size(1000)
@@ -150,6 +152,7 @@ struct CopyParams {
       , threads(0)
       , max_reject(100000)
       , source_type(import_export::SourceType::kDelimitedFile)
+      , trim_spaces(true)
       , retry_count(retries)
       , retry_wait(wait)
       , batch_size(b)

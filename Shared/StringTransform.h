@@ -108,6 +108,9 @@ std::vector<std::string> split(std::string_view str,
                                std::string_view delim = {},
                                std::optional<size_t> maxsplit = std::nullopt);
 
+//! return trimmed string_view
+std::string_view sv_strip(std::string_view str);
+
 //! trim any whitespace from the left and right ends of a string
 std::string strip(std::string_view str);
 

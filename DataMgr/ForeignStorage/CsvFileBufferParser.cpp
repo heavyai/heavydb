@@ -217,7 +217,10 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
             throw;
           }
         }
-
+        if (!col_ti.is_string() && !request.copy_params.trim_spaces) {
+          // everything but strings should be always trimmed
+          row[import_idx] = sv_strip(row[import_idx]);
+        }
         if (col_ti.is_geometry()) {
           if (!skip_column_import(request, col_idx)) {
             auto starting_col_idx = col_idx;
@@ -394,6 +397,8 @@ import_export::CopyParams CsvFileBufferParser::validateAndGetCopyParams(
       it != foreign_table->options.end()) {
     copy_params.threads = std::stoi(it->second);
   }
+  copy_params.trim_spaces = validate_and_get_bool_value(foreign_table, TRIM_SPACES_KEY)
+                                .value_or(copy_params.trim_spaces);
 
   return copy_params;
 }

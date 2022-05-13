@@ -15,6 +15,7 @@
  */
 
 #include "Shared/Intervals.h"
+#include "Shared/StringTransform.h"
 #include "TestHelpers.h"
 #include "Utils/Regexp.h"
 #include "Utils/StringLike.h"
@@ -145,6 +146,21 @@ TEST(Shared, IntervalsInvalidBounds) {
     loop_body_executed = true;
   }
   EXPECT_TRUE(loop_body_executed);
+}
+
+TEST(Shared, StringViewStrip) {
+  std::vector<std::pair<std::string_view, std::string_view>> svs = {
+      {"", ""},
+      {"   ", ""},
+      {" ", ""},
+      {"  abcd", "abcd"},
+      {"abcd  ", "abcd"},
+      {"  abcd   ", "abcd"},
+      {"  a   b c  d   ", "a   b c  d"},
+  };
+  for (auto& [actual, expected] : svs) {
+    ASSERT_EQ(sv_strip(actual), expected);
+  }
 }
 
 TEST(Utils, StringLike) {

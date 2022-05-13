@@ -2136,6 +2136,10 @@ static ImportStatus import_thread_delimited(
             if (!cd->columnType.is_string() && row[import_idx].empty()) {
               is_null = true;
             }
+            if (!cd->columnType.is_string() && !copy_params.trim_spaces) {
+              // everything but strings should be always trimmed
+              row[import_idx] = sv_strip(row[import_idx]);
+            }
 
             if (col_ti.get_physical_cols() == 0) {
               // not geo

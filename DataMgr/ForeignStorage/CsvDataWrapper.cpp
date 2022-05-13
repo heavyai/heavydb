@@ -93,7 +93,8 @@ const std::set<std::string_view> CsvDataWrapper::csv_table_options_{"ARRAY_DELIM
                                                                     "NULLS",
                                                                     "QUOTE",
                                                                     "QUOTED",
-                                                                    "S3_ACCESS_TYPE"};
+                                                                    "S3_ACCESS_TYPE",
+                                                                    "TRIM_SPACES"};
 
 const CsvFileBufferParser CsvDataWrapper::csv_file_buffer_parser_{};
 }  // namespace foreign_storage

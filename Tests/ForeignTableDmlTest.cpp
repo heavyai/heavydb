@@ -4272,6 +4272,44 @@ TEST_F(SelectQueryTest, CsvMultipleFilesWithExpectedAndMismatchedColumns) {
                               file_path + "'");
 }
 
+TEST_F(SelectQueryTest, CsvTrimSpaces) {
+  const auto& query =
+      getCreateForeignTableQuery("(index INT, txt1 TEXT, txt2 TEXT[], b BOOLEAN)",
+                                 {{"header", "false"}, {"trim_spaces", "true"}},
+                                 "with_spaces",
+                                 "csv");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY index;");
+  // clang-format off
+  assertResultSetEqual({
+                          {i(1), "text1", array({"t1", "t2", "t3"}), False},
+                          {i(2), "text2", array({"t10", "t20", "t30"}), True},
+                      },
+    result);
+  // clang-format on
+}
+
+TEST_F(SelectQueryTest, CsvNoTrimSpaces) {
+  const auto& query =
+      getCreateForeignTableQuery("(index INT, txt1 TEXT, txt2 TEXT[], b BOOLEAN)",
+                                 {{"header", "false"}, {"trim_spaces", "false"}},
+                                 "with_spaces",
+                                 "csv");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY index;");
+  // clang-format off
+  assertResultSetEqual({
+                          {i(1), "  text1 ", array({"t1","  t2"," t3 "}), False},
+                          {i(2), " text2 ", array({" t10"," t20 ","  t30 "}), True},
+                      },
+    result);
+  // clang-format on
+}
+
 TEST_F(SelectQueryTest, ParquetArrayInt8EmptyWithFixedLengthArray) {
   const auto& query = getCreateForeignTableQuery(
       "(tinyint_arr_empty TINYINT[1])", "int8_empty_array", "parquet");

@@ -2013,6 +2013,24 @@ const char* create_table_with_quoted_fields = R"(
     ) WITH (FRAGMENT_SIZE=75000000);
   )";
 
+const char* create_table_with_side_spaces = R"(
+    CREATE TABLE with_side_spaces (
+      id        INTEGER,
+      str1      TEXT,
+      bool1     BOOLEAN,
+      smallint1 SMALLINT
+    ) WITH (FRAGMENT_SIZE=75000000);
+  )";
+
+const char* create_table_with_side_spaced_array = R"(
+    CREATE TABLE array_with_side_spaces (
+      id        INTEGER,
+      str_arr1  TEXT[],
+      bool1     BOOLEAN,
+      smallint1 SMALLINT
+    ) WITH (FRAGMENT_SIZE=75000000);
+  )";
+
 class ImportTest : public ImportExportTestBase {
  protected:
 #ifdef HAVE_AWS_S3
@@ -2035,6 +2053,10 @@ class ImportTest : public ImportExportTestBase {
     sql(create_table_with_two_arrays);
     sql("drop table if exists null_text_arrays;");
     sql(create_table_with_null_text_arrays);
+    sql("drop table if exists with_side_spaces;");
+    sql(create_table_with_side_spaces);
+    sql("drop table if exists array_with_side_spaces;");
+    sql(create_table_with_side_spaced_array);
   }
 
   void TearDown() override {
@@ -2046,6 +2068,8 @@ class ImportTest : public ImportExportTestBase {
     sql("drop table if exists unique_rowgroups;");
     sql("drop table if exists two_text_arrays;");
     sql("drop table if exists null_text_arrays;");
+    sql("drop table if exists with_side_spaces;");
+    sql("drop table if exists array_with_side_spaces;");
     ImportExportTestBase::TearDown();
   }
 
@@ -2118,6 +2142,37 @@ class ImportTest : public ImportExportTestBase {
                           "\"field2_part1,field2_part2\"",
                           array({"\"field1\"", "\"field2_part1,field2_part2\""})}});
 
+    return true;
+  }
+
+  bool importTestWithSideSpaces(const string& filename, const string& trim) {
+    sql("TRUNCATE TABLE with_side_spaces;");
+    string query_str = "COPY with_side_spaces FROM '../../Tests/Import/datafiles/" +
+                       filename + "' WITH (trim_spaces='" + trim + "');";
+    sql(query_str);
+    string select_query_str = "SELECT * FROM with_side_spaces ORDER BY id;";
+    string result = (trim == "true" ? "test1" : "  test1   ");
+    sqlAndCompareResult(select_query_str,
+                        {{i(1), result, True, i(1)}, {i(2), "test2", False, i(2)}});
+    return true;
+  }
+
+  bool importTestArrayWithSideSpaces(const string& filename, const string& trim) {
+    sql("TRUNCATE TABLE array_with_side_spaces;");
+    string query_str = "COPY array_with_side_spaces FROM '../../Tests/Import/datafiles/" +
+                       filename + "' WITH (trim_spaces='" + trim + "');";
+    sql(query_str);
+    string select_query_str =
+        "SELECT str_arr1[1], str_arr1[2], str_arr1[3] FROM array_with_side_spaces ORDER "
+        "BY id;";
+    if (trim == "true") {
+      sqlAndCompareResult(select_query_str,
+                          {{"test1", "test2", "test3"}, {"test1", "test2", "test3"}});
+    } else {
+      sqlAndCompareResult(
+          select_query_str,
+          {{"test1", "   test2 ", " test3  "}, {"test1", "test2", "test3"}});
+    }
     return true;
   }
 };
@@ -2446,6 +2501,18 @@ TEST_F(ImportTest, with_quoted_fields) {
         importTestWithQuotedFields("with_quoted_fields_doublequotes.csv", quoted));
     EXPECT_NO_THROW(
         importTestWithQuotedFields("with_quoted_fields_noquotes.csv", quoted));
+  }
+}
+
+TEST_F(ImportTest, with_side_spaces) {
+  for (auto trim : {"false", "true"}) {
+    EXPECT_NO_THROW(importTestWithSideSpaces("with_side_spaces.csv", trim));
+  }
+}
+
+TEST_F(ImportTest, with_side_spaced_array) {
+  for (auto trim : {"false", "true"}) {
+    EXPECT_NO_THROW(importTestArrayWithSideSpaces("array_with_side_spaces.csv", trim));
   }
 }
 

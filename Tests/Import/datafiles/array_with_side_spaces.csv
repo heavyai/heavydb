@@ -1,0 +1,4 @@
+id,str_arr1,bool1,smallint1
+1, {test1,   test2 , test3  }, true, 1
+2,{test1,test2,test3},false,2
+
