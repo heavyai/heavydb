@@ -441,13 +441,6 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
     apache::thrift::GlobalOutput.setOutputFunction([](const char* msg) {});
   }
 
-  if (g_enable_string_functions) {
-    // Use the locale setting of the server by default. The generate parameter can be
-    // updated appropriately if a locale override option is ever supported.
-    boost::locale::generator generator;
-    std::locale::global(generator.generate(""));
-  }
-
   // Thrift event handler for database server setup.
   try {
     if (prog_config_opts.system_parameters.master_address.empty()) {

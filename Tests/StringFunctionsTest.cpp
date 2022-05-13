@@ -28,7 +28,6 @@
 
 #include <gtest/gtest.h>
 #include <boost/format.hpp>
-#include <boost/locale/generator.hpp>
 #include <sstream>
 
 #ifndef BASE_PATH
@@ -2090,10 +2089,6 @@ int main(int argc, char** argv) {
   g_enable_string_functions = true;
   g_enable_watchdog = true;
   g_watchdog_none_encoded_string_translation_limit = 1000000UL;
-
-  // Use system locale setting by default (as done in the server).
-  boost::locale::generator generator;
-  std::locale::global(generator.generate(""));
 
   int err{0};
   try {

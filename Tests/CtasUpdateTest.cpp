@@ -3208,10 +3208,7 @@ TEST_F(ItasStringTest, InsertIntoSelectLowercase_SameTable) {
       "where first_name = 'Sue';";
 
   // globals for "lower()"
-  //  Use system locale setting by default (as done in the server).
   g_enable_string_functions = true;
-  boost::locale::generator generator;
-  std::locale::global(generator.generate(""));
 
   TQueryResult select_result;
   sql(insert_sql);
@@ -3244,10 +3241,7 @@ TEST_F(ItasStringTest, InsertIntoSelectLowercase_DifferentTables) {
       {"united states", "Washington", "US"}};
 
   // globals for "lower()"
-  //  Use system locale setting by default (as done in the server).
   g_enable_string_functions = true;
-  boost::locale::generator generator;
-  std::locale::global(generator.generate(""));
 
   TQueryResult select_result;
   sql(insert_sql);
