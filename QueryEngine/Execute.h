@@ -825,8 +825,6 @@ class Executor {
 
   void buildSelectedFragsMappingForUnion(
       std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
-      std::vector<size_t>& local_col_to_frag_pos,
-      const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
       const FragmentsList& selected_fragments,
       const RelAlgExecutionUnit& ra_exe_unit);
 

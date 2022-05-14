@@ -22588,14 +22588,22 @@ TEST(Select, UnionAll) {
       " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
       " WHERE b0 < 0;",
       dt);
-    c("SELECT SUM(x), y, z FROM TEST GROUP BY y, z"
+    c("SELECT SUM(x), y, z FROM test GROUP BY y, z"
       " UNION ALL"
       " SELECT SUM(x), y, CAST(NULL AS SMALLINT) FROM test GROUP BY y"
       " ORDER BY y, z NULLS LAST;",
       dt);
+    // Multi-union calcite plan
+    ASSERT_EQ(static_cast<int64_t>(60),
+              v<int64_t>(run_simple_agg(
+                  "SELECT SUM(x) FROM (VALUES"
+                  " (10, CAST('2021-01-01 00:00:10' AS timestamp)),"
+                  " (20, CAST('2021-01-01 00:00:20' AS timestamp)),"
+                  " (30, CAST('2021-01-01 00:00:30' AS timestamp))) AS tmp(x,t);",
+                  dt)));
 
     // Don't allow UNION of different types: z(SMALLINT) and CAST(NULL AS INT).
-    EXPECT_THROW(run_multiple_agg("SELECT SUM(x), y, z FROM TEST GROUP BY y, z UNION ALL"
+    EXPECT_THROW(run_multiple_agg("SELECT SUM(x), y, z FROM test GROUP BY y, z UNION ALL"
                                   " SELECT SUM(x), y, CAST(NULL AS INT)"
                                   " FROM test GROUP BY y;",
                                   dt),

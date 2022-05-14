@@ -814,7 +814,7 @@ RelLogicalUnion::RelLogicalUnion(RelAlgInputs inputs, bool is_all)
         "The DEPRECATED enable-union option is set to off. Please remove this option as "
         "it may be disabled in the future.");
   }
-  CHECK_EQ(2u, inputs_.size());
+  CHECK_LE(2u, inputs_.size());
   if (!is_all_) {
     throw QueryNotSupported("UNION without ALL is not supported yet.");
   }
@@ -857,23 +857,26 @@ std::string RelLogicalUnion::getFieldName(const size_t i) const {
 
 void RelLogicalUnion::checkForMatchingMetaInfoTypes() const {
   std::vector<TargetMetaInfo> const& tmis0 = inputs_[0]->getOutputMetainfo();
-  std::vector<TargetMetaInfo> const& tmis1 = inputs_[1]->getOutputMetainfo();
-  if (tmis0.size() != tmis1.size()) {
-    VLOG(2) << "tmis0.size() = " << tmis0.size() << " != " << tmis1.size()
-            << " = tmis1.size()";
-    throw std::runtime_error("Subqueries of a UNION must have matching data types.");
-  }
-  for (size_t i = 0; i < tmis0.size(); ++i) {
-    if (tmis0[i].get_type_info() != tmis1[i].get_type_info()) {
-      SQLTypeInfo const& ti0 = tmis0[i].get_type_info();
-      SQLTypeInfo const& ti1 = tmis1[i].get_type_info();
-      VLOG(2) << "Types do not match for UNION:\n  tmis0[" << i
-              << "].get_type_info().to_string() = " << ti0.to_string() << "\n  tmis1["
-              << i << "].get_type_info().to_string() = " << ti1.to_string();
-      // The only permitted difference is when both columns are dictionary-encoded.
-      if (!(ti0.is_dict_encoded_string() && ti1.is_dict_encoded_string())) {
-        throw std::runtime_error(
-            "Subqueries of a UNION must have the exact same data types.");
+  for (size_t i = 1; i < inputs_.size(); ++i) {
+    std::vector<TargetMetaInfo> const& tmisi = inputs_[i]->getOutputMetainfo();
+    if (tmis0.size() != tmisi.size()) {
+      LOG(INFO) << "tmis0.size()=" << tmis0.size() << " != " << tmisi.size()
+                << "=tmisi.size() for i=" << i;
+      throw std::runtime_error("Subqueries of a UNION must have matching data types.");
+    }
+    for (size_t j = 0; j < tmis0.size(); ++j) {
+      if (tmis0[j].get_type_info() != tmisi[j].get_type_info()) {
+        SQLTypeInfo const& ti0 = tmis0[j].get_type_info();
+        SQLTypeInfo const& ti1 = tmisi[j].get_type_info();
+        LOG(INFO) << "Types do not match for UNION:\n  tmis0[" << j
+                  << "].get_type_info().to_string() = " << ti0.to_string() << "\n  tmis"
+                  << i << '[' << j
+                  << "].get_type_info().to_string() = " << ti1.to_string();
+        // The only permitted difference is when both columns are dictionary-encoded.
+        if (!(ti0.is_dict_encoded_string() && ti1.is_dict_encoded_string())) {
+          throw std::runtime_error(
+              "Subqueries of a UNION must have the exact same data types.");
+        }
       }
     }
   }

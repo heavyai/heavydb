@@ -3064,8 +3064,55 @@ FetchResult Executor::fetchChunks(
   return {all_frag_col_buffers, all_num_rows, all_frag_offsets};
 }
 
-// fetchChunks() is written under the assumption that multiple inputs implies a JOIN.
-// This is written under the assumption that multiple inputs implies a UNION ALL.
+namespace {
+size_t get_selected_input_descs_index(int const table_id,
+                                      std::vector<InputDescriptor> const& input_descs) {
+  auto const has_table_id = [table_id](InputDescriptor const& input_desc) {
+    return table_id == input_desc.getTableId();
+  };
+  return std::find_if(input_descs.begin(), input_descs.end(), has_table_id) -
+         input_descs.begin();
+}
+
+size_t get_selected_input_col_descs_index(
+    int const table_id,
+    std::list<std::shared_ptr<InputColDescriptor const>> const& input_col_descs) {
+  auto const has_table_id = [table_id](auto const& input_desc) {
+    return table_id == input_desc->getScanDesc().getTableId();
+  };
+  return std::distance(
+      input_col_descs.begin(),
+      std::find_if(input_col_descs.begin(), input_col_descs.end(), has_table_id));
+}
+
+std::list<std::shared_ptr<const InputColDescriptor>> get_selected_input_col_descs(
+    int const table_id,
+    std::list<std::shared_ptr<InputColDescriptor const>> const& input_col_descs) {
+  std::list<std::shared_ptr<const InputColDescriptor>> selected;
+  for (auto const& input_col_desc : input_col_descs) {
+    if (table_id == input_col_desc->getScanDesc().getTableId()) {
+      selected.push_back(input_col_desc);
+    }
+  }
+  return selected;
+}
+
+// Set N consecutive elements of frag_col_buffers to ptr in the range of local_col_id.
+void set_mod_range(std::vector<int8_t const*>& frag_col_buffers,
+                   int8_t const* const ptr,
+                   size_t const local_col_id,
+                   size_t const N) {
+  size_t const begin = local_col_id - local_col_id % N;  // N divides begin
+  size_t const end = begin + N;
+  CHECK_LE(end, frag_col_buffers.size()) << (void*)ptr << ' ' << local_col_id << ' ' << N;
+  for (size_t i = begin; i < end; ++i) {
+    frag_col_buffers[i] = ptr;
+  }
+}
+}  // namespace
+
+// fetchChunks() assumes that multiple inputs implies a JOIN.
+// fetchUnionChunks() assumes that multiple inputs implies a UNION ALL.
 FetchResult Executor::fetchUnionChunks(
     const ColumnFetcher& column_fetcher,
     const RelAlgExecutionUnit& ra_exe_unit,
@@ -3082,167 +3129,108 @@ FetchResult Executor::fetchUnionChunks(
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(fetchUnionChunks);
 
-  std::vector<std::vector<const int8_t*>> all_frag_col_buffers;
-  std::vector<std::vector<int64_t>> all_num_rows;
-  std::vector<std::vector<uint64_t>> all_frag_offsets;
-
-  CHECK(!selected_fragments.empty());
+  CHECK_EQ(1u, selected_fragments.size());
   CHECK_LE(2u, ra_exe_unit.input_descs.size());
   CHECK_LE(2u, ra_exe_unit.input_col_descs.size());
+  auto const& input_descs = ra_exe_unit.input_descs;
   using TableId = int;
   TableId const selected_table_id = selected_fragments.front().table_id;
-  bool const input_descs_index =
-      selected_table_id == ra_exe_unit.input_descs[1].getTableId();
-  if (!input_descs_index) {
-    CHECK_EQ(selected_table_id, ra_exe_unit.input_descs[0].getTableId());
-  }
-  bool const input_col_descs_index =
-      selected_table_id ==
-      (*std::next(ra_exe_unit.input_col_descs.begin()))->getScanDesc().getTableId();
-  if (!input_col_descs_index) {
-    CHECK_EQ(selected_table_id,
-             ra_exe_unit.input_col_descs.front()->getScanDesc().getTableId());
-  }
-  VLOG(2) << "selected_fragments.size()=" << selected_fragments.size()
-          << " selected_table_id=" << selected_table_id
-          << " input_descs_index=" << int(input_descs_index)
-          << " input_col_descs_index=" << int(input_col_descs_index)
-          << " ra_exe_unit.input_descs="
-          << shared::printContainer(ra_exe_unit.input_descs)
+  size_t const input_descs_index =
+      get_selected_input_descs_index(selected_table_id, input_descs);
+  CHECK_LT(input_descs_index, input_descs.size());
+  size_t const input_col_descs_index =
+      get_selected_input_col_descs_index(selected_table_id, ra_exe_unit.input_col_descs);
+  CHECK_LT(input_col_descs_index, ra_exe_unit.input_col_descs.size());
+  VLOG(2) << "selected_table_id=" << selected_table_id
+          << " input_descs_index=" << input_descs_index
+          << " input_col_descs_index=" << input_col_descs_index
+          << " input_descs=" << shared::printContainer(input_descs)
           << " ra_exe_unit.input_col_descs="
           << shared::printContainer(ra_exe_unit.input_col_descs);
 
-  // Partition col_global_ids by table_id
-  std::unordered_map<TableId, std::list<std::shared_ptr<const InputColDescriptor>>>
-      table_id_to_input_col_descs;
-  for (auto const& input_col_desc : ra_exe_unit.input_col_descs) {
-    TableId const table_id = input_col_desc->getScanDesc().getTableId();
-    table_id_to_input_col_descs[table_id].push_back(input_col_desc);
-  }
-  for (auto const& pair : table_id_to_input_col_descs) {
-    std::vector<std::vector<size_t>> selected_fragments_crossjoin;
-    std::vector<size_t> local_col_to_frag_pos;
+  std::list<std::shared_ptr<const InputColDescriptor>> selected_input_col_descs =
+      get_selected_input_col_descs(selected_table_id, ra_exe_unit.input_col_descs);
+  std::vector<std::vector<size_t>> selected_fragments_crossjoin;
 
-    buildSelectedFragsMappingForUnion(selected_fragments_crossjoin,
-                                      local_col_to_frag_pos,
-                                      pair.second,
-                                      selected_fragments,
-                                      ra_exe_unit);
+  buildSelectedFragsMappingForUnion(
+      selected_fragments_crossjoin, selected_fragments, ra_exe_unit);
 
-    CartesianProduct<std::vector<std::vector<size_t>>> frag_ids_crossjoin(
-        selected_fragments_crossjoin);
+  CartesianProduct<std::vector<std::vector<size_t>>> frag_ids_crossjoin(
+      selected_fragments_crossjoin);
 
-    for (const auto& selected_frag_ids : frag_ids_crossjoin) {
-      if (allow_runtime_interrupt) {
-        bool isInterrupted = false;
-        {
-          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
-              executor_session_mutex_);
-          const auto query_session = getCurrentQuerySession(session_read_lock);
-          isInterrupted =
-              checkIsQuerySessionInterrupted(query_session, session_read_lock);
-        }
-        if (isInterrupted) {
-          throw QueryExecutionError(ERR_INTERRUPTED);
-        }
-      }
-      std::vector<const int8_t*> frag_col_buffers(
-          plan_state_->global_to_local_col_ids_.size());
-      for (const auto& col_id : pair.second) {
-        CHECK(col_id);
-        const int table_id = col_id->getScanDesc().getTableId();
-        CHECK_EQ(table_id, pair.first);
-        const auto cd = try_get_column_descriptor(col_id.get(), cat);
-        if (cd && cd->isVirtualCol) {
-          CHECK_EQ("rowid", cd->columnName);
-          continue;
-        }
-        const auto fragments_it = all_tables_fragments.find(table_id);
-        CHECK(fragments_it != all_tables_fragments.end());
-        const auto fragments = fragments_it->second;
-        auto it = plan_state_->global_to_local_col_ids_.find(*col_id);
-        CHECK(it != plan_state_->global_to_local_col_ids_.end());
-        CHECK_LT(static_cast<size_t>(it->second),
-                 plan_state_->global_to_local_col_ids_.size());
-        const size_t frag_id = ra_exe_unit.union_all
-                                   ? 0
-                                   : selected_frag_ids[local_col_to_frag_pos[it->second]];
-        if (!fragments->size()) {
-          return {};
-        }
-        CHECK_LT(frag_id, fragments->size());
-        auto memory_level_for_column = memory_level;
-        if (plan_state_->columns_to_fetch_.find(
-                std::make_pair(col_id->getScanDesc().getTableId(), col_id->getColId())) ==
-            plan_state_->columns_to_fetch_.end()) {
-          memory_level_for_column = Data_Namespace::CPU_LEVEL;
-        }
-        if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
-          frag_col_buffers[it->second] =
-              column_fetcher.getResultSetColumn(col_id.get(),
-                                                memory_level_for_column,
-                                                device_id,
-                                                device_allocator,
-                                                thread_idx);
-        } else {
-          if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
-            frag_col_buffers[it->second] =
-                column_fetcher.getAllTableColumnFragments(table_id,
-                                                          col_id->getColId(),
-                                                          all_tables_fragments,
-                                                          memory_level_for_column,
-                                                          device_id,
-                                                          device_allocator,
-                                                          thread_idx);
-          } else {
-            frag_col_buffers[it->second] =
-                column_fetcher.getOneTableColumnFragment(table_id,
-                                                         frag_id,
-                                                         col_id->getColId(),
-                                                         all_tables_fragments,
-                                                         chunks,
-                                                         chunk_iterators,
-                                                         memory_level_for_column,
-                                                         device_id,
-                                                         device_allocator);
-          }
-        }
-      }
-      all_frag_col_buffers.push_back(frag_col_buffers);
+  if (allow_runtime_interrupt) {
+    bool isInterrupted = false;
+    {
+      heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+          executor_session_mutex_);
+      const auto query_session = getCurrentQuerySession(session_read_lock);
+      isInterrupted = checkIsQuerySessionInterrupted(query_session, session_read_lock);
     }
-    std::vector<std::vector<int64_t>> num_rows;
-    std::vector<std::vector<uint64_t>> frag_offsets;
-    std::tie(num_rows, frag_offsets) = getRowCountAndOffsetForAllFrags(
-        ra_exe_unit, frag_ids_crossjoin, ra_exe_unit.input_descs, all_tables_fragments);
-    all_num_rows.insert(all_num_rows.end(), num_rows.begin(), num_rows.end());
-    all_frag_offsets.insert(
-        all_frag_offsets.end(), frag_offsets.begin(), frag_offsets.end());
+    if (isInterrupted) {
+      throw QueryExecutionError(ERR_INTERRUPTED);
+    }
   }
-  // The hack below assumes a particular table traversal order which is not
-  // always achieved due to unordered map in the outermost loop. According
-  // to the code below we expect NULLs in even positions of all_frag_col_buffers[0]
-  // and odd positions of all_frag_col_buffers[1]. As an additional hack we
-  // swap these vectors if NULLs are not on expected positions.
-  if (all_frag_col_buffers[0].size() > 1 && all_frag_col_buffers[0][0] &&
-      !all_frag_col_buffers[0][1]) {
-    std::swap(all_frag_col_buffers[0], all_frag_col_buffers[1]);
+  std::vector<const int8_t*> frag_col_buffers(
+      plan_state_->global_to_local_col_ids_.size());
+  for (const auto& col_id : selected_input_col_descs) {
+    CHECK(col_id);
+    const auto cd = try_get_column_descriptor(col_id.get(), cat);
+    if (cd && cd->isVirtualCol) {
+      CHECK_EQ("rowid", cd->columnName);
+      continue;
+    }
+    const auto fragments_it = all_tables_fragments.find(selected_table_id);
+    CHECK(fragments_it != all_tables_fragments.end());
+    const auto fragments = fragments_it->second;
+    auto it = plan_state_->global_to_local_col_ids_.find(*col_id);
+    CHECK(it != plan_state_->global_to_local_col_ids_.end());
+    size_t const local_col_id = it->second;
+    CHECK_LT(local_col_id, plan_state_->global_to_local_col_ids_.size());
+    constexpr size_t frag_id = 0;
+    if (fragments->empty()) {
+      return {};
+    }
+    MemoryLevel const memory_level_for_column =
+        plan_state_->columns_to_fetch_.count({selected_table_id, col_id->getColId()})
+            ? memory_level
+            : Data_Namespace::CPU_LEVEL;
+    int8_t const* ptr;
+    if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
+      ptr = column_fetcher.getResultSetColumn(
+          col_id.get(), memory_level_for_column, device_id, device_allocator, thread_idx);
+    } else if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
+      ptr = column_fetcher.getAllTableColumnFragments(selected_table_id,
+                                                      col_id->getColId(),
+                                                      all_tables_fragments,
+                                                      memory_level_for_column,
+                                                      device_id,
+                                                      device_allocator,
+                                                      thread_idx);
+    } else {
+      ptr = column_fetcher.getOneTableColumnFragment(selected_table_id,
+                                                     frag_id,
+                                                     col_id->getColId(),
+                                                     all_tables_fragments,
+                                                     chunks,
+                                                     chunk_iterators,
+                                                     memory_level_for_column,
+                                                     device_id,
+                                                     device_allocator);
+    }
+    // Set frag_col_buffers[i]=ptr for i in mod input_descs.size() range of local_col_id.
+    set_mod_range(frag_col_buffers, ptr, local_col_id, input_descs.size());
   }
-  // UNION ALL hacks.
-  VLOG(2) << "all_frag_col_buffers=" << shared::printContainer(all_frag_col_buffers);
-  for (size_t i = 0; i < all_frag_col_buffers.front().size(); ++i) {
-    all_frag_col_buffers[i & 1][i] = all_frag_col_buffers[i & 1][i ^ 1];
-  }
-  if (input_descs_index == input_col_descs_index) {
-    std::swap(all_frag_col_buffers[0], all_frag_col_buffers[1]);
-  }
+  auto const [num_rows, frag_offsets] = getRowCountAndOffsetForAllFrags(
+      ra_exe_unit, frag_ids_crossjoin, input_descs, all_tables_fragments);
 
-  VLOG(2) << "all_frag_col_buffers=" << shared::printContainer(all_frag_col_buffers)
-          << " all_num_rows=" << shared::printContainer(all_num_rows)
-          << " all_frag_offsets=" << shared::printContainer(all_frag_offsets)
+  VLOG(2) << "frag_col_buffers=" << shared::printContainer(frag_col_buffers)
+          << " num_rows=" << shared::printContainer(num_rows)
+          << " frag_offsets=" << shared::printContainer(frag_offsets)
+          << " input_descs_index=" << input_descs_index
           << " input_col_descs_index=" << input_col_descs_index;
-  return {{all_frag_col_buffers[input_descs_index]},
-          {{all_num_rows[0][input_descs_index]}},
-          {{all_frag_offsets[0][input_descs_index]}}};
+  return {{std::move(frag_col_buffers)},
+          {{num_rows[0][input_descs_index]}},
+          {{frag_offsets[0][input_descs_index]}}};
 }
 
 std::vector<size_t> Executor::getFragmentCount(const FragmentsList& selected_fragments,
@@ -3292,38 +3280,14 @@ void Executor::buildSelectedFragsMapping(
 
 void Executor::buildSelectedFragsMappingForUnion(
     std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
-    std::vector<size_t>& local_col_to_frag_pos,
-    const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
     const FragmentsList& selected_fragments,
     const RelAlgExecutionUnit& ra_exe_unit) {
-  local_col_to_frag_pos.resize(plan_state_->global_to_local_col_ids_.size());
-  size_t frag_pos{0};
   const auto& input_descs = ra_exe_unit.input_descs;
   for (size_t scan_idx = 0; scan_idx < input_descs.size(); ++scan_idx) {
-    const int table_id = input_descs[scan_idx].getTableId();
-    // selected_fragments here is from assignFragsToKernelDispatch
-    // execution_kernel.fragments
-    if (selected_fragments[0].table_id != table_id) {  // TODO 0
-      continue;
+    // selected_fragments is set in assignFragsToKernelDispatch execution_kernel.fragments
+    if (selected_fragments[0].table_id == input_descs[scan_idx].getTableId()) {
+      selected_fragments_crossjoin.push_back({size_t(1)});
     }
-    // CHECK_EQ(selected_fragments[scan_idx].table_id, table_id);
-    selected_fragments_crossjoin.push_back(
-        // getFragmentCount(selected_fragments, scan_idx, ra_exe_unit));
-        {size_t(1)});  // TODO
-    for (const auto& col_id : col_global_ids) {
-      CHECK(col_id);
-      const auto& input_desc = col_id->getScanDesc();
-      if (input_desc.getTableId() != table_id ||
-          input_desc.getNestLevel() != static_cast<int>(scan_idx)) {
-        continue;
-      }
-      auto it = plan_state_->global_to_local_col_ids_.find(*col_id);
-      CHECK(it != plan_state_->global_to_local_col_ids_.end());
-      CHECK_LT(static_cast<size_t>(it->second),
-               plan_state_->global_to_local_col_ids_.size());
-      local_col_to_frag_pos[it->second] = frag_pos;
-    }
-    ++frag_pos;
   }
 }
 
