@@ -1148,7 +1148,7 @@ class ImportAndSelectTest
       options.emplace_back("s3_region='us-west-1'");
     }
     if (odbc_order_by.has_value()) {
-      options.emplace_back("odbc_sql_order_by='" + odbc_order_by.value() + "'");
+      options.emplace_back("sql_order_by='" + odbc_order_by.value() + "'");
     }
     if (options.empty()) {
       return {};
@@ -1422,8 +1422,8 @@ TEST_P(ImportAndSelectTest, Multifile) {
                                             "SELECT * FROM import_test_new ORDER BY i,t;",
                                             get_line_regex(3),
                                             4,
-                                            "",  // unused odbc_select
-                                            "",  // unused odbc_order_by
+                                            "",  // unused select
+                                            "",  // unused order_by
                                             /*table_options=*/{},
                                             /*is_dir=*/true);
 

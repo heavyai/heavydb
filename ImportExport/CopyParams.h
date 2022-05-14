@@ -92,15 +92,15 @@ struct CopyParams {
   std::string raster_import_dimensions;
   std::string add_metadata_columns;
   // odbc parameters
-  std::string odbc_sql_select;
-  std::string odbc_sql_order_by;
+  std::string sql_select;
+  std::string sql_order_by;
   // odbc user mapping parameters
-  std::string odbc_username;
-  std::string odbc_password;
-  std::string odbc_credential_string;
+  std::string username;
+  std::string password;
+  std::string credential_string;
   // odbc server parameters
-  std::string odbc_dsn;
-  std::string odbc_connection_string;
+  std::string dsn;
+  std::string connection_string;
   // regex parameters
   std::string line_start_regex;
   std::string line_regex;

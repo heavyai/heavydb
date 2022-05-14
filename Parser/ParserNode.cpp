@@ -1528,52 +1528,52 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
         if (bool_from_string_literal(str_literal)) {
           copy_params.raster_point_compute_angle = true;
         }
-      } else if (boost::iequals(*p->get_name(), "odbc_sql_order_by")) {
+      } else if (boost::iequals(*p->get_name(), "sql_order_by")) {
         if (auto str_literal = dynamic_cast<const StringLiteral*>(p->get_value())) {
-          copy_params.odbc_sql_order_by = *str_literal->get_stringval();
+          copy_params.sql_order_by = *str_literal->get_stringval();
         } else {
-          throw std::runtime_error("Option odbc_sql_order_by must be a string.");
+          throw std::runtime_error("Option sql_order_by must be a string.");
         }
-      } else if (boost::iequals(*p->get_name(), "odbc_username")) {
+      } else if (boost::iequals(*p->get_name(), "username")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr) {
-          throw std::runtime_error("Option odbc_username must be a string.");
+          throw std::runtime_error("Option username must be a string.");
         }
         const auto string_val = *str_literal->get_stringval();
-        copy_params.odbc_username = string_val;
-      } else if (boost::iequals(*p->get_name(), "odbc_password")) {
+        copy_params.username = string_val;
+      } else if (boost::iequals(*p->get_name(), "password")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr) {
-          throw std::runtime_error("Option odbc_password must be a string.");
+          throw std::runtime_error("Option password must be a string.");
         }
         const auto string_val = *str_literal->get_stringval();
-        copy_params.odbc_password = string_val;
-      } else if (boost::iequals(*p->get_name(), "odbc_credential_string")) {
+        copy_params.password = string_val;
+      } else if (boost::iequals(*p->get_name(), "credential_string")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr) {
-          throw std::runtime_error("Option odbc_credential_string must be a string.");
+          throw std::runtime_error("Option credential_string must be a string.");
         }
         const auto string_val = *str_literal->get_stringval();
-        copy_params.odbc_credential_string = string_val;
-      } else if (boost::iequals(*p->get_name(), "odbc_dsn")) {
+        copy_params.credential_string = string_val;
+      } else if (boost::iequals(*p->get_name(), "dsn")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr) {
-          throw std::runtime_error("Option odbc_dsn must be a string.");
+          throw std::runtime_error("Option dsn must be a string.");
         }
         const auto string_val = *str_literal->get_stringval();
-        copy_params.odbc_dsn = string_val;
-      } else if (boost::iequals(*p->get_name(), "odbc_connection_string")) {
+        copy_params.dsn = string_val;
+      } else if (boost::iequals(*p->get_name(), "connection_string")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr) {
-          throw std::runtime_error("Option odbc_connection_string must be a string.");
+          throw std::runtime_error("Option connection_string must be a string.");
         }
         const auto string_val = *str_literal->get_stringval();
-        copy_params.odbc_connection_string = string_val;
+        copy_params.connection_string = string_val;
       } else if (boost::iequals(*p->get_name(), "line_start_regex")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -5411,8 +5411,8 @@ void CopyTableStmt::execute(
   std::string copy_from_source = *copy_from_source_pattern_;
 
   if (copy_params.source_type == import_export::SourceType::kOdbc) {
-    copy_params.odbc_sql_select = copy_from_source;
-    if (copy_params.odbc_sql_order_by.empty()) {
+    copy_params.sql_select = copy_from_source;
+    if (copy_params.sql_order_by.empty()) {
       throw std::runtime_error(
           "Option \"SQL ORDER BY\" must be specified when copying from an ODBC source.");
     }

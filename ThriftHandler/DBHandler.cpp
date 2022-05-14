@@ -3852,13 +3852,13 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
   }
   copy_params.raster_point_compute_angle = cp.raster_point_compute_angle;
   copy_params.raster_import_dimensions = cp.raster_import_dimensions;
-  copy_params.odbc_dsn = cp.odbc_dsn;
-  copy_params.odbc_connection_string = cp.odbc_connection_string;
-  copy_params.odbc_sql_select = cp.odbc_sql_select;
-  copy_params.odbc_sql_order_by = cp.odbc_sql_order_by;
-  copy_params.odbc_username = cp.odbc_username;
-  copy_params.odbc_password = cp.odbc_password;
-  copy_params.odbc_credential_string = cp.odbc_credential_string;
+  copy_params.dsn = cp.odbc_dsn;
+  copy_params.connection_string = cp.odbc_connection_string;
+  copy_params.sql_select = cp.odbc_sql_select;
+  copy_params.sql_order_by = cp.odbc_sql_order_by;
+  copy_params.username = cp.odbc_username;
+  copy_params.password = cp.odbc_password;
+  copy_params.credential_string = cp.odbc_credential_string;
   copy_params.add_metadata_columns = cp.add_metadata_columns;
   copy_params.trim_spaces = cp.trim_spaces;
   return copy_params;
@@ -3983,13 +3983,13 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
   }
   copy_params.raster_point_compute_angle = cp.raster_point_compute_angle;
   copy_params.raster_import_dimensions = cp.raster_import_dimensions;
-  copy_params.odbc_dsn = cp.odbc_dsn;
-  copy_params.odbc_connection_string = cp.odbc_connection_string;
-  copy_params.odbc_sql_select = cp.odbc_sql_select;
-  copy_params.odbc_sql_order_by = cp.odbc_sql_order_by;
-  copy_params.odbc_username = cp.odbc_username;
-  copy_params.odbc_password = cp.odbc_password;
-  copy_params.odbc_credential_string = cp.odbc_credential_string;
+  copy_params.odbc_dsn = cp.dsn;
+  copy_params.odbc_connection_string = cp.connection_string;
+  copy_params.odbc_sql_select = cp.sql_select;
+  copy_params.odbc_sql_order_by = cp.sql_order_by;
+  copy_params.odbc_username = cp.username;
+  copy_params.odbc_password = cp.password;
+  copy_params.odbc_credential_string = cp.credential_string;
   copy_params.add_metadata_columns = cp.add_metadata_columns;
   copy_params.trim_spaces = cp.trim_spaces;
   return copy_params;
