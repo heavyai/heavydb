@@ -965,6 +965,17 @@ class ImportAndSelectTest
     return false;
   }
 
+  std::string applyOdbcRdbmsSchemaModifications(
+      const std::string& in_schema,
+      const std::list<std::pair<std::string, std::string>>& schema_modifications = {}) {
+    std::string schema = in_schema;
+    // apply any custom schema modifications
+    for (const auto& [to_match, to_replace] : schema_modifications) {
+      schema = boost::regex_replace(schema, boost::regex{to_match}, to_replace);
+    }
+    return schema;
+  }
+
   std::string applyOdbcSchemaModifications(const std::string& in_schema) {
     std::string schema = in_schema;
     if (param_.import_type ==
@@ -1009,7 +1020,9 @@ class ImportAndSelectTest
       const std::string& table_options = {},
       const bool is_dir = false,
       const bool is_odbc_geo = false,
-      const std::optional<int64_t> max_reject = std::nullopt) {
+      const std::optional<int64_t> max_reject = std::nullopt,
+      const std::list<std::pair<std::string, std::string>>& odbc_schema_modifications =
+          {}) {
     auto& import_type = param_.import_type;
     auto& data_source_type = param_.data_source_type;
     auto& fragment_size = param_.fragment_size;
@@ -1018,6 +1031,11 @@ class ImportAndSelectTest
     int64_t max_chunk_size = num_elements_per_chunk * max_byte_size_per_element;
 
     auto schema = applyOdbcSchemaModifications(in_schema);
+
+    auto odbc_schema = schema;
+    if (!odbc_schema_modifications.empty()) {
+      odbc_schema = applyOdbcRdbmsSchemaModifications(schema, odbc_schema_modifications);
+    }
 
     std::string query = "CREATE TABLE import_test_new (" + schema + ")";
     std::string query_table_options = "fragment_size=" + std::to_string(fragment_size) +
@@ -1423,27 +1441,27 @@ TEST_P(ImportAndSelectTest, Multifile) {
 }
 
 TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
-  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
-        param_.import_type == "parquet")) {
-    GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
-                    "handling tests";
+  if (param_.import_type == "sqlite") {
+    GTEST_SKIP() << "sqlite does not support geometry types";
   }
+  std::string sql_select_stmt = "";
   auto query = createTableCopyFromAndSelect(
       "index int, p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON",
       "invalid_records/geo_types",
       "SELECT * FROM import_test_new ORDER BY index;",
       "(\\d+),\\s*" + get_line_geo_regex(4),
       256,
-      "'SELECT index, ST_AsText(p) as p, ST_AsText(l) as l, ST_AsText(poly) as poly, "
-      "ST_AsText(multipoly) as multipoly FROM import_test;'",
+      sql_select_stmt,
       "index",
       {},
       false,
-      /*is_odbc_geo=*/true);
+      /*is_odbc_geo=*/true,
+      std::nullopt,
+      {{"LINESTRING", "TEXT"}});
   // clang-format off
     assertResultSetEqual({
     {
-      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,0 1,1 1,0 0))",
+      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
     },
     {
@@ -1467,11 +1485,10 @@ TEST_P(ImportAndSelectTest, NotNullGeoTypeColumns) {
   if (param_.data_source_type != "local") {
     GTEST_SKIP();
   }
-  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
-        param_.import_type == "parquet")) {
-    GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
-                    "handling tests";
+  if (param_.import_type == "sqlite") {
+    GTEST_SKIP() << "sqlite does not support geometry types";
   }
+  std::string sql_select_stmt = "";
   auto query = createTableCopyFromAndSelect(
       "index int, p POINT NOT NULL, l LINESTRING NOT NULL, poly POLYGON NOT NULL, "
       "multipoly MULTIPOLYGON NOT NULL",
@@ -1479,16 +1496,17 @@ TEST_P(ImportAndSelectTest, NotNullGeoTypeColumns) {
       "SELECT * FROM import_test_new ORDER BY index;",
       "(\\d+),\\s*" + get_line_geo_regex(4),
       256,
-      "'SELECT index, ST_AsText(p) as p, ST_AsText(l) as l, ST_AsText(poly) as poly, "
-      "ST_AsText(multipoly) as multipoly FROM import_test;'",
+      sql_select_stmt,
       "index",
       {},
       false,
-      /*is_odbc_geo=*/true);
+      /*is_odbc_geo=*/true,
+      std::nullopt,
+      {{"LINESTRING", "TEXT"}});
   // clang-format off
     assertResultSetEqual({
     {
-      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,0 1,1 1,0 0))",
+      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
     }},
     query);
@@ -1644,11 +1662,7 @@ TEST_P(ImportAndSelectTest, NotNullFixedLengthArrayTypeColumns) {
 }
 
 TEST_P(ImportAndSelectTest, InvalidScalarTypesRecord) {
-  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
-        param_.import_type == "parquet")) {
-    GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
-                    "handling tests";
-  }
+  std::string sql_select_stmt = "";
   auto query = createTableCopyFromAndSelect(
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
       "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
@@ -1657,8 +1671,13 @@ TEST_P(ImportAndSelectTest, InvalidScalarTypesRecord) {
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
       14,
-      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
-      "s");
+      sql_select_stmt,
+      "s",
+      {},
+      false,
+      false,
+      std::nullopt,
+      {{"INTEGER", "BIGINT"}});
 
   // clang-format off
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{
@@ -1680,11 +1699,7 @@ TEST_P(ImportAndSelectTest, NotNullScalarTypeColumns) {
   if (param_.data_source_type != "local") {
     GTEST_SKIP();
   }
-  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
-        param_.import_type == "parquet")) {
-    GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
-                    "handling tests";
-  }
+  std::string sql_select_stmt = "";
   auto query = createTableCopyFromAndSelect(
       "b BOOLEAN NOT NULL, t TINYINT NOT NULL, s SMALLINT NOT NULL, i INTEGER NOT NULL, "
       "bi BIGINT NOT NULL, f FLOAT NOT NULL, "
@@ -1695,8 +1710,13 @@ TEST_P(ImportAndSelectTest, NotNullScalarTypeColumns) {
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
       14,
-      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
-      "s");
+      sql_select_stmt,
+      "s",
+      {},
+      false,
+      false,
+      std::nullopt,
+      {{"INTEGER", "BIGINT"}});
 
   auto expected_values =
       std::vector<std::vector<NullableTargetValue>>{{True,
@@ -1717,11 +1737,7 @@ TEST_P(ImportAndSelectTest, NotNullScalarTypeColumns) {
 }
 
 TEST_P(ImportAndSelectTest, ShardedWithInvalidRecord) {
-  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
-        param_.import_type == "parquet")) {
-    GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
-                    "handling tests";
-  }
+  std::string sql_select_stmt = "";
   auto query = createTableCopyFromAndSelect(
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
       "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
@@ -1730,9 +1746,13 @@ TEST_P(ImportAndSelectTest, ShardedWithInvalidRecord) {
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
       14,
-      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
+      sql_select_stmt,
       "s",
-      "SHARD_COUNT=2");
+      "SHARD_COUNT=2",
+      false,
+      false,
+      std::nullopt,
+      {{"INTEGER", "BIGINT"}});
 
   // clang-format off
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{
@@ -1749,11 +1769,7 @@ TEST_P(ImportAndSelectTest, ShardedWithInvalidRecord) {
 }
 
 TEST_P(ImportAndSelectTest, MaxRejectReached) {
-  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
-        param_.import_type == "parquet")) {
-    GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
-                    "handling tests";
-  }
+  std::string sql_select_stmt = "";
   auto query = createTableCopyFromAndSelect(
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
       "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
@@ -1762,12 +1778,13 @@ TEST_P(ImportAndSelectTest, MaxRejectReached) {
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
       14,
-      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
+      sql_select_stmt,
       "s",
       {},
       false,
       false,
-      /*max_reject=*/0);
+      /*max_reject=*/0,
+      {{"INTEGER", "BIGINT"}});
 
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{};
 
