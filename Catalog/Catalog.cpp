@@ -2812,8 +2812,8 @@ Catalog::getForeignTableFromStorage(int table_id) {
         sqliteConnector_.getData<int>(0, 0),
         foreignServerMapById_[sqliteConnector_.getData<int32_t>(0, 1)].get(),
         sqliteConnector_.getData<std::string>(0, 2),
-        sqliteConnector_.getData<int>(0, 3),
-        sqliteConnector_.getData<int>(0, 4));
+        sqliteConnector_.getData<int64_t>(0, 3),
+        sqliteConnector_.getData<int64_t>(0, 4));
   }
   return foreign_table;
 }
@@ -4513,8 +4513,8 @@ void Catalog::updateForeignTablesInMapUnlocked() {
     const auto table_id = sqliteConnector_.getData<int32_t>(r, 0);
     const auto server_id = sqliteConnector_.getData<int32_t>(r, 1);
     const auto& options = sqliteConnector_.getData<std::string>(r, 2);
-    const auto last_refresh_time = sqliteConnector_.getData<int>(r, 3);
-    const auto next_refresh_time = sqliteConnector_.getData<int>(r, 4);
+    const auto last_refresh_time = sqliteConnector_.getData<int64_t>(r, 3);
+    const auto next_refresh_time = sqliteConnector_.getData<int64_t>(r, 4);
 
     CHECK(tableDescriptorMapById_.find(table_id) != tableDescriptorMapById_.end());
     auto foreign_table =
