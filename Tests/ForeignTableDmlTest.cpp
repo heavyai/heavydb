@@ -534,7 +534,8 @@ class ForeignTableTest : public DBHandlerTestFixture {
     assertResultSetEqual({{i(6)}}, result);
   }
 
-  std::vector<std::vector<NullableTargetValue>> getExpectedScalarTypesResult() {
+  std::vector<std::vector<NullableTargetValue>> getExpectedScalarTypesResult(
+      bool allow_coercion) {
     // clang-format off
     std::vector<std::vector<NullableTargetValue>> expected{
         {
@@ -546,19 +547,52 @@ class ForeignTableTest : public DBHandlerTestFixture {
          2.1234, "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"
         },
         {
-         True, i(120), i(31000), i(2100000000), i(9100000000000000000), 1000.123f,
+         True, i(120), i(31000), i(2100000000), i(9100000000000000000),
+         (wrapper_type_ == "redshift" ? 1000.12f : 1000.123f),
          100.1, "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"
         },
         {
          i(NULL_BOOLEAN),
-         wrapper_type_ == "postgres" ? i(NULL_SMALLINT) : i(NULL_TINYINT), // TINYINT
+         ((!allow_coercion && wrapper_type_ == "postgres") ? i(NULL_SMALLINT) : i(NULL_TINYINT)), // TINYINT
          i(NULL_SMALLINT), i(NULL_INT), i(NULL_BIGINT),
-         wrapper_type_ == "sqlite" ? NULL_DOUBLE : NULL_FLOAT, // FLOAT
+         ((!allow_coercion && wrapper_type_ == "sqlite") ? NULL_DOUBLE : NULL_FLOAT), // FLOAT
          NULL_DOUBLE, Null, Null, Null, Null, Null
         }
       };
     // clang-format on
     return expected;
+  }
+
+  void queryAndAssertScalarTypesResult(bool allow_coercion = false) {
+    sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY s;",
+                        getExpectedScalarTypesResult(allow_coercion));
+  }
+
+  void queryAndAssertGeoTypesResult() {
+    TQueryResult result;
+    sql(result, "SELECT * FROM " + default_table_name + " ORDER BY id;");
+    // clang-format off
+    assertResultSetEqual({
+      {
+        i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
+        "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
+      },
+      {
+        i(2), Null, Null, Null, Null
+      },
+      {
+        i(3), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
+        "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+      },
+      {
+        i(4), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
+        "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+      },
+      {
+        i(5), Null, Null, Null, Null
+      }},
+      result);
+    // clang-format on
   }
 };
 
@@ -4207,11 +4241,7 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes) {
   if (fragment_size_ >= 4) {
     assertExpectedChunkMetadata(getExpectedScalarTypeMetadata(false), default_table_name);
   }
-
-  TQueryResult result;
-  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY s;");
-
-  assertResultSetEqual(getExpectedScalarTypesResult(), result);
+  queryAndAssertScalarTypesResult();
 
   if (fragment_size_ >= 4) {
     assertExpectedChunkMetadata(getExpectedScalarTypeMetadata(true), default_table_name);
@@ -4769,31 +4799,7 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, GeoTypes) {
                               default_table_name,
                               odbc_columns,
                               isOdbc(data_wrapper_type) ? true : false));
-
-  TQueryResult result;
-  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY id;");
-  // clang-format off
-  assertResultSetEqual({
-    {
-      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
-      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
-    },
-    {
-      i(2), Null, Null, Null, Null
-    },
-    {
-      i(3), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
-      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
-    },
-    {
-      i(4), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
-      "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
-    },
-    {
-      i(5), Null, Null, Null, Null
-    }},
-    result);
-  // clang-format on
+  queryAndAssertGeoTypesResult();
 }
 
 class PostGisSelectQueryTest : public SelectQueryTest {
