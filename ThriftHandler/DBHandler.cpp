@@ -5093,28 +5093,34 @@ void DBHandler::import_table(const TSessionId& session,
     CHECK(td);
     check_table_load_privileges(*session_ptr, table_name);
 
-    std::string file_name{file_name_in};
-    auto file_path = boost::filesystem::path(file_name);
+    std::string copy_from_source;
     import_export::CopyParams copy_params = thrift_to_copyparams(cp);
-    if (!boost::istarts_with(file_name, "s3://")) {
-      if (!boost::filesystem::path(file_name).is_absolute()) {
-        file_path = import_path_ / picosha2::hash256_hex_string(session) /
-                    boost::filesystem::path(file_name).filename();
-        file_name = file_path.string();
+    if (copy_params.source_type == import_export::SourceType::kOdbc) {
+      copy_from_source = copy_params.sql_select;
+    } else {
+      std::string file_name{file_name_in};
+      auto file_path = boost::filesystem::path(file_name);
+      if (!boost::istarts_with(file_name, "s3://")) {
+        if (!boost::filesystem::path(file_name).is_absolute()) {
+          file_path = import_path_ / picosha2::hash256_hex_string(session) /
+                      boost::filesystem::path(file_name).filename();
+          file_name = file_path.string();
+        }
+        if (!shared::file_or_glob_path_exists(file_path.string())) {
+          THROW_DB_EXCEPTION("File or directory \"" + file_path.string() +
+                             "\" does not exist.");
+        }
       }
-      if (!shared::file_or_glob_path_exists(file_path.string())) {
-        THROW_DB_EXCEPTION("File or directory \"" + file_path.string() +
-                           "\" does not exist.");
-      }
-    }
-    validate_import_file_path_if_local(file_name);
+      validate_import_file_path_if_local(file_name);
 
-    // TODO(andrew): add delimiter detection to Importer
-    if (copy_params.delimiter == '\0') {
-      copy_params.delimiter = ',';
-      if (boost::filesystem::extension(file_path) == ".tsv") {
-        copy_params.delimiter = '\t';
+      // TODO(andrew): add delimiter detection to Importer
+      if (copy_params.delimiter == '\0') {
+        copy_params.delimiter = ',';
+        if (boost::filesystem::extension(file_path) == ".tsv") {
+          copy_params.delimiter = '\t';
+        }
       }
+      copy_from_source = file_path.string();
     }
 
     const auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
@@ -5122,7 +5128,7 @@ void DBHandler::import_table(const TSessionId& session,
     std::unique_ptr<import_export::AbstractImporter> importer;
     if (leaf_aggregator_.leafCount() > 0) {
     } else {
-      importer = import_export::create_importer(cat, td, file_path.string(), copy_params);
+      importer = import_export::create_importer(cat, td, copy_from_source, copy_params);
     }
     auto ms = measure<>::execution([&]() { importer->import(session_ptr.get()); });
     LOG(INFO) << "Total Import Time: " << (double)ms / 1000.0 << " Seconds.";
