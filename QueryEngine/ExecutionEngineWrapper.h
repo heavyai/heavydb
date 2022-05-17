@@ -17,6 +17,7 @@
 #pragma once
 
 #include "Logger/Logger.h"
+#include "QueryEngine/LLVMGlobalContext.h"
 
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
