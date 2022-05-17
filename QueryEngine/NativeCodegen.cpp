@@ -26,9 +26,7 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #include <llvm/Bitcode/BitcodeWriter.h>
 
 #ifdef ENABLE_ORCJIT
-#include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
-#include <llvm/ExecutionEngine/Orc/LLJIT.h>
-#include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
+#include <llvm/ExecutionEngine/JITSymbol.h>
 #else
 #include <llvm/ExecutionEngine/MCJIT.h>
 #endif
@@ -371,6 +369,7 @@ namespace {
 
 std::string assemblyForCPU(ExecutionEngineWrapper& execution_engine,
                            llvm::Module* llvm_module) {
+#ifndef ENABLE_ORCJIT
   llvm::legacy::PassManager pass_manager;
   auto cpu_target_machine = execution_engine->getTargetMachine();
   CHECK(cpu_target_machine);
@@ -385,11 +384,13 @@ std::string assemblyForCPU(ExecutionEngineWrapper& execution_engine,
 #endif
   pass_manager.run(*llvm_module);
   return "Assembly for the CPU:\n" + std::string(code_str.str()) + "\nEnd of assembly";
-#else  // ORCJIT
+#else   // ORCJIT
   LOG(FATAL) << "Assembly logger not yet supported for ORCJIT.";
   return "";
 #endif  // !ENABLE_ORCJIT
 }
+
+#ifndef ENABLE_ORCJIT
 
 ExecutionEngineWrapper create_execution_engine(llvm::Module* llvm_module,
                                                llvm::EngineBuilder& eb,
@@ -402,7 +403,7 @@ ExecutionEngineWrapper create_execution_engine(llvm::Module* llvm_module,
   // mutex here.
   std::lock_guard<llvm::sys::Mutex> lock(g_ee_create_mutex);
   ExecutionEngineWrapper execution_engine(eb.create(), co);
-  CHECK(execution_engine.get());
+  CHECK(execution_engine.exists());
   // Force the module data layout to match the layout for the selected target
   llvm_module->setDataLayout(execution_engine->getDataLayout());
 
@@ -411,6 +412,8 @@ ExecutionEngineWrapper create_execution_engine(llvm::Module* llvm_module,
   execution_engine->finalizeObject();
   return execution_engine;
 }
+
+#endif
 
 }  // namespace
 
@@ -451,14 +454,17 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
     return msg;
   };
 
-  auto target_machine_builder_or_err = llvm::orc::JITTargetMachineBuilder::detectHost();
-  if (!target_machine_builder_or_err) {
-    LOG(FATAL) << "Failed to initialize JIT Target Machine: "
-               << llvm_err_to_str(target_machine_builder_or_err.takeError());
-  }
+  auto execution_session = std::make_unique<llvm::orc::ExecutionSession>();
 
-  auto target_machine_builder = *target_machine_builder_or_err;
-  target_machine_builder.setOptions(to);
+  auto target_machine_builder_or_error = llvm::orc::JITTargetMachineBuilder::detectHost();
+  if (!target_machine_builder_or_error) {
+    LOG(FATAL) << "Failed to initialize JITTargetMachineBuilder: "
+               << llvm_err_to_str(target_machine_builder_or_error.takeError());
+  }
+  llvm::orc::JITTargetMachineBuilder target_machine_builder =
+      std::move(*target_machine_builder_or_error);
+  target_machine_builder.getOptions().EnableFastISel = true;
+
   if (co.opt_level == ExecutorOptLevel::ReductionJIT) {
     target_machine_builder.setCodeGenOptLevel(llvm::CodeGenOpt::None);
   }
@@ -468,32 +474,13 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
     LOG(FATAL) << "Failed to initialize data layout: "
                << llvm_err_to_str(data_layout_or_err.takeError());
   }
-  auto data_layout = *data_layout_or_err;
+  std::unique_ptr<llvm::DataLayout> data_layout =
+      std::make_unique<llvm::DataLayout>(std::move(*data_layout_or_err));
 
-  auto jit_builder = llvm::orc::LLJITBuilder();
-  jit_builder.setJITTargetMachineBuilder(target_machine_builder);
-  auto jit_or_error = jit_builder.create();
-  if (!jit_or_error) {
-    LOG(FATAL) << "Failed to initialize ORCJIT: "
-               << llvm_err_to_str(jit_or_error.takeError());
-  }
-  auto jit = std::move(*jit_or_error);
-  CHECK(jit);
-
-  module->setDataLayout(data_layout);
-  auto err = jit->addIRModule(
-      llvm::orc::ThreadSafeModule(std::move(owner), getGlobalLLVMThreadSafeContext()));
-  if (err) {
-    LOG(FATAL) << "Failed to add the module to the JIT : " << llvm_err_to_str(err);
-  }
-
-  // Get the main JITDylib and add the local processes symbols
-  auto& dylib = jit->getMainJITDylib();
-  dylib.addGenerator(
-      llvm::cantFail(llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
-          data_layout.getGlobalPrefix())));
-
-  ExecutionEngineWrapper execution_engine(std::move(jit));
+  ExecutionEngineWrapper execution_engine(std::move(execution_session),
+                                          std::move(target_machine_builder),
+                                          std::move(data_layout));
+  execution_engine.addModule(std::move(owner));
   return execution_engine;
 #else
 
@@ -1400,6 +1387,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
     }
   }
   Executor::gpu_code_accessor.put(key, compilation_context);
+
   return std::dynamic_pointer_cast<CompilationContext>(compilation_context);
 #else
   return nullptr;

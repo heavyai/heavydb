@@ -1255,7 +1255,13 @@ void ResultSetReductionJIT::finalizeReductionCode(
   cpu_compilation_context->setFunctionPointer(reduction_code.llvm_reduce_loop);
   reduction_code.func_ptr =
       reinterpret_cast<ReductionCode::FuncPtr>(cpu_compilation_context->func());
+#ifdef ENABLE_ORCJIT
+  // At this point module should be materialized and deleted by ORC JIT.
+  reduction_code.module = nullptr;
+#else
   CHECK(reduction_code.llvm_reduce_loop->getParent() == reduction_code.module);
+#endif
+
   Executor::s_code_accessor.put(key, std::move(cpu_compilation_context));
 }
 

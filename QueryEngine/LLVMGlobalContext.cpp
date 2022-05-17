@@ -38,6 +38,10 @@ llvm::ManagedStatic<llvm::LLVMContext> g_global_context;
 #ifdef ENABLE_ORCJIT
 
 llvm::orc::ThreadSafeContext& getGlobalLLVMThreadSafeContext() {
+  std::call_once(context_init_flag, []() {
+    auto global_context = std::make_unique<llvm::LLVMContext>();
+    g_global_context = llvm::orc::ThreadSafeContext(std::move(global_context));
+  });
   return g_global_context;
 }
 

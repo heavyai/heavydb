@@ -285,7 +285,7 @@ if (ENABLE_JIT_DEBUG)
   add_definitions("-DWITH_JIT_DEBUG")
 endif()
 
-option(ENABLE_ORCJIT "Enable LLVM ORCJIT in place of MCJIT" OFF)
+option(ENABLE_ORCJIT "Enable LLVM ORCJIT in place of MCJIT" ON)
 if(ENABLE_ORCJIT)
   add_definitions("-DENABLE_ORCJIT")
 endif()

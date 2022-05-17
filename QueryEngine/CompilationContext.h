@@ -33,7 +33,7 @@ class CpuCompilationContext : public CompilationContext {
   void setFunctionPointer(llvm::Function* function) {
     func_ = execution_engine_.getPointerToFunction(function);
     CHECK(func_);
-    execution_engine_->removeModule(function->getParent());
+    execution_engine_.removeModule(function->getParent());
   }
 
   void* func() const { return func_; }
