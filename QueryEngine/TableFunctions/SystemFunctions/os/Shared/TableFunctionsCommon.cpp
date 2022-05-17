@@ -106,6 +106,151 @@ std::pair<int32_t, int32_t> get_column_min_max(const Column<TextEncodingDict>& c
 }
 
 template <typename T>
+NEVER_INLINE HOST double get_column_mean(const Column<T>& col) {
+  return get_column_mean(col.ptr_, col.size_);
+}
+
+template NEVER_INLINE HOST double get_column_mean(const Column<int32_t>& col);
+template NEVER_INLINE HOST double get_column_mean(const Column<int64_t>& col);
+template NEVER_INLINE HOST double get_column_mean(const Column<float>& col);
+template NEVER_INLINE HOST double get_column_mean(const Column<double>& col);
+
+template <typename T>
+NEVER_INLINE HOST double get_column_mean(const T* data, const int64_t num_rows) {
+  // const int64_t num_rows = col.size();
+  const size_t max_thread_count = std::thread::hardware_concurrency();
+  const size_t max_inputs_per_thread = 200000;
+  const size_t num_threads = std::min(
+      max_thread_count, ((num_rows + max_inputs_per_thread - 1) / max_inputs_per_thread));
+
+  std::vector<double> local_col_sums(num_threads, 0.);
+  std::vector<int64_t> local_col_non_null_counts(num_threads, 0L);
+  tbb::task_arena limited_arena(num_threads);
+
+  limited_arena.execute([&] {
+    tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_rows),
+                      [&](const tbb::blocked_range<int64_t>& r) {
+                        const int64_t start_idx = r.begin();
+                        const int64_t end_idx = r.end();
+                        double local_col_sum = 0.;
+                        int64_t local_col_non_null_count = 0;
+                        for (int64_t r = start_idx; r < end_idx; ++r) {
+                          const T val = data[r];
+                          if (val == inline_null_value<T>()) {
+                            continue;
+                          }
+                          local_col_sum += data[r];
+                          local_col_non_null_count++;
+                        }
+                        size_t thread_idx = tbb::this_task_arena::current_thread_index();
+                        local_col_sums[thread_idx] += local_col_sum;
+                        local_col_non_null_counts[thread_idx] += local_col_non_null_count;
+                      });
+  });
+
+  double col_sum = 0.0;
+  int64_t col_non_null_count = 0L;
+
+  for (size_t thread_idx = 0; thread_idx < num_threads; ++thread_idx) {
+    col_sum += local_col_sums[thread_idx];
+    col_non_null_count += local_col_non_null_counts[thread_idx];
+  }
+
+  return col_non_null_count == 0 ? 0 : col_sum / col_non_null_count;
+}
+
+// Todo(todd): we should use a functor approach for gathering whatever stats
+// a table function needs so we're not repeating boilerplate code (although
+// should confirm it doesn't have an adverse affect on performance).
+// Leaving as a follow-up though until we have more examples of real-world
+// usage patterns.
+
+template NEVER_INLINE HOST double get_column_mean(const int32_t* data,
+                                                  const int64_t num_rows);
+template NEVER_INLINE HOST double get_column_mean(const int64_t* data,
+                                                  const int64_t num_rows);
+template NEVER_INLINE HOST double get_column_mean(const float* data,
+                                                  const int64_t num_rows);
+template NEVER_INLINE HOST double get_column_mean(const double* data,
+                                                  const int64_t num_rows);
+
+template <typename T>
+NEVER_INLINE HOST double get_column_std_dev(const Column<T>& col, const double mean) {
+  return get_column_std_dev(col.ptr_, col.size_, mean);
+}
+
+template NEVER_INLINE HOST double get_column_std_dev(const Column<int32_t>& col,
+                                                     const double mean);
+template NEVER_INLINE HOST double get_column_std_dev(const Column<int64_t>& col,
+                                                     const double mean);
+template NEVER_INLINE HOST double get_column_std_dev(const Column<float>& col,
+                                                     const double mean);
+template NEVER_INLINE HOST double get_column_std_dev(const Column<double>& col,
+                                                     const double mean);
+
+template <typename T>
+NEVER_INLINE HOST double get_column_std_dev(const T* data,
+                                            const int64_t num_rows,
+                                            const double mean) {
+  // const int64_t num_rows = col.size();
+  const size_t max_thread_count = std::thread::hardware_concurrency();
+  const size_t max_inputs_per_thread = 200000;
+  const size_t num_threads = std::min(
+      max_thread_count, ((num_rows + max_inputs_per_thread - 1) / max_inputs_per_thread));
+
+  std::vector<double> local_col_squared_residuals(num_threads, 0.);
+  std::vector<int64_t> local_col_non_null_counts(num_threads, 0L);
+  tbb::task_arena limited_arena(num_threads);
+
+  limited_arena.execute([&] {
+    tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_rows),
+                      [&](const tbb::blocked_range<int64_t>& r) {
+                        const int64_t start_idx = r.begin();
+                        const int64_t end_idx = r.end();
+                        double local_col_squared_residual = 0.;
+                        int64_t local_col_non_null_count = 0;
+                        for (int64_t r = start_idx; r < end_idx; ++r) {
+                          const T val = data[r];
+                          if (val == inline_null_value<T>()) {
+                            continue;
+                          }
+                          const double residual = val - mean;
+                          local_col_squared_residual += (residual * residual);
+                          local_col_non_null_count++;
+                        }
+                        size_t thread_idx = tbb::this_task_arena::current_thread_index();
+                        local_col_squared_residuals[thread_idx] +=
+                            local_col_squared_residual;
+                        local_col_non_null_counts[thread_idx] += local_col_non_null_count;
+                      });
+  });
+
+  double col_sum_squared_residual = 0.0;
+  int64_t col_non_null_count = 0;
+
+  for (size_t thread_idx = 0; thread_idx < num_threads; ++thread_idx) {
+    col_sum_squared_residual += local_col_squared_residuals[thread_idx];
+    col_non_null_count += local_col_non_null_counts[thread_idx];
+  }
+
+  return col_non_null_count == 0 ? 0
+                                 : sqrt(col_sum_squared_residual / col_non_null_count);
+}
+
+template NEVER_INLINE HOST double get_column_std_dev(const int32_t* data,
+                                                     const int64_t num_rows,
+                                                     const double mean);
+template NEVER_INLINE HOST double get_column_std_dev(const int64_t* data,
+                                                     const int64_t num_rows,
+                                                     const double mean);
+template NEVER_INLINE HOST double get_column_std_dev(const float* data,
+                                                     const int64_t num_rows,
+                                                     const double mean);
+template NEVER_INLINE HOST double get_column_std_dev(const double* data,
+                                                     const int64_t num_rows,
+                                                     const double mean);
+
+template <typename T>
 NEVER_INLINE HOST std::tuple<T, T, bool> get_column_metadata(const Column<T>& col) {
   T col_min = std::numeric_limits<T>::max();
   T col_max = std::numeric_limits<T>::lowest();
@@ -189,6 +334,63 @@ std::tuple<int32_t, int32_t, bool> get_column_metadata(
   int_alias_col.size_ = col.size_;
   return get_column_metadata(int_alias_col);
 }
+
+template <typename T>
+void z_std_normalize_col(const T* input_data,
+                         T* output_data,
+                         const int64_t num_rows,
+                         const double mean,
+                         const double std_dev) {
+  if (std_dev <= 0.0) {
+    throw std::runtime_error("Standard deviation cannot be <= 0");
+  }
+  const double inv_std_dev = 1.0 / std_dev;
+
+  tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_rows),
+                    [&](const tbb::blocked_range<int64_t>& r) {
+                      const int64_t start_idx = r.begin();
+                      const int64_t end_idx = r.end();
+                      for (int64_t row_idx = start_idx; row_idx < end_idx; ++row_idx) {
+                        output_data[row_idx] = (input_data[row_idx] - mean) * inv_std_dev;
+                      }
+                    });
+}
+
+template void z_std_normalize_col(const float* input_data,
+                                  float* output_data,
+                                  const int64_t num_rows,
+                                  const double mean,
+                                  const double std_dev);
+template void z_std_normalize_col(const double* input_data,
+                                  double* output_data,
+                                  const int64_t num_rows,
+                                  const double mean,
+                                  const double std_dev);
+
+template <typename T>
+std::vector<std::vector<T>> z_std_normalize_data(const std::vector<T*>& input_data,
+                                                 const int64_t num_rows) {
+  const int64_t num_features = input_data.size();
+  std::vector<std::vector<T>> normalized_data(num_features);
+  for (int64_t feature_idx = 0; feature_idx < num_features; ++feature_idx) {
+    const auto mean = get_column_mean(input_data[feature_idx], num_rows);
+    const auto std_dev = get_column_std_dev(input_data[feature_idx], num_rows, mean);
+    normalized_data[feature_idx].resize(num_rows);
+    z_std_normalize_col(input_data[feature_idx],
+                        normalized_data[feature_idx].data(),
+                        num_rows,
+                        mean,
+                        std_dev);
+  }
+  return normalized_data;
+}
+
+template std::vector<std::vector<float>> z_std_normalize_data(
+    const std::vector<float*>& input_data,
+    const int64_t num_rows);
+template std::vector<std::vector<double>> z_std_normalize_data(
+    const std::vector<double*>& input_data,
+    const int64_t num_rows);
 
 template <typename T1, typename T2>
 NEVER_INLINE HOST T1

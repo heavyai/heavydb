@@ -175,6 +175,13 @@ struct TextEncodingNone {
   int64_t size_;
 
 #ifndef __CUDACC__
+  TextEncodingNone(const std::string& str) {
+    // Note this will only be valid for the
+    // lifetime of the string
+    ptr_ = const_cast<char*>(str.data());
+    size_ = str.length();
+  }
+  operator std::string() const { return std::string(ptr_, size_); }
   std::string getString() const { return std::string(ptr_, size_); }
 #endif
 

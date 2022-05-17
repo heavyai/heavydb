@@ -534,3 +534,16 @@ function install_blosc() {
   popd
 }
 
+oneDAL_VERSION=2021.5
+# Todo(todd): Still hitting in TBB linker issues, solve before adding oneDAL as a dep
+function install_onedal() {
+  download https://github.com/oneapi-src/oneDAL/archive/refs/tags/${oneDAL_VERSION}.tar.gz
+  extract ${oneDAL_VERSION}.tar.gz
+  pushd oneDAL-${oneDAL_VERSION}
+  ./dev/download_micromkl.sh
+  make -f makefile _daal PLAT=lnx32e REQCPU="avx2 avx" COMPILER=gnu -j
+  mkdir -p $PREFIX/include
+  cp -r __release_lnx_gnu/daal/latest/include/* $PREFIX/include
+  cp -r __release_lnx_gnu/daal/latest/lib/* $PREFIX/lib
+  popd
+}
