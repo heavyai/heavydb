@@ -20,6 +20,9 @@
 
 #include <filesystem>
 #include <iostream>
+#include <string>
+
+using namespace std::string_literals;
 
 #include "CommandLineOptions.h"
 #include "LeafHostInfo.h"
