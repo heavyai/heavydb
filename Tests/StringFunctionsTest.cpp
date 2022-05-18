@@ -1943,6 +1943,157 @@ TEST_F(StringFunctionTest, SelectLowercaseNoneEncoded_MoreRowsThanWatchdogLimit)
   }
 }
 
+TEST_F(StringFunctionTest, UDF_ExpandDefaults) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    /*
+    // ltrim has a defaulted second argument, test the parsing in group clause
+    select ltrim(name) from heavyai_us_states;
+    select ltrim(name) from heavyai_us_states group by 1;
+    select ltrim(name) from heavyai_us_states group by name;
+    select ltrim(name) as s from heavyai_us_states;
+    select ltrim(name) as s from heavyai_us_states group by 1;
+    select ltrim(name) as s from heavyai_us_states group by s;
+    select ltrim(name) as s from heavyai_us_states group by name;
+
+    // baseline verification
+    select ltrim(name, 'New') from heavyai_us_states;
+    select ltrim(name, 'New') from heavyai_us_states group by 1;
+    select ltrim(name, 'New') from heavyai_us_states group by name;
+    select ltrim(name, 'New') as s from heavyai_us_states;
+    select ltrim(name, 'New') as s from heavyai_us_states group by 1;
+    select ltrim(name, 'New') as s from heavyai_us_states group by s;
+    select ltrim(name, 'New') as s from heavyai_us_states group by name;
+
+    // note: "group by 1" causes problems with "order by"
+    */
+
+    {
+      // Second argument is defaulted to ""
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"JOHN"}, {"JOHN"}, {"John"}, {"Sue"}};
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set_unique{
+          {"JOHN"}, {"John"}, {"Sue"}};
+
+      auto result_set1 =
+          sql("select ltrim(first_name) from string_function_test_people where id < 5 "
+              "order by first_name asc;",
+              dt);
+      compare_result_set(expected_result_set, result_set1);
+
+      auto result_set2 =
+          sql("select ltrim(first_name) from string_function_test_people where id < 5 "
+              "group by 1;",
+              dt);
+      // just test the parsing ...
+      // => an order by clause fails because of '1' substitution
+      // => result set comparison could theorically fail due to ordering issues
+      // compare_result_set(expected_result_set_unique, result_set2);
+
+      auto result_set3 =
+          sql("select ltrim(first_name) from string_function_test_people where id < 5 "
+              "group by first_name order by first_name asc;",
+              dt);
+      compare_result_set(expected_result_set_unique, result_set3);
+
+      auto result_set4 =
+          sql("select ltrim(first_name) as s from string_function_test_people where id < "
+              "5 order by first_name asc;",
+              dt);
+      compare_result_set(expected_result_set, result_set4);
+
+      auto result_set5 =
+          sql("select ltrim(first_name) as s from string_function_test_people where id < "
+              "5 group by 1;",
+              dt);
+      // just test the parsing ...
+      // => an order by clause fails because of '1' substitution
+      // => result set comparison could theorically fail due to ordering issues
+      // compare_result_set(expected_result_set_unique, result_set5);
+
+      auto result_set6 =
+          sql("select ltrim(first_name) as s from string_function_test_people where id < "
+              "5 group by s order by ltrim(first_name) asc;",
+              dt);
+      compare_result_set(expected_result_set_unique, result_set6);
+
+      auto result_set7 =
+          sql("select ltrim(first_name) as s from string_function_test_people where id < "
+              "5 group by first_name order by first_name asc;",
+              dt);
+      compare_result_set(expected_result_set_unique, result_set7);
+    }
+
+    {
+      // fully specified call
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"HN"}, {"ohn"}, {"HN"}, {"Sue"}};
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set_unique{
+          {"HN"}, {"ohn"}, {"Sue"}};
+
+      auto result_set1 =
+          sql("select ltrim(first_name, 'JO') from string_function_test_people where id "
+              "< 5 order by id asc;",
+              dt);
+      compare_result_set(expected_result_set, result_set1);
+
+      auto result_set2 =
+          sql("select ltrim(first_name, 'JO') from string_function_test_people where id "
+              "< 5 group by 1;",
+              dt);
+      // just test the parsing ...
+      // => an order by clause fails because of '1' substitution
+      // => result set comparison could theorically fail due to ordering issues
+      // compare_result_set(expected_result_set, result_set2);
+
+      auto result_set3 =
+          sql("select ltrim(first_name, 'JO') from string_function_test_people where id "
+              "< 5 group by first_name order by first_name asc;",
+              dt);
+      compare_result_set(expected_result_set_unique, result_set3);
+
+      auto result_set4 =
+          sql("select ltrim(first_name, 'JO') as s from string_function_test_people "
+              "where id < 5 order by id asc;",
+              dt);
+      compare_result_set(expected_result_set, result_set4);
+
+      auto result_set5 =
+          sql("select ltrim(first_name, 'JO') as s "
+              "from string_function_test_people "
+              "where id < 5 "
+              "group by 1;",
+              dt);
+      // just test the parsing ...
+      // => an order by clause fails because of '1' substitution
+      // => result set comparison could theorically fail due to ordering issues
+      // compare_result_set(expected_result_set, result_set5);
+
+      auto result_set6 =
+          sql("select ltrim(first_name, 'JO') as s "
+              "from string_function_test_people "
+              "where id < 5 "
+              "group by s "
+              "order by ltrim(first_name, 'JO') asc;",
+              dt);
+      // the grouping changes the intermediate results, so use a special result set
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set_special{
+          {"HN"}, {"Sue"}, {"ohn"}};
+      compare_result_set(expected_result_set_special, result_set6);
+
+      auto result_set7 =
+          sql("select ltrim(first_name, 'JO') as s "
+              "from string_function_test_people "
+              "where id < 5 "
+              "group by first_name "
+              "order by first_name asc;",
+              dt);
+      compare_result_set(expected_result_set_unique, result_set7);
+    }
+  }
+}
+
 const char* postgres_osm_names = R"(
     CREATE TABLE postgres_osm_names (
       name TEXT,
