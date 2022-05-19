@@ -76,7 +76,7 @@ struct InsertionOrderedMap {
       CHECK(that_->m_.find(*v_it_) != that_->m_.end());
       return *(that_->m_.find(*v_it_));
     }
-    auto operator-> () {
+    auto operator->() {
       CHECK(that_);
       CHECK(v_it_ != that_->v_.end());
       CHECK(that_->m_.find(*v_it_) != that_->m_.end());

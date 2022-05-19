@@ -320,8 +320,8 @@ int32_t StringDictionary::getDictId() const noexcept {
  * canary
  * @return number of strings in storage
  */
-size_t StringDictionary::getNumStringsFromStorage(const size_t storage_slots) const
-    noexcept {
+size_t StringDictionary::getNumStringsFromStorage(
+    const size_t storage_slots) const noexcept {
   if (storage_slots == 0) {
     return 0;
   }
@@ -458,9 +458,9 @@ template void StringDictionary::getOrAddBulkArray(
  * @param hashes space for the output - should be pre-sized to match string_vec size
  */
 template <class String>
-void StringDictionary::hashStrings(const std::vector<String>& string_vec,
-                                   std::vector<string_dict_hash_t>& hashes) const
-    noexcept {
+void StringDictionary::hashStrings(
+    const std::vector<String>& string_vec,
+    std::vector<string_dict_hash_t>& hashes) const noexcept {
   CHECK_EQ(string_vec.size(), hashes.size());
 
   tbb::parallel_for(tbb::blocked_range<size_t>(0, string_vec.size()),
@@ -769,8 +769,8 @@ std::string StringDictionary::getStringUnlocked(int32_t string_id) const noexcep
   return getStringChecked(string_id);
 }
 
-std::pair<char*, size_t> StringDictionary::getStringBytes(int32_t string_id) const
-    noexcept {
+std::pair<char*, size_t> StringDictionary::getStringBytes(
+    int32_t string_id) const noexcept {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
   CHECK(!isClient());
   CHECK_LE(0, string_id);
@@ -1470,8 +1470,8 @@ void StringDictionary::appendToStorageBulk(
   }
 }
 
-std::string_view StringDictionary::getStringFromStorageFast(const int string_id) const
-    noexcept {
+std::string_view StringDictionary::getStringFromStorageFast(
+    const int string_id) const noexcept {
   const StringIdxEntry* str_meta = offset_map_ + string_id;
   return {payload_map_ + str_meta->off, str_meta->size};
 }

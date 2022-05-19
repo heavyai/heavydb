@@ -329,22 +329,19 @@ CONSTEXPR DEVICE inline typename serialize_detail::IntType<sizeof(T)>::type
 serialized_null_value() {
   using TT = typename serialize_detail::IntType<sizeof(T)>::type;
   T nv = 0;
-  if
-    CONSTEXPR(std::is_floating_point<T>::value) {
-      if
-        CONSTEXPR(array) { nv = inline_fp_null_array_value<T>(); }
-      else {
-        nv = inline_fp_null_value<T>();
-      }
+  if CONSTEXPR (std::is_floating_point<T>::value) {
+    if CONSTEXPR (array) {
+      nv = inline_fp_null_array_value<T>();
+    } else {
+      nv = inline_fp_null_value<T>();
     }
-  else if
-    CONSTEXPR(std::is_integral<T>::value) {
-      if
-        CONSTEXPR(array) { nv = inline_int_null_array_value<T>(); }
-      else {
-        nv = inline_int_null_value<T>();
-      }
+  } else if CONSTEXPR (std::is_integral<T>::value) {
+    if CONSTEXPR (array) {
+      nv = inline_int_null_array_value<T>();
+    } else {
+      nv = inline_int_null_value<T>();
     }
+  }
 #if !(defined(__CUDACC__) || defined(NO_BOOST))
   else {
     CHECK(false) << "Serializing null values of floating point or integral types only is "

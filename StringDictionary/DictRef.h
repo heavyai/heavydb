@@ -27,9 +27,9 @@ struct dict_ref_t {
   };
 
   inline bool operator<(const struct dict_ref_t& rhs) const {
-    return (this->dbId < rhs.dbId)
-               ? true
-               : (this->dbId == rhs.dbId) ? this->dictId < rhs.dictId : false;
+    return (this->dbId < rhs.dbId)    ? true
+           : (this->dbId == rhs.dbId) ? this->dictId < rhs.dictId
+                                      : false;
   }
 
   inline size_t operator()(const struct dict_ref_t& ref) const noexcept {
