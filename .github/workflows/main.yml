@@ -23,7 +23,7 @@ jobs:
 
       - name: Check stlye
         run: |
-          $CONDA/bin/conda run -n omnisci-dev bash -c "find . -name ThirdParty -prune -or \( -name '*.cpp' -or -name '*.h' \) | xargs clang-format -style=file -output-replacements-xml | grep -c '<replacement ' | grep -P '^0$'"
+          $CONDA/bin/conda run -n omnisci-dev bash -c "find . -name ThirdParty -prune -or \( -name '*.cpp' -print -or -name '*.h' -print \) | xargs clang-format --dry-run --Werror -style=file"
 
   build:
     uses: ./.github/workflows/build.yml
