@@ -79,11 +79,15 @@ class ORCJITExecutionEngineWrapper {
       , compiler_layer_(std::make_unique<llvm::orc::IRCompileLayer>(
             *execution_session_,
             *object_layer_,
-            [compiler = std::make_shared<llvm::orc::ConcurrentIRCompiler>(
-                 std::move(target_machine_builder))](llvm::Module& m) {
-              return llvm::Expected<std::unique_ptr<llvm::MemoryBuffer>>((*compiler)(m));
-            })) {
-    execution_session_->getMainJITDylib().setGenerator(
+            std::make_unique<llvm::orc::ConcurrentIRCompiler>(
+                std::move(target_machine_builder)))) {
+    auto dylib_or_error = execution_session_->createJITDylib("<main>");
+    if (!dylib_or_error) {
+      LOG(FATAL) << "Failed to initialize JITTargetMachineBuilder: "
+                 << llvmErrorToString(dylib_or_error.takeError());
+    }
+    main_dylib_ = &(*dylib_or_error);
+    dylib_or_error->addGenerator(
         llvm::cantFail(llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
             data_layout_->getGlobalPrefix())));
   }
@@ -94,8 +98,7 @@ class ORCJITExecutionEngineWrapper {
   void addModule(std::unique_ptr<llvm::Module> module) {
     module->setDataLayout(*data_layout_);
     llvm::orc::ThreadSafeModule tsm(std::move(module), getGlobalLLVMThreadSafeContext());
-    auto err =
-        compiler_layer_->add(execution_session_->getMainJITDylib(), std::move(tsm));
+    auto err = compiler_layer_->add(*main_dylib_, std::move(tsm));
     if (err) {
       LOG(FATAL) << "Cannot add LLVM module: " << llvmErrorToString(err);
     }
@@ -104,8 +107,8 @@ class ORCJITExecutionEngineWrapper {
   void* getPointerToFunction(llvm::Function* function) {
     CHECK(function);
     CHECK(execution_session_);
-    auto symbol = execution_session_->lookup({&execution_session_->getMainJITDylib()},
-                                             (*mangle_)(function->getName()));
+    auto symbol =
+        execution_session_->lookup({main_dylib_}, (*mangle_)(function->getName()));
     if (!symbol) {
       LOG(FATAL) << "Failed to find function " << std::string(function->getName())
                  << "\nError: " << llvmErrorToString(symbol.takeError());
@@ -130,6 +133,7 @@ class ORCJITExecutionEngineWrapper {
   std::unique_ptr<llvm::orc::RTDyldObjectLinkingLayer> object_layer_;
   std::unique_ptr<llvm::orc::IRCompileLayer> compiler_layer_;
   std::unique_ptr<llvm::JITEventListener> intel_jit_listener_;
+  llvm::orc::JITDylib* main_dylib_ = nullptr;
 };
 
 using ExecutionEngineWrapper = ORCJITExecutionEngineWrapper;
