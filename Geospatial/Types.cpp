@@ -1052,9 +1052,11 @@ bool GeoTypesFactory::getGeoColumns(const std::vector<std::string>* wkt_or_wkb_h
                     ring_sizes,
                     poly_rings,
                     promote_poly_to_mpoly);
-
       if (ti.get_type() != row_ti.get_type()) {
-        throw GeoTypesError("GeoFactory", "Columnar: Geometry type mismatch");
+        if (!promote_poly_to_mpoly || !(row_ti.get_type() == SQLTypes::kPOLYGON &&
+                                        ti.get_type() == SQLTypes::kMULTIPOLYGON)) {
+          throw GeoTypesError("GeoFactory", "Columnar: Geometry type mismatch");
+        }
       }
       coords_column.push_back(coords);
       bounds_column.push_back(bounds);

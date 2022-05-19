@@ -74,33 +74,40 @@ class LoadTableTest : public DBHandlerTestFixture {
   const std::string MULTIPOLYGON =
       "MULTIPOLYGON (((0 0,4 0,4 4,0 4,0 0),"
       "(1 1,1 2,2 2,2 1,1 1)),((-1 -1,-2 -1,-2 -2,-1 -2,-1 -1)))";
-  TColumn i1_column, s_column, nns_column, ls_column, mp_column;
-  TDatum i1_datum, s_datum, nns_datum, ls_datum, mp_datum;
-  std::shared_ptr<arrow::Field> i1_field, s_field, nns_field, ls_field, mp_field;
+  const std::string POLYGON = "POLYGON ((0 0,4 0,4 4,0 4,0 0),(1 1,1 2,2 2,2 1,1 1))";
+  const std::string POLYGON_PROMOTED =
+      "MULTIPOLYGON (((0 0,4 0,4 4,0 4,0 0),(1 1,1 2,2 2,2 1,1 1)))";
+
+  TColumn i1_column, s_column, nns_column, ls_column, mp_column, p_column;
+  TDatum i1_datum, s_datum, nns_datum, ls_datum, mp_datum, p_datum;
+  std::shared_ptr<arrow::Field> i1_field, s_field, nns_field, ls_field, mp_field, p_field;
 
  private:
   void initData() {
     i1_column.nulls = s_column.nulls = nns_column.nulls = ls_column.nulls =
-        mp_column.nulls = {false};
+        mp_column.nulls = p_column.nulls = {false};
     i1_column.data.int_col = {1};
     s_column.data.str_col = {"s"};
     nns_column.data.str_col = {"nns"};
     ls_column.data.str_col = {LINESTRING};
     mp_column.data.str_col = {MULTIPOLYGON};
+    p_column.data.str_col = {POLYGON};
 
     i1_datum.is_null = s_datum.is_null = nns_datum.is_null = ls_datum.is_null =
-        mp_datum.is_null = false;
+        mp_datum.is_null = p_datum.is_null = false;
     i1_datum.val.int_val = 1;
     s_datum.val.str_val = "s";
     nns_datum.val.str_val = "nns";
     ls_datum.val.str_val = LINESTRING;
     mp_datum.val.str_val = MULTIPOLYGON;
+    p_datum.val.str_val = POLYGON;
 
     i1_field = arrow::field("i1", arrow::int32());
     s_field = arrow::field("s", arrow::utf8());
     nns_field = arrow::field("nns", arrow::utf8());
     ls_field = arrow::field("ls", arrow::utf8());
     mp_field = arrow::field("mp", arrow::utf8());
+    p_field = arrow::field("mp", arrow::utf8());
   }
 };
 
@@ -122,6 +129,16 @@ TEST_F(LoadTableTest, AllColumns) {
   handler->load_table(session, "geo_load_test", {row}, {});
   sqlAndCompareResult("SELECT * FROM geo_load_test",
                       {{i(1), LINESTRING, "s", MULTIPOLYGON, "nns"}});
+}
+
+TEST_F(LoadTableTest, AllColumnsPromotePolyToMPoly) {
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  TStringRow row;
+  row.cols = {getSV("1"), getSV(LINESTRING), getSV("s"), getSV(POLYGON), getSV("nns")};
+  handler->load_table(session, "geo_load_test", {row}, {});
+  sqlAndCompareResult("SELECT * FROM geo_load_test",
+                      {{i(1), LINESTRING, "s", POLYGON_PROMOTED, "nns"}});
 }
 
 TEST_F(LoadTableTest, AllColumnsReordered) {
@@ -270,6 +287,16 @@ TEST_F(LoadTableTest, DictOutOfBounds) {
 }
 
 // TODO(max): load_table_binary doesn't support tables with geo columns yet
+TEST_F(LoadTableTest, DISABLED_BinaryAllColumnsPromotePolyToMPoly) {
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  TRow row;
+  row.cols = {i1_datum, ls_datum, s_datum, p_datum, nns_datum};
+  handler->load_table_binary(session, "geo_load_test", {row}, {});
+  sqlAndCompareResult("SELECT * FROM geo_load_test",
+                      {{i(1), LINESTRING, "s", POLYGON_PROMOTED, "nns"}});
+}
+
 TEST_F(LoadTableTest, DISABLED_BinaryAllColumns) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
@@ -386,6 +413,18 @@ TEST_F(LoadTableTest, ColumnarAllColumns) {
       {});
   sqlAndCompareResult("SELECT * FROM geo_load_test",
                       {{i(1), LINESTRING, "s", MULTIPOLYGON, "nns"}});
+}
+
+TEST_F(LoadTableTest, ColumnarAllColumnsPromotePolyToMPoly) {
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  handler->load_table_binary_columnar(
+      session,
+      "geo_load_test",
+      {i1_column, ls_column, s_column, p_column, nns_column},
+      {});
+  sqlAndCompareResult("SELECT * FROM geo_load_test",
+                      {{i(1), LINESTRING, "s", POLYGON_PROMOTED, "nns"}});
 }
 
 TEST_F(LoadTableTest, ColumnarAllColumnsReordered) {
@@ -560,6 +599,21 @@ TEST_F(LoadTableTest, ArrowAllColumnsNoGeo) {
 }
 
 // TODO (max) load_table_binary_arrow doesn't support tables with geocolumns properly yet
+TEST_F(LoadTableTest, DISABLED_ArrowAllColumnsPromotePolyToMPoly) {
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  auto schema = arrow::schema({i1_field, ls_field, s_field, p_field, nns_field});
+  ArrowStreamBuilder builder(schema);
+  builder.appendInt32({1});
+  builder.appendString({LINESTRING});
+  builder.appendString({"s"});
+  builder.appendString({POLYGON});
+  builder.appendString({"nns"});
+  handler->load_table_binary_arrow(session, "geo_load_test", builder.finish(), false);
+  sqlAndCompareResult("SELECT * FROM geo_load_test",
+                      {{i(1), LINESTRING, "s", POLYGON_PROMOTED, "nns"}});
+}
+
 TEST_F(LoadTableTest, DISABLED_ArrowAllColumns) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
