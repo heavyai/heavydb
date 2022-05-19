@@ -43,6 +43,25 @@ inline std::string llvmErrorToString(const llvm::Error& err) {
   return msg;
 };
 
+/**
+ * LLVM ORC (at least in LLVM 9.0.1) doesn't deregister sections with EH frames
+ * on module deallocation. It leads to dangling pointers in EH unwinder. Later,
+ * memory of those sections can be re-allocated and re-written with random data.
+ * The next raised exception will cause unwinder to read those registered sections
+ * and random data in it might cause various failures.
+ *
+ * This wrapper of SectionMemoryManager is passed to the object layer. It will be
+ * used by ORC to register EH frames for materialized modules. In its destructor we
+ * deregister all registered EH frames. Original class keeps track of all registered
+ * EH frames and it is safe to call deregisterEHFrames multiple times. So, even if
+ * newer ORC version would deregister EH frames automatically, it would still be safe
+ * to use this wrapper.
+ */
+class SectionMemoryManagerWithEHCleanup : public llvm::SectionMemoryManager {
+ public:
+  ~SectionMemoryManagerWithEHCleanup() override { deregisterEHFrames(); }
+};
+
 class ORCJITExecutionEngineWrapper {
  public:
   ORCJITExecutionEngineWrapper();
@@ -56,7 +75,7 @@ class ORCJITExecutionEngineWrapper {
                                                                *data_layout_))
       , object_layer_(std::make_unique<llvm::orc::RTDyldObjectLinkingLayer>(
             *execution_session_,
-            []() { return std::make_unique<llvm::SectionMemoryManager>(); }))
+            []() { return std::make_unique<SectionMemoryManagerWithEHCleanup>(); }))
       , compiler_layer_(std::make_unique<llvm::orc::IRCompileLayer>(
             *execution_session_,
             *object_layer_,
