@@ -389,6 +389,9 @@ bool is_table_function_whitelisted(const std::string& function_name) {
       "supported_ml_frameworks",
       "kmeans",
       "dbscan",
+      "linear_reg_fit",
+      "linear_reg_predict",
+      "linear_reg_fit_predict",
       "tf_point_cloud_metadata",
       "tf_load_point_cloud"};
 

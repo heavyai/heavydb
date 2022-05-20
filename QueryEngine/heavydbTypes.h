@@ -175,6 +175,7 @@ struct TextEncodingNone {
   int64_t size_;
 
 #ifndef __CUDACC__
+  TextEncodingNone() = default;
   TextEncodingNone(const std::string& str) {
     // Note this will only be valid for the
     // lifetime of the string
@@ -676,8 +677,14 @@ struct TableFunctionManager {
   }
 
   void set_output_row_size(int64_t num_rows) {
-    TableFunctionManager_set_output_row_size(reinterpret_cast<int8_t*>(this), num_rows);
+    if (!output_allocations_disabled) {
+      TableFunctionManager_set_output_row_size(reinterpret_cast<int8_t*>(this), num_rows);
+    }
   }
+
+  void disable_output_allocations() { output_allocations_disabled = true; }
+
+  void enable_output_allocations() { output_allocations_disabled = false; }
 
   int32_t error_message(const char* message) {
     return TableFunctionManager_error_message(reinterpret_cast<int8_t*>(this), message);
@@ -693,6 +700,7 @@ struct TableFunctionManager {
     return result;
   }
 #endif  // HAVE_TOSTRING
+  bool output_allocations_disabled{false};
 };
 #endif  // #ifndef __CUDACC__
 

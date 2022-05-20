@@ -28,14 +28,13 @@
 
 using MatrixT = arma::Mat<double>;
 
-arma::Mat<double> create_input_matrix(
-    const std::vector<std::vector<float>>& input_features,
-    const int64_t num_rows) {
+arma::Mat<double> create_input_matrix(const std::vector<const float*>& input_features,
+                                      const int64_t num_rows) {
   const int64_t num_features = input_features.size();
   arma::Mat<double> features_matrix(num_rows, num_features);
   for (int64_t c = 0; c < num_features; ++c) {
     double* matrix_col_ptr = features_matrix.colptr(c);
-    const float* input_features_col = input_features[c].data();
+    const float* input_features_col = input_features[c];
     tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_rows),
                       [&](const tbb::blocked_range<int64_t>& r) {
                         const int64_t start_idx = r.begin();
@@ -48,14 +47,12 @@ arma::Mat<double> create_input_matrix(
   return features_matrix;
 }
 
-arma::Mat<double> create_input_matrix(
-    const std::vector<std::vector<double>>& input_features,
-    const int64_t num_rows) {
+arma::Mat<double> create_input_matrix(const std::vector<const double*>& input_features,
+                                      const int64_t num_rows) {
   const int64_t num_features = input_features.size();
   arma::Mat<double> features_matrix(num_rows, num_features);
   for (int64_t c = 0; c < num_features; ++c) {
-    memcpy(
-        features_matrix.colptr(c), input_features[c].data(), sizeof(double) * num_rows);
+    memcpy(features_matrix.colptr(c), input_features[c], sizeof(double) * num_rows);
   }
   return features_matrix;
 }
@@ -91,13 +88,12 @@ void run_kmeans(const MatrixT& input_features_matrix_transposed,
 }
 
 template <typename T>
-NEVER_INLINE HOST int32_t
-mlpack_kmeans_impl(const std::vector<std::vector<T>>& input_features,
-                   int32_t* output_clusters,
-                   const int64_t num_rows,
-                   const int32_t num_clusters,
-                   const int32_t num_iterations,
-                   const KMeansInitStrategy init_type) {
+NEVER_INLINE HOST int32_t mlpack_kmeans_impl(const std::vector<const T*>& input_features,
+                                             int32_t* output_clusters,
+                                             const int64_t num_rows,
+                                             const int32_t num_clusters,
+                                             const int32_t num_iterations,
+                                             const KMeansInitStrategy init_type) {
   try {
     const auto input_features_matrix = create_input_matrix(input_features, num_rows);
     const MatrixT input_features_matrix_transposed = input_features_matrix.t();
@@ -129,17 +125,14 @@ mlpack_kmeans_impl(const std::vector<std::vector<T>>& input_features,
     throw std::runtime_error(e.what());
   }
   return num_rows;
-
-  return num_rows;
 }
 
 template <typename T>
-NEVER_INLINE HOST int32_t
-mlpack_dbscan_impl(const std::vector<std::vector<T>>& input_features,
-                   int32_t* output_clusters,
-                   const int64_t num_rows,
-                   const double epsilon,
-                   const int32_t min_observations) {
+NEVER_INLINE HOST int32_t mlpack_dbscan_impl(const std::vector<const T*>& input_features,
+                                             int32_t* output_clusters,
+                                             const int64_t num_rows,
+                                             const double epsilon,
+                                             const int32_t min_observations) {
   try {
     const auto input_features_matrix = create_input_matrix(input_features, num_rows);
     const MatrixT input_features_matrix_transposed = input_features_matrix.t();
@@ -153,6 +146,65 @@ mlpack_dbscan_impl(const std::vector<std::vector<T>>& input_features,
     throw std::runtime_error(e.what());
   }
   return num_rows;
+}
+
+template <typename T>
+NEVER_INLINE HOST int32_t
+mlpack_linear_reg_fit_impl(const T* input_labels,
+                           const std::vector<const T*>& input_features,
+                           int32_t* output_coef_idxs,
+                           T* output_coefs,
+                           const int64_t num_rows) {
+  try {
+    // Implement simple linear regression entirely in Armadillo
+    // to avoid overhead of mlpack copies and extra matrix inversion
+    arma::Mat<T> X(num_rows, input_features.size() + 1);
+    // Intercept
+    X.unsafe_col(0).fill(1);
+    // Now copy feature column pointers
+    const int64_t num_features = input_features.size();
+    for (int64_t feature_idx = 0; feature_idx < num_features; ++feature_idx) {
+      memcpy(
+          X.colptr(feature_idx + 1), input_features[feature_idx], sizeof(T) * num_rows);
+    }
+    const arma::Mat<T> Xt = X.t();
+    const arma::Mat<T> XtX = Xt * X;  // XtX aka "Gram Matrix"
+    const arma::Col<T> Y(input_labels, num_rows);
+    const arma::Col<T> B_est = arma::solve(XtX, Xt * Y);
+    for (int64_t coef_idx = 0; coef_idx < num_features + 1; ++coef_idx) {
+      output_coef_idxs[coef_idx] = coef_idx;
+      output_coefs[coef_idx] = B_est[coef_idx];
+    }
+    return num_features + 1;
+  } catch (std::exception& e) {
+    throw std::runtime_error(e.what());
+  }
+}
+
+template <typename T>
+NEVER_INLINE HOST int32_t
+mlpack_linear_reg_predict_impl(const std::vector<const T*>& input_features,
+                               T* output_predictions,
+                               const int64_t num_rows,
+                               const T* coefs) {
+  try {
+    // Implement simple linear regression entirely in Armadillo
+    // to avoid overhead of mlpack copies and extra matrix inversion
+    const int64_t num_features = input_features.size();
+    const int64_t num_coefs = num_features + 1;
+    arma::Mat<T> X(num_rows, num_coefs);
+    X.unsafe_col(0).fill(1);
+    for (int64_t feature_idx = 0; feature_idx < num_features; ++feature_idx) {
+      memcpy(
+          X.colptr(feature_idx + 1), input_features[feature_idx], sizeof(T) * num_rows);
+    }
+    const arma::Col<T> B(coefs, num_coefs);
+    const arma::Col<T> Y_hat = X * B;
+    memcpy(output_predictions, Y_hat.colptr(0), sizeof(T) * num_rows);
+    return num_rows;
+  } catch (std::exception& e) {
+    throw std::runtime_error(e.what());
+  }
 }
 
 #endif  // #ifdef HAVE_TBB
