@@ -386,6 +386,7 @@ bool is_table_function_whitelisted(const std::string& function_name) {
       "tf_compute_dwell_times",
       "tf_feature_similarity",
       "tf_feature_self_similarity",
+      "supported_ml_frameworks",
       "kmeans",
       "dbscan",
       "tf_point_cloud_metadata",

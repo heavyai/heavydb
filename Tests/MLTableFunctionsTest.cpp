@@ -202,6 +202,50 @@ double calc_classification_accuracy(const std::string& data_table_name,
   return 0;
 }
 
+TEST_F(SystemTFs, SupportedMLFrameworks) {
+  const std::vector<std::string> expected_ml_frameworks = {"onedal", "mlpack"};
+  std::vector<bool> expected_is_available;
+  std::vector<bool> expected_is_default;
+  bool found_ml_framework = false;
+#ifdef HAVE_ONEDAL
+  expected_is_available.emplace_back(true);
+  expected_is_default.emplace_back(!found_ml_framework);
+  found_ml_framework = true;
+#else
+  expected_is_available.emplace_back(false);
+  expected_is_default.emplace_back(false);
+#endif
+
+#ifdef HAVE_MLPACK
+  expected_is_available.emplace_back(true);
+  expected_is_default.emplace_back(!found_ml_framework);
+  found_ml_framework = true;
+#else
+  expected_is_available.emplace_back(false);
+  expected_is_default.emplace_back(false);
+#endif
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    const std::string query =
+        "SELECT ml_framework, is_available, is_default FROM "
+        "TABLE(supported_ml_frameworks()) ORDER BY ml_framework DESC;";
+    const auto rows = run_multiple_agg(query, dt);
+    const size_t num_rows = rows->rowCount();
+    EXPECT_EQ(num_rows, size_t(2));
+    EXPECT_EQ(rows->colCount(), size_t(3));
+    for (size_t row_idx = 0; row_idx < num_rows; ++row_idx) {
+      auto crt_row = rows->getNextRow(true, true);
+      const auto ml_framework =
+          boost::get<std::string>(TestHelpers::v<NullableString>(crt_row[0]));
+      EXPECT_EQ(ml_framework, expected_ml_frameworks[row_idx]);
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[1]),
+                expected_is_available[row_idx] ? 1 : 0);
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[2]),
+                expected_is_default[row_idx] ? 1 : 0);
+    }
+  }
+}
+
 TEST_F(SystemTFs, KMeans_Missing_Args) {
   const auto cursor_query = generate_cursor_query(
       "ml_iris",
