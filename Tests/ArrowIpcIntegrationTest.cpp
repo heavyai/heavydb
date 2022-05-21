@@ -305,6 +305,68 @@ void test_text_values(const std::shared_ptr<arrow::RecordBatch>& record_batch) {
   }
 }
 
+// Verify that column types match
+void test_array_values(const std::shared_ptr<arrow::RecordBatch>& read_batch) {
+  using namespace arrow;
+  using namespace std;
+
+  const std::vector expected_types = {
+      make_pair(BooleanType::type_id, BooleanType::type_name()),
+      make_pair(Int8Type::type_id, Int8Type::type_name()),
+      make_pair(Int16Type::type_id, Int16Type::type_name()),
+      make_pair(Int32Type::type_id, Int32Type::type_name()),
+      make_pair(Int64Type::type_id, Int64Type::type_name()),
+      make_pair(FloatType::type_id, FloatType::type_name()),
+      make_pair(DoubleType::type_id, DoubleType::type_name())};
+
+  ASSERT_EQ(read_batch->schema()->num_fields(), 7);
+
+  for (size_t i = 0; i < expected_types.size(); i++) {
+    auto [type, type_name] = expected_types[i];
+
+    const auto arr = read_batch->column(i);
+    const auto& list = static_cast<const arrow::ListArray&>(*arr);
+    ASSERT_EQ(list.value_type()->id(), type)
+        << fmt::format("Expected column {} to have type {}", i, type_name);
+    std::string bool_expected = R"([
+  [
+    true,
+    false,
+    true
+  ],
+  [],
+  null,
+  [
+    true,
+    null,
+    false
+  ]
+])";
+
+    std::string expected = R"([
+  [
+    0,
+    1,
+    2
+  ],
+  [],
+  null,
+  [
+    0,
+    null,
+    2
+  ]
+])";
+    std::stringstream ss;
+    ss << *arr;
+    if (i == 0) {
+      ASSERT_EQ(bool_expected, ss.str());
+    } else {
+      ASSERT_EQ(expected, ss.str());
+    }
+  }
+}
+
 }  // namespace
 
 class ArrowIpcBasic : public ::testing::Test {
@@ -313,10 +375,11 @@ class ArrowIpcBasic : public ::testing::Test {
     run_ddl_statement("DROP TABLE IF EXISTS arrow_ipc_test;");
     run_ddl_statement("DROP TABLE IF EXISTS test_data_scalars;");
     run_ddl_statement("DROP TABLE IF EXISTS test_data_text;");
+    run_ddl_statement("DROP TABLE IF EXISTS test_data_array;");
 
     run_ddl_statement(R"(
-      CREATE TABLE 
-        arrow_ipc_test(x INT, 
+      CREATE TABLE
+        arrow_ipc_test(x INT,
                        y DOUBLE,
                        t TEXT ENCODING DICT(32))
         WITH (FRAGMENT_SIZE=2);
@@ -337,6 +400,17 @@ class ArrowIpcBasic : public ::testing::Test {
           test_data_text(text_ TEXT ENCODING NONE);
     )");
 
+    run_ddl_statement(R"(
+        CREATE TABLE
+          test_data_array(b  BOOLEAN[],
+                          i1 TINYINT[],
+                          i2 SMALLINT[],
+                          i4 INT[],
+                          i8 BIGINT[],
+                          f4 FLOAT[],
+                          f8 DOUBLE[]);
+    )");
+
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (1, 1.1, 'foo');");
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (2, 2.1, NULL);");
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (NULL, 3.1, 'bar');");
@@ -353,6 +427,28 @@ class ArrowIpcBasic : public ::testing::Test {
     run_ddl_statement("INSERT INTO test_data_text VALUES ('world');");
     run_ddl_statement("INSERT INTO test_data_text VALUES ('');");
     run_ddl_statement("INSERT INTO test_data_text VALUES ('text');");
+
+    {
+      std::string arr = "{0, 1, 2}";
+      std::string barr = "{'true', 'false', 'true'}";
+      std::string empty_arr = "{}";
+      std::string null_arr = "NULL";
+      std::string null_elem_arr = "{0, NULL, 2}";
+      std::string null_elem_barr = "{'true', NULL, 'false'}";
+
+      const std::vector vals = {make_pair(barr, arr),
+                                make_pair(empty_arr, empty_arr),
+                                make_pair(null_arr, null_arr),
+                                make_pair(null_elem_barr, null_elem_arr)};
+      for (const auto& val : vals) {
+        auto [b, i] = val;
+        std::string query = fmt::format(
+            "INSERT INTO test_data_array VALUES ({0}, {1}, {1}, {1}, {1}, {1}, {1});",
+            b,
+            i);
+        run_ddl_statement(query);
+      }
+    }
   }
 
   void TearDown()
@@ -592,6 +688,20 @@ TEST_F(ArrowIpcBasic, IpcCpuTextValues) {
       ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::SHARED_MEMORY);
 
   test_text_values(df.record_batch);
+
+  deallocate_df(data_frame, ExecutorDeviceType::CPU);
+}
+
+TEST_F(ArrowIpcBasic, IpcCpuArrayValues) {
+  auto data_frame =
+      execute_arrow_ipc("SELECT * FROM test_data_array;", ExecutorDeviceType::CPU);
+
+  ASSERT_TRUE(data_frame.df_size > 0);
+
+  auto df =
+      ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::SHARED_MEMORY);
+
+  test_array_values(df.record_batch);
 
   deallocate_df(data_frame, ExecutorDeviceType::CPU);
 }

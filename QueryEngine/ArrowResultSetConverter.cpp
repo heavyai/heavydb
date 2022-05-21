@@ -132,6 +132,48 @@ void create_or_append_value(const ScalarTargetValue& val_cty,
   }
 }
 
+template <typename TYPE, typename VALUE_ARRAY_TYPE>
+void create_or_append_value(const ArrayTargetValue& val_ctys,
+                            std::shared_ptr<ValueArray>& values,
+                            const size_t max_size) {
+  if (!values) {
+    values = std::make_shared<ValueArray>(Vec2<TYPE>());
+    boost::get<Vec2<TYPE>>(*values).reserve(max_size);
+  }
+  CHECK(values);
+
+  Vec2<TYPE>* values_ty = boost::get<Vec2<TYPE>>(values.get());
+  CHECK(values_ty);
+
+  values_ty->emplace_back(std::vector<TYPE>{});
+
+  if (val_ctys) {
+    for (auto val_cty : val_ctys.value()) {
+      auto pval_cty = boost::get<VALUE_ARRAY_TYPE>(&val_cty);
+      CHECK(pval_cty);
+      auto val_ty = static_cast<TYPE>(*pval_cty);
+      values_ty->back().emplace_back(val_ty);
+    }
+  }
+}
+
+void create_or_append_validity(const ArrayTargetValue& value,
+                               const SQLTypeInfo& col_type,
+                               std::shared_ptr<std::vector<bool>>& null_bitmap,
+                               const size_t max_size) {
+  if (col_type.get_notnull()) {
+    CHECK(!null_bitmap);
+    return;
+  }
+
+  if (!null_bitmap) {
+    null_bitmap = std::make_shared<std::vector<bool>>();
+    null_bitmap->reserve(max_size);
+  }
+  CHECK(null_bitmap);
+  null_bitmap->push_back(value ? true : false);
+}
+
 template <typename TYPE>
 void create_or_append_validity(const ScalarTargetValue& value,
                                const SQLTypeInfo& col_type,
@@ -685,90 +727,141 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
           continue;
         }
 
-        auto scalar_value = boost::get<ScalarTargetValue>(&row[j]);
-        // TODO(miyu): support more types other than scalar.
-        CHECK(scalar_value);
-        const auto& column = builders[j];
-        switch (column.physical_type) {
-          case kBOOLEAN:
-            create_or_append_value<bool, int64_t>(
-                *scalar_value, value_seg[j], local_entry_count);
-            create_or_append_validity<int64_t>(
-                *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
-            break;
-          case kTINYINT:
-            create_or_append_value<int8_t, int64_t>(
-                *scalar_value, value_seg[j], local_entry_count);
-            create_or_append_validity<int64_t>(
-                *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
-            break;
-          case kSMALLINT:
-            create_or_append_value<int16_t, int64_t>(
-                *scalar_value, value_seg[j], local_entry_count);
-            create_or_append_validity<int64_t>(
-                *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
-            break;
-          case kINT:
-            create_or_append_value<int32_t, int64_t>(
-                *scalar_value, value_seg[j], local_entry_count);
-            create_or_append_validity<int64_t>(
-                *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
-            break;
-          case kBIGINT:
-            create_or_append_value<int64_t, int64_t>(
-                *scalar_value, value_seg[j], local_entry_count);
-            create_or_append_validity<int64_t>(
-                *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
-            break;
-          case kDECIMAL:
-            create_or_append_value<int64_t, int64_t>(
-                *scalar_value, value_seg[j], local_entry_count);
-            create_or_append_validity<int64_t>(
-                *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
-            break;
-          case kFLOAT:
-            create_or_append_value<float, float>(
-                *scalar_value, value_seg[j], local_entry_count);
-            create_or_append_validity<float>(
-                *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
-            break;
-          case kDOUBLE:
-            create_or_append_value<double, double>(
-                *scalar_value, value_seg[j], local_entry_count);
-            create_or_append_validity<double>(
-                *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
-            break;
-          case kTIME:
-            create_or_append_value<int32_t, int64_t>(
-                *scalar_value, value_seg[j], local_entry_count);
-            create_or_append_validity<int64_t>(
-                *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
-            break;
-          case kDATE:
-            device_type_ == ExecutorDeviceType::GPU
-                ? create_or_append_value<int64_t, int64_t>(
-                      *scalar_value, value_seg[j], local_entry_count)
-                : create_or_append_value<int32_t, int64_t>(
-                      *scalar_value, value_seg[j], local_entry_count);
-            create_or_append_validity<int64_t>(
-                *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
-            break;
-          case kTIMESTAMP:
-            create_or_append_value<int64_t, int64_t>(
-                *scalar_value, value_seg[j], local_entry_count);
-            create_or_append_validity<int64_t>(
-                *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
-            break;
-          case kTEXT:
-            create_or_append_value<std::string, NullableString>(
-                *scalar_value, value_seg[j], local_entry_count);
-            create_or_append_validity<NullableString>(
-                *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
-            break;
-          default:
-            // TODO(miyu): support more scalar types.
-            throw std::runtime_error(column.col_type.get_type_name() +
-                                     " is not supported in Arrow result sets.");
+        if (auto scalar_value = boost::get<ScalarTargetValue>(&row[j])) {
+          // TODO(miyu): support more types other than scalar.
+          CHECK(scalar_value);
+          const auto& column = builders[j];
+          switch (column.physical_type) {
+            case kBOOLEAN:
+              create_or_append_value<bool, int64_t>(
+                  *scalar_value, value_seg[j], local_entry_count);
+              create_or_append_validity<int64_t>(
+                  *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            case kTINYINT:
+              create_or_append_value<int8_t, int64_t>(
+                  *scalar_value, value_seg[j], local_entry_count);
+              create_or_append_validity<int64_t>(
+                  *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            case kSMALLINT:
+              create_or_append_value<int16_t, int64_t>(
+                  *scalar_value, value_seg[j], local_entry_count);
+              create_or_append_validity<int64_t>(
+                  *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            case kINT:
+              create_or_append_value<int32_t, int64_t>(
+                  *scalar_value, value_seg[j], local_entry_count);
+              create_or_append_validity<int64_t>(
+                  *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            case kBIGINT:
+              create_or_append_value<int64_t, int64_t>(
+                  *scalar_value, value_seg[j], local_entry_count);
+              create_or_append_validity<int64_t>(
+                  *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            case kDECIMAL:
+              create_or_append_value<int64_t, int64_t>(
+                  *scalar_value, value_seg[j], local_entry_count);
+              create_or_append_validity<int64_t>(
+                  *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            case kFLOAT:
+              create_or_append_value<float, float>(
+                  *scalar_value, value_seg[j], local_entry_count);
+              create_or_append_validity<float>(
+                  *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            case kDOUBLE:
+              create_or_append_value<double, double>(
+                  *scalar_value, value_seg[j], local_entry_count);
+              create_or_append_validity<double>(
+                  *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            case kTIME:
+              create_or_append_value<int32_t, int64_t>(
+                  *scalar_value, value_seg[j], local_entry_count);
+              create_or_append_validity<int64_t>(
+                  *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            case kDATE:
+              device_type_ == ExecutorDeviceType::GPU
+                  ? create_or_append_value<int64_t, int64_t>(
+                        *scalar_value, value_seg[j], local_entry_count)
+                  : create_or_append_value<int32_t, int64_t>(
+                        *scalar_value, value_seg[j], local_entry_count);
+              create_or_append_validity<int64_t>(
+                  *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            case kTIMESTAMP:
+              create_or_append_value<int64_t, int64_t>(
+                  *scalar_value, value_seg[j], local_entry_count);
+              create_or_append_validity<int64_t>(
+                  *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            case kTEXT:
+              create_or_append_value<std::string, NullableString>(
+                  *scalar_value, value_seg[j], local_entry_count);
+              create_or_append_validity<NullableString>(
+                  *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            default:
+              // TODO(miyu): support more scalar types.
+              throw std::runtime_error(column.col_type.get_type_name() +
+                                       " is not supported in Arrow result sets.");
+          }
+        } else if (auto array = boost::get<ArrayTargetValue>(&row[j])) {
+          // array := Boost::optional<std::vector<ScalarTargetValue>>
+          const auto& column = builders[j];
+          switch (column.col_type.get_subtype()) {
+            case kBOOLEAN:
+              create_or_append_value<int8_t, int64_t>(
+                  *array, value_seg[j], local_entry_count);
+              create_or_append_validity(
+                  *array, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            case kTINYINT:
+              create_or_append_value<int8_t, int64_t>(
+                  *array, value_seg[j], local_entry_count);
+              create_or_append_validity(
+                  *array, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            case kSMALLINT:
+              create_or_append_value<int16_t, int64_t>(
+                  *array, value_seg[j], local_entry_count);
+              create_or_append_validity(
+                  *array, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            case kINT:
+              create_or_append_value<int32_t, int64_t>(
+                  *array, value_seg[j], local_entry_count);
+              create_or_append_validity(
+                  *array, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            case kBIGINT:
+              create_or_append_value<int64_t, int64_t>(
+                  *array, value_seg[j], local_entry_count);
+              create_or_append_validity(
+                  *array, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            case kFLOAT:
+              create_or_append_value<float, float>(
+                  *array, value_seg[j], local_entry_count);
+              create_or_append_validity(
+                  *array, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            case kDOUBLE:
+              create_or_append_value<double, double>(
+                  *array, value_seg[j], local_entry_count);
+              create_or_append_validity(
+                  *array, column.col_type, null_bitmap_seg[j], local_entry_count);
+              break;
+            default:
+              throw std::runtime_error(column.col_type.get_type_name() +
+                                       " is not supported in Arrow result sets.");
+          }
         }
       }
     }
@@ -1016,6 +1109,25 @@ std::shared_ptr<arrow::DataType> get_arrow_type(const SQLTypeInfo& sql_type,
               std::to_string(sql_type.get_precision()));
       }
     case kARRAY:
+      switch (sql_type.get_subtype()) {
+        case kBOOLEAN:
+          return arrow::list(arrow::boolean());
+        case kTINYINT:
+          return arrow::list(arrow::int8());
+        case kSMALLINT:
+          return arrow::list(arrow::int16());
+        case kINT:
+          return arrow::list(arrow::int32());
+        case kBIGINT:
+          return arrow::list(arrow::int64());
+        case kFLOAT:
+          return arrow::list(arrow::float32());
+        case kDOUBLE:
+          return arrow::list(arrow::float64());
+        default:
+          throw std::runtime_error("Unsupported array type for Arrow result sets: " +
+                                   sql_type.get_type_name());
+      }
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
     default:
@@ -1332,6 +1444,57 @@ void appendToColumnBuilder<arrow::StringDictionary32Builder, int32_t>(
   }
 }
 
+template <typename BUILDER_TYPE, typename VALUE_TYPE>
+void appendToListColumnBuilder(ArrowResultSetConverter::ColumnBuilder& column_builder,
+                               const ValueArray& values,
+                               const std::shared_ptr<std::vector<bool>>& is_valid) {
+  Vec2<VALUE_TYPE> vals = boost::get<Vec2<VALUE_TYPE>>(values);
+  auto list_builder = dynamic_cast<arrow::ListBuilder*>(column_builder.builder.get());
+  CHECK(list_builder);
+
+  auto value_builder = static_cast<BUILDER_TYPE*>(list_builder->value_builder());
+
+  if (column_builder.field->nullable()) {
+    for (size_t i = 0; i < vals.size(); i++) {
+      if ((*is_valid)[i]) {
+        const auto& val = vals[i];
+        std::vector<uint8_t> bitmap(val.size());
+        std::transform(val.begin(), val.end(), bitmap.begin(), [](VALUE_TYPE pvalue) {
+          return static_cast<VALUE_TYPE>(pvalue) != null_type<VALUE_TYPE>::value;
+        });
+        ARROW_THROW_NOT_OK(list_builder->Append());
+        if constexpr (std::is_same_v<BUILDER_TYPE, arrow::BooleanBuilder>) {
+          std::vector<uint8_t> bval(val.size());
+          std::copy(val.begin(), val.end(), bval.begin());
+          ARROW_THROW_NOT_OK(
+              value_builder->AppendValues(bval.data(), bval.size(), bitmap.data()));
+        } else {
+          ARROW_THROW_NOT_OK(
+              value_builder->AppendValues(val.data(), val.size(), bitmap.data()));
+        }
+      } else {
+        ARROW_THROW_NOT_OK(list_builder->AppendNull());
+      }
+    }
+  } else {
+    for (size_t i = 0; i < vals.size(); i++) {
+      if ((*is_valid)[i]) {
+        const auto& val = vals[i];
+        ARROW_THROW_NOT_OK(list_builder->Append());
+        if constexpr (std::is_same_v<BUILDER_TYPE, arrow::BooleanBuilder>) {
+          std::vector<uint8_t> bval(val.size());
+          std::copy(val.begin(), val.end(), bval.begin());
+          ARROW_THROW_NOT_OK(value_builder->AppendValues(bval.data(), bval.size()));
+        } else {
+          ARROW_THROW_NOT_OK(value_builder->AppendValues(val.data(), val.size()));
+        }
+      } else {
+        ARROW_THROW_NOT_OK(list_builder->AppendNull());
+      }
+    }
+  }
+}
+
 }  // namespace
 
 void ArrowResultSetConverter::append(
@@ -1391,6 +1554,39 @@ void ArrowResultSetConverter::append(
           : appendToColumnBuilder<arrow::Date32Builder, int32_t>(
                 column_builder, values, is_valid);
       break;
+    case kARRAY:
+      if (column_builder.col_type.get_subtype() == kBOOLEAN) {
+        appendToListColumnBuilder<arrow::BooleanBuilder, int8_t>(
+            column_builder, values, is_valid);
+        break;
+      } else if (column_builder.col_type.get_subtype() == kTINYINT) {
+        appendToListColumnBuilder<arrow::Int8Builder, int8_t>(
+            column_builder, values, is_valid);
+        break;
+      } else if (column_builder.col_type.get_subtype() == kSMALLINT) {
+        appendToListColumnBuilder<arrow::Int16Builder, int16_t>(
+            column_builder, values, is_valid);
+        break;
+      } else if (column_builder.col_type.get_subtype() == kINT) {
+        appendToListColumnBuilder<arrow::Int32Builder, int32_t>(
+            column_builder, values, is_valid);
+        break;
+      } else if (column_builder.col_type.get_subtype() == kBIGINT) {
+        appendToListColumnBuilder<arrow::Int64Builder, int64_t>(
+            column_builder, values, is_valid);
+        break;
+      } else if (column_builder.col_type.get_subtype() == kFLOAT) {
+        appendToListColumnBuilder<arrow::FloatBuilder, float>(
+            column_builder, values, is_valid);
+        break;
+      } else if (column_builder.col_type.get_subtype() == kDOUBLE) {
+        appendToListColumnBuilder<arrow::DoubleBuilder, double>(
+            column_builder, values, is_valid);
+        break;
+      } else {
+        throw std::runtime_error(column_builder.col_type.get_type_name() +
+                                 " is not supported in Arrow result sets.");
+      }
     case kCHAR:
     case kVARCHAR:
     case kTEXT:

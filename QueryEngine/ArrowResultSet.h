@@ -42,7 +42,16 @@ using ValueArray = boost::variant<std::vector<bool>,
                                   std::vector<arrow::Decimal128>,
                                   std::vector<float>,
                                   std::vector<double>,
+                                  std::vector<std::vector<int8_t>>,
+                                  std::vector<std::vector<int16_t>>,
+                                  std::vector<std::vector<int32_t>>,
+                                  std::vector<std::vector<int64_t>>,
+                                  std::vector<std::vector<float>>,
+                                  std::vector<std::vector<double>>,
                                   std::vector<std::string>>;
+
+template <typename T>
+using Vec2 = std::vector<std::vector<T>>;
 
 class ArrowResultSet;
 
