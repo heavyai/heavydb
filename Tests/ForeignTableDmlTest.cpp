@@ -1859,7 +1859,7 @@ TEST_P(DataWrapperSelectQueryTest, FilePathWithLeadingSlash) {
       " WITH (storage_type = 'LOCAL_FILE', base_path = '" + getDataFilesPath() + "');");
   std::string options{"file_path = '/1" + wrapper_ext(wrapper_type_) + "'"};
   if (wrapper_type_ == "regex_parser") {
-    options += ", line_regex = '(\\d+)'";
+    options += ", line_regex = '(\\d+)', header = 'true'";
   }
   sql("CREATE FOREIGN TABLE " + default_table_name +
       " (i INTEGER) SERVER test_server WITH (" + options + ");");

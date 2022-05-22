@@ -92,7 +92,7 @@ void set_parallelism_hints(const RelAlgNode& ra_node,
     int table_id = physical_input.table_id;
     auto table = catalog.getMetadataForTable(table_id, false);
     if (table && table->storageType == StorageType::FOREIGN_TABLE &&
-        !table->is_system_table) {
+        !table->is_in_memory_system_table) {
       int col_id = catalog.getColumnIdBySpi(table_id, physical_input.col_id);
       const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
       auto foreign_table = catalog.getForeignTable(table_id);
@@ -154,7 +154,7 @@ void prepare_for_system_table_execution(const RelAlgNode& ra_node,
     for (const auto& physical_input : get_physical_inputs(&ra_node)) {
       int table_id = physical_input.table_id;
       auto table = catalog.getMetadataForTable(table_id, false);
-      if (table && table->is_system_table) {
+      if (table && table->is_in_memory_system_table) {
         auto column_id = catalog.getColumnIdBySpi(table_id, physical_input.col_id);
         system_table_columns_by_table_id[table_id].emplace_back(column_id);
       }

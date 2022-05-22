@@ -89,6 +89,7 @@ class ParserWrapper {
   bool is_copy_to = false;
   bool is_validate = false;
   bool is_other_explain = false;
+  bool is_refresh = false;
 
   DMLType getDMLType() const { return dml_type_; }
 

@@ -981,6 +981,7 @@ void SysCatalog::dropUser(const string& name) {
   }
 
   // Normal user.
+
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     dropRole_unsafe(name, /*is_temporary=*/false);

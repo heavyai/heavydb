@@ -103,6 +103,17 @@ static constexpr const char* ROLE_ASSIGNMENTS_SYS_TABLE_NAME{"role_assignments"}
 static constexpr const char* MEMORY_SUMMARY_SYS_TABLE_NAME{"memory_summary"};
 static constexpr const char* MEMORY_DETAILS_SYS_TABLE_NAME{"memory_details"};
 static constexpr const char* STORAGE_DETAILS_SYS_TABLE_NAME{"storage_details"};
+static constexpr const char* SERVER_LOGS_SYS_TABLE_NAME{"server_logs"};
+static constexpr const char* REQUEST_LOGS_SYS_TABLE_NAME{"request_logs"};
+static constexpr const char* WS_SERVER_LOGS_SYS_TABLE_NAME{"web_server_logs"};
+static constexpr const char* WS_SERVER_ACCESS_LOGS_SYS_TABLE_NAME{
+    "web_server_access_logs"};
+
+static const std::array<std::string, 4> kAggregatorOnlySystemTables{
+    DASHBOARDS_SYS_TABLE_NAME,
+    REQUEST_LOGS_SYS_TABLE_NAME,
+    WS_SERVER_LOGS_SYS_TABLE_NAME,
+    WS_SERVER_ACCESS_LOGS_SYS_TABLE_NAME};
 
 /**
  * @type Catalog
@@ -422,6 +433,16 @@ class Catalog final {
   void dropForeignServer(const std::string& server_name);
 
   /**
+   * @brief Get all of the foreign tables for associated with a foreign server id
+   *
+   * @param foreign_server_id - id of foreign server
+   * @return std::vector<const ForeignTable*> a vector containing foreign tables which
+   * use the foreign server
+   */
+  std::vector<const foreign_storage::ForeignTable*> getAllForeignTablesForForeignServer(
+      const int32_t foreign_server_id);
+
+  /**
    * Performs a query on all foreign servers accessible to user with optional filter,
    * and returns pointers toresulting server objects
    *
@@ -567,6 +588,8 @@ class Catalog final {
    */
   void reassignOwners(const std::set<std::string>& old_owners,
                       const std::string& new_owner);
+
+  bool isInfoSchemaDb() const;
 
  protected:
   void CheckAndExecuteMigrations();
@@ -752,15 +775,32 @@ class Catalog final {
   void conditionallyInitializeSystemObjects();
   void initializeSystemServers();
   void initializeSystemTables();
+  void initializeUsersSystemTable();
+  void initializeDatabasesSystemTable();
+  void initializePermissionsSystemTable();
+  void initializeRolesSystemTable();
+  void initializeTablesSystemTable();
+  void initializeDashboardsSystemTable();
+  void initializeRoleAssignmentsSystemTable();
+  void initializeMemorySummarySystemTable();
+  void initializeMemoryDetailsSystemTable();
+  void initializeStorageDetailsSystemTable();
+  void initializeServerLogsSystemTables();
+  void initializeRequestLogsSystemTables();
+  void initializeWebServerLogsSystemTables();
+  void initializeWebServerAccessLogsSystemTables();
+
   void createSystemTableServer(const std::string& server_name,
-                               const std::string& data_wrapper_type);
+                               const std::string& data_wrapper_type,
+                               const foreign_storage::OptionsMap& options = {});
   std::pair<foreign_storage::ForeignTable, std::list<ColumnDescriptor>>
   getSystemTableSchema(
       const std::string& table_name,
       const std::string& server_name,
-      const std::vector<std::pair<std::string, SQLTypeInfo>>& column_type_by_name);
+      const std::vector<std::pair<std::string, SQLTypeInfo>>& column_type_by_name,
+      bool is_in_memory_system_table);
 
-  void recreateSystemTableIfUpdated(foreign_storage::ForeignTable& foreign_table,
+  bool recreateSystemTableIfUpdated(foreign_storage::ForeignTable& foreign_table,
                                     const std::list<ColumnDescriptor>& columns);
 
   void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
@@ -776,14 +816,14 @@ class Catalog final {
                                       bool multiline_formatting,
                                       bool dump_defaults) const;
 
-  bool isInfoSchemaDb() const;
-
   static constexpr const char* CATALOG_SERVER_NAME{"system_catalog_server"};
   static constexpr const char* MEMORY_STATS_SERVER_NAME{"system_memory_stats_server"};
   static constexpr const char* STORAGE_STATS_SERVER_NAME{"system_storage_stats_server"};
-  static constexpr std::array<const char*, 3> INTERNAL_SERVERS{CATALOG_SERVER_NAME,
+  static constexpr const char* LOGS_SERVER_NAME{"system_logs_server"};
+  static constexpr std::array<const char*, 4> INTERNAL_SERVERS{CATALOG_SERVER_NAME,
                                                                MEMORY_STATS_SERVER_NAME,
-                                                               STORAGE_STATS_SERVER_NAME};
+                                                               STORAGE_STATS_SERVER_NAME,
+                                                               LOGS_SERVER_NAME};
 
  public:
   mutable std::mutex sqliteMutex_;

@@ -49,6 +49,18 @@ class RegexFileBufferParser : public TextFileBufferParser {
   inline static const std::string LINE_START_REGEX_KEY = "LINE_START_REGEX";
   inline static const std::string HEADER_KEY = "HEADER";
 
+ protected:
+  virtual bool regexMatchColumns(const std::string& row_str,
+                                 const boost::regex& line_regex,
+                                 size_t logical_column_count,
+                                 std::vector<std::string>& parsed_columns_str,
+                                 std::vector<std::string_view>& parsed_columns_sv,
+                                 const std::string& file_path) const;
+
+  virtual bool shouldRemoveNonMatches() const;
+
+  virtual bool shouldTruncateStringValues() const;
+
  private:
   static size_t getMaxBufferResize();
 

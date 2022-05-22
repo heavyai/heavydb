@@ -1899,6 +1899,16 @@ ExecutionResult RefreshForeignTablesCommand::execute(bool read_only_mode) {
 
   for (const auto& table_name_json : ddl_payload["tableNames"].GetArray()) {
     std::string table_name = table_name_json.GetString();
+    static const std::array<std::string, 4> log_system_tables{
+        Catalog_Namespace::SERVER_LOGS_SYS_TABLE_NAME,
+        Catalog_Namespace::REQUEST_LOGS_SYS_TABLE_NAME,
+        Catalog_Namespace::WS_SERVER_LOGS_SYS_TABLE_NAME,
+        Catalog_Namespace::WS_SERVER_ACCESS_LOGS_SYS_TABLE_NAME};
+    if (cat.isInfoSchemaDb() && !shared::contains(log_system_tables, table_name)) {
+      throw std::runtime_error(
+          "REFRESH FOREIGN TABLE can only be executed for the following tables: " +
+          join(log_system_tables, ","));
+    }
     foreign_storage::refresh_foreign_table(cat, table_name, evict_cached_entries);
   }
 

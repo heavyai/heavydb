@@ -982,10 +982,16 @@ FILE* FileMgr::getFileForFileId(const int32_t fileId) {
   return files_.at(fileId)->f;
 }
 
-bool FileMgr::hasChunkMetadataForKeyPrefix(const ChunkKey& keyPrefix) {
+bool FileMgr::hasChunkMetadataForKeyPrefix(const ChunkKey& key_prefix) {
   heavyai::shared_lock<heavyai::shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
-  auto chunkIt = chunkIndex_.lower_bound(keyPrefix);
-  return (chunkIt != chunkIndex_.end());
+  auto chunk_it = chunkIndex_.lower_bound(key_prefix);
+  if (chunk_it == chunkIndex_.end()) {
+    return false;
+  } else {
+    auto it_pair =
+        std::mismatch(key_prefix.begin(), key_prefix.end(), chunk_it->first.begin());
+    return it_pair.first == key_prefix.end();
+  }
 }
 
 void FileMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,

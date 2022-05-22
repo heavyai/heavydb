@@ -303,6 +303,8 @@ boost::shared_ptr<CONSOLE_SINK> make_sink(LogOptions const& log_opts) {
 bool g_any_active_channels{false};
 Severity g_min_active_severity{Severity::FATAL};
 
+static boost::filesystem::path g_log_dir_path;
+
 void init(LogOptions const& log_opts) {
   boost::shared_ptr<boost::log::core> core = boost::log::core::get();
   // boost::log::add_common_attributes(); // LineID TimeStamp ProcessID ThreadID
@@ -329,6 +331,7 @@ void init(LogOptions const& log_opts) {
   core->add_sink(make_sink<ClogSync>(log_opts));
   g_min_active_severity = std::min(g_min_active_severity, log_opts.severity_clog_);
   nvtx_helpers::init();
+  g_log_dir_path = log_opts.full_log_dir();
 }
 
 void set_once_fatal_func(FatalFunc fatal_func) {
@@ -818,6 +821,9 @@ ThreadId thread_id() {
   return g_thread_id;
 }
 
+boost::filesystem::path get_log_dir_path() {
+  return boost::filesystem::canonical(g_log_dir_path);
+}
 }  // namespace logger
 
 #endif  // #ifndef __CUDACC__

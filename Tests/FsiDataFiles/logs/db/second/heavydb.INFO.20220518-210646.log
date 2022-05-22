@@ -1,0 +1,6 @@
+2022-05-18T21:06:46.769106 I 305000 0 0 HeavyDB.cpp:431 HeavyDB starting
+  up
+2022-05-18T21:07:04.752527 I 305000 0 3 DBHandler.cpp:4840 stdlog get_dashboards 21 0 information_schema admin 456-efgh {"client"} {"http:127.0.0.1"}
+2022-05-18T21:07:14.084241 I 305000 0 3 DBHandler.cpp:1555 stdlog_begin sql_execute 23 0 information_schema admin 456-efgh {"query_str"} {"select * from web_server_access_logs LIMIT 1000;"}
+2022-05-18T21:07:15.084981 I 306000 0 3 Calcite.cpp:546 User calcite catalog information_schema sql 'select * from web_server_access_logs LIMIT 1000;'
+2022-05-18T21:07:16.509612 F 306000 0 3 DBHandler.cpp:1555 stdlog sql_execute 23 1426 information_schema admin 456-efgh {"query_str","client","nonce","execution_time_ms","total_time_ms"} {"select * from web_server_access_logs LIMIT 1000;","http:127.0.0.1","100/1-0","1323","1426"}

@@ -781,7 +781,11 @@ void dispatch_metadata_scan_requests(
     current_file_offset += request.end_pos;
     first_row_index_in_buffer += num_rows_in_buffer;
 
-    dispatch_metadata_scan_request(multi_threading_params, request);
+    if (num_rows_in_buffer > 0) {
+      dispatch_metadata_scan_request(multi_threading_params, request);
+    } else {
+      add_request_to_pool(multi_threading_params, request);
+    }
   }
 
   std::unique_lock<std::mutex> pending_requests_queue_lock(
@@ -856,11 +860,11 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
   auto& server_options = foreign_table_->foreign_server->options;
   std::set<std::string> rolled_off_files;
   if (foreign_table_->isAppendMode() && file_reader_ != nullptr) {
-    parser.validateFiles(file_reader_.get(), foreign_table_);
     auto multi_file_reader = dynamic_cast<MultiFileReader*>(file_reader_.get());
     if (allowFileRollOff(foreign_table_) && multi_file_reader) {
       rolled_off_files = multi_file_reader->checkForRolledOffFiles(file_path_options);
     }
+    parser.validateFiles(file_reader_.get(), foreign_table_);
     if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
       file_reader_->checkForMoreRows(append_start_offset_, file_path_options);
     } else {

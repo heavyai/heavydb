@@ -59,6 +59,7 @@
 #include "DataMgr/ForeignStorage/AbstractFileStorageDataWrapper.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "DataMgr/ForeignStorage/FsiChunkUtils.h"
+#include "DataMgr/ForeignStorage/RegexParserDataWrapper.h"
 #include "Fragmenter/Fragmenter.h"
 #include "Fragmenter/SortedOrderFragmenter.h"
 #include "LockMgr/LockMgr.h"
@@ -96,6 +97,9 @@ bool g_enable_fsi{true};
 bool g_enable_s3_fsi{false};
 int32_t g_distributed_leaf_idx{-1};
 int32_t g_distributed_num_leaves{0};
+bool g_enable_logs_system_tables{true};
+// 10 minutes refresh interval by default
+std::string g_logs_system_tables_refresh_interval{"600S"};
 extern bool g_cache_string_hash;
 extern bool g_enable_system_tables;
 
@@ -3062,6 +3066,23 @@ int32_t Catalog::getTableEpoch(const int32_t db_id, const int32_t table_id) cons
   }
 }
 
+std::vector<const foreign_storage::ForeignTable*>
+Catalog::getAllForeignTablesForForeignServer(const int32_t foreign_server_id) {
+  cat_read_lock read_lock(this);
+  std::vector<const foreign_storage::ForeignTable*> foreign_tables;
+  for (auto entry : tableDescriptorMapById_) {
+    auto table_descriptor = entry.second;
+    if (table_descriptor->storageType == StorageType::FOREIGN_TABLE) {
+      auto foreign_table = dynamic_cast<foreign_storage::ForeignTable*>(table_descriptor);
+      CHECK(foreign_table);
+      if (foreign_table->foreign_server->id == foreign_server_id) {
+        foreign_tables.emplace_back(foreign_table);
+      }
+    }
+  }
+  return foreign_tables;
+}
+
 void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) {
   LOG(INFO) << "Set table epoch db:" << db_id << " Table ID  " << table_id
             << " back to new epoch " << new_epoch;
@@ -4525,6 +4546,11 @@ void Catalog::updateForeignTablesInMapUnlocked() {
     foreign_table->populateOptionsMap(options);
     foreign_table->last_refresh_time = last_refresh_time;
     foreign_table->next_refresh_time = next_refresh_time;
+    if (foreign_table->is_system_table) {
+      foreign_table->is_in_memory_system_table =
+          shared::contains(foreign_storage::DataWrapperType::IN_MEMORY_DATA_WRAPPERS,
+                           foreign_table->foreign_server->data_wrapper_type);
+    }
   }
 }
 
@@ -5618,6 +5644,18 @@ void Catalog::initializeSystemServers() {
                           foreign_storage::DataWrapperType::INTERNAL_MEMORY_STATS);
   createSystemTableServer(STORAGE_STATS_SERVER_NAME,
                           foreign_storage::DataWrapperType::INTERNAL_STORAGE_STATS);
+
+  if (g_enable_logs_system_tables) {
+    foreign_storage::OptionsMap log_server_options;
+    log_server_options
+        [foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY] =
+            foreign_storage::AbstractFileStorageDataWrapper::LOCAL_FILE_STORAGE_TYPE;
+    log_server_options[foreign_storage::AbstractFileStorageDataWrapper::BASE_PATH_KEY] =
+        logger::get_log_dir_path().string();
+    createSystemTableServer(LOGS_SERVER_NAME,
+                            foreign_storage::DataWrapperType::INTERNAL_LOGS,
+                            log_server_options);
+  }
 }
 
 namespace {
@@ -5637,13 +5675,84 @@ inline SQLTypeInfo get_var_encoded_text_array_type() {
   sql_type_info.set_comp_param(32);
   return sql_type_info;
 }
+
+void set_common_log_system_table_options(foreign_storage::ForeignTable& foreign_table) {
+  using foreign_storage::ForeignTable;
+  foreign_table.options[ForeignTable::REFRESH_TIMING_TYPE_KEY] =
+      ForeignTable::SCHEDULE_REFRESH_TIMING_TYPE;
+  // Set start date time to 1 minute from now.
+  auto start_epoch = foreign_storage::RefreshTimeCalculator::getCurrentTime() + 60;
+  foreign_table.options[ForeignTable::REFRESH_START_DATE_TIME_KEY] =
+      shared::convert_temporal_to_iso_format({kTIMESTAMP}, start_epoch);
+  foreign_table.options[ForeignTable::REFRESH_INTERVAL_KEY] =
+      g_logs_system_tables_refresh_interval;
+  foreign_table.options[ForeignTable::REFRESH_UPDATE_TYPE_KEY] =
+      ForeignTable::APPEND_REFRESH_UPDATE_TYPE;
+  using foreign_storage::AbstractFileStorageDataWrapper;
+  foreign_table.options[AbstractFileStorageDataWrapper::ALLOW_FILE_ROLL_OFF_KEY] = "TRUE";
+}
+
+void set_common_db_log_system_table_options(
+    foreign_storage::ForeignTable& foreign_table) {
+  // Each log entry should start with a timestamp.
+  using foreign_storage::RegexFileBufferParser;
+  foreign_table.options[RegexFileBufferParser::LINE_START_REGEX_KEY] =
+      "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}";
+  using foreign_storage::AbstractFileStorageDataWrapper;
+  foreign_table.options[AbstractFileStorageDataWrapper::REGEX_PATH_FILTER_KEY] =
+      ".*heavydb\\.INFO\\..*";
+  set_common_log_system_table_options(foreign_table);
+}
+
+void clear_cached_table_data(const Data_Namespace::DataMgr* data_mgr,
+                             int32_t db_id,
+                             int32_t table_id) {
+  auto cache = data_mgr->getPersistentStorageMgr()->getDiskCache();
+  if (cache) {
+    cache->clearForTablePrefix({db_id, table_id});
+  }
+}
+
+void drop_tables(Catalog& catalog, const std::vector<std::string>& table_names) {
+  for (const auto& table_name : table_names) {
+    if (auto td = catalog.getMetadataForTable(table_name)) {
+      catalog.dropTable(td);
+    }
+  }
+}
 }  // namespace
 
 void Catalog::initializeSystemTables() {
-  foreign_storage::ForeignTable foreign_table;
-  list<ColumnDescriptor> columns;
+  initializeUsersSystemTable();
+  initializeDatabasesSystemTable();
+  initializePermissionsSystemTable();
+  initializeRolesSystemTable();
+  initializeTablesSystemTable();
+  initializeDashboardsSystemTable();
+  initializeRoleAssignmentsSystemTable();
+  initializeMemorySummarySystemTable();
+  initializeMemoryDetailsSystemTable();
+  initializeStorageDetailsSystemTable();
 
-  std::tie(foreign_table, columns) =
+  if (g_enable_logs_system_tables) {
+    initializeServerLogsSystemTables();
+    initializeRequestLogsSystemTables();
+    initializeWebServerLogsSystemTables();
+    initializeWebServerAccessLogsSystemTables();
+  } else {
+    drop_tables(*this,
+                {SERVER_LOGS_SYS_TABLE_NAME,
+                 REQUEST_LOGS_SYS_TABLE_NAME,
+                 WS_SERVER_LOGS_SYS_TABLE_NAME,
+                 WS_SERVER_ACCESS_LOGS_SYS_TABLE_NAME});
+    if (getForeignServer(LOGS_SERVER_NAME)) {
+      dropForeignServer(LOGS_SERVER_NAME);
+    }
+  }
+}
+
+void Catalog::initializeUsersSystemTable() {
+  auto [foreign_table, columns] =
       getSystemTableSchema(USERS_SYS_TABLE_NAME,
                            CATALOG_SERVER_NAME,
                            {{"user_id", {kINT}},
@@ -5651,19 +5760,25 @@ void Catalog::initializeSystemTables() {
                             {"is_super_user", {kBOOLEAN}},
                             {"default_db_id", {kINT}},
                             {"default_db_name", get_encoded_text_type()},
-                            {"can_login", {kBOOLEAN}}});
+                            {"can_login", {kBOOLEAN}}},
+                           true);
   recreateSystemTableIfUpdated(foreign_table, columns);
+}
 
-  std::tie(foreign_table, columns) =
+void Catalog::initializeDatabasesSystemTable() {
+  auto [foreign_table, columns] =
       getSystemTableSchema(DATABASES_SYS_TABLE_NAME,
                            CATALOG_SERVER_NAME,
                            {{"database_id", {kINT}},
                             {"database_name", get_encoded_text_type()},
                             {"owner_id", {kINT}},
-                            {"owner_user_name", get_encoded_text_type()}});
+                            {"owner_user_name", get_encoded_text_type()}},
+                           true);
   recreateSystemTableIfUpdated(foreign_table, columns);
+}
 
-  std::tie(foreign_table, columns) =
+void Catalog::initializePermissionsSystemTable() {
+  auto [foreign_table, columns] =
       getSystemTableSchema(PERMISSIONS_SYS_TABLE_NAME,
                            CATALOG_SERVER_NAME,
                            {{"role_name", get_encoded_text_type()},
@@ -5675,16 +5790,22 @@ void Catalog::initializeSystemTables() {
                             {"object_owner_id", {kINT}},
                             {"object_owner_user_name", get_encoded_text_type()},
                             {"object_permission_type", get_encoded_text_type()},
-                            {"object_permissions", get_var_encoded_text_array_type()}});
+                            {"object_permissions", get_var_encoded_text_array_type()}},
+                           true);
   recreateSystemTableIfUpdated(foreign_table, columns);
+}
 
-  std::tie(foreign_table, columns) =
+void Catalog::initializeRolesSystemTable() {
+  auto [foreign_table, columns] =
       getSystemTableSchema(ROLES_SYS_TABLE_NAME,
                            CATALOG_SERVER_NAME,
-                           {{"role_name", get_encoded_text_type()}});
+                           {{"role_name", get_encoded_text_type()}},
+                           true);
   recreateSystemTableIfUpdated(foreign_table, columns);
+}
 
-  std::tie(foreign_table, columns) =
+void Catalog::initializeTablesSystemTable() {
+  auto [foreign_table, columns] =
       getSystemTableSchema(TABLES_SYS_TABLE_NAME,
                            CATALOG_SERVER_NAME,
                            {{"database_id", {kINT}},
@@ -5702,10 +5823,13 @@ void Catalog::initializeSystemTables() {
                             {"max_rows", {kBIGINT}},
                             {"max_rollback_epochs", {kINT}},
                             {"shard_count", {kINT}},
-                            {"ddl_statement", get_encoded_text_type()}});
+                            {"ddl_statement", get_encoded_text_type()}},
+                           true);
   recreateSystemTableIfUpdated(foreign_table, columns);
+}
 
-  std::tie(foreign_table, columns) =
+void Catalog::initializeDashboardsSystemTable() {
+  auto [foreign_table, columns] =
       getSystemTableSchema(DASHBOARDS_SYS_TABLE_NAME,
                            CATALOG_SERVER_NAME,
                            {{"database_id", {kINT}},
@@ -5715,16 +5839,22 @@ void Catalog::initializeSystemTables() {
                             {"owner_id", {kINT}},
                             {"owner_user_name", get_encoded_text_type()},
                             {"last_updated_at", {kTIMESTAMP}},
-                            {"data_sources", get_var_encoded_text_array_type()}});
+                            {"data_sources", get_var_encoded_text_array_type()}},
+                           true);
   recreateSystemTableIfUpdated(foreign_table, columns);
+}
 
-  std::tie(foreign_table, columns) = getSystemTableSchema(
+void Catalog::initializeRoleAssignmentsSystemTable() {
+  auto [foreign_table, columns] = getSystemTableSchema(
       ROLE_ASSIGNMENTS_SYS_TABLE_NAME,
       CATALOG_SERVER_NAME,
-      {{"role_name", get_encoded_text_type()}, {"user_name", get_encoded_text_type()}});
+      {{"role_name", get_encoded_text_type()}, {"user_name", get_encoded_text_type()}},
+      true);
   recreateSystemTableIfUpdated(foreign_table, columns);
+}
 
-  std::tie(foreign_table, columns) =
+void Catalog::initializeMemorySummarySystemTable() {
+  auto [foreign_table, columns] =
       getSystemTableSchema(MEMORY_SUMMARY_SYS_TABLE_NAME,
                            MEMORY_STATS_SERVER_NAME,
                            {{"node", get_encoded_text_type()},
@@ -5734,10 +5864,13 @@ void Catalog::initializeSystemTables() {
                             {"page_size", {kBIGINT}},
                             {"allocated_page_count", {kBIGINT}},
                             {"used_page_count", {kBIGINT}},
-                            {"free_page_count", {kBIGINT}}});
+                            {"free_page_count", {kBIGINT}}},
+                           true);
   recreateSystemTableIfUpdated(foreign_table, columns);
+}
 
-  std::tie(foreign_table, columns) =
+void Catalog::initializeMemoryDetailsSystemTable() {
+  auto [foreign_table, columns] =
       getSystemTableSchema(MEMORY_DETAILS_SYS_TABLE_NAME,
                            MEMORY_STATS_SERVER_NAME,
                            {{"node", get_encoded_text_type()},
@@ -5755,10 +5888,13 @@ void Catalog::initializeSystemTables() {
                             {"page_size", {kBIGINT}},
                             {"slab_id", {kINT}},
                             {"start_page", {kBIGINT}},
-                            {"last_touch_epoch", {kBIGINT}}});
+                            {"last_touch_epoch", {kBIGINT}}},
+                           true);
   recreateSystemTableIfUpdated(foreign_table, columns);
+}
 
-  std::tie(foreign_table, columns) =
+void Catalog::initializeStorageDetailsSystemTable() {
+  auto [foreign_table, columns] =
       getSystemTableSchema(STORAGE_DETAILS_SYS_TABLE_NAME,
                            STORAGE_STATS_SERVER_NAME,
                            {{"node", get_encoded_text_type()},
@@ -5778,28 +5914,161 @@ void Catalog::initializeSystemTables() {
                             {"total_metadata_file_size", {kBIGINT}},
                             {"total_metadata_page_count", {kBIGINT}},
                             {"total_free_metadata_page_count", {kBIGINT}},
-                            {"total_dictionary_data_file_size", {kBIGINT}}});
+                            {"total_dictionary_data_file_size", {kBIGINT}}},
+                           true);
   recreateSystemTableIfUpdated(foreign_table, columns);
 }
 
+void Catalog::initializeServerLogsSystemTables() {
+  auto [foreign_table, columns] =
+      getSystemTableSchema(SERVER_LOGS_SYS_TABLE_NAME,
+                           LOGS_SERVER_NAME,
+                           {{"node", get_encoded_text_type()},
+                            {"log_timestamp", {kTIMESTAMP}},
+                            {"severity", get_encoded_text_type()},
+                            {"process_id", {kINT}},
+                            {"query_id", {kINT}},
+                            {"thread_id", {kINT}},
+                            {"file_location", get_encoded_text_type()},
+                            {"message", get_encoded_text_type()}},
+                           false);
+  set_common_db_log_system_table_options(foreign_table);
+  using foreign_storage::RegexFileBufferParser;
+  // Matches server logs like those seen in the "heavydb.INFO.20220518-210103.log" test
+  // file.
+  foreign_table.options[RegexFileBufferParser::LINE_REGEX_KEY] =
+      "^([^\\s]+)\\s(\\w)\\s(\\d+)\\s(\\d+)\\s(\\d+)\\s([^\\s]+)\\s(.+)$";
+  if (recreateSystemTableIfUpdated(foreign_table, columns)) {
+    // Clear table cache if the table schema is updated
+    clear_cached_table_data(dataMgr_.get(), currentDB_.dbId, foreign_table.tableId);
+  }
+}
+
+void Catalog::initializeRequestLogsSystemTables() {
+  auto [foreign_table, columns] =
+      getSystemTableSchema(REQUEST_LOGS_SYS_TABLE_NAME,
+                           LOGS_SERVER_NAME,
+                           {{"log_timestamp", {kTIMESTAMP}},
+                            {"severity", get_encoded_text_type()},
+                            {"process_id", {kINT}},
+                            {"query_id", {kINT}},
+                            {"thread_id", {kINT}},
+                            {"file_location", get_encoded_text_type()},
+                            {"api_name", get_encoded_text_type()},
+                            {"request_duration_ms", {kBIGINT}},
+                            {"database_name", get_encoded_text_type()},
+                            {"user_name", get_encoded_text_type()},
+                            {"public_session_id", get_encoded_text_type()},
+                            {"query_string", get_encoded_text_type()},
+                            {"client", get_encoded_text_type()},
+                            {"dashboard_id", {kINT}},
+                            {"dashboard_name", get_encoded_text_type()},
+                            {"chart_id", {kINT}},
+                            {"execution_time_ms", {kBIGINT}},
+                            {"total_time_ms", {kBIGINT}}},
+                           false);
+  set_common_db_log_system_table_options(foreign_table);
+  using foreign_storage::RegexFileBufferParser;
+  // Matches request logs like those seen in the "heavydb.INFO.20220518-210103.log" test
+  // file (specifically, lines containing " stdlog ").
+  foreign_table.options[RegexFileBufferParser::LINE_REGEX_KEY] =
+      "^([^\\s]+)\\s(\\w)\\s(\\d+)\\s(\\d+)\\s(\\d+)\\s([^\\s]+)\\s(?:stdlog)\\s(\\w+)"
+      "\\s(?:\\d+)\\s(\\d+)\\s(\\w+)\\s([^\\s]+)\\s([^\\s]+)\\s(\\{[^\\}]+\\})\\s(\\{[^"
+      "\\}]+\\})$";
+  if (recreateSystemTableIfUpdated(foreign_table, columns)) {
+    // Clear table cache if the table schema is updated
+    clear_cached_table_data(dataMgr_.get(), currentDB_.dbId, foreign_table.tableId);
+  }
+}
+
+void Catalog::initializeWebServerLogsSystemTables() {
+  auto [foreign_table, columns] =
+      getSystemTableSchema(WS_SERVER_LOGS_SYS_TABLE_NAME,
+                           LOGS_SERVER_NAME,
+                           {{"log_timestamp", {kTIMESTAMP}},
+                            {"severity", get_encoded_text_type()},
+                            {"message", get_encoded_text_type()}},
+                           false);
+  set_common_log_system_table_options(foreign_table);
+  using foreign_storage::AbstractFileStorageDataWrapper;
+  foreign_table.options[AbstractFileStorageDataWrapper::REGEX_PATH_FILTER_KEY] =
+      ".*heavy_web_server.*ALL\\..*";
+  using foreign_storage::RegexFileBufferParser;
+  // Matches web server logs like those seen in the
+  // "heavy_web_server.test.log.ALL.20220518-210103.307016" test file.
+  foreign_table.options[RegexFileBufferParser::LINE_REGEX_KEY] =
+      "^time=\"([^\"]+)\"\\slevel=([^\\s]+)\\smsg=\"([^\"]+)\"$";
+  if (recreateSystemTableIfUpdated(foreign_table, columns)) {
+    // Clear table cache if the table schema is updated
+    clear_cached_table_data(dataMgr_.get(), currentDB_.dbId, foreign_table.tableId);
+  }
+}
+
+void Catalog::initializeWebServerAccessLogsSystemTables() {
+  auto [foreign_table, columns] =
+      getSystemTableSchema(WS_SERVER_ACCESS_LOGS_SYS_TABLE_NAME,
+                           LOGS_SERVER_NAME,
+                           {{"ip_address", get_encoded_text_type()},
+                            {"log_timestamp", {kTIMESTAMP}},
+                            {"http_method", get_encoded_text_type()},
+                            {"endpoint", get_encoded_text_type()},
+                            {"http_status", {kSMALLINT}},
+                            {"response_size", {kBIGINT}}},
+                           false);
+  set_common_log_system_table_options(foreign_table);
+  using foreign_storage::AbstractFileStorageDataWrapper;
+  foreign_table.options[AbstractFileStorageDataWrapper::REGEX_PATH_FILTER_KEY] =
+      ".*heavy_web_server.*ACCESS\\..*";
+  using foreign_storage::RegexFileBufferParser;
+  // Matches web server access logs like those seen in the
+  // "heavy_web_server.test.log.ACCESS.20220518-210103.307016" test file.
+  foreign_table.options[RegexFileBufferParser::LINE_REGEX_KEY] =
+      "^(\\d+\\.\\d+\\.\\d+\\.\\d+)\\s+\\-\\s+\\-\\s+\\[([^\\]]+)\\]\\s+\"(\\w+)\\s+([^"
+      "\\s]+)\\s+HTTP\\/1\\.1\"\\s+(\\d+)\\s+(\\d+)$";
+  if (recreateSystemTableIfUpdated(foreign_table, columns)) {
+    // Clear table cache if the table schema is updated
+    clear_cached_table_data(dataMgr_.get(), currentDB_.dbId, foreign_table.tableId);
+  }
+}
+
 void Catalog::createSystemTableServer(const std::string& server_name,
-                                      const std::string& data_wrapper_type) {
+                                      const std::string& data_wrapper_type,
+                                      const foreign_storage::OptionsMap& options) {
   auto server = std::make_unique<foreign_storage::ForeignServer>(
-      server_name, data_wrapper_type, foreign_storage::OptionsMap{}, shared::kRootUserId);
+      server_name, data_wrapper_type, options, shared::kRootUserId);
   server->validate();
-  createForeignServer(std::move(server), true);
+  auto stored_server = getForeignServer(server_name);
+  if (stored_server && stored_server->options != server->options) {
+    // Drop all tables for server before dropping server.
+    auto tables = getAllForeignTablesForForeignServer(stored_server->id);
+    for (const auto table : tables) {
+      LOG(INFO) << "Dropping existing \"" << table->tableName << "\" system table for \""
+                << server_name << "\" foreign server.";
+      dropTable(table);
+    }
+    LOG(INFO) << "Dropping existing \"" << server_name
+              << "\" system table foreign server.";
+    dropForeignServer(server_name);
+    stored_server = nullptr;
+  }
+  if (!stored_server) {
+    LOG(INFO) << "Creating a new \"" << server_name << "\" system table foreign server.";
+    createForeignServer(std::move(server), true);
+  }
 }
 
 std::pair<foreign_storage::ForeignTable, std::list<ColumnDescriptor>>
 Catalog::getSystemTableSchema(
     const std::string& table_name,
     const std::string& server_name,
-    const std::vector<std::pair<std::string, SQLTypeInfo>>& column_type_by_name) {
+    const std::vector<std::pair<std::string, SQLTypeInfo>>& column_type_by_name,
+    bool is_in_memory_system_table) {
   foreign_storage::ForeignTable foreign_table;
   foreign_table.tableName = table_name;
   foreign_table.nColumns = column_type_by_name.size();
   foreign_table.isView = false;
   foreign_table.is_system_table = true;
+  foreign_table.is_in_memory_system_table = is_in_memory_system_table;
   foreign_table.fragmenter = nullptr;
   foreign_table.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
   foreign_table.maxFragRows = DEFAULT_FRAGMENT_ROWS;
@@ -5827,7 +6096,7 @@ Catalog::getSystemTableSchema(
   return {foreign_table, columns};
 }
 
-void Catalog::recreateSystemTableIfUpdated(foreign_storage::ForeignTable& foreign_table,
+bool Catalog::recreateSystemTableIfUpdated(foreign_storage::ForeignTable& foreign_table,
                                            const std::list<ColumnDescriptor>& columns) {
   auto stored_td = getMetadataForTable(foreign_table.tableName, false);
   bool should_recreate{false};
@@ -5836,7 +6105,8 @@ void Catalog::recreateSystemTableIfUpdated(foreign_storage::ForeignTable& foreig
         dynamic_cast<const foreign_storage::ForeignTable*>(stored_td);
     CHECK(stored_foreign_table);
     if (stored_foreign_table->foreign_server->name !=
-        foreign_table.foreign_server->name) {
+            foreign_table.foreign_server->name ||
+        stored_foreign_table->options != foreign_table.options) {
       should_recreate = true;
     } else {
       auto stored_columns =
@@ -5870,10 +6140,14 @@ void Catalog::recreateSystemTableIfUpdated(foreign_storage::ForeignTable& foreig
   }
   if (should_recreate) {
     if (stored_td) {
+      LOG(INFO) << "Dropping existing \"" << foreign_table.tableName
+                << "\" system table.";
       deleteTableCatalogMetadata(stored_td, {stored_td});
     }
+    LOG(INFO) << "Creating a new \"" << foreign_table.tableName << "\" system table.";
     createTable(foreign_table, columns, {}, true);
   }
+  return should_recreate;
 }
 
 void Catalog::addToColumnMap(ColumnDescriptor* cd) {

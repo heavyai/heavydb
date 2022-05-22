@@ -76,6 +76,7 @@ struct TableDescriptor {
 
   int32_t maxRollbackEpochs;
   bool is_system_table;
+  bool is_in_memory_system_table;
 
   // write mutex, only to be used inside catalog package
   std::shared_ptr<std::mutex> mutex_;
@@ -90,6 +91,7 @@ struct TableDescriptor {
       , hasDeletedCol(true)
       , maxRollbackEpochs(DEFAULT_MAX_ROLLBACK_EPOCHS)
       , is_system_table(false)
+      , is_in_memory_system_table(false)
       , mutex_(std::make_shared<std::mutex>()) {}
 
   virtual ~TableDescriptor() = default;
