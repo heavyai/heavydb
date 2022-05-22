@@ -20,6 +20,7 @@
 #include "CsvDataWrapper.h"
 #include "ForeignDataWrapper.h"
 #include "InternalCatalogDataWrapper.h"
+#include "InternalLogsDataWrapper.h"
 #include "InternalMemoryStatsDataWrapper.h"
 #include "InternalStorageStatsDataWrapper.h"
 #ifdef ENABLE_IMPORT_PARQUET
@@ -199,6 +200,23 @@ std::unique_ptr<ForeignServer> ForeignDataWrapperFactory::createForeignServerPro
   return foreign_server;
 }
 
+namespace {
+void set_header_option(OptionsMap& options,
+                       const import_export::ImportHeaderRow& has_header) {
+  switch (has_header) {
+    case import_export::ImportHeaderRow::kNoHeader:
+      options[CsvFileBufferParser::HEADER_KEY] = "FALSE";
+      break;
+    case import_export::ImportHeaderRow::kHasHeader:
+    case import_export::ImportHeaderRow::kAutoDetect:
+      options[CsvFileBufferParser::HEADER_KEY] = "TRUE";
+      break;
+    default:
+      CHECK(false);
+  }
+}
+}  // namespace
+
 std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy(
     const int db_id,
     const TableDescriptor* table,
@@ -244,6 +262,9 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
     }
     foreign_table->options[TextFileBufferParser::THREADS_KEY] =
         std::to_string(copy_params.threads);
+    if (copy_params.has_header != import_export::ImportHeaderRow::kAutoDetect) {
+      set_header_option(foreign_table->options, copy_params.has_header);
+    }
   }
 
   // setup data source options based on various criteria
@@ -259,17 +280,7 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
   if (copy_params.source_type == import_export::SourceType::kDelimitedFile) {
     foreign_table->options[CsvFileBufferParser::DELIMITER_KEY] = copy_params.delimiter;
     foreign_table->options[CsvFileBufferParser::NULLS_KEY] = copy_params.null_str;
-    switch (copy_params.has_header) {
-      case import_export::ImportHeaderRow::kNoHeader:
-        foreign_table->options[CsvFileBufferParser::HEADER_KEY] = "FALSE";
-        break;
-      case import_export::ImportHeaderRow::kHasHeader:
-      case import_export::ImportHeaderRow::kAutoDetect:
-        foreign_table->options[CsvFileBufferParser::HEADER_KEY] = "TRUE";
-        break;
-      default:
-        CHECK(false);
-    }
+    set_header_option(foreign_table->options, copy_params.has_header);
     foreign_table->options[CsvFileBufferParser::QUOTED_KEY] =
         bool_to_option_value(copy_params.quoted);
     foreign_table->options[CsvFileBufferParser::QUOTE_KEY] = copy_params.quote;
@@ -331,6 +342,8 @@ std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::create(
   } else if (data_wrapper_type == DataWrapperType::INTERNAL_STORAGE_STATS) {
     data_wrapper =
         std::make_unique<InternalStorageStatsDataWrapper>(db_id, foreign_table);
+  } else if (data_wrapper_type == DataWrapperType::INTERNAL_LOGS) {
+    data_wrapper = std::make_unique<InternalLogsDataWrapper>(db_id, foreign_table);
   } else {
     throw std::runtime_error("Unsupported data wrapper");
   }
@@ -375,6 +388,9 @@ const ForeignDataWrapper& ForeignDataWrapperFactory::createForValidation(
     } else if (data_wrapper_type == DataWrapperType::INTERNAL_STORAGE_STATS) {
       validation_data_wrappers_[data_wrapper_type_key] =
           std::make_unique<InternalStorageStatsDataWrapper>();
+    } else if (data_wrapper_type == DataWrapperType::INTERNAL_LOGS) {
+      validation_data_wrappers_[data_wrapper_type_key] =
+          std::make_unique<InternalLogsDataWrapper>();
     } else {
       UNREACHABLE();
     }

@@ -17,6 +17,8 @@
 #include "ForeignTableRefresh.h"
 #include "Catalog/Catalog.h"
 #include "LockMgr/LockMgr.h"
+#include "Shared/distributed.h"
+#include "Shared/misc.h"
 
 #include "QueryEngine/ExternalCacheInvalidators.h"
 
@@ -88,6 +90,11 @@ void refresh_foreign_table_unlocked(Catalog_Namespace::Catalog& catalog,
 void refresh_foreign_table(Catalog_Namespace::Catalog& catalog,
                            const std::string& table_name,
                            const bool evict_cached_entries) {
+  if (dist::is_leaf_node() &&
+      shared::contains(Catalog_Namespace::kAggregatorOnlySystemTables, table_name)) {
+    // Skip aggregator only system tables on leaf nodes.
+    return;
+  }
   auto table_lock =
       std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
           lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(

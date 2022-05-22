@@ -110,45 +110,24 @@ size_t get_row_count(const char* buffer,
                      size_t start,
                      size_t end,
                      char line_delim,
-                     const std::optional<boost::regex>& line_start_regex) {
+                     const std::optional<boost::regex>& line_start_regex,
+                     const boost::regex& line_regex,
+                     bool remove_non_matches) {
   size_t row_count{0};
   auto buffer_end = buffer + end;
   auto curr = buffer + start;
   while (curr <= buffer_end) {
     auto row_str = get_next_row(curr, buffer_end, line_delim, line_start_regex);
     curr += row_str.length() + 1;
-    row_count++;
+    if (remove_non_matches) {
+      if (boost::regex_match(row_str, line_regex)) {
+        row_count++;
+      }
+    } else {
+      row_count++;
+    }
   }
   return row_count;
-}
-
-bool regex_match_columns(const std::string& row_str,
-                         const boost::regex& line_regex,
-                         size_t logical_column_count,
-                         std::vector<std::string>& parsed_columns_str,
-                         std::vector<std::string_view>& parsed_columns_sv,
-                         const std::string& file_path) {
-  parsed_columns_str.clear();
-  parsed_columns_sv.clear();
-  boost::smatch match;
-  bool set_all_nulls{false};
-  if (boost::regex_match(row_str, match, line_regex)) {
-    auto matched_column_count = match.size() - 1;
-    if (logical_column_count != matched_column_count) {
-      throw_number_of_columns_mismatch_error(
-          logical_column_count, matched_column_count, file_path);
-    }
-    CHECK_GT(match.size(), static_cast<size_t>(1));
-    for (size_t i = 1; i < match.size(); i++) {
-      parsed_columns_str.emplace_back(match[i].str());
-      parsed_columns_sv.emplace_back(parsed_columns_str.back());
-    }
-  } else {
-    parsed_columns_sv =
-        std::vector<std::string_view>(logical_column_count, std::string_view{});
-    set_all_nulls = true;
-  }
-  return set_all_nulls;
 }
 
 std::optional<bool> validate_and_get_bool_value(const ForeignTable* foreign_table,
@@ -218,12 +197,19 @@ ParseBufferResult RegexFileBufferParser::parseBuffer(
 
         bool set_all_nulls = false;
         try {
-          set_all_nulls = regex_match_columns(row_str,
-                                              line_regex_,
-                                              logical_column_count,
-                                              parsed_columns_str,
-                                              parsed_columns_sv,
-                                              request.getFilePath());
+          parsed_columns_str.clear();
+          parsed_columns_sv.clear();
+          set_all_nulls = regexMatchColumns(row_str,
+                                            line_regex_,
+                                            logical_column_count,
+                                            parsed_columns_str,
+                                            parsed_columns_sv,
+                                            request.getFilePath());
+          if (set_all_nulls && shouldRemoveNonMatches()) {
+            current_row_id = row_count--;
+            remaining_row_count++;
+            continue;
+          }
         } catch (const ForeignStorageException& e) {
           if (request.track_rejected_rows) {
             result.rejected_rows.insert(current_row_id);
@@ -288,6 +274,11 @@ ParseBufferResult RegexFileBufferParser::parseBuffer(
               }
             } else {
               try {
+                auto& column_sv = parsed_columns_sv[parsed_column_index];
+                if (column_type.is_string() && shouldTruncateStringValues() &&
+                    column_sv.length() > StringDictionary::MAX_STRLEN) {
+                  column_sv = column_sv.substr(0, StringDictionary::MAX_STRLEN);
+                }
                 request.import_buffers[import_buffer_index]->add_value(
                     cd,
                     parsed_columns_sv[parsed_column_index],
@@ -336,6 +327,35 @@ ParseBufferResult RegexFileBufferParser::parseBuffer(
   return result;
 }
 
+bool RegexFileBufferParser::regexMatchColumns(
+    const std::string& row_str,
+    const boost::regex& line_regex,
+    size_t logical_column_count,
+    std::vector<std::string>& parsed_columns_str,
+    std::vector<std::string_view>& parsed_columns_sv,
+    const std::string& file_path) const {
+  boost::smatch match;
+  bool set_all_nulls{false};
+  if (boost::regex_match(row_str, match, line_regex)) {
+    auto matched_column_count = match.size() - 1 + parsed_columns_sv.size();
+    if (logical_column_count != matched_column_count) {
+      throw_number_of_columns_mismatch_error(
+          logical_column_count, matched_column_count, file_path);
+    }
+    CHECK_GT(match.size(), static_cast<size_t>(1));
+    for (size_t i = 1; i < match.size(); i++) {
+      parsed_columns_str.emplace_back(match[i].str());
+      parsed_columns_sv.emplace_back(parsed_columns_str.back());
+    }
+  } else {
+    parsed_columns_str.clear();
+    parsed_columns_sv =
+        std::vector<std::string_view>(logical_column_count, std::string_view{});
+    set_all_nulls = true;
+  }
+  return set_all_nulls;
+}
+
 import_export::CopyParams RegexFileBufferParser::validateAndGetCopyParams(
     const ForeignTable* foreign_table) const {
   import_export::CopyParams copy_params{};
@@ -347,6 +367,9 @@ import_export::CopyParams RegexFileBufferParser::validateAndGetCopyParams(
     } else {
       copy_params.has_header = import_export::ImportHeaderRow::kNoHeader;
     }
+  } else {
+    // By default, regex parsed files are not assumed to have headers.
+    copy_params.has_header = import_export::ImportHeaderRow::kNoHeader;
   }
   if (auto it = foreign_table->options.find(BUFFER_SIZE_KEY);
       it != foreign_table->options.end()) {
@@ -416,8 +439,13 @@ size_t RegexFileBufferParser::findRowEndPosition(
     }
   }
   CHECK(found_end_pos);
-  num_rows_in_buffer =
-      get_row_count(buffer.get(), 0, end_pos, copy_params.line_delim, line_start_regex_);
+  num_rows_in_buffer = get_row_count(buffer.get(),
+                                     0,
+                                     end_pos,
+                                     copy_params.line_delim,
+                                     line_start_regex_,
+                                     line_regex_,
+                                     shouldRemoveNonMatches());
   return end_pos + 1;
 }
 
@@ -446,5 +474,13 @@ void RegexFileBufferParser::setMaxBufferResize(size_t max_buffer_resize) {
 
 size_t RegexFileBufferParser::getMaxBufferResize() {
   return max_buffer_resize_;
+}
+
+bool RegexFileBufferParser::shouldRemoveNonMatches() const {
+  return false;
+}
+
+bool RegexFileBufferParser::shouldTruncateStringValues() const {
+  return false;
 }
 }  // namespace foreign_storage

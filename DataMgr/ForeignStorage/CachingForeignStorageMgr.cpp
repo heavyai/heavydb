@@ -73,11 +73,17 @@ void CachingForeignStorageMgr::populateChunkBuffersSafely(
   disk_cache_->checkpoint(db, tb);
 }
 
+namespace {
+bool is_in_memory_system_table_chunk_key(const ChunkKey& chunk_key) {
+  return get_foreign_table_for_key(chunk_key).is_in_memory_system_table;
+}
+}  // namespace
+
 void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
                                            AbstractBuffer* destination_buffer,
                                            const size_t num_bytes) {
   ChunkSizeValidator chunk_size_validator(chunk_key);
-  if (is_system_table_chunk_key(chunk_key)) {
+  if (is_in_memory_system_table_chunk_key(chunk_key)) {
     ForeignStorageMgr::fetchBuffer(chunk_key, destination_buffer, num_bytes);
     chunk_size_validator.validateChunkSize(destination_buffer);
     return;
@@ -129,7 +135,7 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
 void CachingForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
     ChunkMetadataVector& chunk_metadata,
     const ChunkKey& key_prefix) {
-  if (is_system_table_chunk_key(key_prefix)) {
+  if (is_in_memory_system_table_chunk_key(key_prefix)) {
     ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(chunk_metadata, key_prefix);
     return;
   }
@@ -242,6 +248,7 @@ void CachingForeignStorageMgr::eraseDataWrapper(const ChunkKey& key) {
 
 void CachingForeignStorageMgr::clearTable(const ChunkKey& table_key) {
   disk_cache_->clearForTablePrefix(table_key);
+  CHECK(!disk_cache_->hasCachedMetadataForKeyPrefix(table_key));
   ForeignStorageMgr::eraseDataWrapper(table_key);
 }
 

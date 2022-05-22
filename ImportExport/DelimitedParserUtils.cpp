@@ -307,7 +307,8 @@ template const char* get_row(const char* buf,
 
 void parse_string_array(const std::string& s,
                         const import_export::CopyParams& copy_params,
-                        std::vector<std::string>& string_vec) {
+                        std::vector<std::string>& string_vec,
+                        bool truncate_values) {
   if (s == copy_params.null_str || s == "NULL" || s.size() < 1 || s.empty()) {
     return;
   }
@@ -337,8 +338,12 @@ void parse_string_array(const std::string& s,
 
   for (size_t i = 0; i < string_vec.size(); ++i) {
     if (string_vec[i].size() > StringDictionary::MAX_STRLEN) {
-      throw std::runtime_error("Array String too long : " + string_vec[i] + " max is " +
-                               std::to_string(StringDictionary::MAX_STRLEN));
+      if (truncate_values) {
+        string_vec[i] = string_vec[i].substr(0, StringDictionary::MAX_STRLEN);
+      } else {
+        throw std::runtime_error("Array String too long : " + string_vec[i] + " max is " +
+                                 std::to_string(StringDictionary::MAX_STRLEN));
+      }
     }
   }
 

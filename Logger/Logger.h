@@ -356,6 +356,8 @@ class QidScopeGuard {
   QueryId id() const { return id_; }
 };
 
+boost::filesystem::path get_log_dir_path();
+
 // Set logger::g_query_id based on given parameter.
 QidScopeGuard set_thread_local_query_id(QueryId const);
 

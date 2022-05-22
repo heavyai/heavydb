@@ -1699,6 +1699,29 @@ TEST_F(SystemTablesShowCreateTableTest, StorageDetails) {
         "BIGINT);"}});
 }
 
+TEST_F(SystemTablesShowCreateTableTest, ServerLogs) {
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE server_logs;",
+      {{"CREATE TABLE server_logs (\n  node TEXT ENCODING DICT(32),\n  log_timestamp "
+        "TIMESTAMP(0),\n  severity TEXT ENCODING DICT(32),\n  process_id INTEGER,\n  "
+        "query_id INTEGER,\n  thread_id INTEGER,\n  file_location TEXT ENCODING "
+        "DICT(32),\n  message TEXT ENCODING DICT(32));"}});
+}
+
+TEST_F(SystemTablesShowCreateTableTest, RequestLogs) {
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE request_logs;",
+      {{"CREATE TABLE request_logs (\n  log_timestamp TIMESTAMP(0),\n  severity TEXT "
+        "ENCODING DICT(32),\n  process_id INTEGER,\n  query_id INTEGER,\n  thread_id "
+        "INTEGER,\n  file_location TEXT ENCODING DICT(32),\n  api_name TEXT ENCODING "
+        "DICT(32),\n  request_duration_ms BIGINT,\n  database_name TEXT ENCODING "
+        "DICT(32),\n  user_name TEXT ENCODING DICT(32),\n  public_session_id TEXT "
+        "ENCODING DICT(32),\n  query_string TEXT ENCODING DICT(32),\n  client TEXT "
+        "ENCODING DICT(32),\n  dashboard_id INTEGER,\n  dashboard_name TEXT ENCODING "
+        "DICT(32),\n  chart_id INTEGER,\n  execution_time_ms BIGINT,\n  total_time_ms "
+        "BIGINT);"}});
+}
+
 class ShowCreateServerTest : public DBHandlerTestFixture {
  public:
   void SetUp() override {
@@ -3293,7 +3316,7 @@ TEST_F(SystemTablesTest, DashboardsSystemTableWithOtherTables) {
     queryAndAssertException(
         "SELECT count(*) FROM dashboards, users WHERE database_id <> " +
             std::to_string(getDbId(shared::kDefaultDbName)) + ";",
-        "Queries involving the 'dashboards' system table with other tables is not yet "
+        "Queries involving aggregator only system tables with other tables is not yet "
         "supported in distributed mode.");
   } else {
     sqlAndCompareResult("SELECT count(*) FROM dashboards, users WHERE database_id <> " +
@@ -3987,6 +4010,238 @@ INSTANTIATE_TEST_SUITE_P(
     [](const auto& param_info) {
       return "Page_Size_" + std::to_string(param_info.param);
     });
+
+class LogsSystemTableTest : public SystemTablesTest,
+                            public testing::WithParamInterface<std::string> {
+ protected:
+  static void SetUpTestSuite() {
+    log_dir_path_ = logger::get_log_dir_path();
+    CHECK(boost::filesystem::exists(log_dir_path_));
+    backup_log_dir_path_ = boost::filesystem::path(test_binary_file_path) / "log_backup";
+    if (!boost::filesystem::is_empty(log_dir_path_)) {
+      // Backup existing logs file, since the test will be overriding files in the log
+      // directory.
+      boost::filesystem::rename(log_dir_path_, backup_log_dir_path_);
+      boost::filesystem::create_directory(log_dir_path_);
+    }
+  }
+
+  static void TearDownTestSuite() {
+    if (boost::filesystem::exists(backup_log_dir_path_)) {
+      boost::filesystem::remove_all(log_dir_path_);
+      boost::filesystem::rename(backup_log_dir_path_, log_dir_path_);
+    }
+  }
+
+  void SetUp() {
+    table_name_ = GetParam();
+    if (isDistributedMode() && table_name_ == "server_logs") {
+      GTEST_SKIP() << "Leaf log content is non-deterministic";
+    }
+    loginInformationSchema();
+    sql("REFRESH FOREIGN TABLES " + table_name_ + " WITH (evict = 'true');");
+    deleteFilesInLogDir();
+  }
+
+  void TearDown() { deleteFilesInLogDir(); }
+
+  void deleteFilesInLogDir() {
+    for (boost::filesystem::directory_iterator it(log_dir_path_), end_it; it != end_it;
+         it++) {
+      boost::filesystem::remove_all(it->path());
+    }
+  }
+
+  void copyToLogDir(const std::string& dir_name) {
+    auto copy_from_dir = test_source_path + "/logs/" + getTestDirName() + "/" + dir_name;
+    for (boost::filesystem::directory_iterator it(copy_from_dir), end_it; it != end_it;
+         it++) {
+      boost::filesystem::copy_file(it->path(),
+                                   log_dir_path_ / it->path().filename(),
+                                   boost::filesystem::copy_option::overwrite_if_exists);
+    }
+  }
+
+  void rollOffFirstLogFile() {
+    auto test_dir_path = test_source_path + "/logs/" + getTestDirName() + "/first/";
+    for (boost::filesystem::directory_iterator it(test_dir_path), end_it; it != end_it;
+         it++) {
+      boost::filesystem::remove(log_dir_path_ / it->path().filename());
+    }
+  }
+
+  std::string getTestDirName() {
+    std::string dir_name;
+    if (table_name_ == "server_logs" || table_name_ == "request_logs") {
+      dir_name = "db";
+    } else if (table_name_ == "web_server_logs") {
+      dir_name = "web_server";
+    } else if (table_name_ == "web_server_access_logs") {
+      dir_name = "web_server_access";
+    } else {
+      UNREACHABLE() << "Unexpected table name: " << table_name_;
+    }
+    return dir_name;
+  }
+
+  std::vector<std::vector<NullableTargetValue>> getFirstLogFileResultSet() {
+    std::vector<std::vector<NullableTargetValue>> result_set;
+    // clang-format off
+    if (table_name_ == "server_logs") {
+      result_set = {{"Server", "2022-05-18T21:01:18", "I", i(300000), i(0), i(3),
+                     "DBHandler.cpp:2874", "stdlog get_tables 22 0 information_schema "
+                     "admin 100-abcd {\"client\"} {\"http:127.0.0.1\"}"},
+                    {"Server", "2022-05-18T21:01:29", "I", i(300000), i(0), i(3),
+                     "DBHandler.cpp:1555", "stdlog_begin sql_execute 23 0 "
+                     "information_schema admin 100-abcd {\"query_str\"} "
+                     "{\"select * from web_server_logs LIMIT 1000;\"}"},
+                    {"Server", "2022-05-18T21:01:30", "I", i(305000), i(0), i(3),
+                     "Calcite.cpp:546", "User calcite catalog information_schema sql "
+                     "'select * from web_server_logs LIMIT 1000;'"}};
+    } else if (table_name_ == "request_logs") {
+      result_set = {{"2022-05-18T21:01:18", "I", i(300000), i(0), i(3),
+                     "DBHandler.cpp:2874", "get_tables", i(0), "information_schema",
+                     "admin", "100-abcd", Null, "http:127.0.0.1", Null, Null, Null,
+                     Null,Null},};
+    } else if (table_name_ == "web_server_access_logs") {
+      result_set = {{"127.0.0.1", "2022-05-18T21:01:08-08:00", "POST", "/", i(200),
+                     i(773)}, {"127.0.0.1", "2022-05-18T21:01:09-08:00", "POST",
+                     "/session/create", i(201), i(78)},
+                    {"127.0.0.1", "2022-05-18T21:01:10-08:00", "GET",
+                     "/configuration/db", i(400), i(2)}};
+    } else if (table_name_ == "web_server_logs") {
+      result_set = {{"2022-05-18T21:01:03-08:00", "info", "Test info message"},
+                    {"2022-05-18T21:01:04-08:00", "error", "Test error message"}};
+    } else {
+      UNREACHABLE() << "Unexpected table name: " << table_name_;
+    }
+    // clang-format on
+    return result_set;
+  }
+
+  std::vector<std::vector<NullableTargetValue>> getAppendedFirstLogFileResultSet() {
+    auto result_set = getFirstLogFileResultSet();
+    // clang-format off
+    if (table_name_ == "server_logs") {
+      result_set.emplace_back(std::vector<NullableTargetValue>{
+          "Server", "2022-05-18T21:01:31", "I", i(300000), i(0), i(3),
+          "DBHandler.cpp:1555", "stdlog sql_execute 23 1000 information_schema admin "
+          "100-abcd {\"query_str\",\"client\",\"nonce\",\"execution_time_ms\","
+          "\"total_time_ms\"} {\"select * from web_server_logs LIMIT 1000;\","
+          "\"http:127.0.0.1\",\"100/2\",\"1354\",\"1443\"}"});
+    } else if (table_name_ == "request_logs") {
+      result_set.emplace_back(std::vector<NullableTargetValue>{
+          "2022-05-18T21:01:31", "I", i(300000), i(0), i(3), "DBHandler.cpp:1555",
+          "sql_execute", i(1000), "information_schema", "admin", "100-abcd",
+          "select * from web_server_logs LIMIT 1000;", "http:127.0.0.1", i(100),
+          "<DELETED>", i(2), i(1354), i(1443)});
+    } else if (table_name_ == "web_server_logs") {
+      result_set.emplace_back(std::vector<NullableTargetValue>{
+          "2022-05-18T21:01:05-08:00", "info", "Test info message 2"});
+    } else if (table_name_ == "web_server_access_logs") {
+      result_set.emplace_back(std::vector<NullableTargetValue>{
+          "127.0.0.1", "2022-05-18T21:01:17-08:00", "GET", "/", i(200), i(558)});
+    } else {
+      UNREACHABLE() << "Unexpected table name: " << table_name_;
+    }
+    // clang-format on
+    return result_set;
+  }
+
+  std::vector<std::vector<NullableTargetValue>> getSecondLogFileResultSet() {
+    std::vector<std::vector<NullableTargetValue>> result_set;
+    // clang-format off
+    if (table_name_ == "server_logs") {
+      result_set = {
+          {"Server", "2022-05-18T21:06:46", "I", i(305000), i(0), i(0),
+           "HeavyDB.cpp:431", "HeavyDB starting\n  up"},
+          {"Server", "2022-05-18T21:07:04", "I", i(305000), i(0), i(3),
+           "DBHandler.cpp:4840", "stdlog get_dashboards 21 0 information_schema admin "
+           "456-efgh {\"client\"} {\"http:127.0.0.1\"}"},
+          {"Server", "2022-05-18T21:07:14", "I", i(305000), i(0), i(3),
+           "DBHandler.cpp:1555", "stdlog_begin sql_execute 23 0 information_schema "
+           "admin 456-efgh {\"query_str\"} {\"select * from web_server_access_logs "
+           "LIMIT 1000;\"}"},
+          {"Server", "2022-05-18T21:07:15", "I", i(306000), i(0), i(3),
+           "Calcite.cpp:546", "User calcite catalog information_schema sql "
+           "'select * from web_server_access_logs LIMIT 1000;'"},
+          {"Server", "2022-05-18T21:07:16", "F", i(306000), i(0), i(3),
+           "DBHandler.cpp:1555", "stdlog sql_execute 23 1426 information_schema "
+           "admin 456-efgh {\"query_str\",\"client\",\"nonce\",\"execution_time_ms\","
+           "\"total_time_ms\"} {\"select * from web_server_access_logs LIMIT 1000;\","
+           "\"http:127.0.0.1\",\"100/1-0\",\"1323\",\"1426\"}"}};
+    } else if (table_name_ == "request_logs") {
+      result_set = {
+          {"2022-05-18T21:07:04", "I", i(305000), i(0), i(3), "DBHandler.cpp:4840",
+           "get_dashboards", i(0), "information_schema", "admin", "456-efgh",
+           Null, "http:127.0.0.1", Null, Null, Null, Null, Null},
+          {"2022-05-18T21:07:16", "F", i(306000), i(0), i(3), "DBHandler.cpp:1555",
+           "sql_execute", i(1426), "information_schema", "admin", "456-efgh",
+           "select * from web_server_access_logs LIMIT 1000;", "http:127.0.0.1",
+           i(100), "<DELETED>", i(1), i(1323), i(1426)}};
+    } else if (table_name_ == "web_server_logs") {
+      result_set = {{"2022-05-18T21:06:46-08:00", "info", "Test info message file 2"},
+                    {"2022-05-18T21:06:47-08:00", "error", "Test error message file 2"},
+                    {"2022-05-18T21:06:48-08:00", "info", "Test info message file 2 2"}};
+    } else if (table_name_ == "web_server_access_logs") {
+      result_set = {
+          {"127.0.0.1", "2022-05-18T21:06:51-08:00", "GET", "/", i(200), i(2558)},
+          {"127.0.0.1", "2022-05-18T21:06:52-08:00", "GET", "/session/validate",
+           i(401), i(42)},
+          {"127.0.0.1", "2022-05-18T21:06:53-08:00", "GET", "/session/durations",
+           i(200), i(64)},
+          {"127.0.0.1", "2022-05-18T21:07:04-08:00", "POST", "/", i(200), i(558)}};
+    } else {
+      UNREACHABLE() << "Unexpected table name: " << table_name_;
+    }
+    // clang-format on
+    return result_set;
+  }
+
+  std::vector<std::vector<NullableTargetValue>> getMultiLogFileResultSet() {
+    auto result_set = getFirstLogFileResultSet();
+    auto result_set_2 = getSecondLogFileResultSet();
+    result_set.insert(result_set.end(), result_set_2.begin(), result_set_2.end());
+    return result_set;
+  }
+
+  std::string table_name_;
+  inline static boost::filesystem::path log_dir_path_;
+  inline static boost::filesystem::path backup_log_dir_path_;
+};
+
+TEST_P(LogsSystemTableTest, SingleLogFile) {
+  copyToLogDir("first");
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getFirstLogFileResultSet());
+
+  copyToLogDir("first_append");
+  sql("REFRESH FOREIGN TABLES " + table_name_);
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getAppendedFirstLogFileResultSet());
+}
+
+TEST_P(LogsSystemTableTest, MultiLogFile) {
+  copyToLogDir("first");
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getFirstLogFileResultSet());
+
+  copyToLogDir("second");
+  sql("REFRESH FOREIGN TABLES " + table_name_);
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getMultiLogFileResultSet());
+
+  rollOffFirstLogFile();
+  sql("REFRESH FOREIGN TABLES " + table_name_);
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getSecondLogFileResultSet());
+}
+
+INSTANTIATE_TEST_SUITE_P(AllLogsSystemTables,
+                         LogsSystemTableTest,
+                         testing::Values("request_logs",
+                                         "server_logs"),
+                         [](const auto& param_info) { return param_info.param; });
 
 class GetTableDetailsTest : public DBHandlerTestFixture {
  protected:

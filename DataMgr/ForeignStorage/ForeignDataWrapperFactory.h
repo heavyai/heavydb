@@ -75,19 +75,27 @@ struct DataWrapperType {
   static constexpr char const* INTERNAL_CATALOG = "INTERNAL_CATALOG";
   static constexpr char const* INTERNAL_MEMORY_STATS = "INTERNAL_MEMORY_STATS";
   static constexpr char const* INTERNAL_STORAGE_STATS = "INTERNAL_STORAGE_STATS";
+  static constexpr char const* INTERNAL_LOGS = "INTERNAL_LOGS";
 
-  static constexpr std::array<char const*, 3> INTERNAL_DATA_WRAPPERS{
+  static constexpr std::array<char const*, 4> INTERNAL_DATA_WRAPPERS{
+      INTERNAL_CATALOG,
+      INTERNAL_MEMORY_STATS,
+      INTERNAL_STORAGE_STATS,
+      INTERNAL_LOGS};
+
+  static constexpr std::array<char const*, 3> IN_MEMORY_DATA_WRAPPERS{
       INTERNAL_CATALOG,
       INTERNAL_MEMORY_STATS,
       INTERNAL_STORAGE_STATS};
 
-  static constexpr std::array<std::string_view, 6> supported_data_wrapper_types{
+  static constexpr std::array<std::string_view, 7> supported_data_wrapper_types{
       PARQUET,
       CSV,
       REGEX_PARSER,
       INTERNAL_CATALOG,
       INTERNAL_MEMORY_STATS,
-      INTERNAL_STORAGE_STATS};
+      INTERNAL_STORAGE_STATS,
+      INTERNAL_LOGS};
 };
 
 class ForeignDataWrapperFactory {
@@ -136,9 +144,9 @@ class ForeignDataWrapperFactory {
       const UserMapping* user_mapping);
 
   /**
-   * Creates an instance (or gets an existing instance) of an immutable ForeignDataWrapper
-   * to be used for validation purposes. Returned instance should not be used for any
-   * stateful operations, such as fetching foreign table data/metadata.
+   * Creates an instance (or gets an existing instance) of an immutable
+   * ForeignDataWrapper to be used for validation purposes. Returned instance should not
+   * be used for any stateful operations, such as fetching foreign table data/metadata.
    */
   static const ForeignDataWrapper& createForValidation(
       const std::string& data_wrapper_type,

@@ -52,6 +52,8 @@ set(datamgr_source_files
     ForeignStorage/InternalSystemDataWrapper.cpp
     ForeignStorage/RegexParserDataWrapper.cpp
     ForeignStorage/RegexFileBufferParser.cpp
+    ForeignStorage/LogFileBufferParser.cpp
+    ForeignStorage/InternalLogsDataWrapper.cpp
 )
 
 if(ENABLE_AWS_S3)

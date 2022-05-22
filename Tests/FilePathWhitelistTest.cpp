@@ -581,27 +581,6 @@ TEST_P(DBHandlerFilePathTest, ImportTable) {
       session_id, "test_table", getFilePath("example.csv"), TCopyParams{});
 }
 
-TEST_P(DBHandlerFilePathTest, ImportGeoTable) {
-// TODO: Undo test case skipping when GDAL failure is resolved
-#ifdef HAVE_AWS_S3
-  if (auto [file_location_type, suffix] = getTestParams();
-      file_location_type == FileLocationType::S3 && suffix == "_tar_gz") {
-    GTEST_SKIP();
-  }
-#endif  // HAVE_AWS_S3
-
-  TCopyParams copy_params;
-  copy_params.source_type = TSourceType::GEO_FILE;
-
-  auto [db_handler, session_id] = getDbHandlerAndSessionId();
-  db_handler->import_geo_table(session_id,
-                               "test_table_2",
-                               getFilePath("example.geojson"),
-                               copy_params,
-                               TRowDescriptor{},
-                               TCreateParams{});
-}
-
 TEST_P(DBHandlerFilePathTest, GetFirstGeoFileInArchive) {
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   std::string result;
@@ -639,7 +618,7 @@ INSTANTIATE_TEST_SUITE_P(
     DBHandlerFilePathTest,
     testing::Combine(testing::Range(static_cast<int>(FileLocationType::First),
                                     static_cast<int>(FileLocationType::Last) + 1),
-                     testing::Values("", "_tar", "_gz", "_tar_gz")),
+                     testing::Values("", "_gz", "_tar_gz")),
     [](const auto& param_info) {
       return DBHandlerFilePathTest::testParamsToString(param_info.param);
     });

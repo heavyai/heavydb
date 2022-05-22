@@ -6262,7 +6262,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
   // test to see if db/catalog is writable before execution of a writable SQL/DDL command
   //   TODO: move to execute() (?)
   //      instead of pre-filtering here based upon incomplete info ?
-  if (pw.getQueryType() != ParserWrapper::QueryType::Read &&
+  if (!pw.is_refresh && pw.getQueryType() != ParserWrapper::QueryType::Read &&
       pw.getQueryType() != ParserWrapper::QueryType::SchemaRead &&
       pw.getQueryType() != ParserWrapper::QueryType::Unknown) {
     dbhandler::check_not_info_schema_db(cat.name());
@@ -6673,7 +6673,7 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
     for (const auto& table_name : result.resolved_accessed_objects.tables_selected_from) {
       auto td = cat->getMetadataForTable(table_name[0], false);
       CHECK(td);
-      if (td->is_system_table) {
+      if (td->is_in_memory_system_table) {
         if (g_enable_system_tables) {
           // Reset system table fragmenter in order to force chunk metadata refetch.
           auto table_schema_lock =
@@ -6744,7 +6744,7 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
                       cat->getDatabaseId(), (*locks.back())())));
         } else {
           auto lock_td = (*locks.back())();
-          if (lock_td->is_system_table) {
+          if (lock_td->is_in_memory_system_table) {
             locks.emplace_back(
                 std::make_unique<lockmgr::TableDataLockContainer<lockmgr::WriteLock>>(
                     lockmgr::TableDataLockContainer<lockmgr::WriteLock>::acquire(

@@ -146,6 +146,8 @@ ParserWrapper::ParserWrapper(std::string query_string) {
         }
       } else if (ddl == "ARCHIVE" || ddl == "DUMP") {
         query_type_ = QueryType::SchemaRead;
+      } else if (ddl == "REFRESH") {
+        is_refresh = true;
       }
       return;
     }
