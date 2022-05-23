@@ -108,6 +108,18 @@ enum class SqlStringOpKind {
 };
 
 enum class SqlWindowFunctionKind {
+  // set MIN's enum val as one, and we use window function kind's enum vals
+  // to classify a behavior of our runtime code for window framing
+  // i.e., aggregate_##value_type##_values functions
+  // todo (yoonmin): support FIRST_EXPR, LAST_EXPR, AND NTH_EXPR with framing
+  MIN = 1,
+  MAX,
+  AVG,
+  SUM,
+  COUNT,
+  FIRST_EXPR,
+  LAST_EXPR,
+  NTH_EXPR,
   ROW_NUMBER,
   RANK,
   DENSE_RANK,
@@ -118,12 +130,16 @@ enum class SqlWindowFunctionKind {
   LEAD,
   FIRST_VALUE,
   LAST_VALUE,
-  AVG,
-  MIN,
-  MAX,
-  SUM,
-  COUNT,
   SUM_INTERNAL  // For deserialization from Calcite only. Gets rewritten to a regular SUM.
+};
+
+enum class SqlWindowFrameBoundType {
+  UNBOUNDED_PRECEDING = 1,
+  EXPR_PRECEDING,
+  CURRENT_ROW,
+  EXPR_FOLLOWING,
+  UNBOUNDED_FOLLOWING,
+  UNKNOWN
 };
 
 enum SQLStmtType { kSELECT, kUPDATE, kINSERT, kDELETE, kCREATE_TABLE };
@@ -387,8 +403,33 @@ inline std::string toString(const SqlWindowFunctionKind& kind) {
       return "COUNT";
     case SqlWindowFunctionKind::SUM_INTERNAL:
       return "SUM_INTERNAL";
+    case SqlWindowFunctionKind::FIRST_EXPR:
+      return "FIRST_EXPR";
+    case SqlWindowFunctionKind::LAST_EXPR:
+      return "LAST_EXPR";
+    case SqlWindowFunctionKind::NTH_EXPR:
+      return "NTH_EXPR";
   }
   LOG(FATAL) << "Invalid window function kind.";
+  return "";
+}
+
+inline std::string toString(const SqlWindowFrameBoundType& kind) {
+  switch (kind) {
+    case SqlWindowFrameBoundType::UNBOUNDED_PRECEDING:
+      return "UNBOUNDED_PRECEDING";
+    case SqlWindowFrameBoundType::EXPR_PRECEDING:
+      return "EXPR_PRECEDING";
+    case SqlWindowFrameBoundType::CURRENT_ROW:
+      return "CURRENT_ROW";
+    case SqlWindowFrameBoundType::EXPR_FOLLOWING:
+      return "EXPR_FOLLOWING";
+    case SqlWindowFrameBoundType::UNBOUNDED_FOLLOWING:
+      return "UNBOUNDED_FOLLOWING";
+    case SqlWindowFrameBoundType::UNKNOWN:
+      return "UNKNOWN";
+  }
+  LOG(FATAL) << "Invalid window function bound type.";
   return "";
 }
 

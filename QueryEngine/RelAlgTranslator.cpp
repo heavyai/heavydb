@@ -1860,46 +1860,10 @@ std::vector<Analyzer::OrderEntry> translate_collation(
   }
   return collation;
 }
-
-bool supported_lower_bound(
-    const RexWindowFunctionOperator::RexWindowBound& window_bound) {
-  return window_bound.unbounded && window_bound.preceding && !window_bound.following &&
-         !window_bound.is_current_row && !window_bound.offset &&
-         window_bound.order_key == 0;
-}
-
-bool supported_upper_bound(const RexWindowFunctionOperator* rex_window_function) {
-  const auto& window_bound = rex_window_function->getUpperBound();
-  const bool to_current_row = !window_bound.unbounded && !window_bound.preceding &&
-                              !window_bound.following && window_bound.is_current_row &&
-                              !window_bound.offset && window_bound.order_key == 1;
-  switch (rex_window_function->getKind()) {
-    case SqlWindowFunctionKind::ROW_NUMBER:
-    case SqlWindowFunctionKind::RANK:
-    case SqlWindowFunctionKind::DENSE_RANK:
-    case SqlWindowFunctionKind::CUME_DIST: {
-      return to_current_row;
-    }
-    default: {
-      return rex_window_function->getOrderKeys().empty()
-                 ? (window_bound.unbounded && !window_bound.preceding &&
-                    window_bound.following && !window_bound.is_current_row &&
-                    !window_bound.offset && window_bound.order_key == 2)
-                 : to_current_row;
-    }
-  }
-}
-
 }  // namespace
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
     const RexWindowFunctionOperator* rex_window_function) const {
-  if (!supported_lower_bound(rex_window_function->getLowerBound()) ||
-      !supported_upper_bound(rex_window_function) ||
-      ((rex_window_function->getKind() == SqlWindowFunctionKind::ROW_NUMBER) !=
-       rex_window_function->isRows())) {
-    throw std::runtime_error("Frame specification not supported");
-  }
   std::vector<std::shared_ptr<Analyzer::Expr>> args;
   for (size_t i = 0; i < rex_window_function->size(); ++i) {
     args.push_back(translateScalarRex(rex_window_function->getOperand(i)));
@@ -1917,12 +1881,200 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
     CHECK_GE(args.size(), 1u);
     ti = args.front()->get_type_info();
   }
+  bool has_framing_clause = true;
+  switch (rex_window_function->getKind()) {
+    case SqlWindowFunctionKind::RANK:
+    case SqlWindowFunctionKind::DENSE_RANK:
+    case SqlWindowFunctionKind::ROW_NUMBER:
+    case SqlWindowFunctionKind::NTILE:
+    case SqlWindowFunctionKind::PERCENT_RANK:
+    case SqlWindowFunctionKind::CUME_DIST:
+    case SqlWindowFunctionKind::LEAD:
+    case SqlWindowFunctionKind::LAG: {
+      VLOG(1) << "Window framing is ignored: given window function "
+              << rex_window_function->getName() + " operates on an entire partition";
+      has_framing_clause = false;
+      break;
+    }
+    default:
+      break;
+  }
+  auto determine_frame_bound_type =
+      [](const RexWindowFunctionOperator::RexWindowBound& bound) {
+        if (bound.unbounded) {
+          CHECK(!bound.bound_expr && !bound.is_current_row);
+          if (bound.following) {
+            return SqlWindowFrameBoundType::UNBOUNDED_FOLLOWING;
+          } else if (bound.preceding) {
+            return SqlWindowFrameBoundType::UNBOUNDED_PRECEDING;
+          }
+        } else {
+          if (bound.is_current_row) {
+            CHECK(!bound.unbounded && !bound.bound_expr);
+            return SqlWindowFrameBoundType::CURRENT_ROW;
+          } else {
+            CHECK(!bound.unbounded && bound.bound_expr);
+            if (bound.following) {
+              return SqlWindowFrameBoundType::EXPR_FOLLOWING;
+            } else if (bound.preceding) {
+              return SqlWindowFrameBoundType::EXPR_PRECEDING;
+            }
+          }
+        }
+        return SqlWindowFrameBoundType::UNKNOWN;
+      };
+
+  bool negative_constant = false;
+  auto& frame_start_bound = rex_window_function->getFrameStartBound();
+  auto& frame_end_bound = rex_window_function->getFrameEndBound();
+  bool has_end_bound_frame_expr = false;
+  std::shared_ptr<Analyzer::Expr> frame_start_bound_expr;
+  SqlWindowFrameBoundType frame_start_bound_type =
+      determine_frame_bound_type(frame_start_bound);
+  std::shared_ptr<Analyzer::Expr> frame_end_bound_expr;
+  SqlWindowFrameBoundType frame_end_bound_type =
+      determine_frame_bound_type(frame_end_bound);
+  auto frame_mode = rex_window_function->isRows()
+                        ? Analyzer::WindowFunction::FrameBoundType::ROW
+                        : Analyzer::WindowFunction::FrameBoundType::RANGE;
+  if (order_keys.empty()) {
+    if (frame_start_bound_type == SqlWindowFrameBoundType::UNBOUNDED_PRECEDING &&
+        frame_end_bound_type == SqlWindowFrameBoundType::UNBOUNDED_FOLLOWING) {
+      // Calcite sets UNBOUNDED PRECEDING ~ UNBOUNDED_FOLLOWING as its default frame bound
+      // if the window context has no order by clause regardless of the existence of
+      // user-given window frame bound but at this point we have no way to recognize the
+      // absence of the frame definition of this window context
+      has_framing_clause = false;
+      LOG(INFO) << "The frame clause is ignored in row mode when no order by clause is "
+                   "specified.";
+    }
+  } else {
+    if (frame_start_bound_type == SqlWindowFrameBoundType::UNBOUNDED_PRECEDING &&
+        frame_end_bound_type == SqlWindowFrameBoundType::CURRENT_ROW) {
+      // Calcite sets this frame bound by default when order by clause is given but has no
+      // window frame definition (even if user gives the same bound, our previous window
+      // computation logic returns exactly the same result)
+      has_framing_clause = false;
+    }
+    // todo (yoonmin) : support window framing based on numeric, date and time type
+    auto order_key_expr = order_keys.front();
+    auto is_negative_framing_bound = [&](const SQLTypes t, const Datum& d) {
+      switch (t) {
+        case kTINYINT: {
+          return d.tinyintval < 0;
+        }
+        case kSMALLINT: {
+          return d.smallintval < 0;
+        }
+        case kINT: {
+          return d.intval < 0;
+        }
+        case kBIGINT: {
+          return d.bigintval < 0;
+        }
+        default: {
+          throw std::runtime_error(
+              "We currently only support integer-type literal expression as a window "
+              "frame "
+              "bound "
+              "expression");
+          break;
+        }
+      }
+    };
+
+    if (frame_start_bound.bound_expr) {
+      frame_start_bound_expr = translateScalarRex(frame_start_bound.bound_expr.get());
+      if (auto literal_expr =
+              dynamic_cast<const Analyzer::Constant*>(frame_start_bound_expr.get())) {
+        negative_constant = is_negative_framing_bound(
+            literal_expr->get_type_info().get_type(), literal_expr->get_constval());
+      } else {
+        throw std::runtime_error(
+            "We currently only support integer-type literal expression as a window frame "
+            "bound "
+            "expression");
+      }
+    }
+
+    if (frame_end_bound.bound_expr) {
+      has_end_bound_frame_expr = true;
+      frame_end_bound_expr = translateScalarRex(frame_end_bound.bound_expr.get());
+      if (auto literal_expr =
+              dynamic_cast<const Analyzer::Constant*>(frame_end_bound_expr.get())) {
+        negative_constant = is_negative_framing_bound(
+            literal_expr->get_type_info().get_type(), literal_expr->get_constval());
+      } else {
+        throw std::runtime_error(
+            "We currently only support integer-type literal expression as a window frame "
+            "bound "
+            "expression");
+      }
+    }
+  }
+  // note that Calcite already has frame-bound constraint checking logic, but we
+  // also check various invalid cases for safety
+  if (negative_constant) {
+    throw std::runtime_error(
+        "A constant expression for window framing should have nonnegative value.");
+  }
+
+  if (frame_start_bound.following) {
+    if (frame_end_bound.is_current_row) {
+      throw std::runtime_error(
+          "Window framing starting from following row cannot end with current row.");
+    } else if (has_end_bound_frame_expr && frame_end_bound.preceding) {
+      throw std::runtime_error(
+          "Window framing starting from following row cannot have preceding rows.");
+    }
+  }
+  if (frame_start_bound.is_current_row && frame_end_bound.preceding &&
+      !frame_end_bound.unbounded && has_end_bound_frame_expr) {
+    throw std::runtime_error(
+        "Window framing starting from current row cannot have preceding rows.");
+  }
+  if (has_framing_clause) {
+    if (frame_mode == Analyzer::WindowFunction::FrameBoundType::RANGE) {
+      if (order_keys.size() > 1) {
+        throw std::runtime_error(
+            "Window framing with range mode requires a single order-by column");
+      }
+      if (!frame_start_bound_expr &&
+          frame_start_bound_type == SqlWindowFrameBoundType::UNBOUNDED_PRECEDING &&
+          !frame_end_bound_expr &&
+          frame_end_bound_type == SqlWindowFrameBoundType::CURRENT_ROW) {
+        has_framing_clause = false;
+        VLOG(1) << "Ignore range framing mode with a frame bound between "
+                   "UNBOUNDED_PRECEDING and CURRENT_ROW";
+      }
+      std::set<const Analyzer::ColumnVar*,
+               bool (*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)>
+          colvar_set(Analyzer::ColumnVar::colvar_comp);
+      order_keys.front()->collect_column_var(colvar_set, false);
+      for (auto cv : colvar_set) {
+        if (!(cv->get_type_info().is_integer() || cv->get_type_info().is_fp())) {
+          has_framing_clause = false;
+          VLOG(1) << "Range framing mode with non-number type ordering column is not "
+                     "supported yet, skip window framing";
+        }
+      }
+    }
+  }
+  if (!has_framing_clause) {
+    frame_start_bound_type = SqlWindowFrameBoundType::UNKNOWN;
+    frame_end_bound_type = SqlWindowFrameBoundType::UNKNOWN;
+    frame_start_bound_expr = nullptr;
+    frame_end_bound_expr = nullptr;
+  }
   return makeExpr<Analyzer::WindowFunction>(
       ti,
       rex_window_function->getKind(),
       args,
       partition_keys,
       order_keys,
+      has_framing_clause ? frame_mode : Analyzer::WindowFunction::FrameBoundType::NONE,
+      makeExpr<Analyzer::WindowFrame>(frame_start_bound_type, frame_start_bound_expr),
+      makeExpr<Analyzer::WindowFrame>(frame_end_bound_type, frame_end_bound_expr),
       translate_collation(rex_window_function->getCollation()));
 }
 

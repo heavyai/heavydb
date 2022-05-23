@@ -145,7 +145,8 @@ set(query_engine_source_files
     Execute.h
     NvidiaKernel.h
     QueryTemplateGenerator.h
-    TableFunctions/TableFunctionManager.h)
+    TableFunctions/TableFunctionManager.h
+    Utils/SegmentTree.h)
 
 set(query_engine_cuda_source_files
     TopKSort.cu

@@ -576,7 +576,9 @@ void TargetExprCodegen::codegenAggregate(
       }
     }
     const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
-    if (window_func && window_function_requires_peer_handling(window_func)) {
+    // window function with framing has a different code path and codegen logic
+    if (window_func && !window_func->hasFraming() &&
+        window_function_requires_peer_handling(window_func)) {
       const auto window_func_context =
           WindowProjectNodeContext::getActiveWindowFunctionContext(executor);
       const auto pending_outputs =

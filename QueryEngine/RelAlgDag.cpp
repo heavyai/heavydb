@@ -1134,7 +1134,7 @@ RexWindowFunctionOperator::RexWindowBound parse_window_bound(
   window_bound.is_current_row = json_bool(field(window_bound_obj, "is_current_row"));
   const auto& offset_field = field(window_bound_obj, "offset");
   if (offset_field.IsObject()) {
-    window_bound.offset = parse_scalar_expr(offset_field, cat, root_dag);
+    window_bound.bound_expr = parse_scalar_expr(offset_field, cat, root_dag);
   } else {
     CHECK(offset_field.IsNull());
   }

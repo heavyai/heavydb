@@ -2235,22 +2235,58 @@ struct OrderEntry {
 };
 
 /*
+ * @type WindowFrame
+ * @brief A window frame bound.
+ */
+class WindowFrame : public Expr {
+ public:
+  WindowFrame(SqlWindowFrameBoundType bound_type,
+              const std::shared_ptr<Analyzer::Expr> bound_expr)
+      : Expr(SQLTypeInfo(kVOID)), bound_type_(bound_type), bound_expr_(bound_expr) {}
+
+  SqlWindowFrameBoundType getBoundType() const { return bound_type_; }
+
+  const Analyzer::Expr* getBoundExpr() const {
+    CHECK(bound_expr_);
+    return bound_expr_.get();
+  }
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  bool operator==(const Expr& rhs) const override;
+
+  std::string toString() const override;
+
+ private:
+  SqlWindowFrameBoundType bound_type_;
+  const std::shared_ptr<Analyzer::Expr> bound_expr_;
+};
+
+/*
  * @type WindowFunction
  * @brief A window function.
  */
 class WindowFunction : public Expr {
  public:
+  enum class FrameBoundType { NONE, ROW, RANGE };
+
   WindowFunction(const SQLTypeInfo& ti,
                  const SqlWindowFunctionKind kind,
                  const std::vector<std::shared_ptr<Analyzer::Expr>>& args,
                  const std::vector<std::shared_ptr<Analyzer::Expr>>& partition_keys,
                  const std::vector<std::shared_ptr<Analyzer::Expr>>& order_keys,
+                 const FrameBoundType frame_bound_type,
+                 const std::shared_ptr<Expr> frame_start_bound,
+                 const std::shared_ptr<Expr> frame_end_bound,
                  const std::vector<OrderEntry>& collation)
       : Expr(ti)
       , kind_(kind)
       , args_(args)
       , partition_keys_(partition_keys)
       , order_keys_(order_keys)
+      , frame_bound_type_(frame_bound_type)
+      , frame_start_bound_(frame_start_bound)
+      , frame_end_bound_(frame_end_bound)
       , collation_(collation){};
 
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
@@ -2270,13 +2306,40 @@ class WindowFunction : public Expr {
     return order_keys_;
   }
 
+  const Analyzer::WindowFrame* getFrameStartBound() const {
+    std::shared_ptr<WindowFrame> frame_start_bound =
+        std::dynamic_pointer_cast<WindowFrame>(frame_start_bound_);
+    CHECK(frame_start_bound);
+    return frame_start_bound.get();
+  }
+
+  const Analyzer::WindowFrame* getFrameEndBound() const {
+    std::shared_ptr<WindowFrame> frame_end_bound =
+        std::dynamic_pointer_cast<WindowFrame>(frame_end_bound_);
+    CHECK(frame_end_bound);
+    return frame_end_bound.get();
+  }
+
   const std::vector<OrderEntry>& getCollation() const { return collation_; }
+
+  Analyzer::WindowFunction::FrameBoundType getFrameBoundType() const {
+    return frame_bound_type_;
+  }
+
+  bool hasFraming() const { return frame_bound_type_ != FrameBoundType::NONE; }
+
+  bool hasRowModeFraming() const { return frame_bound_type_ == FrameBoundType::ROW; }
+
+  bool hasRangeModeFraming() const { return frame_bound_type_ == FrameBoundType::RANGE; }
 
  private:
   const SqlWindowFunctionKind kind_;
   const std::vector<std::shared_ptr<Analyzer::Expr>> args_;
   const std::vector<std::shared_ptr<Analyzer::Expr>> partition_keys_;
   const std::vector<std::shared_ptr<Analyzer::Expr>> order_keys_;
+  const FrameBoundType frame_bound_type_{FrameBoundType::NONE};
+  const std::shared_ptr<Analyzer::Expr> frame_start_bound_;
+  const std::shared_ptr<Analyzer::Expr> frame_end_bound_;
   const std::vector<OrderEntry> collation_;
 };
 

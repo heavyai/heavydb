@@ -187,6 +187,7 @@ extern size_t g_big_group_threshold;
 extern bool g_enable_window_functions;
 extern bool g_enable_parallel_window_partition_compute;
 extern bool g_enable_parallel_window_partition_sort;
+extern size_t g_window_function_aggregation_tree_fanout;
 extern bool g_enable_table_functions;
 extern bool g_enable_dev_table_functions;
 extern bool g_enable_geo_ops_on_uncompressed_coords;

@@ -190,12 +190,16 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
       order_keys_copy.push_back(visit(order_key.get()));
     }
     const auto& type_info = window_func->get_type_info();
-    return makeExpr<Analyzer::WindowFunction>(type_info,
-                                              window_func->getKind(),
-                                              args_copy,
-                                              partition_keys_copy,
-                                              order_keys_copy,
-                                              window_func->getCollation());
+    return makeExpr<Analyzer::WindowFunction>(
+        type_info,
+        window_func->getKind(),
+        args_copy,
+        partition_keys_copy,
+        order_keys_copy,
+        window_func->getFrameBoundType(),
+        window_func->getFrameStartBound()->deep_copy(),
+        window_func->getFrameEndBound()->deep_copy(),
+        window_func->getCollation());
   }
 
   RetType visitStringOper(const Analyzer::StringOper* string_oper) const override {

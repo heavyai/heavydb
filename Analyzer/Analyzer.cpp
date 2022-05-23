@@ -214,9 +214,21 @@ std::shared_ptr<Analyzer::Expr> OffsetInFragment::deep_copy() const {
   return makeExpr<OffsetInFragment>();
 }
 
+std::shared_ptr<Analyzer::Expr> WindowFrame::deep_copy() const {
+  return makeExpr<WindowFrame>(bound_type_,
+                               bound_expr_ ? bound_expr_->deep_copy() : nullptr);
+}
+
 std::shared_ptr<Analyzer::Expr> WindowFunction::deep_copy() const {
-  return makeExpr<WindowFunction>(
-      type_info, kind_, args_, partition_keys_, order_keys_, collation_);
+  return makeExpr<WindowFunction>(type_info,
+                                  kind_,
+                                  args_,
+                                  partition_keys_,
+                                  order_keys_,
+                                  frame_bound_type_,
+                                  frame_start_bound_->deep_copy(),
+                                  frame_end_bound_->deep_copy(),
+                                  collation_);
 }
 
 ExpressionPtr ArrayExpr::deep_copy() const {
@@ -2470,6 +2482,19 @@ bool OffsetInFragment::operator==(const Expr& rhs) const {
   return typeid(rhs) == typeid(OffsetInFragment);
 }
 
+bool WindowFrame::operator==(const Expr& rhs) const {
+  const WindowFrame& rhs_window_frame = dynamic_cast<const WindowFrame&>(rhs);
+  if (bound_type_ == rhs_window_frame.bound_type_) {
+    if (bound_expr_) {
+      return rhs_window_frame.bound_expr_ &&
+             *bound_expr_.get() == *rhs_window_frame.getBoundExpr();
+    } else {
+      return !rhs_window_frame.bound_expr_;
+    }
+  }
+  return false;
+}
+
 bool WindowFunction::operator==(const Expr& rhs) const {
   const auto rhs_window = dynamic_cast<const WindowFunction*>(&rhs);
   if (!rhs_window) {
@@ -2477,7 +2502,10 @@ bool WindowFunction::operator==(const Expr& rhs) const {
   }
   if (kind_ != rhs_window->kind_ || args_.size() != rhs_window->args_.size() ||
       partition_keys_.size() != rhs_window->partition_keys_.size() ||
-      order_keys_.size() != rhs_window->order_keys_.size()) {
+      order_keys_.size() != rhs_window->order_keys_.size() ||
+      frame_bound_type_ != rhs_window->frame_bound_type_ ||
+      frame_start_bound_.get() != rhs_window->frame_start_bound_.get() ||
+      frame_end_bound_.get() != rhs_window->frame_end_bound_.get()) {
     return false;
   }
   return expr_list_match(args_, rhs_window->args_) &&
@@ -2885,11 +2913,43 @@ std::string OffsetInFragment::toString() const {
   return "(OffsetInFragment) ";
 }
 
+std::string WindowFrame::toString() const {
+  auto bound_str = bound_expr_ ? bound_expr_->toString() : "None";
+  return ::toString(bound_type_) + " " + bound_str;
+}
+
 std::string WindowFunction::toString() const {
   std::string result = "WindowFunction(" + ::toString(kind_);
   for (const auto& arg : args_) {
     result += " " + arg->toString();
   }
+  if (hasFraming()) {
+    result += " Frame{";
+    switch (frame_bound_type_) {
+      case FrameBoundType::ROW: {
+        result += "ROW";
+        break;
+      }
+      case FrameBoundType::RANGE: {
+        result += "RANGE";
+        break;
+      }
+      default: {
+        UNREACHABLE()
+            << "Two bound types are supported for window framing: ROW and RANGE.";
+        break;
+      }
+    }
+    result += " BETWEEN : " + frame_start_bound_->toString();
+    result += " AND : " + frame_end_bound_->toString();
+  } else {
+    if (!order_keys_.empty()) {
+      result += " (RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)";
+    } else {
+      result += " (RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)";
+    }
+  }
+  result += "} ";
   return result + ") ";
 }
 

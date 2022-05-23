@@ -530,8 +530,24 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
     bool preceding;
     bool following;
     bool is_current_row;
-    std::shared_ptr<const RexScalar> offset;
+    std::shared_ptr<const RexScalar> bound_expr;
     int order_key;
+
+    bool isUnboundedPreceding() const { return unbounded && preceding && !bound_expr; }
+
+    bool isUnboundedFollowing() const { return unbounded && following && !bound_expr; }
+
+    bool isRowOffsetPreceding() const { return !unbounded && preceding && bound_expr; }
+
+    bool isRowOffsetFollowing() const { return !unbounded && following && bound_expr; }
+
+    bool isCurrentRow() const {
+      return !unbounded && is_current_row && !preceding && !following && !bound_expr;
+    }
+
+    bool hasNoFraming() const {
+      return !unbounded && !preceding && !following && !is_current_row && !bound_expr;
+    }
   };
 
   RexWindowFunctionOperator(const SqlWindowFunctionKind kind,
@@ -539,8 +555,8 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
                             ConstRexScalarPtrVector& partition_keys,
                             ConstRexScalarPtrVector& order_keys,
                             const std::vector<SortField> collation,
-                            const RexWindowBound& lower_bound,
-                            const RexWindowBound& upper_bound,
+                            const RexWindowBound& frame_start_bound,
+                            const RexWindowBound& frame_end_bound,
                             const bool is_rows,
                             const SQLTypeInfo& ti)
       : RexFunctionOperator(::toString(kind), operands, ti)
@@ -548,8 +564,8 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
       , partition_keys_(std::move(partition_keys))
       , order_keys_(std::move(order_keys))
       , collation_(collation)
-      , lower_bound_(lower_bound)
-      , upper_bound_(upper_bound)
+      , frame_start_bound_(frame_start_bound)
+      , frame_end_bound_(frame_end_bound)
       , is_rows_(is_rows) {}
 
   SqlWindowFunctionKind getKind() const { return kind_; }
@@ -583,9 +599,9 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
 
   const std::vector<SortField>& getCollation() const { return collation_; }
 
-  const RexWindowBound& getLowerBound() const { return lower_bound_; }
+  const RexWindowBound& getFrameStartBound() const { return frame_start_bound_; }
 
-  const RexWindowBound& getUpperBound() const { return upper_bound_; }
+  const RexWindowBound& getFrameEndBound() const { return frame_end_bound_; }
 
   bool isRows() const { return is_rows_; }
 
@@ -600,8 +616,8 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
                                       partition_keys,
                                       order_keys,
                                       collation,
-                                      getLowerBound(),
-                                      getUpperBound(),
+                                      getFrameStartBound(),
+                                      getFrameEndBound(),
                                       isRows(),
                                       getType()));
   }
@@ -643,7 +659,8 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
       }
       auto get_window_bound_hash =
           [](const RexWindowFunctionOperator::RexWindowBound& bound) {
-            auto h = boost::hash_value(bound.offset ? bound.offset->toHash() : HASH_N);
+            auto h =
+                boost::hash_value(bound.bound_expr ? bound.bound_expr->toHash() : HASH_N);
             boost::hash_combine(h, bound.unbounded);
             boost::hash_combine(h, bound.preceding);
             boost::hash_combine(h, bound.following);
@@ -651,8 +668,8 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
             boost::hash_combine(h, bound.order_key);
             return h;
           };
-      boost::hash_combine(*hash_, get_window_bound_hash(lower_bound_));
-      boost::hash_combine(*hash_, get_window_bound_hash(upper_bound_));
+      boost::hash_combine(*hash_, get_window_bound_hash(frame_start_bound_));
+      boost::hash_combine(*hash_, get_window_bound_hash(frame_end_bound_));
     }
     return *hash_;
   }
@@ -662,8 +679,8 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
   mutable ConstRexScalarPtrVector partition_keys_;
   mutable ConstRexScalarPtrVector order_keys_;
   const std::vector<SortField> collation_;
-  const RexWindowBound lower_bound_;
-  const RexWindowBound upper_bound_;
+  const RexWindowBound frame_start_bound_;
+  const RexWindowBound frame_end_bound_;
   const bool is_rows_;
 };
 
@@ -2416,6 +2433,23 @@ class RelAlgDag : public boost::noncopyable {
             // we assume table function's hint is handled as global hint by default
             global_query_hint.registerHint(QueryHint::kKeepTableFuncResult);
             global_query_hint.keep_table_function_result = true;
+          }
+          break;
+        }
+        case QueryHint::kAggregateTreeFanout: {
+          CHECK_EQ(1u, target.getListOptions().size());
+          int aggregate_tree_fanout = std::stoi(target.getListOptions()[0]);
+          if (aggregate_tree_fanout < 0) {
+            VLOG(1) << "A fan-out of an aggregate tree should be larger than zero";
+          } else if (aggregate_tree_fanout > 1024) {
+            VLOG(1) << "Too large fanout is provided (i.e., fanout < 1024)";
+          } else {
+            query_hint.registerHint(QueryHint::kAggregateTreeFanout);
+            query_hint.aggregate_tree_fanout = aggregate_tree_fanout;
+            if (target.isGlobalHint()) {
+              global_query_hint.registerHint(QueryHint::kAggregateTreeFanout);
+              global_query_hint.aggregate_tree_fanout = aggregate_tree_fanout;
+            }
           }
         }
         default:
