@@ -706,6 +706,11 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_enable_parallel_window_partition_sort)
           ->implicit_value(true),
       "Enable parallel window function partition sorting.");
+  developer_desc.add_options()(
+      "window-function-frame-aggregation-tree-fanout",
+      po::value<size_t>(&g_window_function_aggregation_tree_fanout)->default_value(8),
+      "A tree fanout for aggregation tree used to compute aggregation over "
+      "window frame");
   developer_desc.add_options()("enable-dev-table-functions",
                                po::value<bool>(&g_enable_dev_table_functions)
                                    ->default_value(g_enable_dev_table_functions)

@@ -21983,6 +21983,317 @@ TEST(Select, DISABLED_WindowFunctionParallelism) {
   }
 }
 
+TEST(Select, WindowFunctionFraming) {
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  // to make a stable test result, we use a table having non-peer row
+  // (i.e., a set of rows having the same (order by) column values)
+  // b/c each query engine may have different sorting
+  // result when having peer rows (i.e., stable sort vs. non-stable sort)
+  // specifically, even if we have a correct sorting result with peers,
+  // they are listed differently in terms of their rowid (i.e., rowid {1,2,3} vs. {1,3,2}
+  // where all rows 1~3 have the same column value)
+  // thus different systems may have different aggregation result over a window frame
+  // on a table having peers (i.e., Postgres, SQLite and SQLServer have different results)
+  const std::string drop_test_table1{"DROP TABLE IF EXISTS test_window_framing;"};
+  const std::string drop_test_table2{
+      "DROP TABLE IF EXISTS test_window_framing_multi_frag;"};
+  const std::vector<std::string> drop_table_ddls{drop_test_table1, drop_test_table2};
+  std::string columns_definition{
+      "(pc int, oc int, oc2 int, ti tinyint, si smallint, i int, bi bigint, f float, d "
+      "double, dc "
+      "decimal(15, 8), n numeric(15, 8), f2 float, d2 double, ts9 TIMESTAMP(9), tm TIME, "
+      "d32 DATE ENCODING DAYS(32))"};
+  auto gen_table_creation_ddl = [&columns_definition](const std::string& table_name,
+                                                      bool multi_frag) {
+    std::string ddl = "CREATE TABLE " + table_name + " " + columns_definition;
+    if (multi_frag) {
+      return ddl + " WITH (FRAGMENT_SIZE = 2);";
+    } else {
+      return ddl + ";";
+    }
+  };
+  for (const auto& drop_table_ddl : drop_table_ddls) {
+    run_ddl_statement(drop_table_ddl);
+    g_sqlite_comparator.query(drop_table_ddl);
+  }
+  const auto single_frag_table = gen_table_creation_ddl("test_window_framing", false);
+  run_ddl_statement(single_frag_table);
+  g_sqlite_comparator.query(single_frag_table);
+  run_ddl_statement(gen_table_creation_ddl("test_window_framing_multi_frag", true));
+  g_sqlite_comparator.query(
+      gen_table_creation_ddl("test_window_framing_multi_frag", false));
+  ScopeGuard cleanup = [&drop_table_ddls] {
+    for (const auto& drop_table_ddl : drop_table_ddls) {
+      run_ddl_statement(drop_table_ddl);
+      g_sqlite_comparator.query(drop_table_ddl);
+    }
+  };
+  std::vector<std::string> rows;
+  rows.push_back(
+      "(1, 1, 1, -1, -1, -1, -1, -1.11, -1.1111, 1.11, 1.111111, 1.11, 1.111111, "
+      "'2022-05-17 01:00:010000000', '20:00:01', '2022-05-01');");
+  rows.push_back(
+      "(1, 2, 2, -8, -8, -8, -8, -8.88, -8.8888, 1.12, 2.111111, 1.12, 2.111111, "
+      "'2022-05-17 01:00:020000000', '20:00:02', '2022-05-02');");
+  rows.push_back(
+      "(1, 3, 3, null, null, null, null, null, null, 1.13, 3.111111, 1.13, 3.111111, "
+      "'2022-05-17 01:00:030000000', '20:00:03', '2022-05-03');");
+  rows.push_back(
+      "(1, 4, 4, -1, -1, -1, -1, -1.11, -1.1111, 1.14, 4.111111, 1.14, 4.111111, "
+      "'2022-05-17 01:00:040000000', '20:00:04', '2022-05-04');");
+  rows.push_back(
+      "(1, 5, 5, 1, 1, 1, 1, 1.11, 1.1111, 1.15, 5.111111, 1.15, 5.111111, '2022-05-17 "
+      "01:00:050000000', '20:00:05', '2022-05-05');");
+  rows.push_back(
+      "(1, 6, 6, -2, -2, -2, -2, -2.22, -2.2222, 1.16, 6.111111, 1.16, 6.111111, "
+      "'2022-05-17 01:00:060000000', '20:00:06', '2022-05-06');");
+  rows.push_back(
+      "(2, 7, 7, -1, -1, -1, -1, -1.11, -1.1111, 1.17, 7.111111, 1.17, 7.111111, "
+      "'2022-05-17 01:00:070000000', '20:00:07', '2022-05-07');");
+  rows.push_back(
+      "(2, 8, 8, 4, 4, 4, 4, 4.4, 4.4444, 1.18, 8.111111, 1.18, 8.111111, '2022-05-17 "
+      "01:00:080000000', '20:00:08', '2022-05-08');");
+  rows.push_back(
+      "(2, 9, 9, 1, 1, 1, 1, 1.11, 1.1111,  1.19, 9.111111, 1.19, 9.111111, '2022-05-17 "
+      "01:00:090000000', '20:00:09', '2022-05-09');");
+  rows.push_back(
+      "(2, 10, 10, -1, -1, -1, -1, -1.11, -1.1111, 1.2, 10.111111, 1.2, 10.111111, "
+      "'2022-05-17 01:00:100000000', '20:00:10', '2022-05-10');");
+  rows.push_back(
+      "(2, 11, 11, 2, 2, 2, 2, 2.22, 2.2222, 1.21, 11.111111, 1.21, 11.111111, "
+      "'2022-05-17 01:00:110000000', '20:00:11', '2022-05-11');");
+  rows.push_back(
+      "(2, 12, 12, 5, 5, 5, 5, 5.55, 5.5555, 1.22, 12.111111, 1.22, 12.111111, "
+      "'2022-05-17 01:00:120000000', '20:00:12', '2022-05-12');");
+  std::mt19937 g(std::random_device{}());
+  std::shuffle(rows.begin(), rows.end(), g);
+  for (const auto& row : rows) {
+    for (std::string table_name :
+         {"INSERT INTO test_window_framing VALUES ",
+          "INSERT INTO test_window_framing_multi_frag VALUES "}) {
+      std::string insert_row_ddl = table_name + row;
+      run_multiple_agg(insert_row_ddl, dt);
+      g_sqlite_comparator.query(insert_row_ddl);
+    }
+  }
+
+  // 1) check the correctness of various aggregation function over window framing
+  for (std::string table_name :
+       {"test_window_framing", "test_window_framing_multi_frag"}) {
+    for (std::string frame_mode : {"ROWS", "RANGE"}) {
+      for (std::string agg_type : {"MIN", "MAX", "AVG", "COUNT", "SUM"}) {
+        for (std::string col_name : {"ti", "si", "i", "bi", "f", "d", "dc", "n"}) {
+          {
+            std::string query_generated = "SELECT oc, " + agg_type + "(" + col_name +
+                                          ") OVER (PARTITION BY pc ORDER BY oc " +
+                                          frame_mode +
+                                          " BETWEEN 2 PRECEDING AND 2 FOLLOWING) FROM " +
+                                          table_name + " ORDER BY oc;";
+            c(query_generated, query_generated, dt);
+          }
+          {
+            std::string query_generated = "SELECT oc, " + agg_type + "(" + col_name +
+                                          ") OVER (ORDER BY oc " + frame_mode +
+                                          " BETWEEN 2 PRECEDING AND 2 FOLLOWING) FROM " +
+                                          table_name + " ORDER BY oc;";
+            c(query_generated, query_generated, dt);
+          }
+        }
+      }
+    }
+  }
+
+  // 2) check the correctness while varying window frame bounds
+  std::vector<std::string> test_frame_bounds{
+      " BETWEEN UNBOUNDED PRECEDING AND 3 PRECEDING",
+      " BETWEEN UNBOUNDED PRECEDING AND 3 FOLLOWING",
+      " BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING",
+      " BETWEEN 3 PRECEDING AND 2 PRECEDING",
+      " BETWEEN 3 PRECEDING AND 3 FOLLOWING",
+      " BETWEEN 3 PRECEDING AND UNBOUNDED FOLLOWING",
+      " BETWEEN CURRENT ROW AND 3 FOLLOWING",
+      " BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING",
+      " BETWEEN 1 FOLLOWING AND 3 FOLLOWING",
+      " BETWEEN 3 FOLLOWING AND UNBOUNDED FOLLOWING"};
+  for (std::string table_name :
+       {"test_window_framing", "test_window_framing_multi_frag"}) {
+    for (std::string frame_mode : {"ROWS", "RANGE"}) {
+      for (std::string agg_type : {"MIN", "MAX", "AVG", "COUNT", "SUM"}) {
+        for (std::string frame_bound : test_frame_bounds) {
+          std::string query_generated =
+              "SELECT oc, " + agg_type + "(i) OVER (PARTITION BY pc ORDER BY oc " +
+              frame_mode + frame_bound + ") FROM " + table_name + " ORDER BY oc;";
+          c(query_generated, query_generated, dt);
+        }
+      }
+    }
+  }
+
+  // 3) row mode: check various ordering types / single and multiple ordering cols
+  std::unordered_map<int, std::string> col_id_maps = {{1, "oc"},
+                                                      {2, "oc2"},
+                                                      {3, "dc"},
+                                                      {4, "n"},
+                                                      {5, "f2"},
+                                                      {6, "d2"},
+                                                      {7, "ts9"},
+                                                      {8, "tm"},
+                                                      {9, "d32"}};
+  for (int i = 1; i <= 9; i++) {
+    const auto col1 = col_id_maps[i];
+    for (int j = 0; j <= 9; j++) {
+      if (j == 0) {
+        // single-column sort
+        std::ostringstream oss;
+        oss << "SELECT " << col1 << ", SUM(i) OVER (PARTITION BY PC ORDER BY " << col1
+            << " ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) FROM test_window_framing "
+               "ORDER BY "
+            << col1 << ";";
+        const auto query_generated = oss.str();
+        c(query_generated, query_generated, dt);
+      } else {
+        const auto col2 = col_id_maps[j];
+        if (col1.compare(col2) == 0) {
+          continue;
+        }
+        std::ostringstream oss;
+        oss << "SELECT " << col1 << ", " << col2
+            << ", SUM(i) OVER (PARTITION BY PC ORDER BY " << col1 << ", " << col2
+            << " ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) FROM test_window_framing "
+               "ORDER BY "
+            << col1 << ", " << col2 << ";";
+        const auto query_generated = oss.str();
+        c(query_generated, query_generated, dt);
+      }
+    }
+  }
+
+  // 4) invalid ordering columns
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT oc, oc2, MIN(i) OVER (PARTITION BY pc ORDER BY oc, oc2 ROWS BETWEEN "
+      "UNBOUNDED "
+      "PRECEDING AND UNBOUNDED PRECEDING) FROM test_window_framing ORDER BY oc, oc2;",
+      dt));
+
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT oc, dc159, MIN(i) OVER (PARTITION BY pc ORDER BY oc, dc159 ROWS BETWEEN "
+      "UNBOUNDED "
+      "PRECEDING AND UNBOUNDED PRECEDING) FROM test_window_framing ORDER BY oc, dc159;",
+      dt));
+
+  // todo (yoonmin) : support window frame with order by ts9, tm9 and d16 cases
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT ts9, MIN(i) OVER (PARTITION BY pc ORDER BY ts9 ROWS BETWEEN UNBOUNDED "
+      "PRECEDING AND UNBOUNDED PRECEDING) FROM test_window_framing ORDER BY ts9;",
+      dt));
+
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT tm9, MIN(i) OVER (PARTITION BY pc ORDER BY tm9 ROWS BETWEEN UNBOUNDED "
+      "PRECEDING AND UNBOUNDED PRECEDING) FROM test_window_framing ORDER BY tm9;",
+      dt));
+
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT d16, MIN(i) OVER (PARTITION BY pc ORDER BY d16 ROWS BETWEEN UNBOUNDED "
+      "PRECEDING AND UNBOUNDED PRECEDING) FROM test_window_framing ORDER BY d16;",
+      dt));
+
+  // 5) invalid frame bounds (the condition is checked regardless of a type of frame
+  // bound)
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN UNBOUNDED "
+      "PRECEDING AND UNBOUNDED PRECEDING) FROM test_window_framing ORDER BY oc;",
+      dt));
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 3 PRECEDING AND "
+      "UNBOUNDED PRECEDING) FROM test_window_framing ORDER BY oc;",
+      dt));
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN CURRENT ROW AND "
+      "3 PRECEDING) FROM test_window_framing ORDER BY oc;",
+      dt));
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN CURRENT ROW AND "
+      "UNBOUNDED PRECEDING) FROM test_window_framing ORDER BY oc;",
+      dt));
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 3 FOLLOWING AND "
+      "3 PRECEDING) FROM test_window_framing ORDER BY oc;",
+      dt));
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 3 FOLLOWING AND "
+      "CURRENT ROW) FROM test_window_framing ORDER BY oc;",
+      dt));
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 3 FOLLOWING AND "
+      "UNBOUNDED PRECEDING) FROM test_window_framing ORDER BY oc;",
+      dt));
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN UNBOUNDED "
+      "FOLLOWING AND UNBOUNDED FOLLOWING) FROM test_window_framing ORDER BY oc;",
+      dt));
+  EXPECT_ANY_THROW(
+      run_multiple_agg("SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc ROWS "
+                       "UNBOUNDED FOLLOWING) FROM test_window_framing ORDER BY oc;",
+                       dt));
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN UNBOUNDED "
+      "FOLLOWING AND 3 PRECEDING) FROM test_window_framing ORDER BY oc;",
+      dt));
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN UNBOUNDED "
+      "FOLLOWING AND 3 FOLLOWING) FROM test_window_framing ORDER BY oc;",
+      dt));
+  // note that currently Calcite ignores the following framing clause:
+  // `ROWS -3 FOLLOWING`, so we skip checking that case
+  EXPECT_ANY_THROW(
+      run_multiple_agg("SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc ROWS -3 "
+                       "PRECEDING) FROM test_window_framing ORDER BY oc;",
+                       dt));
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN UNBOUNDED "
+      "PRECEDING AND -3 PRECEDING) FROM test_window_framing ORDER BY oc;",
+      dt));
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN CURRENT ROW AND "
+      "-3 FOLLOWING) FROM test_window_framing ORDER BY oc;",
+      dt));
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN CURRENT ROW AND "
+      "3.3 FOLLOWING) FROM test_window_framing ORDER BY oc;",
+      dt));
+  EXPECT_ANY_THROW(run_multiple_agg(
+      "SELECT oc, MIN(i) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN CURRENT ROW AND "
+      "-3.3 FOLLOWING) FROM test_window_framing ORDER BY oc;",
+      dt));
+
+  // 6) frame without ordering key(s)
+  // 6.a) in row mode, we ignore user-given frame bound if order-by clause is missing
+  c("SELECT oc, MIN(i) OVER (ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) FROM "
+    "test_window_framing ORDER BY oc;",
+    "SELECT oc, MIN(i) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) "
+    "FROM test_window_framing ORDER BY oc;",
+    dt);
+  c("SELECT oc, MIN(i) OVER (PARTITION BY pc ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) "
+    "FROM test_window_framing ORDER BY oc;",
+    "SELECT oc, MIN(i) OVER (PARTITION BY pc ROWS BETWEEN UNBOUNDED PRECEDING AND "
+    "UNBOUNDED FOLLOWING) "
+    "FROM test_window_framing ORDER BY oc;",
+    dt);
+  // 6.b) in range mode, we throw an exception
+  EXPECT_ANY_THROW(
+      run_multiple_agg("SELECT oc, MIN(i) OVER (RANGE BETWEEN 1 PRECEDING AND 1 "
+                       "FOLLOWING) FROM test_window_framing ORDER BY oc;",
+                       dt));
+  EXPECT_ANY_THROW(
+      run_multiple_agg("SELECT oc, MIN(i) OVER (PARTITION BY pc RANGE BETWEEN 1 "
+                       "PRECEDING AND 1 FOLLOWING) FROM test_window_framing ORDER BY oc;",
+                       dt));
+
+  // run this query to clear window context held by executor
+  // i.e., WindowProjectNodeContext::reset(executor_);
+  run_multiple_agg("SELECT COUNT(1) FROM test_window_framing;", dt);
+}
+
 TEST(Select, FilterNodeCoalesce) {
   // If we do not coalesce the filter with a subsequent project (manufacturing one if
   // neccessary), we currently pull all table columns into memory, which is highly

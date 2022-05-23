@@ -37,6 +37,7 @@ enum QueryHint {
   kOverlapsKeysPerBin,
   kKeepResult,
   kKeepTableFuncResult,
+  kAggregateTreeFanout,
   kHintCount,   // should be at the last elem before INVALID enum value to count #
                 // supported hints correctly
   kInvalidHint  // this should be the last elem of this enum
@@ -52,7 +53,8 @@ static const std::unordered_map<std::string, QueryHint> SupportedQueryHints = {
     {"overlaps_no_cache", QueryHint::kOverlapsNoCache},
     {"overlaps_keys_per_bin", QueryHint::kOverlapsKeysPerBin},
     {"keep_result", QueryHint::kKeepResult},
-    {"keep_table_function_result", QueryHint::kKeepTableFuncResult}};
+    {"keep_table_function_result", QueryHint::kKeepTableFuncResult},
+    {"aggregate_tree_fanout", QueryHint::kAggregateTreeFanout}};
 
 struct HintIdentifier {
   bool global_hint;
@@ -151,6 +153,7 @@ struct RegisteredQueryHint {
       : cpu_mode(false)
       , columnar_output(false)
       , rowwise_output(false)
+      , aggregate_tree_fanout(8)
       , overlaps_bucket_threshold(std::numeric_limits<double>::max())
       , overlaps_max_size(g_overlaps_max_table_size_bytes)
       , overlaps_allow_gpu_build(false)
@@ -212,6 +215,10 @@ struct RegisteredQueryHint {
                 global_hints.keep_table_function_result;
             break;
           }
+          case static_cast<int>(QueryHint::kAggregateTreeFanout): {
+            updated_query_hints.aggregate_tree_fanout =
+                global_hints.aggregate_tree_fanout;
+          }
         }
       }
     }
@@ -224,6 +231,9 @@ struct RegisteredQueryHint {
   bool rowwise_output;
   bool keep_result;
   bool keep_table_function_result;
+
+  // window function framing
+  size_t aggregate_tree_fanout;
 
   // overlaps hash join
   double overlaps_bucket_threshold;  // defined in "OverlapsJoinHashTable.h"

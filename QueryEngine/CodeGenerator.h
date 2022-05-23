@@ -155,6 +155,10 @@ class CodeGenerator {
                                             const SQLTypeInfo& target_dimen,
                                             const bool nullable);
 
+  // Generate the position for the given window function and the query iteration position.
+  llvm::Value* codegenWindowPosition(const WindowFunctionContext* window_func_context,
+                                     llvm::Value* pos_arg);
+
  private:
   std::vector<llvm::Value*> codegen(const Analyzer::Constant*,
                                     const EncodingType enc_type,
@@ -304,10 +308,6 @@ class CodeGenerator {
   llvm::Value* codegenFixedLengthColVarInWindow(const Analyzer::ColumnVar* col_var,
                                                 llvm::Value* col_byte_stream,
                                                 llvm::Value* pos_arg);
-
-  // Generate the position for the given window function and the query iteration position.
-  llvm::Value* codegenWindowPosition(WindowFunctionContext* window_func_context,
-                                     llvm::Value* pos_arg);
 
   std::vector<llvm::Value*> codegenVariableLengthStringColVar(
       llvm::Value* col_byte_stream,

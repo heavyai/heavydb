@@ -224,7 +224,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
 }
 
 llvm::Value* CodeGenerator::codegenWindowPosition(
-    WindowFunctionContext* window_func_context,
+    const WindowFunctionContext* window_func_context,
     llvm::Value* pos_arg) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto window_position = cgen_state_->emitCall(

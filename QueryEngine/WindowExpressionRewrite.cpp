@@ -86,12 +86,16 @@ std::shared_ptr<Analyzer::WindowFunction> rewrite_sum_window(const Analyzer::Exp
   if (sum_ti.is_integer()) {
     sum_ti = SQLTypeInfo(kBIGINT, sum_ti.get_notnull());
   }
-  return makeExpr<Analyzer::WindowFunction>(sum_ti,
-                                            SqlWindowFunctionKind::SUM,
-                                            sum_window_expr->getArgs(),
-                                            sum_window_expr->getPartitionKeys(),
-                                            sum_window_expr->getOrderKeys(),
-                                            sum_window_expr->getCollation());
+  return makeExpr<Analyzer::WindowFunction>(
+      sum_ti,
+      SqlWindowFunctionKind::SUM,
+      sum_window_expr->getArgs(),
+      sum_window_expr->getPartitionKeys(),
+      sum_window_expr->getOrderKeys(),
+      sum_window_expr->getFrameBoundType(),
+      sum_window_expr->getFrameStartBound()->deep_copy(),
+      sum_window_expr->getFrameEndBound()->deep_copy(),
+      sum_window_expr->getCollation());
 }
 
 std::shared_ptr<Analyzer::WindowFunction> rewrite_avg_window(const Analyzer::Expr* expr) {
@@ -124,10 +128,14 @@ std::shared_ptr<Analyzer::WindowFunction> rewrite_avg_window(const Analyzer::Exp
   if (!expr_list_match(sum_window_expr.get()->getArgs(), count_window->getArgs())) {
     return nullptr;
   }
-  return makeExpr<Analyzer::WindowFunction>(SQLTypeInfo(kDOUBLE),
-                                            SqlWindowFunctionKind::AVG,
-                                            sum_window_expr->getArgs(),
-                                            sum_window_expr->getPartitionKeys(),
-                                            sum_window_expr->getOrderKeys(),
-                                            sum_window_expr->getCollation());
+  return makeExpr<Analyzer::WindowFunction>(
+      SQLTypeInfo(kDOUBLE),
+      SqlWindowFunctionKind::AVG,
+      sum_window_expr->getArgs(),
+      sum_window_expr->getPartitionKeys(),
+      sum_window_expr->getOrderKeys(),
+      sum_window_expr->getFrameBoundType(),
+      sum_window_expr->getFrameStartBound()->deep_copy(),
+      sum_window_expr->getFrameEndBound()->deep_copy(),
+      sum_window_expr->getCollation());
 }

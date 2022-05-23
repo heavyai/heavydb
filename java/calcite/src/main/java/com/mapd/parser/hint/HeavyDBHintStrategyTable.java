@@ -24,6 +24,7 @@ public class HeavyDBHintStrategyTable {
     supportedHints.add("overlaps_keys_per_bin");
     supportedHints.add("keep_result");
     supportedHints.add("keep_table_function_result");
+    supportedHints.add("aggregate_tree_fanout");
 
     for (String hint_name : supportedHints) {
       // add local / global hints, e.., cpu_mode / g_cpu_mode

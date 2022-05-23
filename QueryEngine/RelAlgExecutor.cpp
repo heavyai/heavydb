@@ -2427,7 +2427,8 @@ void RelAlgExecutor::computeWindow(const WorkUnit& work_unit,
   // output buffer
   // todo (yoonmin) : support recycler for window function computation?
   std::unordered_map<QueryPlanHash, std::shared_ptr<HashJoin>> partition_cache;
-  std::unordered_map<QueryPlanHash, std::unique_ptr<int64_t[]>> sorted_partition_cache;
+  std::unordered_map<QueryPlanHash, std::shared_ptr<std::vector<int64_t>>>
+      sorted_partition_cache;
   std::unordered_map<QueryPlanHash, size_t> sorted_partition_key_ref_count_map;
   std::unordered_map<size_t, std::unique_ptr<WindowFunctionContext>>
       window_function_context_map;
@@ -2527,12 +2528,18 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
               << ")";
     }
     CHECK(partition_ptr);
+    auto aggregate_tree_fanout = g_window_function_aggregation_tree_fanout;
+    if (work_unit.exe_unit.query_hint.aggregate_tree_fanout != aggregate_tree_fanout) {
+      aggregate_tree_fanout = work_unit.exe_unit.query_hint.aggregate_tree_fanout;
+      VLOG(1) << "Aggregate tree's fanout is set to " << aggregate_tree_fanout;
+    }
     context = std::make_unique<WindowFunctionContext>(window_func,
                                                       partition_cache_key,
                                                       partition_ptr,
                                                       elem_count,
                                                       co.device_type,
-                                                      row_set_mem_owner);
+                                                      row_set_mem_owner,
+                                                      aggregate_tree_fanout);
   } else {
     context = std::make_unique<WindowFunctionContext>(
         window_func, elem_count, co.device_type, row_set_mem_owner);
@@ -2553,29 +2560,56 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
       sorted_partition_key_ref_count_map[sorted_partition_cache_key] =
           cache_key_cnt_it.first->second + 1;
     }
-  }
-  std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
-  for (const auto& order_key : order_keys) {
-    const auto order_col =
-        std::dynamic_pointer_cast<const Analyzer::ColumnVar>(order_key);
-    if (!order_col) {
-      throw std::runtime_error("Only order by columns supported for now");
-    }
-    const int8_t* column;
-    size_t join_col_elem_count;
-    std::tie(column, join_col_elem_count) =
-        ColumnFetcher::getOneColumnFragment(executor_,
-                                            *order_col,
-                                            query_infos.front().info.fragments.front(),
-                                            memory_level,
-                                            0,
-                                            nullptr,
-                                            /*thread_idx=*/0,
-                                            chunks_owner,
-                                            column_cache_map);
 
-    CHECK_EQ(join_col_elem_count, elem_count);
-    context->addOrderColumn(column, order_col.get(), chunks_owner);
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
+    for (const auto& order_key : order_keys) {
+      const auto order_col =
+          std::dynamic_pointer_cast<const Analyzer::ColumnVar>(order_key);
+      if (!order_col) {
+        throw std::runtime_error("Only order by columns supported for now");
+      }
+      const int8_t* column;
+      size_t join_col_elem_count;
+      std::tie(column, join_col_elem_count) =
+          ColumnFetcher::getOneColumnFragment(executor_,
+                                              *order_col,
+                                              query_infos.front().info.fragments.front(),
+                                              memory_level,
+                                              0,
+                                              nullptr,
+                                              /*thread_idx=*/0,
+                                              chunks_owner,
+                                              column_cache_map);
+
+      CHECK_EQ(join_col_elem_count, elem_count);
+      context->addOrderColumn(column, order_col->get_type_info(), chunks_owner);
+    }
+  }
+  if (window_func->hasFraming()) {
+    // todo (yoonmin) : if we try to support generic window function expression without
+    // extra project node, we need to revisit here b/c the current logic assumes that
+    // window function expression has a single input source
+    auto& window_function_expression_args = window_func->getArgs();
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
+    for (auto& expr : window_function_expression_args) {
+      const auto arg_col_var = std::dynamic_pointer_cast<const Analyzer::ColumnVar>(expr);
+      CHECK(arg_col_var);
+      const int8_t* column;
+      size_t join_col_elem_count;
+      std::tie(column, join_col_elem_count) =
+          ColumnFetcher::getOneColumnFragment(executor_,
+                                              *arg_col_var,
+                                              query_infos.front().info.fragments.front(),
+                                              memory_level,
+                                              0,
+                                              nullptr,
+                                              /*thread_idx=*/0,
+                                              chunks_owner,
+                                              column_cache_map);
+
+      CHECK_EQ(join_col_elem_count, elem_count);
+      context->addColumnBufferForWindowFunctionExpression(column, chunks_owner);
+    }
   }
   return context;
 }

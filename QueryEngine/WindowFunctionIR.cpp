@@ -31,13 +31,13 @@ llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
     case SqlWindowFunctionKind::RANK:
     case SqlWindowFunctionKind::DENSE_RANK:
     case SqlWindowFunctionKind::NTILE: {
-      return cgen_state_->emitCall("row_number_window_func",
-                                   {cgen_state_->llInt(reinterpret_cast<const int64_t>(
-                                        window_func_context->output())),
-                                    code_generator.posArg(nullptr)});
+      // they are always evaluated on the entire partition
+      return code_generator.codegenWindowPosition(window_func_context,
+                                                  code_generator.posArg(nullptr));
     }
     case SqlWindowFunctionKind::PERCENT_RANK:
     case SqlWindowFunctionKind::CUME_DIST: {
+      // they are always evaluated on the entire partition
       return cgen_state_->emitCall("percent_window_func",
                                    {cgen_state_->llInt(reinterpret_cast<const int64_t>(
                                         window_func_context->output())),
@@ -47,6 +47,7 @@ llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
     case SqlWindowFunctionKind::LEAD:
     case SqlWindowFunctionKind::FIRST_VALUE:
     case SqlWindowFunctionKind::LAST_VALUE: {
+      // they are always evaluated on the current frame
       CHECK(WindowProjectNodeContext::get(this));
       const auto& args = window_func->getArgs();
       CHECK(!args.empty());
@@ -59,6 +60,7 @@ llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
     case SqlWindowFunctionKind::MAX:
     case SqlWindowFunctionKind::SUM:
     case SqlWindowFunctionKind::COUNT: {
+      // they are always evaluated on the current frame
       return codegenWindowFunctionAggregate(co);
     }
     default: {
@@ -256,11 +258,11 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
           : cgen_state_->castToTypeIn(cgen_state_->inlineIntNull(window_func_ti), 64);
   const auto& args = window_func->getArgs();
   llvm::Value* crt_val;
+  CodeGenerator code_generator(this);
   if (args.empty()) {
     CHECK(window_func->getKind() == SqlWindowFunctionKind::COUNT);
     crt_val = cgen_state_->llInt(int64_t(1));
   } else {
-    CodeGenerator code_generator(this);
     const auto arg_lvs = code_generator.codegen(args.front().get(), true, co);
     CHECK_EQ(arg_lvs.size(), size_t(1));
     if (window_func->getKind() == SqlWindowFunctionKind::SUM && !window_func_ti.is_fp()) {
@@ -273,17 +275,573 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
     }
   }
   const auto agg_name = get_window_agg_name(window_func->getKind(), window_func_ti);
-  llvm::Value* multiplicity_lv = nullptr;
-  if (args.empty()) {
-    cgen_state_->emitCall(agg_name, {aggregate_state, crt_val});
+  if (window_func->hasFraming()) {
+    // compute an aggregated value for each row of the window frame by using segment tree
+    // when constructing a window context, we build a necessary segment tree for it
+    // and use the tree array (so called `aggregate tree`) to query the aggregated value
+    // of the specific window frame
+    const auto pi64_type =
+        llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
+    const auto pi32_type =
+        llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
+    const auto ppi64_type = llvm::PointerType::get(pi64_type, 0);
+    // this lambda function is only used for window framing codegen
+    auto get_col_type_name_for_framing = [](const SQLTypes type) {
+      switch (type) {
+        case kTINYINT:
+          return "int8_t";
+        case kSMALLINT:
+          return "int16_t";
+        case kINT:
+          return "int32_t";
+        case kBIGINT:
+          return "int64_t";
+        case kFLOAT:
+          return "float";
+        case kDOUBLE:
+        case kNUMERIC:
+        case kDECIMAL:
+          return "double";
+        default: {
+          UNREACHABLE();
+          return "UNREACHABLE";
+        }
+      }
+    };
+    // row_id of the current row in partition, which may be different from row_id in a
+    // table, i.e., pos_arg
+    const auto current_row_pos = code_generator.posArg(nullptr);
+
+    // # elems per partition
+    const auto partition_count_buf =
+        cgen_state_->llInt(reinterpret_cast<int64_t>(window_func_context->counts()));
+    const auto partition_count_buf_ptr =
+        cgen_state_->ir_builder_.CreateIntToPtr(partition_count_buf, pi32_type);
+
+    // given current row's pos, calculate the partition index that it belongs to
+    const auto partition_count_lv =
+        cgen_state_->llInt(window_func_context->partitionCount());
+    const auto partition_num_count_buf = cgen_state_->llInt(
+        reinterpret_cast<int64_t>(window_func_context->partitionNumCountBuf()));
+    const auto partition_num_count_ptr =
+        cgen_state_->ir_builder_.CreateIntToPtr(partition_num_count_buf, pi64_type);
+    const auto partition_index_lv = cgen_state_->emitCall(
+        "compute_int64_t_lower_bound",
+        {partition_count_lv, current_row_pos, partition_num_count_ptr});
+
+    // # elems of the given partition
+    const auto num_elem_current_partition_ptr =
+        cgen_state_->ir_builder_.CreateGEP(get_int_type(32, cgen_state_->context_),
+                                           partition_count_buf_ptr,
+                                           partition_index_lv);
+    const auto num_elem_current_partition_lv = cgen_state_->castToTypeIn(
+        cgen_state_->ir_builder_.CreateLoad(
+            num_elem_current_partition_ptr->getType()->getPointerElementType(),
+            num_elem_current_partition_ptr),
+        64);
+
+    // partial sum of # elems of partitions
+    const auto partition_start_offset_buf = cgen_state_->llInt(
+        reinterpret_cast<int64_t>(window_func_context->partitionStartOffset()));
+    const auto partition_start_offset_ptr =
+        cgen_state_->ir_builder_.CreateIntToPtr(partition_start_offset_buf, pi64_type);
+
+    // get start offset of the current partition
+    const auto current_partition_start_offset_ptr =
+        cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
+                                           partition_start_offset_ptr,
+                                           partition_index_lv);
+    const auto current_partition_start_offset_lv = cgen_state_->ir_builder_.CreateLoad(
+        current_partition_start_offset_ptr->getType()->getPointerElementType(),
+        current_partition_start_offset_ptr);
+
+    // a depth of segment tree
+    const auto tree_depth_buf = cgen_state_->llInt(
+        reinterpret_cast<int64_t>(window_func_context->getAggregateTreeDepth()));
+    const auto tree_depth_buf_ptr =
+        cgen_state_->ir_builder_.CreateIntToPtr(tree_depth_buf, pi64_type);
+    const auto current_partition_tree_depth_buf_ptr = cgen_state_->ir_builder_.CreateGEP(
+        get_int_type(64, cgen_state_->context_), tree_depth_buf_ptr, partition_index_lv);
+    const auto current_partition_tree_depth_lv = cgen_state_->ir_builder_.CreateLoad(
+        current_partition_tree_depth_buf_ptr->getType()->getPointerElementType(),
+        current_partition_tree_depth_buf_ptr);
+
+    // a fanout of the current partition's segment tree
+    const auto aggregation_tree_fanout_lv = cgen_state_->llInt(
+        static_cast<int64_t>(window_func_context->getAggregateTreeFanout()));
+
+    // agg_type
+    const auto agg_type_lv =
+        cgen_state_->llInt(static_cast<int32_t>(window_func->getKind()));
+
+    // declare various variables to codegen
+    const auto frame_start_bound = window_func->getFrameStartBound();
+    const auto frame_end_bound = window_func->getFrameEndBound();
+    llvm::Value* order_key_buf_ptr{nullptr};
+    llvm::Value* target_partition_rowid_ptr{nullptr};
+    llvm::Value* target_partition_sorted_rowid_ptr{nullptr};
+    llvm::Value* current_col_value_lv{nullptr};
+    llvm::Value* order_key_col_null_val_lv{nullptr};
+    llvm::Value* null_start_pos_lv{nullptr};
+    llvm::Value* null_end_pos_lv{nullptr};
+    std::vector<llvm::Value*> frame_start_bound_expr_lvs;
+    std::vector<llvm::Value*> frame_end_bound_expr_lvs;
+    llvm::Value* frame_start_bound_expr_lv = nullptr;
+    llvm::Value* frame_end_bound_expr_lv = nullptr;
+    llvm::Value* frame_start_bound_lv = nullptr;
+    llvm::Value* frame_end_bound_lv = nullptr;
+
+    // codegen frame bound expr if necessary
+    auto needs_bound_expr_codegen = [](const Analyzer::WindowFrame* window_frame) {
+      return window_frame->getBoundType() == SqlWindowFrameBoundType::EXPR_FOLLOWING ||
+             window_frame->getBoundType() == SqlWindowFrameBoundType::EXPR_PRECEDING;
+    };
+    if (needs_bound_expr_codegen(frame_start_bound)) {
+      frame_start_bound_expr_lvs =
+          code_generator.codegen(frame_start_bound->getBoundExpr(), true, co);
+      frame_start_bound_expr_lv = frame_start_bound_expr_lvs.front();
+      if (frame_start_bound->getBoundExpr()->get_type_info().get_size() != 8) {
+        frame_start_bound_expr_lv =
+            cgen_state_->castToTypeIn(frame_start_bound_expr_lv, 64);
+      }
+    } else {
+      frame_start_bound_expr_lv = cgen_state_->llInt((int64_t)-1);
+    }
+    if (needs_bound_expr_codegen(frame_end_bound)) {
+      frame_end_bound_expr_lvs =
+          code_generator.codegen(frame_end_bound->getBoundExpr(), true, co);
+      frame_end_bound_expr_lv = frame_end_bound_expr_lvs.front();
+      if (frame_end_bound->getBoundExpr()->get_type_info().get_size() != 8) {
+        frame_end_bound_expr_lv = cgen_state_->castToTypeIn(frame_end_bound_expr_lv, 64);
+      }
+    } else {
+      frame_end_bound_expr_lv = cgen_state_->llInt((int64_t)-1);
+    }
+
+    // for range mode, we need to collect various info regarding ordering column
+    // to determine the frame boundary correctly
+    std::string order_col_type_name{""};
+    if (window_func->getFrameBoundType() ==
+        Analyzer::WindowFunction::FrameBoundType::RANGE) {
+      CHECK(window_func_context->getOrderKeyColumnBuffers().size() == 1);
+      CHECK(window_func->getOrderKeys().size() == 1UL);
+      CHECK(window_func_context->getOrderKeyColumnBuffers().size() == 1UL);
+      order_col_type_name = get_col_type_name_for_framing(
+          window_func_context->getOrderKeyColumnBufferTypes().front().get_type());
+      // ordering column buffer
+      size_t order_key_size =
+          window_func->getOrderKeys().front()->get_type_info().get_size() * 8;
+      const auto order_key_buf_type =
+          llvm::PointerType::get(get_int_type(order_key_size, cgen_state_->context_), 0);
+      const auto order_key_buf = cgen_state_->llInt(reinterpret_cast<int64_t>(
+          window_func_context->getOrderKeyColumnBuffers().front()));
+      order_key_buf_ptr =
+          cgen_state_->ir_builder_.CreateIntToPtr(order_key_buf, order_key_buf_type);
+
+      // load column value of the current row (of ordering column)
+      const auto rowid_in_partition =
+          code_generator.codegenWindowPosition(window_func_context, current_row_pos);
+      const auto current_col_value_ptr = cgen_state_->ir_builder_.CreateGEP(
+          get_int_type(order_key_size, cgen_state_->context_),
+          order_key_buf_ptr,
+          rowid_in_partition);
+      current_col_value_lv = cgen_state_->ir_builder_.CreateLoad(
+          current_col_value_ptr->getType()->getPointerElementType(),
+          current_col_value_ptr,
+          "current_col_value");
+
+      // row_id buf of the current partition
+      const auto partition_rowid_buf =
+          cgen_state_->llInt(reinterpret_cast<int64_t>(window_func_context->payload()));
+      const auto partition_rowid_ptr =
+          cgen_state_->ir_builder_.CreateIntToPtr(partition_rowid_buf, pi32_type);
+      target_partition_rowid_ptr =
+          cgen_state_->ir_builder_.CreateGEP(get_int_type(32, cgen_state_->context_),
+                                             partition_rowid_ptr,
+                                             current_partition_start_offset_lv);
+
+      // row_id buf of ordered current partition
+      const auto sorted_partition_buf = cgen_state_->llInt(
+          reinterpret_cast<int64_t>(window_func_context->sortedPartition()));
+      const auto sorted_partition_buf_ptr =
+          cgen_state_->ir_builder_.CreateIntToPtr(sorted_partition_buf, pi64_type);
+      target_partition_sorted_rowid_ptr =
+          cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
+                                             sorted_partition_buf_ptr,
+                                             current_partition_start_offset_lv);
+
+      // null value of the ordering column
+      order_key_col_null_val_lv = cgen_state_->inlineNull(
+          window_func_context->getOrderKeyColumnBufferTypes().front());
+
+      // null range of the aggregate tree
+      const auto null_start_pos_buf = cgen_state_->llInt(
+          reinterpret_cast<int64_t>(window_func_context->getNullValueStartPos()));
+      const auto null_start_pos_buf_ptr =
+          cgen_state_->ir_builder_.CreateIntToPtr(null_start_pos_buf, pi64_type);
+      const auto null_start_pos_ptr =
+          cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
+                                             null_start_pos_buf_ptr,
+                                             partition_index_lv);
+      null_start_pos_lv = cgen_state_->ir_builder_.CreateLoad(
+          null_start_pos_ptr->getType()->getPointerElementType(),
+          null_start_pos_ptr,
+          "null_start_pos");
+      const auto null_end_pos_buf = cgen_state_->llInt(
+          reinterpret_cast<int64_t>(window_func_context->getNullValueEndPos()));
+      const auto null_end_pos_buf_ptr =
+          cgen_state_->ir_builder_.CreateIntToPtr(null_end_pos_buf, pi64_type);
+      const auto null_end_pos_ptr =
+          cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
+                                             null_end_pos_buf_ptr,
+                                             partition_index_lv);
+      null_end_pos_lv = cgen_state_->ir_builder_.CreateLoad(
+          null_end_pos_ptr->getType()->getPointerElementType(),
+          null_end_pos_ptr,
+          "null_end_pos");
+    }
+
+    // compute frame start depending on the bound type
+    if (frame_start_bound->getBoundType() ==
+        SqlWindowFrameBoundType::UNBOUNDED_PRECEDING) {
+      // frame starts at the first row of the partition
+      frame_start_bound_lv = cgen_state_->llInt((int64_t)0);
+    } else if (frame_start_bound->getBoundType() ==
+               SqlWindowFrameBoundType::EXPR_PRECEDING) {
+      // frame starts at the position before X rows of the current row
+      CHECK(frame_start_bound_expr_lv);
+      if (window_func->getFrameBoundType() ==
+          Analyzer::WindowFunction::FrameBoundType::ROW) {
+        frame_start_bound_lv = cgen_state_->emitCall("compute_row_mode_start_index_sub",
+                                                     {current_row_pos,
+                                                      current_partition_start_offset_lv,
+                                                      frame_start_bound_expr_lv});
+      } else {
+        CHECK(window_func->getFrameBoundType() ==
+              Analyzer::WindowFunction::FrameBoundType::RANGE);
+        std::string lower_bound_func_name{"range_mode_"};
+        lower_bound_func_name.append(order_col_type_name);
+        lower_bound_func_name.append("_sub_frame_lower_bound");
+        frame_start_bound_lv = cgen_state_->emitCall(lower_bound_func_name,
+                                                     {num_elem_current_partition_lv,
+                                                      current_col_value_lv,
+                                                      order_key_buf_ptr,
+                                                      target_partition_rowid_ptr,
+                                                      target_partition_sorted_rowid_ptr,
+                                                      frame_start_bound_expr_lv,
+                                                      order_key_col_null_val_lv,
+                                                      null_start_pos_lv,
+                                                      null_end_pos_lv});
+      }
+    } else if (frame_start_bound->getBoundType() ==
+               SqlWindowFrameBoundType::CURRENT_ROW) {
+      // frame start at the current row
+      if (window_func->getFrameBoundType() ==
+          Analyzer::WindowFunction::FrameBoundType::ROW) {
+        frame_start_bound_lv = cgen_state_->emitCall("compute_row_mode_start_index_sub",
+                                                     {current_row_pos,
+                                                      current_partition_start_offset_lv,
+                                                      cgen_state_->llInt(((int64_t)0))});
+      } else {
+        CHECK(window_func->getFrameBoundType() ==
+              Analyzer::WindowFunction::FrameBoundType::RANGE);
+        std::string lower_bound_func_name{"compute_"};
+        lower_bound_func_name.append(order_col_type_name);
+        lower_bound_func_name.append("_lower_bound_from_ordered_index");
+        frame_start_bound_lv = cgen_state_->emitCall(lower_bound_func_name,
+                                                     {num_elem_current_partition_lv,
+                                                      current_col_value_lv,
+                                                      order_key_buf_ptr,
+                                                      target_partition_rowid_ptr,
+                                                      target_partition_sorted_rowid_ptr,
+                                                      order_key_col_null_val_lv,
+                                                      null_start_pos_lv,
+                                                      null_end_pos_lv});
+      }
+    } else if (frame_start_bound->getBoundType() ==
+               SqlWindowFrameBoundType::EXPR_FOLLOWING) {
+      // frame start at the position after X rows of the current row
+      CHECK(frame_start_bound_expr_lv);
+      if (window_func->getFrameBoundType() ==
+          Analyzer::WindowFunction::FrameBoundType::ROW) {
+        frame_start_bound_lv = cgen_state_->emitCall("compute_row_mode_start_index_add",
+                                                     {current_row_pos,
+                                                      current_partition_start_offset_lv,
+                                                      frame_start_bound_expr_lv,
+                                                      num_elem_current_partition_lv});
+      } else {
+        CHECK(window_func->getFrameBoundType() ==
+              Analyzer::WindowFunction::FrameBoundType::RANGE);
+        std::string lower_bound_func_name{"range_mode_"};
+        lower_bound_func_name.append(order_col_type_name);
+        lower_bound_func_name.append("_add_frame_lower_bound");
+        frame_start_bound_lv = cgen_state_->emitCall(lower_bound_func_name,
+                                                     {num_elem_current_partition_lv,
+                                                      current_col_value_lv,
+                                                      order_key_buf_ptr,
+                                                      target_partition_rowid_ptr,
+                                                      target_partition_sorted_rowid_ptr,
+                                                      frame_start_bound_expr_lv,
+                                                      order_key_col_null_val_lv,
+                                                      null_start_pos_lv,
+                                                      null_end_pos_lv});
+      }
+    } else {
+      CHECK(false) << "frame start cannot be UNBOUNDED FOLLOWING";
+    }
+
+    // compute frame end
+    if (frame_end_bound->getBoundType() == SqlWindowFrameBoundType::UNBOUNDED_PRECEDING) {
+      // frame ends at the first row of the partition
+      CHECK(false) << "frame end cannot be UNBOUNDED PRECEDING";
+    } else if (frame_end_bound->getBoundType() ==
+               SqlWindowFrameBoundType::EXPR_PRECEDING) {
+      // frame ends at the position X rows before the current row
+      CHECK(frame_end_bound_expr_lv);
+      if (window_func->getFrameBoundType() ==
+          Analyzer::WindowFunction::FrameBoundType::ROW) {
+        frame_end_bound_lv = cgen_state_->emitCall("compute_row_mode_end_index_sub",
+                                                   {current_row_pos,
+                                                    current_partition_start_offset_lv,
+                                                    frame_end_bound_expr_lv});
+      } else {
+        CHECK(window_func->getFrameBoundType() ==
+              Analyzer::WindowFunction::FrameBoundType::RANGE);
+        std::string upper_bound_func_name{"range_mode_"};
+        upper_bound_func_name.append(order_col_type_name);
+        upper_bound_func_name.append("_sub_frame_upper_bound");
+        frame_end_bound_lv = cgen_state_->emitCall(upper_bound_func_name,
+                                                   {num_elem_current_partition_lv,
+                                                    current_col_value_lv,
+                                                    order_key_buf_ptr,
+                                                    target_partition_rowid_ptr,
+                                                    target_partition_sorted_rowid_ptr,
+                                                    frame_end_bound_expr_lv,
+                                                    order_key_col_null_val_lv,
+                                                    null_start_pos_lv,
+                                                    null_end_pos_lv});
+      }
+    } else if (frame_end_bound->getBoundType() == SqlWindowFrameBoundType::CURRENT_ROW) {
+      // frame ends at the current row
+      if (window_func->getFrameBoundType() ==
+          Analyzer::WindowFunction::FrameBoundType::ROW) {
+        frame_end_bound_lv = cgen_state_->emitCall("compute_row_mode_end_index_sub",
+                                                   {current_row_pos,
+                                                    current_partition_start_offset_lv,
+                                                    cgen_state_->llInt((int64_t)0)});
+      } else {
+        CHECK(window_func->getFrameBoundType() ==
+              Analyzer::WindowFunction::FrameBoundType::RANGE);
+        std::string upper_bound_func_name{"compute_"};
+        upper_bound_func_name.append(order_col_type_name);
+        upper_bound_func_name.append("_upper_bound_from_ordered_index");
+        frame_end_bound_lv = cgen_state_->emitCall(upper_bound_func_name,
+                                                   {num_elem_current_partition_lv,
+                                                    current_col_value_lv,
+                                                    order_key_buf_ptr,
+                                                    target_partition_rowid_ptr,
+                                                    target_partition_sorted_rowid_ptr,
+                                                    order_key_col_null_val_lv,
+                                                    null_start_pos_lv,
+                                                    null_end_pos_lv});
+      }
+    } else if (frame_end_bound->getBoundType() ==
+               SqlWindowFrameBoundType::EXPR_FOLLOWING) {
+      // frame ends at the position X rows after the current row
+      CHECK(frame_end_bound_expr_lv);
+      if (window_func->getFrameBoundType() ==
+          Analyzer::WindowFunction::FrameBoundType::ROW) {
+        frame_end_bound_lv = cgen_state_->emitCall("compute_row_mode_end_index_add",
+                                                   {current_row_pos,
+                                                    current_partition_start_offset_lv,
+                                                    frame_end_bound_expr_lv,
+                                                    num_elem_current_partition_lv});
+      } else {
+        CHECK(window_func->getFrameBoundType() ==
+              Analyzer::WindowFunction::FrameBoundType::RANGE);
+        std::string upper_bound_func_name{"range_mode_"};
+        upper_bound_func_name.append(order_col_type_name);
+        upper_bound_func_name.append("_add_frame_upper_bound");
+        frame_end_bound_lv = cgen_state_->emitCall(upper_bound_func_name,
+                                                   {num_elem_current_partition_lv,
+                                                    current_col_value_lv,
+                                                    order_key_buf_ptr,
+                                                    target_partition_rowid_ptr,
+                                                    target_partition_sorted_rowid_ptr,
+                                                    frame_end_bound_expr_lv,
+                                                    order_key_col_null_val_lv,
+                                                    null_start_pos_lv,
+                                                    null_end_pos_lv});
+      }
+    } else {
+      // frame ends at the last row of the partition
+      CHECK(frame_end_bound->getBoundType() ==
+            SqlWindowFrameBoundType::UNBOUNDED_FOLLOWING);
+      frame_end_bound_lv = num_elem_current_partition_lv;
+    }
+
+    // compute aggregated value over the computed frame range
+    CHECK(frame_start_bound_expr_lv);
+    CHECK(frame_end_bound_expr_lv);
+
+    // codegen to send a query with frame bound to aggregate tree searcher
+    llvm::Value* aggregation_trees_lv{nullptr};
+    llvm::Value* invalid_val_lv{nullptr};
+    llvm::Value* null_val_lv{nullptr};
+    std::string aggregation_tree_search_func_name{"search_"};
+    std::string aggregation_tree_getter_func_name{"get_"};
+
+    // prepare null values and aggregate_tree getter and searcher depending on
+    // a type of the ordering column
+    auto agg_expr_ti = args.front()->get_type_info();
+    switch (agg_expr_ti.get_type()) {
+      case SQLTypes::kTINYINT:
+      case SQLTypes::kSMALLINT:
+      case SQLTypes::kINT:
+      case SQLTypes::kBIGINT:
+      case SQLTypes::kNUMERIC:
+      case SQLTypes::kDECIMAL: {
+        if (window_func->getKind() == SqlWindowFunctionKind::MIN) {
+          invalid_val_lv = cgen_state_->llInt(std::numeric_limits<int64_t>::max());
+        } else if (window_func->getKind() == SqlWindowFunctionKind::MAX) {
+          invalid_val_lv = cgen_state_->llInt(std::numeric_limits<int64_t>::lowest());
+        } else {
+          invalid_val_lv = cgen_state_->llInt((int64_t)0);
+        }
+        null_val_lv = cgen_state_->llInt(inline_int_null_value<int64_t>());
+        aggregation_tree_search_func_name += "int64_t";
+        aggregation_tree_getter_func_name += "integer";
+        break;
+      }
+      case SQLTypes::kFLOAT:
+      case SQLTypes::kDOUBLE: {
+        if (window_func->getKind() == SqlWindowFunctionKind::MIN) {
+          invalid_val_lv = cgen_state_->llFp(std::numeric_limits<double>::max());
+        } else if (window_func->getKind() == SqlWindowFunctionKind::MAX) {
+          invalid_val_lv = cgen_state_->llFp(std::numeric_limits<double>::lowest());
+        } else {
+          invalid_val_lv = cgen_state_->llFp((double)0);
+        }
+        null_val_lv = cgen_state_->inlineFpNull(SQLTypeInfo(kDOUBLE));
+        aggregation_tree_search_func_name += "double";
+        aggregation_tree_getter_func_name += "double";
+        break;
+      }
+      default: {
+        CHECK(false);
+        break;
+      }
+    }
+
+    // derived aggregation has a different code path
+    if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
+      aggregation_tree_search_func_name += "_derived";
+      aggregation_tree_getter_func_name += "_derived";
+    }
+
+    // get a buffer holding aggregate trees for each partition
+    if (agg_expr_ti.is_integer() || agg_expr_ti.is_decimal()) {
+      if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
+        aggregation_trees_lv = cgen_state_->llInt(reinterpret_cast<int64_t>(
+            window_func_context->getDerivedAggregationTreesForIntegerTypeWindowExpr()));
+      } else {
+        aggregation_trees_lv = cgen_state_->llInt(reinterpret_cast<int64_t>(
+            window_func_context->getAggregationTreesForIntegerTypeWindowExpr()));
+      }
+    } else if (agg_expr_ti.is_fp()) {
+      if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
+        aggregation_trees_lv = cgen_state_->llInt(reinterpret_cast<int64_t>(
+            window_func_context->getDerivedAggregationTreesForDoubleTypeWindowExpr()));
+      } else {
+        aggregation_trees_lv = cgen_state_->llInt(reinterpret_cast<int64_t>(
+            window_func_context->getAggregationTreesForDoubleTypeWindowExpr()));
+      }
+    }
+
+    CHECK(aggregation_trees_lv);
+    CHECK(invalid_val_lv);
+    aggregation_tree_search_func_name += "_aggregation_tree";
+    aggregation_tree_getter_func_name += "_aggregation_tree";
+
+    // get the aggregate tree of the current partition from a window context
+    auto aggregation_trees_ptr =
+        cgen_state_->ir_builder_.CreateIntToPtr(aggregation_trees_lv, ppi64_type);
+    auto target_aggregation_tree_lv = cgen_state_->emitCall(
+        aggregation_tree_getter_func_name, {aggregation_trees_ptr, partition_index_lv});
+
+    // send a query to the aggregate tree with the frame range:
+    // `frame_start_bound_lv` ~ `frame_end_bound_lv`
+    auto res_lv =
+        cgen_state_->emitCall(aggregation_tree_search_func_name,
+                              {target_aggregation_tree_lv,
+                               frame_start_bound_lv,
+                               frame_end_bound_lv,
+                               current_partition_tree_depth_lv,
+                               aggregation_tree_fanout_lv,
+                               cgen_state_->llBool(agg_expr_ti.is_decimal()),
+                               cgen_state_->llInt((int64_t)agg_expr_ti.get_scale()),
+                               invalid_val_lv,
+                               null_val_lv,
+                               agg_type_lv});
+
+    // handling returned null value if exists
+    std::string null_handler_func_name{"handle_null_val_"};
+    std::vector<llvm::Value*> null_handler_args{res_lv, null_val_lv};
+
+    // determine null_handling function's name
+    if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
+      // average aggregate function returns a value as a double
+      // (and our search* function also returns a double)
+      if (agg_expr_ti.is_fp()) {
+        // fp type: double null value
+        null_handler_func_name += "double_double";
+      } else {
+        // non-fp type: int64_t null type
+        null_handler_func_name += "double_int64_t";
+      }
+    } else if (agg_expr_ti.is_fp()) {
+      // fp type: double null value
+      null_handler_func_name += "double_double";
+    } else {
+      // non-fp type: int64_t null type
+      null_handler_func_name += "int64_t_int64_t";
+    }
+    null_handler_func_name += "_window_framing_agg";
+
+    // prepare null_val
+    if (window_func->getKind() == SqlWindowFunctionKind::COUNT) {
+      if (agg_expr_ti.is_fp()) {
+        null_handler_args.push_back(cgen_state_->llFp((double)0));
+      } else {
+        null_handler_args.push_back(cgen_state_->llInt((int64_t)0));
+      }
+    } else if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
+      null_handler_args.push_back(cgen_state_->inlineFpNull(SQLTypeInfo(kDOUBLE)));
+    } else {
+      null_handler_args.push_back(cgen_state_->castToTypeIn(window_func_null_val, 64));
+    }
+    res_lv = cgen_state_->emitCall(null_handler_func_name, null_handler_args);
+
+    // when AGG_TYPE is double, we get a double type return value we expect an integer
+    // type value for the count aggregation
+    if (window_func->getKind() == SqlWindowFunctionKind::COUNT && agg_expr_ti.is_fp()) {
+      return cgen_state_->ir_builder_.CreateFPToSI(
+          res_lv, get_int_type(64, cgen_state_->context_));
+    }
+    return res_lv;
   } else {
-    cgen_state_->emitCall(agg_name + "_skip_val",
-                          {aggregate_state, crt_val, window_func_null_val});
+    llvm::Value* multiplicity_lv = nullptr;
+    if (args.empty()) {
+      cgen_state_->emitCall(agg_name, {aggregate_state, crt_val});
+    } else {
+      cgen_state_->emitCall(agg_name + "_skip_val",
+                            {aggregate_state, crt_val, window_func_null_val});
+    }
+    if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
+      codegenWindowAvgEpilogue(crt_val, window_func_null_val, multiplicity_lv);
+    }
+    return codegenAggregateWindowState();
   }
-  if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
-    codegenWindowAvgEpilogue(crt_val, window_func_null_val, multiplicity_lv);
-  }
-  return codegenAggregateWindowState();
 }
 
 void Executor::codegenWindowAvgEpilogue(llvm::Value* crt_val,
