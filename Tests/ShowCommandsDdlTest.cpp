@@ -40,6 +40,7 @@
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
 extern bool g_enable_system_tables;
+extern bool g_enable_logs_system_tables;
 extern bool g_enable_table_functions;
 extern bool g_enable_dev_table_functions;
 
@@ -4418,6 +4419,7 @@ int main(int argc, char** argv) {
   g_enable_dev_table_functions = true;
   g_enable_fsi = true;
   g_enable_system_tables = true;
+  g_enable_logs_system_tables = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
