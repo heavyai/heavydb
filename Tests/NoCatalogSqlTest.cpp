@@ -184,8 +184,7 @@ class NoCatalogSqlTest : public ::testing::Test {
     calcite_.reset();
   }
 
-  ExecutionResult runSqlQuery(const std::string& sql) {
-    const auto query_ra = calcite_->process("admin", "test_db", pg_shim(sql));
+  ExecutionResult runRAQuery(const std::string& query_ra) {
     auto dag = std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, schema_provider_);
     auto ra_executor = RelAlgExecutor(
         executor_.get(), schema_provider_, data_mgr_->getDataProvider(), std::move(dag));
@@ -193,6 +192,11 @@ class NoCatalogSqlTest : public ::testing::Test {
     auto co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
     co.use_groupby_buffer_desc = g_use_groupby_buffer_desc;
     return ra_executor.executeRelAlgQuery(co, ExecutionOptions(), false);
+  }
+
+  ExecutionResult runSqlQuery(const std::string& sql) {
+    const auto query_ra = calcite_->process("admin", "test_db", pg_shim(sql));
+    return runRAQuery(query_ra);
   }
 
   RelAlgExecutor getExecutor(const std::string& sql) {
@@ -312,6 +316,28 @@ TEST_F(NoCatalogSqlTest, StreamingFilter) {
   auto converter = std::make_unique<ArrowResultSetConverter>(rs, col_names, -1);
   auto at = converter->convertToArrowTable();
   ArrowTestHelpers::compare_arrow_table(at, std::vector<int32_t>{30, 30, 40, 70, 90});
+}
+
+TEST_F(NoCatalogSqlTest, MultipleCalciteMultipleThreads) {
+  constexpr int TEST_NTHREADS = 100;
+  std::vector<ExecutionResult> res;
+  std::vector<std::future<void>> threads;
+  res.resize(TEST_NTHREADS);
+  threads.resize(TEST_NTHREADS);
+  for (int i = 0; i < TEST_NTHREADS; ++i) {
+    threads[i] = std::async(std::launch::async, [this, i, &res]() {
+      auto calcite = std::make_unique<CalciteJNI>(schema_provider_);
+      auto query_ra = calcite->process(
+          "admin", "test_db", "SELECT col_bi + " + std::to_string(i) + " FROM test1;");
+      res[i] = runRAQuery(query_ra);
+    });
+  }
+  for (int i = 0; i < TEST_NTHREADS; ++i) {
+    threads[i].wait();
+  }
+  for (int i = 0; i < TEST_NTHREADS; ++i) {
+    compare_res_data(res[i], std::vector<int64_t>({1 + i, 2 + i, 3 + i, 4 + i, 5 + i}));
+  }
 }
 
 void parse_cli_args_to_globals(int argc, char* argv[]) {
