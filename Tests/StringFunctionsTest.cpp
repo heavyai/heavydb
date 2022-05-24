@@ -2094,6 +2094,66 @@ TEST_F(StringFunctionTest, UDF_ExpandDefaults) {
   }
 }
 
+TEST_F(StringFunctionTest, lcase) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set =
+        sql("select lcase(largest_city) from string_function_test_countries where "
+            "code = 'US';",
+            dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"new york city"}};
+    compare_result_set(expected_result_set, result_set);
+  }
+}
+
+TEST_F(StringFunctionTest, ucase) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set =
+        sql("select ucase(largest_city) from string_function_test_countries where "
+            "code = 'US';",
+            dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"NEW YORK CITY"}};
+    compare_result_set(expected_result_set, result_set);
+  }
+}
+
+TEST_F(StringFunctionTest, left) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set1 = sql("select left('abcdef', -2);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set1{{""}};
+    compare_result_set(expected_result_set1, result_set1);
+    auto result_set2 = sql("select left('abcdef', 0);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set2{{""}};
+    compare_result_set(expected_result_set2, result_set2);
+    auto result_set3 = sql("select left('abcdef', 2);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set3{{"ab"}};
+    compare_result_set(expected_result_set3, result_set3);
+    auto result_set4 = sql("select left('abcdef', 10);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set4{{"abcdef"}};
+    compare_result_set(expected_result_set4, result_set4);
+  }
+}
+
+TEST_F(StringFunctionTest, right) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set1 = sql("select right('abcdef', -2);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set1{{""}};
+    compare_result_set(expected_result_set1, result_set1);
+    auto result_set2 = sql("select right('abcdef', 0);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set2{{""}};
+    compare_result_set(expected_result_set2, result_set2);
+    auto result_set3 = sql("select right('abcdef', 2);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set3{{"ef"}};
+    compare_result_set(expected_result_set3, result_set3);
+    auto result_set4 = sql("select right('abcdef', 10);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set4{{"abcdef"}};
+    compare_result_set(expected_result_set4, result_set4);
+  }
+}
+
 const char* postgres_osm_names = R"(
     CREATE TABLE postgres_osm_names (
       name TEXT,

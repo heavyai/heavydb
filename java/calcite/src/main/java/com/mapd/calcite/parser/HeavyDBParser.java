@@ -1145,9 +1145,9 @@ public final class HeavyDBParser {
       for (int i = 0; i < operands.length; ++i) {
         node_call.setOperand(i, expand(operands[i], id_to_expr, typeFactory));
       }
-      SqlNode expanded_substr = expandSubstr(node_call, typeFactory);
-      if (expanded_substr != null) {
-        return expanded_substr;
+      SqlNode expanded_string_function = expandStringFunctions(node_call, typeFactory);
+      if (expanded_string_function != null) {
+        return expanded_string_function;
       }
       SqlNode expanded_variance = expandVariance(node_call, typeFactory);
       if (expanded_variance != null) {
@@ -1188,24 +1188,92 @@ public final class HeavyDBParser {
     return new_group_by_list;
   }
 
-  private SqlNode expandSubstr(
+  private SqlNode expandStringFunctions(
           final SqlBasicCall proj_call, RelDataTypeFactory typeFactory) {
-    // Expand SUBSTR to Calcite-native SUBSTRING
-    if (!proj_call.getOperator().isName("SUBSTR", false)) {
+    //
+    // Expand string functions
+    //   SUBSTR, LCASE, UCASE, LEFT, RIGHT
+    //
+    // Note: SUBSTRING doesn't offer much flexibility for the numeric arg's type
+    //    "only constant, column, or other string operator arguments are allowed"
+
+    final int operandCount = proj_call.operandCount();
+
+    if (proj_call.getOperator().isName("SUBSTR", false)) {
+      // Expand SUBSTR to SUBSTRING
+      final SqlParserPos pos = proj_call.getParserPosition();
+      if (operandCount == 2) {
+        final SqlNode primary_operand = proj_call.operand(0);
+        final SqlNode from_operand = proj_call.operand(1);
+        return SqlStdOperatorTable.SUBSTRING.createCall(
+                pos, primary_operand, from_operand);
+
+      } else if (operandCount == 3) {
+        final SqlNode primary_operand = proj_call.operand(0);
+        final SqlNode from_operand = proj_call.operand(1);
+        final SqlNode for_operand = proj_call.operand(2);
+        return SqlStdOperatorTable.SUBSTRING.createCall(
+                pos, primary_operand, from_operand, for_operand);
+      }
+      return null;
+
+    } else if (proj_call.getOperator().isName("LEFT", false)) {
+      // Expand LEFT to a suitable SUBSTRING
+      final SqlParserPos pos = proj_call.getParserPosition();
+
+      if (operandCount == 2) {
+        final SqlNode primary = proj_call.operand(0);
+        SqlNode start = SqlLiteral.createExactNumeric("0", SqlParserPos.ZERO);
+        final SqlNode count = proj_call.operand(1);
+        return SqlStdOperatorTable.SUBSTRING.createCall(pos, primary, start, count);
+      }
+      return null;
+
+    } else if (proj_call.getOperator().isName("RIGHT", false)) {
+      // Expand RIGHT to a suitable SUBSTRING
+      final SqlParserPos pos = proj_call.getParserPosition();
+
+      if (operandCount == 2) {
+        final SqlNode primary = proj_call.operand(0);
+        final SqlNode count = proj_call.operand(1);
+        if (count instanceof SqlNumericLiteral) {
+          SqlNumericLiteral numericCount = (SqlNumericLiteral) count;
+          if (numericCount.intValue(true) > 0) {
+            // common case
+            final SqlNode negativeCount =
+                    SqlNumericLiteral.createNegative(numericCount, pos);
+            return SqlStdOperatorTable.SUBSTRING.createCall(pos, primary, negativeCount);
+          }
+          // allow zero (or negative) to return an empty string
+          //   matches behavior of LEFT
+          SqlNode zero = SqlLiteral.createExactNumeric("0", SqlParserPos.ZERO);
+          return SqlStdOperatorTable.SUBSTRING.createCall(pos, primary, zero, zero);
+        }
+        // if not a simple literal ... attempt to evaluate
+        //    expected to fail ... with a useful error message
+        return SqlStdOperatorTable.SUBSTRING.createCall(pos, primary, count);
+      }
+      return null;
+
+    } else if (proj_call.getOperator().isName("LCASE", false)) {
+      // Expand LCASE to LOWER
+      final SqlParserPos pos = proj_call.getParserPosition();
+      if (operandCount == 1) {
+        final SqlNode primary = proj_call.operand(0);
+        return SqlStdOperatorTable.LOWER.createCall(pos, primary);
+      }
+      return null;
+
+    } else if (proj_call.getOperator().isName("UCASE", false)) {
+      // Expand UCASE to UPPER
+      final SqlParserPos pos = proj_call.getParserPosition();
+      if (operandCount == 1) {
+        final SqlNode primary = proj_call.operand(0);
+        return SqlStdOperatorTable.UPPER.createCall(pos, primary);
+      }
       return null;
     }
-    if (proj_call.operandCount() < 2 || proj_call.operandCount() > 3) {
-      return null;
-    }
-    final SqlParserPos pos = proj_call.getParserPosition();
-    final SqlNode primary_operand = proj_call.operand(0);
-    final SqlNode from_operand = proj_call.operand(1);
-    if (proj_call.operandCount() == 2) {
-      return SqlStdOperatorTable.SUBSTRING.createCall(pos, primary_operand, from_operand);
-    }
-    final SqlNode for_operand = proj_call.operand(2);
-    return SqlStdOperatorTable.SUBSTRING.createCall(
-            pos, primary_operand, from_operand, for_operand);
+    return null;
   }
 
   private SqlNode expandVariance(
