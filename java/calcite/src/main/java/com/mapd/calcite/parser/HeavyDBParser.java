@@ -45,13 +45,17 @@ import org.apache.calcite.rel.core.TableModify.Operation;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalTableModify;
 import org.apache.calcite.rel.rules.CoreRules;
+import org.apache.calcite.rel.rules.Restriction;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rex.*;
 import org.apache.calcite.runtime.CalciteException;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.schema.Statistic;
+import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.*;
+import org.apache.calcite.sql.advise.SqlAdvisorValidator;
 import org.apache.calcite.sql.dialect.CalciteSqlDialect;
 import org.apache.calcite.sql.fun.SqlCase;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
@@ -62,7 +66,10 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.type.SqlTypeUtil;
 import org.apache.calcite.sql.util.SqlBasicVisitor;
 import org.apache.calcite.sql.util.SqlShuttle;
+import org.apache.calcite.sql.util.SqlVisitor;
 import org.apache.calcite.sql.validate.SqlConformanceEnum;
+import org.apache.calcite.sql.validate.SqlValidator;
+import org.apache.calcite.sql.validate.SqlValidatorImpl;
 import org.apache.calcite.sql2rel.SqlToRelConverter;
 import org.apache.calcite.tools.*;
 import org.apache.calcite.util.Pair;
@@ -78,6 +85,9 @@ import java.util.function.BiPredicate;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
+import ai.heavy.thrift.server.TColumnType;
+import ai.heavy.thrift.server.TDatumType;
+import ai.heavy.thrift.server.TEncodingType;
 import ai.heavy.thrift.server.TTableDetails;
 
 public final class HeavyDBParser {
@@ -177,8 +187,49 @@ public final class HeavyDBParser {
     return false;
   }
 
+  private boolean isHashJoinableType(TColumnType type) {
+    switch (type.getCol_type().type) {
+      case TINYINT:
+      case SMALLINT:
+      case INT:
+      case BIGINT: {
+        return true;
+      }
+      case STR: {
+        return type.col_type.encoding == TEncodingType.DICT;
+      }
+      default: {
+        return false;
+      }
+    }
+  }
+
+  private boolean isColumnHashJoinable(
+          List<String> joinColumnIdentifier, MetaConnect mc) {
+    try {
+      TTableDetails tableDetails = mc.get_table_details(joinColumnIdentifier.get(0));
+      return null
+              != tableDetails.row_desc.stream()
+                         .filter(c
+                                 -> c.col_name.toLowerCase(Locale.ROOT)
+                                                 .equals(joinColumnIdentifier.get(1))
+                                         && isHashJoinableType(c))
+                         .findFirst()
+                         .orElse(null);
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
   private HeavyDBPlanner getPlanner(
           final boolean allowSubQueryExpansion, final boolean isWatchdogEnabled) {
+    HeavyDBUser user = new HeavyDBUser(dbUser.getUser(),
+            dbUser.getSession(),
+            dbUser.getDB(),
+            -1,
+            ImmutableList.of());
+    final MetaConnect mc =
+            new MetaConnect(dbPort, dataDir, user, this, sock_transport_properties);
     BiPredicate<SqlNode, SqlNode> expandPredicate = new BiPredicate<SqlNode, SqlNode>() {
       @Override
       public boolean test(SqlNode root, SqlNode expression) {
@@ -198,33 +249,66 @@ public final class HeavyDBParser {
             // its underlying table is large. Thus, we enable IN-clause decorrelation
             // under watchdog iff we explicitly have correlated join in IN-clause
             if (isWatchdogEnabled) {
-              boolean found_expression = false;
+              boolean foundExpression = false;
               if (expression instanceof SqlCall) {
-                SqlCall call = (SqlCall) expression;
-                if (call.getOperandList().size() == 2) {
+                SqlCall outerSelectCall = (SqlCall) expression;
+                if (outerSelectCall.getOperandList().size() == 2) {
                   // if IN clause is correlated, its second operand of corresponding
                   // expression is SELECT clause which indicates a correlated subquery.
                   // Here, an expression "f.val IN (SELECT ...)" has two operands.
                   // Since we have interest in its subquery, so try to check whether
                   // the second operand, i.e., call.getOperandList().get(1)
                   // is a type of SqlSelect and also is correlated.
-                  if (call.getOperandList().get(1) instanceof SqlSelect) {
-                    expression = call.getOperandList().get(1);
-                    SqlSelect select_call = (SqlSelect) expression;
-                    if (select_call.hasWhere()) {
+                  if (outerSelectCall.getOperandList().get(1) instanceof SqlSelect) {
+                    // the below checking logic is to allow IN-clause decorrelation
+                    // if it has hash joinable IN expression without correlated join
+                    // i.e., SELECT ... WHERE a.intVal IN (SELECT b.intVal FROM b) ...;
+                    SqlSelect innerSelectCall =
+                            (SqlSelect) outerSelectCall.getOperandList().get(1);
+                    Map<String, String> tableAliasMap = new HashMap<>();
+                    if (root instanceof SqlSelect) {
+                      tableAliasFinder(((SqlSelect) root).getFrom(), tableAliasMap);
+                    }
+                    tableAliasFinder(innerSelectCall.getFrom(), tableAliasMap);
+                    if (outerSelectCall.getOperandList().get(0) instanceof SqlIdentifier
+                            && innerSelectCall.getSelectList().get(0)
+                                            instanceof SqlIdentifier) {
+                      SqlIdentifier outerColIdentifier =
+                              (SqlIdentifier) outerSelectCall.getOperandList().get(0);
+                      SqlIdentifier innerColIdentifier =
+                              (SqlIdentifier) innerSelectCall.getSelectList().get(0);
+                      if (tableAliasMap.containsKey(outerColIdentifier.names.get(0))
+                              && tableAliasMap.containsKey(
+                                      innerColIdentifier.names.get(0))) {
+                        String outerTableName =
+                                tableAliasMap.get(outerColIdentifier.names.get(0));
+                        String innerTableName =
+                                tableAliasMap.get(innerColIdentifier.names.get(0));
+                        if (isColumnHashJoinable(ImmutableList.of(outerTableName,
+                                                         outerColIdentifier.names.get(1)),
+                                    mc)
+                                && isColumnHashJoinable(
+                                        ImmutableList.of(innerTableName,
+                                                innerColIdentifier.names.get(1)),
+                                        mc)) {
+                          return true;
+                        }
+                      }
+                    }
+                    if (innerSelectCall.hasWhere()) {
                       // IN-clause may have correlated join within subquery's WHERE clause
                       // i.e., f.val IN (SELECT r.val FROM R r WHERE f.val2 = r.val2)
                       // then we have to deccorrelate the IN-clause
                       JoinOperatorChecker joinOperatorChecker = new JoinOperatorChecker();
                       if (joinOperatorChecker.containsExpression(
-                                  select_call.getWhere())) {
-                        found_expression = true;
+                                  innerSelectCall.getWhere())) {
+                        return true;
                       }
                     }
                   }
                 }
               }
-              if (!found_expression) {
+              if (!foundExpression) {
                 return false;
               }
             }
@@ -291,34 +375,15 @@ public final class HeavyDBParser {
         return false;
       }
     };
-
-    // create the default schema
-    final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
+    // create the db schema for the user session
     final HeavyDBSchema defaultSchema =
             new HeavyDBSchema(dataDir, this, dbPort, dbUser, sock_transport_properties);
-    final SchemaPlus defaultSchemaPlus = rootSchema.add(dbUser.getDB(), defaultSchema);
-
-    // add the other potential schemas
-    // this is where the systyem schema would be added
-    final MetaConnect mc =
-            new MetaConnect(dbPort, dataDir, dbUser, this, sock_transport_properties);
-
-    // TODO MAT for this checkin we are not going to actually allow any additional
-    // schemas
-    // Eveything should work and perform as it ever did
-    if (false) {
-      for (String db : mc.getDatabases()) {
-        if (!db.toUpperCase().equals(dbUser.getDB().toUpperCase())) {
-          rootSchema.add(db,
-                  new HeavyDBSchema(
-                          dataDir, this, dbPort, dbUser, sock_transport_properties, db));
-        }
-      }
-    }
+    final SchemaPlus dbSchema =
+            Frameworks.createRootSchema(true).add(dbUser.getDB(), defaultSchema);
 
     final FrameworkConfig config =
             Frameworks.newConfigBuilder()
-                    .defaultSchema(defaultSchemaPlus)
+                    .defaultSchema(dbSchema)
                     .operatorTable(dbSqlOperatorTable.get())
                     .parserConfig(SqlParser.configBuilder()
                                           .setConformance(SqlConformanceEnum.LENIENT)
@@ -1590,5 +1655,25 @@ public final class HeavyDBParser {
     }
 
     private SqlKind targetKind;
+  }
+
+  public void tableAliasFinder(SqlNode sqlNode, Map<String, String> tableAliasMap) {
+    final SqlVisitor<Void> aliasCollector = new SqlBasicVisitor<Void>() {
+      @Override
+      public Void visit(SqlCall call) {
+        if (call instanceof SqlBasicCall) {
+          SqlBasicCall basicCall = (SqlBasicCall) call;
+          if (basicCall.getKind() == SqlKind.AS) {
+            SqlIdentifier colNameIdentifier = (SqlIdentifier) basicCall.operand(0);
+            String tblName = colNameIdentifier.names.size() == 1
+                    ? colNameIdentifier.names.get(0)
+                    : colNameIdentifier.names.get(1);
+            tableAliasMap.put(basicCall.operand(1).toString(), tblName);
+          }
+        }
+        return super.visit(call);
+      }
+    };
+    sqlNode.accept(aliasCollector);
   }
 }

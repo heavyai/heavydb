@@ -861,6 +861,42 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
 
 }  // namespace
 
+std::shared_ptr<ResultSet> QueryRunner::getCalcitePlan(const std::string& query_str,
+                                                       bool enable_watchdog,
+                                                       bool as_json_str) {
+  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
+  CHECK(session_info_);
+  const auto& cat = session_info_->getCatalog();
+  auto query_state = create_query_state(session_info_, query_str);
+  auto stdlog = STDLOG(query_state);
+
+  std::shared_ptr<ResultSet> result;
+  auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
+      [&cat, &query_str, &enable_watchdog, &as_json_str, &query_state, &result](
+          const size_t worker_id) {
+        auto executor = Executor::getExecutor(worker_id);
+        auto calcite_mgr = cat.getCalciteMgr();
+        const auto calciteQueryParsingOption =
+            calcite_mgr->getCalciteQueryParsingOption(true, as_json_str, false);
+        const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+            g_enable_calcite_view_optimize, enable_watchdog, {});
+        const auto query_ra = calcite_mgr
+                                  ->process(query_state->createQueryStateProxy(),
+                                            pg_shim(query_str),
+                                            calciteQueryParsingOption,
+                                            calciteOptimizationOption)
+                                  .plan_result;
+        result = std::make_shared<ResultSet>(query_ra);
+        return result;
+      });
+  CHECK(dispatch_queue_);
+  dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);
+  auto result_future = query_launch_task->get_future();
+  result_future.get();
+  CHECK(result);
+  return result;
+}
+
 std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& query_str,
                                                              CompilationOptions co,
                                                              ExecutionOptions eo) {

@@ -338,8 +338,8 @@ public class MetaConnect {
       disconnectFromCatalog();
       return td;
     }
-    // use thrift direct to local server
     try {
+      // use thrift direct to local server
       TProtocol protocol = null;
 
       TTransport transport =
@@ -353,7 +353,6 @@ public class MetaConnect {
       transport.close();
 
       return td;
-
     } catch (TTransportException ex) {
       HEAVYDBLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
@@ -425,6 +424,12 @@ public class MetaConnect {
         HEAVYDBLOGGER.debug("coltype = " + colType);
         int colSubType = rs.getInt("colsubtype");
         HEAVYDBLOGGER.debug("colsubtype = " + colSubType);
+        int compression = rs.getInt("compression");
+        HEAVYDBLOGGER.debug("compression = " + compression);
+        int compression_param = rs.getInt("comp_param");
+        HEAVYDBLOGGER.debug("comp_param = " + compression_param);
+        int size = rs.getInt("size");
+        HEAVYDBLOGGER.debug("size = " + size);
         int colDim = rs.getInt("coldim");
         HEAVYDBLOGGER.debug("coldim = " + colDim);
         int colScale = rs.getInt("colscale");
@@ -449,7 +454,9 @@ public class MetaConnect {
         }
 
         tti.nullable = !isNotNull;
-        tti.encoding = TEncodingType.NONE;
+        tti.encoding = encodingToThrift(compression);
+        tti.comp_param = compression_param;
+        tti.size = size;
         tti.type = tdt;
         tti.scale = colScale;
         tti.precision = colDim;
@@ -546,6 +553,12 @@ public class MetaConnect {
       HEAVYDBLOGGER.debug("coltype = " + colType);
       int colSubType = columnObject.get("colsubtype").getAsInt();
       HEAVYDBLOGGER.debug("colsubtype = " + colSubType);
+      int compression = columnObject.get("compression").getAsInt();
+      HEAVYDBLOGGER.debug("compression = " + compression);
+      int compression_param = columnObject.get("comp_param").getAsInt();
+      HEAVYDBLOGGER.debug("comp_param = " + compression_param);
+      int size = columnObject.get("size").getAsInt();
+      HEAVYDBLOGGER.debug("size = " + size);
       int colDim = columnObject.get("coldim").getAsInt();
       HEAVYDBLOGGER.debug("coldim = " + colDim);
       int colScale = columnObject.get("colscale").getAsInt();
@@ -578,7 +591,9 @@ public class MetaConnect {
       }
 
       tti.nullable = !isNotNull;
-      tti.encoding = TEncodingType.NONE;
+      tti.encoding = encodingToThrift(compression);
+      tti.comp_param = compression_param;
+      tti.size = size;
       tti.type = tdt;
       tti.scale = colScale;
       tti.precision = colDim;
@@ -776,6 +791,29 @@ public class MetaConnect {
         return TDatumType.POLYGON;
       case KMULTIPOLYGON:
         return TDatumType.MULTIPOLYGON;
+      default:
+        return null;
+    }
+  }
+
+  private TEncodingType encodingToThrift(int comp) {
+    switch (comp) {
+      case 0:
+        return TEncodingType.NONE;
+      case 1:
+        return TEncodingType.FIXED;
+      case 2:
+        return TEncodingType.RL;
+      case 3:
+        return TEncodingType.DIFF;
+      case 4:
+        return TEncodingType.DICT;
+      case 5:
+        return TEncodingType.SPARSE;
+      case 6:
+        return TEncodingType.GEOINT;
+      case 7:
+        return TEncodingType.DATE_IN_DAYS;
       default:
         return null;
     }

@@ -266,6 +266,9 @@ class QueryRunner {
   std::optional<RegisteredQueryHint> getParsedGlobalQueryHints(
       const std::string& query_str);
   RaExecutionSequence getRaExecutionSequence(const std::string& query_str);
+  std::shared_ptr<ResultSet> getCalcitePlan(const std::string& query_str,
+                                            bool enable_watchdog,
+                                            bool as_json_str);
 
   std::tuple<QueryPlanHash,
              std::shared_ptr<HashTable>,
