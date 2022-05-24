@@ -4170,7 +4170,17 @@ class LogsSystemTableTest : public SystemTablesTest,
            "DBHandler.cpp:1555", "stdlog sql_execute 23 1426 information_schema "
            "admin 456-efgh {\"query_str\",\"client\",\"nonce\",\"execution_time_ms\","
            "\"total_time_ms\"} {\"select * from web_server_access_logs LIMIT 1000;\","
-           "\"http:127.0.0.1\",\"100/1-0\",\"1323\",\"1426\"}"}};
+           "\"http:127.0.0.1\",\"100/1-0\",\"1323\",\"1426\"}"},
+          {"Server", "2022-05-22T14:36:07", "I", i(50000), i(0), i(3),
+           "DBHandler.cpp:1555", "stdlog sql_execute 20 25000 heavyai "
+           "admin 507-aBcD {\"query_str\",\"client\",\"nonce\",\"execution_time_ms\","
+           "\"total_time_ms\"} {\"SELECT COUNT(*) FROM heavyai_us_states\","
+           "\"http:127.0.0.1\",\"null/1\",\"21312\",\"21400\"}"},
+          {"Server", "2022-05-22T14:36:08", "I", i(50000), i(0), i(3),
+           "DBHandler.cpp:1555", "stdlog sql_execute 20 25000 heavyai "
+           "admin 507-aBcD {\"query_str\",\"client\",\"nonce\",\"execution_time_ms\","
+           "\"total_time_ms\"} {\"SELECT COUNT(*) FROM heavyai_us_states\","
+           "\"http:127.0.0.1\",\"1\",\"30000\",\"40000\"}"}};
     } else if (table_name_ == "request_logs") {
       result_set = {
           {"2022-05-18T21:07:04", "I", i(305000), i(0), i(3), "DBHandler.cpp:4840",
@@ -4179,7 +4189,15 @@ class LogsSystemTableTest : public SystemTablesTest,
           {"2022-05-18T21:07:16", "F", i(306000), i(0), i(3), "DBHandler.cpp:1555",
            "sql_execute", i(1426), "information_schema", "admin", "456-efgh",
            "select * from web_server_access_logs LIMIT 1000;", "http:127.0.0.1",
-           i(100), "<DELETED>", i(1), i(1323), i(1426)}};
+           i(100), "<DELETED>", i(1), i(1323), i(1426)},
+          {"2022-05-22T14:36:07", "I", i(50000), i(0), i(3), "DBHandler.cpp:1555",
+           "sql_execute", i(25000), "heavyai", "admin", "507-aBcD",
+           "SELECT COUNT(*) FROM heavyai_us_states", "http:127.0.0.1",
+           Null, Null, Null, i(21312), i(21400)},
+          {"2022-05-22T14:36:08", "I", i(50000), i(0), i(3), "DBHandler.cpp:1555",
+           "sql_execute", i(25000), "heavyai", "admin", "507-aBcD",
+           "SELECT COUNT(*) FROM heavyai_us_states", "http:127.0.0.1",
+           Null, Null, Null, i(30000), i(40000)}};
     } else if (table_name_ == "web_server_logs") {
       result_set = {{"2022-05-18T21:06:46-08:00", "info", "Test info message file 2"},
                     {"2022-05-18T21:06:47-08:00", "error", "Test error message file 2"},

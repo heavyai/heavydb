@@ -113,8 +113,8 @@ void add_nonce_values(std::vector<std::string>& parsed_columns_str,
       auto chart_and_layer_id = split(dashboard_and_chart_id[1], "-");
       add_column_value(parsed_columns_str, parsed_columns_sv, chart_and_layer_id[0]);
     } else {
-      // Null dashboard id, dashboard name, and chart id.
-      add_column_value(parsed_columns_str, parsed_columns_sv, "", 3);
+      // Null dashboard name and chart id.
+      add_column_value(parsed_columns_str, parsed_columns_sv, "", 2);
     }
   } else {
     // Null dashboard id, dashboard name, and chart id.
