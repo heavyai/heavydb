@@ -4,31 +4,48 @@ on:
     inputs:
       cuda_compiler_version:
         type: string
+        default: 'None'
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      cuda_compiler_version: ${{ inputs.cuda_compiler_version }}
+      PREFIX: distr
+      CONDA_ENV: omnisci-dev
+
     steps:
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 12
 
+      - name: Set env context
+        run: |
+          echo CONDA_PATH=$CONDA >>$GITHUB_ENV
+          echo RUN_STAMP=${{ runner.os }}-${{ (env.cuda_compiler_version != 'None') && format('cuda{0}', env.cuda_compiler_version) || 'CPU' }} >>$GITHUB_ENV
+          echo CONDA_ENV_PATH=$CONDA/envs/${{ env.CONDA_ENV }} >>$GITHUB_ENV
+
       - uses: actions/download-artifact@v3
         with:
-          name: build
+          name: ${{ env.RUN_STAMP }}-build
 
       - name: Unpack build files
         run: |
           tar -zxf build.tgz
 
-      - name: Set the environment
+      - name: Download Conda
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: main.yml
+          workflow_conclusion: completed
+          name: ${{ env.RUN_STAMP }}-conda
+          search_artifacts: true
+
+      - name: Unpack Conda
         run: |
-          df -h
-          free -h
-          cat /proc/cpuinfo
-          conda update conda
-          $CONDA/bin/conda env create -f scripts/mapd-deps-conda-dev-env.yml
+          mkdir -p ${{ env.CONDA_ENV_PATH }}
+          tar -zxf conda.tgz -C ${{ env.CONDA_ENV_PATH }}
 
       - name: Run tests
         run: |
