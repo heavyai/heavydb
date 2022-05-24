@@ -11,7 +11,8 @@ jobs:
     env:
       cuda_compiler_version: ${{ inputs.cuda_compiler_version }}
       PREFIX: distr
-      workflow_conclusion: completed
+      workflow_conclusion: success
+        #      workflow_conclusion: completed
         #      workflow_conclusion: None
       CONDA_ENV: omnisci-dev
 
