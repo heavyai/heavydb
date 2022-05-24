@@ -32,8 +32,10 @@ class JVM {
  public:
   class JNIEnvWrapper {
    public:
-    JNIEnvWrapper(JNIEnv* env, bool detach_thread_on_destruction)
-        : env_(env), detach_thread_on_destruction_(detach_thread_on_destruction) {
+    JNIEnvWrapper(JVM* jvm, JNIEnv* env, bool detach_thread_on_destruction)
+        : jvm_(jvm)
+        , env_(env)
+        , detach_thread_on_destruction_(detach_thread_on_destruction) {
       if (env_) {
         auto res = env_->PushLocalFrame(100);
         if (!res) {
@@ -49,10 +51,14 @@ class JVM {
     JNIEnvWrapper& operator=(const JNIEnvWrapper& other) = delete;
 
     JNIEnvWrapper& operator=(JNIEnvWrapper&& other) {
+      jvm_ = other.jvm_;
       env_ = other.env_;
       detach_thread_on_destruction_ = other.detach_thread_on_destruction_;
+
       other.detach_thread_on_destruction_ = false;
       other.env_ = nullptr;
+      other.jvm_ = nullptr;
+
       return *this;
     }
 
@@ -61,7 +67,7 @@ class JVM {
         env_->PopLocalFrame(nullptr);
       }
       if (detach_thread_on_destruction_) {
-        JVM::detachThread();
+        jvm_->detachThread();
       }
     }
 
@@ -70,21 +76,25 @@ class JVM {
     JNIEnv* operator->() const { return env_; }
 
    private:
+    JVM* jvm_;
     JNIEnv* env_;
     bool detach_thread_on_destruction_;
   };
 
-  // Should be called before calling other methods.
-  // Can be safely called multiple times.
-  static std::shared_ptr<JavaVM> init(size_t max_mem_mb) {
-    std::call_once(jvm_init_flag_, createJVM, max_mem_mb);
-    return jvm_;
+  static std::shared_ptr<JVM> getInstance(size_t max_mem_mb) {
+    std::lock_guard<std::mutex> l(init_mutex_);
+    auto res = instance_.lock();
+    if (!res) {
+      res = createJVM(max_mem_mb);
+      instance_ = res;
+    }
+    return res;
   }
 
   // Get JNI environment for the current thread.
   // You souldn't pass this obect between threads. It should be deallocated
-  // in the same thread it was requrested in.
-  static JNIEnvWrapper getEnv() {
+  // in the same thread it was requrested in. It shouldn't outlive JVM object.
+  JNIEnvWrapper getEnv() {
     JNIEnv* env;
     bool need_detach = false;
 
@@ -105,11 +115,15 @@ class JVM {
       need_detach = true;
     }
 
-    return {env, need_detach};
+    return {this, env, need_detach};
   }
 
+  ~JVM() { jvm_->DestroyJavaVM(); }
+
  private:
-  static void createJVM(size_t max_mem_mb) {
+  JVM(JavaVM* jvm) : jvm_(jvm) {}
+
+  static std::shared_ptr<JVM> createJVM(size_t max_mem_mb) {
     auto root_abs_path = omnisci::get_root_abs_path();
     std::string class_path_arg = "-Djava.class.path=" + root_abs_path +
                                  "/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar";
@@ -130,18 +144,20 @@ class JVM {
       LOG(FATAL) << "Couldn't initialize JVM.";
     }
 
-    jvm_.reset(jvm, [](JavaVM* jvm) { jvm->DestroyJavaVM(); });
+    return std::shared_ptr<JVM>(new JVM(jvm));
   }
 
   // Detach current thread from JVM.
-  static void detachThread() { jvm_->DetachCurrentThread(); }
+  void detachThread() { jvm_->DetachCurrentThread(); }
 
-  static std::shared_ptr<JavaVM> jvm_;
-  static std::once_flag jvm_init_flag_;
+  JavaVM* jvm_;
+
+  static std::weak_ptr<JVM> instance_;
+  static std::mutex init_mutex_;
 };
 
-std::shared_ptr<JavaVM> JVM::jvm_;
-std::once_flag JVM::jvm_init_flag_;
+std::weak_ptr<JVM> JVM::instance_;
+std::mutex JVM::init_mutex_;
 
 }  // namespace
 
@@ -152,8 +168,8 @@ class CalciteJNI::Impl {
        size_t calcite_max_mem_mb)
       : schema_provider_(schema_provider) {
     // Initialize JVM.
-    jvm_ = JVM::init(calcite_max_mem_mb);
-    auto env = JVM::getEnv();
+    jvm_ = JVM::getInstance(calcite_max_mem_mb);
+    auto env = jvm_->getEnv();
 
     // Create CalciteServerHandler object.
     createCalciteServerHandler(env.get(), udf_filename);
@@ -170,7 +186,7 @@ class CalciteJNI::Impl {
   }
 
   ~Impl() {
-    auto env = JVM::getEnv();
+    auto env = jvm_->getEnv();
     for (auto obj : global_refs_) {
       env->DeleteGlobalRef(obj);
     }
@@ -183,7 +199,7 @@ class CalciteJNI::Impl {
                       const bool legacy_syntax,
                       const bool is_explain,
                       const bool is_view_optimize) {
-    auto env = JVM::getEnv();
+    auto env = jvm_->getEnv();
     jstring arg_user = env->NewStringUTF(user.c_str());
     jstring arg_catalog = env->NewStringUTF(db_name.c_str());
     jstring arg_query = env->NewStringUTF(sql_string.c_str());
@@ -235,21 +251,21 @@ class CalciteJNI::Impl {
   }
 
   std::string getExtensionFunctionWhitelist() {
-    auto env = JVM::getEnv();
+    auto env = jvm_->getEnv();
     jstring java_res =
         (jstring)env->CallObjectMethod(handler_obj_, handler_get_ext_fn_list_);
     return convertJavaString(env.get(), java_res);
   }
 
   std::string getUserDefinedFunctionWhitelist() {
-    auto env = JVM::getEnv();
+    auto env = jvm_->getEnv();
     jstring java_res =
         (jstring)env->CallObjectMethod(handler_obj_, handler_get_udf_list_);
     return convertJavaString(env.get(), java_res);
   }
 
   std::string getRuntimeExtensionFunctionWhitelist() {
-    auto env = JVM::getEnv();
+    auto env = jvm_->getEnv();
     jstring java_res =
         (jstring)env->CallObjectMethod(handler_obj_, handlhandler_get_rt_fn_list_);
     return convertJavaString(env.get(), java_res);
@@ -259,7 +275,7 @@ class CalciteJNI::Impl {
       const std::vector<ExtensionFunction>& udfs,
       const std::vector<table_functions::TableFunction>& udtfs,
       bool is_runtime) {
-    auto env = JVM::getEnv();
+    auto env = jvm_->getEnv();
     jobject udfs_list = env->NewObject(array_list_cls_, array_list_ctor_);
     for (auto& udf : udfs) {
       env->CallVoidMethod(
@@ -577,7 +593,7 @@ class CalciteJNI::Impl {
   jmethodID hash_map_put_;
 
   std::vector<jobject> global_refs_;
-  std::shared_ptr<JavaVM> jvm_;
+  std::shared_ptr<JVM> jvm_;
 };
 
 CalciteJNI::CalciteJNI(SchemaProviderPtr schema_provider,
