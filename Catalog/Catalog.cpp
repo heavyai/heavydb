@@ -2664,6 +2664,15 @@ void Catalog::serializeTableJsonUnlocked(const TableDescriptor* td,
     column.AddMember("colsubtype",
                      Value().SetInt(static_cast<int>(cd.columnType.get_subtype())),
                      d.GetAllocator());
+    column.AddMember("compression",
+                     Value().SetInt(static_cast<int>(cd.columnType.get_compression())),
+                     d.GetAllocator());
+    column.AddMember("comp_param",
+                     Value().SetInt(static_cast<int>(cd.columnType.get_comp_param())),
+                     d.GetAllocator());
+    column.AddMember("size",
+                     Value().SetInt(static_cast<int>(cd.columnType.get_size())),
+                     d.GetAllocator());
     column.AddMember(
         "coldim", Value().SetInt(cd.columnType.get_dimension()), d.GetAllocator());
     column.AddMember(

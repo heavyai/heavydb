@@ -20394,6 +20394,58 @@ TEST(Select, Correlated_In) {
   }
 }
 
+TEST(Select, InClauseDecorrelationUnderWatchdog) {
+  SKIP_ALL_ON_AGGREGATOR();
+
+  ScopeGuard watchdog_cleanup = [original = g_enable_watchdog]() {
+    g_enable_watchdog = original;
+  };
+  g_enable_watchdog = true;
+  struct QueryAndExpectedResult {
+    std::string query;
+    bool expected;
+  };
+  {
+    // we now can decorrelate IN-clause without correlated join if IN-expression is
+    // defined between hash joinable columns, i.e., integer type columns
+    std::vector<QueryAndExpectedResult> test_query;
+    test_query.push_back(QueryAndExpectedResult{
+        "SELECT t.x FROM test t WHERE t.x IN (SELECT r.x FROM test_inner r);", false});
+    test_query.push_back(QueryAndExpectedResult{
+        "SELECT x FROM test WHERE x IN (SELECT r.x FROM test_inner r);", false});
+    test_query.push_back(QueryAndExpectedResult{
+        "SELECT x FROM test WHERE x IN (SELECT x FROM test_inner );", false});
+    test_query.push_back(
+        QueryAndExpectedResult{"SELECT t.x FROM test t, test_inner r WHERE t.y = r.y AND "
+                               "t.x IN (SELECT s.x FROM test_inner s);",
+                               false});
+    test_query.push_back(
+        QueryAndExpectedResult{"SELECT t.x FROM test t LEFT JOIN test_inner r ON t.y = "
+                               "r.y WHERE t.x IN (SELECT s.x FROM test_inner s);",
+                               false});
+    test_query.push_back(
+        QueryAndExpectedResult{"SELECT t.x FROM test t INNER JOIN test_inner r ON t.y = "
+                               "r.y WHERE t.x IN (SELECT s.x FROM test_inner s);",
+                               false});
+    test_query.push_back(QueryAndExpectedResult{
+        "SELECT t.x FROM test t WHERE t.m IN (SELECT r.ts FROM test_inner r);", true});
+    test_query.push_back(QueryAndExpectedResult{
+        "SELECT t.x FROM test t WHERE t.fixed_str IN (SELECT r.str FROM test_inner r);",
+        false});
+    for (const auto& test_cond : test_query) {
+      const auto query_explain_result =
+          QR::get()->getCalcitePlan(test_cond.query, g_enable_watchdog, false);
+      EXPECT_EQ(size_t(1), query_explain_result->rowCount(false));
+      const auto crt_row = query_explain_result->getNextRow(true, false);
+      EXPECT_EQ(size_t(1), crt_row.size());
+      const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
+      EXPECT_EQ(explain_str.find(R"("op": "IN")") != std::string::npos,
+                test_cond.expected)
+          << test_cond.query << ", plan: " << explain_str;
+    }
+  }
+}
+
 TEST(Create, QuotedColumnIdentifier) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
