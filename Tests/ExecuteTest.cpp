@@ -20430,6 +20430,10 @@ TEST(Select, InClauseDecorrelationUnderWatchdog) {
     test_query.push_back(QueryAndExpectedResult{
         "SELECT t.x FROM test t WHERE t.m IN (SELECT r.ts FROM test_inner r);", true});
     test_query.push_back(QueryAndExpectedResult{
+        "SELECT COUNT(*) FROM test WHERE (((x IN (SELECT DISTINCT(r.x) FROM (SELECT * "
+        "FROM test_inner) as r WHERE r.x > 0))));",
+        true});
+    test_query.push_back(QueryAndExpectedResult{
         "SELECT t.x FROM test t WHERE t.fixed_str IN (SELECT r.str FROM test_inner r);",
         false});
     for (const auto& test_cond : test_query) {

@@ -212,7 +212,9 @@ public final class HeavyDBParser {
               != tableDetails.row_desc.stream()
                          .filter(c
                                  -> c.col_name.toLowerCase(Locale.ROOT)
-                                                 .equals(joinColumnIdentifier.get(1))
+                                                 .equals(joinColumnIdentifier.get(1)
+                                                                 .toLowerCase(
+                                                                         Locale.ROOT))
                                          && isHashJoinableType(c))
                          .findFirst()
                          .orElse(null);
@@ -1732,11 +1734,15 @@ public final class HeavyDBParser {
         if (call instanceof SqlBasicCall) {
           SqlBasicCall basicCall = (SqlBasicCall) call;
           if (basicCall.getKind() == SqlKind.AS) {
-            SqlIdentifier colNameIdentifier = (SqlIdentifier) basicCall.operand(0);
-            String tblName = colNameIdentifier.names.size() == 1
-                    ? colNameIdentifier.names.get(0)
-                    : colNameIdentifier.names.get(1);
-            tableAliasMap.put(basicCall.operand(1).toString(), tblName);
+            if (basicCall.operand(0) instanceof SqlIdentifier) {
+              // we need to check whether basicCall's the first operand is SqlIdentifier
+              // since sometimes it represents non column identifier like SqlSelect
+              SqlIdentifier colNameIdentifier = (SqlIdentifier) basicCall.operand(0);
+              String tblName = colNameIdentifier.names.size() == 1
+                      ? colNameIdentifier.names.get(0)
+                      : colNameIdentifier.names.get(1);
+              tableAliasMap.put(basicCall.operand(1).toString(), tblName);
+            }
           }
         }
         return super.visit(call);
