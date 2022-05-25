@@ -600,10 +600,6 @@ add_definitions(-DRAPIDJSON_HAS_STDSTRING)
 include_directories(ThirdParty/sqlite3)
 add_subdirectory(ThirdParty/sqlite3)
 
-# libarchive
-find_package(LibArchive REQUIRED)
-include_directories(${LibArchive_INCLUDE_DIRS})
-
 find_package(CURL REQUIRED QUIET)
 if(CURL_FOUND)
   if(ENABLE_AWS_S3)
