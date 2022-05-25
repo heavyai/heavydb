@@ -317,7 +317,6 @@ find_package(PNG REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(GDAL REQUIRED)
 find_package(GDALExtra REQUIRED)
-find_package(BLOSC REQUIRED)
 list(APPEND GDAL_LIBRARIES ${PNG_LIBRARIES} ${GDALExtra_LIBRARIES})
 include_directories(${GDAL_INCLUDE_DIRS})
 

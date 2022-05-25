@@ -24,7 +24,6 @@
 #include "MapDRelease.h"
 #include "OSDependent/omnisci_fs.h"
 #include "QueryEngine/GroupByAndAggregate.h"
-#include "Shared/Compressor.h"
 #include "StringDictionary/StringDictionary.h"
 
 #ifdef _WIN32

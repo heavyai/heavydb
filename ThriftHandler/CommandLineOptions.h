@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <blosc.h>
 #include <cstddef>
 
 #include <boost/algorithm/string.hpp>
@@ -113,8 +112,6 @@ class CommandLineOptions {
 
   void fillOptions();
   void fillAdvancedOptions();
-
-  std::string compressor = std::string(BLOSC_LZ4HC_COMPNAME);
 
   po::options_description help_desc;
   po::options_description developer_desc;
