@@ -11,47 +11,98 @@ jobs:
     env:
       cuda_compiler_version: ${{ inputs.cuda_compiler_version }}
       PREFIX: distr
-      CPU_COUNT: 4
-      RUN_TESTS: 1
+      workflow_conclusion: success
+        #      workflow_conclusion: completed
+        #      workflow_conclusion: None
+      CONDA_ENV: omnisci-dev
 
     steps:
       - uses: actions/checkout@v2
 
-      - name: Set the environment
+      - name: Set env context
         run: |
-          conda update conda
-          $CONDA/bin/conda env create -f scripts/mapd-deps-conda-dev-env.yml --force
+          echo CONDA_PATH=$CONDA >>$GITHUB_ENV
+          echo RUN_STAMP=${{ runner.os }}-${{ (env.cuda_compiler_version != 'None') && format('cuda{0}', env.cuda_compiler_version) || 'CPU' }} >>$GITHUB_ENV
+          echo CONDA_ENV_PATH=$CONDA/envs/${{ env.CONDA_ENV }} >>$GITHUB_ENV
 
-      - name: Install nvidia-cuda-toolkit
+      - name: Download Conda
+        if: ${{ env.workflow_conclusion != 'None' }}
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: main.yml
+          workflow_conclusion: ${{ env.workflow_conclusion }}
+          name: ${{ env.RUN_STAMP }}-conda
+          search_artifacts: true
+
+      - name: Unpack Conda
+        if: ${{ env.workflow_conclusion != 'None' }}
         run: |
-          conda install -n omnisci-dev -c conda-forge cudatoolkit-dev arrow-cpp-proc=3.0.0=cuda
+          mkdir -p ${{ env.CONDA_ENV_PATH }}
+          tar -zxf conda.tgz -C ${{ env.CONDA_ENV_PATH }}
+
+      - name: Update Conda
+        run: |
+          touch timestamp
+          conda update conda
+          conda env update -f scripts/mapd-deps-conda-dev-env.yml
+          test timestamp -ot ${{ env.CONDA_ENV_PATH }}/conda-meta/history || exit 0
+          echo is_conda_update_needed=true >>$GITHUB_ENV
+
+      - name: Create Conda archive
+        if: ${{ env.is_conda_update_needed }}
+        run: |
+          cd ${{ env.CONDA_ENV_PATH }}
+          tar -zcf /tmp/conda.tgz .
+
+      - name: Install cudatoolkit-dev
         if: ${{ env.cuda_compiler_version != 'None' }}
+        run: |
+          conda install -n ${{ env.CONDA_ENV }} -c conda-forge cudatoolkit-dev arrow-cpp-proc=3.0.0=cuda
+
+      - name: Restore Maven cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.m2
+          key: ${{ env.RUN_STAMP }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ env.RUN_STAMP }}-maven
 
       - name: Build
+        env:
+          CPU_COUNT: 4
+          RUN_TESTS: 1
         run: |
           mkdir -p ${{ env.PREFIX }}
           rm -rf build
-          $CONDA/bin/conda run -n omnisci-dev bash scripts/conda/build-install-all.sh
+          $CONDA/bin/conda run -n ${{ env.CONDA_ENV }} bash scripts/conda/build-install-all.sh
           tar -zcf /tmp/build.tgz .
 
       - name: Upload packages
         uses: actions/upload-artifact@v2
         with:
-          name: result_packages
+          name: ${{ env.RUN_STAMP }}-packages
           path: ${{ env.PREFIX }}
 
       - name: Upload build and src files
         uses: actions/upload-artifact@v2
         with:
-          name: build
+          name: ${{ env.RUN_STAMP }}-build
           path: /tmp/build.tgz
+
+      - name: Commit Conda environment
+        if: ${{ env.is_conda_update_needed }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ env.RUN_STAMP }}-conda
+          path: /tmp/conda.tgz
 
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v2
         with:
-          name: logs
+          name: ${{ env.RUN_STAMP }}-logs
           path: |
             build/*.log
             build/CMakeFiles/*.log
+
 
