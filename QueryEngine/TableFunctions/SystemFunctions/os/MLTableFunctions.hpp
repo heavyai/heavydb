@@ -78,9 +78,8 @@ int32_t supported_ml_frameworks__cpu_(TableFunctionManager& mgr,
   const std::vector<int32_t> ml_framework_string_ids =
       output_ml_frameworks.string_dict_proxy_->getOrAddTransientBulk(ml_frameworks);
 
-  bool found_available_framework = false;
-
 #if defined(HAVE_ONEDAL) || defined(HAVE_MLPACK)
+  bool found_available_framework = false;
   auto framework_found_actions = [&output_availability,
                                   &output_default,
                                   &found_available_framework](const int64_t out_row_idx) {
@@ -413,8 +412,6 @@ linear_reg_fit__cpu_template(TableFunctionManager& mgr,
                              preferred_ml_framework_str.getString());
   }
   const auto denulled_data = denull_data(input_labels, input_features);
-  const int64_t num_rows = denulled_data.masked_num_rows;
-
   const auto labels_ptrs = pluck_ptrs(denulled_data.data, 0L, 1L);
   const auto features_ptrs =
       pluck_ptrs(denulled_data.data, 1L, input_features.numCols() + 1);
@@ -429,7 +426,7 @@ linear_reg_fit__cpu_template(TableFunctionManager& mgr,
                                  features_ptrs,
                                  output_coef_idxs.ptr_,
                                  output_coefs.ptr_,
-                                 num_rows);
+                                 denulled_data.masked_num_rows);
       did_execute = true;
     }
 #endif
@@ -440,7 +437,7 @@ linear_reg_fit__cpu_template(TableFunctionManager& mgr,
                                  features_ptrs,
                                  output_coef_idxs.ptr_,
                                  output_coefs.ptr_,
-                                 num_rows);
+                                 denulled_data.masked_num_rows);
       did_execute = true;
     }
 #endif
