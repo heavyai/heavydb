@@ -762,7 +762,7 @@ class TemplateTransformer(AstTransformer):
         if not udtf_node.templates:
             return udtf_node
 
-        udtfs = []
+        udtfs = dict()
 
         d = dict([(node.key, node.types) for node in udtf_node.templates])
         name = udtf_node.name
@@ -771,8 +771,11 @@ class TemplateTransformer(AstTransformer):
             self.mapping_dict = product
             inputs = [input_arg.accept(self) for input_arg in udtf_node.inputs]
             outputs = [output_arg.accept(self) for output_arg in udtf_node.outputs]
-            udtfs.append(UdtfNode(name, inputs, outputs, udtf_node.annotations, None, udtf_node.sizer, udtf_node.line))
+            udtf = UdtfNode(name, inputs, outputs, udtf_node.annotations, None, udtf_node.sizer, udtf_node.line)
+            udtfs[str(udtf)] = udtf
             self.mapping_dict = {}
+
+        udtfs = list(udtfs.values())
 
         if len(udtfs) == 1:
             return udtfs[0]
@@ -1636,6 +1639,10 @@ def find_signatures(input_file):
             except TransformerException as msg:
                 result = ['%s: %s' % (type(msg).__name__, msg)]
                 skip_signature = True
+            assert len(result) == len(expected_result), "\n\tresult:   %s \n!= \n\texpected: %s" % (
+                '\n\t\t  '.join(result),
+                '\n\t\t  '.join(expected_result)
+            )
             assert set(result) == set(expected_result), "\n\tresult:   %s != \n\texpected: %s" % (
                 result,
                 expected_result,
