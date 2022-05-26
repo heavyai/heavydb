@@ -226,7 +226,7 @@ int64_t tf_feature_similarity__cpu_template(
   UDTF: tf_feature_similarity__cpu_template(Cursor<Column<K> primary_key, ColumnList<TextEncodingDict> pivot_features,
   Column<M> metric> primary_features, Cursor<ColumnList<TextEncodingDict> comparison_pivot_features, 
   Column<M> comparison_metric> comparison_features, bool use_tf_idf) ->
-  Column<K> class | input_id=args<0>, Column<float> similarity_score, K=[int32_t, int64_t, TextEncodingDict], F=[int32_t, int64_t], M=[int32_t, int64_t, float, double]
+  Column<K> class | input_id=args<0>, Column<float> similarity_score, K=[int32_t, int64_t, TextEncodingDict], M=[int32_t, int64_t, float, double]
 */
 // clang-format on
 
