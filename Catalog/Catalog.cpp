@@ -6037,8 +6037,6 @@ void Catalog::initializeSystemTables() {
   if (g_enable_logs_system_tables) {
     initializeServerLogsSystemTables();
     initializeRequestLogsSystemTables();
-    initializeWebServerLogsSystemTables();
-    initializeWebServerAccessLogsSystemTables();
   } else {
     drop_tables(*this,
                 {SERVER_LOGS_SYS_TABLE_NAME,

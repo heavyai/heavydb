@@ -62,6 +62,7 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
 
  protected:
   virtual const TextFileBufferParser& getFileBufferParser() const = 0;
+  virtual std::optional<size_t> getMaxFileCount() const;
 
  private:
   AbstractTextFileDataWrapper(const ForeignTable* foreign_table);

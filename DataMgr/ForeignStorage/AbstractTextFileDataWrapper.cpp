@@ -748,12 +748,16 @@ void dispatch_metadata_scan_requests(
 
     if (size == 0) {
       // In some cases at the end of a file we will read 0 bytes even when
-      // file_reader.isScanFinished() is false
+      // file_reader.isScanFinished() is false. Also add request back to the pool to be
+      // picked up again in the next iteration.
+      add_request_to_pool(multi_threading_params, request);
       continue;
     } else if (size == 1 && request.buffer[0] == copy_params.line_delim) {
       // In some cases files with newlines at the end will be encoded with a second
-      // newline that can end up being the only thing in the buffer
+      // newline that can end up being the only thing in the buffer. Also add request back
+      // to the pool to be picked up again in the next iteration.
       current_file_offset++;
+      add_request_to_pool(multi_threading_params, request);
       continue;
     }
     unsigned int num_rows_in_buffer = 0;
@@ -876,7 +880,7 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
     CHECK(fragment_id_to_file_regions_map_.empty());
     if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
       file_reader_ = std::make_unique<LocalMultiFileReader>(
-          file_path, copy_params, file_path_options);
+          file_path, copy_params, file_path_options, getMaxFileCount());
     } else {
       UNREACHABLE();
     }
@@ -1143,6 +1147,10 @@ void AbstractTextFileDataWrapper::createRenderGroupAnalyzers() {
                 .second);
     }
   }
+}
+
+std::optional<size_t> AbstractTextFileDataWrapper::getMaxFileCount() const {
+  return {};
 }
 
 }  // namespace foreign_storage

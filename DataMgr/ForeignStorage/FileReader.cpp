@@ -628,11 +628,16 @@ std::set<std::string> MultiFileReader::checkForRolledOffFiles(
 
 LocalMultiFileReader::LocalMultiFileReader(const std::string& file_path,
                                            const import_export::CopyParams& copy_params,
-                                           const shared::FilePathOptions& options)
+                                           const shared::FilePathOptions& options,
+                                           const std::optional<size_t>& max_file_count)
     : MultiFileReader(file_path, copy_params) {
-  auto found_file_locations = shared::local_glob_filter_sort_files(file_path, options);
-  for (const auto& location : found_file_locations) {
-    insertFile(location);
+  auto file_paths = shared::local_glob_filter_sort_files(file_path, options);
+  if (max_file_count.has_value() && file_paths.size() > max_file_count.value()) {
+    file_paths.erase(file_paths.begin(),
+                     file_paths.begin() + (file_paths.size() - max_file_count.value()));
+  }
+  for (const auto& file_path : file_paths) {
+    insertFile(file_path);
   }
 }
 
