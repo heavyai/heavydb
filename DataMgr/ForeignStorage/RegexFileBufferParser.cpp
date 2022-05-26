@@ -456,7 +456,8 @@ void RegexFileBufferParser::validateFiles(const FileReader* file_reader,
     // has to start with the specified regex.
     auto first_line_by_file_path = file_reader->getFirstLineForEachFile();
     for (const auto& [file_path, line] : first_line_by_file_path) {
-      if (!line_starts_with_regex(
+      if (!line.empty() &&
+          !line_starts_with_regex(
               line.c_str(), 0, line.length() - 1, line_start_regex_.value())) {
         auto line_start_regex = get_line_start_regex(foreign_table);
         CHECK(line_start_regex.has_value());

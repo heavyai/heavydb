@@ -43,6 +43,7 @@ extern bool g_enable_system_tables;
 extern bool g_enable_logs_system_tables;
 extern bool g_enable_table_functions;
 extern bool g_enable_dev_table_functions;
+extern size_t g_logs_system_tables_max_files_count;
 
 std::string test_binary_file_path;
 std::string test_source_path;
@@ -4035,6 +4036,7 @@ class LogsSystemTableTest : public SystemTablesTest,
   }
 
   void SetUp() {
+    default_max_files_count_ = g_logs_system_tables_max_files_count;
     table_name_ = GetParam();
     if (isDistributedMode() && table_name_ == "server_logs") {
       GTEST_SKIP() << "Leaf log content is non-deterministic";
@@ -4044,7 +4046,10 @@ class LogsSystemTableTest : public SystemTablesTest,
     deleteFilesInLogDir();
   }
 
-  void TearDown() { deleteFilesInLogDir(); }
+  void TearDown() {
+    deleteFilesInLogDir();
+    g_logs_system_tables_max_files_count = default_max_files_count_;
+  }
 
   void deleteFilesInLogDir() {
     for (boost::filesystem::directory_iterator it(log_dir_path_), end_it; it != end_it;
@@ -4069,6 +4074,15 @@ class LogsSystemTableTest : public SystemTablesTest,
          it++) {
       boost::filesystem::remove(log_dir_path_ / it->path().filename());
     }
+  }
+
+  size_t getLogDirSize() {
+    size_t dir_size{0};
+    for (boost::filesystem::directory_iterator it(log_dir_path_), end_it; it != end_it;
+         it++) {
+      dir_size += boost::filesystem::file_size(it->path());
+    }
+    return dir_size;
   }
 
   std::string getTestDirName() {
@@ -4227,6 +4241,7 @@ class LogsSystemTableTest : public SystemTablesTest,
   std::string table_name_;
   inline static boost::filesystem::path log_dir_path_;
   inline static boost::filesystem::path backup_log_dir_path_;
+  inline static size_t default_max_files_count_;
 };
 
 TEST_P(LogsSystemTableTest, SingleLogFile) {
@@ -4254,6 +4269,34 @@ TEST_P(LogsSystemTableTest, MultiLogFile) {
   sql("REFRESH FOREIGN TABLES " + table_name_);
   sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
                       getSecondLogFileResultSet());
+}
+
+TEST_P(LogsSystemTableTest, MultiLogFileWithEmptyFiles) {
+  copyToLogDir("first");
+  copyToLogDir("empty");
+
+  // Update foreign table thread count and buffer size options to values that would
+  // previously result in a hang when processing log files.
+  auto foreign_table = const_cast<foreign_storage::ForeignTable*>(
+      getCatalog().getForeignTable(table_name_));
+  foreign_table->options["THREADS"] = "1";
+  foreign_table->options["BUFFER_SIZE"] = std::to_string(getLogDirSize() + 1);
+
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getFirstLogFileResultSet());
+}
+
+TEST_P(LogsSystemTableTest, MaxLogFiles) {
+  copyToLogDir("first");
+  copyToLogDir("second");
+  g_logs_system_tables_max_files_count = 1;
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getSecondLogFileResultSet());
+
+  g_logs_system_tables_max_files_count = 2;
+  sql("REFRESH FOREIGN TABLES " + table_name_ + " WITH (evict = 'true');");
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getMultiLogFileResultSet());
 }
 
 INSTANTIATE_TEST_SUITE_P(AllLogsSystemTables,

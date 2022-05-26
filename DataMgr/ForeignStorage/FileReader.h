@@ -397,7 +397,8 @@ class LocalMultiFileReader : public MultiFileReader {
  public:
   LocalMultiFileReader(const std::string& file_path,
                        const import_export::CopyParams& copy_params,
-                       const shared::FilePathOptions& options);
+                       const shared::FilePathOptions& options,
+                       const std::optional<size_t>& max_file_count);
 
   LocalMultiFileReader(const std::string& file_path,
                        const import_export::CopyParams& copy_params,

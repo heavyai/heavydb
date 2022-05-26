@@ -32,6 +32,7 @@ class InternalLogsDataWrapper : public RegexParserDataWrapper {
 
  protected:
   const TextFileBufferParser& getFileBufferParser() const override;
+  std::optional<size_t> getMaxFileCount() const override;
 
  private:
   const LogFileBufferParser log_file_buffer_parser_;

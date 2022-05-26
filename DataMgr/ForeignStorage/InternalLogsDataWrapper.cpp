@@ -16,6 +16,8 @@
 
 #include "InternalLogsDataWrapper.h"
 
+size_t g_logs_system_tables_max_files_count{100};
+
 namespace foreign_storage {
 InternalLogsDataWrapper::InternalLogsDataWrapper()
     : RegexParserDataWrapper(), log_file_buffer_parser_{nullptr, -1} {}
@@ -33,5 +35,9 @@ InternalLogsDataWrapper::InternalLogsDataWrapper(const int db_id,
 
 const TextFileBufferParser& InternalLogsDataWrapper::getFileBufferParser() const {
   return log_file_buffer_parser_;
+}
+
+std::optional<size_t> InternalLogsDataWrapper::getMaxFileCount() const {
+  return g_logs_system_tables_max_files_count;
 }
 }  // namespace foreign_storage

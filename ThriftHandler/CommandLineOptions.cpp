@@ -65,6 +65,7 @@ extern bool g_enable_system_tables;
 extern bool g_allow_system_dashboard_update;
 extern bool g_enable_logs_system_tables;
 extern std::string g_logs_system_tables_refresh_interval;
+extern size_t g_logs_system_tables_max_files_count;
 #ifdef ENABLE_MEMKIND
 extern std::string g_pmem_path;
 #endif
@@ -591,6 +592,11 @@ void CommandLineOptions::fillOptions() {
                           po::value<std::string>(&g_logs_system_tables_refresh_interval)
                               ->default_value(g_logs_system_tables_refresh_interval),
                           "Refresh interval for logs system tables.");
+  help_desc.add_options()(
+      "logs-system-tables-max-files-count",
+      po::value<size_t>(&g_logs_system_tables_max_files_count)
+          ->default_value(g_logs_system_tables_max_files_count),
+      "Maximum number of log files that will be processed by each logs system table.");
 #ifdef ENABLE_MEMKIND
   help_desc.add_options()("enable-tiered-cpu-mem",
                           po::value<bool>(&g_enable_tiered_cpu_mem)
@@ -1254,6 +1260,14 @@ void CommandLineOptions::validate() {
   }
   LOG(INFO) << "Logs system tables refresh interval set to "
             << g_logs_system_tables_refresh_interval;
+
+  if (g_logs_system_tables_max_files_count == 0) {
+    throw std::runtime_error{
+        "Invalid value provided for the \"logs-system-tables-max-files-count\" "
+        "option. Value must be greater than 0."};
+  }
+  LOG(INFO) << "Maximum number of logs system table files set to "
+            << g_logs_system_tables_max_files_count;
 
 #ifdef ENABLE_MEMKIND
   if (g_enable_tiered_cpu_mem) {
