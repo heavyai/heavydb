@@ -24,6 +24,7 @@
 #include <boost/algorithm/string.hpp>
 
 #include "QueryEngine/CodeGenerator.h"
+#include "QueryEngine/QueryEngine.h"
 
 namespace {
 
@@ -440,7 +441,7 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
                    std::to_string(emit_only_preflight_fn),
                    std::to_string(co_.device_type == ExecutorDeviceType::GPU)};
 
-  auto cached_code = Executor::tf_code_accessor.get_or_wait(key);
+  auto cached_code = QueryEngine::getInstance()->tf_code_accessor->get_or_wait(key);
   if (cached_code) {
     return *cached_code;
   }
@@ -459,8 +460,9 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
     generateGpuKernel();
   }
 
-  Executor::tf_code_accessor.swap(key, finalize(emit_only_preflight_fn));
-  return Executor::tf_code_accessor.get_value(key);
+  QueryEngine::getInstance()->tf_code_accessor->swap(key,
+                                                     finalize(emit_only_preflight_fn));
+  return QueryEngine::getInstance()->tf_code_accessor->get_value(key);
 }
 
 bool TableFunctionCompilationContext::passColumnsByValue(
