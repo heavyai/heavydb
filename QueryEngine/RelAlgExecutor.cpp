@@ -492,7 +492,6 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
   executor_->setCatalog(&cat_);
   executor_->temporary_tables_ = &temporary_tables_;
 
-  WindowProjectNodeContext::reset(executor_);
   auto exec_desc_ptr = ed_seq.getDescriptor(0);
   CHECK(exec_desc_ptr);
   auto& exec_desc = *exec_desc_ptr;
@@ -1036,7 +1035,6 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
                                        const int64_t queue_time_ms) {
   INJECT_TIMER(executeRelAlgStep);
   auto timer = DEBUG_TIMER(__func__);
-  WindowProjectNodeContext::reset(executor_);
   auto exec_desc_ptr = seq.getDescriptor(step_idx);
   CHECK(exec_desc_ptr);
   auto& exec_desc = *exec_desc_ptr;
@@ -3520,6 +3518,11 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   auto co = co_in;
   auto eo = eo_in;
   ColumnCacheMap column_cache;
+  ScopeGuard clearWindowContextIfNecessary = [&]() {
+    if (is_window_execution_unit(work_unit.exe_unit)) {
+      WindowProjectNodeContext::reset(executor_);
+    }
+  };
   if (is_window_execution_unit(work_unit.exe_unit)) {
     if (!g_enable_window_functions) {
       throw std::runtime_error("Window functions support is disabled");
