@@ -28,6 +28,7 @@
 
 #include "Catalog/AuthMetadata.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
+#include "OSDependent/heavyai_locks.h"
 #include "QueryEngine/ExtractFromTime.h"
 #include "QueryEngine/HyperLogLog.h"
 #include "Shared/SystemParameters.h"
@@ -250,3 +251,5 @@ extern bool g_allow_auto_resultset_caching;
 extern size_t g_auto_resultset_caching_threshold;
 extern bool g_allow_query_step_skipping;
 extern bool g_query_engine_cuda_streams;
+extern bool g_multi_instance;
+extern size_t g_lockfile_lock_extension_milliseconds;

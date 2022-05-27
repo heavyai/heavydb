@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef SHARED_MISC_H
-#define SHARED_MISC_H
+#pragma once
 
 #include "funcannotations.h"
 
@@ -305,4 +304,117 @@ OUTPUT transform(INPUT const& input, FUNC const& func) {
 
 }  // namespace shared
 
-#endif  // SHARED_MISC_H
+////////// std::endian //////////
+
+#if __cplusplus >= 202002L  // C++20
+
+#include <bit>
+
+namespace shared {
+
+using endian = std::endian;
+
+}  // namespace shared
+
+#else  // __cplusplus
+
+#if defined(__GNUC__) || defined(__clang__)  // compiler
+
+namespace shared {
+
+enum class endian {
+  little = __ORDER_LITTLE_ENDIAN__,
+  big = __ORDER_BIG_ENDIAN__,
+  native = __BYTE_ORDER__
+};
+
+}  // namespace shared
+
+#elif defined(_WIN32)  // compiler
+
+namespace shared {
+
+enum class endian { little = 0, big = 1, native = little };
+
+}  // namespace shared
+
+#else  // compiler
+
+#error "unexpected compiler"
+
+#endif  // compiler
+
+#endif  // __cplusplus >= 202002L
+
+////////// std::byteswap //////////
+
+#if __cplusplus >= 202002L  // C++20
+#include <version>          // for __cpp_lib_byteswap
+#endif                      // __cplusplus >= 202002L
+
+#if __cplusplus < 202002L || !defined(__cpp_lib_byteswap)  // C++ standard
+
+#include <climits>
+#include <utility>
+
+namespace shared {
+
+// https://stackoverflow.com/questions/36936584/how-to-write-constexpr-swap-function-to-change-endianess-of-an-integer/36937049#36937049
+template <class T, std::size_t... N>
+constexpr T bswap_impl(T i, std::index_sequence<N...>) {
+  return ((((i >> (N * CHAR_BIT)) & (T)(unsigned char)(-1))
+           << ((sizeof(T) - 1 - N) * CHAR_BIT)) |
+          ...);
+};
+template <class T, class U = typename std::make_unsigned<T>::type>
+constexpr U bswap(T i) {
+  return bswap_impl<U>(i, std::make_index_sequence<sizeof(T)>{});
+}
+template <class T>
+constexpr T byteswap(T n) noexcept {
+  return bswap(n);
+}
+
+}  // namespace shared
+
+#else  // C++ standard
+
+#include <bit>
+
+namespace shared {
+
+using byteswap = std::byteswap;  // expected in C++23
+
+}  // namespace shared
+
+#endif  // C++ standard
+
+////////// ntohll() etc. //////////
+
+namespace shared {
+
+inline constexpr auto heavyai_htons(std::uint16_t h) {
+  return (shared::endian::native == shared::endian::big) ? h : shared::byteswap(h);
+}
+
+inline constexpr auto heavyai_htonl(std::uint32_t h) {
+  return (shared::endian::native == shared::endian::big) ? h : shared::byteswap(h);
+}
+
+inline constexpr auto heavyai_htonll(std::uint64_t h) {
+  return (shared::endian::native == shared::endian::big) ? h : shared::byteswap(h);
+}
+
+inline constexpr auto heavyai_ntohs(std::uint16_t n) {
+  return (shared::endian::native == shared::endian::big) ? n : shared::byteswap(n);
+}
+
+inline constexpr auto heavyai_ntohl(std::uint32_t n) {
+  return (shared::endian::native == shared::endian::big) ? n : shared::byteswap(n);
+}
+
+inline constexpr auto heavyai_ntohll(std::uint64_t n) {
+  return (shared::endian::native == shared::endian::big) ? n : shared::byteswap(n);
+}
+
+}  // namespace shared

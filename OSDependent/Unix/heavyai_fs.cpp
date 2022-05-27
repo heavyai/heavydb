@@ -16,9 +16,11 @@
 
 #include "OSDependent/heavyai_fs.h"
 
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "Logger/Logger.h"
 
@@ -83,6 +85,89 @@ int32_t pclose(::FILE* fh) {
 
 int32_t ftruncate(const int32_t fd, int64_t length) {
   return ::ftruncate(fd, length);
+}
+
+int safe_open(const char* path, int flags, mode_t mode) noexcept {
+  for (int ret;;) {
+    ret = ::open(path, flags, mode);
+    if (ret == -1 && errno == EINTR) {  // interrupted by signal
+      continue;
+    }
+    return ret;
+  }
+  UNREACHABLE();
+}
+
+int safe_close(int fd) noexcept {
+  for (int ret;;) {
+    ret = ::close(fd);
+    if (ret == -1 && errno == EINTR) {  // interrupted by signal
+      continue;
+    }
+    return ret;
+  }
+  UNREACHABLE();
+}
+
+int safe_fcntl(int fd, int cmd, struct flock* fl) noexcept {
+  for (int ret;;) {
+    ret = ::fcntl(fd, cmd, fl);
+    if (ret == -1 && errno == EINTR) {  // interrupted by signal
+      continue;
+    }
+    return ret;
+  }
+  UNREACHABLE();
+}
+
+ssize_t safe_read(const int fd, void* buffer, const size_t buffer_size) noexcept {
+  for (ssize_t ret, sz = 0;;) {
+    ret = ::read(fd, &static_cast<char*>(buffer)[sz], buffer_size - sz);
+    if (ret == -1) {
+      if (errno == EINTR) {  // interrupted by signal
+        continue;
+      }
+      return -1;
+    }
+    if (ret == 0) {  // EOF
+      return sz;
+    }
+    sz += ret;
+    if (sz == static_cast<ssize_t>(buffer_size)) {
+      return sz;
+    }
+    // either an EOF is coming or interrupted by signal
+  }
+  UNREACHABLE();
+}
+
+ssize_t safe_write(const int fd, const void* buffer, const size_t buffer_size) noexcept {
+  for (ssize_t ret, sz = 0;;) {
+    ret = ::write(fd, &static_cast<char const*>(buffer)[sz], buffer_size - sz);
+    if (ret == -1) {
+      if (errno == EINTR) {  // interrupted by signal
+        continue;
+      }
+      return -1;
+    }
+    sz += ret;
+    if (sz == static_cast<ssize_t>(buffer_size)) {
+      return sz;
+    }
+    // either an error is coming (such as disk full) or interrupted by signal
+  }
+  UNREACHABLE();
+}
+
+int32_t safe_ftruncate(const int32_t fd, int64_t length) noexcept {
+  for (int ret;;) {
+    ret = ::ftruncate(fd, length);
+    if (ret == -1 && errno == EINTR) {  // interrupted by signal
+      continue;
+    }
+    return ret;
+  }
+  UNREACHABLE();
 }
 
 }  // namespace heavyai
