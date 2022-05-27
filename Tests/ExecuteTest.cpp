@@ -22232,25 +22232,25 @@ TEST(Select, WindowFunctionFraming) {
       dt));
 
   EXPECT_ANY_THROW(run_multiple_agg(
-      "SELECT oc, dc159, MIN(i) OVER (PARTITION BY pc ORDER BY oc, dc159 ROWS BETWEEN "
+      "SELECT oc, dc, MIN(i) OVER (PARTITION BY pc ORDER BY oc, dc ROWS BETWEEN "
       "UNBOUNDED "
-      "PRECEDING AND UNBOUNDED PRECEDING) FROM test_window_framing ORDER BY oc, dc159;",
+      "PRECEDING AND UNBOUNDED PRECEDING) FROM test_window_framing ORDER BY oc, dc;",
       dt));
 
-  // todo (yoonmin) : support window frame with order by ts9, tm9 and d16 cases
+  // todo (yoonmin) : support window frame with order by ts9, tm and d2 cases
   EXPECT_ANY_THROW(run_multiple_agg(
       "SELECT ts9, MIN(i) OVER (PARTITION BY pc ORDER BY ts9 ROWS BETWEEN UNBOUNDED "
       "PRECEDING AND UNBOUNDED PRECEDING) FROM test_window_framing ORDER BY ts9;",
       dt));
 
   EXPECT_ANY_THROW(run_multiple_agg(
-      "SELECT tm9, MIN(i) OVER (PARTITION BY pc ORDER BY tm9 ROWS BETWEEN UNBOUNDED "
-      "PRECEDING AND UNBOUNDED PRECEDING) FROM test_window_framing ORDER BY tm9;",
+      "SELECT tm, MIN(i) OVER (PARTITION BY pc ORDER BY tm ROWS BETWEEN UNBOUNDED "
+      "PRECEDING AND UNBOUNDED PRECEDING) FROM test_window_framing ORDER BY tm;",
       dt));
 
   EXPECT_ANY_THROW(run_multiple_agg(
-      "SELECT d16, MIN(i) OVER (PARTITION BY pc ORDER BY d16 ROWS BETWEEN UNBOUNDED "
-      "PRECEDING AND UNBOUNDED PRECEDING) FROM test_window_framing ORDER BY d16;",
+      "SELECT d2, MIN(i) OVER (PARTITION BY pc ORDER BY d2 ROWS BETWEEN UNBOUNDED "
+      "PRECEDING AND UNBOUNDED PRECEDING) FROM test_window_framing ORDER BY d2;",
       dt));
 
   // 5) invalid frame bounds (the condition is checked regardless of a type of frame
@@ -22344,10 +22344,6 @@ TEST(Select, WindowFunctionFraming) {
       run_multiple_agg("SELECT oc, MIN(i) OVER (PARTITION BY pc RANGE BETWEEN 1 "
                        "PRECEDING AND 1 FOLLOWING) FROM test_window_framing ORDER BY oc;",
                        dt));
-
-  // run this query to clear window context held by executor
-  // i.e., WindowProjectNodeContext::reset(executor_);
-  run_multiple_agg("SELECT COUNT(1) FROM test_window_framing;", dt);
 }
 
 TEST(Select, FilterNodeCoalesce) {
