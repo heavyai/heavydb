@@ -3,13 +3,30 @@
 #include <vector>
 
 #include "CudaMgr/CudaMgr.h"
-#include "NvidiaKernel.h"
+#include "QueryEngine/CodeCacheAccessor.h"
+#include "QueryEngine/NvidiaKernel.h"
 
 inline bool g_query_engine_cuda_streams{true};
 
 class QueryEngine {
  public:
-  QueryEngine(CudaMgr_Namespace::CudaMgr* cuda_mgr, bool cpu_only) : cuda_mgr_(cuda_mgr) {
+  QueryEngine(CudaMgr_Namespace::CudaMgr* cuda_mgr, bool cpu_only)
+      : cuda_mgr_(cuda_mgr)
+      , s_stubs_accessor(
+            std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(code_cache_size,
+                                                                       "s_stubs_cache"))
+      , s_code_accessor(
+            std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(code_cache_size,
+                                                                       "s_code_cache"))
+      , cpu_code_accessor(
+            std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(code_cache_size,
+                                                                       "cpu_code_cache"))
+      , gpu_code_accessor(
+            std::make_unique<CodeCacheAccessor<GpuCompilationContext>>(code_cache_size,
+                                                                       "gpu_code_cache"))
+      , tf_code_accessor(
+            std::make_unique<CodeCacheAccessor<CompilationContext>>(code_cache_size,
+                                                                    "tf_code_cache")) {
     if (cpu_only) {
       g_query_engine_cuda_streams = false;
     }
@@ -87,6 +104,15 @@ class QueryEngine {
 
   inline static std::mutex mutex_;  // TODO(sy): use atomics instead?
   inline static std::weak_ptr<QueryEngine> instance_;
+
+  static constexpr size_t code_cache_size{1000};
+
+ public:
+  std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> s_stubs_accessor;
+  std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> s_code_accessor;
+  std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> cpu_code_accessor;
+  std::unique_ptr<CodeCacheAccessor<GpuCompilationContext>> gpu_code_accessor;
+  std::unique_ptr<CodeCacheAccessor<CompilationContext>> tf_code_accessor;
 };  // class QueryEngine
 
 CUstream getQueryEngineCudaStream();  // NOTE: CUstream is cudaStream_t

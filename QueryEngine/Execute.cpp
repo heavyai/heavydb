@@ -58,6 +58,7 @@
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/OutputBufferInitialization.h"
 #include "QueryEngine/QueryDispatchQueue.h"
+#include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/QueryRewrite.h"
 #include "QueryEngine/QueryTemplateGenerator.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
@@ -182,22 +183,6 @@ extern std::unique_ptr<llvm::Module> read_llvm_module_from_ir_string(
     llvm::LLVMContext& ctx,
     bool is_gpu = false);
 
-CodeCacheAccessor<CpuCompilationContext> Executor::s_stubs_accessor(
-    Executor::code_cache_size,
-    "s_stubs_cache");
-CodeCacheAccessor<CpuCompilationContext> Executor::s_code_accessor(
-    Executor::code_cache_size,
-    "s_code_cache");
-CodeCacheAccessor<CpuCompilationContext> Executor::cpu_code_accessor(
-    Executor::code_cache_size,
-    "cpu_code_cache");
-CodeCacheAccessor<GpuCompilationContext> Executor::gpu_code_accessor(
-    Executor::code_cache_size,
-    "gpu_code_cache");
-CodeCacheAccessor<CompilationContext> Executor::tf_code_accessor(
-    Executor::code_cache_size,
-    "tf_code_cache");
-
 namespace {
 // This function is notably different from that in RelAlgExecutor because it already
 // expects SPI values and therefore needs to avoid that transformation.
@@ -312,11 +297,12 @@ void Executor::initialize_extension_module_sources() {
 
 void Executor::reset(bool discard_runtime_modules_only) {
   // TODO: keep cached results that do not depend on runtime UDF/UDTFs
-  s_code_accessor.clear();
-  s_stubs_accessor.clear();
-  cpu_code_accessor.clear();
-  gpu_code_accessor.clear();
-  tf_code_accessor.clear();
+  auto qe = QueryEngine::getInstance();
+  qe->s_code_accessor->clear();
+  qe->s_stubs_accessor->clear();
+  qe->cpu_code_accessor->clear();
+  qe->gpu_code_accessor->clear();
+  qe->tf_code_accessor->clear();
 
   if (discard_runtime_modules_only) {
     extension_modules_.erase(Executor::ExtModuleKinds::rt_udf_cpu_module);

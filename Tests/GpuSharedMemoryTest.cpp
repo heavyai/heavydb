@@ -15,11 +15,16 @@
  */
 
 #include "GpuSharedMemoryTest.h"
+#include "CudaMgr/CudaMgr.h"
 #include "QueryEngine/LLVMGlobalContext.h"
 #include "QueryEngine/OutputBufferInitialization.h"
+#include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
 
 extern bool g_is_test_env;
+
+extern std::unique_ptr<CudaMgr_Namespace::CudaMgr> g_cuda_mgr;
+std::shared_ptr<QueryEngine> g_query_engine;
 
 namespace {
 
@@ -624,11 +629,18 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
+  g_cuda_mgr.reset(new CudaMgr_Namespace::CudaMgr(0));
+  g_query_engine = QueryEngine::createInstance(g_cuda_mgr.get(), /*cpu_only=*/false);
+
   int err{0};
   try {
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
+
+  g_query_engine.reset();
+  g_cuda_mgr.reset(nullptr);
+
   return err;
 }

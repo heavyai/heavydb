@@ -1269,17 +1269,8 @@ class Executor {
 
   mutable std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 
- public:
-  static CodeCacheAccessor<CpuCompilationContext> s_stubs_accessor;
-  static CodeCacheAccessor<CpuCompilationContext> s_code_accessor;
-  static CodeCacheAccessor<CpuCompilationContext> cpu_code_accessor;
-  static CodeCacheAccessor<GpuCompilationContext> gpu_code_accessor;
-  static CodeCacheAccessor<CompilationContext> tf_code_accessor;
-
- private:
   static const size_t baseline_threshold{
       1000000};  // if a perfect hash needs more entries, use baseline
-  static const size_t code_cache_size{1000};
 
   const unsigned block_size_x_;
   const unsigned grid_size_x_;

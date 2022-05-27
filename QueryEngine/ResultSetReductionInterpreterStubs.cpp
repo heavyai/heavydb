@@ -18,6 +18,7 @@
 #include "CodeGenerator.h"
 #include "ResultSetReductionCodegen.h"
 
+#include "QueryEngine/QueryEngine.h"
 #include "Shared/funcannotations.h"
 
 namespace {
@@ -196,7 +197,8 @@ StubGenerator::Stub StubGenerator::generateStub(const size_t executor_id,
 
   // get_or_wait locks globally unless (i) this is the first attempt
   // to compile for given key, or (ii) when key exists in code cache.
-  const auto compilation_context = Executor::s_stubs_accessor.get_or_wait(key);
+  const auto compilation_context =
+      QueryEngine::getInstance()->s_stubs_accessor->get_or_wait(key);
   if (compilation_context) {
     return reinterpret_cast<StubGenerator::Stub>(compilation_context->get()->func());
   }
@@ -264,6 +266,7 @@ StubGenerator::Stub StubGenerator::generateStub(const size_t executor_id,
   auto cpu_compilation_context = std::make_shared<CpuCompilationContext>(std::move(ee));
   cpu_compilation_context->setFunctionPointer(function);
   auto func_ptr = reinterpret_cast<StubGenerator::Stub>(cpu_compilation_context->func());
-  Executor::s_stubs_accessor.swap(key, std::move(cpu_compilation_context));
+  QueryEngine::getInstance()->s_stubs_accessor->swap(key,
+                                                     std::move(cpu_compilation_context));
   return func_ptr;
 }

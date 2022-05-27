@@ -1,4 +1,4 @@
-#include "QueryEngine.h"
+#include "QueryEngine/QueryEngine.h"
 
 CUstream getQueryEngineCudaStream() {  // NOTE: CUstream is cudaStream_t
   return QueryEngine::getInstance()->getCudaStream();
