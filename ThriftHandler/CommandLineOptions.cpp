@@ -1117,7 +1117,11 @@ void CommandLineOptions::validate() {
     LOG(INFO) << "License key path set to '" << license_path << "'";
   }
   g_read_only = read_only;
-  LOG(INFO) << " Server read-only mode is " << read_only;
+  LOG(INFO) << " Server read-only mode is " << read_only << " (--read-only)";
+  if (g_multi_instance) {
+    LOG(INFO) << " Multiple servers per --data directory is " << g_multi_instance
+              << " (--multi-instance)";
+  }
 #if DISABLE_CONCURRENCY
   LOG(INFO) << " Threading layer: serial";
 #elif ENABLE_TBB

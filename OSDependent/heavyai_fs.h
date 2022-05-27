@@ -20,6 +20,12 @@
 #include <cstdint>
 #include <cstdio>
 
+#ifndef _WIN32
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#endif  // not _WIN32
+
 namespace heavyai {
 
 size_t file_size(const int fd);
@@ -45,4 +51,15 @@ int32_t pclose(::FILE* fh);
 int get_page_size();
 
 int32_t ftruncate(const int32_t fd, int64_t length);
+
+#ifndef _WIN32
+// Signal-safe versions of low-level posix functions. Won't fail w/EINTR.
+int safe_open(const char* path, int flags, mode_t mode) noexcept;
+int safe_close(int fd) noexcept;
+int safe_fcntl(int fd, int cmd, struct flock* fl) noexcept;
+ssize_t safe_read(const int fd, void* buffer, const size_t buffer_size) noexcept;
+ssize_t safe_write(const int fd, const void* buffer, const size_t buffer_size) noexcept;
+int32_t safe_ftruncate(const int32_t fd, int64_t length) noexcept;
+#endif  // not _WIN32
+
 }  // namespace heavyai
