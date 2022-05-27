@@ -164,41 +164,80 @@ void SysCatalog::init(const std::string& basePath,
                       bool is_new_db,
                       bool aggregator,
                       const std::vector<LeafHostInfo>& string_dict_hosts) {
-  {
-    sys_write_lock write_lock(this);
-    sys_sqlite_lock sqlite_lock(this);
-
-    basePath_ = copy_catalog_if_read_only(basePath).string();
-    dataMgr_ = dataMgr;
-    authMetadata_ = &authMetadata;
-    pki_server_.reset(new PkiServer(*authMetadata_));
-    calciteMgr_ = calcite;
-    string_dict_hosts_ = string_dict_hosts;
-    aggregator_ = aggregator;
+  basePath_ = !g_multi_instance ? copy_catalog_if_read_only(basePath).string() : basePath;
+  sqliteConnector_.reset(new SqliteConnector(
+      shared::kSystemCatalogName, basePath_ + "/" + shared::kCatalogDirectoryName + "/"));
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  dataMgr_ = dataMgr;
+  authMetadata_ = &authMetadata;
+  pki_server_.reset(new PkiServer(*authMetadata_));
+  calciteMgr_ = calcite;
+  string_dict_hosts_ = string_dict_hosts;
+  aggregator_ = aggregator;
+  if (is_new_db) {
+    initDB();
+  } else {
     bool db_exists =
         boost::filesystem::exists(basePath_ + "/" + shared::kCatalogDirectoryName + "/" +
                                   shared::kSystemCatalogName);
-    sqliteConnector_.reset(
-        new SqliteConnector(shared::kSystemCatalogName,
-                            basePath_ + "/" + shared::kCatalogDirectoryName + "/"));
-    if (is_new_db) {
-      initDB();
-    } else {
-      if (!db_exists) {
-        importDataFromOldMapdDB();
-      }
-      checkAndExecuteMigrations();
+    if (!db_exists) {
+      importDataFromOldMapdDB();
     }
-    buildRoleMap();
-    buildUserRoleMap();
-    buildObjectDescriptorMap();
-    if (!is_new_db) {
-      // We don't want to create the information schema db during database initialization
-      // because we don't have the appropriate context to intialize the tables.  For
-      // instance if the server is intended to run in distributed mode, initializing the
-      // table as part of initdb will be missing information such as the location of the
-      // string dictionary server.
-      initializeInformationSchemaDb();
+    checkAndExecuteMigrations();
+  }
+  buildMaps(is_new_db);
+}
+
+void SysCatalog::buildMaps(bool is_new_db) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+
+  buildMapsUnlocked(is_new_db);
+}
+
+void SysCatalog::buildMapsUnlocked(bool is_new_db) {
+  VLOG(2) << "reloading catalog caches for: " << shared::kSystemCatalogName;
+
+  // Store permissions for temporary users.
+  std::map<std::string, std::vector<std::string>> tu_map;
+  for (auto& pair : temporary_users_by_name_) {
+    CHECK(pair.second);
+    UserMetadata& user = *pair.second;
+    auto it = granteeMap_.find(to_upper(user.userName));
+    CHECK(it != granteeMap_.end()) << to_upper(user.userName) << " not found";
+
+    auto user_rl = dynamic_cast<User*>(it->second.get());
+    CHECK(user_rl);
+    std::vector<std::string> current_roles = user_rl->getRoles();
+    auto result = tu_map.emplace(user.userName, std::move(current_roles));
+    CHECK(result.second);
+  }
+
+  // Forget permissions and reload them from file storage.
+  buildRoleMapUnlocked();
+  buildUserRoleMapUnlocked();
+  buildObjectDescriptorMapUnlocked();
+  if (!is_new_db) {
+    // We don't want to create the information schema db during database initialization
+    // because we don't have the appropriate context to intialize the tables.  For
+    // instance if the server is intended to run in distributed mode, initializing the
+    // table as part of initdb will be missing information such as the location of the
+    // string dictionary server.
+    initializeInformationSchemaDb();
+  }
+
+  // Restore permissions for temporary users that were stored above.
+  for (auto& pair : temporary_users_by_name_) {
+    CHECK(pair.second);
+    UserMetadata& user = *pair.second;
+
+    createRole_unsafe(user.userName, /*user_private_role*/ true, /*is_temporary*/ true);
+
+    auto it = tu_map.find(user.userName);
+    CHECK(it != tu_map.end()) << user.userName << " not found";
+    for (const auto& r : it->second) {
+      grantRole_unsafe(r, user.userName, /*is_temporary*/ true);
     }
   }
 }
@@ -209,17 +248,19 @@ SysCatalog::SysCatalog()
     , sqliteMutex_{}
     , sharedMutex_{}
     , thread_holding_sqlite_lock{std::thread::id()}
-    , thread_holding_write_lock{std::thread::id()}
-    , dummyCatalog_{std::make_shared<Catalog>()} {}
+    , thread_holding_write_lock{std::thread::id()} {}
 
 SysCatalog::~SysCatalog() {
-  sys_write_lock write_lock(this);
+  // sys_write_lock write_lock(this);
   granteeMap_.clear();
   objectDescriptorMap_.clear();
   cat_map_.clear();
 }
 
 void SysCatalog::initDB() {
+  if (g_read_only) {
+    throw std::runtime_error("can't init a new database in read-only mode");
+  }
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
@@ -2036,7 +2077,7 @@ void SysCatalog::changeDBObjectOwnership(const UserMetadata& new_owner,
     }
   } catch (std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
-    rebuildObjectMaps();
+    rebuildObjectMapsUnlocked();
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
@@ -2490,9 +2531,8 @@ std::set<std::string> SysCatalog::getCreatedRoles() const {
   return roles;
 }
 
-void SysCatalog::buildRoleMap() {
-  sys_write_lock write_lock(this);
-  sys_sqlite_lock sqlite_lock(this);
+void SysCatalog::buildRoleMapUnlocked() {
+  granteeMap_.clear();
   string roleQuery(
       "SELECT roleName, roleType, objectPermissionsType, dbId, objectId, "
       "objectPermissions, objectOwnerId, objectName "
@@ -2562,9 +2602,7 @@ void SysCatalog::populateRoleDbObjects(const std::vector<DBObject>& objects) {
   sqliteConnector_->query("END TRANSACTION");
 }
 
-void SysCatalog::buildUserRoleMap() {
-  sys_write_lock write_lock(this);
-  sys_sqlite_lock sqlite_lock(this);
+void SysCatalog::buildUserRoleMapUnlocked() {
   std::vector<std::pair<std::string, std::string>> granteeRoles;
   string userRoleQuery("SELECT roleName, userName from mapd_roles");
   sqliteConnector_->query(userRoleQuery);
@@ -2608,9 +2646,8 @@ void SysCatalog::buildUserRoleMap() {
   }
 }
 
-void SysCatalog::buildObjectDescriptorMap() {
-  sys_write_lock write_lock(this);
-  sys_sqlite_lock sqlite_lock(this);
+void SysCatalog::buildObjectDescriptorMapUnlocked() {
+  objectDescriptorMap_.clear();
   string objectQuery(
       "SELECT roleName, roleType, objectPermissionsType, dbId, objectId, "
       "objectPermissions, objectOwnerId, objectName "
@@ -2925,7 +2962,7 @@ void SysCatalog::reassignObjectOwners(
     }
   } catch (std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
-    rebuildObjectMaps();
+    rebuildObjectMapsUnlocked();
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
@@ -2988,12 +3025,12 @@ void SysCatalog::createVersionHistoryTable() const {
       "unique)");
 }
 
-void SysCatalog::rebuildObjectMaps() {
+void SysCatalog::rebuildObjectMapsUnlocked() {
   // Rebuild updated maps from storage
   granteeMap_.clear();
-  buildRoleMap();
+  buildRoleMapUnlocked();
   objectDescriptorMap_.clear();
-  buildObjectDescriptorMap();
+  buildObjectDescriptorMapUnlocked();
 }
 
 }  // namespace Catalog_Namespace

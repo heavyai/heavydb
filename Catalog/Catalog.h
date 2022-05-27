@@ -137,11 +137,6 @@ class Catalog final {
           const std::vector<LeafHostInfo>& string_dict_hosts,
           std::shared_ptr<Calcite> calcite,
           bool is_new_db);
-  /**
-   * @brief Constructor builds a hollow catalog
-   * used during constructor of other catalogs
-   */
-  Catalog();
 
   /**
    * @brief Destructor - deletes all
@@ -173,6 +168,7 @@ class Catalog final {
                     const std::string& newColumnName);
   void addColumn(const TableDescriptor& td, ColumnDescriptor& cd);
   void dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd);
+  void invalidateCachesForTable(const int table_id);
   void removeFragmenterForTable(const int table_id) const;
 
   const std::map<int, const ColumnDescriptor*> getDictionaryToColumnMapping();
@@ -702,6 +698,11 @@ class Catalog final {
 
  private:
   void buildDictionaryMapUnlocked();
+  void reloadTableMetadata(int table_id);
+  void reloadTableMetadataUnlocked(int table_id);
+  void reloadCatalogMetadata(const std::map<int32_t, std::string>& user_name_by_user_id);
+  void reloadCatalogMetadataUnlocked(
+      const std::map<int32_t, std::string>& user_name_by_user_id);
   void buildTablesMapUnlocked();
   void buildColumnsMapUnlocked();
   void updateViewsInMapUnlocked();
@@ -757,7 +758,6 @@ class Catalog final {
   foreign_storage::ForeignTable* getForeignTableUnlocked(
       const std::string& tableName) const;
 
-  const Catalog* getObjForLock();
   void removeChunks(const int table_id) const;
 
   void buildCustomExpressionsMapUnlocked();
