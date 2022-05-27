@@ -354,8 +354,6 @@ class SysCatalog : private CommonFileOperations {
   void check_for_session_encryption(const std::string& pki_cert, std::string& session);
   std::vector<Catalog*> getCatalogsForAllDbs();
 
-  std::shared_ptr<Catalog> getDummyCatalog() { return dummyCatalog_; }
-
   std::shared_ptr<Catalog> getCatalog(const std::string& dbName);
   std::shared_ptr<Catalog> getCatalog(const int32_t db_id);
   std::shared_ptr<Catalog> getCatalog(const DBMetadata& curDB, bool is_new_db);
@@ -388,10 +386,12 @@ class SysCatalog : private CommonFileOperations {
   SysCatalog();
 
   void initDB();
-  void buildRoleMap();
-  void buildUserRoleMap();
-  void buildObjectDescriptorMap();
-  void rebuildObjectMaps();
+  void buildMaps(bool is_new_db = false);
+  void buildMapsUnlocked(bool is_new_db = false);
+  void buildRoleMapUnlocked();
+  void buildUserRoleMapUnlocked();
+  void buildObjectDescriptorMapUnlocked();
+  void rebuildObjectMapsUnlocked();
   void checkAndExecuteMigrations();
   void importDataFromOldMapdDB();
   void createRoles();
