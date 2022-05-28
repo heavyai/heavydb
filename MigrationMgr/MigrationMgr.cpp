@@ -37,7 +37,7 @@ namespace migrations {
 void MigrationMgr::migrateDateInDaysMetadata(
     const Catalog_Namespace::TableDescriptorMapById& table_descriptors_by_id,
     const int database_id,
-    const Catalog_Namespace::Catalog* cat,
+    Catalog_Namespace::Catalog* cat,
     SqliteConnector& sqlite) {
   std::vector<int> tables_migrated = {};
   std::unordered_map<int, std::vector<std::string>> tables_to_migrate;

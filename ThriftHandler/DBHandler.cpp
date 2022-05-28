@@ -5984,7 +5984,7 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
   VLOG(1) << "Table Schema Locks:\n" << lockmgr::TableSchemaLockMgr::instance();
   VLOG(1) << "Table Data Locks:\n" << lockmgr::TableDataLockMgr::instance();
 
-  const auto& cat = query_state_proxy.getQueryState().getConstSessionInfo()->getCatalog();
+  auto& cat = query_state_proxy.getQueryState().getConstSessionInfo()->getCatalog();
   auto executor = Executor::getExecutor(
       executor_index ? *executor_index : Executor::UNITARY_EXECUTOR_ID,
       jit_debug_ ? "/tmp" : "",
@@ -7175,7 +7175,7 @@ int32_t DBHandler::get_table_epoch_by_name(const TSessionId& session,
   const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
       *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
-  auto const& cat = session_ptr->getCatalog();
+  auto& cat = session_ptr->getCatalog();
   auto table_read_lock =
       lockmgr::TableSchemaLockMgr::getReadLockForTable(cat, table_name);
   auto table_data_read_lock =

@@ -42,7 +42,7 @@ namespace {
 template <class LockType>
 std::tuple<const TableDescriptor*,
            std::unique_ptr<lockmgr::TableSchemaLockContainer<LockType>>>
-get_table_descriptor_with_lock(const Catalog_Namespace::Catalog& cat,
+get_table_descriptor_with_lock(Catalog_Namespace::Catalog& cat,
                                const std::string& table_name,
                                const bool populate_fragmenter) {
   const TableDescriptor* td{nullptr};

@@ -118,7 +118,7 @@ template <>
 class TableSchemaLockContainer<ReadLock>
     : public LockContainerImpl<const TableDescriptor*, ReadLock> {
  public:
-  static auto acquireTableDescriptor(const Catalog_Namespace::Catalog& cat,
+  static auto acquireTableDescriptor(Catalog_Namespace::Catalog& cat,
                                      const std::string& table_name,
                                      const bool populate_fragmenter = true) {
     VLOG(1) << "Acquiring Table Schema Read Lock for table: " << table_name;
@@ -129,7 +129,7 @@ class TableSchemaLockContainer<ReadLock>
     return ret;
   }
 
-  static auto acquireTableDescriptor(const Catalog_Namespace::Catalog& cat,
+  static auto acquireTableDescriptor(Catalog_Namespace::Catalog& cat,
                                      const int table_id) {
     const auto table_name = cat.getTableName(table_id);
     if (!table_name.has_value()) {
@@ -149,7 +149,7 @@ template <>
 class TableSchemaLockContainer<WriteLock>
     : public LockContainerImpl<const TableDescriptor*, WriteLock> {
  public:
-  static auto acquireTableDescriptor(const Catalog_Namespace::Catalog& cat,
+  static auto acquireTableDescriptor(Catalog_Namespace::Catalog& cat,
                                      const std::string& table_name,
                                      const bool populate_fragmenter = true) {
     VLOG(1) << "Acquiring Table Schema Write Lock for table: " << table_name;
@@ -160,7 +160,7 @@ class TableSchemaLockContainer<WriteLock>
     return ret;
   }
 
-  static auto acquireTableDescriptor(const Catalog_Namespace::Catalog& cat,
+  static auto acquireTableDescriptor(Catalog_Namespace::Catalog& cat,
                                      const int table_id) {
     const auto table_name = cat.getTableName(table_id);
     if (!table_name.has_value()) {

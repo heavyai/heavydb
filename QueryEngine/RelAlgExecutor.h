@@ -54,7 +54,7 @@ class RelAlgExecutor : private StorageIOFacility {
   using TargetInfoList = std::vector<TargetInfo>;
 
   RelAlgExecutor(Executor* executor,
-                 const Catalog_Namespace::Catalog& cat,
+                 Catalog_Namespace::Catalog& cat,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
       : StorageIOFacility(executor, cat)
       , executor_(executor)
@@ -66,7 +66,7 @@ class RelAlgExecutor : private StorageIOFacility {
   }
 
   RelAlgExecutor(Executor* executor,
-                 const Catalog_Namespace::Catalog& cat,
+                 Catalog_Namespace::Catalog& cat,
                  const std::string& query_ra,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
       : StorageIOFacility(executor, cat)
@@ -80,7 +80,7 @@ class RelAlgExecutor : private StorageIOFacility {
   }
 
   RelAlgExecutor(Executor* executor,
-                 const Catalog_Namespace::Catalog& cat,
+                 Catalog_Namespace::Catalog& cat,
                  std::unique_ptr<RelAlgDag> query_dag,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
       : StorageIOFacility(executor, cat)
@@ -425,7 +425,7 @@ class RelAlgExecutor : private StorageIOFacility {
   void setupCaching(const RelAlgNode* ra);
 
   Executor* executor_;
-  const Catalog_Namespace::Catalog& cat_;
+  Catalog_Namespace::Catalog& cat_;
   std::unique_ptr<RelAlgDag> query_dag_;
   std::shared_ptr<const query_state::QueryState> query_state_;
   TemporaryTables temporary_tables_;
