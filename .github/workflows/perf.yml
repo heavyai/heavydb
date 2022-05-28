@@ -19,6 +19,12 @@ jobs:
           ref: trips-reduced
           path: data
 
+      - name: Set env context
+        run: |
+          echo CONDA_PATH=$CONDA >>$GITHUB_ENV
+          echo RUN_STAMP=${{ runner.os }}-${{ (env.cuda_compiler_version != 'None') && format('cuda{0}', env.cuda_compiler_version) || 'CPU' }} >>$GITHUB_ENV
+          echo CONDA_ENV_PATH=$CONDA/envs/${{ env.CONDA_ENV }} >>$GITHUB_ENV
+
       - uses: actions/download-artifact@v3
         with:
           name: ${{ env.RUN_STAMP }}-build
@@ -29,6 +35,7 @@ jobs:
 
       - name: Run tests
         run: |
+          rm -rf data/.git
           build/bin/taxi_reduced --data data | tee taxi.log
 
       - name: Upload perf results
