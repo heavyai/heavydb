@@ -1,0 +1,45 @@
+name: Reusable perf test action
+on:
+  workflow_call: 
+    inputs:
+      cuda_compiler_version:
+        type: string
+        default: 'None'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      cuda_compiler_version: ${{ inputs.cuda_compiler_version }}
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          repository: intel-ai/datasets
+          ref: trips-reduced
+          path: data
+
+      - run: |
+          ls data
+          exit 1
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: ${{ env.RUN_STAMP }}-build
+
+      - name: Unpack build files
+        run: |
+          tar -zxf build.tgz
+
+      - name: Run tests
+        run: |
+          build/bin/taxi_reduced --data ../???
+
+      - name: Upload perf results
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ env.RUN_STAMP }}-taxi
+          path: |
+            build/taxi.log
+
+

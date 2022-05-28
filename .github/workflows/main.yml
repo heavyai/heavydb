@@ -39,3 +39,9 @@ jobs:
     needs: build
     uses: ./.github/workflows/test.yml
 
+  perf:
+    #    needs: build
+    uses: ./.github/workflows/perf.yml
+
+
+
