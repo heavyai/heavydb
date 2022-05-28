@@ -4099,7 +4099,7 @@ int32_t get_table_id(const Catalog_Namespace::Catalog& catalog,
 }
 
 lockmgr::LockedTableDescriptors acquire_query_table_locks(
-    const Catalog_Namespace::Catalog& catalog,
+    Catalog_Namespace::Catalog& catalog,
     const std::string& query_str,
     const QueryStateProxy& query_state_proxy,
     const std::optional<std::string>& insert_table_name = {}) {
@@ -5498,7 +5498,7 @@ void CopyTableStmt::execute(
   }
   return_message.reset(new std::string(tr));
   LOG(INFO) << tr;
-}  // namespace Parser
+}
 
 // CREATE ROLE payroll_dept_role;
 CreateRoleStmt::CreateRoleStmt(const rapidjson::Value& payload) {

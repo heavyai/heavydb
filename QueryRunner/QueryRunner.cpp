@@ -341,7 +341,7 @@ RegisteredQueryHint QueryRunner::getParsedQueryHint(const std::string& query_str
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
-  const auto& cat = session_info_->getCatalog();
+  auto& cat = session_info_->getCatalog();
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
 
   auto calcite_mgr = cat.getCalciteMgr();
@@ -366,7 +366,7 @@ std::shared_ptr<const RelAlgNode> QueryRunner::getRootNodeFromParsedQuery(
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
-  const auto& cat = session_info_->getCatalog();
+  auto& cat = session_info_->getCatalog();
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
 
   auto calcite_mgr = cat.getCalciteMgr();
@@ -390,7 +390,7 @@ QueryRunner::getParsedQueryHints(const std::string& query_str) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
-  const auto& cat = session_info_->getCatalog();
+  auto& cat = session_info_->getCatalog();
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
@@ -412,7 +412,7 @@ std::optional<RegisteredQueryHint> QueryRunner::getParsedGlobalQueryHints(
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
-  const auto& cat = session_info_->getCatalog();
+  auto& cat = session_info_->getCatalog();
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
@@ -433,7 +433,7 @@ RaExecutionSequence QueryRunner::getRaExecutionSequence(const std::string& query
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
-  const auto& cat = session_info_->getCatalog();
+  auto& cat = session_info_->getCatalog();
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
@@ -464,7 +464,7 @@ void QueryRunner::validateDDLStatement(const std::string& stmt_str_in) {
   auto query_state = create_query_state(session_info_, stmt_str);
   auto stdlog = STDLOG(query_state);
 
-  const auto& cat = session_info_->getCatalog();
+  auto& cat = session_info_->getCatalog();
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
@@ -482,7 +482,7 @@ std::shared_ptr<RelAlgTranslator> QueryRunner::getRelAlgTranslator(
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
-  const auto& cat = session_info_->getCatalog();
+  auto& cat = session_info_->getCatalog();
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
@@ -505,7 +505,7 @@ QueryPlanDagInfo QueryRunner::getQueryInfoForDataRecyclerTest(
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
-  const auto& cat = session_info_->getCatalog();
+  auto& cat = session_info_->getCatalog();
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
@@ -582,7 +582,7 @@ void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
   auto stdlog = STDLOG(query_state);
 
   if (pw.is_ddl || pw.getDMLType() == ParserWrapper::DMLType::Insert) {
-    const auto& cat = session_info_->getCatalog();
+    auto& cat = session_info_->getCatalog();
     auto calcite_mgr = cat.getCalciteMgr();
     const auto calciteQueryParsingOption =
         calcite_mgr->getCalciteQueryParsingOption(true, false, true);
@@ -676,7 +676,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
       session_info_->get_catalog_ptr(), current_user, device_type, session_id);
   auto query_state = create_query_state(session_info, query_str);
   auto stdlog = STDLOG(query_state);
-  const auto& cat = query_state->getConstSessionInfo()->getCatalog();
+  auto& cat = query_state->getConstSessionInfo()->getCatalog();
   std::string query_ra{""};
 
   std::shared_ptr<ExecutionResult> result;
@@ -789,7 +789,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
     const ExecutorExplainType explain_type,
     const bool with_filter_push_down) {
   auto const& query_state = query_state_proxy.getQueryState();
-  const auto& cat = query_state.getConstSessionInfo()->getCatalog();
+  auto& cat = query_state.getConstSessionInfo()->getCatalog();
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CompilationOptions co = CompilationOptions::defaults(device_type);
   co.explain_type = explain_type;
@@ -914,7 +914,7 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
                                                   g_enable_filter_push_down);
   }
 
-  const auto& cat = session_info_->getCatalog();
+  auto& cat = session_info_->getCatalog();
 
   std::shared_ptr<ExecutionResult> result;
   auto query_launch_task =

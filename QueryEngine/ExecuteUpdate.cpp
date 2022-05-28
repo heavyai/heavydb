@@ -68,7 +68,7 @@ TableUpdateMetadata Executor::executeUpdate(
     const TableDescriptor* table_desc_for_update,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
-    const Catalog_Namespace::Catalog& cat,
+    Catalog_Namespace::Catalog& cat,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const UpdateLogForFragment::Callback& cb,
     const bool is_agg) {

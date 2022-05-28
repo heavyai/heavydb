@@ -32,7 +32,7 @@ class MigrationMgr {
   static void migrateDateInDaysMetadata(
       const Catalog_Namespace::TableDescriptorMapById& table_descriptors_by_id,
       const int database_id,
-      const Catalog_Namespace::Catalog* cat,
+      Catalog_Namespace::Catalog* cat,
       SqliteConnector& sqlite);
 
   static void executeRebrandMigration(const std::string& base_path);

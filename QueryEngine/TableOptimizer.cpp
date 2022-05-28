@@ -28,7 +28,7 @@ float g_vacuum_min_selectivity{0.1};
 
 TableOptimizer::TableOptimizer(const TableDescriptor* td,
                                Executor* executor,
-                               const Catalog_Namespace::Catalog& cat)
+                               Catalog_Namespace::Catalog& cat)
     : td_(td), executor_(executor), cat_(cat) {
   CHECK(td);
 }

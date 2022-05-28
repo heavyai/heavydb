@@ -96,7 +96,7 @@ auto check_fragment_metadata(Args&&... args) -> auto {
 }
 
 template <typename FUNC, typename... Args>
-void run_op_per_fragment(const Catalog_Namespace::Catalog& catalog,
+void run_op_per_fragment(Catalog_Namespace::Catalog& catalog,
                          const TableDescriptor* td,
                          FUNC f,
                          Args&&... args) {
@@ -112,7 +112,7 @@ void run_op_per_fragment(const Catalog_Namespace::Catalog& catalog,
 }
 
 template <typename FUNC, typename... Args, std::size_t... Is>
-void run_op_per_fragment(const Catalog_Namespace::Catalog& catalog,
+void run_op_per_fragment(Catalog_Namespace::Catalog& catalog,
                          const TableDescriptor* td,
                          FUNC f,
                          std::tuple<Args...> tuple,
@@ -121,7 +121,7 @@ void run_op_per_fragment(const Catalog_Namespace::Catalog& catalog,
 }
 
 template <typename FUNC, typename... Args>
-void run_op_per_fragment(const Catalog_Namespace::Catalog& catalog,
+void run_op_per_fragment(Catalog_Namespace::Catalog& catalog,
                          const TableDescriptor* td,
                          std::tuple<FUNC, std::tuple<Args...>> tuple) {
   run_op_per_fragment(catalog,
@@ -131,15 +131,14 @@ void run_op_per_fragment(const Catalog_Namespace::Catalog& catalog,
                       std::index_sequence_for<Args...>{});
 }
 
-void recompute_metadata(const TableDescriptor* td,
-                        const Catalog_Namespace::Catalog& cat) {
+void recompute_metadata(const TableDescriptor* td, Catalog_Namespace::Catalog& cat) {
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   TableOptimizer optimizer(td, executor.get(), cat);
   EXPECT_NO_THROW(optimizer.recomputeMetadata());
 }
 
 void vacuum_and_recompute_metadata(const TableDescriptor* td,
-                                   const Catalog_Namespace::Catalog& cat) {
+                                   Catalog_Namespace::Catalog& cat) {
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   TableOptimizer optimizer(td, executor.get(), cat);
   EXPECT_NO_THROW(optimizer.vacuumDeletedRows());
@@ -224,7 +223,7 @@ class MultiFragMetadataUpdate : public DBHandlerTestFixture {
 TEST_F(MultiFragMetadataUpdate, NoChanges) {
   std::vector<ChunkMetadataMap> metadata_for_fragments;
   {
-    const auto& cat = getCatalog();
+    auto& cat = getCatalog();
     const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
     // Get chunk metadata before recomputing
@@ -239,7 +238,7 @@ TEST_F(MultiFragMetadataUpdate, NoChanges) {
 
   // Make sure metadata matches after recomputing
   {
-    const auto& cat = getCatalog();
+    auto& cat = getCatalog();
     const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
     auto* fragmenter = td->fragmenter.get();
@@ -300,7 +299,7 @@ class MetadataUpdate : public DBHandlerTestFixture,
 };
 
 TEST_P(MetadataUpdate, InitialMetadata) {
-  const auto& cat = getCatalog();
+  auto& cat = getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   run_op_per_fragment(
@@ -357,7 +356,7 @@ TEST_P(MetadataUpdate, InitialMetadata) {
 }
 
 TEST_P(MetadataUpdate, IntUpdate) {
-  const auto& cat = getCatalog();
+  auto& cat = getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   sql("UPDATE " + g_table_name + " SET x = 3 WHERE x = 1;");
@@ -373,7 +372,7 @@ TEST_P(MetadataUpdate, IntUpdate) {
 }
 
 TEST_P(MetadataUpdate, IntRemoveNull) {
-  const auto& cat = getCatalog();
+  auto& cat = getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   sql("UPDATE " + g_table_name + " SET x = 3;");
@@ -384,7 +383,7 @@ TEST_P(MetadataUpdate, IntRemoveNull) {
 }
 
 TEST_P(MetadataUpdate, NotNullInt) {
-  const auto& cat = getCatalog();
+  auto& cat = getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   sql("UPDATE " + g_table_name + " SET y = " +
@@ -402,7 +401,7 @@ TEST_P(MetadataUpdate, NotNullInt) {
 }
 
 TEST_P(MetadataUpdate, DateNarrowRange) {
-  const auto& cat = getCatalog();
+  auto& cat = getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   sql("UPDATE " + g_table_name + " SET d = '1/1/2010';");
@@ -414,7 +413,7 @@ TEST_P(MetadataUpdate, DateNarrowRange) {
 }
 
 TEST_P(MetadataUpdate, SmallDateNarrowMin) {
-  const auto& cat = getCatalog();
+  auto& cat = getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   sql("UPDATE " + g_table_name + " SET dd = '1/1/2010' WHERE dd = '1/1/1940';");
@@ -425,7 +424,7 @@ TEST_P(MetadataUpdate, SmallDateNarrowMin) {
 }
 
 TEST_P(MetadataUpdate, SmallDateNarrowMax) {
-  const auto& cat = getCatalog();
+  auto& cat = getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   sql("UPDATE " + g_table_name + " SET dd = '1/1/2010' WHERE dd = '12/31/2012';");
@@ -436,7 +435,7 @@ TEST_P(MetadataUpdate, SmallDateNarrowMax) {
 }
 
 TEST_P(MetadataUpdate, DeleteReset) {
-  const auto& cat = getCatalog();
+  auto& cat = getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   sql("DELETE FROM  " + g_table_name + " WHERE dd = '12/31/2012';");
@@ -447,7 +446,7 @@ TEST_P(MetadataUpdate, DeleteReset) {
 }
 
 TEST_P(MetadataUpdate, EncodedStringNull) {
-  const auto& cat = getCatalog();
+  auto& cat = getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   TestHelpers::ValuesGenerator gen(g_table_name);
@@ -465,7 +464,7 @@ TEST_P(MetadataUpdate, EncodedStringNull) {
 }
 
 TEST_P(MetadataUpdate, AlterAfterOptimize) {
-  const auto& cat = getCatalog();
+  auto& cat = getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
   run_op_per_fragment(cat, td, check_fragment_metadata(1, 1, 2, true));
   sql("DELETE FROM  " + g_table_name + " WHERE x IS NULL;");
@@ -487,7 +486,7 @@ TEST_P(MetadataUpdate, AlterAfterOptimize) {
 }
 
 TEST_P(MetadataUpdate, AlterAfterEmptied) {
-  const auto& cat = getCatalog();
+  auto& cat = getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
   sql("DELETE FROM  " + g_table_name + ";");
   vacuum_and_recompute_metadata(td, cat);
@@ -552,7 +551,7 @@ TEST_F(DeletedRowsMetadataUpdateTest, ComputeMetadataAfterDelete) {
   sql("delete from test_table where i <= 2;");
   sqlAndCompareResult("select * from test_table;", {{i(3)}});
 
-  const auto& catalog = getCatalog();
+  auto& catalog = getCatalog();
   const auto td = catalog.getMetadataForTable("test_table");
   recompute_metadata(td, catalog);
   sqlAndCompareResult("select * from test_table;", {{i(3)}});
