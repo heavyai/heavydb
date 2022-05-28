@@ -33,10 +33,23 @@ jobs:
         run: |
           tar -zxf build.tgz
 
+      - name: Download Conda
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: main.yml
+          workflow_conclusion: completed
+          name: ${{ env.RUN_STAMP }}-conda
+          search_artifacts: true
+
+      - name: Unpack Conda
+        run: |
+          mkdir -p ${{ env.CONDA_ENV_PATH }}
+          tar -zxf conda.tgz -C ${{ env.CONDA_ENV_PATH }}
+
       - name: Run tests
         run: |
           rm -rf data/.git
-          build/bin/taxi_reduced --data data | tee taxi.log
+          $CONDA/bin/conda run -n omnisci-dev build/bin/taxi_reduced --data data | tee taxi.log
 
       - name: Upload perf results
         uses: actions/upload-artifact@v2
