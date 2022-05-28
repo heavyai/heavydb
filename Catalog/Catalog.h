@@ -53,6 +53,7 @@
 #include "Catalog/TableMetadata.h"
 #include "Catalog/Types.h"
 #include "DataMgr/DataMgr.h"
+#include "OSDependent/heavyai_locks.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "Shared/heavyai_shared_mutex.h"
 #include "SqliteConnector/SqliteConnector.h"
@@ -60,6 +61,13 @@
 #include "LeafHostInfo.h"
 
 enum GetTablesType { GET_PHYSICAL_TABLES_AND_VIEWS, GET_PHYSICAL_TABLES, GET_VIEWS };
+
+namespace lockmgr {
+
+template <class T>
+class TableLockMgrImpl;
+
+}  // namespace lockmgr
 
 namespace Parser {
 
@@ -699,6 +707,8 @@ class Catalog final {
  private:
   void buildDictionaryMapUnlocked();
   void reloadTableMetadata(int table_id);
+  template <class T>
+  friend class lockmgr::TableLockMgrImpl;  // for reloadTableMetadataUnlocked()
   void reloadTableMetadataUnlocked(int table_id);
   void reloadCatalogMetadata(const std::map<int32_t, std::string>& user_name_by_user_id);
   void reloadCatalogMetadataUnlocked(
@@ -826,6 +836,8 @@ class Catalog final {
                                                                LOGS_SERVER_NAME};
 
  public:
+  mutable std::unique_ptr<heavyai::DistributedSharedMutex> dcatalogMutex_;
+  mutable std::unique_ptr<heavyai::DistributedSharedMutex> dsqliteMutex_;
   mutable std::mutex sqliteMutex_;
   mutable heavyai::shared_mutex sharedMutex_;
   mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;

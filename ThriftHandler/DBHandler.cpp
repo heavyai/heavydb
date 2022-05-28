@@ -1550,9 +1550,10 @@ void DBHandler::sql_validate(TRowDescriptor& _return,
       throw std::runtime_error("Can only validate SELECT statements.");
     }
 
-    const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-        *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-            legacylockmgr::ExecutorOuterLock, true));
+    const auto execute_read_lock =
+        heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+            *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+                legacylockmgr::ExecutorOuterLock, true));
 
     TPlanResult parse_result;
     lockmgr::LockedTableDescriptors locks;
@@ -2330,9 +2331,10 @@ void DBHandler::get_table_details(TTableDetails& _return,
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
 
-  auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   get_table_details_impl(_return, stdlog, table_name, false, false);
 }
 
@@ -2343,9 +2345,10 @@ void DBHandler::get_table_details_for_database(TTableDetails& _return,
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
 
-  auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   get_table_details_impl(_return, stdlog, table_name, false, false, database_name);
 }
 
@@ -2709,9 +2712,10 @@ void DBHandler::get_tables_meta(std::vector<TTableMeta>& _return,
   auto query_state = create_query_state(session_ptr, "");
   stdlog.setQueryState(query_state);
 
-  auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   try {
     get_tables_meta_impl(_return, query_state->createQueryStateProxy(), *session_ptr);
@@ -3145,9 +3149,10 @@ void DBHandler::load_table_binary(const TSessionId& session,
       THROW_DB_EXCEPTION("No rows to insert");
     }
 
-    const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-        *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-            legacylockmgr::ExecutorOuterLock, true));
+    const auto execute_read_lock =
+        heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+            *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+                legacylockmgr::ExecutorOuterLock, true));
     std::unique_ptr<import_export::Loader> loader;
     std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
     auto schema_read_lock = prepare_loader_generic(*session_ptr,
@@ -3333,9 +3338,10 @@ void DBHandler::loadTableBinaryColumnarInternal(
     return;
   }
 
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   std::unique_ptr<import_export::Loader> loader;
   std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
   auto schema_read_lock = prepare_loader_generic(*session_ptr,
@@ -3479,9 +3485,10 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session,
   if (use_column_names) {
     column_names = batch->schema()->field_names();
   }
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   auto schema_read_lock =
       prepare_loader_generic(*session_ptr,
                              table_name,
@@ -3541,9 +3548,10 @@ void DBHandler::load_table(const TSessionId& session,
       THROW_DB_EXCEPTION("No rows to insert");
     }
 
-    const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-        *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-            legacylockmgr::ExecutorOuterLock, true));
+    const auto execute_read_lock =
+        heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+            *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+                legacylockmgr::ExecutorOuterLock, true));
     std::unique_ptr<import_export::Loader> loader;
     std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
     auto schema_read_lock =
@@ -5066,9 +5074,10 @@ void DBHandler::import_table(const TSessionId& session,
     check_read_only("import_table");
     LOG(INFO) << "import_table " << table_name << " from " << file_name_in;
 
-    const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-        *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-            legacylockmgr::ExecutorOuterLock, true));
+    const auto execute_read_lock =
+        heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+            *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+                legacylockmgr::ExecutorOuterLock, true));
     auto& cat = session_ptr->getCatalog();
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
     auto start_time = ::toString(std::chrono::system_clock::now());
@@ -5476,8 +5485,8 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
     }
 
     // match locking sequence for CopyTableStmt::execute
-    heavyai::shared_lock<heavyai::shared_mutex> execute_read_lock(
-        *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+    heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>
+        execute_read_lock(*legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
             legacylockmgr::ExecutorOuterLock, true));
 
     const TableDescriptor* td{nullptr};
@@ -6254,8 +6263,9 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
   // Call to DistributedValidate() below may change cat.
   auto& cat = session_ptr->getCatalog();
 
-  heavyai::unique_lock<heavyai::shared_mutex> executeWriteLock;
-  heavyai::shared_lock<heavyai::shared_mutex> executeReadLock;
+  heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>
+      executeWriteLock;
+  heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>> executeReadLock;
 
   ParserWrapper pw{query_str};
 
@@ -6348,9 +6358,10 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     auto validate_stmt = Parser::ValidateStmt(ddl_query["payload"].GetObject());
     _return.addExecutionTime(measure<>::execution([&]() {
       // Prevent any other query from running while doing validate
-      executeWriteLock = heavyai::unique_lock<heavyai::shared_mutex>(
-          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-              legacylockmgr::ExecutorOuterLock, true));
+      executeWriteLock =
+          heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+              *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+                  legacylockmgr::ExecutorOuterLock, true));
 
       std::string output{"Result for validate"};
       if (g_cluster) {
@@ -6443,9 +6454,10 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     //    DmlUpdate DmlDelete
     //    anything else that failed to match
 
-    executeReadLock = heavyai::shared_lock<heavyai::shared_mutex>(
-        *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-            legacylockmgr::ExecutorOuterLock, true));
+    executeReadLock =
+        heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+            *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+                legacylockmgr::ExecutorOuterLock, true));
 
     std::string query_ra = query_str;
     if (use_calcite) {
@@ -7091,9 +7103,10 @@ void DBHandler::set_table_epoch(const TSessionId& session,
   if (!session_ptr->get_currentUser().isSuper) {
     throw std::runtime_error("Only superuser can set_table_epoch");
   }
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   ChunkKey table_key{db_id, table_id};
   auto table_write_lock = lockmgr::TableSchemaLockMgr::getWriteLockForTable(table_key);
   auto table_data_write_lock = lockmgr::TableDataLockMgr::getWriteLockForTable(table_key);
@@ -7119,9 +7132,10 @@ void DBHandler::set_table_epoch_by_name(const TSessionId& session,
     throw std::runtime_error("Only superuser can set_table_epoch");
   }
 
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   auto& cat = session_ptr->getCatalog();
   auto table_write_lock =
       lockmgr::TableSchemaLockMgr::getWriteLockForTable(cat, table_name);
@@ -7149,9 +7163,10 @@ int32_t DBHandler::get_table_epoch(const TSessionId& session,
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
 
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   ChunkKey table_key{db_id, table_id};
   auto table_read_lock = lockmgr::TableSchemaLockMgr::getReadLockForTable(table_key);
   auto table_data_write_lock = lockmgr::TableDataLockMgr::getReadLockForTable(table_key);
@@ -7172,9 +7187,10 @@ int32_t DBHandler::get_table_epoch_by_name(const TSessionId& session,
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
 
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   auto& cat = session_ptr->getCatalog();
   auto table_read_lock =
       lockmgr::TableSchemaLockMgr::getReadLockForTable(cat, table_name);
@@ -7202,9 +7218,10 @@ void DBHandler::get_table_epochs(std::vector<TTableEpochInfo>& _return,
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
 
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   ChunkKey table_key{db_id, table_id};
   auto table_read_lock = lockmgr::TableSchemaLockMgr::getReadLockForTable(table_key);
   auto table_data_read_lock = lockmgr::TableDataLockMgr::getReadLockForTable(table_key);
@@ -7255,9 +7272,10 @@ void DBHandler::set_table_epochs(const TSessionId& session,
         table_epoch.table_id, table_epoch.table_epoch, table_epoch.leaf_index);
   }
 
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   ChunkKey table_key{db_id, logical_table_id};
   ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
   auto table_write_lock = lockmgr::TableSchemaLockMgr::getWriteLockForTable(table_key);
@@ -7295,6 +7313,10 @@ void DBHandler::shutdown() {
   if (render_handler_) {
     render_handler_->shutdown();
   }
+
+  sessions_.clear();
+
+  Catalog_Namespace::SysCatalog::destroy();
 }
 
 void DBHandler::emergency_shutdown() {

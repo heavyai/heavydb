@@ -2659,9 +2659,10 @@ void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session,
   if (read_only_mode) {
     throw std::runtime_error("INSERT values invalid in read only mode.");
   }
-  auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
@@ -3248,9 +3249,10 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   }
   auto& catalog = session.getCatalog();
 
-  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   // check access privileges
   if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
@@ -3300,9 +3302,10 @@ void CreateDataframeStmt::execute(const Catalog_Namespace::SessionInfo& session,
   }
   auto& catalog = session.getCatalog();
 
-  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   // check access privileges
   if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
@@ -4158,9 +4161,10 @@ void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& 
   auto stdlog = STDLOG(query_state);
   auto& catalog = session_ptr->getCatalog();
 
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   if (catalog.getMetadataForTable(table_name_) == nullptr) {
     throw std::runtime_error("ITAS failed: table " + table_name_ + " does not exist.");
@@ -4212,9 +4216,10 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
   std::set<std::string> select_tables;
   if (create_table) {
-    const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
-        *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-            legacylockmgr::ExecutorOuterLock, true));
+    const auto execute_write_lock =
+        heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+            *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+                legacylockmgr::ExecutorOuterLock, true));
 
     // check access privileges
     if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
@@ -4326,9 +4331,10 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
   // note there is a time where we do not have any executor outer lock here. someone could
   // come along and mess with the data or other tables.
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   auto locks = acquire_query_table_locks(
       catalog, select_query_, query_state->createQueryStateProxy(), table_name_);
@@ -4361,9 +4367,10 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   if (read_only_mode) {
     throw std::runtime_error("DROP TABLE invalid in read only mode.");
   }
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
   const TableDescriptor* td{nullptr};
   std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>> td_with_lock;
@@ -4521,9 +4528,10 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   if (read_only_mode) {
     throw std::runtime_error("TRUNCATE TABLE invalid in read only mode.");
   }
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
@@ -4591,9 +4599,10 @@ void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   }
   auto& catalog = session.getCatalog();
 
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
@@ -4720,9 +4729,10 @@ void RenameDBStmt::execute(const Catalog_Namespace::SessionInfo& session,
   Catalog_Namespace::DBMetadata db;
 
   // TODO: use database lock instead
-  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   if (!SysCatalog::instance().getMetadataForDB(*database_name_, db)) {
     throw std::runtime_error("Database " + *database_name_ + " does not exist.");
@@ -4834,9 +4844,10 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   auto& catalog = session.getCatalog();
 
   // TODO(adb): the catalog should be handling this locking (see AddColumStmt)
-  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   // accumulated vector of table names: oldName->newName
   std::vector<std::pair<std::string, std::string>> names;
@@ -4976,9 +4987,10 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
     throw std::runtime_error("ADD COLUMN invalid in read only mode.");
   }
   // TODO: Review add and drop column implementation
-  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
@@ -5127,9 +5139,10 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
     throw std::runtime_error("DROP COLUMN invalid in read only mode.");
   }
   // TODO: Review add and drop column implementation
-  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
@@ -5209,9 +5222,10 @@ void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
   }
   auto& catalog = session.getCatalog();
 
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
@@ -5241,9 +5255,10 @@ void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session,
       {"max_rollback_epochs", TableParamType::MaxRollbackEpochs},
       {"epoch", TableParamType::Epoch},
       {"max_rows", TableParamType::MaxRows}};
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
@@ -5353,9 +5368,10 @@ void CopyTableStmt::execute(
   size_t total_time = 0;
 
   // Prevent simultaneous import / truncate (see TruncateTableStmt::execute)
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   const TableDescriptor* td{nullptr};
   std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>> td_with_lock;
@@ -6104,9 +6120,10 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session,
                                           ddl_utils::DataTransferType::EXPORT);
   }
 
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   auto locks = acquire_query_table_locks(
       session_ptr->getCatalog(), *select_stmt_, query_state_proxy);
 
@@ -6361,9 +6378,10 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session,
                        calciteOptimizationOption);
 
   // Take write lock after the query is processed to ensure no deadlocks
-  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   TableDescriptor td;
   td.tableName = view_name_;
@@ -6404,9 +6422,10 @@ void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session,
   }
   auto& catalog = session.getCatalog();
 
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   const TableDescriptor* td{nullptr};
   std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>> td_with_lock;
@@ -6468,9 +6487,10 @@ void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session,
         "CREATE DATABASE command can only be executed by super user.");
   }
 
-  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   Catalog_Namespace::DBMetadata db_meta;
   if (SysCatalog::instance().getMetadataForDB(*db_name_, db_meta) && if_not_exists_) {
@@ -6512,9 +6532,10 @@ void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session,
   if (read_only_mode) {
     throw std::runtime_error("DROP DATABASE invalid in read only mode.");
   }
-  const auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   Catalog_Namespace::DBMetadata db;
   if (!SysCatalog::instance().getMetadataForDB(*db_name_, db)) {
@@ -6774,9 +6795,10 @@ DumpTableStmt::DumpTableStmt(const rapidjson::Value& payload)
 void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
                             bool read_only_mode) {
   // valid in read_only_mode
-  const auto execute_read_lock = heavyai::shared_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   auto& catalog = session.getCatalog();
   // Prevent modification of the table schema during a dump operation, while allowing

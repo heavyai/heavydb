@@ -19,6 +19,7 @@
 #include <string>
 
 #include "Catalog/Types.h"
+#include "OSDependent/heavyai_locks.h"
 #include "SqliteConnector/SqliteConnector.h"
 
 namespace Catalog_Namespace {
@@ -36,6 +37,21 @@ class MigrationMgr {
       SqliteConnector& sqlite);
 
   static void executeRebrandMigration(const std::string& base_path);
+
+  static void takeMigrationLock(const std::string& base_path);
+  static void relaxMigrationLock();
+  static bool migrationEnabled() { return migration_enabled_; }
+
+  static void destroy() {
+    if (migration_mutex_) {
+      migration_mutex_->unlock();
+      migration_mutex_.reset();
+    }
+  }
+
+ private:
+  static inline std::unique_ptr<heavyai::DistributedSharedMutex> migration_mutex_;
+  static inline bool migration_enabled_{false};
 };
 
 }  // namespace migrations

@@ -167,6 +167,7 @@ inline auto table_json_filepath(const std::string& base_path,
                                  db_name + "_temp_tables.json");
 }
 
+std::map<int32_t, std::string> get_user_id_to_user_name_map();
 }  // namespace
 
 Catalog::Catalog(const string& basePath,
@@ -183,6 +184,21 @@ Catalog::Catalog(const string& basePath,
     , calciteMgr_(calcite)
     , nextTempTableId_(MAPD_TEMP_TABLE_START_ID)
     , nextTempDictId_(MAPD_TEMP_DICT_START_ID)
+    , dcatalogMutex_(std::make_unique<heavyai::DistributedSharedMutex>(
+          std::filesystem::path(basePath_) / shared::kLockfilesDirectoryName /
+              shared::kCatalogDirectoryName / (currentDB_.dbName + ".lockfile"),
+          [this](size_t) {
+            if (!initialized_) {
+              return;
+            }
+            const auto user_name_by_user_id = get_user_id_to_user_name_map();
+            heavyai::unique_lock<heavyai::DistributedSharedMutex> dsqlite_lock(
+                *dsqliteMutex_);
+            reloadCatalogMetadataUnlocked(user_name_by_user_id);
+          }))
+    , dsqliteMutex_(std::make_unique<heavyai::DistributedSharedMutex>(
+          std::filesystem::path(basePath_) / shared::kLockfilesDirectoryName /
+          shared::kCatalogDirectoryName / (currentDB_.dbName + ".sqlite.lockfile")))
     , sqliteMutex_()
     , sharedMutex_()
     , thread_holding_sqlite_lock()
@@ -213,7 +229,8 @@ Catalog::Catalog(const string& basePath,
 }
 
 Catalog::~Catalog() {
-  cat_write_lock write_lock(this);
+  // cat_write_lock write_lock(this);
+
   // must clean up heap-allocated TableDescriptor and ColumnDescriptor structs
   for (TableDescriptorMap::iterator tableDescIt = tableDescriptorMap_.begin();
        tableDescIt != tableDescriptorMap_.end();

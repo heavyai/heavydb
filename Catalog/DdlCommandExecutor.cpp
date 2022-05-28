@@ -449,9 +449,10 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
 
   // the following commands require a global unique lock until proper table locking has
   // been implemented and/or verified
-  auto execute_write_lock = heavyai::unique_lock<heavyai::shared_mutex>(
-      *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   // TODO(vancouver): add appropriate table locking
 
   if (ddl_command_ == "CREATE_SERVER") {

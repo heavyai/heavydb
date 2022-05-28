@@ -1,4 +1,6 @@
-// Copyright (C) 2022 HEAVY.AI, Inc.
+/*
+ * Copyright (C) 2022 HEAVY.AI, Inc.
+ */
 
 //////////// EXAMPLE
 //

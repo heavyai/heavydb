@@ -1070,40 +1070,78 @@ void CommandLineOptions::validate() {
                              "'");
   }
 
-  {
-    auto exe_filename = boost::filesystem::path(exe_name).filename().string();
-    const auto lock_file =
-        boost::filesystem::path(base_path) / std::string(exe_filename + "_pid.lck");
-    auto pid = std::to_string(getpid());
-
-    int pid_fd = heavyai::open(lock_file.string().c_str(), O_RDWR | O_CREAT, 0644);
-    if (pid_fd == -1) {
-      auto err = std::string("Failed to open PID file ") + lock_file.string().c_str() +
-                 ". " + strerror(errno) + ".";
-      throw std::runtime_error(err);
-    }
 // TODO: support lock on Windows
 #ifndef _WIN32
-    if (lockf(pid_fd, F_TLOCK, 0) == -1) {
-      heavyai::close(pid_fd);
-      auto err = std::string("Another HeavyDB server is using data directory ") +
-                 base_path + ".";
-      throw std::runtime_error(err);
+  {
+    // If we aren't sharing the data directory, take and hold a write lock on
+    // heavydb_pid.lck to prevent other processes from trying to share our dir.
+    // TODO(sy): Probably need to get rid of this PID file because it doesn't make much
+    // sense to store only one server's PID when we have the --multi-instance option.
+    auto exe_filename = boost::filesystem::path(exe_name).filename().string();
+    const std::string lock_file =
+        (boost::filesystem::path(base_path) / std::string(exe_filename + "_pid.lck"))
+            .string();
+    auto pid = std::to_string(getpid());
+    if (!g_multi_instance) {
+      VLOG(1) << "taking [" << lock_file << "] read+write lock until process exit";
+    } else {
+      VLOG(1) << "taking [" << lock_file << "] read-only lock until process exit";
     }
-#endif
-    if (heavyai::ftruncate(pid_fd, 0) == -1) {
-      heavyai::close(pid_fd);
-      auto err = std::string("Failed to truncate PID file ") +
-                 lock_file.string().c_str() + ". " + strerror(errno) + ".";
-      throw std::runtime_error(err);
+
+    int fd;
+    fd = heavyai::safe_open(lock_file.c_str(), O_RDWR | O_CREAT, 0664);
+    if (fd == -1) {
+      throw std::runtime_error("failed to open lockfile: " + lock_file + ": " +
+                               std::string(strerror(errno)) + " (" +
+                               std::to_string(errno) + ")");
     }
-    if (write(pid_fd, pid.c_str(), pid.length()) == -1) {
-      heavyai::close(pid_fd);
-      auto err = std::string("Failed to write PID file ") + lock_file.string().c_str() +
-                 ". " + strerror(errno) + ".";
-      throw std::runtime_error(err);
+
+    struct flock fl;
+    memset(&fl, 0, sizeof(fl));
+    fl.l_type = !g_multi_instance ? F_WRLCK : F_RDLCK;
+    fl.l_whence = SEEK_SET;
+    int cmd;
+#ifdef __linux__
+    // cmd = F_OFD_SETLK;  // TODO(sy): broken on centos
+    cmd = F_SETLK;
+#else
+    cmd = F_SETLK;
+#endif  // __linux__
+    int ret = heavyai::safe_fcntl(fd, cmd, &fl);
+    if (ret == -1 && (errno == EACCES || errno == EAGAIN)) {  // locked by someone else
+      heavyai::safe_close(fd);
+      throw std::runtime_error(
+          "another HeavyDB server instance is already using data directory: " +
+          base_path);
+    } else if (ret == -1) {
+      auto errno0 = errno;
+      heavyai::safe_close(fd);
+      throw std::runtime_error("failed to lock lockfile: " + lock_file + ": " +
+                               std::string(strerror(errno0)) + " (" +
+                               std::to_string(errno0) + ")");
     }
+
+    if (!g_multi_instance) {
+      if (heavyai::ftruncate(fd, 0) == -1) {
+        auto errno0 = errno;
+        heavyai::safe_close(fd);
+        throw std::runtime_error("failed to truncate lockfile: " + lock_file + ": " +
+                                 std::string(strerror(errno0)) + " (" +
+                                 std::to_string(errno0) + ")");
+      }
+      if (heavyai::safe_write(fd, pid.c_str(), pid.length()) == -1) {
+        auto errno0 = errno;
+        heavyai::safe_close(fd);
+        throw std::runtime_error("failed to write lockfile: " + lock_file + ": " +
+                                 std::string(strerror(errno0)) + " (" +
+                                 std::to_string(errno0) + ")");
+      }
+    }
+
+    // Intentionally leak the file descriptor. Lock will be held until process exit.
   }
+#endif  // _WIN32
+
   boost::algorithm::trim_if(db_query_file, boost::is_any_of("\"'"));
   if (db_query_file.length() > 0 && !boost::filesystem::exists(db_query_file)) {
     throw std::runtime_error("File containing DB queries " + db_query_file +
@@ -1361,7 +1399,37 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
 
     // Execute rebrand migration before accessing any system files.
-    migrations::MigrationMgr::executeRebrandMigration(base_path);
+    std::string lockfiles_path = base_path + "/" + shared::kLockfilesDirectoryName;
+    if (!boost::filesystem::exists(lockfiles_path)) {
+      if (!boost::filesystem::create_directory(lockfiles_path)) {
+        std::cerr << "Cannot create " + shared::kLockfilesDirectoryName +
+                         " subdirectory under "
+                  << base_path << std::endl;
+        return 1;
+      }
+    }
+    std::string lockfiles_path2 = lockfiles_path + "/" + shared::kCatalogDirectoryName;
+    if (!boost::filesystem::exists(lockfiles_path2)) {
+      if (!boost::filesystem::create_directory(lockfiles_path2)) {
+        std::cerr << "Cannot create " + shared::kLockfilesDirectoryName + "/" +
+                         shared::kCatalogDirectoryName + " subdirectory under "
+                  << base_path << std::endl;
+        return 1;
+      }
+    }
+    std::string lockfiles_path3 = lockfiles_path + "/" + shared::kDataDirectoryName;
+    if (!boost::filesystem::exists(lockfiles_path3)) {
+      if (!boost::filesystem::create_directory(lockfiles_path3)) {
+        std::cerr << "Cannot create " + shared::kLockfilesDirectoryName + "/" +
+                         shared::kDataDirectoryName + " subdirectory under "
+                  << base_path << std::endl;
+        return 1;
+      }
+    }
+    migrations::MigrationMgr::takeMigrationLock(base_path);
+    if (migrations::MigrationMgr::migrationEnabled()) {
+      migrations::MigrationMgr::executeRebrandMigration(base_path);
+    }
 
     if (!vm["enable-runtime-udf"].defaulted()) {
       if (!vm["enable-runtime-udfs"].defaulted()) {

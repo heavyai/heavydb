@@ -23,6 +23,9 @@
 #include <utility>
 using namespace std;
 
+extern bool g_read_only;
+extern bool g_multi_instance;
+
 namespace File_Namespace {
 
 FileInfo::FileInfo(FileMgr* fileMgr,
@@ -137,12 +140,13 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec) {
     if (versionEpoch > fileMgrEpoch) {
       // First write 0 to first four bytes of
       // header to mark as free
-      if (!g_read_only) {
+      if (!g_read_only && !g_multi_instance) {
+        // TODO(sy): Confirm that proper locking is held before writing here.
         freePageImmediate(pageNum);
+        LOG(WARNING) << "Was not checkpointed: Chunk key: " << show_chunk(chunkKey)
+                     << " Page id: " << pageId << " Epoch: " << versionEpoch
+                     << " FileMgrEpoch " << fileMgrEpoch << endl;
       }
-      LOG(WARNING) << "Was not checkpointed: Chunk key: " << show_chunk(chunkKey)
-                   << " Page id: " << pageId << " Epoch: " << versionEpoch
-                   << " FileMgrEpoch " << fileMgrEpoch << endl;
     } else {  // page was checkpointed properly
       Page page(fileId, pageNum);
       headerVec.emplace_back(chunkKey, pageId, versionEpoch, page);
@@ -243,7 +247,7 @@ void FileInfo::freePageImmediate(int32_t page_num) {
   // we should not get here but putting protection in place
   // as it seems we are no guaranteed to have f/synced so
   // protecting from RO trying to write
-  if (!g_read_only) {
+  if (!g_read_only && !g_multi_instance) {
     int32_t zero{0};
     File_Namespace::write(
         f, page_num * pageSize, sizeof(int32_t), reinterpret_cast<const int8_t*>(&zero));
@@ -256,7 +260,7 @@ void FileInfo::recoverPage(const ChunkKey& chunk_key, int32_t page_num) {
   // we should not get here but putting protection in place
   // as it seems we are no guaranteed to have f/synced so
   // protecting from RO trying to write
-  if (!g_read_only) {
+  if (!g_read_only && !g_multi_instance) {
     File_Namespace::write(f,
                           page_num * pageSize + sizeof(int32_t),
                           2 * sizeof(int32_t),

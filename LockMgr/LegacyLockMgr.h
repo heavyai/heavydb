@@ -29,27 +29,88 @@
 
 namespace legacylockmgr {
 
-enum LockType { ExecutorOuterLock, LockMax };
+// NOTE(sy): Currently the legacylockmgr is only used (or "abused") as a global lock.
+
+enum LockType { ExecutorOuterLock /*, LockMax*/ };
+
+template <typename MutexType>
+class WrapperType final {
+ public:
+  WrapperType()
+      : dmutex_(std::filesystem::path(g_base_path) / shared::kLockfilesDirectoryName /
+                "global.lockfile") {}
+
+  void lock() {
+    if (!g_multi_instance) {
+      mutex_.lock();
+    } else {
+      dmutex_.lock();
+    }
+  }
+  bool try_lock() {
+    if (!g_multi_instance) {
+      return mutex_.try_lock();
+    } else {
+      return dmutex_.try_lock();
+    }
+  }
+  void unlock() {
+    if (!g_multi_instance) {
+      mutex_.unlock();
+    } else {
+      dmutex_.unlock();
+    }
+  }
+
+  void lock_shared() {
+    if (!g_multi_instance) {
+      mutex_.lock_shared();
+    } else {
+      dmutex_.lock_shared();
+    }
+  }
+  bool try_lock_shared() {
+    if (!g_multi_instance) {
+      return mutex_.try_lock_shared();
+    } else {
+      return dmutex_.try_lock_shared();
+    }
+  }
+  void unlock_shared() {
+    if (!g_multi_instance) {
+      mutex_.unlock_shared();
+    } else {
+      dmutex_.unlock_shared();
+    }
+  }
+
+ private:
+  MutexType mutex_;
+  heavyai::DistributedSharedMutex dmutex_;
+};
 
 template <typename MutexType, typename KeyType>
 class LockMgr {
  public:
-  static std::shared_ptr<MutexType> getMutex(const LockType lockType, const KeyType& key);
+  static std::shared_ptr<WrapperType<MutexType>> getMutex(const LockType lockType,
+                                                          const KeyType& key);
 
  private:
   static std::mutex aMutex_;
-  static std::map<std::tuple<LockType, KeyType>, std::shared_ptr<MutexType>> mutexMap_;
+  static std::map<std::tuple<LockType, KeyType>, std::shared_ptr<WrapperType<MutexType>>>
+      mutexMap_;
 };
 
 template <typename MutexType, typename KeyType>
 std::mutex LockMgr<MutexType, KeyType>::aMutex_;
 template <typename MutexType, typename KeyType>
-std::map<std::tuple<LockType, KeyType>, std::shared_ptr<MutexType>>
+std::map<std::tuple<LockType, KeyType>, std::shared_ptr<WrapperType<MutexType>>>
     LockMgr<MutexType, KeyType>::mutexMap_;
 
 template <typename MutexType, typename KeyType>
-std::shared_ptr<MutexType> LockMgr<MutexType, KeyType>::getMutex(const LockType lock_type,
-                                                                 const KeyType& key) {
+std::shared_ptr<WrapperType<MutexType>> LockMgr<MutexType, KeyType>::getMutex(
+    const LockType lock_type,
+    const KeyType& key) {
   auto lock_key = std::make_tuple(lock_type, key);
 
   std::unique_lock<std::mutex> lck(aMutex_);
@@ -58,7 +119,7 @@ std::shared_ptr<MutexType> LockMgr<MutexType, KeyType>::getMutex(const LockType 
     return mit->second;
   }
 
-  auto tMutex = std::make_shared<MutexType>();
+  auto tMutex = std::make_shared<WrapperType<MutexType>>();
   mutexMap_[lock_key] = tMutex;
   return tMutex;
 }

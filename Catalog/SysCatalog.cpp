@@ -167,6 +167,17 @@ void SysCatalog::init(const std::string& basePath,
   basePath_ = !g_multi_instance ? copy_catalog_if_read_only(basePath).string() : basePath;
   sqliteConnector_.reset(new SqliteConnector(
       shared::kSystemCatalogName, basePath_ + "/" + shared::kCatalogDirectoryName + "/"));
+  dcatalogMutex_ = std::make_unique<heavyai::DistributedSharedMutex>(
+      std::filesystem::path(basePath_) / shared::kLockfilesDirectoryName /
+          shared::kCatalogDirectoryName / (shared::kSystemCatalogName + ".lockfile"),
+      [this](size_t) {
+        heavyai::unique_lock<heavyai::DistributedSharedMutex> dsqlite_lock(
+            *dsqliteMutex_);
+        buildMapsUnlocked();
+      });
+  dsqliteMutex_ = std::make_unique<heavyai::DistributedSharedMutex>(
+      std::filesystem::path(basePath_) / shared::kLockfilesDirectoryName /
+      shared::kCatalogDirectoryName / (shared::kSystemCatalogName + ".sqlite.lockfile"));
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   dataMgr_ = dataMgr;
@@ -175,6 +186,7 @@ void SysCatalog::init(const std::string& basePath,
   calciteMgr_ = calcite;
   string_dict_hosts_ = string_dict_hosts;
   aggregator_ = aggregator;
+  migrations::MigrationMgr::takeMigrationLock(basePath_);
   if (is_new_db) {
     initDB();
   } else {
@@ -184,7 +196,10 @@ void SysCatalog::init(const std::string& basePath,
     if (!db_exists) {
       importDataFromOldMapdDB();
     }
-    checkAndExecuteMigrations();
+    if (migrations::MigrationMgr::migrationEnabled()) {
+      checkAndExecuteMigrations();
+      migrations::MigrationMgr::relaxMigrationLock();
+    }
   }
   buildMaps(is_new_db);
 }
@@ -251,6 +266,9 @@ SysCatalog::SysCatalog()
     , thread_holding_write_lock{std::thread::id()} {}
 
 SysCatalog::~SysCatalog() {
+  // TODO(sy): Need to lock here to wait for other threads to complete before pulling out
+  // the rug from under them. Unfortunately this lock was seen to deadlock because the
+  // HeavyDB shutdown sequence needs cleanup. Do we even need these clear()'s anymore?
   // sys_write_lock write_lock(this);
   granteeMap_.clear();
   objectDescriptorMap_.clear();

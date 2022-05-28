@@ -217,7 +217,7 @@ int main(int argc, char* argv[]) {
     if (force) {
       boost::filesystem::remove_all(catalogs_path);
     } else {
-      std::cerr << "HeavyDB catalogs already initialized at " + base_path +
+      std::cerr << "HeavyDB catalogs directory already exists at " + catalogs_path +
                        ". Use -f to force reinitialization.\n";
       return 1;
     }
@@ -227,8 +227,38 @@ int main(int argc, char* argv[]) {
     if (force) {
       boost::filesystem::remove_all(data_path);
     } else {
-      std::cerr << "HeavyDB data directory already exists at " + base_path +
+      std::cerr << "HeavyDB data directory already exists at " + data_path +
                        ". Use -f to force reinitialization.\n";
+      return 1;
+    }
+  }
+  std::string lockfiles_path = base_path + "/" + shared::kLockfilesDirectoryName;
+  if (boost::filesystem::exists(lockfiles_path)) {
+    if (force) {
+      boost::filesystem::remove_all(lockfiles_path);
+    } else {
+      std::cerr << "HeavyDB lockfiles directory already exists at " + lockfiles_path +
+                       ". Use -f to force reinitialization.\n";
+      return 1;
+    }
+  }
+  std::string lockfiles_path2 = lockfiles_path + "/" + shared::kCatalogDirectoryName;
+  if (boost::filesystem::exists(lockfiles_path2)) {
+    if (force) {
+      boost::filesystem::remove_all(lockfiles_path2);
+    } else {
+      std::cerr << "HeavyDB lockfiles catalogs directory already exists at " +
+                       lockfiles_path2 + ". Use -f to force reinitialization.\n";
+      return 1;
+    }
+  }
+  std::string lockfiles_path3 = lockfiles_path + "/" + shared::kDataDirectoryName;
+  if (boost::filesystem::exists(lockfiles_path3)) {
+    if (force) {
+      boost::filesystem::remove_all(lockfiles_path3);
+    } else {
+      std::cerr << "HeavyDB lockfiles data directory already exists at " +
+                       lockfiles_path3 + ". Use -f to force reinitialization.\n";
       return 1;
     }
   }
@@ -237,7 +267,7 @@ int main(int argc, char* argv[]) {
     if (force) {
       boost::filesystem::remove_all(export_path);
     } else {
-      std::cerr << "HeavyDB export directory already exists at " + base_path +
+      std::cerr << "HeavyDB export directory already exists at " + export_path +
                        ". Use -f to force reinitialization.\n";
       return 1;
     }
@@ -252,12 +282,29 @@ int main(int argc, char* argv[]) {
       return 1;
     }
   }
+
   if (!boost::filesystem::create_directory(catalogs_path)) {
     std::cerr << "Cannot create " + shared::kCatalogDirectoryName + " subdirectory under "
               << base_path << std::endl;
   }
+  if (!boost::filesystem::create_directory(lockfiles_path)) {
+    std::cerr << "Cannot create " + shared::kLockfilesDirectoryName +
+                     " subdirectory under "
+              << base_path << std::endl;
+  }
+  if (!boost::filesystem::create_directory(lockfiles_path2)) {
+    std::cerr << "Cannot create " + shared::kLockfilesDirectoryName + "/" +
+                     shared::kCatalogDirectoryName + " subdirectory under "
+              << base_path << std::endl;
+  }
+  if (!boost::filesystem::create_directory(lockfiles_path3)) {
+    std::cerr << "Cannot create " + shared::kLockfilesDirectoryName + "/" +
+                     shared::kDataDirectoryName + " subdirectory under "
+              << base_path << std::endl;
+  }
   if (!boost::filesystem::create_directory(export_path)) {
-    std::cerr << "Cannot create export subdirectory under " << base_path << std::endl;
+    std::cerr << "Cannot create " + shared::kDefaultExportDirName + " subdirectory under "
+              << base_path << std::endl;
   }
 
   log_options.set_base_path(base_path);
@@ -277,9 +324,10 @@ int main(int argc, char* argv[]) {
     std::cerr << "Exception: " << e.what() << "\n";
   }
 
-  Catalog_Namespace::SysCatalog::destroy();
   if (!skip_geo) {
     loadGeo(base_path);
+  } else {
+    Catalog_Namespace::SysCatalog::destroy();
   }
 
   return 0;
