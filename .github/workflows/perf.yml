@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       cuda_compiler_version: ${{ inputs.cuda_compiler_version }}
+      CONDA_ENV: omnisci-dev
 
     steps:
       - uses: actions/checkout@v3
