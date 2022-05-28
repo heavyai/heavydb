@@ -19,10 +19,6 @@ jobs:
           ref: trips-reduced
           path: data
 
-      - run: |
-          ls data
-          exit 1
-
       - uses: actions/download-artifact@v3
         with:
           name: ${{ env.RUN_STAMP }}-build
@@ -33,13 +29,13 @@ jobs:
 
       - name: Run tests
         run: |
-          build/bin/taxi_reduced --data ../???
+          build/bin/taxi_reduced --data data | tee taxi.log
 
       - name: Upload perf results
         uses: actions/upload-artifact@v2
         with:
           name: ${{ env.RUN_STAMP }}-taxi
           path: |
-            build/taxi.log
+            taxi.log
 
 
