@@ -46,13 +46,14 @@
 #include "ObjectRoleDescriptor.h"
 #include "PkiServer.h"
 
-#include "../DataMgr/DataMgr.h"
-#include "../SqliteConnector/SqliteConnector.h"
+#include "Calcite/Calcite.h"
+#include "DataMgr/DataMgr.h"
 #include "LeafHostInfo.h"
-
-#include "../Calcite/Calcite.h"
+#include "MigrationMgr/MigrationMgr.h"
+#include "OSDependent/heavyai_locks.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/heavyai_shared_mutex.h"
+#include "SqliteConnector/SqliteConnector.h"
 
 class Calcite;
 
@@ -340,7 +341,10 @@ class SysCatalog : private CommonFileOperations {
     return *instance_;
   }
 
-  static void destroy() { instance_.reset(); }
+  static void destroy() {
+    instance_.reset();
+    migrations::MigrationMgr::destroy();
+  }
 
   void populateRoleDbObjects(const std::vector<DBObject>& objects);
   std::string name() const { return shared::kDefaultDbName; }
@@ -496,6 +500,8 @@ class SysCatalog : private CommonFileOperations {
   static std::unique_ptr<SysCatalog> instance_;
 
  public:
+  mutable std::unique_ptr<heavyai::DistributedSharedMutex> dcatalogMutex_;
+  mutable std::unique_ptr<heavyai::DistributedSharedMutex> dsqliteMutex_;
   mutable std::mutex sqliteMutex_;
   mutable heavyai::shared_mutex sharedMutex_;
   mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;

@@ -40,5 +40,6 @@ inline const std::string kDefaultKeyStoreDirName = "key_store";
 inline const std::string kDefaultLogDirName = "log";
 inline const std::string kCatalogDirectoryName = "catalogs";
 inline const std::string kDataDirectoryName = "data";
+inline const std::string kLockfilesDirectoryName = "lockfiles";
 inline const std::string kDefaultLicenseFileName = "heavyai.license";
 }  // namespace shared

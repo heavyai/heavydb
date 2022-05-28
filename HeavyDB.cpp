@@ -59,6 +59,7 @@
 #include "DataMgr/OmniSciAwsSdk.h"
 #endif
 #include "MapDRelease.h"
+#include "MigrationMgr/MigrationMgr.h"
 #include "Shared/Compressor.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/file_delete.h"
@@ -416,8 +417,6 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
     if (g_enable_fsi) {
       foreign_storage::ForeignTableRefreshScheduler::stop();
     }
-
-    Catalog_Namespace::SysCatalog::destroy();
 
 #ifdef HAVE_AWS_S3
     omnisci_aws_sdk::shutdown_sdk();

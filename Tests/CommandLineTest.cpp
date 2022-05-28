@@ -175,7 +175,8 @@ TEST_F(InitDBTest, AlreadyInit) {
                       get_temp_dir(),
                       1,
                       "",
-                      "HeavyDB catalogs already initialized at " + get_temp_dir() +
+                      "HeavyDB catalogs directory already exists at " + get_temp_dir() +
+                          "/" + shared::kCatalogDirectoryName +
                           ". Use -f to force reinitialization.");
 }
 // Blocked by existing cache.

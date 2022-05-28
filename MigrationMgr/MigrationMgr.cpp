@@ -32,7 +32,61 @@
 
 #include "MapDRelease.h"
 
+extern bool g_multi_instance;
+
 namespace migrations {
+
+void MigrationMgr::takeMigrationLock(const std::string& base_path) {
+// TODO: support lock on Windows
+#ifndef _WIN32
+  // Only used for --multi-instance clusters.
+  if (!g_multi_instance) {
+    migration_enabled_ = true;
+    return;
+  }
+
+  // If we already have the migration lock then do nothing.
+  if (migration_mutex_) {
+    return;
+  }
+
+  // Initialize the migration mutex. Will be locked until process exit.
+  migration_mutex_ = std::make_unique<heavyai::DistributedSharedMutex>(
+      std::filesystem::path(base_path) / shared::kLockfilesDirectoryName /
+      "migration.lockfile");
+
+  // Take an exclusive lock if we can. If we get the exclusive lock, then later it will be
+  // relaxed to a shared lock, after we run migrations.
+  migration_enabled_ = migration_mutex_->try_lock();
+  if (!g_multi_instance && !migration_enabled_) {
+    throw std::runtime_error(
+        "another HeavyDB server instance is already using data directory: " + base_path);
+  }
+
+  // If we didn't get the exclusive lock, we'll wait for a shared lock instead, and we
+  // won't run migrations.
+  if (!migration_enabled_) {
+    migration_mutex_->lock_shared();
+  }
+#else
+  migration_enabled_ = true;
+#endif  // _WIN32
+}
+
+void MigrationMgr::relaxMigrationLock() {
+// TODO: support lock on Windows
+#ifndef _WIN32
+  // Only used for --multi-instance clusters.
+  if (!g_multi_instance) {
+    return;
+  }
+
+  // If we ran migrations, now relax the exclusive lock to a shared lock.
+  if (migration_enabled_ && migration_mutex_) {
+    migration_mutex_->convert_lock_shared();
+  }
+#endif  // _WIN32
+}
 
 void MigrationMgr::migrateDateInDaysMetadata(
     const Catalog_Namespace::TableDescriptorMapById& table_descriptors_by_id,

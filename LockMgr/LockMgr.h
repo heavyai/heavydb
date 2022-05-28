@@ -43,7 +43,8 @@ class TableSchemaLockMgr : public TableLockMgrImpl<TableSchemaLockMgr> {
   }
 
  private:
-  TableSchemaLockMgr() {}
+  friend class TableLockMgrImpl<TableSchemaLockMgr>;
+  static inline constexpr std::string_view kind = "schema";
 };
 
 /**
@@ -60,7 +61,8 @@ class InsertDataLockMgr : public TableLockMgrImpl<InsertDataLockMgr> {
   }
 
  protected:
-  InsertDataLockMgr() {}
+  friend class TableLockMgrImpl<InsertDataLockMgr>;
+  static inline constexpr std::string_view kind = "insert";
 };
 
 /**
@@ -79,7 +81,8 @@ class TableDataLockMgr : public TableLockMgrImpl<TableDataLockMgr> {
   }
 
  protected:
-  TableDataLockMgr() {}
+  friend class TableLockMgrImpl<TableDataLockMgr>;
+  static inline constexpr std::string_view kind = "data";
 };
 
 template <typename LOCK_TYPE>
