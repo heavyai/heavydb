@@ -122,8 +122,8 @@ class ForeignStorageCacheUnitTest : public testing::Test {
 
   static void assertMetadataEqual(const std::shared_ptr<ChunkMetadata> left_metadata,
                                   const std::shared_ptr<ChunkMetadata> right_metadata) {
-    ASSERT_EQ(*left_metadata, *right_metadata) << left_metadata->dump() << "\n"
-                                               << right_metadata->dump() << "\n";
+    ASSERT_EQ(*left_metadata, *right_metadata) << *left_metadata << "\n"
+                                               << *right_metadata << "\n";
   }
 
   static void reinitializeCache(std::unique_ptr<ForeignStorageCache>& cache,

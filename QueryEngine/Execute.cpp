@@ -37,7 +37,6 @@
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "DataMgr/ForeignStorage/FsiChunkUtils.h"
-#include "DataMgr/ForeignStorage/MetadataPlaceholder.h"
 #include "OSDependent/heavyai_path.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/AggregateUtils.h"
@@ -225,7 +224,7 @@ void populate_string_dictionary(const int32_t table_id,
 
         const ChunkMetadataMap& metadata_map = frag.getChunkMetadataMap();
         CHECK(metadata_map.find(col_id) != metadata_map.end());
-        if (is_metadata_placeholder(*(metadata_map.at(col_id)))) {
+        if (auto& meta = metadata_map.at(col_id); meta->isPlaceholder()) {
           // When this goes out of scope it will stay in CPU cache but become
           // evictable
           auto chunk = Chunk_NS::Chunk::getChunk(col_desc,

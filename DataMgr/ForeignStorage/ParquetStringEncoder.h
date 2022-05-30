@@ -97,6 +97,8 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
     encodeAndCopyContiguous(values, encode_buffer_.data(), values_read);
     TypedParquetInPlaceEncoder<V, V>::appendData(
         def_levels, rep_levels, values_read, levels_read, encode_buffer_.data());
+    chunk_metadata_->chunkStats.has_nulls =
+        chunk_metadata_->chunkStats.has_nulls || (values_read < levels_read);
   }
 
   void encodeAndCopyContiguous(const int8_t* parquet_data_bytes,
@@ -135,6 +137,9 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
     auto column_metadata = group_metadata->ColumnChunk(parquet_column_index);
     metadata->numBytes = ParquetInPlaceEncoder::omnisci_data_type_byte_size_ *
                          column_metadata->num_values();
+
+    // Placeholder metadata is defined with has_nulls = false.
+    metadata->chunkStats.has_nulls = false;
     return metadata;
   }
 

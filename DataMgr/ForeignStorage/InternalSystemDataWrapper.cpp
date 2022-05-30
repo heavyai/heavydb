@@ -178,24 +178,8 @@ void InternalSystemDataWrapper::populateChunkMetadata(
     if (column->columnType.is_varlen_indeed()) {
       chunk_key.emplace_back(1);
     }
-    ForeignStorageBuffer empty_buffer;
-    // Use default encoder metadata
-    empty_buffer.initEncoder(column->columnType);
-    auto chunk_metadata = empty_buffer.getEncoder()->getMetadata(column->columnType);
-    chunk_metadata->numElements = row_count_;
-    if (!column->columnType.is_varlen_indeed()) {
-      chunk_metadata->numBytes = column->columnType.get_size() * row_count_;
-    }
-    if (column->columnType.is_array()) {
-      ForeignStorageBuffer scalar_buffer;
-      scalar_buffer.initEncoder(column->columnType.get_elem_type());
-      auto scalar_metadata =
-          scalar_buffer.getEncoder()->getMetadata(column->columnType.get_elem_type());
-      chunk_metadata->chunkStats.min = scalar_metadata->chunkStats.min;
-      chunk_metadata->chunkStats.max = scalar_metadata->chunkStats.max;
-    }
-    chunk_metadata->chunkStats.has_nulls = true;
-    chunk_metadata_vector.emplace_back(chunk_key, chunk_metadata);
+    chunk_metadata_vector.emplace_back(
+        chunk_key, get_placeholder_metadata(column->columnType, row_count_));
   }
 }
 

@@ -239,3 +239,19 @@ template std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData<std::strin
 template void StringNoneEncoder::update_elem_stats<std::string>(const std::string& elem);
 template void StringNoneEncoder::update_elem_stats<std::string_view>(
     const std::string_view& elem);
+
+void StringNoneEncoder::getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) {
+  Encoder::getMetadata(chunkMetadata);  // call on parent class
+  chunkMetadata->chunkStats.min.stringval = nullptr;
+  chunkMetadata->chunkStats.max.stringval = nullptr;
+  chunkMetadata->chunkStats.has_nulls = has_nulls;
+}
+
+// Only called from the executor for synthesized meta-information.
+std::shared_ptr<ChunkMetadata> StringNoneEncoder::getMetadata(const SQLTypeInfo& ti) {
+  auto chunk_stats = ChunkStats{};
+  chunk_stats.min.stringval = nullptr;
+  chunk_stats.max.stringval = nullptr;
+  chunk_stats.has_nulls = has_nulls;
+  return std::make_shared<ChunkMetadata>(ti, 0, 0, chunk_stats);
+}

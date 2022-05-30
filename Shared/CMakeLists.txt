@@ -12,7 +12,8 @@ set(shared_source_files
     file_path_util.cpp
     file_type.cpp
     enable_assign_render_groups.cpp
-    distributed.cpp)
+    distributed.cpp
+    TargetInfo.cpp)
 
 include_directories(${CMAKE_SOURCE_DIR})
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")

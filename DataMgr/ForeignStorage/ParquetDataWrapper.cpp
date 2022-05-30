@@ -462,6 +462,7 @@ void ParquetDataWrapper::updateChunkMetadataForFragment(
       data_chunk_key.emplace_back(1);
     }
     std::shared_ptr<ChunkMetadata> chunk_metadata = *column_chunk_metadata_iter;
+
     if (chunk_metadata_map_.find(data_chunk_key) == chunk_metadata_map_.end()) {
       chunk_metadata_map_[data_chunk_key] = chunk_metadata;
     } else {
@@ -606,9 +607,7 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
     // should update the cache, and the internal chunk_metadata_map_
     if (is_dictionary_encoded_string_column || logical_column->columnType.is_geometry()) {
       CHECK(metadata_iter != metadata.end());
-      auto& chunk_metadata_ptr = *metadata_iter;
-      cached_metadata->chunkStats.max = chunk_metadata_ptr->chunkStats.max;
-      cached_metadata->chunkStats.min = chunk_metadata_ptr->chunkStats.min;
+      cached_metadata->chunkStats = (*metadata_iter)->chunkStats;
 
       // Update stats on buffer so it is saved in cache
       shared::get_from_map(required_buffers, data_chunk_key)

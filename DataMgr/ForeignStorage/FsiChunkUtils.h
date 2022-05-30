@@ -18,7 +18,6 @@
 
 #include <map>
 
-#include "Catalog/CatalogFwd.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "DataMgr/ChunkMetadata.h"
 #include "Shared/distributed.h"
@@ -31,7 +30,7 @@ void init_chunk_for_column(
     Chunk_NS::Chunk& chunk);
 
 // Construct default metadata for given column descriptor with num_elements
-std::shared_ptr<ChunkMetadata> get_placeholder_metadata(const ColumnDescriptor* column,
+std::shared_ptr<ChunkMetadata> get_placeholder_metadata(const SQLTypeInfo& type,
                                                         size_t num_elements);
 /*
   Splits up a set of items to be processed into multiple partitions, with the intention

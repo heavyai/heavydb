@@ -60,9 +60,7 @@ class LazyParquetChunkLoader {
    *
    * @return An empty list when no metadata update is applicable, otherwise a
    * list of ChunkMetadata shared pointers with which to update the
-   * corresponding column chunk metadata.  NOTE: Only ChunkMetadata.sqlType and
-   * the min & max values of the ChunkMetadata.chunkStats are valid, other
-   * values are not set.
+   * corresponding column chunk metadata.
    *
    * NOTE: if more than one chunk is supplied, the first chunk is required to
    * be the chunk corresponding to the logical column, while the remaining

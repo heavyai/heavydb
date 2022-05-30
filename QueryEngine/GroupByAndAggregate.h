@@ -50,7 +50,7 @@ struct ColRangeInfo {
   int64_t max;
   int64_t bucket;
   bool has_nulls;
-  bool isEmpty() { return min == 0 && max == -1; }
+  bool isEmpty() const;
 };
 
 struct KeylessInfo {
