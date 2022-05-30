@@ -288,6 +288,9 @@ void ForeignStorageMgr::setDataWrapper(
   CHECK(data_wrapper_map_.find(table_key) != data_wrapper_map_.end());
   data_wrapper->setParentWrapper(data_wrapper_map_.at(table_key));
   data_wrapper_map_[table_key] = data_wrapper;
+
+  // Preserve mock wrappers separately so they can persist the parent being re-created.
+  mocked_wrapper_map_[table_key] = data_wrapper;
 }
 
 void ForeignStorageMgr::createDataWrapperUnlocked(int32_t db_id, int32_t tb_id) {
@@ -297,6 +300,14 @@ void ForeignStorageMgr::createDataWrapperUnlocked(int32_t db_id, int32_t tb_id) 
   ChunkKey table_key{db_id, tb_id};
   data_wrapper_map_[table_key] = ForeignDataWrapperFactory::create(
       foreign_table->foreign_server->data_wrapper_type, db_id, foreign_table);
+
+  // If we are testing with mocks, then we want to re-wrap new wrappers with mocks if a
+  // table was given a mock wrapper earlier and destroyed.
+  if (auto mock_it = mocked_wrapper_map_.find(table_key);
+      mock_it != mocked_wrapper_map_.end()) {
+    mock_it->second->setParentWrapper(data_wrapper_map_.at(table_key));
+    data_wrapper_map_[table_key] = mock_it->second;
+  }
 }
 
 bool ForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chunk_key) {

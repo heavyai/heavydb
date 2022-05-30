@@ -6670,6 +6670,7 @@ class PrefetchLimitTest : public RecoverCacheQueryTest {
     auto db_id = cat_->getCurrentDB().dbId;
     auto tb_id = cat_->getMetadataForTable(table_name, false)->tableId;
     auto fsm = psm_->getForeignStorageMgr();
+    fsm->createDataWrapperIfNotExists({db_id, tb_id});
     auto parent_wrapper = fsm->getDataWrapper({db_id, tb_id});
     mock_wrapper->setParentWrapper(parent_wrapper);
     fsm->setDataWrapper({db_id, tb_id}, mock_wrapper);
@@ -7038,6 +7039,39 @@ TEST_F(OdbcSkipMetadataTest, JoinOnNonDictColumnEmptyRefresh) {
   sqlAndCompareResult("SELECT " + t1 + ".i, " + t2 + ".i from " + t1 + ", " + t2 +
                           " WHERE " + t1 + ".i = " + t2 + ".i ORDER BY " + t1 + ".i",
                       {});
+}
+
+class UntouchedRefreshTest : public PrefetchLimitTest {};
+
+TEST_F(UntouchedRefreshTest, DefaultRefresh) {
+  sql(createForeignTableQuery({{"i", "INTEGER"},
+                               {"text_encoded", "TEXT"},
+                               {"text_unencoded", "TEXT ENCODING NONE"},
+                               {"text_array", "TEXT[]"}},
+                              getDataFilesPath() + "0_9.parquet",
+                              wrapper_type_));
+  auto mock_data_wrapper = std::make_shared<MockDataWrapper>();
+  mock_data_wrapper->throwOnMetadataScan(true);
+  setMockWrapper(mock_data_wrapper, default_table_name);
+
+  sql("REFRESH FOREIGN TABLES " + default_table_name);
+  queryAndAssertException("SELECT COUNT(*) FROM " + default_table_name,
+                          "populateChunkMetadata mock exception");
+}
+
+TEST_F(UntouchedRefreshTest, EvictRefresh) {
+  sql(createForeignTableQuery({{"i", "INTEGER"},
+                               {"text_encoded", "TEXT"},
+                               {"text_unencoded", "TEXT ENCODING NONE"},
+                               {"text_array", "TEXT[]"}},
+                              getDataFilesPath() + "0_9.parquet",
+                              wrapper_type_));
+  auto mock_data_wrapper = std::make_shared<MockDataWrapper>();
+  mock_data_wrapper->throwOnMetadataScan(true);
+  setMockWrapper(mock_data_wrapper, default_table_name);
+  sql("REFRESH FOREIGN TABLES " + default_table_name + " WITH (EVICT='TRUE')");
+  queryAndAssertException("SELECT COUNT(*) FROM " + default_table_name,
+                          "populateChunkMetadata mock exception");
 }
 
 int main(int argc, char** argv) {
