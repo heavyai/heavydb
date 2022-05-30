@@ -56,6 +56,70 @@ size_t g_watchdog_baseline_max_groups{120000000};
 extern int64_t g_bitmap_memory_limit;
 extern size_t g_leaf_count;
 
+std::ostream& operator<<(std::ostream& out, const QueryDescriptionType& type) {
+  switch (type) {
+    case QueryDescriptionType::GroupByPerfectHash:
+      out << "GroupByPerfectHash";
+      break;
+    case QueryDescriptionType::GroupByBaselineHash:
+      out << "GroupByBaselineHash";
+      break;
+    case QueryDescriptionType::Projection:
+      out << "Projection";
+      break;
+    case QueryDescriptionType::TableFunction:
+      out << "TableFunction";
+      break;
+    case QueryDescriptionType::NonGroupedAggregate:
+      out << "NonGroupedAggregate";
+      break;
+    case QueryDescriptionType::Estimator:
+      out << "Estimator";
+      break;
+    default:
+      out << "Unknown QueryDescriptionType";
+  }
+  return out;
+}
+
+bool ColRangeInfo::isEmpty() const {
+  return min == 0 && max == -1;
+}
+
+std::ostream& operator<<(std::ostream& out, const ColRangeInfo& info) {
+  out << "Hash Type = " << info.hash_type_ << " min = " << info.min
+      << " max = " << info.max << " bucket = " << info.bucket
+      << " has_nulls = " << info.has_nulls << "\n";
+  return out;
+}
+
+std::ostream& operator<<(std::ostream& out, const CountDistinctImplType& type) {
+  switch (type) {
+    case CountDistinctImplType::Invalid:
+      out << "Invalid";
+      break;
+    case CountDistinctImplType::Bitmap:
+      out << "Bitmap";
+      break;
+    case CountDistinctImplType::UnorderedSet:
+      out << "UnorderedSet";
+      break;
+    default:
+      out << "<Unkown Type>";
+      break;
+  }
+  return out;
+}
+
+std::ostream& operator<<(std::ostream& out, const CountDistinctDescriptor& desc) {
+  out << "Type = " << desc.impl_type_ << " min val = " << desc.min_val
+      << " bitmap_sz_bits = " << desc.bitmap_sz_bits
+      << " bool approximate = " << desc.approximate
+      << " device_type = " << desc.device_type
+      << " sub_bitmap_count = " << desc.sub_bitmap_count;
+  return out;
+}
+
 namespace {
 
 int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {

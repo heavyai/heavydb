@@ -834,7 +834,8 @@ void add_placeholder_metadata(
                               : foreign_table->maxFragRows;
 
     chunk_key[CHUNK_KEY_FRAGMENT_IDX] = fragment_id;
-    chunk_metadata_map[chunk_key] = get_placeholder_metadata(column, num_elements);
+    chunk_metadata_map[chunk_key] =
+        get_placeholder_metadata(column->columnType, num_elements);
   }
 }
 }  // namespace
@@ -1044,8 +1045,8 @@ void AbstractTextFileDataWrapper::updateRolledOffChunks(
       CHECK(partially_deleted_fragment_row_count.has_value());
       auto old_chunk_stats = chunk_metadata->chunkStats;
       auto cd = shared::get_from_map(column_by_id, chunk_key[CHUNK_KEY_COLUMN_IDX]);
-      chunk_metadata =
-          get_placeholder_metadata(cd, partially_deleted_fragment_row_count.value());
+      chunk_metadata = get_placeholder_metadata(
+          cd->columnType, partially_deleted_fragment_row_count.value());
       // Old chunk stats will still be correct (since only row deletion is occurring) and
       // more accurate than that of the placeholder metadata.
       chunk_metadata->chunkStats = old_chunk_stats;

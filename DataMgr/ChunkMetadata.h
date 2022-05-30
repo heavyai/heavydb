@@ -17,11 +17,12 @@
 #pragma once
 
 #include <cstddef>
-#include "../Shared/sqltypes.h"
-#include "Shared/StringTransform.h"
-#include "Shared/types.h"
+#include <iostream>
 
 #include "Logger/Logger.h"
+#include "Shared/StringTransform.h"
+#include "Shared/sqltypes.h"
+#include "Shared/types.h"
 
 struct ChunkStats {
   Datum min;
@@ -34,30 +35,6 @@ struct ChunkMetadata {
   size_t numBytes;
   size_t numElements;
   ChunkStats chunkStats;
-
-  std::string dump() const {
-    auto type = sqlType.is_array() ? sqlType.get_elem_type() : sqlType;
-    // Unencoded strings have no min/max.
-    if (type.is_string() && type.get_compression() == kENCODING_NONE) {
-      return "type: " + sqlType.get_type_name() + " numBytes: " + to_string(numBytes) +
-             " numElements " + to_string(numElements) + " min: <invalid>" +
-             " max: <invalid>" + " has_nulls: " + to_string(chunkStats.has_nulls);
-    } else if (type.is_string()) {
-      return "type: " + sqlType.get_type_name() + " numBytes: " + to_string(numBytes) +
-             " numElements " + to_string(numElements) +
-             " min: " + to_string(chunkStats.min.intval) +
-             " max: " + to_string(chunkStats.max.intval) +
-             " has_nulls: " + to_string(chunkStats.has_nulls);
-    } else {
-      return "type: " + sqlType.get_type_name() + " numBytes: " + to_string(numBytes) +
-             " numElements " + to_string(numElements) +
-             " min: " + DatumToString(chunkStats.min, type) +
-             " max: " + DatumToString(chunkStats.max, type) +
-             " has_nulls: " + to_string(chunkStats.has_nulls);
-    }
-  }
-
-  std::string toString() const { return dump(); }
 
   ChunkMetadata(const SQLTypeInfo& sql_type,
                 const size_t num_bytes,
@@ -149,7 +126,59 @@ struct ChunkMetadata {
                       sqlType.is_array() ? sqlType.get_elem_type() : sqlType) &&
            chunkStats.has_nulls == that.chunkStats.has_nulls;
   }
+
+  bool isPlaceholder() const {
+    // Currently needed because a lot of our Datum operations (in this case
+    // extract_int_type_from_datum()) are not safe for all types.
+    const auto type =
+        sqlType.is_decimal() ? decimal_to_int_type(sqlType) : sqlType.get_type();
+    switch (type) {
+      case kCHAR:
+      case kVARCHAR:
+      case kTEXT:
+        if (sqlType.get_compression() != kENCODING_DICT) {
+          return false;
+        }
+      case kBOOLEAN:
+      case kTINYINT:
+      case kSMALLINT:
+      case kINT:
+      case kBIGINT:
+      case kTIME:
+      case kTIMESTAMP:
+      case kDATE: {
+        auto min = extract_int_type_from_datum(chunkStats.min, sqlType);
+        auto max = extract_int_type_from_datum(chunkStats.max, sqlType);
+        return (numElements > 0 && !chunkStats.has_nulls && (min > max));
+      }
+      default:
+        return false;
+    }
+    return false;
+  }
 };
+
+inline std::ostream& operator<<(std::ostream& out, const ChunkMetadata& chunk_metadata) {
+  auto type = chunk_metadata.sqlType.is_array() ? chunk_metadata.sqlType.get_elem_type()
+                                                : chunk_metadata.sqlType;
+  // Unencoded strings have no min/max.
+  std::string min, max;
+  if (type.is_string() && type.get_compression() == kENCODING_NONE) {
+    min = "<invalid>";
+    max = "<invalid>";
+  } else if (type.is_string()) {
+    min = to_string(chunk_metadata.chunkStats.min.intval);
+    max = to_string(chunk_metadata.chunkStats.max.intval);
+  } else {
+    min = DatumToString(chunk_metadata.chunkStats.min, type);
+    max = DatumToString(chunk_metadata.chunkStats.max, type);
+  }
+  out << "type: " << chunk_metadata.sqlType.get_type_name()
+      << " numBytes: " << chunk_metadata.numBytes << " numElements "
+      << chunk_metadata.numElements << " min: " << min << " max: " << max
+      << " has_nulls: " << std::to_string(chunk_metadata.chunkStats.has_nulls);
+  return out;
+}
 
 inline int64_t extract_min_stat_int_type(const ChunkStats& stats, const SQLTypeInfo& ti) {
   return extract_int_type_from_datum(stats.min, ti);

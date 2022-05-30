@@ -17,7 +17,6 @@
 #include "RelAlgExecutor.h"
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "DataMgr/ForeignStorage/FsiChunkUtils.h"
-#include "DataMgr/ForeignStorage/MetadataPlaceholder.h"
 #include "Fragmenter/InsertDataLoader.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/CalciteDeserializerUtils.h"
@@ -170,6 +169,13 @@ void prepare_for_system_table_execution(const RelAlgNode& ra_node,
       // time data snapshots.
       catalog.getDataMgr().deleteChunksWithPrefix(
           ChunkKey{catalog.getDatabaseId(), table_id}, Data_Namespace::CPU_LEVEL);
+
+      // TODO(Misiu): This prefetching can be removed if we can add support for
+      // ExpressionRanges to reduce invalid with valid ranges (right now prefetching
+      // causes us to fetch the chunks twice).  Right now if we do not prefetch (i.e. if
+      // we remove the code below) some nodes will return valid ranges and others will
+      // return unknown because they only use placeholder metadata and the LeafAggregator
+      // has no idea how to reduce the two.
       auto td = catalog.getMetadataForTable(table_id);
       CHECK(td);
       CHECK(td->fragmenter);

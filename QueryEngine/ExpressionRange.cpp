@@ -337,50 +337,28 @@ ExpressionRange getExpressionRange(
     const std::vector<InputTableInfo>& query_infos,
     const Executor* executor,
     boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
-  const auto& expr_ti = expr->get_type_info();
-  if (!ExpressionRange::typeSupportsRange(expr_ti)) {
+  if (!ExpressionRange::typeSupportsRange(expr->get_type_info())) {
     return ExpressionRange::makeInvalidRange();
-  }
-  auto bin_oper_expr = dynamic_cast<const Analyzer::BinOper*>(expr);
-  if (bin_oper_expr) {
+  } else if (auto bin_oper_expr = dynamic_cast<const Analyzer::BinOper*>(expr)) {
     return getExpressionRange(bin_oper_expr, query_infos, executor, simple_quals);
-  }
-  auto constant_expr = dynamic_cast<const Analyzer::Constant*>(expr);
-  if (constant_expr) {
+  } else if (auto constant_expr = dynamic_cast<const Analyzer::Constant*>(expr)) {
     return getExpressionRange(constant_expr);
-  }
-  auto column_var_expr = dynamic_cast<const Analyzer::ColumnVar*>(expr);
-  if (column_var_expr) {
+  } else if (auto column_var_expr = dynamic_cast<const Analyzer::ColumnVar*>(expr)) {
     return getExpressionRange(column_var_expr, query_infos, executor, simple_quals);
-  }
-  auto string_oper_expr = dynamic_cast<const Analyzer::StringOper*>(expr);
-  if (string_oper_expr) {
+  } else if (auto string_oper_expr = dynamic_cast<const Analyzer::StringOper*>(expr)) {
     return getExpressionRange(string_oper_expr, executor);
-  }
-
-  auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
-  if (like_expr) {
+  } else if (auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr)) {
     return getExpressionRange(like_expr);
-  }
-  auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);
-  if (case_expr) {
+  } else if (auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr)) {
     return getExpressionRange(case_expr, query_infos, executor);
-  }
-  auto u_expr = dynamic_cast<const Analyzer::UOper*>(expr);
-  if (u_expr) {
+  } else if (auto u_expr = dynamic_cast<const Analyzer::UOper*>(expr)) {
     return getExpressionRange(u_expr, query_infos, executor, simple_quals);
-  }
-  auto extract_expr = dynamic_cast<const Analyzer::ExtractExpr*>(expr);
-  if (extract_expr) {
+  } else if (auto extract_expr = dynamic_cast<const Analyzer::ExtractExpr*>(expr)) {
     return getExpressionRange(extract_expr, query_infos, executor, simple_quals);
-  }
-  auto datetrunc_expr = dynamic_cast<const Analyzer::DatetruncExpr*>(expr);
-  if (datetrunc_expr) {
+  } else if (auto datetrunc_expr = dynamic_cast<const Analyzer::DatetruncExpr*>(expr)) {
     return getExpressionRange(datetrunc_expr, query_infos, executor, simple_quals);
-  }
-  auto width_bucket_expr = dynamic_cast<const Analyzer::WidthBucketExpr*>(expr);
-  if (width_bucket_expr) {
-    return getExpressionRange(width_bucket_expr, query_infos, executor, simple_quals);
+  } else if (auto width_expr = dynamic_cast<const Analyzer::WidthBucketExpr*>(expr)) {
+    return getExpressionRange(width_expr, query_infos, executor, simple_quals);
   }
   return ExpressionRange::makeInvalidRange();
 }
@@ -621,6 +599,13 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
           }
         }
       }
+
+      // Detect FSI placeholder metadata.  If we let this through it will be treated as an
+      // empty range, when it really implies an unknown range.
+      if (min_it->second->isPlaceholder() || max_it->second->isPlaceholder()) {
+        return ExpressionRange::makeInvalidRange();
+      }
+
       if (col_ti.is_fp()) {
         const auto min_val = extract_min_stat_fp_type(min_it->second->chunkStats, col_ti);
         const auto max_val = extract_max_stat_fp_type(max_it->second->chunkStats, col_ti);

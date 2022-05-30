@@ -37,6 +37,7 @@
 
 using Data_Namespace::AbstractBuffer;
 
+// TODO(Misiu): All of these functions should be moved to a .cpp file.
 class ArrayNoneEncoder : public Encoder {
  public:
   ArrayNoneEncoder(AbstractBuffer* buffer)

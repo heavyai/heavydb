@@ -712,17 +712,17 @@ class SelectQueryTest : public ForeignTableTest {
         auto column_id = col_id;
         auto fragment_column_ids = std::make_pair(fragment_id, column_id);
         auto expected_metadata_iter = expected_metadata.find(fragment_column_ids);
-        ASSERT_NE(expected_metadata_iter, expected_metadata.end())
+        EXPECT_NE(expected_metadata_iter, expected_metadata.end())
             << boost::format(
                    "Foreign table chunk metadata not found in expected metadata: "
                    "fragment_id: %d, column_id: %d") %
                    fragment_id % column_id;
         expected_metadata_found[fragment_column_ids] = true;
-        ASSERT_EQ(*chunk_metadata, *expected_metadata_iter->second)
+        EXPECT_EQ(*chunk_metadata, *expected_metadata_iter->second)
             << (boost::format("At fragment_id: %d, column_id: %d") % fragment_id %
                 column_id)
-            << " Expected: " << expected_metadata_iter->second.get()->dump()
-            << ", Found: " << chunk_metadata.get()->dump();
+            << " Expected: " << *expected_metadata_iter->second
+            << ", Found: " << *chunk_metadata;
       }
     }
 
@@ -979,7 +979,7 @@ class DataTypeFragmentSizeAndDataWrapperTest
           createChunkMetadata<int64_t>(11, num_elems * 4, num_elems, 0, 2, true);
     } else {
       test_chunk_metadata_map[{0, 11}] = createChunkMetadata<int64_t>(
-          11, num_elems * 4, num_elems, 2147483647, -2147483648, true);
+          11, num_elems * 4, num_elems, 2147483647, -2147483648, false);
     }
     // unencoded string
     if (data_loaded || wrapper_type_ == "csv" || is_regex(wrapper_type_)) {
@@ -4533,6 +4533,9 @@ TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
   // clang-format on
 }
 
+// TODO(Misiu): The has_nulls metadata stas are not consistent between data wrappers for
+// geo-types.  This test should be re-written to make sure we are consistent (or at least
+// igore that parts that don't matter).
 TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
   SKIP_IF_DISTRIBUTED("Test relies on local metadata or cache access");
   // enable for these tests
@@ -4554,7 +4557,7 @@ TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
   std::map<std::pair<int, int>, std::unique_ptr<ChunkMetadata>> test_chunk_metadata_map;
   test_chunk_metadata_map[{0, 1}] = createChunkMetadata<int32_t>(1, 20, 5, 1, 5, false);
   test_chunk_metadata_map[{0, 2}] = createChunkMetadata(2, 0, 5, true);
-  test_chunk_metadata_map[{0, 3}] = createChunkMetadata<int8_t>(3, 80, 5, -16, 64, true);
+  test_chunk_metadata_map[{0, 3}] = createChunkMetadata<int8_t>(3, 80, 5, -16, 64, false);
   test_chunk_metadata_map[{0, 4}] = createChunkMetadata(4, 0, 5, true);
   test_chunk_metadata_map[{0, 5}] = createChunkMetadata<int8_t>(5, 112, 5, -16, 64, true);
   test_chunk_metadata_map[{0, 6}] =
@@ -4565,7 +4568,7 @@ TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
   test_chunk_metadata_map[{0, 10}] =
       createChunkMetadata<double>(10, 160, 5, 0.000000, 7.000000, true);
   test_chunk_metadata_map[{0, 11}] =
-      createChunkMetadata<int32_t>(11, 20, 5, -1, 0, true);  // adjust for RGs
+      createChunkMetadata<int32_t>(11, 20, 5, -1, 0, false);  // adjust for RGs
   test_chunk_metadata_map[{0, 12}] = createChunkMetadata(12, 0, 5, true);
   test_chunk_metadata_map[{0, 13}] =
       createChunkMetadata<int8_t>(13, 288, 5, -16, 64, true);
@@ -4574,7 +4577,7 @@ TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
   test_chunk_metadata_map[{0, 16}] =
       createChunkMetadata<double>(16, 160, 5, 0.000000, 3.000000, true);
   test_chunk_metadata_map[{0, 17}] =
-      createChunkMetadata<int32_t>(17, 20, 5, -1, 0, true);  // adjust for RGs
+      createChunkMetadata<int32_t>(17, 20, 5, -1, 0, false);  // adjust for RGs
   assertExpectedChunkMetadata(test_chunk_metadata_map);
 }
 
@@ -5072,8 +5075,8 @@ class ForeignStorageCacheQueryTest : public ForeignTableTest {
 
   static void assertMetadataEqual(const std::shared_ptr<ChunkMetadata> left_metadata,
                                   const std::shared_ptr<ChunkMetadata> right_metadata) {
-    ASSERT_EQ(*left_metadata, *right_metadata) << left_metadata->dump() << "\n"
-                                               << right_metadata->dump() << "\n";
+    ASSERT_EQ(*left_metadata, *right_metadata) << *left_metadata << "\n"
+                                               << *right_metadata << "\n";
   }
 };
 
@@ -6741,6 +6744,15 @@ TEST_F(PrefetchLimitTest, OneAndHalfFragmentLimit) {
 // If the cache is too small to contain one full fragment, then we should partially
 // populate it with chunks from that one fragment.
 TEST_F(PrefetchLimitTest, PartialFragmentLimit) {
+  // TODO(Misiu): This test is currently inconsistent.  Depending which column we try to
+  // fetch first (which is arbitrarily determined by the QueryEngine) we will store a
+  // different set of chunks (which can have different sizes).  We can fix this by calling
+  // fetchBuffer() directly from the ForeignStorageMgr after setting the parallelism
+  // hints. This will simulate the call that we would get from the QE but guarantee the
+  // consistency for which chunk is requested first.  This format should be used to
+  // rewrite all of the PrefetchLimitTests.
+  GTEST_SKIP() << "Test currently disabled";
+
   // 1 varlen data + 1 varlen index + 2 int chunk.
   size_t size_limit = max_buffer_size_ + index_buffer_size_ + int_buffer_size_ * 2U;
   size_t actual_size = int_buffer_size_ + index_buffer_size_ + int_buffer_size_ * 2U;
@@ -6954,6 +6966,78 @@ TEST_F(AlterOdbcClearCacheTest, AlterOdbcClearCache) {
   ASSERT_GT(cache_->getNumCachedChunks(), 0U);
   sql("ALTER FOREIGN TABLE " + default_table_name + " SET (SQL_ORDER_BY = 'i');");
   ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
+}
+
+class OdbcSkipMetadataTest : public ForeignTableTest, public TempDirManager {
+  void SetUp() override {
+    wrapper_type_ = "sqlite";
+    ForeignTableTest::SetUp();
+    sql("DROP FOREIGN TABLE IF EXISTS " + default_table_name);
+    sql("DROP FOREIGN TABLE IF EXISTS " + default_table_name + "_1");
+  }
+
+  void TearDown() override {
+    sql("DROP FOREIGN TABLE IF EXISTS " + default_table_name);
+    sql("DROP FOREIGN TABLE IF EXISTS " + default_table_name + "_1");
+    ForeignTableTest::TearDown();
+  }
+};
+
+TEST_F(OdbcSkipMetadataTest, JoinOnNonDictColumn) {
+  std::string t1{default_table_name};
+  std::string t2{default_table_name + "_1"};
+  sql(createForeignTableQuery(
+      {{"t", "TEXT"}, {"i", "INTEGER"}, {"d", "DOUBLE"}},
+      getDataFilesPath() + "/example_2.csv",
+      wrapper_type_,
+      {{"SQL_SELECT", "select t, i, d from " + t1}, {"SQL_ORDER_BY", "i"}}));
+  sql(createForeignTableQuery(
+      {{"t", "TEXT"}, {"i", "INTEGER"}, {"d", "DOUBLE"}},
+      getDataFilesPath() + "/example_2.csv",
+      wrapper_type_,
+      {{"SQL_SELECT", "select t, i, d from " + t2}, {"SQL_ORDER_BY", "i"}},
+      t2));
+  sqlAndCompareResult("SELECT " + t1 + ".i, " + t2 + ".i from " + t1 + ", " + t2 +
+                          " WHERE " + t1 + ".i = " + t2 + ".i ORDER BY " + t1 + ".i",
+                      {{i(1), i(1)},
+                       {i(1), i(1)},
+                       {i(1), i(1)},
+                       {i(1), i(1)},
+                       {i(1), i(1)},
+                       {i(1), i(1)},
+                       {i(1), i(1)},
+                       {i(1), i(1)},
+                       {i(1), i(1)},
+                       {i(2), i(2)},
+                       {i(2), i(2)},
+                       {i(2), i(2)},
+                       {i(2), i(2)},
+                       {i(3), i(3)}});
+}
+
+// Added to make sure we cross the ExpressionRange generaetion path for empty fsi tables.
+TEST_F(OdbcSkipMetadataTest, JoinOnNonDictColumnEmptyRefresh) {
+  std::string t1{default_table_name};
+  std::string t2{default_table_name + "_1"};
+  bf::copy_file(getDataFilesPath() + "example_2.csv", test_temp_dir + "/example_2.csv");
+  sql(createForeignTableQuery(
+      {{"t", "TEXT"}, {"i", "INTEGER"}, {"d", "DOUBLE"}},
+      test_temp_dir + "/example_2.csv",
+      wrapper_type_,
+      {{"SQL_SELECT", "select t, i, d from " + t1}, {"SQL_ORDER_BY", "i"}}));
+  sql(createForeignTableQuery(
+      {{"t", "TEXT"}, {"i", "INTEGER"}, {"d", "DOUBLE"}},
+      getDataFilesPath() + "/example_2.csv",
+      wrapper_type_,
+      {{"SQL_SELECT", "select t, i, d from " + t2}, {"SQL_ORDER_BY", "i"}},
+      t2));
+  bf::ofstream(test_temp_dir + "/empty.csv");
+  createODBCSourceTable(
+      t1, "(t TEXT, i INTEGER, d DOUBLE)", test_temp_dir + "/empty.csv", wrapper_type_);
+  sql("REFRESH FOREIGN TABLES " + t1 + " WITH (evict='true')");
+  sqlAndCompareResult("SELECT " + t1 + ".i, " + t2 + ".i from " + t1 + ", " + t2 +
+                          " WHERE " + t1 + ".i = " + t2 + ".i ORDER BY " + t1 + ".i",
+                      {});
 }
 
 int main(int argc, char** argv) {

@@ -73,21 +73,10 @@ class StringNoneEncoder : public Encoder {
                                             const size_t numAppendElems,
                                             const bool replicating = false);
 
-  void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) override {
-    Encoder::getMetadata(chunkMetadata);  // call on parent class
-    chunkMetadata->chunkStats.min.stringval = nullptr;
-    chunkMetadata->chunkStats.max.stringval = nullptr;
-    chunkMetadata->chunkStats.has_nulls = has_nulls;
-  }
+  void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) override;
 
   // Only called from the executor for synthesized meta-information.
-  std::shared_ptr<ChunkMetadata> getMetadata(const SQLTypeInfo& ti) override {
-    auto chunk_stats = ChunkStats{};
-    chunk_stats.min.stringval = nullptr;
-    chunk_stats.max.stringval = nullptr;
-    chunk_stats.has_nulls = has_nulls;
-    return std::make_shared<ChunkMetadata>(ti, 0, 0, chunk_stats);
-  }
+  std::shared_ptr<ChunkMetadata> getMetadata(const SQLTypeInfo& ti) override;
 
   void updateStats(const int64_t, const bool) override { CHECK(false); }
 
