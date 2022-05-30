@@ -161,6 +161,11 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   mutable std::shared_mutex data_wrapper_mutex_;
   std::map<ChunkKey, std::shared_ptr<ForeignDataWrapper>> data_wrapper_map_;
 
+  // Some operations in FSM delete and re-create wrappers (refreshing a table, for
+  // instance).  If we have mocked these wrappers, then we should preserve the mock and
+  // re-use it if we re-create the wrapper.
+  std::map<ChunkKey, std::shared_ptr<MockForeignDataWrapper>> mocked_wrapper_map_;
+
   // TODO: Remove below map, which is used to temporarily hold chunk buffers,
   // when buffer mgr interface is updated to accept multiple buffers in one call
   std::map<ChunkKey, std::unique_ptr<AbstractBuffer>> temp_chunk_buffer_map_;
