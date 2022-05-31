@@ -625,8 +625,11 @@ void WindowFunctionContext::compute(
   if (window_func_->hasFraming()) {
     // let's allow aggregation functions first
     // todo (yoonmin) : support navigation functions, i.e., first_expr, last_expr, and
-    // nth_expr
-    CHECK(window_function_is_aggregate(window_func_->getKind()));
+    // nth_expr, and first_value / last values
+    if (!window_function_is_aggregate(window_func_->getKind())) {
+      throw std::runtime_error(
+          "We do not support window framing for non aggregate functions");
+    }
     // construct segment tree per partition to deal with aggregation over frame
     const auto build_aggregation_tree_for_partitions = [&](const size_t start,
                                                            const size_t end) {

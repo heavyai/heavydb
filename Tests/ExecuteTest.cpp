@@ -22344,6 +22344,15 @@ TEST(Select, WindowFunctionFraming) {
       run_multiple_agg("SELECT oc, MIN(i) OVER (PARTITION BY pc RANGE BETWEEN 1 "
                        "PRECEDING AND 1 FOLLOWING) FROM test_window_framing ORDER BY oc;",
                        dt));
+  // 7. throw an exception when using window framing on first / last values
+  EXPECT_ANY_THROW(
+      run_multiple_agg("SELECT oc, FIRST_VALUE(i) OVER (RANGE BETWEEN 1 PRECEDING AND 1 "
+                       "FOLLOWING) FROM test_window_framing ORDER BY oc;",
+                       dt));
+  EXPECT_ANY_THROW(
+      run_multiple_agg("SELECT oc, LAST_VALUE(i) OVER (RANGE BETWEEN 1 PRECEDING AND 1 "
+                       "FOLLOWING) FROM test_window_framing ORDER BY oc;",
+                       dt));
 }
 
 TEST(Select, FilterNodeCoalesce) {
