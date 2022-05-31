@@ -37,6 +37,18 @@ class MetadataScanInfeasibleFragmentSizeException : public std::runtime_error {
                                     // fragment size for metadata scan should be
 };
 
+inline void throw_unexpected_number_of_items(const size_t& num_expected,
+                                             const size_t& num_loaded,
+                                             const std::string& item_type) {
+  throw ForeignStorageException(
+      "Unexpected number of " + item_type +
+      " while loading from foreign data source: expected " +
+      std::to_string(num_expected) + " , obtained " + std::to_string(num_loaded) + " " +
+      item_type +
+      ". Please use the \"REFRESH FOREIGN TABLES\" command on the foreign table "
+      "if data source has been updated.");
+}
+
 inline void throw_removed_row_in_result_set_error(const std::string& select_statement) {
   throw ForeignStorageException{
       "Refresh of foreign table created with \"APPEND\" update type failed as result set "

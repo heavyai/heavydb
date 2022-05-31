@@ -28,6 +28,7 @@
 #include "DataMgr/ForeignStorage/FileReader.h"
 #include "DataMgr/ForeignStorage/ForeignTableSchema.h"
 #include "DataMgr/ForeignStorage/FsiChunkUtils.h"
+#include "ForeignStorageException.h"
 #include "FsiJsonUtils.h"
 #include "ImportExport/RenderGroupAnalyzer.h"
 #include "Shared/misc.h"
@@ -156,7 +157,8 @@ void AbstractTextFileDataWrapper::updateMetadata(
 }
 
 /**
- * Data structure containing data and metadata gotten from parsing a set of file regions.
+ * Data structure containing data and metadata gotten from parsing a set of file
+ * regions.
  */
 struct ParseFileRegionResult {
   size_t file_offset;
@@ -168,6 +170,22 @@ struct ParseFileRegionResult {
     return file_offset < other.file_offset;
   }
 };
+
+namespace {
+void throw_unexpected_number_of_items(const size_t num_expected,
+                                      const size_t num_loaded,
+                                      const std::string& item_type,
+                                      const std::string& foreign_table_name) {
+  try {
+    foreign_storage::throw_unexpected_number_of_items(
+        num_expected, num_loaded, item_type);
+  } catch (const foreign_storage::ForeignStorageException& except) {
+    throw foreign_storage::ForeignStorageException(
+        std::string(except.what()) + " Foreign table: " + foreign_table_name);
+  }
+}
+
+}  // namespace
 
 /**
  * Parses a set of file regions given a handle to the file and range of indexes
@@ -192,7 +210,12 @@ ParseFileRegionResult parse_file_regions(
     auto read_size = file_reader.readRegion(parse_file_request.buffer.get(),
                                             file_regions[i].first_row_file_offset,
                                             file_regions[i].region_size);
-    CHECK_EQ(file_regions[i].region_size, read_size);
+    if (file_regions[i].region_size != read_size) {
+      throw_unexpected_number_of_items(file_regions[i].region_size,
+                                       read_size,
+                                       "bytes",
+                                       parse_file_request.getTableName());
+    }
     parse_file_request.begin_pos = 0;
     parse_file_request.end_pos = file_regions[i].region_size;
     parse_file_request.first_row_index = file_regions[i].first_row_index;
@@ -754,8 +777,8 @@ void dispatch_metadata_scan_requests(
       continue;
     } else if (size == 1 && request.buffer[0] == copy_params.line_delim) {
       // In some cases files with newlines at the end will be encoded with a second
-      // newline that can end up being the only thing in the buffer. Also add request back
-      // to the pool to be picked up again in the next iteration.
+      // newline that can end up being the only thing in the buffer. Also add request
+      // back to the pool to be picked up again in the next iteration.
       current_file_offset++;
       add_request_to_pool(multi_threading_params, request);
       continue;
@@ -1047,8 +1070,8 @@ void AbstractTextFileDataWrapper::updateRolledOffChunks(
       auto cd = shared::get_from_map(column_by_id, chunk_key[CHUNK_KEY_COLUMN_IDX]);
       chunk_metadata = get_placeholder_metadata(
           cd->columnType, partially_deleted_fragment_row_count.value());
-      // Old chunk stats will still be correct (since only row deletion is occurring) and
-      // more accurate than that of the placeholder metadata.
+      // Old chunk stats will still be correct (since only row deletion is occurring)
+      // and more accurate than that of the placeholder metadata.
       chunk_metadata->chunkStats = old_chunk_stats;
     }
   }
