@@ -780,8 +780,14 @@ void BufferMgr::fetchBuffer(const ChunkKey& key,
     buffer = createBuffer(key, page_size_, num_bytes);  // will pin buffer
     try {
       parent_mgr_->fetchBuffer(key, buffer, num_bytes);
+    } catch (const foreign_storage::ForeignStorageException& error) {
+      deleteBuffer(key);  // buffer failed to load, ensure it is cleaned up
+      LOG(WARNING) << "Could not fetch parent chunk " << keyToString(key)
+                   << " from foreign storage. Error was " << error.what();
+      throw error;
     } catch (std::runtime_error& error) {
-      LOG(FATAL) << "Could not fetch parent buffer " << keyToString(key);
+      LOG(FATAL) << "Could not fetch parent buffer " << keyToString(key)
+                 << " error: " << error.what();
     }
   } else {
     buffer = buffer_it->second->buffer;
@@ -789,8 +795,13 @@ void BufferMgr::fetchBuffer(const ChunkKey& key,
     if (num_bytes > buffer->size()) {
       try {
         parent_mgr_->fetchBuffer(key, buffer, num_bytes);
+      } catch (const foreign_storage::ForeignStorageException& error) {
+        LOG(WARNING) << "Could not fetch parent chunk " << keyToString(key)
+                     << " from foreign storage. Error was " << error.what();
+        throw error;
       } catch (std::runtime_error& error) {
-        LOG(FATAL) << "Could not fetch parent buffer " << keyToString(key);
+        LOG(FATAL) << "Could not fetch parent buffer " << keyToString(key)
+                   << " error: " << error.what();
       }
     }
     sized_segs_lock.unlock();

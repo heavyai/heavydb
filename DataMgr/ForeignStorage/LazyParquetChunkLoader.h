@@ -43,7 +43,8 @@ class LazyParquetChunkLoader {
 
   LazyParquetChunkLoader(std::shared_ptr<arrow::fs::FileSystem> file_system,
                          FileReaderMap* file_reader_cache,
-                         const RenderGroupAnalyzerMap* render_group_analyzer_map);
+                         const RenderGroupAnalyzerMap* render_group_analyzer_map,
+                         const std::string& foreign_table_name);
 
   /**
    * Load a number of row groups of a column in a parquet file into a chunk
@@ -169,5 +170,6 @@ class LazyParquetChunkLoader {
   FileReaderMap* file_reader_cache_;
 
   const RenderGroupAnalyzerMap* render_group_analyzer_map_;
+  std::string foreign_table_name_;
 };
 }  // namespace foreign_storage

@@ -440,7 +440,8 @@ void ParquetDataWrapper::metadataScanRowGroupMetadata(
 
 std::list<RowGroupMetadata> ParquetDataWrapper::getRowGroupMetadataForFilePaths(
     const std::vector<std::string>& file_paths) const {
-  LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get(), nullptr);
+  LazyParquetChunkLoader chunk_loader(
+      file_system_, file_reader_cache_.get(), nullptr, foreign_table_->tableName);
   return chunk_loader.metadataScan(file_paths, *schema_, do_metadata_stats_validation_);
 }
 
@@ -546,8 +547,10 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
   if (delete_buffer) {
     rejected_row_indices = std::make_unique<RejectedRowIndices>();
   }
-  LazyParquetChunkLoader chunk_loader(
-      file_system_, file_reader_cache_.get(), &render_group_analyzer_map_);
+  LazyParquetChunkLoader chunk_loader(file_system_,
+                                      file_reader_cache_.get(),
+                                      &render_group_analyzer_map_,
+                                      foreign_table_->tableName);
   auto metadata = chunk_loader.loadChunk(row_group_intervals,
                                          parquet_column_index,
                                          chunks,
@@ -719,8 +722,10 @@ bool ParquetDataWrapper::isRestored() const {
 }
 
 DataPreview ParquetDataWrapper::getDataPreview(const size_t num_rows) {
-  LazyParquetChunkLoader chunk_loader(
-      file_system_, file_reader_cache_.get(), &render_group_analyzer_map_);
+  LazyParquetChunkLoader chunk_loader(file_system_,
+                                      file_reader_cache_.get(),
+                                      &render_group_analyzer_map_,
+                                      foreign_table_->tableName);
   auto file_paths = getAllFilePaths();
   if (file_paths.empty()) {
     throw ForeignStorageException{"No file found at \"" +

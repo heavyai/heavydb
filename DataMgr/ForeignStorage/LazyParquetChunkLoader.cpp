@@ -1892,6 +1892,19 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
           array_encoder->finalizeRowGroup();
         }
       } catch (const std::exception& error) {
+        // check for a specific error to detect a possible unexpected switch of data
+        // source in order to respond with informative error message
+        if (boost::regex_search(error.what(),
+                                boost::regex{"Deserializing page header failed."})) {
+          throw ForeignStorageException(
+              "Unable to read from foreign data source, possible cause is an unexpected "
+              "change of source. Please use the \"REFRESH FOREIGN TABLES\" command on "
+              "the "
+              "foreign table "
+              "if data source has been updated. Foreign table: " +
+              foreign_table_name_);
+        }
+
         throw ForeignStorageException(
             std::string(error.what()) + " Row group: " + std::to_string(row_group_index) +
             ", Parquet column: '" + col_reader->descr()->path()->ToDotString() +
@@ -1963,10 +1976,12 @@ bool LazyParquetChunkLoader::isColumnMappingSupported(
 LazyParquetChunkLoader::LazyParquetChunkLoader(
     std::shared_ptr<arrow::fs::FileSystem> file_system,
     FileReaderMap* file_map,
-    const RenderGroupAnalyzerMap* render_group_analyzer_map)
+    const RenderGroupAnalyzerMap* render_group_analyzer_map,
+    const std::string& foreign_table_name)
     : file_system_(file_system)
     , file_reader_cache_(file_map)
-    , render_group_analyzer_map_{render_group_analyzer_map} {}
+    , render_group_analyzer_map_{render_group_analyzer_map}
+    , foreign_table_name_(foreign_table_name) {}
 
 std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::loadChunk(
     const std::vector<RowGroupInterval>& row_group_intervals,

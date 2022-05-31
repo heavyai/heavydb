@@ -2896,6 +2896,95 @@ TEST_F(RefreshTests, InvalidRefreshMode) {
                           "Value must be \"APPEND\" or \"ALL\".");
 }
 
+class AlteredSourceTest : public RefreshTests,
+                          public ::testing::WithParamInterface<WrapperType> {
+ public:
+  static std::string getTestName(const ::testing::TestParamInfo<WrapperType>& info) {
+    auto wrapper_type = info.param;
+    std::stringstream ss;
+    ss << "DataWrapper_" << wrapper_type;
+    return ss.str();
+  }
+
+  void SetUp() override {
+    wrapper_type_ = GetParam();
+    if (wrapper_type_ == "csv" || wrapper_type_ == "parquet") {
+      file_ext_ = wrapper_type_;
+    } else {
+      CHECK(wrapper_type_ == "regex_parser" || isOdbc(wrapper_type_));
+      file_ext_ = "csv";
+    }
+    auto cat = &getCatalog();
+    // store previous cache config
+    stored_cache_config_ =
+        cat->getDataMgr().getPersistentStorageMgr()->getDiskCacheConfig();
+    // turn on cache for setup as required
+    cat->getDataMgr().resetPersistentStorage(
+        {cache_path_, File_Namespace::DiskCacheLevel::fsi}, 0, getSystemParameters());
+    RefreshTests::SetUp();
+    // turn off cache for test
+    cat->getDataMgr().resetPersistentStorage(
+        {cache_path_, File_Namespace::DiskCacheLevel::none}, 0, getSystemParameters());
+  }
+
+  void TearDown() override {
+    RefreshTests::TearDown();
+    auto cat = &getCatalog();
+    cat->getDataMgr().resetPersistentStorage(
+        stored_cache_config_, 0, getSystemParameters());
+  }
+
+ protected:
+  inline static std::string cache_path_ =
+      to_string(BASE_PATH) + "/" + shared::kDefaultDiskCacheDirName;
+
+  File_Namespace::DiskCacheConfig stored_cache_config_;
+};
+
+TEST_P(AlteredSourceTest, FragmentRemoved) {
+  SKIP_IF_DISTRIBUTED(
+      "Test requires cache to be turned off in distributed mode, which is not an "
+      "implemented configuration at this time");
+
+  createFilesAndTables({"1"});
+  sqlAndCompareResult("SELECT COUNT(i) FROM " + default_table_name + "0", {{i(1)}});
+  sql("ALTER SYSTEM CLEAR CPU MEMORY");
+  sql("ALTER SYSTEM CLEAR GPU MEMORY");
+  updateForeignSource({"empty"});
+
+  std::string expected_exception;
+
+  if (wrapper_type_ == "csv" || wrapper_type_ == "regex_parser") {
+    expected_exception =
+        "Unexpected number of bytes while loading from foreign data source: expected "
+        "2 , obtained 1 bytes. Please use the \"REFRESH FOREIGN TABLES\" command on "
+        "the foreign table if data source has been updated. Foreign table: "
+        "test_foreign_table0";
+
+  } else if (wrapper_type_ == "parquet") {
+    expected_exception =
+        "Unable to read from foreign data source, possible cause is an unexpected "
+        "change of source. Please use the \"REFRESH FOREIGN TABLES\" command on the "
+        "foreign table if data source has been updated. Foreign table: "
+        "test_foreign_table0";
+  } else if (isOdbc(wrapper_type_)) {
+    expected_exception =
+        "Unexpected number of records while loading from foreign data source: "
+        "expected 1 , obtained 0 records. Please use the \"REFRESH FOREIGN TABLES\" "
+        "command on the foreign table if data source has been updated. Foreign table: "
+        "test_foreign_table0";
+  } else {
+    UNREACHABLE() << "unexpected case in test";
+  }
+  queryAndAssertException("SELECT COUNT(i) FROM " + default_table_name + "0",
+                          expected_exception);
+}
+
+INSTANTIATE_TEST_SUITE_P(FragmentRemovedForDataWrapper,
+                         AlteredSourceTest,
+                         testing::Values("csv", "regex_parser", "parquet", "postgres"),
+                         AlteredSourceTest::getTestName);
+
 class RefreshMetadataTypeTest : public SelectQueryTest {};
 TEST_F(RefreshMetadataTypeTest, ScalarTypes) {
   const auto& query = getCreateForeignTableQuery(
