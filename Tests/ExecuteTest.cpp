@@ -22344,6 +22344,7 @@ TEST(Select, WindowFunctionFraming) {
       run_multiple_agg("SELECT oc, MIN(i) OVER (PARTITION BY pc RANGE BETWEEN 1 "
                        "PRECEDING AND 1 FOLLOWING) FROM test_window_framing ORDER BY oc;",
                        dt));
+
   // 7. throw an exception when using window framing on first / last values
   EXPECT_ANY_THROW(
       run_multiple_agg("SELECT oc, FIRST_VALUE(i) OVER (RANGE BETWEEN 1 PRECEDING AND 1 "
@@ -22353,6 +22354,22 @@ TEST(Select, WindowFunctionFraming) {
       run_multiple_agg("SELECT oc, LAST_VALUE(i) OVER (RANGE BETWEEN 1 PRECEDING AND 1 "
                        "FOLLOWING) FROM test_window_framing ORDER BY oc;",
                        dt));
+
+  // when a query is dispatched to validate its syntax, inputs are empty so internal
+  // data structures used to evaluate queries such as aggregate tree should have
+  // a handling logic in this case
+  {
+    // QueryRunner::runSelectQuery is not currently supported in distributed mode
+    // and it is enough to check this in single mode
+    SKIP_ALL_ON_AGGREGATOR();
+    auto eo = ExecutionOptions::defaults();
+    eo.just_validate = true;
+    QR::get()->runSelectQuery(
+        "SELECT AVG(AVG(i)) OVER (ORDER BY oc ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING), "
+        "oc FROM test_window_framing GROUP BY oc",
+        CompilationOptions::defaults(dt),
+        eo);
+  }
 }
 
 TEST(Select, FilterNodeCoalesce) {

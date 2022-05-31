@@ -2589,7 +2589,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
       context->addOrderColumn(column, order_col->get_type_info(), chunks_owner);
     }
   }
-  if (window_func->hasFraming()) {
+  if (context->needsToBuildAggregateTree()) {
     // todo (yoonmin) : if we try to support generic window function expression without
     // extra project node, we need to revisit here b/c the current logic assumes that
     // window function expression has a single input source
