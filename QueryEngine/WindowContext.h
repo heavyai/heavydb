@@ -179,6 +179,8 @@ class WindowFunctionContext {
 
   size_t partitionCount() const;
 
+  const bool needsToBuildAggregateTree() const;
+
  private:
   // State for a window aggregate. The count field is only used for average.
   struct AggregateState {
@@ -248,7 +250,7 @@ class WindowFunctionContext {
   // Markers for partition start used to reinitialize state for aggregate window
   // functions.
   int8_t* partition_start_;
-  // Markers for partition start used to reinitialize state for aggregate window
+  // Markers for partition end used to reinitialize state for aggregate window
   // functions.
   int8_t* partition_end_;
   // State for aggregate function over a window.

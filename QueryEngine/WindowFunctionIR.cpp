@@ -275,11 +275,13 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
     }
   }
   const auto agg_name = get_window_agg_name(window_func->getKind(), window_func_ti);
-  if (window_func->hasFraming()) {
+  if (window_func_context->needsToBuildAggregateTree()) {
     // compute an aggregated value for each row of the window frame by using segment tree
     // when constructing a window context, we build a necessary segment tree for it
     // and use the tree array (so called `aggregate tree`) to query the aggregated value
     // of the specific window frame
+    // we fall back to the non-framing window func evaluation logic if an input
+    // of the window function can be an empty one
     const auto pi64_type =
         llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
     const auto pi32_type =
