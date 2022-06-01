@@ -461,7 +461,13 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
     return msg;
   };
 
+#if LLVM_VERSION_MAJOR > 12
+  auto self_epc = llvm::cantFail(llvm::orc::SelfExecutorProcessControl::Create());
+  auto execution_session =
+      std::make_unique<llvm::orc::ExecutionSession>(std::move(self_epc));
+#else
   auto execution_session = std::make_unique<llvm::orc::ExecutionSession>();
+#endif
 
   auto target_machine_builder_or_error = llvm::orc::JITTargetMachineBuilder::detectHost();
   if (!target_machine_builder_or_error) {
