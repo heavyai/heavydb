@@ -29,7 +29,7 @@ dependencies:
   - fmt
   - maven
   - boost-cpp
-  - clangdev
+  - clangdev   12.*
   - llvm
   - double-conversion
   - snappy
