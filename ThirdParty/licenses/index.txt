@@ -3,7 +3,6 @@
   Apache Arrow                              [Apache](https://github.com/apache/arrow/blob/master/LICENSE.txt)                                  Data exchange layer
   Apache Calcite                            [Apache](https://github.com/apache/calcite/blob/master/LICENSE)                                    SQL parser
   Apache Thrift                             [Apache](https://github.com/apache/thrift/blob/master/LICENSE)                                     RPC
-  Bcrypt                                    [CC0](https://github.com/rg3/bcrypt/blob/master/COPYING)                                           Password hashing
   Boost                                     [Boost](http://www.boost.org/LICENSE_1_0.txt)                                                      Multiple
   cpr                                       [MIT](https://github.com/whoshuu/cpr/blob/master/LICENSE)                                          License verification
   CUDA                                      [NVIDIA EULA](http://docs.nvidia.com/cuda/eula/index.html#redistribution-rights)                   GPU access
