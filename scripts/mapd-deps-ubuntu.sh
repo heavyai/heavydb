@@ -217,60 +217,6 @@ install_rdkafka
 # libuv
 install_libuv
 
-# glslang (with spirv-tools)
-VERS=8.13.3743 # stable 4/27/20
-rm -rf glslang
-mkdir -p glslang
-pushd glslang
-wget --continue https://github.com/KhronosGroup/glslang/archive/$VERS.tar.gz
-tar xvf $VERS.tar.gz
-pushd glslang-$VERS
-./update_glslang_sources.py
-mkdir build
-pushd build
-cmake \
-    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-    -DCMAKE_INSTALL_PREFIX=$PREFIX \
-    ..
-make -j $(nproc)
-make install
-popd # build
-popd # glslang-$VERS
-popd # glslang
-
-# spirv-cross
-VERS=2020-06-29 # latest from 6/29/20
-rm -rf spirv-cross
-mkdir -p spirv-cross
-pushd spirv-cross
-wget --continue https://github.com/KhronosGroup/SPIRV-Cross/archive/$VERS.tar.gz
-tar xvf $VERS.tar.gz
-pushd SPIRV-Cross-$VERS
-mkdir build
-pushd build
-cmake \
-    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-    -DCMAKE_INSTALL_PREFIX=$PREFIX \
-    -DCMAKE_POSITION_INDEPENDENT_CODE=on \
-    -DSPIRV_CROSS_ENABLE_TESTS=off \
-    ..
-make -j $(nproc)
-make install
-popd # build
-popd # SPIRV-Cross-$VERS
-popd # spirv-cross
-
-# Vulkan
-# Custom tarball which excludes the spir-v toolchain
-VERS=1.2.162.0 # stable 12/11/20
-rm -rf vulkan
-mkdir -p vulkan
-pushd vulkan
-wget --continue ${HTTP_DEPS}/vulkansdk-linux-x86_64-no-spirv-$VERS.tar.gz -O vulkansdk-linux-x86_64-no-spirv-$VERS.tar.gz
-tar xvf vulkansdk-linux-x86_64-no-spirv-$VERS.tar.gz
-rsync -av $VERS/x86_64/* $PREFIX
-popd # vulkan
-
 # OpenSAML
 download_make_install ${HTTP_DEPS}/xml-security-c-2.0.2.tar.gz "" "--without-xalan"
 download_make_install ${HTTP_DEPS}/xmltooling-3.0.4-nolog4shib.tar.gz
@@ -288,14 +234,11 @@ PATH=\$PREFIX/go/bin:\$PATH
 PATH=\$PREFIX/maven/bin:\$PATH
 PATH=\$PREFIX/bin:\$PATH
 
-VULKAN_SDK=\$PREFIX
-VK_LAYER_PATH=\$PREFIX/etc/vulkan/explicit_layer.d
-
 CMAKE_PREFIX_PATH=\$PREFIX:\$CMAKE_PREFIX_PATH
 
 GOROOT=\$PREFIX/go
 
-export LD_LIBRARY_PATH PATH VULKAN_SDK VK_LAYER_PATH CMAKE_PREFIX_PATH GOROOT
+export LD_LIBRARY_PATH PATH CMAKE_PREFIX_PATH GOROOT
 EOF
 
 echo

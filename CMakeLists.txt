@@ -47,11 +47,7 @@ endif()
 
 project(omnisci)
 
-if(NOT EXISTS "${CMAKE_SOURCE_DIR}/Rendering")
-  set(MAPD_EDITION "OS")
-elseif(NOT DEFINED MAPD_EDITION)
-  set(MAPD_EDITION "EE")
-endif()
+set(MAPD_EDITION "OS")
 set(MAPD_EDITION "${MAPD_EDITION}" CACHE STRING "MapD edition" FORCE)
 set_property(CACHE MAPD_EDITION PROPERTY STRINGS "EE" "CE" "OS")
 add_definitions("-DMAPD_EDITION_${MAPD_EDITION}")
@@ -654,32 +650,6 @@ set(gen_cpp_files
 
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
 
-set(MAPD_RENDERING_LIBRARIES "")
-if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
-  option(ENABLE_RENDERING "Build backend renderer" OFF)
-  if(ENABLE_RENDERING)
-    # muparserx - currently render-only
-    include_directories(ThirdParty/muparserx)
-    add_subdirectory(ThirdParty/muparserx)
-
-    option(ENABLE_RENDER_TESTS "Build backend renderer tests" ON)
-
-    add_definitions("-DHAVE_RENDERING")
-    add_subdirectory(Rendering)
-    add_subdirectory(QueryRenderer)
-
-    include_directories(${RENDERING_INCLUDE_DIRS})
-    set(MAPD_RENDERING_LIBRARIES QueryRenderer Rendering)
-
-    set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-render")
-    if(${RENDERER_CONTEXT_TYPE} STREQUAL "GLX")
-      set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-glx")
-    endif()
-  endif()
-else()
-  set(ENABLE_RENDERING OFF CACHE BOOL "Build backend renderer" FORCE)
-endif()
-
 set(TIME_LIMITED_NUMBER_OF_DAYS "30" CACHE STRING "Number of days this build is valid for if build is time limited")
 
 option(TIME_LIMITED_BUILD "Build Time Limited Build" OFF)
@@ -732,10 +702,6 @@ endif()
 
 list(APPEND MAPD_LIBRARIES Calcite)
 
-if(ENABLE_RENDERING)
-  list(APPEND MAPD_LIBRARIES "${MAPD_RENDERING_LIBRARIES}")
-endif()
-
 list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
 
 if(ENABLE_FOLLY)
@@ -762,11 +728,6 @@ endif()
 option(ENABLE_BENCHMARKS "Build benchmarks" ON)
 if (ENABLE_TESTS AND ENABLE_BENCHMARKS)
   add_subdirectory(Benchmarks/taxi)
-endif()
-
-if(ENABLE_RENDERING AND ENABLE_RENDER_TESTS)
-  enable_testing()
-  add_subdirectory(Tests/RenderTests)
 endif()
 
 execute_process(
@@ -841,10 +802,6 @@ set(CPACK_RPM_PACKAGE_AUTOREQ OFF)
 set(CPACK_RPM_SPEC_MORE_DEFINE "%define __jar_repack %{nil}")
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   set(CPACK_DEBIAN_PACKAGE_DEPENDS "${CPACK_DEBIAN_PACKAGE_DEPENDS}, libldap-2.4-2")
-endif()
-if(ENABLE_RENDERING)
-  set(CPACK_RPM_PACKAGE_REQUIRES "${CPACK_RPM_PACKAGE_REQUIRES}, libX11, libXext")
-  set(CPACK_DEBIAN_PACKAGE_DEPENDS "${CPACK_DEBIAN_PACKAGE_DEPENDS}, libx11-6, libxext6")
 endif()
 
 set_dpkg_arch(${CMAKE_SYSTEM_PROCESSOR} CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
@@ -921,11 +878,8 @@ install(PROGRAMS startomnisci DESTINATION ".")
 install(PROGRAMS scripts/inneromnisci DESTINATION "scripts")
 install(PROGRAMS insert_sample_data DESTINATION ".")
 
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  install(DIRECTORY docker/sds DESTINATION "docker")
-endif()
 install(FILES docker/README.md DESTINATION "docker")
-if(ENABLE_CUDA OR ENABLE_RENDERING)
+if(ENABLE_CUDA)
   install(FILES docker/Dockerfile.cuda RENAME Dockerfile DESTINATION "docker")
 else()
   install(FILES docker/Dockerfile.cpu RENAME Dockerfile DESTINATION "docker")

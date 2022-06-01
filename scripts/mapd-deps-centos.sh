@@ -323,17 +323,6 @@ popd # build
 popd # SPIRV-Cross-$VERS
 popd # spirv-cross
 
-# Vulkan
-# Custom tarball which excludes the spir-v toolchain
-VERS=1.2.162.0 # stable 12/11/20
-rm -rf vulkan
-mkdir -p vulkan
-pushd vulkan
-wget --continue ${HTTP_DEPS}/vulkansdk-linux-x86_64-no-spirv-$VERS.tar.gz -O vulkansdk-linux-x86_64-no-spirv-$VERS.tar.gz
-tar xvf vulkansdk-linux-x86_64-no-spirv-$VERS.tar.gz
-rsync -av $VERS/x86_64/* $PREFIX
-popd # vulkan
-
 # install opensaml and its dependencies
 VERS=3.2.2
 download ${HTTP_DEPS}/xerces-c-$VERS.tar.gz

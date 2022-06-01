@@ -57,14 +57,6 @@ class CommandLineOptions {
   AuthMetadata authMetadata;
 
   SystemParameters system_parameters;
-  bool enable_rendering = false;
-  bool enable_auto_clear_render_mem = false;
-  int render_oom_retry_threshold = 0;  // in milliseconds
-  size_t render_mem_bytes = 1000000000;
-  size_t max_concurrent_render_sessions = 500;
-  bool render_compositor_use_last_gpu = true;
-  bool renderer_use_vulkan_driver = false;
-
   bool enable_runtime_udf = false;
 
   bool enable_watchdog = true;

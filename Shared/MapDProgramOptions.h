@@ -46,12 +46,10 @@ class MapDProgramOptions : public boost::program_options::options_description {
   AuthMetadata authMetadata;
 
   MapDParameters mapd_parameters;
-  bool enable_rendering = false;
   bool enable_watchdog = true;
   bool enable_dynamic_watchdog = false;
   unsigned dynamic_watchdog_time_limit = 10000;
 
-  size_t render_mem_bytes = 500000000;
   size_t render_poly_cache_bytes = 300000000;
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1
                       // means do not override

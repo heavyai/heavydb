@@ -7,10 +7,8 @@ Boost | [Boost](<http://www.boost.org/LICENSE_1_0.txt>) | Multiple |
 cpr | [MIT](<https://github.com/whoshuu/cpr/blob/master/LICENSE>) | License verification |
 CUDA | [NVIDIA EULA](<http://docs.nvidia.com/cuda/eula/index.html#redistribution-rights>) | GPU access |
 double-conversion | [BSD-like](<https://github.com/google/double-conversion/blob/master/COPYING>) | Folly |
-EGL, KHR | [MIT]() | Rendering Support |
 fmt | [MIT](https://github.com/fmtlib/fmt/blob/master/LICENSE.rst) | Folly |
 Folly | [Apache](https://github.com/facebook/folly/blob/master/LICENSE) | Multiple |
-glbinding | [MIT](<https://github.com/cginternals/glbinding/blob/master/LICENSE>) | OpenGL management |
 gflags | [BSD-like](<https://github.com/gflags/gflags/blob/master/COPYING.txt>) | Folly |
 glog | [BSD-like](<https://github.com/google/glog/blob/master/COPYING>) | C++ logging |
 cpp-jwt | [MIT](<https://github.com/arun11299/cpp-jwt/blob/master/LICENSE>) | Elliptical Curve Digital Signature |
@@ -29,13 +27,7 @@ SQLite | [Public Domain](<https://www.sqlite.org/copyright.html>) | Catalog mana
 TBB | [Apache-2.0](https://raw.githubusercontent.com/oneapi-src/oneTBB/tbb_2020/LICENSE) | Threadpool support |
 TimeGM | [BSD](<https://cdn.netbsd.org/pub/pkgsrc/current/pkgsrc/pkgtools/libnbcompat/files/timegm.c>) | Date/time support |
 Uber H3 | [Apache-2.0](https://github.com/uber/h3/blob/master/LICENSE) | H3 index encoding/decoding |
-Xorg | [MIT](<https://www.x.org/releases/X11R7.7/doc/xorg-docs/License.html>) | OpenGL rendering |
 zlib | [zlib](<http://zlib.net/zlib_license.html>) | PNG support |
---- | --- | --- |
-glslang | [BSD BSD-like MIT](https://github.com/KhronosGroup/glslang/blob/master/LICENSE.txt) | Rendering support
-spirv-tools | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Tools/blob/master/LICENSE) | Rendering support
-spirv-cross | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Cross/blob/master/LICENSE) | Rendering support
-Vulkan Memory Allocator | [MIT](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/blob/master/LICENSE.txt) | Rendering support
 --- | --- | --- |
 generate\_cert (Go) | [BSD](<https://github.com/golang/go/blob/master/LICENSE>) | HTTPS certificate generator |
 gorilla/context | [BSD](<https://github.com/gorilla/context/blob/master/LICENSE>) | HTTP session handlers |

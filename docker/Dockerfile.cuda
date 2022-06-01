@@ -16,10 +16,8 @@ ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,graphics
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libldap-2.4-2 \
         bsdmainutils \
-        libopengl0 \
         wget \
         curl \
-        libvulkan1 \
         clang-9 \
         liblz4-tool \
         default-jre-headless && \
@@ -31,9 +29,6 @@ COPY --from=extract /omnisci /omnisci
 # UDF support
 RUN update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-9 100
 ENV CPLUS_INCLUDE_PATH=/usr/lib/llvm-9/lib/clang/9.0.0/include
-
-RUN mkdir -p /etc/vulkan/icd.d && \
-    echo '{ "file_format_version" : "1.0.0", "ICD" : { "library_path" : "libGLX_nvidia.so.0", "api_version" : "1.1.99" } }' > /etc/vulkan/icd.d/nvidia_icd.json
 
 WORKDIR /omnisci
 
