@@ -1943,7 +1943,8 @@ TEST_F(StringFunctionTest, SelectLowercaseNoneEncoded_MoreRowsThanWatchdogLimit)
   }
 }
 
-TEST_F(StringFunctionTest, UDF_ExpandDefaults) {
+// DISABLED until expansion  issue is resolved
+TEST_F(StringFunctionTest, DISABLED_UDF_ExpandDefaults) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
