@@ -35,8 +35,10 @@ namespace {
 
 class ArrowSQLRunnerImpl {
  public:
-  static void init(size_t max_gpu_mem, const std::string& udf_filename) {
-    instance_.reset(new ArrowSQLRunnerImpl(max_gpu_mem, udf_filename));
+  static void init(ConfigPtr config,
+                   size_t max_gpu_mem,
+                   const std::string& udf_filename) {
+    instance_.reset(new ArrowSQLRunnerImpl(config, max_gpu_mem, udf_filename));
   }
 
   static void reset() { instance_.reset(); }
@@ -45,6 +47,8 @@ class ArrowSQLRunnerImpl {
     CHECK(instance_) << "ArrowSQLRunner is not initialized";
     return instance_.get();
   }
+
+  Config& config() { return *config_; }
 
   bool gpusPresent() { return data_mgr_->gpusPresent(); }
 
@@ -326,7 +330,14 @@ class ArrowSQLRunnerImpl {
   }
 
  protected:
-  ArrowSQLRunnerImpl(size_t max_gpu_mem, const std::string& udf_filename) {
+  ArrowSQLRunnerImpl(ConfigPtr config,
+                     size_t max_gpu_mem,
+                     const std::string& udf_filename)
+      : config_(std::move(config)) {
+    if (!config_) {
+      config_ = std::make_shared<Config>();
+    }
+
     storage_ = std::make_shared<ArrowStorage>(TEST_SCHEMA_ID, "test", TEST_DB_ID);
 
     std::map<GpuMgrName, std::unique_ptr<GpuMgr>> gpu_mgrs;
@@ -350,12 +361,13 @@ class ArrowSQLRunnerImpl {
         /*executor_id=*/0,
         data_mgr_.get(),
         data_mgr_->getBufferProvider(),
+        config_,
         "",
         "",
         system_parameters);
     executor_->setSchemaProvider(storage_);
 
-    calcite_ = std::make_shared<CalciteJNI>(storage_, udf_filename, 1024);
+    calcite_ = std::make_shared<CalciteJNI>(storage_, config_, udf_filename, 1024);
     ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
     if (!udf_filename.empty()) {
       ExtensionFunctionsWhitelist::addUdfs(calcite_->getUserDefinedFunctionWhitelist());
@@ -368,6 +380,7 @@ class ArrowSQLRunnerImpl {
     calcite_->setRuntimeExtensionFunctions(udfs, udtfs, /*is_runtime=*/false);
   }
 
+  ConfigPtr config_;
   std::shared_ptr<DataMgr> data_mgr_;
   std::shared_ptr<ArrowStorage> storage_;
   std::shared_ptr<Executor> executor_;
@@ -383,12 +396,16 @@ std::unique_ptr<ArrowSQLRunnerImpl> ArrowSQLRunnerImpl::instance_;
 
 }  // namespace
 
-void init(size_t max_gpu_mem, const std::string& udf_filename) {
-  ArrowSQLRunnerImpl::init(max_gpu_mem, udf_filename);
+void init(ConfigPtr config, size_t max_gpu_mem, const std::string& udf_filename) {
+  ArrowSQLRunnerImpl::init(config, max_gpu_mem, udf_filename);
 }
 
 void reset() {
   ArrowSQLRunnerImpl::reset();
+}
+
+Config& config() {
+  return ArrowSQLRunnerImpl::get()->config();
 }
 
 bool gpusPresent() {

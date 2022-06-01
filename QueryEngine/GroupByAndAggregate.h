@@ -201,6 +201,7 @@ class GroupByAndAggregate {
   std::tuple<llvm::Value*, llvm::Value*> genLoadHashDesc(llvm::Value* groups_buffer);
 
   Executor* executor_;
+  const Config& config_;
   const RelAlgExecutionUnit& ra_exe_unit_;
   const std::vector<InputTableInfo>& query_infos_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;

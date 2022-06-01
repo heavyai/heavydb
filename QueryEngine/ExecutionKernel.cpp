@@ -26,7 +26,6 @@
 #include "QueryEngine/ExternalExecutor.h"
 #include "QueryEngine/SerializeToSql.h"
 
-extern size_t g_cpu_sub_task_size;
 namespace {
 
 bool needs_skip_result(const ResultSetPtr& res) {
@@ -331,7 +330,7 @@ void ExecutionKernel::runImpl(Executor* executor,
   // result sets. Can we simply do it once and holdin an outer structure?
   if (can_run_subkernels) {
     size_t total_rows = fetch_result->num_rows[0][0];
-    size_t sub_size = g_cpu_sub_task_size;
+    size_t sub_size = executor->getConfig().exec.sub_tasks.sub_task_size;
     for (size_t sub_start = start_rowid; sub_start < total_rows; sub_start += sub_size) {
       sub_size = (sub_start + sub_size > total_rows) ? total_rows - sub_start : sub_size;
       auto subtask = std::make_shared<KernelSubtask>(*this,

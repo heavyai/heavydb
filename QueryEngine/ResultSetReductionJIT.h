@@ -21,6 +21,7 @@
 #include "ResultSetReductionOps.h"
 
 #include "Descriptors/QueryMemoryDescriptor.h"
+#include "Shared/Config.h"
 #include "Shared/TargetInfo.h"
 
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
@@ -54,7 +55,8 @@ class ResultSetReductionJIT {
   ResultSetReductionJIT(const QueryMemoryDescriptor& query_mem_desc,
                         const std::vector<TargetInfo>& targets,
                         const std::vector<int64_t>& target_init_vals,
-                        const size_t executor_id);
+                        const size_t executor_id,
+                        const Config& config);
   virtual ~ResultSetReductionJIT() = default;
 
   // Generate the code for the result set reduction loop.
@@ -132,6 +134,7 @@ class ResultSetReductionJIT {
 
   std::string cacheKey() const;
 
+  const Config& config_;
   const QueryMemoryDescriptor query_mem_desc_;
   const std::vector<TargetInfo> targets_;
   const std::vector<int64_t> target_init_vals_;
@@ -147,8 +150,13 @@ class GpuReductionHelperJIT : public ResultSetReductionJIT {
   GpuReductionHelperJIT(const QueryMemoryDescriptor& query_mem_desc,
                         const std::vector<TargetInfo>& targets,
                         const std::vector<int64_t>& target_init_vals,
-                        const size_t executor_id)
-      : ResultSetReductionJIT(query_mem_desc, targets, target_init_vals, executor_id)
+                        const size_t executor_id,
+                        const Config& config)
+      : ResultSetReductionJIT(query_mem_desc,
+                              targets,
+                              target_init_vals,
+                              executor_id,
+                              config)
       , query_mem_desc_(query_mem_desc) {
     CHECK(query_mem_desc_.getQueryDescriptionType() ==
           QueryDescriptionType::GroupByPerfectHash);

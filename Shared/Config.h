@@ -12,5 +12,29 @@
  * limitations under the License.
  */
 
-extern bool g_use_groupby_buffer_desc;
-extern double g_gpu_mem_limit_percent;
+#pragma once
+
+#include <memory>
+
+struct WatchdogConfig {
+  bool enable = false;
+  bool enable_dynamic = false;
+  size_t time_limit = 10'000;
+  size_t baseline_max_groups = 120'000'000;
+};
+
+struct CpuSubTasksConfig {
+  bool enable = false;
+  size_t sub_task_size = 500'000;
+};
+
+struct ExecutionConfig {
+  WatchdogConfig watchdog;
+  CpuSubTasksConfig sub_tasks;
+};
+
+struct Config {
+  ExecutionConfig exec;
+};
+
+using ConfigPtr = std::shared_ptr<Config>;

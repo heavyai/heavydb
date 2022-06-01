@@ -33,8 +33,6 @@
 
 #include <future>
 
-extern bool g_enable_watchdog;
-
 bool g_enable_experimental_string_functions = false;
 
 namespace {
@@ -480,11 +478,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
 namespace {
 
 std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Expr> arg,
-                                                   const ResultSet& val_set) {
+                                                   const ResultSet& val_set,
+                                                   bool enable_watchdog) {
   if (!result_set::can_use_parallel_algorithms(val_set)) {
     return nullptr;
   }
-  if (val_set.rowCount() > 5000000 && g_enable_watchdog) {
+  if (val_set.rowCount() > 5000000 && enable_watchdog) {
     throw std::runtime_error(
         "Unable to handle 'expr IN (subquery)', subquery returned 5M+ rows.");
   }
@@ -586,7 +585,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(
         expr = nullptr;
       }
     } else {
-      expr = get_in_values_expr(lhs, *row_set);
+      expr =
+          get_in_values_expr(lhs, *row_set, executor_->getConfig().exec.watchdog.enable);
     }
     if (expr) {
       return expr;
@@ -598,7 +598,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(
     if (row.empty()) {
       break;
     }
-    if (g_enable_watchdog && value_exprs.size() >= 10000) {
+    if (executor_->getConfig().exec.watchdog.enable && value_exprs.size() >= 10000) {
       throw std::runtime_error(
           "Unable to handle 'expr IN (subquery)', subquery returned 10000+ rows.");
     }
@@ -631,7 +631,8 @@ void fill_dictionary_encoded_in_vals(
     const std::pair<int64_t, int64_t> values_rowset_slice,
     const StringDictionaryProxy* source_dict,
     const StringDictionaryProxy* dest_dict,
-    const int64_t needle_null_val) {
+    const int64_t needle_null_val,
+    bool enable_watchdog) {
   CHECK(in_vals.empty());
   bool dicts_are_equal = source_dict == dest_dict;
   for (auto index = values_rowset_slice.first; index < values_rowset_slice.second;
@@ -651,7 +652,7 @@ void fill_dictionary_encoded_in_vals(
         in_vals.push_back(string_id);
       }
     }
-    if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
+    if (UNLIKELY(enable_watchdog && (in_vals.size() & 1023) == 0 &&
                  total_in_vals_count.fetch_add(1024) >= g_max_integer_set_size)) {
       throw std::runtime_error(
           "Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
@@ -662,14 +663,15 @@ void fill_dictionary_encoded_in_vals(
 void fill_integer_in_vals(std::vector<int64_t>& in_vals,
                           std::atomic<size_t>& total_in_vals_count,
                           const ResultSet* values_rowset,
-                          const std::pair<int64_t, int64_t> values_rowset_slice) {
+                          const std::pair<int64_t, int64_t> values_rowset_slice,
+                          bool enable_watchdog) {
   CHECK(in_vals.empty());
   for (auto index = values_rowset_slice.first; index < values_rowset_slice.second;
        ++index) {
     const auto row = values_rowset->getOneColRow(index);
     if (row.valid) {
       in_vals.push_back(row.value);
-      if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
+      if (UNLIKELY(enable_watchdog && (in_vals.size() & 1023) == 0 &&
                    total_in_vals_count.fetch_add(1024) >= g_max_integer_set_size)) {
         throw std::runtime_error(
             "Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
@@ -720,7 +722,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
       const auto needle_null_val = inline_int_null_val(arg_type);
       fetcher_threads.push_back(std::async(
           std::launch::async,
-          [&val_set, &total_in_vals_count, sd, dd, needle_null_val](
+          [this, &val_set, &total_in_vals_count, sd, dd, needle_null_val](
               std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
             fill_dictionary_encoded_in_vals(in_vals,
                                             total_in_vals_count,
@@ -728,7 +730,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
                                             {start, end},
                                             sd,
                                             dd,
-                                            needle_null_val);
+                                            needle_null_val,
+                                            executor_->getConfig().exec.watchdog.enable);
           },
           std::ref(expr_set[i]),
           start_entry,
@@ -737,9 +740,13 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
       CHECK(arg_type.is_integer());
       fetcher_threads.push_back(std::async(
           std::launch::async,
-          [&val_set, &total_in_vals_count](
+          [this, &val_set, &total_in_vals_count](
               std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
-            fill_integer_in_vals(in_vals, total_in_vals_count, &val_set, {start, end});
+            fill_integer_in_vals(in_vals,
+                                 total_in_vals_count,
+                                 &val_set,
+                                 {start, end},
+                                 executor_->getConfig().exec.watchdog.enable);
           },
           std::ref(expr_set[i]),
           start_entry,

@@ -80,7 +80,6 @@ static_assert(false, "LLVM Version >= 9 is required.");
 
 #include <boost/filesystem.hpp>
 
-extern bool g_enable_dynamic_watchdog;
 extern bool g_enable_filter_function;
 extern bool g_enable_smem_grouped_non_count_agg;
 extern bool g_enable_smem_non_grouped_agg;
@@ -2127,7 +2126,7 @@ void Executor::createErrorCheckControlFlow(
         if (!err_lv_returned_from_row_func) {
           err_lv_returned_from_row_func = err_lv;
         }
-        if (device_type == ExecutorDeviceType::GPU && g_enable_dynamic_watchdog) {
+        if (device_type == ExecutorDeviceType::GPU && run_with_dynamic_watchdog) {
           // let kernel execution finish as expected, regardless of the observed error,
           // unless it is from the dynamic watchdog where all threads within that block
           // return together.
@@ -2825,7 +2824,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
           *query_mem_desc,
           target_exprs_to_infos(ra_exe_unit.target_exprs, *query_mem_desc),
           plan_state_->init_agg_vals_,
-          executor_id_);
+          executor_id_,
+          getConfig());
       gpu_smem_code.codegen();
       gpu_smem_code.injectFunctionsInto(query_func);
 

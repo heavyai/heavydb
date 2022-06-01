@@ -895,7 +895,9 @@ inline ResultSetRowIterator& ResultSetRowIterator::operator++(void) {
 
 class ResultSetManager {
  public:
-  ResultSet* reduce(std::vector<ResultSet*>&, const size_t executor_id);
+  ResultSet* reduce(std::vector<ResultSet*>&,
+                    const size_t executor_id,
+                    const Config& config);
 
   std::shared_ptr<ResultSet> getOwnResultSet();
 

@@ -1032,7 +1032,7 @@ void run_reduction(const std::vector<TargetInfo>& target_infos,
       storage2->getUnderlyingBuffer(), target_infos, query_mem_desc, generator2, step);
   ResultSetManager rs_manager;
   std::vector<ResultSet*> storage_set{rs1.get(), rs2.get()};
-  rs_manager.reduce(storage_set, Executor::UNITARY_EXECUTOR_ID);
+  rs_manager.reduce(storage_set, Executor::UNITARY_EXECUTOR_ID, config());
 }
 
 void test_reduce(const std::vector<TargetInfo>& target_infos,
@@ -1070,7 +1070,8 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
       storage2->getUnderlyingBuffer(), target_infos, query_mem_desc, generator2, step);
   ResultSetManager rs_manager;
   std::vector<ResultSet*> storage_set{rs1.get(), rs2.get()};
-  auto result_rs = rs_manager.reduce(storage_set, Executor::UNITARY_EXECUTOR_ID);
+  auto result_rs =
+      rs_manager.reduce(storage_set, Executor::UNITARY_EXECUTOR_ID, config());
 
   if (sort) {
     std::list<Analyzer::OrderEntry> order_entries;
@@ -1213,7 +1214,8 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
 
   ResultSetManager rs_manager;
   std::vector<ResultSet*> storage_set{rs1.get(), rs2.get()};
-  auto result_rs = rs_manager.reduce(storage_set, Executor::UNITARY_EXECUTOR_ID);
+  auto result_rs =
+      rs_manager.reduce(storage_set, Executor::UNITARY_EXECUTOR_ID, config());
   std::queue<std::vector<int64_t>> ref_table = rse->getReferenceTable();
   std::vector<bool> ref_group_map = rse->getReferenceGroupMap();
   const auto result = get_rows_sorted_by_col(*result_rs, 0);
@@ -1971,9 +1973,11 @@ TEST(MoreReduce, MissingValues) {
   ResultSetReductionJIT reduction_jit(rs1->getQueryMemDesc(),
                                       rs1->getTargetInfos(),
                                       rs1->getTargetInitVals(),
-                                      Executor::UNITARY_EXECUTOR_ID);
+                                      Executor::UNITARY_EXECUTOR_ID,
+                                      config());
   const auto reduction_code = reduction_jit.codegen();
-  storage1->reduce(*storage2, {}, reduction_code, Executor::UNITARY_EXECUTOR_ID);
+  storage1->reduce(
+      *storage2, {}, reduction_code, Executor::UNITARY_EXECUTOR_ID, config());
   {
     const auto row = rs1->getNextRow(false, false);
     CHECK_EQ(size_t(2), row.size());
@@ -2041,9 +2045,11 @@ TEST(MoreReduce, MissingValuesKeyless) {
   ResultSetReductionJIT reduction_jit(rs1->getQueryMemDesc(),
                                       rs1->getTargetInfos(),
                                       rs1->getTargetInitVals(),
-                                      Executor::UNITARY_EXECUTOR_ID);
+                                      Executor::UNITARY_EXECUTOR_ID,
+                                      config());
   const auto reduction_code = reduction_jit.codegen();
-  storage1->reduce(*storage2, {}, reduction_code, Executor::UNITARY_EXECUTOR_ID);
+  storage1->reduce(
+      *storage2, {}, reduction_code, Executor::UNITARY_EXECUTOR_ID, config());
   {
     const auto row = rs1->getNextRow(false, false);
     CHECK_EQ(size_t(2), row.size());
@@ -2129,10 +2135,14 @@ TEST(MoreReduce, OffsetRewrite) {
   ResultSetReductionJIT reduction_jit(rs1->getQueryMemDesc(),
                                       rs1->getTargetInfos(),
                                       rs1->getTargetInitVals(),
-                                      Executor::UNITARY_EXECUTOR_ID);
+                                      Executor::UNITARY_EXECUTOR_ID,
+                                      config());
   const auto reduction_code = reduction_jit.codegen();
-  storage1->reduce(
-      *storage2, serialized_varlen_buffer, reduction_code, Executor::UNITARY_EXECUTOR_ID);
+  storage1->reduce(*storage2,
+                   serialized_varlen_buffer,
+                   reduction_code,
+                   Executor::UNITARY_EXECUTOR_ID,
+                   config());
   rs1->setSeparateVarlenStorageValid(true);
   {
     const auto row = rs1->getNextRow(false, false);

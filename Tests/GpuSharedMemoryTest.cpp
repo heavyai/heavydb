@@ -257,14 +257,19 @@ create_and_init_output_result_sets(std::shared_ptr<RowSetMemoryOwner> row_set_me
 void perform_reduction_on_cpu(std::vector<std::unique_ptr<ResultSet>>& result_sets,
                               const ResultSetStorage* cpu_result_storage) {
   CHECK(result_sets.size() > 0);
+  Config config;
   ResultSetReductionJIT reduction_jit(result_sets.front()->getQueryMemDesc(),
                                       result_sets.front()->getTargetInfos(),
                                       result_sets.front()->getTargetInitVals(),
-                                      Executor::UNITARY_EXECUTOR_ID);
+                                      Executor::UNITARY_EXECUTOR_ID,
+                                      config);
   const auto reduction_code = reduction_jit.codegen();
   for (auto& result_set : result_sets) {
-    cpu_result_storage->reduce(
-        *(result_set->getStorage()), {}, reduction_code, Executor::UNITARY_EXECUTOR_ID);
+    cpu_result_storage->reduce(*(result_set->getStorage()),
+                               {},
+                               reduction_code,
+                               Executor::UNITARY_EXECUTOR_ID,
+                               config);
   }
 }
 
@@ -361,7 +366,9 @@ void perform_test_and_verify_results(TestInputData input) {
       row_set_mem_owner, query_mem_desc, input.target_infos);
 
   // performing reduciton using the GPU reduction code:
-  GpuReductionTester gpu_smem_tester(module,
+  Config config;
+  GpuReductionTester gpu_smem_tester(config,
+                                     module,
                                      context,
                                      query_mem_desc,
                                      input.target_infos,

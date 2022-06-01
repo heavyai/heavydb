@@ -18,8 +18,6 @@
 #include "Execute.h"
 #include "StringDictionaryTranslationMgr.h"
 
-extern bool g_enable_watchdog;
-
 llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
                                         const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
@@ -226,7 +224,7 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
   }
   // dictionary encode non-constant
   if (operand_ti.get_compression() != kENCODING_DICT && !operand_is_const) {
-    if (g_enable_watchdog) {
+    if (config_.exec.watchdog.enable) {
       throw WatchdogException(
           "Cast from none-encoded string to dictionary-encoded would be slow");
     }
@@ -245,7 +243,7 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
   }
   CHECK(operand_lv->getType()->isIntegerTy(32));
   if (ti.get_compression() == kENCODING_NONE) {
-    if (g_enable_watchdog) {
+    if (config_.exec.watchdog.enable) {
       throw WatchdogException(
           "Cast from dictionary-encoded string to none-encoded would be slow");
     }

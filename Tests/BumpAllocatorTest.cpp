@@ -63,7 +63,7 @@ GpuInfo get_gpu_info() {
 }
 
 bool setup() {
-  init(/*max_gpu_mem=*/1000000000);
+  init(nullptr, /*max_gpu_mem=*/1000000000);
 
   if (!gpusPresent()) {
     LOG(WARNING) << "No GPUs detected. Skipping all Bump Allocator tests.";

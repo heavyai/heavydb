@@ -127,9 +127,6 @@ class CommandLineOptions {
   const bool dist_v5_;
 };
 
-extern bool g_enable_watchdog;
-extern bool g_enable_dynamic_watchdog;
-extern unsigned g_dynamic_watchdog_time_limit;
 extern unsigned g_trivial_loop_join_threshold;
 extern bool g_from_table_reordering;
 extern bool g_enable_filter_push_down;
@@ -173,8 +170,6 @@ extern size_t g_min_memory_allocation_size;
 extern bool g_enable_experimental_string_functions;
 extern bool g_enable_interop;
 extern bool g_enable_union;
-extern bool g_enable_cpu_sub_tasks;
-extern size_t g_cpu_sub_task_size;
 extern bool g_enable_filter_function;
 extern bool g_enable_automatic_ir_metadata;
 extern size_t g_enable_parallel_linearization;

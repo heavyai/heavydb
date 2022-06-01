@@ -29,8 +29,6 @@
 #include <ctime>
 #include <iostream>
 
-extern bool g_enable_watchdog;
-
 using namespace TestHelpers;
 using namespace TestHelpers::ArrowSQLRunner;
 
@@ -892,9 +890,11 @@ TEST(Select, Disable_INExpr_Decorrelation_Under_Watchdog) {
       "val IN (SELECT key0 FROM TT1 WHERE TT1.key0 IS NOT NULL AND TT1.rowid > -1 AND "
       "TT1.rowid < 100 AND TT1.rowid between 0 and 100 AND id = TT1.key1);";
 
-  ScopeGuard reset = [orig = g_enable_watchdog] { g_enable_watchdog = orig; };
+  ScopeGuard reset = [orig = config().exec.watchdog.enable] {
+    config().exec.watchdog.enable = orig;
+  };
   for (auto flag : {false, true}) {
-    g_enable_watchdog = flag;
+    config().exec.watchdog.enable = flag;
     // we do not decorrelate IN-expr if watchdog is enabled, so
     // we expect to see the existence of IN-expr in the query plan
     for (auto& query : {q1, q2}) {

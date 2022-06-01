@@ -157,6 +157,8 @@ class TestDataProvider : public TestHelpers::TestDataProvider {
 class NoCatalogSqlTest : public ::testing::Test {
  protected:
   static void SetUpTestSuite() {
+    config_ = std::make_shared<Config>();
+
     schema_provider_ = std::make_shared<TestSchemaProvider>();
 
     SystemParameters system_parameters;
@@ -167,14 +169,19 @@ class NoCatalogSqlTest : public ::testing::Test {
     ps_mgr->registerDataProvider(TEST_SCHEMA_ID,
                                  std::make_shared<TestDataProvider>(schema_provider_));
 
-    executor_ = Executor::getExecutor(
-        0, data_mgr_.get(), data_mgr_->getBufferProvider(), "", "", system_parameters);
+    executor_ = Executor::getExecutor(0,
+                                      data_mgr_.get(),
+                                      data_mgr_->getBufferProvider(),
+                                      config_,
+                                      "",
+                                      "",
+                                      system_parameters);
 
     init_calcite("");
   }
 
   static void init_calcite(const std::string& udf_filename) {
-    calcite_ = std::make_shared<CalciteJNI>(schema_provider_, udf_filename);
+    calcite_ = std::make_shared<CalciteJNI>(schema_provider_, config_, udf_filename);
   }
 
   static void TearDownTestSuite() {
@@ -213,12 +220,14 @@ class NoCatalogSqlTest : public ::testing::Test {
   }
 
  protected:
+  static ConfigPtr config_;
   static std::shared_ptr<DataMgr> data_mgr_;
   static SchemaProviderPtr schema_provider_;
   static std::shared_ptr<Executor> executor_;
   static std::shared_ptr<CalciteJNI> calcite_;
 };
 
+ConfigPtr NoCatalogSqlTest::config_;
 std::shared_ptr<DataMgr> NoCatalogSqlTest::data_mgr_;
 SchemaProviderPtr NoCatalogSqlTest::schema_provider_;
 std::shared_ptr<Executor> NoCatalogSqlTest::executor_;
@@ -326,7 +335,7 @@ TEST_F(NoCatalogSqlTest, MultipleCalciteMultipleThreads) {
   threads.resize(TEST_NTHREADS);
   for (int i = 0; i < TEST_NTHREADS; ++i) {
     threads[i] = std::async(std::launch::async, [this, i, &res]() {
-      auto calcite = std::make_unique<CalciteJNI>(schema_provider_);
+      auto calcite = std::make_unique<CalciteJNI>(schema_provider_, config_);
       auto query_ra = calcite->process(
           "admin", "test_db", "SELECT col_bi + " + std::to_string(i) + " FROM test1;");
       res[i] = runRAQuery(query_ra);
@@ -342,8 +351,9 @@ TEST_F(NoCatalogSqlTest, MultipleCalciteMultipleThreads) {
 
 TEST(CalciteReinitTest, SingleThread) {
   auto schema_provider = std::make_shared<TestSchemaProvider>();
+  auto config = std::make_shared<Config>();
   for (int i = 0; i < 10; ++i) {
-    auto calcite = std::make_shared<CalciteJNI>(schema_provider, "");
+    auto calcite = std::make_shared<CalciteJNI>(schema_provider, config);
     auto query_ra = calcite->process("admin", "test_db", "SELECT 1;");
     CHECK(query_ra.find("LogicalValues") != std::string::npos);
     CHECK(query_ra.find("LogicalProject") != std::string::npos);
@@ -352,9 +362,10 @@ TEST(CalciteReinitTest, SingleThread) {
 
 TEST(CalciteReinitTest, MultipleThreads) {
   auto schema_provider = std::make_shared<TestSchemaProvider>();
+  auto config = std::make_shared<Config>();
   for (int i = 0; i < 10; ++i) {
-    auto f = std::async(std::launch::async, [schema_provider]() {
-      auto calcite = std::make_shared<CalciteJNI>(schema_provider, "");
+    auto f = std::async(std::launch::async, [schema_provider, config]() {
+      auto calcite = std::make_shared<CalciteJNI>(schema_provider, config);
       auto query_ra = calcite->process("admin", "test_db", "SELECT 1;");
       CHECK(query_ra.find("LogicalValues") != std::string::npos);
       CHECK(query_ra.find("LogicalProject") != std::string::npos);

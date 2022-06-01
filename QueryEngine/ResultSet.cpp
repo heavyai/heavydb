@@ -48,13 +48,12 @@
 #include <numeric>
 
 size_t g_parallel_top_min = 100e3;
-size_t g_parallel_top_max = 20e6;  // In effect only with g_enable_watchdog.
+size_t g_parallel_top_max = 20e6;  // In effect only with enabled watchdog.
 size_t g_streaming_topn_max = 100e3;
 
 constexpr int64_t uninitialized_cached_row_count{-1};
 
 extern bool g_enable_direct_columnarization;
-extern bool g_enable_watchdog;
 
 void ResultSet::keepFirstN(const size_t n) {
   invalidateCachedRowCount();
@@ -777,12 +776,13 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
   CHECK(permutation_.empty());
 
   if (top_n && g_parallel_top_min < entryCount()) {
-    if (g_enable_watchdog && g_parallel_top_max < entryCount()) {
+    if (executor->getConfig().exec.watchdog.enable && g_parallel_top_max < entryCount()) {
       throw WatchdogException("Sorting the result would be too slow");
     }
     parallelTop(order_entries, top_n, executor);
   } else {
-    if (g_enable_watchdog && Executor::baseline_threshold < entryCount()) {
+    if (executor && executor->getConfig().exec.watchdog.enable &&
+        Executor::baseline_threshold < entryCount()) {
       throw WatchdogException("Sorting the result would be too slow");
     }
 

@@ -19,6 +19,7 @@
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "SchemaMgr/SchemaProvider.h"
+#include "Shared/Config.h"
 
 struct FilterPushDownInfo {
   int input_prev;
@@ -29,6 +30,7 @@ struct FilterPushDownInfo {
 class CalciteJNI {
  public:
   CalciteJNI(SchemaProviderPtr schema_provider,
+             ConfigPtr config,
              const std::string& udf_filename = "",
              size_t calcite_max_mem_mb = 1024);
   ~CalciteJNI();

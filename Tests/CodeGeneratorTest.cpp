@@ -34,7 +34,7 @@ TEST(CodeGeneratorTest, IntegerConstant) {
   auto executor =
       Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get();
   auto llvm_module = llvm::CloneModule(*executor->get_rt_module());
-  ScalarCodeGenerator code_generator(std::move(llvm_module));
+  ScalarCodeGenerator code_generator(executor->getConfig(), std::move(llvm_module));
   CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
   co.hoist_literals = false;
 
@@ -59,7 +59,7 @@ TEST(CodeGeneratorTest, IntegerAdd) {
   auto executor =
       Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get();
   auto llvm_module = llvm::CloneModule(*executor->get_rt_module());
-  ScalarCodeGenerator code_generator(std::move(llvm_module));
+  ScalarCodeGenerator code_generator(executor->getConfig(), std::move(llvm_module));
   CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
   co.hoist_literals = false;
 
@@ -86,7 +86,7 @@ TEST(CodeGeneratorTest, IntegerColumn) {
   auto executor =
       Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get();
   auto llvm_module = llvm::CloneModule(*executor->get_rt_module());
-  ScalarCodeGenerator code_generator(std::move(llvm_module));
+  ScalarCodeGenerator code_generator(executor->getConfig(), std::move(llvm_module));
   CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
   co.hoist_literals = false;
 
@@ -114,7 +114,7 @@ TEST(CodeGeneratorTest, IntegerExpr) {
   auto executor =
       Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get();
   auto llvm_module = llvm::CloneModule(*executor->get_rt_module());
-  ScalarCodeGenerator code_generator(std::move(llvm_module));
+  ScalarCodeGenerator code_generator(executor->getConfig(), std::move(llvm_module));
   CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
   co.hoist_literals = false;
 
@@ -156,7 +156,7 @@ TEST(CodeGeneratorTest, IntegerConstantGPU) {
   auto executor =
       Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get();
   auto llvm_module = llvm::CloneModule(*executor->get_rt_module());
-  ScalarCodeGenerator code_generator(std::move(llvm_module));
+  ScalarCodeGenerator code_generator(executor->getConfig(), std::move(llvm_module));
   CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::GPU);
   co.hoist_literals = false;
 
@@ -203,7 +203,7 @@ TEST(CodeGeneratorTest, IntegerAddGPU) {
   auto executor =
       Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get();
   auto llvm_module = llvm::CloneModule(*executor->get_rt_module());
-  ScalarCodeGenerator code_generator(std::move(llvm_module));
+  ScalarCodeGenerator code_generator(executor->getConfig(), std::move(llvm_module));
   CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::GPU);
   co.hoist_literals = false;
 
@@ -252,7 +252,7 @@ TEST(CodeGeneratorTest, IntegerColumnGPU) {
   auto executor =
       Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get();
   auto llvm_module = llvm::CloneModule(*executor->get_rt_module());
-  ScalarCodeGenerator code_generator(std::move(llvm_module));
+  ScalarCodeGenerator code_generator(executor->getConfig(), std::move(llvm_module));
   CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::GPU);
   co.hoist_literals = false;
 
@@ -311,7 +311,7 @@ TEST(CodeGeneratorTest, IntegerExprGPU) {
   auto executor =
       Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get();
   auto llvm_module = llvm::CloneModule(*executor->get_rt_module());
-  ScalarCodeGenerator code_generator(std::move(llvm_module));
+  ScalarCodeGenerator code_generator(executor->getConfig(), std::move(llvm_module));
   CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::GPU);
   co.hoist_literals = false;
 

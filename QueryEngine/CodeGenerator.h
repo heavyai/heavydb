@@ -26,13 +26,17 @@ class CodeGenerator {
  public:
   CodeGenerator(Executor* executor)
       : executor_(executor)
+      , config_(executor->getConfig())
       , cgen_state_(executor->cgen_state_.get())
       , plan_state_(executor->plan_state_.get()) {}
 
   // Overload which can be used without an executor, for SQL scalar expression code
   // generation.
-  CodeGenerator(CgenState* cgen_state, PlanState* plan_state)
-      : executor_(nullptr), cgen_state_(cgen_state), plan_state_(plan_state) {}
+  CodeGenerator(const Config& config, CgenState* cgen_state, PlanState* plan_state)
+      : executor_(nullptr)
+      , config_(config)
+      , cgen_state_(cgen_state)
+      , plan_state_(plan_state) {}
 
   // Generates IR value(s) for the given analyzer expression.
   std::vector<llvm::Value*> codegen(const Analyzer::Expr*,
@@ -486,6 +490,7 @@ class CodeGenerator {
     return executor_;
   }
 
+  const Config& config_;
   CgenState* cgen_state_;
   PlanState* plan_state_;
 
@@ -496,8 +501,8 @@ class CodeGenerator {
 class ScalarCodeGenerator : public CodeGenerator {
  public:
   // Constructor which takes the runtime module.
-  ScalarCodeGenerator(std::unique_ptr<llvm::Module> llvm_module)
-      : CodeGenerator(nullptr, nullptr), module_(std::move(llvm_module)) {}
+  ScalarCodeGenerator(const Config& config, std::unique_ptr<llvm::Module> llvm_module)
+      : CodeGenerator(config, nullptr, nullptr), module_(std::move(llvm_module)) {}
 
   // Function generated for a given analyzer expression. For GPU, a wrapper which meets
   // the kernel signature constraints (returns void, takes all arguments as pointers) is

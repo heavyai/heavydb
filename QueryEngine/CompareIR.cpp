@@ -19,8 +19,6 @@
 
 #include <typeinfo>
 
-extern bool g_enable_watchdog;
-
 namespace {
 
 llvm::CmpInst::Predicate llvm_icmp_pred(const SQLOps op_type) {
@@ -471,7 +469,7 @@ llvm::Value* CodeGenerator::codegenQualifierCmp(const SQLOps optype,
   const bool is_real_string{target_ti.is_string() &&
                             target_ti.get_compression() != kENCODING_DICT};
   if (is_real_string) {
-    if (g_enable_watchdog) {
+    if (config_.exec.watchdog.enable) {
       throw WatchdogException(
           "Comparison between a dictionary-encoded and a none-encoded string would be "
           "slow");

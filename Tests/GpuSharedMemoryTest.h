@@ -59,7 +59,8 @@ class StrideNumberGenerator : public NumberGenerator {
 
 class GpuReductionTester : public GpuSharedMemCodeBuilder {
  public:
-  GpuReductionTester(llvm::Module* module,
+  GpuReductionTester(const Config& config,
+                     llvm::Module* module,
                      llvm::LLVMContext& context,
                      const QueryMemoryDescriptor& qmd,
                      const std::vector<TargetInfo>& targets,
@@ -70,7 +71,8 @@ class GpuReductionTester : public GpuSharedMemCodeBuilder {
                                 qmd,
                                 targets,
                                 init_agg_values,
-                                Executor::UNITARY_EXECUTOR_ID)
+                                Executor::UNITARY_EXECUTOR_ID,
+                                config)
       , cuda_mgr_(cuda_mgr) {
     // CHECK(getReductionFunction());
   }

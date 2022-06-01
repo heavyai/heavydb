@@ -19,7 +19,6 @@
 
 extern bool g_enable_runtime_query_interrupt;
 extern bool g_enable_non_kernel_time_query_interrupt;
-extern bool g_enable_dynamic_watchdog;
 
 void Executor::registerActiveModule(void* llvm_module, const int device_id) const {
 #ifdef HAVE_CUDA
@@ -101,7 +100,7 @@ void Executor::interrupt(const std::string& query_session,
   // In this case, we should not execute the code in below to avoid runtime failure
   CHECK(data_mgr_);
   auto cuda_mgr = data_mgr_->getCudaMgr();
-  if (cuda_mgr && (g_enable_dynamic_watchdog || allow_interrupt)) {
+  if (cuda_mgr && (config_->exec.watchdog.enable_dynamic || allow_interrupt)) {
     // we additionally allow sending interrupt signal for
     // `g_enable_non_kernel_time_query_interrupt` especially for CTAS/ITAS queries: data
     // population happens on CPU but select_query can be processed via GPU
@@ -138,7 +137,7 @@ void Executor::interrupt(const std::string& query_session,
         cuEventCreate(&stop, 0);
         cuEventRecord(start, cu_stream1);
 
-        if (g_enable_dynamic_watchdog) {
+        if (config_->exec.watchdog.enable_dynamic) {
           CUdeviceptr dw_abort;
           size_t dw_abort_size;
           if (cuModuleGetGlobal(&dw_abort, &dw_abort_size, cu_module, "dw_abort") ==
@@ -215,7 +214,7 @@ void Executor::interrupt(const std::string& query_session,
     }
   }
 #endif
-  if (g_enable_dynamic_watchdog) {
+  if (config_->exec.watchdog.enable_dynamic) {
     dynamic_watchdog_init(static_cast<unsigned>(DW_ABORT));
   }
 
@@ -232,7 +231,7 @@ void Executor::resetInterrupt() {
 #endif
   const auto allow_interrupt =
       g_enable_runtime_query_interrupt || g_enable_non_kernel_time_query_interrupt;
-  if (g_enable_dynamic_watchdog) {
+  if (config_->exec.watchdog.enable_dynamic) {
     dynamic_watchdog_init(static_cast<unsigned>(DW_RESET));
   } else if (allow_interrupt) {
     VLOG(1) << "Reset interrupt flag for CPU execution kernel on Executor "

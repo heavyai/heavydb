@@ -30,8 +30,6 @@
 #include "StreamingTopN.h"
 
 extern bool g_enable_non_kernel_time_query_interrupt;
-extern bool g_enable_dynamic_watchdog;
-extern unsigned g_dynamic_watchdog_time_limit;
 
 QueryExecutionContext::QueryExecutionContext(
     const RelAlgExecutionUnit& ra_exe_unit,
@@ -248,11 +246,11 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   cuEventCreate(&start2, 0);
   cuEventCreate(&stop2, 0);
 
-  if (g_enable_dynamic_watchdog || (allow_runtime_interrupt)) {
+  if (executor_->getConfig().exec.watchdog.enable_dynamic || (allow_runtime_interrupt)) {
     cuEventRecord(start0, 0);
   }
 
-  if (g_enable_dynamic_watchdog) {
+  if (executor_->getConfig().exec.watchdog.enable_dynamic) {
     initializeDynamicWatchdog(native_code.second, device_id);
   }
 
@@ -310,7 +308,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       param_ptrs.push_back(&param);
     }
 
-    if (g_enable_dynamic_watchdog || allow_runtime_interrupt) {
+    if (executor_->getConfig().exec.watchdog.enable_dynamic || allow_runtime_interrupt) {
       cuEventRecord(stop0, 0);
       cuEventSynchronize(stop0);
       float milliseconds0 = 0;
@@ -347,7 +345,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                      &param_ptrs[0],
                                      nullptr));
     }
-    if (g_enable_dynamic_watchdog || allow_runtime_interrupt) {
+    if (executor_->getConfig().exec.watchdog.enable_dynamic || allow_runtime_interrupt) {
       executor_->registerActiveModule(native_code.second, device_id);
       cuEventRecord(stop1, 0);
       cuEventSynchronize(stop1);
@@ -481,7 +479,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       param_ptrs.push_back(&param);
     }
 
-    if (g_enable_dynamic_watchdog || (allow_runtime_interrupt)) {
+    if (executor_->getConfig().exec.watchdog.enable_dynamic ||
+        (allow_runtime_interrupt)) {
       cuEventRecord(stop0, 0);
       cuEventSynchronize(stop0);
       float milliseconds0 = 0;
@@ -518,7 +517,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                      nullptr));
     }
 
-    if (g_enable_dynamic_watchdog || allow_runtime_interrupt) {
+    if (executor_->getConfig().exec.watchdog.enable_dynamic || allow_runtime_interrupt) {
       executor_->registerActiveModule(native_code.second, device_id);
       cuEventRecord(stop1, 0);
       cuEventSynchronize(stop1);
@@ -577,7 +576,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
         device_id);
   }
 
-  if (g_enable_dynamic_watchdog || allow_runtime_interrupt) {
+  if (executor_->getConfig().exec.watchdog.enable_dynamic || allow_runtime_interrupt) {
     cuEventRecord(stop2, 0);
     cuEventSynchronize(stop2);
     float milliseconds2 = 0;
@@ -788,10 +787,11 @@ void QueryExecutionContext::initializeDynamicWatchdog(void* native_module,
   CUdeviceptr dw_cycle_budget;
   size_t dw_cycle_budget_size;
   // Translate milliseconds to device cycles
-  uint64_t cycle_budget = executor_->deviceCycles(g_dynamic_watchdog_time_limit);
+  uint64_t cycle_budget =
+      executor_->deviceCycles(executor_->getConfig().exec.watchdog.time_limit);
   if (device_id == 0) {
     LOG(INFO) << "Dynamic Watchdog budget: GPU: "
-              << std::to_string(g_dynamic_watchdog_time_limit) << "ms, "
+              << std::to_string(executor_->getConfig().exec.watchdog.time_limit) << "ms, "
               << std::to_string(cycle_budget) << " cycles";
   }
   checkCudaErrors(cuModuleGetGlobal(

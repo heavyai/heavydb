@@ -21,6 +21,7 @@
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "QueryEngine/QueryHint.h"
+#include "Shared/Config.h"
 
 #include "BufferPoolStats.h"
 
@@ -35,9 +36,13 @@ extern bool g_hoist_literals;
 constexpr int TEST_SCHEMA_ID = 1;
 constexpr int TEST_DB_ID = (TEST_SCHEMA_ID << 24) + 1;
 
-void init(size_t max_gpu_mem = 0, const std::string& udf_filename = "");
+void init(ConfigPtr config = nullptr,
+          size_t max_gpu_mem = 0,
+          const std::string& udf_filename = "");
 
 void reset();
+
+Config& config();
 
 bool gpusPresent();
 

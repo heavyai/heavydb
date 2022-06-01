@@ -43,7 +43,6 @@ bool g_aggregator{false};
 extern bool g_enable_smem_group_by;
 extern bool g_allow_cpu_retry;
 extern bool g_allow_query_step_cpu_retry;
-extern bool g_enable_watchdog;
 extern bool g_skip_intermediate_count;
 extern bool g_enable_left_join_filter_hoisting;
 extern bool g_from_table_reordering;
@@ -3037,11 +3036,11 @@ TEST_F(Select, Arrays) {
                        dt),
         std::vector<int64_t>({1, 0, 1, 0, 1, 0}));
 
-    const auto watchdog_state = g_enable_watchdog;
+    const auto watchdog_state = config().exec.watchdog.enable;
     ScopeGuard reset_Watchdog_state = [&watchdog_state] {
-      g_enable_watchdog = watchdog_state;
+      config().exec.watchdog.enable = watchdog_state;
     };
-    g_enable_watchdog = true;
+    config().exec.watchdog.enable = true;
     // throw exception when comparing full array joins when watchdog is on
     EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
                                 "t1.arr_str[1] > t2.arr_str[1];",
@@ -3081,7 +3080,7 @@ TEST_F(Select, Arrays) {
     // translation maps, as well as much faster support for this class of queries
     // with watchdog off (distributed and single-node).
 
-    g_enable_watchdog = false;
+    config().exec.watchdog.enable = false;
 
     EXPECT_EQ(int64_t(190),
               v<int64_t>(run_simple_agg(
@@ -4510,14 +4509,14 @@ TEST_F(Select, Case) {
           dt));  // Cast from BOOLEAN to TEXT not supported
 
     {
-      const auto watchdog_state = g_enable_watchdog;
-      g_enable_watchdog = true;
+      const auto watchdog_state = config().exec.watchdog.enable;
+      config().exec.watchdog.enable = true;
       ScopeGuard reset_Watchdog_state = [&watchdog_state] {
-        g_enable_watchdog = watchdog_state;
+        config().exec.watchdog.enable = watchdog_state;
       };
 
       // casts not yet supported in distributed mode
-      g_enable_watchdog = false;
+      config().exec.watchdog.enable = false;
       c(R"(SELECT CASE WHEN x = 7 THEN 'a' WHEN x = 8 then str ELSE fixed_str END FROM test ORDER BY 1;)",
         dt);
       c(R"(SELECT CASE WHEN str = 'foo' THEN real_str WHEN str = 'bar' THEN 'b' ELSE null_str END FROM test ORDER BY 1)",
@@ -5015,19 +5014,19 @@ TEST_F(Select, StringCompare) {
     c("SELECT COUNT(*) FROM test WHERE 'ba' > shared_dict;", dt);
     c("SELECT COUNT(*) FROM test WHERE 'bar' > shared_dict;", dt);
 
-    const auto watchdog_state = g_enable_watchdog;
+    const auto watchdog_state = config().exec.watchdog.enable;
     ScopeGuard reset_Watchdog_state = [&watchdog_state] {
-      g_enable_watchdog = watchdog_state;
+      config().exec.watchdog.enable = watchdog_state;
     };
 
-    g_enable_watchdog = true;
+    config().exec.watchdog.enable = true;
 
     EXPECT_THROW(run_simple_agg("SELECT COUNT(*) FROM test, test_inner WHERE "
                                 "test.shared_dict < test_inner.str",
                                 dt),
                  std::runtime_error);
 
-    g_enable_watchdog = false;
+    config().exec.watchdog.enable = false;
 
     c("SELECT COUNT(*) FROM test, test_inner WHERE "
       "test.shared_dict < test_inner.str",
@@ -5040,13 +5039,13 @@ TEST_F(Select, DictionaryStringEquality) {
   // execute between two text columns even when they do not share
   // dictionaries, with watchdog both on and off and without punting
   // to CPU
-  const auto watchdog_state = g_enable_watchdog;
+  const auto watchdog_state = config().exec.watchdog.enable;
   const auto cpu_retry_state = g_allow_cpu_retry;
   const auto cpu_step_retry_state = g_allow_query_step_cpu_retry;
 
   ScopeGuard reset_global_state =
       [&watchdog_state, &cpu_retry_state, &cpu_step_retry_state] {
-        g_enable_watchdog = watchdog_state;
+        config().exec.watchdog.enable = watchdog_state;
         g_allow_cpu_retry = cpu_retry_state;
         g_allow_query_step_cpu_retry = cpu_step_retry_state;
       };
@@ -5055,7 +5054,7 @@ TEST_F(Select, DictionaryStringEquality) {
   g_allow_query_step_cpu_retry = false;
 
   for (auto enable_watchdog : {true, false}) {
-    g_enable_watchdog = enable_watchdog;
+    config().exec.watchdog.enable = enable_watchdog;
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
       SKIP_NO_GPU();
       c("SELECT COUNT(*) FROM test WHERE str = fixed_str", dt);
@@ -8743,10 +8742,10 @@ TEST_F(Select, SpeculativeTopNSort) {
 TEST_F(Select, TopNSortWithWatchdogOn) {
   ScopeGuard reset = [top_min = g_parallel_top_min,
                       top_max = g_parallel_top_max,
-                      watchdog = g_enable_watchdog] {
+                      watchdog = config().exec.watchdog.enable] {
     g_parallel_top_min = top_min;
     g_parallel_top_max = top_max;
-    g_enable_watchdog = watchdog;
+    config().exec.watchdog.enable = watchdog;
   };
   g_parallel_top_min = 0;
   g_parallel_top_max = 10;
@@ -8760,7 +8759,7 @@ TEST_F(Select, TopNSortWithWatchdogOn) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     for (auto watchdog : test_values) {
-      g_enable_watchdog = watchdog;
+      config().exec.watchdog.enable = watchdog;
       EXPECT_NO_THROW(
           run_multiple_agg("SELECT x FROM gpu_sort_test ORDER BY x DESC", dt));
       EXPECT_NO_THROW(run_multiple_agg(
@@ -9664,9 +9663,11 @@ TEST_F(Select, Joins_InnerJoin_TwoTables) {
       "order by test.z;",
       dt);
 
-    const auto watchdog_state = g_enable_watchdog;
-    ScopeGuard reset = [watchdog_state] { g_enable_watchdog = watchdog_state; };
-    g_enable_watchdog = false;
+    const auto watchdog_state = config().exec.watchdog.enable;
+    ScopeGuard reset = [watchdog_state] {
+      config().exec.watchdog.enable = watchdog_state;
+    };
+    config().exec.watchdog.enable = false;
     c(R"(SELECT str FROM test JOIN (SELECT 'foo' AS val, 12345 AS cnt) subq ON test.str = subq.val;)",
       dt);
   }
@@ -11339,10 +11340,10 @@ TEST_F(Select, ArrowDictionaries) {
 }
 
 TEST_F(Select, WatchdogTest) {
-  const auto watchdog_state = g_enable_watchdog;
-  g_enable_watchdog = true;
+  const auto watchdog_state = config().exec.watchdog.enable;
+  config().exec.watchdog.enable = true;
   ScopeGuard reset_Watchdog_state = [&watchdog_state] {
-    g_enable_watchdog = watchdog_state;
+    config().exec.watchdog.enable = watchdog_state;
   };
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -11356,15 +11357,15 @@ TEST_F(Select, WatchdogTest) {
 TEST_F(Select, PuntToCPU) {
   const auto cpu_retry_state = g_allow_cpu_retry;
   const auto cpu_step_retry_state = g_allow_query_step_cpu_retry;
-  const auto watchdog_state = g_enable_watchdog;
+  const auto watchdog_state = config().exec.watchdog.enable;
   g_allow_cpu_retry = false;
   g_allow_query_step_cpu_retry = false;
-  g_enable_watchdog = true;
+  config().exec.watchdog.enable = true;
   ScopeGuard reset_global_flag_state =
       [&cpu_retry_state, &cpu_step_retry_state, &watchdog_state] {
         g_allow_cpu_retry = cpu_retry_state;
         g_allow_query_step_cpu_retry = cpu_step_retry_state;
-        g_enable_watchdog = watchdog_state;
+        config().exec.watchdog.enable = watchdog_state;
         g_gpu_mem_limit_percent = 0.9;  // Reset to 90%
       };
 
@@ -11388,15 +11389,15 @@ TEST_F(Select, PuntToCPU) {
 TEST_F(Select, PuntQueryStepToCPU) {
   const auto cpu_retry_state = g_allow_cpu_retry;
   const auto cpu_step_retry_state = g_allow_query_step_cpu_retry;
-  const auto watchdog_state = g_enable_watchdog;
+  const auto watchdog_state = config().exec.watchdog.enable;
   g_allow_cpu_retry = false;
   g_allow_query_step_cpu_retry = false;
-  g_enable_watchdog = true;
+  config().exec.watchdog.enable = true;
   ScopeGuard reset_global_flag_state =
       [&cpu_retry_state, &cpu_step_retry_state, &watchdog_state] {
         g_allow_cpu_retry = cpu_retry_state;
         g_allow_query_step_cpu_retry = cpu_step_retry_state;
-        g_enable_watchdog = watchdog_state;
+        config().exec.watchdog.enable = watchdog_state;
         g_gpu_mem_limit_percent = 0.9;  // Reset to 90%
       };
 

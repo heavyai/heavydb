@@ -101,7 +101,7 @@ class SQLTestEnv : public ::testing::Environment {
       Executor::addUdfIrToModule(compile_result.second, /*is_cuda_ir=*/true);
     }
 
-    init(0, compiler.getAstFileName(udf_file.string()));
+    init(nullptr, 0, compiler.getAstFileName(udf_file.string()));
   }
 
   void TearDown() override {

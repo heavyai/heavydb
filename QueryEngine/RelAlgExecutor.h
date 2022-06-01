@@ -346,6 +346,7 @@ class RelAlgExecutor {
   std::unique_ptr<RelAlgDag> query_dag_;
   std::shared_ptr<SchemaProvider> schema_provider_;
   DataProvider* data_provider_;
+  const Config& config_;
   TemporaryTables temporary_tables_;
   time_t now_;
   std::unordered_map<unsigned, JoinQualsPerNestingLevel> left_deep_join_info_;

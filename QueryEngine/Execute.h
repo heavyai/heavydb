@@ -67,6 +67,7 @@
 #include "DataMgr/Chunk/Chunk.h"
 #include "Logger/Logger.h"
 #include "SchemaMgr/SchemaProvider.h"
+#include "Shared/Config.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/funcannotations.h"
 #include "Shared/mapd_shared_mutex.h"
@@ -349,6 +350,7 @@ class Executor {
   Executor(const ExecutorId id,
            Data_Namespace::DataMgr* data_mgr,
            BufferProvider* buffer_provider,
+           ConfigPtr config,
            const size_t block_size_x,
            const size_t grid_size_x,
            const size_t max_gpu_slab_size,
@@ -372,6 +374,7 @@ class Executor {
       const ExecutorId id,
       Data_Namespace::DataMgr* data_mgr,
       BufferProvider* buffer_provider,
+      ConfigPtr config = nullptr,
       const std::string& debug_dir = "",
       const std::string& debug_file = "",
       const SystemParameters& system_parameters = SystemParameters());
@@ -489,6 +492,10 @@ class Executor {
     CHECK(buffer_provider_);
     return buffer_provider_;
   }
+
+  const Config& getConfig() const { return *config_; }
+
+  ConfigPtr getConfigPtr() const { return config_; }
 
   const std::shared_ptr<RowSetMemoryOwner> getRowSetMemoryOwner() const;
 
@@ -1203,6 +1210,7 @@ class Executor {
       1000000};  // if a perfect hash needs more entries, use baseline
   static const size_t code_cache_size{1000};
 
+  ConfigPtr config_;
   const unsigned block_size_x_;
   const unsigned grid_size_x_;
   const size_t max_gpu_slab_size_;

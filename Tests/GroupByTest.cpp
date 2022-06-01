@@ -27,9 +27,7 @@
 #include "DataMgr/DataMgrDataProvider.h"
 
 extern bool g_is_test_env;
-extern bool g_enable_watchdog;
 extern size_t g_big_group_threshold;
-extern size_t g_watchdog_baseline_max_groups;
 
 using namespace TestHelpers;
 using namespace TestHelpers::ArrowSQLRunner;
@@ -337,28 +335,28 @@ TEST_F(LowCardinalityThresholdTest, GroupBy) {
 class BigCardinalityThresholdTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    g_enable_watchdog = true;
-    initial_g_watchdog_baseline_max_groups = g_watchdog_baseline_max_groups;
-    g_watchdog_baseline_max_groups = g_big_group_threshold + 1;
+    config().exec.watchdog.enable = true;
+    initial_baseline_max_groups = config().exec.watchdog.baseline_max_groups;
+    config().exec.watchdog.baseline_max_groups = g_big_group_threshold + 1;
 
     createTable("big_cardinality",
                 {{"fl", dictType()}, {"ar", dictType()}, {"dep", dictType()}});
 
     std::stringstream ss;
     // add enough groups to trigger the watchdog exception if we use a poor estimate
-    for (size_t i = 0; i < g_watchdog_baseline_max_groups; i++) {
+    for (size_t i = 0; i < config().exec.watchdog.baseline_max_groups; i++) {
       ss << i << ", " << i + 1 << ", " << i + 2 << std::endl;
     }
     insertCsvValues("big_cardinality", ss.str());
   }
 
   void TearDown() override {
-    g_enable_watchdog = false;
-    g_watchdog_baseline_max_groups = initial_g_watchdog_baseline_max_groups;
+    config().exec.watchdog.enable = false;
+    config().exec.watchdog.baseline_max_groups = initial_baseline_max_groups;
     dropTable("big_cardinality");
   }
 
-  size_t initial_g_watchdog_baseline_max_groups{0};
+  size_t initial_baseline_max_groups{0};
 };
 
 TEST_F(BigCardinalityThresholdTest, EmptyFilters) {

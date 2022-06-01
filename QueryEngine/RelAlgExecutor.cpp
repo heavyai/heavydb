@@ -54,7 +54,6 @@ bool g_columnar_large_projections{true};
 size_t g_columnar_large_projections_threshold{1000000};
 
 extern bool g_enable_bump_allocator;
-extern bool g_enable_watchdog;
 extern size_t g_default_max_groups_buffer_entry_guess;
 extern bool g_from_table_reordering;
 extern bool g_allow_cpu_retry;
@@ -63,7 +62,6 @@ extern bool g_enable_window_functions;
 extern bool g_enable_table_functions;
 extern bool g_enable_multifrag_rs;
 extern bool g_allow_query_step_cpu_retry;
-extern bool g_enable_dynamic_watchdog;
 
 namespace {
 
@@ -126,6 +124,7 @@ RelAlgExecutor::RelAlgExecutor(Executor* executor,
     : executor_(executor)
     , schema_provider_(schema_provider)
     , data_provider_(data_provider)
+    , config_(executor_->getConfig())
     , now_(0)
     , queue_time_ms_(0) {}
 
@@ -137,6 +136,7 @@ RelAlgExecutor::RelAlgExecutor(Executor* executor,
     , query_dag_(std::move(query_dag))
     , schema_provider_(std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
     , data_provider_(data_provider)
+    , config_(executor_->getConfig())
     , now_(0)
     , queue_time_ms_(0) {}
 
@@ -290,7 +290,7 @@ void RelAlgExecutor::prepareStreamingExecution(const CompilationOptions& co,
                                                const ExecutionOptions& eo) {
   query_dag_->resetQueryExecutionState();
   const auto& ra = query_dag_->getRootNode();
-  if (g_enable_dynamic_watchdog) {
+  if (config_.exec.watchdog.enable_dynamic) {
     executor_->resetInterrupt();
   }
   // so it should do cleanup session info after finishing its execution
@@ -408,7 +408,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
 
   // capture the lock acquistion time
   auto clock_begin = timer_start();
-  if (g_enable_dynamic_watchdog) {
+  if (config_.exec.watchdog.enable_dynamic) {
     executor_->resetInterrupt();
   }
 
@@ -612,7 +612,7 @@ void RelAlgExecutor::prepareLeafExecution(
     const TableGenerations& table_generations) {
   // capture the lock acquistion time
   auto clock_begin = timer_start();
-  if (g_enable_dynamic_watchdog) {
+  if (config_.exec.watchdog.enable_dynamic) {
     executor_->resetInterrupt();
   }
   queue_time_ms_ = timer_stop(clock_begin);
@@ -2494,7 +2494,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
         CHECK(max_groups_buffer_entry_guess);
         // Only allow two iterations of increasingly large entry guesses up to a
         // maximum of 512MB per column per kernel
-        if (g_enable_watchdog || iteration_ctr > 1) {
+        if (config_.exec.watchdog.enable || iteration_ctr > 1) {
           throw std::runtime_error("Query ran out of output slots in the result");
         }
         max_groups_buffer_entry_guess *= 2;

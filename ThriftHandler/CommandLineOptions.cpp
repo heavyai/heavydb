@@ -138,11 +138,6 @@ void CommandLineOptions::fillOptions() {
       "exit-after-warmup",
       po::value<bool>(&exit_after_warmup)->default_value(false)->implicit_value(true),
       "Exit after OmniSci warmup queries.");
-  help_desc.add_options()("dynamic-watchdog-time-limit",
-                          po::value<unsigned>(&dynamic_watchdog_time_limit)
-                              ->default_value(dynamic_watchdog_time_limit)
-                              ->implicit_value(10000),
-                          "Dynamic watchdog time limit, in milliseconds.");
   help_desc.add_options()("enable-data-recycler",
                           po::value<bool>(&enable_data_recycler)
                               ->default_value(enable_data_recycler)
@@ -522,17 +517,6 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(intel_jit_profile)
           ->implicit_value(true),
       "Enable runtime support for the JIT code profiling using Intel VTune.");
-  developer_desc.add_options()(
-      "enable-cpu-sub-tasks",
-      po::value<bool>(&g_enable_cpu_sub_tasks)
-          ->default_value(g_enable_cpu_sub_tasks)
-          ->implicit_value(true),
-      "Enable parallel processing of a single data fragment on CPU. This can improve CPU "
-      "load balance and decrease reduction overhead.");
-  developer_desc.add_options()(
-      "cpu-sub-task-size",
-      po::value<size_t>(&g_cpu_sub_task_size)->default_value(g_cpu_sub_task_size),
-      "Set CPU sub-task size in rows.");
   developer_desc.add_options()(
       "skip-intermediate-count",
       po::value<bool>(&g_skip_intermediate_count)
@@ -961,9 +945,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
       return 1;
     }
 
-    g_enable_watchdog = enable_watchdog;
-    g_enable_dynamic_watchdog = enable_dynamic_watchdog;
-    g_dynamic_watchdog_time_limit = dynamic_watchdog_time_limit;
     g_enable_runtime_query_interrupt = enable_runtime_query_interrupt;
     g_enable_non_kernel_time_query_interrupt = enable_non_kernel_time_query_interrupt;
     g_pending_query_interrupt_freq = pending_query_interrupt_freq;

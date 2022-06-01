@@ -22,8 +22,6 @@
 
 #include <jni.h>
 
-extern bool g_enable_watchdog;
-
 using namespace std::string_literals;
 
 namespace {
@@ -159,9 +157,10 @@ std::shared_ptr<JVM> JVM::instance_;
 class CalciteJNI::Impl {
  public:
   Impl(SchemaProviderPtr schema_provider,
+       ConfigPtr config,
        const std::string& udf_filename,
        size_t calcite_max_mem_mb)
-      : schema_provider_(schema_provider) {
+      : schema_provider_(schema_provider), config_(config) {
     // Initialize JVM.
     jvm_ = JVM::getInstance(calcite_max_mem_mb);
     auto env = jvm_->getEnv();
@@ -211,11 +210,12 @@ class CalciteJNI::Impl {
       throw std::runtime_error(
           "Filter pushdown info is not yet implemented in Calcite JNI client.");
     }
-    jobject arg_optimization_options = env->NewObject(optimization_opts_cls_,
-                                                      optimization_opts_ctor_,
-                                                      (jboolean)is_view_optimize,
-                                                      (jboolean)g_enable_watchdog,
-                                                      arg_filter_push_down_info);
+    jobject arg_optimization_options =
+        env->NewObject(optimization_opts_cls_,
+                       optimization_opts_ctor_,
+                       (jboolean)is_view_optimize,
+                       (jboolean)config_->exec.watchdog.enable,
+                       arg_filter_push_down_info);
     jobject arg_restriction = nullptr;
     auto schema_json = schema_to_json(schema_provider_);
     jstring arg_schema = env->NewStringUTF(schema_json.c_str());
@@ -544,6 +544,7 @@ class CalciteJNI::Impl {
   }
 
   SchemaProviderPtr schema_provider_;
+  ConfigPtr config_;
 
   // com.mapd.parser.server.CalciteServerHandler instance and methods.
   jobject handler_obj_;
@@ -592,9 +593,11 @@ class CalciteJNI::Impl {
 };
 
 CalciteJNI::CalciteJNI(SchemaProviderPtr schema_provider,
+                       ConfigPtr config,
                        const std::string& udf_filename,
                        size_t calcite_max_mem_mb) {
-  impl_ = std::make_unique<Impl>(schema_provider, udf_filename, calcite_max_mem_mb);
+  impl_ =
+      std::make_unique<Impl>(schema_provider, config, udf_filename, calcite_max_mem_mb);
 }
 
 CalciteJNI::~CalciteJNI() {}

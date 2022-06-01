@@ -28,6 +28,7 @@
 #include "CardinalityEstimator.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "ResultSetBufferAccessors.h"
+#include "Shared/Config.h"
 #include "TargetValue.h"
 
 #include <atomic>
@@ -106,7 +107,8 @@ class ResultSetStorage {
   void reduce(const ResultSetStorage& that,
               const std::vector<std::string>& serialized_varlen_buffer,
               const ReductionCode& reduction_code,
-              const size_t executor_id) const;
+              const size_t executor_id,
+              const Config& config) const;
 
   void rewriteAggregateBufferOffsets(
       const std::vector<std::string>& serialized_varlen_buffer) const;
@@ -170,7 +172,8 @@ class ResultSetStorage {
                               const int8_t* that_buff,
                               const size_t i,
                               const size_t that_entry_count,
-                              const ResultSetStorage& that) const;
+                              const ResultSetStorage& that,
+                              bool enable_dynamic_watchdog) const;
 
   void reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
                                    const int64_t* that_buff,

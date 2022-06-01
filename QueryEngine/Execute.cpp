@@ -75,11 +75,7 @@
 #include "Shared/threading.h"
 #include "ThirdParty/robin_hood.h"
 
-bool g_enable_dynamic_watchdog{false};
-bool g_enable_cpu_sub_tasks{false};
-size_t g_cpu_sub_task_size{500'000};
 bool g_enable_filter_function{true};
-unsigned g_dynamic_watchdog_time_limit{10000};
 bool g_allow_cpu_retry{true};
 bool g_allow_query_step_cpu_retry{true};
 bool g_null_div_by_zero{false};
@@ -189,6 +185,7 @@ CodeCacheAccessor<GpuCompilationContext> Executor::gpu_code_accessor(
 Executor::Executor(const ExecutorId executor_id,
                    Data_Namespace::DataMgr* data_mgr,
                    BufferProvider* buffer_provider,
+                   ConfigPtr config,
                    const size_t block_size_x,
                    const size_t grid_size_x,
                    const size_t max_gpu_slab_size,
@@ -197,6 +194,7 @@ Executor::Executor(const ExecutorId executor_id,
     : executor_id_(executor_id)
     , context_(new llvm::LLVMContext())
     , cgen_state_(new CgenState({}, false, this))
+    , config_(config)
     , block_size_x_(block_size_x)
     , grid_size_x_(grid_size_x)
     , max_gpu_slab_size_(max_gpu_slab_size)
@@ -402,6 +400,7 @@ std::shared_ptr<Executor> Executor::getExecutor(
     const ExecutorId executor_id,
     Data_Namespace::DataMgr* data_mgr,
     BufferProvider* buffer_provider,
+    ConfigPtr config,
     const std::string& debug_dir,
     const std::string& debug_file,
     const SystemParameters& system_parameters) {
@@ -413,9 +412,14 @@ std::shared_ptr<Executor> Executor::getExecutor(
     return it->second;
   }
 
+  if (!config) {
+    config = std::make_shared<Config>();
+  }
+
   auto executor = std::make_shared<Executor>(executor_id,
                                              data_mgr,
                                              buffer_provider,
+                                             config,
                                              system_parameters.cuda_block_size,
                                              system_parameters.cuda_grid_size,
                                              system_parameters.max_gpu_slab_size,
@@ -1209,6 +1213,7 @@ namespace {
 
 ReductionCode get_reduction_code(
     const size_t executor_id,
+    const Config& config,
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
     int64_t* compilation_queue_time) {
   auto clock_begin = timer_start();
@@ -1218,7 +1223,8 @@ ReductionCode get_reduction_code(
   ResultSetReductionJIT reduction_jit(this_result_set->getQueryMemDesc(),
                                       this_result_set->getTargetInfos(),
                                       this_result_set->getTargetInitVals(),
-                                      executor_id);
+                                      executor_id,
+                                      config);
   return reduction_jit.codegen();
 };
 
@@ -1287,8 +1293,8 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
   }
 
   int64_t compilation_queue_time = 0;
-  const auto reduction_code =
-      get_reduction_code(executor_id_, results_per_device, &compilation_queue_time);
+  const auto reduction_code = get_reduction_code(
+      executor_id_, getConfig(), results_per_device, &compilation_queue_time);
 
   if (couldUseParallelReduce(query_mem_desc)) {
     std::vector<ResultSetStorage*> storages;
@@ -1300,10 +1306,10 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
         (ResultSetStorage*)nullptr,
         [&](auto r, ResultSetStorage* res) {
           for (auto i = r.begin() + 1; i != r.end(); ++i) {
-            (*r.begin())->reduce(**i, {}, reduction_code, executor_id_);
+            (*r.begin())->reduce(**i, {}, reduction_code, executor_id_, getConfig());
           }
           if (res) {
-            res->reduce(*(*r.begin()), {}, reduction_code, executor_id_);
+            res->reduce(*(*r.begin()), {}, reduction_code, executor_id_, getConfig());
             return res;
           }
           return *r.begin();
@@ -1315,13 +1321,16 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
           if (!rhs) {
             return lhs;
           }
-          lhs->reduce(*rhs, {}, reduction_code, executor_id_);
+          lhs->reduce(*rhs, {}, reduction_code, executor_id_, getConfig());
           return lhs;
         });
   } else {
     for (size_t i = 1; i < results_per_device.size(); ++i) {
-      reduced_results->getStorage()->reduce(
-          *(results_per_device[i].first->getStorage()), {}, reduction_code, executor_id_);
+      reduced_results->getStorage()->reduce(*(results_per_device[i].first->getStorage()),
+                                            {},
+                                            reduction_code,
+                                            executor_id_,
+                                            getConfig());
     }
   }
   reduced_results->addCompilationQueueTime(compilation_queue_time);
@@ -2763,7 +2772,7 @@ void Executor::launchKernels(SharedKernelContext& shared_context,
       kernels.empty() ? nullptr : &kernels[0]->ra_exe_unit_;
 
 #ifdef HAVE_TBB
-  if (g_enable_cpu_sub_tasks && device_type == ExecutorDeviceType::CPU) {
+  if (config_->exec.sub_tasks.enable && device_type == ExecutorDeviceType::CPU) {
     shared_context.setThreadPool(&tg);
   }
   ScopeGuard pool_guard([&shared_context]() { shared_context.setThreadPool(nullptr); });
@@ -3006,7 +3015,7 @@ FetchResult Executor::fetchChunks(
           throw QueryExecutionError(ERR_INTERRUPTED);
         }
       }
-      if (g_enable_dynamic_watchdog && interrupted_.load()) {
+      if (config_->exec.watchdog.enable_dynamic && interrupted_.load()) {
         throw QueryExecutionError(ERR_INTERRUPTED);
       }
       CHECK(col_id);
@@ -3381,7 +3390,7 @@ int32_t Executor::executePlanWithoutGroupBy(
       throw QueryExecutionError(ERR_INTERRUPTED);
     }
   }
-  if (g_enable_dynamic_watchdog && interrupted_.load()) {
+  if (config_->exec.watchdog.enable_dynamic && interrupted_.load()) {
     throw QueryExecutionError(ERR_INTERRUPTED);
   }
   if (device_type == ExecutorDeviceType::CPU) {
@@ -3585,7 +3594,7 @@ int32_t Executor::executePlanWithGroupBy(
       throw QueryExecutionError(ERR_INTERRUPTED);
     }
   }
-  if (g_enable_dynamic_watchdog && interrupted_.load()) {
+  if (config_->exec.watchdog.enable_dynamic && interrupted_.load()) {
     return ERR_INTERRUPTED;
   }
 
@@ -3769,7 +3778,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const HashTableBuildDagMap& hashtable_build_dag_map,
     const RegisteredQueryHint& query_hint,
     const TableIdToNodeMap& table_id_to_node_map) {
-  if (g_enable_dynamic_watchdog && interrupted_.load()) {
+  if (config_->exec.watchdog.enable_dynamic && interrupted_.load()) {
     throw QueryExecutionError(ERR_INTERRUPTED);
   }
   try {
@@ -4114,7 +4123,7 @@ std::pair<bool, int64_t> Executor::skipFragment(
     }
     llvm::LLVMContext local_context;
     CgenState local_cgen_state(local_context);
-    CodeGenerator code_generator(&local_cgen_state, nullptr);
+    CodeGenerator code_generator(getConfig(), &local_cgen_state, nullptr);
 
     const auto rhs_val =
         CodeGenerator::codegenIntConst(rhs_const, &local_cgen_state)->getSExtValue();

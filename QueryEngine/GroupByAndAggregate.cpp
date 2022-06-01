@@ -52,9 +52,7 @@
 
 bool g_bigint_count{false};
 int g_hll_precision_bits{11};
-size_t g_watchdog_baseline_max_groups{120000000};
 
-extern bool g_enable_watchdog;
 namespace {
 
 int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {
@@ -313,6 +311,7 @@ GroupByAndAggregate::GroupByAndAggregate(
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const std::optional<int64_t>& group_cardinality_estimation)
     : executor_(executor)
+    , config_(executor_->getConfig())
     , ra_exe_unit_(ra_exe_unit)
     , query_infos_(query_infos)
     , row_set_mem_owner_(row_set_mem_owner)
@@ -623,7 +622,7 @@ CountDistinctDescriptors init_count_distinct_descriptors(
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
       }
 
-      if (g_enable_watchdog && !(arg_range_info.isEmpty()) &&
+      if (executor->getConfig().exec.watchdog.enable && !(arg_range_info.isEmpty()) &&
           count_distinct_impl_type == CountDistinctImplType::HashSet) {
         throw WatchdogException("Cannot use a fast path for COUNT distinct");
       }
@@ -725,9 +724,9 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
           ? KeylessInfo{false, -1}
           : get_keyless_info(ra_exe_unit_, query_infos_, is_group_by, executor_);
 
-  if (g_enable_watchdog &&
+  if (config_.exec.watchdog.enable &&
       ((col_range_info.hash_type_ == QueryDescriptionType::GroupByBaselineHash &&
-        max_groups_buffer_entry_count > g_watchdog_baseline_max_groups) ||
+        max_groups_buffer_entry_count > config_.exec.watchdog.baseline_max_groups) ||
        (col_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
         ra_exe_unit_.groupby_exprs.size() == 1 &&
         (col_range_info.max - col_range_info.min) /

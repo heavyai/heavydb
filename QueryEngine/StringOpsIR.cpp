@@ -22,8 +22,6 @@
 
 #include <boost/locale/conversion.hpp>
 
-extern bool g_enable_watchdog;
-
 extern "C" RUNTIME_EXPORT uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
   auto chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
   VarlenDatum vd;
@@ -71,7 +69,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::CharLengthExpr* expr,
   auto str_lv = codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
-    if (g_enable_watchdog) {
+    if (config_.exec.watchdog.enable) {
       throw WatchdogException(
           "LENGTH / CHAR_LENGTH on dictionary-encoded strings would be slow");
     }
@@ -155,7 +153,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::LikeExpr* expr,
   }
   const auto& ti = expr->get_arg()->get_type_info();
   CHECK(ti.is_string());
-  if (g_enable_watchdog && ti.get_compression() != kENCODING_NONE) {
+  if (config_.exec.watchdog.enable && ti.get_compression() != kENCODING_NONE) {
     throw WatchdogException(
         "Cannot do LIKE / ILIKE on this dictionary encoded column, its cardinality is "
         "too high");
@@ -368,7 +366,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::RegexpExpr* expr,
   }
   const auto& ti = expr->get_arg()->get_type_info();
   CHECK(ti.is_string());
-  if (g_enable_watchdog && ti.get_compression() != kENCODING_NONE) {
+  if (config_.exec.watchdog.enable && ti.get_compression() != kENCODING_NONE) {
     throw WatchdogException(
         "Cannot do REGEXP_LIKE on this dictionary encoded column, its cardinality is too "
         "high");

@@ -33,7 +33,6 @@
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/raw_os_ostream.h>
 
-extern bool g_enable_dynamic_watchdog;
 extern bool g_enable_non_kernel_time_query_interrupt;
 
 namespace {
@@ -497,8 +496,7 @@ extern "C" RUNTIME_EXPORT void get_group_value_reduction_rt(
 }
 
 extern "C" RUNTIME_EXPORT uint8_t check_watchdog_rt(const size_t sample_seed) {
-  if (UNLIKELY(g_enable_dynamic_watchdog && (sample_seed & 0x3F) == 0 &&
-               dynamic_watchdog())) {
+  if (UNLIKELY((sample_seed & 0x3F) == 0 && dynamic_watchdog())) {
     return true;
   }
   return false;
@@ -515,8 +513,10 @@ extern "C" uint8_t check_interrupt_rt(const size_t sample_seed) {
 ResultSetReductionJIT::ResultSetReductionJIT(const QueryMemoryDescriptor& query_mem_desc,
                                              const std::vector<TargetInfo>& targets,
                                              const std::vector<int64_t>& target_init_vals,
-                                             const size_t executor_id)
+                                             const size_t executor_id,
+                                             const Config& config)
     : executor_id_(executor_id)
+    , config_(config)
     , query_mem_desc_(query_mem_desc)
     , targets_(targets)
     , target_init_vals_(target_init_vals) {}
@@ -977,15 +977,16 @@ void generate_loop_body(For* for_loop,
                         Value* that_entry_count,
                         Value* this_qmd_handle,
                         Value* that_qmd_handle,
-                        Value* serialized_varlen_buffer) {
+                        Value* serialized_varlen_buffer,
+                        bool enable_dynamic_watchdog) {
   const auto that_entry_idx = for_loop->add<BinaryOperator>(
       BinaryOperator::BinaryOp::Add, for_loop->iter(), start_index, "that_entry_idx");
   const auto sample_seed =
       for_loop->add<Cast>(Cast::CastOp::SExt, that_entry_idx, Type::Int64, "");
-  if (g_enable_dynamic_watchdog || g_enable_non_kernel_time_query_interrupt) {
+  if (enable_dynamic_watchdog || g_enable_non_kernel_time_query_interrupt) {
     const auto checker_rt_name =
-        g_enable_dynamic_watchdog ? "check_watchdog_rt" : "check_interrupt_rt";
-    const auto error_code = g_enable_dynamic_watchdog ? WATCHDOG_ERROR : INTERRUPT_ERROR;
+        enable_dynamic_watchdog ? "check_watchdog_rt" : "check_interrupt_rt";
+    const auto error_code = enable_dynamic_watchdog ? WATCHDOG_ERROR : INTERRUPT_ERROR;
     const auto checker_triggered = for_loop->add<ExternalCall>(
         checker_rt_name, Type::Int8, std::vector<const Value*>{sample_seed}, "");
     const auto interrupt_triggered_bool =
@@ -1040,7 +1041,8 @@ void ResultSetReductionJIT::reduceLoop(const ReductionCode& reduction_code) cons
                      that_entry_count_arg,
                      this_qmd_handle_arg,
                      that_qmd_handle_arg,
-                     serialized_varlen_buffer_arg);
+                     serialized_varlen_buffer_arg,
+                     config_.exec.watchdog.enable_dynamic);
   ir_reduce_loop->add<Ret>(ir_reduce_loop->addConstant<ConstantInt>(0, Type::Int32));
 }
 

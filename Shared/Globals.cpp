@@ -12,6 +12,5 @@
  * limitations under the License.
  */
 
-bool g_enable_watchdog{false};
 bool g_use_groupby_buffer_desc = false;  //  if true, size agnostic regime is used
 double g_gpu_mem_limit_percent{0.9};

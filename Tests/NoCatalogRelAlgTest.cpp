@@ -193,8 +193,13 @@ class NoCatalogRelAlgTest : public ::testing::Test {
     ps_mgr->registerDataProvider(TEST_SCHEMA_ID2,
                                  std::make_shared<TestDataProvider2>(schema_provider_));
 
-    executor_ = Executor::getExecutor(
-        0, data_mgr_.get(), data_mgr_->getBufferProvider(), "", "", system_parameters);
+    executor_ = Executor::getExecutor(0,
+                                      data_mgr_.get(),
+                                      data_mgr_->getBufferProvider(),
+                                      nullptr,
+                                      "",
+                                      "",
+                                      system_parameters);
   }
 
   static void TearDownTestSuite() {}
