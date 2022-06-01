@@ -1201,7 +1201,8 @@ public final class HeavyDBParser {
 
     final int operandCount = proj_call.operandCount();
 
-    if (proj_call.getOperator().isName("SUBSTR", false)) {
+    if (proj_call.getOperator().isName("SUBSTR", false)
+            || proj_call.getOperator().isName("MID", false)) {
       // Expand SUBSTR to SUBSTRING
       final SqlParserPos pos = proj_call.getParserPosition();
       if (operandCount == 2) {
@@ -1272,6 +1273,15 @@ public final class HeavyDBParser {
       if (operandCount == 1) {
         final SqlNode primary = proj_call.operand(0);
         return SqlStdOperatorTable.UPPER.createCall(pos, primary);
+      }
+      return null;
+
+    } else if (proj_call.getOperator().isName("LEN", false)) {
+      // Expand LEN to operator CHARACTER_LENGTH
+      final SqlParserPos pos = proj_call.getParserPosition();
+      if (operandCount == 1) {
+        final SqlNode primary = proj_call.operand(0);
+        return SqlStdOperatorTable.CHARACTER_LENGTH.createCall(pos, primary);
       }
       return null;
     }

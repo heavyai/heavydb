@@ -2118,6 +2118,28 @@ TEST_F(StringFunctionTest, ucase) {
   }
 }
 
+TEST_F(StringFunctionTest, len) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // LEN is an alias for LENGTH, just test the alias as
+    //    LENGTH functionality should be covered by other tests
+    auto result_set = sql("select len('abcdefghi');", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(9)}};
+    compare_result_set(expected_result_set, result_set);
+  }
+}
+
+TEST_F(StringFunctionTest, mid) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // MID is an alias for SUBSTRING, just test the alias as
+    //    substring functionality should be covered by other tests
+    auto result_set = sql("select mid('abcdef', 2,4);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"bcde"}};
+    compare_result_set(expected_result_set, result_set);
+  }
+}
+
 TEST_F(StringFunctionTest, left) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
