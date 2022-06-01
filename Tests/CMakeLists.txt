@@ -58,10 +58,6 @@ endif()
 if(ENABLE_CUDA)
   add_executable(GpuSharedMemoryTest GpuSharedMemoryTest.cpp ResultSetTestUtils.cpp)
 endif()
-if(("${MAPD_EDITION_LOWER}" STREQUAL "ee") AND ENABLE_AWS_S3)
-  add_executable(UserMappingDdlTest ee/UserMappingDdlTest.cpp)
-  add_executable(PkiEncryptorTest ee/PkiEncryptorTest.cpp)
-endif()
 
 # Tests + Microbenchmarks
 add_executable(StringDictionaryBenchmark StringDictionaryBenchmark.cpp)
@@ -139,14 +135,6 @@ if(ENABLE_CUDA)
   target_link_libraries(GpuSharedMemoryTest ${EXECUTE_TEST_LIBS})
 endif()
 
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  target_link_libraries(UserMappingDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-  target_link_libraries(PkiEncryptorTest gtest Logger Shared)
-  if(ENABLE_AWS_S3)
-    target_link_libraries(S3SelectClientTest ${EXECUTE_TEST_LIBS})
-  endif()
-endif()
-
 set(TEST_ARGS "--gtest_output=xml:../")
 add_test(UtilTest UtilTest ${TEST_ARGS})
 add_test(ArrowBasedExecuteTest ArrowBasedExecuteTest ${TEST_ARGS})
@@ -190,14 +178,6 @@ endif()
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_test(UdfTest UdfTest ${TEST_ARGS})
-endif()
-
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  add_test(UserMappingDdlTest UserMappingDdlTest ${TEST_ARGS})
-  add_test(PkiEncryptorTest PkiEncryptorTest ${TEST_ARGS})
-  if(ENABLE_AWS_S3)
-    add_test(S3SelectClientTest S3SelectClientTest ${TEST_ARGS})
-  endif()
 endif()
 
 find_package(fmt REQUIRED)
@@ -251,11 +231,6 @@ endif()
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   list(APPEND TEST_PROGRAMS UdfTest)
-endif()
-
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  list(APPEND TEST_PROGRAMS UserMappingDdlTest)
-  list(APPEND TEST_PROGRAMS PkiEncryptorTest)
 endif()
 
 set(SANITY_TESTS ${TEST_PROGRAMS})
