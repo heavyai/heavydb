@@ -157,27 +157,6 @@ popd
 VERS=3.52.15
 CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libiodbc-${VERS}.tar.gz
 
-#c-blosc
-VERS=1.14.4
-wget --continue https://github.com/Blosc/c-blosc/archive/v$VERS.tar.gz
-tar xvf v$VERS.tar.gz
-BDIR="c-blosc-$VERS/build"
-rm -rf "$BDIR"
-mkdir -p "$BDIR"
-pushd "$BDIR"
-cmake \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=$PREFIX \
-    -DBUILD_BENCHMARKS=off \
-    -DBUILD_TESTS=off \
-    -DPREFER_EXTERNAL_SNAPPY=off \
-    -DPREFER_EXTERNAL_ZLIB=off \
-    -DPREFER_EXTERNAL_ZSTD=off \
-    ..
-make -j $(nproc)
-make install
-popd
-
 install_folly
 
 download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21

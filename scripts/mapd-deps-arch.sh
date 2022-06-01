@@ -12,7 +12,6 @@ unset CMAKE_GENERATOR
 # Install all normal dependencies
 yay -S \
     aws-sdk-cpp \
-    blosc \
     boost \
     c-ares \
     clang \

@@ -33,7 +33,6 @@ requirements:
     - cython
     - arrow-cpp =2.0
     - bisonpp
-    - blosc
     - boost-cpp {{ boost_cpp }}
     - clangdev <11
     - double-conversion
@@ -63,7 +62,6 @@ outputs:
       run:             # common part of run requirements for other packages
         - boost-cpp {{ boost_cpp }}
         - bzip2
-        - blosc
         # omnscidb Load-time UDF support calls clang++
         - gxx_{{ target_platform }} 8.*
         - double-conversion
@@ -104,7 +102,6 @@ outputs:
       run:
         - boost-cpp {{ boost_cpp }}
         - bzip2
-        - blosc
         # omnscidb Load-time UDF support calls clang++
         - gxx_{{ target_platform }}
         - double-conversion

@@ -39,7 +39,7 @@ The `mapd-deps-prebuilt.sh` script includes two files with the appropriate envir
 Building on Ubuntu
 ==================
 
-Most build dependencies required by OmniSciDB are available via APT. Certain dependencies such as Thrift, Blosc, and Folly must be built as they either do not exist in the default repositories or have outdated versions. A prebuilt package containing all these dependencies is provided for Ubuntu 18.04 and 20.04 (x86_64). The dependencies will be installed to `/usr/local/mapd-deps/` by default; see the Environment Variables section below for how to add these dependencies to your environment.
+Most build dependencies required by OmniSciDB are available via APT. Certain dependencies such as Thrift, and Folly must be built as they either do not exist in the default repositories or have outdated versions. A prebuilt package containing all these dependencies is provided for Ubuntu 18.04 and 20.04 (x86_64). The dependencies will be installed to `/usr/local/mapd-deps/` by default; see the Environment Variables section below for how to add these dependencies to your environment.
 
 These dependencies will be installed to a directory under `/usr/local/mapd-deps`. The `mapd-deps-prebuilt.sh` script above will generate a script named `mapd-deps.sh` containing the environment variables which need to be set. Simply source this file in your current session (or symlink it to `/etc/profile.d/mapd-deps.sh`) in order to activate it:
 

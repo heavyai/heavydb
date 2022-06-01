@@ -52,12 +52,6 @@ slf4j-log4j12 | [MIT](<http://www.slf4j.org/license.html>) | Java logging |
 Google Gson | [Apache](<https://github.com/google/gson/blob/master/LICENSE>) | Java JSON parsing |
 Xerial sqlite-jdbc | [Apache](<https://github.com/xerial/sqlite-jdbc/blob/master/LICENSE>) | Catalog connector/reader |
 --- | --- | --- |
-bitshuffle | [MIT](<https://github.com/Blosc/c-blosc/blob/master/LICENSES/BITSHUFFLE.txt>) | Compression support |
-blosc | [BSD](<https://github.com/Blosc/c-blosc/blob/master/LICENSES/BLOSC.txt>) | Compression support |
-fastlz | [MIT](<https://github.com/Blosc/c-blosc/blob/master/LICENSES/FASTLZ.txt>) | Compression support |
-lz4 | [BSD 2-Clause](<https://github.com/Blosc/c-blosc/blob/master/LICENSES/LZ4.txt>) | Compression support |
-snappy | [BSD](<https://github.com/Blosc/c-blosc/blob/master/LICENSES/SNAPPY.txt>) | Compression support |
-stdint | [BSD](<https://github.com/Blosc/c-blosc/blob/master/LICENSES/STDINT.txt>) | Compression support |
 zlib | [zlib](<http://zlib.net/zlib_license.html>) | Compression support |
 zstd | [BSD](<https://github.com/facebook/zstd/blob/dev/LICENSE>) | Compression support |
 libarchive | [BSD](<https://raw.githubusercontent.com/libarchive/libarchive/master/COPYING>) | Compression support |
