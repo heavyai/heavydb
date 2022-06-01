@@ -35,6 +35,10 @@ add_executable(DataRecyclerTest DataRecyclerTest.cpp)
 add_executable(DataMgrTest DataMgrTest.cpp)
 add_executable(ExplainTest ExplainTest.cpp)
 
+if(ENABLE_L0)
+  add_executable(SpirvBuildTest SpirvBuildTest.cpp)
+endif()
+
 if(ENABLE_CUDA)
   message(DEBUG "Tests CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
   set(MAPD_DEFINITIONS -DHAVE_CUDA)
@@ -136,6 +140,10 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(FIND THRIFT_HANDLER_TEST_LIBRARIES Licensing LICENSING_INDEX)
   list(INSERT THRIFT_HANDLER_TEST_LIBRARIES ${LICENSING_INDEX} TestLicensing)
   list(REMOVE_ITEM THRIFT_HANDLER_TEST_LIBRARIES Licensing)
+endif()
+
+if(ENABLE_L0)
+  target_link_libraries(SpirvBuildTest LLVMSPIRVLib ${EXECUTE_TEST_LIBS})
 endif()
 
 target_link_libraries(ResultSetTest ${EXECUTE_TEST_LIBS})
@@ -356,6 +364,10 @@ add_test(JSONTest JSONTest ${TEST_ARGS})
 endif()
 add_test(DataMgrTest DataMgrTest ${TEST_ARGS})
 add_test(ExplainTest ExplainTest ${TEST_ARGS})
+
+if(ENABLE_L0)
+  add_test(SpirvBuildTest SpirvBuildTest ${TEST_ARGS})
+endif()
 
 if(ENABLE_SYSTEM_TFS)
   add_test(SystemTableFunctionsTest SystemTableFunctionsTest ${TEST_ARGS})
