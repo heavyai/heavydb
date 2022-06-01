@@ -16,7 +16,6 @@ dependencies:
   - gxx_linux-64   9.*
   - gcc_linux-64   9.*
   - ccache
-  - libgdal    >=2.3
   - sysroot_linux-64 >=2.14
   - arrow-cpp  5.0
   - pyarrow    5.0

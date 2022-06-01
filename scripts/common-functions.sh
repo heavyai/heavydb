@@ -208,40 +208,6 @@ function install_llvm() {
     popd
 }
 
-PROJ_VERSION=7.2.1
-GDAL_VERSION=3.2.2
-
-function install_gdal() {
-    # sqlite3
-    download_make_install https://sqlite.org/2021/sqlite-autoconf-3350500.tar.gz
-
-    # expat
-    download_make_install https://github.com/libexpat/libexpat/releases/download/R_2_2_5/expat-2.2.5.tar.bz2
-
-    # kml
-    download ${HTTP_DEPS}/libkml-master.zip
-    unzip -u libkml-master.zip
-    pushd libkml-master
-    ./autogen.sh || true
-    CXXFLAGS="-std=c++03" ./configure --with-expat-include-dir=$PREFIX/include/ --with-expat-lib-dir=$PREFIX/lib --prefix=$PREFIX --enable-static --disable-java --disable-python --disable-swig
-    makej
-    make install
-    popd
-
-    # proj
-    download_make_install ${HTTP_DEPS}/proj-${PROJ_VERSION}.tar.gz "" "--disable-tiff"
-
-    # gdal
-    download_make_install ${HTTP_DEPS}/gdal-${GDAL_VERSION}.tar.gz "" "--without-geos --with-libkml=$PREFIX --with-proj=$PREFIX --with-libtiff=internal --with-libgeotiff=internal"
-}
-
-GEOS_VERSION=3.8.1
-
-function install_geos() {
-    download_make_install ${HTTP_DEPS}/geos-${GEOS_VERSION}.tar.bz2 "" "--enable-shared --disable-static"
-
-}
-
 FOLLY_VERSION=2021.02.01.00
 FMT_VERSION=7.1.3
 function install_folly() {

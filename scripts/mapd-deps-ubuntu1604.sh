@@ -80,9 +80,6 @@ install_ninja
 
 install_cmake
 
-# Geo Support
-install_gdal
-
 VERS=1_72_0
 # http://downloads.sourceforge.net/project/boost/boost/${VERS//_/.}/boost_$VERS.tar.bz2
 download ${HTTP_DEPS}/boost_$VERS.tar.bz2

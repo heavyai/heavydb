@@ -26,7 +26,6 @@ requirements:
     - llvmdev <11
     - make
     - maven
-    - libgdal >=2.3
     # new tbb needs glibc >= 2.14
     - sysroot_linux-64 >=2.14 # [linux]
   host:
@@ -44,8 +43,6 @@ requirements:
     - llvmdev <11
     - llvm <11
     - libarchive
-    - libgdal >=2.3
-    - libkml
     - libpng
     # for some reason, librdkafka 1.4+ triggers dependency conflicts
     - librdkafka <1.4
@@ -70,8 +67,6 @@ outputs:
         # omnscidb Load-time UDF support calls clang++
         - gxx_{{ target_platform }} 8.*
         - double-conversion
-        - libgdal >=2.3
-        - libkml
         - libpng
         - libarchive
         - libclang-cpp <11
@@ -113,8 +108,6 @@ outputs:
         # omnscidb Load-time UDF support calls clang++
         - gxx_{{ target_platform }}
         - double-conversion
-        - libgdal >=2.3
-        - libkml
         - libpng
         - libarchive
         - ncurses

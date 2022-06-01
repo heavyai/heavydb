@@ -1,6 +1,4 @@
-# 2018-05-03: Suppress lock-order-inversion warning from internal locks in GDAL. Since the warnings only occur when `GDAL::init` is called, this should be fairly safe.
 # 2019-03-31 Suppress google rawlog.  it is unclear why this issue suddenly started to occur.  Investigation will continue
-deadlock:gdal
 race:boost::*::saved_single_repeat
 race:boost::*::saved_state
 race:boost::*::perl_matcher

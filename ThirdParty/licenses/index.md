@@ -39,15 +39,6 @@ spirv-tools | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Tools/blob/mast
 spirv-cross | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Cross/blob/master/LICENSE) | Rendering support
 Vulkan Memory Allocator | [MIT](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/blob/master/LICENSE.txt) | Rendering support
 --- | --- | --- |
-gdal | [MIT](<http://svn.osgeo.org/gdal/trunk/gdal/LICENSE.TXT>) | GDAL, Geospatial import |
-libexpat | [MIT](<https://github.com/LuaDist/libexpat/blob/master/COPYING>) | GDAL, KML import |
-libkml | [BSD](<https://github.com/google/libkml/blob/master/LICENSE>) | GDAL, KML import |
-minizip | [zlib](<http://zlib.net/zlib_license.html>) | GDAL, zip support |
-pcre | [BSD](<http://www.pcre.org/licence.txt>) | GDAL, KML import |
-proj4 | [MIT](<http://proj4.org/license.html>) | GDAL, Geospatial reprojection |
-shapelib | [MIT](<http://shapelib.maptools.org/license.html>) | GDAL, Shapefile import |
-uriparser | [BSD](<https://sourceforge.net/p/uriparser/git/ci/master/tree/COPYING>) | GDAL, KML import |
---- | --- | --- |
 generate\_cert (Go) | [BSD](<https://github.com/golang/go/blob/master/LICENSE>) | HTTPS certificate generator |
 gorilla/context | [BSD](<https://github.com/gorilla/context/blob/master/LICENSE>) | HTTP session handlers |
 gorilla/handlers | [BSD](<https://github.com/gorilla/handlers/blob/master/LICENSE>) | HTTP service handlers |
@@ -146,9 +137,4 @@ go-yaml/yaml | [MIT](<https://github.com/go-yaml/yaml/blob/v2/LICENSE.libyaml>) 
 uber-go/atomic | [MIT](<https://github.com/uber-go/atomic/blob/master/LICENSE.txt>) | Distributed consensus |
 uber-go/multierr | [MIT](<https://github.com/uber-go/multierr/blob/master/LICENSE.txt>) | Distributed consensus |
 uber-go/zap | [MIT](<https://github.com/uber-go/zap/blob/master/LICENSE.txt>) | Distributed consensus |
---- | --- | --- |
-geos | [LGPLv2.1](<https://github.com/libgeos/geos/blob/master/COPYING>) | Geo support, dynamic linked |
---- | --- | --- |
-Canonical Raft | [LGPLv3](<https://github.com/canonical/raft/blob/master/LICENSE>) | Distributed consensus |
-libuv | [MIT](<https://github.com/libuv/libuv/blob/v1.x/LICENSE>) | Distributed consensus |
 --- | --- | --- |

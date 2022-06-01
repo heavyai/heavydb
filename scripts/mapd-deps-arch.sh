@@ -22,8 +22,6 @@ yay -S \
     flex \
     fmt \
     gcc \
-    gdal \
-    geos \
     git \
     glbinding \
     go \
