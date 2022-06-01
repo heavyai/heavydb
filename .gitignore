@@ -55,12 +55,6 @@ CMakeSettings.json
 # Emacs editor files
 *~
 
-# go files
-ThirdParty/go/bin/
-ThirdParty/go/pkg/
-ThirdParty/go/src/*
-!ThirdParty/go/src/mapd/
-
 # sphinx docs
 !docs/**/Makefile
 *.pyc

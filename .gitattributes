@@ -10,7 +10,6 @@ ThirdParty/* linguist-vendored
 *.h       text
 *.hpp     text
 
-*.go      text
 *.java    text
 *.js      text
 *.py      text

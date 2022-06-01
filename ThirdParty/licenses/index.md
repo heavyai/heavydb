@@ -29,22 +29,6 @@ TimeGM | [BSD](<https://cdn.netbsd.org/pub/pkgsrc/current/pkgsrc/pkgtools/libnbc
 Uber H3 | [Apache-2.0](https://github.com/uber/h3/blob/master/LICENSE) | H3 index encoding/decoding |
 zlib | [zlib](<http://zlib.net/zlib_license.html>) | PNG support |
 --- | --- | --- |
-generate\_cert (Go) | [BSD](<https://github.com/golang/go/blob/master/LICENSE>) | HTTPS certificate generator |
-gorilla/context | [BSD](<https://github.com/gorilla/context/blob/master/LICENSE>) | HTTP session handlers |
-gorilla/handlers | [BSD](<https://github.com/gorilla/handlers/blob/master/LICENSE>) | HTTP service handlers |
-gorilla/securecookie | [BSD](<https://github.com/gorilla/securecookie/blob/master/LICENSE>) | HTTP session handlers |
-gorilla/sessions | [BSD](<https://github.com/gorilla/sessions/blob/master/LICENSE>) | HTTP session handlers |
-pelletier/go-toml | [MIT](<https://github.com/pelletier/go-toml/blob/master/LICENSE>) | Config file parser |
-Jeffail/gabs | [MIT](<https://github.com/Jeffail/gabs/blob/master/LICENSE>) | JSON Parsing |
-rs/cors | [MIT](<https://github.com/rs/cors/blob/master/LICENSE>) | CORS handler |
-Sirupsen/logrus | [MIT](<https://github.com/Sirupsen/logrus/blob/master/LICENSE>) | Go logging |
-spf13/afero | [BSD](<https://github.com/spf13/afero/blob/master/LICENSE.txt>) | CLI flags handler |
-spf13/pflag | [BSD](<https://github.com/spf13/pflag/blob/master/LICENSE>) | CLI flags handler |
-spf13/viper | [MIT](<https://github.com/spf13/viper/blob/master/LICENSE>) | Config file management |
-andrewseidl/viper | [MIT](<https://github.com/andrewseidl/viper/blob/master/LICENSE>) | Config file management |
-tylerb/graceful | [MIT](<https://github.com/tylerb/graceful/blob/master/LICENSE>) | Graceful server shutdown and restart |
-dgrijalva/jwt-go | [MIT](<https://github.com/dgrijalva/jwt-go/blob/master/LICENSE>) | Licensing |
---- | --- | --- |
 Apache commons-cli | [Apache](<https://github.com/apache/commons-cli/blob/trunk/LICENSE.txt>) | CLI flags handler |
 Apache commons-math3 | [Apache](<https://github.com/apache/commons-math/blob/master/LICENSE.txt>) | Math functions |
 Apache commons-text | [Apache](<https://github.com/apache/commons-text/blob/master/LICENSE.txt>) | String parsing functions |
@@ -69,56 +53,4 @@ opensaml | [Apache](<https://git.shibboleth.net/view/?p=cpp-opensaml.git;a=blob;
 xerces-c | [Apache](<https://github.com/apache/xerces-c/blob/trunk/LICENSE>) | SAML support |
 xml-security-c | [Apache](<https://github.com/apache/santuario-cpp/blob/trunk/LICENSE.txt>) | SAML support |
 xmltooling | [Apache](<https://git.shibboleth.net/view/?p=cpp-xmltooling.git;a=blob;f=doc/LICENSE.txt>) | SAML support |
---- | --- | --- |
-beorn7/perks | [MIT](<https://github.com/beorn7/perks/blob/master/LICENSE>) | Distributed consensus |
-coreos/go-semver | [Apache-2.0](<https://github.com/coreos/go-semver/blob/master/LICENSE>) | Distributed consensus |
-coreos/go-systemd | [Apache-2.0](<https://github.com/coreos/go-systemd/blob/master/LICENSE>) | Distributed consensus |
-coreos/pkg | [Apache-2.0](<https://github.com/coreos/pkg/blob/master/LICENSE>) | Distributed consensus |
-dustin/go-humanize | [MIT](<https://github.com/dustin/go-humanize/blob/master/LICENSE>) | Distributed consensus |
-ghodss/yaml | [MIT](<https://github.com/ghodss/yaml/blob/master/LICENSE>) | Distributed consensus |
-gogo/protobuf | [BSD-3-Clause](<https://github.com/gogo/protobuf/blob/master/LICENSE>) | Distributed consensus |
-golang/protobuf | [BSD-3-Clause](<https://github.com/golang/protobuf/blob/master/LICENSE>) | Distributed consensus |
-google/btree | [Apache-2.0](<https://github.com/google/btree/blob/master/LICENSE>) | Distributed consensus |
-google/uuid | [BSD-3-Clause](<https://github.com/google/uuid/blob/master/LICENSE>) | Distributed consensus |
-gorilla/websocket | [BSD-2-Clause](<https://github.com/gorilla/websocket/blob/master/LICENSE>) | Distributed consensus |
-grpc-ecosystem/go-grpc-middleware | [Apache-2.0](<https://github.com/grpc-ecosystem/go-grpc-middleware/blob/master/LICENSE>) | Distributed consensus |
-grpc-ecosystem/go-grpc-prometheus | [Apache-2.0](<https://github.com/grpc-ecosystem/go-grpc-prometheus/blob/master/LICENSE>) | Distributed consensus |
-grpc-ecosystem/grpc-gateway | [BSD-3-Clause](<https://github.com/grpc-ecosystem/grpc-gateway/blob/master/LICENSE.txt>) | Distributed consensus |
-Jeffail/gabs | [MIT](<https://github.com/Jeffail/gabs/blob/master/LICENSE>) | Distributed consensus |
-jonboulle/clockwork | [Apache-2.0](<https://github.com/jonboulle/clockwork/blob/master/LICENSE>) | Distributed consensus |
-kr/pretty | [MIT](<https://github.com/kr/pretty/blob/master/License>) | Distributed consensus |
-kr/text | [MIT](<https://github.com/kr/text/blob/master/License>) | Distributed consensus |
-magiconair/properties | [BSD-2-Clause](<https://github.com/magiconair/properties/blob/master/LICENSE>) | Distributed consensus |
-matttproud/golang_protobuf_extensions | [Apache-2.0](<https://github.com/matttproud/golang_protobuf_extensions/blob/master/LICENSE>) | Distributed consensus |
-mitchellh/mapstructure | [MIT](<https://github.com/mitchellh/mapstructure/blob/master/LICENSE>) | Distributed consensus |
-pelletier/go-toml | [MIT](<https://github.com/pelletier/go-toml/blob/master/LICENSE>) | Distributed consensus |
-prometheus/client_golang | [Apache-2.0](<https://github.com/prometheus/client_golang/blob/master/LICENSE>) | Distributed consensus |
-prometheus/client_model | [Apache-2.0](<https://github.com/prometheus/client_model/blob/master/LICENSE>) | Distributed consensus |
-prometheus/common | [Apache-2.0](<https://github.com/prometheus/common/blob/master/LICENSE>) | Distributed consensus |
-prometheus/procfs | [Apache-2.0](<https://github.com/prometheus/procfs/blob/master/LICENSE>) | Distributed consensus |
-rcrowley/go-metrics | [BSD-2-Clause](<https://github.com/rcrowley/go-metrics/blob/master/LICENSE>) | Distributed consensus |
-rs/xhandler | [MIT](<https://github.com/rs/xhandler/blob/master/LICENSE>) | Distributed consensus |
-soheilhy/cmux | [Apache-2.0](<https://github.com/soheilhy/cmux/blob/master/LICENSE>) | Distributed consensus |
-spf13/jwalterweatherman | [MIT](<https://github.com/spf13/jwalterweatherman/blob/master/LICENSE>) | Distributed consensus |
-tmc/grpc-websocket-proxy | [MIT](<https://github.com/tmc/grpc-websocket-proxy/blob/master/LICENSE>) | Distributed consensus |
-ugorji/go | [MIT](<https://github.com/ugorji/go/blob/master/LICENSE>) | Distributed consensus |
-xeipuuv/gojsonpointer | [Apache-2.0](<https://github.com/xeipuuv/gojsonpointer/blob/master/LICENSE-APACHE-2.0.txt>) | Distributed consensus |
-xeipuuv/gojsonreference | [Apache-2.0](<https://github.com/xeipuuv/gojsonreference/blob/master/LICENSE-APACHE-2.0.txt>) | Distributed consensus |
-xeipuuv/gojsonschema | [Apache-2.0](<https://github.com/xeipuuv/gojsonschema/blob/master/LICENSE-APACHE-2.0.txt>) | Distributed consensus |
-xiang90/probing | [MIT](<https://github.com/xiang90/probing/blob/master/LICENSE>) | Distributed consensus |
-etcd-io/bbolt | [MIT](<https://github.com/etcd-io/bbolt/blob/master/LICENSE>) | Distributed consensus |
-etcd-io/etcd | [Apache-2.0](<https://github.com/etcd-io/etcd/blob/master/LICENSE>) | Distributed consensus |
-google/go-genproto | [Apache-2.0](<https://github.com/google/go-genproto/blob/master/LICENSE>) | Distributed consensus |
-golang/crypto | [BSD-3-Clause](<https://github.com/golang/crypto/blob/master/LICENSE>) | Distributed consensus |
-golang/net | [BSD-3-Clause](<https://github.com/golang/net/blob/master/LICENSE>) | Distributed consensus |
-golang/sys | [BSD-3-Clause](<https://github.com/golang/sys/blob/master/LICENSE>) | Distributed consensus |
-golang/text | [BSD-3-Clause](<https://github.com/golang/text/blob/master/LICENSE>) | Distributed consensus |
-golang/time | [BSD-3-Clause](<https://github.com/golang/time/blob/master/LICENSE>) | Distributed consensus |
-grpc/grpc-go | [Apache-2.0](<https://github.com/grpc/grpc-go/blob/master/LICENSE>) | Distributed consensus |
-fsnotify/fsnotify | [BSD-3-Clause](<https://github.com/fsnotify/fsnotify/blob/master/LICENSE>) | Distributed consensus |
-go-yaml/yaml | [Apache-2.0](<https://github.com/go-yaml/yaml/blob/v2/LICENSE>) | Distributed consensus |
-go-yaml/yaml | [MIT](<https://github.com/go-yaml/yaml/blob/v2/LICENSE.libyaml>) | Distributed consensus |
-uber-go/atomic | [MIT](<https://github.com/uber-go/atomic/blob/master/LICENSE.txt>) | Distributed consensus |
-uber-go/multierr | [MIT](<https://github.com/uber-go/multierr/blob/master/LICENSE.txt>) | Distributed consensus |
-uber-go/zap | [MIT](<https://github.com/uber-go/zap/blob/master/LICENSE.txt>) | Distributed consensus |
 --- | --- | --- |

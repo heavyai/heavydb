@@ -17,7 +17,6 @@ fi
 brew install cmake
 brew install wget
 brew install jq
-brew install golang
 brew install libpng
 brew install libarchive
 brew install maven
