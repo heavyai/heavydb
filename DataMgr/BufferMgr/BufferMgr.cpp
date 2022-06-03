@@ -149,6 +149,21 @@ AbstractBuffer* BufferMgr::createBuffer(const ChunkKey& chunk_key,
   return chunk_index_[chunk_key]->buffer;
 }
 
+AbstractBuffer* BufferMgr::createZeroCopyBuffer(
+    const ChunkKey& chunk_key,
+    std::unique_ptr<AbstractDataToken> token) {
+  {
+    std::lock_guard<std::mutex> lock(chunk_index_mutex_);
+    CHECK(chunk_index_.find(chunk_key) == chunk_index_.end());
+    BufferSeg buffer_seg(BufferSeg(-1, 0, USED));
+    buffer_seg.chunk_key = chunk_key;
+    std::lock_guard<std::mutex> unsizedSegsLock(unsized_segs_mutex_);
+    unsized_segs_.push_back(buffer_seg);
+    chunk_index_[chunk_key] = std::prev(unsized_segs_.end(), 1);
+  }
+  return allocateZeroCopyBuffer(chunk_index_[chunk_key], page_size_, std::move(token));
+}
+
 BufferList::iterator BufferMgr::evict(BufferList::iterator& evict_start,
                                       const size_t num_pages_requested,
                                       const int slab_num) {
@@ -745,6 +760,10 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes
     return buffer_it->second->buffer;
   } else {  // If wasn't in pool then we need to fetch it
     sized_segs_lock.unlock();
+    // Check if we can zero-copy fetch requested chunk.
+    if (auto token = getZeroCopyBufferMemory(key, num_bytes)) {
+      return createZeroCopyBuffer(key, std::move(token));
+    }
     // createChunk pins for us
     AbstractBuffer* buffer = createBuffer(key, page_size_, num_bytes);
     try {
@@ -884,4 +903,10 @@ const std::vector<BufferList>& BufferMgr::getSlabSegments() {
 void BufferMgr::removeTableRelatedDS(const int db_id, const int table_id) {
   UNREACHABLE();
 }
+
+std::unique_ptr<AbstractDataToken> BufferMgr::getZeroCopyBufferMemory(const ChunkKey& key,
+                                                                      size_t numBytes) {
+  return parent_mgr_->getZeroCopyBufferMemory(key, numBytes);
+}
+
 }  // namespace Buffer_Namespace

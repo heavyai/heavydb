@@ -54,6 +54,13 @@ void CpuBufferMgr::allocateBuffer(BufferList::iterator seg_it,
                                 // buffer member
 }
 
+AbstractBuffer* CpuBufferMgr::allocateZeroCopyBuffer(
+    BufferList::iterator seg_it,
+    const size_t page_size,
+    std::unique_ptr<AbstractDataToken> token) {
+  return new CpuBuffer(this, seg_it, device_id_, page_size, std::move(token), gpu_mgr_);
+}
+
 void CpuBufferMgr::initializeMem() {
   allocator_.reset(new Arena(max_slab_size_ + kArenaBlockOverhead));
 }

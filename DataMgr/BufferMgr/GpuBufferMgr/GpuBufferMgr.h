@@ -32,6 +32,10 @@ class GpuBufferMgr : public BufferMgr {
                AbstractBufferMgr* parent_mgr = 0);
   inline MgrType getMgrType() override { return GPU_MGR; }
   inline std::string getStringMgrType() override { return ToString(GPU_MGR); }
+  std::unique_ptr<AbstractDataToken> getZeroCopyBufferMemory(const ChunkKey& key,
+                                                             size_t numBytes) override {
+    return nullptr;
+  }
   ~GpuBufferMgr() override;
 
  private:

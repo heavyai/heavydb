@@ -44,6 +44,24 @@ Buffer::Buffer(BufferMgr* bm,
   }
 }
 
+Buffer::Buffer(BufferMgr* bm,
+               BufferList::iterator seg_it,
+               int device_id,
+               size_t page_size,
+               std::unique_ptr<AbstractDataToken> token)
+    : AbstractBuffer(device_id)
+    , mem_(const_cast<int8_t*>(token->getMemoryPtr()))
+    , bm_(bm)
+    , seg_it_(seg_it)
+    , page_size_(page_size)
+    , num_pages_(0)
+    , pin_count_(0)
+    , token_(std::move(token)) {
+  pin();
+  seg_it_->buffer = this;
+  setSize(token_->getSize());
+}
+
 Buffer::~Buffer() {}
 
 void Buffer::reserve(const size_t num_bytes) {
@@ -53,6 +71,15 @@ void Buffer::reserve(const size_t num_bytes) {
   size_t num_pages = (num_bytes + page_size_ - 1) / page_size_;
   // std::cout << "NumPages reserved: " << numPages << std::endl;
   if (num_pages > num_pages_) {
+    // Reserve can be called for zero-copy buffers only when chunk
+    // is modified (some data was appended). In this case we have to
+    // drop zero-copy buffer and allocate memory.
+    // TODO: disallow chunk modifications?
+    if (token_) {
+      token_.reset();
+      setSize(0);
+      mem_ = nullptr;
+    }
     // When running out of cpu buffers, reserveBuffer() will fail and
     // trigger a SlabTooBig exception, so pageDirtyFlags_ and numPages_
     // MUST NOT be set until reserveBuffer() returns; otherwise, this

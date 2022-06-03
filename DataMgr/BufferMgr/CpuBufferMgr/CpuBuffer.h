@@ -29,6 +29,13 @@ class CpuBuffer : public Buffer {
             const size_t page_size = 512,
             const size_t num_bytes = 0);
 
+  CpuBuffer(BufferMgr* bm,
+            BufferList::iterator segment_iter,
+            int device_id,
+            const size_t page_size,
+            std::unique_ptr<AbstractDataToken> token,
+            GpuMgr* gpu_mgr);
+
   inline Data_Namespace::MemoryLevel getType() const override { return CPU_LEVEL; }
 
  private:

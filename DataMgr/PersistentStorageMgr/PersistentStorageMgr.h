@@ -27,10 +27,14 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   AbstractBuffer* createBuffer(const ChunkKey& chunk_key,
                                const size_t page_size,
                                const size_t initial_size) override;
+  AbstractBuffer* createZeroCopyBuffer(const ChunkKey& key,
+                                       std::unique_ptr<AbstractDataToken> token) override;
   void deleteBuffer(const ChunkKey& chunk_key, const bool purge) override;
   void deleteBuffersWithPrefix(const ChunkKey& chunk_key_prefix,
                                const bool purge) override;
   AbstractBuffer* getBuffer(const ChunkKey& chunk_key, const size_t num_bytes) override;
+  std::unique_ptr<AbstractDataToken> getZeroCopyBufferMemory(const ChunkKey& key,
+                                                             size_t numBytes) override;
   void fetchBuffer(const ChunkKey& chunk_key,
                    AbstractBuffer* destination_buffer,
                    const size_t num_bytes) override;

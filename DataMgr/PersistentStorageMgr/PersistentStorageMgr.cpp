@@ -33,6 +33,12 @@ AbstractBuffer* PersistentStorageMgr::createBuffer(const ChunkKey& chunk_key,
       chunk_key, page_size, initial_size);
 }
 
+AbstractBuffer* PersistentStorageMgr::createZeroCopyBuffer(
+    const ChunkKey& key,
+    std::unique_ptr<AbstractDataToken> token) {
+  return getStorageMgrForTableKey(key)->createZeroCopyBuffer(key, std::move(token));
+}
+
 void PersistentStorageMgr::deleteBuffer(const ChunkKey& chunk_key, const bool purge) {
   getStorageMgrForTableKey(chunk_key)->deleteBuffer(chunk_key, purge);
 }
@@ -46,6 +52,12 @@ void PersistentStorageMgr::deleteBuffersWithPrefix(const ChunkKey& chunk_key_pre
 AbstractBuffer* PersistentStorageMgr::getBuffer(const ChunkKey& chunk_key,
                                                 const size_t num_bytes) {
   return getStorageMgrForTableKey(chunk_key)->getBuffer(chunk_key, num_bytes);
+}
+
+std::unique_ptr<AbstractDataToken> PersistentStorageMgr::getZeroCopyBufferMemory(
+    const ChunkKey& key,
+    size_t numBytes) {
+  return getStorageMgrForTableKey(key)->getZeroCopyBufferMemory(key, numBytes);
 }
 
 void PersistentStorageMgr::fetchBuffer(const ChunkKey& chunk_key,

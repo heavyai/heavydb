@@ -130,6 +130,9 @@ class BufferMgr : public AbstractBufferMgr {  // implements
                                const size_t page_size = 0,
                                const size_t initial_size = 0) override;
 
+  AbstractBuffer* createZeroCopyBuffer(const ChunkKey& chunk_key,
+                                       std::unique_ptr<AbstractDataToken> token) override;
+
   /// Deletes the chunk with the specified key
   void deleteBuffer(const ChunkKey& key, const bool purge = true) override;
   void deleteBuffersWithPrefix(const ChunkKey& key_prefix,
@@ -137,6 +140,9 @@ class BufferMgr : public AbstractBufferMgr {  // implements
 
   /// Returns the a pointer to the chunk with the specified key.
   AbstractBuffer* getBuffer(const ChunkKey& key, const size_t num_bytes = 0) override;
+
+  std::unique_ptr<AbstractDataToken> getZeroCopyBufferMemory(const ChunkKey& key,
+                                                             size_t numBytes) override;
 
   /**
    * @brief Puts the contents of d into the Buffer with ChunkKey key.
@@ -202,6 +208,13 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   virtual void allocateBuffer(BufferList::iterator seg_it,
                               const size_t page_size,
                               const size_t num_bytes) = 0;
+  virtual AbstractBuffer* allocateZeroCopyBuffer(
+      BufferList::iterator seg_it,
+      const size_t page_size,
+      std::unique_ptr<AbstractDataToken> token) {
+    UNREACHABLE();
+    return nullptr;
+  }
   void clear();
 
   std::mutex chunk_index_mutex_;

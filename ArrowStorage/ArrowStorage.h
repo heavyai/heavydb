@@ -60,6 +60,10 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
                    Data_Namespace::AbstractBuffer* dest,
                    const size_t num_bytes = 0) override;
 
+  std::unique_ptr<Data_Namespace::AbstractDataToken> getZeroCopyBufferMemory(
+      const ChunkKey& key,
+      size_t num_bytes) override;
+
   TableFragmentsInfo getTableMetadata(int db_id, int table_id) const override;
 
   const DictDescriptor* getDictMetadata(int dict_id, bool load_dict = true) override;
@@ -134,6 +138,22 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
     std::vector<std::shared_ptr<arrow::ChunkedArray>> col_data;
     std::vector<DataFragment> fragments;
     size_t row_count = 0;
+  };
+
+  class ArrowChunkDataToken : public Data_Namespace::AbstractDataToken {
+   public:
+    ArrowChunkDataToken(std::shared_ptr<arrow::Array> chunk,
+                        const int8_t* ptr,
+                        size_t size)
+        : chunk_(std::move(chunk)), ptr_(ptr), size_(size) {}
+
+    const int8_t* getMemoryPtr() const override { return ptr_; }
+    size_t getSize() const override { return size_; }
+
+   private:
+    std::shared_ptr<arrow::Array> chunk_;
+    const int8_t* ptr_;
+    size_t size_;
   };
 
   void checkNewTableParams(const std::string& table_name,

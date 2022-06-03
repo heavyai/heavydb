@@ -80,6 +80,7 @@ void ArrowStorage::fetchBuffer(const ChunkKey& key,
       getColumnInfo(
           key[CHUNK_KEY_DB_IDX], key[CHUNK_KEY_TABLE_IDX], key[CHUNK_KEY_COLUMN_IDX])
           ->type;
+  dest->reserve(num_bytes);
   if (!col_type.is_varlen_indeed()) {
     CHECK_EQ(key.size(), (size_t)4);
     size_t elem_size = col_type.get_size();
@@ -107,6 +108,49 @@ void ArrowStorage::fetchBuffer(const ChunkKey& key,
     }
   }
   dest->setSize(num_bytes);
+}
+
+std::unique_ptr<AbstractDataToken> ArrowStorage::getZeroCopyBufferMemory(
+    const ChunkKey& key,
+    size_t num_bytes) {
+  CHECK_EQ(key[CHUNK_KEY_DB_IDX], db_id_);
+  CHECK_EQ(tables_.count(key[CHUNK_KEY_TABLE_IDX]), (size_t)1);
+
+  auto col_type =
+      getColumnInfo(
+          key[CHUNK_KEY_DB_IDX], key[CHUNK_KEY_TABLE_IDX], key[CHUNK_KEY_COLUMN_IDX])
+          ->type;
+
+  if (!col_type.is_varlen_indeed()) {
+    auto& table = *tables_.at(key[CHUNK_KEY_TABLE_IDX]);
+
+    size_t col_idx = static_cast<size_t>(key[CHUNK_KEY_COLUMN_IDX] - 1);
+    size_t frag_idx = static_cast<size_t>(key[CHUNK_KEY_FRAGMENT_IDX] - 1);
+    CHECK_EQ(key.size(), (size_t)4);
+    size_t elem_size = col_type.get_size();
+    auto& frag = table.fragments[frag_idx];
+    size_t rows_to_fetch = num_bytes ? num_bytes / elem_size : frag.row_count;
+    const auto* fixed_type =
+        dynamic_cast<const arrow::FixedWidthType*>(table.col_data[col_idx]->type().get());
+    CHECK(fixed_type);
+    size_t arrow_elem_size = fixed_type->bit_width() / 8;
+    // For fixed size arrays we simply use elem type in arrow and therefore have to scale
+    // to get a proper slice.
+    size_t elems = elem_size / arrow_elem_size;
+    CHECK_GT(elems, (size_t)0);
+    auto data_to_fetch =
+        table.col_data[col_idx]->Slice(static_cast<int64_t>(frag.offset * elems),
+                                       static_cast<int64_t>(rows_to_fetch * elems));
+    if (data_to_fetch->num_chunks() == 1) {
+      auto chunk = data_to_fetch->chunk(0);
+      const int8_t* ptr =
+          chunk->data()->GetValues<int8_t>(1, chunk->data()->offset * arrow_elem_size);
+      size_t chunk_size = chunk->length() * arrow_elem_size;
+      return std::make_unique<ArrowChunkDataToken>(std::move(chunk), ptr, chunk_size);
+    }
+  }
+
+  return nullptr;
 }
 
 void ArrowStorage::fetchFixedLenData(const TableData& table,

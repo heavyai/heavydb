@@ -48,6 +48,11 @@ class CpuBufferMgr : public BufferMgr {
   inline MgrType getMgrType() override { return CPU_MGR; }
   inline std::string getStringMgrType() override { return ToString(CPU_MGR); }
 
+  AbstractBuffer* allocateZeroCopyBuffer(
+      BufferList::iterator seg_it,
+      const size_t page_size,
+      std::unique_ptr<AbstractDataToken> token) override;
+
  protected:
   void addSlab(const size_t slab_size) override;
   void freeAllMem() override;

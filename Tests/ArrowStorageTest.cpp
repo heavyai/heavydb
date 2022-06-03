@@ -71,7 +71,7 @@ class TestBuffer : public Data_Namespace::AbstractBuffer {
     UNREACHABLE();
   }
 
-  void reserve(size_t num_bytes) override { UNREACHABLE(); }
+  void reserve(size_t num_bytes) override { CHECK_EQ(num_bytes, size_); }
 
   void append(int8_t* src,
               const size_t num_bytes,

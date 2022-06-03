@@ -75,12 +75,17 @@ class AbstractBufferMgr {
   virtual AbstractBuffer* createBuffer(const ChunkKey& key,
                                        const size_t pageSize = 0,
                                        const size_t initialSize = 0) = 0;
+  virtual AbstractBuffer* createZeroCopyBuffer(
+      const ChunkKey& key,
+      std::unique_ptr<AbstractDataToken> token) = 0;
   virtual void deleteBuffer(
       const ChunkKey& key,
       const bool purge = true) = 0;  // purge param only used in FileMgr
   virtual void deleteBuffersWithPrefix(const ChunkKey& keyPrefix,
                                        const bool purge = true) = 0;
   virtual AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) = 0;
+  virtual std::unique_ptr<AbstractDataToken> getZeroCopyBufferMemory(const ChunkKey& key,
+                                                                     size_t numBytes) = 0;
   virtual void fetchBuffer(const ChunkKey& key,
                            AbstractBuffer* destBuffer,
                            const size_t numBytes = 0) = 0;

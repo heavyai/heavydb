@@ -44,6 +44,14 @@ namespace Data_Namespace {
 
 // enum BufferType {FILE_BUFFER, CPU_BUFFER, GPU_BUFFER};
 
+class AbstractDataToken {
+ public:
+  virtual ~AbstractDataToken() = default;
+
+  virtual const int8_t* getMemoryPtr() const = 0;
+  virtual size_t getSize() const = 0;
+};
+
 class AbstractBuffer {
  public:
   AbstractBuffer(const int device_id)

@@ -32,6 +32,19 @@ class AbstractDataProvider : public Data_Namespace::AbstractBufferMgr {
     return nullptr;
   }
 
+  Data_Namespace::AbstractBuffer* createZeroCopyBuffer(
+      const ChunkKey& key,
+      std::unique_ptr<Data_Namespace::AbstractDataToken> token) override {
+    UNREACHABLE();
+    return nullptr;
+  }
+
+  std::unique_ptr<Data_Namespace::AbstractDataToken> getZeroCopyBufferMemory(
+      const ChunkKey& key,
+      size_t numBytes) override {
+    return nullptr;
+  }
+
   void deleteBuffer(const ChunkKey& key, const bool purge = true) override {
     UNREACHABLE();
   }

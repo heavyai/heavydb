@@ -68,6 +68,13 @@ class Buffer : public AbstractBuffer {
          const size_t page_size = 512,
          const size_t num_bytes = 0);
 
+  // Create zero-copy read-only buffer referencing external memory.
+  Buffer(BufferMgr* bm,
+         BufferList::iterator seg_it,
+         int device_id,
+         size_t page_size,
+         std::unique_ptr<AbstractDataToken> token);
+
   /// Destructor
   ~Buffer() override;
 
@@ -165,6 +172,7 @@ class Buffer : public AbstractBuffer {
   std::vector<bool> page_dirty_flags_;
   int pin_count_;
   std::mutex pin_mutex_;
+  std::unique_ptr<AbstractDataToken> token_;
 };
 
 }  // namespace Buffer_Namespace
