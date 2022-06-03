@@ -67,7 +67,6 @@ extern size_t g_columnar_large_projections_threshold;
 extern bool g_enable_system_tables;
 extern bool g_allow_system_dashboard_update;
 extern bool g_enable_logs_system_tables;
-extern std::string g_logs_system_tables_refresh_interval;
 extern size_t g_logs_system_tables_max_files_count;
 #ifdef ENABLE_MEMKIND
 extern std::string g_pmem_path;
@@ -591,10 +590,6 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(g_enable_logs_system_tables)
                               ->implicit_value(true),
                           "Enable use of logs system tables.");
-  help_desc.add_options()("logs-system-tables-refresh-interval",
-                          po::value<std::string>(&g_logs_system_tables_refresh_interval)
-                              ->default_value(g_logs_system_tables_refresh_interval),
-                          "Refresh interval for logs system tables.");
   help_desc.add_options()(
       "logs-system-tables-max-files-count",
       po::value<size_t>(&g_logs_system_tables_max_files_count)
@@ -1296,16 +1291,6 @@ void CommandLineOptions::validate() {
   }
   LOG(INFO) << "Enable FSI is set to " << g_enable_fsi;
   LOG(INFO) << "Enable logs system tables set to " << g_enable_logs_system_tables;
-
-  static const boost::regex interval_regex{"^\\d{1,}[SHD]$",
-                                           boost::regex::extended | boost::regex::icase};
-  if (!boost::regex_match(g_logs_system_tables_refresh_interval, interval_regex)) {
-    throw std::runtime_error{
-        "Invalid interval value provided for the \"logs-system-tables-refresh-interval\" "
-        "option. Interval should have the following format: nS, nH, or nD"};
-  }
-  LOG(INFO) << "Logs system tables refresh interval set to "
-            << g_logs_system_tables_refresh_interval;
 
   if (g_logs_system_tables_max_files_count == 0) {
     throw std::runtime_error{
