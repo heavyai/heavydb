@@ -4,17 +4,24 @@ on:
     inputs:
       cuda_compiler_version:
         type: string
+    outputs:
+      is_conda_updated:
+        value: ${{ jobs.build.outputs.is_conda_updated }}
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     env:
       cuda_compiler_version: ${{ inputs.cuda_compiler_version }}
       PREFIX: distr
-      workflow_conclusion: success
+        #workflow_conclusion: success
         #      workflow_conclusion: completed
-        #      workflow_conclusion: None
+      workflow_conclusion: None
       CONDA_ENV: omnisci-dev
+
+    outputs:
+      is_conda_updated: ${{ env.is_conda_updated }}
 
     steps:
       - uses: actions/checkout@v2
@@ -46,10 +53,10 @@ jobs:
           conda update conda
           conda env update -f scripts/mapd-deps-conda-dev-env.yml
           test timestamp -ot ${{ env.CONDA_ENV_PATH }}/conda-meta/history || exit 0
-          echo is_conda_update_needed=true >>$GITHUB_ENV
+          echo is_conda_updated=true >>$GITHUB_ENV
 
       - name: Create Conda archive
-        if: ${{ env.is_conda_update_needed }}
+        if: ${{ env.is_conda_updated }}
         run: |
           cd ${{ env.CONDA_ENV_PATH }}
           tar -zcf /tmp/conda.tgz .
@@ -90,7 +97,7 @@ jobs:
           path: /tmp/build.tgz
 
       - name: Commit Conda environment
-        if: ${{ env.is_conda_update_needed }}
+        if: ${{ env.is_conda_updated }}
         uses: actions/upload-artifact@v2
         with:
           name: ${{ env.RUN_STAMP }}-conda

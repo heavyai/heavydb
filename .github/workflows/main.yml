@@ -38,10 +38,13 @@ jobs:
   test:
     needs: build
     uses: ./.github/workflows/test.yml
+    with:
+      is_conda_updated: ${{ needs.build.outputs.is_conda_updated }}
 
   perf:
     needs: build
     uses: ./.github/workflows/perf.yml
-
+    with:
+      is_conda_updated: ${{ needs.build.outputs.is_conda_updated }}
 
 

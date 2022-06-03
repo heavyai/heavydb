@@ -5,6 +5,8 @@ on:
       cuda_compiler_version:
         type: string
         default: 'None'
+      is_conda_updated:
+        type: string
 
 jobs:
   test:
@@ -34,7 +36,14 @@ jobs:
         run: |
           tar -zxf build.tgz
 
-      - name: Download Conda
+      - name: Download new Conda
+        if: ${{ inputs.is_conda_updated == 'true' }}
+        uses: actions/download-artifact@v3
+        with:
+          name: ${{ env.RUN_STAMP }}-conda
+
+      - name: Download old Conda
+        if: ${{ inputs.is_conda_updated != 'true' }}
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: main.yml
