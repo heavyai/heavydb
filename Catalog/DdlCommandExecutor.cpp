@@ -445,6 +445,10 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
   } else if (ddl_command_ == "VALIDATE_SYSTEM") {
     // VALIDATE should have been excuted in outer context before it reaches here
     UNREACHABLE();
+  } else if (ddl_command_ == "REFRESH_FOREIGN_TABLES") {
+    result =
+        RefreshForeignTablesCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
+    return result;
   }
 
   // the following commands require a global unique lock until proper table locking has
@@ -489,9 +493,6 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
     result = AlterForeignServerCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "ALTER_FOREIGN_TABLE") {
     result = AlterForeignTableCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
-  } else if (ddl_command_ == "REFRESH_FOREIGN_TABLES") {
-    result =
-        RefreshForeignTablesCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_DISK_CACHE_USAGE") {
     result = ShowDiskCacheUsageCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_USER_DETAILS") {
@@ -1854,6 +1855,11 @@ ExecutionResult RefreshForeignTablesCommand::execute(bool read_only_mode) {
   if (read_only_mode) {
     throw std::runtime_error("REFRESH FOREIGN TABLE invalid in read only mode.");
   }
+
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   bool evict_cached_entries{false};
   foreign_storage::OptionsContainer opt;
