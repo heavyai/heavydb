@@ -182,11 +182,11 @@ class StringFunctionTest : public testing::Test {
           insert into string_function_test_people values(3, 'JOHN', 'Wilson', 'John WILSON', 20, 'cA', '555-614-9814', null, 'What is the sound of one hand clapping?', 'JOHN.WILSON@geops.net');
           insert into string_function_test_people values(4, 'Sue', 'Smith', 'Sue SMITH', 25, 'CA', '555-614-2282', null, 'Nothing exists entirely alone. Everything is always in relation to everything else.', 'Find me at sue4tw@example.com, or reach me at sue.smith@example.com. I''d love to hear from you!'); 
           drop table if exists string_function_test_countries;
-          create table string_function_test_countries(id int, code text, arrow_code text, name text, short_name text encoding none, capital text, largest_city text encoding none, lang text encoding none);
-          insert into string_function_test_countries values(1, 'US', '>>US<<', 'United States', null, 'Washington', 'New York City', 'en');
-          insert into string_function_test_countries values(2, 'ca', '>>CA<<', 'Canada', 'Canada', 'Ottawa', 'TORONTO', 'EN');
-          insert into string_function_test_countries values(3, 'Gb', '>>GB<<', 'United Kingdom', 'UK', 'London', 'LONDON', 'en');
-          insert into string_function_test_countries values(4, 'dE', '>>DE<<', 'Germany', 'Germany', 'Berlin', 'Berlin', 'de');
+          create table string_function_test_countries(id int, code text, arrow_code text, name text, short_name text encoding none, capital text, largest_city text encoding none, lang text encoding none, json_data_none text encoding none);
+          insert into string_function_test_countries values(1, 'US', '>>US<<', 'United States', null, 'Washington', 'New York City', 'en', '{"capital": "Washington D.C.", "pop": 329500000, "has_prime_minister": false, "prime_minister": null, "factoids": {"gdp_per_cap_2015_2020": [56863, 58021, 60110, 63064, 65280, 63544], "Last 3 leaders": ["Barack Obama", "Donald Trump", "Joseph Biden"], "most_valuable_crop": "corn"}}');
+          insert into string_function_test_countries values(2, 'ca', '>>CA<<', 'Canada', 'Canada', 'Ottawa', 'TORONTO', 'EN', '{"capital", "Toronto", "pop": 38010000, "has_prime_minister": true, "prime_minister": "Justin Trudeau", "factoids": {"gdp_per_cap_2015_2020": [43596, 42316, 45129, 46454, 46327, 43242], "Last 3 leaders": ["Paul Martin", "Stephen Harper", "Justin Trudeau"], "most valuable crop": "wheat"}}');
+          insert into string_function_test_countries values(3, 'Gb', '>>GB<<', 'United Kingdom', 'UK', 'London', 'LONDON', 'en', '{"capital", "London", "pop": 67220000, "prime_minister": "Boris Johnson", "has_prime_minister": true, "factoids": {"gdp_per_cap_2015_2020": [45039, 41048, 40306, 42996, 42354, 40285], "most valuable crop": "wheat"}}');
+          insert into string_function_test_countries values(4, 'dE', '>>DE<<', 'Germany', 'Germany', 'Berlin', 'Berlin', 'de', '{"capital", "Berlin", "has_prime_minister": false, "prime_minister": null, "factoids": {"gdp_per_cap_2015_2020": [41103, 42136, 44453, 47811, 46468, 45724], "most valuable crop": "wheat"}}');
         )"));
       StringFunctionTest::test_data_loaded = true;
     }
@@ -1148,6 +1148,133 @@ TEST_F(StringFunctionTest, RegexpSubstrLiteral) {
             dt);
     std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"spam@devnull.com"}};
     compare_result_set(expected_result_set, result_set);
+  }
+}
+
+TEST_F(StringFunctionTest, JsonValue) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      // String value with key at root level
+      auto result_set =
+          sql("select json_value(json_data_none, '$.capital') from "
+              "string_function_test_countries;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"Washington D.C."}, {"Toronto"}, {"London"}, {"Berlin"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Numeric value with key at root level
+      auto result_set =
+          sql("select json_value(json_data_none, '$.pop') from "
+              "string_function_test_countries;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"329500000"}, {"38010000"}, {"67220000"}, {""}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Boolean value with key at root level
+      auto result_set =
+          sql("select json_value(json_data_none, '$.has_prime_minister') from "
+              "string_function_test_countries;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"false"}, {"true"}, {"true"}, {"false"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Null values with key at root level
+      auto result_set =
+          sql("select json_value(json_data_none, '$.prime_minister') from "
+              "string_function_test_countries;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {""}, {"Justin Trudeau"}, {"Boris Johnson"}, {""}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Non-existent key at root level (actual key: "capital")
+      // Should be all nulls
+      auto result_set =
+          sql("select json_value(json_data_none, '$.capitol') from "
+              "string_function_test_countries;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {""}, {""}, {""}, {""}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Nested Accessor
+      auto result_set =
+          sql("select json_value(json_data_none, '$.factoids.most_valuable_crop') "
+              "from string_function_test_countries;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"corn"}, {""}, {"wheat"}, {"wheat"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Nested Accessor - non-existent key
+      auto result_set =
+          sql("select json_value(json_data_none, '$.factoids.nicest_view') "
+              "from string_function_test_countries;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {""}, {""}, {""}, {""}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Nested Accessor - two non-existent nested keys
+      auto result_set =
+          sql("select json_value(json_data_none, '$.factoids.provinces.ottawa') "
+              "from string_function_test_countries;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {""}, {""}, {""}, {""}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Nested Accessor - two non-existent nested keys - last is array
+      auto result_set =
+          sql("select json_value(json_data_none, '$.factoids.provinces.populations[3]') "
+              "from string_function_test_countries;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {""}, {""}, {""}, {""}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Nested Accessor - Array (string)
+      auto result_set =
+          sql("select json_value(json_data_none, '$.factoids.\"Last 3 leaders\"[2]') "
+              "from string_function_test_countries;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"Joseph Biden"}, {"Justin Trudeau"}, {""}, {""}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Nested Accessor - Array (numeric)
+      auto result_set =
+          sql("select json_value(json_data_none, '$.factoids.gdp_per_cap_2015_2020[4]') "
+              "from string_function_test_countries;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"65280"}, {"46327"}, {"42354"}, {"46468"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Nested Accessor - Array (numeric, off end)
+      auto result_set =
+          sql("select json_value(json_data_none, '$.factoids.gdp_per_cap_2015_2020[7]') "
+              "from string_function_test_countries;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {""}, {""}, {""}, {""}};
+      compare_result_set(expected_result_set, result_set);
+    }
   }
 }
 

@@ -371,6 +371,35 @@ struct RegexpReplace : public StringOp {
   const int64_t occurrence_;
 };
 
+struct JsonValue : public StringOp {
+ public:
+  JsonValue(const std::optional<std::string>& var_str_optional_literal,
+            const std::string& json_path)
+      : StringOp(SqlStringOpKind::JSON_VALUE, var_str_optional_literal)
+      , json_keys_(parse_json_path(json_path)) {}
+
+  NullableStrType operator()(const std::string& str) const override;
+
+ private:
+  enum class JsonKeyKind { OBJECT, ARRAY };
+  struct JsonKey {
+    JsonKeyKind key_kind;
+    std::string object_key;
+    // Todo (todd): Support array ranges ala SQL Server
+    size_t array_key;
+
+    JsonKey(const std::string& object_key)
+        : key_kind(JsonKeyKind::OBJECT), object_key(object_key) {}
+    JsonKey(const size_t array_key)
+        : key_kind(JsonKeyKind::ARRAY), array_key(array_key) {}
+  };
+
+  static std::vector<JsonKey> parse_json_path(const std::string& json_path);
+
+  const std::vector<JsonKey> json_keys_;
+  const bool lax_mode_{true};  // If true return null and not error on parsing error
+};
+
 struct NullOp : public StringOp {
   NullOp(const std::optional<std::string>& var_str_optional_literal,
          const SqlStringOpKind op_kind)

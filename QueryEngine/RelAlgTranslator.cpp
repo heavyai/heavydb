@@ -1384,6 +1384,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
       return makeExpr<Analyzer::RegexpReplaceStringOper>(args);
     case SqlStringOpKind::REGEXP_SUBSTR:
       return makeExpr<Analyzer::RegexpSubstrStringOper>(args);
+    case SqlStringOpKind::JSON_VALUE:
+      return makeExpr<Analyzer::JsonValueStringOper>(args);
     default: {
       throw std::runtime_error("Unsupported string function.");
     }
@@ -1616,7 +1618,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "SPLIT_PART"sv,
                    "REGEXP_REPLACE"sv,
                    "REGEXP_SUBSTR"sv,
-                   "REGEXP_MATCH"sv)) {
+                   "REGEXP_MATCH"sv,
+                   "JSON_VALUE"sv)) {
     return translateStringOper(rex_function);
   }
   if (func_resolve(rex_function->getName(), "CARDINALITY"sv, "ARRAY_LENGTH"sv)) {

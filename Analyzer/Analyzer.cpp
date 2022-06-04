@@ -3526,6 +3526,11 @@ std::shared_ptr<Analyzer::Expr> RegexpSubstrStringOper::deep_copy() const {
       std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
 }
 
+std::shared_ptr<Analyzer::Expr> JsonValueStringOper::deep_copy() const {
+  return makeExpr<Analyzer::JsonValueStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
 std::shared_ptr<Analyzer::Expr> FunctionOper::deep_copy() const {
   std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
   for (size_t i = 0; i < getArity(); ++i) {

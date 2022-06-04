@@ -15,6 +15,8 @@
  */
 
 #include "StringOps.h"
+#include <rapidjson/document.h>
+#include <iostream>
 namespace StringOps_Namespace {
 
 boost::regex StringOp::generateRegex(const std::string& op_name,
@@ -425,6 +427,107 @@ std::pair<bool, int64_t> RegexpSubstr::set_sub_match_info(
       true, sub_match_group_idx > 0L ? sub_match_group_idx - 1 : sub_match_group_idx);
 }
 
+std::vector<JsonValue::JsonKey> JsonValue::parse_json_path(const std::string& json_path) {
+  if (!json_path.length()) {
+    throw std::runtime_error("JSON search path must not be empty.");
+  }
+  if (json_path[0] != '$') {
+    throw std::runtime_error("JSON search path must start with '$' character.");
+  }
+  // Use tildas to enclose escaped regex string due to embedded ')"'
+  const std::string regex_key_pattern =
+      R"~(^(\.([[:alpha:]][[:alnum:]_-]*)|"([[:alpha:]][ [:alnum:]_-]*)")|\[([[:digit:]]+)\])~";
+  const auto key_regex =
+      boost::regex(regex_key_pattern,
+                   boost::regex_constants::extended | boost::regex_constants::optimize);
+  size_t string_pos = 1UL;
+  std::string::const_iterator search_start(json_path.cbegin() + string_pos);
+  boost::smatch match;
+  std::vector<JsonKey> json_keys;
+  while (boost::regex_search(search_start, json_path.cend(), match, key_regex)) {
+    size_t matching_expr = 0;
+    if (match[2].matched) {
+      // simple object key
+      matching_expr = 2;
+    } else if (match[3].matched) {
+      // complex object key
+      matching_expr = 3;
+    } else if (match[4].matched) {
+      // array key
+      matching_expr = 4;
+    }
+    CHECK_GT(matching_expr, 0UL);
+    string_pos += match.position(size_t(0)) + match.length(0);
+
+    const std::string key_match(match[matching_expr].first, match[matching_expr].second);
+    CHECK_GE(key_match.length(), 1UL);
+    if (isalpha(key_match[0])) {
+      // Object key
+      json_keys.emplace_back(JsonKey(key_match));
+    } else {
+      // Array key
+      json_keys.emplace_back(JsonKey(std::stoi(key_match)));
+    }
+    search_start =
+        match.suffix().first;  // Move to position after last char of matched string
+  }
+  if (json_keys.empty()) {
+    throw std::runtime_error("No keys found in JSON search path.");
+  }
+  if (string_pos < json_path.size()) {
+    throw std::runtime_error("JSON path parsing error.");
+  }
+
+  return json_keys;
+}
+
+NullableStrType JsonValue::operator()(const std::string& str) const {
+  rapidjson::Document document;
+  document.Parse(str.c_str());
+  rapidjson::Value& json_val = document;
+  for (const auto& json_key : json_keys_) {
+    switch (json_key.key_kind) {
+      case JsonKeyKind::OBJECT: {
+        if (!json_val.IsObject() || !json_val.HasMember(json_key.object_key)) {
+          return NullableStrType();
+        }
+        json_val = json_val[json_key.object_key];
+        break;
+      }
+      case JsonKeyKind::ARRAY: {
+        if (!json_val.IsArray() || json_val.Size() <= json_key.array_key) {
+          return NullableStrType();
+        }
+        json_val = json_val[json_key.array_key];
+        break;
+      }
+    }
+  }
+  // Now get value as string
+  if (json_val.IsString()) {
+    return NullableStrType(std::string(json_val.GetString()));
+  } else if (json_val.IsNumber()) {
+    if (json_val.IsDouble()) {
+      return NullableStrType(std::to_string(json_val.GetDouble()));
+    } else if (json_val.IsInt64()) {
+      return NullableStrType(std::to_string(json_val.GetInt64()));
+    } else if (json_val.IsUint64()) {
+      // Need to cover range of uint64 that can't fit int in64
+      return NullableStrType(std::to_string(json_val.GetUint64()));
+    } else {
+      // A bit defensive, as I'm fairly sure json does not
+      // support numeric types with widths > 64 bits, so may drop
+      return NullableStrType();
+    }
+  } else if (json_val.IsBool()) {
+    return NullableStrType(std::string(json_val.IsTrue() ? "true" : "false"));
+  } else {
+    // Should cover nulls
+    return NullableStrType();
+  }
+  return NullableStrType();
+}
+
 std::string StringOps::operator()(const std::string& str) const {
   NullableStrType modified_str(str);
   for (const auto& string_op : string_ops_) {
@@ -604,6 +707,12 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
                                                   occurrence_literal,
                                                   regex_params_literal,
                                                   sub_match_idx_literal);
+    }
+    case SqlStringOpKind::JSON_VALUE: {
+      CHECK_EQ(num_non_variable_literals, 1UL);
+      const auto json_path_literal = string_op_info.getStringLiteral(1);
+      return std::make_unique<const JsonValue>(var_string_optional_literal,
+                                               json_path_literal);
     }
     default: {
       UNREACHABLE();

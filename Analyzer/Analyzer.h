@@ -2157,6 +2157,38 @@ class RegexpSubstrStringOper : public StringOper {
   }
 };
 
+class JsonValueStringOper : public StringOper {
+ public:
+  JsonValueStringOper(const std::shared_ptr<Analyzer::Expr>& operand,
+                      const std::shared_ptr<Analyzer::Expr>& json_path)
+      : StringOper(SqlStringOpKind::JSON_VALUE,
+                   {operand, json_path},
+                   getMinArgs(),
+                   getExpectedTypeFamilies(),
+                   getArgNames()) {}
+
+  JsonValueStringOper(const std::vector<std::shared_ptr<Analyzer::Expr>>& operands)
+      : StringOper(SqlStringOpKind::JSON_VALUE,
+                   operands,
+                   getMinArgs(),
+                   getExpectedTypeFamilies(),
+                   getArgNames()) {}
+
+  JsonValueStringOper(const std::shared_ptr<Analyzer::StringOper>& string_oper)
+      : StringOper(string_oper) {}
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  size_t getMinArgs() const override { return 2UL; }
+
+  std::vector<OperandTypeFamily> getExpectedTypeFamilies() const override {
+    return {OperandTypeFamily::STRING_FAMILY, OperandTypeFamily::STRING_FAMILY};
+  }
+  std::vector<std::string> getArgNames() const override {
+    return {"operand", "JSON path"};
+  }
+};
+
 class FunctionOper : public Expr {
  public:
   FunctionOper(const SQLTypeInfo& ti,
