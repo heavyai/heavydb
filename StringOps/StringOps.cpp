@@ -15,8 +15,11 @@
  */
 
 #include "StringOps.h"
+#include "Shared/base64.h"
+
 #include <rapidjson/document.h>
 #include <boost/algorithm/string/predicate.hpp>
+
 namespace StringOps_Namespace {
 
 boost::regex StringOp::generateRegex(const std::string& op_name,
@@ -579,6 +582,14 @@ NullableStrType JsonValue::operator()(const std::string& str) const {
   }
 }
 
+NullableStrType Base64Encode::operator()(const std::string& str) const {
+  return shared::encode_base64(str);
+}
+
+NullableStrType Base64Decode::operator()(const std::string& str) const {
+  return shared::decode_base64(str);
+}
+
 std::string StringOps::operator()(const std::string& str) const {
   NullableStrType modified_str(str);
   for (const auto& string_op : string_ops_) {
@@ -764,6 +775,14 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
       const auto json_path_literal = string_op_info.getStringLiteral(1);
       return std::make_unique<const JsonValue>(var_string_optional_literal,
                                                json_path_literal);
+    }
+    case SqlStringOpKind::BASE64_ENCODE: {
+      CHECK_EQ(num_non_variable_literals, 0UL);
+      return std::make_unique<const Base64Encode>(var_string_optional_literal);
+    }
+    case SqlStringOpKind::BASE64_DECODE: {
+      CHECK_EQ(num_non_variable_literals, 0UL);
+      return std::make_unique<const Base64Decode>(var_string_optional_literal);
     }
     default: {
       UNREACHABLE();

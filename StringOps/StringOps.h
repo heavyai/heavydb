@@ -439,6 +439,20 @@ struct JsonValue : public StringOp {
   const std::vector<JsonKey> json_keys_;
 };
 
+struct Base64Encode : public StringOp {
+  Base64Encode(const std::optional<std::string>& var_str_optional_literal)
+      : StringOp(SqlStringOpKind::BASE64_ENCODE, var_str_optional_literal) {}
+
+  NullableStrType operator()(const std::string& str) const override;
+};
+
+struct Base64Decode : public StringOp {
+  Base64Decode(const std::optional<std::string>& var_str_optional_literal)
+      : StringOp(SqlStringOpKind::BASE64_DECODE, var_str_optional_literal) {}
+
+  NullableStrType operator()(const std::string& str) const override;
+};
+
 struct NullOp : public StringOp {
   NullOp(const std::optional<std::string>& var_str_optional_literal,
          const SqlStringOpKind op_kind)

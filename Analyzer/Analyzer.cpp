@@ -3531,6 +3531,16 @@ std::shared_ptr<Analyzer::Expr> JsonValueStringOper::deep_copy() const {
       std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
 }
 
+std::shared_ptr<Analyzer::Expr> Base64EncodeStringOper::deep_copy() const {
+  return makeExpr<Analyzer::Base64EncodeStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
+std::shared_ptr<Analyzer::Expr> Base64DecodeStringOper::deep_copy() const {
+  return makeExpr<Analyzer::Base64DecodeStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
 std::shared_ptr<Analyzer::Expr> FunctionOper::deep_copy() const {
   std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
   for (size_t i = 0; i < getArity(); ++i) {

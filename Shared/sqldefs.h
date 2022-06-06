@@ -105,6 +105,8 @@ enum class SqlStringOpKind {
   REGEXP_REPLACE,
   REGEXP_SUBSTR,
   JSON_VALUE,
+  BASE64_ENCODE,
+  BASE64_DECODE,
   INVALID
 };
 
@@ -326,6 +328,12 @@ inline SqlStringOpKind name_to_string_op_kind(const std::string& func_name) {
   if (func_name == "JSON_VALUE") {
     return SqlStringOpKind::JSON_VALUE;
   }
+  if (func_name == "BASE64_ENCODE") {
+    return SqlStringOpKind::BASE64_ENCODE;
+  }
+  if (func_name == "BASE64_DECODE") {
+    return SqlStringOpKind::BASE64_DECODE;
+  }
   LOG(FATAL) << "Invalid string function " << func_name << ".";
   return SqlStringOpKind::INVALID;
 }
@@ -369,6 +377,10 @@ inline std::string toString(const SqlStringOpKind& kind) {
       return "REGEXP_SUBSTR";
     case SqlStringOpKind::JSON_VALUE:
       return "JSON_VALUE";
+    case SqlStringOpKind::BASE64_ENCODE:
+      return "BASE64_ENCODE";
+    case SqlStringOpKind::BASE64_DECODE:
+      return "BASE64_DECODE";
     default:
       LOG(FATAL) << "Invalid string operation";
   }

@@ -207,6 +207,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new RegexpReplace());
     opTab.addOperator(new RegexpSubstr());
     opTab.addOperator(new RegexpMatch());
+    opTab.addOperator(new Base64Encode());
+    opTab.addOperator(new Base64Decode());
     opTab.addOperator(new Likely());
     opTab.addOperator(new Unlikely());
     opTab.addOperator(new Sign());
@@ -1172,6 +1174,51 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   public static class RegexpMatch extends RegexpSubstr {
     public RegexpMatch() {
       super("REGEXP_MATCH");
+    }
+  }
+  public static class Base64Encode extends SqlFunction {
+    public Base64Encode() {
+      super("BASE64_ENCODE",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+  }
+
+  public static class Base64Decode extends SqlFunction {
+    public Base64Decode() {
+      super("BASE64_DECODE",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
     }
   }
 

@@ -1315,6 +1315,77 @@ TEST_F(StringFunctionTest, JsonValueParseMode) {
   }
 }
 
+TEST_F(StringFunctionTest, Base64) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      // Current behavior is that BASE64_ENCODE(NULL literal) and BASE64_DECODE(NULL
+      // literal) returns NULL
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(true)}};
+      auto result_set = sql("select base64_encode(CAST(NULL AS TEXT)) IS NULL;", dt);
+      compare_result_set(expected_result_set, result_set);
+      result_set = sql("select base64_decode(CAST(NULL AS TEXT)) IS NULL;", dt);
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Current behavior is that BASE64_ENCODE(NULL var) and BASE64_DECODE(NULL var)
+      // returns NULL
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set(4, {int64_t(true)});
+      auto result_set =
+          sql("SELECT base64_encode(json_value(json_data_none, '$.prime_minister'))"
+              " IS NULL FROM string_function_test_countries;",
+              dt);
+      compare_result_set(expected_result_set, result_set);
+      result_set =
+          sql("SELECT base64_decode(json_value(json_data_none, '$.prime_minister'))"
+              " IS NULL FROM string_function_test_countries;",
+              dt);
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      auto result_set = sql("select base64_encode('HEAVY.AI');", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"SEVBVlkuQUk="}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      auto result_set = sql("select base64_decode('SEVBVlkuQUk=');", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"HEAVY.AI"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      auto result_set = sql("select base64_decode(base64_encode('HEAVY.AI'));", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"HEAVY.AI"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Invalid base64 characters, should throw
+      EXPECT_ANY_THROW(sql("select base64_decode('HEAVY.AI');", dt));
+    }
+    {
+      auto result_set =
+          sql("select base64_encode(name) from string_function_test_countries ORDER by "
+              "id ASC;",
+              dt);
+      // Below encodings validated independently
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"VW5pdGVkIFN0YXRlcw=="},
+          {"Q2FuYWRh"},
+          {"VW5pdGVkIEtpbmdkb20="},
+          {"R2VybWFueQ=="}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      auto result_set =
+          sql("select base64_decode(base64_encode(name)) from "
+              "string_function_test_countries ORDER by id ASC;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"United States"}, {"Canada"}, {"United Kingdom"}, {"Germany"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
 TEST_F(StringFunctionTest, StringFunctionEqualsFilterLHS) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
