@@ -221,6 +221,12 @@ class QueryMemoryDescriptor {
 
   void addColSlotInfo(const std::vector<std::tuple<int8_t, int8_t>>& slots_for_col);
 
+  // FlatBuffer support:
+  void addColSlotInfoFlatBuffer(const int64_t flatbuffer_size);
+  int64_t getFlatBufferSize(const size_t slot_idx) const {
+    return col_slot_context_.getFlatBufferSize(slot_idx);
+  }
+
   void clearSlotInfo();
 
   void alignPaddedSlots();

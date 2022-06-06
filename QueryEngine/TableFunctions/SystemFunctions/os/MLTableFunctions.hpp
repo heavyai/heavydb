@@ -593,9 +593,7 @@ linear_reg_predict__cpu_template(TableFunctionManager& mgr,
 
 template <typename T>
 Column<T> create_wrapper_col(std::vector<T>& col_vec) {
-  Column<T> wrapper_col;
-  wrapper_col.ptr_ = col_vec.data();
-  wrapper_col.size_ = static_cast<int64_t>(col_vec.size());
+  Column<T> wrapper_col(col_vec.data(), static_cast<int64_t>(col_vec.size()));
   return wrapper_col;
 }
 

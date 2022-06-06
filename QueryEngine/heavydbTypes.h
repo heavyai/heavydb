@@ -23,6 +23,7 @@
 
 #include "DateTruncate.h"
 #include "ExtractFromTime.h"
+#include "Utils/FlatBuffer.h"
 
 #if !(defined(__CUDACC__) || defined(NO_BOOST))
 #include "../Shared/DateTimeParser.h"
@@ -63,7 +64,14 @@ EXTENSION_NOINLINE int8_t* allocate_varlen_buffer(int64_t element_count,
 #define TABLE_FUNCTION_ERROR(MSG) table_function_error(ERROR_STRING(MSG))
 #define ERROR_MESSAGE(MSG) error_message(ERROR_STRING(MSG))
 
+EXTENSION_NOINLINE_HOST void set_output_array_values_total_number(
+    int32_t index,
+    int64_t output_array_values_total_number);
 EXTENSION_NOINLINE_HOST void set_output_row_size(int64_t num_rows);
+EXTENSION_NOINLINE_HOST void TableFunctionManager_set_output_array_values_total_number(
+    int8_t* mgr_ptr,
+    int32_t index,
+    int64_t output_array_values_total_number);
 EXTENSION_NOINLINE_HOST void TableFunctionManager_set_output_row_size(int8_t* mgr_ptr,
                                                                       int64_t num_rows);
 EXTENSION_NOINLINE_HOST int8_t* TableFunctionManager_get_singleton();
@@ -140,6 +148,10 @@ struct Array {
   int64_t size;
   int8_t is_null;
 
+  DEVICE Array(T* ptr, const int64_t size, const bool is_null = false)
+      : ptr(is_null ? nullptr : ptr), size(size), is_null(is_null) {}
+  DEVICE Array() : ptr(nullptr), size(0), is_null(true) {}
+
   DEVICE Array(const int64_t size, const bool is_null = false)
       : size(size), is_null(is_null) {
     if (!is_null) {
@@ -159,6 +171,7 @@ struct Array {
   }
 
   DEVICE T& operator[](const unsigned int index) { return ptr[index]; }
+  DEVICE const T& operator[](const unsigned int index) const { return ptr[index]; }
 
   DEVICE int64_t getSize() const { return size; }
 
@@ -168,6 +181,31 @@ struct Array {
     return std::is_signed<T>::value ? std::numeric_limits<T>::min()
                                     : std::numeric_limits<T>::max();
   }
+
+  DEVICE bool isNull(const unsigned int index) const {
+    return (is_null ? false : ptr[index] == null_value());
+  }
+
+#ifdef HAVE_TOSTRING
+  std::string toString() const {
+    std::string result =
+        ::typeName(this) + "(ptr=" + ::toString(reinterpret_cast<void*>(ptr)) +
+        ", size=" + std::to_string(size) + ", is_null=" + std::to_string(is_null) + ")[";
+    for (int64_t i = 0; i < size; i++) {
+      if (size > 10) {
+        // show the first 8 and the last 2 values in the array:
+        if (i == 8) {
+          result += "..., ";
+        } else if (i > 8 && i < size - 2) {
+          continue;
+        }
+      }
+      result += ::toString((*this)[i]) + ", ";
+    }
+    result += "]";
+    return result;
+  }
+#endif
 };
 
 struct TextEncodingNone {
@@ -451,11 +489,13 @@ static DEVICE __constant__ T Column_null_value;
 
 template <typename T>
 struct Column {
-  T* ptr_;        // row data
-  int64_t size_;  // row count
+  T* ptr_;            // row data
+  int64_t num_rows_;  // row count
+
+  DEVICE Column(T* ptr, const int64_t num_rows) : ptr_(ptr), num_rows_(num_rows) {}
 
   DEVICE T& operator[](const unsigned int index) const {
-    if (index >= size_) {
+    if (index >= num_rows_) {
 #ifndef __CUDACC__
       throw std::runtime_error("column buffer index is out of range");
 #else
@@ -466,7 +506,9 @@ struct Column {
     }
     return ptr_[index];
   }
-  DEVICE int64_t size() const { return size_; }
+  DEVICE inline T* getPtr() const { return ptr_; }
+  DEVICE inline int64_t size() const { return num_rows_; }
+  DEVICE inline void setSize(int64_t num_rows) { num_rows_ = num_rows; }
 
   DEVICE inline bool isNull(int64_t index) const { return is_null(ptr_[index]); }
   DEVICE inline void setNull(int64_t index) { set_null(ptr_[index]); }
@@ -492,23 +534,121 @@ struct Column {
 #ifdef HAVE_TOSTRING
   std::string toString() const {
     return ::typeName(this) + "(ptr=" + ::toString(reinterpret_cast<void*>(ptr_)) +
-           ", size=" + std::to_string(size_) + ")";
+           ", num_rows=" + std::to_string(num_rows_) + ")";
   }
 #endif
+};
+
+template <typename T>
+struct Column<Array<T>> {
+  // A type for a column of variable length arrays
+  //
+  // Internally, the varlen arrays are stored using compressed storage
+  // format (see https://pearu.github.io/variable_length_arrays.html
+  // for the description) using FlatBuffer tool.
+  int8_t* flatbuffer_;  // contains a flat buffer of the storage, use FlatBufferManager
+                        // to access it.
+  int64_t num_rows_;    // total row count, the number of all varlen arrays
+
+  Column<Array<T>>(int8_t* flatbuffer, const int64_t num_rows)
+      : flatbuffer_(flatbuffer), num_rows_(num_rows) {}
+
+  DEVICE Array<T> operator[](const unsigned int index) const {
+    FlatBufferManager m{flatbuffer_};
+    int8_t* ptr;
+    int64_t size;
+    bool is_null;
+    auto status = m.getItem(index, size, ptr, is_null);
+#ifndef __CUDACC__
+    if (status != FlatBufferManager::Status::Success) {
+      throw std::runtime_error("operator[] failed: " + ::toString(status));
+    }
+#endif
+    Array<T> result(reinterpret_cast<T*>(ptr), size / sizeof(T), is_null);
+    return result;
+  }
+
+  DEVICE int64_t size() const { return num_rows_; }
+
+  DEVICE inline bool isNull(int64_t index) const {
+    FlatBufferManager m{flatbuffer_};
+    bool is_null = false;
+    auto status = m.isNull(index, is_null);
+#ifndef __CUDACC__
+    if (status != FlatBufferManager::Status::Success) {
+      throw std::runtime_error("isNull failed: " + ::toString(status));
+    }
+#endif
+    return is_null;
+  }
+
+  DEVICE inline void setNull(int64_t index) {
+    FlatBufferManager m{flatbuffer_};
+    auto status = m.setNull(index);
+#ifndef __CUDACC__
+    if (status != FlatBufferManager::Status::Success) {
+      throw std::runtime_error("setNull failed: " + ::toString(status));
+    }
+#endif
+  }
+
+  DEVICE inline void setItem(int64_t index, const Array<T>& other) {
+    FlatBufferManager m{flatbuffer_};
+    FlatBufferManager::Status status;
+    if (other.isNull()) {
+      status = m.setNull(index);
+    } else {
+      status = m.setItem(index,
+                         reinterpret_cast<const int8_t*>(&(other[0])),
+                         other.getSize() * sizeof(T));
+    }
+#ifndef __CUDACC__
+    if (status != FlatBufferManager::Status::Success) {
+      throw std::runtime_error("setItem failed: " + ::toString(status));
+    }
+#endif
+  }
+
+  DEVICE inline void concatItem(int64_t index, const Array<T>& other) {
+    FlatBufferManager m{flatbuffer_};
+    FlatBufferManager::Status status;
+    if (other.isNull()) {
+      status = m.setNull(index);
+    } else {
+      status = m.concatItem(index,
+                            reinterpret_cast<const int8_t*>(&(other[0])),
+                            other.getSize() * sizeof(T));
+#ifndef __CUDACC__
+      if (status != FlatBufferManager::Status::Success) {
+        throw std::runtime_error("concatItem failed: " + ::toString(status));
+      }
+#endif
+    }
+  }
 };
 
 template <>
 struct Column<TextEncodingDict> {
   TextEncodingDict* ptr_;  // row data
-  int64_t size_;           // row count
+  int64_t num_rows_;       // row count
 #ifndef __CUDACC__
 #ifndef UDF_COMPILED
   StringDictionaryProxy* string_dict_proxy_;
+  DEVICE Column(TextEncodingDict* ptr,
+                const int64_t num_rows,
+                StringDictionaryProxy* string_dict_proxy)
+      : ptr_(ptr), num_rows_(num_rows), string_dict_proxy_(string_dict_proxy) {}
+#else
+  DEVICE Column(TextEncodingDict* ptr, const int64_t num_rows)
+      : ptr_(ptr), num_rows_(num_rows) {}
 #endif  // #ifndef UDF_COMPILED
+#else
+  DEVICE Column(TextEncodingDict* ptr, const int64_t num_rows)
+      : ptr_(ptr), num_rows_(num_rows) {}
 #endif  // #ifndef __CUDACC__
 
   DEVICE TextEncodingDict& operator[](const unsigned int index) const {
-    if (index >= size_) {
+    if (index >= num_rows_) {
 #ifndef __CUDACC__
       throw std::runtime_error("column buffer index is out of range");
 #else
@@ -519,7 +659,9 @@ struct Column<TextEncodingDict> {
     }
     return ptr_[index];
   }
-  DEVICE int64_t size() const { return size_; }
+  DEVICE inline TextEncodingDict* getPtr() const { return ptr_; }
+  DEVICE inline int64_t size() const { return num_rows_; }
+  DEVICE inline void setSize(int64_t num_rows) { num_rows_ = num_rows; }
 
   DEVICE inline bool isNull(int64_t index) const { return is_null(ptr_[index].value); }
 
@@ -558,7 +700,7 @@ struct Column<TextEncodingDict> {
 #ifdef HAVE_TOSTRING
   std::string toString() const {
     return ::typeName(this) + "(ptr=" + ::toString(reinterpret_cast<void*>(ptr_)) +
-           ", size=" + std::to_string(size_) + ")";
+           ", num_rows=" + std::to_string(num_rows_) + ")";
   }
 #endif
 };
@@ -585,13 +727,16 @@ template <typename T>
 struct ColumnList {
   int8_t** ptrs_;     // ptrs to columns data
   int64_t num_cols_;  // the length of columns list
-  int64_t size_;      // the size of columns
+  int64_t num_rows_;  // the number of rows of columns
 
-  DEVICE int64_t size() const { return size_; }
+  DEVICE ColumnList(int8_t** ptrs, const int64_t num_cols, const int64_t num_rows)
+      : ptrs_(ptrs), num_cols_(num_cols), num_rows_(num_rows) {}
+
+  DEVICE int64_t size() const { return num_rows_; }
   DEVICE int64_t numCols() const { return num_cols_; }
   DEVICE Column<T> operator[](const int index) const {
     if (index >= 0 && index < num_cols_)
-      return {reinterpret_cast<T*>(ptrs_[index]), size_};
+      return {reinterpret_cast<T*>(ptrs_[index]), num_rows_};
     else
       return {nullptr, -1};
   }
@@ -605,7 +750,38 @@ struct ColumnList {
                 (index < num_cols_ - 1 ? ", " : "");
     }
     result += "], num_cols=" + std::to_string(num_cols_) +
-              ", size=" + std::to_string(size_) + ")";
+              ", num_rows=" + std::to_string(num_rows_) + ")";
+    return result;
+  }
+
+#endif
+};
+
+template <typename T>
+struct ColumnList<Array<T>> {
+  int8_t** ptrs_;     // ptrs to columns data in FlatBuffer format
+  int64_t num_cols_;  // the length of columns list
+  int64_t num_rows_;  // the size of columns
+
+  DEVICE int64_t size() const { return num_rows_; }
+  DEVICE int64_t numCols() const { return num_cols_; }
+  DEVICE Column<Array<T>> operator[](const int index) const {
+    int8_t* ptr = ((index >= 0 && index < num_cols_) ? ptrs_[index] : nullptr);
+    int64_t num_rows = ((index >= 0 && index < num_cols_) ? num_rows_ : -1);
+    Column<Array<T>> result(ptr, num_rows);
+    return result;
+  }
+
+#ifdef HAVE_TOSTRING
+
+  std::string toString() const {
+    std::string result = ::typeName(this) + "(ptrs=[";
+    for (int64_t index = 0; index < num_cols_; index++) {
+      result += ::toString(reinterpret_cast<void*>(ptrs_[index])) +
+                (index < num_cols_ - 1 ? ", " : "");
+    }
+    result += "], num_cols=" + std::to_string(num_cols_) +
+              ", num_rows=" + std::to_string(num_rows_) + ")";
     return result;
   }
 
@@ -616,35 +792,52 @@ template <>
 struct ColumnList<TextEncodingDict> {
   int8_t** ptrs_;     // ptrs to columns data
   int64_t num_cols_;  // the length of columns list
-  int64_t size_;      // the size of columns
+  int64_t num_rows_;  // the size of columns
 #ifndef __CUDACC__
 #ifndef UDF_COMPILED
   StringDictionaryProxy** string_dict_proxies_;  // the size of columns
-#endif                                           // #ifndef UDF_COMPILED
-#endif                                           // #ifndef __CUDACC__
+  DEVICE ColumnList(int8_t** ptrs,
+                    const int64_t num_cols,
+                    const int64_t num_rows,
+                    StringDictionaryProxy** string_dict_proxies)
+      : ptrs_(ptrs)
+      , num_cols_(num_cols)
+      , num_rows_(num_rows)
+      , string_dict_proxies_(string_dict_proxies) {}
+#else
+  DEVICE ColumnList(int8_t** ptrs, const int64_t num_cols, const int64_t num_rows)
+      : ptrs_(ptrs), num_cols_(num_cols), num_rows_(num_rows) {}
+#endif  // #ifndef UDF_COMPILED
+#else
+  DEVICE ColumnList(int8_t** ptrs, const int64_t num_cols, const int64_t num_rows)
+      : ptrs_(ptrs), num_cols_(num_cols), num_rows_(num_rows) {}
+#endif  // #ifndef __CUDACC__
 
-  DEVICE int64_t size() const { return size_; }
+  DEVICE int64_t size() const { return num_rows_; }
   DEVICE int64_t numCols() const { return num_cols_; }
   DEVICE Column<TextEncodingDict> operator[](const int index) const {
     if (index >= 0 && index < num_cols_) {
-      return {reinterpret_cast<TextEncodingDict*>(ptrs_[index]),
-              size_,
+      Column<TextEncodingDict> result(reinterpret_cast<TextEncodingDict*>(ptrs_[index]),
+                                      num_rows_
 #ifndef __CUDACC__
 #ifndef UDF_COMPILED
-              string_dict_proxies_[index]
+                                      ,
+                                      string_dict_proxies_[index]
 #endif  // #ifndef UDF_COMPILED
 #endif  // #ifndef __CUDACC__
-      };
+      );
+      return result;
     } else {
-      return {nullptr,
-              -1
+      Column<TextEncodingDict> result(nullptr,
+                                      -1
 #ifndef __CUDACC__
 #ifndef UDF_COMPILED
-              ,
-              nullptr
+                                      ,
+                                      nullptr
 #endif  // #ifndef UDF_COMPILED
 #endif  // #ifndef__CUDACC__
-      };
+      );
+      return result;
     }
   }
 
@@ -657,7 +850,7 @@ struct ColumnList<TextEncodingDict> {
                 (index < num_cols_ - 1 ? ", " : "");
     }
     result += "], num_cols=" + std::to_string(num_cols_) +
-              ", size=" + std::to_string(size_) + ")";
+              ", num_rows=" + std::to_string(num_rows_) + ")";
     return result;
   }
 
@@ -674,6 +867,12 @@ struct ColumnList<TextEncodingDict> {
 struct TableFunctionManager {
   static TableFunctionManager* get_singleton() {
     return reinterpret_cast<TableFunctionManager*>(TableFunctionManager_get_singleton());
+  }
+
+  void set_output_array_values_total_number(int32_t index,
+                                            int64_t output_array_values_total_number) {
+    TableFunctionManager_set_output_array_values_total_number(
+        reinterpret_cast<int8_t*>(this), index, output_array_values_total_number);
   }
 
   void set_output_row_size(int64_t num_rows) {

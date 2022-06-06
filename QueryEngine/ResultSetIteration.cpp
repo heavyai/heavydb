@@ -26,6 +26,7 @@
 #include "ParserNode.h"
 #include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/TargetValue.h"
+#include "QueryEngine/Utils/FlatBuffer.h"
 #include "ResultSet.h"
 #include "ResultSetGeoSerialization.h"
 #include "RuntimeFunctions.h"
@@ -130,7 +131,6 @@ std::vector<TargetValue> ResultSet::getRowAt(
   if (!fixup_count_distinct_pointers && storage->isEmptyEntry(local_entry_idx)) {
     return {};
   }
-
   const auto buff = storage->buff_;
   CHECK(buff);
   std::vector<TargetValue> row;
@@ -1355,14 +1355,11 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
       auto& frag_col_buffers =
           getColumnFrag(storage_idx.first, target_logical_idx, varlen_ptr);
       bool is_end{false};
+      auto col_buf = const_cast<int8_t*>(frag_col_buffers[col_lazy_fetch.local_col_id]);
       if (target_info.sql_type.is_string()) {
         VarlenDatum vd;
-        ChunkIter_get_nth(reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(
-                              frag_col_buffers[col_lazy_fetch.local_col_id])),
-                          varlen_ptr,
-                          false,
-                          &vd,
-                          &is_end);
+        ChunkIter_get_nth(
+            reinterpret_cast<ChunkIter*>(col_buf), varlen_ptr, false, &vd, &is_end);
         CHECK(!is_end);
         if (vd.is_null) {
           return TargetValue(nullptr);
@@ -1374,11 +1371,17 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
       } else {
         CHECK(target_info.sql_type.is_array());
         ArrayDatum ad;
-        ChunkIter_get_nth(reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(
-                              frag_col_buffers[col_lazy_fetch.local_col_id])),
-                          varlen_ptr,
-                          &ad,
-                          &is_end);
+        if (FlatBufferManager::isFlatBuffer(col_buf)) {
+          FlatBufferManager m{col_buf};
+          int64_t length;
+          auto status = m.getItem(varlen_ptr, length, ad.pointer, ad.is_null);
+          CHECK_EQ(status, FlatBufferManager::Status::Success);
+          CHECK_GE(length, 0);
+          ad.length = length;
+        } else {
+          ChunkIter_get_nth(
+              reinterpret_cast<ChunkIter*>(col_buf), varlen_ptr, &ad, &is_end);
+        }
         CHECK(!is_end);
         if (ad.is_null) {
           return ArrayTargetValue(boost::optional<std::vector<ScalarTargetValue>>{});

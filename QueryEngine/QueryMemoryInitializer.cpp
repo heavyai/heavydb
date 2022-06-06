@@ -25,6 +25,7 @@
 #include "QueryEngine/QueryEngine.h"
 #include "ResultSet.h"
 #include "StreamingTopN.h"
+#include "Utils/FlatBuffer.h"
 
 #include <Shared/checked_alloc.h>
 
@@ -362,13 +363,24 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     return;
   }
 
-  const size_t num_columns = query_mem_desc.getBufferColSlotCount();
+  const size_t num_columns =
+      query_mem_desc.getBufferColSlotCount();  // shouldn't we use getColCount() ???
   size_t total_group_by_buffer_size{0};
   for (size_t i = 0; i < num_columns; ++i) {
-    const size_t col_width = exe_unit.target_exprs[i]->get_type_info().get_size();
-    const size_t group_buffer_size = num_rows_ * col_width;
-    total_group_by_buffer_size =
-        align_to_int64(total_group_by_buffer_size + group_buffer_size);
+    auto ti = exe_unit.target_exprs[i]->get_type_info();
+    if (ti.is_array()) {
+      // See TableFunctionManager.h for info regarding flatbuffer
+      // memory managment.
+      auto slot_idx = query_mem_desc.getSlotIndexForSingleSlotCol(i);
+      int64_t flatbuffer_size = query_mem_desc.getFlatBufferSize(slot_idx);
+      total_group_by_buffer_size =
+          align_to_int64(total_group_by_buffer_size + flatbuffer_size);
+    } else {
+      const size_t col_width = ti.get_size();
+      const size_t group_buffer_size = num_rows_ * col_width;
+      total_group_by_buffer_size =
+          align_to_int64(total_group_by_buffer_size + group_buffer_size);
+    }
   }
 
   CHECK_EQ(num_buffers_, size_t(1));

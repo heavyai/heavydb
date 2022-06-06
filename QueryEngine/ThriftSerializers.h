@@ -458,6 +458,34 @@ inline ExtArgumentType from_thrift(const TExtArgumentType::type& t) {
       return ExtArgumentType::ColumnListBool;
     case TExtArgumentType::ColumnListTextEncodingDict:
       return ExtArgumentType::ColumnListTextEncodingDict;
+    case TExtArgumentType::ColumnArrayInt8:
+      return ExtArgumentType::ColumnArrayInt8;
+    case TExtArgumentType::ColumnArrayInt16:
+      return ExtArgumentType::ColumnArrayInt16;
+    case TExtArgumentType::ColumnArrayInt32:
+      return ExtArgumentType::ColumnArrayInt32;
+    case TExtArgumentType::ColumnArrayInt64:
+      return ExtArgumentType::ColumnArrayInt64;
+    case TExtArgumentType::ColumnArrayFloat:
+      return ExtArgumentType::ColumnArrayFloat;
+    case TExtArgumentType::ColumnArrayDouble:
+      return ExtArgumentType::ColumnArrayDouble;
+    case TExtArgumentType::ColumnArrayBool:
+      return ExtArgumentType::ColumnArrayBool;
+    case TExtArgumentType::ColumnListArrayInt8:
+      return ExtArgumentType::ColumnListArrayInt8;
+    case TExtArgumentType::ColumnListArrayInt16:
+      return ExtArgumentType::ColumnListArrayInt16;
+    case TExtArgumentType::ColumnListArrayInt32:
+      return ExtArgumentType::ColumnListArrayInt32;
+    case TExtArgumentType::ColumnListArrayInt64:
+      return ExtArgumentType::ColumnListArrayInt64;
+    case TExtArgumentType::ColumnListArrayFloat:
+      return ExtArgumentType::ColumnListArrayFloat;
+    case TExtArgumentType::ColumnListArrayDouble:
+      return ExtArgumentType::ColumnListArrayDouble;
+    case TExtArgumentType::ColumnListArrayBool:
+      return ExtArgumentType::ColumnListArrayBool;
   }
   UNREACHABLE();
   return ExtArgumentType{};
@@ -559,6 +587,34 @@ inline TExtArgumentType::type to_thrift(const ExtArgumentType& t) {
       return TExtArgumentType::ColumnListBool;
     case ExtArgumentType::ColumnListTextEncodingDict:
       return TExtArgumentType::ColumnListTextEncodingDict;
+    case ExtArgumentType::ColumnArrayInt8:
+      return TExtArgumentType::ColumnArrayInt8;
+    case ExtArgumentType::ColumnArrayInt16:
+      return TExtArgumentType::ColumnArrayInt16;
+    case ExtArgumentType::ColumnArrayInt32:
+      return TExtArgumentType::ColumnArrayInt32;
+    case ExtArgumentType::ColumnArrayInt64:
+      return TExtArgumentType::ColumnArrayInt64;
+    case ExtArgumentType::ColumnArrayFloat:
+      return TExtArgumentType::ColumnArrayFloat;
+    case ExtArgumentType::ColumnArrayDouble:
+      return TExtArgumentType::ColumnArrayDouble;
+    case ExtArgumentType::ColumnArrayBool:
+      return TExtArgumentType::ColumnArrayBool;
+    case ExtArgumentType::ColumnListArrayInt8:
+      return TExtArgumentType::ColumnListArrayInt8;
+    case ExtArgumentType::ColumnListArrayInt16:
+      return TExtArgumentType::ColumnListArrayInt16;
+    case ExtArgumentType::ColumnListArrayInt32:
+      return TExtArgumentType::ColumnListArrayInt32;
+    case ExtArgumentType::ColumnListArrayInt64:
+      return TExtArgumentType::ColumnListArrayInt64;
+    case ExtArgumentType::ColumnListArrayFloat:
+      return TExtArgumentType::ColumnListArrayFloat;
+    case ExtArgumentType::ColumnListArrayDouble:
+      return TExtArgumentType::ColumnListArrayDouble;
+    case ExtArgumentType::ColumnListArrayBool:
+      return TExtArgumentType::ColumnListArrayBool;
   }
   UNREACHABLE();
   return TExtArgumentType::type{};

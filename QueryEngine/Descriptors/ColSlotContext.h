@@ -98,6 +98,9 @@ class ColSlotContext {
 
   void addColumn(const std::vector<std::tuple<int8_t, int8_t>>& slots_for_col);
 
+  void addColumnFlatBuffer(const int64_t flatbuffer_size);
+  int64_t getFlatBufferSize(const size_t slot_idx) const;
+
   bool operator==(const ColSlotContext& that) const {
     return std::equal(
                slot_sizes_.cbegin(), slot_sizes_.cend(), that.slot_sizes_.cbegin()) &&
@@ -130,6 +133,8 @@ class ColSlotContext {
       str += "\t" + std::to_string(i) + " | " + std::to_string(slot_size.padded_size) +
              " , " + std::to_string(slot_size.logical_size) + "\n";
     }
+    str += "\tcol_to_slot_map=" + ::toString(col_to_slot_map_) + "\n";
+    str += "\tvarlen_output_slot_map=" + ::toString(varlen_output_slot_map_) + "\n";
     return str;
   }
 

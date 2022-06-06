@@ -277,11 +277,8 @@ int64_t tf_feature_similarity__cpu_template(
       new_sdp_ptrs.emplace_back(comparison_sdp);
     }
   }
-  ColumnList<TextEncodingDict> translated_comparison_pivot_features;
-  translated_comparison_pivot_features.ptrs_ = new_col_ptrs.data();
-  translated_comparison_pivot_features.num_cols_ = num_feature_cols;
-  translated_comparison_pivot_features.size_ = num_comparison_rows;
-  translated_comparison_pivot_features.string_dict_proxies_ = new_sdp_ptrs.data();
+  ColumnList<TextEncodingDict> translated_comparison_pivot_features(
+      new_col_ptrs.data(), num_feature_cols, num_comparison_rows, new_sdp_ptrs.data());
 
   const auto primary_key_metadata = getCompositeKeyMetadata(primary_key);
   const auto pivot_features_metadata = getCompositeKeyMetadata(pivot_features);

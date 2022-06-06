@@ -56,32 +56,6 @@ size_t g_watchdog_baseline_max_groups{120000000};
 extern int64_t g_bitmap_memory_limit;
 extern size_t g_leaf_count;
 
-std::ostream& operator<<(std::ostream& out, const QueryDescriptionType& type) {
-  switch (type) {
-    case QueryDescriptionType::GroupByPerfectHash:
-      out << "GroupByPerfectHash";
-      break;
-    case QueryDescriptionType::GroupByBaselineHash:
-      out << "GroupByBaselineHash";
-      break;
-    case QueryDescriptionType::Projection:
-      out << "Projection";
-      break;
-    case QueryDescriptionType::TableFunction:
-      out << "TableFunction";
-      break;
-    case QueryDescriptionType::NonGroupedAggregate:
-      out << "NonGroupedAggregate";
-      break;
-    case QueryDescriptionType::Estimator:
-      out << "Estimator";
-      break;
-    default:
-      out << "Unknown QueryDescriptionType";
-  }
-  return out;
-}
-
 bool ColRangeInfo::isEmpty() const {
   return min == 0 && max == -1;
 }

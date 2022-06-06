@@ -99,15 +99,13 @@ template NEVER_INLINE HOST std::pair<double, double> get_column_min_max(
     const Column<double>& col);
 
 std::pair<int32_t, int32_t> get_column_min_max(const Column<TextEncodingDict>& col) {
-  Column<int32_t> int_alias_col;
-  int_alias_col.ptr_ = reinterpret_cast<int32_t*>(col.ptr_);
-  int_alias_col.size_ = col.size_;
+  Column<int32_t> int_alias_col(reinterpret_cast<int32_t*>(col.getPtr()), col.size());
   return get_column_min_max(int_alias_col);
 }
 
 template <typename T>
 NEVER_INLINE HOST double get_column_mean(const Column<T>& col) {
-  return get_column_mean(col.ptr_, col.size_);
+  return get_column_mean(col.getPtr(), col.size());
 }
 
 template NEVER_INLINE HOST double get_column_mean(const Column<int32_t>& col);
@@ -176,7 +174,7 @@ template NEVER_INLINE HOST double get_column_mean(const double* data,
 
 template <typename T>
 NEVER_INLINE HOST double get_column_std_dev(const Column<T>& col, const double mean) {
-  return get_column_std_dev(col.ptr_, col.size_, mean);
+  return get_column_std_dev(col.getPtr(), col.size(), mean);
 }
 
 template NEVER_INLINE HOST double get_column_std_dev(const Column<int32_t>& col,
@@ -329,9 +327,7 @@ template NEVER_INLINE HOST std::tuple<double, double, bool> get_column_metadata(
 
 std::tuple<int32_t, int32_t, bool> get_column_metadata(
     const Column<TextEncodingDict>& col) {
-  Column<int32_t> int_alias_col;
-  int_alias_col.ptr_ = reinterpret_cast<int32_t*>(col.ptr_);
-  int_alias_col.size_ = col.size_;
+  Column<int32_t> int_alias_col(reinterpret_cast<int32_t*>(col.getPtr()), col.size());
   return get_column_metadata(int_alias_col);
 }
 

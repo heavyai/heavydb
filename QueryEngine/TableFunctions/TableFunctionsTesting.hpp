@@ -2034,4 +2034,101 @@ EXTENSION_NOINLINE_HOST int32_t ct_timestamp_truncate(TableFunctionManager& mgr,
   return size;
 }
 
+// clang-format off
+/*
+  UDTF: sum_along_row__cpu_template(Column<Array<T>> input) -> Column<T>, T=[float, double, int8_t, int16_t, int32_t, int64_t, bool] | output_row_size="input.size()"
+*/
+// clang-format on
+template <typename T>
+NEVER_INLINE HOST int32_t sum_along_row__cpu_template(const Column<Array<T>>& input,
+                                                      Column<T>& output) {
+  int size = input.size();
+  for (int i = 0; i < size; i++) {
+    const Array<T> arr = input[i];
+    if (arr.isNull()) {
+      output.setNull(i);
+    } else {
+      T acc{0};
+      for (auto j = 0; j < arr.getSize(); j++) {
+        if constexpr (std::is_same_v<T, bool>) {
+          // todo: arr.isNull(i) returns arr[i] because bool does not
+          // have null value, we should introduce 8-bit boolean type
+          // for Arrays
+          acc |= arr[j];
+        } else {
+          if (!arr.isNull(j)) {
+            acc += arr[j];
+          }
+        }
+      }
+      output[i] = acc;
+    }
+  }
+  return size;
+}
+
+// clang-format off
+/*
+  UDTF: array_copier__cpu_template(TableFunctionManager mgr, Column<Array<T>> input) -> Column<Array<T>>, T=[float, double, int8_t, int16_t, int32_t, int64_t, bool]
+*/
+// clang-format on
+template <typename T>
+NEVER_INLINE HOST int32_t array_copier__cpu_template(TableFunctionManager& mgr,
+                                                     const Column<Array<T>>& input,
+                                                     Column<Array<T>>& output) {
+  int size = input.size();
+
+  // count the number of items in all input arrays:
+  int output_values_size = 0;
+  for (int i = 0; i < size; i++) {
+    output_values_size += input[i].getSize();
+  }
+
+  // set the size and allocate the output columns buffers:
+  mgr.set_output_array_values_total_number(
+      /*output column index=*/0,
+      /*upper bound to the number of items in all output arrays=*/output_values_size);
+  mgr.set_output_row_size(size);
+
+  // set the items of output colums:
+  for (int i = 0; i < size; i++) {
+    output.setItem(i, input[i]);
+  }
+
+  return size;
+}
+
+// clang-format off
+/*
+  UDTF: array_concat__cpu_template(TableFunctionManager mgr, ColumnList<Array<T>> input) -> Column<Array<T>>, T=[float, double, int8_t, int16_t, int32_t, int64_t, bool]
+*/
+// clang-format on
+template <typename T>
+NEVER_INLINE HOST int32_t array_concat__cpu_template(TableFunctionManager& mgr,
+                                                     const ColumnList<Array<T>>& inputs,
+                                                     Column<Array<T>>& output) {
+  int size = inputs.size();
+
+  int output_values_size = 0;
+  for (int j = 0; j < inputs.numCols(); j++) {
+    for (int i = 0; i < size; i++) {
+      output_values_size += inputs[j][i].getSize();
+    }
+  }
+  mgr.set_output_array_values_total_number(
+      /*output column index=*/0,
+      /*upper bound to the number of items in all output arrays=*/output_values_size);
+
+  mgr.set_output_row_size(size);
+
+  for (int i = 0; i < size; i++) {
+    for (int j = 0; j < inputs.numCols(); j++) {
+      Column<Array<T>> col = inputs[j];
+      output.concatItem(i,
+                        col[i]);  // works only if i is the last row set, otherwise throws
+    }
+  }
+  return size;
+}
+
 #endif  // ifndef __CUDACC__

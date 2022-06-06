@@ -79,16 +79,6 @@ separator = '$=>$'
 
 Signature = namedtuple('Signature', ['name', 'inputs', 'outputs', 'input_annotations', 'output_annotations', 'function_annotations', 'sizer'])
 
-ExtArgumentTypes = ''' Int8, Int16, Int32, Int64, Float, Double, Void, PInt8, PInt16,
-PInt32, PInt64, PFloat, PDouble, PBool, Bool, ArrayInt8, ArrayInt16,
-ArrayInt32, ArrayInt64, ArrayFloat, ArrayDouble, ArrayBool, GeoPoint,
-GeoLineString, Cursor, GeoPolygon, GeoMultiPolygon, ColumnInt8,
-ColumnInt16, ColumnInt32, ColumnInt64, ColumnFloat, ColumnDouble,
-ColumnBool, ColumnTextEncodingDict, ColumnTimestamp, TextEncodingNone,
-TextEncodingDict, Timestamp, ColumnListInt8, ColumnListInt16, ColumnListInt32,
-ColumnListInt64, ColumnListFloat, ColumnListDouble, ColumnListBool,
-ColumnListTextEncodingDict'''.strip().replace(' ', '').replace('\n', '').split(',')
-
 OutputBufferSizeTypes = '''
 kConstant, kUserSpecifiedConstantParameter, kUserSpecifiedRowMultiplier, kTableFunctionSpecifiedParameter, kPreFlightParameter
 '''.strip().replace(' ', '').split(',')
@@ -282,12 +272,20 @@ class Bracket:
     def get_cpp_type(self):
         name = self.name.rsplit("::", 1)[-1]
         clsname = None
+        subclsname = None
         if name.startswith('ColumnList'):
             name = name.lstrip('ColumnList')
             clsname = 'ColumnList'
         elif name.startswith('Column'):
             name = name.lstrip('Column')
             clsname = 'Column'
+        if name.startswith('Array'):
+            name = name.lstrip('Array')
+            if clsname is None:
+                clsname = 'Array'
+            else:
+                subclsname = 'Array'
+
         if name.startswith('Bool'):
             ctype = name.lower()
         elif name.startswith('Int'):
@@ -304,7 +302,9 @@ class Bracket:
             raise NotImplementedError(self)
         if clsname is None:
             return ctype
-        return '%s<%s>' % (clsname, ctype)
+        if subclsname is None:
+            return '%s<%s>' % (clsname, ctype)
+        return '%s<%s<%s>>' % (clsname, subclsname, ctype)
 
     def format_cpp_type(self, idx, use_generic_arg_name=False, real_arg_name=None, is_input=True):
         col_typs = ('Column', 'ColumnList')
@@ -318,7 +318,6 @@ class Bracket:
             arg_name = 'input' + str(idx) if is_input else 'output' + str(idx)
         const = 'const ' if is_input else ''
         cpp_type = self.get_cpp_type()
-
         if any(cpp_type.startswith(t) for t in col_typs + literal_ref_typs):
             return '%s%s& %s' % (const, cpp_type, arg_name), arg_name
         else:
@@ -1146,6 +1145,9 @@ class ComposedNode(TypeNode, IterableNode):
     def __iter__(self):
         for i in self.inner:
             yield i
+
+    def is_text_encoding_dict(self):
+        return False
 
     def is_column_text_encoding_dict(self):
         return self.is_column() and self.inner[0].is_text_encoding_dict()

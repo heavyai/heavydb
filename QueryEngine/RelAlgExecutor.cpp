@@ -5011,8 +5011,13 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
         // avoid setting type info to ti here since ti doesn't have all the
         // properties correctly set
         auto type_info = input_expr->get_type_info();
-        type_info.set_subtype(type_info.get_type());  // set type to be subtype
-        type_info.set_type(ti.get_type());            // set type to column list
+        if (ti.is_column_array()) {
+          type_info.set_compression(kENCODING_ARRAY);
+          type_info.set_subtype(type_info.get_subtype());  // set type to be subtype
+        } else {
+          type_info.set_subtype(type_info.get_type());  // set type to be subtype
+        }
+        type_info.set_type(ti.get_type());  // set type to column list
         type_info.set_dimension(ti.get_dimension());
         input_expr->set_type_info(type_info);
 
@@ -5023,14 +5028,17 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       auto& input_expr = input_exprs[input_index];
       auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr);
       CHECK(col_var);
-
       // same here! avoid setting type info to ti since it doesn't have all the
       // properties correctly set
       auto type_info = input_expr->get_type_info();
-      type_info.set_subtype(type_info.get_type());  // set type to be subtype
-      type_info.set_type(ti.get_type());            // set type to column
+      if (ti.is_column_array()) {
+        type_info.set_compression(kENCODING_ARRAY);
+        type_info.set_subtype(type_info.get_subtype());  // set type to be subtype
+      } else {
+        type_info.set_subtype(type_info.get_type());  // set type to be subtype
+      }
+      type_info.set_type(ti.get_type());  // set type to column
       input_expr->set_type_info(type_info);
-
       input_col_exprs.push_back(col_var);
       input_index++;
     } else {

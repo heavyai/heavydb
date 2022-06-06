@@ -568,6 +568,34 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.ColumnListBool;
       case ColumnListTextEncodingDict:
         return ExtensionFunction.ExtArgumentType.ColumnListTextEncodingDict;
+      case ColumnArrayInt8:
+        return ExtensionFunction.ExtArgumentType.ColumnArrayInt8;
+      case ColumnArrayInt16:
+        return ExtensionFunction.ExtArgumentType.ColumnArrayInt16;
+      case ColumnArrayInt32:
+        return ExtensionFunction.ExtArgumentType.ColumnArrayInt32;
+      case ColumnArrayInt64:
+        return ExtensionFunction.ExtArgumentType.ColumnArrayInt64;
+      case ColumnArrayFloat:
+        return ExtensionFunction.ExtArgumentType.ColumnArrayFloat;
+      case ColumnArrayDouble:
+        return ExtensionFunction.ExtArgumentType.ColumnArrayDouble;
+      case ColumnArrayBool:
+        return ExtensionFunction.ExtArgumentType.ColumnArrayBool;
+      case ColumnListArrayInt8:
+        return ExtensionFunction.ExtArgumentType.ColumnListArrayInt8;
+      case ColumnListArrayInt16:
+        return ExtensionFunction.ExtArgumentType.ColumnListArrayInt16;
+      case ColumnListArrayInt32:
+        return ExtensionFunction.ExtArgumentType.ColumnListArrayInt32;
+      case ColumnListArrayInt64:
+        return ExtensionFunction.ExtArgumentType.ColumnListArrayInt64;
+      case ColumnListArrayFloat:
+        return ExtensionFunction.ExtArgumentType.ColumnListArrayFloat;
+      case ColumnListArrayDouble:
+        return ExtensionFunction.ExtArgumentType.ColumnListArrayDouble;
+      case ColumnListArrayBool:
+        return ExtensionFunction.ExtArgumentType.ColumnListArrayBool;
       default:
         HEAVYDBLOGGER.error("toExtArgumentType: unknown type " + type);
         return null;

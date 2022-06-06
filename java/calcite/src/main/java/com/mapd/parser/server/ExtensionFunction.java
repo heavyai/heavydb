@@ -79,6 +79,20 @@ public class ExtensionFunction {
     ColumnListBool,
     ColumnTextEncodingDict,
     ColumnListTextEncodingDict,
+    ColumnArrayInt8,
+    ColumnArrayInt16,
+    ColumnArrayInt32,
+    ColumnArrayInt64,
+    ColumnArrayFloat,
+    ColumnArrayDouble,
+    ColumnArrayBool,
+    ColumnListArrayInt8,
+    ColumnListArrayInt16,
+    ColumnListArrayInt32,
+    ColumnListArrayInt64,
+    ColumnListArrayFloat,
+    ColumnListArrayDouble,
+    ColumnListArrayBool,
   }
   ;
 
@@ -296,6 +310,34 @@ public class ExtensionFunction {
         return "ColumnList<bool>";
       case ColumnListTextEncodingDict:
         return "ColumnList<TextEncodingDict>";
+      case ColumnArrayInt8:
+        return "Column<Array<i8>>";
+      case ColumnArrayInt16:
+        return "Column<Array<i16>>";
+      case ColumnArrayInt32:
+        return "Column<Array<i32>>";
+      case ColumnArrayInt64:
+        return "Column<Array<i64>>";
+      case ColumnArrayFloat:
+        return "Column<Array<float>>";
+      case ColumnArrayDouble:
+        return "Column<Array<double>>";
+      case ColumnArrayBool:
+        return "Column<Array<bool>>";
+      case ColumnListArrayInt8:
+        return "ColumnList<Array<i8>>";
+      case ColumnListArrayInt16:
+        return "ColumnList<Array<i16>>";
+      case ColumnListArrayInt32:
+        return "ColumnList<Array<i32>>";
+      case ColumnListArrayInt64:
+        return "ColumnList<Array<i64>>";
+      case ColumnListArrayFloat:
+        return "ColumnList<Array<float>>";
+      case ColumnListArrayDouble:
+        return "ColumnList<Array<double>>";
+      case ColumnListArrayBool:
+        return "ColumnList<Array<bool>>";
     }
     HEAVYDBLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
     assert false;
@@ -337,13 +379,33 @@ public class ExtensionFunction {
             || type == ExtArgumentType.PBool;
   }
 
+  private static boolean isColumnArrayType(final ExtArgumentType type) {
+    return type == ExtArgumentType.ColumnArrayInt8
+            || type == ExtArgumentType.ColumnArrayInt16
+            || type == ExtArgumentType.ColumnArrayInt32
+            || type == ExtArgumentType.ColumnArrayInt64
+            || type == ExtArgumentType.ColumnArrayFloat
+            || type == ExtArgumentType.ColumnArrayDouble
+            || type == ExtArgumentType.ColumnArrayBool;
+  }
+
+  private static boolean isColumnListArrayType(final ExtArgumentType type) {
+    return type == ExtArgumentType.ColumnListArrayInt8
+            || type == ExtArgumentType.ColumnListArrayInt16
+            || type == ExtArgumentType.ColumnListArrayInt32
+            || type == ExtArgumentType.ColumnListArrayInt64
+            || type == ExtArgumentType.ColumnListArrayFloat
+            || type == ExtArgumentType.ColumnListArrayDouble
+            || type == ExtArgumentType.ColumnListArrayBool;
+  }
+
   private static boolean isColumnType(final ExtArgumentType type) {
     return type == ExtArgumentType.ColumnInt8 || type == ExtArgumentType.ColumnInt16
             || type == ExtArgumentType.ColumnInt32 || type == ExtArgumentType.ColumnInt64
             || type == ExtArgumentType.ColumnFloat || type == ExtArgumentType.ColumnDouble
             || type == ExtArgumentType.ColumnBool
             || type == ExtArgumentType.ColumnTextEncodingDict
-            || type == ExtArgumentType.ColumnTimestamp;
+            || type == ExtArgumentType.ColumnTimestamp || isColumnArrayType(type);
   }
 
   private static boolean isColumnListType(final ExtArgumentType type) {
@@ -354,7 +416,8 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ColumnListFloat
             || type == ExtArgumentType.ColumnListDouble
             || type == ExtArgumentType.ColumnListBool
-            || type == ExtArgumentType.ColumnListTextEncodingDict;
+            || type == ExtArgumentType.ColumnListTextEncodingDict
+            || isColumnListArrayType(type);
   }
 
   private static ExtArgumentType getValueType(final ExtArgumentType type) {
@@ -400,6 +463,27 @@ public class ExtensionFunction {
         return ExtArgumentType.TextEncodingDict;
       case ColumnTimestamp:
         return ExtArgumentType.Timestamp;
+      case ColumnArrayInt8:
+      case ColumnListArrayInt8:
+        return ExtArgumentType.Int8;
+      case ColumnArrayInt16:
+      case ColumnListArrayInt16:
+        return ExtArgumentType.Int16;
+      case ColumnArrayInt32:
+      case ColumnListArrayInt32:
+        return ExtArgumentType.Int32;
+      case ColumnArrayInt64:
+      case ColumnListArrayInt64:
+        return ExtArgumentType.Int64;
+      case ColumnArrayFloat:
+      case ColumnListArrayFloat:
+        return ExtArgumentType.Float;
+      case ColumnArrayDouble:
+      case ColumnListArrayDouble:
+        return ExtArgumentType.Double;
+      case ColumnArrayBool:
+      case ColumnListArrayBool:
+        return ExtArgumentType.Bool;
     }
     HEAVYDBLOGGER.error("getValueType: no value for type " + type);
     assert false;

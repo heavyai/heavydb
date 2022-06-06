@@ -82,6 +82,20 @@ enum class ExtArgumentType {
   ColumnListTextEncodingDict,
   ColumnTimestamp,
   Timestamp,
+  ColumnArrayInt8,
+  ColumnArrayInt16,
+  ColumnArrayInt32,
+  ColumnArrayInt64,
+  ColumnArrayFloat,
+  ColumnArrayDouble,
+  ColumnArrayBool,
+  ColumnListArrayInt8,
+  ColumnListArrayInt16,
+  ColumnListArrayInt32,
+  ColumnListArrayInt64,
+  ColumnListArrayFloat,
+  ColumnListArrayDouble,
+  ColumnListArrayBool
 };
 
 SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type);

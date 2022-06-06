@@ -250,6 +250,34 @@ std::string serialize_type(const ExtArgumentType type,
       return (declare ? "{i8**, i64, i64}*" : "ColumnList<bool>");
     case ExtArgumentType::ColumnListTextEncodingDict:
       return (declare ? "{i8**, i64, i64}*" : "ColumnList<TextEncodingDict>");
+    case ExtArgumentType::ColumnArrayInt8:
+      return (declare ? "{i8*, i64}*" : "Column<Array<i8>>");
+    case ExtArgumentType::ColumnArrayInt16:
+      return (declare ? "{i8*, i64}*" : "Column<Array<i16>>");
+    case ExtArgumentType::ColumnArrayInt32:
+      return (declare ? "{i8*, i64}*" : "Column<Array<i32>>");
+    case ExtArgumentType::ColumnArrayInt64:
+      return (declare ? "{i8*, i64}*" : "Column<Array<i64>>");
+    case ExtArgumentType::ColumnArrayFloat:
+      return (declare ? "{i8*, i64}*" : "Column<Array<float>>");
+    case ExtArgumentType::ColumnArrayDouble:
+      return (declare ? "{i8*, i64}*" : "Column<Array<double>>");
+    case ExtArgumentType::ColumnArrayBool:
+      return (declare ? "{i8*, i64}*" : "Column<Array<bool>>");
+    case ExtArgumentType::ColumnListArrayInt8:
+      return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<i8>");
+    case ExtArgumentType::ColumnListArrayInt16:
+      return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<i16>");
+    case ExtArgumentType::ColumnListArrayInt32:
+      return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<i32>");
+    case ExtArgumentType::ColumnListArrayInt64:
+      return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<i64>");
+    case ExtArgumentType::ColumnListArrayFloat:
+      return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<float>");
+    case ExtArgumentType::ColumnListArrayDouble:
+      return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<double>");
+    case ExtArgumentType::ColumnListArrayBool:
+      return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<bool>");
     default:
       CHECK(false);
   }
@@ -342,6 +370,34 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
       return generate_column_type(kBOOLEAN);
     case ExtArgumentType::ColumnListTextEncodingDict:
       return generate_column_type(kTEXT, kENCODING_DICT, 0 /* comp_param */);
+    case ExtArgumentType::ColumnArrayInt8:
+      return generate_column_array_type(kTINYINT);
+    case ExtArgumentType::ColumnArrayInt16:
+      return generate_column_array_type(kSMALLINT);
+    case ExtArgumentType::ColumnArrayInt32:
+      return generate_column_array_type(kINT);
+    case ExtArgumentType::ColumnArrayInt64:
+      return generate_column_array_type(kBIGINT);
+    case ExtArgumentType::ColumnArrayFloat:
+      return generate_column_array_type(kFLOAT);
+    case ExtArgumentType::ColumnArrayDouble:
+      return generate_column_array_type(kDOUBLE);
+    case ExtArgumentType::ColumnArrayBool:
+      return generate_column_array_type(kBOOLEAN);
+    case ExtArgumentType::ColumnListArrayInt8:
+      return generate_column_list_array_type(kTINYINT);
+    case ExtArgumentType::ColumnListArrayInt16:
+      return generate_column_list_array_type(kSMALLINT);
+    case ExtArgumentType::ColumnListArrayInt32:
+      return generate_column_list_array_type(kINT);
+    case ExtArgumentType::ColumnListArrayInt64:
+      return generate_column_list_array_type(kBIGINT);
+    case ExtArgumentType::ColumnListArrayFloat:
+      return generate_column_list_array_type(kFLOAT);
+    case ExtArgumentType::ColumnListArrayDouble:
+      return generate_column_list_array_type(kDOUBLE);
+    case ExtArgumentType::ColumnListArrayBool:
+      return generate_column_list_array_type(kBOOLEAN);
     default:
       LOG(FATAL) << "ExtArgumentType `" << serialize_type(ext_arg_type)
                  << "` cannot be converted to SQLTypeInfo.";
@@ -498,6 +554,34 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "COLUMNLIST<BOOLEAN>";
     case ExtArgumentType::ColumnListTextEncodingDict:
       return "COLUMNLIST<TEXT ENCODING DICT>";
+    case ExtArgumentType::ColumnArrayInt8:
+      return "COLUMN<ARRAY<TINYINT>>";
+    case ExtArgumentType::ColumnArrayInt16:
+      return "COLUMN<ARRAY<SMALLINT>>";
+    case ExtArgumentType::ColumnArrayInt32:
+      return "COLUMN<ARRAY<INT>>";
+    case ExtArgumentType::ColumnArrayInt64:
+      return "COLUMN<ARRAY<BIGINT>>";
+    case ExtArgumentType::ColumnArrayFloat:
+      return "COLUMN<ARRAY<FLOAT>>";
+    case ExtArgumentType::ColumnArrayDouble:
+      return "COLUMN<ARRAY<DOUBLE>>";
+    case ExtArgumentType::ColumnArrayBool:
+      return "COLUMN<ARRAY<BOOLEAN>>";
+    case ExtArgumentType::ColumnListArrayInt8:
+      return "COLUMNLIST<ARRAY<TINYINT>>";
+    case ExtArgumentType::ColumnListArrayInt16:
+      return "COLUMNLIST<ARRAY<SMALLINT>>";
+    case ExtArgumentType::ColumnListArrayInt32:
+      return "COLUMNLIST<ARRAY<INT>>";
+    case ExtArgumentType::ColumnListArrayInt64:
+      return "COLUMNLIST<ARRAY<BIGINT>>";
+    case ExtArgumentType::ColumnListArrayFloat:
+      return "COLUMNLIST<ARRAY<FLOAT>>";
+    case ExtArgumentType::ColumnListArrayDouble:
+      return "COLUMNLIST<ARRAY<DOUBLE>>";
+    case ExtArgumentType::ColumnListArrayBool:
+      return "COLUMNLIST<ARRAY<BOOLEAN>>";
     default:
       UNREACHABLE();
   }
@@ -727,6 +811,48 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "ColumnList<TextEncodingDict>") {
     return ExtArgumentType::ColumnListTextEncodingDict;
+  }
+  if (type_name == "Column<Array<i8>>") {
+    return ExtArgumentType::ColumnArrayInt8;
+  }
+  if (type_name == "Column<Array<i16>>") {
+    return ExtArgumentType::ColumnArrayInt16;
+  }
+  if (type_name == "Column<Array<i32>>") {
+    return ExtArgumentType::ColumnArrayInt32;
+  }
+  if (type_name == "Column<Array<i64>>") {
+    return ExtArgumentType::ColumnArrayInt64;
+  }
+  if (type_name == "Column<Array<float>>") {
+    return ExtArgumentType::ColumnArrayFloat;
+  }
+  if (type_name == "Column<Array<double>>") {
+    return ExtArgumentType::ColumnArrayDouble;
+  }
+  if (type_name == "Column<Array<bool>>") {
+    return ExtArgumentType::ColumnArrayBool;
+  }
+  if (type_name == "ColumnList<Array<i8>>") {
+    return ExtArgumentType::ColumnListArrayInt8;
+  }
+  if (type_name == "ColumnList<Array<i16>>") {
+    return ExtArgumentType::ColumnListArrayInt16;
+  }
+  if (type_name == "ColumnList<Array<i32>>") {
+    return ExtArgumentType::ColumnListArrayInt32;
+  }
+  if (type_name == "ColumnList<Array<i64>>") {
+    return ExtArgumentType::ColumnListArrayInt64;
+  }
+  if (type_name == "ColumnList<Array<float>>") {
+    return ExtArgumentType::ColumnListArrayFloat;
+  }
+  if (type_name == "ColumnList<Array<double>>") {
+    return ExtArgumentType::ColumnListArrayDouble;
+  }
+  if (type_name == "ColumnList<Array<bool>>") {
+    return ExtArgumentType::ColumnListArrayBool;
   }
   CHECK(false);
   return ExtArgumentType::Int16;

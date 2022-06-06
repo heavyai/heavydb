@@ -124,6 +124,27 @@ SQLTypeInfo ext_arg_type_to_type_info_output(const ExtArgumentType ext_arg_type)
       return SQLTypeInfo(kTEXT, false, kENCODING_DICT);
     case ExtArgumentType::ColumnTimestamp:
       return SQLTypeInfo(kTIMESTAMP, 9, 0, false);
+    case ExtArgumentType::ColumnArrayInt8:
+    case ExtArgumentType::ColumnListArrayInt8:
+      return generate_array_type(kTINYINT);
+    case ExtArgumentType::ColumnArrayInt16:
+    case ExtArgumentType::ColumnListArrayInt16:
+      return generate_array_type(kSMALLINT);
+    case ExtArgumentType::ColumnArrayInt32:
+    case ExtArgumentType::ColumnListArrayInt32:
+      return generate_array_type(kINT);
+    case ExtArgumentType::ColumnArrayInt64:
+    case ExtArgumentType::ColumnListArrayInt64:
+      return generate_array_type(kBIGINT);
+    case ExtArgumentType::ColumnArrayFloat:
+    case ExtArgumentType::ColumnListArrayFloat:
+      return generate_array_type(kFLOAT);
+    case ExtArgumentType::ColumnArrayDouble:
+    case ExtArgumentType::ColumnListArrayDouble:
+      return generate_array_type(kDOUBLE);
+    case ExtArgumentType::ColumnArrayBool:
+    case ExtArgumentType::ColumnListArrayBool:
+      return generate_array_type(kBOOLEAN);
     default:
       LOG(WARNING) << "ext_arg_type_to_type_info_output: ExtArgumentType `"
                    << ExtensionFunctionsWhitelist::toString(ext_arg_type)

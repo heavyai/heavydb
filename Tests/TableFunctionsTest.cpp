@@ -178,6 +178,109 @@ class TableFunctions : public ::testing::Test {
         run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       }
     }
+    {
+      run_ddl_statement("DROP TABLE IF EXISTS arr_test;");
+      run_ddl_statement(
+          "CREATE TABLE arr_test ("
+          "barr BOOLEAN[], sum_along_row_barr BOOLEAN, concat_barr BOOLEAN[], "
+          "carr TINYINT[], sum_along_row_carr TINYINT, concat_carr TINYINT[], "
+          "sarr SMALLINT[], sum_along_row_sarr SMALLINT, concat_sarr SMALLINT[], "
+          "iarr INT[], sum_along_row_iarr INT, concat_iarr INT[], "
+          "larr BIGINT[], sum_along_row_larr BIGINT, concat_larr  BIGINT[], "
+          "farr FLOAT[], sum_along_row_farr FLOAT, concat_farr FLOAT[], "
+          "darr DOUBLE[], sum_along_row_darr DOUBLE, concat_darr DOUBLE[]);");
+
+      TestHelpers::ValuesGenerator gen("arr_test");
+
+      run_multiple_agg(gen("{'true', 'true', 'false'}",
+                           "'true'",
+                           "{'true', 'true', 'false', 'true', 'true', 'false'}",
+                           "{1, 2}",
+                           3,
+                           "{1, 2, 1, 2}",
+                           "{1, 2}",
+                           3,
+                           "{1, 2, 1, 2}",
+                           "{1, 2}",
+                           3,
+                           "{1, 2, 1, 2}",
+                           "{1, 2}",
+                           3,
+                           "{1, 2, 1, 2}",
+                           "{1.0, 2.0}",
+                           "3.0",
+                           "{1.0, 2.0, 1.0, 2.0}",
+                           "{1.0, 2.0}",
+                           "3.0",
+                           "{1.0, 2.0, 1.0, 2.0}"),
+                       ExecutorDeviceType::CPU);
+      run_multiple_agg(gen("{'true', NULL, 'false'}",
+                           "'true'",
+                           "{'true', NULL, 'false', 'true', NULL, 'false'}",
+                           "{1, NULL, 2}",
+                           3,
+                           "{1, NULL, 2, 1, NULL, 2}",
+                           "{1, NULL, 2}",
+                           3,
+                           "{1, NULL, 2, 1, NULL, 2}",
+                           "{1, NULL, 2}",
+                           3,
+                           "{1, NULL, 2, 1, NULL, 2}",
+                           "{1, NULL, 2}",
+                           3,
+                           "{1, NULL, 2, 1, NULL, 2}",
+                           "{1.0, NULL, 2.0}",
+                           "3.0",
+                           "{1.0, NULL, 2.0, 1.0, NULL, 2.0}",
+                           "{1.0, NULL, 2.0}",
+                           "3.0",
+                           "{1.0, NULL, 2.0, 1.0, NULL, 2.0}"),
+                       ExecutorDeviceType::CPU);
+      run_multiple_agg(gen("{}",
+                           "'false'",
+                           "{}",
+                           "{}",
+                           "0",
+                           "{}",
+                           "{}",
+                           "0",
+                           "{}",
+                           "{}",
+                           "0",
+                           "{}",
+                           "{}",
+                           "0",
+                           "{}",
+                           "{}",
+                           "0.0",
+                           "{}",
+                           "{}",
+                           "0.0",
+                           "{}"),
+                       ExecutorDeviceType::CPU);
+      run_multiple_agg(gen("NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL"),
+                       ExecutorDeviceType::CPU);
+    }
   }
 
   void TearDown() override {
@@ -187,6 +290,7 @@ class TableFunctions : public ::testing::Test {
     run_ddl_statement("DROP TABLE IF EXISTS time_test");
     run_ddl_statement("DROP TABLE IF EXISTS time_test_castable");
     run_ddl_statement("DROP TABLE IF EXISTS time_test_uncastable");
+    run_ddl_statement("DROP TABLE IF EXISTS arr_test;");
   }
 };
 
@@ -2455,6 +2559,139 @@ TEST_F(TableFunctions, ResultsetRecycling) {
         ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(7));
       }
     }
+  }
+}
+
+template <typename T>
+void assert_equal(const TargetValue& val1,
+                  const TargetValue& val2,
+                  const SQLTypeInfo& ti) {
+  if (ti.is_integer() || ti.is_boolean()) {
+    const auto scalar_col_val1 = boost::get<ScalarTargetValue>(&val1);
+    const auto scalar_col_val2 = boost::get<ScalarTargetValue>(&val2);
+    auto p1 = boost::get<int64_t>(scalar_col_val1);
+    auto p2 = boost::get<int64_t>(scalar_col_val2);
+    ASSERT_EQ(static_cast<T>(*p1), static_cast<T>(*p2)) << "ti=" << ti.to_string();
+  } else if (ti.is_fp()) {
+    const auto scalar_col_val1 = boost::get<ScalarTargetValue>(&val1);
+    const auto scalar_col_val2 = boost::get<ScalarTargetValue>(&val2);
+    if constexpr (std::is_same_v<T, float>) {
+      auto p1 = boost::get<float>(scalar_col_val1);
+      auto p2 = boost::get<float>(scalar_col_val2);
+      ASSERT_EQ(static_cast<T>(*p1), static_cast<T>(*p2)) << "ti=" << ti.to_string();
+    } else {
+      if constexpr (!std::is_same_v<T, double>) {
+        UNREACHABLE();
+      }
+      auto p1 = boost::get<double>(scalar_col_val1);
+      auto p2 = boost::get<double>(scalar_col_val2);
+      ASSERT_EQ(static_cast<T>(*p1), static_cast<T>(*p2)) << "ti=" << ti.to_string();
+    }
+  } else if (ti.is_array()) {
+    const auto array_col_val1 = boost::get<ArrayTargetValue>(&val1);
+    const auto array_col_val2 = boost::get<ArrayTargetValue>(&val2);
+    if (array_col_val1->is_initialized()) {
+      const auto& vec1 = array_col_val1->get();
+      const auto& vec2 = array_col_val2->get();
+      ASSERT_EQ(vec1.size(), vec2.size()) << "ti=" << ti.to_string();
+      for (size_t i = 0; i < vec1.size(); i++) {
+        const auto item1 = vec1[i];
+        const auto item2 = vec2[i];
+        assert_equal<T>(item1, item2, ti.get_subtype());
+      }
+    } else {
+      // null array
+      ASSERT_EQ(array_col_val2->is_initialized(), false) << "ti=" << ti.to_string();
+    }
+  } else {
+    UNREACHABLE();
+  }
+}
+
+template <typename T>
+void assert_equal(const ResultSetPtr rows1, const ResultSetPtr rows2) {
+  const size_t num_rows1 = rows1->rowCount();
+  ASSERT_EQ(num_rows1, rows2->rowCount());
+  const size_t num_cols1 = rows1->colCount();
+  ASSERT_EQ(num_cols1, rows2->colCount());
+  for (size_t r = 0; r < num_rows1; ++r) {
+    const auto& row1 = rows1->getRowAtNoTranslations(r);
+    const auto& row2 = rows2->getRowAtNoTranslations(r);
+    for (size_t c = 0; c < num_cols1; ++c) {
+      const auto ti = rows1->getColType(c);
+      ASSERT_EQ(ti, rows2->getColType(c));
+      const TargetValue item1 = row1[c];
+      const TargetValue item2 = row2[c];
+      assert_equal<T>(item1, item2, ti);
+    }
+  }
+}
+
+TEST_F(TableFunctions, ColumnArraySumAlongRow) {
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+#define COLUMNARRAYSUMALONGROWTEST(COLNAME, CTYPE)                                      \
+  {                                                                                     \
+    const auto rows =                                                                   \
+        run_multiple_agg("SELECT out0 FROM TABLE(sum_along_row(cursor(SELECT " #COLNAME \
+                         " FROM arr_test)));",                                          \
+                         dt);                                                           \
+    const auto result_rows =                                                            \
+        run_multiple_agg("SELECT sum_along_row_" #COLNAME " FROM arr_test;", dt);       \
+    assert_equal<CTYPE>(rows, result_rows);                                             \
+  }
+    COLUMNARRAYSUMALONGROWTEST(barr, bool);
+    COLUMNARRAYSUMALONGROWTEST(carr, int8_t);
+    COLUMNARRAYSUMALONGROWTEST(sarr, int16_t);
+    COLUMNARRAYSUMALONGROWTEST(iarr, int32_t);
+    COLUMNARRAYSUMALONGROWTEST(larr, int64_t);
+    COLUMNARRAYSUMALONGROWTEST(farr, float);
+    COLUMNARRAYSUMALONGROWTEST(darr, double);
+  }
+}
+
+TEST_F(TableFunctions, ColumnArrayCopier) {
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+#define COLUMNARRAYCOPIERTEST(COLNAME, CTYPE)                                            \
+  {                                                                                      \
+    const auto rows =                                                                    \
+        run_multiple_agg("SELECT out0 FROM TABLE(array_copier(cursor(SELECT " #COLNAME   \
+                         " FROM arr_test)));",                                           \
+                         dt);                                                            \
+    const auto result_rows = run_multiple_agg("SELECT " #COLNAME " FROM arr_test;", dt); \
+    assert_equal<CTYPE>(rows, result_rows);                                              \
+  }
+    COLUMNARRAYCOPIERTEST(barr, bool);
+    COLUMNARRAYCOPIERTEST(carr, int8_t);
+    COLUMNARRAYCOPIERTEST(sarr, int16_t);
+    COLUMNARRAYCOPIERTEST(iarr, int32_t);
+    COLUMNARRAYCOPIERTEST(larr, int64_t);
+    COLUMNARRAYCOPIERTEST(farr, float);
+    COLUMNARRAYCOPIERTEST(darr, double);
+  }
+}
+
+TEST_F(TableFunctions, ColumnArrayConcat) {
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+#define COLUMNARRAYCONCATTEST(COLNAME, CTYPE)                                          \
+  {                                                                                    \
+    const auto rows =                                                                  \
+        run_multiple_agg("SELECT out0 FROM TABLE(array_concat(cursor(SELECT " #COLNAME \
+                         ", " #COLNAME " FROM arr_test)));",                           \
+                         dt);                                                          \
+    const auto result_rows =                                                           \
+        run_multiple_agg("SELECT concat_" #COLNAME " FROM arr_test;", dt);             \
+    assert_equal<CTYPE>(rows, result_rows);                                            \
+  }
+    COLUMNARRAYCONCATTEST(barr, bool);
+    COLUMNARRAYCONCATTEST(carr, int8_t);
+    COLUMNARRAYCONCATTEST(sarr, int16_t);
+    COLUMNARRAYCONCATTEST(iarr, int32_t);
+    COLUMNARRAYCONCATTEST(larr, int64_t);
+    COLUMNARRAYCONCATTEST(farr, float);
+    COLUMNARRAYCONCATTEST(darr, double);
   }
 }
 

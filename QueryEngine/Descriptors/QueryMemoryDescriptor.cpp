@@ -1189,6 +1189,10 @@ void QueryMemoryDescriptor::addColSlotInfo(
   col_slot_context_.addColumn(slots_for_col);
 }
 
+void QueryMemoryDescriptor::addColSlotInfoFlatBuffer(const int64_t flatbuffer_size) {
+  col_slot_context_.addColumnFlatBuffer(flatbuffer_size);
+}
+
 void QueryMemoryDescriptor::clearSlotInfo() {
   col_slot_context_.clear();
 }

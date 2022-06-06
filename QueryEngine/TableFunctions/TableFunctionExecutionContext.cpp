@@ -23,6 +23,7 @@
 #include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/TableFunctions/TableFunctionCompilationContext.h"
 #include "QueryEngine/TableFunctions/TableFunctionManager.h"
+#include "QueryEngine/Utils/FlatBuffer.h"
 #include "Shared/funcannotations.h"
 
 namespace {
@@ -172,7 +173,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
       // We use the number of entries in the first column to be the number of rows to base
       // the output off of (optionally depending on the sizing parameter)
       if (!input_num_rows) {
-        input_num_rows = (buf_elem_count ? buf_elem_count : 1);
+        input_num_rows = (buf_elem_count > 0 ? buf_elem_count : 1);
       }
 
       int8_t* input_str_dict_proxy_ptr = nullptr;
@@ -508,16 +509,29 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   // Todo (todd): Consolidate this column byte offset logic that occurs in at least 4
   // places
   for (size_t col_idx = 0; col_idx < num_out_columns; col_idx++) {
-    const size_t target_width =
-        exe_unit.target_exprs[col_idx]->get_type_info().get_size();
-    const size_t allocated_column_size = target_width * mgr->get_nrows();
-    const size_t actual_column_size = target_width * output_row_count;
-    if (src != dst) {
-      auto t = memmove(dst, src, actual_column_size);
-      CHECK_EQ(dst, t);
+    auto ti = exe_unit.target_exprs[col_idx]->get_type_info();
+    if (ti.is_array()) {
+      // TODO: implement FlatBuffer normalization when the
+      // max_nof_values is larger than the nof specified values.
+      //
+      // TODO: implement flatbuffer resize when output_row_count < mgr->get_nrows()
+      CHECK_EQ(mgr->get_nrows(), output_row_count);
+      FlatBufferManager m{src};
+      const size_t allocated_column_size = m.flatbufferSize();
+      const size_t actual_column_size = allocated_column_size;
+      src = align_to_int64(src + allocated_column_size);
+      dst = align_to_int64(dst + actual_column_size);
+    } else {
+      const size_t target_width = ti.get_size();
+      const size_t allocated_column_size = target_width * mgr->get_nrows();
+      const size_t actual_column_size = target_width * output_row_count;
+      if (src != dst) {
+        auto t = memmove(dst, src, actual_column_size);
+        CHECK_EQ(dst, t);
+      }
+      src = align_to_int64(src + allocated_column_size);
+      dst = align_to_int64(dst + actual_column_size);
     }
-    src = align_to_int64(src + allocated_column_size);
-    dst = align_to_int64(dst + actual_column_size);
   }
   return mgr->query_buffers->getResultSetOwned(0);
 }

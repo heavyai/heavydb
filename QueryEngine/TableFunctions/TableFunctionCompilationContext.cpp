@@ -79,10 +79,51 @@ inline llvm::Type* get_llvm_type_from_sql_column_type(const SQLTypeInfo elem_ti,
     return get_int_ptr_type(8, ctx);
   } else if (elem_ti.is_timestamp()) {
     return get_int_ptr_type(elem_ti.get_size() * 8, ctx);
+  } else if (elem_ti.is_array()) {
+    return get_int_ptr_type(8, ctx);
   }
   LOG(FATAL) << "get_llvm_type_from_sql_column_type: not implemented for "
              << ::toString(elem_ti);
   return nullptr;
+}
+
+void initialize_ptr_member(llvm::Value* member_ptr,
+                           llvm::Type* member_llvm_type,
+                           llvm::Value* value_ptr,
+                           llvm::IRBuilder<>& ir_builder) {
+  if (value_ptr != nullptr) {
+    if (value_ptr->getType() == member_llvm_type->getPointerElementType()) {
+      ir_builder.CreateStore(value_ptr, member_ptr);
+    } else {
+      auto tmp = ir_builder.CreateBitCast(value_ptr, member_llvm_type);
+      ir_builder.CreateStore(tmp, member_ptr);
+    }
+  } else {
+    ir_builder.CreateStore(llvm::Constant::getNullValue(member_llvm_type), member_ptr);
+  }
+}
+
+void initialize_int64_member(llvm::Value* member_ptr,
+                             llvm::Value* value,
+                             int64_t default_value,
+                             llvm::LLVMContext& ctx,
+                             llvm::IRBuilder<>& ir_builder) {
+  llvm::Value* val = nullptr;
+  if (value != nullptr) {
+    auto value_type = value->getType();
+    if (value_type->isPointerTy()) {
+      CHECK(value_type->getPointerElementType()->isIntegerTy(64));
+      val = ir_builder.CreateLoad(value->getType()->getPointerElementType(), value);
+    } else {
+      CHECK(value_type->isIntegerTy(64));
+      val = value;
+    }
+    ir_builder.CreateStore(val, member_ptr);
+  } else {
+    auto const_default =
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), default_value, true);
+    ir_builder.CreateStore(const_default, member_ptr);
+  }
 }
 
 std::tuple<llvm::Value*, llvm::Value*> alloc_column(std::string col_name,
@@ -106,26 +147,29 @@ std::tuple<llvm::Value*, llvm::Value*> alloc_column(std::string col_name,
     builder.CreateLoad to it in order to construct a Column instance
     as a value) and a pointer to the Column instance.
    */
-  llvm::Type* data_ptr_llvm_type =
-      get_llvm_type_from_sql_column_type(data_target_info, ctx);
   const bool is_text_encoding_dict_type =
       data_target_info.is_string() &&
       data_target_info.get_compression() == kENCODING_DICT;
+  llvm::StructType* col_struct_type;
+  llvm::Type* data_ptr_llvm_type =
+      get_llvm_type_from_sql_column_type(data_target_info, ctx);
+  if (is_text_encoding_dict_type) {
+    col_struct_type = llvm::StructType::get(
+        ctx,
+        {
+            data_ptr_llvm_type,           /* T* ptr */
+            llvm::Type::getInt64Ty(ctx),  /* int64_t sz */
+            llvm::Type::getInt8PtrTy(ctx) /* int8_t* string_dictionary_ptr */
+        });
+  } else {
+    col_struct_type =
+        llvm::StructType::get(ctx,
+                              {
+                                  data_ptr_llvm_type,         /* T* ptr */
+                                  llvm::Type::getInt64Ty(ctx) /* int64_t sz */
+                              });
+  }
 
-  llvm::StructType* col_struct_type =
-      is_text_encoding_dict_type
-          ? llvm::StructType::get(
-                ctx,
-                {
-                    data_ptr_llvm_type,           /* T* ptr */
-                    llvm::Type::getInt64Ty(ctx),  /* int64_t sz */
-                    llvm::Type::getInt8PtrTy(ctx) /* int64_t string_dictionary_ptr */
-                })
-          : llvm::StructType::get(ctx,
-                                  {
-                                      data_ptr_llvm_type,         /* T* ptr */
-                                      llvm::Type::getInt64Ty(ctx) /* int64_t sz */
-                                  });
   auto col = ir_builder.CreateAlloca(col_struct_type);
   col->setName(col_name);
   auto col_ptr_ptr = ir_builder.CreateStructGEP(col_struct_type, col, 0);
@@ -139,43 +183,14 @@ std::tuple<llvm::Value*, llvm::Value*> alloc_column(std::string col_name,
     col_str_dict_ptr->setName(col_name + ".string_dict_proxy");
   }
 
-  if (data_ptr != nullptr) {
-    if (data_ptr->getType() == data_ptr_llvm_type->getPointerElementType()) {
-      ir_builder.CreateStore(data_ptr, col_ptr_ptr);
-    } else {
-      auto tmp = ir_builder.CreateBitCast(data_ptr, data_ptr_llvm_type);
-      ir_builder.CreateStore(tmp, col_ptr_ptr);
-    }
-  } else {
-    ir_builder.CreateStore(llvm::Constant::getNullValue(data_ptr_llvm_type), col_ptr_ptr);
-  }
-  llvm::Value* size_val = nullptr;
-  if (data_size != nullptr) {
-    auto data_size_type = data_size->getType();
-    if (data_size_type->isPointerTy()) {
-      CHECK(data_size_type->getPointerElementType()->isIntegerTy(64));
-      size_val =
-          ir_builder.CreateLoad(data_size->getType()->getPointerElementType(), data_size);
-    } else {
-      CHECK(data_size_type->isIntegerTy(64));
-      size_val = data_size;
-    }
-    ir_builder.CreateStore(size_val, col_sz_ptr);
-  } else {
-    auto const_minus1 = llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), -1, true);
-    ir_builder.CreateStore(const_minus1, col_sz_ptr);
-  }
+  initialize_ptr_member(col_ptr_ptr, data_ptr_llvm_type, data_ptr, ir_builder);
+  initialize_int64_member(col_sz_ptr, data_size, -1, ctx, ir_builder);
   if (is_text_encoding_dict_type) {
-    if (data_str_dict_proxy_ptr != nullptr) {
-      auto data_str_dict_proxy_type = data_str_dict_proxy_ptr->getType();
-      CHECK(data_str_dict_proxy_type->getPointerElementType()->isIntegerTy(8));
-      ir_builder.CreateStore(data_str_dict_proxy_ptr, col_str_dict_ptr);
-    } else {
-      ir_builder.CreateStore(llvm::Constant::getNullValue(llvm::Type::getInt8PtrTy(ctx)),
-                             col_str_dict_ptr);
-    }
+    initialize_ptr_member(col_str_dict_ptr,
+                          llvm::Type::getInt8PtrTy(ctx),
+                          data_str_dict_proxy_ptr,
+                          ir_builder);
   }
-
   auto col_ptr = ir_builder.CreatePointerCast(
       col_ptr_ptr, llvm::PointerType::get(llvm::Type::getInt8Ty(ctx), 0));
   col_ptr->setName(col_name + "_ptr");
@@ -236,49 +251,19 @@ llvm::Value* alloc_column_list(std::string col_list_name,
     col_str_dict_ptr_ptr->setName(col_list_name + ".string_dict_proxies");
   }
 
+  initialize_ptr_member(col_list_ptr_ptr, data_ptrs_llvm_type, data_ptrs, ir_builder);
+
   CHECK(length >= 0);
   auto const_length = llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), length, true);
-
-  if (data_ptrs != nullptr) {
-    if (data_ptrs->getType() == data_ptrs_llvm_type->getPointerElementType()) {
-      ir_builder.CreateStore(data_ptrs, col_list_ptr_ptr);
-    } else {
-      auto tmp = ir_builder.CreateBitCast(data_ptrs, data_ptrs_llvm_type);
-      ir_builder.CreateStore(tmp, col_list_ptr_ptr);
-    }
-  } else {
-    ir_builder.CreateStore(llvm::Constant::getNullValue(data_ptrs_llvm_type),
-                           col_list_ptr_ptr);
-  }
-
   ir_builder.CreateStore(const_length, col_list_length_ptr);
 
-  if (data_size != nullptr) {
-    auto data_size_type = data_size->getType();
-    llvm::Value* size_val = nullptr;
-    if (data_size_type->isPointerTy()) {
-      CHECK(data_size_type->getPointerElementType()->isIntegerTy(64));
-      size_val =
-          ir_builder.CreateLoad(data_size->getType()->getPointerElementType(), data_size);
-    } else {
-      CHECK(data_size_type->isIntegerTy(64));
-      size_val = data_size;
-    }
-    ir_builder.CreateStore(size_val, col_list_size_ptr);
-  } else {
-    auto const_minus1 = llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), -1, true);
-    ir_builder.CreateStore(const_minus1, col_list_size_ptr);
-  }
+  initialize_int64_member(col_list_size_ptr, data_size, -1, ctx, ir_builder);
 
   if (is_text_encoding_dict_type) {
-    if (data_str_dict_proxy_ptrs != nullptr) {
-      auto data_str_dict_proxies_type = data_str_dict_proxy_ptrs->getType();
-      CHECK(data_str_dict_proxies_type->getPointerElementType()->isIntegerTy(8));
-      ir_builder.CreateStore(data_str_dict_proxy_ptrs, col_str_dict_ptr_ptr);
-    } else {
-      ir_builder.CreateStore(llvm::Constant::getNullValue(data_ptrs_llvm_type),
-                             col_list_ptr_ptr);
-    }
+    initialize_ptr_member(col_str_dict_ptr_ptr,
+                          data_str_dict_proxy_ptrs->getType(),
+                          data_str_dict_proxy_ptrs,
+                          ir_builder);
   }
 
   auto col_list_ptr = ir_builder.CreatePointerCast(

@@ -265,6 +265,23 @@ void ColSlotContext::addColumn(
   }
 }
 
+void ColSlotContext::addColumnFlatBuffer(const int64_t flatbuffer_size) {
+  const auto col_idx = col_to_slot_map_.size();
+  col_to_slot_map_.emplace_back();
+  addSlotForColumn(0, 0, col_idx);
+  // reusing varlenOutput infrastructure for storing the size of a flatbuffer:
+  varlen_output_slot_map_.insert(std::make_pair(col_idx, flatbuffer_size));
+}
+
+int64_t ColSlotContext::getFlatBufferSize(const size_t slot_idx) const {
+  const auto varlen_map_it = varlen_output_slot_map_.find(slot_idx);
+  if (varlen_map_it == varlen_output_slot_map_.end()) {
+    throw std::runtime_error("Failed to find FlatBuffer map entry for slot " +
+                             std::to_string(slot_idx));
+  }
+  return varlen_map_it->second;
+}
+
 void ColSlotContext::addSlotForColumn(const int8_t logical_size,
                                       const size_t column_idx) {
   addSlotForColumn(-1, logical_size, column_idx);

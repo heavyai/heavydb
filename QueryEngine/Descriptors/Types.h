@@ -23,6 +23,9 @@
 
 #pragma once
 
+#include <ostream>
+#include <sstream>
+
 enum class QueryDescriptionType {
   GroupByPerfectHash,
   GroupByBaselineHash,
@@ -31,3 +34,35 @@ enum class QueryDescriptionType {
   NonGroupedAggregate,
   Estimator
 };
+
+inline std::ostream& operator<<(std::ostream& os, const QueryDescriptionType& type) {
+  switch (type) {
+    case QueryDescriptionType::GroupByPerfectHash:
+      os << "GroupByPerfectHash";
+      break;
+    case QueryDescriptionType::GroupByBaselineHash:
+      os << "GroupByBaselineHash";
+      break;
+    case QueryDescriptionType::Projection:
+      os << "Projection";
+      break;
+    case QueryDescriptionType::TableFunction:
+      os << "TableFunction";
+      break;
+    case QueryDescriptionType::NonGroupedAggregate:
+      os << "NonGroupedAggregate";
+      break;
+    case QueryDescriptionType::Estimator:
+      os << "Estimator";
+      break;
+    default:
+      os << "Unknown QueryDescriptionType";
+  }
+  return os;
+}
+
+inline std::string toString(const QueryDescriptionType& type) {
+  std::ostringstream ss;
+  ss << type;
+  return ss.str();
+}
