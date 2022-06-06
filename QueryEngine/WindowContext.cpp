@@ -576,6 +576,9 @@ void WindowFunctionContext::compute(
             << ")";
     DEBUG_TIMER("Window Function Cached Sorted Partition Copy");
     std::memcpy(intermediate_output_buffer, sorted_partition->data(), output_buf_sz);
+    if (window_func_->hasFraming()) {
+      sorted_partition_buf_ = sorted_partition;
+    }
   } else {
     // ordering partitions if necessary
     const auto sort_partitions = [&](const size_t start, const size_t end) {
@@ -604,8 +607,7 @@ void WindowFunctionContext::compute(
     bool can_access_sorted_partition =
         sorted_partition_ref_cnt_it != sorted_partition_key_ref_count_map.end() &&
         sorted_partition_ref_cnt_it->second > 1;
-    bool has_framing_clause = window_func_->hasFraming();
-    if (can_access_sorted_partition || has_framing_clause) {
+    if (can_access_sorted_partition || window_func_->hasFraming()) {
       // keep the sorted partition only if it will be reused from other window function
       // context of this query
       sorted_partition_buf_ = std::make_shared<std::vector<int64_t>>(elem_count_);

@@ -22354,6 +22354,30 @@ TEST(Select, WindowFunctionFraming) {
       run_multiple_agg("SELECT oc, LAST_VALUE(i) OVER (RANGE BETWEEN 1 PRECEDING AND 1 "
                        "FOLLOWING) FROM test_window_framing ORDER BY oc;",
                        dt));
+  // 8. use multiple window aggregate functions over the window frame
+  {
+    std::vector<std::string> test_query;
+    test_query.push_back(
+        "SELECT oc, MIN(ti) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 2 PRECEDING "
+        "AND 2 FOLLOWING), MIN(ti) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 2 "
+        "PRECEDING AND 2 FOLLOWING) FROM test_window_framing ORDER BY oc;");
+    test_query.push_back(
+        "SELECT oc, MIN(ti) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 2 PRECEDING "
+        "AND 2 FOLLOWING), MAX(ti) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 2 "
+        "PRECEDING AND 2 FOLLOWING) FROM test_window_framing ORDER BY oc;");
+    test_query.push_back(
+        "SELECT oc, MIN(ti) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 2 PRECEDING "
+        "AND 2 FOLLOWING), MIN(ti) OVER (PARTITION BY pc ORDER BY oc RANGE BETWEEN 2 "
+        "PRECEDING AND 2 FOLLOWING) FROM test_window_framing ORDER BY oc;");
+    test_query.push_back(
+        "SELECT oc, MIN(ti) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 2 PRECEDING "
+        "AND 2 FOLLOWING), MAX(ti) OVER (PARTITION BY pc ORDER BY oc ROWS BETWEEN 2 "
+        "PRECEDING AND 2 FOLLOWING), SUM(ti) OVER (PARTITION BY pc ORDER BY oc RANGE "
+        "BETWEEN 2 PRECEDING AND 2 FOLLOWING) FROM test_window_framing ORDER BY oc;");
+    for (const auto& q : test_query) {
+      c(q, q, dt);
+    }
+  }
 
   // 8. throw an exception when using non literal expression as window framing found
   EXPECT_ANY_THROW(
