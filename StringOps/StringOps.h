@@ -371,17 +371,38 @@ struct RegexpReplace : public StringOp {
   const int64_t occurrence_;
 };
 
+// We currently do not allow strict mode JSON parsing per the SQL standard, as
+// 1) We can't throw run-time errors in the case that the string operator
+// is evaluated in an actual kernel, which is the case for none-encoded text
+// inputs, and would need to capture the parsing and key errors and set
+// kernel error flags accordingly. Currently throwing an error in even a CPU
+// kernel will crash the server as it's not caught (by design, as executor kernels
+// use error codes so that GPU and CPU code can throw errors).
+// 2) When JSON_VALUE (or other not-yet-implemented JSON operators) is run over
+// a string dictionary, if the column shares a dictionary such that the dictionary
+// contains entries not in the column, we can throw errors for fields not in the
+// actual column, as we compute JSON_VALUE for all values in the dictionary
+// pre-kernel launch to build the string dictionary translation map. Since the
+// offending values may not actually be in the column (when it references a
+// shared dict), there is not even a way for the user to filter out or
+// case-guard the offending values
+// Todo(todd): Implement proper error infra for StringOps, both for the
+// none-encoded and dictionary encoded paths
+
 struct JsonValue : public StringOp {
  public:
   JsonValue(const std::optional<std::string>& var_str_optional_literal,
             const std::string& json_path)
       : StringOp(SqlStringOpKind::JSON_VALUE, var_str_optional_literal)
+      , json_parse_mode_(parse_json_parse_mode(json_path))
       , json_keys_(parse_json_path(json_path)) {}
 
   NullableStrType operator()(const std::string& str) const override;
 
  private:
-  enum class JsonKeyKind { OBJECT, ARRAY };
+  enum class JsonKeyKind { JSON_OBJECT, JSON_ARRAY };
+  enum class JsonParseMode { PARSE_MODE_LAX, PARSE_MODE_STRICT };
+
   struct JsonKey {
     JsonKeyKind key_kind;
     std::string object_key;
@@ -389,15 +410,33 @@ struct JsonValue : public StringOp {
     size_t array_key;
 
     JsonKey(const std::string& object_key)
-        : key_kind(JsonKeyKind::OBJECT), object_key(object_key) {}
+        : key_kind(JsonKeyKind::JSON_OBJECT), object_key(object_key) {}
     JsonKey(const size_t array_key)
-        : key_kind(JsonKeyKind::ARRAY), array_key(array_key) {}
+        : key_kind(JsonKeyKind::JSON_ARRAY), array_key(array_key) {}
   };
 
+  static JsonParseMode parse_json_parse_mode(std::string_view json_path);
   static std::vector<JsonKey> parse_json_path(const std::string& json_path);
+  inline NullableStrType handle_parse_error(const std::string& json_str) const {
+    if (json_parse_mode_ == JsonParseMode::PARSE_MODE_LAX) {
+      return NullableStrType();
+    } else {
+      throw std::runtime_error("Could not parse: " + json_str + ".");
+    }
+  }
 
+  inline NullableStrType handle_key_error(const std::string& json_str) const {
+    if (json_parse_mode_ == JsonParseMode::PARSE_MODE_LAX) {
+      return NullableStrType();
+    } else {
+      throw std::runtime_error("Key not found or did not contain value in: " + json_str +
+                               ".");
+    }
+  }
+  static constexpr bool allow_strict_json_parsing{false};
+  const JsonParseMode json_parse_mode_;  // If PARSE_MODE_LAX return null and don't throw
+                                         // error on parsing error
   const std::vector<JsonKey> json_keys_;
-  const bool lax_mode_{true};  // If true return null and not error on parsing error
 };
 
 struct NullOp : public StringOp {

@@ -16,7 +16,7 @@
 
 #include "StringOps.h"
 #include <rapidjson/document.h>
-#include <iostream>
+#include <boost/algorithm/string/predicate.hpp>
 namespace StringOps_Namespace {
 
 boost::regex StringOp::generateRegex(const std::string& op_name,
@@ -427,37 +427,65 @@ std::pair<bool, int64_t> RegexpSubstr::set_sub_match_info(
       true, sub_match_group_idx > 0L ? sub_match_group_idx - 1 : sub_match_group_idx);
 }
 
+// json_path must start with "lax $", "strict $" or "$" (case-insensitive).
+JsonValue::JsonParseMode JsonValue::parse_json_parse_mode(std::string_view json_path) {
+  size_t const string_pos = json_path.find('$');
+  if (string_pos == 0) {
+    // Parsing mode was not explicitly specified, default to PARSE_MODE_LAX
+    return JsonValue::JsonParseMode::PARSE_MODE_LAX;
+  } else if (string_pos == std::string::npos) {
+    throw std::runtime_error("JSON search path must include a '$' literal.");
+  }
+  std::string_view const prefix = json_path.substr(0, string_pos);
+  if (boost::iequals(prefix, std::string_view("lax "))) {
+    return JsonValue::JsonParseMode::PARSE_MODE_LAX;
+  } else if (boost::iequals(prefix, std::string_view("strict "))) {
+    if constexpr (JsonValue::allow_strict_json_parsing) {
+      return JsonValue::JsonParseMode::PARSE_MODE_STRICT;
+    } else {
+      throw std::runtime_error("Strict parsing not currently supported for JSON_VALUE.");
+    }
+  } else {
+    throw std::runtime_error("Issue parsing JSON_VALUE Parse Mode.");
+  }
+}
+
 std::vector<JsonValue::JsonKey> JsonValue::parse_json_path(const std::string& json_path) {
-  if (!json_path.length()) {
-    throw std::runtime_error("JSON search path must not be empty.");
+  // Assume that parse_key_error_mode validated strict/lax mode
+  size_t string_pos = json_path.find("$");
+  if (string_pos == std::string::npos) {
+    throw std::runtime_error("JSON search path must begin with '$' literal.");
   }
-  if (json_path[0] != '$') {
-    throw std::runtime_error("JSON search path must start with '$' character.");
-  }
+  string_pos += 1;  // Go to next character after $
+
   // Use tildas to enclose escaped regex string due to embedded ')"'
-  const std::string regex_key_pattern =
-      R"~(^(\.([[:alpha:]][[:alnum:]_-]*)|"([[:alpha:]][ [:alnum:]_-]*)")|\[([[:digit:]]+)\])~";
-  const auto key_regex =
-      boost::regex(regex_key_pattern,
-                   boost::regex_constants::extended | boost::regex_constants::optimize);
-  size_t string_pos = 1UL;
+  static const auto& key_regex = *new boost::regex(
+      R"~(^(\.(([[:alpha:]][[:alnum:]_-]*)|"([[:alpha:]][ [:alnum:]_-]*)"))|\[([[:digit:]]+)\])~",
+      boost::regex_constants::extended | boost::regex_constants::optimize);
+  static_assert(std::is_trivially_destructible_v<decltype(key_regex)>);
+
   std::string::const_iterator search_start(json_path.cbegin() + string_pos);
   boost::smatch match;
   std::vector<JsonKey> json_keys;
   while (boost::regex_search(search_start, json_path.cend(), match, key_regex)) {
+    CHECK_EQ(match.size(), 6UL);
+    if (match.position(size_t(0)) != 0L) {
+      // Match wasn't found at beginning of string
+      throw std::runtime_error("JSON search path parsing error: '" + json_path + "'");
+    }
     size_t matching_expr = 0;
-    if (match[2].matched) {
+    if (match[3].matched) {
       // simple object key
-      matching_expr = 2;
-    } else if (match[3].matched) {
-      // complex object key
       matching_expr = 3;
     } else if (match[4].matched) {
-      // array key
+      // complex object key
       matching_expr = 4;
+    } else if (match[5].matched) {
+      // array key
+      matching_expr = 5;
     }
     CHECK_GT(matching_expr, 0UL);
-    string_pos += match.position(size_t(0)) + match.length(0);
+    string_pos += match.length(0);
 
     const std::string key_match(match[matching_expr].first, match[matching_expr].second);
     CHECK_GE(key_match.length(), 1UL);
@@ -477,26 +505,39 @@ std::vector<JsonValue::JsonKey> JsonValue::parse_json_path(const std::string& js
   if (string_pos < json_path.size()) {
     throw std::runtime_error("JSON path parsing error.");
   }
-
   return json_keys;
 }
 
 NullableStrType JsonValue::operator()(const std::string& str) const {
   rapidjson::Document document;
-  document.Parse(str.c_str());
+  if (document.Parse(str.c_str()).HasParseError()) {
+    if constexpr (JsonValue::allow_strict_json_parsing) {
+      return handle_parse_error(str);
+    } else {
+      return NullableStrType();
+    }
+  }
   rapidjson::Value& json_val = document;
   for (const auto& json_key : json_keys_) {
     switch (json_key.key_kind) {
-      case JsonKeyKind::OBJECT: {
+      case JsonKeyKind::JSON_OBJECT: {
         if (!json_val.IsObject() || !json_val.HasMember(json_key.object_key)) {
-          return NullableStrType();
+          if constexpr (JsonValue::allow_strict_json_parsing) {
+            return handle_key_error(str);
+          } else {
+            return NullableStrType();
+          }
         }
         json_val = json_val[json_key.object_key];
         break;
       }
-      case JsonKeyKind::ARRAY: {
+      case JsonKeyKind::JSON_ARRAY: {
         if (!json_val.IsArray() || json_val.Size() <= json_key.array_key) {
-          return NullableStrType();
+          if constexpr (JsonValue::allow_strict_json_parsing) {
+            return handle_key_error(str);
+          } else {
+            return NullableStrType();
+          }
         }
         json_val = json_val[json_key.array_key];
         break;
@@ -517,15 +558,25 @@ NullableStrType JsonValue::operator()(const std::string& str) const {
     } else {
       // A bit defensive, as I'm fairly sure json does not
       // support numeric types with widths > 64 bits, so may drop
-      return NullableStrType();
+      if constexpr (JsonValue::allow_strict_json_parsing) {
+        return handle_key_error(str);
+      } else {
+        return NullableStrType();
+      }
     }
   } else if (json_val.IsBool()) {
     return NullableStrType(std::string(json_val.IsTrue() ? "true" : "false"));
-  } else {
-    // Should cover nulls
+  } else if (json_val.IsNull()) {
     return NullableStrType();
+  } else {
+    // For any unhandled type - we may move this to a CHECK after gaining
+    // more confidence in prod
+    if constexpr (JsonValue::allow_strict_json_parsing) {
+      return handle_key_error(str);
+    } else {
+      return NullableStrType();
+    }
   }
-  return NullableStrType();
 }
 
 std::string StringOps::operator()(const std::string& str) const {

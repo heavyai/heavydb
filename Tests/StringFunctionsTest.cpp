@@ -1278,6 +1278,43 @@ TEST_F(StringFunctionTest, JsonValue) {
   }
 }
 
+TEST_F(StringFunctionTest, JsonValueParseMode) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      // Explicit Lax Mode (the default)
+      auto result_set =
+          sql("select json_value(json_data_none, 'lax $.factoids.most_valuable_crop') "
+              "from string_function_test_countries;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"corn"}, {""}, {"wheat"}, {"wheat"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Explicit Lax Mode (test case-insensitivity)
+      auto result_set =
+          sql("select json_value(json_data_none, 'LAX $.factoids.most_valuable_crop') "
+              "from string_function_test_countries;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"corn"}, {""}, {"wheat"}, {"wheat"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Test that Strict Mode is disabled
+      try {
+        sql("select json_value(json_data_none, 'strict $.factoids.most_valuable_crop') "
+            "from string_function_test_countries;",
+            dt);
+        FAIL() << "An exception should have been thrown for this test case";
+      } catch (const std::exception& e) {
+        ASSERT_STREQ("Strict parsing not currently supported for JSON_VALUE.", e.what());
+      }
+    }
+  }
+}
+
 TEST_F(StringFunctionTest, StringFunctionEqualsFilterLHS) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
