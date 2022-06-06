@@ -19,7 +19,7 @@ def get_source_version():
 
 def get_package_version():
     try:
-        return importlib_metadata.version(__name__)
+        return importlib_metadata.version("pyheavydb")
     except importlib_metadata.PackageNotFoundError:
         # package is not installed
         return get_source_version()
