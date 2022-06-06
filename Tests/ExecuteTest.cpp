@@ -22355,6 +22355,16 @@ TEST(Select, WindowFunctionFraming) {
                        "FOLLOWING) FROM test_window_framing ORDER BY oc;",
                        dt));
 
+  // 8. throw an exception when using non literal expression as window framing found
+  EXPECT_ANY_THROW(
+      run_multiple_agg("SELECT oc, SUM(i) OVER (RANGE BETWEEN pc * 2 PRECEDING AND 1 "
+                       "FOLLOWING) FROM test_window_framing ORDER BY oc;",
+                       dt));
+  EXPECT_ANY_THROW(
+      run_multiple_agg("SELECT oc, SUM(i) OVER (RANGE BETWEEN 1 PRECEDING AND pc * 2 "
+                       "FOLLOWING) FROM test_window_framing ORDER BY oc;",
+                       dt));
+
   // when a query is dispatched to validate its syntax, inputs are empty so internal
   // data structures used to evaluate queries such as aggregate tree should have
   // a handling logic in this case

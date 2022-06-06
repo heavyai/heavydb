@@ -1925,6 +1925,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
       };
 
   bool negative_constant = false;
+  bool detect_invalid_frame_start_bound_expr = false;
+  bool detect_invalid_frame_end_bound_expr = false;
   auto& frame_start_bound = rex_window_function->getFrameStartBound();
   auto& frame_end_bound = rex_window_function->getFrameEndBound();
   bool has_end_bound_frame_expr = false;
@@ -1983,40 +1985,43 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
       }
     };
 
-    if (frame_start_bound.bound_expr) {
-      frame_start_bound_expr = translateScalarRex(frame_start_bound.bound_expr.get());
-      if (auto literal_expr =
-              dynamic_cast<const Analyzer::Constant*>(frame_start_bound_expr.get())) {
-        negative_constant = is_negative_framing_bound(
-            literal_expr->get_type_info().get_type(), literal_expr->get_constval());
-      } else {
-        throw std::runtime_error(
-            "We currently only support integer-type literal expression as a window frame "
-            "bound "
-            "expression");
+    auto translate_frame_bound_expr = [&](const RexScalar* bound_expr) {
+      std::shared_ptr<Analyzer::Expr> translated_expr;
+      if (dynamic_cast<const RexLiteral*>(bound_expr)) {
+        translated_expr = translateScalarRex(bound_expr);
+        if (auto literal_expr =
+                dynamic_cast<const Analyzer::Constant*>(translated_expr.get())) {
+          negative_constant = is_negative_framing_bound(
+              literal_expr->get_type_info().get_type(), literal_expr->get_constval());
+          return std::make_pair(false, translated_expr);
+        }
       }
+      return std::make_pair(true, translated_expr);
+    };
+
+    if (frame_start_bound.bound_expr) {
+      std::tie(detect_invalid_frame_start_bound_expr, frame_start_bound_expr) =
+          translate_frame_bound_expr(frame_start_bound.bound_expr.get());
     }
 
     if (frame_end_bound.bound_expr) {
-      has_end_bound_frame_expr = true;
-      frame_end_bound_expr = translateScalarRex(frame_end_bound.bound_expr.get());
-      if (auto literal_expr =
-              dynamic_cast<const Analyzer::Constant*>(frame_end_bound_expr.get())) {
-        negative_constant = is_negative_framing_bound(
-            literal_expr->get_type_info().get_type(), literal_expr->get_constval());
-      } else {
-        throw std::runtime_error(
-            "We currently only support integer-type literal expression as a window frame "
-            "bound "
-            "expression");
-      }
+      std::tie(detect_invalid_frame_end_bound_expr, frame_end_bound_expr) =
+          translate_frame_bound_expr(frame_end_bound.bound_expr.get());
     }
-  }
-  // note that Calcite already has frame-bound constraint checking logic, but we
-  // also check various invalid cases for safety
-  if (negative_constant) {
-    throw std::runtime_error(
-        "A constant expression for window framing should have nonnegative value.");
+
+    // currently we only support literal expression as frame bound expression
+    if (detect_invalid_frame_start_bound_expr || detect_invalid_frame_end_bound_expr) {
+      throw std::runtime_error(
+          "We currently only support literal expression as a window frame bound "
+          "expression");
+    }
+
+    // note that Calcite already has frame-bound constraint checking logic, but we
+    // also check various invalid cases for safety
+    if (negative_constant) {
+      throw std::runtime_error(
+          "A constant expression for window framing should have nonnegative value.");
+    }
   }
 
   if (frame_start_bound.following) {
