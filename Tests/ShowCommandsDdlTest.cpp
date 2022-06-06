@@ -1149,6 +1149,7 @@ class ShowDatabasesTest : public DBHandlerTestFixture {
 
   static void SetUpTestSuite() {
     createDBHandler();
+    TearDownTestSuite();
     createTestUser("test_user_1", "test_pass_1");
     createTestUser("test_user_2", "test_pass_2");
     createTestUser("test_super_user", "test_pass", true);
@@ -2788,6 +2789,9 @@ class SystemTablesTest : public DBHandlerTestFixture {
   static void SetUpTestSuite() {
     DBHandlerTestFixture::SetUpTestSuite();
     switchToAdmin();
+    dropUser("test_user_1");
+    dropUser("test_user_2");
+    dropUser("test_user_3");
     createUser("test_user_1");
     createUser("test_user_2");
   }
@@ -2796,6 +2800,7 @@ class SystemTablesTest : public DBHandlerTestFixture {
     switchToAdmin();
     dropUser("test_user_1");
     dropUser("test_user_2");
+    dropUser("test_user_3");
     DBHandlerTestFixture::TearDownTestSuite();
   }
 
@@ -2810,8 +2815,8 @@ class SystemTablesTest : public DBHandlerTestFixture {
     sql("DROP TABLE IF EXISTS test_table;");
     sql("DROP TABLE IF EXISTS test_table_1;");
     sql("DROP TABLE IF EXISTS test_table_2;");
-    dropUser("test_user_3");
     resetDbObjectsAndPermissions();
+    dropUser("test_user_3");
   }
 
   void resetDbObjectsAndPermissions() {
@@ -2831,6 +2836,16 @@ class SystemTablesTest : public DBHandlerTestFixture {
   static void dropUser(const std::string& user_name) {
     switchToAdmin();
     sql("DROP USER IF EXISTS " + user_name + ";");
+  }
+
+  // Drops a user while skipping the normal checks (like if the user owns a db).  Used to
+  // create db states that are no longer valid used for legacy testsing.
+  static void dropUserUnchecked(const std::string& user_name) {
+    CHECK(!isDistributedMode()) << "Can't manipulate syscat directly in distributed mode";
+    auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
+    Catalog_Namespace::UserMetadata user;
+    CHECK(sys_cat.getMetadataForUser(user_name, user));
+    sys_cat.dropUserUnchecked(user_name, user);
   }
 
   int64_t getUserId(const std::string& user_name) {
@@ -3401,15 +3416,21 @@ TEST_F(SystemTablesTest, DatabasesSystemTable) {
 }
 
 TEST_F(SystemTablesTest, DatabasesSystemTableDeletedOwner) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "SysCat can not be directly manipulated in distributed mode";
+  }
   switchToAdmin();
   const std::string user_name{"test_user_3"};
   createUser(user_name);
   const std::string db_name{"test_db_1"};
   sql("CREATE DATABASE " + db_name + " (owner = '" + user_name + "');");
   auto user_id = getUserId(user_name);
-  dropUser(user_name);
+
+  dropUserUnchecked(user_name);
 
   loginInformationSchema();
+  // Need to make sure we reset the syscat user_ids before we drop dbs.
+
   // clang-format off
   sqlAndCompareResult("SELECT * FROM databases ORDER BY database_name;",
                       {{getDbId(shared::kDefaultDbName), shared::kDefaultDbName,
@@ -3451,6 +3472,10 @@ TEST_F(SystemTablesTest, PermissionsSystemTable) {
 }
 
 TEST_F(SystemTablesTest, PermissionsSystemTableDeletedOwner) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "SysCat can not be directly manipulated in distributed mode";
+  }
+
   // clang-format off
   sqlAndCompareResult("SELECT * FROM permissions ORDER BY role_name;",
                       {{"test_user_1", True, i(2), shared::kInfoSchemaDbName,
@@ -3468,9 +3493,11 @@ TEST_F(SystemTablesTest, PermissionsSystemTableDeletedOwner) {
   sql("CREATE DATABASE " + db_name + " (owner = '" + user_name + "');");
   sql("GRANT ACCESS ON DATABASE " + db_name + " to test_user_1;");
   auto user_id = getUserId(user_name);
-  dropUser(user_name);
+
+  dropUserUnchecked(user_name);
 
   loginInformationSchema();
+
   // clang-format off
   sqlAndCompareResult("SELECT * FROM permissions ORDER BY role_name, object_name;",
                       {{"test_user_1", True, getDbId(shared::kInfoSchemaDbName),

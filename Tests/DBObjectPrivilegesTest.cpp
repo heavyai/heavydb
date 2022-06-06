@@ -1856,6 +1856,11 @@ TEST(DBObject, LoadKey) {
   ASSERT_NO_THROW(dbo3.loadKey(*cat));
 }
 
+// TODO(Misiu): The SysCatalog tests (and possibly more) have unspecified pre-conditions
+// that can cause failures if not identified (such as pre-existing users or dbs).  We
+// should clean these tests up to guarantee preconditions and postconditions.  Namely, we
+// should check that there are no extra dbs/users at the start of the test suite, and make
+// sure users/dbs we intend to create do not exist prior to the test.
 TEST(SysCatalog, RenameUser_Basic) {
   using namespace std::string_literals;
   auto username = "chuck"s;
@@ -1863,17 +1868,20 @@ TEST(SysCatalog, RenameUser_Basic) {
   auto rename_successful = false;
 
   ScopeGuard scope_guard = [&rename_successful] {
+    run_ddl_statement("DROP DATABASE nydb;");
     if (rename_successful) {
       run_ddl_statement("DROP USER cryingchuck;");
     } else {
       run_ddl_statement("DROP USER chuck");
     }
-    run_ddl_statement("DROP DATABASE nydb;");
   };
 
   Catalog_Namespace::UserMetadata user_meta;
   auto username_out(username);
   auto database_out(database_name);
+
+  run_ddl_statement("DROP DATABASE IF EXISTS nydb");
+  run_ddl_statement("DROP USER IF EXISTS chuck");
 
   run_ddl_statement("CREATE USER chuck (password='password');");
   run_ddl_statement("CREATE DATABASE nydb (owner='chuck');");
@@ -1943,12 +1951,12 @@ TEST(SysCatalog, RenameUser_AlreadyLoggedInQueryAfterRename) {
   auto rename_successful = false;
 
   ScopeGuard scope_guard = [&rename_successful] {
+    run_ddl_statement("DROP DATABASE nydb;");
     if (rename_successful) {
       run_ddl_statement("DROP USER cryingchuck;");
     } else {
       run_ddl_statement("DROP USER chuck");
     }
-    run_ddl_statement("DROP DATABASE nydb;");
   };
 
   Catalog_Namespace::UserMetadata user_meta;
@@ -2009,12 +2017,12 @@ TEST(SysCatalog, RenameUser_ReloginWithOldName) {
   auto rename_successful = false;
 
   ScopeGuard scope_guard = [&rename_successful] {
+    run_ddl_statement("DROP DATABASE nydb;");
     if (rename_successful) {
       run_ddl_statement("DROP USER cryingchuck;");
     } else {
       run_ddl_statement("DROP USER chuck");
     }
-    run_ddl_statement("DROP DATABASE nydb;");
   };
 
   Catalog_Namespace::UserMetadata user_meta;
@@ -2062,6 +2070,7 @@ TEST(SysCatalog, RenameUser_CheckPrivilegeTransfer) {
   auto rename_successful = false;
 
   ScopeGuard s = [&rename_successful] {
+    run_ddl_statement("DROP DATABASE Ferengi;");
     run_ddl_statement("DROP USER rom;");
 
     if (rename_successful) {
@@ -2069,7 +2078,6 @@ TEST(SysCatalog, RenameUser_CheckPrivilegeTransfer) {
     } else {
       run_ddl_statement("DROP USER quark;");
     }
-    run_ddl_statement("DROP DATABASE Ferengi;");
   };
 
   EXPECT_NO_THROW(
@@ -2135,10 +2143,9 @@ TEST(SysCatalog, RenameUser_SuperUserRenameCheck) {
   using namespace std::string_literals;
 
   ScopeGuard s = [] {
+    run_ddl_statement("DROP DATABASE Ferengi;");
     run_ddl_statement("DROP USER rom;");
     run_ddl_statement("DROP USER quark;");
-
-    run_ddl_statement("DROP DATABASE Ferengi;");
   };
 
   run_ddl_statement("CREATE USER quark (password='password',is_super='false');");
@@ -2228,11 +2235,11 @@ TEST(SysCatalog, RenameDatabase_WrongUser) {
   auto database_name = "fnews"s;
 
   ScopeGuard scope_gard = [] {
-    run_ddl_statement("DROP USER reader;");
-    run_ddl_statement("DROP USER jkyle;");
-
     run_ddl_statement("DROP DATABASE qworg;");
     run_ddl_statement("DROP DATABASE fnews;");
+
+    run_ddl_statement("DROP USER reader;");
+    run_ddl_statement("DROP USER jkyle;");
   };
 
   run_ddl_statement("CREATE USER reader (password='rabbit');");
@@ -2276,14 +2283,14 @@ TEST(SysCatalog, RenameDatabase_SuperUser) {
   auto rename_successful = false;
 
   ScopeGuard scope_guard = [&rename_successful] {
-    run_ddl_statement("DROP USER maurypovich;");
-    run_ddl_statement("DROP USER thefather;");
     run_ddl_statement("DROP DATABASE trouble;");
     if (rename_successful) {
       run_ddl_statement("DROP DATABASE nachovater;");
     } else {
       run_ddl_statement("DROP DATABASE paternitydb;");
     }
+    run_ddl_statement("DROP USER maurypovich;");
+    run_ddl_statement("DROP USER thefather;");
   };
 
   run_ddl_statement("CREATE USER maurypovich (password='password');");
@@ -2392,14 +2399,13 @@ TEST(SysCatalog, RenameDatabase_PrivsTest) {
   auto rename_successful = false;
 
   ScopeGuard s = [&rename_successful] {
-    run_ddl_statement("DROP USER quark;");
-    run_ddl_statement("DROP USER rom;");
-
     if (rename_successful) {
       run_ddl_statement("DROP DATABASE grandnagus;");
     } else {
       run_ddl_statement("DROP DATABASE Ferengi;");
     }
+    run_ddl_statement("DROP USER quark;");
+    run_ddl_statement("DROP USER rom;");
   };
 
   run_ddl_statement("CREATE USER quark (password='password',is_super='false');");
@@ -2463,8 +2469,8 @@ TEST(SysCatalog, DropDatabase_ByOwner) {
   const std::string dbname = "thedb";
 
   ScopeGuard scope_guard = [&] {
-    run_ddl_statement("DROP USER IF EXISTS " + username + ";");
     run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
+    run_ddl_statement("DROP USER IF EXISTS " + username + ";");
   };
 
   run_ddl_statement("CREATE USER " + username + " (password='password');");
@@ -2492,9 +2498,9 @@ TEST(SysCatalog, DropDatabase_ByNonOwner) {
   const std::string dbname = "thedb";
 
   ScopeGuard scope_guard = [&] {
+    run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
     run_ddl_statement("DROP USER IF EXISTS " + username + ";");
     run_ddl_statement("DROP USER IF EXISTS not" + username + ";");
-    run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
   };
 
   run_ddl_statement("CREATE USER " + username + " (password='password');");
@@ -2524,9 +2530,9 @@ TEST(SysCatalog, DropDatabase_BySuperUser) {
   const std::string dbname = "thedb";
 
   ScopeGuard scope_guard = [&] {
+    run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
     run_ddl_statement("DROP USER IF EXISTS " + username + ";");
     run_ddl_statement("DROP USER IF EXISTS not" + username + ";");
-    run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
   };
 
   run_ddl_statement("CREATE USER " + username + " (password='password');");
@@ -4442,6 +4448,68 @@ TEST(SyncUserWithRemoteProvider, IS_SUPER) {
   u2 = sys_cat.getUser("u2");
   ASSERT_TRUE(u2);
   ASSERT_EQ(u2->isSuper, false);
+}
+
+class CreateDropDatabaseTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("drop database if exists orphan_db");
+    sql("drop user if exists test_admin_user");
+  }
+  void TearDown() override {
+    loginAdmin();
+    sql("drop database if exists orphan_db");
+    sql("drop user if exists test_admin_user");
+    DBHandlerTestFixture::TearDown();
+  }
+  // Drops a user while skipping the normal checks (like if the user owns a db).  Used to
+  // create db states that are no longer valid used for legacy testsing.
+  static void dropUserUnchecked(const std::string& user_name) {
+    CHECK(!isDistributedMode()) << "Can't manipulate syscat directly in distributed mode";
+    auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
+    Catalog_Namespace::UserMetadata user;
+    CHECK(sys_cat.getMetadataForUser(user_name, user));
+    sys_cat.dropUserUnchecked(user_name, user);
+  }
+};
+
+TEST_F(CreateDropDatabaseTest, OrphanedDB) {
+  sql("create user test_admin_user (password = 'password', is_super = 'true')");
+  login("test_admin_user", "password");
+  sql("create database orphan_db");
+  login("admin", "HyperInteractive", "orphan_db");
+  sqlAndCompareResult("show databases",
+                      {{"heavyai", "admin"},
+                       {"information_schema", "admin"},
+                       {"orphan_db", "test_admin_user"}});
+  sql("create table temp (i int)");
+  queryAndAssertException(
+      "drop user test_admin_user",
+      "Cannot drop user. User test_admin_user owns database orphan_db");
+}
+
+// We should no longer be able to generate an orphaned db, but in case we do, we should
+// still be able to show it as a super-user.
+TEST_F(CreateDropDatabaseTest, LegacyOrphanedDB) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Can not manipulate syscat directly in distributed mode.";
+  }
+  sql("create user test_admin_user (password = 'password', is_super = 'true')");
+  login("test_admin_user", "password");
+  sql("create database orphan_db");
+  login("admin", "HyperInteractive", "orphan_db");
+  sqlAndCompareResult("show databases",
+                      {{"heavyai", "admin"},
+                       {"information_schema", "admin"},
+                       {"orphan_db", "test_admin_user"}});
+
+  dropUserUnchecked("test_admin_user");
+
+  sqlAndCompareResult("show databases",
+                      {{"heavyai", "admin"},
+                       {"information_schema", "admin"},
+                       {"orphan_db", "<DELETED>"}});
 }
 
 int main(int argc, char* argv[]) {

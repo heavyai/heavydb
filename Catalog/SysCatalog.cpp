@@ -1016,15 +1016,10 @@ UserMetadata SysCatalog::createUser(const string& name,
   return *u;
 }
 
-void SysCatalog::dropUser(const string& name) {
+// Can be invoked directly to drop users without sanitization for testing.
+void SysCatalog::dropUserUnchecked(const std::string& name, const UserMetadata& user) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
-
-  UserMetadata user;
-  if (!getMetadataForUser(name, user)) {
-    std::string const loggable = g_log_user_id ? std::string("") : name + ' ';
-    throw runtime_error("Cannot drop user. User " + loggable + "does not exist.");
-  }
 
   // Temporary user.
   if (user.is_temporary) {
@@ -1057,6 +1052,28 @@ void SysCatalog::dropUser(const string& name) {
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
+}
+
+void SysCatalog::dropUser(const string& name) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+
+  std::string const loggable = g_log_user_id ? std::string("") : name + ' ';
+
+  UserMetadata user;
+  if (!getMetadataForUser(name, user)) {
+    throw runtime_error("Cannot drop user. User " + loggable + "does not exist.");
+  }
+
+  auto dbs = getAllDBMetadata();
+  for (const auto& db : dbs) {
+    if (db.dbOwner == user.userId) {
+      throw runtime_error("Cannot drop user. User " + loggable + "owns database " +
+                          db.dbName);
+    }
+  }
+
+  dropUserUnchecked(name, user);
 }
 
 std::vector<Catalog*> SysCatalog::getCatalogsForAllDbs() {
@@ -1745,6 +1762,11 @@ DBSummaryList SysCatalog::getDatabaseListForUser(const UserMetadata& user) {
   std::list<Catalog_Namespace::DBMetadata> db_list = getAllDBMetadata();
   std::list<Catalog_Namespace::UserMetadata> user_list = getAllUserMetadata();
 
+  std::map<int32_t, std::string> user_id_to_name_map;
+  for (const auto& user : user_list) {
+    user_id_to_name_map.emplace(user.userId, user.userName);
+  }
+
   for (auto d : db_list) {
     DBObject dbObject(d.dbName, DatabaseDBObjectType);
     dbObject.loadKey();
@@ -1752,11 +1774,11 @@ DBSummaryList SysCatalog::getDatabaseListForUser(const UserMetadata& user) {
     if (!checkPrivileges(user, std::vector<DBObject>{dbObject})) {
       continue;
     }
-    for (auto u : user_list) {
-      if (d.dbOwner == u.userId) {
-        ret.emplace_back(DBSummary{d.dbName, u.userName});
-        break;
-      }
+
+    if (auto it = user_id_to_name_map.find(d.dbOwner); it != user_id_to_name_map.end()) {
+      ret.emplace_back(DBSummary{d.dbName, it->second});
+    } else {
+      ret.emplace_back(DBSummary{d.dbName, "<DELETED>"});
     }
   }
 

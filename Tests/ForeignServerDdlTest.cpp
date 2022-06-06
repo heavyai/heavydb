@@ -282,6 +282,7 @@ class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
   static void SetUpTestSuite() {
     createDBHandler();
     switchToAdmin();
+    dropTestUser();
     createTestUser();
   }
 
