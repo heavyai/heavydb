@@ -192,11 +192,12 @@ int main(int argc, char* argv[]) {
     LOG(ERROR) << e.what();
   }
 
-  Catalog_Namespace::SysCatalog::instance().dropUser(TEST_USER);
   Catalog_Namespace::DBMetadata db_metadata;
   if (Catalog_Namespace::SysCatalog::instance().getMetadataForDB(TEST_DB, db_metadata)) {
     Catalog_Namespace::SysCatalog::instance().dropDatabase(db_metadata);
   }
+  Catalog_Namespace::SysCatalog::instance().dropUser(TEST_USER);
+
   QR::reset();
   return err;
 }

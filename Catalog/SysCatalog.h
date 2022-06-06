@@ -189,6 +189,9 @@ class SysCatalog : private CommonFileOperations {
                           UserAlterations alts,
                           bool is_temporary);
   void dropUser(const std::string& name);
+  // TODO(Misiu): This method is needed only by tests and should otherwise be private and
+  // accessed via friendship.
+  void dropUserUnchecked(const std::string& name, const UserMetadata& user);
   UserMetadata alterUser(std::string const& name, UserAlterations alts);
   void renameUser(std::string const& old_name, std::string const& new_name);
   void createDatabase(const std::string& dbname, int owner);
