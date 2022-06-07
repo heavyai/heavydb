@@ -33,7 +33,9 @@
 #include "StringDictionary/StringDictionary.h"
 #include "StringDictionary/StringDictionaryProxy.h"
 
+#ifndef _MSC_VER
 #include <x86intrin.h>
+#endif
 
 #ifdef HAVE_TBB
 #include <tbb/parallel_for.h>
@@ -103,19 +105,25 @@ inline int64_t map_str_id_to_outer_dict(const int64_t inner_elem,
   return outer_id;
 }
 
+#if defined(_MSC_VER)
+#define DEFAULT_TARGET_ATTRIBUTE
+#else
+#define DEFAULT_TARGET_ATTRIBUTE __attribute__((target("default")))
+#endif
+
 /**
  * For non-AVX512 we are fine with auto-vectorized loop.
  */
-__attribute__((target("default"))) void init_hash_join_buff_cpu(
-    int32_t* groups_buffer,
-    const int32_t invalid_slot_val,
-    const int64_t start,
-    const int64_t end) {
+DEFAULT_TARGET_ATTRIBUTE void init_hash_join_buff_cpu(int32_t* groups_buffer,
+                                                      const int32_t invalid_slot_val,
+                                                      const int64_t start,
+                                                      const int64_t end) {
   for (int64_t pos = start; pos < end; ++pos) {
     groups_buffer[pos] = invalid_slot_val;
   }
 }
 
+#ifndef _MSC_VER
 /**
  * For AVX512 target we perform manual vectorization to use non-temporal stores.
  */
@@ -163,6 +171,7 @@ init_hash_join_buff_cpu(int32_t* groups_buffer,
     groups_buffer[pos++] = invalid_slot_val;
   }
 }
+#endif
 
 }  // namespace
 #endif

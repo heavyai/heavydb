@@ -1696,6 +1696,12 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub_hoisted_literals(
 #endif
 }
 
+#ifndef _MSC_VER
+#define RESTRICT __restrict__
+#else
+#define RESTRICT
+#endif
+
 extern "C" RUNTIME_EXPORT void multifrag_query_hoisted_literals(
     const int8_t GLOBAL_ADDR_SPACE* GLOBAL_ADDR_SPACE* GLOBAL_ADDR_SPACE* col_buffers,
     GLOBAL_ADDR_SPACE const uint64_t* __restrict__ num_fragments,

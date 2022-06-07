@@ -20,7 +20,9 @@
 #include "../Logger/Logger.h"
 #include "funcannotations.h"
 
+#ifndef _MSC_VER
 #include <cassert>
+#endif
 #include <cfloat>
 #include <cstdint>
 #include <cstdlib>

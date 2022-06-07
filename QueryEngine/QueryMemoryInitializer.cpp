@@ -27,7 +27,10 @@
 
 #include <Shared/checked_alloc.h>
 #include <ThirdParty/robin_hood.h>
+
+#ifndef _MSC_VER
 #include <x86intrin.h>
+#endif
 
 // 8 GB, the limit of perfect hash group by under normal conditions
 int64_t g_bitmap_memory_limit{8LL * 1000 * 1000 * 1000};
@@ -170,6 +173,7 @@ size_t get_num_rows_for_vec_sample(const size_t row_size) {
   return 1 << (vp2 - p2);
 }
 
+#ifndef _MSC_VER
 // It's assumed sample has 64 extra bytes to handle alignment.
 __attribute__((target("avx512f"))) void spread_vec_sample(int8_t* dst,
                                                           const size_t dst_size,
@@ -202,11 +206,18 @@ __attribute__((target("avx512f"))) void spread_vec_sample(int8_t* dst,
   // Scalar tail.
   memcpy(align_dst, align_sample, rem_scalar);
 }
+#endif  // _MSC_VER
 
-__attribute__((target("default"))) void spread_vec_sample(int8_t* dst,
-                                                          const size_t dst_size,
-                                                          const int8_t* sample_ptr,
-                                                          const size_t sample_size) {
+#if defined(_MSC_VER)
+#define DEFAULT_TARGET_ATTRIBUTE
+#else
+#define DEFAULT_TARGET_ATTRIBUTE __attribute__((target("default")))
+#endif
+
+DEFAULT_TARGET_ATTRIBUTE void spread_vec_sample(int8_t* dst,
+                                                const size_t dst_size,
+                                                const int8_t* sample_ptr,
+                                                const size_t sample_size) {
   size_t rem = dst_size;
   while (rem >= sample_size) {
     memcpy(dst, sample_ptr, sample_size);

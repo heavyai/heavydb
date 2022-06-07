@@ -19,7 +19,6 @@
 
 #include "Shared/funcannotations.h"
 
-#include <cassert>
 #include <cstdint>
 #include <ctime>
 #include <limits>

@@ -132,28 +132,36 @@ size_t gen_null_bitmap_default(uint8_t* dst,
   return null_count;
 }
 
-size_t __attribute__((target("default")))
-gen_null_bitmap_8(uint8_t* dst, const uint8_t* src, size_t size, const uint8_t null_val) {
+#if defined(_MSC_VER)
+#define DEFAULT_TARGET_ATTRIBUTE
+#else
+#define DEFAULT_TARGET_ATTRIBUTE __attribute__((target("default")))
+#endif
+
+size_t DEFAULT_TARGET_ATTRIBUTE gen_null_bitmap_8(uint8_t* dst,
+                                                  const uint8_t* src,
+                                                  size_t size,
+                                                  const uint8_t null_val) {
   return gen_null_bitmap_default<uint8_t>(dst, src, size, null_val);
 }
 
-size_t __attribute__((target("default"))) gen_null_bitmap_16(uint8_t* dst,
-                                                             const uint16_t* src,
-                                                             size_t size,
-                                                             const uint16_t null_val) {
+size_t DEFAULT_TARGET_ATTRIBUTE gen_null_bitmap_16(uint8_t* dst,
+                                                   const uint16_t* src,
+                                                   size_t size,
+                                                   const uint16_t null_val) {
   return gen_null_bitmap_default<uint16_t>(dst, src, size, null_val);
 }
 
-size_t __attribute__((target("default"))) gen_null_bitmap_32(uint8_t* dst,
-                                                             const uint32_t* src,
-                                                             size_t size,
-                                                             const uint32_t null_val) {
+size_t DEFAULT_TARGET_ATTRIBUTE gen_null_bitmap_32(uint8_t* dst,
+                                                   const uint32_t* src,
+                                                   size_t size,
+                                                   const uint32_t null_val) {
   return gen_null_bitmap_default<uint32_t>(dst, src, size, null_val);
 }
 
-size_t __attribute__((target("default"))) gen_null_bitmap_64(uint8_t* dst,
-                                                             const uint64_t* src,
-                                                             size_t size,
-                                                             const uint64_t null_val) {
+size_t DEFAULT_TARGET_ATTRIBUTE gen_null_bitmap_64(uint8_t* dst,
+                                                   const uint64_t* src,
+                                                   size_t size,
+                                                   const uint64_t null_val) {
   return gen_null_bitmap_default<uint64_t>(dst, src, size, null_val);
 }

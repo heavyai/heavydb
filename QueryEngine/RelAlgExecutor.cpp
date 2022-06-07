@@ -403,7 +403,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     executor_->resetInterrupt();
   }
 
-  auto acquire_execute_mutex = [](Executor * executor) -> auto {
+  auto acquire_execute_mutex = [](Executor * executor) -> auto{
     auto ret = executor->acquireExecuteMutex();
     return ret;
   };
@@ -2410,46 +2410,37 @@ struct ErrorInfo {
 ErrorInfo getErrorDescription(const int32_t error_code) {
   switch (error_code) {
     case Executor::ERR_DIV_BY_ZERO:
-      return {.code = "ERR_DIV_BY_ZERO", .description = "Division by zero"};
+      return {"ERR_DIV_BY_ZERO", "Division by zero"};
     case Executor::ERR_OUT_OF_GPU_MEM:
-      return {.code = "ERR_OUT_OF_GPU_MEM",
-              .description =
-                  "Query couldn't keep the entire working set of columns in GPU memory"};
+      return {"ERR_OUT_OF_GPU_MEM",
+
+              "Query couldn't keep the entire working set of columns in GPU memory"};
     case Executor::ERR_UNSUPPORTED_SELF_JOIN:
-      return {.code = "ERR_UNSUPPORTED_SELF_JOIN",
-              .description = "Self joins not supported yet"};
+      return {"ERR_UNSUPPORTED_SELF_JOIN", "Self joins not supported yet"};
     case Executor::ERR_OUT_OF_CPU_MEM:
-      return {.code = "ERR_OUT_OF_CPU_MEM",
-              .description = "Not enough host memory to execute the query"};
+      return {"ERR_OUT_OF_CPU_MEM", "Not enough host memory to execute the query"};
     case Executor::ERR_OVERFLOW_OR_UNDERFLOW:
-      return {.code = "ERR_OVERFLOW_OR_UNDERFLOW",
-              .description = "Overflow or underflow"};
+      return {"ERR_OVERFLOW_OR_UNDERFLOW", "Overflow or underflow"};
     case Executor::ERR_OUT_OF_TIME:
-      return {.code = "ERR_OUT_OF_TIME",
-              .description = "Query execution has exceeded the time limit"};
+      return {"ERR_OUT_OF_TIME", "Query execution has exceeded the time limit"};
     case Executor::ERR_INTERRUPTED:
-      return {.code = "ERR_INTERRUPTED",
-              .description = "Query execution has been interrupted"};
+      return {"ERR_INTERRUPTED", "Query execution has been interrupted"};
     case Executor::ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED:
-      return {
-          .code = "ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED",
-          .description = "Columnar conversion not supported for variable length types"};
+      return {"ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED",
+              "Columnar conversion not supported for variable length types"};
     case Executor::ERR_TOO_MANY_LITERALS:
-      return {.code = "ERR_TOO_MANY_LITERALS",
-              .description = "Too many literals in the query"};
+      return {"ERR_TOO_MANY_LITERALS", "Too many literals in the query"};
     case Executor::ERR_STRING_CONST_IN_RESULTSET:
-      return {.code = "ERR_STRING_CONST_IN_RESULTSET",
-              .description =
-                  "NONE ENCODED String types are not supported as input result set."};
+      return {"ERR_STRING_CONST_IN_RESULTSET",
+              "NONE ENCODED String types are not supported as input result set."};
     case Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES:
-      return {.code = "ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES",
-              .description = "Multiple distinct values encountered"};
+      return {"ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES",
+              "Multiple distinct values encountered"};
     case Executor::ERR_WIDTH_BUCKET_INVALID_ARGUMENT:
-      return {.code = "ERR_WIDTH_BUCKET_INVALID_ARGUMENT",
-              .description =
-                  "Arguments of WIDTH_BUCKET function does not satisfy the condition"};
+      return {"ERR_WIDTH_BUCKET_INVALID_ARGUMENT",
+              "Arguments of WIDTH_BUCKET function does not satisfy the condition"};
     default:
-      return {.code = nullptr, .description = nullptr};
+      return {nullptr, nullptr};
   }
 }
 

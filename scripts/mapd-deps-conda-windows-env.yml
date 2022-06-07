@@ -1,0 +1,45 @@
+#  To create environment, execute:
+#     conda env create -f scripts/mapd-deps-conda-dev-env.yml
+#
+#  To activate:
+#     conda activate omnisci-dev
+#
+#  To build OmnisciDB for development:
+#     scripts/conda/build-install-all.sh
+
+#  TODO: autogenerate this file from conda/meta.yaml requirements
+name: omnisci-dev
+channels:
+  - conda-forge
+
+dependencies:
+  - ccache
+  - arrow-cpp  5.0
+  - pyarrow    5.0
+  - pandas     1.3.3
+  - llvmdev     12.*
+  - openjdk     8.*
+  - tbb-devel
+  - cython
+  - make
+  - fmt
+  - maven
+  - boost-cpp   1.76.*
+  - clangdev   12.*
+  - llvm
+  - double-conversion
+  - snappy
+  - gflags
+  - glog
+  - libiconv
+  #- ncurses
+  - openssl
+  - xz
+  - bzip2
+  - zlib
+  - ittapi
+  - pytest
+  - cmake   3.23.2
+  # when cuda is enabled, install also
+  #- arrow-cpp=0.16=*cuda
+  #- binutils

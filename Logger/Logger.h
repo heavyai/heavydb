@@ -161,7 +161,11 @@ struct LogShutdown {
 };
 
 // Optional pointer to function to call on LOG(FATAL).
+#ifdef _MSC_VER  // https://docs.microsoft.com/en-us/previous-versions/visualstudio/visual-studio-2010/7c38yzs9(v=vs.100)
+using FatalFunc = void (*)();
+#else
 using FatalFunc = void (*)() noexcept;
+#endif
 void set_once_fatal_func(FatalFunc);
 
 // Lifetime of Logger is each call to LOG().
