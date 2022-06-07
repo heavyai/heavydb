@@ -952,16 +952,24 @@ FragmentInfo* InsertOrderFragmenter::createNewFragment(
   for (map<int, Chunk>::iterator colMapIt = columnMap_.begin();
        colMapIt != columnMap_.end();
        ++colMapIt) {
+    auto& chunk = colMapIt->second;
+    if (memoryLevel == Data_Namespace::MemoryLevel::CPU_LEVEL) {
+      /* At the end of this function chunks from the previous fragment become 'rolled
+       * off', temporaray tables will lose reference to any 'rolled off' chunks and are
+       * not able to unpin these chunks. Keep reference to 'rolled off' chunks and unpin
+       * at ~InsertOrderFragmenter, chunks wrapped by unique_ptr to avoid extraneous
+       * ~Chunk calls with temporary chunks.*/
+      tracked_in_memory_chunks_.emplace_back(std::make_unique<Chunk_NS::Chunk>(chunk));
+    }
     ChunkKey chunkKey = chunkKeyPrefix_;
-    chunkKey.push_back(colMapIt->second.getColumnDesc()->columnId);
+    chunkKey.push_back(chunk.getColumnDesc()->columnId);
     chunkKey.push_back(maxFragmentId_);
-    colMapIt->second.createChunkBuffer(
-        dataMgr_,
-        chunkKey,
-        memoryLevel,
-        newFragmentInfo->deviceIds[static_cast<int>(memoryLevel)],
-        pageSize_);
-    colMapIt->second.initEncoder();
+    chunk.createChunkBuffer(dataMgr_,
+                            chunkKey,
+                            memoryLevel,
+                            newFragmentInfo->deviceIds[static_cast<int>(memoryLevel)],
+                            pageSize_);
+    chunk.initEncoder();
   }
 
   heavyai::lock_guard<heavyai::shared_mutex> writeLock(fragmentInfoMutex_);

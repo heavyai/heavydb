@@ -720,6 +720,78 @@ TEST_F(LoadTableTest, ArrowDefaultStr) {
   sqlAndCompareResult("SELECT * FROM load_test", {{i(1), "default str", "nns"}});
 }
 
+namespace {
+struct MemorySignature {
+  Buffer_Namespace::MemStatus memStatus_;
+  Data_Namespace::MemoryLevel memLevel_;
+};
+
+void assert_memory_signature_for_chunk_key_prefix(
+    const std::shared_ptr<DataMgr> data_mgr,
+    const ChunkKey& table_chunk_key,
+    const std::vector<MemorySignature>& expected_memory_signature) {
+  std::vector<MemorySignature> actual_memory_signature;
+
+  for (int memory_level = Data_Namespace::MemoryLevel::DISK_LEVEL;
+       memory_level <= Data_Namespace::MemoryLevel::GPU_LEVEL;
+       ++memory_level) {
+    auto memory_level_info_vec =
+        data_mgr->getMemoryInfo(static_cast<Data_Namespace::MemoryLevel>(memory_level));
+    for (auto memory_info : memory_level_info_vec) {
+      for (auto memory_data : memory_info.nodeMemoryData) {
+        if (has_table_prefix(memory_data.chunk_key) &&
+            in_same_table(table_chunk_key, memory_data.chunk_key)) {
+          actual_memory_signature.push_back(
+              {memory_data.memStatus,
+               static_cast<Data_Namespace::MemoryLevel>(memory_level)});
+        }
+      }
+    }
+  }
+
+  ASSERT_EQ(actual_memory_signature.size(), expected_memory_signature.size());
+  for (size_t i = 0; i < actual_memory_signature.size(); i++) {
+    ASSERT_EQ(actual_memory_signature[i].memStatus_,
+              expected_memory_signature[i].memStatus_);
+    ASSERT_EQ(actual_memory_signature[i].memLevel_,
+              expected_memory_signature[i].memLevel_);
+  }
+}
+}  // namespace
+
+TEST_F(LoadTableTest, TemporaryTableChunkBufferCleanup) {
+  // create a temporary table with multiple fragments to make that we're not leaking any
+  // buffers on fragment creation
+  sql("drop table if exists temp_table_cleanup_chuk_buffers;");
+  sql("create temporary table temp_table_cleanup_chuk_buffers (i1 integer) with "
+      "(FRAGMENT_SIZE=1);");
+  sql("insert into temp_table_cleanup_chuk_buffers values(1);");
+  sql("insert into temp_table_cleanup_chuk_buffers values(2);");
+
+  auto [db_handler, _] = getDbHandlerAndSessionId();
+  auto data_mgr = db_handler->data_mgr_;
+  auto tb_id = getCatalog().getTableId("temp_table_cleanup_chuk_buffers");
+  CHECK(tb_id.has_value());
+  ChunkKey table_chunk_key;
+  table_chunk_key.push_back(getCatalog().getDatabaseId());
+  table_chunk_key.push_back(tb_id.value());
+  CHECK(has_table_prefix(table_chunk_key));
+
+  assert_memory_signature_for_chunk_key_prefix(
+      data_mgr,
+      table_chunk_key,
+      {{Buffer_Namespace::MemStatus::USED, MemoryLevel::CPU_LEVEL},
+       {Buffer_Namespace::MemStatus::USED, MemoryLevel::CPU_LEVEL},
+       {Buffer_Namespace::MemStatus::USED, MemoryLevel::CPU_LEVEL},
+       {Buffer_Namespace::MemStatus::USED, MemoryLevel::CPU_LEVEL}});
+
+  sql("drop table temp_table_cleanup_chuk_buffers;");
+  assert_memory_signature_for_chunk_key_prefix(
+      data_mgr,
+      table_chunk_key,
+      {{Buffer_Namespace::MemStatus::FREE, MemoryLevel::CPU_LEVEL}});
+}
+
 class ImportGeoTableTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {

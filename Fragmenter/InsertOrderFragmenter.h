@@ -192,6 +192,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   std::vector<int> chunkKeyPrefix_;
   std::map<int, Chunk_NS::Chunk>
       columnMap_; /**< stores a map of column id to metadata about that column */
+  std::vector<std::unique_ptr<Chunk_NS::Chunk>> tracked_in_memory_chunks_;
   std::deque<std::unique_ptr<FragmentInfo>>
       fragmentInfoVec_; /**< data about each fragment stored - id and number of rows */
   // int currentInsertBufferFragmentId_;
