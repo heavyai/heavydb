@@ -340,6 +340,29 @@ TEST_F(NoCatalogSqlTest, MultipleCalciteMultipleThreads) {
   }
 }
 
+TEST(CalciteReinitTest, SingleThread) {
+  auto schema_provider = std::make_shared<TestSchemaProvider>();
+  for (int i = 0; i < 10; ++i) {
+    auto calcite = std::make_shared<CalciteJNI>(schema_provider, "");
+    auto query_ra = calcite->process("admin", "test_db", "SELECT 1;");
+    CHECK(query_ra.find("LogicalValues") != std::string::npos);
+    CHECK(query_ra.find("LogicalProject") != std::string::npos);
+  }
+}
+
+TEST(CalciteReinitTest, MultipleThreads) {
+  auto schema_provider = std::make_shared<TestSchemaProvider>();
+  for (int i = 0; i < 10; ++i) {
+    auto f = std::async(std::launch::async, [schema_provider]() {
+      auto calcite = std::make_shared<CalciteJNI>(schema_provider, "");
+      auto query_ra = calcite->process("admin", "test_db", "SELECT 1;");
+      CHECK(query_ra.find("LogicalValues") != std::string::npos);
+      CHECK(query_ra.find("LogicalProject") != std::string::npos);
+    });
+    f.wait();
+  }
+}
+
 void parse_cli_args_to_globals(int argc, char* argv[]) {
   namespace po = boost::program_options;
 

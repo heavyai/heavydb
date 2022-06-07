@@ -82,13 +82,8 @@ class JVM {
   };
 
   static std::shared_ptr<JVM> getInstance(size_t max_mem_mb) {
-    std::lock_guard<std::mutex> l(init_mutex_);
-    auto res = instance_.lock();
-    if (!res) {
-      res = createJVM(max_mem_mb);
-      instance_ = res;
-    }
-    return res;
+    std::call_once(instance_init_flag_, [=] { instance_ = createJVM(max_mem_mb); });
+    return instance_;
   }
 
   // Get JNI environment for the current thread.
@@ -152,12 +147,12 @@ class JVM {
 
   JavaVM* jvm_;
 
-  static std::weak_ptr<JVM> instance_;
-  static std::mutex init_mutex_;
+  static std::once_flag instance_init_flag_;
+  static std::shared_ptr<JVM> instance_;
 };
 
-std::weak_ptr<JVM> JVM::instance_;
-std::mutex JVM::init_mutex_;
+std::once_flag JVM::instance_init_flag_;
+std::shared_ptr<JVM> JVM::instance_;
 
 }  // namespace
 
