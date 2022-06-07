@@ -1087,6 +1087,18 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
           throw std::runtime_error("max_reject option must be an integer.");
         }
         copy_params.max_reject = int_literal->get_intval();
+      } else if (boost::iequals(*p->get_name(), "max_import_batch_row_count")) {
+        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+        if (int_literal == nullptr) {
+          throw std::runtime_error(
+              "max_import_batch_row_count option must be an integer.");
+        }
+        if (int_literal->get_intval() <= 0) {
+          throw std::runtime_error(
+              "max_import_batch_row_count option must be a positive integer (greater "
+              "than 0).");
+        }
+        copy_params.max_import_batch_row_count = int_literal->get_intval();
       } else if (boost::iequals(*p->get_name(), "buffer_size")) {
         const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
         if (int_literal == nullptr) {
