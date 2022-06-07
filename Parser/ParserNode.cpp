@@ -3404,8 +3404,11 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   // view optimization
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
-  const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+      false,
+      g_enable_watchdog,
+      {},
+      Catalog_Namespace::SysCatalog::instance().isAggregator());
   const auto query_ra = calcite_mgr
                             ->process(query_state_proxy,
                                       pg_shim(select_stmt),
@@ -3469,8 +3472,11 @@ size_t LocalQueryConnector::getOuterFragmentCount(QueryStateProxy query_state_pr
   // view optimization
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
-  const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+      false,
+      g_enable_watchdog,
+      {},
+      Catalog_Namespace::SysCatalog::instance().isAggregator());
   const auto query_ra = calcite_mgr
                             ->process(query_state_proxy,
                                       pg_shim(sql_query_string),
@@ -4121,8 +4127,8 @@ lockmgr::LockedTableDescriptors acquire_query_table_locks(
   auto calcite_mgr = catalog.getCalciteMgr();
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
-  const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+      false, g_enable_watchdog, {}, SysCatalog::instance().isAggregator());
   const auto result = calcite_mgr->process(query_state_proxy,
                                            pg_shim(query_str),
                                            calciteQueryParsingOption,
@@ -6382,8 +6388,8 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session,
   // this now also ensures that access permissions are checked
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
-  const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+      false, g_enable_watchdog, {}, SysCatalog::instance().isAggregator());
   calcite_mgr->process(query_state->createQueryStateProxy(),
                        query_after_shim,
                        calciteQueryParsingOption,
@@ -6876,8 +6882,11 @@ std::unique_ptr<Parser::Stmt> create_stmt_for_query(
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
-  const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+      false,
+      g_enable_watchdog,
+      {},
+      Catalog_Namespace::SysCatalog::instance().isAggregator());
   const auto query_json = calcite_mgr
                               ->process(query_state->createQueryStateProxy(),
                                         pg_shim(queryStr),

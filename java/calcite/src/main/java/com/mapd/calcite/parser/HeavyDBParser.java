@@ -162,7 +162,7 @@ public final class HeavyDBParser {
   };
 
   private HeavyDBPlanner getPlanner() {
-    return getPlanner(true, false);
+    return getPlanner(true, false, false);
   }
 
   private boolean isCorrelated(SqlNode expression) {
@@ -223,8 +223,9 @@ public final class HeavyDBParser {
     }
   }
 
-  private HeavyDBPlanner getPlanner(
-          final boolean allowSubQueryExpansion, final boolean isWatchdogEnabled) {
+  private HeavyDBPlanner getPlanner(final boolean allowSubQueryExpansion,
+          final boolean isWatchdogEnabled,
+          final boolean isDistributedMode) {
     HeavyDBUser user = new HeavyDBUser(dbUser.getUser(),
             dbUser.getSession(),
             dbUser.getDB(),
@@ -250,23 +251,41 @@ public final class HeavyDBParser {
             // aggregate logic. And the added project is the source of the exception when
             // its underlying table is large. Thus, we enable IN-clause decorrelation
             // under watchdog iff we explicitly have correlated join in IN-clause
-            if (isWatchdogEnabled) {
-              boolean foundExpression = false;
-              if (expression instanceof SqlCall) {
-                SqlCall outerSelectCall = (SqlCall) expression;
-                if (outerSelectCall.getOperandList().size() == 2) {
-                  // if IN clause is correlated, its second operand of corresponding
-                  // expression is SELECT clause which indicates a correlated subquery.
-                  // Here, an expression "f.val IN (SELECT ...)" has two operands.
-                  // Since we have interest in its subquery, so try to check whether
-                  // the second operand, i.e., call.getOperandList().get(1)
-                  // is a type of SqlSelect and also is correlated.
-                  if (outerSelectCall.getOperandList().get(1) instanceof SqlSelect) {
-                    // the below checking logic is to allow IN-clause decorrelation
-                    // if it has hash joinable IN expression without correlated join
-                    // i.e., SELECT ... WHERE a.intVal IN (SELECT b.intVal FROM b) ...;
-                    SqlSelect innerSelectCall =
-                            (SqlSelect) outerSelectCall.getOperandList().get(1);
+            if (expression instanceof SqlCall) {
+              SqlCall outerSelectCall = (SqlCall) expression;
+              if (outerSelectCall.getOperandList().size() == 2) {
+                // if IN clause is correlated, its second operand of corresponding
+                // expression is SELECT clause which indicates a correlated subquery.
+                // Here, an expression "f.val IN (SELECT ...)" has two operands.
+                // Since we have interest in its subquery, so try to check whether
+                // the second operand, i.e., call.getOperandList().get(1)
+                // is a type of SqlSelect and also is correlated.
+                if (outerSelectCall.getOperandList().get(1) instanceof SqlSelect) {
+                  // the below checking logic is to allow IN-clause decorrelation
+                  // if it has hash joinable IN expression without correlated join
+                  // i.e., SELECT ... WHERE a.intVal IN (SELECT b.intVal FROM b) ...;
+                  SqlSelect innerSelectCall =
+                          (SqlSelect) outerSelectCall.getOperandList().get(1);
+                  if (innerSelectCall.hasWhere()) {
+                    // IN-clause may have correlated join within subquery's WHERE clause
+                    // i.e., f.val IN (SELECT r.val FROM R r WHERE f.val2 = r.val2)
+                    // then we have to deccorrelate the IN-clause
+                    JoinOperatorChecker joinOperatorChecker = new JoinOperatorChecker();
+                    if (joinOperatorChecker.containsExpression(
+                                innerSelectCall.getWhere())) {
+                      return true;
+                    }
+                  }
+                  if (isDistributedMode) {
+                    // we temporarily disable IN-clause decorrelation in dist mode
+                    // todo (yoonmin) : relax this in dist mode when available
+                    return false;
+                  }
+                  boolean hasHashJoinableExpression = false;
+                  if (isWatchdogEnabled) {
+                    // when watchdog is enabled, we try to selectively allow decorrelation
+                    // iff IN-expression is between two columns that both are hash
+                    // joinable
                     Map<String, String> tableAliasMap = new HashMap<>();
                     if (root instanceof SqlSelect) {
                       tableAliasFinder(((SqlSelect) root).getFrom(), tableAliasMap);
@@ -293,28 +312,17 @@ public final class HeavyDBParser {
                                         ImmutableList.of(innerTableName,
                                                 innerColIdentifier.names.get(1)),
                                         mc)) {
-                          return true;
+                          hasHashJoinableExpression = true;
                         }
                       }
                     }
-                    if (innerSelectCall.hasWhere()) {
-                      // IN-clause may have correlated join within subquery's WHERE clause
-                      // i.e., f.val IN (SELECT r.val FROM R r WHERE f.val2 = r.val2)
-                      // then we have to deccorrelate the IN-clause
-                      JoinOperatorChecker joinOperatorChecker = new JoinOperatorChecker();
-                      if (joinOperatorChecker.containsExpression(
-                                  innerSelectCall.getWhere())) {
-                        return true;
-                      }
+                    if (!hasHashJoinableExpression) {
+                      return false;
                     }
                   }
                 }
               }
-              if (!foundExpression) {
-                return false;
-              }
             }
-
             if (root instanceof SqlSelect) {
               SqlSelect selectCall = (SqlSelect) root;
               if (new ExpressionListedInSelectClauseChecker().containsExpression(
@@ -421,7 +429,8 @@ public final class HeavyDBParser {
   public Pair<String, SqlIdentifierCapturer> process(
           String sql, final HeavyDBParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
-    final HeavyDBPlanner planner = getPlanner(true, parserOptions.isWatchdogEnabled());
+    final HeavyDBPlanner planner = getPlanner(
+            true, parserOptions.isWatchdogEnabled(), parserOptions.isDistributedMode());
     final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
     String res = processSql(sqlNode, parserOptions);
     SqlIdentifierCapturer capture = captureIdentifiers(sqlNode);
@@ -432,7 +441,8 @@ public final class HeavyDBParser {
           String query, final HeavyDBParserOptions parserOptions) throws IOException {
     HeavyDBSchema schema =
             new HeavyDBSchema(dataDir, this, dbPort, dbUser, sock_transport_properties);
-    HeavyDBPlanner planner = getPlanner(true, parserOptions.isWatchdogEnabled());
+    HeavyDBPlanner planner = getPlanner(
+            true, parserOptions.isWatchdogEnabled(), parserOptions.isDistributedMode());
 
     planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
     RelRoot optRel = planner.buildRATreeAndPerformQueryOptimization(query, schema);
@@ -444,7 +454,8 @@ public final class HeavyDBParser {
           throws SqlParseException, ValidationException, RelConversionException {
     callCount++;
 
-    final HeavyDBPlanner planner = getPlanner(true, parserOptions.isWatchdogEnabled());
+    final HeavyDBPlanner planner = getPlanner(
+            true, parserOptions.isWatchdogEnabled(), parserOptions.isDistributedMode());
     final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
 
     return processSql(sqlNode, parserOptions);
@@ -463,7 +474,8 @@ public final class HeavyDBParser {
       return sqlNode.toString();
     }
 
-    final HeavyDBPlanner planner = getPlanner(true, parserOptions.isWatchdogEnabled());
+    final HeavyDBPlanner planner = getPlanner(
+            true, parserOptions.isWatchdogEnabled(), parserOptions.isDistributedMode());
     planner.advanceToValidate();
 
     final RelRoot sqlRel = convertSqlToRelNode(sqlNode, planner, parserOptions);
@@ -765,8 +777,9 @@ public final class HeavyDBParser {
               null);
     }
 
-    HeavyDBPlanner planner =
-            getPlanner(allowSubqueryDecorrelation, parserOptions.isWatchdogEnabled());
+    HeavyDBPlanner planner = getPlanner(allowSubqueryDecorrelation,
+            parserOptions.isWatchdogEnabled(),
+            parserOptions.isDistributedMode());
     SqlNode node = null;
     try {
       node = planner.parse(select.toSqlString(CalciteSqlDialect.DEFAULT).getSql());
@@ -836,7 +849,8 @@ public final class HeavyDBParser {
 
   RelRoot queryToRelNode(final String sql, final HeavyDBParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
-    final HeavyDBPlanner planner = getPlanner(true, parserOptions.isWatchdogEnabled());
+    final HeavyDBPlanner planner = getPlanner(
+            true, parserOptions.isWatchdogEnabled(), parserOptions.isDistributedMode());
     final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
     return convertSqlToRelNode(sqlNode, planner, parserOptions);
   }
@@ -886,8 +900,9 @@ public final class HeavyDBParser {
       // close original planner
       planner.close();
       // create a new one
-      planner = getPlanner(
-              allowCorrelatedSubQueryExpansion, parserOptions.isWatchdogEnabled());
+      planner = getPlanner(allowCorrelatedSubQueryExpansion,
+              parserOptions.isWatchdogEnabled(),
+              parserOptions.isDistributedMode());
       node = parseSql(
               node.toSqlString(CalciteSqlDialect.DEFAULT).toString(), false, planner);
     }
@@ -1670,7 +1685,9 @@ public final class HeavyDBParser {
 
     public boolean isEqualityJoinOperator(SqlBasicCall basicCall) {
       if (null != basicCall) {
-        if (basicCall.operands.length == 2 && basicCall.getKind() == SqlKind.EQUALS
+        if (basicCall.operands.length == 2
+                && (basicCall.getKind() == SqlKind.EQUALS
+                        || basicCall.getKind() == SqlKind.NOT_EQUALS)
                 && basicCall.operand(0) instanceof SqlIdentifier
                 && basicCall.operand(1) instanceof SqlIdentifier) {
           return true;

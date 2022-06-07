@@ -96,7 +96,7 @@ TEST_F(ViewObject, BasicTest) {
   auto calciteQueryParsingOption =
       g_calcite->getCalciteQueryParsingOption(true, false, true);
   auto calciteOptimizationOption =
-      g_calcite->getCalciteOptimizationOption(false, false, {});
+      g_calcite->getCalciteOptimizationOption(false, false, {}, false);
 
   auto qs1 = QR::create_query_state(session, "select i1 from table1");
   TPlanResult tresult = g_calcite->process(qs1->createQueryStateProxy(),
@@ -146,7 +146,7 @@ TEST_F(ViewObject, Joins) {
   auto calciteQueryParsingOption =
       g_calcite->getCalciteQueryParsingOption(true, false, true);
   auto calciteOptimizationOption =
-      g_calcite->getCalciteOptimizationOption(true, false, {});
+      g_calcite->getCalciteOptimizationOption(true, false, {}, false);
 
   {
     auto qs1 = QR::create_query_state(

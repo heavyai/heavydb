@@ -200,7 +200,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
               queryParsingOption.legacy_syntax,
               queryParsingOption.is_explain,
               optimizationOption.is_view_optimize,
-              optimizationOption.enable_watchdog);
+              optimizationOption.enable_watchdog,
+              optimizationOption.distributed_mode);
 
       if (!buildRATreeFromRAString) {
         Pair<String, SqlIdentifierCapturer> res;

@@ -6667,7 +6667,8 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
         auto optimization_option = calcite_->getCalciteOptimizationOption(
             system_parameters.enable_calcite_view_optimize,
             g_enable_watchdog,
-            filter_push_down_info);
+            filter_push_down_info,
+            Catalog_Namespace::SysCatalog::instance().isAggregator());
 
         result = calcite_->process(timer.createQueryStateProxy(),
                                    legacy_syntax_ ? pg_shim(actual_query) : actual_query,

@@ -30,17 +30,20 @@ public final class HeavyDBParserOptions {
   private boolean isExplain;
   private boolean isViewOptimizeEnabled;
   private boolean isWatchdogEnabled;
+  private boolean distributedMode;
 
   public HeavyDBParserOptions(List<FilterPushDownInfo> inFilterPushDownInfo,
           boolean inLegacySyntax,
           boolean inIsExplain,
           boolean inIsViewOptimzeEnabled,
-          boolean inWatchdogEnabled) {
+          boolean inWatchdogEnabled,
+          boolean inDistributedMode) {
     filterPushDownInfo = inFilterPushDownInfo;
     legacySyntax = inLegacySyntax;
     isExplain = inIsExplain;
     isViewOptimizeEnabled = inIsViewOptimzeEnabled;
     isWatchdogEnabled = inWatchdogEnabled;
+    distributedMode = inDistributedMode;
   }
 
   public HeavyDBParserOptions() {
@@ -49,6 +52,7 @@ public final class HeavyDBParserOptions {
     isExplain = false;
     isViewOptimizeEnabled = false;
     isWatchdogEnabled = false;
+    distributedMode = false;
   }
 
   /**
@@ -126,5 +130,13 @@ public final class HeavyDBParserOptions {
 
   public void setWatchdogEnabled(boolean isWatchdogEnabled) {
     this.isWatchdogEnabled = isWatchdogEnabled;
+  }
+
+  public boolean isDistributedMode() {
+    return distributedMode;
+  }
+
+  public void setDistributedMode(boolean distributedMode) {
+    this.distributedMode = distributedMode;
   }
 }

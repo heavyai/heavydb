@@ -1387,7 +1387,7 @@ TEST_F(ViewObject, CalciteViewResolution) {
   auto calciteQueryParsingOption =
       g_calcite->getCalciteQueryParsingOption(true, false, true);
   auto calciteOptimizationOption =
-      g_calcite->getCalciteOptimizationOption(false, false, {});
+      g_calcite->getCalciteOptimizationOption(false, false, {}, false);
 
   auto query_state1 =
       QR::create_query_state(QR::get()->getSession(), "select * from bill_table");
