@@ -196,6 +196,7 @@ class SysCatalog : private CommonFileOperations {
   void renameUser(std::string const& old_name, std::string const& new_name);
   void createDatabase(const std::string& dbname, int owner);
   void renameDatabase(std::string const& old_name, std::string const& new_name);
+  void changeDatabaseOwner(std::string const& dbname, const std::string& new_owner);
   void dropDatabase(const DBMetadata& db);
   std::optional<UserMetadata> getUser(std::string const& uname) {
     if (UserMetadata user; getMetadataForUser(uname, user)) {
@@ -417,6 +418,18 @@ class SysCatalog : private CommonFileOperations {
   bool checkPasswordForUserImpl(const std::string& passwd,
                                 std::string& name,
                                 UserMetadata& user);
+
+  struct UpdateQuery {
+    std::string query;
+    std::vector<std::string> text_params;
+  };
+  using UpdateQueries = std::list<UpdateQuery>;
+  void runUpdateQueriesAndChangeOwnership(const UserMetadata& new_owner,
+                                          const UserMetadata& previous_owner,
+                                          DBObject object,
+                                          const Catalog_Namespace::Catalog& catalog,
+                                          const UpdateQueries& update_queries,
+                                          bool revoke_privileges = true);
 
   // Here go functions not wrapped into transactions (necessary for nested calls)
   void grantDefaultPrivilegesToRole_unsafe(const std::string& name, bool issuper);

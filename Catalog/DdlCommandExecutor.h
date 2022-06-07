@@ -278,6 +278,18 @@ class DropPolicyCommand : public DdlCommand {
   ExecutionResult execute(bool read_only_mode) override;
 };
 
+class AlterDatabaseCommand : public DdlCommand {
+ public:
+  AlterDatabaseCommand(const DdlCommandData& ddl_data,
+                       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+
+ private:
+  void changeOwner();
+  void rename();
+};
+
 class ReassignOwnedCommand : public DdlCommand {
  public:
   ReassignOwnedCommand(const DdlCommandData& ddl_data,

@@ -393,10 +393,6 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
     auto drop_db_stmt = Parser::DropDBStmt(extractPayload(*ddl_data_));
     drop_db_stmt.execute(*session_ptr_, read_only_mode);
     return result;
-  } else if (ddl_command_ == "RENAME_DB") {
-    auto rename_db_stmt = Parser::RenameDBStmt(extractPayload(*ddl_data_));
-    rename_db_stmt.execute(*session_ptr_, read_only_mode);
-    return result;
   } else if (ddl_command_ == "CREATE_USER") {
     auto create_user_stmt = Parser::CreateUserStmt(extractPayload(*ddl_data_));
     create_user_stmt.execute(*session_ptr_, read_only_mode);
@@ -491,6 +487,8 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
         read_only_mode);
   } else if (ddl_command_ == "ALTER_SERVER") {
     result = AlterForeignServerCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
+  } else if (ddl_command_ == "ALTER_DATABASE") {
+    result = AlterDatabaseCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "ALTER_FOREIGN_TABLE") {
     result = AlterForeignTableCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_DISK_CACHE_USAGE") {
@@ -571,7 +569,7 @@ DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails()
       ddl_command_ == "DUMP_TABLE" || ddl_command_ == "RESTORE_TABLE" ||
       ddl_command_ == "OPTIMIZE_TABLE" || ddl_command_ == "CREATE_VIEW" ||
       ddl_command_ == "DROP_VIEW" || ddl_command_ == "CREATE_DB" ||
-      ddl_command_ == "DROP_DB" || ddl_command_ == "RENAME_DB" ||
+      ddl_command_ == "DROP_DB" || ddl_command_ == "ALTER_DATABASE" ||
       ddl_command_ == "CREATE_USER" || ddl_command_ == "DROP_USER" ||
       ddl_command_ == "ALTER_USER" || ddl_command_ == "RENAME_USER" ||
       ddl_command_ == "CREATE_ROLE" || ddl_command_ == "DROP_ROLE" ||
@@ -722,6 +720,82 @@ ExecutionResult CreateForeignServerCommand::execute(bool read_only_mode) {
       current_user, server_name, ServerDBObjectType, catalog);
 
   return result;
+}
+
+AlterDatabaseCommand::AlterDatabaseCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<const Catalog_Namespace::SessionInfo> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data_);
+  CHECK(ddl_payload.HasMember("databaseName"));
+  CHECK(ddl_payload["databaseName"].IsString());
+  CHECK(ddl_payload.HasMember("alterType"));
+  CHECK(ddl_payload["alterType"].IsString());
+  if (ddl_payload["alterType"] == "RENAME_DATABASE") {
+    CHECK(ddl_payload.HasMember("newDatabaseName"));
+    CHECK(ddl_payload["newDatabaseName"].IsString());
+  } else if (ddl_payload["alterType"] == "CHANGE_OWNER") {
+    CHECK(ddl_payload.HasMember("newOwner"));
+    CHECK(ddl_payload["newOwner"].IsString());
+  } else {
+    UNREACHABLE();  // not-implemented alterType
+  }
+}
+
+ExecutionResult AlterDatabaseCommand::execute(bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("ALTER DATABASE invalid in read only mode.");
+  }
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::string databaseName = ddl_payload["databaseName"].GetString();
+
+  auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
+  Catalog_Namespace::DBMetadata db;
+  if (!sys_cat.getMetadataForDB(databaseName, db)) {
+    throw std::runtime_error("Database " + databaseName + " does not exists.");
+  }
+
+  std::string alter_type = ddl_payload["alterType"].GetString();
+  if (alter_type == "CHANGE_OWNER") {
+    changeOwner();
+  } else if (alter_type == "RENAME_DATABASE") {
+    rename();
+  }
+
+  return ExecutionResult();
+}
+
+void AlterDatabaseCommand::rename() {
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::string database_name = ddl_payload["databaseName"].GetString();
+  std::string new_database_name = ddl_payload["newDatabaseName"].GetString();
+
+  Catalog_Namespace::DBMetadata db;
+  CHECK(Catalog_Namespace::SysCatalog::instance().getMetadataForDB(database_name, db));
+
+  if (!session_ptr_->get_currentUser().isSuper &&
+      session_ptr_->get_currentUser().userId != db.dbOwner) {
+    throw std::runtime_error("Only a super user or the owner can rename the database.");
+  }
+
+  Catalog_Namespace::SysCatalog::instance().renameDatabase(database_name,
+                                                           new_database_name);
+}
+
+void AlterDatabaseCommand::changeOwner() {
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::string database_name = ddl_payload["databaseName"].GetString();
+  std::string new_owner = ddl_payload["newOwner"].GetString();
+  auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
+  if (!session_ptr_->get_currentUser().isSuper) {
+    throw std::runtime_error(
+        "Only a super user can change a database's owner. "
+        "Current user is not a super-user. "
+        "Database with name \"" +
+        database_name + "\" will not have owner changed.");
+  }
+
+  sys_cat.changeDatabaseOwner(database_name, new_owner);
 }
 
 AlterForeignServerCommand::AlterForeignServerCommand(

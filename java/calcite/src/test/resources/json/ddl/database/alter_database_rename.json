@@ -1,0 +1,10 @@
+{
+  "statementType": "DDL",
+  "payload": {
+    "newDatabaseName": "my_new_database",
+    "command": "ALTER_DATABASE",
+    "alterType": "RENAME_DATABASE",
+    "databaseName": "my_database"
+  }
+}
+

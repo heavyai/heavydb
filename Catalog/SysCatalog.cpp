@@ -1327,6 +1327,37 @@ void SysCatalog::renameUser(std::string const& old_name, std::string const& new_
   transaction_streamer(sqliteConnector_, success_handler, failure_handler, q1, q2, q3);
 }
 
+void SysCatalog::changeDatabaseOwner(std::string const& dbname,
+                                     const std::string& new_owner) {
+  using namespace std::string_literals;
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+
+  DBMetadata db;
+  if (!getMetadataForDB(dbname, db)) {
+    throw std::runtime_error("Database " + dbname + " does not exists.");
+  }
+
+  Catalog_Namespace::UserMetadata user, original_owner;
+  if (!getMetadataForUser(new_owner, user)) {
+    throw std::runtime_error("User with username \"" + new_owner + "\" does not exist. " +
+                             "Database with name \"" + dbname +
+                             "\" can not have owner changed.");
+  }
+
+  bool original_owner_exists = getMetadataForUserById(db.dbOwner, original_owner);
+  auto cat = getCatalog(db, true);
+  DBObject db_object(dbname, DBObjectType::DatabaseDBObjectType);
+  runUpdateQueriesAndChangeOwnership(
+      user,
+      original_owner,
+      db_object,
+      *cat,
+      UpdateQueries{{"UPDATE mapd_databases SET owner=?1 WHERE name=?2;",
+                     {std::to_string(user.userId), dbname}}},
+      original_owner_exists);
+}
+
 void SysCatalog::renameDatabase(std::string const& old_name,
                                 std::string const& new_name) {
   using namespace std::string_literals;
@@ -2056,11 +2087,13 @@ bool SysCatalog::verifyDBObjectOwnership(const UserMetadata& user,
   return false;
 }
 
-void SysCatalog::changeDBObjectOwnership(const UserMetadata& new_owner,
-                                         const UserMetadata& previous_owner,
-                                         DBObject object,
-                                         const Catalog_Namespace::Catalog& catalog,
-                                         bool revoke_privileges) {
+void SysCatalog::runUpdateQueriesAndChangeOwnership(
+    const UserMetadata& new_owner,
+    const UserMetadata& previous_owner,
+    DBObject object,
+    const Catalog_Namespace::Catalog& catalog,
+    const SysCatalog::UpdateQueries& update_queries,
+    bool revoke_privileges) {
   sys_write_lock write_lock(this);
   if (new_owner.is_temporary || previous_owner.is_temporary) {
     throw std::runtime_error("ownership change not allowed for temporary user(s)");
@@ -2095,6 +2128,13 @@ void SysCatalog::changeDBObjectOwnership(const UserMetadata& new_owner,
     if (!previous_owner.isSuper && revoke_privileges) {  // no need to revoke from suser
       revokeDBObjectPrivileges_unsafe(previous_owner.userName, object, catalog);
     }
+
+    // run update queries if specified
+    for (const auto& update_query : update_queries) {
+      sqliteConnector_->query_with_text_params(update_query.query,
+                                               update_query.text_params);
+    }
+
     auto object_key = object.getObjectKey();
     sqliteConnector_->query_with_text_params(
         "UPDATE mapd_object_permissions SET objectOwnerId = ? WHERE dbId = ? AND "
@@ -2121,6 +2161,15 @@ void SysCatalog::changeDBObjectOwnership(const UserMetadata& new_owner,
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
+}
+
+void SysCatalog::changeDBObjectOwnership(const UserMetadata& new_owner,
+                                         const UserMetadata& previous_owner,
+                                         DBObject object,
+                                         const Catalog_Namespace::Catalog& catalog,
+                                         bool revoke_privileges) {
+  runUpdateQueriesAndChangeOwnership(
+      new_owner, previous_owner, object, catalog, {}, revoke_privileges);
 }
 
 void SysCatalog::getDBObjectPrivileges(const std::string& granteeName,
