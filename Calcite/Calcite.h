@@ -101,7 +101,8 @@ class Calcite final {
   TOptimizationOption getCalciteOptimizationOption(
       bool is_view_optimize,
       bool enable_watchdog,
-      const std::vector<TFilterPushDownInfo>& filter_push_down_info);
+      const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+      bool distributed_mode);
 
  private:
   void init(const int db_port,

@@ -699,10 +699,12 @@ TQueryParsingOption Calcite::getCalciteQueryParsingOption(bool legacy_syntax,
 TOptimizationOption Calcite::getCalciteOptimizationOption(
     bool is_view_optimize,
     bool enable_watchdog,
-    const std::vector<TFilterPushDownInfo>& filter_push_down_info) {
+    const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+    bool distributed_mode) {
   TOptimizationOption optimization_option;
   optimization_option.filter_push_down_info = filter_push_down_info;
   optimization_option.is_view_optimize = is_view_optimize;
   optimization_option.enable_watchdog = enable_watchdog;
+  optimization_option.distributed_mode = distributed_mode;
   return optimization_option;
 }
