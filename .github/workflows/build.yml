@@ -4,6 +4,7 @@ on:
     inputs:
       cuda_compiler_version:
         type: string
+        default: None
     outputs:
       is_conda_updated:
         value: ${{ jobs.build.outputs.is_conda_updated }}
