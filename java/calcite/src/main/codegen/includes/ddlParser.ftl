@@ -919,26 +919,45 @@ SqlDdl SqlDropDB(Span s) :
 
 
 /*
- * Rename database using the following syntax:
+ * Alter an existing database using one of two currently supported variants with
+ * the following syntax:
  *
- * ALTER DATABASE <db_name> RENAME TO <new_db_name>
+ * ALTER DATABASE <database_name> OWNER TO <new_owner>
+ * ALTER DATABASE <database_name> RENAME TO <new_database_name>
  */
-SqlRenameDB SqlRenameDB(Span s) :
-{   
-    SqlIdentifier dbName;
-    SqlIdentifier newDBName;
+SqlDdl SqlAlterDatabase(Span s) :
+{
+    SqlAlterDatabase.Builder sqlAlterDatabaseBuilder = new SqlAlterDatabase.Builder();
+    SqlIdentifier databaseName;
+    SqlIdentifier sqlIdentifier;
 }
 {
-    <ALTER>
-    <DATABASE>
-    dbName = CompoundIdentifier()
-    <RENAME>
-    <TO>
-    newDBName = CompoundIdentifier()
+    <ALTER> <DATABASE>
+    databaseName=CompoundIdentifier()
     {
-        return new SqlRenameDB(s.end(this), dbName.toString(), newDBName.toString());
+        sqlAlterDatabaseBuilder.setDatabaseName(databaseName.toString());
+    }
+    (
+        <OWNER> <TO> 
+        sqlIdentifier=CompoundIdentifier()
+        { 
+            sqlAlterDatabaseBuilder.setNewOwner(sqlIdentifier.toString());
+            sqlAlterDatabaseBuilder.setAlterType(SqlAlterDatabase.AlterType.CHANGE_OWNER);
+        }
+    |
+        <RENAME> <TO>
+        sqlIdentifier=CompoundIdentifier()
+        {
+            sqlAlterDatabaseBuilder.setNewDatabaseName(sqlIdentifier.toString());
+            sqlAlterDatabaseBuilder.setAlterType(SqlAlterDatabase.AlterType.RENAME_DATABASE);
+        }
+    )
+    {
+        sqlAlterDatabaseBuilder.setPos(s.end(this));
+        return sqlAlterDatabaseBuilder.build();
     }
 }
+
 
 /*
  * Create a user using the following syntax:

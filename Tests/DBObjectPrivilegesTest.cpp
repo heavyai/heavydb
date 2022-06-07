@@ -288,6 +288,177 @@ class DashboardObject : public ::testing::Test {
   void TearDown() override { drop_dashboards(); }
 };
 
+class DatabaseDdlTest : public DBHandlerTestFixture {
+ protected:
+  static void SetUpTestSuite() {
+    switchToAdmin();
+    createTestUser();
+  }
+
+  static void TearDownTestSuite() { dropTestUser(); }
+
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    dropDatabase();
+  }
+
+  void TearDown() override {
+    switchToAdmin();
+    dropDatabase();
+    DBHandlerTestFixture::TearDown();
+  }
+
+  static void createTestUser() {
+    sql("CREATE USER test_user (password = 'test_pass');");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  }
+
+  static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
+
+  static void dropTestUserUnchecked() {
+    auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
+    UserMetadata test_user;
+    sys_catalog.getMetadataForUser("test_user", test_user);
+    sys_catalog.dropUserUnchecked("test_user", test_user);
+  }
+
+  void createTestDatabase(const std::optional<std::string>& user = std::nullopt) {
+    if (user.has_value()) {
+      sql("CREATE DATABASE test_database (owner='" + user.value() + "');");
+    } else {
+      sql("CREATE DATABASE test_database;");
+    }
+  }
+
+  void dropDatabase() {
+    sql("DROP DATABASE IF EXISTS test_database;");
+    sql("DROP DATABASE IF EXISTS test_database_new;");
+  }
+
+  void assertExpectedDatabase(const Catalog_Namespace::DBMetadata& expected = {},
+                              const std::string& database_name = "test_database") {
+    auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
+    Catalog_Namespace::DBMetadata db;
+    sys_catalog.getMetadataForDB(database_name, db);
+
+    ASSERT_EQ(expected.dbId, expected.dbId);
+    ASSERT_EQ(expected.dbName, expected.dbName);
+    ASSERT_EQ(expected.dbOwner, expected.dbOwner);
+  }
+
+  Catalog_Namespace::DBMetadata createDatabaseMetadata(const std::string& dbname,
+                                                       const int32_t owner_id) {
+    auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
+    Catalog_Namespace::DBMetadata db;
+    sys_catalog.getMetadataForDB(dbname, db);  // used to fill in the dbId
+    db.dbName = dbname;
+    db.dbOwner = getCurrentUser().userId;
+    return db;
+  }
+
+  static Catalog_Namespace::UserMetadata getTestUser() {
+    Catalog_Namespace::UserMetadata user;
+    auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
+    sys_catalog.getMetadataForUser("test_user", user);
+    return user;
+  }
+};
+
+TEST_F(DatabaseDdlTest, ChangeOwner) {
+  createTestDatabase();
+  assertExpectedDatabase(createDatabaseMetadata("test_database", shared::kRootUserId));
+  sql("ALTER DATABASE test_database OWNER TO test_user;");
+  assertExpectedDatabase(createDatabaseMetadata("test_database", getTestUser().userId));
+}
+
+TEST_F(DatabaseDdlTest, ChangeOwnerPreviousOwnerDropped) {
+  if (g_aggregator) {
+    LOG(INFO) << "Test not supported in distributed mode due to not being able to drop "
+                 "user unchecked.";
+    return;
+  }
+  createTestDatabase("test_user");
+  assertExpectedDatabase(createDatabaseMetadata("test_database", getTestUser().userId));
+  dropTestUserUnchecked();
+  sql("ALTER DATABASE test_database OWNER TO " + shared::kRootUsername + ";");
+  assertExpectedDatabase(createDatabaseMetadata("test_database", shared::kRootUserId));
+  createTestUser();
+}
+
+TEST_F(DatabaseDdlTest, ChangeOwnerLackingCredentials) {
+  createTestDatabase();
+  assertExpectedDatabase(createDatabaseMetadata("test_database", shared::kRootUserId));
+  login("test_user", "test_pass");
+  queryAndAssertException(
+      "ALTER DATABASE test_database OWNER TO test_user;",
+      "Only a super user can change a database's owner. Current user is not a "
+      "super-user. Database with name \"test_database\" will not have owner changed.");
+  assertExpectedDatabase(createDatabaseMetadata("test_database", shared::kRootUserId));
+}
+
+TEST_F(DatabaseDdlTest, ChangeOwnerAsOwner) {
+  createTestDatabase("test_user");
+  login("test_user", "test_pass");
+  assertExpectedDatabase(createDatabaseMetadata("test_database", getTestUser().userId));
+  queryAndAssertException(
+      "ALTER DATABASE test_database OWNER TO test_user;",
+      "Only a super user can change a database's owner. Current user is not a "
+      "super-user. Database with name \"test_database\" will not have owner changed.");
+  assertExpectedDatabase(createDatabaseMetadata("test_database", getTestUser().userId));
+}
+
+TEST_F(DatabaseDdlTest, ChangeOwnerNonExistantDatabase) {
+  queryAndAssertException("ALTER DATABASE test_database OWNER TO test_user;",
+                          "Database test_database does not exists.");
+}
+
+TEST_F(DatabaseDdlTest, ChangeOwnerNonExistantUser) {
+  createTestDatabase();
+  assertExpectedDatabase(createDatabaseMetadata("test_database", shared::kRootUserId));
+  queryAndAssertException("ALTER DATABASE test_database OWNER TO some_user;",
+                          "User with username \"some_user\" does not exist. Database "
+                          "with name \"test_database\" can not have owner changed.");
+}
+
+TEST_F(DatabaseDdlTest, Rename) {
+  createTestDatabase();
+  assertExpectedDatabase(createDatabaseMetadata("test_database", shared::kRootUserId));
+  sql("ALTER DATABASE test_database RENAME TO test_database_new;");
+  assertExpectedDatabase(
+      createDatabaseMetadata("test_database_new", shared::kRootUserId));
+}
+
+TEST_F(DatabaseDdlTest, RenameLackingCredentials) {
+  createTestDatabase();
+  assertExpectedDatabase(createDatabaseMetadata("test_database", shared::kRootUserId));
+  login("test_user", "test_pass");
+  queryAndAssertException("ALTER DATABASE test_database RENAME TO test_database_new;",
+                          "Only a super user or the owner can rename the database.");
+  assertExpectedDatabase(createDatabaseMetadata("test_database", shared::kRootUserId));
+}
+
+TEST_F(DatabaseDdlTest, RenameAsOwner) {
+  createTestDatabase("test_user");
+  login("test_user", "test_pass");
+  assertExpectedDatabase(createDatabaseMetadata("test_database", getTestUser().userId));
+  sql("ALTER DATABASE test_database RENAME TO test_database_new;");
+  assertExpectedDatabase(
+      createDatabaseMetadata("test_database_new", getTestUser().userId));
+}
+
+TEST_F(DatabaseDdlTest, RenameNonExistantDatabase) {
+  queryAndAssertException("ALTER DATABASE test_database OWNER TO test_user;",
+                          "Database test_database does not exists.");
+}
+
+TEST_F(DatabaseDdlTest, RenameToExistingDatabase) {
+  createTestDatabase();
+  assertExpectedDatabase(createDatabaseMetadata("test_database", shared::kRootUserId));
+  queryAndAssertException("ALTER DATABASE test_database RENAME TO test_database;",
+                          "Database test_database already exists.");
+  assertExpectedDatabase(createDatabaseMetadata("test_database", shared::kRootUserId));
+}
+
 struct ServerObject : public DBHandlerTestFixture {
   Users user_;
   Roles role_;

@@ -35,7 +35,6 @@ data: {
         "com.mapd.parser.extension.ddl.SqlDdlNodes"
         "com.mapd.parser.extension.ddl.SqlCreateDB"
         "com.mapd.parser.extension.ddl.SqlDropDB"
-        "com.mapd.parser.extension.ddl.SqlRenameDB"
         "com.mapd.parser.extension.ddl.SqlCreateTable"
         "com.mapd.parser.extension.ddl.SqlDropTable"
         "com.mapd.parser.extension.ddl.SqlRenameTable"
@@ -61,6 +60,7 @@ data: {
         "com.mapd.parser.extension.ddl.SqlShowRuntimeFunctions"
         "com.mapd.parser.extension.ddl.SqlAlterTable"
         "com.mapd.parser.extension.ddl.SqlAlterServer"
+        "com.mapd.parser.extension.ddl.SqlAlterDatabase"
         "com.mapd.parser.extension.ddl.SqlAlterForeignTable"
         "com.mapd.parser.extension.ddl.SqlCreateForeignTable"
         "com.mapd.parser.extension.ddl.SqlDropForeignTable"
@@ -542,13 +542,13 @@ data: {
       # all of the statements listed here have LOOKAHEAD(2) which is
       # hardcoded in Calcite's Parser.jj source code.
       statementParserMethods: [
+        "SqlAlterDatabase(span())"
         "SqlAlterTable(span())"
         "SqlAlterServer(span())"
         "SqlAlterForeignTable(span())"
         "SqlAlterUser(span())"
         "SqlReassignOwned(span())"
         "SqlRefreshForeignTables(span())"
-        "SqlRenameDB(span())"
         "SqlRenameTable(span())"
         "SqlInsertIntoTable(span())"
         "SqlKillQuery(span())"

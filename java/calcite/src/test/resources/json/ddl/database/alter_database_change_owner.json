@@ -1,0 +1,9 @@
+{
+  "payload": {
+    "databaseName": "test_database",
+    "newOwner": "Joe",
+    "command": "ALTER_DATABASE",
+    "alterType": "CHANGE_OWNER"
+  },
+  "statementType": "DDL"
+}
