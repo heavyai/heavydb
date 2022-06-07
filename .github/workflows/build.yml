@@ -15,9 +15,6 @@ jobs:
     env:
       cuda_compiler_version: ${{ inputs.cuda_compiler_version }}
       PREFIX: distr
-      workflow_conclusion: success
-        #      workflow_conclusion: completed
-        #workflow_conclusion: None
       CONDA_ENV: omnisci-dev
 
     outputs:
@@ -33,17 +30,18 @@ jobs:
           echo CONDA_ENV_PATH=$CONDA/envs/${{ env.CONDA_ENV }} >>$GITHUB_ENV
 
       - name: Download Conda
-        if: ${{ env.workflow_conclusion != 'None' }}
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: main.yml
-          workflow_conclusion: ${{ env.workflow_conclusion }}
+          branch: ${{ github.ref_name }}
+          workflow_conclusion: success
           name: ${{ env.RUN_STAMP }}-conda
           search_artifacts: true
+        continue-on-error: true
 
       - name: Unpack Conda
-        if: ${{ env.workflow_conclusion != 'None' }}
         run: |
+          test -f conda.tgz || exit 0
           mkdir -p ${{ env.CONDA_ENV_PATH }}
           tar -zxf conda.tgz -C ${{ env.CONDA_ENV_PATH }}
 
@@ -52,7 +50,7 @@ jobs:
           touch timestamp
           conda update conda
           conda env update -f scripts/mapd-deps-conda-dev-env.yml
-          test timestamp -ot ${{ env.CONDA_ENV_PATH }}/conda-meta/history || exit 0
+          test timestamp -nt ${{ env.CONDA_ENV_PATH }}/conda-meta/history && exit 0
           echo is_conda_updated=true >>$GITHUB_ENV
 
       - name: Create Conda archive
