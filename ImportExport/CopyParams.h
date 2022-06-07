@@ -70,6 +70,7 @@ struct CopyParams {
   size_t retry_wait;
   size_t batch_size;
   size_t buffer_size;
+  size_t max_import_batch_row_count;
   // geospatial params
   bool lonlat;
   EncodingType geo_coords_encoding;
@@ -124,6 +125,7 @@ struct CopyParams {
       , retry_wait(5)
       , batch_size(1000)
       , buffer_size(kImportFileBufferSize)
+      , max_import_batch_row_count(0)
       , lonlat(true)
       , geo_coords_encoding(kENCODING_GEOINT)
       , geo_coords_comp_param(32)
@@ -157,6 +159,7 @@ struct CopyParams {
       , retry_wait(wait)
       , batch_size(b)
       , buffer_size(kImportFileBufferSize)
+      , max_import_batch_row_count(0)
       , lonlat(true)
       , geo_coords_encoding(kENCODING_GEOINT)
       , geo_coords_comp_param(32)

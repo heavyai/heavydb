@@ -338,10 +338,51 @@ void ForeignDataImporter::finalize(
   finalize(parent_session_info, import_status, string_dictionaries);
 }
 
-// TODO: the `proxy_foreign_table_fragment_size_` parameter controls the amount
-// of data buffered in memory while importing using the `ForeignDataImporter`
-// may need to be tuned or exposed as configurable parameter
-int32_t ForeignDataImporter::proxy_foreign_table_fragment_size_ = 2000000;
+// This value is used only if it is non-zero; it is for testing purposes only
+int32_t ForeignDataImporter::proxy_foreign_table_fragment_size_ = 0;
+
+namespace {
+int32_t get_proxy_foreign_table_fragment_size(
+    const size_t max_import_batch_row_count,
+    const Catalog_Namespace::SessionInfo& parent_session_info,
+    const int32_t table_id) {
+  if (ForeignDataImporter::proxy_foreign_table_fragment_size_ != 0) {
+    return ForeignDataImporter::proxy_foreign_table_fragment_size_;
+  }
+
+  if (max_import_batch_row_count != 0) {
+    return max_import_batch_row_count;
+  }
+
+  // This number is chosen as a reasonable default value to reserve for
+  // intermediate buffering during import, it is about 2GB of memory. Note,
+  // depending on the acutal size of var len values, this heuristic target may
+  // be off.
+  const size_t max_buffer_byte_size = 2 * 1024UL * 1024UL * 1024UL;
+
+  auto& catalog = parent_session_info.getCatalog();
+
+  auto logical_columns =
+      catalog.getAllColumnMetadataForTable(table_id, false, false, false);
+
+  size_t row_byte_size = 0;
+  for (const auto& column_descriptor : logical_columns) {
+    auto type = column_descriptor->columnType;
+    size_t field_byte_length = 0;
+    if (type.is_varlen_indeed()) {
+      // use a heuristic of 25% of the maximum string length size, which is likely
+      // conservative
+      field_byte_length = std::max<size_t>(StringDictionary::MAX_STRLEN / 4, 1);
+    } else {
+      field_byte_length = type.get_size();
+    }
+    row_byte_size += field_byte_length;
+  }
+
+  return std::min<size_t>((max_buffer_byte_size + row_byte_size - 1) / row_byte_size,
+                          DEFAULT_FRAGMENT_ROWS);
+}
+}  // namespace
 
 ImportStatus ForeignDataImporter::importGeneral(
     const Catalog_Namespace::SessionInfo* session_info,
@@ -365,7 +406,12 @@ ImportStatus ForeignDataImporter::importGeneral(
                                                   current_user.userId);
 
     // set fragment size for proxy foreign table during import
-    foreign_table->maxFragRows = proxy_foreign_table_fragment_size_;
+    foreign_table->maxFragRows = get_proxy_foreign_table_fragment_size(
+        copy_params.max_import_batch_row_count, *session_info, table_->tableId);
+
+    // log for debugging purposes
+    LOG(INFO) << "Import fragment row count is " << foreign_table->maxFragRows
+              << " for table " << table_->tableName;
 
     auto data_wrapper =
         foreign_storage::ForeignDataWrapperFactory::createForGeneralImport(
@@ -389,7 +435,7 @@ ImportStatus ForeignDataImporter::importGeneral(
                                         copy_params,
                                         copy_from_source);
 
-  }  // this scope ensures that fsi proxy objects are destroyed proir to checkpointing
+  }  // this scope ensures that fsi proxy objects are destroyed prior to checkpoint
 
   finalize(*session_info, import_status, table_->tableId);
 
