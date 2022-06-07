@@ -47,7 +47,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: main.yml
-          workflow_conclusion: completed
+          workflow_conclusion: success
           name: ${{ env.RUN_STAMP }}-conda
           search_artifacts: true
 
