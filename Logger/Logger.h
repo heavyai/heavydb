@@ -208,10 +208,10 @@ inline bool fast_logging_check(Severity severity) {
 // These can be changed to for/while loops with slight performance degradation.
 
 #define SLOG(severity_or_channel)                                                     \
-  if (auto _omnisci_logger_severity_or_channel_ = severity_or_channel;                \
-      logger::fast_logging_check(_omnisci_logger_severity_or_channel_))               \
-    if (auto _omnisci_logger_ = logger::Logger(_omnisci_logger_severity_or_channel_)) \
-  _omnisci_logger_.stream(__FILE__, __LINE__)
+  if (auto _heavydb_logger_severity_or_channel_ = severity_or_channel;                \
+      logger::fast_logging_check(_heavydb_logger_severity_or_channel_))               \
+    if (auto _heavydb_logger_ = logger::Logger(_heavydb_logger_severity_or_channel_)) \
+  _heavydb_logger_.stream(__FILE__, __LINE__)
 
 #define LOG(tag) SLOG(logger::tag)
 
@@ -246,7 +246,7 @@ BOOST_NOINLINE std::string* check_failed(X const& x,
 }
 
 // Complexity comes from requirement that x and y be evaluated only once.
-#define OMINSCI_CHECKOP_FUNCTION(name, op)                          \
+#define HEAVYDB_CHECKOP_FUNCTION(name, op)                          \
   template <typename X, typename Y>                                 \
   inline std::string* Check##name(                                  \
       X const& x, Y const& y, char const* xstr, char const* ystr) { \
@@ -255,13 +255,13 @@ BOOST_NOINLINE std::string* check_failed(X const& x,
     else                                                            \
       return logger::check_failed(x, y, xstr, ystr, " " #op " ");   \
   }
-OMINSCI_CHECKOP_FUNCTION(EQ, ==)
-OMINSCI_CHECKOP_FUNCTION(NE, !=)
-OMINSCI_CHECKOP_FUNCTION(LT, <)
-OMINSCI_CHECKOP_FUNCTION(LE, <=)
-OMINSCI_CHECKOP_FUNCTION(GT, >)
-OMINSCI_CHECKOP_FUNCTION(GE, >=)
-#undef OMINSCI_CHECKOP_FUNCTION
+HEAVYDB_CHECKOP_FUNCTION(EQ, ==)
+HEAVYDB_CHECKOP_FUNCTION(NE, !=)
+HEAVYDB_CHECKOP_FUNCTION(LT, <)
+HEAVYDB_CHECKOP_FUNCTION(LE, <=)
+HEAVYDB_CHECKOP_FUNCTION(GT, >)
+HEAVYDB_CHECKOP_FUNCTION(GE, >=)
+#undef HEAVYDB_CHECKOP_FUNCTION
 
 #define UNREACHABLE() LOG(FATAL) << "UNREACHABLE "
 

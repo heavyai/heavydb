@@ -110,7 +110,7 @@ struct TableFunctionManager {
                            // before set_output_row_size because
                            // set_output_row_size allocates the output
                            // buffers
-    auto num_out_columns = get_ncols();
+    int32_t num_out_columns = get_ncols();
     CHECK_LE(0, index);
     CHECK_LT(index, num_out_columns);
     output_array_values_total_number_[index] = output_array_values_total_number;
