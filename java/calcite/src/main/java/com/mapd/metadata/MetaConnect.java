@@ -94,7 +94,7 @@ public class MetaConnect {
   private static final int KPOLYGON = 20;
   private static final int KMULTIPOLYGON = 21;
   private static final int KTINYINT = 22;
-  private static final int KMULTILINESTRING = 23;
+  private static final int KMULTILINESTRING = 30;
 
   private static final String CATALOG_DIR_NAME = "catalogs";
   private static volatile Map<String, Set<String>> DATABASE_TO_TABLES =
