@@ -2087,7 +2087,7 @@ TEST_P(DataWrapperSelectQueryTest, OutOfRange) {
         "ODBC column contains values that are outside the range of the "
         "database "
         "column type INTEGER. Min allowed value: -2147483647. Max allowed value: "
-        "2147483647. Encountered value: -2147483648.");
+        "2147483647. Encountered value: -2147483648. Foreign table: test_foreign_table");
   }
 }
 
@@ -2960,7 +2960,6 @@ TEST_P(AlteredSourceTest, FragmentRemoved) {
         "2 , obtained 1 bytes. Please use the \"REFRESH FOREIGN TABLES\" command on "
         "the foreign table if data source has been updated. Foreign table: "
         "test_foreign_table0";
-
   } else if (wrapper_type_ == "parquet") {
     expected_exception =
         "Unable to read from foreign data source, possible cause is an unexpected "
