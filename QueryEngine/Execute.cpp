@@ -3321,7 +3321,7 @@ int32_t Executor::executePlanWithoutGroupBy(
   if (render_info) {
     // TODO(adb): make sure that we either never get here in the CPU case, or if we do get
     // here, we are in non-insitu mode.
-    CHECK(render_info->useCudaBuffers() || !render_info->isPotentialInSituRender())
+    CHECK(render_info->useCudaBuffers() || !render_info->isInSitu())
         << "CUDA disabled rendering in the executePlanWithoutGroupBy query path is "
            "currently unsupported.";
     render_allocator_map_ptr = render_info->render_allocator_map_ptr.get();

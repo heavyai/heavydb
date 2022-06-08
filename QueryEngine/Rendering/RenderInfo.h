@@ -20,13 +20,14 @@
 #include "Catalog/Catalog.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/Rendering/RenderAllocator.h"
+#include "Shared/Rendering/InSituFlags.h"
 #include "Shared/Rendering/RenderQueryOptions.h"
 
 namespace QueryRenderer {
 struct RenderSessionKey;
 }
 
-class RenderInfo {
+class RenderInfo : public heavyai::InSituFlagsOwnerInterface {
  public:
   std::unique_ptr<RenderAllocatorMap> render_allocator_map_ptr;
   const ::QueryRenderer::RenderSessionKey& render_session_key;
@@ -40,17 +41,14 @@ class RenderInfo {
 
   RenderInfo(const ::QueryRenderer::RenderSessionKey& in_render_session_key,
              const RenderQueryOptions& in_render_query_opts,
-             const bool force_non_in_situ_data = false);
+             const heavyai::InSituFlags in_insitu_flags = heavyai::InSituFlags::kInSitu);
 
   const Catalog_Namespace::SessionInfo& getSessionInfo() const;
   std::shared_ptr<Catalog_Namespace::SessionInfo const> getSessionInfoPtr() const;
-  void setForceNonInSituData();
-  bool isForcedNonInSitu() const;
-  bool queryRanWithInSituData() const;
-  bool hasInSituData() const;
-  bool isInSituDataFlagUnset() const;
-  bool couldRunInSitu() const;
-  bool isPotentialInSituRender() const;
+
+  void forceNonInSitu();
+  void setNonInSitu();
+
   bool useCudaBuffers() const;
   void disableCudaBuffers();
 

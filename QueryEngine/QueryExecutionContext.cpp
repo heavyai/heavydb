@@ -58,7 +58,7 @@ QueryExecutionContext::QueryExecutionContext(
         data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   }
 
-  auto render_allocator_map = render_info && render_info->isPotentialInSituRender()
+  auto render_allocator_map = render_info && render_info->isInSitu()
                                   ? render_info->render_allocator_map_ptr.get()
                                   : nullptr;
   query_buffers_ = std::make_unique<QueryMemoryInitializer>(ra_exe_unit,

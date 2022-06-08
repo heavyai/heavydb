@@ -459,7 +459,7 @@ bool RelAlgExecutor::canUseResultsetCache(const ExecutionOptions& eo,
   return g_enable_data_recycler && g_use_query_resultset_cache && !g_cluster &&
          !validate_or_explain_query && !hasStepForUnion() &&
          !query_for_partial_outer_frag &&
-         (!render_info || (render_info && !render_info->isPotentialInSituRender()));
+         (!render_info || (render_info && !render_info->isInSitu()));
 }
 
 size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
@@ -575,7 +575,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
   auto co_cpu = CompilationOptions::makeCpuOnly(co);
 
   if (render_info) {
-    render_info->setForceNonInSituData();
+    render_info->forceNonInSitu();
   }
   return run_query(co_cpu);
 }
@@ -958,7 +958,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
       const auto co_cpu = CompilationOptions::makeCpuOnly(co);
       if (render_info && i == num_steps) {
         // only render on the last step
-        render_info->setForceNonInSituData();
+        render_info->forceNonInSitu();
       }
       executeRelAlgStep(seq,
                         i,
@@ -1019,7 +1019,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
       LOG(INFO) << "Retrying current query step " << i << " on CPU";
       const auto co_cpu = CompilationOptions::makeCpuOnly(co);
       if (render_info && i == interval.second - 1) {
-        render_info->setForceNonInSituData();
+        render_info->forceNonInSitu();
       }
       executeRelAlgStep(seq,
                         i,
@@ -3267,7 +3267,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
           use_speculative_top_n(source_work_unit.exe_unit,
                                 source_result.getRows()->getQueryMemDesc());
     }
-    if (render_info && render_info->isPotentialInSituRender()) {
+    if (render_info && render_info->isInSitu()) {
       return source_result;
     }
     if (source_result.isFilterPushDownEnabled()) {
@@ -3410,7 +3410,7 @@ bool can_output_columnar(const RelAlgExecutionUnit& ra_exe_unit,
   if (!is_projection(ra_exe_unit)) {
     return false;
   }
-  if (render_info && render_info->isPotentialInSituRender()) {
+  if (render_info && render_info->isInSitu()) {
     return false;
   }
   if (!ra_exe_unit.sort_info.order_entries.empty()) {
@@ -3578,7 +3578,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       return ExecutionResult(selected_filters, eo.find_push_down_candidates);
     }
   }
-  if (render_info && render_info->isPotentialInSituRender()) {
+  if (render_info && render_info->isInSitu()) {
     co.allow_lazy_fetch = false;
   }
   const auto body = work_unit.body;
@@ -3747,7 +3747,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   result.setQueueTime(queue_time_ms);
   if (render_info) {
     build_render_targets(*render_info, work_unit.exe_unit.target_exprs, targets_meta);
-    if (render_info->isPotentialInSituRender()) {
+    if (render_info->isInSitu()) {
       // return an empty result (with the same queue time, and zero render time)
       return {std::make_shared<ResultSet>(
                   queue_time_ms,
@@ -3802,7 +3802,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       } else if (hasStepForUnion()) {
         VLOG(1) << "Query hint \'keep_result\' is ignored since a query has union-(all) "
                    "operator";
-      } else if (render_info && render_info->isPotentialInSituRender()) {
+      } else if (render_info && render_info->isInSitu()) {
         VLOG(1) << "Query hint \'keep_result\' is ignored since a query is classified as "
                    "a in-situ rendering query";
       } else if (is_validate_or_explain_query(eo)) {
@@ -3974,7 +3974,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
   }
 
   if (render_info) {
-    render_info->setForceNonInSituData();
+    render_info->forceNonInSitu();
   }
 
   const auto co_cpu = CompilationOptions::makeCpuOnly(co);
