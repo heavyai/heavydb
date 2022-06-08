@@ -421,7 +421,7 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
       const auto rows =
           run_multiple_agg("SELECT * FROM geospatial_test WHERE id = 1", dt);
       const auto row = rows->getNextRow(false, false);
-      ASSERT_EQ(row.size(), size_t(12));
+      ASSERT_EQ(row.size(), size_t(14));
     }
 
     // Projection (return GeoTargetValue)
@@ -1381,7 +1381,7 @@ TEST_P(GeoSpatialNullTablesFixture, GeoWithNulls) {
             "SELECT COUNT(*) FROM geospatial_null_test WHERE ST_Distance(p,l) < 2.0;",
             dt)));
     ASSERT_EQ(
-        static_cast<int64_t>(1),
+        static_cast<int64_t>(2),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM geospatial_null_test WHERE ST_Distance(p,ml) < 2.0;",
             dt)));
