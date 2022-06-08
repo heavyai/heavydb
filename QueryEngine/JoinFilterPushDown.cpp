@@ -134,7 +134,8 @@ std::vector<PushedDownFilterInfo> RelAlgExecutor::selectFiltersToBePushedDown(
   if (to_gather_info_for_filter_selectivity(ti)) {
     for (const auto& candidate : all_push_down_candidates) {
       const auto selectivity = getFilterSelectivity(candidate.filter_expressions, co, eo);
-      if (selectivity.is_valid && selectivity.isFilterSelectiveEnough()) {
+      if (selectivity.is_valid &&
+          selectivity.isFilterSelectiveEnough(config_.opts.filter_pushdown)) {
         selective_push_down_candidates.push_back(candidate);
       }
     }

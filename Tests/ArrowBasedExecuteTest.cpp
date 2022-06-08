@@ -9548,13 +9548,13 @@ TEST_F(Select, Joins_DifferentIntegerTypes) {
 }
 
 TEST_F(Select, Joins_FilterPushDown) {
-  auto default_flag = g_enable_filter_push_down;
-  auto default_lower_frac = g_filter_push_down_low_frac;
+  auto default_flag = config().opts.filter_pushdown.enable;
+  auto default_lower_frac = config().opts.filter_pushdown.low_frac;
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     for (auto fpd : {std::make_pair(true, 1.0), std::make_pair(false, 0.0)}) {
-      g_enable_filter_push_down = fpd.first;
-      g_filter_push_down_low_frac = fpd.second;
+      config().opts.filter_pushdown.enable = fpd.first;
+      config().opts.filter_pushdown.low_frac = fpd.second;
       c("SELECT COUNT(*) FROM coalesce_cols_test_2 AS R, coalesce_cols_test_0 AS S "
         "WHERE R.y = S.y AND R.x > 2 AND (S.x > 1 OR S.y < 18);",
         dt);
@@ -9605,8 +9605,8 @@ TEST_F(Select, Joins_FilterPushDown) {
     }
   }
   // reloading default values
-  g_enable_filter_push_down = default_flag;
-  g_filter_push_down_low_frac = default_lower_frac;
+  config().opts.filter_pushdown.enable = default_flag;
+  config().opts.filter_pushdown.low_frac = default_lower_frac;
 }
 
 TEST_F(Select, Joins_InnerJoin_TwoTables) {

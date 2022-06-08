@@ -21,11 +21,7 @@
 
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/RangeTableIndexVisitor.h"
-
-extern bool g_enable_filter_push_down;
-extern float g_filter_push_down_low_frac;
-extern float g_filter_push_down_high_frac;
-extern size_t g_filter_push_down_passing_row_ubound;
+#include "Shared/Config.h"
 
 /**
  * The main purpose of this struct is to help identify the selected filters
@@ -54,15 +50,14 @@ struct FilterSelectivity {
   size_t getRowsPassingUpperBound() const {
     return fraction_passing * total_rows_upper_bound;
   }
-  bool isFilterSelectiveEnough() const {
-    auto low_frac_threshold = (g_filter_push_down_low_frac >= 0.0)
-                                  ? std::min(g_filter_push_down_low_frac, 1.0f)
-                                  : kFractionPassingLowThreshold;
-    auto high_frac_threshold = (g_filter_push_down_high_frac >= 0.0)
-                                   ? std::min(g_filter_push_down_high_frac, 1.0f)
+  bool isFilterSelectiveEnough(const FilterPushdownConfig& config) const {
+    auto low_frac_threshold = (config.low_frac >= 0.0) ? std::min(config.low_frac, 1.0f)
+                                                       : kFractionPassingLowThreshold;
+    auto high_frac_threshold = (config.high_frac >= 0.0)
+                                   ? std::min(config.high_frac, 1.0f)
                                    : kFractionPassingHighThreshold;
-    auto rows_ubound_threshold = (g_filter_push_down_passing_row_ubound > 0)
-                                     ? g_filter_push_down_passing_row_ubound
+    auto rows_ubound_threshold = (config.passing_row_ubound > 0)
+                                     ? config.passing_row_ubound
                                      : kRowsPassingUpperBoundThreshold;
     return (fraction_passing < low_frac_threshold ||
             (fraction_passing < high_frac_threshold &&

@@ -33,8 +33,20 @@ struct ExecutionConfig {
   CpuSubTasksConfig sub_tasks;
 };
 
+struct FilterPushdownConfig {
+  bool enable = false;
+  float low_frac = -1.0f;
+  float high_frac = -1.0f;
+  size_t passing_row_ubound = 0;
+};
+
+struct OptimizationsConfig {
+  FilterPushdownConfig filter_pushdown;
+};
+
 struct Config {
   ExecutionConfig exec;
+  OptimizationsConfig opts;
 };
 
 using ConfigPtr = std::shared_ptr<Config>;
