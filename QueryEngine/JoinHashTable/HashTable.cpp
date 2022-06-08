@@ -164,7 +164,7 @@ DecodedJoinHashBufferSet HashTable::toSet(
   auto i32ptr3 = reinterpret_cast<const int32_t*>(ptr3);
   auto i32ptr4 = reinterpret_cast<const int32_t*>(ptr4);
 
-  if (have_keys) {  // BaselineJoinHashTable or OverlapsJoinHashTable
+  if (have_keys) {  // BaselineJoinHashTable
     CHECK(key_component_width == 8 || key_component_width == 4);
     if (key_component_width == 8) {
       if (!have_offsets && !have_counts) {

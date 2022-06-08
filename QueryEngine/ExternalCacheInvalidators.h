@@ -25,7 +25,6 @@
 
 // Classes that are involved in needing a cache invalidated
 #include "JoinHashTable/BaselineJoinHashTable.h"
-#include "JoinHashTable/OverlapsJoinHashTable.h"
 #include "JoinHashTable/PerfectJoinHashTable.h"
 
 // Note that this is functionally the same as the above two invalidators. The
@@ -33,4 +32,4 @@
 // The above cache invalidators are specific invalidators called during update/delete and
 // will likely be extended in the future.
 using JoinHashTableCacheInvalidator =
-    CacheInvalidator<OverlapsJoinHashTable, BaselineJoinHashTable, PerfectJoinHashTable>;
+    CacheInvalidator<BaselineJoinHashTable, PerfectJoinHashTable>;

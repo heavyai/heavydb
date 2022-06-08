@@ -61,8 +61,6 @@ bool skip_tests(const ExecutorDeviceType device_type) {
     continue;                                                \
   }
 
-extern bool g_enable_overlaps_hashjoin;
-
 namespace {
 
 size_t getNumberOfCachedPerfectHashTables() {
@@ -692,9 +690,6 @@ int main(int argc, char** argv) {
   init();
 
   int err{0};
-
-  // enable overlaps hashjoin
-  g_enable_overlaps_hashjoin = true;
 
   try {
     err = RUN_ALL_TESTS();

@@ -2684,58 +2684,6 @@ void RelAlgDag::registerQueryHints(std::shared_ptr<RelAlgNode> node,
         detect_rowwise_output_hint = true;
         break;
       }
-      case QueryHint::kOverlapsBucketThreshold: {
-        CHECK(target.getListOptions().size() == 1);
-        double overlaps_bucket_threshold = std::stod(target.getListOptions()[0]);
-        if (overlaps_bucket_threshold >= 0.0 && overlaps_bucket_threshold <= 90.0) {
-          query_hint.registerHint(QueryHint::kOverlapsBucketThreshold);
-          query_hint.overlaps_bucket_threshold = overlaps_bucket_threshold;
-        } else {
-          VLOG(1) << "Skip the given query hint \"overlaps_bucket_threshold\" ("
-                  << overlaps_bucket_threshold
-                  << ") : the hint value should be within 0.0 ~ 90.0";
-        }
-        break;
-      }
-      case QueryHint::kOverlapsMaxSize: {
-        CHECK(target.getListOptions().size() == 1);
-        std::stringstream ss(target.getListOptions()[0]);
-        int overlaps_max_size;
-        ss >> overlaps_max_size;
-        if (overlaps_max_size >= 0) {
-          query_hint.registerHint(QueryHint::kOverlapsMaxSize);
-          query_hint.overlaps_max_size = (size_t)overlaps_max_size;
-        } else {
-          VLOG(1) << "Skip the query hint \"overlaps_max_size\" (" << overlaps_max_size
-                  << ") : the hint value should be larger than or equal to zero";
-        }
-        break;
-      }
-      case QueryHint::kOverlapsAllowGpuBuild: {
-        query_hint.registerHint(QueryHint::kOverlapsAllowGpuBuild);
-        query_hint.overlaps_allow_gpu_build = true;
-        break;
-      }
-      case QueryHint::kOverlapsNoCache: {
-        query_hint.registerHint(QueryHint::kOverlapsNoCache);
-        query_hint.overlaps_no_cache = true;
-        VLOG(1) << "Skip auto tuner and hashtable caching for overlaps join.";
-        break;
-      }
-      case QueryHint::kOverlapsKeysPerBin: {
-        CHECK(target.getListOptions().size() == 1);
-        double overlaps_keys_per_bin = std::stod(target.getListOptions()[0]);
-        if (overlaps_keys_per_bin > 0.0 &&
-            overlaps_keys_per_bin < std::numeric_limits<double>::max()) {
-          query_hint.registerHint(QueryHint::kOverlapsKeysPerBin);
-          query_hint.overlaps_keys_per_bin = overlaps_keys_per_bin;
-        } else {
-          VLOG(1) << "Skip the given query hint \"overlaps_keys_per_bin\" ("
-                  << overlaps_keys_per_bin
-                  << ") : the hint value should be larger than zero";
-        }
-        break;
-      }
       default:
         break;
     }

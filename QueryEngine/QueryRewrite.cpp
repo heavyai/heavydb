@@ -26,52 +26,13 @@
 #include "Shared/sqltypes.h"
 
 extern size_t g_constrained_by_in_threshold;
-extern bool g_enable_overlaps_hashjoin;
 
 RelAlgExecutionUnit QueryRewriter::rewrite(
     const RelAlgExecutionUnit& ra_exe_unit_in) const {
   auto rewritten_exe_unit = rewriteConstrainedByIn(ra_exe_unit_in);
   auto rewritten_exe_unit_for_agg_on_gby_col =
       rewriteAggregateOnGroupByColumn(rewritten_exe_unit);
-  return rewriteOverlapsJoin(rewritten_exe_unit_for_agg_on_gby_col);
-}
-
-RelAlgExecutionUnit QueryRewriter::rewriteOverlapsJoin(
-    const RelAlgExecutionUnit& ra_exe_unit_in) const {
-  if (!g_enable_overlaps_hashjoin) {
-    return ra_exe_unit_in;
-  }
-  if (ra_exe_unit_in.join_quals.empty()) {
-    return ra_exe_unit_in;
-  }
-
-  std::list<std::shared_ptr<Analyzer::Expr>> quals;
-  quals.insert(quals.end(), ra_exe_unit_in.quals.begin(), ra_exe_unit_in.quals.end());
-
-  JoinQualsPerNestingLevel join_condition_per_nesting_level;
-  for (const auto& join_condition_in : ra_exe_unit_in.join_quals) {
-    JoinCondition join_condition{{}, join_condition_in.type};
-
-    for (const auto& join_qual_expr_in : join_condition_in.quals) {
-      join_condition.quals.push_back(join_qual_expr_in);
-    }
-    join_condition_per_nesting_level.push_back(join_condition);
-  }
-  return {ra_exe_unit_in.input_descs,
-          ra_exe_unit_in.input_col_descs,
-          ra_exe_unit_in.simple_quals,
-          quals,
-          join_condition_per_nesting_level,
-          ra_exe_unit_in.groupby_exprs,
-          ra_exe_unit_in.target_exprs,
-          ra_exe_unit_in.estimator,
-          ra_exe_unit_in.sort_info,
-          ra_exe_unit_in.scan_limit,
-          ra_exe_unit_in.query_hint,
-          ra_exe_unit_in.query_plan_dag,
-          ra_exe_unit_in.hash_table_build_plan_dag,
-          ra_exe_unit_in.table_id_to_node_map,
-          ra_exe_unit_in.use_bump_allocator};
+  return rewritten_exe_unit_for_agg_on_gby_col;
 }
 
 RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(

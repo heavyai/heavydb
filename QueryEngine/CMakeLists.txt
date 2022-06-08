@@ -65,10 +65,8 @@ set(query_engine_source_files
     JoinHashTable/BaselineJoinHashTable.cpp
     JoinHashTable/HashJoin.cpp
     JoinHashTable/HashTable.cpp
-    JoinHashTable/OverlapsJoinHashTable.cpp
     JoinHashTable/PerfectJoinHashTable.cpp
     JoinHashTable/Runtime/HashJoinRuntime.cpp
-    JoinHashTable/RangeJoinHashTable.cpp
     LogicalIR.cpp
     LLVMFunctionAttributesUtil.cpp
     LLVMGlobalContext.cpp
@@ -130,7 +128,6 @@ set(query_engine_source_files
     QueryPlanDagExtractor.cpp
     DataRecycler/HashtableRecycler.cpp
     DataRecycler/HashingSchemeRecycler.cpp
-    DataRecycler/OverlapsTuningParamRecycler.cpp
     Visitors/QueryPlanDagChecker.cpp
     Visitors/SQLOperatorDetector.cpp
 

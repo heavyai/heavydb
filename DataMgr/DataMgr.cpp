@@ -36,7 +36,6 @@
 #include <algorithm>
 #include <limits>
 
-extern bool g_enable_fsi;
 bool g_enable_tiered_cpu_mem{false};
 size_t g_pmem_size{0};
 

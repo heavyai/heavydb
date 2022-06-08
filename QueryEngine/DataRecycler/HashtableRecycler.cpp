@@ -36,17 +36,7 @@ bool HashtableRecycler::hasItemInCache(
   CHECK(hashtable_cache);
   auto candidate_ht = getCachedItem(key, *hashtable_cache);
   if (candidate_ht) {
-    if (item_type == OVERLAPS_HT) {
-      CHECK(candidate_ht->meta_info && candidate_ht->meta_info->overlaps_meta_info);
-      CHECK(meta_info && meta_info->overlaps_meta_info);
-      if (checkOverlapsHashtableBucketCompatability(
-              *candidate_ht->meta_info->overlaps_meta_info,
-              *meta_info->overlaps_meta_info)) {
-        return true;
-      }
-    } else {
-      return true;
-    }
+    return true;
   }
   return false;
 }
@@ -221,24 +211,6 @@ std::string HashtableRecycler::toString() const {
     oss << "\t" << metric_tracker.toString() << "\n";
   }
   return oss.str();
-}
-
-bool HashtableRecycler::checkOverlapsHashtableBucketCompatability(
-    const OverlapsHashTableMetaInfo& candidate,
-    const OverlapsHashTableMetaInfo& target) const {
-  if (candidate.bucket_sizes.size() != target.bucket_sizes.size()) {
-    return false;
-  }
-  for (size_t i = 0; i < candidate.bucket_sizes.size(); i++) {
-    if (std::abs(target.bucket_sizes[i] - candidate.bucket_sizes[i]) > 1e-4) {
-      return false;
-    }
-  }
-  auto threshold_check =
-      candidate.overlaps_bucket_threshold == target.overlaps_bucket_threshold;
-  auto hashtable_size_check =
-      candidate.overlaps_max_table_size_bytes == target.overlaps_max_table_size_bytes;
-  return threshold_check && hashtable_size_check;
 }
 
 std::string HashtableRecycler::getJoinColumnInfoString(

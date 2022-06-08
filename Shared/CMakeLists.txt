@@ -2,7 +2,6 @@ set(shared_source_files
     Datum.cpp
     StringTransform.cpp
     DateTimeParser.cpp
-    File.cpp
     StackTrace.cpp
     base64.cpp
     misc.cpp

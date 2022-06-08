@@ -24,7 +24,6 @@
 namespace po = boost::program_options;
 
 extern bool g_enable_table_functions;
-extern bool g_enable_overlaps_hashjoin;
 
 using namespace TestHelpers;
 using namespace TestHelpers::ArrowSQLRunner;

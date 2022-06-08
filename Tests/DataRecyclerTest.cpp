@@ -37,8 +37,6 @@
 
 extern bool g_is_test_env;
 extern unsigned g_trivial_loop_join_threshold;
-extern bool g_enable_overlaps_hashjoin;
-extern bool g_enable_hashjoin_many_to_many;
 extern bool g_from_table_reordering;
 
 using namespace TestHelpers;

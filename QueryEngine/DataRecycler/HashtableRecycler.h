@@ -27,15 +27,8 @@ struct QueryPlanMetaInfo {
   std::string inner_col_info_string;
 };
 
-struct OverlapsHashTableMetaInfo {
-  size_t overlaps_max_table_size_bytes;
-  double overlaps_bucket_threshold;
-  std::vector<double> bucket_sizes;
-};
-
 struct HashtableCacheMetaInfo {
   std::optional<QueryPlanMetaInfo> query_plan_meta_info;
-  std::optional<OverlapsHashTableMetaInfo> overlaps_meta_info;
 };
 
 class HashtableRecycler
@@ -68,10 +61,6 @@ class HashtableRecycler
   void clearCache() override;
 
   std::string toString() const override;
-
-  bool checkOverlapsHashtableBucketCompatability(
-      const OverlapsHashTableMetaInfo& candidate_bucket_dim,
-      const OverlapsHashTableMetaInfo& target_bucket_dim) const;
 
   static std::pair<QueryPlanHash, HashtableCacheMetaInfo> getHashtableCacheKey(
       const std::vector<InnerOuter>& inner_outer_pairs,

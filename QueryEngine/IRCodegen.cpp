@@ -20,8 +20,6 @@
 #include "MaxwellCodegenPatch.h"
 #include "RelAlgTranslator.h"
 
-#include "QueryEngine/JoinHashTable/RangeJoinHashTable.h"
-
 // Driver methods for the IR generation.
 
 extern bool g_enable_left_join_filter_hoisting;
@@ -606,38 +604,6 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
                 : nullptr,
             /*hoisted_filters=*/hoisted_filters_cb);
-      } else if (auto range_join_table =
-                     dynamic_cast<RangeJoinHashTable*>(current_level_hash_table.get())) {
-        join_loops.emplace_back(
-            /* kind= */ JoinLoopKind::MultiSet,
-            /* type= */ current_level_join_conditions.type,
-            /* iteration_domain_codegen= */
-            [this,
-             range_join_table,
-             current_hash_table_idx,
-             level_idx,
-             current_level_hash_table,
-             &co](const std::vector<llvm::Value*>& prev_iters) {
-              addJoinLoopIterator(prev_iters, level_idx);
-              JoinLoopDomain domain{{0}};
-              CHECK(!prev_iters.empty());
-              const auto matching_set = range_join_table->codegenMatchingSetWithOffset(
-                  co, current_hash_table_idx, prev_iters.back());
-              domain.values_buffer = matching_set.elements;
-              domain.element_count = matching_set.count;
-              return domain;
-            },
-            /* outer_condition_match= */
-            current_level_join_conditions.type == JoinType::LEFT
-                ? std::function<llvm::Value*(const std::vector<llvm::Value*>&)>(
-                      outer_join_condition_remaining_quals_cb)
-                : nullptr,
-            /* found_outer_matches= */
-            current_level_join_conditions.type == JoinType::LEFT
-                ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
-                : nullptr,
-            /* hoisted_filters= */ nullptr  // <<! TODO
-        );
       } else {
         join_loops.emplace_back(
             /*kind=*/JoinLoopKind::Set,

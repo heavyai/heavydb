@@ -426,7 +426,6 @@ ColumnsForDevice PerfectJoinHashTable::fetchColumnsForDevice(
   std::vector<JoinColumn> join_columns;
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::vector<JoinColumnTypeInfo> join_column_types;
-  std::vector<JoinBucketInfo> join_bucket_info;
   std::vector<std::shared_ptr<void>> malloc_owner;
   for (const auto& inner_outer_pair : inner_outer_pairs_) {
     const auto inner_col = inner_outer_pair.first;
@@ -451,7 +450,7 @@ ColumnsForDevice PerfectJoinHashTable::fetchColumnsForDevice(
                                                       0,
                                                       get_join_column_type_kind(ti)});
   }
-  return {join_columns, join_column_types, chunks_owner, join_bucket_info, malloc_owner};
+  return {join_columns, join_column_types, chunks_owner, malloc_owner};
 }
 
 void PerfectJoinHashTable::reifyForDevice(const ChunkKey& chunk_key,

@@ -378,49 +378,6 @@ void fill_baseline_hash_join_buff_on_device_64(int8_t* hash_buff,
       num_elems);
 }
 
-void overlaps_fill_baseline_hash_join_buff_on_device_64(
-    int8_t* hash_buff,
-    const int64_t entry_count,
-    const int32_t invalid_slot_val,
-    const size_t key_component_count,
-    const bool with_val_slot,
-    int* dev_err_buff,
-    const OverlapsKeyHandler* key_handler,
-    const int64_t num_elems) {
-  cuda_kernel_launch_wrapper(
-      fill_baseline_hash_join_buff_wrapper<unsigned long long, OverlapsKeyHandler>,
-      hash_buff,
-      entry_count,
-      invalid_slot_val,
-      false,
-      key_component_count,
-      with_val_slot,
-      dev_err_buff,
-      key_handler,
-      num_elems);
-}
-
-void range_fill_baseline_hash_join_buff_on_device_64(int8_t* hash_buff,
-                                                     const int64_t entry_count,
-                                                     const int32_t invalid_slot_val,
-                                                     const size_t key_component_count,
-                                                     const bool with_val_slot,
-                                                     int* dev_err_buff,
-                                                     const RangeKeyHandler* key_handler,
-                                                     const size_t num_elems) {
-  cuda_kernel_launch_wrapper(
-      fill_baseline_hash_join_buff_wrapper<unsigned long long, RangeKeyHandler>,
-      hash_buff,
-      entry_count,
-      invalid_slot_val,
-      false,
-      key_component_count,
-      with_val_slot,
-      dev_err_buff,
-      key_handler,
-      num_elems);
-}
-
 void fill_one_to_many_baseline_hash_table_on_device_32(
     int32_t* buff,
     const int32_t* composite_key_dict,
@@ -450,68 +407,6 @@ void fill_one_to_many_baseline_hash_table_on_device_64(
                                                           invalid_slot_val,
                                                           key_handler,
                                                           num_elems);
-}
-
-void overlaps_fill_one_to_many_baseline_hash_table_on_device_64(
-    int32_t* buff,
-    const int64_t* composite_key_dict,
-    const int64_t hash_entry_count,
-    const int32_t invalid_slot_val,
-    const OverlapsKeyHandler* key_handler,
-    const int64_t num_elems) {
-  fill_one_to_many_baseline_hash_table_on_device<int64_t>(buff,
-                                                          composite_key_dict,
-                                                          hash_entry_count,
-                                                          invalid_slot_val,
-                                                          key_handler,
-                                                          num_elems);
-}
-
-void range_fill_one_to_many_baseline_hash_table_on_device_64(
-    int32_t* buff,
-    const int64_t* composite_key_dict,
-    const size_t hash_entry_count,
-    const int32_t invalid_slot_val,
-    const RangeKeyHandler* key_handler,
-    const size_t num_elems) {
-  fill_one_to_many_baseline_hash_table_on_device<int64_t>(buff,
-                                                          composite_key_dict,
-                                                          hash_entry_count,
-                                                          invalid_slot_val,
-                                                          key_handler,
-                                                          num_elems);
-}
-
-void approximate_distinct_tuples_on_device_overlaps(uint8_t* hll_buffer,
-                                                    const uint32_t b,
-                                                    int32_t* row_counts_buffer,
-                                                    const OverlapsKeyHandler* key_handler,
-                                                    const int64_t num_elems) {
-  cuda_kernel_launch_wrapper(approximate_distinct_tuples_impl_gpu<OverlapsKeyHandler>,
-                             hll_buffer,
-                             row_counts_buffer,
-                             b,
-                             num_elems,
-                             key_handler);
-
-  auto row_counts_buffer_ptr = thrust::device_pointer_cast(row_counts_buffer);
-  thrust::inclusive_scan(
-      row_counts_buffer_ptr, row_counts_buffer_ptr + num_elems, row_counts_buffer_ptr);
-}
-
-void approximate_distinct_tuples_on_device_range(uint8_t* hll_buffer,
-                                                 const uint32_t b,
-                                                 int32_t* row_counts_buffer,
-                                                 const RangeKeyHandler* key_handler,
-                                                 const size_t num_elems,
-                                                 const size_t block_size_x,
-                                                 const size_t grid_size_x) {
-  approximate_distinct_tuples_impl_gpu<<<grid_size_x, block_size_x>>>(
-      hll_buffer, row_counts_buffer, b, num_elems, key_handler);
-
-  auto row_counts_buffer_ptr = thrust::device_pointer_cast(row_counts_buffer);
-  thrust::inclusive_scan(
-      row_counts_buffer_ptr, row_counts_buffer_ptr + num_elems, row_counts_buffer_ptr);
 }
 
 void approximate_distinct_tuples_on_device(uint8_t* hll_buffer,

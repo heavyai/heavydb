@@ -438,7 +438,6 @@ ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDevice(
   std::vector<JoinColumn> join_columns;
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::vector<JoinColumnTypeInfo> join_column_types;
-  std::vector<JoinBucketInfo> join_bucket_info;
   std::vector<std::shared_ptr<void>> malloc_owner;
   for (const auto& inner_outer_pair : inner_outer_pairs_) {
     const auto inner_col = inner_outer_pair.first;
@@ -463,7 +462,7 @@ ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDevice(
                                                       0,
                                                       get_join_column_type_kind(ti)});
   }
-  return {join_columns, join_column_types, chunks_owner, join_bucket_info, malloc_owner};
+  return {join_columns, join_column_types, chunks_owner, malloc_owner};
 }
 
 void BaselineJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_device,
@@ -476,7 +475,6 @@ void BaselineJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_d
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
   const auto err = initHashTableForDevice(columns_for_device.join_columns,
                                           columns_for_device.join_column_types,
-                                          columns_for_device.join_buckets,
                                           layout,
                                           effective_memory_level,
                                           entry_count,
@@ -547,7 +545,6 @@ StrProxyTranslationMapsPtrsAndOffsets decomposeStrDictTranslationMaps(
 int BaselineJoinHashTable::initHashTableForDevice(
     const std::vector<JoinColumn>& join_columns,
     const std::vector<JoinColumnTypeInfo>& join_column_types,
-    const std::vector<JoinBucketInfo>& join_bucket_info,
     const HashType layout,
     const Data_Namespace::MemoryLevel effective_memory_level,
     const size_t entry_count,
@@ -635,7 +632,6 @@ int BaselineJoinHashTable::initHashTableForDevice(
                                          composite_key_info,
                                          join_columns,
                                          join_column_types,
-                                         join_bucket_info,
                                          str_proxy_translation_map_ptrs_and_offsets,
                                          entry_count,
                                          join_columns.front().num_elems,

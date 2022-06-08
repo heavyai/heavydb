@@ -180,24 +180,6 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(g_enable_filter_push_down)
                               ->implicit_value(true),
                           "Enable filter push down through joins.");
-  help_desc.add_options()("enable-overlaps-hashjoin",
-                          po::value<bool>(&g_enable_overlaps_hashjoin)
-                              ->default_value(g_enable_overlaps_hashjoin)
-                              ->implicit_value(true),
-                          "Enable the overlaps hash join framework allowing for range "
-                          "join (e.g. spatial overlaps) computation using a hash table.");
-  help_desc.add_options()("enable-hashjoin-many-to-many",
-                          po::value<bool>(&g_enable_hashjoin_many_to_many)
-                              ->default_value(g_enable_hashjoin_many_to_many)
-                              ->implicit_value(true),
-                          "Enable the overlaps hash join framework allowing for range "
-                          "join (e.g. spatial overlaps) computation using a hash table.");
-  help_desc.add_options()("enable-distance-rangejoin",
-                          po::value<bool>(&g_enable_distance_rangejoin)
-                              ->default_value(g_enable_distance_rangejoin)
-                              ->implicit_value(true),
-                          "Enable accelerating point distance joins with a hash table. "
-                          "This rewrites ST_Distance when using an upperbound (<= X).");
   help_desc.add_options()("enable-runtime-query-interrupt",
                           po::value<bool>(&enable_runtime_query_interrupt)
                               ->default_value(enable_runtime_query_interrupt)
@@ -312,20 +294,6 @@ void CommandLineOptions::fillOptions() {
       "num-reader-threads",
       po::value<size_t>(&num_reader_threads)->default_value(num_reader_threads),
       "Number of reader threads to use.");
-  help_desc.add_options()(
-      "max-import-threads",
-      po::value<size_t>(&g_max_import_threads)->default_value(g_max_import_threads),
-      "Max number of default import threads to use (num hardware threads will be used "
-      "instead if lower). Can be overriden with copy statement threads option).");
-  help_desc.add_options()(
-      "overlaps-max-table-size-bytes",
-      po::value<size_t>(&g_overlaps_max_table_size_bytes)
-          ->default_value(g_overlaps_max_table_size_bytes),
-      "The maximum size in bytes of the hash table for an overlaps hash join.");
-  help_desc.add_options()("overlaps-target-entries-per-bin",
-                          po::value<double>(&g_overlaps_target_entries_per_bin)
-                              ->default_value(g_overlaps_target_entries_per_bin),
-                          "The target number of hash entries per bin for overlaps join");
   if (!dist_v5_) {
     help_desc.add_options()("port,p",
                             po::value<int>(&system_parameters.omnisci_server_port)
@@ -377,31 +345,7 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(g_enable_experimental_string_functions)
                               ->implicit_value(true),
                           "Enable experimental string functions.");
-  help_desc.add_options()(
-      "enable-fsi",
-      po::value<bool>(&g_enable_fsi)->default_value(g_enable_fsi)->implicit_value(true),
-      "Enable foreign storage interface.");
 
-#ifdef ENABLE_IMPORT_PARQUET
-  help_desc.add_options()("enable-parquet-import-fsi",
-                          po::value<bool>(&g_enable_parquet_import_fsi)
-                              ->default_value(g_enable_parquet_import_fsi)
-                              ->implicit_value(true),
-                          "Enable foreign storage interface based parquet import.");
-#endif
-
-#ifdef HAVE_AWS_S3
-  help_desc.add_options()(
-      "allow-s3-server-privileges",
-      po::value<bool>(&g_allow_s3_server_privileges)
-          ->default_value(g_allow_s3_server_privileges)
-          ->implicit_value(true),
-      "Allow S3 server privileges, if IAM user credentials are not provided. Credentials "
-      "may be specified with "
-      "environment variables (such as AWS_ACCESS_KEY_ID,  AWS_SECRET_ACCESS_KEY, etc), "
-      "an AWS credentials file, or when running on an EC2 instance, with an IAM role "
-      "that is attached to the instance.");
-#endif  // defined(HAVE_AWS_S3)
   help_desc.add_options()(
       "enable-interoperability",
       po::value<bool>(&g_enable_interop)
@@ -908,7 +852,6 @@ void CommandLineOptions::validate() {
   if (vm.count("license-path")) {
     LOG(INFO) << "License key path set to '" << license_path << "'";
   }
-  g_read_only = read_only;
   LOG(INFO) << " Server read-only mode is " << read_only;
 #if DISABLE_CONCURRENCY
   LOG(INFO) << " Threading layer: serial";
@@ -940,14 +883,6 @@ void CommandLineOptions::validate() {
 
   LOG(INFO) << "Allowed import paths is set to " << allowed_import_paths;
   LOG(INFO) << "Allowed export paths is set to " << allowed_export_paths;
-
-  g_enable_s3_fsi = false;
-
-#ifdef ENABLE_IMPORT_PARQUET
-  if (g_enable_parquet_import_fsi) {
-    g_enable_fsi = true;  // a requirement for FSI parquet import is for FSI to be enabled
-  }
-#endif
 }
 
 boost::optional<int> CommandLineOptions::parse_command_line(
@@ -1120,14 +1055,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     }
     LOG(INFO) << " Master Address is " << system_parameters.master_address;
     LOG(INFO) << " Master Port is " << system_parameters.master_port;
-  }
-
-  if (g_max_import_threads < 1) {
-    std::cerr << "max-import-threads must be >= 1 (was set to " << g_max_import_threads
-              << ")." << std::endl;
-    return 8;
-  } else {
-    LOG(INFO) << " Max import threads " << g_max_import_threads;
   }
 
   LOG(INFO) << " cuda block size " << system_parameters.cuda_block_size;

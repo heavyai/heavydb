@@ -56,7 +56,6 @@ extern unsigned g_forced_gpu_proportion;
 
 extern size_t g_big_group_threshold;
 extern unsigned g_trivial_loop_join_threshold;
-extern bool g_enable_overlaps_hashjoin;
 extern double g_gpu_mem_limit_percent;
 extern size_t g_parallel_top_min;
 extern size_t g_parallel_top_max;

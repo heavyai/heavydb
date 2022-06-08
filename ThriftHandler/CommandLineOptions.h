@@ -144,11 +144,6 @@ extern float g_filter_push_down_high_frac;
 extern size_t g_filter_push_down_passing_row_ubound;
 extern bool g_enable_columnar_output;
 extern bool g_optimize_row_initialization;
-extern bool g_enable_overlaps_hashjoin;
-extern bool g_enable_hashjoin_many_to_many;
-extern bool g_enable_distance_rangejoin;
-extern size_t g_overlaps_max_table_size_bytes;
-extern double g_overlaps_target_entries_per_bin;
 extern bool g_strip_join_covered_quals;
 extern size_t g_constrained_by_in_threshold;
 extern size_t g_big_group_threshold;
@@ -171,26 +166,16 @@ extern bool g_enable_lazy_fetch;
 extern bool g_enable_multifrag_rs;
 extern bool g_enable_heterogeneous_execution;
 
-extern int64_t g_omni_kafka_seek;
-extern size_t g_compression_limit_bytes;
 extern bool g_skip_intermediate_count;
 extern bool g_enable_bump_allocator;
 extern size_t g_max_memory_allocation_size;
 extern size_t g_min_memory_allocation_size;
 extern bool g_enable_experimental_string_functions;
-extern bool g_enable_fsi;
-extern bool g_enable_s3_fsi;
-#ifdef ENABLE_IMPORT_PARQUET
-extern bool g_enable_parquet_import_fsi;
-#endif
 extern bool g_enable_interop;
 extern bool g_enable_union;
 extern bool g_enable_cpu_sub_tasks;
 extern size_t g_cpu_sub_task_size;
 extern bool g_enable_filter_function;
-extern size_t g_max_import_threads;
-extern bool g_allow_s3_server_privileges;
-extern bool g_read_only;
 extern bool g_enable_automatic_ir_metadata;
 extern size_t g_enable_parallel_linearization;
 extern size_t g_max_log_length;

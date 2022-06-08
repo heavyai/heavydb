@@ -24,7 +24,6 @@
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/ExternalCacheInvalidators.h"
-#include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
 #include "QueryEngine/ResultSet.h"
 
 #include <gtest/gtest.h>
@@ -42,8 +41,6 @@ using namespace TestHelpers::ArrowSQLRunner;
 namespace {
 ExecutorDeviceType g_device_type;
 }
-
-extern bool g_enable_overlaps_hashjoin;
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
@@ -686,7 +683,6 @@ TEST(Other, Regression) {
 }
 
 int main(int argc, char** argv) {
-  ::g_enable_overlaps_hashjoin = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 

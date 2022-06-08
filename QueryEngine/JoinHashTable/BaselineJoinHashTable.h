@@ -173,7 +173,6 @@ class BaselineJoinHashTable : public HashJoin {
   virtual int initHashTableForDevice(
       const std::vector<JoinColumn>& join_columns,
       const std::vector<JoinColumnTypeInfo>& join_column_types,
-      const std::vector<JoinBucketInfo>& join_buckets,
       const HashType layout,
       const Data_Namespace::MemoryLevel effective_memory_level,
       const size_t entry_count,

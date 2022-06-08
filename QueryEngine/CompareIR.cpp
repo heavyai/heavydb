@@ -20,7 +20,6 @@
 #include <typeinfo>
 
 extern bool g_enable_watchdog;
-extern bool g_enable_overlaps_hashjoin;
 
 namespace {
 
@@ -273,25 +272,6 @@ llvm::Value* CodeGenerator::codegenCmp(const Analyzer::BinOper* bin_oper,
   }
   auto lhs_lvs = codegen(lhs, true, co);
   return codegenCmp(optype, qualifier, lhs_lvs, lhs_ti, rhs, co);
-}
-
-llvm::Value* CodeGenerator::codegenOverlaps(const SQLOps optype,
-                                            const SQLQualifier qualifier,
-                                            const std::shared_ptr<Analyzer::Expr> lhs,
-                                            const std::shared_ptr<Analyzer::Expr> rhs,
-                                            const CompilationOptions& co) {
-  AUTOMATIC_IR_METADATA(cgen_state_);
-  const auto lhs_ti = lhs->get_type_info();
-  if (g_enable_overlaps_hashjoin) {
-    // failed to build a suitable hash table. short circuit the overlaps expression by
-    // always returning true. this will fall into the ST_Contains check, which will do
-    // overlaps checks before the heavier contains computation.
-    VLOG(1) << "Failed to build overlaps hash table, short circuiting overlaps operator.";
-    return llvm::ConstantInt::get(get_int_type(8, cgen_state_->context_), true);
-  }
-
-  CHECK(false) << "Unsupported type for overlaps operator: " << lhs_ti.get_type_name();
-  return nullptr;
 }
 
 llvm::Value* CodeGenerator::codegenStrCmp(const SQLOps optype,

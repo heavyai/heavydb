@@ -85,11 +85,7 @@ struct ColumnsForDevice {
   const std::vector<JoinColumn> join_columns;
   const std::vector<JoinColumnTypeInfo> join_column_types;
   const std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
-  std::vector<JoinBucketInfo> join_buckets;
   const std::vector<std::shared_ptr<void>> malloc_owner;
-
-  void setBucketInfo(const std::vector<double>& bucket_sizes_for_dimension,
-                     const std::vector<InnerOuter> inner_outer_pairs);
 };
 
 struct HashJoinMatchingSet {

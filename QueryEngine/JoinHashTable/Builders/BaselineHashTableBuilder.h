@@ -37,40 +37,18 @@ int fill_baseline_hash_join_buff(int8_t* hash_buff,
                                  const int32_t cpu_thread_idx,
                                  const int32_t cpu_thread_count) {
   auto timer = DEBUG_TIMER(__func__);
-  if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
-    return fill_baseline_hash_join_buff_32(hash_buff,
-                                           entry_count,
-                                           invalid_slot_val,
-                                           for_semi_join,
-                                           key_component_count,
-                                           with_val_slot,
-                                           key_handler,
-                                           num_elems,
-                                           cpu_thread_idx,
-                                           cpu_thread_count);
-  } else if constexpr (std::is_same<KEY_HANDLER, RangeKeyHandler>::value) {
-    return range_fill_baseline_hash_join_buff_32(hash_buff,
-                                                 entry_count,
-                                                 invalid_slot_val,
-                                                 key_component_count,
-                                                 with_val_slot,
-                                                 key_handler,
-                                                 num_elems,
-                                                 cpu_thread_idx,
-                                                 cpu_thread_count);
-  } else {
-    static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value,
-                  "Only Generic, Overlaps, and Range Key Handlers are supported.");
-    return overlaps_fill_baseline_hash_join_buff_32(hash_buff,
-                                                    entry_count,
-                                                    invalid_slot_val,
-                                                    key_component_count,
-                                                    with_val_slot,
-                                                    key_handler,
-                                                    num_elems,
-                                                    cpu_thread_idx,
-                                                    cpu_thread_count);
-  }
+  static_assert(std::is_same<KEY_HANDLER, GenericKeyHandler>::value,
+                "Only Generic Key Handlers are supported.");
+  return fill_baseline_hash_join_buff_32(hash_buff,
+                                         entry_count,
+                                         invalid_slot_val,
+                                         for_semi_join,
+                                         key_component_count,
+                                         with_val_slot,
+                                         key_handler,
+                                         num_elems,
+                                         cpu_thread_idx,
+                                         cpu_thread_count);
 }
 
 template <typename SIZE,
@@ -87,40 +65,18 @@ int fill_baseline_hash_join_buff(int8_t* hash_buff,
                                  const int32_t cpu_thread_idx,
                                  const int32_t cpu_thread_count) {
   auto timer = DEBUG_TIMER(__func__);
-  if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
-    return fill_baseline_hash_join_buff_64(hash_buff,
-                                           entry_count,
-                                           invalid_slot_val,
-                                           for_semi_join,
-                                           key_component_count,
-                                           with_val_slot,
-                                           key_handler,
-                                           num_elems,
-                                           cpu_thread_idx,
-                                           cpu_thread_count);
-  } else if constexpr (std::is_same<KEY_HANDLER, RangeKeyHandler>::value) {
-    return range_fill_baseline_hash_join_buff_64(hash_buff,
-                                                 entry_count,
-                                                 invalid_slot_val,
-                                                 key_component_count,
-                                                 with_val_slot,
-                                                 key_handler,
-                                                 num_elems,
-                                                 cpu_thread_idx,
-                                                 cpu_thread_count);
-  } else {
-    static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value,
-                  "Only Generic, Overlaps, and Range Key Handlers are supported.");
-    return overlaps_fill_baseline_hash_join_buff_64(hash_buff,
-                                                    entry_count,
-                                                    invalid_slot_val,
-                                                    key_component_count,
-                                                    with_val_slot,
-                                                    key_handler,
-                                                    num_elems,
-                                                    cpu_thread_idx,
-                                                    cpu_thread_count);
-  }
+  static_assert(std::is_same<KEY_HANDLER, GenericKeyHandler>::value,
+                "Only Generic Key Handlers are supported.");
+  return fill_baseline_hash_join_buff_64(hash_buff,
+                                         entry_count,
+                                         invalid_slot_val,
+                                         for_semi_join,
+                                         key_component_count,
+                                         with_val_slot,
+                                         key_handler,
+                                         num_elems,
+                                         cpu_thread_idx,
+                                         cpu_thread_count);
 }
 
 template <typename SIZE,
@@ -136,23 +92,17 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                             const KEY_HANDLER* key_handler,
                                             const size_t num_elems) {
   auto timer = DEBUG_TIMER(__func__);
-  if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
-    fill_baseline_hash_join_buff_on_device_32(hash_buff,
-                                              entry_count,
-                                              invalid_slot_val,
-                                              for_semi_join,
-                                              key_component_count,
-                                              with_val_slot,
-                                              dev_err_buff,
-                                              key_handler,
-                                              num_elems);
-  } else if constexpr (std::is_same<KEY_HANDLER, RangeKeyHandler>::value) {
-    UNREACHABLE();
-  } else {
-    static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value,
-                  "Only Generic, Overlaps, and Range Key Handlers are supported.");
-    LOG(FATAL) << "32-bit keys not yet supported for overlaps join.";
-  }
+  static_assert(std::is_same<KEY_HANDLER, GenericKeyHandler>::value,
+                "Only Generic Key Handlers are supported.");
+  fill_baseline_hash_join_buff_on_device_32(hash_buff,
+                                            entry_count,
+                                            invalid_slot_val,
+                                            for_semi_join,
+                                            key_component_count,
+                                            with_val_slot,
+                                            dev_err_buff,
+                                            key_handler,
+                                            num_elems);
 }
 
 template <typename SIZE,
@@ -168,64 +118,39 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                             const KEY_HANDLER* key_handler,
                                             const size_t num_elems) {
   auto timer = DEBUG_TIMER(__func__);
-  if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
-    fill_baseline_hash_join_buff_on_device_64(hash_buff,
-                                              entry_count,
-                                              invalid_slot_val,
-                                              for_semi_join,
-                                              key_component_count,
-                                              with_val_slot,
-                                              dev_err_buff,
-                                              key_handler,
-                                              num_elems);
-  } else if constexpr (std::is_same<KEY_HANDLER, RangeKeyHandler>::value) {
-    range_fill_baseline_hash_join_buff_on_device_64(hash_buff,
-                                                    entry_count,
+  static_assert(std::is_same<KEY_HANDLER, GenericKeyHandler>::value,
+                "Only Generic Key Handlers are supported.");
+  fill_baseline_hash_join_buff_on_device_64(hash_buff,
+                                            entry_count,
+                                            invalid_slot_val,
+                                            for_semi_join,
+                                            key_component_count,
+                                            with_val_slot,
+                                            dev_err_buff,
+                                            key_handler,
+                                            num_elems);
+}
+
+template <typename SIZE,
+          class KEY_HANDLER,
+          typename std::enable_if<sizeof(SIZE) == 4, SIZE>::type* = nullptr>
+void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
+                                                    const SIZE* composite_key_dict,
+                                                    const size_t hash_entry_count,
+                                                    const int32_t invalid_slot_val,
+                                                    const size_t key_component_count,
+                                                    const KEY_HANDLER* key_handler,
+                                                    const size_t num_elems) {
+  auto timer = DEBUG_TIMER(__func__);
+  static_assert(std::is_same<KEY_HANDLER, GenericKeyHandler>::value,
+                "Only Generic Key Handlers are supported.");
+  fill_one_to_many_baseline_hash_table_on_device_32(buff,
+                                                    composite_key_dict,
+                                                    hash_entry_count,
                                                     invalid_slot_val,
                                                     key_component_count,
-                                                    with_val_slot,
-                                                    dev_err_buff,
                                                     key_handler,
                                                     num_elems);
-  } else {
-    static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value,
-                  "Only Generic, Overlaps, and Range Key Handlers are supported.");
-    overlaps_fill_baseline_hash_join_buff_on_device_64(hash_buff,
-                                                       entry_count,
-                                                       invalid_slot_val,
-                                                       key_component_count,
-                                                       with_val_slot,
-                                                       dev_err_buff,
-                                                       key_handler,
-                                                       num_elems);
-  }
-}
-
-template <typename SIZE,
-          class KEY_HANDLER,
-          typename std::enable_if<sizeof(SIZE) == 4, SIZE>::type* = nullptr>
-void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
-                                                    const SIZE* composite_key_dict,
-                                                    const size_t hash_entry_count,
-                                                    const int32_t invalid_slot_val,
-                                                    const size_t key_component_count,
-                                                    const KEY_HANDLER* key_handler,
-                                                    const size_t num_elems) {
-  auto timer = DEBUG_TIMER(__func__);
-  if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
-    fill_one_to_many_baseline_hash_table_on_device_32(buff,
-                                                      composite_key_dict,
-                                                      hash_entry_count,
-                                                      invalid_slot_val,
-                                                      key_component_count,
-                                                      key_handler,
-                                                      num_elems);
-  } else {
-    static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value ||
-                      std::is_same<KEY_HANDLER, RangeKeyHandler>::value,
-                  "Only Generic, Overlaps, and Range Key Handlers are supported.");
-    LOG(FATAL) << "32-bit keys not yet supported for overlaps join.";
-  }
 }
 
 template <typename SIZE,
@@ -239,30 +164,14 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const KEY_HANDLER* key_handler,
                                                     const size_t num_elems) {
   auto timer = DEBUG_TIMER(__func__);
-  if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
-    fill_one_to_many_baseline_hash_table_on_device_64(buff,
-                                                      composite_key_dict,
-                                                      hash_entry_count,
-                                                      invalid_slot_val,
-                                                      key_handler,
-                                                      num_elems);
-  } else if constexpr (std::is_same<KEY_HANDLER, RangeKeyHandler>::value) {
-    range_fill_one_to_many_baseline_hash_table_on_device_64(buff,
-                                                            composite_key_dict,
-                                                            hash_entry_count,
-                                                            invalid_slot_val,
-                                                            key_handler,
-                                                            num_elems);
-  } else {
-    static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value,
-                  "Only Generic, Overlaps, and Range Key Handlers are supported.");
-    overlaps_fill_one_to_many_baseline_hash_table_on_device_64(buff,
-                                                               composite_key_dict,
-                                                               hash_entry_count,
-                                                               invalid_slot_val,
-                                                               key_handler,
-                                                               num_elems);
-  }
+  static_assert(std::is_same<KEY_HANDLER, GenericKeyHandler>::value,
+                "Only Generic Key Handlers are supported.");
+  fill_one_to_many_baseline_hash_table_on_device_64(buff,
+                                                    composite_key_dict,
+                                                    hash_entry_count,
+                                                    invalid_slot_val,
+                                                    key_handler,
+                                                    num_elems);
 }
 
 class BaselineJoinHashTableBuilder {
@@ -273,7 +182,6 @@ class BaselineJoinHashTableBuilder {
                          const CompositeKeyInfo& composite_key_info,
                          const std::vector<JoinColumn>& join_columns,
                          const std::vector<JoinColumnTypeInfo>& join_column_types,
-                         const std::vector<JoinBucketInfo>& join_bucket_info,
                          const StrProxyTranslationMapsPtrsAndOffsets&
                              str_proxy_translation_maps_ptrs_and_offsets,
                          const size_t keyspace_entry_count,
@@ -452,11 +360,9 @@ class BaselineJoinHashTableBuilder {
               key_component_count,
               join_columns,
               join_column_types,
-              join_bucket_info,
               str_proxy_translation_maps_ptrs_and_offsets.first,
               str_proxy_translation_maps_ptrs_and_offsets.second,
-              thread_count,
-              std::is_same_v<KEY_HANDLER, RangeKeyHandler>);
+              thread_count);
           break;
         }
         case 8: {
@@ -469,11 +375,9 @@ class BaselineJoinHashTableBuilder {
               key_component_count,
               join_columns,
               join_column_types,
-              join_bucket_info,
               str_proxy_translation_maps_ptrs_and_offsets.first,
               str_proxy_translation_maps_ptrs_and_offsets.second,
-              thread_count,
-              std::is_same_v<KEY_HANDLER, RangeKeyHandler>);
+              thread_count);
           break;
         }
         default:

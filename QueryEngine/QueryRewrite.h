@@ -27,9 +27,6 @@ class QueryRewriter {
       const RelAlgExecutionUnit& ra_exe_unit_in) const;
 
  private:
-  RelAlgExecutionUnit rewriteOverlapsJoin(
-      const RelAlgExecutionUnit& ra_exe_unit_in) const;
-
   RelAlgExecutionUnit rewriteConstrainedByIn(
       const RelAlgExecutionUnit& ra_exe_unit_in) const;
 

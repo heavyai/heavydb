@@ -34,12 +34,10 @@ struct EMPTY_META_INFO {};
 
 // Item type that we try to recycle
 enum CacheItemType {
-  PERFECT_HT = 0,             // Perfect hashtable
-  BASELINE_HT,                // Baseline hashtable
-  OVERLAPS_HT,                // Overlaps hashtable
-  HT_HASHING_SCHEME,          // Hashtable layout
-  BASELINE_HT_APPROX_CARD,    // Approximated cardinality for baseline hashtable
-  OVERLAPS_AUTO_TUNER_PARAM,  // Hashtable auto tuner's params for overlaps join
+  PERFECT_HT = 0,           // Perfect hashtable
+  BASELINE_HT,              // Baseline hashtable
+  HT_HASHING_SCHEME,        // Hashtable layout
+  BASELINE_HT_APPROX_CARD,  // Approximated cardinality for baseline hashtable
   // TODO (yoonmin): support the following items for recycling
   // ROW_RS,             Row-wise resultset
   // COUNTALL_CARD_EST,  Cardinality of query result
@@ -120,10 +118,8 @@ class DataRecyclerUtil {
   static constexpr auto cache_item_type_str =
       shared::string_view_array("Perfect Join Hashtable",
                                 "Baseline Join Hashtable",
-                                "Overlaps Join Hashtable",
                                 "Hashing Scheme for Join Hashtable",
-                                "Baseline Join Hashtable's Approximated Cardinality",
-                                "Overlaps Join Hashtable's Auto Tuner's Parameters");
+                                "Baseline Join Hashtable's Approximated Cardinality");
   static std::string_view toStringCacheItemType(CacheItemType item_type) {
     static_assert(cache_item_type_str.size() == NUM_CACHE_ITEM_TYPE);
     return cache_item_type_str[item_type];
