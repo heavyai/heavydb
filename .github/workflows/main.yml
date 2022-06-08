@@ -27,8 +27,6 @@ jobs:
 
   build:
     uses: ./.github/workflows/build.yml
-    with:
-      cuda_compiler_version: None
 
   build-cuda:
     uses: ./.github/workflows/build.yml
