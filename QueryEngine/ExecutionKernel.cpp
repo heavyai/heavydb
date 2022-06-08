@@ -267,7 +267,7 @@ void ExecutionKernel::runImpl(Executor* executor,
   }
   const CompilationResult& compilation_result = query_comp_desc.getCompilationResult();
   std::unique_ptr<QueryExecutionContext> query_exe_context_owned;
-  const bool do_render = render_info_ && render_info_->isPotentialInSituRender();
+  const bool do_render = render_info_ && render_info_->isInSitu();
 
   int64_t total_num_input_rows{-1};
   if (kernel_dispatch_mode == ExecutorDispatchMode::KernelPerFragment &&
@@ -471,8 +471,7 @@ void KernelSubtask::run(Executor* executor) {
 
 void KernelSubtask::runImpl(Executor* executor) {
   auto& query_exe_context_owned = shared_context_.getTlsExecutionContext().local();
-  const bool do_render =
-      kernel_.render_info_ && kernel_.render_info_->isPotentialInSituRender();
+  const bool do_render = kernel_.render_info_ && kernel_.render_info_->isInSitu();
   const CompilationResult& compilation_result =
       kernel_.query_comp_desc.getCompilationResult();
   const int outer_table_id = kernel_.ra_exe_unit_.union_all

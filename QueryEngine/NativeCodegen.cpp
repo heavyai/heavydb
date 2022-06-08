@@ -2714,8 +2714,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   if (query_mem_desc->getQueryDescriptionType() ==
           QueryDescriptionType::GroupByBaselineHash &&
-      !has_cardinality_estimation &&
-      (!render_info || !render_info->isPotentialInSituRender()) && !eo.just_explain) {
+      !has_cardinality_estimation && (!render_info || !render_info->isInSitu()) &&
+      !eo.just_explain) {
     const auto col_range_info = group_by_and_aggregate.getColRangeInfo();
     throw CardinalityEstimationRequired(col_range_info.max - col_range_info.min);
   }

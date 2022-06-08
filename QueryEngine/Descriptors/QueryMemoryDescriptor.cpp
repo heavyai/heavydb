@@ -291,7 +291,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
         count_distinct_descriptors,
         false,
         output_columnar_hint,
-        render_info && render_info->isPotentialInSituRender(),
+        render_info && render_info->isInSitu(),
         must_use_baseline_sort,
         /*use_streaming_top_n=*/false);
   }
@@ -311,7 +311,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       if (render_info) {
         // TODO(croot): this can be removed now thanks to the more centralized
         // NonInsituQueryClassifier code, but keeping it just in case
-        render_info->setInSituDataIfUnset(false);
+        render_info->setNonInSitu();
       }
       // keyless hash: whether or not group columns are stored at the beginning of the
       // output buffer
@@ -368,7 +368,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       if (render_info) {
         // TODO(croot): this can be removed now thanks to the more centralized
         // NonInsituQueryClassifier code, but keeping it just in case
-        render_info->setInSituDataIfUnset(false);
+        render_info->setNonInSitu();
       }
       entry_count = shard_count
                         ? (max_groups_buffer_entry_count + shard_count - 1) / shard_count
@@ -415,26 +415,25 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       UNREACHABLE() << "Unknown query type";
   }
 
-  return std::make_unique<QueryMemoryDescriptor>(
-      executor,
-      ra_exe_unit,
-      query_infos,
-      allow_multifrag,
-      keyless_hash,
-      interleaved_bins_on_gpu,
-      idx_target_as_key,
-      actual_col_range_info,
-      col_slot_context,
-      group_col_widths,
-      group_col_compact_width,
-      target_groupby_indices,
-      entry_count,
-      count_distinct_descriptors,
-      sort_on_gpu_hint,
-      output_columnar,
-      render_info && render_info->isPotentialInSituRender(),
-      must_use_baseline_sort,
-      streaming_top_n);
+  return std::make_unique<QueryMemoryDescriptor>(executor,
+                                                 ra_exe_unit,
+                                                 query_infos,
+                                                 allow_multifrag,
+                                                 keyless_hash,
+                                                 interleaved_bins_on_gpu,
+                                                 idx_target_as_key,
+                                                 actual_col_range_info,
+                                                 col_slot_context,
+                                                 group_col_widths,
+                                                 group_col_compact_width,
+                                                 target_groupby_indices,
+                                                 entry_count,
+                                                 count_distinct_descriptors,
+                                                 sort_on_gpu_hint,
+                                                 output_columnar,
+                                                 render_info && render_info->isInSitu(),
+                                                 must_use_baseline_sort,
+                                                 streaming_top_n);
 }
 
 namespace {

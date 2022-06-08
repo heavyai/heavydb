@@ -19,8 +19,9 @@
 
 RenderInfo::RenderInfo(const ::QueryRenderer::RenderSessionKey& in_render_session_key,
                        const RenderQueryOptions& in_render_query_opts,
-                       const bool force_non_in_situ_data)
-    : render_session_key(in_render_session_key)
+                       const heavyai::InSituFlags in_insitu_flags)
+    : heavyai::InSituFlagsOwnerInterface(in_insitu_flags)
+    , render_session_key(in_render_session_key)
     , render_query_opts_(in_render_query_opts) {
   CHECK(false);
 }
@@ -41,33 +42,12 @@ std::shared_ptr<Catalog_Namespace::SessionInfo const> RenderInfo::getSessionInfo
   return {};
 }
 
-void RenderInfo::setForceNonInSituData() {
+void RenderInfo::forceNonInSitu() {
   CHECK(false);
 }
 
-bool RenderInfo::isForcedNonInSitu() const {
+void RenderInfo::setNonInSitu() {
   CHECK(false);
-  return false;
-}
-
-bool RenderInfo::queryRanWithInSituData() const {
-  CHECK(false);
-  return false;
-}
-
-bool RenderInfo::hasInSituData() const {
-  CHECK(false);
-  return false;
-}
-
-bool RenderInfo::isInSituDataFlagUnset() const {
-  CHECK(false);
-  return false;
-}
-
-bool RenderInfo::isPotentialInSituRender() const {
-  CHECK(false);
-  return false;
 }
 
 bool RenderInfo::useCudaBuffers() const {
@@ -97,11 +77,6 @@ std::shared_ptr<QueryRenderer::QueryDataLayout> RenderInfo::getQuerySsboLayout()
 void RenderInfo::setQuerySsboLayout(
     const std::shared_ptr<QueryRenderer::QueryDataLayout>& ssbo_layout) {
   CHECK(false);
-}
-
-bool RenderInfo::setInSituDataIfUnset(const bool is_in_situ_data) {
-  CHECK(false);
-  return false;
 }
 
 const RenderQueryOptions& RenderInfo::getRenderQueryOptions() const {
