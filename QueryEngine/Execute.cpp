@@ -89,8 +89,7 @@ bool g_enable_left_join_filter_hoisting{true};
 bool g_optimize_row_initialization{true};
 bool g_strip_join_covered_quals{false};
 size_t g_constrained_by_in_threshold{10};
-size_t g_default_max_groups_buffer_entry_guess{16384};
-size_t g_big_group_threshold{g_default_max_groups_buffer_entry_guess};
+size_t g_big_group_threshold{16384};
 bool g_enable_window_functions{true};
 bool g_enable_table_functions{false};
 size_t g_max_memory_allocation_size{2000000000};  // set to max slab size

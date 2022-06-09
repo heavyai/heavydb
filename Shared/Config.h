@@ -38,6 +38,7 @@ struct JoinConfig {
 
 struct GroupByConfig {
   bool bigint_count = false;
+  size_t default_max_groups_buffer_entry_guess = 16384;
 };
 
 struct ExecutionConfig {

@@ -54,7 +54,6 @@ bool g_columnar_large_projections{true};
 size_t g_columnar_large_projections_threshold{1000000};
 
 extern bool g_enable_bump_allocator;
-extern size_t g_default_max_groups_buffer_entry_guess;
 extern bool g_from_table_reordering;
 extern bool g_allow_cpu_retry;
 extern size_t g_big_group_threshold;
@@ -1974,7 +1973,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
   const size_t scan_total_limit =
       scan_limit ? get_scan_limit(source, scan_limit + offset) : 0;
   size_t max_groups_buffer_entry_guess{
-      scan_total_limit ? scan_total_limit : g_default_max_groups_buffer_entry_guess};
+      scan_total_limit ? scan_total_limit
+                       : config_.exec.group_by.default_max_groups_buffer_entry_guess};
   SortAlgorithm sort_algorithm{SortAlgorithm::SpeculativeTopN};
   const auto order_entries = get_order_entries(sort);
   SortInfo sort_info{order_entries, sort_algorithm, limit, offset};
@@ -2878,7 +2878,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
   }
   return {rewritten_exe_unit,
           compound,
-          g_default_max_groups_buffer_entry_guess,
+          config_.exec.group_by.default_max_groups_buffer_entry_guess,
           std::move(query_rewriter),
           input_permutation,
           left_deep_join_input_sizes};
@@ -3149,7 +3149,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
                               false,
                               std::nullopt},
           aggregate,
-          g_default_max_groups_buffer_entry_guess,
+          config_.exec.group_by.default_max_groups_buffer_entry_guess,
           nullptr};
 }
 
@@ -3247,7 +3247,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
   }
   return {rewritten_exe_unit,
           project,
-          g_default_max_groups_buffer_entry_guess,
+          config_.exec.group_by.default_max_groups_buffer_entry_guess,
           std::move(query_rewriter),
           input_permutation,
           left_deep_join_input_sizes};
@@ -3363,7 +3363,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
 
   return {rewritten_exe_unit,
           logical_union,
-          g_default_max_groups_buffer_entry_guess,
+          config_.exec.group_by.default_max_groups_buffer_entry_guess,
           std::move(query_rewriter)};
 }
 
@@ -3627,7 +3627,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            dag_info.hash_table_plan_dag,
            dag_info.table_id_to_node_map},
           filter,
-          g_default_max_groups_buffer_entry_guess,
+          config_.exec.group_by.default_max_groups_buffer_entry_guess,
           nullptr};
 }
 
