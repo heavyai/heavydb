@@ -210,9 +210,14 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
     case kCOLUMN_LIST:
       return ti.get_elem_type().get_size() * 8;
     default:
-      LOG(FATAL) << "Unhandled int_type: " << int_type;
-      return {};
+      break;
   }
+#ifdef __CUDACC__
+  UNREACHABLE();
+#else
+  UNREACHABLE() << "Unhandled int_type: " << int_type;
+#endif
+  return {};
 }
 
 inline bool is_unsigned_type(const SQLTypeInfo& ti) {
