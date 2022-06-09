@@ -127,7 +127,9 @@ std::shared_ptr<ResultSet> SpeculativeTopNMap::asRows(
   query_mem_desc_rs.setAllTargetGroupbyIndices({-1, -1});
 
   auto rs = std::make_shared<ResultSet>(
-      target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc_rs),
+      target_exprs_to_infos(ra_exe_unit.target_exprs,
+                            query_mem_desc_rs,
+                            executor->getConfig().exec.group_by.bigint_count),
       ExecutorDeviceType::CPU,
       query_mem_desc_rs,
       row_set_mem_owner,

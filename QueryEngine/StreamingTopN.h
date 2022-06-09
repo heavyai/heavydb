@@ -51,7 +51,8 @@ class Expr;
 // Compute the slot index where the target given by target_idx is stored, where
 // target_exprs is the list all projected expressions.
 size_t get_heap_key_slot_index(const std::vector<Analyzer::Expr*>& target_exprs,
-                               const size_t target_idx);
+                               const size_t target_idx,
+                               bool bigint_count);
 
 #ifdef HAVE_CUDA
 namespace Data_Namespace {
@@ -67,6 +68,7 @@ std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
     const RelAlgExecutionUnit& ra_exe_unit,
     const QueryMemoryDescriptor& query_mem_desc,
     const size_t thread_count,
-    const int device_id);
+    const int device_id,
+    bool bigint_count);
 #endif  // HAVE_CUDA
 #endif  // QUERYENGINE_STREAMINGTOPN_H

@@ -152,7 +152,8 @@ class QueryMemoryDescriptor {
 
   static int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
                                           const std::vector<InputTableInfo>& query_infos,
-                                          const int8_t crt_min_byte_width);
+                                          const int8_t crt_min_byte_width,
+                                          bool bigint_count);
 
   // Getters and Setters
   const Executor* getExecutor() const { return executor_; }
@@ -386,8 +387,8 @@ inline void set_notnull(TargetInfo& target, const bool not_null) {
   set_compact_type(target, new_type);
 }
 
-std::vector<TargetInfo> target_exprs_to_infos(
-    const std::vector<Analyzer::Expr*>& targets,
-    const QueryMemoryDescriptor& query_mem_desc);
+std::vector<TargetInfo> target_exprs_to_infos(const std::vector<Analyzer::Expr*>& targets,
+                                              const QueryMemoryDescriptor& query_mem_desc,
+                                              bool bigint_count);
 
 #endif  // QUERYENGINE_QUERYMEMORYDESCRIPTOR_H

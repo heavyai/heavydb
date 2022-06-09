@@ -1351,15 +1351,16 @@ std::vector<Analyzer::Expr*> translate_targets(
     const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
     const RelCompound* compound,
     const RelAlgTranslator& translator,
-    const ExecutorType executor_type) {
+    const ExecutorType executor_type,
+    bool bigint_count) {
   std::vector<Analyzer::Expr*> target_exprs;
   for (size_t i = 0; i < compound->size(); ++i) {
     const auto target_rex = compound->getTargetExpr(i);
     const auto target_rex_agg = dynamic_cast<const RexAgg*>(target_rex);
     std::shared_ptr<Analyzer::Expr> target_expr;
     if (target_rex_agg) {
-      target_expr =
-          RelAlgTranslator::translateAggregateRex(target_rex_agg, scalar_sources);
+      target_expr = RelAlgTranslator::translateAggregateRex(
+          target_rex_agg, scalar_sources, bigint_count);
     } else {
       const auto target_rex_scalar = dynamic_cast<const RexScalar*>(target_rex);
       const auto target_rex_ref = dynamic_cast<const RexRef*>(target_rex_scalar);
@@ -1396,7 +1397,8 @@ std::vector<Analyzer::Expr*> translate_targets(
     const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
     const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
     const RelAggregate* aggregate,
-    const RelAlgTranslator& translator) {
+    const RelAlgTranslator& translator,
+    bool bigint_count) {
   std::vector<Analyzer::Expr*> target_exprs;
   size_t group_key_idx = 1;
   for (const auto& groupby_expr : groupby_exprs) {
@@ -1407,8 +1409,8 @@ std::vector<Analyzer::Expr*> translate_targets(
   }
 
   for (const auto& target_rex_agg : aggregate->getAggExprs()) {
-    auto target_expr =
-        RelAlgTranslator::translateAggregateRex(target_rex_agg.get(), scalar_sources);
+    auto target_expr = RelAlgTranslator::translateAggregateRex(
+        target_rex_agg.get(), scalar_sources, bigint_count);
     CHECK(target_expr);
     target_expr = fold_expr(target_expr.get());
     target_exprs_owned.push_back(target_expr);
@@ -2080,7 +2082,8 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
   RelAlgExecutionUnit ra_exe_unit = ra_exe_unit_in;
   for (size_t i = 0; i < ra_exe_unit.target_exprs.size(); ++i) {
     const auto target_expr = ra_exe_unit.target_exprs[i];
-    const auto agg_info = get_target_info(target_expr, g_bigint_count);
+    const auto agg_info =
+        get_target_info(target_expr, executor->getConfig().exec.group_by.bigint_count);
     if (agg_info.agg_kind != kAPPROX_COUNT_DISTINCT) {
       continue;
     }
@@ -2132,7 +2135,12 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
     if (approx_count_distinct_desc.bitmapPaddedSizeBytes() >=
         precise_count_distinct_desc.bitmapPaddedSizeBytes()) {
       auto precise_count_distinct = makeExpr<Analyzer::AggExpr>(
-          get_agg_type(kCOUNT, arg.get()), kCOUNT, arg, true, nullptr);
+          get_agg_type(
+              kCOUNT, arg.get(), executor->getConfig().exec.group_by.bigint_count),
+          kCOUNT,
+          arg,
+          true,
+          nullptr);
       target_exprs_owned.push_back(precise_count_distinct);
       ra_exe_unit.target_exprs[i] = precise_count_distinct.get();
     }
@@ -2315,12 +2323,12 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_u
                                                           const bool is_agg,
                                                           const CompilationOptions& co,
                                                           const ExecutionOptions& eo) {
-  const auto count =
-      makeExpr<Analyzer::AggExpr>(SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, false),
-                                  kCOUNT,
-                                  nullptr,
-                                  false,
-                                  nullptr);
+  const auto count = makeExpr<Analyzer::AggExpr>(
+      SQLTypeInfo(config_.exec.group_by.bigint_count ? kBIGINT : kINT, false),
+      kCOUNT,
+      nullptr,
+      false,
+      nullptr);
   const auto count_all_exe_unit =
       create_count_all_execution_unit(work_unit.exe_unit, count);
   size_t one{1};
@@ -2821,7 +2829,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                               groupby_exprs,
                                               compound,
                                               translator,
-                                              eo.executor_type);
+                                              eo.executor_type,
+                                              config_.exec.group_by.bigint_count);
   auto query_hint = RegisteredQueryHint::defaults();
   if (query_dag_) {
     auto candidate = query_dag_->getQueryHint(compound);
@@ -3101,8 +3110,12 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
   const auto scalar_sources =
       synthesize_inputs(aggregate, size_t(0), in_metainfo, input_to_nest_level);
   const auto groupby_exprs = translate_groupby_exprs(aggregate, scalar_sources);
-  const auto target_exprs = translate_targets(
-      target_exprs_owned_, scalar_sources, groupby_exprs, aggregate, translator);
+  const auto target_exprs = translate_targets(target_exprs_owned_,
+                                              scalar_sources,
+                                              groupby_exprs,
+                                              aggregate,
+                                              translator,
+                                              config_.exec.group_by.bigint_count);
   const auto targets_meta = get_targets_meta(aggregate, target_exprs);
   aggregate->setOutputMetainfo(targets_meta);
   auto dag_info = QueryPlanDagExtractor::extractQueryPlanDag(aggregate,

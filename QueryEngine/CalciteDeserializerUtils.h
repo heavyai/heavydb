@@ -197,7 +197,9 @@ class Expr;
 
 }  // namespace Analyzer
 
-SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const Analyzer::Expr* arg_expr);
+SQLTypeInfo get_agg_type(const SQLAgg agg_kind,
+                         const Analyzer::Expr* arg_expr,
+                         bool bigint_count);
 
 ExtractField to_datepart_field(const std::string&);
 

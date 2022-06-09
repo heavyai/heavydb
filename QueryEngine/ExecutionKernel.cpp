@@ -262,7 +262,9 @@ void ExecutionKernel::runImpl(Executor* executor,
         executor->plan_state_.get(),
         ExternalQueryOutputSpec{
             *query_mem_desc,
-            target_exprs_to_infos(ra_exe_unit_.target_exprs, *query_mem_desc),
+            target_exprs_to_infos(ra_exe_unit_.target_exprs,
+                                  *query_mem_desc,
+                                  executor->getConfig().exec.group_by.bigint_count),
             executor});
     shared_context.addDeviceResults(
         std::move(device_results_), outer_table_id, outer_tab_frag_ids);

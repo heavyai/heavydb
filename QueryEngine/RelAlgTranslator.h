@@ -55,7 +55,8 @@ class RelAlgTranslator {
 
   static std::shared_ptr<Analyzer::Expr> translateAggregateRex(
       const RexAgg* rex,
-      const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources);
+      const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
+      bool bigint_count);
 
   static std::shared_ptr<Analyzer::Expr> translateLiteral(const RexLiteral*);
 

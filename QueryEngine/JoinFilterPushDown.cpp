@@ -76,12 +76,12 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
     }
     input_col_descs.push_back(std::make_shared<const InputColDescriptor>(input_col_desc));
   }
-  const auto count_expr =
-      makeExpr<Analyzer::AggExpr>(SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, false),
-                                  kCOUNT,
-                                  nullptr,
-                                  false,
-                                  nullptr);
+  const auto count_expr = makeExpr<Analyzer::AggExpr>(
+      SQLTypeInfo(config_.exec.group_by.bigint_count ? kBIGINT : kINT, false),
+      kCOUNT,
+      nullptr,
+      false,
+      nullptr);
   RelAlgExecutionUnit ra_exe_unit{input_descs,
                                   input_col_descs,
                                   {},

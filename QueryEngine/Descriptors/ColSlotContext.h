@@ -49,7 +49,8 @@ class ColSlotContext {
   ColSlotContext() {}
 
   ColSlotContext(const std::vector<Analyzer::Expr*>& col_expr_list,
-                 const std::vector<int64_t>& col_exprs_to_not_project);
+                 const std::vector<int64_t>& col_exprs_to_not_project,
+                 bool bigint_count);
 
   void setAllSlotsSize(const int8_t slot_width_size);
 

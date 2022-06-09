@@ -195,7 +195,7 @@ void TargetExprCodegen::codegen(
 
     if (chosen_bytes != sizeof(int32_t)) {
       CHECK_EQ(8, chosen_bytes);
-      if (g_bigint_count) {
+      if (executor->getConfig().exec.group_by.bigint_count) {
         const auto acc_i64 = LL_BUILDER.CreateBitCast(
             is_group_by ? agg_col_ptr : agg_out_vec[slot_index],
             llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0));
@@ -542,7 +542,8 @@ void TargetExprCodegenBuilder::operator()(const Analyzer::Expr* target_expr,
     CHECK_EQ(query_mem_desc.getPaddedSlotWidthBytes(slot_index_counter), int8_t(8));
   }
 
-  auto target_info = get_target_info(target_expr, g_bigint_count);
+  auto target_info =
+      get_target_info(target_expr, executor->getConfig().exec.group_by.bigint_count);
   auto arg_expr = agg_arg(target_expr);
   if (arg_expr) {
     if (target_info.agg_kind == kSINGLE_VALUE || target_info.agg_kind == kSAMPLE ||

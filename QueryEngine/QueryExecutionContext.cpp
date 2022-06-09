@@ -367,12 +367,14 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     }
 
     if (query_mem_desc_.useStreamingTopN()) {
-      query_buffers_->applyStreamingTopNOffsetGpu(buffer_provider,
-                                                  query_mem_desc_,
-                                                  gpu_group_by_buffers,
-                                                  ra_exe_unit,
-                                                  total_thread_count,
-                                                  device_id);
+      query_buffers_->applyStreamingTopNOffsetGpu(
+          buffer_provider,
+          query_mem_desc_,
+          gpu_group_by_buffers,
+          ra_exe_unit,
+          total_thread_count,
+          device_id,
+          executor_->getConfig().exec.group_by.bigint_count);
     } else {
       if (use_speculative_top_n(ra_exe_unit, query_mem_desc_)) {
         try {

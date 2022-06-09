@@ -1138,7 +1138,8 @@ TemporaryTable Executor::resultsUnion(SharedKernelContext& shared_context,
   if (results_per_device.empty()) {
     std::vector<TargetInfo> targets;
     for (const auto target_expr : ra_exe_unit.target_exprs) {
-      targets.push_back(get_target_info(target_expr, g_bigint_count));
+      targets.push_back(
+          get_target_info(target_expr, getConfig().exec.group_by.bigint_count));
     }
     return std::make_shared<ResultSet>(targets,
                                        ExecutorDeviceType::CPU,
@@ -1185,7 +1186,8 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
   if (results_per_device.empty()) {
     std::vector<TargetInfo> targets;
     for (const auto target_expr : ra_exe_unit.target_exprs) {
-      targets.push_back(get_target_info(target_expr, g_bigint_count));
+      targets.push_back(
+          get_target_info(target_expr, getConfig().exec.group_by.bigint_count));
     }
     return std::make_shared<ResultSet>(targets,
                                        ExecutorDeviceType::CPU,
@@ -2146,7 +2148,9 @@ ResultSetPtr Executor::executeTableFunction(
                                          /*is_table_function=*/true);
     query_mem_desc.setOutputColumnar(true);
     return std::make_shared<ResultSet>(
-        target_exprs_to_infos(exe_unit.target_exprs, query_mem_desc),
+        target_exprs_to_infos(exe_unit.target_exprs,
+                              query_mem_desc,
+                              getConfig().exec.group_by.bigint_count),
         co.device_type,
         ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
         this->getRowSetMemoryOwner(),
@@ -2237,7 +2241,8 @@ ExecutorDeviceType Executor::getDeviceTypeForTargets(
     const RelAlgExecutionUnit& ra_exe_unit,
     const ExecutorDeviceType requested_device_type) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
-    const auto agg_info = get_target_info(target_expr, g_bigint_count);
+    const auto agg_info =
+        get_target_info(target_expr, getConfig().exec.group_by.bigint_count);
     if (!ra_exe_unit.groupby_exprs.empty() &&
         !isArchPascalOrLater(requested_device_type)) {
       if ((agg_info.agg_kind == kAVG || agg_info.agg_kind == kSUM) &&
@@ -2272,10 +2277,11 @@ int64_t inline_null_val(const SQLTypeInfo& ti, const bool float_argument_input) 
 void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
                                   std::vector<int64_t>& entry,
                                   const std::vector<Analyzer::Expr*>& target_exprs,
-                                  const QueryMemoryDescriptor& query_mem_desc) {
+                                  const QueryMemoryDescriptor& query_mem_desc,
+                                  bool bigint_count) {
   for (size_t target_idx = 0; target_idx < target_exprs.size(); ++target_idx) {
     const auto target_expr = target_exprs[target_idx];
-    const auto agg_info = get_target_info(target_expr, g_bigint_count);
+    const auto agg_info = get_target_info(target_expr, bigint_count);
     CHECK(agg_info.is_agg);
     target_infos.push_back(agg_info);
     const bool float_argument_input = takes_float_argument(agg_info);
@@ -2320,8 +2326,12 @@ ResultSetPtr build_row_for_empty_input(
   }
   std::vector<TargetInfo> target_infos;
   std::vector<int64_t> entry;
-  fill_entries_for_empty_input(target_infos, entry, target_exprs, query_mem_desc);
   const auto executor = query_mem_desc.getExecutor();
+  fill_entries_for_empty_input(target_infos,
+                               entry,
+                               target_exprs,
+                               query_mem_desc,
+                               executor->getConfig().exec.group_by.bigint_count);
   CHECK(executor);
   auto row_set_mem_owner = executor->getRowSetMemoryOwner();
   CHECK(row_set_mem_owner);
@@ -3472,7 +3482,8 @@ int32_t Executor::executePlanWithoutGroupBy(
     size_t out_vec_idx = 0;
 
     for (const auto target_expr : target_exprs) {
-      const auto agg_info = get_target_info(target_expr, g_bigint_count);
+      const auto agg_info =
+          get_target_info(target_expr, getConfig().exec.group_by.bigint_count);
       CHECK(agg_info.is_agg || dynamic_cast<Analyzer::Constant*>(target_expr))
           << target_expr->toString();
 

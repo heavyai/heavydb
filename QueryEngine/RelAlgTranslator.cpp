@@ -221,7 +221,8 @@ bool is_agg_supported_for_type(const SQLAgg& agg_kind, const SQLTypeInfo& arg_ti
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
     const RexAgg* rex,
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources) {
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
+    bool bigint_count) {
   SQLAgg agg_kind = rex->getKind();
   const bool is_distinct = rex->isDistinct();
   const bool takes_arg{rex->size() > 0};
@@ -264,7 +265,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
                                " is not supported yet.");
     }
   }
-  const auto agg_ti = get_agg_type(agg_kind, arg_expr.get());
+  const auto agg_ti = get_agg_type(agg_kind, arg_expr.get(), bigint_count);
   return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct, arg1);
 }
 

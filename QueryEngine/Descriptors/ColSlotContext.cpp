@@ -32,10 +32,9 @@
 #include <numeric>
 #include <stdexcept>
 
-extern bool g_bigint_count;
-
 ColSlotContext::ColSlotContext(const std::vector<Analyzer::Expr*>& col_expr_list,
-                               const std::vector<int64_t>& col_exprs_to_not_project) {
+                               const std::vector<int64_t>& col_exprs_to_not_project,
+                               bool bigint_count) {
   // Note that non-projected col exprs could be projected cols that we can lazy fetch or
   // grouped cols with keyless hash
   if (!col_exprs_to_not_project.empty()) {
@@ -54,7 +53,7 @@ ColSlotContext::ColSlotContext(const std::vector<Analyzer::Expr*>& col_expr_list
       // row index
       addSlotForColumn(sizeof(int64_t), col_expr_idx);
     } else {
-      const auto agg_info = get_target_info(col_expr, g_bigint_count);
+      const auto agg_info = get_target_info(col_expr, bigint_count);
       const auto chosen_type = get_compact_type(agg_info);
 
       if ((chosen_type.is_string() && chosen_type.get_compression() == kENCODING_NONE) ||

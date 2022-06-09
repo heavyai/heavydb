@@ -8774,11 +8774,13 @@ TEST_F(Select, TopNSortWithWatchdogOn) {
 }
 
 TEST_F(Select, GroupByPerfectHash) {
-  const auto default_bigint_flag = g_bigint_count;
-  ScopeGuard reset = [default_bigint_flag] { g_bigint_count = default_bigint_flag; };
+  const auto default_bigint_flag = config().exec.group_by.bigint_count;
+  ScopeGuard reset = [default_bigint_flag] {
+    config().exec.group_by.bigint_count = default_bigint_flag;
+  };
 
   auto run_test = [](const bool bigint_count_flag) {
-    g_bigint_count = bigint_count_flag;
+    config().exec.group_by.bigint_count = bigint_count_flag;
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
       SKIP_NO_GPU();
       // single-column perfect hash:
@@ -17898,6 +17900,8 @@ TEST_F(ManyRowsTest, Projection) {
 }
 
 int main(int argc, char** argv) {
+  auto config = std::make_shared<Config>();
+
   g_is_test_env = true;
 
   std::cout << "Starting ExecuteTest" << std::endl;
@@ -17918,8 +17922,8 @@ int main(int argc, char** argv) {
                          ->implicit_value(true),
                      "Enable automatic table reordering in FROM clause");
   desc.add_options()("bigint-count",
-                     po::value<bool>(&g_bigint_count)
-                         ->default_value(g_bigint_count)
+                     po::value<bool>(&config->exec.group_by.bigint_count)
+                         ->default_value(config->exec.group_by.bigint_count)
                          ->implicit_value(false),
                      "Use 64-bit count");
   desc.add_options()("disable-shared-mem-group-by",
@@ -17994,7 +17998,7 @@ int main(int argc, char** argv) {
   g_enable_window_functions = true;
   g_enable_interop = false;
 
-  init();
+  init(config);
 
   int err{0};
   try {

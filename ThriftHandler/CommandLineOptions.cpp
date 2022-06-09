@@ -83,11 +83,6 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(allow_loop_joins)
                               ->implicit_value(true),
                           "Enable loop joins.");
-  help_desc.add_options()("bigint-count",
-                          po::value<bool>(&g_bigint_count)
-                              ->default_value(g_bigint_count)
-                              ->implicit_value(true),
-                          "Use 64-bit count.");
   help_desc.add_options()("calcite-max-mem",
                           po::value<size_t>(&system_parameters.calcite_max_mem)
                               ->default_value(system_parameters.calcite_max_mem),

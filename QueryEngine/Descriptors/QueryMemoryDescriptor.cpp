@@ -175,7 +175,8 @@ bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
 }
 
 template <class T>
-inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
+inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list,
+                                               bool bigint_count) {
   std::vector<int8_t> col_widths;
   size_t col_expr_idx = 0;
   for (const auto& col_expr : col_expr_list) {
@@ -183,7 +184,7 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
       // row index
       col_widths.push_back(sizeof(int64_t));
     } else {
-      const auto agg_info = get_target_info(col_expr, g_bigint_count);
+      const auto agg_info = get_target_info(col_expr, bigint_count);
       const auto chosen_type = get_compact_type(agg_info);
       if ((chosen_type.is_string() && chosen_type.get_compression() == kENCODING_NONE) ||
           chosen_type.is_array()) {
@@ -224,13 +225,18 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
     const bool must_use_baseline_sort,
     const bool output_columnar_hint,
     const bool streaming_top_n_hint) {
-  auto group_col_widths = get_col_byte_widths(ra_exe_unit.groupby_exprs);
+  auto group_col_widths = get_col_byte_widths(
+      ra_exe_unit.groupby_exprs, executor->getConfig().exec.group_by.bigint_count);
   const bool is_group_by{!group_col_widths.empty()};
 
-  auto col_slot_context = ColSlotContext(ra_exe_unit.target_exprs, {});
+  auto col_slot_context = ColSlotContext(
+      ra_exe_unit.target_exprs, {}, executor->getConfig().exec.group_by.bigint_count);
 
   const auto min_slot_size = QueryMemoryDescriptor::pick_target_compact_width(
-      ra_exe_unit, query_infos, crt_min_byte_width);
+      ra_exe_unit,
+      query_infos,
+      crt_min_byte_width,
+      executor->getConfig().exec.group_by.bigint_count);
 
   col_slot_context.setAllSlotsPaddedSize(min_slot_size);
   col_slot_context.validate();
@@ -302,7 +308,9 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
           target_groupby_indices = target_expr_group_by_indices(ra_exe_unit.groupby_exprs,
                                                                 ra_exe_unit.target_exprs);
           col_slot_context =
-              ColSlotContext(ra_exe_unit.target_exprs, target_groupby_indices);
+              ColSlotContext(ra_exe_unit.target_exprs,
+                             target_groupby_indices,
+                             executor->getConfig().exec.group_by.bigint_count);
         }
 
         bool has_varlen_sample_agg = false;
@@ -333,7 +341,9 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
                         : max_groups_buffer_entry_count;
       target_groupby_indices = target_expr_group_by_indices(ra_exe_unit.groupby_exprs,
                                                             ra_exe_unit.target_exprs);
-      col_slot_context = ColSlotContext(ra_exe_unit.target_exprs, target_groupby_indices);
+      col_slot_context = ColSlotContext(ra_exe_unit.target_exprs,
+                                        target_groupby_indices,
+                                        executor->getConfig().exec.group_by.bigint_count);
 
       group_col_compact_width =
           output_columnar ? 8
@@ -365,7 +375,9 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
               ? target_expr_proj_indices(ra_exe_unit, executor->getSchemaProvider())
               : std::vector<int64_t>{};
 
-      col_slot_context = ColSlotContext(ra_exe_unit.target_exprs, target_groupby_indices);
+      col_slot_context = ColSlotContext(ra_exe_unit.target_exprs,
+                                        target_groupby_indices,
+                                        executor->getConfig().exec.group_by.bigint_count);
       break;
     }
     default:
@@ -659,8 +671,9 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
 int8_t QueryMemoryDescriptor::pick_target_compact_width(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos,
-    const int8_t crt_min_byte_width) {
-  if (g_bigint_count) {
+    const int8_t crt_min_byte_width,
+    bool bigint_count) {
+  if (bigint_count) {
     return sizeof(int64_t);
   }
   int8_t compact_width{0};
@@ -745,7 +758,7 @@ int8_t QueryMemoryDescriptor::pick_target_compact_width(
                : crt_min_byte_width;
   } else {
     // TODO(miyu): relax this condition to allow more cases just w/o padding
-    for (auto wid : get_col_byte_widths(ra_exe_unit.target_exprs)) {
+    for (auto wid : get_col_byte_widths(ra_exe_unit.target_exprs, bigint_count)) {
       compact_width = std::max(compact_width, wid);
     }
     return compact_width;
@@ -1197,12 +1210,12 @@ std::string QueryMemoryDescriptor::reductionKey() const {
   return str;
 }
 
-std::vector<TargetInfo> target_exprs_to_infos(
-    const std::vector<Analyzer::Expr*>& targets,
-    const QueryMemoryDescriptor& query_mem_desc) {
+std::vector<TargetInfo> target_exprs_to_infos(const std::vector<Analyzer::Expr*>& targets,
+                                              const QueryMemoryDescriptor& query_mem_desc,
+                                              bool bigint_count) {
   std::vector<TargetInfo> target_infos;
   for (const auto target_expr : targets) {
-    auto target = get_target_info(target_expr, g_bigint_count);
+    auto target = get_target_info(target_expr, bigint_count);
     if (query_mem_desc.getQueryDescriptionType() ==
         QueryDescriptionType::NonGroupedAggregate) {
       set_notnull(target, false);

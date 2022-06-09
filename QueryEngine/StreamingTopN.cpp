@@ -44,10 +44,11 @@ std::vector<int8_t> get_rows_copy_from_heaps(const int64_t* heaps,
 }  // namespace streaming_top_n
 
 size_t get_heap_key_slot_index(const std::vector<Analyzer::Expr*>& target_exprs,
-                               const size_t target_idx) {
+                               const size_t target_idx,
+                               bool bigint_count) {
   size_t slot_idx = 0;
   for (size_t i = 0; i < target_idx; ++i) {
-    auto agg_info = get_target_info(target_exprs[i], g_bigint_count);
+    auto agg_info = get_target_info(target_exprs[i], bigint_count);
     slot_idx = advance_slot(slot_idx, agg_info, false);
   }
   return slot_idx;
@@ -60,7 +61,8 @@ std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
     const RelAlgExecutionUnit& ra_exe_unit,
     const QueryMemoryDescriptor& query_mem_desc,
     const size_t thread_count,
-    const int device_id) {
+    const int device_id,
+    bool bigint_count) {
   CHECK(!query_mem_desc.canOutputColumnar());
   CHECK_EQ(ra_exe_unit.sort_info.order_entries.size(), size_t(1));
   const auto& only_oe = ra_exe_unit.sort_info.order_entries.back();
@@ -68,13 +70,14 @@ std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
   const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
   const auto group_key_bytes = query_mem_desc.getEffectiveKeyWidth();
   const PodOrderEntry pod_oe{only_oe.tle_no, only_oe.is_desc, only_oe.nulls_first};
-  const auto key_slot_idx = get_heap_key_slot_index(ra_exe_unit.target_exprs, oe_col_idx);
+  const auto key_slot_idx =
+      get_heap_key_slot_index(ra_exe_unit.target_exprs, oe_col_idx, bigint_count);
   GroupByBufferLayoutInfo oe_layout{
       n * thread_count,
       query_mem_desc.getColOffInBytes(key_slot_idx),
       static_cast<size_t>(query_mem_desc.getPaddedSlotWidthBytes(oe_col_idx)),
       query_mem_desc.getRowSize(),
-      get_target_info(ra_exe_unit.target_exprs[oe_col_idx], g_bigint_count),
+      get_target_info(ra_exe_unit.target_exprs[oe_col_idx], bigint_count),
       -1};
   return pop_n_rows_from_merged_heaps_gpu(
       buffer_provider,

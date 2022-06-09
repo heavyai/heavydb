@@ -42,7 +42,6 @@
 #include <vector>
 
 extern bool g_enable_smem_group_by;
-extern bool g_bigint_count;
 
 struct ColRangeInfo {
   QueryDescriptionType hash_type_;

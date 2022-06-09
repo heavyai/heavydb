@@ -21,8 +21,6 @@
 
 #include "../Analyzer/Analyzer.h"
 
-extern bool g_bigint_count;
-
 std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targets,
                                       const QueryMemoryDescriptor& query_mem_desc) {
   std::vector<int64_t> agg_init_vals;
@@ -254,7 +252,8 @@ int64_t get_agg_initial_val(const SQLAgg agg,
 std::vector<int64_t> init_agg_val_vec(
     const std::vector<Analyzer::Expr*>& targets,
     const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
-    const QueryMemoryDescriptor& query_mem_desc) {
+    const QueryMemoryDescriptor& query_mem_desc,
+    bool bigint_count) {
   std::vector<TargetInfo> target_infos;
   target_infos.reserve(targets.size());
   const auto agg_col_count = query_mem_desc.getSlotCount();
@@ -262,7 +261,7 @@ std::vector<int64_t> init_agg_val_vec(
        target_idx < targets.size() && agg_col_idx < agg_col_count;
        ++target_idx, ++agg_col_idx) {
     const auto target_expr = targets[target_idx];
-    auto target = get_target_info(target_expr, g_bigint_count);
+    auto target = get_target_info(target_expr, bigint_count);
     auto arg_expr = agg_arg(target_expr);
     if (arg_expr) {
       if (query_mem_desc.getQueryDescriptionType() ==

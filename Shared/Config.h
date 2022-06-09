@@ -36,10 +36,15 @@ struct JoinConfig {
   size_t huge_join_hash_min_load = 10;
 };
 
+struct GroupByConfig {
+  bool bigint_count = false;
+};
+
 struct ExecutionConfig {
   WatchdogConfig watchdog;
   CpuSubTasksConfig sub_tasks;
   JoinConfig join;
+  GroupByConfig group_by;
 };
 
 struct FilterPushdownConfig {
