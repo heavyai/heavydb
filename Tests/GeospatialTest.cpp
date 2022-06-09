@@ -357,6 +357,16 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
         static_cast<int64_t>(5),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(ml,p) <= 2.0;", dt)));
+    // yet unsupported native implementations
+    EXPECT_THROW(
+        run_simple_agg("SELECT ST_Distance(ml,ml) FROM geospatial_test limit 1;", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_simple_agg("SELECT ST_Distance(ml,poly) FROM geospatial_test limit 1;", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_simple_agg("SELECT ST_Distance(mpoly,ml) FROM geospatial_test limit 1;", dt),
+        std::runtime_error);
     ASSERT_EQ(static_cast<int64_t>(1),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM geospatial_test "
@@ -965,6 +975,11 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
               v<int64_t>(run_simple_agg("SELECT ST_NPoints(l) FROM geospatial_test ORDER "
                                         "BY ST_NPoints(l) DESC LIMIT 1;",
                                         dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(3),
+        v<int64_t>(run_simple_agg("SELECT ST_NPoints(ml) FROM geospatial_test ORDER "
+                                  "BY ST_NPoints(l) DESC LIMIT 1;",
+                                  dt)));
     ASSERT_EQ(static_cast<int64_t>(3),
               v<int64_t>(run_simple_agg("SELECT ST_NPoints(poly) FROM geospatial_test "
                                         "ORDER BY ST_NPoints(l) DESC LIMIT 1;",
@@ -1918,6 +1933,11 @@ TEST(GeoSpatial, Math) {
         v<int64_t>(run_simple_agg(
             R"(SELECT ST_Contains(ST_GeomFromText('LINESTRING(1 -1.0000000001, 3 -1.0000000001)'), ST_GeomFromText('POINT(0.9999999992 -1)'));)",
             dt)));
+
+    // ST_Contains doesn't yet support MULTILINESTRING
+    EXPECT_ANY_THROW(run_simple_agg(
+        R"(SELECT ST_Contains(ST_GeomFromText('POLYGON((2 0, 0 2, -2 0, 0 -2, 2 0))'), ST_GeomFromText('MULTILINESTRING((1 0, 0 1, -1 0), (0 -1, 1 0))'));)",
+        dt));
 
     // Postgis compatibility
     ASSERT_EQ(

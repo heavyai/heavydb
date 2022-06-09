@@ -168,6 +168,17 @@ class Distance : public Codegen {
                                " currently doesn't accept non-POINT geographies");
     }
 
+    bool unsupported_args = false;
+    if (first_operand_ti.get_type() == kMULTILINESTRING) {
+      unsupported_args = (second_operand_ti.get_type() != kPOINT);
+    } else if (second_operand_ti.get_type() == kMULTILINESTRING) {
+      unsupported_args = (first_operand_ti.get_type() != kPOINT);
+    }
+    if (unsupported_args) {
+      throw std::runtime_error(getName() +
+                               " currently doesn't support this argument combination");
+    }
+
     std::string func_name = getName() + suffix(first_operand_ti.get_type()) +
                             suffix(second_operand_ti.get_type());
     if (is_geodesic) {

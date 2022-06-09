@@ -1430,6 +1430,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
       }
     }
   }
+  if (arg0_ti.get_type() == kMULTILINESTRING || arg1_ti.get_type() == kMULTILINESTRING) {
+    throw QueryNotSupported(rex_function->getName() +
+                            " currently doesn't support this argument combination");
+  }
 
   auto can_use_compressed_coords = [](const SQLTypeInfo& i0_ti,
                                       const Analyzer::ExpressionPtrVector& i0_operands,
