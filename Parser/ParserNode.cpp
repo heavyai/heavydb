@@ -1570,11 +1570,11 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
         }
         const auto string_val = *str_literal->get_stringval();
         copy_params.credential_string = string_val;
-      } else if (boost::iequals(*p->get_name(), "dsn")) {
+      } else if (boost::iequals(*p->get_name(), "data_source_name")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr) {
-          throw std::runtime_error("Option dsn must be a string.");
+          throw std::runtime_error("Option data_source_name must be a string.");
         }
         const auto string_val = *str_literal->get_stringval();
         copy_params.dsn = string_val;
