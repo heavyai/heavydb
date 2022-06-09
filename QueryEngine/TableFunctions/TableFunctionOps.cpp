@@ -130,4 +130,26 @@ extern "C" DEVICE RUNTIME_EXPORT int8_t* TableFunctionManager_get_singleton() {
   return reinterpret_cast<int8_t*>(mgr);
 }
 
+extern "C" DEVICE RUNTIME_EXPORT void TableFunctionManager_set_metadata(
+    int8_t* mgr_ptr,
+    const char* key,
+    const uint8_t* raw_bytes,
+    const size_t num_bytes,
+    const TableFunctionMetadataType value_type) {
+  auto mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
+  CHECK(mgr);
+  mgr->set_metadata(key, raw_bytes, num_bytes, value_type);
+}
+
+extern "C" DEVICE RUNTIME_EXPORT void TableFunctionManager_get_metadata(
+    int8_t* mgr_ptr,
+    const char* key,
+    const uint8_t*& raw_bytes,
+    size_t& num_bytes,
+    TableFunctionMetadataType& value_type) {
+  auto mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
+  CHECK(mgr);
+  mgr->get_metadata(key, raw_bytes, num_bytes, value_type);
+}
+
 #endif  // EXECUTE_INCLUDE

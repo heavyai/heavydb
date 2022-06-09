@@ -2695,6 +2695,24 @@ TEST_F(TableFunctions, ColumnArrayConcat) {
   }
 }
 
+TEST_F(TableFunctions, MetadataSetGet) {
+  // this should work
+  EXPECT_NO_THROW(
+      run_multiple_agg("SELECT * FROM TABLE(tf_metadata_getter(CURSOR(SELECT * FROM "
+                       "TABLE(tf_metadata_setter()))));",
+                       ExecutorDeviceType::CPU));
+  // these should throw
+  EXPECT_THROW(
+      run_multiple_agg("SELECT * FROM TABLE(tf_metadata_getter_bad(CURSOR(SELECT "
+                       "* FROM TABLE(tf_metadata_setter()))));",
+                       ExecutorDeviceType::CPU),
+      std::runtime_error);
+  EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(tf_metadata_getter(CURSOR(SELECT "
+                                "* FROM TABLE(tf_metadata_setter_bad()))));",
+                                ExecutorDeviceType::CPU),
+               std::runtime_error);
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

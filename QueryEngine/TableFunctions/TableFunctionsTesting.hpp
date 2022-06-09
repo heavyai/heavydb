@@ -2131,4 +2131,100 @@ NEVER_INLINE HOST int32_t array_concat__cpu_template(TableFunctionManager& mgr,
   return size;
 }
 
+// clang-format off
+/*
+  UDTF: tf_metadata_setter__cpu_template(TableFunctionManager) -> Column<bool> success
+*/
+// clang-format on
+
+NEVER_INLINE HOST int32_t tf_metadata_setter__cpu_template(TableFunctionManager& mgr,
+                                                           Column<bool>& success) {
+  // set one of each type
+  mgr.set_metadata("test_int8_t", int8_t(1));
+  mgr.set_metadata("test_int16_t", int16_t(2));
+  mgr.set_metadata("test_int32_t", int32_t(3));
+  mgr.set_metadata("test_int64_t", int64_t(4));
+  mgr.set_metadata("test_float", 5.0f);
+  mgr.set_metadata("test_double", 6.0);
+  mgr.set_metadata("test_bool", true);
+
+  mgr.set_output_row_size(1);
+  success[0] = true;
+  return 1;
+}
+
+// clang-format off
+/*
+  UDTF: tf_metadata_setter_bad__cpu_template(TableFunctionManager) -> Column<bool> success
+*/
+// clang-format on
+
+NEVER_INLINE HOST int32_t tf_metadata_setter_bad__cpu_template(TableFunctionManager& mgr,
+                                                               Column<bool>& success) {
+  // set the same name twice
+  mgr.set_metadata("test_int8_t", int8_t(1));
+  mgr.set_metadata("test_int8_t", int16_t(2));
+
+  mgr.set_output_row_size(1);
+  success[0] = true;
+  return 1;
+}
+
+// clang-format off
+/*
+  UDTF: tf_metadata_getter__cpu_template(TableFunctionManager, Column<bool>) -> Column<bool> success
+*/
+// clang-format on
+
+NEVER_INLINE HOST int32_t tf_metadata_getter__cpu_template(TableFunctionManager& mgr,
+                                                           const Column<bool>& input,
+                                                           Column<bool>& success) {
+  // get them all back and check values
+  int8_t i8{};
+  int16_t i16{};
+  int32_t i32{};
+  int64_t i64{};
+  float f{};
+  double d{};
+  bool b{};
+  mgr.get_metadata("test_int8_t", i8);
+  mgr.get_metadata("test_int16_t", i16);
+  mgr.get_metadata("test_int32_t", i32);
+  mgr.get_metadata("test_int64_t", i64);
+  mgr.get_metadata("test_float", f);
+  mgr.get_metadata("test_double", d);
+  mgr.get_metadata("test_bool", b);
+
+  // return value indicates values were correct
+  // types are implicitly correct by this point, or the above would have thrown
+  bool result = (i8 == 1) && (i16 == 2) && (i32 == 3) && (i64 == 4) && (f == 5.0f) &&
+                (d == 6.0) && b;
+  if (!result) {
+    throw std::runtime_error("Metadata return values are incorrect");
+  }
+
+  mgr.set_output_row_size(1);
+  success[0] = true;
+  return 1;
+}
+
+// clang-format off
+/*
+  UDTF: tf_metadata_getter_bad__cpu_template(TableFunctionManager, Column<bool>) -> Column<bool> success
+*/
+// clang-format on
+
+NEVER_INLINE HOST int32_t tf_metadata_getter_bad__cpu_template(TableFunctionManager& mgr,
+                                                               const Column<bool>& input,
+                                                               Column<bool>& success) {
+  // get one back as the wrong type
+  // this should throw
+  float f{};
+  mgr.get_metadata("test_double", f);
+
+  mgr.set_output_row_size(1);
+  success[0] = true;
+  return 1;
+}
+
 #endif  // ifndef __CUDACC__

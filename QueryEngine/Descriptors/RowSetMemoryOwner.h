@@ -30,6 +30,7 @@
 #include "Logger/Logger.h"
 #include "QueryEngine/CountDistinct.h"
 #include "QueryEngine/StringDictionaryGenerations.h"
+#include "QueryEngine/TableFunctionMetadataType.h"
 #include "Shared/quantile.h"
 #include "StringDictionary/StringDictionaryProxy.h"
 #include "StringOps/StringOps.h"
@@ -278,6 +279,40 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
 
   quantile::TDigest* nullTDigest(double const q);
 
+  //
+  // key/value store for table function intercommunication
+  //
+
+  void setTableFunctionMetadata(const char* key,
+                                const uint8_t* raw_data,
+                                const size_t num_bytes,
+                                const TableFunctionMetadataType value_type) {
+    std::vector<uint8_t> value(num_bytes);
+    std::memcpy(value.data(), raw_data, num_bytes);
+    std::lock_guard<std::mutex> lock(table_function_metadata_store_mutex_);
+    auto const [itr, emplaced] = table_function_metadata_store_.try_emplace(
+        std::string(key), std::move(value), value_type);
+    if (!emplaced) {
+      throw std::runtime_error("Table Function Metadata with key '" + std::string(key) +
+                               "' already exists");
+    }
+  }
+
+  void getTableFunctionMetadata(const char* key,
+                                const uint8_t*& raw_data,
+                                size_t& num_bytes,
+                                TableFunctionMetadataType& value_type) const {
+    std::lock_guard<std::mutex> lock(table_function_metadata_store_mutex_);
+    auto const itr = table_function_metadata_store_.find(key);
+    if (itr == table_function_metadata_store_.end()) {
+      throw std::runtime_error("Failed to find Table Function Metadata with key '" +
+                               std::string(key) + "'");
+    }
+    raw_data = itr->second.first.data();
+    num_bytes = itr->second.first.size();
+    value_type = itr->second.second;
+  }
+
  private:
   struct CountDistinctBitmapBuffer {
     int8_t* ptr;
@@ -308,6 +343,10 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   std::vector<std::unique_ptr<Arena>> allocators_;
 
   mutable std::mutex state_mutex_;
+
+  using MetadataValue = std::pair<std::vector<uint8_t>, TableFunctionMetadataType>;
+  std::map<std::string, MetadataValue> table_function_metadata_store_;
+  mutable std::mutex table_function_metadata_store_mutex_;
 
   friend class ResultSet;
   friend class QueryExecutionContext;

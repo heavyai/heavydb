@@ -215,6 +215,22 @@ struct TableFunctionManager {
     error_message_ = std::string(msg);
   }
 
+  void set_metadata(const char* key,
+                    const uint8_t* raw_bytes,
+                    const size_t num_bytes,
+                    const TableFunctionMetadataType value_type) const {
+    CHECK(row_set_mem_owner_);
+    row_set_mem_owner_->setTableFunctionMetadata(key, raw_bytes, num_bytes, value_type);
+  }
+
+  void get_metadata(const char* key,
+                    const uint8_t*& raw_bytes,
+                    size_t& num_bytes,
+                    TableFunctionMetadataType& value_type) const {
+    CHECK(row_set_mem_owner_);
+    row_set_mem_owner_->getTableFunctionMetadata(key, raw_bytes, num_bytes, value_type);
+  }
+
   // Methods for managing singleton instance of TableFunctionManager:
 
   bool isSingleton() const { return is_singleton_; }

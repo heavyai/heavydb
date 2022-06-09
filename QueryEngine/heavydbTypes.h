@@ -23,6 +23,7 @@
 
 #include "DateTruncate.h"
 #include "ExtractFromTime.h"
+#include "TableFunctionMetadataType.h"
 #include "Utils/FlatBuffer.h"
 
 #if !(defined(__CUDACC__) || defined(NO_BOOST))
@@ -78,6 +79,18 @@ EXTENSION_NOINLINE_HOST int8_t* TableFunctionManager_get_singleton();
 EXTENSION_NOINLINE_HOST int32_t table_function_error(const char* message);
 EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_error_message(int8_t* mgr_ptr,
                                                                    const char* message);
+EXTENSION_NOINLINE_HOST void TableFunctionManager_set_metadata(
+    int8_t* mgr_ptr,
+    const char* key,
+    const uint8_t* raw_bytes,
+    const size_t num_bytes,
+    const TableFunctionMetadataType value_type);
+EXTENSION_NOINLINE_HOST void TableFunctionManager_get_metadata(
+    int8_t* mgr_ptr,
+    const char* key,
+    const uint8_t*& raw_bytes,
+    size_t& num_bytes,
+    TableFunctionMetadataType& value_type);
 
 // https://www.fluentcpp.com/2018/04/06/strong-types-by-struct/
 struct TextEncodingDict {
@@ -864,6 +877,29 @@ struct ColumnList<TextEncodingDict> {
   tables for methods.
 */
 #ifndef __CUDACC__
+
+namespace {
+template <typename T>
+TableFunctionMetadataType get_metadata_type() {
+  if constexpr (std::is_same<T, int8_t>::value) {
+    return TableFunctionMetadataType::kInt8;
+  } else if constexpr (std::is_same<T, int16_t>::value) {
+    return TableFunctionMetadataType::kInt16;
+  } else if constexpr (std::is_same<T, int32_t>::value) {
+    return TableFunctionMetadataType::kInt32;
+  } else if constexpr (std::is_same<T, int64_t>::value) {
+    return TableFunctionMetadataType::kInt64;
+  } else if constexpr (std::is_same<T, float>::value) {
+    return TableFunctionMetadataType::kFloat;
+  } else if constexpr (std::is_same<T, double>::value) {
+    return TableFunctionMetadataType::kDouble;
+  } else if constexpr (std::is_same<T, bool>::value) {
+    return TableFunctionMetadataType::kBool;
+  }
+  throw std::runtime_error("Unsupported TableFunctionMetadataType");
+}
+}  // namespace
+
 struct TableFunctionManager {
   static TableFunctionManager* get_singleton() {
     return reinterpret_cast<TableFunctionManager*>(TableFunctionManager_get_singleton());
@@ -887,6 +923,31 @@ struct TableFunctionManager {
 
   int32_t error_message(const char* message) {
     return TableFunctionManager_error_message(reinterpret_cast<int8_t*>(this), message);
+  }
+
+  template <typename T>
+  void set_metadata(const std::string& key, const T& value) {
+    TableFunctionManager_set_metadata(reinterpret_cast<int8_t*>(this),
+                                      key.c_str(),
+                                      reinterpret_cast<const uint8_t*>(&value),
+                                      sizeof(value),
+                                      get_metadata_type<T>());
+  }
+
+  template <typename T>
+  void get_metadata(const std::string& key, T& value) {
+    const uint8_t* raw_data{};
+    size_t num_bytes{};
+    TableFunctionMetadataType value_type;
+    TableFunctionManager_get_metadata(
+        reinterpret_cast<int8_t*>(this), key.c_str(), raw_data, num_bytes, value_type);
+    if (sizeof(T) != num_bytes) {
+      throw std::runtime_error("Size mismatch for Table Function Metadata '" + key + "'");
+    }
+    if (get_metadata_type<T>() != value_type) {
+      throw std::runtime_error("Type mismatch for Table Function Metadata '" + key + "'");
+    }
+    std::memcpy(&value, raw_data, num_bytes);
   }
 
 #ifdef HAVE_TOSTRING
