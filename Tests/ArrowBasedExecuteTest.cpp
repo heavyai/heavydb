@@ -53,7 +53,6 @@ extern bool g_forced_heterogeneous_distribution;
 extern unsigned g_forced_cpu_proportion;
 extern unsigned g_forced_gpu_proportion;
 
-extern size_t g_big_group_threshold;
 extern double g_gpu_mem_limit_percent;
 extern size_t g_parallel_top_min;
 extern size_t g_parallel_top_max;
@@ -2745,11 +2744,11 @@ TEST_F(Select, GroupBy) {
     c("SELECT i, b FROM test_ranges GROUP BY i, b;", dt);
 
     {
-      const auto big_group_threshold = g_big_group_threshold;
+      const auto big_group_threshold = config().exec.group_by.big_group_threshold;
       ScopeGuard reset_big_group_threshold = [&big_group_threshold] {
-        g_big_group_threshold = big_group_threshold;
+        config().exec.group_by.big_group_threshold = big_group_threshold;
       };
-      g_big_group_threshold = 1;
+      config().exec.group_by.big_group_threshold = 1;
       c("SELECT d, COUNT(*) FROM test GROUP BY d ORDER BY d DESC LIMIT 10;", dt);
     }
 
@@ -8425,13 +8424,13 @@ TEST_F(Select, ArrayUnnest) {
     }
 
     // unnest groupby, force estimator run
-    const auto big_group_threshold = g_big_group_threshold;
+    const auto big_group_threshold = config().exec.group_by.big_group_threshold;
     ScopeGuard reset_big_group_threshold = [&big_group_threshold] {
       // this sets the "has estimation" parameter to false for baseline hash groupby of
       // small tables, forcing the estimator to run
-      g_big_group_threshold = big_group_threshold;
+      config().exec.group_by.big_group_threshold = big_group_threshold;
     };
-    g_big_group_threshold = 1;
+    config().exec.group_by.big_group_threshold = 1;
 
     EXPECT_EQ(
         v<int64_t>(run_simple_agg(

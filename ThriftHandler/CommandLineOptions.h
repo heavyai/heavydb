@@ -136,7 +136,6 @@ extern bool g_enable_columnar_output;
 extern bool g_optimize_row_initialization;
 extern bool g_strip_join_covered_quals;
 extern size_t g_constrained_by_in_threshold;
-extern size_t g_big_group_threshold;
 extern bool g_enable_window_functions;
 extern bool g_enable_parallel_window_partition_compute;
 extern bool g_enable_parallel_window_partition_sort;

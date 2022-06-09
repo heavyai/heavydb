@@ -56,7 +56,6 @@ size_t g_columnar_large_projections_threshold{1000000};
 extern bool g_enable_bump_allocator;
 extern bool g_from_table_reordering;
 extern bool g_allow_cpu_retry;
-extern size_t g_big_group_threshold;
 extern bool g_enable_window_functions;
 extern bool g_enable_table_functions;
 extern bool g_enable_multifrag_rs;
@@ -2288,10 +2287,10 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       result = execute_and_handle_errors(
           card, /*has_cardinality_estimation=*/true, /*has_ndv_estimation=*/false);
     } else {
-      result = execute_and_handle_errors(
-          max_groups_buffer_entry_guess,
-          groups_approx_upper_bound(table_infos) <= g_big_group_threshold,
-          /*has_ndv_estimation=*/false);
+      result = execute_and_handle_errors(max_groups_buffer_entry_guess,
+                                         groups_approx_upper_bound(table_infos) <=
+                                             config_.exec.group_by.big_group_threshold,
+                                         /*has_ndv_estimation=*/false);
     }
   } catch (const CardinalityEstimationRequired& e) {
     // check the cardinality cache

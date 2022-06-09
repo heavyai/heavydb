@@ -27,7 +27,6 @@
 #include "DataMgr/DataMgrDataProvider.h"
 
 extern bool g_is_test_env;
-extern size_t g_big_group_threshold;
 
 using namespace TestHelpers;
 using namespace TestHelpers::ArrowSQLRunner;
@@ -313,7 +312,7 @@ class LowCardinalityThresholdTest : public ::testing::Test {
                 {{"fl", dictType()}, {"ar", dictType()}, {"dep", dictType()}});
 
     std::stringstream ss;
-    for (size_t i = 0; i < g_big_group_threshold; i++) {
+    for (size_t i = 0; i < config().exec.group_by.big_group_threshold; i++) {
       ss << i << ", " << i + 1 << ", " << i + 2 << std::endl;
     }
     insertCsvValues("low_cardinality", ss.str());
@@ -328,7 +327,7 @@ TEST_F(LowCardinalityThresholdTest, GroupBy) {
 
     auto result = run_multiple_agg(
         R"(select fl,ar,dep from low_cardinality group by fl,ar,dep;)", dt);
-    EXPECT_EQ(result->rowCount(), g_big_group_threshold);
+    EXPECT_EQ(result->rowCount(), config().exec.group_by.big_group_threshold);
   }
 }
 
@@ -337,7 +336,8 @@ class BigCardinalityThresholdTest : public ::testing::Test {
   void SetUp() override {
     config().exec.watchdog.enable = true;
     initial_baseline_max_groups = config().exec.watchdog.baseline_max_groups;
-    config().exec.watchdog.baseline_max_groups = g_big_group_threshold + 1;
+    config().exec.watchdog.baseline_max_groups =
+        config().exec.group_by.big_group_threshold + 1;
 
     createTable("big_cardinality",
                 {{"fl", dictType()}, {"ar", dictType()}, {"dep", dictType()}});
