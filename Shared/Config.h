@@ -28,9 +28,18 @@ struct CpuSubTasksConfig {
   size_t sub_task_size = 500'000;
 };
 
+struct JoinConfig {
+  bool allow_loop_joins = false;
+  unsigned trivial_loop_join_threshold = 1'000;
+  bool inner_join_fragment_skipping = true;
+  size_t huge_join_hash_threshold = 1'000'000;
+  size_t huge_join_hash_min_load = 10;
+};
+
 struct ExecutionConfig {
   WatchdogConfig watchdog;
   CpuSubTasksConfig sub_tasks;
+  JoinConfig join;
 };
 
 struct FilterPushdownConfig {

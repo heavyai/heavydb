@@ -147,11 +147,12 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
 
   // We don't want to build huge and very sparse tables
   // to consume lots of memory.
-  if (bucketized_entry_count > 1000000) {
+  if (bucketized_entry_count > executor->getConfig().exec.join.huge_join_hash_threshold) {
     const auto& query_info =
         get_inner_query_info(inner_col->get_table_id(), query_infos).info;
     if (query_info.getNumTuplesUpperBound() * 100 <
-        huge_join_hash_min_load_ * bucketized_entry_count) {
+        executor->getConfig().exec.join.huge_join_hash_min_load *
+            bucketized_entry_count) {
       throw TooManyHashEntries();
     }
   }

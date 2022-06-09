@@ -487,7 +487,8 @@ void check_if_loop_join_is_allowed(RelAlgExecutionUnit& ra_exe_unit,
                                    const ExecutionOptions& eo,
                                    const std::vector<InputTableInfo>& query_infos,
                                    const size_t level_idx,
-                                   const std::string& fail_reason) {
+                                   const std::string& fail_reason,
+                                   unsigned trivial_loop_join_threshold) {
   if (eo.allow_loop_joins) {
     return;
   }
@@ -496,7 +497,7 @@ void check_if_loop_join_is_allowed(RelAlgExecutionUnit& ra_exe_unit,
         "Hash join failed, reason(s): " + fail_reason +
         " | Cannot fall back to loop join for intermediate join quals");
   }
-  if (!is_trivial_loop_join(query_infos, ra_exe_unit)) {
+  if (!is_trivial_loop_join(query_infos, ra_exe_unit, trivial_loop_join_threshold)) {
     throw std::runtime_error(
         "Hash join failed, reason(s): " + fail_reason +
         " | Cannot fall back to loop join for non-trivial inner table size");
@@ -634,8 +635,12 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
       const auto fail_reasons_str = current_level_join_conditions.quals.empty()
                                         ? "No equijoin expression found"
                                         : boost::algorithm::join(fail_reasons, " | ");
-      check_if_loop_join_is_allowed(
-          ra_exe_unit, eo, query_infos, level_idx, fail_reasons_str);
+      check_if_loop_join_is_allowed(ra_exe_unit,
+                                    eo,
+                                    query_infos,
+                                    level_idx,
+                                    fail_reasons_str,
+                                    config_->exec.join.trivial_loop_join_threshold);
       // Callback provided to the `JoinLoop` framework to evaluate the (outer) join
       // condition.
       VLOG(1) << "Unable to build hash table, falling back to loop join: "

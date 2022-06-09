@@ -241,13 +241,6 @@ void CommandLineOptions::fillOptions() {
       "idle-session-duration",
       po::value<int>(&idle_session_duration)->default_value(idle_session_duration),
       "Maximum duration of idle session.");
-  help_desc.add_options()("inner-join-fragment-skipping",
-                          po::value<bool>(&g_inner_join_fragment_skipping)
-                              ->default_value(g_inner_join_fragment_skipping)
-                              ->implicit_value(true),
-                          "Enable/disable inner join fragment skipping. This feature is "
-                          "considered stable and is enabled by default. This "
-                          "parameter will be removed in a future release.");
   help_desc.add_options()(
       "max-session-duration",
       po::value<int>(&max_session_duration)->default_value(max_session_duration),
@@ -292,12 +285,6 @@ void CommandLineOptions::fillOptions() {
                           po::value<int>(&system_parameters.start_gpu)
                               ->default_value(system_parameters.start_gpu),
                           "First gpu to use.");
-  help_desc.add_options()("trivial-loop-join-threshold",
-                          po::value<unsigned>(&g_trivial_loop_join_threshold)
-                              ->default_value(g_trivial_loop_join_threshold)
-                              ->implicit_value(1000),
-                          "The maximum number of rows in the inner table of a loop join "
-                          "considered to be trivially small.");
   help_desc.add_options()("verbose",
                           po::value<bool>(&verbose_logging)
                               ->default_value(verbose_logging)

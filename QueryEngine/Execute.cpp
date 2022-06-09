@@ -80,9 +80,7 @@ bool g_allow_cpu_retry{true};
 bool g_allow_query_step_cpu_retry{true};
 bool g_null_div_by_zero{false};
 bool g_inf_div_by_zero{false};
-unsigned g_trivial_loop_join_threshold{1000};
 bool g_from_table_reordering{true};
-bool g_inner_join_fragment_skipping{true};
 extern bool g_enable_smem_group_by;
 extern std::unique_ptr<llvm::Module> udf_gpu_module;
 extern std::unique_ptr<llvm::Module> udf_cpu_module;
@@ -1483,7 +1481,8 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
 }  // namespace
 
 bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos,
-                          const RelAlgExecutionUnit& ra_exe_unit) {
+                          const RelAlgExecutionUnit& ra_exe_unit,
+                          unsigned trivial_loop_join_threshold) {
   if (ra_exe_unit.input_descs.size() < 2) {
     return false;
   }
@@ -1500,8 +1499,7 @@ bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos,
     }
   }
   CHECK(inner_table_idx);
-  return query_infos[*inner_table_idx].info.getNumTuples() <=
-         g_trivial_loop_join_threshold;
+  return query_infos[*inner_table_idx].info.getNumTuples() <= trivial_loop_join_threshold;
 }
 
 namespace {
@@ -2569,13 +2567,14 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
   const auto device_count = deviceCount(device_type);
   CHECK_GT(device_count, 0);
 
-  fragment_descriptor.buildFragmentKernelMap(ra_exe_unit,
-                                             shared_context.getFragOffsets(),
-                                             policy,
-                                             device_count,
-                                             use_multifrag_kernel,
-                                             g_inner_join_fragment_skipping,
-                                             this);
+  fragment_descriptor.buildFragmentKernelMap(
+      ra_exe_unit,
+      shared_context.getFragOffsets(),
+      policy,
+      device_count,
+      use_multifrag_kernel,
+      config_->exec.join.inner_join_fragment_skipping,
+      this);
   if (eo.with_watchdog && fragment_descriptor.shouldCheckWorkUnitWatchdog()) {
     checkWorkUnitWatchdog(
         ra_exe_unit, table_infos, *schema_provider_, device_type, device_count);
@@ -2692,13 +2691,14 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createHeterogeneousKerne
 
   CHECK(!ra_exe_unit.input_descs.empty());
 
-  fragment_descriptor.buildFragmentKernelMap(ra_exe_unit,
-                                             shared_context.getFragOffsets(),
-                                             policy,
-                                             available_cpus + available_gpus.size(),
-                                             false, /*multifrag policy unsupported yet*/
-                                             g_inner_join_fragment_skipping,
-                                             this);
+  fragment_descriptor.buildFragmentKernelMap(
+      ra_exe_unit,
+      shared_context.getFragOffsets(),
+      policy,
+      available_cpus + available_gpus.size(),
+      false, /*multifrag policy unsupported yet*/
+      config_->exec.join.inner_join_fragment_skipping,
+      this);
 
   if (!ra_exe_unit.use_bump_allocator && allow_single_frag_table_opt &&
       query_mem_descs.count(ExecutorDeviceType::GPU) &&

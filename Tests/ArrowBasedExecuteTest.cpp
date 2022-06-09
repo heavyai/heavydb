@@ -54,7 +54,6 @@ extern unsigned g_forced_cpu_proportion;
 extern unsigned g_forced_gpu_proportion;
 
 extern size_t g_big_group_threshold;
-extern unsigned g_trivial_loop_join_threshold;
 extern double g_gpu_mem_limit_percent;
 extern size_t g_parallel_top_min;
 extern size_t g_parallel_top_max;
@@ -11019,9 +11018,11 @@ TEST_F(Select, Joins_Decimal) {
       "WHERE t1.y = t2.y ORDER BY t1.y, t1.x;",
       dt);
     // disable loop joins, expect throw
-    const auto trivial_join_loop_state = g_trivial_loop_join_threshold;
-    ScopeGuard reset = [&] { g_trivial_loop_join_threshold = trivial_join_loop_state; };
-    g_trivial_loop_join_threshold = 1;
+    const auto trivial_join_loop_state = config().exec.join.trivial_loop_join_threshold;
+    ScopeGuard reset = [&] {
+      config().exec.join.trivial_loop_join_threshold = trivial_join_loop_state;
+    };
+    config().exec.join.trivial_loop_join_threshold = 1;
 
     EXPECT_ANY_THROW(
         run_multiple_agg("SELECT COUNT(*) FROM hash_join_decimal_test as t1, "

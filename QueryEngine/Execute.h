@@ -1363,7 +1363,8 @@ inline bool is_constructed_point(const Analyzer::Expr* expr) {
 }
 
 bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos,
-                          const RelAlgExecutionUnit& ra_exe_unit);
+                          const RelAlgExecutionUnit& ra_exe_unit,
+                          unsigned trivial_loop_join_threshold);
 
 std::unordered_set<int> get_available_gpus(const Data_Namespace::DataMgr* data_mgr);
 
