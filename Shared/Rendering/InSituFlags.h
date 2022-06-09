@@ -41,7 +41,8 @@ class InSituFlagsOwnerInterface {
   InSituFlags getInSituFlags() const { return insitu_flags_; }
 
   bool isForcedNonInSitu() const {
-    return any_bits_set(insitu_flags_ & InSituFlags::kForcedNonInSitu);
+    return (insitu_flags_ & InSituFlags::kForcedNonInSitu) ==
+           InSituFlags::kForcedNonInSitu;
   }
 
   bool isInSitu() const { return insitu_flags_ == InSituFlags::kInSitu; }
