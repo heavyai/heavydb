@@ -1142,8 +1142,6 @@ class ImportAndSelectTest
     if (import_type == "parquet") {
       options.emplace_back("source_type='parquet_file'");
     }
-    if (isOdbc(import_type)) {
-    }
     if (data_source_type == "s3_public" || data_source_type == "s3_private") {
       options.emplace_back("s3_region='us-west-1'");
     }
