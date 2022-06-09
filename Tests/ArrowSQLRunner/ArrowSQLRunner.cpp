@@ -386,11 +386,15 @@ class ArrowSQLRunnerImpl {
         }
       }
 
+#ifdef _WIN32
+      calcite_->setRuntimeExtensionFunctions({}, {}, /*is_runtime=*/false);
+#else
       table_functions::TableFunctionsFactory::init();
       auto udtfs =
           table_functions::TableFunctionsFactory::get_table_funcs(/*is_runtime=*/false);
       std::vector<ExtensionFunction> udfs = {};
       calcite_->setRuntimeExtensionFunctions(udfs, udtfs, /*is_runtime=*/false);
+#endif
     }
 
     rel_alg_cache_ = std::make_shared<RelAlgCache>(calcite_, storage_, config_);
