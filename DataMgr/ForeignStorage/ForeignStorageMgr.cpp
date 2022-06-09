@@ -285,11 +285,14 @@ void ForeignStorageMgr::setDataWrapper(
     std::shared_ptr<MockForeignDataWrapper> data_wrapper) {
   CHECK(is_table_key(table_key));
   std::lock_guard data_wrapper_lock(data_wrapper_mutex_);
-  CHECK(data_wrapper_map_.find(table_key) != data_wrapper_map_.end());
-  data_wrapper->setParentWrapper(data_wrapper_map_.at(table_key));
-  data_wrapper_map_[table_key] = data_wrapper;
-
-  // Preserve mock wrappers separately so they can persist the parent being re-created.
+  if (auto wrapper_iter = data_wrapper_map_.find(table_key);
+      wrapper_iter != data_wrapper_map_.end()) {
+    data_wrapper->setParentWrapper(wrapper_iter->second);
+    data_wrapper_map_[table_key] = data_wrapper;
+  }
+  // If a wrapper does not yet exist, then delay setting the mock until we actually
+  // create the wrapper. Preserve mock wrappers separately so they can persist the parent
+  // being re-created.
   mocked_wrapper_map_[table_key] = data_wrapper;
 }
 

@@ -213,15 +213,12 @@ void CachingForeignStorageMgr::refreshTable(const ChunkKey& table_key,
   }
 }
 
+bool CachingForeignStorageMgr::hasStoredDataWrapper(int32_t db, int32_t tb) const {
+  return disk_cache_->hasStoredDataWrapperMetadata(db, tb);
+}
+
 void CachingForeignStorageMgr::refreshTableInCache(const ChunkKey& table_key) {
   CHECK(is_table_key(table_key));
-
-  if (!disk_cache_->hasStoredDataWrapperMetadata(table_key[CHUNK_KEY_DB_IDX],
-                                                 table_key[CHUNK_KEY_TABLE_IDX])) {
-    // If we have no metadata for the table then we should not force metadata population
-    // until we actually run a query on it.
-    return;
-  }
 
   // Preserve the list of which chunks were cached per table to refresh after clear.
   std::vector<ChunkKey> old_chunk_keys =

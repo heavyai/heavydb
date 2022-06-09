@@ -16,6 +16,7 @@
 
 #include "ForeignTableRefresh.h"
 #include "Catalog/Catalog.h"
+#include "DataMgr/ForeignStorage/CachingForeignStorageMgr.h"
 #include "LockMgr/LockMgr.h"
 #include "Shared/distributed.h"
 #include "Shared/misc.h"
@@ -37,11 +38,22 @@ void refresh_foreign_table_unlocked(Catalog_Namespace::Catalog& catalog,
   auto& data_mgr = catalog.getDataMgr();
   ChunkKey table_key{catalog.getCurrentDB().dbId, td.tableId};
   ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
-
   catalog.removeFragmenterForTable(td.tableId);
 
+  auto fsm = data_mgr.getPersistentStorageMgr()->getForeignStorageMgr();
+  CHECK(fsm);
+  if (auto cfm = dynamic_cast<CachingForeignStorageMgr*>(fsm)) {
+    if (!cfm->hasStoredDataWrapper(table_key[CHUNK_KEY_DB_IDX],
+                                   table_key[CHUNK_KEY_TABLE_IDX])) {
+      // If there is no wrapper stored on disk, then we have not populated the metadata
+      // for this table and we are free to skip the refresh.
+      catalog.updateForeignTableRefreshTimes(td.tableId);
+      return;
+    }
+  }
+
   std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> old_chunk_metadata_by_chunk_key;
-  if (catalog.getForeignTable(td.tableId)->isAppendMode() && !evict_cached_entries) {
+  if (td.isAppendMode() && !evict_cached_entries) {
     ChunkMetadataVector metadata_vec;
     data_mgr.getChunkMetadataVecForKeyPrefix(metadata_vec, table_key);
     int last_fragment_id = 0;
@@ -61,8 +73,7 @@ void refresh_foreign_table_unlocked(Catalog_Namespace::Catalog& catalog,
   }
 
   try {
-    data_mgr.getPersistentStorageMgr()->getForeignStorageMgr()->refreshTable(
-        table_key, evict_cached_entries);
+    fsm->refreshTable(table_key, evict_cached_entries);
     catalog.updateForeignTableRefreshTimes(td.tableId);
   } catch (PostEvictionRefreshException& e) {
     catalog.updateForeignTableRefreshTimes(td.tableId);

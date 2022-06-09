@@ -44,6 +44,8 @@ class CachingForeignStorageMgr : public ForeignStorageMgr {
 
   bool createDataWrapperIfNotExists(const ChunkKey& chunk_key) override;
 
+  bool hasStoredDataWrapper(int32_t db, int32_t tb) const;
+
  private:
   void refreshTableInCache(const ChunkKey& table_key);
 
