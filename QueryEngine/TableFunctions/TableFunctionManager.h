@@ -120,7 +120,7 @@ struct TableFunctionManager {
         query_mem_desc,
         /*device_id=*/0,
         ExecutorDeviceType::CPU,
-        g_use_groupby_buffer_desc,
+        executor_->getConfig().exec.group_by.use_groupby_buffer_desc,
         (output_num_rows_ == 0 ? 1 : output_num_rows_),
         std::vector<std::vector<const int8_t*>>{col_buf_ptrs_},
         std::vector<std::vector<uint64_t>>{{0}},  // frag offsets

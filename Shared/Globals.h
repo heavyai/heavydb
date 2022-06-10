@@ -12,5 +12,4 @@
  * limitations under the License.
  */
 
-extern bool g_use_groupby_buffer_desc;
 extern double g_gpu_mem_limit_percent;

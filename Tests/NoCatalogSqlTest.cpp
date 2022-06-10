@@ -37,6 +37,8 @@ constexpr int TEST2_TABLE_ID = 2;
 constexpr int TEST_AGG_TABLE_ID = 3;
 constexpr int TEST_STREAMING_TABLE_ID = 4;
 
+static bool use_groupby_buffer_desc = false;
+
 using ArrowTestHelpers::compare_res_data;
 
 class TestSchemaProvider : public SimpleSchemaProvider {
@@ -197,7 +199,7 @@ class NoCatalogSqlTest : public ::testing::Test {
         executor_.get(), schema_provider_, data_mgr_->getDataProvider(), std::move(dag));
 
     auto co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
-    co.use_groupby_buffer_desc = g_use_groupby_buffer_desc;
+    co.use_groupby_buffer_desc = use_groupby_buffer_desc;
     return ra_executor.executeRelAlgQuery(co, ExecutionOptions(), false);
   }
 
@@ -395,7 +397,7 @@ void parse_cli_args_to_globals(int argc, char* argv[]) {
       std::exit(EXIT_SUCCESS);
     }
     po::notify(vm);
-    g_use_groupby_buffer_desc = vm["use-groupby-buffer-desc"].as<bool>();
+    use_groupby_buffer_desc = vm["use-groupby-buffer-desc"].as<bool>();
 
   } catch (boost::program_options::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
