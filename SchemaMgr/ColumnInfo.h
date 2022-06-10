@@ -18,8 +18,8 @@
 #include "Shared/toString.h"
 
 #include <memory>
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
 
 struct ColumnRef {
   ColumnRef(int db_id_, int table_id_, int column_id_)
