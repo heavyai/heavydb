@@ -367,6 +367,84 @@ void test_array_values(const std::shared_ptr<arrow::RecordBatch>& read_batch) {
   }
 }
 
+void test_array_text_values(const std::shared_ptr<arrow::RecordBatch>& read_batch) {
+  using namespace arrow;
+  ASSERT_EQ(read_batch->schema()->num_fields(), 1);
+
+  auto dict_type = dictionary(int32(), utf8());
+
+  std::string expected = R"([
+
+  -- dictionary:
+    [
+      "3",
+      "2",
+      "1",
+      "test",
+      "world",
+      "hello"
+    ]
+  -- indices:
+    [
+      5,
+      4,
+      5,
+      3,
+      4
+    ],
+
+  -- dictionary:
+    [
+      "3",
+      "2",
+      "1",
+      "test",
+      "world",
+      "hello"
+    ]
+  -- indices:
+    [
+      2,
+      1,
+      0
+    ],
+
+  -- dictionary:
+    [
+      "3",
+      "2",
+      "1",
+      "test",
+      "world",
+      "hello"
+    ]
+  -- indices:
+    [],
+  null,
+
+  -- dictionary:
+    [
+      "3",
+      "2",
+      "1",
+      "test",
+      "world",
+      "hello"
+    ]
+  -- indices:
+    [
+      5,
+      null,
+      4
+    ]
+])";
+
+  const auto arr = read_batch->column(0);
+  std::stringstream ss;
+  ss << *arr;
+  ASSERT_EQ(expected, ss.str());
+}
+
 }  // namespace
 
 class ArrowIpcBasic : public ::testing::Test {
@@ -376,6 +454,7 @@ class ArrowIpcBasic : public ::testing::Test {
     run_ddl_statement("DROP TABLE IF EXISTS test_data_scalars;");
     run_ddl_statement("DROP TABLE IF EXISTS test_data_text;");
     run_ddl_statement("DROP TABLE IF EXISTS test_data_array;");
+    run_ddl_statement("DROP TABLE IF EXISTS test_data_array_text;");
 
     run_ddl_statement(R"(
       CREATE TABLE
@@ -411,6 +490,11 @@ class ArrowIpcBasic : public ::testing::Test {
                           f8 DOUBLE[]);
     )");
 
+    run_ddl_statement(R"(
+        CREATE TABLE
+          test_data_array_text(t TEXT[] ENCODING DICT);
+    )");
+
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (1, 1.1, 'foo');");
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (2, 2.1, NULL);");
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (NULL, 3.1, 'bar');");
@@ -431,10 +515,13 @@ class ArrowIpcBasic : public ::testing::Test {
     {
       std::string arr = "{0, 1, 2}";
       std::string barr = "{'true', 'false', 'true'}";
+      std::string tarr = "{'hello', 'world', 'hello', 'test', 'world'}";
+      std::string iarr = "{'1', '2', '3'}";
       std::string empty_arr = "{}";
       std::string null_arr = "NULL";
       std::string null_elem_arr = "{0, NULL, 2}";
       std::string null_elem_barr = "{'true', NULL, 'false'}";
+      std::string null_elem_tarr = "{'hello', NULL, 'world'}";
 
       const std::vector vals = {make_pair(barr, arr),
                                 make_pair(empty_arr, empty_arr),
@@ -446,6 +533,12 @@ class ArrowIpcBasic : public ::testing::Test {
             "INSERT INTO test_data_array VALUES ({0}, {1}, {1}, {1}, {1}, {1}, {1});",
             b,
             i);
+        run_ddl_statement(query);
+      }
+
+      for (const auto& t : {tarr, iarr, empty_arr, null_arr, null_elem_tarr}) {
+        std::string query =
+            fmt::format("INSERT INTO test_data_array_text VALUES ({0});", t);
         run_ddl_statement(query);
       }
     }
@@ -702,6 +795,20 @@ TEST_F(ArrowIpcBasic, IpcCpuArrayValues) {
       ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::SHARED_MEMORY);
 
   test_array_values(df.record_batch);
+
+  deallocate_df(data_frame, ExecutorDeviceType::CPU);
+}
+
+TEST_F(ArrowIpcBasic, IpcCpuArrayTextValues) {
+  auto data_frame =
+      execute_arrow_ipc("SELECT * FROM test_data_array_text;", ExecutorDeviceType::CPU);
+
+  ASSERT_TRUE(data_frame.df_size > 0);
+
+  auto df =
+      ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::SHARED_MEMORY);
+
+  test_array_text_values(df.record_batch);
 
   deallocate_df(data_frame, ExecutorDeviceType::CPU);
 }

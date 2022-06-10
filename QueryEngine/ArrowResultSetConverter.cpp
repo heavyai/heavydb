@@ -151,8 +151,7 @@ void create_or_append_value(const ArrayTargetValue& val_ctys,
     for (auto val_cty : val_ctys.value()) {
       auto pval_cty = boost::get<VALUE_ARRAY_TYPE>(&val_cty);
       CHECK(pval_cty);
-      auto val_ty = static_cast<TYPE>(*pval_cty);
-      values_ty->back().emplace_back(val_ty);
+      values_ty->back().emplace_back(static_cast<TYPE>(*pval_cty));
     }
   }
 }
@@ -367,6 +366,57 @@ std::pair<key_t, std::shared_ptr<arrow::Buffer>> get_shm_buffer(size_t size) {
   return std::make_pair<key_t, std::shared_ptr<arrow::Buffer>>(std::move(key),
                                                                std::move(buffer));
 #endif
+}
+
+void remap_string_values(const ArrowResultSetConverter::ColumnBuilder& column_builder,
+                         const std::vector<uint8_t>& bitmap,
+                         std::vector<int64_t>& vec1d) {
+  /*
+   remap negative values if ArrowStringRemapMode == ONLY_TRANSIENT_STRINGS_REMAPPED or
+   everything if ALL_STRINGS_REMAPPED
+  */
+
+  auto all_strings_remapped_bitmap = [&column_builder, &vec1d, &bitmap]() {
+    for (size_t i = 0; i < vec1d.size(); i++) {
+      if (bitmap[i]) {
+        vec1d[i] = column_builder.string_remapping.at(vec1d[i]);
+      }
+    }
+  };
+
+  auto all_strings_remapped = [&column_builder, &vec1d]() {
+    for (size_t i = 0; i < vec1d.size(); i++) {
+      vec1d[i] = column_builder.string_remapping.at(vec1d[i]);
+    }
+  };
+
+  auto only_transient_strings_remapped = [&column_builder, &vec1d]() {
+    for (size_t i = 0; i < vec1d.size(); i++) {
+      if (vec1d[i] < 0) {
+        vec1d[i] = column_builder.string_remapping.at(vec1d[i]);
+      }
+    }
+  };
+
+  auto only_transient_strings_remapped_bitmap = [&column_builder, &vec1d, &bitmap]() {
+    for (size_t i = 0; i < vec1d.size(); i++) {
+      if (bitmap[i] && vec1d[i] < 0) {
+        vec1d[i] = column_builder.string_remapping.at(vec1d[i]);
+      }
+    }
+  };
+
+  switch (column_builder.string_remap_mode) {
+    case ArrowStringRemapMode::ALL_STRINGS_REMAPPED:
+      bitmap.empty() ? all_strings_remapped() : all_strings_remapped_bitmap();
+      break;
+    case ArrowStringRemapMode::ONLY_TRANSIENT_STRINGS_REMAPPED:
+      bitmap.empty() ? only_transient_strings_remapped()
+                     : only_transient_strings_remapped_bitmap();
+      break;
+    default:
+      UNREACHABLE();
+  }
 }
 
 }  // namespace
@@ -858,6 +908,14 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
               create_or_append_validity(
                   *array, column.col_type, null_bitmap_seg[j], local_entry_count);
               break;
+            case kTEXT:
+              if (column.col_type.is_dict_encoded_type()) {
+                create_or_append_value<int64_t, int64_t>(
+                    *array, value_seg[j], local_entry_count);
+                create_or_append_validity(
+                    *array, column.col_type, null_bitmap_seg[j], local_entry_count);
+                break;
+              }
             default:
               throw std::runtime_error(column.col_type.get_type_name() +
                                        " is not supported in Arrow result sets.");
@@ -1075,7 +1133,7 @@ std::shared_ptr<arrow::DataType> get_arrow_type(const SQLTypeInfo& sql_type,
     case kTEXT:
       if (sql_type.is_dict_encoded_string()) {
         auto value_type = std::make_shared<arrow::StringType>();
-        return dictionary(arrow::int32(), value_type, false);
+        return arrow::dictionary(arrow::int32(), value_type, false);
       }
       return arrow::utf8();
     case kDECIMAL:
@@ -1124,6 +1182,11 @@ std::shared_ptr<arrow::DataType> get_arrow_type(const SQLTypeInfo& sql_type,
           return arrow::list(arrow::float32());
         case kDOUBLE:
           return arrow::list(arrow::float64());
+        case kTEXT:
+          if (sql_type.is_dict_encoded_type()) {
+            auto value_type = std::make_shared<arrow::StringType>();
+            return arrow::list(arrow::dictionary(arrow::int32(), value_type, false));
+          }
         default:
           throw std::runtime_error("Unsupported array type for Arrow result sets: " +
                                    sql_type.get_type_name());
@@ -1198,9 +1261,11 @@ void ArrowResultSetConverter::initializeColumnBuilder(
                                      : get_physical_type(col_type);
 
   auto value_type = field->type();
-  if (col_type.is_dict_encoded_string()) {
+  if (col_type.is_dict_encoded_type()) {
     auto timer = DEBUG_TIMER("Translate string dictionary to Arrow dictionary");
-    column_builder.builder.reset(new arrow::StringDictionary32Builder());
+    if (!col_type.is_array()) {
+      column_builder.builder.reset(new arrow::StringDictionary32Builder());
+    }
     // add values to the builder
     const int dict_id = col_type.get_comp_param();
 
@@ -1301,11 +1366,17 @@ void ArrowResultSetConverter::initializeColumnBuilder(
     std::shared_ptr<arrow::StringArray> string_array;
     ARROW_THROW_NOT_OK(str_array_builder.Finish(&string_array));
 
-    auto dict_builder =
-        dynamic_cast<arrow::StringDictionary32Builder*>(column_builder.builder.get());
-    CHECK(dict_builder);
+    if (col_type.is_array()) {
+      column_builder.string_array = std::move(string_array);
+      ARROW_THROW_NOT_OK(arrow::MakeBuilder(
+          arrow::default_memory_pool(), value_type, &column_builder.builder));
+    } else {
+      auto dict_builder =
+          dynamic_cast<arrow::StringDictionary32Builder*>(column_builder.builder.get());
+      CHECK(dict_builder);
 
-    ARROW_THROW_NOT_OK(dict_builder->InsertMemoValues(*string_array));
+      ARROW_THROW_NOT_OK(dict_builder->InsertMemoValues(*string_array));
+    }
   } else {
     ARROW_THROW_NOT_OK(arrow::MakeBuilder(
         arrow::default_memory_pool(), value_type, &column_builder.builder));
@@ -1495,6 +1566,53 @@ void appendToListColumnBuilder(ArrowResultSetConverter::ColumnBuilder& column_bu
   }
 }
 
+template <>
+void appendToListColumnBuilder<arrow::StringDictionaryBuilder, int64_t>(
+    ArrowResultSetConverter::ColumnBuilder& column_builder,
+    const ValueArray& values,
+    const std::shared_ptr<std::vector<bool>>& is_valid) {
+  Vec2<int64_t> vec2d = boost::get<Vec2<int64_t>>(values);
+
+  auto* list_builder = dynamic_cast<arrow::ListBuilder*>(column_builder.builder.get());
+  CHECK(list_builder);
+
+  // todo: fix value_builder being a StringDictionaryBuilder and not
+  // StringDictionary32Builder
+  auto* value_builder =
+      dynamic_cast<arrow::StringDictionaryBuilder*>(list_builder->value_builder());
+  CHECK(value_builder);
+
+  if (column_builder.field->nullable()) {
+    for (size_t i = 0; i < vec2d.size(); i++) {
+      if ((*is_valid)[i]) {
+        auto& vec1d = vec2d[i];
+        std::vector<uint8_t> bitmap(vec1d.size());
+        std::transform(vec1d.begin(), vec1d.end(), bitmap.begin(), [](int64_t pvalue) {
+          return pvalue != null_type<int32_t>::value;
+        });
+        ARROW_THROW_NOT_OK(list_builder->Append());
+        ARROW_THROW_NOT_OK(value_builder->InsertMemoValues(*column_builder.string_array));
+        remap_string_values(column_builder, bitmap, vec1d);
+        ARROW_THROW_NOT_OK(value_builder->AppendIndices(
+            vec1d.data(), static_cast<int64_t>(vec1d.size()), bitmap.data()));
+      } else {
+        ARROW_THROW_NOT_OK(list_builder->AppendNull());
+      }
+    }
+  } else {
+    for (size_t i = 0; i < vec2d.size(); i++) {
+      if ((*is_valid)[i]) {
+        auto& vec1d = vec2d[i];
+        ARROW_THROW_NOT_OK(list_builder->Append());
+        remap_string_values(column_builder, {}, vec1d);
+        ARROW_THROW_NOT_OK(value_builder->AppendIndices(vec1d.data(), vec1d.size()));
+      } else {
+        ARROW_THROW_NOT_OK(list_builder->AppendNull());
+      }
+    }
+  }
+}
+
 }  // namespace
 
 void ArrowResultSetConverter::append(
@@ -1581,6 +1699,10 @@ void ArrowResultSetConverter::append(
         break;
       } else if (column_builder.col_type.get_subtype() == kDOUBLE) {
         appendToListColumnBuilder<arrow::DoubleBuilder, double>(
+            column_builder, values, is_valid);
+        break;
+      } else if (column_builder.col_type.is_dict_encoded_type()) {
+        appendToListColumnBuilder<arrow::StringDictionaryBuilder, int64_t>(
             column_builder, values, is_valid);
         break;
       } else {

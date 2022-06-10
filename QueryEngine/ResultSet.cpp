@@ -1314,20 +1314,34 @@ const std::vector<std::string> ResultSet::getStringDictionaryPayloadCopy(
 const std::pair<std::vector<int32_t>, std::vector<std::string>>
 ResultSet::getUniqueStringsForDictEncodedTargetCol(const size_t col_idx) const {
   const auto col_type_info = getColType(col_idx);
-  CHECK(col_type_info.is_dict_encoded_string());
   std::unordered_set<int32_t> unique_string_ids_set;
   const size_t num_entries = entryCount();
   std::vector<bool> targets_to_skip(colCount(), true);
   targets_to_skip[col_idx] = false;
-  const auto null_val = inline_fixed_encoding_null_val(col_type_info);
+  CHECK(col_type_info.is_dict_encoded_type());  // Array<Text> or Text
+  const int64_t null_val = inline_fixed_encoding_null_val(
+      col_type_info.is_array() ? col_type_info.get_elem_type() : col_type_info);
 
   for (size_t row_idx = 0; row_idx < num_entries; ++row_idx) {
     const auto result_row = getRowAtNoTranslations(row_idx, targets_to_skip);
     if (!result_row.empty()) {
-      const auto scalar_col_val = boost::get<ScalarTargetValue>(result_row[col_idx]);
-      const int32_t string_id = static_cast<int32_t>(boost::get<int64_t>(scalar_col_val));
-      if (string_id != null_val) {
-        unique_string_ids_set.emplace(string_id);
+      if (const auto scalar_col_val =
+              boost::get<ScalarTargetValue>(&result_row[col_idx])) {
+        const int32_t string_id =
+            static_cast<int32_t>(boost::get<int64_t>(*scalar_col_val));
+        if (string_id != null_val) {
+          unique_string_ids_set.emplace(string_id);
+        }
+      } else if (const auto array_col_val =
+                     boost::get<ArrayTargetValue>(&result_row[col_idx])) {
+        if (*array_col_val) {
+          for (const ScalarTargetValue& scalar : array_col_val->value()) {
+            const int32_t string_id = static_cast<int32_t>(boost::get<int64_t>(scalar));
+            if (string_id != null_val) {
+              unique_string_ids_set.emplace(string_id);
+            }
+          }
+        }
       }
     }
   }

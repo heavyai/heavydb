@@ -42,13 +42,14 @@ using ValueArray = boost::variant<std::vector<bool>,
                                   std::vector<arrow::Decimal128>,
                                   std::vector<float>,
                                   std::vector<double>,
+                                  std::vector<std::string>,
                                   std::vector<std::vector<int8_t>>,
                                   std::vector<std::vector<int16_t>>,
                                   std::vector<std::vector<int32_t>>,
                                   std::vector<std::vector<int64_t>>,
                                   std::vector<std::vector<float>>,
                                   std::vector<std::vector<double>>,
-                                  std::vector<std::string>>;
+                                  std::vector<std::vector<std::string>>>;
 
 template <typename T>
 using Vec2 = std::vector<std::vector<T>>;
@@ -282,6 +283,7 @@ class ArrowResultSetConverter {
 
     std::shared_ptr<arrow::Field> field;
     std::unique_ptr<arrow::ArrayBuilder> builder;
+    std::shared_ptr<arrow::StringArray> string_array;
     SQLTypeInfo col_type;
     SQLTypes physical_type;
     ArrowStringRemapMode string_remap_mode{ArrowStringRemapMode::INVALID};
