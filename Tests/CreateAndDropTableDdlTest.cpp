@@ -1091,6 +1091,16 @@ TEST_P(CreateTableTest, WithFragmentSizeOption) {
   assertColumnDetails(expected_attributes, column);
 }
 
+TEST_P(CreateTableTest, UnsupportedGeometrySyntax) {
+  auto query = getCreateTableQuery(GetParam(), "test_table", "(geom GEOMETRY)");
+  queryAndAssertException(query, "Unsupported type \"GEOMETRY\" specified.");
+}
+
+TEST_P(CreateTableTest, UnsupportedGeographySyntax) {
+  auto query = getCreateTableQuery(GetParam(), "test_table", "(geom GEOGRAPHY)");
+  queryAndAssertPartialException(query, "Incorrect syntax near the keyword 'GEOGRAPHY'");
+}
+
 INSTANTIATE_TEST_SUITE_P(CreateAndDropTableDdlTest,
                          CreateTableTest,
                          testing::Values(ddl_utils::TableType::TABLE,

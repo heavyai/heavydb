@@ -468,6 +468,10 @@ void validate_and_set_encoding(ColumnDescriptor& cd,
 void validate_and_set_type(ColumnDescriptor& cd, SqlType* column_type) {
   column_type->check_type();
 
+  if (column_type->get_type() == kGEOMETRY) {
+    throw std::runtime_error("Unsupported type \"GEOMETRY\" specified.");
+  }
+
   if (column_type->get_is_array()) {
     cd.columnType.set_type(kARRAY);
     cd.columnType.set_subtype(column_type->get_type());
