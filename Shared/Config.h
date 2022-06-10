@@ -91,6 +91,7 @@ struct ExecutionConfig {
   CodegenConfig codegen;
 
   size_t streaming_topn_max = 100'000;
+  size_t parallel_top_min = 100'000;
 };
 
 struct FilterPushdownConfig {

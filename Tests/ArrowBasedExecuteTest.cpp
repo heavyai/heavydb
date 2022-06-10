@@ -45,7 +45,6 @@ extern bool g_enable_left_join_filter_hoisting;
 extern bool g_from_table_reordering;
 
 extern double g_gpu_mem_limit_percent;
-extern size_t g_parallel_top_min;
 extern size_t g_parallel_top_max;
 extern size_t g_constrained_by_in_threshold;
 
@@ -8701,12 +8700,14 @@ TEST_F(Select, GpuSort) {
 }
 
 TEST_F(Select, SpeculativeTopNSort) {
-  ScopeGuard reset = [orig = g_parallel_top_min] { g_parallel_top_min = orig; };
-  size_t test_values[]{size_t(0), g_parallel_top_min};
+  ScopeGuard reset = [orig = config().exec.parallel_top_min] {
+    config().exec.parallel_top_min = orig;
+  };
+  size_t test_values[]{size_t(0), config().exec.parallel_top_min};
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     for (auto parallel_top_min : test_values) {
-      g_parallel_top_min = parallel_top_min;
+      config().exec.parallel_top_min = parallel_top_min;
       c("SELECT x, COUNT(*) AS val FROM gpu_sort_test GROUP BY x ORDER BY val DESC LIMIT "
         "2;",
         dt);
@@ -8729,20 +8730,20 @@ TEST_F(Select, SpeculativeTopNSort) {
 }
 
 TEST_F(Select, TopNSortWithWatchdogOn) {
-  ScopeGuard reset = [top_min = g_parallel_top_min,
+  ScopeGuard reset = [top_min = config().exec.parallel_top_min,
                       top_max = g_parallel_top_max,
                       watchdog = config().exec.watchdog.enable] {
-    g_parallel_top_min = top_min;
+    config().exec.parallel_top_min = top_min;
     g_parallel_top_max = top_max;
     config().exec.watchdog.enable = watchdog;
   };
-  g_parallel_top_min = 0;
+  config().exec.parallel_top_min = 0;
   g_parallel_top_max = 10;
   // Let's assume we have top-K query as SELECT ... ORDER BY ... LIMIT K
   // Currently, when columnar output is on (either by default or manually turned on)
   // QMD decides to use resultset's cardinality instead of K for its entry count
   // Then if we enable watchdog, we get the watchdog exception when sorting
-  // if QMD's entry_count > g_parallel_top_max (also > g_parallel_top_min)
+  // if QMD's entry_count > g_parallel_top_max (also > config().exec.parallel_top_min)
   // ("Sorting the result would be too slow")
   bool test_values[]{true, false};
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
