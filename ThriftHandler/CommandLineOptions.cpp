@@ -47,7 +47,6 @@ extern size_t g_approx_quantile_buffer;
 extern size_t g_approx_quantile_centroids;
 extern size_t g_parallel_top_min;
 extern size_t g_parallel_top_max;
-extern size_t g_streaming_topn_max;
 extern size_t g_estimator_failure_max_groupby_size;
 extern bool g_columnar_large_projections;
 extern size_t g_columnar_large_projections_threshold;
@@ -577,10 +576,6 @@ void CommandLineOptions::fillAdvancedOptions() {
       po::value<size_t>(&g_parallel_top_max)->default_value(g_parallel_top_max),
       "For ResultSets requiring a heap sort, the maximum number of rows allowed by "
       "watchdog.");
-  developer_desc.add_options()(
-      "streaming-top-n-max",
-      po::value<size_t>(&g_streaming_topn_max)->default_value(g_streaming_topn_max),
-      "The maximum number of rows allowing streaming top-N sorting.");
   developer_desc.add_options()("enable-automatic-ir-metadata",
                                po::value<bool>(&g_enable_automatic_ir_metadata)
                                    ->default_value(g_enable_automatic_ir_metadata)

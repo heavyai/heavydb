@@ -26,7 +26,6 @@
 #include <boost/algorithm/cxx11/any_of.hpp>
 
 extern bool g_enable_columnar_output;
-extern size_t g_streaming_topn_max;
 
 namespace {
 
@@ -143,7 +142,8 @@ int8_t pick_baseline_key_width(const RelAlgExecutionUnit& ra_exe_unit,
 }
 
 bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
-                         const bool output_columnar) {
+                         const bool output_columnar,
+                         bool streaming_topn_max) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
       return false;
@@ -165,7 +165,7 @@ bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
     const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
     if ((order_entry_expr->get_type_info().is_number() ||
          order_entry_expr->get_type_info().is_time()) &&
-        n <= g_streaming_topn_max) {
+        n <= streaming_topn_max) {
       return true;
     }
   }
@@ -355,7 +355,10 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
     case QueryDescriptionType::Projection: {
       CHECK(!must_use_baseline_sort);
 
-      if (streaming_top_n_hint && use_streaming_top_n(ra_exe_unit, output_columnar)) {
+      if (streaming_top_n_hint &&
+          use_streaming_top_n(ra_exe_unit,
+                              output_columnar,
+                              executor->getConfig().exec.streaming_topn_max)) {
         streaming_top_n = true;
         entry_count = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
       } else {

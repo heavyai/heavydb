@@ -88,6 +88,8 @@ struct ExecutionConfig {
   HeterogenousConfig heterogeneous;
   InterruptConfig interrupt;
   CodegenConfig codegen;
+
+  size_t streaming_topn_max = 100'000;
 };
 
 struct FilterPushdownConfig {
