@@ -252,12 +252,6 @@ void CommandLineOptions::fillOptions() {
       "Compiler server, packaged separately.");
   help_desc.add_options()("version,v", "Print Version Number.");
 
-  help_desc.add_options()(
-      "enable-interoperability",
-      po::value<bool>(&g_enable_interop)
-          ->default_value(g_enable_interop)
-          ->implicit_value(true),
-      "Enable offloading of query portions to an external execution engine.");
   help_desc.add_options()("enable-union",
                           po::value<bool>(&g_enable_union)
                               ->default_value(g_enable_union)

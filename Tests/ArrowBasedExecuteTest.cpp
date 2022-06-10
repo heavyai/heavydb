@@ -49,7 +49,6 @@ extern size_t g_constrained_by_in_threshold;
 
 extern bool g_enable_calcite_view_optimize;
 extern bool g_enable_bump_allocator;
-extern bool g_enable_interop;
 extern bool g_enable_union;
 
 extern bool g_is_test_env;
@@ -17465,8 +17464,8 @@ TEST_F(Select, VariableLengthAggs) {
 }
 
 TEST_F(Select, Interop) {
-  g_enable_interop = true;
-  ScopeGuard interop_guard = [] { g_enable_interop = false; };
+  config().exec.enable_interop = true;
+  ScopeGuard interop_guard = [] { config().exec.enable_interop = false; };
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT 'dict_' || str c1, 'fake_' || substring(real_str, 6) c2, x + 56 c3, f c4, "
@@ -17502,7 +17501,7 @@ TEST_F(Select, Interop) {
       "SELECT ('fake_' || SUBSTR(real_str, 6)) LIKE '%_ba%' b from test ORDER BY b;",
       dt);
   }
-  g_enable_interop = false;
+  config().exec.enable_interop = false;
 }
 
 // Test https://github.com/omnisci/omniscidb/issues/463
@@ -17994,7 +17993,7 @@ int main(int argc, char** argv) {
   }
 
   config->exec.window_func.enable = true;
-  g_enable_interop = false;
+  config->exec.enable_interop = false;
 
   init(config);
 

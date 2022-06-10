@@ -94,6 +94,7 @@ struct ExecutionConfig {
   size_t streaming_topn_max = 100'000;
   size_t parallel_top_min = 100'000;
   bool enable_experimental_string_functions = false;
+  bool enable_interop = false;
 };
 
 struct FilterPushdownConfig {

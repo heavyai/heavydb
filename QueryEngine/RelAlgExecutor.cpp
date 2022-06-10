@@ -47,7 +47,6 @@
 #include <numeric>
 
 bool g_skip_intermediate_count{true};
-bool g_enable_interop{false};
 bool g_enable_union{true};  // DEPRECATED
 size_t g_estimator_failure_max_groupby_size{256000000};
 bool g_columnar_large_projections{true};
@@ -669,7 +668,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
       const auto co_cpu = CompilationOptions::makeCpuOnly(co);
       executeRelAlgStep(seq, i, co_cpu, eo, queue_time_ms);
     } catch (const NativeExecutionError&) {
-      if (!g_enable_interop) {
+      if (!config_.exec.enable_interop) {
         throw;
       }
       auto eo_extern = eo;
