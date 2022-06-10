@@ -120,6 +120,4 @@ inline int hll_size_for_rate(const int err_percent) {
   return std::min(16, std::max(static_cast<int>(k), 4));
 }
 
-extern int g_hll_precision_bits;
-
 #endif  // QUERYENGINE_HYPERLOGLOG_H

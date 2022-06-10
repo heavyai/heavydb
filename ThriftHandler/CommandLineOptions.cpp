@@ -221,12 +221,6 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(system_parameters.gpu_input_mem_limit),
                           "Force query to CPU when input data memory usage exceeds this "
                           "percentage of available GPU memory.");
-  help_desc.add_options()(
-      "hll-precision-bits",
-      po::value<int>(&g_hll_precision_bits)
-          ->default_value(g_hll_precision_bits)
-          ->implicit_value(g_hll_precision_bits),
-      "Number of bits used from the hash value used to specify the bucket number.");
   if (!dist_v5_) {
     help_desc.add_options()("http-port",
                             po::value<int>(&http_port)->default_value(http_port),
@@ -893,11 +887,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
 
   } catch (po::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
-    return 1;
-  }
-
-  if (g_hll_precision_bits < 1 || g_hll_precision_bits > 16) {
-    std::cerr << "hll-precision-bits must be between 1 and 16." << std::endl;
     return 1;
   }
 

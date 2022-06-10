@@ -50,8 +50,6 @@
 #include <string_view>
 #include <thread>
 
-int g_hll_precision_bits{11};
-
 namespace {
 
 int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {
@@ -582,7 +580,7 @@ CountDistinctDescriptors init_count_distinct_descriptors(
           CHECK_GE(error_rate->get_constval().intval, 1);
           bitmap_sz_bits = hll_size_for_rate(error_rate->get_constval().smallintval);
         } else {
-          bitmap_sz_bits = g_hll_precision_bits;
+          bitmap_sz_bits = executor->getConfig().exec.group_by.hll_precision_bits;
         }
       }
       if (arg_range_info.isEmpty()) {

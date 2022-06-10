@@ -2117,7 +2117,7 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
       CHECK_GE(error_rate->get_constval().intval, 1);
       approx_bitmap_sz_bits = hll_size_for_rate(error_rate->get_constval().intval);
     } else {
-      approx_bitmap_sz_bits = g_hll_precision_bits;
+      approx_bitmap_sz_bits = executor->getConfig().exec.group_by.hll_precision_bits;
     }
     CountDistinctDescriptor approx_count_distinct_desc{CountDistinctImplType::Bitmap,
                                                        arg_range.getIntMin(),
