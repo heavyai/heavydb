@@ -81,7 +81,6 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #include <boost/filesystem.hpp>
 
 extern bool g_enable_filter_function;
-extern size_t g_gpu_smem_threshold;
 extern double g_running_query_interrupt_freq;
 
 float g_fraction_code_cache_to_evict = 0.2;
@@ -2448,7 +2447,9 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
         query_mem_desc_ptr->countDistinctDescriptorsLogicallyEmpty() &&
         !query_mem_desc_ptr->useStreamingTopN()) {
       const size_t shared_memory_threshold_bytes = std::min(
-          g_gpu_smem_threshold == 0 ? SIZE_MAX : g_gpu_smem_threshold,
+          config.exec.group_by.gpu_smem_threshold == 0
+              ? SIZE_MAX
+              : config.exec.group_by.gpu_smem_threshold,
           cuda_mgr->getMinSharedMemoryPerBlockForAllDevices() / num_blocks_per_mp);
       const auto output_buffer_size =
           query_mem_desc_ptr->getRowSize() * query_mem_desc_ptr->getEntryCount();
@@ -2629,7 +2630,9 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                        query_mem_desc->queryDescTypeToString() + " query(" +
                        std::to_string(get_shared_memory_size(gpu_shared_mem_optimization,
                                                              query_mem_desc.get())) +
-                       " out of " + std::to_string(g_gpu_smem_threshold) + " bytes).";
+                       " out of " +
+                       std::to_string(config_->exec.group_by.gpu_smem_threshold) +
+                       " bytes).";
   }
 
   const GpuSharedMemoryContext gpu_smem_context(

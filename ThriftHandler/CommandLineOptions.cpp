@@ -405,11 +405,6 @@ void CommandLineOptions::fillAdvancedOptions() {
                                po::value<int>(&system_parameters.num_executors)
                                    ->default_value(system_parameters.num_executors),
                                "Number of executors to run in parallel.");
-  developer_desc.add_options()(
-      "gpu-shared-mem-threshold",
-      po::value<size_t>(&g_gpu_smem_threshold)->default_value(g_gpu_smem_threshold),
-      "GPU shared memory threshold (in bytes). If query requires larger buffers than "
-      "this threshold, we disable those optimizations. 0 (default) means no static cap.");
   developer_desc.add_options()("enable-direct-columnarization",
                                po::value<bool>(&g_enable_direct_columnarization)
                                    ->default_value(g_enable_direct_columnarization)
