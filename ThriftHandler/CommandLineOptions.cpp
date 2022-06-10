@@ -251,11 +251,6 @@ void CommandLineOptions::fillOptions() {
       "to the `register_runtime_udf` endpoint. For use with the Python Remote Backend "
       "Compiler server, packaged separately.");
   help_desc.add_options()("version,v", "Print Version Number.");
-  help_desc.add_options()("enable-experimental-string-functions",
-                          po::value<bool>(&g_enable_experimental_string_functions)
-                              ->default_value(g_enable_experimental_string_functions)
-                              ->implicit_value(true),
-                          "Enable experimental string functions.");
 
   help_desc.add_options()(
       "enable-interoperability",

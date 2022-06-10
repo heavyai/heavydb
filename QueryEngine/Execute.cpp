@@ -91,7 +91,6 @@ size_t g_min_memory_allocation_size{
 bool g_enable_bump_allocator{false};
 double g_bump_allocator_step_reduction{0.75};
 bool g_enable_direct_columnarization{true};
-extern bool g_enable_experimental_string_functions;
 bool g_enable_lazy_fetch{true};
 bool g_use_estimator_result_cache{true};
 unsigned g_pending_query_interrupt_freq{1000};
@@ -749,7 +748,7 @@ std::vector<int8_t> Executor::serializeLiterals(
         const auto p = boost::get<std::pair<std::string, int>>(&lit);
         CHECK(p);
         const auto str_id =
-            g_enable_experimental_string_functions
+            config_->exec.enable_experimental_string_functions
                 ? getStringDictionaryProxy(p->second, row_set_mem_owner_, true)
                       ->getOrAddTransient(p->first)
                 : getStringDictionaryProxy(p->second, row_set_mem_owner_, true)

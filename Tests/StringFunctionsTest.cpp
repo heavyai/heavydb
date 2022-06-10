@@ -28,8 +28,6 @@
 #include <boost/format.hpp>
 #include <boost/locale/generator.hpp>
 
-extern bool g_enable_experimental_string_functions;
-
 using namespace TestHelpers;
 using namespace TestHelpers::ArrowSQLRunner;
 
@@ -265,7 +263,7 @@ TEST_F(LowerFunctionTest, LowercaseNullColumn) {
 }
 
 TEST_F(LowerFunctionTest, SelectLowercase_ExperimentalStringFunctionsDisabled) {
-  g_enable_experimental_string_functions = false;
+  config().exec.enable_experimental_string_functions = false;
 
   try {
     run_multiple_agg("select lower(first_name) from lower_function_test_people;",
@@ -273,7 +271,7 @@ TEST_F(LowerFunctionTest, SelectLowercase_ExperimentalStringFunctionsDisabled) {
     FAIL() << "An exception should have been thrown for this test case";
   } catch (const std::exception& e) {
     ASSERT_STREQ("Function LOWER(TEXT) not supported.", e.what());
-    g_enable_experimental_string_functions = true;
+    config().exec.enable_experimental_string_functions = true;
   }
 }
 
@@ -284,7 +282,7 @@ int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
 
   init();
-  g_enable_experimental_string_functions = true;
+  config().exec.enable_experimental_string_functions = true;
 
   // Use system locale setting by default (as done in the server).
   boost::locale::generator generator;
@@ -297,7 +295,7 @@ int main(int argc, char** argv) {
     LOG(ERROR) << e.what();
   }
 
-  g_enable_experimental_string_functions = false;
+  config().exec.enable_experimental_string_functions = false;
   reset();
   return err;
 }

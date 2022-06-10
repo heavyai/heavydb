@@ -33,8 +33,6 @@
 
 #include <future>
 
-bool g_enable_experimental_string_functions = false;
-
 namespace {
 
 SQLTypeInfo build_type_info(const SQLTypes sql_type,
@@ -1374,7 +1372,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   if (rex_function->getName() == "CURRENT_USER"sv) {
     return translateCurrentUser(rex_function);
   }
-  if (g_enable_experimental_string_functions && rex_function->getName() == "LOWER"sv) {
+  if (executor_->getConfig().exec.enable_experimental_string_functions &&
+      rex_function->getName() == "LOWER"sv) {
     return translateLower(rex_function);
   }
   if (func_resolve(rex_function->getName(), "CARDINALITY"sv, "ARRAY_LENGTH"sv)) {
