@@ -36,19 +36,15 @@
 #include <thrust/sort.h>
 #endif
 
-bool g_enable_parallel_window_partition_compute{true};
-size_t g_parallel_window_partition_compute_threshold{1 << 12};  // 4096
-
-bool g_enable_parallel_window_partition_sort{true};
-size_t g_parallel_window_partition_sort_threshold{1 << 10};  // 1024
-
 // Non-partitioned version (no join table provided)
 WindowFunctionContext::WindowFunctionContext(
     const Analyzer::WindowFunction* window_func,
+    const Config& config,
     const size_t elem_count,
     const ExecutorDeviceType device_type,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
     : window_func_(window_func)
+    , config_(config)
     , partitions_(nullptr)
     , elem_count_(elem_count)
     , output_(nullptr)
@@ -70,11 +66,13 @@ WindowFunctionContext::WindowFunctionContext(
 // Partitioned version
 WindowFunctionContext::WindowFunctionContext(
     const Analyzer::WindowFunction* window_func,
+    const Config& config,
     const std::shared_ptr<HashJoin>& partitions,
     const size_t elem_count,
     const ExecutorDeviceType device_type,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
     : window_func_(window_func)
+    , config_(config)
     , partitions_(partitions)
     , elem_count_(elem_count)
     , output_(nullptr)
@@ -503,8 +501,9 @@ void WindowFunctionContext::computePartition(const size_t partition_idx,
     return false;
   };
 
-  if (g_enable_parallel_window_partition_sort &&
-      partition_size >= g_parallel_window_partition_sort_threshold) {
+  if (config_.exec.window_func.parallel_window_partition_sort &&
+      partition_size >=
+          config_.exec.window_func.parallel_window_partition_sort_threshold) {
 #ifdef HAVE_TBB
     tbb::parallel_sort(output_for_partition_buff,
                        output_for_partition_buff + partition_size,
@@ -559,9 +558,10 @@ void WindowFunctionContext::compute() {
     }
   };
 
-  const bool should_parallelize{g_enable_parallel_window_partition_compute &&
-                                elem_count_ >=
-                                    g_parallel_window_partition_compute_threshold};
+  const bool should_parallelize{
+      config_.exec.window_func.parallel_window_partition_compute &&
+      elem_count_ >=
+          config_.exec.window_func.parallel_window_partition_compute_threshold};
   if (should_parallelize) {
     auto timer = DEBUG_TIMER("Window Function Partition Compute");
     threading::task_group thread_pool;

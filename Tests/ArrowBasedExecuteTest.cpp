@@ -57,7 +57,6 @@ extern size_t g_parallel_top_min;
 extern size_t g_parallel_top_max;
 extern size_t g_constrained_by_in_threshold;
 
-extern bool g_enable_window_functions;
 extern bool g_enable_calcite_view_optimize;
 extern bool g_enable_bump_allocator;
 extern bool g_enable_interop;
@@ -17993,7 +17992,7 @@ int main(int argc, char** argv) {
     g_hoist_literals = false;
   }
 
-  g_enable_window_functions = true;
+  config->exec.window_func.enable = true;
   g_enable_interop = false;
 
   init(config);

@@ -56,7 +56,6 @@ size_t g_columnar_large_projections_threshold{1000000};
 extern bool g_enable_bump_allocator;
 extern bool g_from_table_reordering;
 extern bool g_allow_cpu_retry;
-extern bool g_enable_window_functions;
 extern bool g_enable_table_functions;
 extern bool g_enable_multifrag_rs;
 extern bool g_allow_query_step_cpu_retry;
@@ -1705,13 +1704,14 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
     }
     CHECK(join_table_or_err.hash_table->getHashType() == HashType::OneToMany);
     context = std::make_unique<WindowFunctionContext>(window_func,
+                                                      config_,
                                                       join_table_or_err.hash_table,
                                                       elem_count,
                                                       co.device_type,
                                                       row_set_mem_owner);
   } else {
     context = std::make_unique<WindowFunctionContext>(
-        window_func, elem_count, co.device_type, row_set_mem_owner);
+        window_func, config_, elem_count, co.device_type, row_set_mem_owner);
   }
   const auto& order_keys = window_func->getOrderKeys();
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
@@ -2171,7 +2171,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   auto eo = eo_in;
   ColumnCacheMap column_cache;
   if (is_window_execution_unit(work_unit.exe_unit)) {
-    if (!g_enable_window_functions) {
+    if (!config_.exec.window_func.enable) {
       throw std::runtime_error("Window functions support is disabled");
     }
     co.device_type = ExecutorDeviceType::CPU;

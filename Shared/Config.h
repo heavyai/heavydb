@@ -48,11 +48,20 @@ struct GroupByConfig {
   unsigned hll_precision_bits = 11;
 };
 
+struct WindowFunctionsConfig {
+  bool enable = true;
+  bool parallel_window_partition_compute = true;
+  size_t parallel_window_partition_compute_threshold = 4096;
+  bool parallel_window_partition_sort = true;
+  size_t parallel_window_partition_sort_threshold = 1024;
+};
+
 struct ExecutionConfig {
   WatchdogConfig watchdog;
   CpuSubTasksConfig sub_tasks;
   JoinConfig join;
   GroupByConfig group_by;
+  WindowFunctionsConfig window_func;
 };
 
 struct FilterPushdownConfig {

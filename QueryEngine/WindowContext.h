@@ -19,6 +19,7 @@
 #include "Analyzer/Analyzer.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
+#include "Shared/Config.h"
 
 #include <functional>
 #include <unordered_map>
@@ -67,12 +68,14 @@ class WindowFunctionContext {
  public:
   // non-partitioned version
   WindowFunctionContext(const Analyzer::WindowFunction* window_func,
+                        const Config& config,
                         const size_t elem_count,
                         const ExecutorDeviceType device_type,
                         std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
   // partitioned version
   WindowFunctionContext(const Analyzer::WindowFunction* window_func,
+                        const Config& config,
                         const std::shared_ptr<HashJoin>& partitions,
                         const size_t elem_count,
                         const ExecutorDeviceType device_type,
@@ -158,6 +161,7 @@ class WindowFunctionContext {
   size_t partitionCount() const;
 
   const Analyzer::WindowFunction* window_func_;
+  const Config& config_;
   // Keeps ownership of order column.
   std::vector<std::vector<std::shared_ptr<Chunk_NS::Chunk>>> order_columns_owner_;
   // Order column buffers.
