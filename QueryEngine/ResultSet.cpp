@@ -47,8 +47,6 @@
 #include <future>
 #include <numeric>
 
-size_t g_parallel_top_max = 20e6;  // In effect only with enabled watchdog.
-
 constexpr int64_t uninitialized_cached_row_count{-1};
 
 extern bool g_enable_direct_columnarization;
@@ -774,7 +772,8 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
   CHECK(permutation_.empty());
 
   if (top_n && executor->getConfig().exec.parallel_top_min < entryCount()) {
-    if (executor->getConfig().exec.watchdog.enable && g_parallel_top_max < entryCount()) {
+    if (executor->getConfig().exec.watchdog.enable &&
+        executor->getConfig().exec.watchdog.parallel_top_max < entryCount()) {
       throw WatchdogException("Sorting the result would be too slow");
     }
     parallelTop(order_entries, top_n, executor);

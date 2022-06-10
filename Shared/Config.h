@@ -21,6 +21,7 @@ struct WatchdogConfig {
   bool enable_dynamic = false;
   size_t time_limit = 10'000;
   size_t baseline_max_groups = 120'000'000;
+  size_t parallel_top_max = 20'000'000;
 };
 
 struct CpuSubTasksConfig {

@@ -45,7 +45,6 @@ extern int64_t g_bitmap_memory_limit;
 extern bool g_enable_calcite_ddl_parser;
 extern size_t g_approx_quantile_buffer;
 extern size_t g_approx_quantile_centroids;
-extern size_t g_parallel_top_max;
 extern size_t g_estimator_failure_max_groupby_size;
 extern bool g_columnar_large_projections;
 extern size_t g_columnar_large_projections_threshold;
@@ -565,11 +564,6 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_enable_calcite_ddl_parser)
           ->implicit_value(true),
       "Enable using Calcite for supported DDL parsing when available.");
-  developer_desc.add_options()(
-      "parallel-top-max",
-      po::value<size_t>(&g_parallel_top_max)->default_value(g_parallel_top_max),
-      "For ResultSets requiring a heap sort, the maximum number of rows allowed by "
-      "watchdog.");
   developer_desc.add_options()("enable-automatic-ir-metadata",
                                po::value<bool>(&g_enable_automatic_ir_metadata)
                                    ->default_value(g_enable_automatic_ir_metadata)
@@ -893,7 +887,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
             << system_parameters.enable_calcite_view_optimize;
   LOG(INFO) << " Allow Local Auth Fallback: "
             << (authMetadata.allowLocalAuthFallback ? "enabled" : "disabled");
-  LOG(INFO) << " ParallelTop watchdog max: " << g_parallel_top_max;
 
   LOG(INFO) << " Enable Data Recycler: "
             << (g_enable_data_recycler ? "enabled" : "disabled");
