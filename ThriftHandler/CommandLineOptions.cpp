@@ -371,12 +371,6 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(intel_jit_profile)
           ->implicit_value(true),
       "Enable runtime support for the JIT code profiling using Intel VTune.");
-  developer_desc.add_options()(
-      "skip-intermediate-count",
-      po::value<bool>(&g_skip_intermediate_count)
-          ->default_value(g_skip_intermediate_count)
-          ->implicit_value(true),
-      "Skip pre-flight counts for intermediate projections with no filters.");
 
   developer_desc.add_options()(
       "min-cpu-slab-size",

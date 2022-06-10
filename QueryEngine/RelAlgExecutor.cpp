@@ -46,7 +46,6 @@
 #include <functional>
 #include <numeric>
 
-bool g_skip_intermediate_count{true};
 size_t g_estimator_failure_max_groupby_size{256000000};
 bool g_columnar_large_projections{true};
 size_t g_columnar_large_projections_threshold{1000000};
@@ -772,7 +771,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     std::optional<size_t> prev_count;
     // Disabling the intermediate count optimization in distributed, as the previous
     // execution descriptor will likely not hold the aggregated result.
-    if (g_skip_intermediate_count && step_idx > 0) {
+    if (config_.opts.skip_intermediate_count && step_idx > 0) {
       // If the previous node produced a reliable count, skip the pre-flight count.
       RelAlgNode const* const prev_body = project->getInput(0);
       if (shared::dynamic_castable_to_any<RelCompound, RelLogicalValues>(prev_body)) {

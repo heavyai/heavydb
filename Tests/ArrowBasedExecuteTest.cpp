@@ -40,7 +40,6 @@ using namespace TestHelpers::ArrowSQLRunner;
 
 bool g_aggregator{false};
 
-extern bool g_skip_intermediate_count;
 extern bool g_enable_left_join_filter_hoisting;
 
 extern double g_gpu_mem_limit_percent;
@@ -4267,9 +4266,9 @@ TEST_F(Select, MultiStepQueries) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    const auto skip_intermediate_count = g_skip_intermediate_count;
+    const auto skip_intermediate_count = config().opts.skip_intermediate_count;
     ScopeGuard reset_skip_intermediate_count = [&skip_intermediate_count] {
-      g_skip_intermediate_count = skip_intermediate_count;
+      config().opts.skip_intermediate_count = skip_intermediate_count;
     };
 
     c("SELECT z, (z * SUM(x)) / SUM(y) + 1 FROM test GROUP BY z ORDER BY z;", dt);

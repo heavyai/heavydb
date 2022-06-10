@@ -32,8 +32,6 @@
 #include <ctime>
 #include <sstream>
 
-extern bool g_skip_intermediate_count;
-
 enum class MergeType { Union, Reduce };
 
 struct QueryStepExecutionResult {
