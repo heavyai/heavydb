@@ -30,7 +30,6 @@
   }
 
 extern bool g_is_test_env;
-extern bool g_enable_parallel_linearization;
 
 using namespace TestHelpers;
 using namespace TestHelpers::ArrowSQLRunner;
@@ -691,7 +690,7 @@ TEST_F(MultiFragArrayJoinTest, IndexedArrayJoin) {
 class MultiFragArrayParallelLinearizationTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    g_enable_parallel_linearization = 10;
+    config().exec.parallel_linearization_threshold = 10;
 
     std::vector<ArrowStorage::ColumnDescription> cols{
         {"tiv", arrayType(kTINYINT)},
@@ -857,7 +856,7 @@ class MultiFragArrayParallelLinearizationTest : public ::testing::Test {
     dropTable("mfarr_n");
     dropTable("sfarr_n2");
     dropTable("mfarr_n2");
-    g_enable_parallel_linearization = 20000;
+    config().exec.parallel_linearization_threshold = 20000;
   }
 };
 

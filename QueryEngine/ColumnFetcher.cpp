@@ -25,7 +25,6 @@
 #include "Shared/likely.h"
 #include "Shared/sqltypes.h"
 
-extern size_t g_enable_parallel_linearization;
 namespace {
 
 inline const ColumnarResults* columnarize_result(
@@ -789,7 +788,8 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
             }
           }
         };
-        if (cur_chunk_num_tuples > g_enable_parallel_linearization) {
+        if (cur_chunk_num_tuples >
+            executor_->getConfig().exec.parallel_linearization_threshold) {
           is_parallel_modification = true;
           for (auto interval :
                makeIntervals(size_t(0), cur_chunk_num_tuples, worker_count)) {

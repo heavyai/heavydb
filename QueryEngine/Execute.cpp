@@ -97,8 +97,6 @@ unsigned g_pending_query_interrupt_freq{1000};
 bool g_is_test_env{false};  // operating under a unit test environment. Currently only
                             // limits the allocation for the output buffer arena
                             // and data recycler test
-size_t g_enable_parallel_linearization{
-    10000};  // # rows that we are trying to linearize varlen col in parallel
 bool g_enable_data_recycler{true};
 bool g_use_hashtable_cache{true};
 size_t g_hashtable_cache_total_bytes{size_t(1) << 32};
