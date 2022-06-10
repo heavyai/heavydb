@@ -121,18 +121,7 @@ tf_compute_dwell_times__cpu_template(TableFunctionManager& mgr,
                    static_cast<int64_t>(num_input_rows));
       worker_threads.emplace_back(std::async(
           std::launch::async,
-          [&per_thread_session_counts,
-           &per_thread_actual_idx_offsets,
-           &input_id,
-           &input_site_id,
-           &input_ts,
-           &permutation_idxs,
-           &id_null_val,
-           &site_id_null_val,
-           min_dwell_points,
-           min_dwell_seconds,
-           num_input_rows,
-           max_inactive_seconds](
+          [&, min_dwell_points, min_dwell_seconds, num_input_rows, max_inactive_seconds](
               const auto start_idx, const auto end_idx, const auto thread_idx) {
             int32_t thread_session_count = per_thread_session_counts[thread_idx];
             // First find first new index

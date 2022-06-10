@@ -46,7 +46,7 @@ struct QueryStepExecutionResult {
 };
 
 namespace Fragmenter_Namespace {
-struct InsertDataLoader;
+class InsertDataLoader;
 }
 
 class RelAlgExecutor : private StorageIOFacility {
