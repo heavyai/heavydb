@@ -26,7 +26,6 @@
 #include <future>
 #include <numeric>
 
-extern bool g_enable_non_kernel_time_query_interrupt;
 namespace {
 
 inline int64_t fixed_encoding_nullable_val(const int64_t val,
@@ -62,7 +61,11 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
                                : result_set::use_parallel_algorithms(rows))
     , direct_columnar_conversion_(rows.isDirectColumnarConversionPossible())
     , thread_idx_(thread_idx)
-    , executor_(executor) {
+    , executor_(executor)
+    , enable_interrupt_(executor_
+                            ? executor_->getConfig()
+                                  .exec.interrupt.enable_non_kernel_time_query_interrupt
+                            : false) {
   auto timer = DEBUG_TIMER(__func__);
   column_buffers_.resize(num_columns);
   for (size_t i = 0; i < num_columns; ++i) {
@@ -98,7 +101,11 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
     , parallel_conversion_(false)
     , direct_columnar_conversion_(false)
     , thread_idx_(thread_idx)
-    , executor_(executor) {
+    , executor_(executor)
+    , enable_interrupt_(executor_
+                            ? executor_->getConfig()
+                                  .exec.interrupt.enable_non_kernel_time_query_interrupt
+                            : false) {
   auto timer = DEBUG_TIMER(__func__);
   const bool is_varlen =
       target_type.is_array() ||
@@ -176,7 +183,7 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
       conversion_threads.push_back(std::async(
           std::launch::async,
           [&do_work, this](const size_t start, const size_t end) {
-            if (g_enable_non_kernel_time_query_interrupt) {
+            if (enable_interrupt_) {
               size_t local_idx = 0;
               for (size_t i = start; i < end; ++i, ++local_idx) {
                 if (UNLIKELY((local_idx & 0xFFFF) == 0 && executor_ &&
@@ -224,7 +231,7 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
     }
     ++row_idx;
   };
-  if (g_enable_non_kernel_time_query_interrupt) {
+  if (enable_interrupt_) {
     while (!done) {
       if (UNLIKELY((row_idx & 0xFFFF) == 0 && executor_ &&
                    executor_->checkNonKernelTimeInterrupted())) {
@@ -488,7 +495,7 @@ void ColumnarResults::materializeAllLazyColumns(
           std::launch::async,
           [&do_work_just_lazy_columns, &targets_to_skip, this](const size_t start,
                                                                const size_t end) {
-            if (g_enable_non_kernel_time_query_interrupt) {
+            if (enable_interrupt_) {
               size_t local_idx = 0;
               for (size_t i = start; i < end; ++i, ++local_idx) {
                 if (UNLIKELY((local_idx & 0xFFFF) == 0 && executor_ &&
@@ -587,7 +594,7 @@ void ColumnarResults::locateAndCountEntries(const ResultSet& rows,
           size_t start_index, size_t end_index, size_t thread_idx) {
         size_t total_non_empty = 0;
         size_t local_idx = 0;
-        if (g_enable_non_kernel_time_query_interrupt) {
+        if (enable_interrupt_) {
           for (size_t entry_idx = start_index; entry_idx < end_index;
                entry_idx++, local_idx++) {
             if (UNLIKELY((local_idx & 0xFFFF) == 0 && executor_ &&
@@ -761,7 +768,7 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
     const size_t total_non_empty = non_empty_per_thread[thread_idx];
     size_t non_empty_idx = 0;
     size_t local_idx = 0;
-    if (g_enable_non_kernel_time_query_interrupt) {
+    if (enable_interrupt_) {
       for (size_t entry_idx = start_index; entry_idx < end_index;
            entry_idx++, local_idx++) {
         if (UNLIKELY((local_idx & 0xFFFF) == 0 && executor_ &&
@@ -863,7 +870,7 @@ void ColumnarResults::compactAndCopyEntriesWithoutTargetSkipping(
     const size_t total_non_empty = non_empty_per_thread[thread_idx];
     size_t non_empty_idx = 0;
     size_t local_idx = 0;
-    if (g_enable_non_kernel_time_query_interrupt) {
+    if (enable_interrupt_) {
       for (size_t entry_idx = start_index; entry_idx < end_index;
            entry_idx++, local_idx++) {
         if (UNLIKELY((local_idx & 0xFFFF) == 0 && executor_ &&

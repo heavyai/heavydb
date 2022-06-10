@@ -33,8 +33,6 @@
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/raw_os_ostream.h>
 
-extern bool g_enable_non_kernel_time_query_interrupt;
-
 namespace {
 
 // Error code to be returned when the watchdog timer triggers during the reduction.
@@ -978,12 +976,13 @@ void generate_loop_body(For* for_loop,
                         Value* this_qmd_handle,
                         Value* that_qmd_handle,
                         Value* serialized_varlen_buffer,
-                        bool enable_dynamic_watchdog) {
+                        bool enable_dynamic_watchdog,
+                        bool enable_interrupt) {
   const auto that_entry_idx = for_loop->add<BinaryOperator>(
       BinaryOperator::BinaryOp::Add, for_loop->iter(), start_index, "that_entry_idx");
   const auto sample_seed =
       for_loop->add<Cast>(Cast::CastOp::SExt, that_entry_idx, Type::Int64, "");
-  if (enable_dynamic_watchdog || g_enable_non_kernel_time_query_interrupt) {
+  if (enable_dynamic_watchdog || enable_interrupt) {
     const auto checker_rt_name =
         enable_dynamic_watchdog ? "check_watchdog_rt" : "check_interrupt_rt";
     const auto error_code = enable_dynamic_watchdog ? WATCHDOG_ERROR : INTERRUPT_ERROR;
@@ -1042,7 +1041,8 @@ void ResultSetReductionJIT::reduceLoop(const ReductionCode& reduction_code) cons
                      this_qmd_handle_arg,
                      that_qmd_handle_arg,
                      serialized_varlen_buffer_arg,
-                     config_.exec.watchdog.enable_dynamic);
+                     config_.exec.watchdog.enable_dynamic,
+                     config_.exec.interrupt.enable_non_kernel_time_query_interrupt);
   ir_reduce_loop->add<Ret>(ir_reduce_loop->addConstant<ConstantInt>(0, Type::Int32));
 }
 

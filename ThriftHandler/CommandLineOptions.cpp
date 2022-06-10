@@ -154,29 +154,12 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(enable_dynamic_watchdog)
                               ->implicit_value(true),
                           "Enable dynamic watchdog.");
-  help_desc.add_options()("enable-runtime-query-interrupt",
-                          po::value<bool>(&enable_runtime_query_interrupt)
-                              ->default_value(enable_runtime_query_interrupt)
-                              ->implicit_value(true),
-                          "Enable runtime query interrupt.");
-  help_desc.add_options()("enable-non-kernel-time-query-interrupt",
-                          po::value<bool>(&enable_non_kernel_time_query_interrupt)
-                              ->default_value(enable_non_kernel_time_query_interrupt)
-                              ->implicit_value(true),
-                          "Enable non-kernel time query interrupt.");
   help_desc.add_options()("pending-query-interrupt-freq",
                           po::value<unsigned>(&pending_query_interrupt_freq)
                               ->default_value(pending_query_interrupt_freq)
                               ->implicit_value(1000),
                           "A frequency of checking the request of pending query "
                           "interrupt from user (in millisecond).");
-  help_desc.add_options()(
-      "running-query-interrupt-freq",
-      po::value<double>(&running_query_interrupt_freq)
-          ->default_value(running_query_interrupt_freq)
-          ->implicit_value(0.5),
-      "A frequency of checking the request of running query "
-      "interrupt from user (0.0 (less frequent) ~ (more frequent) 1.0).");
   help_desc.add_options()("use-estimator-result-cache",
                           po::value<bool>(&use_estimator_result_cache)
                               ->default_value(use_estimator_result_cache)
@@ -840,10 +823,7 @@ boost::optional<int> CommandLineOptions::parse_command_line(
       return 1;
     }
 
-    g_enable_runtime_query_interrupt = enable_runtime_query_interrupt;
-    g_enable_non_kernel_time_query_interrupt = enable_non_kernel_time_query_interrupt;
     g_pending_query_interrupt_freq = pending_query_interrupt_freq;
-    g_running_query_interrupt_freq = running_query_interrupt_freq;
     g_use_estimator_result_cache = use_estimator_result_cache;
     g_enable_data_recycler = enable_data_recycler;
     g_use_hashtable_cache = use_hashtable_cache;

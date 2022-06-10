@@ -39,8 +39,6 @@
 #include <future>
 #include <numeric>
 
-extern bool g_enable_non_kernel_time_query_interrupt;
-
 namespace {
 
 bool use_multithreaded_reduction(const size_t entry_count) {
@@ -411,8 +409,10 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
       // all slot pairs are arrays.
       two_slot_target = true;
     }
-    if (UNLIKELY(g_enable_non_kernel_time_query_interrupt && executor &&
-                 executor->checkNonKernelTimeInterrupted())) {
+    if (UNLIKELY(
+            executor &&
+            executor->getConfig().exec.interrupt.enable_non_kernel_time_query_interrupt &&
+            executor->checkNonKernelTimeInterrupted())) {
       throw std::runtime_error(
           "Query execution was interrupted during result set reduction");
     }

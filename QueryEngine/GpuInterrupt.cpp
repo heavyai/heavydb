@@ -17,9 +17,6 @@
 #include "DynamicWatchdog.h"
 #include "Execute.h"
 
-extern bool g_enable_runtime_query_interrupt;
-extern bool g_enable_non_kernel_time_query_interrupt;
-
 void Executor::registerActiveModule(void* llvm_module, const int device_id) const {
 #ifdef HAVE_CUDA
   std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
@@ -50,7 +47,8 @@ void Executor::unregisterActiveModule(void* llvm_module, const int device_id) co
 void Executor::interrupt(const std::string& query_session,
                          const std::string& interrupt_session) {
   const auto allow_interrupt =
-      g_enable_runtime_query_interrupt || g_enable_non_kernel_time_query_interrupt;
+      config_->exec.interrupt.enable_runtime_query_interrupt ||
+      config_->exec.interrupt.enable_non_kernel_time_query_interrupt;
   if (allow_interrupt) {
     bool is_running_query = false;
     {
@@ -102,7 +100,7 @@ void Executor::interrupt(const std::string& query_session,
   auto cuda_mgr = data_mgr_->getCudaMgr();
   if (cuda_mgr && (config_->exec.watchdog.enable_dynamic || allow_interrupt)) {
     // we additionally allow sending interrupt signal for
-    // `g_enable_non_kernel_time_query_interrupt` especially for CTAS/ITAS queries: data
+    // `enable_non_kernel_time_query_interrupt` especially for CTAS/ITAS queries: data
     // population happens on CPU but select_query can be processed via GPU
     CHECK_GE(cuda_mgr->getDeviceCount(), 1);
     std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
@@ -230,7 +228,8 @@ void Executor::resetInterrupt() {
   std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
 #endif
   const auto allow_interrupt =
-      g_enable_runtime_query_interrupt || g_enable_non_kernel_time_query_interrupt;
+      config_->exec.interrupt.enable_runtime_query_interrupt ||
+      config_->exec.interrupt.enable_non_kernel_time_query_interrupt;
   if (config_->exec.watchdog.enable_dynamic) {
     dynamic_watchdog_init(static_cast<unsigned>(DW_RESET));
   } else if (allow_interrupt) {

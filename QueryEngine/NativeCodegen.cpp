@@ -81,7 +81,6 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #include <boost/filesystem.hpp>
 
 extern bool g_enable_filter_function;
-extern double g_running_query_interrupt_freq;
 
 float g_fraction_code_cache_to_evict = 0.2;
 
@@ -2028,7 +2027,7 @@ void Executor::createErrorCheckControlFlow(
             int64_t total_num_shift = num_shift_by_gridDim + num_shift_by_blockDim;
             uint64_t interrupt_checking_freq = 32;
             // TODO: get from ExecutionOptions
-            auto freq_control_knob = g_running_query_interrupt_freq;
+            auto freq_control_knob = config_->exec.interrupt.running_query_interrupt_freq;
             CHECK_GT(freq_control_knob, 0);
             CHECK_LE(freq_control_knob, 1.0);
             if (!input_table_infos.empty()) {

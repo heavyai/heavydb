@@ -197,6 +197,7 @@ class ColumnarResults {
   // with minimal ussage of result set's iterator access
   size_t thread_idx_;
   Executor* executor_;
+  bool enable_interrupt_;
 };
 
 using ColumnCacheMap =

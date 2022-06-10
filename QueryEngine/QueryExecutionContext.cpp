@@ -29,8 +29,6 @@
 #include "SpeculativeTopN.h"
 #include "StreamingTopN.h"
 
-extern bool g_enable_non_kernel_time_query_interrupt;
-
 QueryExecutionContext::QueryExecutionContext(
     const RelAlgExecutionUnit& ra_exe_unit,
     const QueryMemoryDescriptor& query_mem_desc,
@@ -123,7 +121,7 @@ ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
       deinterleaved_buffer[deinterleaved_buffer_idx] = agg_vals[agg_idx];
     }
   };
-  if (g_enable_non_kernel_time_query_interrupt) {
+  if (executor_->getConfig().exec.interrupt.enable_non_kernel_time_query_interrupt) {
     for (size_t bin_base_off = query_mem_desc_.getColOffInBytes(0), bin_idx = 0;
          bin_idx < result_set->entryCount();
          ++bin_idx, bin_base_off += query_mem_desc_.getColOffInBytesInNextBin(0)) {

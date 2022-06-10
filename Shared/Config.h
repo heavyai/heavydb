@@ -66,6 +66,12 @@ struct HeterogenousConfig {
   bool allow_query_step_cpu_retry = true;
 };
 
+struct InterruptConfig {
+  bool enable_runtime_query_interrupt = true;
+  bool enable_non_kernel_time_query_interrupt = true;
+  double running_query_interrupt_freq = 0.1;
+};
+
 struct ExecutionConfig {
   WatchdogConfig watchdog;
   CpuSubTasksConfig sub_tasks;
@@ -73,6 +79,7 @@ struct ExecutionConfig {
   GroupByConfig group_by;
   WindowFunctionsConfig window_func;
   HeterogenousConfig heterogeneous;
+  InterruptConfig interrupt;
 };
 
 struct FilterPushdownConfig {

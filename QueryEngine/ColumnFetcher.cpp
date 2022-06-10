@@ -25,7 +25,6 @@
 #include "Shared/likely.h"
 #include "Shared/sqltypes.h"
 
-extern bool g_enable_non_kernel_time_query_interrupt;
 extern size_t g_enable_parallel_linearization;
 namespace {
 
@@ -180,7 +179,7 @@ JoinColumn ColumnFetcher::makeJoinColumn(
   size_t num_elems = 0;
   size_t num_chunks = 0;
   for (auto& frag : fragments) {
-    if (g_enable_non_kernel_time_query_interrupt &&
+    if (executor->getConfig().exec.interrupt.enable_non_kernel_time_query_interrupt &&
         executor->checkNonKernelTimeInterrupted()) {
       throw QueryExecutionError(Executor::ERR_INTERRUPTED);
     }
@@ -312,7 +311,8 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
     auto column_it = columnarized_scan_table_cache_.find({table_id, col_id});
     if (column_it == columnarized_scan_table_cache_.end()) {
       for (size_t frag_id = 0; frag_id < frag_count; ++frag_id) {
-        if (g_enable_non_kernel_time_query_interrupt &&
+        if (executor_->getConfig()
+                .exec.interrupt.enable_non_kernel_time_query_interrupt &&
             executor_->checkNonKernelTimeInterrupted()) {
           throw QueryExecutionError(Executor::ERR_INTERRUPTED);
         }
@@ -708,7 +708,7 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
 
   for (; chunk_holder_it != local_chunk_holder.end();
        chunk_holder_it++, chunk_iter_holder_it++, chunk_num_tuple_it++) {
-    if (g_enable_non_kernel_time_query_interrupt &&
+    if (executor_->getConfig().exec.interrupt.enable_non_kernel_time_query_interrupt &&
         executor_->checkNonKernelTimeInterrupted()) {
       throw QueryExecutionError(Executor::ERR_INTERRUPTED);
     }
@@ -966,7 +966,8 @@ MergedChunk ColumnFetcher::linearizeFixedLenArrayColFrags(
     auto chunk_iter_holder_it = local_chunk_iter_holder.begin();
     for (; chunk_holder_it != local_chunk_holder.end();
          chunk_holder_it++, chunk_iter_holder_it++) {
-      if (g_enable_non_kernel_time_query_interrupt && check_interrupt()) {
+      if (executor_->getConfig().exec.interrupt.enable_non_kernel_time_query_interrupt &&
+          check_interrupt()) {
         throw QueryExecutionError(Executor::ERR_INTERRUPTED);
       }
       auto target_chunk = chunk_holder_it->get();
