@@ -166,11 +166,11 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   // Technically, this only applies to APPROX_COUNT_DISTINCT, but in practice we
   // can expect this to be true anyway for grouped queries since the precise version
   // uses significantly more memory.
-  const int64_t baseline_threshold =
-      has_count_distinct(ra_exe_unit_, config_.exec.group_by.bigint_count)
-          ? (device_type_ == ExecutorDeviceType::GPU ? (Executor::baseline_threshold / 4)
-                                                     : Executor::baseline_threshold)
-          : Executor::baseline_threshold;
+  int64_t baseline_threshold = config_.exec.group_by.baseline_threshold;
+  if (has_count_distinct(ra_exe_unit_, config_.exec.group_by.bigint_count) &&
+      device_type_ == ExecutorDeviceType::GPU) {
+    baseline_threshold = baseline_threshold / 4;
+  }
   if (ra_exe_unit_.groupby_exprs.size() != 1) {
     try {
       checked_int64_t cardinality{1};

@@ -46,6 +46,7 @@ struct GroupByConfig {
   bool enable_gpu_smem_grouped_non_count_agg = true;
   size_t gpu_smem_threshold = 4096;
   unsigned hll_precision_bits = 11;
+  size_t baseline_threshold = 1'000'000;
 };
 
 struct WindowFunctionsConfig {

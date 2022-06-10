@@ -1206,8 +1206,6 @@ class Executor {
   static CodeCacheAccessor<GpuCompilationContext> gpu_code_accessor;
 
  private:
-  static const size_t baseline_threshold{
-      1000000};  // if a perfect hash needs more entries, use baseline
   static const size_t code_cache_size{1000};
 
   ConfigPtr config_;

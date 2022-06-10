@@ -781,7 +781,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
     parallelTop(order_entries, top_n, executor);
   } else {
     if (executor && executor->getConfig().exec.watchdog.enable &&
-        Executor::baseline_threshold < entryCount()) {
+        executor->getConfig().exec.group_by.baseline_threshold < entryCount()) {
       throw WatchdogException("Sorting the result would be too slow");
     }
 
