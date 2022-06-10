@@ -44,7 +44,6 @@ extern bool g_skip_intermediate_count;
 extern bool g_enable_left_join_filter_hoisting;
 
 extern double g_gpu_mem_limit_percent;
-extern size_t g_constrained_by_in_threshold;
 
 extern bool g_enable_calcite_view_optimize;
 extern bool g_enable_bump_allocator;
@@ -4652,10 +4651,11 @@ TEST_F(Select, Case) {
             "denominator, y FROM test GROUP BY y ORDER BY y) a GROUP BY c HAVING c > 0",
             dt)));
 
-    const auto constrained_by_in_threshold_state = g_constrained_by_in_threshold;
-    g_constrained_by_in_threshold = 0;
+    const auto constrained_by_in_threshold_state =
+        config().opts.constrained_by_in_threshold;
+    config().opts.constrained_by_in_threshold = 0;
     ScopeGuard reset_constrained_by_in_threshold = [&constrained_by_in_threshold_state] {
-      g_constrained_by_in_threshold = constrained_by_in_threshold_state;
+      config().opts.constrained_by_in_threshold = constrained_by_in_threshold_state;
     };
     c("SELECT fixed_str AS key0, str as key1, count(*) as val FROM test WHERE "
       "((fixed_str IN (SELECT fixed_str FROM test GROUP BY fixed_str))) GROUP BY key0, "

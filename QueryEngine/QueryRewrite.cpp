@@ -25,8 +25,6 @@
 #include "Logger/Logger.h"
 #include "Shared/sqltypes.h"
 
-extern size_t g_constrained_by_in_threshold;
-
 RelAlgExecutionUnit QueryRewriter::rewrite(
     const RelAlgExecutionUnit& ra_exe_unit_in) const {
   auto rewritten_exe_unit = rewriteConstrainedByIn(ra_exe_unit_in);
@@ -89,7 +87,8 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByInImpl(
         continue;
       }
       const size_t range_sz = expr_range.getIntMax() - expr_range.getIntMin() + 1;
-      if (range_sz <= in_vals->get_value_list().size() * g_constrained_by_in_threshold) {
+      if (range_sz <= in_vals->get_value_list().size() *
+                          executor_->getConfig().opts.constrained_by_in_threshold) {
         ++it;
         continue;
       }

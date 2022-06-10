@@ -80,7 +80,6 @@ extern std::unique_ptr<llvm::Module> udf_cpu_module;
 bool g_enable_columnar_output{false};
 bool g_enable_left_join_filter_hoisting{true};
 bool g_optimize_row_initialization{true};
-size_t g_constrained_by_in_threshold{10};
 bool g_enable_table_functions{false};
 size_t g_max_memory_allocation_size{2000000000};  // set to max slab size
 size_t g_min_memory_allocation_size{

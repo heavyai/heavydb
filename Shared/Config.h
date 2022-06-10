@@ -109,6 +109,7 @@ struct OptimizationsConfig {
   FilterPushdownConfig filter_pushdown;
   bool from_table_reordering = true;
   bool strip_join_covered_quals = false;
+  size_t constrained_by_in_threshold = 10;
 };
 
 struct Config {
