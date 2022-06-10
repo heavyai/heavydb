@@ -40,8 +40,6 @@ using namespace TestHelpers::ArrowSQLRunner;
 
 bool g_aggregator{false};
 
-extern bool g_enable_left_join_filter_hoisting;
-
 extern double g_gpu_mem_limit_percent;
 
 extern bool g_enable_calcite_view_optimize;
@@ -9773,9 +9771,9 @@ TEST_F(Select, Joins_InnerJoin_Filters) {
 }
 
 TEST_F(Select, Joins_LeftJoinFiltered) {
-  const bool left_join_hoisting_state = g_enable_left_join_filter_hoisting;
+  const bool left_join_hoisting_state = config().opts.enable_left_join_filter_hoisting;
   ScopeGuard reset = [left_join_hoisting_state] {
-    g_enable_left_join_filter_hoisting = left_join_hoisting_state;
+    config().opts.enable_left_join_filter_hoisting = left_join_hoisting_state;
   };
 
   auto check_explain_result = [](const std::string& query,
@@ -9805,7 +9803,7 @@ TEST_F(Select, Joins_LeftJoinFiltered) {
   };
 
   for (bool enable_filter_hoisting : {false, true}) {
-    g_enable_left_join_filter_hoisting = enable_filter_hoisting;
+    config().opts.enable_left_join_filter_hoisting = enable_filter_hoisting;
 
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
       SKIP_NO_GPU();

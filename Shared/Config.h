@@ -111,6 +111,7 @@ struct OptimizationsConfig {
   bool strip_join_covered_quals = false;
   size_t constrained_by_in_threshold = 10;
   bool skip_intermediate_count = true;
+  bool enable_left_join_filter_hoisting = true;
 };
 
 struct Config {

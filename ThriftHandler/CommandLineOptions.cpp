@@ -38,7 +38,6 @@ extern bool g_use_table_device_offset;
 extern float g_fraction_code_cache_to_evict;
 extern bool g_cache_string_hash;
 extern bool g_enable_idp_temporary_users;
-extern bool g_enable_left_join_filter_hoisting;
 extern int64_t g_large_ndv_threshold;
 extern size_t g_large_ndv_multiplier;
 extern int64_t g_bitmap_memory_limit;
@@ -309,12 +308,6 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_enable_columnar_output)
           ->implicit_value(true),
       "Enable columnar output for intermediate/final query steps.");
-  developer_desc.add_options()(
-      "enable-left-join-filter-hoisting",
-      po::value<bool>(&g_enable_left_join_filter_hoisting)
-          ->default_value(g_enable_left_join_filter_hoisting)
-          ->implicit_value(true),
-      "Enable hoisting left hand side filters through left joins.");
   developer_desc.add_options()("optimize-row-init",
                                po::value<bool>(&g_optimize_row_initialization)
                                    ->default_value(g_optimize_row_initialization)

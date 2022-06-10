@@ -22,8 +22,6 @@
 
 // Driver methods for the IR generation.
 
-extern bool g_enable_left_join_filter_hoisting;
-
 std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
                                                  const bool fetch_columns,
                                                  const CompilationOptions& co) {
@@ -739,7 +737,7 @@ JoinLoop::HoistedFiltersCallback Executor::buildHoistLeftHandSideFiltersCb(
     const size_t level_idx,
     const int inner_table_id,
     const CompilationOptions& co) {
-  if (!g_enable_left_join_filter_hoisting) {
+  if (!config_->opts.enable_left_join_filter_hoisting) {
     return nullptr;
   }
 
