@@ -112,9 +112,6 @@ size_t g_gpu_smem_threshold{
 bool g_enable_smem_grouped_non_count_agg{
     true};  // enable use of shared memory when performing group-by with select non-count
             // aggregates
-bool g_enable_smem_non_grouped_agg{
-    true};  // enable optimizations for using GPU shared memory in implementation of
-            // non-grouped aggregates
 bool g_is_test_env{false};  // operating under a unit test environment. Currently only
                             // limits the allocation for the output buffer arena
                             // and data recycler test

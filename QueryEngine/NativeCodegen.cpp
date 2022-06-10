@@ -82,7 +82,6 @@ static_assert(false, "LLVM Version >= 9 is required.");
 
 extern bool g_enable_filter_function;
 extern bool g_enable_smem_grouped_non_count_agg;
-extern bool g_enable_smem_non_grouped_agg;
 extern size_t g_gpu_smem_threshold;
 extern double g_running_query_interrupt_freq;
 
@@ -2401,7 +2400,7 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
 
   if (query_mem_desc_ptr->getQueryDescriptionType() ==
           QueryDescriptionType::NonGroupedAggregate &&
-      g_enable_smem_non_grouped_agg &&
+      config.exec.group_by.enable_gpu_smem_non_grouped_agg &&
       query_mem_desc_ptr->countDistinctDescriptorsLogicallyEmpty()) {
     // TODO: relax this, if necessary
     if (gpu_blocksize < query_mem_desc_ptr->getEntryCount()) {

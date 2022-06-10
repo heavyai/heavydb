@@ -148,7 +148,6 @@ extern unsigned g_pending_query_interrupt_freq;
 extern double g_running_query_interrupt_freq;
 extern bool g_enable_non_kernel_time_query_interrupt;
 extern size_t g_gpu_smem_threshold;
-extern bool g_enable_smem_non_grouped_agg;
 extern bool g_enable_smem_grouped_non_count_agg;
 extern bool g_use_estimator_result_cache;
 extern bool g_enable_lazy_fetch;

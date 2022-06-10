@@ -42,6 +42,7 @@ struct GroupByConfig {
   size_t big_group_threshold = 16384;
   bool use_groupby_buffer_desc = false;
   bool enable_gpu_smem_group_by = true;
+  bool enable_gpu_smem_non_grouped_agg = true;
 };
 
 struct ExecutionConfig {
