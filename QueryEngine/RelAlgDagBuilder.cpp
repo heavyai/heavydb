@@ -31,8 +31,6 @@
 #include <string>
 #include <unordered_set>
 
-extern bool g_enable_union;
-
 namespace {
 
 const unsigned FIRST_RA_NODE_ID = 1;
@@ -584,11 +582,6 @@ bool RelSort::hasEquivCollationOf(const RelSort& that) const {
 
 RelLogicalUnion::RelLogicalUnion(RelAlgInputs inputs, bool is_all)
     : RelAlgNode(std::move(inputs)), is_all_(is_all) {
-  if (!g_enable_union) {
-    throw QueryNotSupported(
-        "The DEPRECATED enable-union option is set to off. Please remove this option as "
-        "it may be disabled in the future.");
-  }
   CHECK_EQ(2u, inputs_.size());
   if (!is_all_) {
     throw QueryNotSupported("UNION without ALL is not supported yet.");

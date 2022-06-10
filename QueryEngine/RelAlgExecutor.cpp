@@ -47,7 +47,6 @@
 #include <numeric>
 
 bool g_skip_intermediate_count{true};
-bool g_enable_union{true};  // DEPRECATED
 size_t g_estimator_failure_max_groupby_size{256000000};
 bool g_columnar_large_projections{true};
 size_t g_columnar_large_projections_threshold{1000000};

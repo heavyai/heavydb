@@ -252,12 +252,6 @@ void CommandLineOptions::fillOptions() {
       "Compiler server, packaged separately.");
   help_desc.add_options()("version,v", "Print Version Number.");
 
-  help_desc.add_options()("enable-union",
-                          po::value<bool>(&g_enable_union)
-                              ->default_value(g_enable_union)
-                              ->implicit_value(true),
-                          "DEPRECATED. UNION ALL is enabled by default. Please remove "
-                          "use of this option, as it may be disabled in the future.");
   help_desc.add_options()(
       "calcite-service-timeout",
       po::value<size_t>(&system_parameters.calcite_timeout)
@@ -740,12 +734,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     if (vm.count("version")) {
       std::cout << "OmniSci Version: " << MAPD_RELEASE << std::endl;
       return 0;
-    }
-    if (!g_enable_union) {
-      std::cerr
-          << "The enable-union option is DEPRECATED and is now enabled by default. "
-             "Please remove use of this option, as it may be disabled in the future."
-          << std::endl;
     }
 
     if (vm.count("config")) {

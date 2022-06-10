@@ -49,7 +49,6 @@ extern size_t g_constrained_by_in_threshold;
 
 extern bool g_enable_calcite_view_optimize;
 extern bool g_enable_bump_allocator;
-extern bool g_enable_union;
 
 extern bool g_is_test_env;
 
@@ -17206,8 +17205,6 @@ TEST_F(Select, GroupEmptyBlank) {
 
 // Uses tables from import_union_all_tests().
 TEST_F(Select, UnionAll) {
-  bool enable_union = true;
-  std::swap(g_enable_union, enable_union);
   for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
     SKIP_NO_GPU();
     c("SELECT a0, a1, a2, a3 FROM union_all_a"
@@ -17417,7 +17414,6 @@ TEST_F(Select, UnionAll) {
                                   dt),
                  std::runtime_error);
   }
-  g_enable_union = enable_union;
 }
 
 TEST_F(Select, VariableLengthAggs) {
