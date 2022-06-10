@@ -81,7 +81,6 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #include <boost/filesystem.hpp>
 
 extern bool g_enable_filter_function;
-extern bool g_enable_smem_grouped_non_count_agg;
 extern size_t g_gpu_smem_threshold;
 extern double g_running_query_interrupt_freq;
 
@@ -2464,7 +2463,7 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
                                                       *query_mem_desc_ptr,
                                                       config.exec.group_by.bigint_count);
       std::unordered_set<SQLAgg> supported_aggs{kCOUNT};
-      if (g_enable_smem_grouped_non_count_agg) {
+      if (config.exec.group_by.enable_gpu_smem_grouped_non_count_agg) {
         supported_aggs = {kCOUNT, kMIN, kMAX, kSUM, kAVG};
       }
       if (std::find_if(target_infos.begin(),

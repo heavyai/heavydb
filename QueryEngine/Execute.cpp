@@ -105,13 +105,10 @@ bool g_use_estimator_result_cache{true};
 unsigned g_pending_query_interrupt_freq{1000};
 double g_running_query_interrupt_freq{0.1};
 size_t g_gpu_smem_threshold{
-    4096};  // GPU shared memory threshold (in bytes), if larger
-            // buffer sizes are required we do not use GPU shared
-            // memory optimizations Setting this to 0 means unlimited
-            // (subject to other dynamically calculated caps)
-bool g_enable_smem_grouped_non_count_agg{
-    true};  // enable use of shared memory when performing group-by with select non-count
-            // aggregates
+    4096};                  // GPU shared memory threshold (in bytes), if larger
+                            // buffer sizes are required we do not use GPU shared
+                            // memory optimizations Setting this to 0 means unlimited
+                            // (subject to other dynamically calculated caps)
 bool g_is_test_env{false};  // operating under a unit test environment. Currently only
                             // limits the allocation for the output buffer arena
                             // and data recycler test

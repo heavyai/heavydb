@@ -43,6 +43,7 @@ struct GroupByConfig {
   bool use_groupby_buffer_desc = false;
   bool enable_gpu_smem_group_by = true;
   bool enable_gpu_smem_non_grouped_agg = true;
+  bool enable_gpu_smem_grouped_non_count_agg = true;
 };
 
 struct ExecutionConfig {

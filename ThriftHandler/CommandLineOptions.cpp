@@ -410,12 +410,6 @@ void CommandLineOptions::fillAdvancedOptions() {
       po::value<size_t>(&g_gpu_smem_threshold)->default_value(g_gpu_smem_threshold),
       "GPU shared memory threshold (in bytes). If query requires larger buffers than "
       "this threshold, we disable those optimizations. 0 (default) means no static cap.");
-  developer_desc.add_options()(
-      "enable-shared-mem-grouped-non-count-agg",
-      po::value<bool>(&g_enable_smem_grouped_non_count_agg)
-          ->default_value(g_enable_smem_grouped_non_count_agg)
-          ->implicit_value(true),
-      "Enable using GPU shared memory for grouped non-count aggregate queries.");
   developer_desc.add_options()("enable-direct-columnarization",
                                po::value<bool>(&g_enable_direct_columnarization)
                                    ->default_value(g_enable_direct_columnarization)
