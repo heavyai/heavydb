@@ -176,8 +176,9 @@ class SegmentTree {
         return invalid_val_;
       }
       // try to get the current row's column value
+      const auto input_col_idx_ordered = ordered_input_col_idx_buf_[input_col_idx];
       const auto refined_input_col_idx =
-          original_input_col_idx_buf_[ordered_input_col_idx_buf_[input_col_idx]];
+          original_input_col_idx_buf_[input_col_idx_ordered];
       const auto col_val = input_col_buf_[refined_input_col_idx];
       if (col_val != input_type_null_val_) {
         if (agg_type_ == SqlWindowFunctionKind::COUNT) {
@@ -213,12 +214,13 @@ class SegmentTree {
                                                      size_t cur_node_depth) {
     if (cur_node_idx >= leaf_range_.first && cur_node_idx <= leaf_range_.second) {
       int64_t input_col_idx = cur_node_idx - leaf_range_.first;
-      const auto modified_input_col_idx =
-          original_input_col_idx_buf_[ordered_input_col_idx_buf_[input_col_idx]];
       if (input_col_idx >= num_elems_) {
         derived_aggregated_[cur_node_idx] = {invalid_val_, 0};
       } else {
-        auto col_val = input_col_buf_[modified_input_col_idx];
+        const auto input_col_idx_ordered = ordered_input_col_idx_buf_[input_col_idx];
+        const auto refined_input_col_idx =
+            original_input_col_idx_buf_[input_col_idx_ordered];
+        auto col_val = input_col_buf_[refined_input_col_idx];
         if (col_val != input_type_null_val_) {
           derived_aggregated_[cur_node_idx] = {col_val, 1};
         } else {
