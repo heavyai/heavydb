@@ -377,13 +377,6 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_skip_intermediate_count)
           ->implicit_value(true),
       "Skip pre-flight counts for intermediate projections with no filters.");
-  developer_desc.add_options()(
-      "strip-join-covered-quals",
-      po::value<bool>(&g_strip_join_covered_quals)
-          ->default_value(g_strip_join_covered_quals)
-          ->implicit_value(true),
-      "Remove quals from the filtered count if they are covered by a "
-      "join condition (currently only ST_Contains).");
 
   developer_desc.add_options()(
       "min-cpu-slab-size",

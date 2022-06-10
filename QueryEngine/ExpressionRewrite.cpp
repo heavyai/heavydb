@@ -29,7 +29,6 @@
 #include "QueryEngine/WindowExpressionRewrite.h"
 #include "Shared/sqldefs.h"
 
-extern bool g_strip_join_covered_quals;
 namespace {
 
 class OrToInVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::InValues>> {
@@ -802,10 +801,6 @@ class JoinCoveredQualVisitor : public ScalarExprVisitor<bool> {
 std::list<std::shared_ptr<Analyzer::Expr>> strip_join_covered_filter_quals(
     const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
     const JoinQualsPerNestingLevel& join_quals) {
-  if (!g_strip_join_covered_quals) {
-    return quals;
-  }
-
   if (join_quals.empty()) {
     return quals;
   }

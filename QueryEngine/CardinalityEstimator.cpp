@@ -114,11 +114,14 @@ RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_
 
 RelAlgExecutionUnit create_count_all_execution_unit(
     const RelAlgExecutionUnit& ra_exe_unit,
-    std::shared_ptr<Analyzer::Expr> replacement_target) {
+    std::shared_ptr<Analyzer::Expr> replacement_target,
+    bool strip_join_covered_quals) {
   return {ra_exe_unit.input_descs,
           ra_exe_unit.input_col_descs,
           ra_exe_unit.simple_quals,
-          strip_join_covered_filter_quals(ra_exe_unit.quals, ra_exe_unit.join_quals),
+          strip_join_covered_quals
+              ? strip_join_covered_filter_quals(ra_exe_unit.quals, ra_exe_unit.join_quals)
+              : ra_exe_unit.quals,
           ra_exe_unit.join_quals,
           {},
           {replacement_target.get()},

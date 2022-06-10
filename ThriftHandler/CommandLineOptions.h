@@ -129,7 +129,6 @@ class CommandLineOptions {
 
 extern bool g_enable_columnar_output;
 extern bool g_optimize_row_initialization;
-extern bool g_strip_join_covered_quals;
 extern size_t g_constrained_by_in_threshold;
 extern bool g_enable_table_functions;
 extern size_t g_max_memory_allocation_size;

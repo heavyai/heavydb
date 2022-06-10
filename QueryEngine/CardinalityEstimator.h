@@ -122,7 +122,8 @@ RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_
 
 RelAlgExecutionUnit create_count_all_execution_unit(
     const RelAlgExecutionUnit& ra_exe_unit,
-    std::shared_ptr<Analyzer::Expr> replacement_target);
+    std::shared_ptr<Analyzer::Expr> replacement_target,
+    bool strip_join_covered_quals);
 
 ResultSetPtr reduce_estimator_results(
     const RelAlgExecutionUnit& ra_exe_unit,
