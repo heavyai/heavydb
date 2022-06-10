@@ -72,6 +72,13 @@ struct InterruptConfig {
   double running_query_interrupt_freq = 0.1;
 };
 
+struct CodegenConfig {
+  bool inf_div_by_zero = false;
+  bool null_div_by_zero = false;
+  bool hoist_literals = true;
+  bool enable_filter_function = true;
+};
+
 struct ExecutionConfig {
   WatchdogConfig watchdog;
   CpuSubTasksConfig sub_tasks;
@@ -80,6 +87,7 @@ struct ExecutionConfig {
   WindowFunctionsConfig window_func;
   HeterogenousConfig heterogeneous;
   InterruptConfig interrupt;
+  CodegenConfig codegen;
 };
 
 struct FilterPushdownConfig {

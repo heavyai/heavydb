@@ -28,8 +28,6 @@
 #include <cfenv>
 #include <cmath>
 
-extern bool g_null_div_by_zero;
-
 #define DEF_OPERATOR(fname, op)                                                    \
   ExpressionRange fname(const ExpressionRange& other) const {                      \
     if (type_ == ExpressionRangeType::Invalid ||                                   \
@@ -206,7 +204,8 @@ ExpressionRange apply_simple_quals(
   return qual_range;
 }
 
-ExpressionRange ExpressionRange::operator/(const ExpressionRange& other) const {
+ExpressionRange ExpressionRange::div(const ExpressionRange& other,
+                                     bool null_div_by_zero) const {
   if (type_ != ExpressionRangeType::Integer ||
       other.type_ != ExpressionRangeType::Integer) {
     return ExpressionRange::makeInvalidRange();
@@ -220,7 +219,7 @@ ExpressionRange ExpressionRange::operator/(const ExpressionRange& other) const {
   auto div_range = binOp<int64_t>(other, [](const int64_t x, const int64_t y) {
     return int64_t(checked_int64_t(x) / y);
   });
-  if (g_null_div_by_zero) {
+  if (null_div_by_zero) {
     div_range.setHasNulls();
   }
   return div_range;
@@ -404,6 +403,7 @@ ExpressionRange getExpressionRange(
     case kMULTIPLY:
       return lhs * rhs;
     case kDIVIDE: {
+      bool null_div_by_zero = executor->getConfig().exec.codegen.null_div_by_zero;
       const auto& lhs_type = expr->get_left_operand()->get_type_info();
       if (lhs_type.is_decimal() && lhs.getType() != ExpressionRangeType::Invalid) {
         CHECK(lhs.getType() == ExpressionRangeType::Integer);
@@ -412,9 +412,9 @@ ExpressionRange getExpressionRange(
             scale_up_interval_endpoint(lhs.getIntMax(), lhs_type),
             0,
             lhs.hasNulls());
-        return adjusted_lhs / rhs;
+        return adjusted_lhs.div(rhs, null_div_by_zero);
       }
-      return lhs / rhs;
+      return lhs.div(rhs, null_div_by_zero);
     }
     default:
       break;

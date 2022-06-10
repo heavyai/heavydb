@@ -29,8 +29,6 @@ extern double g_gpu_mem_limit_percent;
 
 namespace TestHelpers::ArrowSQLRunner {
 
-bool g_hoist_literals = true;
-
 namespace {
 
 class ArrowSQLRunnerImpl {
@@ -154,7 +152,7 @@ class ArrowSQLRunnerImpl {
 
   CompilationOptions getCompilationOptions(ExecutorDeviceType device_type) {
     auto co = CompilationOptions::defaults(device_type);
-    co.hoist_literals = g_hoist_literals;
+    co.hoist_literals = config_->exec.codegen.hoist_literals;
     return co;
   }
 

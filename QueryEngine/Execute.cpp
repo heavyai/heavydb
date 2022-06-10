@@ -75,9 +75,6 @@
 #include "Shared/threading.h"
 #include "ThirdParty/robin_hood.h"
 
-bool g_enable_filter_function{true};
-bool g_null_div_by_zero{false};
-bool g_inf_div_by_zero{false};
 bool g_from_table_reordering{true};
 extern std::unique_ptr<llvm::Module> udf_gpu_module;
 extern std::unique_ptr<llvm::Module> udf_cpu_module;

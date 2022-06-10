@@ -145,8 +145,10 @@ class ExpressionRange {
   ExpressionRange operator+(const ExpressionRange& other) const;
   ExpressionRange operator-(const ExpressionRange& other) const;
   ExpressionRange operator*(const ExpressionRange& other) const;
-  ExpressionRange operator/(const ExpressionRange& other) const;
   ExpressionRange operator||(const ExpressionRange& other) const;
+
+  ExpressionRange div(const ExpressionRange& other, bool null_div_by_zero) const;
+
 
   bool operator==(const ExpressionRange& other) const;
 

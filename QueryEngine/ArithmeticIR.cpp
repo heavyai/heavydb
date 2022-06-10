@@ -18,8 +18,6 @@
 #include "Execute.h"
 
 // Code generation routines and helpers for basic arithmetic and unary minus.
-extern bool g_null_div_by_zero;
-extern bool g_inf_div_by_zero;
 namespace {
 
 std::string numeric_or_time_interval_type_name(const SQLTypeInfo& ti1,
@@ -483,7 +481,7 @@ llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
                          {lhs_lv, scale_lv, cgen_state_->llInt(inline_int_null_val(ti))});
     }
   }
-  if (g_inf_div_by_zero && ti.is_fp()) {
+  if (config_.exec.codegen.inf_div_by_zero && ti.is_fp()) {
     llvm::Value* inf_lv = ti.get_type() == kFLOAT ? cgen_state_->llFp(INF_FLOAT)
                                                   : cgen_state_->llFp(INF_DOUBLE);
     llvm::Value* null_lv = ti.get_type() == kFLOAT ? cgen_state_->llFp(NULL_FLOAT)
@@ -491,7 +489,7 @@ llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
     return cgen_state_->emitCall("safe_inf_div_" + numeric_type_name(ti),
                                  {lhs_lv, rhs_lv, inf_lv, null_lv});
   }
-  if (g_null_div_by_zero) {
+  if (config_.exec.codegen.null_div_by_zero) {
     llvm::Value* null_lv{nullptr};
     if (ti.is_fp()) {
       null_lv = ti.get_type() == kFLOAT ? cgen_state_->llFp(NULL_FLOAT)

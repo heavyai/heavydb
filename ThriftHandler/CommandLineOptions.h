@@ -128,8 +128,6 @@ class CommandLineOptions {
 };
 
 extern bool g_from_table_reordering;
-extern bool g_inf_div_by_zero;
-extern bool g_null_div_by_zero;
 extern bool g_enable_columnar_output;
 extern bool g_optimize_row_initialization;
 extern bool g_strip_join_covered_quals;
@@ -150,7 +148,6 @@ extern size_t g_min_memory_allocation_size;
 extern bool g_enable_experimental_string_functions;
 extern bool g_enable_interop;
 extern bool g_enable_union;
-extern bool g_enable_filter_function;
 extern bool g_enable_automatic_ir_metadata;
 extern size_t g_enable_parallel_linearization;
 extern size_t g_max_log_length;

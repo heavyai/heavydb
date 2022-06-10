@@ -31,8 +31,6 @@ class RelAlgExecutor;
 
 namespace TestHelpers::ArrowSQLRunner {
 
-extern bool g_hoist_literals;
-
 constexpr int TEST_SCHEMA_ID = 1;
 constexpr int TEST_DB_ID = (TEST_SCHEMA_ID << 24) + 1;
 

@@ -80,8 +80,6 @@ static_assert(false, "LLVM Version >= 9 is required.");
 
 #include <boost/filesystem.hpp>
 
-extern bool g_enable_filter_function;
-
 float g_fraction_code_cache_to_evict = 0.2;
 
 static llvm::sys::Mutex g_ee_create_mutex;
@@ -2720,7 +2718,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   cgen_state_->row_func_bb_ =
       llvm::BasicBlock::Create(cgen_state_->context_, "entry", cgen_state_->row_func_);
 
-  if (g_enable_filter_function) {
+  if (config_->exec.codegen.enable_filter_function) {
     auto filter_func_ft =
         llvm::FunctionType::get(get_int_type(32, cgen_state_->context_), {}, false);
     cgen_state_->filter_func_ = llvm::Function::Create(filter_func_ft,

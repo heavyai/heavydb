@@ -43,8 +43,6 @@ bool g_aggregator{false};
 extern bool g_skip_intermediate_count;
 extern bool g_enable_left_join_filter_hoisting;
 extern bool g_from_table_reordering;
-extern bool g_inf_div_by_zero;
-extern bool g_null_div_by_zero;
 
 extern double g_gpu_mem_limit_percent;
 extern size_t g_parallel_top_min;
@@ -7247,7 +7245,7 @@ TEST_F(Select, DivByZero) {
 }
 
 TEST_F(Select, ReturnNullFromDivByZero) {
-  g_null_div_by_zero = true;
+  config().exec.codegen.null_div_by_zero = true;
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT x / 0 FROM test;", dt);
@@ -7264,7 +7262,7 @@ TEST_F(Select, ReturnNullFromDivByZero) {
 }
 
 TEST_F(Select, ReturnInfFromDivByZero) {
-  g_inf_div_by_zero = true;
+  config().exec.codegen.inf_div_by_zero = true;
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT f / 0. FROM test;", "SELECT 2e308 FROM test;", dt);
@@ -17991,7 +17989,7 @@ int main(int argc, char** argv) {
   logger::init(log_options);
 
   if (vm.count("disable-literal-hoisting")) {
-    g_hoist_literals = false;
+    config->exec.codegen.hoist_literals = false;
   }
 
   config->exec.window_func.enable = true;

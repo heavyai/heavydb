@@ -211,12 +211,6 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(system_parameters.num_sessions),
                           "Maximum number of active session.");
   help_desc.add_options()(
-      "null-div-by-zero",
-      po::value<bool>(&g_null_div_by_zero)
-          ->default_value(g_null_div_by_zero)
-          ->implicit_value(true),
-      "Return null on division by zero instead of throwing an exception.");
-  help_desc.add_options()(
       "num-reader-threads",
       po::value<size_t>(&num_reader_threads)->default_value(num_reader_threads),
       "Number of reader threads to use.");
@@ -560,13 +554,6 @@ void CommandLineOptions::fillAdvancedOptions() {
       "size of the group by buffer (entry count in Query Memory Descriptor) and "
       "multiplying it by the number of count distinct expression and the size of bitmap "
       "required for each. For approx_count_distinct this is typically 8192 bytes.");
-  developer_desc.add_options()(
-      "enable-filter-function",
-      po::value<bool>(&g_enable_filter_function)
-          ->default_value(g_enable_filter_function)
-          ->implicit_value(true),
-      "Enable the filter function protection feature for the SQL JIT compiler. "
-      "Normally should be on but techs might want to disable for troubleshooting.");
   developer_desc.add_options()(
       "enable-idp-temporary-users",
       po::value<bool>(&g_enable_idp_temporary_users)
