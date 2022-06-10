@@ -41,8 +41,6 @@
 #include <stack>
 #include <vector>
 
-extern bool g_enable_smem_group_by;
-
 struct ColRangeInfo {
   QueryDescriptionType hash_type_;
   int64_t min;

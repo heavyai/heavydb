@@ -2377,7 +2377,7 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
                                  const ExecutorDeviceType device_type,
                                  const unsigned gpu_blocksize,
                                  const unsigned num_blocks_per_mp,
-                                 bool bigint_count) {
+                                 const Config& config) {
   if (device_type == ExecutorDeviceType::CPU) {
     return false;
   }
@@ -2410,7 +2410,7 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
     // skip shared memory usage when dealing with 1) variable length targets, 2)
     // not a COUNT aggregate
     const auto target_infos = target_exprs_to_infos(
-        ra_exe_unit.target_exprs, *query_mem_desc_ptr, bigint_count);
+        ra_exe_unit.target_exprs, *query_mem_desc_ptr, config.exec.group_by.bigint_count);
     std::unordered_set<SQLAgg> supported_aggs{kCOUNT};
     if (std::find_if(target_infos.begin(),
                      target_infos.end(),
@@ -2428,7 +2428,7 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
 
   if (query_mem_desc_ptr->getQueryDescriptionType() ==
           QueryDescriptionType::GroupByPerfectHash &&
-      g_enable_smem_group_by) {
+      config.exec.group_by.enable_gpu_smem_group_by) {
     /**
      * To simplify the implementation for practical purposes, we
      * initially provide shared memory support for cases where there are at most as many
@@ -2461,8 +2461,9 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
       // skip shared memory usage when dealing with 1) variable length targets, 2)
       // non-basic aggregates (COUNT, SUM, MIN, MAX, AVG)
       // TODO: relax this if necessary
-      const auto target_infos = target_exprs_to_infos(
-          ra_exe_unit.target_exprs, *query_mem_desc_ptr, bigint_count);
+      const auto target_infos = target_exprs_to_infos(ra_exe_unit.target_exprs,
+                                                      *query_mem_desc_ptr,
+                                                      config.exec.group_by.bigint_count);
       std::unordered_set<SQLAgg> supported_aggs{kCOUNT};
       if (g_enable_smem_grouped_non_count_agg) {
         supported_aggs = {kCOUNT, kMIN, kMAX, kSUM, kAVG};
@@ -2622,7 +2623,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                   co.device_type,
                                   cuda_mgr ? this->blockSize() : 1,
                                   cuda_mgr ? this->numBlocksPerMP() : 1,
-                                  getConfig().exec.group_by.bigint_count);
+                                  getConfig());
   if (gpu_shared_mem_optimization) {
     // disable interleaved bins optimization on the GPU
     query_mem_desc->setHasInterleavedBinsOnGpu(false);

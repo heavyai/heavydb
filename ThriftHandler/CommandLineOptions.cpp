@@ -401,12 +401,6 @@ void CommandLineOptions::fillAdvancedOptions() {
                                    ->default_value(g_enable_lazy_fetch)
                                    ->implicit_value(true),
                                "Enable lazy fetch columns in query results.");
-  developer_desc.add_options()(
-      "enable-shared-mem-group-by",
-      po::value<bool>(&g_enable_smem_group_by)
-          ->default_value(g_enable_smem_group_by)
-          ->implicit_value(true),
-      "Enable using GPU shared memory for some GROUP BY queries.");
   developer_desc.add_options()("num-executors",
                                po::value<int>(&system_parameters.num_executors)
                                    ->default_value(system_parameters.num_executors),

@@ -81,7 +81,6 @@ bool g_allow_query_step_cpu_retry{true};
 bool g_null_div_by_zero{false};
 bool g_inf_div_by_zero{false};
 bool g_from_table_reordering{true};
-extern bool g_enable_smem_group_by;
 extern std::unique_ptr<llvm::Module> udf_gpu_module;
 extern std::unique_ptr<llvm::Module> udf_cpu_module;
 bool g_enable_columnar_output{false};

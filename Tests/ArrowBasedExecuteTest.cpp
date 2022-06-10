@@ -40,7 +40,6 @@ using namespace TestHelpers::ArrowSQLRunner;
 
 bool g_aggregator{false};
 
-extern bool g_enable_smem_group_by;
 extern bool g_allow_cpu_retry;
 extern bool g_allow_query_step_cpu_retry;
 extern bool g_skip_intermediate_count;
@@ -17926,8 +17925,8 @@ int main(int argc, char** argv) {
                          ->implicit_value(false),
                      "Use 64-bit count");
   desc.add_options()("disable-shared-mem-group-by",
-                     po::value<bool>(&g_enable_smem_group_by)
-                         ->default_value(g_enable_smem_group_by)
+                     po::value<bool>(&config->exec.group_by.enable_gpu_smem_group_by)
+                         ->default_value(config->exec.group_by.enable_gpu_smem_group_by)
                          ->implicit_value(false),
                      "Enable/disable using GPU shared memory for GROUP BY.");
   desc.add_options()("enable-columnar-output",

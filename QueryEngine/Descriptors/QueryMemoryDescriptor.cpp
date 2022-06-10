@@ -25,7 +25,6 @@
 
 #include <boost/algorithm/cxx11/any_of.hpp>
 
-bool g_enable_smem_group_by{true};
 extern bool g_enable_columnar_output;
 extern size_t g_streaming_topn_max;
 
