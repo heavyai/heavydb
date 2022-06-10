@@ -795,7 +795,8 @@ TEST(StringDictionaryProxy, BuildUnionTranslationMapToPartialOverlapProxy) {
   ASSERT_EQ(dest_sdp.storageEntryCount(), num_dest_persisted_entries);
   ASSERT_EQ(dest_sdp.transientEntryCount(), num_dest_transient_entries);
 
-  const auto id_map = source_sdp.buildUnionTranslationMapToOtherProxy(&dest_sdp, {});
+  const auto id_map =
+      tsan_safe_buildUnionTranslationMapToOtherProxy(&source_sdp, &dest_sdp);
   const size_t expected_num_untranslated_strings =
       calc_expected_untranslated_strings(num_source_persisted_entries,
                                          num_dest_persisted_entries,
