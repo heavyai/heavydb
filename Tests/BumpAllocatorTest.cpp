@@ -25,7 +25,6 @@
 using namespace TestHelpers;
 using namespace TestHelpers::ArrowSQLRunner;
 
-extern bool g_allow_cpu_retry;
 extern size_t g_max_memory_allocation_size;
 extern size_t g_min_memory_allocation_size;
 extern bool g_enable_bump_allocator;
@@ -94,15 +93,15 @@ class LowGpuBufferMemory : public ::testing::Test {
     g_min_memory_allocation_size = 2000000000;
 
     // CPU retry off to disable automatic punt to CPU
-    allow_cpu_retry_state_ = g_allow_cpu_retry;
-    g_allow_cpu_retry = false;
+    allow_cpu_retry_state_ = config().exec.heterogeneous.allow_cpu_retry;
+    config().exec.heterogeneous.allow_cpu_retry = false;
   }
 
   void TearDown() override {
     dropTable("test");
 
     g_min_memory_allocation_size = min_mem_allocation_state_;
-    g_allow_cpu_retry = allow_cpu_retry_state_;
+    config().exec.heterogeneous.allow_cpu_retry = allow_cpu_retry_state_;
   }
 
  private:
@@ -149,15 +148,15 @@ class LowGpuBufferMemoryCpuRetry : public ::testing::Test {
     g_min_memory_allocation_size = 2000000000;
 
     // allow CPU retry on
-    allow_cpu_retry_state_ = g_allow_cpu_retry;
-    g_allow_cpu_retry = true;
+    allow_cpu_retry_state_ = config().exec.heterogeneous.allow_cpu_retry;
+    config().exec.heterogeneous.allow_cpu_retry = true;
   }
 
   void TearDown() override {
     dropTable("test");
 
     g_min_memory_allocation_size = min_mem_allocation_state_;
-    g_allow_cpu_retry = allow_cpu_retry_state_;
+    config().exec.heterogeneous.allow_cpu_retry = allow_cpu_retry_state_;
   }
 
  private:
@@ -194,8 +193,8 @@ class MediumGpuBufferMemory : public ::testing::Test {
     g_max_memory_allocation_size = 512;
 
     // CPU retry off to disable automatic punt to CPU
-    allow_cpu_retry_state_ = g_allow_cpu_retry;
-    g_allow_cpu_retry = false;
+    allow_cpu_retry_state_ = config().exec.heterogeneous.allow_cpu_retry;
+    config().exec.heterogeneous.allow_cpu_retry = false;
   }
 
   void TearDown() override {
@@ -203,7 +202,7 @@ class MediumGpuBufferMemory : public ::testing::Test {
 
     g_max_memory_allocation_size = max_mem_allocation_state_;
 
-    g_allow_cpu_retry = allow_cpu_retry_state_;
+    config().exec.heterogeneous.allow_cpu_retry = allow_cpu_retry_state_;
   }
 
  private:

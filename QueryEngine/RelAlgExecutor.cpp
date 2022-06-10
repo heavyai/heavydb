@@ -55,10 +55,8 @@ size_t g_columnar_large_projections_threshold{1000000};
 
 extern bool g_enable_bump_allocator;
 extern bool g_from_table_reordering;
-extern bool g_allow_cpu_retry;
 extern bool g_enable_table_functions;
 extern bool g_enable_multifrag_rs;
-extern bool g_allow_query_step_cpu_retry;
 
 namespace {
 
@@ -237,7 +235,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
   try {
     return run_query(co);
   } catch (const QueryMustRunOnCpu&) {
-    if (!g_allow_cpu_retry) {
+    if (!config_.exec.heterogeneous.allow_cpu_retry) {
       throw;
     }
   }
@@ -664,7 +662,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
       // TODO(todd): Determine if and when we can relax this restriction
       // for distributed
       CHECK(co.device_type == ExecutorDeviceType::GPU);
-      if (!g_allow_query_step_cpu_retry) {
+      if (!config_.exec.heterogeneous.allow_query_step_cpu_retry) {
         throw;
       }
       LOG(INFO) << "Retrying current query step " << i << " on CPU";
@@ -709,7 +707,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
       // TODO(todd): Determine if and when we can relax this restriction
       // for distributed
       CHECK(co.device_type == ExecutorDeviceType::GPU);
-      if (!g_allow_query_step_cpu_retry) {
+      if (!config_.exec.heterogeneous.allow_query_step_cpu_retry) {
         throw;
       }
       LOG(INFO) << "Retrying current query step " << i << " on CPU";
@@ -2528,7 +2526,7 @@ void RelAlgExecutor::handlePersistentError(const int32_t error_code) {
     // allowed to continue on CPU because retry on CPU is explicitly allowed through
     // --allow-cpu-retry.
     LOG(INFO) << "Query ran out of GPU memory, attempting punt to CPU";
-    if (!g_allow_cpu_retry) {
+    if (!config_.exec.heterogeneous.allow_cpu_retry) {
       throw std::runtime_error(
           "Query ran out of GPU memory, unable to automatically retry on CPU");
     }

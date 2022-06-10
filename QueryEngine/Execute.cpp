@@ -76,8 +76,6 @@
 #include "ThirdParty/robin_hood.h"
 
 bool g_enable_filter_function{true};
-bool g_allow_cpu_retry{true};
-bool g_allow_query_step_cpu_retry{true};
 bool g_null_div_by_zero{false};
 bool g_inf_div_by_zero{false};
 bool g_from_table_reordering{true};
@@ -122,13 +120,6 @@ size_t g_max_log_length{500};
 
 extern bool g_cache_string_hash;
 bool g_enable_multifrag_rs{false};
-
-bool g_enable_heterogeneous_execution{false};
-bool g_enable_multifrag_heterogeneous_execution{false};
-bool g_forced_heterogeneous_distribution{false};
-
-unsigned g_forced_cpu_proportion{1u};
-unsigned g_forced_gpu_proportion{0u};
 
 int const Executor::max_gpu_count;
 
@@ -1868,11 +1859,11 @@ TemporaryTable Executor::executeWorkUnitImpl(
     exe_policy = std::make_unique<policy::FragmentIDAssignmentExecutionPolicy>(
         ExecutorDeviceType::CPU);
   } else {
-    if (g_enable_heterogeneous_execution) {
-      if (g_forced_heterogeneous_distribution) {
+    if (config_->exec.heterogeneous.enable_heterogeneous_execution) {
+      if (config_->exec.heterogeneous.forced_heterogeneous_distribution) {
         std::map<ExecutorDeviceType, unsigned> distribution{
-            {ExecutorDeviceType::CPU, g_forced_cpu_proportion},
-            {ExecutorDeviceType::GPU, g_forced_gpu_proportion}};
+            {ExecutorDeviceType::CPU, config_->exec.heterogeneous.forced_cpu_proportion},
+            {ExecutorDeviceType::GPU, config_->exec.heterogeneous.forced_gpu_proportion}};
         exe_policy = std::make_unique<policy::ProportionBasedExecutionPolicy>(
             std::move(distribution));
       } else {
@@ -1953,7 +1944,7 @@ TemporaryTable Executor::executeWorkUnitImpl(
 
       try {
         std::vector<std::unique_ptr<ExecutionKernel>> kernels;
-        if (g_enable_heterogeneous_execution) {
+        if (config_->exec.heterogeneous.enable_heterogeneous_execution) {
           kernels = createHeterogeneousKernels(shared_context,
                                                ra_exe_unit,
                                                column_fetcher,
@@ -2001,7 +1992,7 @@ TemporaryTable Executor::executeWorkUnitImpl(
     if (is_agg) {
       try {
         ExecutorDeviceType reduction_device_type = ExecutorDeviceType::CPU;
-        if (!g_enable_heterogeneous_execution) {
+        if (!config_->exec.heterogeneous.enable_heterogeneous_execution) {
           reduction_device_type = device_type;
         }
         return collectAllDeviceResults(shared_context,

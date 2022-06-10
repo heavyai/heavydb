@@ -128,8 +128,6 @@ class CommandLineOptions {
 };
 
 extern bool g_from_table_reordering;
-extern bool g_allow_cpu_retry;
-extern bool g_allow_query_step_cpu_retry;
 extern bool g_inf_div_by_zero;
 extern bool g_null_div_by_zero;
 extern bool g_enable_columnar_output;
@@ -147,7 +145,6 @@ extern bool g_enable_non_kernel_time_query_interrupt;
 extern bool g_use_estimator_result_cache;
 extern bool g_enable_lazy_fetch;
 extern bool g_enable_multifrag_rs;
-extern bool g_enable_heterogeneous_execution;
 
 extern bool g_skip_intermediate_count;
 extern bool g_enable_bump_allocator;

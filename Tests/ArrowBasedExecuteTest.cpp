@@ -40,17 +40,11 @@ using namespace TestHelpers::ArrowSQLRunner;
 
 bool g_aggregator{false};
 
-extern bool g_allow_cpu_retry;
-extern bool g_allow_query_step_cpu_retry;
 extern bool g_skip_intermediate_count;
 extern bool g_enable_left_join_filter_hoisting;
 extern bool g_from_table_reordering;
 extern bool g_inf_div_by_zero;
 extern bool g_null_div_by_zero;
-extern bool g_enable_heterogeneous_execution;
-extern bool g_forced_heterogeneous_distribution;
-extern unsigned g_forced_cpu_proportion;
-extern unsigned g_forced_gpu_proportion;
 
 extern double g_gpu_mem_limit_percent;
 extern size_t g_parallel_top_min;
@@ -5036,18 +5030,19 @@ TEST_F(Select, DictionaryStringEquality) {
   // dictionaries, with watchdog both on and off and without punting
   // to CPU
   const auto watchdog_state = config().exec.watchdog.enable;
-  const auto cpu_retry_state = g_allow_cpu_retry;
-  const auto cpu_step_retry_state = g_allow_query_step_cpu_retry;
+  const auto cpu_retry_state = config().exec.heterogeneous.allow_cpu_retry;
+  const auto cpu_step_retry_state =
+      config().exec.heterogeneous.allow_query_step_cpu_retry;
 
   ScopeGuard reset_global_state =
       [&watchdog_state, &cpu_retry_state, &cpu_step_retry_state] {
         config().exec.watchdog.enable = watchdog_state;
-        g_allow_cpu_retry = cpu_retry_state;
-        g_allow_query_step_cpu_retry = cpu_step_retry_state;
+        config().exec.heterogeneous.allow_cpu_retry = cpu_retry_state;
+        config().exec.heterogeneous.allow_query_step_cpu_retry = cpu_step_retry_state;
       };
 
-  g_allow_cpu_retry = false;
-  g_allow_query_step_cpu_retry = false;
+  config().exec.heterogeneous.allow_cpu_retry = false;
+  config().exec.heterogeneous.allow_query_step_cpu_retry = false;
 
   for (auto enable_watchdog : {true, false}) {
     config().exec.watchdog.enable = enable_watchdog;
@@ -11355,16 +11350,17 @@ TEST_F(Select, WatchdogTest) {
 }
 
 TEST_F(Select, PuntToCPU) {
-  const auto cpu_retry_state = g_allow_cpu_retry;
-  const auto cpu_step_retry_state = g_allow_query_step_cpu_retry;
+  const auto cpu_retry_state = config().exec.heterogeneous.allow_cpu_retry;
+  const auto cpu_step_retry_state =
+      config().exec.heterogeneous.allow_query_step_cpu_retry;
   const auto watchdog_state = config().exec.watchdog.enable;
-  g_allow_cpu_retry = false;
-  g_allow_query_step_cpu_retry = false;
+  config().exec.heterogeneous.allow_cpu_retry = false;
+  config().exec.heterogeneous.allow_query_step_cpu_retry = false;
   config().exec.watchdog.enable = true;
   ScopeGuard reset_global_flag_state =
       [&cpu_retry_state, &cpu_step_retry_state, &watchdog_state] {
-        g_allow_cpu_retry = cpu_retry_state;
-        g_allow_query_step_cpu_retry = cpu_step_retry_state;
+        config().exec.heterogeneous.allow_cpu_retry = cpu_retry_state;
+        config().exec.heterogeneous.allow_query_step_cpu_retry = cpu_step_retry_state;
         config().exec.watchdog.enable = watchdog_state;
         g_gpu_mem_limit_percent = 0.9;  // Reset to 90%
       };
@@ -11380,23 +11376,24 @@ TEST_F(Select, PuntToCPU) {
   EXPECT_THROW(run_multiple_agg("SELECT str, COUNT(*) FROM test GROUP BY str;", dt),
                std::runtime_error);
 
-  g_allow_cpu_retry = true;
+  config().exec.heterogeneous.allow_cpu_retry = true;
   EXPECT_NO_THROW(run_multiple_agg("SELECT x, COUNT(*) FROM test GROUP BY x;", dt));
   EXPECT_NO_THROW(run_multiple_agg(
       "SELECT COUNT(*) FROM test WHERE x IN (SELECT y FROM test WHERE y > 3);", dt));
 }
 
 TEST_F(Select, PuntQueryStepToCPU) {
-  const auto cpu_retry_state = g_allow_cpu_retry;
-  const auto cpu_step_retry_state = g_allow_query_step_cpu_retry;
+  const auto cpu_retry_state = config().exec.heterogeneous.allow_cpu_retry;
+  const auto cpu_step_retry_state =
+      config().exec.heterogeneous.allow_query_step_cpu_retry;
   const auto watchdog_state = config().exec.watchdog.enable;
-  g_allow_cpu_retry = false;
-  g_allow_query_step_cpu_retry = false;
+  config().exec.heterogeneous.allow_cpu_retry = false;
+  config().exec.heterogeneous.allow_query_step_cpu_retry = false;
   config().exec.watchdog.enable = true;
   ScopeGuard reset_global_flag_state =
       [&cpu_retry_state, &cpu_step_retry_state, &watchdog_state] {
-        g_allow_cpu_retry = cpu_retry_state;
-        g_allow_query_step_cpu_retry = cpu_step_retry_state;
+        config().exec.heterogeneous.allow_cpu_retry = cpu_retry_state;
+        config().exec.heterogeneous.allow_query_step_cpu_retry = cpu_step_retry_state;
         config().exec.watchdog.enable = watchdog_state;
         g_gpu_mem_limit_percent = 0.9;  // Reset to 90%
       };
@@ -11410,40 +11407,41 @@ TEST_F(Select, PuntQueryStepToCPU) {
   EXPECT_NO_THROW(run_multiple_agg("SELECT x, COUNT(*) FROM test GROUP BY x;", dt));
 
   // Query is multi-step and second step can only run on CPU, will fail without
-  // g_allow_cpu_retry Note: If and when we implement APPROX_MEDIAN for GPU, this will
-  // fail and need adjustment
+  // config().exec.heterogeneous.allow_cpu_retry Note: If and when we implement
+  // APPROX_MEDIAN for GPU, this will fail and need adjustment
   EXPECT_THROW(run_multiple_agg("SELECT x, APPROX_MEDIAN(n) AS n_median FROM (SELECT x, "
                                 "y, COUNT(*) AS n FROM test GROUP BY x, y) GROUP BY x;",
                                 dt),
                std::runtime_error);
 
-  g_allow_cpu_retry = false;
-  g_allow_query_step_cpu_retry = true;
+  config().exec.heterogeneous.allow_cpu_retry = false;
+  config().exec.heterogeneous.allow_query_step_cpu_retry = true;
 
   EXPECT_NO_THROW(run_multiple_agg("SELECT x, COUNT(*) FROM test GROUP BY x;", dt));
-  // Even without g_allow_cpu_retry = true, this should run with
-  // g_allow_query_step_cpu_retry = true, as second step can drop to CPU without
-  // triggering global punt to CPU
+  // Even without config().exec.heterogeneous.allow_cpu_retry = true, this should run with
+  // config().exec.heterogeneous.allow_query_step_cpu_retry = true, as second step can
+  // drop to CPU without triggering global punt to CPU
   EXPECT_NO_THROW(
       run_multiple_agg("SELECT x, APPROX_MEDIAN(n) AS n_median FROM (SELECT x, y, "
                        "COUNT(*) AS n FROM test GROUP BY x, y) GROUP BY x;",
                        dt));
 
-  g_allow_cpu_retry = false;
-  g_allow_query_step_cpu_retry = false;
+  config().exec.heterogeneous.allow_cpu_retry = false;
+  config().exec.heterogeneous.allow_query_step_cpu_retry = false;
   g_gpu_mem_limit_percent = 1e-10;
 
   // Out of memory errors caught pre-allocation should (currently) trigger a
-  // QueryMustRunOnCPU exception and will be caught with either g_allow_cpu_retry or
-  // g_allow_query_step_cpu_retry
+  // QueryMustRunOnCPU exception and will be caught with either
+  // config().exec.heterogeneous.allow_cpu_retry or
+  // config().exec.heterogeneous.allow_query_step_cpu_retry
 
   EXPECT_THROW(run_multiple_agg("SELECT x, AVG(n) AS n_avg FROM (SELECT x, "
                                 "y, COUNT(*) AS n FROM test GROUP BY x, y) GROUP BY x;",
                                 dt),
                std::runtime_error);
 
-  g_allow_cpu_retry = false;
-  g_allow_query_step_cpu_retry = true;
+  config().exec.heterogeneous.allow_cpu_retry = false;
+  config().exec.heterogeneous.allow_query_step_cpu_retry = true;
   g_gpu_mem_limit_percent = 1e-10;
 
   EXPECT_NO_THROW(
@@ -17938,17 +17936,21 @@ int main(int argc, char** argv) {
                          ->default_value(g_enable_bump_allocator)
                          ->implicit_value(true),
                      "Enable the bump allocator for projection queries on GPU.");
-  desc.add_options()("enable-heterogeneous",
-                     po::value<bool>(&g_enable_heterogeneous_execution)
-                         ->default_value(g_enable_heterogeneous_execution)
-                         ->implicit_value(true),
-                     "Allow heterogeneous execution.");
-  desc.add_options()("force-heterogeneous-distribution",
-                     po::value<bool>(&g_forced_heterogeneous_distribution)
-                         ->default_value(g_forced_heterogeneous_distribution)
-                         ->implicit_value(true));
-  desc.add_options()("cpu-prop", po::value<unsigned>(&g_forced_cpu_proportion));
-  desc.add_options()("gpu-prop", po::value<unsigned>(&g_forced_gpu_proportion));
+  desc.add_options()(
+      "enable-heterogeneous",
+      po::value<bool>(&config->exec.heterogeneous.enable_heterogeneous_execution)
+          ->default_value(config->exec.heterogeneous.enable_heterogeneous_execution)
+          ->implicit_value(true),
+      "Allow heterogeneous execution.");
+  desc.add_options()(
+      "force-heterogeneous-distribution",
+      po::value<bool>(&config->exec.heterogeneous.forced_heterogeneous_distribution)
+          ->default_value(config->exec.heterogeneous.forced_heterogeneous_distribution)
+          ->implicit_value(true));
+  desc.add_options()(
+      "cpu-prop", po::value<unsigned>(&config->exec.heterogeneous.forced_cpu_proportion));
+  desc.add_options()(
+      "gpu-prop", po::value<unsigned>(&config->exec.heterogeneous.forced_gpu_proportion));
   desc.add_options()("dump-ir",
                      po::value<bool>()->default_value(false)->implicit_value(true),
                      "Dump IR and PTX for all executed queries to file."

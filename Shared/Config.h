@@ -56,12 +56,23 @@ struct WindowFunctionsConfig {
   size_t parallel_window_partition_sort_threshold = 1024;
 };
 
+struct HeterogenousConfig {
+  bool enable_heterogeneous_execution = false;
+  bool enable_multifrag_heterogeneous_execution = false;
+  bool forced_heterogeneous_distribution = false;
+  unsigned forced_cpu_proportion = 1;
+  unsigned forced_gpu_proportion = 0;
+  bool allow_cpu_retry = true;
+  bool allow_query_step_cpu_retry = true;
+};
+
 struct ExecutionConfig {
   WatchdogConfig watchdog;
   CpuSubTasksConfig sub_tasks;
   JoinConfig join;
   GroupByConfig group_by;
   WindowFunctionsConfig window_func;
+  HeterogenousConfig heterogeneous;
 };
 
 struct FilterPushdownConfig {

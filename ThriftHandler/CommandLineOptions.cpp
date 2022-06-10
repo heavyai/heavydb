@@ -72,12 +72,6 @@ void CommandLineOptions::init_logging() {
 
 void CommandLineOptions::fillOptions() {
   help_desc.add_options()("help,h", "Show available options.");
-  help_desc.add_options()(
-      "allow-cpu-retry",
-      po::value<bool>(&g_allow_cpu_retry)
-          ->default_value(g_allow_cpu_retry)
-          ->implicit_value(true),
-      R"(Allow the queries which failed on GPU to retry on CPU, even when watchdog is enabled.)");
   help_desc.add_options()("allow-loop-joins",
                           po::value<bool>(&allow_loop_joins)
                               ->default_value(allow_loop_joins)
@@ -106,11 +100,6 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(system_parameters.cpu_only)
                               ->implicit_value(true),
                           "Run on CPU only, even if GPUs are available.");
-  help_desc.add_options()("enable-heterogeneous",
-                          po::value<bool>(&g_enable_heterogeneous_execution)
-                              ->default_value(g_enable_heterogeneous_execution)
-                              ->implicit_value(true),
-                          "Allow the engine to schedule kernels heterogeneously.");
   help_desc.add_options()("cuda-block-size",
                           po::value<size_t>(&system_parameters.cuda_block_size)
                               ->default_value(system_parameters.cuda_block_size),
@@ -651,13 +640,6 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_columnar_large_projections_threshold),
       "Threshold (in minimum number of rows) to prefer columnar output for projections. "
       "Requires --columnar-large-projections to be set.");
-
-  help_desc.add_options()(
-      "allow-query-step-cpu-retry",
-      po::value<bool>(&g_allow_query_step_cpu_retry)
-          ->default_value(g_allow_query_step_cpu_retry)
-          ->implicit_value(true),
-      R"(Allow certain query steps to retry on CPU, even when allow-cpu-retry is disabled)");
 }
 
 namespace {

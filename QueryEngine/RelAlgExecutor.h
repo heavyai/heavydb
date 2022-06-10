@@ -277,7 +277,7 @@ class RelAlgExecutor {
 
   // Allows an out of memory error through if CPU retry is enabled. Otherwise, throws an
   // appropriate exception corresponding to the query error code.
-  static void handlePersistentError(const int32_t error_code);
+  void handlePersistentError(const int32_t error_code);
 
   WorkUnit createWorkUnit(const RelAlgNode*, const SortInfo&, const ExecutionOptions& eo);
 

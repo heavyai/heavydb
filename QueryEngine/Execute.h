@@ -266,9 +266,9 @@ class CompilationRetryNoCompaction : public std::runtime_error {
 };
 
 // Throwing QueryMustRunOnCpu allows us retry a query step on CPU if
-// g_allow_query_step_cpu_retry is true (on by default) by catching
+// allow_query_step_cpu_retry is true (on by default) by catching
 // the exception at the query step execution level in RelAlgExecutor,
-// or if g_allow_query_step_cpu_retry is false but g_allow_cpu_retry is true,
+// or if allow_query_step_cpu_retry is false but allow_cpu_retry is true,
 // by retrying the entire query on CPU (if both flags are false, we return an
 // error). This flag is thrown for the following broad categories of conditions:
 // 1) we have not implemented an operator on GPU and so cannot codegen for GPU

@@ -5,8 +5,6 @@
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 
-extern bool g_enable_heterogeneous_execution;
-extern bool g_enable_multifrag_heterogeneous_execution;
 boost::filesystem::path g_data_path;
 size_t g_fragment_size = 1'000'000;
 
@@ -96,17 +94,23 @@ int main(int argc, char* argv[]) {
   namespace po = boost::program_options;
   namespace fs = boost::filesystem;
 
+  auto config = std::make_shared<Config>();
+
   po::options_description desc("Options");
-  desc.add_options()("enable-heterogeneous",
-                     po::value<bool>(&g_enable_heterogeneous_execution)
-                         ->default_value(g_enable_heterogeneous_execution)
-                         ->implicit_value(true),
-                     "Allow heterogeneous execution.");
-  desc.add_options()("enable-multifrag",
-                     po::value<bool>(&g_enable_multifrag_heterogeneous_execution)
-                         ->default_value(g_enable_multifrag_heterogeneous_execution)
-                         ->implicit_value(true),
-                     "Allow multifrag heterogeneous execution.");
+  desc.add_options()(
+      "enable-heterogeneous",
+      po::value<bool>(&config->exec.heterogeneous.enable_heterogeneous_execution)
+          ->default_value(config->exec.heterogeneous.enable_heterogeneous_execution)
+          ->implicit_value(true),
+      "Allow heterogeneous execution.");
+  desc.add_options()(
+      "enable-multifrag",
+      po::value<bool>(
+          &config->exec.heterogeneous.enable_multifrag_heterogeneous_execution)
+          ->default_value(
+              config->exec.heterogeneous.enable_multifrag_heterogeneous_execution)
+          ->implicit_value(true),
+      "Allow multifrag heterogeneous execution.");
   desc.add_options()("data", po::value<fs::path>(&g_data_path), "Path to taxi dataset.");
   desc.add_options()("fragment-size",
                      po::value<size_t>(&g_fragment_size)->default_value(g_fragment_size),
@@ -126,7 +130,7 @@ int main(int argc, char* argv[]) {
   }
 
   logger::init(log_options);
-  init();
+  init(config);
 
   try {
     createTaxiReducedTable();
