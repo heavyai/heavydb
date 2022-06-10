@@ -75,7 +75,6 @@
 #include "Shared/threading.h"
 #include "ThirdParty/robin_hood.h"
 
-bool g_from_table_reordering{true};
 extern std::unique_ptr<llvm::Module> udf_gpu_module;
 extern std::unique_ptr<llvm::Module> udf_cpu_module;
 bool g_enable_columnar_output{false};

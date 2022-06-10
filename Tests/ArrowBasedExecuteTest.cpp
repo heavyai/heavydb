@@ -42,7 +42,6 @@ bool g_aggregator{false};
 
 extern bool g_skip_intermediate_count;
 extern bool g_enable_left_join_filter_hoisting;
-extern bool g_from_table_reordering;
 
 extern double g_gpu_mem_limit_percent;
 extern size_t g_constrained_by_in_threshold;
@@ -10857,10 +10856,10 @@ TEST_F(Select, Joins_Subqueries) {
     ASSERT_EQ(1, v<int64_t>(crt_row[1]));
 
     // Subquery equijoin requiring string translation
-    const auto table_reordering_state = g_from_table_reordering;
-    g_from_table_reordering = false;  // disable from table reordering
+    const auto table_reordering_state = config().opts.from_table_reordering;
+    config().opts.from_table_reordering = false;  // disable from table reordering
     ScopeGuard reset_from_table_reordering_state = [&table_reordering_state] {
-      g_from_table_reordering = table_reordering_state;
+      config().opts.from_table_reordering = table_reordering_state;
     };
 
     c("SELECT str1, n FROM (SELECT str str1, COUNT(*) n FROM test GROUP BY str HAVING "
@@ -10921,10 +10920,10 @@ class JoinTest : public ExecuteTestBase, public ::testing::Test {
 };
 
 TEST_F(JoinTest, EmptyJoinTables) {
-  const auto table_reordering_state = g_from_table_reordering;
-  g_from_table_reordering = false;  // disable from table reordering
+  const auto table_reordering_state = config().opts.from_table_reordering;
+  config().opts.from_table_reordering = false;  // disable from table reordering
   ScopeGuard reset_from_table_reordering_state = [&table_reordering_state] {
-    g_from_table_reordering = table_reordering_state;
+    config().opts.from_table_reordering = table_reordering_state;
   };
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -17906,8 +17905,8 @@ int main(int argc, char** argv) {
 
   desc.add_options()("disable-literal-hoisting", "Disable literal hoisting");
   desc.add_options()("from-table-reordering",
-                     po::value<bool>(&g_from_table_reordering)
-                         ->default_value(g_from_table_reordering)
+                     po::value<bool>(&config->opts.from_table_reordering)
+                         ->default_value(config->opts.from_table_reordering)
                          ->implicit_value(true),
                      "Enable automatic table reordering in FROM clause");
   desc.add_options()("bigint-count",

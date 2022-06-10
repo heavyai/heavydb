@@ -36,7 +36,6 @@
 #include <stdexcept>
 
 extern bool g_is_test_env;
-extern bool g_from_table_reordering;
 
 using namespace TestHelpers;
 using namespace TestHelpers::ArrowSQLRunner;
@@ -1168,7 +1167,9 @@ TEST(DataRecycler, Hashtable_For_Dict_Encoded_Column) {
       q1a, q1b, q2a, q2b, q3a, q3b, q4a, q4b, q5a, q5b, q6a, q6b};
   std::vector<std::string> queries_case2 = {q7a, q7b, q8a, q8b, q9a, q9b};
 
-  ScopeGuard reset = [orig = g_from_table_reordering] { g_from_table_reordering = orig; };
+  ScopeGuard reset = [orig = config().opts.from_table_reordering] {
+    config().opts.from_table_reordering = orig;
+  };
 
   // 1. disable from-table-reordering
   // this means the same join query with different table listing order in FROM clause
@@ -1178,7 +1179,7 @@ TEST(DataRecycler, Hashtable_For_Dict_Encoded_Column) {
   // ... WHERE ... IN (SELECT ...) have different cache key even if their query semantic
   // is the same since their plan is different, e.g., decorrelation per query planner adds
   // de-duplication logic
-  g_from_table_reordering = false;
+  config().opts.from_table_reordering = false;
   clear_caches(ExecutorDeviceType::CPU);
   for (const auto& test_case : {q1, q2, q3, q4, q5, q6}) {
     perform_test(test_case, static_cast<size_t>(1));
@@ -1196,7 +1197,7 @@ TEST(DataRecycler, Hashtable_For_Dict_Encoded_Column) {
   // if the table cardinality and a join qual are the same, we have the same cache key
   // regardless of table listing order in FROM clause
   //
-  g_from_table_reordering = true;
+  config().opts.from_table_reordering = true;
   clear_caches(ExecutorDeviceType::CPU);
   for (const auto& test_case : {q1, q2, q3, q4, q5, q6}) {
     perform_test(test_case, static_cast<size_t>(1));

@@ -127,7 +127,6 @@ class CommandLineOptions {
   const bool dist_v5_;
 };
 
-extern bool g_from_table_reordering;
 extern bool g_enable_columnar_output;
 extern bool g_optimize_row_initialization;
 extern bool g_strip_join_covered_quals;

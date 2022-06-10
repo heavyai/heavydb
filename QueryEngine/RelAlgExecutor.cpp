@@ -52,7 +52,6 @@ bool g_columnar_large_projections{true};
 size_t g_columnar_large_projections_threshold{1000000};
 
 extern bool g_enable_bump_allocator;
-extern bool g_from_table_reordering;
 extern bool g_enable_table_functions;
 extern bool g_enable_multifrag_rs;
 
@@ -2796,7 +2795,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
     left_deep_join_input_sizes = get_left_deep_join_input_sizes(left_deep_join);
     left_deep_join_quals = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
-    if (g_from_table_reordering &&
+    if (config_.opts.from_table_reordering &&
         std::find(join_types.begin(), join_types.end(), JoinType::LEFT) ==
             join_types.end()) {
       input_permutation = do_table_reordering(input_descs,
@@ -3173,7 +3172,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
     const auto query_infos = get_table_infos(input_descs, executor_);
     left_deep_join_quals = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
-    if (g_from_table_reordering) {
+    if (config_.opts.from_table_reordering) {
       input_permutation = do_table_reordering(input_descs,
                                               input_col_descs,
                                               left_deep_join_quals,

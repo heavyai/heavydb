@@ -176,11 +176,6 @@ void CommandLineOptions::fillOptions() {
                               ->implicit_value(true),
                           "Enable watchdog.");
 
-  help_desc.add_options()("from-table-reordering",
-                          po::value<bool>(&g_from_table_reordering)
-                              ->default_value(g_from_table_reordering)
-                              ->implicit_value(true),
-                          "Enable automatic table reordering in FROM clause.");
   help_desc.add_options()("gpu-buffer-mem-bytes",
                           po::value<size_t>(&system_parameters.gpu_buffer_mem_bytes)
                               ->default_value(system_parameters.gpu_buffer_mem_bytes),
@@ -780,10 +775,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
   } catch (po::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;
-  }
-
-  if (!g_from_table_reordering) {
-    LOG(INFO) << " From clause table reordering is disabled";
   }
 
   if (vm.count("udf")) {
