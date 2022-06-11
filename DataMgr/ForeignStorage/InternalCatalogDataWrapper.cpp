@@ -166,17 +166,20 @@ std::vector<std::string> get_data_sources(const std::string& dashboard_metadata)
   if (!document.IsObject()) {
     return {};
   }
-  std::string data_sources_str;
-  json_utils::get_value_from_object(document, data_sources_str, "table");
-  auto data_sources = split(data_sources_str, ",");
-  for (auto it = data_sources.begin(); it != data_sources.end();) {
-    *it = strip(*it);
-    static std::regex parameter_regex{"\\$\\{.+\\}"};
-    if (std::regex_match(*it, parameter_regex)) {
-      // Remove custom SQL sources.
-      it = data_sources.erase(it);
-    } else {
-      it++;
+  auto data_sources_str =
+      json_utils::get_optional_string_value_from_object(document, "table");
+  std::vector<std::string> data_sources;
+  if (data_sources_str.has_value()) {
+    data_sources = split(data_sources_str.value(), ",");
+    for (auto it = data_sources.begin(); it != data_sources.end();) {
+      *it = strip(*it);
+      static std::regex parameter_regex{"\\$\\{.+\\}"};
+      if (std::regex_match(*it, parameter_regex)) {
+        // Remove custom SQL sources.
+        it = data_sources.erase(it);
+      } else {
+        it++;
+      }
     }
   }
   return data_sources;

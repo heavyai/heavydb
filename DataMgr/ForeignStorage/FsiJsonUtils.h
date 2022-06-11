@@ -16,10 +16,14 @@
 
 #pragma once
 
-#include <rapidjson/document.h>
 #include <map>
+#include <optional>
 #include <vector>
+
+#include <rapidjson/document.h>
+
 #include "Logger/Logger.h"
+
 namespace foreign_storage {
 
 // helper functions for serializing/deserializing objects to rapidjson value
@@ -36,6 +40,10 @@ template <class T>
 void get_value_from_object(const rapidjson::Value& object,
                            T& value,
                            const std::string& name);
+
+std::optional<std::string> get_optional_string_value_from_object(
+    const rapidjson::Value& object,
+    const std::string& name);
 
 // Basic types (more can be added as required) will be defined in source file
 // int

@@ -2861,14 +2861,12 @@ class SystemTablesTest : public DBHandlerTestFixture {
     return td->tableId;
   }
 
-  void createDashboard(const std::string& dashboard_name) {
+  void createDashboard(const std::string& dashboard_name,
+                       const std::string& metadata_json =
+                           "{\"table\":\"test_table, ${test_custom_source}\"}") {
     const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-    auto id =
-        db_handler->create_dashboard(session_id,
-                                     dashboard_name,
-                                     "state",
-                                     "image",
-                                     "{\"table\":\"test_table, ${test_custom_source}\"}");
+    auto id = db_handler->create_dashboard(
+        session_id, dashboard_name, "state", "image", metadata_json);
     dashboard_id_by_name_[dashboard_name] = id;
   }
 
@@ -3280,92 +3278,6 @@ TEST_F(SystemTablesTest, TablesSystemTableDeletedOwner) {
                         i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
                         i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0),
                         create_table_sql}});
-  // clang-format on
-}
-
-TEST_F(SystemTablesTest, DashboardsSystemTable) {
-  switchToAdmin();
-  sql("CREATE DATABASE test_db_1;");
-
-  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
-  createDashboard("test_dashboard_1");
-  auto last_updated_1 = getLastUpdatedTime("test_dashboard_1");
-
-  loginInformationSchema();
-  // Skip the shared::kDefaultDbName database, since it can contain dashboards
-  // created by other test suites.
-  // clang-format off
-  sqlAndCompareResult("SELECT * FROM dashboards WHERE database_id <> " +
-                      std::to_string(getDbId(shared::kDefaultDbName)) + " ORDER BY dashboard_name;",
-                      {{i(3), "test_db_1", i(1), "test_dashboard_1", getUserId(shared::kRootUsername),
-                        shared::kRootUsername, last_updated_1, array({"test_table"})}});
-  // clang-format on
-
-  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
-  createDashboard("test_dashboard_2");
-  updateDashboardName("test_dashboard_1", "test_dashboard_3");
-  auto last_updated_2 = getLastUpdatedTime("test_dashboard_2");
-  auto last_updated_3 = getLastUpdatedTime("test_dashboard_3");
-
-  loginInformationSchema();
-  // clang-format off
-  sqlAndCompareResult("SELECT * FROM dashboards WHERE database_id <> " +
-                      std::to_string(getDbId(shared::kDefaultDbName)) + " ORDER BY dashboard_name;",
-                      {{i(3), "test_db_1", i(2), "test_dashboard_2", getUserId(shared::kRootUsername),
-                        shared::kRootUsername, last_updated_2, array({"test_table"})},
-                       {i(3), "test_db_1", i(1), "test_dashboard_3", getUserId(shared::kRootUsername),
-                        shared::kRootUsername, last_updated_3, array({"test_table"})}});
-  // clang-format on
-}
-
-TEST_F(SystemTablesTest, DashboardsSystemTableWithOtherTables) {
-  switchToAdmin();
-  sql("CREATE DATABASE test_db_1;");
-
-  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
-  createDashboard("test_dashboard_1");
-  auto last_updated_1 = getLastUpdatedTime("test_dashboard_1");
-
-  loginInformationSchema();
-  // Skip the shared::kDefaultDbName database, since it can contain dashboards
-  // created by other test suites.
-  if (isDistributedMode()) {
-    queryAndAssertException(
-        "SELECT count(*) FROM dashboards, users WHERE database_id <> " +
-            std::to_string(getDbId(shared::kDefaultDbName)) + ";",
-        "Queries involving aggregator only system tables with other tables is not yet "
-        "supported in distributed mode.");
-  } else {
-    sqlAndCompareResult("SELECT count(*) FROM dashboards, users WHERE database_id <> " +
-                            std::to_string(getDbId(shared::kDefaultDbName)) + ";",
-                        {{i(3)}});
-  }
-}
-
-TEST_F(SystemTablesTest, DashboardsSystemTableDeletedOwner) {
-  switchToAdmin();
-  const std::string db_name{"test_db_1"};
-  sql("CREATE DATABASE " + db_name + ";");
-  const std::string user_name{"test_user_3"};
-  createUser(user_name);
-  sql("GRANT ALL ON DATABASE " + db_name + " TO " + user_name + ";");
-
-  login(user_name, "test_pass", db_name);
-  const std::string dashboard_name{"test_dashboard_1"};
-  createDashboard(dashboard_name);
-  auto last_updated = getLastUpdatedTime(dashboard_name);
-  auto user_id = getUserId(user_name);
-  dropUser(user_name);
-
-  loginInformationSchema();
-  // Skip the shared::kDefaultDbName database, since it can contain dashboards
-  // created by other test suites.
-  // clang-format off
-  sqlAndCompareResult("SELECT * FROM dashboards WHERE database_id <> " +
-                      std::to_string(getDbId(shared::kDefaultDbName)) +
-                      " ORDER BY dashboard_name;",
-                      {{i(3), "test_db_1", i(1), dashboard_name, user_id, "<DELETED>",
-                        last_updated, array({"test_table"})}});
   // clang-format on
 }
 
