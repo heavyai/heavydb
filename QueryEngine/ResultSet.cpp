@@ -771,7 +771,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
 
   CHECK(permutation_.empty());
 
-  if (top_n && executor->getConfig().exec.parallel_top_min < entryCount()) {
+  if (top_n && executor && executor->getConfig().exec.parallel_top_min < entryCount()) {
     if (executor->getConfig().exec.watchdog.enable &&
         executor->getConfig().exec.watchdog.parallel_top_max < entryCount()) {
       throw WatchdogException("Sorting the result would be too slow");
