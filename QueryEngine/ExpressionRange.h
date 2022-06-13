@@ -149,7 +149,6 @@ class ExpressionRange {
 
   ExpressionRange div(const ExpressionRange& other, bool null_div_by_zero) const;
 
-
   bool operator==(const ExpressionRange& other) const;
 
   static bool typeSupportsRange(const SQLTypeInfo& ti);
