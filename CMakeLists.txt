@@ -675,6 +675,7 @@ add_subdirectory(Calcite)
 
 add_subdirectory(ArrowStorage)
 add_subdirectory(Analyzer)
+add_subdirectory(ConfigBuilder)
 add_subdirectory(QueryEngine)
 add_subdirectory(DataMgr)
 add_subdirectory(CudaMgr)
