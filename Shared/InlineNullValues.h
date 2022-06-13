@@ -22,6 +22,8 @@
 
 #ifndef _MSC_VER
 #include <cassert>
+#else
+#include <assert.h>
 #endif
 #include <cfloat>
 #include <cstdint>
