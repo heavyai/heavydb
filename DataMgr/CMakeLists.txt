@@ -43,7 +43,7 @@ endif()
 
 add_library(DataMgr ${datamgr_source_files})
 
-target_link_libraries(DataMgr CudaMgr L0Mgr Shared SchemaMgr ${Boost_THREAD_LIBRARY} ${TBB_LIBS} ${CMAKE_DL_LIBS})
+target_link_libraries(DataMgr CudaMgr L0Mgr Shared SchemaMgr ${Boost_THREAD_LIBRARY} TBB::tbb ${CMAKE_DL_LIBS})
 
 option(ENABLE_CRASH_CORRUPTION_TEST "Enable crash using SIGUSR2 during page deletion to faster and affirmative test/repro db corruption" OFF)
 if(ENABLE_CRASH_CORRUPTION_TEST)
