@@ -27,6 +27,7 @@
 #include <gtest/gtest.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/any.hpp>
+#include <boost/crc.hpp>
 #include <boost/program_options.hpp>
 
 #include <cmath>
@@ -17952,7 +17953,16 @@ int main(int argc, char** argv) {
                          ->default_value(config->exec.group_by.use_groupby_buffer_desc)
                          ->implicit_value(true),
                      "Use GroupBy Buffer Descriptor for hash tables.");
-
+  desc.add_options()("build-rel-alg-cache",
+                     po::value<std::string>(&config->debug.build_ra_cache)
+                         ->default_value(config->debug.build_ra_cache),
+                     "Used in tests to store all parsed SQL queries in a cache and "
+                     "write them to the specified file when program finishes.");
+  desc.add_options()("use-rel-alg-cache",
+                     po::value<std::string>(&config->debug.use_ra_cache)
+                         ->default_value(config->debug.use_ra_cache),
+                     "Used in tests to load pre-generated cache of parsed SQL "
+                     "queries from the specified file to avoid Calcite usage.");
   desc.add_options()(
       "test-help",
       "Print all ExecuteTest specific options (for gtest options use `--help`).");

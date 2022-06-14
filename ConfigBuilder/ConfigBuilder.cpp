@@ -14,6 +14,7 @@
 
 #include "ConfigBuilder.h"
 
+#include <boost/crc.hpp>
 #include <boost/program_options.hpp>
 
 #include <iostream>
@@ -40,7 +41,9 @@ ConfigBuilder::ConfigBuilder() {
 
 ConfigBuilder::ConfigBuilder(ConfigPtr config) : config_(config) {}
 
-bool ConfigBuilder::parseCommandLineArgs(int argc, char const* const* argv) {
+bool ConfigBuilder::parseCommandLineArgs(int argc,
+                                         char const* const* argv,
+                                         bool allow_gtest_flags) {
   po::options_description opt_desc;
 
   opt_desc.add_options()("help,h", "Show available options.");
@@ -380,6 +383,23 @@ bool ConfigBuilder::parseCommandLineArgs(int argc, char const* const* argv) {
           ->default_value(config_->opts.enable_left_join_filter_hoisting)
           ->implicit_value(true),
       "Enable hoisting left hand side filters through left joins.");
+
+  // debug
+  opt_desc.add_options()("build-rel-alg-cache",
+                         po::value<std::string>(&config_->debug.build_ra_cache)
+                             ->default_value(config_->debug.build_ra_cache),
+                         "Used in tests to store all parsed SQL queries in a cache and "
+                         "write them to the specified file when program finishes.");
+  opt_desc.add_options()("use-rel-alg-cache",
+                         po::value<std::string>(&config_->debug.use_ra_cache)
+                             ->default_value(config_->debug.use_ra_cache),
+                         "Used in tests to load pre-generated cache of parsed SQL "
+                         "queries from the specified file to avoid Calcite usage.");
+
+  if (allow_gtest_flags) {
+    opt_desc.add_options()("gtest_list_tests", "list all test");
+    opt_desc.add_options()("gtest_filter", "filters tests, use --help for details");
+  }
 
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv).options(opt_desc).run(), vm);

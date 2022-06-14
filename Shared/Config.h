@@ -15,6 +15,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 
 struct WatchdogConfig {
   bool enable = false;
@@ -114,9 +115,15 @@ struct OptimizationsConfig {
   bool enable_left_join_filter_hoisting = true;
 };
 
+struct DebugConfig {
+  std::string build_ra_cache = "";
+  std::string use_ra_cache = "";
+};
+
 struct Config {
   ExecutionConfig exec;
   OptimizationsConfig opts;
+  DebugConfig debug;
 };
 
 using ConfigPtr = std::shared_ptr<Config>;

@@ -13,6 +13,7 @@
  */
 
 #include "ArrowSQLRunner.h"
+#include "RelAlgCache.h"
 
 #include "Calcite/CalciteJNI.h"
 #include "DataMgr/DataMgr.h"
@@ -80,7 +81,7 @@ class ArrowSQLRunnerImpl {
     std::string query_ra;
 
     calcite_time_ += measure<std::chrono::microseconds>::execution([&]() {
-      query_ra = calcite_->process("admin", "test_db", pg_shim(sql), {}, true);
+      query_ra = rel_alg_cache_->process("admin", "test_db", pg_shim(sql), {}, true);
     });
 
     return query_ra;
@@ -325,6 +326,7 @@ class ArrowSQLRunnerImpl {
     executor_.reset();
     data_mgr_.reset();
     calcite_.reset();
+    rel_alg_cache_.reset();
   }
 
  protected:
@@ -365,17 +367,25 @@ class ArrowSQLRunnerImpl {
         system_parameters);
     executor_->setSchemaProvider(storage_);
 
-    calcite_ = std::make_shared<CalciteJNI>(storage_, config_, udf_filename, 1024);
-    ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
-    if (!udf_filename.empty()) {
-      ExtensionFunctionsWhitelist::addUdfs(calcite_->getUserDefinedFunctionWhitelist());
+    if (config_->debug.use_ra_cache.empty() || !config_->debug.build_ra_cache.empty()) {
+      calcite_ = std::make_shared<CalciteJNI>(storage_, config_, udf_filename, 1024);
+
+      if (config_->debug.use_ra_cache.empty()) {
+        ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
+        if (!udf_filename.empty()) {
+          ExtensionFunctionsWhitelist::addUdfs(
+              calcite_->getUserDefinedFunctionWhitelist());
+        }
+      }
+
+      table_functions::TableFunctionsFactory::init();
+      auto udtfs =
+          table_functions::TableFunctionsFactory::get_table_funcs(/*is_runtime=*/false);
+      std::vector<ExtensionFunction> udfs = {};
+      calcite_->setRuntimeExtensionFunctions(udfs, udtfs, /*is_runtime=*/false);
     }
 
-    table_functions::TableFunctionsFactory::init();
-    auto udtfs =
-        table_functions::TableFunctionsFactory::get_table_funcs(/*is_runtime=*/false);
-    std::vector<ExtensionFunction> udfs = {};
-    calcite_->setRuntimeExtensionFunctions(udfs, udtfs, /*is_runtime=*/false);
+    rel_alg_cache_ = std::make_shared<RelAlgCache>(calcite_, storage_, *config_);
   }
 
   ConfigPtr config_;
@@ -383,6 +393,7 @@ class ArrowSQLRunnerImpl {
   std::shared_ptr<ArrowStorage> storage_;
   std::shared_ptr<Executor> executor_;
   std::shared_ptr<CalciteJNI> calcite_;
+  std::shared_ptr<RelAlgCache> rel_alg_cache_;
   SQLiteComparator sqlite_comparator_;
   int64_t calcite_time_ = 0;
   int64_t execution_time_ = 0;

@@ -24,7 +24,9 @@ class ConfigBuilder {
   ConfigBuilder(const ConfigBuilder& other) = delete;
   ConfigBuilder(ConfigBuilder&& other) = delete;
 
-  bool parseCommandLineArgs(int argc, char const* const* argv);
+  bool parseCommandLineArgs(int argc,
+                            char const* const* argv,
+                            bool allow_gtest_flags = false);
 
   ConfigPtr config();
 
