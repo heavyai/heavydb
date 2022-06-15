@@ -45,20 +45,6 @@ class StringNoneEncoder : public Encoder {
                                        const size_t byteLimit,
                                        const bool replicating = false);
 
-  std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
-                                            const size_t num_elems_to_append,
-                                            const SQLTypeInfo& ti,
-                                            const bool replicating = false,
-                                            const int64_t offset = -1) override {
-    UNREACHABLE();  // should never be called for strings
-    return nullptr;
-  }
-
-  std::shared_ptr<ChunkMetadata> appendData(const std::vector<std::string>* srcData,
-                                            const int start_idx,
-                                            const size_t numAppendElems,
-                                            const bool replicating = false);
-
   void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) override {
     Encoder::getMetadata(chunkMetadata);  // call on parent class
     chunkMetadata->chunkStats.min.stringval = nullptr;

@@ -39,46 +39,6 @@ class NoneEncoder : public Encoder {
     resetChunkStats();
   }
 
-  std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
-                                            const size_t num_elems_to_append,
-                                            const SQLTypeInfo&,
-                                            const bool replicating = false,
-                                            const int64_t offset = -1) override {
-    if (offset == 0 && num_elems_to_append >= num_elems_) {
-      resetChunkStats();
-    }
-    T* unencodedData = reinterpret_cast<T*>(src_data);
-    std::vector<T> encoded_data;
-    if (replicating) {
-      encoded_data.resize(num_elems_to_append);
-    }
-    for (size_t i = 0; i < num_elems_to_append; ++i) {
-      size_t ri = replicating ? 0 : i;
-      T data = validateDataAndUpdateStats(unencodedData[ri]);
-      if (replicating) {
-        encoded_data[i] = data;
-      }
-    }
-    if (offset == -1) {
-      num_elems_ += num_elems_to_append;
-      buffer_->append(
-          replicating ? reinterpret_cast<int8_t*>(encoded_data.data()) : src_data,
-          num_elems_to_append * sizeof(T));
-      if (!replicating) {
-        src_data += num_elems_to_append * sizeof(T);
-      }
-    } else {
-      num_elems_ = offset + num_elems_to_append;
-      CHECK(!replicating);
-      CHECK_GE(offset, 0);
-      buffer_->write(
-          src_data, num_elems_to_append * sizeof(T), static_cast<size_t>(offset));
-    }
-    auto chunk_metadata = std::make_shared<ChunkMetadata>();
-    getMetadata(chunk_metadata);
-    return chunk_metadata;
-  }
-
   void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) override {
     Encoder::getMetadata(chunkMetadata);  // call on parent class
     chunkMetadata->fillChunkStats(dataMin, dataMax, has_nulls);

@@ -149,42 +149,6 @@ size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
   }
 }
 
-std::shared_ptr<ChunkMetadata> Chunk::appendData(DataBlockPtr& src_data,
-                                                 const size_t num_elems,
-                                                 const size_t start_idx,
-                                                 const bool replicating) {
-  const auto& ti = column_info_->type;
-  if (ti.is_varlen()) {
-    switch (ti.get_type()) {
-      case kARRAY: {
-        if (ti.get_size() > 0) {
-          FixedLengthArrayNoneEncoder* array_encoder =
-              dynamic_cast<FixedLengthArrayNoneEncoder*>(buffer_->getEncoder());
-          return array_encoder->appendData(
-              src_data.arraysPtr, start_idx, num_elems, replicating);
-        }
-        ArrayNoneEncoder* array_encoder =
-            dynamic_cast<ArrayNoneEncoder*>(buffer_->getEncoder());
-        return array_encoder->appendData(
-            src_data.arraysPtr, start_idx, num_elems, replicating);
-      }
-      case kTEXT:
-      case kVARCHAR:
-      case kCHAR: {
-        CHECK_EQ(kENCODING_NONE, ti.get_compression());
-        StringNoneEncoder* str_encoder =
-            dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
-        return str_encoder->appendData(
-            src_data.stringsPtr, start_idx, num_elems, replicating);
-      }
-      default:
-        CHECK(false);
-    }
-  }
-  return buffer_->getEncoder()->appendData(
-      src_data.numbersPtr, num_elems, ti, replicating);
-}
-
 void Chunk::unpinBuffer() {
   if (buffer_) {
     buffer_->unPin();

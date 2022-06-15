@@ -37,43 +37,6 @@ class DateDaysEncoder : public Encoder {
     resetChunkStats();
   }
 
-  std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
-                                            const size_t num_elems_to_append,
-                                            const SQLTypeInfo& ti,
-                                            const bool replicating = false,
-                                            const int64_t offset = -1) override {
-    CHECK(ti.is_date_in_days());
-    if (offset == 0 && num_elems_to_append >= num_elems_) {
-      resetChunkStats();
-    }
-    T* unencoded_data = reinterpret_cast<T*>(src_data);
-    auto encoded_data = std::make_unique<V[]>(num_elems_to_append);
-    for (size_t i = 0; i < num_elems_to_append; ++i) {
-      size_t ri = replicating ? 0 : i;
-      encoded_data.get()[i] = encodeDataAndUpdateStats(unencoded_data[ri]);
-    }
-
-    if (offset == -1) {
-      num_elems_ += num_elems_to_append;
-      buffer_->append(reinterpret_cast<int8_t*>(encoded_data.get()),
-                      num_elems_to_append * sizeof(V));
-      if (!replicating) {
-        src_data += num_elems_to_append * sizeof(T);
-      }
-    } else {
-      num_elems_ = offset + num_elems_to_append;
-      CHECK(!replicating);
-      CHECK_GE(offset, 0);
-      buffer_->write(reinterpret_cast<int8_t*>(encoded_data.get()),
-                     num_elems_to_append * sizeof(V),
-                     static_cast<size_t>(offset));
-    }
-
-    auto chunk_metadata = std::make_shared<ChunkMetadata>();
-    getMetadata(chunk_metadata);
-    return chunk_metadata;
-  }
-
   void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) override {
     Encoder::getMetadata(chunkMetadata);
     chunkMetadata->fillChunkStats(dataMin, dataMax, has_nulls);

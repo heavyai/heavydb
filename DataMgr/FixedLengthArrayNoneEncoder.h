@@ -55,46 +55,6 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     return dataSize / array_size;
   }
 
-  std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
-                                            const size_t num_elems_to_append,
-                                            const SQLTypeInfo& ti,
-                                            const bool replicating = false,
-                                            const int64_t offset = -1) override {
-    UNREACHABLE();  // should never be called for arrays
-    return nullptr;
-  }
-
-  std::shared_ptr<ChunkMetadata> appendData(const std::vector<ArrayDatum>* srcData,
-                                            const int start_idx,
-                                            const size_t numAppendElems,
-                                            const bool replicating = false) {
-    size_t data_size = array_size * numAppendElems;
-    buffer_->reserve(data_size);
-
-    for (size_t i = start_idx; i < start_idx + numAppendElems; i++) {
-      size_t len = (*srcData)[replicating ? 0 : i].length;
-      // Length of the appended array should be equal to the fixed length,
-      // all others should have been discarded, assert if something slips through
-      CHECK_EQ(len, array_size);
-      // NULL arrays have been filled with subtype's NULL sentinels,
-      // should be appended as regular data, same size
-      buffer_->append((*srcData)[replicating ? 0 : i].pointer, len);
-
-      // keep Chunk statistics with array elements
-      update_elem_stats((*srcData)[replicating ? 0 : i]);
-    }
-    // make sure buffer_ is flushed even if no new data is appended to it
-    // (e.g. empty strings) because the metadata needs to be flushed.
-    if (!buffer_->isDirty()) {
-      buffer_->setDirty();
-    }
-
-    num_elems_ += numAppendElems;
-    auto chunk_metadata = std::make_shared<ChunkMetadata>();
-    getMetadata(chunk_metadata);
-    return chunk_metadata;
-  }
-
   void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) override {
     Encoder::getMetadata(chunkMetadata);  // call on parent class
     chunkMetadata->fillChunkStats(elem_min, elem_max, has_nulls);

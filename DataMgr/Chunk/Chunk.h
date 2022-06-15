@@ -77,11 +77,6 @@ class Chunk {
                                        const size_t byte_limit,
                                        const bool replicating = false);
 
-  std::shared_ptr<ChunkMetadata> appendData(DataBlockPtr& srcData,
-                                            const size_t numAppendElems,
-                                            const size_t startIdx,
-                                            const bool replicating = false);
-
   void createChunkBuffer(DataMgr* data_mgr,
                          const ChunkKey& key,
                          const MemoryLevel mem_level,

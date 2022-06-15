@@ -150,18 +150,6 @@ class Encoder {
   Encoder(Data_Namespace::AbstractBuffer* buffer);
   virtual ~Encoder() {}
 
-  //! Append data to the chunk buffer backing this encoder.
-  //! @param src_data Source data for the append
-  //! @param num_elems_to_append Number of elements to append
-  //! @param ti SQL Type Info for the column TODO(adb): used?
-  //! @param replicating Pass one value and fill the chunk with it
-  //! @param offset Write data starting at a given offset. Default is -1 which indicates
-  //! an append, an offset of 0 rewrites the chunk up to `num_elems_to_append`.
-  virtual std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
-                                                    const size_t num_elems_to_append,
-                                                    const SQLTypeInfo& ti,
-                                                    const bool replicating = false,
-                                                    const int64_t offset = -1) = 0;
   virtual void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata);
   // Only called from the executor for synthesized meta-information.
   virtual std::shared_ptr<ChunkMetadata> getMetadata(const SQLTypeInfo& ti) = 0;
