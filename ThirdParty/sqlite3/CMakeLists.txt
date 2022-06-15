@@ -8,3 +8,4 @@ endif()
 
 add_library(sqlite3 STATIC sqlite3.c sqlite3.h)
 target_link_libraries(sqlite3 ${CMAKE_DL_LIBS} pthread)
+set_property(TARGET sqlite3 PROPERTY POSITION_INDEPENDENT_CODE ON)
