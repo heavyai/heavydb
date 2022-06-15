@@ -26,6 +26,7 @@
 
 #define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED 1
 
+#include <condition_variable>
 #include <iostream>
 #include <list>
 #include <map>
@@ -214,7 +215,10 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   std::mutex sized_segs_mutex_;
   std::mutex unsized_segs_mutex_;
   std::mutex buffer_id_mutex_;
-  std::mutex global_mutex_;
+  // This map is used for granular locks in case of parallel requests
+  // to fetch the same chunk that is not in chunk_index yet. Access
+  // to this map should be synced throug chunk_index_mutex_.
+  std::map<ChunkKey, std::shared_ptr<std::condition_variable>> in_progress_buffer_cvs_;
 
   std::map<ChunkKey, BufferList::iterator> chunk_index_;
   size_t max_buffer_pool_num_pages_;  // max number of pages for buffer pool
