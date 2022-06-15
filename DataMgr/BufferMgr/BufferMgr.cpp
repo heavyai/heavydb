@@ -771,45 +771,6 @@ void BufferMgr::fetchBuffer(const ChunkKey& key,
   buffer->unPin();
 }
 
-AbstractBuffer* BufferMgr::putBuffer(const ChunkKey& key,
-                                     AbstractBuffer* src_buffer,
-                                     const size_t num_bytes) {
-  std::unique_lock<std::mutex> chunk_index_lock(chunk_index_mutex_);
-  auto buffer_it = chunk_index_.find(key);
-  bool found_buffer = buffer_it != chunk_index_.end();
-  chunk_index_lock.unlock();
-  AbstractBuffer* buffer;
-  if (!found_buffer) {
-    buffer = createBuffer(key, page_size_);
-  } else {
-    buffer = buffer_it->second->buffer;
-  }
-  size_t old_buffer_size = buffer->size();
-  size_t new_buffer_size = num_bytes == 0 ? src_buffer->size() : num_bytes;
-  CHECK(!buffer->isDirty());
-
-  if (src_buffer->isUpdated()) {
-    //@todo use dirty flags to only flush pages of chunk that need to
-    // be flushed
-    buffer->write((int8_t*)src_buffer->getMemoryPtr(),
-                  new_buffer_size,
-                  0,
-                  src_buffer->getType(),
-                  src_buffer->getDeviceId());
-  } else if (src_buffer->isAppended()) {
-    CHECK(old_buffer_size < new_buffer_size);
-    buffer->append((int8_t*)src_buffer->getMemoryPtr() + old_buffer_size,
-                   new_buffer_size - old_buffer_size,
-                   src_buffer->getType(),
-                   src_buffer->getDeviceId());
-  } else {
-    UNREACHABLE();
-  }
-  src_buffer->clearDirtyBits();
-  buffer->syncEncoder(src_buffer);
-  return buffer;
-}
-
 int BufferMgr::getBufferId() {
   std::lock_guard<std::mutex> lock(buffer_id_mutex_);
   return max_buffer_id_++;

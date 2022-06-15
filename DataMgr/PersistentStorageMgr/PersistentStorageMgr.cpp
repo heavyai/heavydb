@@ -67,13 +67,6 @@ void PersistentStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
       chunk_key, destination_buffer, num_bytes);
 }
 
-AbstractBuffer* PersistentStorageMgr::putBuffer(const ChunkKey& chunk_key,
-                                                AbstractBuffer* source_buffer,
-                                                const size_t num_bytes) {
-  return getStorageMgrForTableKey(chunk_key)->putBuffer(
-      chunk_key, source_buffer, num_bytes);
-}
-
 void PersistentStorageMgr::getChunkMetadataVecForKeyPrefix(
     ChunkMetadataVector& chunk_metadata,
     const ChunkKey& key_prefix) {

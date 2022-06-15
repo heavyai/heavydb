@@ -38,9 +38,6 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   void fetchBuffer(const ChunkKey& chunk_key,
                    AbstractBuffer* destination_buffer,
                    const size_t num_bytes) override;
-  AbstractBuffer* putBuffer(const ChunkKey& chunk_key,
-                            AbstractBuffer* source_buffer,
-                            const size_t num_bytes) override;
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metadata,
                                        const ChunkKey& chunk_key_prefix) override;
   bool isBufferOnDevice(const ChunkKey& chunk_key) override;

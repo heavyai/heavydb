@@ -154,9 +154,6 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   void fetchBuffer(const ChunkKey& key,
                    AbstractBuffer* dest_buffer,
                    const size_t num_bytes = 0) override;
-  AbstractBuffer* putBuffer(const ChunkKey& key,
-                            AbstractBuffer* d,
-                            const size_t num_bytes = 0) override;
   const DictDescriptor* getDictMetadata(int dict_id, bool load_dict = true) override {
     UNREACHABLE();
     return nullptr;

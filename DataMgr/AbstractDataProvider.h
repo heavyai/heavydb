@@ -60,13 +60,6 @@ class AbstractDataProvider : public Data_Namespace::AbstractBufferMgr {
     return nullptr;
   }
 
-  Data_Namespace::AbstractBuffer* putBuffer(const ChunkKey& key,
-                                            Data_Namespace::AbstractBuffer* srcBuffer,
-                                            const size_t numBytes = 0) override {
-    UNREACHABLE();
-    return nullptr;
-  }
-
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                        const ChunkKey& keyPrefix) override {
     UNREACHABLE();
