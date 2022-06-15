@@ -201,13 +201,9 @@ class DataMgr {
   void clearMemory(const MemoryLevel memLevel);
 
   const std::map<ChunkKey, File_Namespace::FileBuffer*>& getChunkMap();
-  void checkpoint(const int db_id,
-                  const int tb_id);  // checkpoint for individual table of DB
-  void checkpoint(const int db_id, const int table_id, const MemoryLevel memory_level);
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                        const ChunkKey& keyPrefix);
   inline bool gpusPresent() const { return hasGpus_; }
-  void removeTableRelatedDS(const int db_id, const int tb_id);
   void setTableEpoch(const int db_id, const int tb_id, const int start_epoch);
   size_t getTableEpoch(const int db_id, const int tb_id);
 
@@ -256,7 +252,6 @@ class DataMgr {
   void populateMgrs(const SystemParameters& system_parameters,
                     const size_t userSpecifiedNumReaderThreads);
   void convertDB(const std::string basePath);
-  void checkpoint();  // checkpoint for whole DB, called from convertDB proc only
   void createTopLevelMetadata() const;
   void allocateCpuBufferMgr(int32_t device_id,
                             size_t total_cpu_size,

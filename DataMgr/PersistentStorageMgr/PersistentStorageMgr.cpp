@@ -111,14 +111,6 @@ bool PersistentStorageMgr::isAllocationCapped() {
   return false;
 }
 
-void PersistentStorageMgr::checkpoint() {
-  UNREACHABLE();
-}
-
-void PersistentStorageMgr::checkpoint(const int db_id, const int tb_id) {
-  UNREACHABLE();
-}
-
 AbstractBuffer* PersistentStorageMgr::alloc(const size_t num_bytes) {
   UNREACHABLE();
   return nullptr;
@@ -139,10 +131,6 @@ std::string PersistentStorageMgr::getStringMgrType() {
 size_t PersistentStorageMgr::getNumChunks() {
   UNREACHABLE();
   return 0;
-}
-
-void PersistentStorageMgr::removeTableRelatedDS(const int db_id, const int table_id) {
-  getStorageMgr(db_id)->removeTableRelatedDS(db_id, table_id);
 }
 
 const DictDescriptor* PersistentStorageMgr::getDictMetadata(int dict_id, bool load_dict) {

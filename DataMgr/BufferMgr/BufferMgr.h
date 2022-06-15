@@ -157,10 +157,6 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   AbstractBuffer* putBuffer(const ChunkKey& key,
                             AbstractBuffer* d,
                             const size_t num_bytes = 0) override;
-  void checkpoint() override;
-  void checkpoint(const int db_id, const int tb_id) override;
-  void removeTableRelatedDS(const int db_id, const int table_id) override;
-
   const DictDescriptor* getDictMetadata(int dict_id, bool load_dict = true) override {
     UNREACHABLE();
     return nullptr;

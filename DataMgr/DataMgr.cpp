@@ -530,46 +530,6 @@ void DataMgr::copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer) {
 // size_t numBytes, const size_t destOffset, const size_t srcOffset) {
 //} /
 
-void DataMgr::checkpoint(const int db_id, const int tb_id) {
-  // TODO(adb): do we need a buffer mgr lock here?
-  // MAT Yes to reduce Parallel Executor TSAN issues (and correctness for now)
-  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
-  for (auto levelIt = bufferMgrs_.rbegin(); levelIt != bufferMgrs_.rend(); ++levelIt) {
-    // use reverse iterator so we start at GPU level, then CPU then DISK
-    for (auto deviceIt = levelIt->begin(); deviceIt != levelIt->end(); ++deviceIt) {
-      (*deviceIt)->checkpoint(db_id, tb_id);
-    }
-  }
-}
-
-void DataMgr::checkpoint(const int db_id,
-                         const int table_id,
-                         const MemoryLevel memory_level) {
-  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
-  CHECK_LT(static_cast<size_t>(memory_level), bufferMgrs_.size());
-  CHECK_LT(static_cast<size_t>(memory_level), levelSizes_.size());
-  for (int device_id = 0; device_id < levelSizes_[memory_level]; device_id++) {
-    bufferMgrs_[memory_level][device_id]->checkpoint(db_id, table_id);
-  }
-}
-
-void DataMgr::checkpoint() {
-  // TODO(adb): SAA
-  // MAT Yes to reduce Parallel Executor TSAN issues (and correctness for now)
-  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
-  for (auto levelIt = bufferMgrs_.rbegin(); levelIt != bufferMgrs_.rend(); ++levelIt) {
-    // use reverse iterator so we start at GPU level, then CPU then DISK
-    for (auto deviceIt = levelIt->begin(); deviceIt != levelIt->end(); ++deviceIt) {
-      (*deviceIt)->checkpoint();
-    }
-  }
-}
-
-void DataMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
-  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
-  bufferMgrs_[0][0]->removeTableRelatedDS(db_id, tb_id);
-}
-
 void DataMgr::setTableEpoch(const int db_id, const int tb_id, const int start_epoch) {
   UNREACHABLE();
 }

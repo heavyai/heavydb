@@ -693,49 +693,6 @@ void BufferMgr::removeSegment(BufferList::iterator& seg_it) {
   }
 }
 
-void BufferMgr::checkpoint() {
-  std::lock_guard<std::mutex> lock(global_mutex_);  // granular lock
-  std::lock_guard<std::mutex> chunkIndexLock(chunk_index_mutex_);
-
-  for (auto& chunk_itr : chunk_index_) {
-    // checks that buffer is actual chunk (not just buffer) and is dirty
-    auto& buffer_itr = chunk_itr.second;
-    if (buffer_itr->chunk_key[0] != -1 && buffer_itr->buffer->isDirty()) {
-      parent_mgr_->putBuffer(buffer_itr->chunk_key, buffer_itr->buffer);
-      buffer_itr->buffer->clearDirtyBits();
-    }
-  }
-}
-
-void BufferMgr::checkpoint(const int db_id, const int tb_id) {
-  std::lock_guard<std::mutex> lock(global_mutex_);  // granular lock
-  std::lock_guard<std::mutex> chunk_index_lock(chunk_index_mutex_);
-
-  ChunkKey key_prefix;
-  key_prefix.push_back(db_id);
-  key_prefix.push_back(tb_id);
-  auto start_chunk_it = chunk_index_.lower_bound(key_prefix);
-  if (start_chunk_it == chunk_index_.end()) {
-    return;
-  }
-
-  auto buffer_it = start_chunk_it;
-  while (buffer_it != chunk_index_.end() &&
-         std::search(buffer_it->first.begin(),
-                     buffer_it->first.begin() + key_prefix.size(),
-                     key_prefix.begin(),
-                     key_prefix.end()) != buffer_it->first.begin() + key_prefix.size()) {
-    if (buffer_it->second->chunk_key[0] != -1 &&
-        buffer_it->second->buffer->isDirty()) {  // checks that buffer is actual chunk
-                                                 // (not just buffer) and is dirty
-
-      parent_mgr_->putBuffer(buffer_it->second->chunk_key, buffer_it->second->buffer);
-      buffer_it->second->buffer->clearDirtyBits();
-    }
-    buffer_it++;
-  }
-}
-
 /// Returns a pointer to the Buffer holding the chunk, if it exists; otherwise,
 /// throws a runtime_error.
 AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes) {
@@ -898,10 +855,6 @@ void BufferMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metad
 
 const std::vector<BufferList>& BufferMgr::getSlabSegments() {
   return slab_segments_;
-}
-
-void BufferMgr::removeTableRelatedDS(const int db_id, const int table_id) {
-  UNREACHABLE();
 }
 
 std::unique_ptr<AbstractDataToken> BufferMgr::getZeroCopyBufferMemory(const ChunkKey& key,

@@ -102,14 +102,6 @@ class AbstractDataProvider : public Data_Namespace::AbstractBufferMgr {
     return false;
   }
 
-  void checkpoint() override { UNREACHABLE(); }
-
-  void checkpoint(const int db_id, const int tb_id) override { UNREACHABLE(); }
-
-  void removeTableRelatedDS(const int db_id, const int table_id) override {
-    UNREACHABLE();
-  }
-
   const DictDescriptor* getDictMetadata(int dict_id, bool load_dict = true) override {
     UNREACHABLE();
     return nullptr;

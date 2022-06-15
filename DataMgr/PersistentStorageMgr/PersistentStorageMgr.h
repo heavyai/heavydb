@@ -49,14 +49,11 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   size_t getInUseSize() override;
   size_t getAllocated() override;
   bool isAllocationCapped() override;
-  void checkpoint() override;
-  void checkpoint(const int db_id, const int tb_id) override;
   AbstractBuffer* alloc(const size_t num_bytes) override;
   void free(AbstractBuffer* buffer) override;
   MgrType getMgrType() override;
   std::string getStringMgrType() override;
   size_t getNumChunks() override;
-  void removeTableRelatedDS(const int db_id, const int table_id) override;
 
   const DictDescriptor* getDictMetadata(int dict_id, bool load_dict = true);
 
