@@ -25,7 +25,7 @@
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_sort.h>
 
-#include "QueryEngine/TableFunctions/SystemFunctions/os/Shared/TableFunctionsCommon.h"
+#include "QueryEngine/TableFunctions/SystemFunctions/os/Shared/TableFunctionsCommon.hpp"
 
 namespace TableFunctions_Namespace {
 

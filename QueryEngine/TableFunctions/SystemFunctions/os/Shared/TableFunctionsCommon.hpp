@@ -35,10 +35,10 @@ NEVER_INLINE HOST std::pair<int32_t, int32_t> get_column_min_max(
     const Column<TextEncodingDict>& col);
 
 template <typename T>
-NEVER_INLINE HOST double get_column_mean(const Column<T>& col);
+NEVER_INLINE HOST double get_column_mean(const T* data, const int64_t num_rows);
 
 template <typename T>
-NEVER_INLINE HOST double get_column_mean(const T* data, const int64_t num_rows);
+NEVER_INLINE HOST double get_column_mean(const Column<T>& col);
 
 template <typename T>
 NEVER_INLINE HOST double get_column_std_dev(const Column<T>& col, const double mean);

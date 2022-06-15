@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "../../QueryEngine/TableFunctions/SystemFunctions/os/Shared/TableFunctionsCommon.h"
+#include "../../QueryEngine/TableFunctions/SystemFunctions/os/Shared/TableFunctionsCommon.hpp"
 #include "../../QueryEngine/heavydbTypes.h"
 
 /*

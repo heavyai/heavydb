@@ -16,7 +16,7 @@
 
 #ifndef __CUDACC__
 
-#include "TableFunctionsCommon.h"
+#include "TableFunctionsCommon.hpp"
 
 #include <cstring>  // std::memcpy
 #include <filesystem>
@@ -38,7 +38,7 @@ NEVER_INLINE HOST std::pair<T, T> get_column_min_max(const Column<T>& col) {
   T col_max = std::numeric_limits<T>::lowest();
   const int64_t num_rows = col.size();
   const size_t max_thread_count = std::thread::hardware_concurrency();
-  const size_t max_inputs_per_thread = 200000;
+  const size_t max_inputs_per_thread = 20000;
   const size_t num_threads = std::min(
       max_thread_count, ((num_rows + max_inputs_per_thread - 1) / max_inputs_per_thread));
 
@@ -54,14 +54,15 @@ NEVER_INLINE HOST std::pair<T, T> get_column_min_max(const Column<T>& col) {
                         T local_col_min = std::numeric_limits<T>::max();
                         T local_col_max = std::numeric_limits<T>::lowest();
                         for (int64_t r = start_idx; r < end_idx; ++r) {
-                          if (col.isNull(r)) {
+                          const T val = col[r];
+                          if (val == inline_null_value<T>()) {
                             continue;
                           }
-                          if (col[r] < local_col_min) {
-                            local_col_min = col[r];
+                          if (val < local_col_min) {
+                            local_col_min = val;
                           }
-                          if (col[r] > local_col_max) {
-                            local_col_max = col[r];
+                          if (val > local_col_max) {
+                            local_col_max = val;
                           }
                         }
                         size_t thread_idx = tbb::this_task_arena::current_thread_index();
@@ -103,28 +104,23 @@ std::pair<int32_t, int32_t> get_column_min_max(const Column<TextEncodingDict>& c
   return get_column_min_max(int_alias_col);
 }
 
-template <typename T>
-NEVER_INLINE HOST double get_column_mean(const Column<T>& col) {
-  return get_column_mean(col.getPtr(), col.size());
-}
-
-template NEVER_INLINE HOST double get_column_mean(const Column<int32_t>& col);
-template NEVER_INLINE HOST double get_column_mean(const Column<int64_t>& col);
-template NEVER_INLINE HOST double get_column_mean(const Column<float>& col);
-template NEVER_INLINE HOST double get_column_mean(const Column<double>& col);
+// Todo(todd): we should use a functor approach for gathering whatever stats
+// a table function needs so we're not repeating boilerplate code (although
+// should confirm it doesn't have an adverse affect on performance).
+// Leaving as a follow-up though until we have more examples of real-world
+// usage patterns.
 
 template <typename T>
 NEVER_INLINE HOST double get_column_mean(const T* data, const int64_t num_rows) {
   // const int64_t num_rows = col.size();
   const size_t max_thread_count = std::thread::hardware_concurrency();
-  const size_t max_inputs_per_thread = 200000;
+  const size_t max_inputs_per_thread = 20000;
   const size_t num_threads = std::min(
       max_thread_count, ((num_rows + max_inputs_per_thread - 1) / max_inputs_per_thread));
 
   std::vector<double> local_col_sums(num_threads, 0.);
   std::vector<int64_t> local_col_non_null_counts(num_threads, 0L);
   tbb::task_arena limited_arena(num_threads);
-
   limited_arena.execute([&] {
     tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_rows),
                       [&](const tbb::blocked_range<int64_t>& r) {
@@ -157,20 +153,35 @@ NEVER_INLINE HOST double get_column_mean(const T* data, const int64_t num_rows) 
   return col_non_null_count == 0 ? 0 : col_sum / col_non_null_count;
 }
 
-// Todo(todd): we should use a functor approach for gathering whatever stats
-// a table function needs so we're not repeating boilerplate code (although
-// should confirm it doesn't have an adverse affect on performance).
-// Leaving as a follow-up though until we have more examples of real-world
-// usage patterns.
+template NEVER_INLINE HOST double get_column_mean(const int8_t* data,
+                                                  const int64_t num_rows);
+
+template NEVER_INLINE HOST double get_column_mean(const int16_t* data,
+                                                  const int64_t num_rows);
 
 template NEVER_INLINE HOST double get_column_mean(const int32_t* data,
                                                   const int64_t num_rows);
+
 template NEVER_INLINE HOST double get_column_mean(const int64_t* data,
                                                   const int64_t num_rows);
+
 template NEVER_INLINE HOST double get_column_mean(const float* data,
                                                   const int64_t num_rows);
+
 template NEVER_INLINE HOST double get_column_mean(const double* data,
                                                   const int64_t num_rows);
+
+template <typename T>
+NEVER_INLINE HOST double get_column_mean(const Column<T>& col) {
+  return get_column_mean(col.getPtr(), col.size());
+}
+
+template NEVER_INLINE HOST double get_column_mean(const Column<int8_t>& col);
+template NEVER_INLINE HOST double get_column_mean(const Column<int16_t>& col);
+template NEVER_INLINE HOST double get_column_mean(const Column<int32_t>& col);
+template NEVER_INLINE HOST double get_column_mean(const Column<int64_t>& col);
+template NEVER_INLINE HOST double get_column_mean(const Column<float>& col);
+template NEVER_INLINE HOST double get_column_mean(const Column<double>& col);
 
 template <typename T>
 NEVER_INLINE HOST double get_column_std_dev(const Column<T>& col, const double mean) {
