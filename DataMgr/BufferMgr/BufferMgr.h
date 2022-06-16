@@ -87,6 +87,23 @@ using namespace Data_Namespace;
 
 namespace Buffer_Namespace {
 
+struct MemoryData {
+  size_t slabNum;
+  int32_t startPage;
+  size_t numPages;
+  uint32_t touch;
+  std::vector<int32_t> chunk_key;
+  MemStatus memStatus;
+};
+
+struct MemoryInfo {
+  size_t pageSize;
+  size_t maxNumPages;
+  size_t numPageAllocated;
+  bool isAllocationCapped;
+  std::vector<MemoryData> nodeMemoryData;
+};
+
 /**
  * @class   BufferMgr
  * @brief
@@ -177,6 +194,8 @@ class BufferMgr : public AbstractBufferMgr {  // implements
                                      const size_t num_bytes);
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metadata_vec,
                                        const ChunkKey& key_prefix) override;
+
+  MemoryInfo getMemoryInfo();
 
  protected:
   const size_t

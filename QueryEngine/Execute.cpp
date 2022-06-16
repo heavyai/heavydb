@@ -2550,7 +2550,7 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
       table_infos,
       query_comp_desc.getDeviceType() == ExecutorDeviceType::GPU
           ? data_mgr_->getMemoryInfo(Data_Namespace::MemoryLevel::GPU_LEVEL)
-          : std::vector<Data_Namespace::MemoryInfo>{},
+          : std::vector<Buffer_Namespace::MemoryInfo>{},
       eo.gpu_input_mem_limit_percent,
       eo.outer_fragment_indices);
   CHECK(!ra_exe_unit.input_descs.empty());

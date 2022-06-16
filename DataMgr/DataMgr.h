@@ -57,23 +57,6 @@ struct DictDescriptor;
 
 namespace Data_Namespace {
 
-struct MemoryData {
-  size_t slabNum;
-  int32_t startPage;
-  size_t numPages;
-  uint32_t touch;
-  std::vector<int32_t> chunk_key;
-  Buffer_Namespace::MemStatus memStatus;
-};
-
-struct MemoryInfo {
-  size_t pageSize;
-  size_t maxNumPages;
-  size_t numPageAllocated;
-  bool isAllocationCapped;
-  std::vector<MemoryData> nodeMemoryData;
-};
-
 //! Parse /proc/meminfo into key/value pairs.
 class ProcMeminfoParser {
   std::unordered_map<std::string, size_t> items_;
@@ -196,7 +179,7 @@ class DataMgr {
   bool isBufferOnDevice(const ChunkKey& key,
                         const MemoryLevel memLevel,
                         const int deviceId);
-  std::vector<MemoryInfo> getMemoryInfo(const MemoryLevel memLevel);
+  std::vector<Buffer_Namespace::MemoryInfo> getMemoryInfo(const MemoryLevel memLevel);
   std::string dumpLevel(const MemoryLevel memLevel);
   void clearMemory(const MemoryLevel memLevel);
 
@@ -266,7 +249,6 @@ class DataMgr {
   std::string dataDir_;
   bool hasGpus_;
   size_t reservedGpuMem_;
-  std::mutex buffer_access_mutex_;
   std::unique_ptr<DataMgrBufferProvider> buffer_provider_;
   std::unique_ptr<DataMgrDataProvider> data_provider_;
 };

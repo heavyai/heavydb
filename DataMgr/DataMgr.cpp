@@ -312,37 +312,15 @@ void DataMgr::convertDB(const std::string basePath) {
 
 void DataMgr::createTopLevelMetadata() const {}
 
-std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
-  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
-
-  std::vector<MemoryInfo> mem_info;
+std::vector<Buffer_Namespace::MemoryInfo> DataMgr::getMemoryInfo(
+    const MemoryLevel memLevel) {
+  std::vector<Buffer_Namespace::MemoryInfo> mem_info;
   if (memLevel == MemoryLevel::CPU_LEVEL) {
     Buffer_Namespace::CpuBufferMgr* cpu_buffer =
         dynamic_cast<Buffer_Namespace::CpuBufferMgr*>(
             bufferMgrs_[MemoryLevel::CPU_LEVEL][0]);
     CHECK(cpu_buffer);
-    MemoryInfo mi;
-
-    mi.pageSize = cpu_buffer->getPageSize();
-    mi.maxNumPages = cpu_buffer->getMaxSize() / mi.pageSize;
-    mi.isAllocationCapped = cpu_buffer->isAllocationCapped();
-    mi.numPageAllocated = cpu_buffer->getAllocated() / mi.pageSize;
-
-    const auto& slab_segments = cpu_buffer->getSlabSegments();
-    for (size_t slab_num = 0; slab_num < slab_segments.size(); ++slab_num) {
-      for (auto segment : slab_segments[slab_num]) {
-        MemoryData md;
-        md.slabNum = slab_num;
-        md.startPage = segment.start_page;
-        md.numPages = segment.num_pages;
-        md.touch = segment.last_touched;
-        md.memStatus = segment.mem_status;
-        md.chunk_key.insert(
-            md.chunk_key.end(), segment.chunk_key.begin(), segment.chunk_key.end());
-        mi.nodeMemoryData.push_back(md);
-      }
-    }
-    mem_info.push_back(mi);
+    mem_info.push_back(cpu_buffer->getMemoryInfo());
   } else if (hasGpus_) {
     int numGpus = getGpuMgr()->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
@@ -350,36 +328,13 @@ std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
           dynamic_cast<Buffer_Namespace::BufferMgr*>(
               bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]);
       CHECK(gpu_buffer);
-      MemoryInfo mi;
-
-      mi.pageSize = gpu_buffer->getPageSize();
-      mi.maxNumPages = gpu_buffer->getMaxSize() / mi.pageSize;
-      mi.isAllocationCapped = gpu_buffer->isAllocationCapped();
-      mi.numPageAllocated = gpu_buffer->getAllocated() / mi.pageSize;
-
-      const auto& slab_segments = gpu_buffer->getSlabSegments();
-      for (size_t slab_num = 0; slab_num < slab_segments.size(); ++slab_num) {
-        for (auto segment : slab_segments[slab_num]) {
-          MemoryData md;
-          md.slabNum = slab_num;
-          md.startPage = segment.start_page;
-          md.numPages = segment.num_pages;
-          md.touch = segment.last_touched;
-          md.chunk_key.insert(
-              md.chunk_key.end(), segment.chunk_key.begin(), segment.chunk_key.end());
-          md.memStatus = segment.mem_status;
-          mi.nodeMemoryData.push_back(md);
-        }
-      }
-      mem_info.push_back(mi);
+      mem_info.push_back(gpu_buffer->getMemoryInfo());
     }
   }
   return mem_info;
 }
 
 std::string DataMgr::dumpLevel(const MemoryLevel memLevel) {
-  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
-
   // if gpu we need to iterate through all the buffermanagers for each card
   if (memLevel == MemoryLevel::GPU_LEVEL) {
     int numGpus = getGpuMgr()->getDeviceCount();
@@ -394,8 +349,6 @@ std::string DataMgr::dumpLevel(const MemoryLevel memLevel) {
 }
 
 void DataMgr::clearMemory(const MemoryLevel memLevel) {
-  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
-
   // if gpu we need to iterate through all the buffermanagers for each card
   if (memLevel == MemoryLevel::GPU_LEVEL) {
     if (hasGpus_) {
@@ -421,7 +374,6 @@ void DataMgr::clearMemory(const MemoryLevel memLevel) {
 bool DataMgr::isBufferOnDevice(const ChunkKey& key,
                                const MemoryLevel memLevel,
                                const int deviceId) {
-  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   return bufferMgrs_[memLevel][deviceId]->isBufferOnDevice(key);
 }
 
@@ -453,7 +405,6 @@ void DataMgr::setGpuMgrContext(GpuMgrName name) {
 
 void DataMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                               const ChunkKey& keyPrefix) {
-  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   bufferMgrs_[0][0]->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, keyPrefix);
 }
 
@@ -461,7 +412,6 @@ AbstractBuffer* DataMgr::createChunkBuffer(const ChunkKey& key,
                                            const MemoryLevel memoryLevel,
                                            const int deviceId,
                                            const size_t page_size) {
-  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   int level = static_cast<int>(memoryLevel);
   return bufferMgrs_[level][deviceId]->createBuffer(key, page_size);
 }
@@ -470,7 +420,6 @@ AbstractBuffer* DataMgr::getChunkBuffer(const ChunkKey& key,
                                         const MemoryLevel memoryLevel,
                                         const int deviceId,
                                         const size_t numBytes) {
-  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   const auto level = static_cast<size_t>(memoryLevel);
   CHECK_LT(level, levelSizes_.size());     // make sure we have a legit buffermgr
   CHECK_LT(deviceId, levelSizes_[level]);  // make sure we have a legit buffermgr
@@ -478,8 +427,6 @@ AbstractBuffer* DataMgr::getChunkBuffer(const ChunkKey& key,
 }
 
 void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix) {
-  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
-
   int numLevels = bufferMgrs_.size();
   for (int level = numLevels - 1; level >= 0; --level) {
     for (int device = 0; device < levelSizes_[level]; ++device) {
@@ -491,8 +438,6 @@ void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix) {
 // only deletes the chunks at the given memory level
 void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix,
                                      const MemoryLevel memLevel) {
-  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
-
   if (bufferMgrs_.size() <= memLevel) {
     return;
   }
@@ -504,14 +449,12 @@ void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix,
 AbstractBuffer* DataMgr::alloc(const MemoryLevel memoryLevel,
                                const int deviceId,
                                const size_t numBytes) {
-  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   const auto level = static_cast<int>(memoryLevel);
   CHECK_LT(deviceId, levelSizes_[level]);
   return bufferMgrs_[level][deviceId]->alloc(numBytes);
 }
 
 void DataMgr::free(AbstractBuffer* buffer) {
-  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   int level = static_cast<int>(buffer->getType());
   bufferMgrs_[level][buffer->getDeviceId()]->free(buffer);
 }

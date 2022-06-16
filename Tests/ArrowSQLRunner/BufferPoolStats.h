@@ -41,7 +41,7 @@ struct BufferPoolStats {
 inline BufferPoolStats getBufferPoolStats(
     DataMgr* data_mgr,
     const Data_Namespace::MemoryLevel memory_level) {
-  const std::vector<MemoryInfo> memory_infos = data_mgr->getMemoryInfo(memory_level);
+  auto memory_infos = data_mgr->getMemoryInfo(memory_level);
   if (memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
     CHECK_EQ(memory_infos.size(), static_cast<size_t>(1));
   }
@@ -53,7 +53,7 @@ inline BufferPoolStats getBufferPoolStats(
       0};  // can be greater than chunk keys set size due to table replication
   size_t total_num_bytes{0};
   for (auto& pool_memory_info : memory_infos) {
-    const std::vector<MemoryData>& memory_data = pool_memory_info.nodeMemoryData;
+    const auto& memory_data = pool_memory_info.nodeMemoryData;
     for (auto& memory_datum : memory_data) {
       total_num_buffers++;
       const auto& chunk_key = memory_datum.chunk_key;

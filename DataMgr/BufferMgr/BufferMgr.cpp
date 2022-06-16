@@ -863,4 +863,29 @@ std::unique_ptr<AbstractDataToken> BufferMgr::getZeroCopyBufferMemory(const Chun
   return parent_mgr_->getZeroCopyBufferMemory(key, numBytes);
 }
 
+MemoryInfo BufferMgr::getMemoryInfo() {
+  std::unique_lock<std::mutex> sized_segs_lock(sized_segs_mutex_);
+  MemoryInfo mi;
+
+  mi.pageSize = getPageSize();
+  mi.maxNumPages = getMaxSize() / mi.pageSize;
+  mi.isAllocationCapped = isAllocationCapped();
+  mi.numPageAllocated = getAllocated() / mi.pageSize;
+
+  for (size_t slab_num = 0; slab_num < slab_segments_.size(); ++slab_num) {
+    for (auto segment : slab_segments_[slab_num]) {
+      MemoryData md;
+      md.slabNum = slab_num;
+      md.startPage = segment.start_page;
+      md.numPages = segment.num_pages;
+      md.touch = segment.last_touched;
+      md.memStatus = segment.mem_status;
+      md.chunk_key.insert(
+          md.chunk_key.end(), segment.chunk_key.begin(), segment.chunk_key.end());
+      mi.nodeMemoryData.push_back(md);
+    }
+  }
+  return mi;
+}
+
 }  // namespace Buffer_Namespace

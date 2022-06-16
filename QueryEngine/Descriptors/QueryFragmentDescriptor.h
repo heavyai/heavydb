@@ -37,7 +37,7 @@
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/Dispatchers/ExecutionPolicy.h"
 
-namespace Data_Namespace {
+namespace Buffer_Namespace {
 struct MemoryInfo;
 }
 
@@ -66,7 +66,7 @@ class QueryFragmentDescriptor {
  public:
   QueryFragmentDescriptor(const RelAlgExecutionUnit& ra_exe_unit,
                           const std::vector<InputTableInfo>& query_infos,
-                          const std::vector<Data_Namespace::MemoryInfo>& gpu_mem_infos,
+                          const std::vector<Buffer_Namespace::MemoryInfo>& gpu_mem_infos,
                           const double gpu_input_mem_limit_percent,
                           const std::vector<size_t> allowed_outer_fragment_indices);
 
