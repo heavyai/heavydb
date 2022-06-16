@@ -257,9 +257,10 @@ class FixedLengthEncoder : public Encoder {
 
     // assume always CPU_BUFFER?
     if (offset == -1) {
+      auto append_data_size = num_elems_to_append * sizeof(V);
+      buffer_->reserve(buffer_->size() + append_data_size);
       num_elems_ += num_elems_to_append;
-      buffer_->append(reinterpret_cast<int8_t*>(data_to_write),
-                      num_elems_to_append * sizeof(V));
+      buffer_->append(reinterpret_cast<int8_t*>(data_to_write), append_data_size);
       if (!replicating) {
         src_data += num_elems_to_append * sizeof(T);
       }

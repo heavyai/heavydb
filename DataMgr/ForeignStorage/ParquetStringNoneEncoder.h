@@ -61,7 +61,7 @@ class ParquetStringNoneEncoder : public ParquetEncoder {
     index_buffer_->append(encode_buffer_.data(), levels_read * sizeof(StringOffsetT));
 
     encode_buffer_.resize(std::max<size_t>(total_len, encode_buffer_.size()));
-    buffer_->reserve(total_len);
+    buffer_->reserve(buffer_->size() + total_len);
     total_len = 0;
     for (int64_t i = 0, j = 0; i < levels_read; ++i) {
       if (def_levels[i]) {

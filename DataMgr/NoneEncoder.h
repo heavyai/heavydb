@@ -95,10 +95,12 @@ class NoneEncoder : public Encoder {
       updateStats(src_data, num_elems_to_append);
     }
     if (offset == -1) {
+      auto append_data_size = num_elems_to_append * sizeof(T);
+      buffer_->reserve(buffer_->size() + append_data_size);
       num_elems_ += num_elems_to_append;
       buffer_->append(
           replicating ? reinterpret_cast<int8_t*>(encoded_data.data()) : src_data,
-          num_elems_to_append * sizeof(T));
+          append_data_size);
       if (!replicating) {
         src_data += num_elems_to_append * sizeof(T);
       }

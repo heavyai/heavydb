@@ -120,11 +120,11 @@ class ArrayNoneEncoder : public Encoder {
                                             const size_t numAppendElems,
                                             const bool replicating) {
     CHECK(index_buf != nullptr);  // index_buf must be set before this.
-    size_t index_size = numAppendElems * sizeof(ArrayOffsetT);
+    size_t append_index_size = numAppendElems * sizeof(ArrayOffsetT);
     if (num_elems_ == 0) {
-      index_size += sizeof(ArrayOffsetT);  // plus one for the initial offset
+      append_index_size += sizeof(ArrayOffsetT);  // plus one for the initial offset
     }
-    index_buf->reserve(index_size);
+    index_buf->reserve(index_buf->size() + append_index_size);
 
     bool first_elem_padded = false;
     ArrayOffsetT initial_offset = 0;
@@ -158,18 +158,18 @@ class ArrayNoneEncoder : public Encoder {
       }
     }
     // Need to start data from 8 byte offset if first array encoded is a NULL array
-    size_t data_size = (first_elem_padded) ? DEFAULT_NULL_PADDING_SIZE : 0;
+    size_t append_data_size = (first_elem_padded) ? DEFAULT_NULL_PADDING_SIZE : 0;
     for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {
       // NULL arrays don't take any space so don't add to the data size
       if ((*srcData)[replicating ? 0 : n].is_null) {
         continue;
       }
-      data_size += (*srcData)[replicating ? 0 : n].length;
+      append_data_size += (*srcData)[replicating ? 0 : n].length;
     }
-    buffer_->reserve(data_size);
+    buffer_->reserve(buffer_->size() + append_data_size);
 
-    size_t inbuf_size =
-        std::min(std::max(index_size, data_size), (size_t)MAX_INPUT_BUF_SIZE);
+    size_t inbuf_size = std::min(std::max(append_index_size, append_data_size),
+                                 (size_t)MAX_INPUT_BUF_SIZE);
     auto gc_inbuf = std::make_unique<int8_t[]>(inbuf_size);
     auto inbuf = gc_inbuf.get();
     for (size_t num_appended = 0; num_appended < numAppendElems;) {

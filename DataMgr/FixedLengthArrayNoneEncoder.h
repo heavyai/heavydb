@@ -107,16 +107,6 @@ class FixedLengthArrayNoneEncoder : public Encoder {
                                             const int start_idx,
                                             const size_t numAppendElems,
                                             const bool replicating = false) {
-    // Todo: The reserve call was changed to take into account the existing data size,
-    // but in other encoders (like ArrayNoneEncoder) we only reserve the append size,
-    // which will be a no-op likely after the first append on a chunk. This probably
-    // won't matter for disk writes as we just have static (default 2MB) page sizes, but
-    // could be an issue for temporary in-memory tables, as buffers for multi-column
-    // imports will likely need to be repeatedly migrated to grow them if they are
-    // "landlocked" amidst other buffers. We should follow-up with work to call reserve
-    // properly, accounting for both the new append size and existing size, for that
-    // reason and just for overall semantic correctness.
-
     const size_t existing_data_size = num_elems_ * array_size;
     const size_t append_data_size = array_size * numAppendElems;
     buffer_->reserve(existing_data_size + append_data_size);

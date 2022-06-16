@@ -184,8 +184,8 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
     validate(parquet_data, j, column_type_);
   }
 
-  void reserve(const size_t num_elements) override {
-    buffer_->reserve(num_elements * sizeof(V));
+  void reserve(const size_t num_append_elements) override {
+    buffer_->reserve(buffer_->size() + (num_append_elements * sizeof(V)));
   }
 
   void appendDataTrackErrors(const int16_t* def_levels,

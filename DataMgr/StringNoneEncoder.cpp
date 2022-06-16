@@ -96,11 +96,11 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
     const size_t numAppendElems,
     const bool replicating) {
   CHECK(index_buf);  // index_buf must be set before this.
-  size_t index_size = numAppendElems * sizeof(StringOffsetT);
+  size_t append_index_size = numAppendElems * sizeof(StringOffsetT);
   if (num_elems_ == 0) {
-    index_size += sizeof(StringOffsetT);  // plus one for the initial offset of 0.
+    append_index_size += sizeof(StringOffsetT);  // plus one for the initial offset of 0.
   }
-  index_buf->reserve(index_size);
+  index_buf->reserve(index_buf->size() + append_index_size);
   StringOffsetT offset = 0;
   if (num_elems_ == 0) {
     index_buf->append((int8_t*)&offset,
@@ -116,15 +116,15 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
                     Data_Namespace::CPU_LEVEL);
     CHECK_GE(last_offset, 0);
   }
-  size_t data_size = 0;
+  size_t append_data_size = 0;
   for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {
     size_t len = (*srcData)[replicating ? 0 : n].length();
-    data_size += len;
+    append_data_size += len;
   }
-  buffer_->reserve(data_size);
+  buffer_->reserve(buffer_->size() + append_data_size);
 
   size_t inbuf_size =
-      std::min(std::max(index_size, data_size), (size_t)MAX_INPUT_BUF_SIZE);
+      std::min(std::max(append_index_size, append_data_size), (size_t)MAX_INPUT_BUF_SIZE);
   auto inbuf = std::make_unique<int8_t[]>(inbuf_size);
   for (size_t num_appended = 0; num_appended < numAppendElems;) {
     StringOffsetT* p = reinterpret_cast<StringOffsetT*>(inbuf.get());
