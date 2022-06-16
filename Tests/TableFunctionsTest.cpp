@@ -2695,6 +2695,29 @@ TEST_F(TableFunctions, ColumnArrayConcat) {
   }
 }
 
+TEST_F(TableFunctions, ColumnArrayCopierOneRow) {
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+#define COLUMNARRAYCOPIERTESTONEROW(COLNAME, CTYPE)                                    \
+  {                                                                                    \
+    const auto rows =                                                                  \
+        run_multiple_agg("SELECT out0 FROM TABLE(array_copier(cursor(SELECT " #COLNAME \
+                         " FROM arr_test WHERE rowid=0)));",                           \
+                         dt);                                                          \
+    const auto result_rows =                                                           \
+        run_multiple_agg("SELECT " #COLNAME " FROM arr_test WHERE rowid=0;", dt);      \
+    assert_equal<CTYPE>(rows, result_rows);                                            \
+  }
+    COLUMNARRAYCOPIERTESTONEROW(barr, bool);
+    COLUMNARRAYCOPIERTESTONEROW(carr, int8_t);
+    COLUMNARRAYCOPIERTESTONEROW(sarr, int16_t);
+    COLUMNARRAYCOPIERTESTONEROW(iarr, int32_t);
+    COLUMNARRAYCOPIERTESTONEROW(larr, int64_t);
+    COLUMNARRAYCOPIERTESTONEROW(farr, float);
+    COLUMNARRAYCOPIERTESTONEROW(darr, double);
+  }
+}
+
 TEST_F(TableFunctions, MetadataSetGet) {
   // this should work
   EXPECT_NO_THROW(

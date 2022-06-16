@@ -128,7 +128,7 @@ int64_t toBuffer(const TargetValue& col_val, const SQLTypeInfo& type_info, int8_
 
 int64_t countNumberOfValues(const ResultSet& rows, const size_t column_idx) {
   return tbb::parallel_reduce(
-      tbb::blocked_range<int64_t>(0, rows.entryCount()),
+      tbb::blocked_range<int64_t>(0, rows.rowCount()),
       static_cast<int64_t>(0),
       [&](tbb::blocked_range<int64_t> r, int64_t running_count) {
         for (int i = r.begin(); i < r.end(); ++i) {
