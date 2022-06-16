@@ -210,6 +210,6 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
   int next_dict_id_ = 1;
   std::unordered_map<int, std::unique_ptr<TableData>> tables_;
   std::unordered_map<int, std::unique_ptr<DictDescriptor>> dicts_;
-  mapd_shared_mutex data_mutex_;
-  mapd_shared_mutex schema_mutex_;
+  mutable mapd_shared_mutex data_mutex_;
+  mutable mapd_shared_mutex dict_mutex_;
 };

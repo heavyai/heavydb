@@ -67,9 +67,12 @@ size_t computeTotalStringsLength(std::shared_ptr<arrow::ChunkedArray> arr,
 void ArrowStorage::fetchBuffer(const ChunkKey& key,
                                Data_Namespace::AbstractBuffer* dest,
                                const size_t num_bytes) {
+  mapd_shared_lock<mapd_shared_mutex> data_lock(data_mutex_);
   CHECK_EQ(key[CHUNK_KEY_DB_IDX], db_id_);
   CHECK_EQ(tables_.count(key[CHUNK_KEY_TABLE_IDX]), (size_t)1);
   auto& table = *tables_.at(key[CHUNK_KEY_TABLE_IDX]);
+  mapd_shared_lock<mapd_shared_mutex> table_lock(table.mutex);
+  data_lock.unlock();
 
   size_t col_idx = static_cast<size_t>(key[CHUNK_KEY_COLUMN_IDX] - 1);
   size_t frag_idx = static_cast<size_t>(key[CHUNK_KEY_FRAGMENT_IDX] - 1);
@@ -113,8 +116,12 @@ void ArrowStorage::fetchBuffer(const ChunkKey& key,
 std::unique_ptr<AbstractDataToken> ArrowStorage::getZeroCopyBufferMemory(
     const ChunkKey& key,
     size_t num_bytes) {
+  mapd_shared_lock<mapd_shared_mutex> data_lock(data_mutex_);
   CHECK_EQ(key[CHUNK_KEY_DB_IDX], db_id_);
   CHECK_EQ(tables_.count(key[CHUNK_KEY_TABLE_IDX]), (size_t)1);
+  auto& table = *tables_.at(key[CHUNK_KEY_TABLE_IDX]);
+  mapd_shared_lock<mapd_shared_mutex> table_lock(table.mutex);
+  data_lock.unlock();
 
   auto col_type =
       getColumnInfo(
@@ -122,8 +129,6 @@ std::unique_ptr<AbstractDataToken> ArrowStorage::getZeroCopyBufferMemory(
           ->type;
 
   if (!col_type.is_varlen_indeed()) {
-    auto& table = *tables_.at(key[CHUNK_KEY_TABLE_IDX]);
-
     size_t col_idx = static_cast<size_t>(key[CHUNK_KEY_COLUMN_IDX] - 1);
     size_t frag_idx = static_cast<size_t>(key[CHUNK_KEY_FRAGMENT_IDX] - 1);
     CHECK_EQ(key.size(), (size_t)4);
@@ -259,9 +264,12 @@ void ArrowStorage::fetchVarLenArrayData(const TableData& table,
 }
 
 TableFragmentsInfo ArrowStorage::getTableMetadata(int db_id, int table_id) const {
+  mapd_shared_lock<mapd_shared_mutex> data_lock(data_mutex_);
   CHECK_EQ(db_id, db_id_);
   CHECK_EQ(tables_.count(table_id), (size_t)1);
   auto& table = *tables_.at(table_id);
+  mapd_shared_lock<mapd_shared_mutex> table_lock(table.mutex);
+  data_lock.unlock();
 
   if (table.fragments.empty()) {
     return getEmptyTableMetadata(table_id);
@@ -304,6 +312,7 @@ TableFragmentsInfo ArrowStorage::getEmptyTableMetadata(int table_id) const {
 }
 
 const DictDescriptor* ArrowStorage::getDictMetadata(int dict_id, bool /*load_dict*/) {
+  mapd_shared_lock<mapd_shared_mutex> dict_lock(dict_mutex_);
   CHECK_EQ(getSchemaId(dict_id), schema_id_);
   if (dicts_.count(dict_id)) {
     return dicts_.at(dict_id).get();
@@ -316,8 +325,10 @@ TableInfoPtr ArrowStorage::createTable(const std::string& table_name,
                                        const TableOptions& options) {
   TableInfoPtr res;
   int table_id;
+  mapd_unique_lock<mapd_shared_mutex> data_lock(data_mutex_);
   {
-    mapd_unique_lock<mapd_shared_mutex> lock(schema_mutex_);
+    mapd_unique_lock<mapd_shared_mutex> dict_lock(dict_mutex_);
+    mapd_unique_lock<mapd_shared_mutex> schema_lock(schema_mutex_);
     table_id = next_table_id_++;
     checkNewTableParams(table_name, columns, options);
     res = addTableInfo(
@@ -366,7 +377,6 @@ TableInfoPtr ArrowStorage::createTable(const std::string& table_name,
   auto schema = arrow::schema(fields);
 
   {
-    mapd_unique_lock<mapd_shared_mutex> lock(data_mutex_);
     auto [iter, inserted] = tables_.emplace(table_id, std::make_unique<TableData>());
     CHECK(inserted);
     auto& table = *iter->second;
@@ -414,6 +424,7 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at,
 }
 
 void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_id) {
+  mapd_shared_lock<mapd_shared_mutex> data_lock(data_mutex_);
   if (!tables_.count(table_id)) {
     throw std::runtime_error("Invalid table id: "s + std::to_string(table_id));
   }
@@ -421,7 +432,9 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
   auto& table = *tables_.at(table_id);
   compareSchemas(table.schema, at->schema());
 
-  mapd_unique_lock<mapd_shared_mutex> lock(table.mutex);
+  mapd_unique_lock<mapd_shared_mutex> table_lock(table.mutex);
+  data_lock.unlock();
+
   std::vector<std::shared_ptr<arrow::ChunkedArray>> col_data;
   col_data.resize(at->columns().size());
 
@@ -447,6 +460,7 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
     frag.metadata.resize(at->columns().size());
   }
 
+  mapd_shared_lock<mapd_shared_mutex> dict_lock(dict_mutex_);
   threading::parallel_for(
       threading::blocked_range(0, (int)at->columns().size()), [&](auto range) {
         for (auto col_idx = range.begin(); col_idx != range.end(); col_idx++) {
@@ -543,6 +557,7 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
           }
         }
       });  // each column
+  dict_lock.unlock();
 
   if (table.row_count) {
     // If table is not empty then we have to merge chunked arrays.
@@ -621,7 +636,7 @@ void ArrowStorage::appendCsvFile(const std::string& file_name,
 void ArrowStorage::appendCsvFile(const std::string& file_name,
                                  int table_id,
                                  const CsvParseOptions parse_options) {
-  if (!tables_.count(table_id)) {
+  if (!getTableInfo(db_id_, table_id)) {
     throw std::runtime_error("Invalid table id: "s + std::to_string(table_id));
   }
 
@@ -643,7 +658,7 @@ void ArrowStorage::appendCsvData(const std::string& csv_data,
 void ArrowStorage::appendCsvData(const std::string& csv_data,
                                  int table_id,
                                  const CsvParseOptions parse_options) {
-  if (!tables_.count(table_id)) {
+  if (!getTableInfo(db_id_, table_id)) {
     throw std::runtime_error("Invalid table id: "s + std::to_string(table_id));
   }
 
@@ -665,7 +680,7 @@ void ArrowStorage::appendJsonData(const std::string& json_data,
 void ArrowStorage::appendJsonData(const std::string& json_data,
                                   int table_id,
                                   const JsonParseOptions parse_options) {
-  if (!tables_.count(table_id)) {
+  if (!getTableInfo(db_id_, table_id)) {
     throw std::runtime_error("Invalid table id: "s + std::to_string(table_id));
   }
 
@@ -691,7 +706,7 @@ void ArrowStorage::appendParquetFile(const std::string& file_name,
 }
 
 void ArrowStorage::appendParquetFile(const std::string& file_name, int table_id) {
-  if (!tables_.count(table_id)) {
+  if (!getTableInfo(db_id_, table_id)) {
     throw std::runtime_error("Invalid table id: "s + std::to_string(table_id));
   }
 
@@ -711,6 +726,10 @@ void ArrowStorage::dropTable(const std::string& table_name, bool throw_if_not_ex
 }
 
 void ArrowStorage::dropTable(int table_id, bool throw_if_not_exist) {
+  mapd_unique_lock<mapd_shared_mutex> data_lock(data_mutex_);
+  mapd_unique_lock<mapd_shared_mutex> dict_lock(dict_mutex_);
+  mapd_unique_lock<mapd_shared_mutex> schema_lock(schema_mutex_);
+
   if (!tables_.count(table_id)) {
     if (throw_if_not_exist) {
       throw std::runtime_error("Cannot drop table with invalid id: "s +
@@ -718,14 +737,12 @@ void ArrowStorage::dropTable(int table_id, bool throw_if_not_exist) {
     }
   }
 
-  mapd_unique_lock<mapd_shared_mutex> lock1(data_mutex_);
-  mapd_unique_lock<mapd_shared_mutex> lock2(schema_mutex_);
   std::unique_ptr<TableData> table = std::move(tables_.at(table_id));
-  mapd_unique_lock<mapd_shared_mutex> lock3(table->mutex);
+  mapd_unique_lock<mapd_shared_mutex> table_lock(table->mutex);
   tables_.erase(table_id);
 
   std::unordered_set<int> dicts_to_remove;
-  auto col_infos = listColumns(db_id_, table_id);
+  auto col_infos = listColumnsNoLock(db_id_, table_id);
   for (auto& col_info : col_infos) {
     if (col_info->type.is_dict_encoded_string()) {
       dicts_to_remove.insert(col_info->type.get_comp_param());
@@ -757,7 +774,7 @@ void ArrowStorage::checkNewTableParams(const std::string& table_name,
     throw std::runtime_error("Cannot create table with empty name");
   }
 
-  auto tinfo = getTableInfo(db_id_, table_name);
+  auto tinfo = getTableInfoNoLock(db_id_, table_name);
   if (tinfo) {
     throw std::runtime_error("Table with name '"s + table_name + "' already exists"s);
   }

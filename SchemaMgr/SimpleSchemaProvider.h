@@ -16,6 +16,8 @@
 
 #include "SchemaProvider.h"
 
+#include "Shared/mapd_shared_mutex.h"
+
 class SimpleSchemaProvider : public SchemaProvider {
  public:
   SimpleSchemaProvider(int id, const std::string& name) : id_(id), name_(name) {}
@@ -25,6 +27,7 @@ class SimpleSchemaProvider : public SchemaProvider {
   std::string_view getName() const override { return name_; }
 
   std::vector<int> listDatabases() const override {
+    mapd_shared_lock<mapd_shared_mutex> lock(schema_mutex_);
     std::vector<int> res;
     std::unordered_set<int> ids;
     for (auto& pr : table_index_by_name_) {
@@ -37,6 +40,7 @@ class SimpleSchemaProvider : public SchemaProvider {
   }
 
   TableInfoList listTables(int db_id) const override {
+    mapd_shared_lock<mapd_shared_mutex> lock(schema_mutex_);
     TableInfoList res;
     if (table_index_by_name_.count(db_id)) {
       for (auto& pr : table_index_by_name_.at(db_id)) {
@@ -47,43 +51,26 @@ class SimpleSchemaProvider : public SchemaProvider {
   }
 
   ColumnInfoList listColumns(int db_id, int table_id) const override {
-    CHECK_EQ(column_index_by_name_.count({db_id, table_id}), (size_t)1);
-    auto& table_cols = column_index_by_name_.at({db_id, table_id});
-    ColumnInfoList res;
-    res.reserve(table_cols.size());
-    for (auto [col_name, col_info] : table_cols) {
-      res.push_back(col_info);
-    }
-    std::sort(res.begin(), res.end(), [](ColumnInfoPtr& lhs, ColumnInfoPtr& rhs) -> bool {
-      return lhs->column_id < rhs->column_id;
-    });
-    return res;
+    mapd_shared_lock<mapd_shared_mutex> lock(schema_mutex_);
+    return listColumnsNoLock(db_id, table_id);
   }
 
   using SchemaProvider::listColumns;
 
   TableInfoPtr getTableInfo(int db_id, int table_id) const override {
-    auto it = table_infos_.find({db_id, table_id});
-    if (it != table_infos_.end()) {
-      return it->second;
-    }
-    return nullptr;
+    mapd_shared_lock<mapd_shared_mutex> lock(schema_mutex_);
+    return getTableInfoNoLock(db_id, table_id);
   }
 
   TableInfoPtr getTableInfo(int db_id, const std::string& table_name) const override {
-    auto db_it = table_index_by_name_.find(db_id);
-    if (db_it != table_index_by_name_.end()) {
-      auto table_it = db_it->second.find(table_name);
-      if (table_it != db_it->second.end()) {
-        return table_it->second;
-      }
-    }
-    return nullptr;
+    mapd_shared_lock<mapd_shared_mutex> lock(schema_mutex_);
+    return getTableInfoNoLock(db_id, table_name);
   }
 
   using SchemaProvider::getTableInfo;
 
   ColumnInfoPtr getColumnInfo(int db_id, int table_id, int col_id) const override {
+    mapd_shared_lock<mapd_shared_mutex> lock(schema_mutex_);
     auto it = column_infos_.find({db_id, table_id, col_id});
     if (it != column_infos_.end()) {
       return it->second;
@@ -94,6 +81,7 @@ class SimpleSchemaProvider : public SchemaProvider {
   ColumnInfoPtr getColumnInfo(int db_id,
                               int table_id,
                               const std::string& col_name) const override {
+    mapd_shared_lock<mapd_shared_mutex> lock(schema_mutex_);
     auto table_it = column_index_by_name_.find({db_id, table_id});
     if (table_it != column_index_by_name_.end()) {
       auto col_it = table_it->second.find(col_name);
@@ -107,6 +95,43 @@ class SimpleSchemaProvider : public SchemaProvider {
   using SchemaProvider::getColumnInfo;
 
  protected:
+  TableInfoPtr getTableInfoNoLock(int db_id, int table_id) const {
+    auto it = table_infos_.find({db_id, table_id});
+    if (it != table_infos_.end()) {
+      return it->second;
+    }
+    return nullptr;
+  }
+
+  TableInfoPtr getTableInfoNoLock(int db_id, const std::string& table_name) const {
+    auto db_it = table_index_by_name_.find(db_id);
+    if (db_it != table_index_by_name_.end()) {
+      auto table_it = db_it->second.find(table_name);
+      if (table_it != db_it->second.end()) {
+        return table_it->second;
+      }
+    }
+    return nullptr;
+  }
+
+  ColumnInfoList listColumnsNoLock(int db_id, int table_id) const {
+    CHECK_EQ(column_index_by_name_.count({db_id, table_id}), (size_t)1);
+    auto& table_cols = column_index_by_name_.at({db_id, table_id});
+    ColumnInfoList res;
+    res.reserve(table_cols.size());
+    for (auto [col_name, col_info] : table_cols) {
+      res.push_back(col_info);
+    }
+    std::sort(res.begin(), res.end(), [](ColumnInfoPtr& lhs, ColumnInfoPtr& rhs) -> bool {
+      return lhs->column_id < rhs->column_id;
+    });
+    return res;
+  }
+
+  ColumnInfoList listColumnsNoLock(const TableRef& ref) const {
+    return listColumnsNoLock(ref.db_id, ref.table_id);
+  }
+
   TableInfoPtr addTableInfo(TableInfoPtr table_info) {
     table_infos_[*table_info] = table_info;
     table_index_by_name_[table_info->db_id][table_info->name] = table_info;
@@ -138,9 +163,9 @@ class SimpleSchemaProvider : public SchemaProvider {
   }
 
   void dropTable(int db_id, int table_id) {
-    auto tinfo = getTableInfo(db_id, table_id);
+    auto tinfo = getTableInfoNoLock(db_id, table_id);
     CHECK(tinfo);
-    auto col_infos = listColumns(*tinfo);
+    auto col_infos = listColumnsNoLock(*tinfo);
     table_infos_.erase(*tinfo);
     table_index_by_name_.at(db_id).erase(tinfo->name);
     for (auto& col_info : col_infos) {
@@ -158,4 +183,5 @@ class SimpleSchemaProvider : public SchemaProvider {
   std::unordered_map<int, TableByNameMap> table_index_by_name_;
   ColumnInfoMap column_infos_;
   std::unordered_map<TableRef, ColumnByNameMap> column_index_by_name_;
+  mutable mapd_shared_mutex schema_mutex_;
 };
