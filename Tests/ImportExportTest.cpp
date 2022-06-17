@@ -68,7 +68,6 @@ using namespace TestHelpers;
 extern bool g_use_date_in_days_default_encoding;
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
-extern bool g_enable_add_metadata_columns;
 
 extern bool g_enable_legacy_delimited_import;
 #ifdef ENABLE_IMPORT_PARQUET
@@ -5145,7 +5144,6 @@ class MetadataColumnsTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
-    g_enable_add_metadata_columns = true;
     sql("drop table if exists metadata_geo;");
     sql("drop table if exists metadata_raster;");
   }
@@ -5153,7 +5151,6 @@ class MetadataColumnsTest : public DBHandlerTestFixture {
   void TearDown() override {
     sql("drop table if exists metadata_geo;");
     sql("drop table if exists metadata_raster;");
-    g_enable_add_metadata_columns = false;
     DBHandlerTestFixture::TearDown();
   }
 

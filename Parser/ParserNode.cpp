@@ -84,7 +84,7 @@ bool g_enable_legacy_parquet_import{false};
 #endif
 bool g_enable_fsi_regex_import{true};
 
-bool g_enable_add_metadata_columns{false};
+bool g_enable_add_metadata_columns{true};
 
 using Catalog_Namespace::SysCatalog;
 using namespace std::string_literals;
