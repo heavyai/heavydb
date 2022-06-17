@@ -120,7 +120,7 @@ bool TextFileBufferParser::isCoordinateScalar(const std::string_view datum) {
 }
 
 namespace {
-constexpr bool PROMOTE_POLYGON_TO_MULTIPOLYGON = true;
+constexpr bool PROMOTE_SINGLE_TO_MULTI = true;
 
 bool set_coordinates_from_separate_lon_lat_columns(const std::string_view lon_str,
                                                    const std::string_view lat_str,
@@ -224,7 +224,7 @@ void TextFileBufferParser::processInvalidGeoColumn(
 
   SQLTypeInfo import_ti{col_ti};
   Geospatial::GeoTypesFactory::getNullGeoColumns(
-      import_ti, coords, bounds, ring_sizes, poly_rings, PROMOTE_POLYGON_TO_MULTIPOLYGON);
+      import_ti, coords, bounds, ring_sizes, poly_rings, PROMOTE_SINGLE_TO_MULTI);
 
   // import extracted geo
   import_export::Importer::set_geo_physical_import_buffer(*catalog,
@@ -287,12 +287,8 @@ void TextFileBufferParser::processGeoColumn(
     ++import_idx;
   } else {
     if (is_null || geo_string.empty() || geo_string == "NULL") {
-      Geospatial::GeoTypesFactory::getNullGeoColumns(import_ti,
-                                                     coords,
-                                                     bounds,
-                                                     ring_sizes,
-                                                     poly_rings,
-                                                     PROMOTE_POLYGON_TO_MULTIPOLYGON);
+      Geospatial::GeoTypesFactory::getNullGeoColumns(
+          import_ti, coords, bounds, ring_sizes, poly_rings, PROMOTE_SINGLE_TO_MULTI);
       is_null = true;
     } else {
       // extract geometry directly from WKT
@@ -302,7 +298,7 @@ void TextFileBufferParser::processGeoColumn(
                                                       bounds,
                                                       ring_sizes,
                                                       poly_rings,
-                                                      PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
+                                                      PROMOTE_SINGLE_TO_MULTI)) {
         std::string msg = "Failed to extract valid geometry from row " +
                           std::to_string(first_row_index + row_index_plus_one) +
                           " for column " + cd->columnName;
@@ -310,13 +306,10 @@ void TextFileBufferParser::processGeoColumn(
       }
 
       // validate types
-      if (col_type != import_ti.get_type()) {
-        if (!PROMOTE_POLYGON_TO_MULTIPOLYGON ||
-            !(import_ti.get_type() == SQLTypes::kPOLYGON &&
-              col_type == SQLTypes::kMULTIPOLYGON)) {
-          throw std::runtime_error("Imported geometry doesn't match the type of column " +
-                                   cd->columnName);
-        }
+      if (!geo_promoted_type_match(
+              import_ti.get_type(), col_type, PROMOTE_SINGLE_TO_MULTI)) {
+        throw std::runtime_error("Imported geometry doesn't match the type of column " +
+                                 cd->columnName);
       }
 
       // get render group

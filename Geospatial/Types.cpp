@@ -1021,11 +1021,11 @@ bool GeoTypesFactory::getGeoColumns(const std::string& wkt_or_wkb_hex,
                                     std::vector<double>& bounds,
                                     std::vector<int>& ring_sizes,
                                     std::vector<int>& poly_rings,
-                                    const bool promote_poly_to_mpoly) {
+                                    const bool promote_single_to_multi) {
   try {
     if (wkt_or_wkb_hex.empty() || wkt_or_wkb_hex == "NULL") {
       getNullGeoColumns(
-          ti, coords, bounds, ring_sizes, poly_rings, promote_poly_to_mpoly);
+          ti, coords, bounds, ring_sizes, poly_rings, promote_single_to_multi);
       return true;
     }
 
@@ -1041,7 +1041,7 @@ bool GeoTypesFactory::getGeoColumns(const std::string& wkt_or_wkb_hex,
                       bounds,
                       ring_sizes,
                       poly_rings,
-                      promote_poly_to_mpoly);
+                      promote_single_to_multi);
 
   } catch (const std::exception& e) {
     LOG(ERROR) << "Geospatial Import Error: " << e.what();
@@ -1057,7 +1057,7 @@ bool GeoTypesFactory::getGeoColumns(const std::vector<uint8_t>& wkb,
                                     std::vector<double>& bounds,
                                     std::vector<int>& ring_sizes,
                                     std::vector<int>& poly_rings,
-                                    const bool promote_poly_to_mpoly) {
+                                    const bool promote_single_to_multi) {
   try {
     const auto geospatial_base = GeoTypesFactory::createGeoType(wkb);
 
@@ -1071,7 +1071,7 @@ bool GeoTypesFactory::getGeoColumns(const std::vector<uint8_t>& wkb,
                       bounds,
                       ring_sizes,
                       poly_rings,
-                      promote_poly_to_mpoly);
+                      promote_single_to_multi);
 
   } catch (const std::exception& e) {
     LOG(ERROR) << "Geospatial Import Error: " << e.what();
@@ -1087,7 +1087,7 @@ bool GeoTypesFactory::getGeoColumns(OGRGeometry* geom,
                                     std::vector<double>& bounds,
                                     std::vector<int>& ring_sizes,
                                     std::vector<int>& poly_rings,
-                                    const bool promote_poly_to_mpoly) {
+                                    const bool promote_single_to_multi) {
   try {
     const auto geospatial_base = GeoTypesFactory::createGeoType(geom);
 
@@ -1101,7 +1101,7 @@ bool GeoTypesFactory::getGeoColumns(OGRGeometry* geom,
                       bounds,
                       ring_sizes,
                       poly_rings,
-                      promote_poly_to_mpoly);
+                      promote_single_to_multi);
 
   } catch (const std::exception& e) {
     LOG(ERROR) << "Geospatial Import Error: " << e.what();
@@ -1117,7 +1117,7 @@ bool GeoTypesFactory::getGeoColumns(const std::vector<std::string>* wkt_or_wkb_h
                                     std::vector<std::vector<double>>& bounds_column,
                                     std::vector<std::vector<int>>& ring_sizes_column,
                                     std::vector<std::vector<int>>& poly_rings_column,
-                                    const bool promote_poly_to_mpoly) {
+                                    const bool promote_single_to_multi) {
   try {
     for (const auto& wkt_or_wkb_hex : *wkt_or_wkb_hex_column) {
       std::vector<double> coords;
@@ -1132,12 +1132,11 @@ bool GeoTypesFactory::getGeoColumns(const std::vector<std::string>* wkt_or_wkb_h
                     bounds,
                     ring_sizes,
                     poly_rings,
-                    promote_poly_to_mpoly);
-      if (ti.get_type() != row_ti.get_type()) {
-        if (!promote_poly_to_mpoly || !(row_ti.get_type() == SQLTypes::kPOLYGON &&
-                                        ti.get_type() == SQLTypes::kMULTIPOLYGON)) {
-          throw GeoTypesError("GeoFactory", "Columnar: Geometry type mismatch");
-        }
+                    promote_single_to_multi);
+
+      if (!geo_promoted_type_match(
+              row_ti.get_type(), ti.get_type(), promote_single_to_multi)) {
+        throw GeoTypesError("GeoFactory", "Columnar: Geometry type mismatch");
       }
       coords_column.push_back(coords);
       bounds_column.push_back(bounds);
@@ -1183,7 +1182,7 @@ void GeoTypesFactory::getGeoColumnsImpl(const std::unique_ptr<GeoBase>& geospati
                                         std::vector<double>& bounds,
                                         std::vector<int>& ring_sizes,
                                         std::vector<int>& poly_rings,
-                                        const bool promote_poly_to_mpoly) {
+                                        const bool promote_single_to_multi) {
   switch (geospatial_base->getType()) {
     case GeoBase::GeoType::kPOINT: {
       const auto geospatial_point = dynamic_cast<GeoPoint*>(geospatial_base.get());
@@ -1197,6 +1196,9 @@ void GeoTypesFactory::getGeoColumnsImpl(const std::unique_ptr<GeoBase>& geospati
           dynamic_cast<GeoLineString*>(geospatial_base.get());
       CHECK(geospatial_linestring);
       geospatial_linestring->getColumns(coords, bounds);
+      if (promote_single_to_multi) {
+        ring_sizes.push_back(1);
+      }
       ti.set_type(kLINESTRING);
       break;
     }
@@ -1212,7 +1214,7 @@ void GeoTypesFactory::getGeoColumnsImpl(const std::unique_ptr<GeoBase>& geospati
       const auto geospatial_poly = dynamic_cast<GeoPolygon*>(geospatial_base.get());
       CHECK(geospatial_poly);
       geospatial_poly->getColumns(coords, ring_sizes, bounds);
-      if (promote_poly_to_mpoly) {
+      if (promote_single_to_multi) {
         if (ring_sizes.size()) {
           CHECK_GT(coords.size(), 0u);
           poly_rings.push_back(1 + geospatial_poly->getNumInteriorRings());
@@ -1240,7 +1242,7 @@ void GeoTypesFactory::getNullGeoColumns(SQLTypeInfo& ti,
                                         std::vector<double>& bounds,
                                         std::vector<int>& ring_sizes,
                                         std::vector<int>& poly_rings,
-                                        const bool promote_poly_to_mpoly) {
+                                        const bool promote_single_to_multi) {
   auto t = ti.get_type();
   switch (t) {
     case kPOINT: {

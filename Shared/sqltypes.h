@@ -1237,3 +1237,10 @@ struct SqlLiteralArg {
   SQLTypeInfo ti;
   Datum datum;
 };
+
+inline bool geo_promoted_type_match(const SQLTypes a,
+                                    const SQLTypes b,
+                                    const bool allow_promotion) {
+  return (a == b) || (allow_promotion && ((a == kPOLYGON && b == kMULTIPOLYGON) ||
+                                          (a == kLINESTRING && b == kMULTILINESTRING)));
+}
