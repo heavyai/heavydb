@@ -1210,19 +1210,33 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     }
   }
 
-  // All geo function calls translated below only need the coords, extras e.g.
-  // ring_sizes are dropped. Specialize for other/new functions if needed.
-  geoargs.erase(geoargs.begin() + 1, geoargs.end());
+  // Unless overriden, function is assumed to be interested in the first geoarg only,
+  // which may be a geo object (e.g. geo column), or a coord array (e.g. geo literal)
+  auto discard_after_arg = 1;
 
   if (rex_function->getName() == "ST_Length"sv) {
-    if (arg_ti.get_type() != kLINESTRING) {
-      throw QueryNotSupported(rex_function->getName() + " expects LINESTRING");
+    if (arg_ti.get_type() != kLINESTRING && arg_ti.get_type() != kMULTILINESTRING) {
+      throw QueryNotSupported(rex_function->getName() +
+                              " expects LINESTRING or MULTILINESTRING");
+    }
+    if (arg_ti.get_type() == kMULTILINESTRING) {
+      auto ti0 = geoargs[0]->get_type_info();
+      if (ti0.get_type() == kARRAY && ti0.get_subtype() == kTINYINT) {
+        // Received expanded geo: widen the reach to grab linestring size array as well
+        discard_after_arg = 2;
+      }
     }
     specialized_geofunc += suffix(arg_ti.get_type());
     if (arg_ti.get_subtype() == kGEOGRAPHY && arg_ti.get_output_srid() == 4326) {
+      if (arg_ti.get_type() == kMULTILINESTRING) {
+        throw QueryNotSupported(rex_function->getName() +
+                                " Geodesic is not supported for MULTILINESTRING");
+      }
       specialized_geofunc += "_Geodesic"s;
     }
   }
+
+  geoargs.erase(geoargs.begin() + discard_after_arg, geoargs.end());
 
   // Add input compression mode and SRID args to enable on-the-fly
   // decompression/transforms

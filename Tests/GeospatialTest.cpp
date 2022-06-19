@@ -1673,6 +1673,13 @@ TEST(GeoSpatial, Math) {
             R"(SELECT ST_Length(CAST (ST_GeomFromText('LINESTRING(-76.6168198439371 39.9703199555959, -80.5189990254673 40.6493554919257, -82.5189990254673 42.6493554919257)', 4326) as GEOGRAPHY));)",
             dt)),
         static_cast<double>(0.01));
+    // Cartesian length of a planar multi path
+    ASSERT_NEAR(
+        static_cast<double>(6.65685),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Length('MULTILINESTRING((1 0, 0 1, -1 0, 0 -1, 1 0),(2 2,2 3))');)",
+            dt)),
+        static_cast<double>(0.0001));
 
     // ST_Perimeter
     // Cartesian perimeter of a planar polygon

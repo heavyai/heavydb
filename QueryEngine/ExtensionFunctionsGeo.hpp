@@ -1175,6 +1175,36 @@ double ST_Length_LineString_Geodesic(int8_t* coords,
   return length_linestring(coords, coords_sz, ic, isr, osr, true, false);
 }
 
+EXTENSION_NOINLINE
+double ST_Length_MultiLineString(int8_t* coords,
+                                 int64_t coords_sz,
+                                 int8_t* linestring_sizes_in,
+                                 int64_t linestring_sizes_sz,
+                                 int32_t ic,
+                                 int32_t isr,
+                                 int32_t osr) {
+  if (linestring_sizes_sz <= 0) {
+    return 0.0;
+  }
+  double mls_length = 0.0;
+
+  auto next_linestring_coords = coords;
+
+  for (auto l = 0; l < linestring_sizes_sz; l++) {
+    auto linestring_coords = next_linestring_coords;
+    auto linestring_sizes = reinterpret_cast<int32_t*>(linestring_sizes_in);
+    auto linestring_num_points = linestring_sizes[l];
+    auto linestring_num_coords = 2 * linestring_num_points;
+    auto linestring_coords_size = linestring_num_coords * compression_unit_size(ic);
+    next_linestring_coords += linestring_coords_size;
+    double ls_length = length_linestring(
+        linestring_coords, linestring_coords_size, ic, isr, osr, false, false);
+    mls_length += ls_length;
+  }
+
+  return mls_length;
+}
+
 //
 // ST_Perimeter
 //

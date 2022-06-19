@@ -73,6 +73,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoColumnVar(
   switch (ti.get_type()) {
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON: {
       std::vector<llvm::Value*> geo_lvs;
