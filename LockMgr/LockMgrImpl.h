@@ -224,17 +224,12 @@ class TableLockMgrImpl {
 
   static WriteLock getWriteLockForTable(Catalog_Namespace::Catalog& cat,
                                         const std::string& table_name) {
-    if (const auto tdp = cat.getMetadataForTable(table_name, false)) {
-      ChunkKey chunk_key{cat.getCurrentDB().dbId, tdp->tableId};
-      auto& table_lock_mgr = T::instance();
-      MutexTracker* tracker = table_lock_mgr.getTableMutex(chunk_key);
-      CHECK(tracker);
-      return WriteLock(tracker);
-    } else {
-      throw std::runtime_error("Table/View " + table_name + " for catalog " +
-                               cat.getCurrentDB().dbName + " does not exist");
-    }
+    auto lock = WriteLock(getMutexTracker(cat, table_name));
+    // Ensure table still exists after lock is acquired.
+    validateExistingTable(cat, table_name);
+    return std::move(lock);
   }
+
   static WriteLock getWriteLockForTable(const ChunkKey table_key) {
     auto& table_lock_mgr = T::instance();
     return WriteLock(table_lock_mgr.getTableMutex(table_key));
@@ -242,17 +237,12 @@ class TableLockMgrImpl {
 
   static ReadLock getReadLockForTable(Catalog_Namespace::Catalog& cat,
                                       const std::string& table_name) {
-    if (const auto tdp = cat.getMetadataForTable(table_name, false)) {
-      ChunkKey chunk_key{cat.getCurrentDB().dbId, tdp->tableId};
-      auto& table_lock_mgr = T::instance();
-      MutexTracker* tracker = table_lock_mgr.getTableMutex(chunk_key);
-      CHECK(tracker);
-      return ReadLock(tracker);
-    } else {
-      throw std::runtime_error("Table/View " + table_name + " for catalog " +
-                               cat.getCurrentDB().dbName + " does not exist");
-    }
+    auto lock = ReadLock(getMutexTracker(cat, table_name));
+    // Ensure table still exists after lock is acquired.
+    validateAndGetExistingTableId(cat, table_name);
+    return std::move(lock);
   }
+
   static ReadLock getReadLockForTable(const ChunkKey table_key) {
     auto& table_lock_mgr = T::instance();
     return ReadLock(table_lock_mgr.getTableMutex(table_key));
@@ -362,6 +352,32 @@ class TableLockMgrImpl {
 
   mutable std::mutex map_mutex_;
   std::map<ChunkKey, std::unique_ptr<MutexTracker>> table_mutex_map_;
+
+ private:
+  static MutexTracker* getMutexTracker(Catalog_Namespace::Catalog& catalog,
+                                       const std::string& table_name) {
+    ChunkKey chunk_key{catalog.getDatabaseId(),
+                       validateAndGetExistingTableId(catalog, table_name)};
+    auto& table_lock_mgr = T::instance();
+    MutexTracker* tracker = table_lock_mgr.getTableMutex(chunk_key);
+    CHECK(tracker);
+    return tracker;
+  }
+
+  static void validateExistingTable(Catalog_Namespace::Catalog& catalog,
+                                    const std::string& table_name) {
+    validateAndGetExistingTableId(catalog, table_name);
+  }
+
+  static int32_t validateAndGetExistingTableId(Catalog_Namespace::Catalog& catalog,
+                                               const std::string& table_name) {
+    auto table_id = catalog.getTableId(table_name);
+    if (!table_id.has_value()) {
+      throw std::runtime_error("Table/View " + table_name + " for catalog " +
+                               catalog.name() + " does not exist");
+    }
+    return table_id.value();
+  }
 };
 
 template <typename T>

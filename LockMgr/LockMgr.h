@@ -125,9 +125,9 @@ class TableSchemaLockContainer<ReadLock>
                                      const std::string& table_name,
                                      const bool populate_fragmenter = true) {
     VLOG(1) << "Acquiring Table Schema Read Lock for table: " << table_name;
+    auto lock = TableSchemaLockMgr::getReadLockForTable(cat, table_name);
     auto ret = TableSchemaLockContainer<ReadLock>(
-        cat.getMetadataForTable(table_name, populate_fragmenter),
-        TableSchemaLockMgr::getReadLockForTable(cat, table_name));
+        cat.getMetadataForTable(table_name, populate_fragmenter), std::move(lock));
     validate_table_descriptor_after_lock(ret(), cat, table_name, populate_fragmenter);
     return ret;
   }
@@ -156,9 +156,9 @@ class TableSchemaLockContainer<WriteLock>
                                      const std::string& table_name,
                                      const bool populate_fragmenter = true) {
     VLOG(1) << "Acquiring Table Schema Write Lock for table: " << table_name;
+    auto lock = TableSchemaLockMgr::getWriteLockForTable(cat, table_name);
     auto ret = TableSchemaLockContainer<WriteLock>(
-        cat.getMetadataForTable(table_name, populate_fragmenter),
-        TableSchemaLockMgr::getWriteLockForTable(cat, table_name));
+        cat.getMetadataForTable(table_name, populate_fragmenter), std::move(lock));
     validate_table_descriptor_after_lock(ret(), cat, table_name, populate_fragmenter);
     return ret;
   }

@@ -31,6 +31,7 @@ public class CatalogConcurrencyTest {
   private void run_test(
           HeavyDBTestClient dba, HeavyDBTestClient user, String prefix, int max)
           throws Exception {
+    final String sharedTableName = "table_shared";
     for (int i = 0; i < max; i++) {
       String tableName = "table_" + prefix + "_" + i;
       String viewName = "view_" + prefix + "_" + i;
@@ -71,6 +72,14 @@ public class CatalogConcurrencyTest {
       logger.info("[" + tid + "]"
               + "DROP " + tableName);
       dba.runSql("DROP TABLE " + tableName + ";");
+
+      logger.info("[" + tid + "]"
+              + "CREATE IF NOT EXISTS " + sharedTableName);
+      dba.runSql("CREATE TABLE IF NOT EXISTS " + sharedTableName + " (id INTEGER);");
+
+      logger.info("[" + tid + "]"
+              + "DROP IF EXISTS " + sharedTableName);
+      dba.runSql("DROP TABLE IF EXISTS " + sharedTableName + ";");
     }
   }
 
