@@ -1,0 +1,1 @@
+CREATE SERVER odbc_server FOREIGN DATA WRAPPER odbc WITH (DATA_SOURCE_NAME='postgres')
