@@ -227,7 +227,7 @@ class TableLockMgrImpl {
     auto lock = WriteLock(getMutexTracker(cat, table_name));
     // Ensure table still exists after lock is acquired.
     validateExistingTable(cat, table_name);
-    return std::move(lock);
+    return lock;
   }
 
   static WriteLock getWriteLockForTable(const ChunkKey table_key) {
@@ -240,7 +240,7 @@ class TableLockMgrImpl {
     auto lock = ReadLock(getMutexTracker(cat, table_name));
     // Ensure table still exists after lock is acquired.
     validateAndGetExistingTableId(cat, table_name);
-    return std::move(lock);
+    return lock;
   }
 
   static ReadLock getReadLockForTable(const ChunkKey table_key) {
