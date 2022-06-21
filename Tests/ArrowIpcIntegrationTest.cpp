@@ -369,80 +369,40 @@ void test_array_values(const std::shared_ptr<arrow::RecordBatch>& read_batch) {
 
 void test_array_text_values(const std::shared_ptr<arrow::RecordBatch>& read_batch) {
   using namespace arrow;
+  using namespace arrow::internal;
   ASSERT_EQ(read_batch->schema()->num_fields(), 1);
 
-  auto dict_type = dictionary(int32(), utf8());
+  const auto column = read_batch->column(0);
+  const auto& list_array = dynamic_cast<arrow::ListArray&>(*column);
 
-  std::string expected = R"([
+  std::vector<bool> null_values = {0, 0, 0, 1, 0};
+  std::vector<std::vector<std::string>> values;
 
-  -- dictionary:
-    [
-      "3",
-      "2",
-      "1",
-      "test",
-      "world",
-      "hello"
-    ]
-  -- indices:
-    [
-      5,
-      4,
-      5,
-      3,
-      4
-    ],
+  for (int i = 0; i < list_array.length(); i++) {
+    std::shared_ptr<Array> array = list_array.value_slice(i);
+    const auto dict = dynamic_cast<DictionaryArray*>(array.get());
+    if (!null_values[i]) {
+      values.emplace_back(std::vector<std::string>());
+      for (int j = 0; j < dict->indices()->length(); j++) {
+        int64_t idx = dict->GetValueIndex(j);
+        if (idx < 6) {
+          values.back().emplace_back(
+              dict->dictionary()->GetScalar(idx).ValueOrDie()->ToString());
+        } else {
+          values.back().emplace_back("");
+        }
+      }
+    } else {
+      ASSERT_EQ(dict->indices()->length(), 0);
+    }
+  }
 
-  -- dictionary:
-    [
-      "3",
-      "2",
-      "1",
-      "test",
-      "world",
-      "hello"
-    ]
-  -- indices:
-    [
-      2,
-      1,
-      0
-    ],
-
-  -- dictionary:
-    [
-      "3",
-      "2",
-      "1",
-      "test",
-      "world",
-      "hello"
-    ]
-  -- indices:
-    [],
-  null,
-
-  -- dictionary:
-    [
-      "3",
-      "2",
-      "1",
-      "test",
-      "world",
-      "hello"
-    ]
-  -- indices:
-    [
-      5,
-      null,
-      4
-    ]
-])";
-
-  const auto arr = read_batch->column(0);
-  std::stringstream ss;
-  ss << *arr;
-  ASSERT_EQ(expected, ss.str());
+  std::vector<std::vector<std::string>> expected = {
+      {"hello", "world", "hello", "test", "world"},
+      {"1", "2", "3"},
+      {},
+      {"hello", "", "world"}};
+  ASSERT_EQ(expected, values);
 }
 
 }  // namespace
