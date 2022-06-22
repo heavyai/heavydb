@@ -244,16 +244,17 @@ class GeospatialEncoder {
                                                     bounds_parse_buffer_,
                                                     ring_sizes_parse_buffer_,
                                                     poly_rings_parse_buffer_,
-                                                    PROMOTE_SINGLE_TO_MULTI)) {
+                                                    PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
       throwMalformedGeoElement(geo_column_descriptor_->columnName);
     }
 
     // validate types
-
-    if (!geo_promoted_type_match(import_ti.get_type(),
-                                 geo_column_descriptor_->columnType.get_type(),
-                                 PROMOTE_SINGLE_TO_MULTI)) {
-      throwMismatchedGeoElement(geo_column_descriptor_->columnName);
+    if (geo_column_descriptor_->columnType.get_type() != import_ti.get_type()) {
+      if (!PROMOTE_POLYGON_TO_MULTIPOLYGON ||
+          !(import_ti.get_type() == SQLTypes::kPOLYGON &&
+            geo_column_descriptor_->columnType.get_type() == SQLTypes::kMULTIPOLYGON)) {
+        throwMismatchedGeoElement(geo_column_descriptor_->columnName);
+      }
     }
 
     // append coords
@@ -304,7 +305,7 @@ class GeospatialEncoder {
                                                    bounds_parse_buffer_,
                                                    ring_sizes_parse_buffer_,
                                                    poly_rings_parse_buffer_,
-                                                   PROMOTE_SINGLE_TO_MULTI);
+                                                   PROMOTE_POLYGON_TO_MULTIPOLYGON);
     // POINT columns are represented using fixed length arrays and need
     // special treatment of nulls
     if (geo_column_descriptor_->columnType.get_type() == kPOINT) {
@@ -481,7 +482,7 @@ class GeospatialEncoder {
 
   const ColumnDescriptor* geo_column_descriptor_;
 
-  constexpr static bool PROMOTE_SINGLE_TO_MULTI = true;
+  constexpr static bool PROMOTE_POLYGON_TO_MULTIPOLYGON = true;
 
   StringNoneEncoder* base_column_encoder_;
   Encoder* coords_column_encoder_;

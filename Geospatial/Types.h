@@ -277,7 +277,7 @@ class GeoTypesFactory {
                             std::vector<double>& bounds,
                             std::vector<int>& ring_sizes,
                             std::vector<int>& poly_rings,
-                            const bool promote_single_to_multi = false);
+                            const bool promote_poly_to_mpoly = false);
 
   static bool getGeoColumns(const std::vector<uint8_t>& wkb,
                             SQLTypeInfo& ti,
@@ -285,7 +285,7 @@ class GeoTypesFactory {
                             std::vector<double>& bounds,
                             std::vector<int>& ring_sizes,
                             std::vector<int>& poly_rings,
-                            const bool promote_single_to_multi = false);
+                            const bool promote_poly_to_mpoly = false);
 
   static bool getGeoColumns(OGRGeometry* geom,
                             SQLTypeInfo& ti,
@@ -293,7 +293,7 @@ class GeoTypesFactory {
                             std::vector<double>& bounds,
                             std::vector<int>& ring_sizes,
                             std::vector<int>& poly_rings,
-                            const bool promote_single_to_multi = false);
+                            const bool promote_poly_to_mpoly = false);
 
   static bool getGeoColumns(const std::vector<std::string>* wkt_or_wkb_hex_column,
                             SQLTypeInfo& ti,
@@ -301,14 +301,14 @@ class GeoTypesFactory {
                             std::vector<std::vector<double>>& bounds_column,
                             std::vector<std::vector<int>>& ring_sizes_column,
                             std::vector<std::vector<int>>& poly_rings_column,
-                            const bool promote_single_to_multi = false);
+                            const bool promote_poly_to_mpoly = false);
 
   static void getNullGeoColumns(SQLTypeInfo& ti,
                                 std::vector<double>& coords,
                                 std::vector<double>& bounds,
                                 std::vector<int>& ring_sizes,
                                 std::vector<int>& poly_rings,
-                                const bool promote_single_to_multi = false);
+                                const bool promote_poly_to_mpoly = false);
 
  private:
   static std::unique_ptr<Geospatial::GeoBase> createGeoTypeImpl(
@@ -320,7 +320,7 @@ class GeoTypesFactory {
                                 std::vector<double>& bounds,
                                 std::vector<int>& ring_sizes,
                                 std::vector<int>& poly_rings,
-                                const bool promote_single_to_multi = false);
+                                const bool promote_poly_to_mpoly = false);
 };
 
 }  // namespace Geospatial
