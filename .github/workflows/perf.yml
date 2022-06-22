@@ -56,16 +56,28 @@ jobs:
           mkdir -p ${{ env.CONDA_ENV_PATH }}
           tar -zxf conda.tgz -C ${{ env.CONDA_ENV_PATH }}
 
-      - name: Run tests
+      - name: Download perf results
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: main.yml
+          branch: ${{ github.ref_name }}
+          workflow_conclusion: success
+          name: ${{ env.RUN_STAMP }}-taxi
+          search_artifacts: true
+        continue-on-error: true
+
+      - name: Run tests and process results
         run: |
           rm -rf data/.git
-          $CONDA/bin/conda run -n omnisci-dev build/bin/taxi_reduced --data data | tee taxi.log
+          
+          $CONDA/bin/conda run -n omnisci-dev pip install matplotlib
+          $CONDA/bin/conda run -n omnisci-dev python3 .github/workflows/scripts/run-perf.py 3x build/bin/taxi_reduced --data data
 
       - name: Upload perf results
         uses: actions/upload-artifact@v2
         with:
           name: ${{ env.RUN_STAMP }}-taxi
           path: |
-            taxi.log
-
+            *.pdf
+            perf.json
 
