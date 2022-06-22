@@ -339,6 +339,7 @@ class SysCatalog : private CommonFileOperations {
   std::set<std::string> getCreatedRoles() const;
   bool isAggregator() const { return aggregator_; }
   static SysCatalog& instance() {
+    std::unique_lock lk(instance_mutex_);
     if (!instance_) {
       instance_.reset(new SysCatalog());
     }
@@ -346,6 +347,7 @@ class SysCatalog : private CommonFileOperations {
   }
 
   static void destroy() {
+    std::unique_lock lk(instance_mutex_);
     instance_.reset();
     migrations::MigrationMgr::destroy();
   }
@@ -513,6 +515,7 @@ class SysCatalog : private CommonFileOperations {
   using dbid_to_cat_map = tbb::concurrent_hash_map<std::string, std::shared_ptr<Catalog>>;
   dbid_to_cat_map cat_map_;
 
+  static std::mutex instance_mutex_;
   static std::unique_ptr<SysCatalog> instance_;
 
  public:

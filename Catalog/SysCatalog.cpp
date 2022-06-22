@@ -116,6 +116,7 @@ std::filesystem::path copy_catalog_if_read_only(std::filesystem::path base_data_
 namespace Catalog_Namespace {
 
 thread_local bool SysCatalog::thread_holds_read_lock = false;
+std::mutex SysCatalog::instance_mutex_;
 std::unique_ptr<SysCatalog> SysCatalog::instance_;
 
 using sys_read_lock = read_lock<SysCatalog>;

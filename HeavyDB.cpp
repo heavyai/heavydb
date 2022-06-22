@@ -410,13 +410,13 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
 
     thrift_stop();
 
-    g_db_handler.reset();
-
-    wait_for_server_threads();
-
     if (g_enable_fsi) {
       foreign_storage::ForeignTableRefreshScheduler::stop();
     }
+
+    g_db_handler.reset();
+
+    wait_for_server_threads();
 
 #ifdef HAVE_AWS_S3
     omnisci_aws_sdk::shutdown_sdk();
