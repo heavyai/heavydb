@@ -52,7 +52,6 @@ size_t g_columnar_large_projections_threshold{1000000};
 
 extern bool g_enable_bump_allocator;
 extern bool g_enable_table_functions;
-extern bool g_enable_multifrag_rs;
 
 namespace {
 
@@ -791,7 +790,8 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     }
     // For intermediate results we want to keep the result fragmented
     // to have higher parallelism on next steps.
-    bool multifrag_result = g_enable_multifrag_rs && (step_idx != seq.size() - 1);
+    bool multifrag_result =
+        config_.exec.enable_multifrag_rs && (step_idx != seq.size() - 1);
     exec_desc.setResult(
         executeProject(project,
                        co,

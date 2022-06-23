@@ -327,6 +327,13 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
       po::value<size_t>(&config_->exec.parallel_linearization_threshold)
           ->default_value(config_->exec.parallel_linearization_threshold),
       "Threshold for parallel varlen col linearization");
+  opt_desc.add_options()(
+      "enable-multifrag-results",
+      po::value<bool>(&config_->exec.enable_multifrag_rs)
+          ->default_value(config_->exec.enable_multifrag_rs)
+          ->implicit_value(true),
+      "Enable multi-fragment intermediate results to improve execution parallelism for "
+      "queries with multiple execution steps");
 
   // opts.filter_pushdown
   opt_desc.add_options()("enable-filter-push-down",

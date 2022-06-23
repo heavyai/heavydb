@@ -97,6 +97,7 @@ struct ExecutionConfig {
   bool enable_experimental_string_functions = false;
   bool enable_interop = false;
   size_t parallel_linearization_threshold = 10'000;
+  bool enable_multifrag_rs = false;
 };
 
 struct FilterPushdownConfig {
