@@ -50,7 +50,6 @@ RelAlgCache::~RelAlgCache() {
 }
 
 std::string RelAlgCache::process(
-    const std::string& user,
     const std::string& db_name,
     const std::string& sql_string,
     const std::vector<FilterPushDownInfo>& filter_push_down_info,
@@ -71,7 +70,6 @@ std::string RelAlgCache::process(
       CacheKey key;
       key.sql = sql_string;
       key.schema_id = schema_it->second;
-      key.user = user;
       key.db_name = db_name;
       key.legacy_syntax = legacy_syntax;
       key.is_explain = is_explain;
@@ -88,8 +86,7 @@ std::string RelAlgCache::process(
                              "\nSchema: " + schema_json);
   }
 
-  auto ra = calcite_->process(user,
-                              db_name,
+  auto ra = calcite_->process(db_name,
                               sql_string,
                               filter_push_down_info,
                               legacy_syntax,
@@ -97,14 +94,13 @@ std::string RelAlgCache::process(
                               is_view_optimize);
 
   if (!build_cache_.empty()) {
-    put(user, db_name, sql_string, legacy_syntax, is_explain, schema_json, ra);
+    put(db_name, sql_string, legacy_syntax, is_explain, schema_json, ra);
   }
 
   return ra;
 }
 
-void RelAlgCache::put(const std::string& user,
-                      const std::string& db_name,
+void RelAlgCache::put(const std::string& db_name,
                       const std::string& sql,
                       bool legacy_syntax,
                       bool is_explain,
@@ -119,7 +115,6 @@ void RelAlgCache::put(const std::string& user,
   CacheKey key;
   key.sql = sql;
   key.schema_id = schema_it->second;
-  key.user = user;
   key.db_name = db_name;
   key.legacy_syntax = legacy_syntax;
   key.is_explain = is_explain;
@@ -173,7 +168,6 @@ void RelAlgCache::load() {
   for (auto& entry : doc["rel_alg"].GetArray()) {
     if (!entry.HasMember("sql") || !entry["sql"].IsString() ||
         !entry.HasMember("schema_id") || !entry["schema_id"].IsNumber() ||
-        !entry.HasMember("user") || !entry["user"].IsString() ||
         !entry.HasMember("db_name") || !entry["db_name"].IsString() ||
         !entry.HasMember("legacy_syntax") || !entry["legacy_syntax"].IsBool() ||
         !entry.HasMember("is_explain") || !entry["is_explain"].IsBool() ||
@@ -183,7 +177,6 @@ void RelAlgCache::load() {
     CacheKey key;
     key.sql = entry["sql"].GetString();
     key.schema_id = entry["schema_id"].GetInt();
-    key.user = entry["user"].GetString();
     key.db_name = entry["db_name"].GetString();
     key.legacy_syntax = entry["legacy_syntax"].GetBool();
     key.is_explain = entry["is_explain"].GetBool();
@@ -219,10 +212,6 @@ void RelAlgCache::store() const {
         doc.GetAllocator());
     rel_alg_entry.AddMember(
         "schema_id", rapidjson::Value().SetInt(pr.first.schema_id), doc.GetAllocator());
-    rel_alg_entry.AddMember(
-        "user",
-        rapidjson::Value().SetString(rapidjson::StringRef(pr.first.user)),
-        doc.GetAllocator());
     rel_alg_entry.AddMember(
         "db_name",
         rapidjson::Value().SetString(rapidjson::StringRef(pr.first.db_name)),

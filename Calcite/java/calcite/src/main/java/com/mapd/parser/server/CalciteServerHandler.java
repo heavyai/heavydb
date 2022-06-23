@@ -101,8 +101,7 @@ public class CalciteServerHandler {
     this.parserPool = new GenericObjectPool(calciteParserFactory);
   }
 
-  public PlanResult process(String user,
-          String catalog,
+  public PlanResult process(String catalog,
           String queryText,
           QueryParsingOption queryParsingOption,
           OptimizationOption optimizationOption,
@@ -120,9 +119,8 @@ public class CalciteServerHandler {
       MAPDLOGGER.error(msg, ex);
       throw new InvalidParseRequest(-1, msg);
     }
-    MapDUser mapDUser = new MapDUser(user, catalog, restriction);
-    MAPDLOGGER.debug("process was called User: " + user + " Catalog: " + catalog
-            + " sql: " + queryText);
+    MapDUser mapDUser = new MapDUser(catalog, restriction);
+    MAPDLOGGER.debug("process was called Catalog: " + catalog + " sql: " + queryText);
     parser.setUser(mapDUser);
     parser.setSchema(schemaJson);
     CURRENT_PARSER.set(parser);

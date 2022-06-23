@@ -80,9 +80,8 @@ class ArrowSQLRunnerImpl {
   std::string getSqlQueryRelAlg(const std::string& sql) {
     std::string query_ra;
 
-    calcite_time_ += measure<std::chrono::microseconds>::execution([&]() {
-      query_ra = rel_alg_cache_->process("admin", "test_db", pg_shim(sql), {}, true);
-    });
+    calcite_time_ += measure<std::chrono::microseconds>::execution(
+        [&]() { query_ra = rel_alg_cache_->process("test_db", pg_shim(sql), {}, true); });
 
     return query_ra;
   }

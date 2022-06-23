@@ -35,8 +35,7 @@ class CalciteJNI {
              size_t calcite_max_mem_mb = 1024);
   ~CalciteJNI();
 
-  std::string process(const std::string& user,
-                      const std::string& db_name,
+  std::string process(const std::string& db_name,
                       const std::string& sql_string,
                       const std::vector<FilterPushDownInfo>& filter_push_down_info = {},
                       const bool legacy_syntax = false,

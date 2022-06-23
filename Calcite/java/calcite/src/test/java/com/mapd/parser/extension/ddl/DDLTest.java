@@ -39,7 +39,7 @@ public class DDLTest {
     optimizationOption.filterPushDownInfo = new ArrayList<>();
 
     return calciteServerHandler.process(
-            "", "", ddlCommand, queryParsingOption, optimizationOption, null, null);
+            "", ddlCommand, queryParsingOption, optimizationOption, null, null);
   }
 
   JsonObject getJsonFromFile(final String fileName) throws Exception {

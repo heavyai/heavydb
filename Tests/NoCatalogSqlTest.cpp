@@ -204,12 +204,12 @@ class NoCatalogSqlTest : public ::testing::Test {
   }
 
   ExecutionResult runSqlQuery(const std::string& sql) {
-    const auto query_ra = calcite_->process("admin", "test_db", pg_shim(sql));
+    const auto query_ra = calcite_->process("test_db", pg_shim(sql));
     return runRAQuery(query_ra);
   }
 
   RelAlgExecutor getExecutor(const std::string& sql) {
-    const auto query_ra = calcite_->process("admin", "test_db", pg_shim(sql));
+    const auto query_ra = calcite_->process("test_db", pg_shim(sql));
     auto dag = std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, schema_provider_);
     return RelAlgExecutor(
         executor_.get(), schema_provider_, data_mgr_->getDataProvider(), std::move(dag));
@@ -339,7 +339,7 @@ TEST_F(NoCatalogSqlTest, MultipleCalciteMultipleThreads) {
     threads[i] = std::async(std::launch::async, [this, i, &res]() {
       auto calcite = std::make_unique<CalciteJNI>(schema_provider_, config_);
       auto query_ra = calcite->process(
-          "admin", "test_db", "SELECT col_bi + " + std::to_string(i) + " FROM test1;");
+          "test_db", "SELECT col_bi + " + std::to_string(i) + " FROM test1;");
       res[i] = runRAQuery(query_ra);
     });
   }
@@ -356,7 +356,7 @@ TEST(CalciteReinitTest, SingleThread) {
   auto config = std::make_shared<Config>();
   for (int i = 0; i < 10; ++i) {
     auto calcite = std::make_shared<CalciteJNI>(schema_provider, config);
-    auto query_ra = calcite->process("admin", "test_db", "SELECT 1;");
+    auto query_ra = calcite->process("test_db", "SELECT 1;");
     CHECK(query_ra.find("LogicalValues") != std::string::npos);
     CHECK(query_ra.find("LogicalProject") != std::string::npos);
   }
@@ -368,7 +368,7 @@ TEST(CalciteReinitTest, MultipleThreads) {
   for (int i = 0; i < 10; ++i) {
     auto f = std::async(std::launch::async, [schema_provider, config]() {
       auto calcite = std::make_shared<CalciteJNI>(schema_provider, config);
-      auto query_ra = calcite->process("admin", "test_db", "SELECT 1;");
+      auto query_ra = calcite->process("test_db", "SELECT 1;");
       CHECK(query_ra.find("LogicalValues") != std::string::npos);
       CHECK(query_ra.find("LogicalProject") != std::string::npos);
     });

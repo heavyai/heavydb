@@ -31,8 +31,7 @@ class RelAlgCache {
               const Config& config);
   ~RelAlgCache();
 
-  std::string process(const std::string& user,
-                      const std::string& db_name,
+  std::string process(const std::string& db_name,
                       const std::string& sql_string,
                       const std::vector<FilterPushDownInfo>& filter_push_down_info = {},
                       const bool legacy_syntax = false,
@@ -40,8 +39,7 @@ class RelAlgCache {
                       const bool is_view_optimize = false);
 
  private:
-  void put(const std::string& user,
-           const std::string& db_name,
+  void put(const std::string& db_name,
            const std::string& sql,
            bool legacy_syntax,
            bool is_explain,
@@ -54,13 +52,12 @@ class RelAlgCache {
   struct CacheKey {
     std::string sql;
     int schema_id;
-    std::string user;
     std::string db_name;
     bool legacy_syntax;
     bool is_explain;
 
     bool operator==(const CacheKey& other) const {
-      return sql == other.sql && schema_id == other.schema_id && user == other.user &&
+      return sql == other.sql && schema_id == other.schema_id &&
              db_name == other.db_name && legacy_syntax == other.legacy_syntax &&
              is_explain == other.is_explain;
     }
@@ -68,12 +65,8 @@ class RelAlgCache {
 
   struct CacheKeyHash {
     size_t operator()(const CacheKey& key) const {
-      return boost::hash_value(std::tie(key.sql,
-                                        key.schema_id,
-                                        key.user,
-                                        key.db_name,
-                                        key.legacy_syntax,
-                                        key.is_explain));
+      return boost::hash_value(std::tie(
+          key.sql, key.schema_id, key.db_name, key.legacy_syntax, key.is_explain));
     }
   };
 

@@ -186,15 +186,13 @@ class CalciteJNI::Impl {
     }
   }
 
-  std::string process(const std::string& user,
-                      const std::string& db_name,
+  std::string process(const std::string& db_name,
                       const std::string& sql_string,
                       const std::vector<FilterPushDownInfo>& filter_push_down_info,
                       const bool legacy_syntax,
                       const bool is_explain,
                       const bool is_view_optimize) {
     auto env = jvm_->getEnv();
-    jstring arg_user = env->NewStringUTF(user.c_str());
     jstring arg_catalog = env->NewStringUTF(db_name.c_str());
     jstring arg_query = env->NewStringUTF(sql_string.c_str());
     jobject arg_parsing_options = env->NewObject(parsing_opts_cls_,
@@ -222,7 +220,6 @@ class CalciteJNI::Impl {
 
     jobject java_res = env->CallObjectMethod(handler_obj_,
                                              handler_process_,
-                                             arg_user,
                                              arg_catalog,
                                              arg_query,
                                              arg_parsing_options,
@@ -328,7 +325,7 @@ class CalciteJNI::Impl {
     handler_process_ = env->GetMethodID(
         handler_cls,
         "process",
-        "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/"
+        "(Ljava/lang/String;Ljava/lang/String;Lcom/"
         "mapd/parser/server/QueryParsingOption;Lcom/mapd/parser/server/"
         "OptimizationOption;Lorg/apache/calcite/rel/rules/Restriction;Ljava/lang/"
         "String;)Lcom/mapd/parser/server/PlanResult;");
@@ -603,15 +600,13 @@ CalciteJNI::CalciteJNI(SchemaProviderPtr schema_provider,
 CalciteJNI::~CalciteJNI() {}
 
 std::string CalciteJNI::process(
-    const std::string& user,
     const std::string& db_name,
     const std::string& sql_string,
     const std::vector<FilterPushDownInfo>& filter_push_down_info,
     const bool legacy_syntax,
     const bool is_explain,
     const bool is_view_optimize) {
-  return impl_->process(user,
-                        db_name,
+  return impl_->process(db_name,
                         sql_string,
                         filter_push_down_info,
                         legacy_syntax,

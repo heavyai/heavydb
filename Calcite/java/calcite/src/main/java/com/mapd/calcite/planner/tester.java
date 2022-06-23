@@ -40,7 +40,7 @@ public class tester {
   public static void main(String[] args) {
     final SqlStdOperatorTable stdOpTab = SqlStdOperatorTable.instance();
 
-    MapDUser mdu = new MapDUser("admin", "omnisci", null);
+    MapDUser mdu = new MapDUser("omnisci", null);
     MapDSchema mapd = new MapDSchema(null, mdu);
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
     final FrameworkConfig config =

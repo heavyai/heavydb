@@ -22,12 +22,10 @@ import org.apache.calcite.rel.rules.Restriction;
  * @author michael
  */
 public class MapDUser {
-  private final String user;
   private final String catalog;
   private final Restriction restriction;
 
-  public MapDUser(String user, String catalog, Restriction restriction) {
-    this.user = user;
+  public MapDUser(String catalog, Restriction restriction) {
     this.catalog = catalog;
     this.restriction = restriction;
   }
@@ -38,9 +36,5 @@ public class MapDUser {
 
   public String getDB() {
     return catalog;
-  }
-
-  public String getUser() {
-    return user;
   }
 }
