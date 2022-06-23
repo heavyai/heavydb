@@ -133,7 +133,6 @@ extern double g_bump_allocator_step_reduction;
 extern unsigned g_pending_query_interrupt_freq;
 extern bool g_use_estimator_result_cache;
 
-extern bool g_enable_bump_allocator;
 extern size_t g_max_memory_allocation_size;
 extern size_t g_min_memory_allocation_size;
 extern bool g_enable_automatic_ir_metadata;

@@ -27,7 +27,6 @@ using namespace TestHelpers::ArrowSQLRunner;
 
 extern size_t g_max_memory_allocation_size;
 extern size_t g_min_memory_allocation_size;
-extern bool g_enable_bump_allocator;
 
 namespace {
 
@@ -62,7 +61,9 @@ GpuInfo get_gpu_info() {
 }
 
 bool setup() {
-  init(nullptr, /*max_gpu_mem=*/1000000000);
+  auto config = std::make_shared<Config>();
+  config->mem.gpu.enable_bump_allocator = true;
+  init(config, /*max_gpu_mem=*/1000000000);
 
   if (!gpusPresent()) {
     LOG(WARNING) << "No GPUs detected. Skipping all Bump Allocator tests.";
@@ -251,8 +252,6 @@ int main(int argc, char** argv) {
   }
 
   logger::init(log_options);
-
-  g_enable_bump_allocator = true;
 
   if (!setup()) {
     // No GPUs detected, bypass the test

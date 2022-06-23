@@ -44,7 +44,6 @@ bool g_aggregator{false};
 extern double g_gpu_mem_limit_percent;
 
 extern bool g_enable_calcite_view_optimize;
-extern bool g_enable_bump_allocator;
 
 extern bool g_is_test_env;
 
@@ -17923,8 +17922,8 @@ int main(int argc, char** argv) {
                          ->implicit_value(true),
                      "Enable/disable using columnar output format.");
   desc.add_options()("enable-bump-allocator",
-                     po::value<bool>(&g_enable_bump_allocator)
-                         ->default_value(g_enable_bump_allocator)
+                     po::value<bool>(&config->mem.gpu.enable_bump_allocator)
+                         ->default_value(config->mem.gpu.enable_bump_allocator)
                          ->implicit_value(true),
                      "Enable the bump allocator for projection queries on GPU.");
   desc.add_options()(

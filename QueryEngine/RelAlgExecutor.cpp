@@ -50,7 +50,6 @@ size_t g_estimator_failure_max_groupby_size{256000000};
 bool g_columnar_large_projections{true};
 size_t g_columnar_large_projections_threshold{1000000};
 
-extern bool g_enable_bump_allocator;
 extern bool g_enable_table_functions;
 
 namespace {
@@ -2142,10 +2141,12 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
 }
 
 inline bool can_use_bump_allocator(const RelAlgExecutionUnit& ra_exe_unit,
+                                   const Config& config,
                                    const CompilationOptions& co,
                                    const ExecutionOptions& eo) {
-  return g_enable_bump_allocator && (co.device_type == ExecutorDeviceType::GPU) &&
-         !eo.output_columnar_hint && ra_exe_unit.sort_info.order_entries.empty();
+  return config.mem.gpu.enable_bump_allocator &&
+         (co.device_type == ExecutorDeviceType::GPU) && !eo.output_columnar_hint &&
+         ra_exe_unit.sort_info.order_entries.empty();
 }
 
 }  // namespace
@@ -2205,7 +2206,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     if (previous_count && !exe_unit_has_quals(ra_exe_unit)) {
       ra_exe_unit.scan_limit = *previous_count;
     } else {
-      if (can_use_bump_allocator(ra_exe_unit, co, eo)) {
+      if (can_use_bump_allocator(ra_exe_unit, config_, co, eo)) {
         ra_exe_unit.scan_limit = 0;
         ra_exe_unit.use_bump_allocator = true;
       } else if (eo.executor_type == ::ExecutorType::Extern) {

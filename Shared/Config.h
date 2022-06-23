@@ -123,6 +123,14 @@ struct ResultSetConfig {
   bool enable_lazy_fetch = true;
 };
 
+struct GpuMemoryConfig {
+  bool enable_bump_allocator = false;
+};
+
+struct MemoryConfig {
+  GpuMemoryConfig gpu;
+};
+
 struct DebugConfig {
   std::string build_ra_cache = "";
   std::string use_ra_cache = "";
@@ -132,6 +140,7 @@ struct Config {
   ExecutionConfig exec;
   OptimizationsConfig opts;
   ResultSetConfig rs;
+  MemoryConfig mem;
   DebugConfig debug;
 };
 

@@ -387,19 +387,6 @@ void CommandLineOptions::fillAdvancedOptions() {
       "obtained, the query will be retried with different execution parameters and/or "
       "on "
       "CPU (if allow-cpu-retry is enabled). Requires bump allocator.");
-  developer_desc.add_options()("enable-bump-allocator",
-                               po::value<bool>(&g_enable_bump_allocator)
-                                   ->default_value(g_enable_bump_allocator)
-                                   ->implicit_value(true),
-                               "Enable the bump allocator for projection queries on "
-                               "GPU. The bump allocator will "
-                               "allocate a fixed size buffer for each query, track the "
-                               "number of rows passing the "
-                               "kernel during query execution, and copy back only the "
-                               "rows that passed the kernel "
-                               "to CPU after execution. When disabled, pre-flight "
-                               "count queries are used to size "
-                               "the output buffer for projection queries.");
   developer_desc.add_options()(
       "code-cache-eviction-percent",
       po::value<float>(&g_fraction_code_cache_to_evict)

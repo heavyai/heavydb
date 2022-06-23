@@ -414,6 +414,18 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
                              ->implicit_value(true),
                          "Enable lazy fetch columns in query results.");
 
+  // mem.gpu
+  opt_desc.add_options()(
+      "enable-bump-allocator",
+      po::value<bool>(&config_->mem.gpu.enable_bump_allocator)
+          ->default_value(config_->mem.gpu.enable_bump_allocator)
+          ->implicit_value(true),
+      "Enable the bump allocator for projection queries on GPU. The bump allocator will "
+      "allocate a fixed size buffer for each query, track the number of rows passing the "
+      "kernel during query execution, and copy back only the rows that passed the kernel "
+      "to CPU after execution. When disabled, pre-flight count queries are used to size "
+      "the output buffer for projection queries.");
+
   // debug
   opt_desc.add_options()("build-rel-alg-cache",
                          po::value<std::string>(&config_->debug.build_ra_cache)
