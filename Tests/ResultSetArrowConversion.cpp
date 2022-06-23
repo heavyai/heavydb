@@ -41,9 +41,6 @@
 // Google Test
 #include <gtest/gtest.h>
 
-// Global variables controlling execution
-extern bool g_enable_lazy_fetch;
-
 // Input files' names
 static const char* TABLE6x4_CSV_FILE =
     "../../Tests/EmbeddedDataFiles/embedded_db_test_6x4table.csv";
@@ -200,7 +197,7 @@ void test_arrow_table_conversion_table6x4(size_t fragment_size) {
 
   auto column = table->column(1);
   size_t expected_chunk_count =
-      (g_enable_lazy_fetch || !config().rs.enable_columnar_output)
+      (config().rs.enable_lazy_fetch || !config().rs.enable_columnar_output)
           ? 1
           : (table->num_rows() + fragment_size - 1) / fragment_size;
 
@@ -229,15 +226,15 @@ void test_chunked_conversion(bool enable_columnar_output,
                              bool enable_lazy_fetch,
                              size_t fragment_size) {
   bool prev_enable_columnar_output = config().rs.enable_columnar_output;
-  bool prev_enable_lazy_fetch = g_enable_lazy_fetch;
+  bool prev_enable_lazy_fetch = config().rs.enable_lazy_fetch;
 
   ScopeGuard reset = [prev_enable_columnar_output, prev_enable_lazy_fetch] {
     config().rs.enable_columnar_output = prev_enable_columnar_output;
-    g_enable_lazy_fetch = prev_enable_lazy_fetch;
+    config().rs.enable_lazy_fetch = prev_enable_lazy_fetch;
   };
 
   config().rs.enable_columnar_output = enable_columnar_output;
-  g_enable_lazy_fetch = enable_lazy_fetch;
+  config().rs.enable_lazy_fetch = enable_lazy_fetch;
   test_arrow_table_conversion_table6x4(fragment_size);
 }
 
@@ -435,15 +432,15 @@ TEST(ArrowTable, Chunked_GROUPBY1) {
 //  values of enable_columnar_output, enable_lazy_fetch
 void JoinTest(bool enable_columnar_output, bool enable_lazy_fetch) {
   bool prev_enable_columnar_output = config().rs.enable_columnar_output;
-  bool prev_enable_lazy_fetch = g_enable_lazy_fetch;
+  bool prev_enable_lazy_fetch = config().rs.enable_lazy_fetch;
 
   ScopeGuard reset = [prev_enable_columnar_output, prev_enable_lazy_fetch] {
     config().rs.enable_columnar_output = prev_enable_columnar_output;
-    g_enable_lazy_fetch = prev_enable_lazy_fetch;
+    config().rs.enable_lazy_fetch = prev_enable_lazy_fetch;
   };
 
   config().rs.enable_columnar_output = enable_columnar_output;
-  g_enable_lazy_fetch = enable_lazy_fetch;
+  config().rs.enable_lazy_fetch = enable_lazy_fetch;
 
   auto res = runSqlQuery(
       "SELECT * FROM test_chunked INNER JOIN join_table ON test_chunked.i=join_table.i;",
@@ -519,15 +516,15 @@ TEST(ArrowTable, Chunked_NULLS2) {
 //  Tests for large tables
 TEST(ArrowTable, LargeTables) {
   bool prev_enable_columnar_output = config().rs.enable_columnar_output;
-  bool prev_enable_lazy_fetch = g_enable_lazy_fetch;
+  bool prev_enable_lazy_fetch = config().rs.enable_lazy_fetch;
 
   ScopeGuard reset = [prev_enable_columnar_output, prev_enable_lazy_fetch] {
     config().rs.enable_columnar_output = prev_enable_columnar_output;
-    g_enable_lazy_fetch = prev_enable_lazy_fetch;
+    config().rs.enable_lazy_fetch = prev_enable_lazy_fetch;
   };
 
   config().rs.enable_columnar_output = true;
-  g_enable_lazy_fetch = false;
+  config().rs.enable_lazy_fetch = false;
   const size_t N = 500'000;
   test_single_column_table<int8_t>(N, 150);
   test_single_column_table<int16_t>(N, 150);
@@ -539,15 +536,15 @@ TEST(ArrowTable, LargeTables) {
 
 TEST(ArrowTable, LargeTablesRowWise) {
   bool prev_enable_columnar_output = config().rs.enable_columnar_output;
-  bool prev_enable_lazy_fetch = g_enable_lazy_fetch;
+  bool prev_enable_lazy_fetch = config().rs.enable_lazy_fetch;
 
   ScopeGuard reset = [prev_enable_columnar_output, prev_enable_lazy_fetch] {
     config().rs.enable_columnar_output = prev_enable_columnar_output;
-    g_enable_lazy_fetch = prev_enable_lazy_fetch;
+    config().rs.enable_lazy_fetch = prev_enable_lazy_fetch;
   };
 
   config().rs.enable_columnar_output = false;
-  g_enable_lazy_fetch = false;
+  config().rs.enable_lazy_fetch = false;
   const size_t N = 500'000;
   test_single_column_table<int8_t>(N, 150);
   test_single_column_table<int16_t>(N, 150);

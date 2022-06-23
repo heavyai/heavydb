@@ -313,11 +313,6 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(allow_multifrag)
           ->implicit_value(true),
       "Enable execution over multiple fragments in a single round-trip to GPU.");
-  developer_desc.add_options()("enable-lazy-fetch",
-                               po::value<bool>(&g_enable_lazy_fetch)
-                                   ->default_value(g_enable_lazy_fetch)
-                                   ->implicit_value(true),
-                               "Enable lazy fetch columns in query results.");
   developer_desc.add_options()("num-executors",
                                po::value<int>(&system_parameters.num_executors)
                                    ->default_value(system_parameters.num_executors),

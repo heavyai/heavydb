@@ -401,6 +401,11 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
                              ->implicit_value(true),
                          "Enables/disables a more optimized columnarization method "
                          "for intermediate steps in multi-step queries.");
+  opt_desc.add_options()("enable-lazy-fetch",
+                         po::value<bool>(&config_->rs.enable_lazy_fetch)
+                             ->default_value(config_->rs.enable_lazy_fetch)
+                             ->implicit_value(true),
+                         "Enable lazy fetch columns in query results.");
 
   // debug
   opt_desc.add_options()("build-rel-alg-cache",
