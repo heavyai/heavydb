@@ -41,8 +41,6 @@ using namespace TestHelpers::ArrowSQLRunner;
 
 bool g_aggregator{false};
 
-extern double g_gpu_mem_limit_percent;
-
 extern bool g_enable_calcite_view_optimize;
 
 extern bool g_is_test_env;
@@ -11355,7 +11353,7 @@ TEST_F(Select, PuntToCPU) {
         config().exec.heterogeneous.allow_cpu_retry = cpu_retry_state;
         config().exec.heterogeneous.allow_query_step_cpu_retry = cpu_step_retry_state;
         config().exec.watchdog.enable = watchdog_state;
-        g_gpu_mem_limit_percent = 0.9;  // Reset to 90%
+        config().mem.gpu.input_mem_limit_percent = 0.9;  // Reset to 90%
       };
 
   const auto dt = ExecutorDeviceType::GPU;
@@ -11363,7 +11361,7 @@ TEST_F(Select, PuntToCPU) {
     return;
   }
 
-  g_gpu_mem_limit_percent = 1e-10;
+  config().mem.gpu.input_mem_limit_percent = 1e-10;
   EXPECT_THROW(run_multiple_agg("SELECT x, COUNT(*) FROM test GROUP BY x;", dt),
                std::runtime_error);
   EXPECT_THROW(run_multiple_agg("SELECT str, COUNT(*) FROM test GROUP BY str;", dt),
@@ -11388,7 +11386,7 @@ TEST_F(Select, PuntQueryStepToCPU) {
         config().exec.heterogeneous.allow_cpu_retry = cpu_retry_state;
         config().exec.heterogeneous.allow_query_step_cpu_retry = cpu_step_retry_state;
         config().exec.watchdog.enable = watchdog_state;
-        g_gpu_mem_limit_percent = 0.9;  // Reset to 90%
+        config().mem.gpu.input_mem_limit_percent = 0.9;  // Reset to 90%
       };
 
   const auto dt = ExecutorDeviceType::GPU;
@@ -11421,7 +11419,7 @@ TEST_F(Select, PuntQueryStepToCPU) {
 
   config().exec.heterogeneous.allow_cpu_retry = false;
   config().exec.heterogeneous.allow_query_step_cpu_retry = false;
-  g_gpu_mem_limit_percent = 1e-10;
+  config().mem.gpu.input_mem_limit_percent = 1e-10;
 
   // Out of memory errors caught pre-allocation should (currently) trigger a
   // QueryMustRunOnCPU exception and will be caught with either
@@ -11435,7 +11433,7 @@ TEST_F(Select, PuntQueryStepToCPU) {
 
   config().exec.heterogeneous.allow_cpu_retry = false;
   config().exec.heterogeneous.allow_query_step_cpu_retry = true;
-  g_gpu_mem_limit_percent = 1e-10;
+  config().mem.gpu.input_mem_limit_percent = 1e-10;
 
   EXPECT_NO_THROW(
       run_multiple_agg("SELECT x, AVG(n) AS n_avg FROM (SELECT x, y, "

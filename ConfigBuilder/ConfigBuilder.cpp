@@ -448,6 +448,13 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
               get_range_checker(0.01, 0.99, "max-output-projection-allocation-bytes")),
       "Step for re-trying memory allocation of a fixed output buffer allocation for "
       "projection queries with no pre-flight count. Must be in range [0.01, 0.99].");
+  opt_desc.add_options()(
+      "gpu-input-mem-limit",
+      po::value<double>(&config_->mem.gpu.input_mem_limit_percent)
+          ->default_value(config_->mem.gpu.input_mem_limit_percent)
+          ->notifier(get_range_checker(0.01, 0.99, "gpu-input-mem-limit")),
+      "Max part of GPU memory that can be used for input data. Must be in range [0.01, "
+      "0.99].");
 
   // debug
   opt_desc.add_options()("build-rel-alg-cache",

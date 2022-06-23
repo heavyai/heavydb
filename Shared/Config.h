@@ -128,6 +128,7 @@ struct GpuMemoryConfig {
   size_t min_memory_allocation_size = 256;
   size_t max_memory_allocation_size = 2000000000;
   double bump_allocator_step_reduction = 0.75;
+  double input_mem_limit_percent = 0.9;
 };
 
 struct MemoryConfig {

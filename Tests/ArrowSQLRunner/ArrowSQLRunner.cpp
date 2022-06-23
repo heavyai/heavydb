@@ -25,8 +25,6 @@
 
 #include <gtest/gtest.h>
 
-extern double g_gpu_mem_limit_percent;
-
 namespace TestHelpers::ArrowSQLRunner {
 
 namespace {
@@ -145,7 +143,7 @@ class ArrowSQLRunnerImpl {
             10000,
             false,
             false,
-            g_gpu_mem_limit_percent,
+            config_->mem.gpu.input_mem_limit_percent,
             false,
             1000};
   }
