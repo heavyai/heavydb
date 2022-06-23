@@ -117,6 +117,7 @@ struct OptimizationsConfig {
 
 struct ResultSetConfig {
   bool enable_columnar_output = false;
+  bool optimize_row_initialization = true;
 };
 
 struct DebugConfig {

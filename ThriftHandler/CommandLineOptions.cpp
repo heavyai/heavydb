@@ -302,11 +302,6 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->implicit_value(true),
       "Enable additional calcite (query plan) optimizations when a view is part of the "
       "query.");
-  developer_desc.add_options()("optimize-row-init",
-                               po::value<bool>(&g_optimize_row_initialization)
-                                   ->default_value(g_optimize_row_initialization)
-                                   ->implicit_value(true),
-                               "Optimize row initialization.");
   developer_desc.add_options()("enable-legacy-syntax",
                                po::value<bool>(&enable_legacy_syntax)
                                    ->default_value(enable_legacy_syntax)

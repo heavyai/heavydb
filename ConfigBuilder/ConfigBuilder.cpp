@@ -390,6 +390,11 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
                              ->default_value(config_->rs.enable_columnar_output)
                              ->implicit_value(true),
                          "Enable columnar output for intermediate/final query steps.");
+  opt_desc.add_options()("optimize-row-init",
+                         po::value<bool>(&config_->rs.optimize_row_initialization)
+                             ->default_value(config_->rs.optimize_row_initialization)
+                             ->implicit_value(true),
+                         "Optimize row initialization.");
 
   // debug
   opt_desc.add_options()("build-rel-alg-cache",

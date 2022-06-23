@@ -33,7 +33,6 @@
 // 8 GB, the limit of perfect hash group by under normal conditions
 int64_t g_bitmap_memory_limit{8LL * 1000 * 1000 * 1000};
 
-extern bool g_optimize_row_initialization;
 extern size_t g_max_memory_allocation_size;
 
 namespace {
@@ -535,10 +534,6 @@ void QueryMemoryInitializer::initGroupByBuffer(
 
 bool QueryMemoryInitializer::useVectorRowGroupsInit(const size_t row_size,
                                                     const size_t entries) const {
-  if (!g_optimize_row_initialization) {
-    return false;
-  }
-
   // Assume 512-bit vector size. Don't bother if
   // the sample is too big.
   auto rows_per_sample = get_num_rows_for_vec_sample<64>(row_size);
@@ -567,6 +562,7 @@ void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_me
   // we fallback to default implementation in that cases
   if (!std::any_of(agg_bitmap_size.begin(), agg_bitmap_size.end(), is_true) &&
       !std::any_of(quantile_params.begin(), quantile_params.end(), is_true) &&
+      executor->getConfig().rs.optimize_row_initialization &&
       useVectorRowGroupsInit(row_size, groups_buffer_entry_count * warp_size)) {
     auto rows_per_sample = get_num_rows_for_vec_sample<64>(row_size);
     auto sample_size = row_size * rows_per_sample;
