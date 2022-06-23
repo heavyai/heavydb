@@ -84,7 +84,6 @@ size_t g_min_memory_allocation_size{
            // without pre-flight count
 bool g_enable_bump_allocator{false};
 double g_bump_allocator_step_reduction{0.75};
-bool g_enable_direct_columnarization{true};
 bool g_enable_lazy_fetch{true};
 bool g_use_estimator_result_cache{true};
 unsigned g_pending_query_interrupt_freq{1000};

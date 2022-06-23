@@ -322,12 +322,6 @@ void CommandLineOptions::fillAdvancedOptions() {
                                po::value<int>(&system_parameters.num_executors)
                                    ->default_value(system_parameters.num_executors),
                                "Number of executors to run in parallel.");
-  developer_desc.add_options()("enable-direct-columnarization",
-                               po::value<bool>(&g_enable_direct_columnarization)
-                                   ->default_value(g_enable_direct_columnarization)
-                                   ->implicit_value(true),
-                               "Enables/disables a more optimized columnarization method "
-                               "for intermediate steps in multi-step queries.");
   developer_desc.add_options()(
       "offset-device-by-table-id",
       po::value<bool>(&g_use_table_device_offset)

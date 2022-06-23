@@ -49,8 +49,6 @@
 
 constexpr int64_t uninitialized_cached_row_count{-1};
 
-extern bool g_enable_direct_columnarization;
-
 void ResultSet::keepFirstN(const size_t n) {
   invalidateCachedRowCount();
   keep_first_ = n;
@@ -784,6 +782,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
     }
 
     if (top_n == 0 && size_t(1) == order_entries.size() &&
+        (!executor || executor->getConfig().rs.enable_direct_columnarization) &&
         isDirectColumnarConversionPossible() && query_mem_desc_.didOutputColumnar() &&
         query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection) {
       const auto& order_entry = order_entries.front();
@@ -1358,9 +1357,7 @@ ResultSet::getUniqueStringsForDictEncodedTargetCol(const size_t col_idx) const {
  * becomes equivalent to the row-wise columnarization.
  */
 bool ResultSet::isDirectColumnarConversionPossible() const {
-  if (!g_enable_direct_columnarization) {
-    return false;
-  } else if (query_mem_desc_.didOutputColumnar()) {
+  if (query_mem_desc_.didOutputColumnar()) {
     return permutation_.empty() && (query_mem_desc_.getQueryDescriptionType() ==
                                         QueryDescriptionType::Projection ||
                                     (query_mem_desc_.getQueryDescriptionType() ==

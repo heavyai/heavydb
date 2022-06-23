@@ -395,6 +395,12 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
                              ->default_value(config_->rs.optimize_row_initialization)
                              ->implicit_value(true),
                          "Optimize row initialization.");
+  opt_desc.add_options()("enable-direct-columnarization",
+                         po::value<bool>(&config_->rs.enable_direct_columnarization)
+                             ->default_value(config_->rs.enable_direct_columnarization)
+                             ->implicit_value(true),
+                         "Enables/disables a more optimized columnarization method "
+                         "for intermediate steps in multi-step queries.");
 
   // debug
   opt_desc.add_options()("build-rel-alg-cache",

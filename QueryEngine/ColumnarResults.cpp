@@ -59,7 +59,9 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
     , parallel_conversion_(is_parallel_execution_enforced
                                ? true
                                : result_set::use_parallel_algorithms(rows))
-    , direct_columnar_conversion_(rows.isDirectColumnarConversionPossible())
+    , direct_columnar_conversion_(
+          (!executor || executor->getConfig().rs.enable_direct_columnarization) &&
+          rows.isDirectColumnarConversionPossible())
     , thread_idx_(thread_idx)
     , executor_(executor)
     , enable_interrupt_(executor_
