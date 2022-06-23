@@ -78,7 +78,6 @@
 extern std::unique_ptr<llvm::Module> udf_gpu_module;
 extern std::unique_ptr<llvm::Module> udf_cpu_module;
 bool g_enable_table_functions{false};
-double g_bump_allocator_step_reduction{0.75};
 bool g_use_estimator_result_cache{true};
 unsigned g_pending_query_interrupt_freq{1000};
 bool g_is_test_env{false};  // operating under a unit test environment. Currently only

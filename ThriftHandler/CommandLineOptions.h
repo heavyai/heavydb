@@ -128,7 +128,6 @@ class CommandLineOptions {
 };
 
 extern bool g_enable_table_functions;
-extern double g_bump_allocator_step_reduction;
 extern unsigned g_pending_query_interrupt_freq;
 extern bool g_use_estimator_result_cache;
 

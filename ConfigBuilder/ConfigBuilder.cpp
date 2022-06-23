@@ -440,6 +440,14 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
       "Maximum allocation size for a fixed output buffer allocation for projection "
       "queries with no pre-flight count. Default is the maximum slab size (sizes "
       "greater than the maximum slab size have no affect). Requires bump allocator.");
+  opt_desc.add_options()(
+      "max-output-projection-allocation-bytes",
+      po::value<double>(&config_->mem.gpu.bump_allocator_step_reduction)
+          ->default_value(config_->mem.gpu.bump_allocator_step_reduction)
+          ->notifier(
+              get_range_checker(0.01, 0.99, "max-output-projection-allocation-bytes")),
+      "Step for re-trying memory allocation of a fixed output buffer allocation for "
+      "projection queries with no pre-flight count. Must be in range [0.01, 0.99].");
 
   // debug
   opt_desc.add_options()("build-rel-alg-cache",

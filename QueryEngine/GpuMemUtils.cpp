@@ -25,8 +25,6 @@
 
 #include <vector>
 
-extern double g_bump_allocator_step_reduction;
-
 void copy_to_nvidia_gpu(Data_Namespace::DataMgr* data_mgr,
 
                         CUdeviceptr dst,
@@ -126,7 +124,8 @@ GpuGroupByBuffers create_dev_group_by_buffers(
               reinterpret_cast<CUdeviceptr>(cuda_allocator->alloc(mem_size));
         } catch (const OutOfMemory& e) {
           LOG(WARNING) << e.what();
-          max_memory_size = max_memory_size * g_bump_allocator_step_reduction;
+          max_memory_size =
+              max_memory_size * config.mem.gpu.bump_allocator_step_reduction;
           if (max_memory_size < config.mem.gpu.min_memory_allocation_size) {
             throw;
           }
