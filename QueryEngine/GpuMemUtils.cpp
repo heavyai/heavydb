@@ -25,7 +25,6 @@
 
 #include <vector>
 
-extern size_t g_max_memory_allocation_size;
 extern double g_bump_allocator_step_reduction;
 
 void copy_to_nvidia_gpu(Data_Namespace::DataMgr* data_mgr,
@@ -111,7 +110,7 @@ GpuGroupByBuffers create_dev_group_by_buffers(
       // memory remaining on the device. This may have the side effect of evicting
       // memory allocated for previous queries. However, at current maximum slab sizes
       // (2GB) we expect these effects to be minimal.
-      size_t max_memory_size{g_max_memory_allocation_size};
+      size_t max_memory_size{config.mem.gpu.max_memory_allocation_size};
       while (true) {
         entry_count = max_memory_size / query_mem_desc.getRowSize();
         groups_buffer_size =

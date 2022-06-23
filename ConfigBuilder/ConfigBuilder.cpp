@@ -433,6 +433,13 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
       "queries with no pre-flight count. If an allocation of this size cannot be "
       "obtained, the query will be retried with different execution parameters and/or "
       "on CPU (if allow-cpu-retry is enabled). Requires bump allocator.");
+  opt_desc.add_options()(
+      "max-output-projection-allocation-bytes",
+      po::value<size_t>(&config_->mem.gpu.max_memory_allocation_size)
+          ->default_value(config_->mem.gpu.max_memory_allocation_size),
+      "Maximum allocation size for a fixed output buffer allocation for projection "
+      "queries with no pre-flight count. Default is the maximum slab size (sizes "
+      "greater than the maximum slab size have no affect). Requires bump allocator.");
 
   // debug
   opt_desc.add_options()("build-rel-alg-cache",

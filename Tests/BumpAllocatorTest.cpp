@@ -25,8 +25,6 @@
 using namespace TestHelpers;
 using namespace TestHelpers::ArrowSQLRunner;
 
-extern size_t g_max_memory_allocation_size;
-
 namespace {
 
 size_t g_num_gpus{0};
@@ -189,8 +187,8 @@ class MediumGpuBufferMemory : public ::testing::Test {
     }
     insertCsvValues("test", ss.str());
 
-    max_mem_allocation_state_ = g_max_memory_allocation_size;
-    g_max_memory_allocation_size = 512;
+    max_mem_allocation_state_ = config().mem.gpu.max_memory_allocation_size;
+    config().mem.gpu.max_memory_allocation_size = 512;
 
     // CPU retry off to disable automatic punt to CPU
     allow_cpu_retry_state_ = config().exec.heterogeneous.allow_cpu_retry;
@@ -200,7 +198,7 @@ class MediumGpuBufferMemory : public ::testing::Test {
   void TearDown() override {
     dropTable("test");
 
-    g_max_memory_allocation_size = max_mem_allocation_state_;
+    config().mem.gpu.max_memory_allocation_size = max_mem_allocation_state_;
 
     config().exec.heterogeneous.allow_cpu_retry = allow_cpu_retry_state_;
   }

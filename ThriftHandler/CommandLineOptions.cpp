@@ -371,14 +371,6 @@ void CommandLineOptions::fillAdvancedOptions() {
       "min-gpu-slab-size.");
 
   developer_desc.add_options()(
-      "max-output-projection-allocation-bytes",
-      po::value<size_t>(&g_max_memory_allocation_size)
-          ->default_value(g_max_memory_allocation_size),
-      "Maximum allocation size for a fixed output buffer allocation for projection "
-      "queries with no pre-flight count. Default is the maximum slab size (sizes "
-      "greater "
-      "than the maximum slab size have no affect). Requires bump allocator.");
-  developer_desc.add_options()(
       "code-cache-eviction-percent",
       po::value<float>(&g_fraction_code_cache_to_evict)
           ->default_value(g_fraction_code_cache_to_evict),

@@ -33,8 +33,6 @@
 // 8 GB, the limit of perfect hash group by under normal conditions
 int64_t g_bitmap_memory_limit{8LL * 1000 * 1000 * 1000};
 
-extern size_t g_max_memory_allocation_size;
-
 namespace {
 
 inline void check_total_bitmap_memory(const QueryMemoryDescriptor& query_mem_desc) {
@@ -286,7 +284,8 @@ QueryMemoryInitializer::QueryMemoryInitializer(
       group_buffer_size = num_rows * query_mem_desc.getRowSize();
     } else {
       // otherwise, allocate a GPU buffer equivalent to the maximum GPU allocation size
-      group_buffer_size = g_max_memory_allocation_size / query_mem_desc.getRowSize();
+      group_buffer_size = executor->getConfig().mem.gpu.max_memory_allocation_size /
+                          query_mem_desc.getRowSize();
     }
   } else {
     group_buffer_size =
