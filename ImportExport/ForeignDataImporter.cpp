@@ -40,23 +40,6 @@ extern bool g_enable_legacy_parquet_import;
 extern bool g_enable_fsi_regex_import;
 
 namespace {
-
-std::string get_data_wrapper_type(const import_export::CopyParams& copy_params) {
-  std::string data_wrapper_type;
-  if (copy_params.source_type == import_export::SourceType::kDelimitedFile) {
-    data_wrapper_type = foreign_storage::DataWrapperType::CSV;
-  } else if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
-    data_wrapper_type = foreign_storage::DataWrapperType::REGEX_PARSER;
-#ifdef ENABLE_IMPORT_PARQUET
-  } else if (copy_params.source_type == import_export::SourceType::kParquetFile) {
-    data_wrapper_type = foreign_storage::DataWrapperType::PARQUET;
-#endif
-  } else {
-    UNREACHABLE();
-  }
-  return data_wrapper_type;
-}
-
 ChunkMetadataVector metadata_scan(foreign_storage::ForeignDataWrapper* data_wrapper,
                                   foreign_storage::ForeignTable* foreign_table) {
   ChunkMetadataVector metadata_vector;
@@ -415,7 +398,7 @@ ImportStatus ForeignDataImporter::importGeneral(
 
     auto data_wrapper =
         foreign_storage::ForeignDataWrapperFactory::createForGeneralImport(
-            get_data_wrapper_type(copy_params),
+            copy_params,
             catalog.getDatabaseId(),
             foreign_table.get(),
             user_mapping.get());

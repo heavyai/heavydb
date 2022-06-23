@@ -644,7 +644,10 @@ void ParquetDataWrapper::populateChunkBuffers(const ChunkToBufferMap& required_b
               col_id, frag_id, buffers_to_load, delete_buffer);
         }
       };
-  auto futures = create_futures_for_workers(col_frag_hints, g_max_import_threads, lambda);
+
+  CHECK(foreign_table_);
+  auto num_threads = foreign_storage::get_num_threads(*foreign_table_);
+  auto futures = create_futures_for_workers(col_frag_hints, num_threads, lambda);
 
   // We wait on all futures, then call get because we want all threads to have finished
   // before we propagate a potential exception.
@@ -731,7 +734,7 @@ DataPreview ParquetDataWrapper::getDataPreview(const size_t num_rows) {
     throw ForeignStorageException{"No file found at \"" +
                                   getFullFilePath(foreign_table_) + "\""};
   }
-  return chunk_loader.previewFiles(file_paths, num_rows);
+  return chunk_loader.previewFiles(file_paths, num_rows, *foreign_table_);
 }
 
 // declared in three derived classes to avoid

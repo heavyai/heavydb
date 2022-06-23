@@ -163,7 +163,6 @@ class TextFileBufferParser {
                           const ColumnDescriptor* column,
                           const std::string& null_indicator);
 
-  inline static const std::string THREADS_KEY = "THREADS";
   inline static const std::string BUFFER_SIZE_KEY = "BUFFER_SIZE";
 
  private:

@@ -7,11 +7,22 @@
 #include "Catalog/ForeignTable.h"
 #include "Shared/StringTransform.h"
 #include "Shared/misc.h"
+#include "Shared/thread_count.h"
 #include "Utils/DdlUtils.h"
 
 extern bool g_enable_s3_fsi;
 
 namespace foreign_storage {
+
+size_t get_num_threads(const ForeignTable& table) {
+  auto num_threads = 0;
+  if (auto opt = table.getOption(AbstractFileStorageDataWrapper::THREADS_KEY);
+      opt.has_value()) {
+    num_threads = std::stoi(opt.value());
+  }
+  return import_export::num_import_threads(num_threads);
+}
+
 AbstractFileStorageDataWrapper::AbstractFileStorageDataWrapper() {}
 
 void AbstractFileStorageDataWrapper::validateServerOptions(

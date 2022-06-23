@@ -15,6 +15,7 @@
  */
 
 #include "DataMgr/ForeignStorage/RegexFileBufferParser.h"
+#include "DataMgr/ForeignStorage/AbstractFileStorageDataWrapper.h"
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "Shared/StringTransform.h"
@@ -375,7 +376,7 @@ import_export::CopyParams RegexFileBufferParser::validateAndGetCopyParams(
       it != foreign_table->options.end()) {
     copy_params.buffer_size = std::stoi(it->second);
   }
-  if (auto it = foreign_table->options.find(THREADS_KEY);
+  if (auto it = foreign_table->options.find(AbstractFileStorageDataWrapper::THREADS_KEY);
       it != foreign_table->options.end()) {
     copy_params.threads = std::stoi(it->second);
   }

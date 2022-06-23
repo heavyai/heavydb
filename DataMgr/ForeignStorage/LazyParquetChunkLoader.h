@@ -133,12 +133,14 @@ class LazyParquetChunkLoader {
    *
    * @param files - files to preview
    * @param max_num_rows - maximum number of rows to preview
+   * @param table - foreign table for preview
    *
    * @return a `DataPreview` instance that contains relevant preview
    * information
    */
   DataPreview previewFiles(const std::vector<std::string>& files,
-                           const size_t max_num_rows);
+                           const size_t max_num_rows,
+                           const ForeignTable& table);
 
  private:
   /**

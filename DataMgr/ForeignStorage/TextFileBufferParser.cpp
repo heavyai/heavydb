@@ -19,6 +19,7 @@
 #include "Geospatial/Types.h"
 
 namespace foreign_storage {
+
 ParseBufferRequest::ParseBufferRequest(
     size_t buffer_size,
     const import_export::CopyParams& copy_params,

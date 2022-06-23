@@ -25,6 +25,7 @@
 #include <parquet/statistics.h>
 #include <parquet/types.h>
 
+#include "AbstractFileStorageDataWrapper.h"
 #include "ForeignStorageException.h"
 #include "FsiChunkUtils.h"
 #include "ParquetArrayDetectEncoder.h"
@@ -2243,7 +2244,8 @@ struct PreviewContext {
 };
 
 DataPreview LazyParquetChunkLoader::previewFiles(const std::vector<std::string>& files,
-                                                 const size_t max_num_rows) {
+                                                 const size_t max_num_rows,
+                                                 const ForeignTable& foreign_table) {
   CHECK(!files.empty());
 
   auto first_file = *files.begin();
@@ -2325,10 +2327,12 @@ DataPreview LazyParquetChunkLoader::previewFiles(const std::vector<std::string>&
           }
         };
 
+    auto num_threads = foreign_storage::get_num_threads(foreign_table);
+
     std::vector<int> columns(num_columns);
     std::iota(columns.begin(), columns.end(), 0);
-    auto futures = create_futures_for_workers(
-        columns, g_max_import_threads, append_row_groups_for_column);
+    auto futures =
+        create_futures_for_workers(columns, num_threads, append_row_groups_for_column);
     for (auto& future : futures) {
       future.wait();
     }
@@ -2436,7 +2440,10 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
   }
 
   // Iterate asyncronously over any paths beyond the first.
-  auto paths_per_thread = partition_for_threads(cache_subset, g_max_import_threads);
+  auto table_ptr = schema.getForeignTable();
+  CHECK(table_ptr);
+  auto num_threads = foreign_storage::get_num_threads(*table_ptr);
+  auto paths_per_thread = partition_for_threads(cache_subset, num_threads);
   std::vector<std::future<std::pair<std::list<RowGroupMetadata>, MaxRowGroupSizeStats>>>
       futures;
   for (const auto& path_group : paths_per_thread) {

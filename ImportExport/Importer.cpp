@@ -130,15 +130,6 @@ bool check_session_interrupted(const QuerySessionId& query_session, Executor* ex
   }
   return false;
 }
-
-const size_t num_import_threads(const int copy_params_threads) {
-  if (copy_params_threads > 0) {
-    return static_cast<size_t>(copy_params_threads);
-  }
-  return std::min(static_cast<size_t>(std::thread::hardware_concurrency()),
-                  g_max_import_threads);
-}
-
 }  // namespace
 
 // For logging std::vector<std::string> row.

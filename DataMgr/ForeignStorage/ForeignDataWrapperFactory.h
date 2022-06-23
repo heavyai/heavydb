@@ -138,7 +138,7 @@ class ForeignDataWrapperFactory {
       const UserMapping* user_mapping);
 
   static std::unique_ptr<ForeignDataWrapper> createForGeneralImport(
-      const std::string& data_wrapper_type,
+      const import_export::CopyParams& copy_params,
       const int db_id,
       const ForeignTable* foreign_table,
       const UserMapping* user_mapping);

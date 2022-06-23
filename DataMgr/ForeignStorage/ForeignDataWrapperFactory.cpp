@@ -31,6 +31,25 @@
 #include "RegexParserDataWrapper.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/misc.h"
+#include "Shared/thread_count.h"
+
+namespace {
+std::string get_data_wrapper_type(const import_export::CopyParams& copy_params) {
+  std::string data_wrapper_type;
+  if (copy_params.source_type == import_export::SourceType::kDelimitedFile) {
+    data_wrapper_type = foreign_storage::DataWrapperType::CSV;
+  } else if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
+    data_wrapper_type = foreign_storage::DataWrapperType::REGEX_PARSER;
+#ifdef ENABLE_IMPORT_PARQUET
+  } else if (copy_params.source_type == import_export::SourceType::kParquetFile) {
+    data_wrapper_type = foreign_storage::DataWrapperType::PARQUET;
+#endif
+  } else {
+    UNREACHABLE();
+  }
+  return data_wrapper_type;
+}
+}  // namespace
 
 namespace foreign_storage {
 bool is_s3_uri(const std::string& file_path) {
@@ -117,10 +136,11 @@ std::string bool_to_option_value(const bool value) {
 }
 
 std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::createForGeneralImport(
-    const std::string& data_wrapper_type,
+    const import_export::CopyParams& copy_params,
     const int db_id,
     const ForeignTable* foreign_table,
     const UserMapping* user_mapping) {
+  auto data_wrapper_type = get_data_wrapper_type(copy_params);
   CHECK(is_valid_data_wrapper(data_wrapper_type));
 
   if (data_wrapper_type == DataWrapperType::CSV) {
@@ -250,6 +270,8 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
       foreign_table->options[AbstractFileStorageDataWrapper::FILE_SORT_REGEX_KEY] =
           copy_params.file_sort_regex.value();
     }
+    foreign_table->options[AbstractFileStorageDataWrapper::THREADS_KEY] =
+        std::to_string(import_export::num_import_threads(copy_params.threads));
   }
 
   if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
@@ -260,8 +282,6 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
       foreign_table->options[RegexFileBufferParser::LINE_START_REGEX_KEY] =
           copy_params.line_start_regex;
     }
-    foreign_table->options[TextFileBufferParser::THREADS_KEY] =
-        std::to_string(copy_params.threads);
     if (copy_params.has_header != import_export::ImportHeaderRow::kAutoDetect) {
       set_header_option(foreign_table->options, copy_params.has_header);
     }
@@ -307,8 +327,6 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
 
     foreign_table->options[TextFileBufferParser::BUFFER_SIZE_KEY] =
         std::to_string(copy_params.buffer_size);
-    foreign_table->options[TextFileBufferParser::THREADS_KEY] =
-        std::to_string(copy_params.threads);
 
     foreign_table->options[CsvFileBufferParser::TRIM_SPACES_KEY] =
         bool_to_option_value(copy_params.trim_spaces);
