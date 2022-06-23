@@ -752,7 +752,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
 #endif  // HAVE_CUDA
   if (query_mem_desc_.sortOnGpu()) {
     try {
-      radixSortOnGpu(order_entries);
+      radixSortOnGpu(executor ? executor->getConfig() : Config(), order_entries);
     } catch (const OutOfMemory&) {
       LOG(WARNING) << "Out of GPU memory during sort, finish on CPU";
       radixSortOnCpu(order_entries);
@@ -1224,6 +1224,7 @@ PermutationView ResultSet::topPermutation(PermutationView permutation,
 }
 
 void ResultSet::radixSortOnGpu(
+    const Config& config,
     const std::list<Analyzer::OrderEntry>& order_entries) const {
   auto timer = DEBUG_TIMER(__func__);
   const int device_id{0};
@@ -1234,6 +1235,7 @@ void ResultSet::radixSortOnGpu(
   group_by_buffers[0] = reinterpret_cast<int64_t*>(storage_->getUnderlyingBuffer());
   auto dev_group_by_buffers =
       create_dev_group_by_buffers(&cuda_allocator,
+                                  config,
                                   group_by_buffers,
                                   query_mem_desc_,
                                   block_size_,

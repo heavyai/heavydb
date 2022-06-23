@@ -79,9 +79,6 @@ extern std::unique_ptr<llvm::Module> udf_gpu_module;
 extern std::unique_ptr<llvm::Module> udf_cpu_module;
 bool g_enable_table_functions{false};
 size_t g_max_memory_allocation_size{2000000000};  // set to max slab size
-size_t g_min_memory_allocation_size{
-    256};  // minimum memory allocation required for projection query output buffer
-           // without pre-flight count
 double g_bump_allocator_step_reduction{0.75};
 bool g_use_estimator_result_cache{true};
 unsigned g_pending_query_interrupt_freq{1000};

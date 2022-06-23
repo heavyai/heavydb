@@ -286,6 +286,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     auto gpu_group_by_buffers =
         query_buffers_->createAndInitializeGroupByBufferGpu(ra_exe_unit,
                                                             query_mem_desc_,
+                                                            executor_->getConfig(),
                                                             kernel_params[INIT_AGG_VALS],
                                                             device_id,
                                                             dispatch_mode_,

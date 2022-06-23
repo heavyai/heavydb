@@ -134,7 +134,6 @@ extern unsigned g_pending_query_interrupt_freq;
 extern bool g_use_estimator_result_cache;
 
 extern size_t g_max_memory_allocation_size;
-extern size_t g_min_memory_allocation_size;
 extern bool g_enable_automatic_ir_metadata;
 extern size_t g_max_log_length;
 extern bool g_enable_tiered_cpu_mem;

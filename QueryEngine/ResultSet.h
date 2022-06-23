@@ -568,7 +568,8 @@ class ResultSet {
 
   size_t advanceCursorToNextEntry() const;
 
-  void radixSortOnGpu(const std::list<Analyzer::OrderEntry>& order_entries) const;
+  void radixSortOnGpu(const Config& config,
+                      const std::list<Analyzer::OrderEntry>& order_entries) const;
 
   void radixSortOnCpu(const std::list<Analyzer::OrderEntry>& order_entries) const;
 

@@ -125,6 +125,7 @@ struct ResultSetConfig {
 
 struct GpuMemoryConfig {
   bool enable_bump_allocator = false;
+  size_t min_memory_allocation_size = 256;
 };
 
 struct MemoryConfig {

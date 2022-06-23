@@ -56,6 +56,7 @@ class Allocator;
 
 GpuGroupByBuffers create_dev_group_by_buffers(
     DeviceAllocator* device_allocator,
+    const Config& config,
     const std::vector<int64_t*>& group_by_buffers,
     const QueryMemoryDescriptor&,
     const unsigned block_size_x,

@@ -425,6 +425,14 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
       "kernel during query execution, and copy back only the rows that passed the kernel "
       "to CPU after execution. When disabled, pre-flight count queries are used to size "
       "the output buffer for projection queries.");
+  opt_desc.add_options()(
+      "min-output-projection-allocation-bytes",
+      po::value<size_t>(&config_->mem.gpu.min_memory_allocation_size)
+          ->default_value(config_->mem.gpu.min_memory_allocation_size),
+      "Minimum allocation size for a fixed output buffer allocation for projection "
+      "queries with no pre-flight count. If an allocation of this size cannot be "
+      "obtained, the query will be retried with different execution parameters and/or "
+      "on CPU (if allow-cpu-retry is enabled). Requires bump allocator.");
 
   // debug
   opt_desc.add_options()("build-rel-alg-cache",

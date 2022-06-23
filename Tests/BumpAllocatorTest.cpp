@@ -26,7 +26,6 @@ using namespace TestHelpers;
 using namespace TestHelpers::ArrowSQLRunner;
 
 extern size_t g_max_memory_allocation_size;
-extern size_t g_min_memory_allocation_size;
 
 namespace {
 
@@ -90,8 +89,8 @@ class LowGpuBufferMemory : public ::testing::Test {
     insertCsvValues("test", ss.str());
 
     // Min memory allocation size set to 2GB to guarantee OOM during allocation
-    min_mem_allocation_state_ = g_min_memory_allocation_size;
-    g_min_memory_allocation_size = 2000000000;
+    min_mem_allocation_state_ = config().mem.gpu.min_memory_allocation_size;
+    config().mem.gpu.min_memory_allocation_size = 2000000000;
 
     // CPU retry off to disable automatic punt to CPU
     allow_cpu_retry_state_ = config().exec.heterogeneous.allow_cpu_retry;
@@ -101,7 +100,7 @@ class LowGpuBufferMemory : public ::testing::Test {
   void TearDown() override {
     dropTable("test");
 
-    g_min_memory_allocation_size = min_mem_allocation_state_;
+    config().mem.gpu.min_memory_allocation_size = min_mem_allocation_state_;
     config().exec.heterogeneous.allow_cpu_retry = allow_cpu_retry_state_;
   }
 
@@ -145,8 +144,8 @@ class LowGpuBufferMemoryCpuRetry : public ::testing::Test {
     insertCsvValues("test", ss.str());
 
     // Min memory allocation size set to 2GB to guarantee OOM during allocation
-    min_mem_allocation_state_ = g_min_memory_allocation_size;
-    g_min_memory_allocation_size = 2000000000;
+    min_mem_allocation_state_ = config().mem.gpu.min_memory_allocation_size;
+    config().mem.gpu.min_memory_allocation_size = 2000000000;
 
     // allow CPU retry on
     allow_cpu_retry_state_ = config().exec.heterogeneous.allow_cpu_retry;
@@ -156,7 +155,7 @@ class LowGpuBufferMemoryCpuRetry : public ::testing::Test {
   void TearDown() override {
     dropTable("test");
 
-    g_min_memory_allocation_size = min_mem_allocation_state_;
+    config().mem.gpu.min_memory_allocation_size = min_mem_allocation_state_;
     config().exec.heterogeneous.allow_cpu_retry = allow_cpu_retry_state_;
   }
 

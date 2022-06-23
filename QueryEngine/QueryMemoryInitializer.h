@@ -187,6 +187,7 @@ class QueryMemoryInitializer {
   GpuGroupByBuffers createAndInitializeGroupByBufferGpu(
       const RelAlgExecutionUnit& ra_exe_unit,
       const QueryMemoryDescriptor& query_mem_desc,
+      const Config& config,
       const CUdeviceptr init_agg_vals_dev_ptr,
       const int device_id,
       const ExecutorDispatchMode dispatch_mode,

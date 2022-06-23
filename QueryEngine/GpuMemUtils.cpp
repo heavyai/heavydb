@@ -26,7 +26,6 @@
 #include <vector>
 
 extern size_t g_max_memory_allocation_size;
-extern size_t g_min_memory_allocation_size;
 extern double g_bump_allocator_step_reduction;
 
 void copy_to_nvidia_gpu(Data_Namespace::DataMgr* data_mgr,
@@ -65,6 +64,7 @@ inline size_t coalesced_size(const QueryMemoryDescriptor& query_mem_desc,
 
 GpuGroupByBuffers create_dev_group_by_buffers(
     DeviceAllocator* cuda_allocator,
+    const Config& config,
     const std::vector<int64_t*>& group_by_buffers,
     const QueryMemoryDescriptor& query_mem_desc,
     const unsigned block_size_x,
@@ -128,7 +128,7 @@ GpuGroupByBuffers create_dev_group_by_buffers(
         } catch (const OutOfMemory& e) {
           LOG(WARNING) << e.what();
           max_memory_size = max_memory_size * g_bump_allocator_step_reduction;
-          if (max_memory_size < g_min_memory_allocation_size) {
+          if (max_memory_size < config.mem.gpu.min_memory_allocation_size) {
             throw;
           }
 

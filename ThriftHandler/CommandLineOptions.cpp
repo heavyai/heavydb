@@ -379,15 +379,6 @@ void CommandLineOptions::fillAdvancedOptions() {
       "greater "
       "than the maximum slab size have no affect). Requires bump allocator.");
   developer_desc.add_options()(
-      "min-output-projection-allocation-bytes",
-      po::value<size_t>(&g_min_memory_allocation_size)
-          ->default_value(g_min_memory_allocation_size),
-      "Minimum allocation size for a fixed output buffer allocation for projection "
-      "queries with no pre-flight count. If an allocation of this size cannot be "
-      "obtained, the query will be retried with different execution parameters and/or "
-      "on "
-      "CPU (if allow-cpu-retry is enabled). Requires bump allocator.");
-  developer_desc.add_options()(
       "code-cache-eviction-percent",
       po::value<float>(&g_fraction_code_cache_to_evict)
           ->default_value(g_fraction_code_cache_to_evict),

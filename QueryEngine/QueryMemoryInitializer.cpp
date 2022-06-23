@@ -944,6 +944,7 @@ GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
 GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     const RelAlgExecutionUnit& ra_exe_unit,
     const QueryMemoryDescriptor& query_mem_desc,
+    const Config& config,
     const CUdeviceptr init_agg_vals_dev_ptr,
     const int device_id,
     const ExecutorDispatchMode dispatch_mode,
@@ -962,6 +963,7 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
   CHECK(!use_hash_table_desc_);
   auto dev_group_by_buffers =
       create_dev_group_by_buffers(device_allocator_,
+                                  config,
                                   group_by_buffers_,
                                   query_mem_desc,
                                   block_size_x,
