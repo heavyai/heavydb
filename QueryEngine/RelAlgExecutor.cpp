@@ -333,7 +333,7 @@ void RelAlgExecutor::prepareStreamingExecution(const CompilationOptions& co,
   auto work_unit = createWorkUnitForStreaming(body, co, eo);
 
   auto ra_exe_unit = work_unit.exe_unit;
-  ra_exe_unit.query_hint = RegisteredQueryHint::defaults();
+  ra_exe_unit.query_hint = RegisteredQueryHint::fromConfig(config_);
   auto candidate = query_dag_->getQueryHint(body);
   if (candidate) {
     ra_exe_unit.query_hint = *candidate;
@@ -2187,7 +2187,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       work_unit.exe_unit, table_infos, executor_, co.device_type, target_exprs_owned_);
 
   // register query hint if query_dag_ is valid
-  ra_exe_unit.query_hint = RegisteredQueryHint::defaults();
+  ra_exe_unit.query_hint = RegisteredQueryHint::fromConfig(config_);
   if (query_dag_) {
     auto candidate = query_dag_->getQueryHint(body);
     if (candidate) {
@@ -2624,7 +2624,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* node,
     return createFilterWorkUnit(filter, sort_info, eo.just_explain);
   }
   LOG(FATAL) << "Unhandled node type: " << node->toString();
-  return {};
+  throw std::logic_error("Unexpected node type: " + node->toString());
 }
 
 namespace {
@@ -2824,7 +2824,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                               translator,
                                               eo.executor_type,
                                               config_.exec.group_by.bigint_count);
-  auto query_hint = RegisteredQueryHint::defaults();
+  auto query_hint = RegisteredQueryHint::fromConfig(config_);
   if (query_dag_) {
     auto candidate = query_dag_->getQueryHint(compound);
     if (candidate) {
@@ -3118,7 +3118,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
                                                              temporary_tables_,
                                                              executor_,
                                                              translator);
-  auto query_hint = RegisteredQueryHint::defaults();
+  auto query_hint = RegisteredQueryHint::fromConfig(config_);
   if (query_dag_) {
     auto candidate = query_dag_->getQueryHint(aggregate);
     if (candidate) {
@@ -3194,7 +3194,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
-  auto query_hint = RegisteredQueryHint::defaults();
+  auto query_hint = RegisteredQueryHint::fromConfig(config_);
   if (query_dag_) {
     auto candidate = query_dag_->getQueryHint(project);
     if (candidate) {
@@ -3316,7 +3316,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
                                         nullptr,
                                         sort_info,
                                         max_num_tuples,
-                                        RegisteredQueryHint::defaults(),
+                                        RegisteredQueryHint::fromConfig(config_),
                                         EMPTY_QUERY_PLAN,
                                         {},
                                         {},
@@ -3598,7 +3598,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
                                                              temporary_tables_,
                                                              executor_,
                                                              translator);
-  auto query_hint = RegisteredQueryHint::defaults();
+  auto query_hint = RegisteredQueryHint::fromConfig(config_);
   if (query_dag_) {
     auto candidate = query_dag_->getQueryHint(filter);
     if (candidate) {

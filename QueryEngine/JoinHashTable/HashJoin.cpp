@@ -512,7 +512,7 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
       AllColumnVarsVisitor().visit(qual_bin_oper.get());
   auto query_infos = getSyntheticInputTableInfo(cvs, executor);
   setupSyntheticCaching(data_provider, cvs, executor);
-  RegisteredQueryHint query_hint = RegisteredQueryHint::defaults();
+  RegisteredQueryHint query_hint = RegisteredQueryHint::fromConfig(executor->getConfig());
 
   auto hash_table = HashJoin::getInstance(qual_bin_oper,
                                           query_infos,
@@ -542,7 +542,7 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
       AllColumnVarsVisitor().visit(qual_bin_oper.get());
   auto query_infos = getSyntheticInputTableInfo(cvs, executor);
   setupSyntheticCaching(data_provider, cvs, executor);
-  RegisteredQueryHint query_hint = RegisteredQueryHint::defaults();
+  RegisteredQueryHint query_hint = RegisteredQueryHint::fromConfig(executor->getConfig());
 
   auto hash_table = HashJoin::getInstance(qual_bin_oper,
                                           query_infos,
@@ -574,7 +574,7 @@ std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance
   }
   auto query_infos = getSyntheticInputTableInfo(cvs, executor);
   setupSyntheticCaching(data_provider, cvs, executor);
-  RegisteredQueryHint query_hint = RegisteredQueryHint::defaults();
+  RegisteredQueryHint query_hint = RegisteredQueryHint::fromConfig(executor->getConfig());
   std::shared_ptr<HashJoin> hash_table;
   std::string error_msg;
   for (auto& qual : qual_bin_opers) {

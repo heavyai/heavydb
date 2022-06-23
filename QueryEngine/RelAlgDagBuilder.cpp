@@ -1353,13 +1353,11 @@ void create_compound(
   RelAlgNode* last_node{nullptr};
 
   size_t node_hash{0};
-  bool hint_registered{false};
-  RegisteredQueryHint registered_query_hint = RegisteredQueryHint::defaults();
+  std::optional<RegisteredQueryHint> registered_query_hint;
   for (const auto node_idx : pattern) {
     const auto ra_node = nodes[node_idx];
     auto registered_query_hint_it = query_hints.find(ra_node->toHash());
     if (registered_query_hint_it != query_hints.end()) {
-      hint_registered = true;
       node_hash = registered_query_hint_it->first;
       registered_query_hint = registered_query_hint_it->second;
     }
@@ -1444,11 +1442,11 @@ void create_compound(
   auto first_node = nodes[pattern.front()];
   CHECK_EQ(size_t(1), first_node->inputCount());
   compound_node->addManagedInput(first_node->getAndOwnInput(0));
-  if (hint_registered) {
+  if (registered_query_hint) {
     // pass the registered hint from the origin node to newly created compound node
     // where it is coalesced
     query_hints.erase(node_hash);
-    query_hints.emplace(compound_node->toHash(), registered_query_hint);
+    query_hints.emplace(compound_node->toHash(), *registered_query_hint);
   }
   for (size_t i = 0; i < pattern.size() - 1; ++i) {
     nodes[pattern[i]].reset();
@@ -2659,7 +2657,7 @@ void RelAlgDag::registerQueryHints(std::shared_ptr<RelAlgNode> node,
                                    Hints* hints_delivered) {
   bool detect_columnar_output_hint = false;
   bool detect_rowwise_output_hint = false;
-  RegisteredQueryHint query_hint;
+  RegisteredQueryHint query_hint = RegisteredQueryHint::fromConfig(*config_);
   for (auto it = hints_delivered->begin(); it != hints_delivered->end(); it++) {
     auto target = it->second;
     auto hint_type = it->first;
@@ -2681,12 +2679,12 @@ void RelAlgDag::registerQueryHints(std::shared_ptr<RelAlgNode> node,
         break;
     }
   }
-  // we have four cases depending on 1) g_enable_columnar_output flag
+  // we have four cases depending on 1) enable_columnar_output flag
   // and 2) query hint status: columnar_output and rowwise_output
-  // case 1. g_enable_columnar_output = true
+  // case 1. enable_columnar_output = true
   // case 1.a) columnar_output = true (so rowwise_output = false);
   // case 1.b) rowwise_output = true (so columnar_output = false);
-  // case 2. g_enable_columnar_output = false
+  // case 2. enable_columnar_output = false
   // case 2.a) columnar_output = true (so rowwise_output = false);
   // case 2.b) rowwise_output = true (so columnar_output = false);
   // case 1.a --> use columnar output
@@ -2696,9 +2694,9 @@ void RelAlgDag::registerQueryHints(std::shared_ptr<RelAlgNode> node,
   if (detect_columnar_output_hint && detect_rowwise_output_hint) {
     VLOG(1) << "Two hints 1) columnar output and 2) rowwise output are enabled together, "
             << "so skip them and use the runtime configuration "
-               "\"g_enable_columnar_output\"";
+               "\"enable_columnar_output\"";
   } else if (detect_columnar_output_hint && !detect_rowwise_output_hint) {
-    if (g_enable_columnar_output) {
+    if (config_->rs.enable_columnar_output) {
       VLOG(1) << "We already enable columnar output by default "
                  "(g_enable_columnar_output = true), so skip this columnar output hint";
     } else {
@@ -2706,7 +2704,7 @@ void RelAlgDag::registerQueryHints(std::shared_ptr<RelAlgNode> node,
       query_hint.columnar_output = true;
     }
   } else if (!detect_columnar_output_hint && detect_rowwise_output_hint) {
-    if (!g_enable_columnar_output) {
+    if (!config_->rs.enable_columnar_output) {
       VLOG(1) << "We already use the default rowwise output (g_enable_columnar_output "
                  "= false), so skip this rowwise output hint";
     } else {
@@ -2729,14 +2727,17 @@ RelAlgDagBuilder::RelAlgDagBuilder(RelAlgDagBuilder& root_dag_builder,
                                    const rapidjson::Value& query_ast,
                                    int db_id,
                                    SchemaProviderPtr schema_provider)
-    : db_id_(db_id), schema_provider_(schema_provider) {
+    : RelAlgDag(root_dag_builder.config_)
+    , db_id_(db_id)
+    , schema_provider_(schema_provider) {
   build(query_ast, root_dag_builder);
 }
 
 RelAlgDagBuilder::RelAlgDagBuilder(const std::string& query_ra,
                                    int db_id,
-                                   SchemaProviderPtr schema_provider)
-    : db_id_(db_id), schema_provider_(schema_provider) {
+                                   SchemaProviderPtr schema_provider,
+                                   ConfigPtr config)
+    : RelAlgDag(config), db_id_(db_id), schema_provider_(schema_provider) {
   rapidjson::Document query_ast;
   query_ast.Parse(query_ra.c_str());
   VLOG(2) << "Parsing query RA JSON: " << query_ra;

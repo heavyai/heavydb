@@ -182,6 +182,7 @@ class TestDataProvider2 : public TestHelpers::TestDataProvider {
 class NoCatalogRelAlgTest : public ::testing::Test {
  protected:
   static void SetUpTestSuite() {
+    config_ = std::make_shared<Config>();
     schema_provider_ = std::make_shared<TestSchemaProvider>();
 
     SystemParameters system_parameters;
@@ -196,7 +197,7 @@ class NoCatalogRelAlgTest : public ::testing::Test {
     executor_ = Executor::getExecutor(0,
                                       data_mgr_.get(),
                                       data_mgr_->getBufferProvider(),
-                                      nullptr,
+                                      config_,
                                       "",
                                       "",
                                       system_parameters);
@@ -206,7 +207,7 @@ class NoCatalogRelAlgTest : public ::testing::Test {
 
   ExecutionResult runRelAlgQuery(const std::string& ra) {
     return runRelAlgQuery(
-        std::make_unique<RelAlgDagBuilder>(ra, TEST_DB_ID, schema_provider_));
+        std::make_unique<RelAlgDagBuilder>(ra, TEST_DB_ID, schema_provider_, config_));
   }
 
   ExecutionResult runRelAlgQuery(std::unique_ptr<RelAlgDag> dag) {
@@ -223,17 +224,19 @@ class NoCatalogRelAlgTest : public ::testing::Test {
   }
 
  protected:
+  static ConfigPtr config_;
   static std::shared_ptr<DataMgr> data_mgr_;
   static SchemaProviderPtr schema_provider_;
   static std::shared_ptr<Executor> executor_;
 };
 
+ConfigPtr NoCatalogRelAlgTest::config_;
 std::shared_ptr<DataMgr> NoCatalogRelAlgTest::data_mgr_;
 SchemaProviderPtr NoCatalogRelAlgTest::schema_provider_;
 std::shared_ptr<Executor> NoCatalogRelAlgTest::executor_;
 
 TEST_F(NoCatalogRelAlgTest, SelectSingleColumn) {
-  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_);
+  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_, config_);
   dag->addProject(dag->addScan(TEST_DB_ID, "test1"), std::vector<int>({1}));
   dag->finalize();
   auto res = runRelAlgQuery(std::move(dag));
@@ -241,7 +244,7 @@ TEST_F(NoCatalogRelAlgTest, SelectSingleColumn) {
 }
 
 TEST_F(NoCatalogRelAlgTest, SelectAllColumns) {
-  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_);
+  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_, config_);
   dag->addProject(dag->addScan(TEST_DB_ID, "test1"), std::vector<int>({0, 1, 2, 3}));
   dag->finalize();
   auto res = runRelAlgQuery(std::move(dag));
@@ -253,7 +256,7 @@ TEST_F(NoCatalogRelAlgTest, SelectAllColumns) {
 }
 
 TEST_F(NoCatalogRelAlgTest, SelectAllColumnsMultiFrag) {
-  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_);
+  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_, config_);
   dag->addProject(dag->addScan(TEST_DB_ID, "test2"), std::vector<int>({0, 1, 2, 3}));
   dag->finalize();
   auto res = runRelAlgQuery(std::move(dag));
@@ -267,7 +270,7 @@ TEST_F(NoCatalogRelAlgTest, SelectAllColumnsMultiFrag) {
 }
 
 TEST_F(NoCatalogRelAlgTest, GroupBySingleColumn) {
-  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_);
+  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_, config_);
   auto proj =
       dag->addProject(dag->addScan(TEST_DB_ID, "test_agg"), std::vector<int>({0, 1}));
   auto agg = dag->addAgg(
@@ -284,7 +287,7 @@ TEST_F(NoCatalogRelAlgTest, GroupBySingleColumn) {
 }
 
 TEST_F(NoCatalogRelAlgTest, InnerJoin) {
-  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_);
+  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_, config_);
   auto join = dag->addEquiJoin(dag->addScan(TEST_DB_ID, "test1"),
                                dag->addScan(TEST_DB_ID, "test2"),
                                JoinType::INNER,
@@ -304,7 +307,7 @@ TEST_F(NoCatalogRelAlgTest, InnerJoin) {
 }
 
 TEST_F(NoCatalogRelAlgTest, InterDatabaseJoin) {
-  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_);
+  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_, config_);
   auto join = dag->addEquiJoin(dag->addScan(TEST_DB_ID, "test1"),
                                dag->addScan(TEST_DB2_ID, "db2.test2"),
                                JoinType::INNER,
@@ -371,7 +374,8 @@ TEST_F(NoCatalogRelAlgTest, StreamingAggregate) {
   ]
 })""";
 
-  auto dag = std::make_unique<RelAlgDagBuilder>(ra, TEST_DB_ID, schema_provider_);
+  auto dag =
+      std::make_unique<RelAlgDagBuilder>(ra, TEST_DB_ID, schema_provider_, config_);
   if (executor_.get() == nullptr) {
     std::cout << "** Error ** -- executor_ is nulltpr. Aborting." << std::endl;
     std::abort();
@@ -465,7 +469,8 @@ TEST_F(NoCatalogRelAlgTest, StreamingFilter) {
   ]
 })""";
 
-  auto dag = std::make_unique<RelAlgDagBuilder>(ra, TEST_DB_ID, schema_provider_);
+  auto dag =
+      std::make_unique<RelAlgDagBuilder>(ra, TEST_DB_ID, schema_provider_, config_);
   if (executor_.get() == nullptr) {
     std::cout << "** Error ** -- executor_ is nulltpr. Aborting." << std::endl;
     std::abort();

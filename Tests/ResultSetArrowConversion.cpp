@@ -42,7 +42,6 @@
 #include <gtest/gtest.h>
 
 // Global variables controlling execution
-extern bool g_enable_columnar_output;
 extern bool g_enable_lazy_fetch;
 
 // Input files' names
@@ -64,16 +63,16 @@ using namespace TestHelpers::ArrowSQLRunner;
 namespace {
 
 // Processes command line args
-void parse_cli_args(int argc, char* argv[]) {
+void parse_cli_args(int argc, char* argv[], ConfigPtr config) {
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
 
   desc.add_options()("help,h", "Print help messages ");
-  desc.add_options()(
-      "enable-columnar-output",
-      po::value<bool>(&g_enable_columnar_output)->default_value(g_enable_columnar_output),
-      "Enable columnar_output");
+  desc.add_options()("enable-columnar-output",
+                     po::value<bool>(&config->rs.enable_columnar_output)
+                         ->default_value(config->rs.enable_columnar_output),
+                     "Enable columnar_output");
 
   logger::LogOptions log_options(argv[0]);
   log_options.severity_ = logger::Severity::FATAL;
@@ -201,7 +200,7 @@ void test_arrow_table_conversion_table6x4(size_t fragment_size) {
 
   auto column = table->column(1);
   size_t expected_chunk_count =
-      (g_enable_lazy_fetch || !g_enable_columnar_output)
+      (g_enable_lazy_fetch || !config().rs.enable_columnar_output)
           ? 1
           : (table->num_rows() + fragment_size - 1) / fragment_size;
 
@@ -229,15 +228,15 @@ void test_arrow_table_conversion_table6x4(size_t fragment_size) {
 void test_chunked_conversion(bool enable_columnar_output,
                              bool enable_lazy_fetch,
                              size_t fragment_size) {
-  bool prev_enable_columnar_output = g_enable_columnar_output;
+  bool prev_enable_columnar_output = config().rs.enable_columnar_output;
   bool prev_enable_lazy_fetch = g_enable_lazy_fetch;
 
   ScopeGuard reset = [prev_enable_columnar_output, prev_enable_lazy_fetch] {
-    g_enable_columnar_output = prev_enable_columnar_output;
+    config().rs.enable_columnar_output = prev_enable_columnar_output;
     g_enable_lazy_fetch = prev_enable_lazy_fetch;
   };
 
-  g_enable_columnar_output = enable_columnar_output;
+  config().rs.enable_columnar_output = enable_columnar_output;
   g_enable_lazy_fetch = enable_lazy_fetch;
   test_arrow_table_conversion_table6x4(fragment_size);
 }
@@ -435,15 +434,15 @@ TEST(ArrowTable, Chunked_GROUPBY1) {
 //  This test performs a simple JOIN test for supplied boolean
 //  values of enable_columnar_output, enable_lazy_fetch
 void JoinTest(bool enable_columnar_output, bool enable_lazy_fetch) {
-  bool prev_enable_columnar_output = g_enable_columnar_output;
+  bool prev_enable_columnar_output = config().rs.enable_columnar_output;
   bool prev_enable_lazy_fetch = g_enable_lazy_fetch;
 
   ScopeGuard reset = [prev_enable_columnar_output, prev_enable_lazy_fetch] {
-    g_enable_columnar_output = prev_enable_columnar_output;
+    config().rs.enable_columnar_output = prev_enable_columnar_output;
     g_enable_lazy_fetch = prev_enable_lazy_fetch;
   };
 
-  g_enable_columnar_output = enable_columnar_output;
+  config().rs.enable_columnar_output = enable_columnar_output;
   g_enable_lazy_fetch = enable_lazy_fetch;
 
   auto res = runSqlQuery(
@@ -519,15 +518,15 @@ TEST(ArrowTable, Chunked_NULLS2) {
 
 //  Tests for large tables
 TEST(ArrowTable, LargeTables) {
-  bool prev_enable_columnar_output = g_enable_columnar_output;
+  bool prev_enable_columnar_output = config().rs.enable_columnar_output;
   bool prev_enable_lazy_fetch = g_enable_lazy_fetch;
 
   ScopeGuard reset = [prev_enable_columnar_output, prev_enable_lazy_fetch] {
-    g_enable_columnar_output = prev_enable_columnar_output;
+    config().rs.enable_columnar_output = prev_enable_columnar_output;
     g_enable_lazy_fetch = prev_enable_lazy_fetch;
   };
 
-  g_enable_columnar_output = true;
+  config().rs.enable_columnar_output = true;
   g_enable_lazy_fetch = false;
   const size_t N = 500'000;
   test_single_column_table<int8_t>(N, 150);
@@ -539,15 +538,15 @@ TEST(ArrowTable, LargeTables) {
 }
 
 TEST(ArrowTable, LargeTablesRowWise) {
-  bool prev_enable_columnar_output = g_enable_columnar_output;
+  bool prev_enable_columnar_output = config().rs.enable_columnar_output;
   bool prev_enable_lazy_fetch = g_enable_lazy_fetch;
 
   ScopeGuard reset = [prev_enable_columnar_output, prev_enable_lazy_fetch] {
-    g_enable_columnar_output = prev_enable_columnar_output;
+    config().rs.enable_columnar_output = prev_enable_columnar_output;
     g_enable_lazy_fetch = prev_enable_lazy_fetch;
   };
 
-  g_enable_columnar_output = false;
+  config().rs.enable_columnar_output = false;
   g_enable_lazy_fetch = false;
   const size_t N = 500'000;
   test_single_column_table<int8_t>(N, 150);
@@ -563,9 +562,11 @@ int main(int argc, char* argv[]) {
 
   int err{0};
   try {
-    parse_cli_args(argc, argv);
+    auto config = std::make_shared<Config>();
 
-    init();
+    parse_cli_args(argc, argv, config);
+
+    init(config);
 
     import_data();
 

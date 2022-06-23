@@ -49,8 +49,8 @@ class TestRelAlgDagBuilder : public RelAlgDag {
     std::vector<size_t> operands;
   };
 
-  TestRelAlgDagBuilder(SchemaProviderPtr schema_provider)
-      : schema_provider_(schema_provider) {}
+  TestRelAlgDagBuilder(SchemaProviderPtr schema_provider, ConfigPtr config)
+      : RelAlgDag(config), schema_provider_(schema_provider) {}
   ~TestRelAlgDagBuilder() override = default;
 
   RelAlgNodePtr addScan(const TableRef& table);

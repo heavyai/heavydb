@@ -103,7 +103,8 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
                                   {count_expr.get()},
                                   nullptr,
                                   SortInfo{},
-                                  0};
+                                  0,
+                                  RegisteredQueryHint::fromConfig(executor->getConfig())};
 
   ColumnCacheMap column_cache;
   size_t max_groups_buffer_entry_guess = 1;
@@ -199,7 +200,8 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
                                   {count_expr.get()},
                                   nullptr,
                                   SortInfo{},
-                                  0};
+                                  0,
+                                  RegisteredQueryHint::fromConfig(executor->getConfig())};
 
   ColumnCacheMap column_cache;
   size_t max_groups_buffer_entry_guess = 1;
@@ -276,7 +278,8 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
                                   {count_expr.get()},
                                   nullptr,
                                   SortInfo{},
-                                  0};
+                                  0,
+                                  RegisteredQueryHint::fromConfig(executor->getConfig())};
 
   ColumnCacheMap column_cache;
   size_t max_groups_buffer_entry_guess = 1;

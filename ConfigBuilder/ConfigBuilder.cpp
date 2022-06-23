@@ -384,6 +384,13 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
           ->implicit_value(true),
       "Enable hoisting left hand side filters through left joins.");
 
+  // rs
+  opt_desc.add_options()("enable-columnar-output",
+                         po::value<bool>(&config_->rs.enable_columnar_output)
+                             ->default_value(config_->rs.enable_columnar_output)
+                             ->implicit_value(true),
+                         "Enable columnar output for intermediate/final query steps.");
+
   // debug
   opt_desc.add_options()("build-rel-alg-cache",
                          po::value<std::string>(&config_->debug.build_ra_cache)

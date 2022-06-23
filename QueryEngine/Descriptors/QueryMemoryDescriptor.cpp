@@ -25,8 +25,6 @@
 
 #include <boost/algorithm/cxx11/any_of.hpp>
 
-extern bool g_enable_columnar_output;
-
 namespace {
 
 bool is_int_and_no_bigger_than(const SQLTypeInfo& ti, const size_t byte_width) {

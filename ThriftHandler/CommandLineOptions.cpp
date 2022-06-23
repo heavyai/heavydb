@@ -302,12 +302,6 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->implicit_value(true),
       "Enable additional calcite (query plan) optimizations when a view is part of the "
       "query.");
-  developer_desc.add_options()(
-      "enable-columnar-output",
-      po::value<bool>(&g_enable_columnar_output)
-          ->default_value(g_enable_columnar_output)
-          ->implicit_value(true),
-      "Enable columnar output for intermediate/final query steps.");
   developer_desc.add_options()("optimize-row-init",
                                po::value<bool>(&g_optimize_row_initialization)
                                    ->default_value(g_optimize_row_initialization)

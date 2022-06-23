@@ -2734,7 +2734,7 @@ TEST_F(Select, GroupBy) {
       c("SELECT d, COUNT(*) FROM test GROUP BY d ORDER BY d DESC LIMIT 10;", dt);
     }
 
-    if (g_enable_columnar_output) {
+    if (config().rs.enable_columnar_output) {
       // TODO: Fixup the tests below when running with columnar output enabled
       continue;
     }
@@ -10834,7 +10834,7 @@ TEST_F(Select, Joins_OneOuterExpression) {
 }
 
 TEST_F(Select, Joins_Subqueries) {
-  if (g_enable_columnar_output) {
+  if (config().rs.enable_columnar_output) {
     // TODO(adb): fixup these tests under columnar
     return;
   }
@@ -17918,8 +17918,8 @@ int main(int argc, char** argv) {
                          ->implicit_value(false),
                      "Enable/disable using GPU shared memory for GROUP BY.");
   desc.add_options()("enable-columnar-output",
-                     po::value<bool>(&g_enable_columnar_output)
-                         ->default_value(g_enable_columnar_output)
+                     po::value<bool>(&config->rs.enable_columnar_output)
+                         ->default_value(config->rs.enable_columnar_output)
                          ->implicit_value(true),
                      "Enable/disable using columnar output format.");
   desc.add_options()("enable-bump-allocator",

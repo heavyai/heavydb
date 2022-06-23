@@ -115,6 +115,10 @@ struct OptimizationsConfig {
   bool enable_left_join_filter_hoisting = true;
 };
 
+struct ResultSetConfig {
+  bool enable_columnar_output = false;
+};
+
 struct DebugConfig {
   std::string build_ra_cache = "";
   std::string use_ra_cache = "";
@@ -123,6 +127,7 @@ struct DebugConfig {
 struct Config {
   ExecutionConfig exec;
   OptimizationsConfig opts;
+  ResultSetConfig rs;
   DebugConfig debug;
 };
 

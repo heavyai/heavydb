@@ -25,7 +25,6 @@
 
 #include <gtest/gtest.h>
 
-extern bool g_enable_columnar_output;
 extern double g_gpu_mem_limit_percent;
 
 namespace TestHelpers::ArrowSQLRunner {
@@ -89,7 +88,8 @@ class ArrowSQLRunnerImpl {
   std::unique_ptr<RelAlgExecutor> makeRelAlgExecutor(const std::string& sql) {
     std::string query_ra = getSqlQueryRelAlg(sql);
 
-    auto dag = std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, storage_);
+    auto dag =
+        std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, storage_, config_);
 
     return std::make_unique<RelAlgExecutor>(
         executor_.get(), storage_, data_mgr_->getDataProvider(), std::move(dag));
@@ -111,7 +111,7 @@ class ArrowSQLRunnerImpl {
     auto ra_executor = makeRelAlgExecutor(query_str);
     auto query_hints =
         ra_executor->getParsedQueryHint(ra_executor->getRootRelAlgNodeShPtr().get());
-    return query_hints ? *query_hints : RegisteredQueryHint::defaults();
+    return query_hints ? *query_hints : RegisteredQueryHint::fromConfig(*config_);
   }
 
   std::optional<std::unordered_map<size_t, RegisteredQueryHint>> getParsedQueryHints(
@@ -134,7 +134,7 @@ class ArrowSQLRunnerImpl {
   }
 
   ExecutionOptions getExecutionOptions(bool allow_loop_joins, bool just_explain = false) {
-    return {g_enable_columnar_output,
+    return {config_->rs.enable_columnar_output,
             true,
             just_explain,
             allow_loop_joins,

@@ -21,7 +21,7 @@
 
 #include <boost/algorithm/string.hpp>
 
-extern bool g_enable_columnar_output;
+#include "Shared/Config.h"
 
 // we expect query hint enum val starts with zero,
 // and let remaining enum value to be auto-incremented
@@ -124,10 +124,10 @@ struct RegisteredQueryHint {
   // and we get all necessary info from it and organize it into "RegisteredQueryHint"
   // so by using "RegisteredQueryHint", we can know and access which query hint is
   // registered and its detailed info such as the hint's parameter values given by user
-  RegisteredQueryHint()
+  RegisteredQueryHint(bool enable_columnar_output)
       : cpu_mode(false)
-      , columnar_output(g_enable_columnar_output)
-      , rowwise_output(!g_enable_columnar_output)
+      , columnar_output(enable_columnar_output)
+      , rowwise_output(!enable_columnar_output)
       , registered_hint(QueryHint::kHintCount, false) {}
 
   RegisteredQueryHint& operator=(const RegisteredQueryHint& other) {
@@ -152,7 +152,9 @@ struct RegisteredQueryHint {
 
   std::vector<bool> registered_hint;
 
-  static RegisteredQueryHint defaults() { return RegisteredQueryHint(); }
+  static RegisteredQueryHint fromConfig(const Config& config) {
+    return RegisteredQueryHint(config.rs.enable_columnar_output);
+  }
 
  public:
   static QueryHint translateQueryHint(const std::string& hint_name) {

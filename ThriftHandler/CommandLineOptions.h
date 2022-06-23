@@ -127,7 +127,6 @@ class CommandLineOptions {
   const bool dist_v5_;
 };
 
-extern bool g_enable_columnar_output;
 extern bool g_optimize_row_initialization;
 extern bool g_enable_table_functions;
 extern size_t g_max_memory_allocation_size;

@@ -91,7 +91,8 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
                                   {count_expr.get()},
                                   nullptr,
                                   {{}, SortAlgorithm::Default, 0, 0},
-                                  0};
+                                  0,
+                                  RegisteredQueryHint::fromConfig(config_)};
   size_t one{1};
   TemporaryTable filtered_result;
   const auto table_infos = get_table_infos(input_descs, executor_);

@@ -70,10 +70,10 @@ TEST(kCpuMode, ForceToCPUMode) {
 }
 
 TEST(QueryHint, checkQueryLayoutHintWithEnablingColumnarOutput) {
-  const auto enable_columnar_output = g_enable_columnar_output;
-  g_enable_columnar_output = true;
+  const auto enable_columnar_output = config().rs.enable_columnar_output;
+  config().rs.enable_columnar_output = true;
   ScopeGuard reset_columnar_output = [&enable_columnar_output] {
-    g_enable_columnar_output = enable_columnar_output;
+    config().rs.enable_columnar_output = enable_columnar_output;
   };
 
   const auto q1 = "SELECT /*+ columnar_output */ * FROM SQL_HINT_DUMMY";
@@ -129,10 +129,10 @@ TEST(QueryHint, checkQueryLayoutHintWithEnablingColumnarOutput) {
 }
 
 TEST(QueryHint, checkQueryLayoutHintWithoutEnablingColumnarOutput) {
-  const auto enable_columnar_output = g_enable_columnar_output;
-  g_enable_columnar_output = false;
+  const auto enable_columnar_output = config().rs.enable_columnar_output;
+  config().rs.enable_columnar_output = false;
   ScopeGuard reset_columnar_output = [&enable_columnar_output] {
-    g_enable_columnar_output = enable_columnar_output;
+    config().rs.enable_columnar_output = enable_columnar_output;
   };
   const auto q1 = "SELECT /*+ columnar_output */ * FROM SQL_HINT_DUMMY";
   const auto q2 = "SELECT /*+ rowwise_output */ * FROM SQL_HINT_DUMMY";
@@ -187,10 +187,10 @@ TEST(QueryHint, checkQueryLayoutHintWithoutEnablingColumnarOutput) {
 }
 
 TEST(QueryHint, UDF) {
-  const auto enable_columnar_output = g_enable_columnar_output;
-  g_enable_columnar_output = false;
+  const auto enable_columnar_output = config().rs.enable_columnar_output;
+  config().rs.enable_columnar_output = false;
   ScopeGuard reset_columnar_output = [&enable_columnar_output] {
-    g_enable_columnar_output = enable_columnar_output;
+    config().rs.enable_columnar_output = enable_columnar_output;
   };
 
   const auto q1 =
@@ -217,10 +217,10 @@ TEST(QueryHint, UDF) {
 }
 
 TEST(QueryHint, checkPerQueryBlockHint) {
-  const auto enable_columnar_output = g_enable_columnar_output;
-  g_enable_columnar_output = false;
+  const auto enable_columnar_output = config().rs.enable_columnar_output;
+  config().rs.enable_columnar_output = false;
   ScopeGuard reset_columnar_output = [&enable_columnar_output] {
-    g_enable_columnar_output = enable_columnar_output;
+    config().rs.enable_columnar_output = enable_columnar_output;
   };
 
   const auto q1 =
@@ -265,10 +265,10 @@ TEST(QueryHint, checkPerQueryBlockHint) {
 }
 
 TEST(QueryHint, WindowFunction) {
-  const auto enable_columnar_output = g_enable_columnar_output;
-  g_enable_columnar_output = false;
+  const auto enable_columnar_output = config().rs.enable_columnar_output;
+  config().rs.enable_columnar_output = false;
   ScopeGuard reset_columnar_output = [&enable_columnar_output] {
-    g_enable_columnar_output = enable_columnar_output;
+    config().rs.enable_columnar_output = enable_columnar_output;
   };
 
   const auto q1 =

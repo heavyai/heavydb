@@ -40,6 +40,7 @@
 #include "SchemaMgr/ColumnInfo.h"
 #include "SchemaMgr/SchemaProvider.h"
 #include "SchemaMgr/TableInfo.h"
+#include "Shared/Config.h"
 #include "Shared/toString.h"
 
 class Rex {
@@ -1903,7 +1904,7 @@ class QueryNotSupported : public std::runtime_error {
 
 class RelAlgDag {
  public:
-  RelAlgDag() = default;
+  RelAlgDag(ConfigPtr config) : config_(config) {}
   virtual ~RelAlgDag() = default;
 
   void eachNode(std::function<void(RelAlgNode const*)> const& callback) const;
@@ -1950,6 +1951,7 @@ class RelAlgDag {
   void resetQueryExecutionState();
 
  protected:
+  ConfigPtr config_;
   // Root node of the query.
   RelAlgNodePtr root_;
   // All nodes including the root one.
@@ -1979,7 +1981,8 @@ class RelAlgDagBuilder : public RelAlgDag, public boost::noncopyable {
    */
   RelAlgDagBuilder(const std::string& query_ra,
                    int db_id,
-                   SchemaProviderPtr schema_provider);
+                   SchemaProviderPtr schema_provider,
+                   ConfigPtr config);
 
   /**
    * Constructs a sub-DAG for any subqueries. Should only be called during DAG
@@ -1994,6 +1997,8 @@ class RelAlgDagBuilder : public RelAlgDag, public boost::noncopyable {
                    const rapidjson::Value& query_ast,
                    int db_id,
                    SchemaProviderPtr schema_provider);
+
+  const Config& config() const { return *config_; }
 
  private:
   void build(const rapidjson::Value& query_ast, RelAlgDagBuilder& root_dag_builder);
