@@ -384,7 +384,6 @@ if (ENABLE_PDAL)
   find_package(PDAL REQUIRED)
   if(PDAL_FOUND)
     include_directories(${PDAL_INCLUDE_DIRS})
-    link_directories(${PDAL_LIBRARIES})
     add_definitions( ${PDAL_DEFINITIONS} )
     set(ENABLE_PDAL ON)
     add_definitions("-DHAVE_PDAL")
@@ -951,7 +950,8 @@ if(ENABLE_FOLLY)
 endif()
 
 if(ENABLE_PDAL)
-  list(APPEND MAPD_LIBRARIES ${PDAL_LIBRARIES})
+  list(APPEND MAPD_LIBRARIES ${PDAL_LIBRARIES} ${GDAL_LIBRARIES} ${GDALExtra_LIBRARIES})
+
 endif()
 
 if(ENABLE_LICENSING_AWS)
