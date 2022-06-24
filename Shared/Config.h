@@ -144,6 +144,7 @@ struct MemoryConfig {
 struct CacheConfig {
   bool use_estimator_result_cache = true;
   bool enable_data_recycler = true;
+  bool use_hashtable_cache = true;
 };
 
 struct DebugConfig {

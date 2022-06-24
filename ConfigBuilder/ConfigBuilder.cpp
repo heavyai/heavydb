@@ -478,6 +478,11 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
                              ->default_value(config_->cache.enable_data_recycler)
                              ->implicit_value(true),
                          "Use data recycler.");
+  opt_desc.add_options()("use-hashtable-cache",
+                         po::value<bool>(&config_->cache.use_hashtable_cache)
+                             ->default_value(config_->cache.use_hashtable_cache)
+                             ->implicit_value(true),
+                         "Use hashtable cache.");
 
   // debug
   opt_desc.add_options()("build-rel-alg-cache",

@@ -118,11 +118,6 @@ void CommandLineOptions::fillOptions() {
       "exit-after-warmup",
       po::value<bool>(&exit_after_warmup)->default_value(false)->implicit_value(true),
       "Exit after OmniSci warmup queries.");
-  help_desc.add_options()("use-hashtable-cache",
-                          po::value<bool>(&use_hashtable_cache)
-                              ->default_value(use_hashtable_cache)
-                              ->implicit_value(true),
-                          "Use hashtable cache.");
   help_desc.add_options()(
       "hashtable-cache-total-bytes",
       po::value<size_t>(&hashtable_cache_total_bytes)
@@ -679,7 +674,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     }
 
     g_pending_query_interrupt_freq = pending_query_interrupt_freq;
-    g_use_hashtable_cache = use_hashtable_cache;
     g_max_cacheable_hashtable_size_bytes = max_cacheable_hashtable_size_bytes;
     g_hashtable_cache_total_bytes = hashtable_cache_total_bytes;
 
