@@ -20,7 +20,6 @@
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 #include "Shared/Config.h"
 
-extern size_t g_hashtable_cache_total_bytes;
 extern size_t g_max_cacheable_hashtable_size_bytes;
 
 struct QueryPlanMetaInfo {
@@ -37,7 +36,7 @@ class HashtableRecycler
  public:
   HashtableRecycler(ConfigPtr config, CacheItemType hashtable_type, int num_gpus)
       : DataRecycler({hashtable_type},
-                     g_hashtable_cache_total_bytes,
+                     config->cache.hashtable_cache_total_bytes,
                      g_max_cacheable_hashtable_size_bytes,
                      num_gpus)
       , config_(config) {}

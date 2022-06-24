@@ -552,7 +552,7 @@ TEST(DataRecycler, Perfect_Hashtable_Cache_Maintanence) {
       // test3. set hashtable cache size as 30 bytes,
       // and try to cache t1.x's hashtable (12 bytes) and then that of t4.x's (24 bytes)
       // since sizeof(t1.x) + sizeof(t4.x) > 30 we need to remove t1.x's to cache t4.x's
-      const auto original_total_cache_size = g_hashtable_cache_total_bytes;
+      const auto original_total_cache_size = config().cache.hashtable_cache_total_bytes;
       PerfectJoinHashTable::getHashTableCache()->setTotalCacheSize(
           CacheItemType::PERFECT_HT, 30);
       ScopeGuard reset_cache_status = [&original_total_cache_size] {
@@ -587,7 +587,7 @@ TEST(DataRecycler, Perfect_Hashtable_Cache_Maintanence) {
       // cache t1.x and t2.x (so total 14 * 2 = 28 bytes) and then try to cache t4.x's
       // and check whether cache only has t4.x's (remove t1.x's and t2.x's to make a room
       // for t4.x's)
-      const auto original_total_cache_size = g_hashtable_cache_total_bytes;
+      const auto original_total_cache_size = config().cache.hashtable_cache_total_bytes;
       PerfectJoinHashTable::getHashTableCache()->setTotalCacheSize(
           CacheItemType::PERFECT_HT, 30);
       ScopeGuard reset_cache_status = [&original_total_cache_size] {
@@ -630,7 +630,7 @@ TEST(DataRecycler, Perfect_Hashtable_Cache_Maintanence) {
       // and try to cache t3.x's.
       // if our cache maintenance works correctly, we should remove t2.x's since it is
       // less frequently reused one
-      const auto original_total_cache_size = g_hashtable_cache_total_bytes;
+      const auto original_total_cache_size = config().cache.hashtable_cache_total_bytes;
       PerfectJoinHashTable::getHashTableCache()->setTotalCacheSize(
           CacheItemType::PERFECT_HT, 40);
       ScopeGuard reset_cache_status = [&original_total_cache_size] {
@@ -776,7 +776,7 @@ TEST(DataRecycler, Baseline_Hashtable_Cache_Maintanence) {
       // test3. set hashtable cache size as 150 bytes,
       // and try to cache t1's hashtable (72 bytes) and then that of t4's (144 bytes)
       // since sizeof(t1) + sizeof(t4) > 150 we need to remove t1's to cache t4's
-      const auto original_total_cache_size = g_hashtable_cache_total_bytes;
+      const auto original_total_cache_size = config().cache.hashtable_cache_total_bytes;
       BaselineJoinHashTable::getHashTableCache()->setTotalCacheSize(
           CacheItemType::BASELINE_HT, 150);
       ScopeGuard reset_cache_status = [&original_total_cache_size] {
@@ -813,7 +813,7 @@ TEST(DataRecycler, Baseline_Hashtable_Cache_Maintanence) {
       // cache t1 and t2 (so total 72+96 = 168 bytes) and then try to cache t4's
       // and check whether cache only has t4's (remove t1.x's and t2.x's to make a room
       // for t4's)
-      const auto original_total_cache_size = g_hashtable_cache_total_bytes;
+      const auto original_total_cache_size = config().cache.hashtable_cache_total_bytes;
       BaselineJoinHashTable::getHashTableCache()->setTotalCacheSize(
           CacheItemType::BASELINE_HT, 180);
       ScopeGuard reset_cache_status = [&original_total_cache_size] {
@@ -857,7 +857,7 @@ TEST(DataRecycler, Baseline_Hashtable_Cache_Maintanence) {
       // t2 since sizeof(t1) + sizeof(t2) + sizeof(t3) ? 72 + 96 + 120 > 200 if our cache
       // maintenance works correctly, we should remove t2's since it is less frequently
       // reused one (so 72 + 120 = 192 < 200)
-      const auto original_total_cache_size = g_hashtable_cache_total_bytes;
+      const auto original_total_cache_size = config().cache.hashtable_cache_total_bytes;
       BaselineJoinHashTable::getHashTableCache()->setTotalCacheSize(
           CacheItemType::BASELINE_HT, 200);
       ScopeGuard reset_cache_status = [&original_total_cache_size] {

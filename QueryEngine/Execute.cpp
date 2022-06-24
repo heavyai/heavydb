@@ -82,7 +82,6 @@ unsigned g_pending_query_interrupt_freq{1000};
 bool g_is_test_env{false};  // operating under a unit test environment. Currently only
                             // limits the allocation for the output buffer arena
                             // and data recycler test
-size_t g_hashtable_cache_total_bytes{size_t(1) << 32};
 size_t g_max_cacheable_hashtable_size_bytes{size_t(1) << 31};
 
 size_t g_approx_quantile_buffer{1000};

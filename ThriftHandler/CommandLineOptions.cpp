@@ -118,12 +118,6 @@ void CommandLineOptions::fillOptions() {
       "exit-after-warmup",
       po::value<bool>(&exit_after_warmup)->default_value(false)->implicit_value(true),
       "Exit after OmniSci warmup queries.");
-  help_desc.add_options()(
-      "hashtable-cache-total-bytes",
-      po::value<size_t>(&hashtable_cache_total_bytes)
-          ->default_value(hashtable_cache_total_bytes)
-          ->implicit_value(4294967296),
-      "Size of total memory space for hashtable cache, in bytes (default: 4GB).");
   help_desc.add_options()("max-cacheable-hashtable-size-bytes",
                           po::value<size_t>(&max_cacheable_hashtable_size_bytes)
                               ->default_value(max_cacheable_hashtable_size_bytes)
@@ -675,7 +669,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
 
     g_pending_query_interrupt_freq = pending_query_interrupt_freq;
     g_max_cacheable_hashtable_size_bytes = max_cacheable_hashtable_size_bytes;
-    g_hashtable_cache_total_bytes = hashtable_cache_total_bytes;
 
   } catch (po::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;

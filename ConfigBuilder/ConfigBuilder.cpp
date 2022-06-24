@@ -483,6 +483,10 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
                              ->default_value(config_->cache.use_hashtable_cache)
                              ->implicit_value(true),
                          "Use hashtable cache.");
+  opt_desc.add_options()("hashtable-cache-total-bytes",
+                         po::value<size_t>(&config_->cache.hashtable_cache_total_bytes)
+                             ->default_value(config_->cache.hashtable_cache_total_bytes),
+                         "Size of total memory space for hashtable cache, in bytes.");
 
   // debug
   opt_desc.add_options()("build-rel-alg-cache",
