@@ -30,7 +30,6 @@
 #include "TargetExprBuilder.h"
 
 #include "../CudaMgr/CudaMgr.h"
-#include "../Shared/Globals.h"
 #include "../Shared/checked_alloc.h"
 #include "../Shared/funcannotations.h"
 #include "../ThirdParty/robin_hood.h"

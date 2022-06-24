@@ -34,7 +34,6 @@
 #include "QueryEngine/RexVisitor.h"
 #include "QueryEngine/WindowContext.h"
 #include "SessionInfo.h"
-#include "Shared/Globals.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"

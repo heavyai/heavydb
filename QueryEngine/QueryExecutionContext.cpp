@@ -24,7 +24,6 @@
 #include "QueryMemoryInitializer.h"
 #include "RelAlgExecutionUnit.h"
 #include "ResultSet.h"
-#include "Shared/Globals.h"
 #include "Shared/likely.h"
 #include "SpeculativeTopN.h"
 #include "StreamingTopN.h"

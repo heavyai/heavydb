@@ -17,7 +17,6 @@
 #pragma once
 
 #include "QueryEngine/QueryMemoryInitializer.h"
-#include "Shared/Globals.h"
 
 /*
   The TableFunctionManager implements the following features:

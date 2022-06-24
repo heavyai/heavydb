@@ -21,7 +21,6 @@
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
-#include "Shared/Globals.h"
 #include "Shared/scope.h"
 
 #include <gtest/gtest.h>

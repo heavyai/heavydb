@@ -19,7 +19,6 @@
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/RelAlgExecutor.h"
 #include "SchemaMgr/SimpleSchemaProvider.h"
-#include "Shared/Globals.h"
 #include "Shared/scope.h"
 
 #include "ArrowTestHelpers.h"

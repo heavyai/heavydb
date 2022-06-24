@@ -25,7 +25,6 @@
 #include "ResultSet.h"
 #include "StreamingTopN.h"
 
-#include <Shared/Globals.h>
 #include <Shared/checked_alloc.h>
 #include <ThirdParty/robin_hood.h>
 #include <x86intrin.h>
