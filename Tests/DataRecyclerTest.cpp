@@ -396,7 +396,7 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
   // get query info for DAG cache test in advance
   auto& DAG_CACHE = executor->getQueryPlanDagCache();
 
-  auto original_DAG_cache_max_size = MAX_NODE_CACHE_SIZE;
+  auto original_DAG_cache_max_size = config().cache.dag_cache_size;
   ScopeGuard reset_overlaps_state = [&original_DAG_cache_max_size, &DAG_CACHE] {
     DAG_CACHE.setNodeMapMaxSize(original_DAG_cache_max_size);
   };

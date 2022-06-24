@@ -146,6 +146,10 @@ Executor::Executor(const ExecutorId executor_id,
     , temporary_tables_(nullptr)
     , input_table_info_cache_(this)
     , thread_id_(logger::thread_id()) {
+  std::call_once(first_init_flag_, [this]() {
+    query_plan_dag_cache_ =
+        std::make_unique<QueryPlanDagCache>(config_->cache.dag_cache_size);
+  });
   Executor::initialize_extension_module_sources();
   update_extension_modules();
 }
@@ -4245,13 +4249,13 @@ mapd_shared_mutex& Executor::getDataRecyclerLock() {
 }
 
 QueryPlanDagCache& Executor::getQueryPlanDagCache() {
-  return query_plan_dag_cache_;
+  return *query_plan_dag_cache_;
 }
 
 JoinColumnsInfo Executor::getJoinColumnsInfo(const Analyzer::Expr* join_expr,
                                              JoinColumnSide target_side,
                                              bool extract_only_col_id) {
-  return query_plan_dag_cache_.getJoinColumnsInfoString(
+  return query_plan_dag_cache_->getJoinColumnsInfoString(
       join_expr, target_side, extract_only_col_id);
 }
 
@@ -4625,6 +4629,7 @@ void* Executor::gpu_active_modules_[max_gpu_count];
 std::shared_mutex Executor::register_runtime_extension_functions_mutex_;
 std::mutex Executor::kernel_mutex_;
 
-QueryPlanDagCache Executor::query_plan_dag_cache_;
+std::unique_ptr<QueryPlanDagCache> Executor::query_plan_dag_cache_;
+std::once_flag Executor::first_init_flag_;
 mapd_shared_mutex Executor::recycler_mutex_;
 std::unordered_map<std::string, size_t> Executor::cardinality_cache_;

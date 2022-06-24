@@ -498,6 +498,10 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
           ->default_value(config_->cache.gpu_fraction_code_cache_to_evict),
       "Percentage of the GPU code cache to evict if an out of memory error is "
       "encountered while attempting to place generated code on the GPU.");
+  opt_desc.add_options()("dag-cache-size",
+                         po::value<size_t>(&config_->cache.dag_cache_size)
+                             ->default_value(config_->cache.dag_cache_size),
+                         "Maximum number of nodes in DAG cache");
 
   // debug
   opt_desc.add_options()("build-rel-alg-cache",

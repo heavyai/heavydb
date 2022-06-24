@@ -1263,7 +1263,8 @@ class Executor {
 
   static mapd_shared_mutex executors_cache_mutex_;
 
-  static QueryPlanDagCache query_plan_dag_cache_;
+  static std::unique_ptr<QueryPlanDagCache> query_plan_dag_cache_;
+  static std::once_flag first_init_flag_;
   const QueryPlanHash INVALID_QUERY_PLAN_HASH{std::hash<std::string>{}(EMPTY_QUERY_PLAN)};
   static mapd_shared_mutex recycler_mutex_;
   static std::unordered_map<std::string, size_t> cardinality_cache_;

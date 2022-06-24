@@ -29,8 +29,6 @@
 #include "RelAlgExecutionUnit.h"
 #include "ScalarExprVisitor.h"
 
-constexpr size_t MAX_NODE_CACHE_SIZE = 1e9;  // set ~1GB as cache size threshold
-
 // we manage the uniqueness of node ID by its explained contents that each rel node has
 using RelNodeMap = std::unordered_map<RelNodeExplainedHash, RelNodeId>;
 // we also maintain labeled graph to manage extracted query plan DAG
@@ -84,7 +82,7 @@ class ColumnVarsVisitor
 // plan we have a sequence of node IDs and return it as an extracted query plan DAG
 class QueryPlanDagCache {
  public:
-  QueryPlanDagCache(size_t max_node_cache_size = MAX_NODE_CACHE_SIZE)
+  QueryPlanDagCache(size_t max_node_cache_size = 1e9)
       : max_node_map_size_(max_node_cache_size) {}
 
   QueryPlanDagCache(QueryPlanDagCache&& other) = delete;
