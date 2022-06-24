@@ -35,7 +35,6 @@ const std::string CommandLineOptions::nodeIds_token = {"node_id"};
 extern std::string cluster_command_line_arg;
 
 extern bool g_use_table_device_offset;
-extern float g_fraction_code_cache_to_evict;
 extern bool g_cache_string_hash;
 extern bool g_enable_idp_temporary_users;
 extern int64_t g_large_ndv_threshold;
@@ -337,13 +336,6 @@ void CommandLineOptions::fillAdvancedOptions() {
       "there is not enough free memory to accomodate the target slab size, smaller "
       "slabs will be allocated, down to the minimum size speified by "
       "min-gpu-slab-size.");
-
-  developer_desc.add_options()(
-      "code-cache-eviction-percent",
-      po::value<float>(&g_fraction_code_cache_to_evict)
-          ->default_value(g_fraction_code_cache_to_evict),
-      "Percentage of the GPU code cache to evict if an out of memory error is "
-      "encountered while attempting to place generated code on the GPU.");
 
   developer_desc.add_options()("ssl-cert",
                                po::value<std::string>(&system_parameters.ssl_cert_file)

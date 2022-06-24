@@ -80,8 +80,6 @@ static_assert(false, "LLVM Version >= 9 is required.");
 
 #include <boost/filesystem.hpp>
 
-float g_fraction_code_cache_to_evict = 0.2;
-
 static llvm::sys::Mutex g_ee_create_mutex;
 
 namespace {
@@ -1378,9 +1376,10 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
       // Thrown if memory not able to be allocated on gpu
       // Retry once after evicting portion of code cache
       LOG(WARNING) << "Failed to allocate GPU memory for generated code. Evicting "
-                   << g_fraction_code_cache_to_evict * 100.
+                   << config_->cache.gpu_fraction_code_cache_to_evict * 100.
                    << "% of GPU code cache and re-trying.";
-      Executor::gpu_code_accessor.evictFractionEntries(g_fraction_code_cache_to_evict);
+      Executor::gpu_code_accessor.evictFractionEntries(
+          config_->cache.gpu_fraction_code_cache_to_evict);
       compilation_context = CodeGenerator::generateNativeGPUCode(this,
                                                                  query_func,
                                                                  multifrag_query_func,

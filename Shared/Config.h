@@ -147,6 +147,7 @@ struct CacheConfig {
   bool use_hashtable_cache = true;
   size_t hashtable_cache_total_bytes = 1ULL << 32;
   size_t max_cacheable_hashtable_size_bytes = 1ULL << 31;
+  double gpu_fraction_code_cache_to_evict = 0.2;
 };
 
 struct DebugConfig {

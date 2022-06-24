@@ -492,6 +492,12 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
       po::value<size_t>(&config_->cache.max_cacheable_hashtable_size_bytes)
           ->default_value(config_->cache.max_cacheable_hashtable_size_bytes),
       "The maximum size of hashtable that is available to cache, in bytes");
+  opt_desc.add_options()(
+      "gpu-code-cache-eviction-percent",
+      po::value<double>(&config_->cache.gpu_fraction_code_cache_to_evict)
+          ->default_value(config_->cache.gpu_fraction_code_cache_to_evict),
+      "Percentage of the GPU code cache to evict if an out of memory error is "
+      "encountered while attempting to place generated code on the GPU.");
 
   // debug
   opt_desc.add_options()("build-rel-alg-cache",
