@@ -156,11 +156,7 @@ void CommandLineOptions::fillOptions() {
                               ->implicit_value(1000),
                           "A frequency of checking the request of pending query "
                           "interrupt from user (in millisecond).");
-  help_desc.add_options()("use-estimator-result-cache",
-                          po::value<bool>(&use_estimator_result_cache)
-                              ->default_value(use_estimator_result_cache)
-                              ->implicit_value(true),
-                          "Use estimator result cache.");
+
   if (!dist_v5_) {
     help_desc.add_options()(
         "enable-string-dict-hash-cache",
@@ -688,7 +684,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     }
 
     g_pending_query_interrupt_freq = pending_query_interrupt_freq;
-    g_use_estimator_result_cache = use_estimator_result_cache;
     g_enable_data_recycler = enable_data_recycler;
     g_use_hashtable_cache = use_hashtable_cache;
     g_max_cacheable_hashtable_size_bytes = max_cacheable_hashtable_size_bytes;

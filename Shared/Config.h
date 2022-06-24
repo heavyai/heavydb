@@ -141,6 +141,10 @@ struct MemoryConfig {
   GpuMemoryConfig gpu;
 };
 
+struct CacheConfig {
+  bool use_estimator_result_cache = true;
+};
+
 struct DebugConfig {
   std::string build_ra_cache = "";
   std::string use_ra_cache = "";
@@ -151,6 +155,7 @@ struct Config {
   OptimizationsConfig opts;
   ResultSetConfig rs;
   MemoryConfig mem;
+  CacheConfig cache;
   DebugConfig debug;
 };
 

@@ -467,6 +467,13 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
       "Max part of GPU memory that can be used for input data. Must be in range [0.01, "
       "0.99].");
 
+  // cache
+  opt_desc.add_options()("use-estimator-result-cache",
+                         po::value<bool>(&config_->cache.use_estimator_result_cache)
+                             ->default_value(config_->cache.use_estimator_result_cache)
+                             ->implicit_value(true),
+                         "Use estimator result cache.");
+
   // debug
   opt_desc.add_options()("build-rel-alg-cache",
                          po::value<std::string>(&config_->debug.build_ra_cache)

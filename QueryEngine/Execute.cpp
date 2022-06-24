@@ -78,7 +78,6 @@
 extern std::unique_ptr<llvm::Module> udf_gpu_module;
 extern std::unique_ptr<llvm::Module> udf_cpu_module;
 bool g_enable_table_functions{false};
-bool g_use_estimator_result_cache{true};
 unsigned g_pending_query_interrupt_freq{1000};
 bool g_is_test_env{false};  // operating under a unit test environment. Currently only
                             // limits the allocation for the output buffer arena
@@ -4547,7 +4546,7 @@ bool Executor::checkIsQuerySessionEnrolled(
 
 void Executor::addToCardinalityCache(const std::string& cache_key,
                                      const size_t cache_value) {
-  if (g_use_estimator_result_cache) {
+  if (config_->cache.use_estimator_result_cache) {
     mapd_unique_lock<mapd_shared_mutex> lock(recycler_mutex_);
     cardinality_cache_[cache_key] = cache_value;
     VLOG(1) << "Put estimated cardinality to the cache";
@@ -4556,7 +4555,7 @@ void Executor::addToCardinalityCache(const std::string& cache_key,
 
 Executor::CachedCardinality Executor::getCachedCardinality(const std::string& cache_key) {
   mapd_shared_lock<mapd_shared_mutex> lock(recycler_mutex_);
-  if (g_use_estimator_result_cache &&
+  if (config_->cache.use_estimator_result_cache &&
       cardinality_cache_.find(cache_key) != cardinality_cache_.end()) {
     VLOG(1) << "Reuse cached cardinality";
     return {true, cardinality_cache_[cache_key]};
