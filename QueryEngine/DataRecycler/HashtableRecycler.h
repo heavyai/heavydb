@@ -20,8 +20,6 @@
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 #include "Shared/Config.h"
 
-extern size_t g_max_cacheable_hashtable_size_bytes;
-
 struct QueryPlanMetaInfo {
   QueryPlan query_plan_dag;
   std::string inner_col_info_string;
@@ -37,7 +35,7 @@ class HashtableRecycler
   HashtableRecycler(ConfigPtr config, CacheItemType hashtable_type, int num_gpus)
       : DataRecycler({hashtable_type},
                      config->cache.hashtable_cache_total_bytes,
-                     g_max_cacheable_hashtable_size_bytes,
+                     config->cache.max_cacheable_hashtable_size_bytes,
                      num_gpus)
       , config_(config) {}
 

@@ -487,6 +487,11 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
                          po::value<size_t>(&config_->cache.hashtable_cache_total_bytes)
                              ->default_value(config_->cache.hashtable_cache_total_bytes),
                          "Size of total memory space for hashtable cache, in bytes.");
+  opt_desc.add_options()(
+      "max-cacheable-hashtable-size-bytes",
+      po::value<size_t>(&config_->cache.max_cacheable_hashtable_size_bytes)
+          ->default_value(config_->cache.max_cacheable_hashtable_size_bytes),
+      "The maximum size of hashtable that is available to cache, in bytes");
 
   // debug
   opt_desc.add_options()("build-rel-alg-cache",

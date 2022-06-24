@@ -132,4 +132,3 @@ extern unsigned g_pending_query_interrupt_freq;
 
 extern bool g_enable_automatic_ir_metadata;
 extern size_t g_max_log_length;
-extern size_t g_max_cacheable_hashtable_size_bytes;

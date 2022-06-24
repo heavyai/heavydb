@@ -673,7 +673,8 @@ TEST(DataRecycler, Perfect_Hashtable_Cache_Maintanence) {
       // test 6. set per_hashtable_size_limit to be 18
       // and try to cache t1.x, t2.x and t3.x
       // due to the per item limit, we can cache t1.x's and t2.x's but not t3.x's
-      const auto original_per_max_hashtable_size = g_max_cacheable_hashtable_size_bytes;
+      const auto original_per_max_hashtable_size =
+          config().cache.max_cacheable_hashtable_size_bytes;
       PerfectJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
           CacheItemType::PERFECT_HT, 18);
       ScopeGuard reset_cache_status = [&original_per_max_hashtable_size] {
@@ -896,7 +897,8 @@ TEST(DataRecycler, Baseline_Hashtable_Cache_Maintanence) {
       // test 6. set per_hashtable_size_limit to be 100
       // and try to cache t1 (72 bytes), t2 (96 bytes) and t3 (120 bytes)
       // due to the per item limit, we can cache t1's and t2's but not t3's
-      const auto original_per_max_hashtable_size = g_max_cacheable_hashtable_size_bytes;
+      const auto original_per_max_hashtable_size =
+          config().cache.max_cacheable_hashtable_size_bytes;
       BaselineJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
           CacheItemType::BASELINE_HT, 100);
       ScopeGuard reset_cache_status = [&original_per_max_hashtable_size] {

@@ -146,6 +146,7 @@ struct CacheConfig {
   bool enable_data_recycler = true;
   bool use_hashtable_cache = true;
   size_t hashtable_cache_total_bytes = 1ULL << 32;
+  size_t max_cacheable_hashtable_size_bytes = 1ULL << 31;
 };
 
 struct DebugConfig {
