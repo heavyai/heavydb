@@ -133,8 +133,6 @@ extern bool g_use_estimator_result_cache;
 
 extern bool g_enable_automatic_ir_metadata;
 extern size_t g_max_log_length;
-extern bool g_enable_tiered_cpu_mem;
-extern size_t g_pmem_size;
 extern bool g_enable_data_recycler;
 extern bool g_use_hashtable_cache;
 extern size_t g_hashtable_cache_total_bytes;

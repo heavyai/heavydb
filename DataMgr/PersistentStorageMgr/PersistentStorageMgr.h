@@ -22,7 +22,7 @@ using namespace Data_Namespace;
 
 class PersistentStorageMgr : public AbstractBufferMgr {
  public:
-  PersistentStorageMgr(const std::string& data_dir, const size_t num_reader_threads);
+  PersistentStorageMgr(const size_t num_reader_threads);
 
   AbstractBuffer* createBuffer(const ChunkKey& chunk_key,
                                const size_t page_size,

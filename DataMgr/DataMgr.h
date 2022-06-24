@@ -36,6 +36,7 @@
 #include "OSDependent/omnisci_fs.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
 #include "SchemaMgr/ColumnInfo.h"
+#include "Shared/Config.h"
 
 #include <fstream>
 #include <iomanip>
@@ -154,7 +155,7 @@ class ProcBuddyinfoParser {
 
 class DataMgr {
  public:
-  explicit DataMgr(const std::string& dataDir,
+  explicit DataMgr(const Config& config,
                    const SystemParameters& system_parameters,
                    std::map<GpuMgrName, std::unique_ptr<GpuMgr>>&& gpuMgrs,
                    const size_t reservedGpuMem = (1 << 27),
@@ -217,8 +218,6 @@ class DataMgr {
   static size_t getTotalSystemMemory();
 
   PersistentStorageMgr* getPersistentStorageMgr() const;
-  void resetPersistentStorage(const size_t num_reader_threads,
-                              const SystemParameters& sys_params);
 
   // Used for testing.
   Buffer_Namespace::CpuBufferMgr* getCpuBufferMgr() const;
@@ -232,11 +231,13 @@ class DataMgr {
   DataProvider* getDataProvider() const { return data_provider_.get(); }
 
  private:
-  void populateMgrs(const SystemParameters& system_parameters,
+  void populateMgrs(const Config& config,
+                    const SystemParameters& system_parameters,
                     const size_t userSpecifiedNumReaderThreads);
   void convertDB(const std::string basePath);
   void createTopLevelMetadata() const;
   void allocateCpuBufferMgr(int32_t device_id,
+                            bool enable_tiered_cpu_mem,
                             size_t total_cpu_size,
                             size_t minCpuSlabSize,
                             size_t maxCpuSlabSize,
@@ -246,7 +247,6 @@ class DataMgr {
   std::vector<std::vector<AbstractBufferMgr*>> bufferMgrs_;
   GpuMgr* gpuMgrContext_;
   std::map<GpuMgrName, std::unique_ptr<GpuMgr>> gpuMgrs_;
-  std::string dataDir_;
   bool hasGpus_;
   size_t reservedGpuMem_;
   std::unique_ptr<DataMgrBufferProvider> buffer_provider_;

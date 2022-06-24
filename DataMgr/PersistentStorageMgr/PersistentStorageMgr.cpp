@@ -18,13 +18,8 @@
 
 #include "SchemaMgr/SchemaProvider.h"
 
-PersistentStorageMgr::PersistentStorageMgr(const std::string& data_dir,
-                                           const size_t num_reader_threads)
-    : AbstractBufferMgr(0) {
-  if (data_dir != "") {
-    UNREACHABLE();
-  }
-}
+PersistentStorageMgr::PersistentStorageMgr(const size_t num_reader_threads)
+    : AbstractBufferMgr(0) {}
 
 AbstractBuffer* PersistentStorageMgr::createBuffer(const ChunkKey& chunk_key,
                                                    const size_t page_size,

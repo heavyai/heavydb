@@ -414,6 +414,17 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
                              ->implicit_value(true),
                          "Enable lazy fetch columns in query results.");
 
+  // mem.cpu
+  opt_desc.add_options()("enable-tiered-cpu-mem",
+                         po::value<bool>(&config_->mem.cpu.enable_tiered_cpu_mem)
+                             ->default_value(config_->mem.cpu.enable_tiered_cpu_mem)
+                             ->implicit_value(true),
+                         "Enable additional tiers of CPU memory (PMEM, etc...)");
+  opt_desc.add_options()("pmem-size",
+                         po::value<size_t>(&config_->mem.cpu.pmem_size)
+                             ->default_value(config_->mem.cpu.pmem_size),
+                         "An amount of PMEM memory to use.");
+
   // mem.gpu
   opt_desc.add_options()(
       "enable-bump-allocator",

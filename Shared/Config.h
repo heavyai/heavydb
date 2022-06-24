@@ -131,7 +131,13 @@ struct GpuMemoryConfig {
   double input_mem_limit_percent = 0.9;
 };
 
+struct CpuMemoryConfig {
+  bool enable_tiered_cpu_mem = false;
+  size_t pmem_size = 0;
+};
+
 struct MemoryConfig {
+  CpuMemoryConfig cpu;
   GpuMemoryConfig gpu;
 };
 

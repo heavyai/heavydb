@@ -349,8 +349,8 @@ class ArrowSQLRunnerImpl {
 
     SystemParameters system_parameters;
     system_parameters.gpu_buffer_mem_bytes = max_gpu_mem;
-    data_mgr_ =
-        std::make_shared<DataMgr>("", system_parameters, std::move(gpu_mgrs), uses_gpu);
+    data_mgr_ = std::make_shared<DataMgr>(
+        *config_, system_parameters, std::move(gpu_mgrs), uses_gpu);
     auto* ps_mgr = data_mgr_->getPersistentStorageMgr();
     ps_mgr->registerDataProvider(TEST_SCHEMA_ID, storage_);
 

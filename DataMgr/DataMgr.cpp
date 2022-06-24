@@ -36,18 +36,14 @@
 #include <algorithm>
 #include <limits>
 
-bool g_enable_tiered_cpu_mem{false};
-size_t g_pmem_size{0};
-
 namespace Data_Namespace {
 
-DataMgr::DataMgr(const std::string& dataDir,
+DataMgr::DataMgr(const Config& config,
                  const SystemParameters& system_parameters,
                  std::map<GpuMgrName, std::unique_ptr<GpuMgr>>&& gpuMgrs,
                  const size_t reservedGpuMem,
                  const size_t numReaderThreads)
     : gpuMgrContext_(nullptr)
-    , dataDir_(dataDir)
     , hasGpus_(false)
     , reservedGpuMem_(reservedGpuMem)
     , buffer_provider_(std::make_unique<DataMgrBufferProvider>(this))
@@ -67,7 +63,7 @@ DataMgr::DataMgr(const std::string& dataDir,
     hasGpus_ = true;
   }
 
-  populateMgrs(system_parameters, numReaderThreads);
+  populateMgrs(config, system_parameters, numReaderThreads);
   createTopLevelMetadata();
 }
 
@@ -161,6 +157,7 @@ size_t DataMgr::getTotalSystemMemory() {
 }
 
 void DataMgr::allocateCpuBufferMgr(int32_t device_id,
+                                   bool enable_tiered_cpu_mem,
                                    size_t total_cpu_size,
                                    size_t minCpuSlabSize,
                                    size_t maxCpuSlabSize,
@@ -168,7 +165,7 @@ void DataMgr::allocateCpuBufferMgr(int32_t device_id,
                                    const CpuTierSizeVector& cpu_tier_sizes) {
   GpuMgr* gpuMgr = getGpuMgr();
 
-  if (g_enable_tiered_cpu_mem) {
+  if (enable_tiered_cpu_mem) {
     bufferMgrs_[1].push_back(new Buffer_Namespace::TieredCpuBufferMgr(0,
                                                                       total_cpu_size,
                                                                       gpuMgr,
@@ -188,26 +185,12 @@ void DataMgr::allocateCpuBufferMgr(int32_t device_id,
   }
 }
 
-// This function exists for testing purposes so that we can test a reset of the cache.
-void DataMgr::resetPersistentStorage(const size_t num_reader_threads,
-                                     const SystemParameters& sys_params) {
-  int numLevels = bufferMgrs_.size();
-  for (int level = numLevels - 1; level >= 0; --level) {
-    for (size_t device = 0; device < bufferMgrs_[level].size(); device++) {
-      delete bufferMgrs_[level][device];
-    }
-  }
-  bufferMgrs_.clear();
-  populateMgrs(sys_params, num_reader_threads);
-  createTopLevelMetadata();
-}
-
-void DataMgr::populateMgrs(const SystemParameters& system_parameters,
+void DataMgr::populateMgrs(const Config& config,
+                           const SystemParameters& system_parameters,
                            const size_t userSpecifiedNumReaderThreads) {
   // no need for locking, as this is only called in the constructor
   bufferMgrs_.resize(2);
-  bufferMgrs_[0].push_back(
-      new PersistentStorageMgr(dataDir_, userSpecifiedNumReaderThreads));
+  bufferMgrs_[0].push_back(new PersistentStorageMgr(userSpecifiedNumReaderThreads));
 
   levelSizes_.push_back(1);  // levelSizes_[DISK_LEVEL] = 1
   size_t page_size{512};
@@ -231,10 +214,10 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
   CpuTierSizeVector cpu_tier_sizes(numCpuTiers, 0);
   cpu_tier_sizes[CpuTier::DRAM] = cpuBufferSize;
 
-  if (g_enable_tiered_cpu_mem) {
-    cpu_tier_sizes[CpuTier::PMEM] = g_pmem_size;
-    LOG(INFO) << "Max memory pool size for PMEM is " << (float)g_pmem_size / (1024 * 1024)
-              << "MB";
+  if (config.mem.cpu.enable_tiered_cpu_mem) {
+    cpu_tier_sizes[CpuTier::PMEM] = config.mem.cpu.pmem_size;
+    LOG(INFO) << "Max memory pool size for PMEM is "
+              << (float)config.mem.cpu.pmem_size / (1024 * 1024) << "MB";
   }
 
   size_t total_cpu_size = 0;
@@ -253,8 +236,13 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
     LOG(INFO) << "Reserved GPU memory is " << (float)reservedGpuMem_ / (1024 * 1024)
               << "MB includes render buffer allocation";
     bufferMgrs_.resize(3);
-    allocateCpuBufferMgr(
-        0, total_cpu_size, minCpuSlabSize, maxCpuSlabSize, page_size, cpu_tier_sizes);
+    allocateCpuBufferMgr(0,
+                         config.mem.cpu.enable_tiered_cpu_mem,
+                         total_cpu_size,
+                         minCpuSlabSize,
+                         maxCpuSlabSize,
+                         page_size,
+                         cpu_tier_sizes);
 
     levelSizes_.push_back(1);  // levelSizes_[CPU_LEVEL] = 1
     int numGpus = getGpuMgr()->getDeviceCount();
@@ -300,8 +288,13 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
     }
     levelSizes_.push_back(numGpus);  // levelSizes_[GPU_LEVEL] = numGpus
   } else {
-    allocateCpuBufferMgr(
-        0, total_cpu_size, minCpuSlabSize, maxCpuSlabSize, page_size, cpu_tier_sizes);
+    allocateCpuBufferMgr(0,
+                         config.mem.cpu.enable_tiered_cpu_mem,
+                         total_cpu_size,
+                         minCpuSlabSize,
+                         maxCpuSlabSize,
+                         page_size,
+                         cpu_tier_sizes);
     levelSizes_.push_back(1);  // levelSizes_[CPU_LEVEL] = 1
   }
 }
