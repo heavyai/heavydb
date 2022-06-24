@@ -17,6 +17,7 @@
 #pragma once
 
 #include "DataRecycler.h"
+#include "Shared/Config.h"
 
 constexpr DeviceIdentifier LAYOUT_CACHE_DEVICE_IDENTIFIER =
     DataRecyclerUtil::CPU_DEVICE_IDENTIFIER;
@@ -27,11 +28,12 @@ class HashingSchemeRecycler
   // hashing scheme recycler caches logical information instead of actual data
   // so we do not limit its capacity
   // thus we do not maintain a metric cache for hashing scheme
-  HashingSchemeRecycler()
+  HashingSchemeRecycler(ConfigPtr config)
       : DataRecycler({CacheItemType::HT_HASHING_SCHEME},
                      std::numeric_limits<size_t>::max(),
                      std::numeric_limits<size_t>::max(),
-                     0) {}
+                     0)
+      , config_(config) {}
 
   std::optional<HashType> getItemFromCache(
       QueryPlanHash key,
@@ -79,4 +81,6 @@ class HashingSchemeRecycler
       size_t required_size,
       std::lock_guard<std::mutex>& lock,
       std::optional<EMPTY_META_INFO> meta_info = std::nullopt) override {}
+
+  ConfigPtr config_;
 };

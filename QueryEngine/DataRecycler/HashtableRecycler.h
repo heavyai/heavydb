@@ -18,6 +18,7 @@
 
 #include "DataRecycler.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
+#include "Shared/Config.h"
 
 extern size_t g_hashtable_cache_total_bytes;
 extern size_t g_max_cacheable_hashtable_size_bytes;
@@ -34,11 +35,12 @@ struct HashtableCacheMetaInfo {
 class HashtableRecycler
     : public DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo> {
  public:
-  HashtableRecycler(CacheItemType hashtable_type, int num_gpus)
+  HashtableRecycler(ConfigPtr config, CacheItemType hashtable_type, int num_gpus)
       : DataRecycler({hashtable_type},
                      g_hashtable_cache_total_bytes,
                      g_max_cacheable_hashtable_size_bytes,
-                     num_gpus) {}
+                     num_gpus)
+      , config_(config) {}
 
   std::shared_ptr<HashTable> getItemFromCache(
       QueryPlanHash key,
@@ -123,4 +125,6 @@ class HashtableRecycler
       size_t required_size,
       std::lock_guard<std::mutex>& lock,
       std::optional<HashtableCacheMetaInfo> meta_info = std::nullopt) override;
+
+  ConfigPtr config_;
 };

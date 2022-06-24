@@ -473,6 +473,11 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
                              ->default_value(config_->cache.use_estimator_result_cache)
                              ->implicit_value(true),
                          "Use estimator result cache.");
+  opt_desc.add_options()("enable-data-recycler",
+                         po::value<bool>(&config_->cache.enable_data_recycler)
+                             ->default_value(config_->cache.enable_data_recycler)
+                             ->implicit_value(true),
+                         "Use data recycler.");
 
   // debug
   opt_desc.add_options()("build-rel-alg-cache",

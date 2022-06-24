@@ -19,7 +19,6 @@
 
 extern bool g_is_test_env;
 extern bool g_use_hashtable_cache;
-extern bool g_enable_data_recycler;
 
 bool HashtableRecycler::hasItemInCache(
     QueryPlanHash key,
@@ -27,7 +26,7 @@ bool HashtableRecycler::hasItemInCache(
     DeviceIdentifier device_identifier,
     std::lock_guard<std::mutex>& lock,
     std::optional<HashtableCacheMetaInfo> meta_info) const {
-  if (!g_enable_data_recycler || !g_use_hashtable_cache ||
+  if (!config_->cache.enable_data_recycler || !g_use_hashtable_cache ||
       key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return false;
   }
@@ -46,7 +45,7 @@ std::shared_ptr<HashTable> HashtableRecycler::getItemFromCache(
     CacheItemType item_type,
     DeviceIdentifier device_identifier,
     std::optional<HashtableCacheMetaInfo> meta_info) const {
-  if (!g_enable_data_recycler || !g_use_hashtable_cache ||
+  if (!config_->cache.enable_data_recycler || !g_use_hashtable_cache ||
       key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return nullptr;
   }
@@ -70,7 +69,7 @@ void HashtableRecycler::putItemToCache(QueryPlanHash key,
                                        size_t item_size,
                                        size_t compute_time,
                                        std::optional<HashtableCacheMetaInfo> meta_info) {
-  if (!g_enable_data_recycler || !g_use_hashtable_cache ||
+  if (!config_->cache.enable_data_recycler || !g_use_hashtable_cache ||
       key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return;
   }
@@ -114,7 +113,7 @@ void HashtableRecycler::removeItemFromCache(
     DeviceIdentifier device_identifier,
     std::lock_guard<std::mutex>& lock,
     std::optional<HashtableCacheMetaInfo> meta_info) {
-  if (!g_enable_data_recycler || !g_use_hashtable_cache ||
+  if (!config_->cache.enable_data_recycler || !g_use_hashtable_cache ||
       key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return;
   }

@@ -31,11 +31,9 @@
 
 // let's only consider CPU hashtable recycler at this moment
 // todo (yoonmin): support GPU hashtable cache without regression
-std::unique_ptr<HashtableRecycler> BaselineJoinHashTable::hash_table_cache_ =
-    std::make_unique<HashtableRecycler>(CacheItemType::BASELINE_HT,
-                                        DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-std::unique_ptr<HashingSchemeRecycler> BaselineJoinHashTable::hash_table_layout_cache_ =
-    std::make_unique<HashingSchemeRecycler>();
+std::unique_ptr<HashtableRecycler> BaselineJoinHashTable::hash_table_cache_;
+std::unique_ptr<HashingSchemeRecycler> BaselineJoinHashTable::hash_table_layout_cache_;
+std::once_flag BaselineJoinHashTable::init_caches_flag_;
 
 //! Make hash table from an in-flight SQL query's parse tree etc.
 std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
@@ -50,6 +48,8 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     Executor* executor,
     const HashTableBuildDagMap& hashtable_build_dag_map,
     const TableIdToNodeMap& table_id_to_node_map) {
+  initCaches(executor->getConfigPtr());
+
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
 
   if (VLOGGING(1)) {
@@ -111,6 +111,14 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
             << " ms";
   }
   return join_hash_table;
+}
+
+void BaselineJoinHashTable::initCaches(ConfigPtr config) {
+  std::call_once(init_caches_flag_, [&config]() {
+    hash_table_cache_ = std::make_unique<HashtableRecycler>(
+        config, CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    hash_table_layout_cache_ = std::make_unique<HashingSchemeRecycler>(config);
+  });
 }
 
 BaselineJoinHashTable::BaselineJoinHashTable(

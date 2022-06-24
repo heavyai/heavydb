@@ -31,11 +31,9 @@
 #include "QueryEngine/RuntimeFunctions.h"
 
 // let's only consider CPU hahstable recycler at this moment
-std::unique_ptr<HashtableRecycler> PerfectJoinHashTable::hash_table_cache_ =
-    std::make_unique<HashtableRecycler>(CacheItemType::PERFECT_HT,
-                                        DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-std::unique_ptr<HashingSchemeRecycler> PerfectJoinHashTable::hash_table_layout_cache_ =
-    std::make_unique<HashingSchemeRecycler>();
+std::unique_ptr<HashtableRecycler> PerfectJoinHashTable::hash_table_cache_;
+std::unique_ptr<HashingSchemeRecycler> PerfectJoinHashTable::hash_table_layout_cache_;
+std::once_flag PerfectJoinHashTable::init_caches_flag_;
 
 namespace {
 
@@ -97,6 +95,8 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     Executor* executor,
     const HashTableBuildDagMap& hashtable_build_dag_map,
     const TableIdToNodeMap& table_id_to_node_map) {
+  initCaches(executor->getConfigPtr());
+
   CHECK(IS_EQUIVALENCE(qual_bin_oper->get_optype()));
   const auto cols = get_cols(
       qual_bin_oper.get(), executor->getSchemaProvider(), executor->temporary_tables_);
@@ -223,6 +223,14 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
             << " ms";
   }
   return join_hash_table;
+}
+
+void PerfectJoinHashTable::initCaches(ConfigPtr config) {
+  std::call_once(init_caches_flag_, [&]() {
+    hash_table_cache_ = std::make_unique<HashtableRecycler>(
+        config, CacheItemType::PERFECT_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    hash_table_layout_cache_ = std::make_unique<HashingSchemeRecycler>(config);
+  });
 }
 
 bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,

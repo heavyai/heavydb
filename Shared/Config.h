@@ -143,6 +143,7 @@ struct MemoryConfig {
 
 struct CacheConfig {
   bool use_estimator_result_cache = true;
+  bool enable_data_recycler = true;
 };
 
 struct DebugConfig {

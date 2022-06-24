@@ -686,7 +686,11 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
-  init();
+  auto config = std::make_shared<Config>();
+
+  init(config);
+  PerfectJoinHashTable::initCaches(config);
+  BaselineJoinHashTable::initCaches(config);
 
   int err{0};
   try {

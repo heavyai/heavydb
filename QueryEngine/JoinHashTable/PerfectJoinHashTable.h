@@ -120,6 +120,8 @@ class PerfectJoinHashTable : public HashJoin {
     };
   }
 
+  static void initCaches(ConfigPtr config);
+
   virtual ~PerfectJoinHashTable() {}
 
  private:
@@ -261,6 +263,7 @@ class PerfectJoinHashTable : public HashJoin {
 
   static std::unique_ptr<HashtableRecycler> hash_table_cache_;
   static std::unique_ptr<HashingSchemeRecycler> hash_table_layout_cache_;
+  static std::once_flag init_caches_flag_;
 };
 
 bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,

@@ -18,14 +18,13 @@
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 
 extern bool g_use_hashtable_cache;
-extern bool g_enable_data_recycler;
 
 std::optional<HashType> HashingSchemeRecycler::getItemFromCache(
     QueryPlanHash key,
     CacheItemType item_type,
     DeviceIdentifier device_identifier,
     std::optional<EMPTY_META_INFO> meta_info) const {
-  if (!g_enable_data_recycler || !g_use_hashtable_cache ||
+  if (!config_->cache.enable_data_recycler || !g_use_hashtable_cache ||
       key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return std::nullopt;
   }
@@ -50,7 +49,7 @@ void HashingSchemeRecycler::putItemToCache(QueryPlanHash key,
                                            size_t item_size,
                                            size_t compute_time,
                                            std::optional<EMPTY_META_INFO> meta_info) {
-  if (!g_enable_data_recycler || !g_use_hashtable_cache ||
+  if (!config_->cache.enable_data_recycler || !g_use_hashtable_cache ||
       key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return;
   }
@@ -97,7 +96,7 @@ bool HashingSchemeRecycler::hasItemInCache(
     DeviceIdentifier device_identifier,
     std::lock_guard<std::mutex>& lock,
     std::optional<EMPTY_META_INFO> meta_info) const {
-  if (!g_enable_data_recycler || !g_use_hashtable_cache ||
+  if (!config_->cache.enable_data_recycler || !g_use_hashtable_cache ||
       key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return false;
   }
