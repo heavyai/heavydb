@@ -53,6 +53,7 @@ pcre | [BSD](<http://www.pcre.org/licence.txt>) | GDAL, KML import |
 proj4 | [MIT](<http://proj4.org/license.html>) | GDAL, Geospatial reprojection |
 shapelib | [MIT](<http://shapelib.maptools.org/license.html>) | GDAL, Shapefile import |
 uriparser | [BSD](<https://sourceforge.net/p/uriparser/git/ci/master/tree/COPYING>) | GDAL, KML import |
+pdal | [BSD](https://raw.githubusercontent.com/PDAL/PDAL/master/LICENSE.txt) | Point cloud import |
 --- | --- | --- |
 generate\_cert (Go) | [BSD](<https://github.com/golang/go/blob/master/LICENSE>) | HTTPS certificate generator |
 gorilla/context | [BSD](<https://github.com/gorilla/context/blob/master/LICENSE>) | HTTP session handlers |

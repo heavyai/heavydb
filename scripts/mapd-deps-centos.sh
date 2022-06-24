@@ -215,6 +215,7 @@ install_blosc
 # Geo Support
 install_gdal
 install_geos
+install_pdal
 
 # TBB
 install_tbb static

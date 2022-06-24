@@ -145,6 +145,7 @@ install_blosc
 # Geo Support
 install_gdal
 install_geos
+install_pdal
 
 # install AWS core and s3 sdk
 install_awscpp -j $(nproc)
