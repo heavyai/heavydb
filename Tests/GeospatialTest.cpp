@@ -2342,6 +2342,12 @@ TEST_F(GeoSpatialTempTables, Geos) {
             R"(SELECT ST_Area(ST_Buffer('LINESTRING(0 0, 10 0, 10 10)', 1.0)) FROM geospatial_test WHERE id = 3;)",
             dt)),
         static_cast<double>(0.03)));
+    EXPECT_GPU_THROW(ASSERT_NEAR(
+        static_cast<double>(42.9018),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Area(ST_Buffer('MULTILINESTRING((0 0, 10 0, 10 10))', 1.0)) FROM geospatial_test WHERE id = 3;)",
+            dt)),
+        static_cast<double>(0.03)));
     // ST_IsValid
     EXPECT_GPU_THROW(
         ASSERT_EQ(static_cast<int64_t>(1),

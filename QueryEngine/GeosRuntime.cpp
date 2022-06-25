@@ -134,6 +134,21 @@ bool toWkb(WKB& wkb,
     return linestring.getWkb(wkb);
   }
   std::vector<int32_t> meta1v(meta1, meta1 + meta1_size);
+  if (static_cast<SQLTypes>(type) == kMULTILINESTRING) {
+    GeoMultiLineString multilinestring(*cv, meta1v);
+    if (execute_transform && !multilinestring.transform(srid_in, srid_out)) {
+      return false;
+    }
+    if (best_planar_srid_ptr) {
+      // A non-NULL pointer signifies a request to find the best planar srid
+      // to transform this WGS84 geometry to, based on geometry's centroid.
+      *best_planar_srid_ptr = multilinestring.getBestPlanarSRID();
+      if (!multilinestring.transform(4326, *best_planar_srid_ptr)) {
+        return false;
+      }
+    }
+    return multilinestring.getWkb(wkb);
+  }
   if (static_cast<SQLTypes>(type) == kPOLYGON) {
     GeoPolygon poly(*cv, meta1v);
     if (execute_transform && !poly.transform(srid_in, srid_out)) {
