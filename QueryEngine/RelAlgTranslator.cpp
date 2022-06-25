@@ -1740,6 +1740,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     CHECK_EQ(rex_function->size(), size_t(1));
     return translateUnaryGeoFunction(rex_function);
   }
+  if (func_resolve(rex_function->getName(), "ST_ConvexHull"sv)) {
+    CHECK_EQ(rex_function->size(), size_t(1));
+    SQLTypeInfo ti;
+    return translateUnaryGeoConstructor(rex_function, ti, false);
+  }
   if (func_resolve(rex_function->getName(),
                    "convert_meters_to_pixel_width"sv,
                    "convert_meters_to_pixel_height"sv,
@@ -1788,7 +1793,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "ST_Intersection"sv,
                    "ST_Difference"sv,
                    "ST_Union"sv,
-                   "ST_Buffer"sv)) {
+                   "ST_Buffer"sv,
+                   "ST_ConcaveHull"sv)) {
+    CHECK_EQ(rex_function->size(), size_t(2));
     SQLTypeInfo ti;
     return translateBinaryGeoConstructor(rex_function, ti, false);
   }

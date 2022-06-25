@@ -324,7 +324,9 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
                                         "ST_Intersection"sv,
                                         "ST_Difference"sv,
                                         "ST_Union"sv,
-                                        "ST_Buffer"sv)) {
+                                        "ST_Buffer"sv,
+                                        "ST_ConcaveHull"sv,
+                                        "ST_ConvexHull"sv)) {
         // TODO: the design of geo operators currently doesn't allow input srid overrides.
         // For example, in case of ST_Area(ST_Transform(ST_Buffer(geo_column,0), 900913))
         // we can ask geos runtime to transform ST_Buffer's output from 4326 to 900913,
@@ -802,11 +804,16 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
           std::vector<std::shared_ptr<Analyzer::Expr>>{geoargs.front()},
           legacy_transform_srid > 0 ? std::make_optional<int>(legacy_transform_srid)
                                     : std::nullopt)};
+    } else if (func_resolve(rex_function->getName(), "ST_ConvexHull"sv)) {
+      CHECK_EQ(size_t(1), rex_function->size());
+      // What geo type will the constructor return? Could be anything.
+      return {translateUnaryGeoConstructor(rex_function, arg_ti, with_bounds)};
     } else if (func_resolve(rex_function->getName(),
                             "ST_Intersection"sv,
                             "ST_Difference"sv,
                             "ST_Union"sv,
-                            "ST_Buffer"sv)) {
+                            "ST_Buffer"sv,
+                            "ST_ConcaveHull"sv)) {
       CHECK_EQ(size_t(2), rex_function->size());
       // What geo type will the constructor return? Could be anything.
       return {translateBinaryGeoConstructor(rex_function, arg_ti, with_bounds)};
@@ -895,7 +902,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoProjection(
                                       "ST_Intersection"sv,
                                       "ST_Difference"sv,
                                       "ST_Union"sv,
-                                      "ST_Buffer"sv)) {
+                                      "ST_Buffer"sv,
+                                      "ST_ConcaveHull"sv,
+                                      "ST_ConvexHull"sv)) {
       // Allow projection of gdal-transformed geos outputs
       allow_gdal_transform = true;
     }
@@ -924,6 +933,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoConstructor(
     op = Geospatial::GeoBase::GeoOp::kUNION;
   } else if (rex_function->getName() == "ST_Buffer"sv) {
     op = Geospatial::GeoBase::GeoOp::kBUFFER;
+  } else if (rex_function->getName() == "ST_ConcaveHull"sv) {
+    op = Geospatial::GeoBase::GeoOp::kCONCAVEHULL;
   }
 
   Analyzer::ExpressionPtrVector geoargs0{};
@@ -934,7 +945,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoConstructor(
                    "ST_Intersection"sv,
                    "ST_Difference"sv,
                    "ST_Union"sv,
-                   "ST_Buffer"sv)) {
+                   "ST_Buffer"sv,
+                   "ST_ConcaveHull"sv)) {
     // First arg: geometry
     geoargs0 = translateGeoFunctionArg(rex_function->getOperand(0),
                                        arg0_ti,
@@ -964,7 +976,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoConstructor(
       throw QueryNotSupported(rex_function->getName() +
                               " geo constructor requires arguments with matching srids");
     }
-  } else if (func_resolve(rex_function->getName(), "ST_Buffer"sv)) {
+  } else if (func_resolve(rex_function->getName(), "ST_Buffer"sv, "ST_ConcaveHull"sv)) {
     // Second arg: double scalar
     auto param_expr = translateScalarRex(rex_function->getOperand(1));
     arg1_ti = SQLTypeInfo(kDOUBLE, false);
@@ -1039,6 +1051,58 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoPredicate(
   ti = SQLTypeInfo(kBOOLEAN, false);
   auto op = Geospatial::GeoBase::GeoOp::kEQUALS;
   return makeExpr<Analyzer::GeoBinOper>(op, ti, arg0_ti, arg1_ti, geoargs0, geoargs1);
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoConstructor(
+    const RexFunctionOperator* rex_function,
+    SQLTypeInfo& ti,
+    const bool with_bounds) const {
+#ifndef ENABLE_GEOS
+  throw QueryNotSupported(rex_function->getName() +
+                          " geo constructor requires enabled GEOS support");
+#endif
+  Geospatial::GeoBase::GeoOp op = Geospatial::GeoBase::GeoOp::kCONVEXHULL;
+
+  Analyzer::ExpressionPtrVector geoargs0{};
+  SQLTypeInfo arg0_ti;
+  if (func_resolve(rex_function->getName(), "ST_ConvexHull"sv)) {
+    // First arg: geometry
+    geoargs0 = translateGeoFunctionArg(rex_function->getOperand(0),
+                                       arg0_ti,
+                                       false,
+                                       false,
+                                       true,
+                                       true,
+                                       false,
+                                       false,
+                                       /* allow_gdal_transforms = */ true);
+  }
+
+  // Record the optional transform request that can be sent by an ecompassing TRANSFORM
+  auto srid = ti.get_output_srid();
+  // Build the typeinfo of the constructed geometry
+  SQLTypeInfo arg_ti = arg0_ti;
+  arg_ti.set_type(kMULTIPOLYGON);
+  arg_ti.set_subtype(kGEOMETRY);
+  arg_ti.set_compression(kENCODING_NONE);  // Constructed geometries are not compressed
+  arg_ti.set_comp_param(0);
+  arg_ti.set_input_srid(arg0_ti.get_output_srid());
+  if (srid > 0) {
+    if (arg_ti.get_input_srid() > 0) {
+      // Constructed geometry to be transformed to srid given by encompassing transform
+      arg_ti.set_output_srid(srid);
+    } else {
+      throw QueryNotSupported("Transform of geo constructor " + rex_function->getName() +
+                              " requires its argument(s) to have a valid srid");
+    }
+  } else {
+    arg_ti.set_output_srid(arg_ti.get_input_srid());  // No encompassing transform
+  }
+  // If there was an output transform, it's now embedded into arg_ti and the geo operator.
+  // Now de-register the transform from the return typeinfo:
+  ti = arg_ti;
+  ti.set_input_srid(ti.get_output_srid());
+  return makeExpr<Analyzer::GeoUOper>(op, arg_ti, arg0_ti, geoargs0);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(

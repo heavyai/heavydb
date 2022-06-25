@@ -229,6 +229,17 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
     return codegenGeosPredicateCall(func, argument_list, co);
   }
 
+  if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kCONVEXHULL) {
+    func += "_double"s;  // Use same interface as ST_ConcaveHull, with a dummy double
+
+    // Insert that dummy double arg
+    argument_list.insert(argument_list.end(), cgen_state_->llFp(double(0)));
+
+    auto result_srid = cgen_state_->llInt(geo_expr->get_type_info().get_output_srid());
+
+    return codegenGeosConstructorCall(func, argument_list, result_srid, co);
+  }
+
   throw std::runtime_error("Unsupported unary geo operation.");
   return {};
 }
@@ -317,6 +328,13 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
   } else if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kBUFFER) {
     // Extra argument in this case is double
     func += "_double"s;
+  } else if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kCONCAVEHULL) {
+#if (GEOS_VERSION_MAJOR > 3) || (GEOS_VERSION_MAJOR == 3 && GEOS_VERSION_MINOR >= 11)
+    // Extra argument in this case is double
+    func += "_double"s;
+#else
+    throw std::runtime_error("ST_ConcaveHull requires GEOS 3.11 or newer");
+#endif
   } else {
     throw std::runtime_error("Unsupported binary geo operation.");
   }
@@ -324,7 +342,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
   // Append arg1 to the list
   argument_list.insert(argument_list.end(), arg1_list.begin(), arg1_list.end());
 
-  // Deal with unary geo predicates
+  // Deal with binary geo predicates
   if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kEQUALS) {
     return codegenGeosPredicateCall(func, argument_list, co);
   }

@@ -584,6 +584,12 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_double(
       } else {
         g = GEOSGeom_clone_r(context, g1);
       }
+    } else if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kCONCAVEHULL) {
+#if (GEOS_VERSION_MAJOR > 3) || (GEOS_VERSION_MAJOR == 3 && GEOS_VERSION_MINOR >= 11)
+      g = GEOSConcaveHull_r(context, g1, arg2);
+#endif
+    } else if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kCONVEXHULL) {
+      g = GEOSConvexHull_r(context, g1);
     }
     g = postprocess(context, g);
     if (g) {

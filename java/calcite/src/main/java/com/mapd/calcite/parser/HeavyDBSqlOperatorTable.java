@@ -248,6 +248,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new ST_Point());
     opTab.addOperator(new ST_Centroid());
     opTab.addOperator(new ST_Buffer());
+    opTab.addOperator(new ST_ConcaveHull());
+    opTab.addOperator(new ST_ConvexHull());
     opTab.addOperator(new ST_Intersection());
     opTab.addOperator(new ST_Union());
     opTab.addOperator(new ST_Difference());
@@ -2121,6 +2123,57 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       st_buffer_sig.add(SqlTypeFamily.ANY);
       st_buffer_sig.add(SqlTypeFamily.NUMERIC);
       return st_buffer_sig;
+    }
+  }
+
+  static class ST_ConcaveHull extends SqlFunction {
+    ST_ConcaveHull() {
+      super("ST_ConcaveHull",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 2;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> st_concavehull_sig =
+              new java.util.ArrayList<SqlTypeFamily>();
+      st_concavehull_sig.add(SqlTypeFamily.ANY);
+      st_concavehull_sig.add(SqlTypeFamily.NUMERIC);
+      return st_concavehull_sig;
+    }
+  }
+
+  static class ST_ConvexHull extends SqlFunction {
+    ST_ConvexHull() {
+      super("ST_ConvexHull",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> st_convexhull_sig =
+              new java.util.ArrayList<SqlTypeFamily>();
+      st_convexhull_sig.add(SqlTypeFamily.ANY);
+      return st_convexhull_sig;
     }
   }
 

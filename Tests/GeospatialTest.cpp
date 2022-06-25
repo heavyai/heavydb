@@ -2348,6 +2348,28 @@ TEST_F(GeoSpatialTempTables, Geos) {
             R"(SELECT ST_Area(ST_Buffer('MULTILINESTRING((0 0, 10 0, 10 10))', 1.0)) FROM geospatial_test WHERE id = 3;)",
             dt)),
         static_cast<double>(0.03)));
+    // ST_ConcaveHull
+#if (GEOS_VERSION_MAJOR > 3) || (GEOS_VERSION_MAJOR == 3 && GEOS_VERSION_MINOR >= 11)
+    EXPECT_GPU_THROW(ASSERT_NEAR(
+        static_cast<double>(22565.6485058608),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Area(ST_ConcaveHull(ST_GeomFromText('MULTILINESTRING((106 164,30 112,74 70,82 112,130 94,130 62,122 40,156 32,162 76,172 88),(132 178,134 148,128 136,96 128,132 108,150 130,170 142,174 110,156 96,158 90,158 88),(22 64,66 28,94 38,94 68,114 76,112 30,132 10,168 18,178 34,186 52,184 74,190 100,190 122,182 148,178 170,176 184,156 164,146 178,132 186,92 182,56 158,36 150,62 150,76 128,88 118))'),0.99));)",
+            dt)),
+        static_cast<double>(0.03)));
+#else
+    // geo operators can't deal with geo operator output transforms yet
+    EXPECT_THROW(
+        run_simple_agg(
+            R"(SELECT ST_Area(ST_ConcaveHull('LINESTRING(0 0, 10 0, 10 10)', 1.0));)",
+            dt),
+        std::runtime_error);
+#endif
+    // ST_ConvexHull
+    EXPECT_GPU_THROW(ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_Area(ST_ConvexHull(ST_GeomFromText('MULTILINESTRING((100 190,10 8),(150 10, 20 30),(50 5, 150 30, 50 10, 10 10))'))) = ST_Area('POLYGON((50 5,10 8,10 10,100 190,150 30,150 10,50 5))');)",
+            dt))));  // ConvexHull = POLYGON((50 5,10 8,10 10,100 190,150 30,150 10,50 5))
     // ST_IsValid
     EXPECT_GPU_THROW(
         ASSERT_EQ(static_cast<int64_t>(1),

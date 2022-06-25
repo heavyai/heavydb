@@ -66,7 +66,9 @@ class GeoBase {
     kBUFFER = 4,
     kISVALID = 5,
     kISEMPTY = 6,
-    kEQUALS = 7
+    kEQUALS = 7,
+    kCONCAVEHULL = 8,
+    kCONVEXHULL = 9
   };
   virtual GeoType getType() const = 0;
   const OGRGeometry* getOGRGeometry() const { return geom_; }

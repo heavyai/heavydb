@@ -2983,6 +2983,12 @@ std::string GeoUOper::toString() const {
     case Geospatial::GeoBase::GeoOp::kISVALID:
       fn = "ST_IsValid";
       break;
+    case Geospatial::GeoBase::GeoOp::kCONCAVEHULL:
+      fn = "ST_IsConcaveHull";
+      break;
+    case Geospatial::GeoBase::GeoOp::kCONVEXHULL:
+      fn = "ST_IsConvexHull";
+      break;
     default:
       fn = "Geo_UNKNOWN";
       break;
