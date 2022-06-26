@@ -110,18 +110,10 @@ extern std::unique_ptr<llvm::Module> read_llvm_module_from_ir_string(
     llvm::LLVMContext& ctx,
     bool is_gpu = false);
 
-CodeCacheAccessor<CpuCompilationContext> Executor::s_stubs_accessor(
-    Executor::code_cache_size,
-    "s_stubs_cache");
-CodeCacheAccessor<CpuCompilationContext> Executor::s_code_accessor(
-    Executor::code_cache_size,
-    "s_code_cache");
-CodeCacheAccessor<CpuCompilationContext> Executor::cpu_code_accessor(
-    Executor::code_cache_size,
-    "cpu_code_cache");
-CodeCacheAccessor<GpuCompilationContext> Executor::gpu_code_accessor(
-    Executor::code_cache_size,
-    "gpu_code_cache");
+std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> Executor::s_stubs_accessor;
+std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> Executor::s_code_accessor;
+std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> Executor::cpu_code_accessor;
+std::unique_ptr<CodeCacheAccessor<GpuCompilationContext>> Executor::gpu_code_accessor;
 
 Executor::Executor(const ExecutorId executor_id,
                    Data_Namespace::DataMgr* data_mgr,
@@ -149,6 +141,14 @@ Executor::Executor(const ExecutorId executor_id,
   std::call_once(first_init_flag_, [this]() {
     query_plan_dag_cache_ =
         std::make_unique<QueryPlanDagCache>(config_->cache.dag_cache_size);
+    s_stubs_accessor = std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(
+        config_->cache.code_cache_size, "s_stubs_cache");
+    s_code_accessor = std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(
+        config_->cache.code_cache_size, "s_code_cache");
+    cpu_code_accessor = std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(
+        config_->cache.code_cache_size, "cpu_code_cache");
+    gpu_code_accessor = std::make_unique<CodeCacheAccessor<GpuCompilationContext>>(
+        config_->cache.code_cache_size, "gpu_code_cache");
   });
   Executor::initialize_extension_module_sources();
   update_extension_modules();
@@ -179,10 +179,10 @@ void Executor::initialize_extension_module_sources() {
 
 void Executor::reset(bool discard_runtime_modules_only) {
   // TODO: keep cached results that do not depend on runtime UDF/UDTFs
-  s_code_accessor.clear();
-  s_stubs_accessor.clear();
-  cpu_code_accessor.clear();
-  gpu_code_accessor.clear();
+  s_code_accessor->clear();
+  s_stubs_accessor->clear();
+  cpu_code_accessor->clear();
+  gpu_code_accessor->clear();
 
   if (discard_runtime_modules_only) {
     extension_modules_.erase(Executor::ExtModuleKinds::rt_udf_cpu_module);

@@ -1200,14 +1200,12 @@ class Executor {
   mutable std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 
  public:
-  static CodeCacheAccessor<CpuCompilationContext> s_stubs_accessor;
-  static CodeCacheAccessor<CpuCompilationContext> s_code_accessor;
-  static CodeCacheAccessor<CpuCompilationContext> cpu_code_accessor;
-  static CodeCacheAccessor<GpuCompilationContext> gpu_code_accessor;
+  static std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> s_stubs_accessor;
+  static std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> s_code_accessor;
+  static std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> cpu_code_accessor;
+  static std::unique_ptr<CodeCacheAccessor<GpuCompilationContext>> gpu_code_accessor;
 
  private:
-  static const size_t code_cache_size{1000};
-
   ConfigPtr config_;
   const unsigned block_size_x_;
   const unsigned grid_size_x_;

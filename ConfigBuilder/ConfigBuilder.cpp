@@ -502,6 +502,10 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
                          po::value<size_t>(&config_->cache.dag_cache_size)
                              ->default_value(config_->cache.dag_cache_size),
                          "Maximum number of nodes in DAG cache");
+  opt_desc.add_options()("code-cache-size",
+                         po::value<size_t>(&config_->cache.code_cache_size)
+                             ->default_value(config_->cache.code_cache_size),
+                         "Maximum number of entries in a code cache");
 
   // debug
   opt_desc.add_options()("build-rel-alg-cache",

@@ -513,7 +513,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
   for (const auto helper : cgen_state_->helper_functions_) {
     key.push_back(serialize_llvm_object(helper));
   }
-  auto cached_code = cpu_code_accessor.get_value(key);
+  auto cached_code = cpu_code_accessor->get_value(key);
   if (cached_code) {
     return cached_code;
   }
@@ -523,7 +523,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
   auto cpu_compilation_context =
       std::make_shared<CpuCompilationContext>(std::move(execution_engine));
   cpu_compilation_context->setFunctionPointer(multifrag_query_func);
-  cpu_code_accessor.put(key, cpu_compilation_context);
+  cpu_code_accessor->put(key, cpu_compilation_context);
   return std::dynamic_pointer_cast<CompilationContext>(cpu_compilation_context);
 }
 
@@ -1332,7 +1332,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
   for (const auto helper : cgen_state_->helper_functions_) {
     key.push_back(serialize_llvm_object(helper));
   }
-  auto cached_code = Executor::gpu_code_accessor.get_value(key);
+  auto cached_code = Executor::gpu_code_accessor->get_value(key);
   if (cached_code) {
     return cached_code;
   }
@@ -1378,7 +1378,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
       LOG(WARNING) << "Failed to allocate GPU memory for generated code. Evicting "
                    << config_->cache.gpu_fraction_code_cache_to_evict * 100.
                    << "% of GPU code cache and re-trying.";
-      Executor::gpu_code_accessor.evictFractionEntries(
+      Executor::gpu_code_accessor->evictFractionEntries(
           config_->cache.gpu_fraction_code_cache_to_evict);
       compilation_context = CodeGenerator::generateNativeGPUCode(this,
                                                                  query_func,
@@ -1391,7 +1391,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
       throw;
     }
   }
-  Executor::gpu_code_accessor.put(key, compilation_context);
+  Executor::gpu_code_accessor->put(key, compilation_context);
 
   return std::dynamic_pointer_cast<CompilationContext>(compilation_context);
 #else
