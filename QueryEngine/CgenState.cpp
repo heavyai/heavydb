@@ -40,6 +40,7 @@ CgenState::CgenState(const size_t num_query_infos,
     , contains_left_deep_outer_join_(contains_left_deep_outer_join)
     , outer_join_match_found_per_level_(std::max(num_query_infos, size_t(1)) - 1)
     , needs_error_check_(false)
+    , automatic_ir_metadata_(executor->getConfig().debug.enable_automatic_ir_metadata)
     , query_func_(nullptr)
     , query_func_entry_ir_builder_(context_){};
 
@@ -51,7 +52,7 @@ CgenState::CgenState(const size_t num_query_infos,
           contains_left_deep_outer_join,
           Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get()) {}
 
-CgenState::CgenState(llvm::LLVMContext& context)
+CgenState::CgenState(const Config& config, llvm::LLVMContext& context)
     : executor_id_(Executor::INVALID_EXECUTOR_ID)
     , module_(nullptr)
     , row_func_(nullptr)
@@ -59,6 +60,7 @@ CgenState::CgenState(llvm::LLVMContext& context)
     , ir_builder_(context_)
     , contains_left_deep_outer_join_(false)
     , needs_error_check_(false)
+    , automatic_ir_metadata_(config.debug.enable_automatic_ir_metadata)
     , query_func_(nullptr)
     , query_func_entry_ir_builder_(context_){};
 

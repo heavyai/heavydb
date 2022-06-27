@@ -26,8 +26,6 @@
 
 #ifndef NDEBUG
 
-extern bool g_enable_automatic_ir_metadata;
-
 class AutomaticIRMetadataGuard {
  public:
   AutomaticIRMetadataGuard(CgenState* cgen_state,
@@ -42,9 +40,8 @@ class AutomaticIRMetadataGuard {
       , done_(false) {
     std::lock_guard<std::mutex> lock(instructions_mutex_);
     this_is_root_ = !instructions_.count(cgen_state_);
-    enabled_ = g_enable_automatic_ir_metadata;
+    enabled_ = cgen_state && cgen_state->automatic_ir_metadata_;
     if (enabled_) {
-      CHECK(cgen_state_);
       CHECK(cgen_state_->module_);
       our_instructions_ = &instructions_[cgen_state_];
       rememberPreexistingInstructions();

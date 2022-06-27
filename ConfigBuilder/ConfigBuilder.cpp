@@ -518,6 +518,11 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
                              ->default_value(config_->debug.use_ra_cache),
                          "Used in tests to load pre-generated cache of parsed SQL "
                          "queries from the specified file to avoid Calcite usage.");
+  opt_desc.add_options()("enable-automatic-ir-metadata",
+                         po::value<bool>(&config_->debug.enable_automatic_ir_metadata)
+                             ->default_value(config_->debug.enable_automatic_ir_metadata)
+                             ->implicit_value(true),
+                         "Enable automatic IR metadata (debug builds only).");
 
   if (allow_gtest_flags) {
     opt_desc.add_options()("gtest_list_tests", "list all test");

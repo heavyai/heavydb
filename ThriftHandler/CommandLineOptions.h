@@ -130,5 +130,4 @@ class CommandLineOptions {
 extern bool g_enable_table_functions;
 extern unsigned g_pending_query_interrupt_freq;
 
-extern bool g_enable_automatic_ir_metadata;
 extern size_t g_max_log_length;

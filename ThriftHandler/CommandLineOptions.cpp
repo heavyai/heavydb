@@ -430,11 +430,6 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_enable_calcite_ddl_parser)
           ->implicit_value(true),
       "Enable using Calcite for supported DDL parsing when available.");
-  developer_desc.add_options()("enable-automatic-ir-metadata",
-                               po::value<bool>(&g_enable_automatic_ir_metadata)
-                                   ->default_value(g_enable_automatic_ir_metadata)
-                                   ->implicit_value(true),
-                               "Enable automatic IR metadata (debug builds only).");
   developer_desc.add_options()(
       "max-log-length",
       po::value<size_t>(&g_max_log_length)->default_value(g_max_log_length),

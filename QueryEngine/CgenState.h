@@ -41,7 +41,7 @@ struct CgenState {
             const bool contains_left_deep_outer_join,
             Executor* executor);
   CgenState(const size_t num_query_infos, const bool contains_left_deep_outer_join);
-  CgenState(llvm::LLVMContext& context);
+  CgenState(const Config& config, llvm::LLVMContext& context);
 
   size_t getOrAddLiteral(const Analyzer::Constant* constant,
                          const EncodingType enc_type,
@@ -363,6 +363,7 @@ struct CgenState {
   std::map<std::pair<llvm::Value*, llvm::Value*>, ArrayLoadCodegen>
       array_load_cache_;  // byte stream to array info
   bool needs_error_check_;
+  bool automatic_ir_metadata_;
 
   llvm::Function* query_func_;
   llvm::IRBuilder<> query_func_entry_ir_builder_;

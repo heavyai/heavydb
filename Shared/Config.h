@@ -155,6 +155,7 @@ struct CacheConfig {
 struct DebugConfig {
   std::string build_ra_cache = "";
   std::string use_ra_cache = "";
+  bool enable_automatic_ir_metadata = true;
 };
 
 struct Config {

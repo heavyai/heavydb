@@ -86,8 +86,6 @@ bool g_is_test_env{false};  // operating under a unit test environment. Currentl
 size_t g_approx_quantile_buffer{1000};
 size_t g_approx_quantile_centroids{300};
 
-bool g_enable_automatic_ir_metadata{true};
-
 size_t g_max_log_length{500};
 
 extern bool g_cache_string_hash;
@@ -126,8 +124,8 @@ Executor::Executor(const ExecutorId executor_id,
                    const std::string& debug_file)
     : executor_id_(executor_id)
     , context_(new llvm::LLVMContext())
-    , cgen_state_(new CgenState({}, false, this))
     , config_(config)
+    , cgen_state_(new CgenState({}, false, this))
     , block_size_x_(block_size_x)
     , grid_size_x_(grid_size_x)
     , max_gpu_slab_size_(max_gpu_slab_size)
@@ -4080,7 +4078,7 @@ std::pair<bool, int64_t> Executor::skipFragment(
           chunk_max, pow(10, lhs_col->get_type_info().get_dimension()));
     }
     llvm::LLVMContext local_context;
-    CgenState local_cgen_state(local_context);
+    CgenState local_cgen_state(getConfig(), local_context);
     CodeGenerator code_generator(getConfig(), &local_cgen_state, nullptr);
 
     const auto rhs_val =

@@ -1153,6 +1153,7 @@ class Executor {
   };
 
  private:
+  ConfigPtr config_;
   std::unique_ptr<CgenState> cgen_state_;
 
   const std::unique_ptr<llvm::Module>& get_extension_module(ExtModuleKinds kind) const {
@@ -1206,7 +1207,6 @@ class Executor {
   static std::unique_ptr<CodeCacheAccessor<GpuCompilationContext>> gpu_code_accessor;
 
  private:
-  ConfigPtr config_;
   const unsigned block_size_x_;
   const unsigned grid_size_x_;
   const size_t max_gpu_slab_size_;
