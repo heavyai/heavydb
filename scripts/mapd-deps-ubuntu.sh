@@ -50,6 +50,9 @@ fi
 sudo mkdir -p $PREFIX
 sudo chown -R $(id -u) $PREFIX
 
+# this should be based on the actual distro and arch, but they're the same files.
+DEBIAN_FRONTEND=noninteractive sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub
+
 DEBIAN_FRONTEND=noninteractive sudo apt update
 
 # required for gcc-9 on Ubuntu 18.04
