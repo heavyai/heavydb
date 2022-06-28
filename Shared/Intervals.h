@@ -86,13 +86,19 @@ class Intervals {
   }
 
  public:
-  class Iterator : public std::iterator<std::input_iterator_tag, Interval<T>> {
+  class Iterator {
     T begin_;
     U const quot_;
     U rem_;
     U index{0};
 
    public:
+    using iterator_category = std::input_iterator_tag;
+    using value_type = Interval<T>;
+    using difference_type = std::ptrdiff_t;
+    using pointer = value_type*;
+    using reference = value_type&;
+
     Iterator(T begin, U quot, U rem) : begin_(begin), quot_(quot), rem_(rem) {}
     Interval<T> operator*() const {
       return {begin_, T(begin_ + quot_ + bool(rem_)), index};

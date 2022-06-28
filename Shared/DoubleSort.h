@@ -97,7 +97,12 @@ std::ostream& operator<<(std::ostream& out, Value<T0, T1> const& ds) {
 #endif
 
 template <typename T0, typename T1>
-struct Iterator : public std::iterator<std::input_iterator_tag, Value<T0, T1>> {
+struct Iterator {
+  using iterator_category = std::input_iterator_tag;
+  using value_type = Value<T0, T1>;
+  using difference_type = std::ptrdiff_t;
+  using pointer = value_type*;
+  using reference = value_type&;
   Value<T0, T1> this_;  // this_ is always a reference object. I.e. this_.ref_ == true.
   DEVICE Iterator(T0* ptr0, T1* ptr1) : this_(ptr0, ptr1) {}
   DEVICE Iterator(Iterator const& b) : this_(b.this_.v0_.ptr_, b.this_.v1_.ptr_) {}

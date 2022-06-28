@@ -725,6 +725,16 @@ endif()
 # RapidJSON
 include_directories(ThirdParty/rapidjson)
 add_definitions(-DRAPIDJSON_HAS_STDSTRING)
+if(NOT MSVC)
+  # At the present time the current vcpkg version of rapidjson is 2020-09-14:
+  # https://github.com/microsoft/vcpkg/blob/master/versions/r-/rapidjson.json
+  # and the Windows build fails because it does not have this fix:
+  # https://github.com/Tencent/rapidjson/pull/1568
+  # Once vcpkg's rapidjson has this fix then let's try not making this exception for MSVC.
+  # When this changes, remove this exception from all other similar CMakeLists.txt files too.
+  add_definitions(-DRAPIDJSON_NOMEMBERITERATORCLASS)
+endif()
+
 
 # Linenoise
 add_subdirectory(ThirdParty/linenoise)

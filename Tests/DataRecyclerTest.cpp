@@ -850,10 +850,8 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       auto q1_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_ht_metainfo = q1_ht_and_metainfo.cached_ht_metainfo;
-      if (!q1_ht_metainfo.has_value() &&
-          !q1_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q1_ht_metainfo.has_value());
+      EXPECT_TRUE(q1_ht_metainfo->overlaps_meta_info.has_value());
       auto q1_tuning_param = q1_ht_and_metainfo.cached_tuning_info;
       EXPECT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
       EXPECT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
@@ -870,10 +868,8 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       auto q1_v2_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_v2_ht_metainfo = q1_v2_ht_and_metainfo.cached_ht_metainfo;
-      if (!q1_v2_ht_metainfo.has_value() &&
-          !q1_v2_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q1_v2_ht_metainfo.has_value());
+      EXPECT_TRUE(q1_v2_ht_metainfo->overlaps_meta_info.has_value());
       auto q1_v2_tuning_param = q1_v2_ht_and_metainfo.cached_tuning_info;
       // we do not cache the tuning param if we give a related sql hint
       EXPECT_TRUE(!q1_v2_tuning_param.has_value());
@@ -893,10 +889,8 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       auto q1_v3_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_v3_ht_metainfo = q1_v3_ht_and_metainfo.cached_ht_metainfo;
-      if (!q1_v3_ht_metainfo.has_value() &&
-          !q1_v3_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q1_v3_ht_metainfo.has_value());
+      EXPECT_TRUE(q1_v3_ht_metainfo->overlaps_meta_info.has_value());
       auto q1_v3_tuning_param = q1_v3_ht_and_metainfo.cached_tuning_info;
       // we do not cache the tuning param if we give a related sql hint
       EXPECT_TRUE(!q1_v3_tuning_param.has_value());
@@ -918,10 +912,8 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       auto q1_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_ht_metainfo = q1_ht_and_metainfo.cached_ht_metainfo;
-      if (!q1_ht_metainfo.has_value() &&
-          !q1_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q1_ht_metainfo.has_value());
+      EXPECT_TRUE(q1_ht_metainfo->overlaps_meta_info.has_value());
       auto q1_tuning_param = q1_ht_and_metainfo.cached_tuning_info;
       EXPECT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
       EXPECT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
@@ -935,10 +927,8 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       auto q2_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q2_ht_metainfo = q2_ht_and_metainfo.cached_ht_metainfo;
-      if (!q2_ht_metainfo.has_value() &&
-          !q2_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q2_ht_metainfo.has_value());
+      EXPECT_TRUE(q2_ht_metainfo->overlaps_meta_info.has_value());
       auto q2_tuning_param = q2_ht_and_metainfo.cached_tuning_info;
       EXPECT_TRUE(q2_tuning_param.has_value());
 
@@ -951,10 +941,8 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       auto q2_v2_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q2_v2_ht_metainfo = q2_v2_ht_and_metainfo.cached_ht_metainfo;
-      if (!q2_v2_ht_metainfo.has_value() &&
-          !q2_v2_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q2_v2_ht_metainfo.has_value());
+      EXPECT_TRUE(q2_v2_ht_metainfo->overlaps_meta_info.has_value());
       auto q2_v2_tuning_param = q2_v2_ht_and_metainfo.cached_tuning_info;
       // we compute hashtable param when we give max_hashtable size hint
       EXPECT_TRUE(q2_v2_tuning_param.has_value());
@@ -983,10 +971,8 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       auto q1_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_ht_metainfo = q1_ht_and_metainfo.cached_ht_metainfo;
-      if (!q1_ht_metainfo.has_value() &&
-          !q1_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q1_ht_metainfo.has_value());
+      EXPECT_TRUE(q1_ht_metainfo->overlaps_meta_info.has_value());
       auto q1_tuning_param = q1_ht_and_metainfo.cached_tuning_info;
       EXPECT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
       EXPECT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
@@ -1029,10 +1015,8 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       auto q1_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_ht_metainfo = q1_ht_and_metainfo.cached_ht_metainfo;
-      if (!q1_ht_metainfo.has_value() &&
-          !q1_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q1_ht_metainfo.has_value());
+      EXPECT_TRUE(q1_ht_metainfo->overlaps_meta_info.has_value());
       auto q1_tuning_param = q1_ht_and_metainfo.cached_tuning_info;
       EXPECT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
       EXPECT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
@@ -1055,14 +1039,10 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       EXPECT_EQ(static_cast<size_t>(208),
                 q1_ht_and_metainfo_v2.cached_metric->getMemSize());
       auto q1_ht_metainfo_v2 = q1_ht_and_metainfo_v2.cached_ht_metainfo;
-      if (!q1_ht_metainfo_v2.has_value() &&
-          !q1_ht_metainfo_v2->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q1_ht_metainfo_v2.has_value());
+      EXPECT_TRUE(q1_ht_metainfo_v2->overlaps_meta_info.has_value());
       auto q1_tuning_param_v2 = q1_ht_and_metainfo_v2.cached_tuning_info;
-      if (!q1_tuning_param_v2.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q1_tuning_param_v2.has_value());
       EXPECT_TRUE(compareOverlapsHTParams(
           q1_ht_and_metainfo.cached_ht_metainfo->overlaps_meta_info,
           q1_ht_and_metainfo_v2.cached_ht_metainfo->overlaps_meta_info));

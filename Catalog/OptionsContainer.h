@@ -53,9 +53,9 @@ struct OptionsContainer {
     if (clear) {
       options.clear();
     }
-    for (const auto& member : ddl_options.GetObject()) {
-      std::string key = to_upper(member.name.GetString());
-      options[key] = member.value.GetString();
+    for (auto itr = ddl_options.MemberBegin(); itr != ddl_options.MemberEnd(); ++itr) {
+      std::string key = to_upper(itr->name.GetString());
+      options[key] = itr->value.GetString();
     }
   }
 

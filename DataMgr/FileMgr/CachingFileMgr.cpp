@@ -21,8 +21,11 @@
  */
 
 #include "DataMgr/FileMgr/CachingFileMgr.h"
-#include <boost/filesystem.hpp>
 #include "Shared/misc.h"
+
+#include <boost/filesystem.hpp>
+
+#include <fstream>
 
 namespace bf = boost::filesystem;
 

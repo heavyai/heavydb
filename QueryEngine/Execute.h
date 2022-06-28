@@ -457,7 +457,7 @@ class Executor {
     heavyai::unique_lock<heavyai::shared_mutex> flush_lock(
         execute_mutex_);  // don't want native code to vanish while executing
     heavyai::unique_lock<heavyai::shared_mutex> lock(executors_cache_mutex_);
-    (decltype(executors_){}).swap(executors_);
+    executors_.clear();
   }
 
   static void clearMemory(const Data_Namespace::MemoryLevel memory_level);

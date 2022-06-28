@@ -23,6 +23,7 @@
 
 #include <gtest/gtest.h>
 #include <boost/filesystem.hpp>
+#include <boost/filesystem/fstream.hpp>
 
 #include "Catalog/Catalog.h"
 

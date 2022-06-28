@@ -22,6 +22,7 @@
 #include <gtest/gtest.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/filesystem/fstream.hpp>
 #include <boost/program_options.hpp>
 
 #include "Catalog/OptionsContainer.h"

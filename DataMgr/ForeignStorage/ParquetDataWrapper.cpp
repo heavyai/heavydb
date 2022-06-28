@@ -457,11 +457,10 @@ void ParquetDataWrapper::updateChunkMetadataForFragment(
     CHECK(column_chunk_metadata_iter != column_chunk_metadata.end());
     const auto column_descriptor = schema_->getColumnDescriptor(column_id);
     const auto& type_info = column_descriptor->columnType;
-    ChunkKey chunk_key{db_id_, foreign_table_->tableId, column_id, fragment_id};
-    ChunkKey data_chunk_key = chunk_key;
-    if (type_info.is_varlen_indeed()) {
-      data_chunk_key.emplace_back(1);
-    }
+    ChunkKey const data_chunk_key =
+        type_info.is_varlen_indeed()
+            ? ChunkKey{db_id_, foreign_table_->tableId, column_id, fragment_id, 1}
+            : ChunkKey{db_id_, foreign_table_->tableId, column_id, fragment_id};
     std::shared_ptr<ChunkMetadata> chunk_metadata = *column_chunk_metadata_iter;
 
     if (chunk_metadata_map_.find(data_chunk_key) == chunk_metadata_map_.end()) {

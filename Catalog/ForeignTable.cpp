@@ -133,13 +133,13 @@ void ForeignTable::validateDataWrapperOptions() const {
 OptionsMap ForeignTable::createOptionsMap(const rapidjson::Value& json_options) {
   OptionsMap options_map;
   CHECK(json_options.IsObject());
-  for (const auto& member : json_options.GetObject()) {
-    auto key = to_upper(member.name.GetString());
+  for (auto itr = json_options.MemberBegin(); itr != json_options.MemberEnd(); ++itr) {
+    auto key = to_upper(itr->name.GetString());
     if (std::find(upper_case_options.begin(), upper_case_options.end(), key) !=
         upper_case_options.end()) {
-      options_map[key] = to_upper(member.value.GetString());
+      options_map[key] = to_upper(itr->value.GetString());
     } else {
-      options_map[key] = member.value.GetString();
+      options_map[key] = itr->value.GetString();
     }
   }
   return options_map;

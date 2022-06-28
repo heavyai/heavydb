@@ -1992,11 +1992,12 @@ void parse_options(const rapidjson::Value& payload,
                    bool stringToNull = false,
                    bool stringToInteger = false) {
   if (payload.HasMember("options") && payload["options"].IsObject()) {
-    for (const auto& option : payload["options"].GetObject()) {
-      auto option_name = std::make_unique<std::string>(option.name.GetString());
+    const auto& options = payload["options"];
+    for (auto itr = options.MemberBegin(); itr != options.MemberEnd(); ++itr) {
+      auto option_name = std::make_unique<std::string>(itr->name.GetString());
       std::unique_ptr<Literal> literal_value;
-      if (option.value.IsString()) {
-        std::string str = option.value.GetString();
+      if (itr->value.IsString()) {
+        std::string str = itr->value.GetString();
         if (stringToNull && str == "") {
           literal_value = std::make_unique<NullLiteral>();
         } else if (stringToInteger && std::all_of(str.begin(), str.end(), ::isdigit)) {
@@ -2009,9 +2010,9 @@ void parse_options(const rapidjson::Value& payload,
           literal_value =
               std::make_unique<StringLiteral>(unique_literal_string.release());
         }
-      } else if (option.value.IsInt() || option.value.IsInt64()) {
-        literal_value = std::make_unique<IntLiteral>(json_i64(option.value));
-      } else if (option.value.IsNull()) {
+      } else if (itr->value.IsInt() || itr->value.IsInt64()) {
+        literal_value = std::make_unique<IntLiteral>(json_i64(itr->value));
+      } else if (itr->value.IsNull()) {
         literal_value = std::make_unique<NullLiteral>();
       } else {
         throw std::runtime_error("Unable to handle literal for " + *option_name);
@@ -4500,13 +4501,13 @@ std::unique_ptr<DDLStmt> AlterTableStmt::delegate(const rapidjson::Value& payloa
 
   } else if (type == "ALTER_OPTIONS") {
     CHECK(payload.HasMember("options"));
-
-    if (payload["options"].IsObject()) {
-      for (const auto& option : payload["options"].GetObject()) {
-        std::string* option_name = new std::string(json_str(option.name));
+    const auto& options = payload["options"];
+    if (options.IsObject()) {
+      for (auto itr = options.MemberBegin(); itr != options.MemberEnd(); ++itr) {
+        std::string* option_name = new std::string(json_str(itr->name));
         Literal* literal_value;
-        if (option.value.IsString()) {
-          std::string literal_string = json_str(option.value);
+        if (itr->value.IsString()) {
+          std::string literal_string = json_str(itr->value);
 
           // iff this string can be converted to INT
           //   ... do so because it is necessary for AlterTableParamStmt
@@ -4517,9 +4518,9 @@ std::unique_ptr<DDLStmt> AlterTableStmt::delegate(const rapidjson::Value& payloa
           } else {
             literal_value = new StringLiteral(&literal_string);
           }
-        } else if (option.value.IsInt() || option.value.IsInt64()) {
-          literal_value = new IntLiteral(json_i64(option.value));
-        } else if (option.value.IsNull()) {
+        } else if (itr->value.IsInt() || itr->value.IsInt64()) {
+          literal_value = new IntLiteral(json_i64(itr->value));
+        } else if (itr->value.IsNull()) {
           literal_value = new NullLiteral();
         } else {
           throw std::runtime_error("Unable to handle literal for " + *option_name);
@@ -4530,9 +4531,8 @@ std::unique_ptr<DDLStmt> AlterTableStmt::delegate(const rapidjson::Value& payloa
         return std::unique_ptr<DDLStmt>(
             new Parser::AlterTableParamStmt(new std::string(tableName), nv));
       }
-
     } else {
-      CHECK(payload["options"].IsNull());
+      CHECK(options.IsNull());
     }
   }
   return nullptr;
