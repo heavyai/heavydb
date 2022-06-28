@@ -224,6 +224,18 @@ llvm::Value* CgenState::emitCall(const std::string& fname,
   return ir_builder_.CreateCall(func, args);
 }
 
+llvm::Value* CgenState::emitEntryCall(const std::string& fname,
+                                      const std::vector<llvm::Value*>& args) {
+  // Get the function reference from the query module.
+  auto func = module_->getFunction(fname);
+  CHECK(func);
+  // If the function called isn't external, clone the implementation from the runtime
+  // module.
+  maybeCloneFunctionRecursive(func);
+
+  return query_func_entry_ir_builder_.CreateCall(func, args);
+}
+
 void CgenState::emitErrorCheck(llvm::Value* condition,
                                llvm::Value* errorCode,
                                std::string label) {

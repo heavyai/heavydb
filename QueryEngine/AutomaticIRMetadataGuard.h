@@ -94,7 +94,7 @@ class AutomaticIRMetadataGuard {
           if (!preexisting_instructions_.count(i)) {
             std::string qefile = makeQueryEngineFilename();
             std::string footnote =
-                ppfunc_ + " near " + qefile + " line #" + std::to_string(ppline_);
+                ppfunc_ + " after " + qefile + " line #" + std::to_string(ppline_);
             auto it = our_instructions_->find(i);
             if (it == our_instructions_->end()) {
               std::string bfile = replacePunctuation(makeBaseFilename());

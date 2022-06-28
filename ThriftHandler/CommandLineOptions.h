@@ -253,3 +253,4 @@ extern bool g_allow_query_step_skipping;
 extern bool g_query_engine_cuda_streams;
 extern bool g_multi_instance;
 extern size_t g_lockfile_lock_extension_milliseconds;
+extern bool g_allow_invalid_literal_buffer_reads;

@@ -43,10 +43,10 @@ struct CgenState {
   CgenState(const size_t num_query_infos, const bool contains_left_deep_outer_join);
   CgenState(llvm::LLVMContext& context);
 
-  size_t getOrAddLiteral(const Analyzer::Constant* constant,
-                         const EncodingType enc_type,
-                         const int dict_id,
-                         const int device_id) {
+  std::tuple<size_t, size_t> getOrAddLiteral(const Analyzer::Constant* constant,
+                                             const EncodingType enc_type,
+                                             const int dict_id,
+                                             const int device_id) {
     const auto& ti = constant->get_type_info();
     const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
     switch (type) {
@@ -279,6 +279,8 @@ struct CgenState {
   }
 
   llvm::Value* emitCall(const std::string& fname, const std::vector<llvm::Value*>& args);
+  llvm::Value* emitEntryCall(const std::string& fname,
+                             const std::vector<llvm::Value*>& args);
 
   size_t getLiteralBufferUsage(const int device_id) { return literal_bytes_[device_id]; }
 
@@ -434,7 +436,7 @@ struct CgenState {
 
  private:
   template <class T>
-  size_t getOrAddLiteral(const T& val, const int device_id) {
+  std::tuple<size_t, size_t> getOrAddLiteral(const T& val, const int device_id) {
     const LiteralValue var_val(val);
     size_t literal_found_off{0};
     auto& literals = literals_[device_id];
@@ -442,13 +444,13 @@ struct CgenState {
       const auto lit_bytes = literalBytes(literal);
       literal_found_off = addAligned(literal_found_off, lit_bytes);
       if (literal == var_val) {
-        return literal_found_off - lit_bytes;
+        return {literal_found_off - lit_bytes, lit_bytes};
       }
     }
     literals.emplace_back(val);
     const auto lit_bytes = literalBytes(var_val);
     literal_bytes_[device_id] = addAligned(literal_bytes_[device_id], lit_bytes);
-    return literal_bytes_[device_id] - lit_bytes;
+    return {literal_bytes_[device_id] - lit_bytes, lit_bytes};
   }
 
   std::unordered_map<int, LiteralValues> literals_;

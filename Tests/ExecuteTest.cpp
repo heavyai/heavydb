@@ -7203,6 +7203,28 @@ TEST(Select, DetectOverflowedLiteralBuf) {
   EXPECT_THROW(perform_test(), TooManyLiterals);
 }
 
+TEST(Select, LiteralBufCorrectnessTest) {
+  ScopeGuard reset_watchdog = [orig = g_enable_watchdog] { g_enable_watchdog = orig; };
+  g_enable_watchdog = true;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("drop table if exists t1;");
+    run_ddl_statement("create table t1(d1 decimal(4,0), d2 decimal(4,2));");
+    run_ddl_statement("insert into t1 values(1, 1);");
+    run_ddl_statement("insert into t1 values(2, 2);");
+    run_ddl_statement("insert into t1 values(3, 3);");
+    run_ddl_statement("insert into t1 values(4, 4);");
+    run_ddl_statement("insert into t1 values(5, 5);");
+    run_ddl_statement("insert into t1 values(6, 6);");
+    run_ddl_statement("insert into t1 values(7, 7);");
+    ASSERT_EQ(7,
+              v<int64_t>(run_simple_agg("select count(1) from t1 where d1 IN (select d1 "
+                                        "from t1 where d2 is not null);",
+                                        dt)));
+    run_ddl_statement("drop table if exists t1;");
+  }
+}
+
 TEST(Select, BooleanColumn) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
