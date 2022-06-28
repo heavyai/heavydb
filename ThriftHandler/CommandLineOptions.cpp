@@ -1011,6 +1011,13 @@ void CommandLineOptions::fillAdvancedOptions() {
                               ->default_value(g_query_engine_cuda_streams)
                               ->implicit_value(true),
                           "Enable Query Engine CUDA streams");
+
+  help_desc.add_options()(
+      "allow-invalid-literal-buffer-reads",
+      po::value<bool>(&g_allow_invalid_literal_buffer_reads)
+          ->default_value(g_allow_invalid_literal_buffer_reads)
+          ->implicit_value(true),
+      "For backwards compatibility. Enabling may cause invalid query results.");
 }
 
 namespace {
@@ -1165,6 +1172,10 @@ void CommandLineOptions::validate() {
   if (g_multi_instance) {
     LOG(INFO) << " Multiple servers per --data directory is " << g_multi_instance
               << " (--multi-instance)";
+  }
+  if (g_allow_invalid_literal_buffer_reads) {
+    LOG(WARNING) << " Allowing invalid reads from the literal buffer. May cause invalid "
+                    "query results! (--allow-invalid-literal-buffer-reads)";
   }
 #if DISABLE_CONCURRENCY
   LOG(INFO) << " Threading layer: serial";

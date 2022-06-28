@@ -287,7 +287,8 @@ class CodeGenerator {
   std::vector<llvm::Value*> codegenHoistedConstantsLoads(const SQLTypeInfo& type_info,
                                                          const EncodingType enc_type,
                                                          const int dict_id,
-                                                         const int16_t lit_off);
+                                                         const int16_t lit_off,
+                                                         const size_t lit_bytes);
 
   std::vector<llvm::Value*> codegenHoistedConstantsPlaceholders(
       const SQLTypeInfo& type_info,
