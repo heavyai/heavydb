@@ -541,6 +541,24 @@ bool ConfigBuilder::parseCommandLineArgs(int argc,
   return false;
 }
 
+bool ConfigBuilder::parseCommandLineArgs(const std::string& app_name,
+                                         const std::string& cmd_args,
+                                         bool allow_gtest_flags) {
+  std::vector<std::string> args;
+  if (!cmd_args.empty()) {
+    args = po::split_unix(cmd_args);
+  }
+
+  // Generate command line to  CommandLineOptions for DBHandler
+  std::vector<const char*> argv;
+  argv.push_back(app_name.c_str());
+  for (auto& arg : args) {
+    argv.push_back(arg.c_str());
+  }
+  return parseCommandLineArgs(
+      static_cast<int>(argv.size()), argv.data(), allow_gtest_flags);
+}
+
 ConfigPtr ConfigBuilder::config() {
   return config_;
 }

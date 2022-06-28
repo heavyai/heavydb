@@ -27,6 +27,9 @@ class ConfigBuilder {
   bool parseCommandLineArgs(int argc,
                             char const* const* argv,
                             bool allow_gtest_flags = false);
+  bool parseCommandLineArgs(const std::string& app_name,
+                            const std::string& cmd_line,
+                            bool allow_gtest_flags = false);
 
   ConfigPtr config();
 
