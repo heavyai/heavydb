@@ -1814,6 +1814,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     return makeExpr<Analyzer::FunctionOper>(
         ret_ti, rex_function->getName(), arg_expr_list);
   }
+
   // Reset possibly wrong return type of rex_function to the return
   // type of the optimal valid implementation. The return type can be
   // wrong in the case of multiple implementations of UDF functions
@@ -1822,14 +1823,26 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   SQLTypeInfo ret_ti;
   try {
     auto ext_func_sig = bind_function(rex_function->getName(), arg_expr_list);
-
     auto ext_func_args = ext_func_sig.getInputArgs();
-    CHECK_EQ(arg_expr_list.size(), ext_func_args.size());
-    for (size_t i = 0; i < arg_expr_list.size(); i++) {
+    CHECK_LE(arg_expr_list.size(), ext_func_args.size());
+    for (size_t i = 0, di = 0; i < arg_expr_list.size(); i++) {
+      CHECK_LT(i + di, ext_func_args.size());
+      auto ext_func_arg = ext_func_args[i + di];
+      if (ext_func_arg == ExtArgumentType::PInt8 ||
+          ext_func_arg == ExtArgumentType::PInt16 ||
+          ext_func_arg == ExtArgumentType::PInt32 ||
+          ext_func_arg == ExtArgumentType::PInt64 ||
+          ext_func_arg == ExtArgumentType::PFloat ||
+          ext_func_arg == ExtArgumentType::PDouble ||
+          ext_func_arg == ExtArgumentType::PBool) {
+        di++;
+        // pointer argument follows length argument:
+        CHECK(ext_func_args[i + di] == ExtArgumentType::Int64);
+      }
       // fold casts on constants
       if (auto constant =
               std::dynamic_pointer_cast<Analyzer::Constant>(arg_expr_list[i])) {
-        auto ext_func_arg_ti = ext_arg_type_to_type_info(ext_func_args[i]);
+        auto ext_func_arg_ti = ext_arg_type_to_type_info(ext_func_arg);
         if (ext_func_arg_ti != arg_expr_list[i]->get_type_info()) {
           arg_expr_list[i] = constant->add_cast(ext_func_arg_ti);
         }

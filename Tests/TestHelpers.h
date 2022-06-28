@@ -43,12 +43,20 @@ void compare_array(const TargetValue& r,
   ASSERT_EQ(scalar_tv_vector.size(), arr.size());
   size_t ctr = 0;
   for (const ScalarTargetValue& scalar_tv : scalar_tv_vector) {
-    auto p = boost::get<T>(&scalar_tv);
-    CHECK(p);
-    if (tol < 0.) {
-      ASSERT_EQ(*p, arr[ctr++]);
+    T value;
+    if constexpr (std::is_integral_v<T>) {
+      auto p = boost::get<int64_t>(&scalar_tv);
+      CHECK(p);
+      value = *p;
     } else {
-      ASSERT_NEAR(*p, arr[ctr++], tol);
+      auto p = boost::get<T>(&scalar_tv);
+      CHECK(p);
+      value = *p;
+    }
+    if (tol < 0.) {
+      ASSERT_EQ(value, arr[ctr++]);
+    } else {
+      ASSERT_NEAR(value, arr[ctr++], tol);
     }
   }
 }

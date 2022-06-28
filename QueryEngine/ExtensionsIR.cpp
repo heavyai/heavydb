@@ -288,8 +288,7 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
     const auto arg0 =
         (arg_cast && arg_cast->get_optype() == kCAST) ? arg_cast->get_operand() : arg;
     const auto array_expr_arg = dynamic_cast<const Analyzer::ArrayExpr*>(arg0);
-    auto is_local_alloc =
-        ret_ti.is_buffer() || (array_expr_arg && array_expr_arg->isLocalAlloc());
+    auto is_local_alloc = array_expr_arg && array_expr_arg->isLocalAlloc();
     const auto& arg_ti = arg->get_type_info();
     const auto arg_lvs = codegen(arg, true, co);
     auto geo_uoper_arg = dynamic_cast<const Analyzer::GeoUOper*>(arg);
