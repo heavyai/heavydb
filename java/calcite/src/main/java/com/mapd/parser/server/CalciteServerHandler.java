@@ -541,6 +541,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.GeoPoint;
       case GeoLineString:
         return ExtensionFunction.ExtArgumentType.GeoLineString;
+      case GeoMultiLineString:
+        return ExtensionFunction.ExtArgumentType.GeoMultiLineString;
       case Cursor:
         return ExtensionFunction.ExtArgumentType.Cursor;
       case GeoPolygon:

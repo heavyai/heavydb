@@ -95,7 +95,8 @@ enum class ExtArgumentType {
   ColumnListArrayInt64,
   ColumnListArrayFloat,
   ColumnListArrayDouble,
-  ColumnListArrayBool
+  ColumnListArrayBool,
+  GeoMultiLineString
 };
 
 SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type);

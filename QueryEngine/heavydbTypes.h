@@ -438,6 +438,30 @@ struct GeoLineString {
   DEVICE int32_t getOutputSrid() const { return output_srid; }
 };
 
+struct GeoMultiLineString {
+  int8_t* ptr;
+  int32_t sz;
+  int8_t* linestring_sizes;
+  int32_t num_linestrings;
+  int32_t compression;
+  int32_t input_srid;
+  int32_t output_srid;
+
+  DEVICE int8_t* getCoords() const { return ptr; }
+
+  DEVICE int32_t getCoordsSize() const { return sz; }
+
+  DEVICE int8_t* getLineStringSizes() { return linestring_sizes; }
+
+  DEVICE int32_t getNumLineStrings() const { return num_linestrings; }
+
+  DEVICE int32_t getCompression() const { return compression; }
+
+  DEVICE int32_t getInputSrid() const { return input_srid; }
+
+  DEVICE int32_t getOutputSrid() const { return output_srid; }
+};
+
 struct GeoPolygon {
   int8_t* ptr_coords;
   int32_t coords_size;

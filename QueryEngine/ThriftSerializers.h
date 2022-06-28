@@ -412,6 +412,8 @@ inline ExtArgumentType from_thrift(const TExtArgumentType::type& t) {
       return ExtArgumentType::GeoPoint;
     case TExtArgumentType::GeoLineString:
       return ExtArgumentType::GeoLineString;
+    case TExtArgumentType::GeoMultiLineString:
+      return ExtArgumentType::GeoMultiLineString;
     case TExtArgumentType::Cursor:
       return ExtArgumentType::Cursor;
     case TExtArgumentType::GeoPolygon:
@@ -541,6 +543,8 @@ inline TExtArgumentType::type to_thrift(const ExtArgumentType& t) {
       return TExtArgumentType::GeoPoint;
     case ExtArgumentType::GeoLineString:
       return TExtArgumentType::GeoLineString;
+    case ExtArgumentType::GeoMultiLineString:
+      return TExtArgumentType::GeoMultiLineString;
     case ExtArgumentType::Cursor:
       return TExtArgumentType::Cursor;
     case ExtArgumentType::GeoPolygon:

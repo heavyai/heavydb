@@ -283,6 +283,18 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         return 1;
       }
       return -1;
+    case kMULTILINESTRING:
+      if (sig_type == ExtArgumentType::PInt8 && sig_pos + 3 < max_pos &&
+          sig_types[sig_pos + 1] == ExtArgumentType::Int64 &&
+          sig_types[sig_pos + 2] == ExtArgumentType::PInt8 &&
+          sig_types[sig_pos + 3] == ExtArgumentType::Int64) {
+        penalty_score += 1000;
+        return 4;
+      } else if (sig_type == ExtArgumentType::GeoMultiLineString) {
+        penalty_score += 1000;
+        return 1;
+      }
+      break;
     case kARRAY:
       if ((sig_type == ExtArgumentType::PInt8 || sig_type == ExtArgumentType::PInt16 ||
            sig_type == ExtArgumentType::PInt32 || sig_type == ExtArgumentType::PInt64 ||

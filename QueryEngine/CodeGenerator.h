@@ -531,6 +531,21 @@ class CodeGenerator {
                                 llvm::Value* output_srid,
                                 std::vector<llvm::Value*>& output_args);
 
+  llvm::StructType* createMultiLineStringStructType(const std::string& udf_func_name,
+                                                    size_t param_num);
+
+  void codegenGeoMultiLineStringArgs(const std::string& udf_func_name,
+                                     size_t param_num,
+                                     llvm::Value* multi_linestring_coords,
+                                     llvm::Value* multi_linestring_size,
+                                     llvm::Value* linestring_sizes,
+                                     llvm::Value* linestring_sizes_size,
+                                     // TODO: bounds?
+                                     llvm::Value* compression,
+                                     llvm::Value* input_srid,
+                                     llvm::Value* output_srid,
+                                     std::vector<llvm::Value*>& output_args);
+
   llvm::StructType* createPolygonStructType(const std::string& udf_func_name,
                                             size_t param_num);
 

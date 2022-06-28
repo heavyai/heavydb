@@ -262,6 +262,7 @@ TEST_F(UDFCompilerTest, UdfQuery) {
   run_ddl_statement("DROP TABLE IF EXISTS sal_emp;");
   run_ddl_statement("DROP TABLE IF EXISTS geospatial_test;");
   run_ddl_statement("DROP TABLE IF EXISTS geospatial_linestring;");
+  run_ddl_statement("DROP TABLE IF EXISTS geospatial_multilinestring;");
   run_ddl_statement("DROP TABLE IF EXISTS geo_poly;");
   run_ddl_statement("DROP TABLE IF EXISTS geo_mpoly;");
 
@@ -276,6 +277,8 @@ TEST_F(UDFCompilerTest, UdfQuery) {
   run_ddl_statement("CREATE TABLE sal_emp(name text, pay_by_quarter integer[]);");
 
   run_ddl_statement("CREATE TABLE geospatial_linestring (id INT, l LINESTRING)");
+  run_ddl_statement(
+      "CREATE TABLE geospatial_multilinestring (id INT, ml MULTILINESTRING)");
   run_ddl_statement("CREATE TABLE geo_poly (id INT, p POLYGON);");
   run_ddl_statement("CREATE TABLE geo_mpoly (id INT, p MULTIPOLYGON);");
 
@@ -314,6 +317,7 @@ TEST_F(UDFCompilerTest, UdfQuery) {
       "'POINT(51.4618933852762 -0.926690306514502)', "
       "'POINT(55.9523783996701 -3.20510306395594326)');");
   EXPECT_NO_THROW(run_multiple_agg(point_insert1, ExecutorDeviceType::CPU));
+
   std::string linestring_insert1(
       "INSERT into geospatial_linestring VALUES(0, 'LINESTRING(1 0, 2 3, 3 4)');");
   std::string linestring_insert2(
@@ -322,6 +326,16 @@ TEST_F(UDFCompilerTest, UdfQuery) {
 
   EXPECT_NO_THROW(run_multiple_agg(linestring_insert1, ExecutorDeviceType::CPU));
   EXPECT_NO_THROW(run_multiple_agg(linestring_insert2, ExecutorDeviceType::CPU));
+
+  std::string multilinestring_insert1(
+      "INSERT into geospatial_multilinestring "
+      "VALUES(0, 'MULTILINESTRING((1 0, 2 3, 3 4),(5 5,5 6))');");
+  std::string multilinestring_insert2(
+      "INSERT into geospatial_multilinestring "
+      "VALUES(1, 'MULTILINESTRING((1 0, 0 1, -1 0, 0 -1, 1 0),(2 2,2 3))');");
+
+  EXPECT_NO_THROW(run_multiple_agg(multilinestring_insert1, ExecutorDeviceType::CPU));
+  EXPECT_NO_THROW(run_multiple_agg(multilinestring_insert2, ExecutorDeviceType::CPU));
 
   std::string polygon_insert1(
       "INSERT into geo_poly VALUES(0, 'POLYGON((1 0, "
@@ -459,6 +473,11 @@ TEST_F(UDFCompilerTest, UdfQuery) {
         v<double>(run_simple_agg(
             "select linestring_length(l) from geospatial_linestring WHERE id = 1;", dt)));
 
+    ASSERT_DOUBLE_EQ(6.656854249492381,
+                     v<double>(run_simple_agg("select multilinestring_length(ml) from "
+                                              "geospatial_multilinestring WHERE id = 1;",
+                                              dt)));
+
     ASSERT_DOUBLE_EQ(1.98,
                      v<double>(run_simple_agg(
                          "select polygon_area(p) from geo_poly WHERE id = 0;", dt)));
@@ -529,6 +548,7 @@ TEST_F(UDFCompilerTest, UdfQuery) {
   run_ddl_statement("DROP TABLE sal_emp;");
   run_ddl_statement("DROP TABLE geospatial_test;");
   run_ddl_statement("DROP TABLE geospatial_linestring;");
+  run_ddl_statement("DROP TABLE geospatial_multilinestring;");
   run_ddl_statement("DROP TABLE geo_poly;");
   run_ddl_statement("DROP TABLE geo_mpoly;");
 }

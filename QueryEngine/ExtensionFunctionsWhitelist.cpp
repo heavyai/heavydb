@@ -204,6 +204,8 @@ std::string serialize_type(const ExtArgumentType type,
       return "geo_point";
     case ExtArgumentType::GeoLineString:
       return "geo_linestring";
+    case ExtArgumentType::GeoMultiLineString:
+      return "geo_multi_linestring";
     case ExtArgumentType::GeoPolygon:
       return "geo_polygon";
     case ExtArgumentType::GeoMultiPolygon:
@@ -526,6 +528,8 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "POINT";
     case ExtArgumentType::GeoLineString:
       return "LINESTRING";
+    case ExtArgumentType::GeoMultiLineString:
+      return "MULTILINESTRING";
     case ExtArgumentType::GeoPolygon:
       return "POLYGON";
     case ExtArgumentType::GeoMultiPolygon:
@@ -742,6 +746,9 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "geo_linestring") {
     return ExtArgumentType::GeoLineString;
+  }
+  if (type_name == "geo_multi_linestring") {
+    return ExtArgumentType::GeoMultiLineString;
   }
   if (type_name == "geo_polygon") {
     return ExtArgumentType::GeoPolygon;

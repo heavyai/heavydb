@@ -93,6 +93,7 @@ public class ExtensionFunction {
     ColumnListArrayFloat,
     ColumnListArrayDouble,
     ColumnListArrayBool,
+    GeoMultiLineString,
   }
   ;
 
@@ -284,6 +285,8 @@ public class ExtensionFunction {
         return "cursor";
       case GeoLineString:
         return "geo_linestring";
+      case GeoMultiLineString:
+        return "geo_multi_linestring";
       case GeoPolygon:
         return "geo_polygon";
       case GeoMultiPolygon:
@@ -523,6 +526,7 @@ public class ExtensionFunction {
         return SqlTypeName.ARRAY;
       case GeoPoint:
       case GeoLineString:
+      case GeoMultiLineString:
       case GeoPolygon:
       case GeoMultiPolygon:
         return SqlTypeName.GEOMETRY;
