@@ -3121,6 +3121,54 @@ TEST(Select, CountWithLimitAndOffset) {
 }
 
 TEST(Select, CountDistinct) {
+  std::string date_table_ddl{
+      "(rid INT, d16 DATE ENCODING DAYS(16), d32 DATE ENCODING DAYS(32), ti TIME, tie "
+      "TIME ENCODING FIXED(32), tm0 TIMESTAMP(0), tm0e TIMESTAMP ENCODING FIXED(32), tm3 "
+      "TIMESTAMP(3), tm6 TIMESTAMP(6), tm9 TIMESTAMP(9)"};
+  std::string date_table_ddl_sqlite{
+      "(rid INT, d16 DATE, d32 DATE, ti TIME(0), tie TIME(0), tm0 TIMESTAMP(0), tm0e "
+      "TIMESTAMP(0), tm3 TIMESTAMP(3), tm6 TIMESTAMP(6), tm9 TIMESTAMP(9));"};
+  std::vector<std::pair<std::string, std::string>> tbl_name_ddl_prefix_pair{
+      {"dt_cd_test", ");"},
+      {"dt_cd_test_frag", ") WITH (FRAGMENT_SIZE = 2);"},
+      {"dt_cd_test_sharded", ", SHARD KEY(rid)) WITH (SHARD_COUNT=2);"}};
+  const auto drop_date_cd_test_tables_ddl = [&tbl_name_ddl_prefix_pair]() {
+    for (const auto& p : tbl_name_ddl_prefix_pair) {
+      const auto ddl_stmt = "DROP TABLE IF EXISTS " + p.first;
+      run_ddl_statement(ddl_stmt);
+      g_sqlite_comparator.query(ddl_stmt);
+    }
+  };
+  ScopeGuard drop_date_cd_test_tables = [&drop_date_cd_test_tables_ddl] {
+    drop_date_cd_test_tables_ddl();
+  };
+  drop_date_cd_test_tables_ddl();
+  for (const auto& p : tbl_name_ddl_prefix_pair) {
+    run_ddl_statement("CREATE TABLE " + p.first + date_table_ddl + p.second);
+    g_sqlite_comparator.query("CREATE TABLE " + p.first + date_table_ddl_sqlite);
+  }
+  std::vector<std::string> date_cd_table_rows{
+      " VALUES (0, \'2022-06-01\', \'2022-06-01\', \'01:00:00\', \'01:00:00\', "
+      "\'2022-06-01 01:00:01\', \'2022-06-01 01:00:01\', \'2022-06-01 01:00:00.001\', "
+      "\'2022-06-01 01:00:00.000001\', \'2022-06-01 01:00:00.000100000\');",
+      " VALUES (1, \'2022-06-02\', \'2022-06-02\', \'01:00:01\', \'01:00:01\', "
+      "\'2022-06-01 01:00:02\', \'2022-06-01 01:00:02\', \'2022-06-01 01:00:00.002\', "
+      "\'2022-06-01 01:00:00.000002\', \'2022-06-01 01:00:00.000200000\');",
+      " VALUES (2, \'2022-06-03\', \'2022-06-03\', \'01:00:02\', \'01:00:02\', "
+      "\'2022-06-01 01:00:03\', \'2022-06-01 01:00:03\', \'2022-06-01 01:00:00.003\', "
+      "\'2022-06-01 01:00:00.000003\', \'2022-06-01 01:00:00.000300000\');",
+      " VALUES (3, \'2022-06-04\', \'2022-06-04\', \'01:00:03\', \'01:00:03\', "
+      "\'2022-06-01 01:00:04\', \'2022-06-01 01:00:04\', \'2022-06-01 01:00:00.004\', "
+      "\'2022-06-01 01:00:00.000004\', \'2022-06-01 01:00:00.000400000\');",
+  };
+  for (const auto& p : tbl_name_ddl_prefix_pair) {
+    for (const auto& v : date_cd_table_rows) {
+      const auto insert_stmt = "INSERT INTO " + p.first + v;
+      run_ddl_statement(insert_stmt);
+      g_sqlite_comparator.query(insert_stmt);
+    }
+  }
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(distinct x) FROM test;", dt);
@@ -3154,6 +3202,12 @@ TEST(Select, CountDistinct) {
     SKIP_ON_AGGREGATOR(c("SELECT COUNT(distinct ENCODE_TEXT(real_str)) FROM test;",
                          "SELECT COUNT(distinct real_str) FROM test;",
                          dt));
+    for (const std::string& col_name :
+         {"d16", "d32", "ti", "tie", "tm0", "tm0e", "tm3", "tm6", "tm9"}) {
+      c("SELECT COUNT(DISTINCT " + col_name + ") FROM dt_cd_test;", dt);
+      c("SELECT COUNT(DISTINCT " + col_name + ") FROM dt_cd_test_frag;", dt);
+      c("SELECT COUNT(DISTINCT " + col_name + ") FROM dt_cd_test_sharded;", dt);
+    }
   }
 }
 

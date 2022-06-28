@@ -646,7 +646,8 @@ CountDistinctDescriptors init_count_distinct_descriptors(
     const ExecutorDeviceType device_type,
     Executor* executor) {
   CountDistinctDescriptors count_distinct_descriptors;
-  for (const auto target_expr : ra_exe_unit.target_exprs) {
+  for (size_t i = 0; i < ra_exe_unit.target_exprs.size(); i++) {
+    const auto target_expr = ra_exe_unit.target_exprs[i];
     auto agg_info = get_target_info(target_expr, g_bigint_count);
     if (is_distinct_target(agg_info)) {
       CHECK(agg_info.is_agg);
@@ -672,6 +673,30 @@ CountDistinctDescriptors init_count_distinct_descriptors(
           arg_ti.is_fp() ? no_range_info
                          : get_expr_range_info(
                                ra_exe_unit, query_infos, agg_expr->get_arg(), executor);
+      const auto original_target_expr_ti =
+          ra_exe_unit.target_exprs_original_type_infos[i];
+      if (original_target_expr_ti.get_type() == kDATE &&
+          original_target_expr_ti.get_compression() == kENCODING_DATE_IN_DAYS) {
+        // manually encode the col range of date col if necessary
+        // (see conditionally_change_arg_to_int_type function in RelAlgExecutor.cpp)
+        auto is_date_value_not_encoded = [&original_target_expr_ti](int64_t date_val) {
+          if (original_target_expr_ti.get_comp_param() == 16) {
+            return date_val < INT16_MIN || date_val > INT16_MAX;
+          } else {
+            return date_val < INT32_MIN || date_val > INT32_MIN;
+          }
+        };
+        if (is_date_value_not_encoded(arg_range_info.min)) {
+          // chunk metadata of the date column contains decoded value
+          // so we manually encode it again here to represent its column range correctly
+          arg_range_info.min =
+              DateConverters::get_epoch_days_from_seconds(arg_range_info.min);
+        }
+        if (is_date_value_not_encoded(arg_range_info.max)) {
+          arg_range_info.max =
+              DateConverters::get_epoch_days_from_seconds(arg_range_info.max);
+        }
+      }
       CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::UnorderedSet};
       int64_t bitmap_sz_bits{0};
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
