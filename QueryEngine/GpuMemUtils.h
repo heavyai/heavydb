@@ -32,6 +32,7 @@
 #endif  // HAVE_CUDA
 
 #include "BufferProvider/BufferProvider.h"
+#include "Shared/Config.h"
 
 namespace Data_Namespace {
 class DataMgr;
