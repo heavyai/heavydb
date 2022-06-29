@@ -812,19 +812,25 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       assert functionQualifier == null;
       switch (operands.length) {
         case 1:
-          operands = new SqlNode[] {SqlLiteral.createCharString(" ", pos), operands[0]};
+          operands = new SqlNode[] {operands[0], SqlLiteral.createCharString(" ", pos)};
           break;
         case 2:
           if (operands[1] == null) {
             operands[1] = SqlLiteral.createCharString(" ", pos);
           }
-          operands = new SqlNode[] {operands[1], operands[0]};
+          operands = new SqlNode[] {operands[0], operands[1]};
           break;
         default:
           throw new IllegalArgumentException(
                   "Invalid operand count " + Arrays.toString(operands));
       }
       return super.createCall(functionQualifier, pos, operands);
+    }
+
+    @Override
+    public boolean requiresCreate(List<SqlNode> operands) {
+      // if there is only 1 Operand, the code will be creating 'defaults'
+      return (operands.size() == 1);
     }
   }
 
@@ -893,6 +899,12 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
         default:
           return true;
       }
+    }
+
+    @Override
+    public boolean requiresCreate(List<SqlNode> operands) {
+      // if there are only 2 Operands, the code will be creating 'defaults'
+      return (operands.size() == 2);
     }
   }
 
@@ -973,6 +985,12 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
                   "Invalid operand count " + Arrays.toString(operands));
       }
       return super.createCall(functionQualifier, pos, operands);
+    }
+
+    @Override
+    public boolean requiresCreate(List<SqlNode> operands) {
+      // if there are only 2 Operands, the code will be creating 'defaults'
+      return (operands.size() == 2);
     }
   }
   public static class Reverse extends SqlFunction {
