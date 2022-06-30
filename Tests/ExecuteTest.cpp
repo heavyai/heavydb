@@ -11155,6 +11155,21 @@ TEST(Select, Joins_FunctionOper) {
           "= cte.h3;";
       EXPECT_EQ(80 * 2 + 1, v<int64_t>(run_simple_agg(query, dt)));
     }
+    {
+      // check whether we're properly generate a code for a left join between bigint and
+      // non-bigint integer columns
+      const auto gen_query = [](const auto col_name) {
+        std::ostringstream oss;
+        oss << "with series as (select generate_series as s from "
+               "table(generate_series(-10, 10))) select R."
+            << col_name << " from series left join test R on (series.s = R." << col_name
+            << ");";
+        return oss.str();
+      };
+      for (const auto col_name : {"w", "z", "x", "fx"}) {
+        EXPECT_NO_THROW(run_multiple_agg(gen_query(col_name), dt));
+      }
+    }
   }
 }
 

@@ -468,6 +468,8 @@ class CodeGenerator {
       const Analyzer::ColumnVar* rhs,
       const Analyzer::BinOper* tautological_eq) const;
 
+  bool needCastForHashJoinLhs(const Analyzer::ColumnVar* rhs) const;
+
   std::unique_ptr<InValuesBitmap> createInValuesBitmap(const Analyzer::InValues*,
                                                        const CompilationOptions&);
 
