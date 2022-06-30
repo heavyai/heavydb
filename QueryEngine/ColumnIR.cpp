@@ -446,6 +446,13 @@ std::vector<llvm::Value*> CodeGenerator::codegenOuterJoinNullPlaceholder(
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_args_bb);
   Executor::FetchCacheAnchor anchor(cgen_state_);
   const auto orig_lvs = codegenColVar(col_var, fetch_column, true, co);
+  // sometimes col_var used in the join qual needs to cast its column to sync with
+  // the target join column's type which generates a code with a new bb like cast_bb
+  // if so, we need to keep that bb to correctly construct phi_bb
+  // i.e., use cast_bb instead of outer_join_args_bb for the "casted" column
+  // which is the right end point
+  const auto needs_casting_col_var = needCastForHashJoinLhs(col_var);
+  auto* cast_bb = cgen_state_->ir_builder_.GetInsertBlock();
   cgen_state_->ir_builder_.CreateBr(phi_bb);
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_nulls_bb);
   const auto& null_ti = col_var->get_type_info();
@@ -468,7 +475,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenOuterJoinNullPlaceholder(
     const auto target_type = orig_lvs[i]->getType();
     CHECK_EQ(target_type, null_target_lvs[i]->getType());
     auto target_phi = cgen_state_->ir_builder_.CreatePHI(target_type, 2);
-    target_phi->addIncoming(orig_lvs[i], outer_join_args_bb);
+    const auto orig_lvs_bb = needs_casting_col_var ? cast_bb : outer_join_args_bb;
+    target_phi->addIncoming(orig_lvs[i], orig_lvs_bb);
     target_phi->addIncoming(null_target_lvs[i], outer_join_nulls_bb);
     target_lvs.push_back(target_phi);
   }
@@ -614,6 +622,69 @@ std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
     }
   }
   return nullptr;
+}
+
+bool CodeGenerator::needCastForHashJoinLhs(const Analyzer::ColumnVar* rhs) const {
+  for (const auto& tautological_eq : plan_state_->join_info_.equi_join_tautologies_) {
+    CHECK(IS_EQUIVALENCE(tautological_eq->get_optype()));
+    if (dynamic_cast<const Analyzer::ExpressionTuple*>(
+            tautological_eq->get_left_operand())) {
+      auto lhs_col = hashJoinLhsTuple(rhs, tautological_eq.get());
+      if (lhs_col) {
+        // our join column normalizer falls back to the loop join
+        // when columns of two join tables do not have the same types
+        // todo (yoonmin): relax this
+        return false;
+      }
+    } else {
+      auto eq_right_op = tautological_eq->get_right_operand();
+      if (!rhs->get_type_info().is_string()) {
+        eq_right_op = remove_cast_to_int(eq_right_op);
+      }
+      if (!eq_right_op) {
+        eq_right_op = tautological_eq->get_right_operand();
+      }
+      if (*eq_right_op == *rhs) {
+        auto eq_left_op = tautological_eq->get_left_operand();
+        if (!eq_left_op->get_type_info().is_string()) {
+          eq_left_op = remove_cast_to_int(eq_left_op);
+        }
+        if (!eq_left_op) {
+          eq_left_op = tautological_eq->get_left_operand();
+        }
+        if (eq_left_op->get_type_info().is_geometry()) {
+          // skip cast for a geospatial lhs, since the rhs is likely to be a geospatial
+          // physical col without geospatial type info
+          return false;
+        }
+        if (is_constructed_point(eq_left_op)) {
+          // skip cast for a constructed point lhs
+          return false;
+        }
+        auto eq_left_op_col = dynamic_cast<const Analyzer::ColumnVar*>(eq_left_op);
+        if (!eq_left_op_col) {
+          if (dynamic_cast<const Analyzer::StringOper*>(eq_left_op)) {
+            return false;
+          }
+          if (dynamic_cast<const Analyzer::FunctionOper*>(eq_left_op)) {
+            return false;
+          }
+        }
+        CHECK(eq_left_op_col);
+        if (eq_left_op_col->get_rte_idx() != 0) {
+          return false;
+        }
+        if (rhs->get_type_info().is_string()) {
+          return false;
+        }
+        if (rhs->get_type_info().is_array()) {
+          return false;
+        }
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 std::shared_ptr<const Analyzer::ColumnVar> CodeGenerator::hashJoinLhsTuple(
