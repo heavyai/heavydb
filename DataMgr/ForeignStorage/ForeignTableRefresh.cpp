@@ -35,6 +35,7 @@ void clear_cpu_and_gpu_cache(Data_Namespace::DataMgr& data_mgr,
 void refresh_foreign_table_unlocked(Catalog_Namespace::Catalog& catalog,
                                     const ForeignTable& td,
                                     const bool evict_cached_entries) {
+  LOG(INFO) << "Starting refresh for table: " << td.tableName;
   auto& data_mgr = catalog.getDataMgr();
   ChunkKey table_key{catalog.getCurrentDB().dbId, td.tableId};
   ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
@@ -96,6 +97,7 @@ void refresh_foreign_table_unlocked(Catalog_Namespace::Catalog& catalog,
       }
     }
   }
+  LOG(INFO) << "Completed refresh for table: " << td.tableName;
 }
 
 void refresh_foreign_table(Catalog_Namespace::Catalog& catalog,

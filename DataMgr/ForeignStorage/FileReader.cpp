@@ -547,7 +547,9 @@ MultiFileReader::MultiFileReader(const std::string& file_path,
   json_utils::get_value_from_object(value, cumulative_sizes_, "cumulative_sizes");
   json_utils::get_value_from_object(value, current_offset_, "current_offset");
   json_utils::get_value_from_object(value, current_index_, "current_index");
-  json_utils::get_value_from_object(value, starting_offset_, "starting_offset");
+  if (value.HasMember("starting_offset")) {
+    json_utils::get_value_from_object(value, starting_offset_, "starting_offset");
+  }
 
   // Validate files_metadata here, but objects will be recreated by child class
   CHECK(value.HasMember("files_metadata"));
