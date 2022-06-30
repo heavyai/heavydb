@@ -19,6 +19,10 @@
  * @brief Test suite for DML SQL queries on foreign tables
  */
 
+#include <fstream>
+#include <regex>
+#include <string>
+
 #include <gtest/gtest.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
@@ -863,6 +867,41 @@ class RecoverCacheQueryTest : public ForeignTableTest {
       path += "_" + data_wrapper_type;
     }
     return path + ".json";
+  }
+
+  ChunkKey getTestTableKey() {
+    auto& catalog = getCatalog();
+    auto td = catalog.getMetadataForTable(default_table_name, false);
+    CHECK(td);
+    return ChunkKey{catalog.getDatabaseId(), td->tableId};
+  }
+
+  void setOldDataWrapperMetadata(const std::string& table_name,
+                                 const std::string& file_name_prefix) {
+    auto& catalog = getCatalog();
+    auto disk_cache = catalog.getDataMgr().getPersistentStorageMgr()->getDiskCache();
+    ASSERT_NE(disk_cache, nullptr);
+    auto db_id = catalog.getDatabaseId();
+    auto td = getCatalog().getMetadataForTable(table_name, false);
+    ASSERT_NE(td, nullptr);
+    auto wrapper_metadata_path = disk_cache->getSerializedWrapperPath(db_id, td->tableId);
+    ASSERT_TRUE(boost::filesystem::exists(wrapper_metadata_path));
+
+    auto file_name_suffix = is_regex(wrapper_type_) ? "csv" : wrapper_type_;
+    auto prefix = (boost::filesystem::path("old") / file_name_prefix).string();
+    auto old_wrapper_metadata_path = getWrapperMetadataPath(prefix, file_name_suffix);
+    ASSERT_TRUE(boost::filesystem::exists(old_wrapper_metadata_path));
+
+    // Write content from the old wrapper metadata test file, replacing "BASEPATH" with
+    // the actual base path value.
+    boost::filesystem::remove(wrapper_metadata_path);
+    std::ofstream new_file{wrapper_metadata_path};
+    std::ifstream old_file{old_wrapper_metadata_path};
+    std::string line;
+    while (std::getline(old_file, line)) {
+      static std::regex base_path_regex{"BASEPATH"};
+      new_file << std::regex_replace(line, base_path_regex, getDataFilesPath());
+    }
   }
 
   void SetUp() override {
@@ -5333,14 +5372,14 @@ TEST_F(RecoverCacheQueryTest, RecoverWithoutWrappers) {
   ASSERT_TRUE(isTableDatawrapperRestored(default_table_name));
 }
 
-class RecoverCacheTest
-    : public RecoverCacheQueryTest,
-      public ::testing::WithParamInterface<std::pair<WrapperType, FileNameType>> {
+class RecoverCacheTest : public RecoverCacheQueryTest,
+                         public ::testing::WithParamInterface<WrapperType> {
  protected:
-  FileNameType file_name_;
+  std::string file_ext_;
 
   void SetUp() override {
-    std::tie(wrapper_type_, file_name_) = GetParam();
+    wrapper_type_ = GetParam();
+    file_ext_ = wrapper_ext(wrapper_type_);
     RecoverCacheQueryTest::SetUp();
   }
 };
@@ -5349,7 +5388,7 @@ TEST_P(RecoverCacheTest, RestoreCache) {
   SKIP_IF_DISTRIBUTED("Test relies on local metadata or cache acces");
 
   sql(createForeignTableQuery(
-      {{"t", "TEXT"}}, getDataFilesPath() + file_name_, wrapper_type_));
+      {{"t", "TEXT"}}, getDataFilesPath() + "a" + file_ext_, wrapper_type_));
 
   ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
   ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
@@ -5371,14 +5410,31 @@ TEST_P(RecoverCacheTest, RestoreCache) {
   ASSERT_TRUE(isTableDatawrapperRestored(default_table_name));
 }
 
+TEST_P(RecoverCacheTest, RestoreCacheFromOldWrapperMetadata) {
+  SKIP_IF_DISTRIBUTED("Test relies on local metadata or cache access");
+
+  sql(createForeignTableQuery(
+      {{"col1", "BIGINT"}}, getDataFilesPath() + "1" + file_ext_, wrapper_type_));
+  sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(1)}});
+
+  // Reset cache and clear memory representations (disk data persists).
+  resetStorageManagerAndClearTableMemory(getTestTableKey());
+  ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
+  ASSERT_FALSE(isTableDatawrapperRestored(default_table_name));
+  setOldDataWrapperMetadata(default_table_name, "1");
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY col1;",
+                      {{i(1)}});
+
+  ASSERT_EQ(cache_->getNumCachedChunks(), size_t(1));
+  ASSERT_EQ(cache_->getNumCachedMetadata(), size_t(1));
+  ASSERT_TRUE(isTableDatawrapperRestored(default_table_name));
+}
+
 INSTANTIATE_TEST_SUITE_P(RecoverCacheParameterizedTests,
                          RecoverCacheTest,
-                         ::testing::Values(std::make_pair("csv", "a.csv"),
-                                           std::make_pair("parquet", "a.parquet"),
-                                           std::make_pair("sqlite", "a.csv"),
-                                           std::make_pair("postgres", "a.csv"),
-                                           std::make_pair("regex_parser", "a.csv")),
-                         [](const auto& param_info) { return param_info.param.first; });
+                         ::testing::ValuesIn(local_wrappers),
+                         [](const auto& param_info) { return param_info.param; });
 
 class DataWrapperRecoverCacheQueryTest
     : public RecoverCacheQueryTest,

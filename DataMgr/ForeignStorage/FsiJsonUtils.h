@@ -151,7 +151,7 @@ void add_value_to_object(rapidjson::Value& object,
                          const std::string& name,
                          rapidjson::Document::AllocatorType& allocator) {
   CHECK(object.IsObject());
-  CHECK(!object.HasMember(name));
+  CHECK(!object.HasMember(name)) << "Found unexpected member: " << name;
   rapidjson::Value json_val;
   set_value(json_val, value, allocator);
   rapidjson::Value json_name;
@@ -165,7 +165,7 @@ void get_value_from_object(const rapidjson::Value& object,
                            T& value,
                            const std::string& name) {
   CHECK(object.IsObject());
-  CHECK(object.HasMember(name));
+  CHECK(object.HasMember(name)) << "Could not find member: " << name;
   get_value(object[name], value);
 }
 
