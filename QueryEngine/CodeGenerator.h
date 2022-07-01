@@ -331,6 +331,10 @@ class CodeGenerator {
 
   llvm::Value* codegenFpArith(const Analyzer::BinOper*, llvm::Value*, llvm::Value*);
 
+  llvm::Value* codegenCastTimestampToTime(llvm::Value* ts_lv,
+                                          const int dimen,
+                                          const bool nullable);
+
   llvm::Value* codegenCastTimestampToDate(llvm::Value* ts_lv,
                                           const int dimen,
                                           const bool nullable);

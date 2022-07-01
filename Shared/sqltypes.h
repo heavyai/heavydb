@@ -566,6 +566,10 @@ class SQLTypeInfo {
     return "";
   }
 #endif
+  template <typename... Types>
+  bool is_any(Types... types) const {
+    return (... || (types == type));
+  }
   inline bool is_string() const { return IS_STRING(type); }
   inline bool is_string_array() const { return (type == kARRAY) && IS_STRING(subtype); }
   inline bool is_integer() const { return IS_INTEGER(type); }
@@ -701,6 +705,8 @@ class SQLTypeInfo {
     } else if (type == kDATE && new_type_info.get_type() == kTIMESTAMP) {
       return true;
     } else if (type == kTIMESTAMP && new_type_info.get_type() == kDATE) {
+      return true;
+    } else if (type == kTIMESTAMP && new_type_info.get_type() == kTIME) {
       return true;
     } else if (type == kBOOLEAN && new_type_info.is_number()) {
       return true;

@@ -109,6 +109,10 @@ llvm::Value* CodeGenerator::codegenCast(llvm::Value* operand_lv,
       return codegenCastTimestampToDate(
           operand_lv, operand_ti.get_dimension(), !ti.get_notnull());
     }
+    if (operand_ti.get_type() == kTIMESTAMP && ti.get_type() == kTIME) {
+      return codegenCastTimestampToTime(
+          operand_lv, operand_ti.get_dimension(), !ti.get_notnull());
+    }
     if ((operand_ti.get_type() == kTIMESTAMP || operand_ti.get_type() == kDATE) &&
         ti.get_type() == kTIMESTAMP) {
       const auto operand_dimen =
@@ -128,6 +132,26 @@ llvm::Value* CodeGenerator::codegenCast(llvm::Value* operand_lv,
   }
   CHECK(false);
   return nullptr;
+}
+
+llvm::Value* CodeGenerator::codegenCastTimestampToTime(llvm::Value* ts_lv,
+                                                       const int dimen,
+                                                       const bool nullable) {
+  std::vector<llvm::Value*> datetrunc_args{ts_lv};
+  std::string hptodate_fname;
+  if (dimen > 0) {
+    hptodate_fname = "ExtractTimeFromHPTimestamp";
+    datetrunc_args.push_back(
+        cgen_state_->llInt(DateTimeUtils::get_timestamp_precision_scale(dimen)));
+  } else {
+    hptodate_fname = "ExtractTimeFromLPTimestamp";
+  }
+  if (nullable) {
+    datetrunc_args.push_back(cgen_state_->inlineIntNull(SQLTypeInfo(kBIGINT, false)));
+    hptodate_fname += "Nullable";
+  }
+  return cgen_state_->emitExternalCall(
+      hptodate_fname, get_int_type(64, cgen_state_->context_), datetrunc_args);
 }
 
 llvm::Value* CodeGenerator::codegenCastTimestampToDate(llvm::Value* ts_lv,

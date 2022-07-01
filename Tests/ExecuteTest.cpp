@@ -7352,6 +7352,7 @@ TEST(Select, CastFromNull) {
     c("SELECT CAST(NULL AS DOUBLE) FROM test;", dt);
     c("SELECT CAST(NULL AS DECIMAL) FROM test;", dt);
     c("SELECT CAST(NULL AS NUMERIC) FROM test;", dt);
+    c("SELECT CAST(NULL as TIME) from test", dt);
   }
 }
 
@@ -7489,6 +7490,158 @@ TEST(Select, CastRoundNullable) {
               v<int64_t>(run_simple_agg("SELECT CAST(CAST(x AS FLOAT) * 1.6 AS INT) AS "
                                         "key0 FROM test GROUP BY key0 ORDER BY key0;",
                                         dt)));
+  }
+}
+
+TEST(Select, CastTimestampToTime) {
+  run_ddl_statement("DROP TABLE IF EXISTS test_cast_tstt;");
+  run_ddl_statement(
+      "CREATE TABLE test_cast_tstt(ts0 timestamp(0),"
+      "ts3 timestamp(3), ts6 timestamp(6), ts9 timestamp(9));");
+
+  auto dt = ExecutorDeviceType::CPU;
+  run_multiple_agg(
+      "INSERT INTO test_cast_tstt values ('2011-05-01 10:15:10',"
+      "'2011-05-01 10:15:10.123', '2011-05-01 10:15:10.123456', '2011-05-01 "
+      "10:15:10.123456789');",
+      dt);
+  run_multiple_agg(
+      "INSERT INTO test_cast_tstt values ('2012-02-01 09:20:15',"
+      "'2011-02-01 09:20:15.999', '2011-02-01 09:20:15.999999', '2011-02-01 "
+      "09:20:15.999999999');",
+      dt);
+  run_multiple_agg(
+      "INSERT INTO test_cast_tstt values ('2012-02-01 23:20:20',"
+      "'2011-02-01 23:20:20.999', '2011-02-01 23:20:20.999999', '2011-02-01 "
+      "23:20:20.999999999');",
+      dt);
+  run_multiple_agg(
+      "INSERT INTO test_cast_tstt values ('2012-02-01 00:20:20',"
+      "'2011-02-01 00:20:20.999', '2011-02-01 00:20:20.999999', '2011-02-01 "
+      "00:20:20.999999999');",
+      dt);
+  run_multiple_agg(
+      "INSERT INTO test_cast_tstt values ('2012-03-02 00:20:20',"
+      "'2011-03-02 00:20:20.999', '2011-03-02 00:20:20.999999', '2011-03-02 "
+      "00:20:20.999999999');",
+      dt);
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    //  joins with casts from timestamp to date/time aren't working
+    //   run_ddl_statement("DROP TABLE IF EXISTS test_cast_tstt_join;");
+    //   run_ddl_statement("CREATE TABLE test_cast_tstt_join(t0 time);");
+    //   run_multiple_agg(
+    //     "INSERT INTO test_cast_tstt_join values ('10:15:10');",dt):
+    //   run_multiple_agg(
+    //     "INSERT INTO test_cast_tstt_join values ('10:15:10');",dt):
+    //   run_multiple_agg(
+    //     "INSERT INTO test_cast_tstt_join values ('09:20:20');",dt):
+
+    EXPECT_EQ(
+        36910,
+        v<int64_t>(run_simple_agg("SELECT cast(ts0 as time) FROM test_cast_tstt where "
+                                  "cast(ts0 as time) = '10:15:10';",
+                                  dt)));
+    EXPECT_EQ(
+        36910,
+        v<int64_t>(run_simple_agg("SELECT cast(ts3 as time) FROM test_cast_tstt where "
+                                  "cast(ts3 as time) = '10:15:10';",
+                                  dt)));
+    EXPECT_EQ(
+        36910,
+        v<int64_t>(run_simple_agg("SELECT cast(ts6 as time) FROM test_cast_tstt where "
+                                  "cast(ts6 as time) = '10:15:10';",
+                                  dt)));
+    EXPECT_EQ(
+        36910,
+        v<int64_t>(run_simple_agg("SELECT cast(ts9 as time) FROM test_cast_tstt where "
+                                  "cast(ts9 as time) = '10:15:10';",
+                                  dt)));
+
+    EXPECT_EQ(2,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test_cast_tstt "
+                                        "WHERE cast(ts0 as time) > '09:20:15' "
+                                        "AND cast(ts3 as time) > '09:20:15' "
+                                        "AND cast(ts6 as time) > '09:20:15' "
+                                        "AND cast(ts9 as time) > '09:20:15';",
+                                        dt)));
+    EXPECT_EQ(3,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test_cast_tstt "
+                                        "WHERE cast(ts0 as time) >= '09:20:15' "
+                                        "AND cast(ts3 as time) >= '09:20:15' "
+                                        "AND cast(ts6 as time) >= '09:20:15' "
+                                        "AND cast(ts9 as time) >= '09:20:15';",
+                                        dt)));
+    EXPECT_EQ(
+        5,
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test_cast_tstt "
+            "WHERE cast(ts0 as time) in ('00:20:20','09:20:15','10:15:10','23:20:20');",
+            dt)));
+    EXPECT_EQ(
+        5,
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test_cast_tstt "
+            "WHERE cast(ts3 as time) in ('00:20:20','09:20:15','10:15:10','23:20:20');",
+            dt)));
+    EXPECT_EQ(
+        5,
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test_cast_tstt "
+            "WHERE cast(ts6 as time) in ('00:20:20','09:20:15','10:15:10','23:20:20');",
+            dt)));
+    EXPECT_EQ(
+        5,
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test_cast_tstt "
+            "WHERE cast(ts9 as time) in ('00:20:20','09:20:15','10:15:10','23:20:20');",
+            dt)));
+    EXPECT_EQ(
+        0,
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test_cast_tstt "
+            "WHERE cast(ts0 as time) in ('00:20:21','09:20:16','10:15:11','23:20:21');",
+            dt)));
+    EXPECT_EQ(
+        0,
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test_cast_tstt "
+            "WHERE cast(ts3 as time) in ('00:20:21','09:20:16','10:15:11','23:20:21');",
+            dt)));
+    EXPECT_EQ(
+        0,
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test_cast_tstt "
+            "WHERE cast(ts6 as time) in ('00:20:21','09:20:16','10:15:11','23:20:21');",
+            dt)));
+
+    EXPECT_EQ(
+        0,
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test_cast_tstt "
+            "WHERE cast(ts9 as time) in ('00:20:21','09:20:16','10:15:11','23:20:21');",
+            dt)));
+
+    auto rows = run_multiple_agg(
+        "SELECT cast(ts0 as time) tm, COUNT(*) FROM test_cast_tstt GROUP BY tm order by "
+        "tm",
+        dt);
+    EXPECT_EQ(rows->rowCount(), size_t(4));
+    {
+      auto row = rows->getNextRow(false, false);
+      EXPECT_EQ(1220, v<int64_t>(row[0]));
+      EXPECT_EQ(2, v<int64_t>(row[1]));
+      row = rows->getNextRow(false, false);
+      EXPECT_EQ(33615, v<int64_t>(row[0]));
+      EXPECT_EQ(1, v<int64_t>(row[1]));
+      row = rows->getNextRow(false, false);
+      EXPECT_EQ(36910, v<int64_t>(row[0]));
+      EXPECT_EQ(1, v<int64_t>(row[1]));
+      row = rows->getNextRow(false, false);
+      EXPECT_EQ(84020, v<int64_t>(row[0]));
+      EXPECT_EQ(1, v<int64_t>(row[1]));
+    }
   }
 }
 
@@ -19405,7 +19558,6 @@ TEST(Update, ImplicitCastToTime4) {
                                                    g_use_temporary_tables,
                                                    true,
                                                    false));
-    run_multiple_agg("insert into time4 values ('01:23:45');", dt);
 
     EXPECT_THROW(run_multiple_agg("update time4 set t1='nonsense';", dt), std::exception);
 
@@ -19417,10 +19569,15 @@ TEST(Update, ImplicitCastToTime4) {
     // run_multiple_agg("update time4 set t1=cast( '1990-12-31 23:59:59' as char(32) );",
     // dt); run_multiple_agg("select t1 from time4;", dt);
 
-    EXPECT_THROW(
-        run_multiple_agg(
-            "update time4 set t1=cast( '1989-01-01 00:00:00' as timestamp );", dt),
-        std::runtime_error);
+    run_multiple_agg("update time4 set t1=cast( '1989-01-01 00:00:00' as timestamp );",
+                     dt);
+    run_multiple_agg(
+        "update time4 set t1=cast( '1989-01-01 00:00:00.123' as timestamp );", dt);
+    run_multiple_agg(
+        "update time4 set t1=cast( '1989-01-01 00:00:00.123456' as timestamp );", dt);
+    run_multiple_agg(
+        "update time4 set t1=cast( '1989-01-01 00:00:00.123456789' as timestamp );", dt);
+
     EXPECT_THROW(run_multiple_agg("update time4 set t1=cast( '2000' as date );", dt),
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("update time4 set t1=cast( 2000.00 as float );", dt),
@@ -19453,6 +19610,15 @@ TEST(Update, ImplicitCastToTime8) {
 
     run_multiple_agg("insert into timetab values ('01:23:45');", dt);
 
+    run_multiple_agg("update timetab set t1=cast( '1989-01-01 02:01:20' as timestamp );",
+                     dt);
+    run_multiple_agg(
+        "update timetab set t1=cast( '1989-01-01 02:01:20.123' as timestamp );", dt);
+    run_multiple_agg(
+        "update timetab set t1=cast( '1989-01-01 02:01:20.123456' as timestamp );", dt);
+    run_multiple_agg(
+        "update timetab set t1=cast( '1989-01-01 02:01:20.123456789' as timestamp );",
+        dt);
     EXPECT_THROW(run_multiple_agg("update timetab set t1='nonsense';", dt),
                  std::exception);
 

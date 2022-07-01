@@ -4126,7 +4126,6 @@ std::pair<bool, int64_t> Executor::skipFragment(
         !lhs->get_type_info().is_fp()) {
       continue;
     }
-
     if (lhs->get_type_info().is_fp()) {
       const auto fragment_skip_status =
           canSkipFragmentForFpQual(comp_expr.get(), lhs_col, fragment, rhs_const);
@@ -4144,6 +4143,14 @@ std::pair<bool, int64_t> Executor::skipFragment(
 
     // Everything below is logic for integer and integer-backed timestamps
     // TODO: Factor out into separate function per canSkipFragmentForFpQual above
+
+    if (lhs_col->get_type_info().is_timestamp() &&
+        rhs_const->get_type_info().is_any(kTIME)) {
+      // when casting from a timestamp to time
+      // is not possible to get a valid range
+      // so we can't skip any fragment
+      continue;
+    }
 
     const int col_id = lhs_col->get_column_id();
     auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);

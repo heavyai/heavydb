@@ -1280,6 +1280,9 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
     // relax nullability
     type_info = new_type_info;
     return;
+  } else if (type_info.is_timestamp() && new_type_info.is_any(kTIME)) {
+    type_info = new_type_info;
+    return;
   } else {
     throw std::runtime_error("Cast from " + type_info.get_type_name() + " to " +
                              new_type_info.get_type_name() + " not supported");

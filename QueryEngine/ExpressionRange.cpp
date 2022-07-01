@@ -784,6 +784,12 @@ ExpressionRange getDateTimePrecisionCastRange(const ExpressionRange& arg_range,
     return ExpressionRange::makeIntRange(min_ts, max_ts, bucket, arg_range.hasNulls());
   }
 
+  if (oper_ti.is_timestamp() && target_ti.is_any(kTIME)) {
+    // The min and max TS wouldn't make sense here, so return a range covering the whole
+    // day
+    return ExpressionRange::makeIntRange(0, kSecsPerDay, 0, arg_range.hasNulls());
+  }
+
   const int32_t ti_dimen = target_ti.get_dimension();
   const int32_t oper_dimen = oper_ti.get_dimension();
   CHECK(oper_dimen != ti_dimen);
@@ -874,7 +880,7 @@ ExpressionRange getExpressionRange(
   const auto& arg_ti = u_expr->get_operand()->get_type_info();
   // Timestamp to Date OR Date/Timestamp casts with different precision
   if ((ti.is_timestamp() && (arg_ti.get_dimension() != ti.get_dimension())) ||
-      ((arg_ti.is_timestamp() && ti.is_date()))) {
+      ((arg_ti.is_timestamp() && ti.is_any(kDATE, kTIME)))) {
     return getDateTimePrecisionCastRange(arg_range, arg_ti, ti);
   }
   switch (arg_range.getType()) {
