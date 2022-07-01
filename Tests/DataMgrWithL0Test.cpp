@@ -25,9 +25,9 @@ TEST(DataMgrWithL0, SanityTest) {
   gpu_mgrs[GpuMgrName::L0] = std::make_unique<l0::L0Manager>();
   l0::L0Manager* original_mgr = (l0::L0Manager*)gpu_mgrs[GpuMgrName::L0].get();
 
-  std::string data_mgr_path{"./data_mgr_test_dir"};
+  ConfigPtr config_ = std::make_shared<Config>();
   SystemParameters sys_params = {};
-  auto data_mgr = std::make_unique<Data_Namespace::DataMgr>(data_mgr_path,
+  auto data_mgr = std::make_unique<Data_Namespace::DataMgr>(*config_,
                                                             sys_params,
                                                             std::move(gpu_mgrs),
                                                             /*use_gpus=*/true);
@@ -42,9 +42,9 @@ TEST(DataMgrWithL0, SimpleReadWriteTest) {
   std::map<GpuMgrName, std::unique_ptr<GpuMgr>> gpu_mgrs;
   gpu_mgrs[GpuMgrName::L0] = std::make_unique<l0::L0Manager>();
 
-  std::string data_mgr_path{"./data_mgr_test_dir"};
+  ConfigPtr config_ = std::make_shared<Config>();
   SystemParameters sys_params = {};
-  auto data_mgr = std::make_unique<Data_Namespace::DataMgr>(data_mgr_path,
+  auto data_mgr = std::make_unique<Data_Namespace::DataMgr>(*config_,
                                                             sys_params,
                                                             std::move(gpu_mgrs),
                                                             /*use_gpus=*/true);

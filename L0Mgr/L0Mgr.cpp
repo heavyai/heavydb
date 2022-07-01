@@ -73,7 +73,7 @@ std::vector<std::shared_ptr<L0Driver>> get_drivers() {
   L0_SAFE_CALL(zeDriverGet(&driver_count, handles.data()));
 
   std::vector<std::shared_ptr<L0Driver>> result(driver_count);
-  for (int i = 0; i < driver_count; i++) {
+  for (uint32_t i = 0; i < driver_count; i++) {
     result[i] = std::make_shared<L0Driver>(handles[i]);
   }
   return result;
