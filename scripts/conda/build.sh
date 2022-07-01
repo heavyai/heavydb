@@ -38,9 +38,9 @@ export INSTALL_BASE=. # was opt/omnisci-cpu
 
 if [[ "$cuda_compiler_version" == None ]] || [[ -z "$cuda_compiler_version" ]]
 then
-   export EXTRA_CMAKE_OPTIONS="$EXTRA_CMAKE_OPTIONS -DENABLE_CUDA=off -DENABLE_DBE=on"
+   export EXTRA_CMAKE_OPTIONS="$EXTRA_CMAKE_OPTIONS -DENABLE_CUDA=off"
 else
-   export EXTRA_CMAKE_OPTIONS="$EXTRA_CMAKE_OPTIONS -DENABLE_CUDA=on -DENABLE_DBE=off"
+   export EXTRA_CMAKE_OPTIONS="$EXTRA_CMAKE_OPTIONS -DENABLE_CUDA=on"
 fi
 
 if [[ "$RUN_TESTS" == "0" ]]
@@ -78,13 +78,11 @@ cmake -Wno-dev \
     -DCMAKE_PREFIX_PATH=$PREFIX \
     -DCMAKE_INSTALL_PREFIX=$PREFIX/$INSTALL_BASE \
     -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
-    -DMAPD_DOCS_DOWNLOAD=off \
     -DENABLE_AWS_S3=off \
     -DENABLE_FOLLY=off \
     -DENABLE_JAVA_REMOTE_DEBUG=off \
     -DENABLE_PROFILER=off \
     -DPREFER_STATIC_LIBS=off \
-    -DENABLE_FSI=ON \
     -DENABLE_ITT=OFF \
     -DENABLE_JIT_DEBUG=OFF \
     -DENABLE_INTEL_JIT_LISTENER=OFF \
