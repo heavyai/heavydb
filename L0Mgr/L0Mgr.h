@@ -61,7 +61,7 @@ class L0Device {
   ze_device_handle_t device_;
 #endif
 
-  L0Driver driver_;
+  const L0Driver& driver_;
   std::shared_ptr<L0CommandQueue> command_queue_;
 
  public:
