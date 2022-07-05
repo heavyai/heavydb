@@ -45,5 +45,5 @@ dependencies:
   - ittapi
   - pytest
   # when cuda is enabled, install also
-  #- arrow-cpp=0.16=*cuda
+  #- arrow-cpp=5.0=*cuda
   - binutils
