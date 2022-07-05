@@ -3183,201 +3183,6 @@ class OutVecOwner {
  private:
   std::vector<int64_t*> out_vec_;
 };
-}  // namespace
-
-int32_t Executor::executePlanWithoutGroupBy(
-    const RelAlgExecutionUnit& ra_exe_unit,
-    const CompilationResult& compilation_result,
-    const bool hoist_literals,
-    ResultSetPtr* results,
-    const std::vector<Analyzer::Expr*>& target_exprs,
-    const ExecutorDeviceType device_type,
-    std::vector<std::vector<const int8_t*>>& col_buffers,
-    QueryExecutionContext* query_exe_context,
-    const std::vector<std::vector<int64_t>>& num_rows,
-    const std::vector<std::vector<uint64_t>>& frag_offsets,
-    Data_Namespace::DataMgr* data_mgr,
-    const int device_id,
-    const uint32_t start_rowid,
-    const uint32_t num_tables,
-    const bool allow_runtime_interrupt,
-    const int64_t rows_to_process) {
-  INJECT_TIMER(executePlanWithoutGroupBy);
-  auto timer = DEBUG_TIMER(__func__);
-  CHECK(!results || !(*results));
-  if (col_buffers.empty()) {
-    return 0;
-  }
-
-  int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
-  std::vector<int64_t*> out_vec;
-  const auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
-  const auto join_hash_table_ptrs = getJoinHashTablePtrs(device_type, device_id);
-  std::unique_ptr<OutVecOwner> output_memory_scope;
-  if (allow_runtime_interrupt) {
-    bool isInterrupted = false;
-    {
-      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
-      const auto query_session = getCurrentQuerySession(session_read_lock);
-      isInterrupted = checkIsQuerySessionInterrupted(query_session, session_read_lock);
-    }
-    if (isInterrupted) {
-      throw QueryExecutionError(ERR_INTERRUPTED);
-    }
-  }
-  if (config_->exec.watchdog.enable_dynamic && interrupted_.load()) {
-    throw QueryExecutionError(ERR_INTERRUPTED);
-  }
-  if (device_type == ExecutorDeviceType::CPU) {
-    CpuCompilationContext* cpu_generated_code =
-        dynamic_cast<CpuCompilationContext*>(compilation_result.generated_code.get());
-    CHECK(cpu_generated_code);
-    out_vec = query_exe_context->launchCpuCode(ra_exe_unit,
-                                               cpu_generated_code,
-                                               hoist_literals,
-                                               hoist_buf,
-                                               col_buffers,
-                                               num_rows,
-                                               frag_offsets,
-                                               0,
-                                               &error_code,
-                                               num_tables,
-                                               join_hash_table_ptrs,
-                                               rows_to_process);
-    output_memory_scope.reset(new OutVecOwner(out_vec));
-  } else {
-    GpuCompilationContext* gpu_generated_code =
-        dynamic_cast<GpuCompilationContext*>(compilation_result.generated_code.get());
-    CHECK(gpu_generated_code);
-    try {
-      out_vec = query_exe_context->launchGpuCode(
-          ra_exe_unit,
-          gpu_generated_code,
-          hoist_literals,
-          hoist_buf,
-          col_buffers,
-          num_rows,
-          frag_offsets,
-          0,
-          data_mgr,
-          getBufferProvider(),
-          blockSize(),
-          gridSize(),
-          device_id,
-          compilation_result.gpu_smem_context.getSharedMemorySize(),
-          &error_code,
-          num_tables,
-          allow_runtime_interrupt,
-          join_hash_table_ptrs);
-      output_memory_scope.reset(new OutVecOwner(out_vec));
-    } catch (const OutOfMemory&) {
-      return ERR_OUT_OF_GPU_MEM;
-    } catch (const std::exception& e) {
-      LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
-    }
-  }
-  if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW ||
-      error_code == Executor::ERR_DIV_BY_ZERO ||
-      error_code == Executor::ERR_OUT_OF_TIME ||
-      error_code == Executor::ERR_INTERRUPTED ||
-      error_code == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES ||
-      error_code == Executor::ERR_WIDTH_BUCKET_INVALID_ARGUMENT) {
-    return error_code;
-  }
-  if (ra_exe_unit.estimator) {
-    CHECK(!error_code);
-    if (results) {
-      *results =
-          std::shared_ptr<ResultSet>(query_exe_context->estimator_result_set_.release());
-    }
-    return 0;
-  }
-  // Expect delayed results extraction (used for sub-fragments) for estimator only;
-  CHECK(results);
-  std::vector<int64_t> reduced_outs;
-  const auto num_frags = col_buffers.size();
-  const size_t entry_count =
-      device_type == ExecutorDeviceType::GPU
-          ? (compilation_result.gpu_smem_context.isSharedMemoryUsed()
-                 ? 1
-                 : blockSize() * gridSize() * num_frags)
-          : num_frags;
-  if (size_t(1) == entry_count) {
-    for (auto out : out_vec) {
-      CHECK(out);
-      reduced_outs.push_back(*out);
-    }
-  } else {
-    size_t out_vec_idx = 0;
-
-    for (const auto target_expr : target_exprs) {
-      const auto agg_info =
-          get_target_info(target_expr, getConfig().exec.group_by.bigint_count);
-      CHECK(agg_info.is_agg || dynamic_cast<Analyzer::Constant*>(target_expr))
-          << target_expr->toString();
-
-      int64_t val1;
-      const bool float_argument_input = takes_float_argument(agg_info);
-      if (is_distinct_target(agg_info) || agg_info.agg_kind == kAPPROX_QUANTILE) {
-        CHECK(agg_info.agg_kind == kCOUNT ||
-              agg_info.agg_kind == kAPPROX_COUNT_DISTINCT ||
-              agg_info.agg_kind == kAPPROX_QUANTILE);
-        val1 = out_vec[out_vec_idx][0];
-        error_code = 0;
-      } else {
-        const auto chosen_bytes = static_cast<size_t>(
-            query_exe_context->query_mem_desc_.getPaddedSlotWidthBytes(out_vec_idx));
-        std::tie(val1, error_code) =
-            Executor::reduceResults(agg_info.agg_kind,
-                                    agg_info.sql_type,
-                                    query_exe_context->getAggInitValForIndex(out_vec_idx),
-                                    float_argument_input ? sizeof(int32_t) : chosen_bytes,
-                                    out_vec[out_vec_idx],
-                                    entry_count,
-                                    false,
-                                    float_argument_input);
-      }
-      if (error_code) {
-        break;
-      }
-      reduced_outs.push_back(val1);
-      if (agg_info.agg_kind == kAVG ||
-          (agg_info.agg_kind == kSAMPLE && agg_info.sql_type.is_varlen())) {
-        const auto chosen_bytes = static_cast<size_t>(
-            query_exe_context->query_mem_desc_.getPaddedSlotWidthBytes(out_vec_idx + 1));
-        int64_t val2;
-        std::tie(val2, error_code) = Executor::reduceResults(
-            agg_info.agg_kind == kAVG ? kCOUNT : agg_info.agg_kind,
-            agg_info.sql_type,
-            query_exe_context->getAggInitValForIndex(out_vec_idx + 1),
-            float_argument_input ? sizeof(int32_t) : chosen_bytes,
-            out_vec[out_vec_idx + 1],
-            entry_count,
-            false,
-            false);
-        if (error_code) {
-          break;
-        }
-        reduced_outs.push_back(val2);
-        ++out_vec_idx;
-      }
-      ++out_vec_idx;
-    }
-  }
-
-  if (error_code) {
-    return error_code;
-  }
-
-  CHECK_EQ(size_t(1), query_exe_context->query_buffers_->result_sets_.size());
-  auto rows_ptr = std::shared_ptr<ResultSet>(
-      query_exe_context->query_buffers_->result_sets_[0].release());
-  rows_ptr->fillOneEntry(reduced_outs);
-  *results = std::move(rows_ptr);
-  return error_code;
-}
-
-namespace {
 
 bool check_rows_less_than_needed(const ResultSetPtr& results, const size_t scan_limit) {
   CHECK(scan_limit);
@@ -3386,33 +3191,33 @@ bool check_rows_less_than_needed(const ResultSetPtr& results, const size_t scan_
 
 }  // namespace
 
-int32_t Executor::executePlanWithGroupBy(
-    const RelAlgExecutionUnit& ra_exe_unit,
-    const CompilationResult& compilation_result,
-    const bool hoist_literals,
-    ResultSetPtr* results,
-    const ExecutorDeviceType device_type,
-    std::vector<std::vector<const int8_t*>>& col_buffers,
-    const std::vector<size_t> outer_tab_frag_ids,
-    QueryExecutionContext* query_exe_context,
-    const std::vector<std::vector<int64_t>>& num_rows,
-    const std::vector<std::vector<uint64_t>>& frag_offsets,
-    Data_Namespace::DataMgr* data_mgr,
-    const int device_id,
-    const int outer_table_id,
-    const int64_t scan_limit,
-    const uint32_t start_rowid,
-    const uint32_t num_tables,
-    const bool allow_runtime_interrupt,
-    const int64_t rows_to_process) {
+int32_t Executor::executePlan(const RelAlgExecutionUnit& ra_exe_unit,
+                              const CompilationResult& compilation_result,
+                              const bool hoist_literals,
+                              ResultSetPtr* results,
+                              const ExecutorDeviceType device_type,
+                              std::vector<std::vector<const int8_t*>>& col_buffers,
+                              const std::vector<size_t> outer_tab_frag_ids,
+                              QueryExecutionContext* query_exe_context,
+                              const std::vector<std::vector<int64_t>>& num_rows,
+                              const std::vector<std::vector<uint64_t>>& frag_offsets,
+                              Data_Namespace::DataMgr* data_mgr,
+                              const int device_id,
+                              const int outer_table_id,
+                              const int64_t scan_limit,
+                              const uint32_t start_rowid,
+                              const uint32_t num_tables,
+                              const bool allow_runtime_interrupt,
+                              const int64_t rows_to_process) {
   auto timer = DEBUG_TIMER(__func__);
-  INJECT_TIMER(executePlanWithGroupBy);
+  INJECT_TIMER(executePlan);
   // TODO: get results via a separate method, but need to do something with literals.
   CHECK(!results || !(*results));
   if (col_buffers.empty()) {
     return 0;
   }
-  CHECK_NE(ra_exe_unit.groupby_exprs.size(), size_t(0));
+
+  const bool is_groupby = ra_exe_unit.groupby_exprs.size() != 0;
   // TODO(alex):
   // 1. Optimize size (make keys more compact).
   // 2. Resize on overflow.
@@ -3432,7 +3237,7 @@ int32_t Executor::executePlanWithGroupBy(
     }
   }
   if (config_->exec.watchdog.enable_dynamic && interrupted_.load()) {
-    return ERR_INTERRUPTED;
+    throw QueryExecutionError(ERR_INTERRUPTED);
   }
 
   VLOG(2) << "bool(ra_exe_unit.union_all)=" << bool(ra_exe_unit.union_all)
@@ -3450,6 +3255,159 @@ int32_t Executor::executePlanWithGroupBy(
           << " device_id=" << device_id << " outer_table_id=" << outer_table_id
           << " scan_limit=" << scan_limit << " start_rowid=" << start_rowid
           << " num_tables=" << num_tables;
+
+  if (!is_groupby) {
+    std::unique_ptr<OutVecOwner> output_memory_scope;
+    std::vector<int64_t*> out_vec;
+    if (device_type == ExecutorDeviceType::CPU) {
+      CpuCompilationContext* cpu_generated_code =
+          dynamic_cast<CpuCompilationContext*>(compilation_result.generated_code.get());
+      CHECK(cpu_generated_code);
+      out_vec = query_exe_context->launchCpuCode(ra_exe_unit,
+                                                 cpu_generated_code,
+                                                 hoist_literals,
+                                                 hoist_buf,
+                                                 col_buffers,
+                                                 num_rows,
+                                                 frag_offsets,
+                                                 0,
+                                                 &error_code,
+                                                 num_tables,
+                                                 join_hash_table_ptrs,
+                                                 rows_to_process);
+      output_memory_scope.reset(new OutVecOwner(out_vec));
+    } else {
+      GpuCompilationContext* gpu_generated_code =
+          dynamic_cast<GpuCompilationContext*>(compilation_result.generated_code.get());
+      CHECK(gpu_generated_code);
+      try {
+        out_vec = query_exe_context->launchGpuCode(
+            ra_exe_unit,
+            gpu_generated_code,
+            hoist_literals,
+            hoist_buf,
+            col_buffers,
+            num_rows,
+            frag_offsets,
+            0,
+            data_mgr,
+            getBufferProvider(),
+            blockSize(),
+            gridSize(),
+            device_id,
+            compilation_result.gpu_smem_context.getSharedMemorySize(),
+            &error_code,
+            num_tables,
+            allow_runtime_interrupt,
+            join_hash_table_ptrs);
+        output_memory_scope.reset(new OutVecOwner(out_vec));
+      } catch (const OutOfMemory&) {
+        return ERR_OUT_OF_GPU_MEM;
+      } catch (const std::exception& e) {
+        LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
+      }
+    }
+    if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW ||
+        error_code == Executor::ERR_DIV_BY_ZERO ||
+        error_code == Executor::ERR_OUT_OF_TIME ||
+        error_code == Executor::ERR_INTERRUPTED ||
+        error_code == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES ||
+        error_code == Executor::ERR_WIDTH_BUCKET_INVALID_ARGUMENT) {
+      return error_code;
+    }
+    if (ra_exe_unit.estimator) {
+      CHECK(!error_code);
+      if (results) {
+        *results = std::shared_ptr<ResultSet>(
+            query_exe_context->estimator_result_set_.release());
+      }
+      return 0;
+    }
+    // Expect delayed results extraction (used for sub-fragments) for estimator only;
+    CHECK(results);
+    std::vector<int64_t> reduced_outs;
+    const auto num_frags = col_buffers.size();
+    const size_t entry_count =
+        device_type == ExecutorDeviceType::GPU
+            ? (compilation_result.gpu_smem_context.isSharedMemoryUsed()
+                   ? 1
+                   : blockSize() * gridSize() * num_frags)
+            : num_frags;
+    if (size_t(1) == entry_count) {
+      for (auto out : out_vec) {
+        CHECK(out);
+        reduced_outs.push_back(*out);
+      }
+    } else {
+      size_t out_vec_idx = 0;
+
+      for (const auto target_expr : ra_exe_unit.target_exprs) {
+        const auto agg_info =
+            get_target_info(target_expr, getConfig().exec.group_by.bigint_count);
+        CHECK(agg_info.is_agg || dynamic_cast<Analyzer::Constant*>(target_expr))
+            << target_expr->toString();
+
+        int64_t val1;
+        const bool float_argument_input = takes_float_argument(agg_info);
+        if (is_distinct_target(agg_info) || agg_info.agg_kind == kAPPROX_QUANTILE) {
+          CHECK(agg_info.agg_kind == kCOUNT ||
+                agg_info.agg_kind == kAPPROX_COUNT_DISTINCT ||
+                agg_info.agg_kind == kAPPROX_QUANTILE);
+          val1 = out_vec[out_vec_idx][0];
+          error_code = 0;
+        } else {
+          const auto chosen_bytes = static_cast<size_t>(
+              query_exe_context->query_mem_desc_.getPaddedSlotWidthBytes(out_vec_idx));
+          std::tie(val1, error_code) = Executor::reduceResults(
+              agg_info.agg_kind,
+              agg_info.sql_type,
+              query_exe_context->getAggInitValForIndex(out_vec_idx),
+              float_argument_input ? sizeof(int32_t) : chosen_bytes,
+              out_vec[out_vec_idx],
+              entry_count,
+              false,
+              float_argument_input);
+        }
+        if (error_code) {
+          break;
+        }
+        reduced_outs.push_back(val1);
+        if (agg_info.agg_kind == kAVG ||
+            (agg_info.agg_kind == kSAMPLE && agg_info.sql_type.is_varlen())) {
+          const auto chosen_bytes = static_cast<size_t>(
+              query_exe_context->query_mem_desc_.getPaddedSlotWidthBytes(out_vec_idx +
+                                                                         1));
+          int64_t val2;
+          std::tie(val2, error_code) = Executor::reduceResults(
+              agg_info.agg_kind == kAVG ? kCOUNT : agg_info.agg_kind,
+              agg_info.sql_type,
+              query_exe_context->getAggInitValForIndex(out_vec_idx + 1),
+              float_argument_input ? sizeof(int32_t) : chosen_bytes,
+              out_vec[out_vec_idx + 1],
+              entry_count,
+              false,
+              false);
+          if (error_code) {
+            break;
+          }
+          reduced_outs.push_back(val2);
+          ++out_vec_idx;
+        }
+        ++out_vec_idx;
+      }
+    }
+
+    if (error_code) {
+      return error_code;
+    }
+
+    CHECK_EQ(size_t(1), query_exe_context->query_buffers_->result_sets_.size());
+    auto rows_ptr = std::shared_ptr<ResultSet>(
+        query_exe_context->query_buffers_->result_sets_[0].release());
+    rows_ptr->fillOneEntry(reduced_outs);
+    *results = std::move(rows_ptr);
+    return error_code;
+  }
 
   RelAlgExecutionUnit ra_exe_unit_copy = ra_exe_unit;
   // For UNION ALL, filter out input_descs and input_col_descs that are not associated

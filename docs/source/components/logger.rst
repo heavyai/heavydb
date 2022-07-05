@@ -328,7 +328,7 @@ calls are stored in the correct node of the parent tree. An example of a resulti
             New thread(5)
               0ms start(0ms) fetchChunks Execute.cpp:2024
               0ms start(0ms) getQueryExecutionContext QueryMemoryDescriptor.cpp:711
-              0ms start(0ms) executePlanWithoutGroupBy Execute.cpp:2276
+              0ms start(0ms) executePlan Execute.cpp:2276
                 0ms start(0ms) launchGpuCode QueryExecutionContext.cpp:195
             End thread(5)
 
