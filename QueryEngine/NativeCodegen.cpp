@@ -1443,8 +1443,10 @@ std::unique_ptr<llvm::TargetMachine> CodeGenerator::initializeNVPTXBackend(
   llvm::InitializeAllTargets();
 #ifndef ENABLE_ORCJIT
   llvm::InitializeAllTargetMCs();
-#endif
+#else
+  // Fails with ORC backend on CUDA
   llvm::InitializeAllAsmPrinters();
+#endif
   std::string err;
   auto target = llvm::TargetRegistry::lookupTarget("nvptx64", err);
   if (!target) {
