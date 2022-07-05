@@ -1997,9 +1997,8 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
 
     Executor::clearExternalCaches(true, table_descriptor, cat_.getDatabaseId());
 
-    auto updated_table_desc = node->getModifiedTableDescriptor();
     dml_transaction_parameters_ =
-        std::make_unique<UpdateTransactionParameters>(updated_table_desc,
+        std::make_unique<UpdateTransactionParameters>(table_descriptor,
                                                       node->getTargetColumns(),
                                                       node->getOutputMetainfo(),
                                                       node->isVarlenUpdateRequired());
@@ -2007,7 +2006,7 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
     const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 
     auto execute_update_ra_exe_unit =
-        [this, &co, &eo_in, &table_infos, &updated_table_desc](
+        [this, &co, &eo_in, &table_infos, &table_descriptor, &node](
             const RelAlgExecutionUnit& ra_exe_unit, const bool is_aggregate) {
           CompilationOptions co_project = CompilationOptions::makeCpuOnly(co);
 
@@ -2021,13 +2020,14 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
 
           auto update_transaction_parameters = dynamic_cast<UpdateTransactionParameters*>(
               dml_transaction_parameters_.get());
+          update_transaction_parameters->setInputSourceNode(node);
           CHECK(update_transaction_parameters);
           auto update_callback = yieldUpdateCallback(*update_transaction_parameters);
           try {
             auto table_update_metadata =
                 executor_->executeUpdate(ra_exe_unit,
                                          table_infos,
-                                         updated_table_desc,
+                                         table_descriptor,
                                          co_project,
                                          eo,
                                          cat_,
@@ -2097,7 +2097,29 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
         work_unit.exe_unit.scan_limit = input_table->rowCount();
       }
     }
-
+    if (project->hasWindowFunctionExpr() || project->hasPushedDownWindowExpr()) {
+      // the first condition means this project node has at least one window function
+      // and the second condition indicates that this project node falls into
+      // one of the following cases:
+      // 1) window function expression on a multi-fragmented table
+      // 2) window function expression is too complex to evaluate without codegen:
+      // i.e., sum(x+y+z) instead of sum(x) -> we currently do not support codegen to
+      // evaluate such a complex window function expression
+      // 3) nested window function expression
+      // but currently we do not support update on a multi-fragmented table having
+      // window function, so the second condition only refers to non-fragmented table with
+      // cases 2) or 3)
+      // if at least one of two conditions satisfy, we must compute corresponding window
+      // context before entering `execute_update_for_node` to properly update the table
+      if (!leaf_results_.empty()) {
+        throw std::runtime_error(
+            "Update query having window function is not yet supported in distributed "
+            "mode.");
+      }
+      ColumnCacheMap column_cache;
+      co.device_type = ExecutorDeviceType::CPU;
+      computeWindow(work_unit, co, eo_in, column_cache, queue_time_ms);
+    }
     execute_update_for_node(project, work_unit, false);
   } else {
     throw std::runtime_error("Unsupported parent node for update: " +

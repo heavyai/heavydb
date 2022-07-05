@@ -984,8 +984,8 @@ class ModifyManipulationTarget {
       , table_descriptor_(table_descriptor)
       , target_columns_(target_columns) {}
 
-  void setUpdateViaSelectFlag() const { is_update_via_select_ = true; }
-  void setDeleteViaSelectFlag() const { is_delete_via_select_ = true; }
+  void setUpdateViaSelectFlag(bool required) const { is_update_via_select_ = required; }
+  void setDeleteViaSelectFlag(bool required) const { is_delete_via_select_ = required; }
   void setVarlenUpdateRequired(bool required) const {
     varlen_update_required_ = required;
   }
@@ -999,12 +999,17 @@ class ModifyManipulationTarget {
   auto const isUpdateViaSelect() const { return is_update_via_select_; }
   auto const isDeleteViaSelect() const { return is_delete_via_select_; }
   auto const isVarlenUpdateRequired() const { return varlen_update_required_; }
+  auto const isProjectForUpdate() const {
+    return is_update_via_select_ || is_delete_via_select_ || varlen_update_required_;
+  }
   auto const isRowwiseOutputForced() const { return force_rowwise_output_; }
 
   void setTargetColumns(ColumnNameList const& target_columns) const {
     target_columns_ = target_columns;
   }
   ColumnNameList const& getTargetColumns() const { return target_columns_; }
+
+  void invalidateTargetColumns() const { target_columns_.clear(); }
 
   template <typename VALIDATION_FUNCTOR>
   bool validateTargetColumns(VALIDATION_FUNCTOR validator) const {
@@ -1039,7 +1044,8 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
       , scalar_exprs_(std::move(scalar_exprs))
       , fields_(fields)
       , hint_applied_(false)
-      , hints_(std::make_unique<Hints>()) {
+      , hints_(std::make_unique<Hints>())
+      , has_pushed_down_window_expr_(false) {
     inputs_.push_back(input);
   }
 
@@ -1066,6 +1072,34 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   bool isRenaming() const;
 
   size_t size() const override { return scalar_exprs_.size(); }
+
+  void propagateModifyManipulationTarget(
+      std::shared_ptr<RelProject> new_project_node) const {
+    if (isUpdateViaSelect()) {
+      new_project_node->setUpdateViaSelectFlag(true);
+    }
+    if (isDeleteViaSelect()) {
+      new_project_node->setDeleteViaSelectFlag(true);
+    }
+    if (isVarlenUpdateRequired()) {
+      new_project_node->setVarlenUpdateRequired(true);
+    }
+    new_project_node->setModifiedTableDescriptor(getModifiedTableDescriptor());
+    new_project_node->setTargetColumns(getTargetColumns());
+    resetModifyManipulationTarget();
+  }
+
+  void resetModifyManipulationTarget() const {
+    setModifiedTableDescriptor(nullptr);
+    setUpdateViaSelectFlag(false);
+    setDeleteViaSelectFlag(false);
+    setVarlenUpdateRequired(false);
+    invalidateTargetColumns();
+  }
+
+  bool hasPushedDownWindowExpr() const { return has_pushed_down_window_expr_; }
+
+  void setPushedDownWindowExpr() { has_pushed_down_window_expr_ = true; }
 
   const RexScalar* getProjectAt(const size_t idx) const {
     CHECK(idx < scalar_exprs_.size());
@@ -1120,7 +1154,14 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   }
 
   std::shared_ptr<RelAlgNode> deepCopy() const override {
-    return std::make_shared<RelProject>(*this);
+    auto copied_project_node = std::make_shared<RelProject>(*this);
+    if (isProjectForUpdate()) {
+      propagateModifyManipulationTarget(copied_project_node);
+    }
+    if (has_pushed_down_window_expr_) {
+      copied_project_node->setPushedDownWindowExpr();
+    }
+    return copied_project_node;
   }
 
   bool hasWindowFunctionExpr() const;
@@ -1171,6 +1212,7 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   mutable std::vector<std::string> fields_;
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;
+  bool has_pushed_down_window_expr_;
 };
 
 class RelAggregate : public RelAlgNode {
@@ -1975,11 +2017,19 @@ class RelModify : public RelAlgNode {
     CHECK(previous_project_node != nullptr);
 
     if (previous_project_node->hasWindowFunctionExpr()) {
-      throw std::runtime_error(
-          "UPDATE of a column using a window function is not currently supported.");
+      if (table_descriptor_->fragmenter->getNumFragments() > 1) {
+        throw std::runtime_error(
+            "UPDATE of a column of multi-fragmented table using window function not "
+            "currently supported.");
+      }
+      if (table_descriptor_->nShards > 0) {
+        throw std::runtime_error(
+            "UPDATE of a column of sharded table using window function not "
+            "currently supported.");
+      }
     }
 
-    previous_project_node->setUpdateViaSelectFlag();
+    previous_project_node->setUpdateViaSelectFlag(true);
     // remove the offset column in the projection for update handling
     target_column_list_.pop_back();
 
@@ -2032,7 +2082,7 @@ class RelModify : public RelAlgNode {
     RelProject const* previous_project_node =
         dynamic_cast<RelProject const*>(inputs_[0].get());
     CHECK(previous_project_node != nullptr);
-    previous_project_node->setDeleteViaSelectFlag();
+    previous_project_node->setDeleteViaSelectFlag(true);
     previous_project_node->setModifiedTableDescriptor(table_descriptor_);
   }
 

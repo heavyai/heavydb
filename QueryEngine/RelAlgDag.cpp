@@ -2366,6 +2366,7 @@ void separate_window_function_expressions(
       window_func_project_node->setExpressions(window_func_scalar_exprs);
       window_func_project_node->replaceInput(prev_node, new_project);
       propagate_hints_to_new_project(window_func_project_node, new_project, query_hints);
+      new_project->setPushedDownWindowExpr();
     }
   }
   nodes.assign(node_list.begin(), node_list.end());
@@ -2542,6 +2543,7 @@ void add_window_function_pre_project(
 
       // step 3. finalize
       propagate_hints_to_new_project(window_func_project_node, new_project, query_hints);
+      new_project->setPushedDownWindowExpr();
       node_list.insert(node_itr, new_project);
       window_func_project_node->replaceInput(prev_node, new_project);
       window_func_project_node->setExpressions(scalar_exprs_for_window_project);
@@ -2576,6 +2578,7 @@ void add_window_function_pre_project(
 
       auto new_project = std::make_shared<RelProject>(scalar_exprs, fields, prev_node);
       propagate_hints_to_new_project(window_func_project_node, new_project, query_hints);
+      new_project->setPushedDownWindowExpr();
       node_list.insert(node_itr, new_project);
       window_func_project_node->replaceInput(
           prev_node, new_project, old_index_to_new_index);

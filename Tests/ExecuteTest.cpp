@@ -19837,6 +19837,75 @@ TEST(Update, UsingDateColumns) {
   }
 }
 
+TEST(Update, NonFragmentedTableWithUsingWindowFunction) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    SKIP_WITH_TEMP_TABLES();
+    SKIP_ALL_ON_AGGREGATOR();
+
+    run_ddl_statement("drop table if exists test_singlefrag_update;");
+    run_ddl_statement("create table test_singlefrag_update (a int, b int);");
+
+    run_ddl_statement("drop table if exists test_multifrag_update;");
+    run_ddl_statement(
+        "create table test_multifrag_update (a int, b int) with (fragment_size = 2);");
+
+    run_ddl_statement("drop table if exists test_sharded_update;");
+    run_ddl_statement(
+        "create table test_sharded_update (a int, b int, shard key(a)) with "
+        "(vacuum='delayed', shard_count = 2);");
+    auto insert_table_rows = [](const std::string& table_name) {
+      run_multiple_agg("insert into " + table_name + " values (1, 10);",
+                       ExecutorDeviceType::CPU);
+      run_multiple_agg("insert into " + table_name + " values (1, 1);",
+                       ExecutorDeviceType::CPU);
+      run_multiple_agg("insert into " + table_name + " values (2, 20);",
+                       ExecutorDeviceType::CPU);
+      run_multiple_agg("insert into " + table_name + " values (2, 4);",
+                       ExecutorDeviceType::CPU);
+      run_multiple_agg("insert into " + table_name + " values (3, 30);",
+                       ExecutorDeviceType::CPU);
+      run_multiple_agg("insert into " + table_name + " values (3, 6);",
+                       ExecutorDeviceType::CPU);
+      run_multiple_agg("insert into " + table_name + " values (4, 40);",
+                       ExecutorDeviceType::CPU);
+      run_multiple_agg("insert into " + table_name + " values (4, 8);",
+                       ExecutorDeviceType::CPU);
+    };
+    insert_table_rows("test_singlefrag_update");
+    insert_table_rows("test_multifrag_update");
+    insert_table_rows("test_sharded_update");
+
+    run_ddl_statement("alter table test_singlefrag_update add column c int;");
+    run_ddl_statement("alter table test_multifrag_update add column c int;");
+    run_ddl_statement("alter table test_sharded_update add column c int;");
+
+    EXPECT_NO_THROW(run_multiple_agg(
+        "update test_singlefrag_update set c = max(b) over(partition by a);", dt));
+    EXPECT_THROW(
+        run_multiple_agg(
+            "update test_multifrag_update set c = max(b) over(partition by a);", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "update test_sharded_update set c = max(b) over(partition by a);", dt),
+        std::runtime_error);
+
+    EXPECT_EQ(int64_t(10),
+              v<int64_t>(run_simple_agg(
+                  "select c from test_singlefrag_update where a = 1 limit 1;", dt)));
+    EXPECT_EQ(int64_t(20),
+              v<int64_t>(run_simple_agg(
+                  "select c from test_singlefrag_update where a = 2 limit 1;", dt)));
+    EXPECT_EQ(int64_t(30),
+              v<int64_t>(run_simple_agg(
+                  "select c from test_singlefrag_update where a = 3 limit 1;", dt)));
+    EXPECT_EQ(int64_t(40),
+              v<int64_t>(run_simple_agg(
+                  "select c from test_singlefrag_update where a = 4 limit 1;", dt)));
+  }
+}
+
 TEST(Delete, ShardedTableDeleteTest) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
