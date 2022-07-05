@@ -1185,6 +1185,28 @@ TEST_F(TableFunctions, CallFailure) {
   }
 }
 
+TEST_F(TableFunctions, CountDistinctOverRowCopiedTable) {
+  const auto testQuery = [](const std::string& query, ExecutorDeviceType dt) {
+    const auto res = run_multiple_agg(query, dt);
+    ASSERT_EQ(res->rowCount(), size_t(1));
+    auto crt_row = res->getNextRow(false, false);
+    ASSERT_GT(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(0));
+  };
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    testQuery(
+        "SELECT approx_count_distinct(out0) FROM TABLE(row_copier(cursor(SELECT d FROM "
+        "tf_test), 1));",
+        dt);
+    testQuery(
+        "SELECT count(distinct out0) FROM TABLE(row_copier(cursor(SELECT d FROM "
+        "tf_test), 1));",
+        dt);
+    break;
+  }
+}
+
 TEST_F(TableFunctions, NamedOutput) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

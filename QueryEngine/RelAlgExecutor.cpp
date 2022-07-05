@@ -1814,27 +1814,28 @@ namespace {
 // If an encoded type is used in the context of COUNT(DISTINCT ...) then don't
 // bother decoding it. This is done by changing the sql type to an integer.
 void conditionally_change_arg_to_int_type(
+    size_t target_expr_idx,
     std::shared_ptr<Analyzer::Expr>& target_expr,
-    std::vector<SQLTypeInfo>& target_exprs_type_infos) {
+    std::unordered_map<size_t, SQLTypeInfo>& target_exprs_type_infos) {
   auto* agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr.get());
   CHECK(agg_expr);
   if (agg_expr->get_is_distinct()) {
     SQLTypeInfo const& ti = agg_expr->get_arg()->get_type_info();
     if (ti.get_type() != kARRAY && ti.get_compression() == kENCODING_DATE_IN_DAYS) {
-      target_exprs_type_infos.push_back(ti);
+      target_exprs_type_infos.emplace(target_expr_idx, ti);
       target_expr = target_expr->deep_copy();
       auto* arg = dynamic_cast<Analyzer::AggExpr*>(target_expr.get())->get_arg();
       arg->set_type_info({get_int_type_by_size(ti.get_size()), ti.get_notnull()});
       return;
     }
   }
-  target_exprs_type_infos.push_back(target_expr->get_type_info());
+  target_exprs_type_infos.emplace(target_expr_idx, target_expr->get_type_info());
 }
 }  // namespace
 
 std::vector<Analyzer::Expr*> translate_targets(
     std::vector<std::shared_ptr<Analyzer::Expr>>& target_exprs_owned,
-    std::vector<SQLTypeInfo>& target_exprs_type_infos,
+    std::unordered_map<size_t, SQLTypeInfo>& target_exprs_type_infos,
     const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
     const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
     const RelCompound* compound,
@@ -1848,7 +1849,7 @@ std::vector<Analyzer::Expr*> translate_targets(
     if (target_rex_agg) {
       target_expr =
           RelAlgTranslator::translateAggregateRex(target_rex_agg, scalar_sources);
-      conditionally_change_arg_to_int_type(target_expr, target_exprs_type_infos);
+      conditionally_change_arg_to_int_type(i, target_expr, target_exprs_type_infos);
     } else {
       const auto target_rex_scalar = dynamic_cast<const RexScalar*>(target_rex);
       const auto target_rex_ref = dynamic_cast<const RexRef*>(target_rex_scalar);
@@ -1872,7 +1873,7 @@ std::vector<Analyzer::Expr*> translate_targets(
           target_expr = cast_dict_to_none(target_expr);
         }
       }
-      target_exprs_type_infos.push_back(target_expr->get_type_info());
+      target_exprs_type_infos.emplace(i, target_expr->get_type_info());
     }
     CHECK(target_expr);
     target_exprs_owned.push_back(target_expr);
@@ -1883,7 +1884,7 @@ std::vector<Analyzer::Expr*> translate_targets(
 
 std::vector<Analyzer::Expr*> translate_targets(
     std::vector<std::shared_ptr<Analyzer::Expr>>& target_exprs_owned,
-    std::vector<SQLTypeInfo>& target_exprs_type_infos,
+    std::unordered_map<size_t, SQLTypeInfo>& target_exprs_type_infos,
     const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
     const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
     const RelAggregate* aggregate,
@@ -4389,7 +4390,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
       translate_scalar_sources(compound, translator, eo.executor_type);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
   const auto quals_cf = translate_quals(compound, translator);
-  std::vector<SQLTypeInfo> target_exprs_type_infos;
+  std::unordered_map<size_t, SQLTypeInfo> target_exprs_type_infos;
   const auto target_exprs = translate_targets(target_exprs_owned_,
                                               target_exprs_type_infos,
                                               scalar_sources,
@@ -4687,7 +4688,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
   const auto scalar_sources =
       synthesize_inputs(aggregate, size_t(0), in_metainfo, input_to_nest_level);
   const auto groupby_exprs = translate_groupby_exprs(aggregate, scalar_sources);
-  std::vector<SQLTypeInfo> target_exprs_type_infos;
+  std::unordered_map<size_t, SQLTypeInfo> target_exprs_type_infos;
   const auto target_exprs = translate_targets(target_exprs_owned_,
                                               target_exprs_type_infos,
                                               scalar_sources,
