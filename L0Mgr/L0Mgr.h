@@ -77,6 +77,8 @@ class L0Device {
   ze_device_handle_t device() const;
   ze_context_handle_t ctx() const;
   ~L0Device();
+#else
+  L0Device() = default;
 #endif
 };
 
