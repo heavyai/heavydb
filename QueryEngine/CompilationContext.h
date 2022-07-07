@@ -36,6 +36,14 @@ class CpuCompilationContext : public CompilationContext {
     execution_engine_.removeModule(function->getParent());
   }
 
+  void* getPointerToFunction(llvm::Function* function) {
+    return execution_engine_.getPointerToFunction(function);
+  }
+
+  bool valid() const {
+    return execution_engine_.exists();
+  }
+
   void* func() const { return func_; }
 
   using TableFunctionEntryPointPtr = int32_t (*)(const int8_t* mgr_ptr,

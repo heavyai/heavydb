@@ -139,13 +139,13 @@ std::vector<void*> ScalarCodeGenerator::generateNativeCode(
     Executor* executor,
     const CompiledExpression& compiled_expression,
     const CompilationOptions& co) {
-  CHECK(module_ && !execution_engine_.exists()) << "Invalid code generator state";
+  CHECK(module_) << "Invalid code generator state";
   module_.release();
   switch (co.device_type) {
     case ExecutorDeviceType::CPU: {
-      execution_engine_ =
+      cpu_compilation_context_ =
           generateNativeCPUCode(compiled_expression.func, {compiled_expression.func}, co);
-      return {execution_engine_.getPointerToFunction(compiled_expression.func)};
+      return {cpu_compilation_context_->getPointerToFunction(compiled_expression.func)};
     }
     case ExecutorDeviceType::GPU: {
       return generateNativeGPUCode(

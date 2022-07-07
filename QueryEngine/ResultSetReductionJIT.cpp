@@ -1251,9 +1251,8 @@ void ResultSetReductionJIT::finalizeReductionCode(
 #else
   LOG(IR) << serialize_llvm_object(reduction_code.module);
 #endif
-  auto ee = CodeGenerator::generateNativeCPUCode(
+  auto cpu_compilation_context = CodeGenerator::generateNativeCPUCode(
       reduction_code.llvm_reduce_loop, {reduction_code.llvm_reduce_loop}, co);
-  auto cpu_compilation_context = std::make_shared<CpuCompilationContext>(std::move(ee));
   cpu_compilation_context->setFunctionPointer(reduction_code.llvm_reduce_loop);
   reduction_code.func_ptr =
       reinterpret_cast<ReductionCode::FuncPtr>(cpu_compilation_context->func());

@@ -390,9 +390,10 @@ std::string assemblyForCPU(ExecutionEngineWrapper& execution_engine,
 
 #ifndef ENABLE_ORCJIT
 
-ExecutionEngineWrapper create_execution_engine(llvm::Module* llvm_module,
-                                               llvm::EngineBuilder& eb,
-                                               const CompilationOptions& co) {
+std::shared_ptr<CpuCompilationContext> create_execution_engine(
+    llvm::Module* llvm_module,
+    llvm::EngineBuilder& eb,
+    const CompilationOptions& co) {
   auto timer = DEBUG_TIMER(__func__);
   // Avoids data race in
   // llvm::sys::DynamicLibrary::getPermanentLibrary and
@@ -408,14 +409,14 @@ ExecutionEngineWrapper create_execution_engine(llvm::Module* llvm_module,
   LOG(ASM) << assemblyForCPU(execution_engine, llvm_module);
 
   execution_engine->finalizeObject();
-  return execution_engine;
+  return std::make_shared<CpuCompilationContext>(std::move(execution_engine));
 }
 
 #endif
 
 }  // namespace
 
-ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
+std::shared_ptr<CpuCompilationContext> CodeGenerator::generateNativeCPUCode(
     llvm::Function* func,
     const std::unordered_set<llvm::Function*>& live_funcs,
     const CompilationOptions& co) {
@@ -485,7 +486,7 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
                                           std::move(target_machine_builder),
                                           std::move(data_layout));
   execution_engine.addModule(std::move(owner));
-  return execution_engine;
+  return std::make_shared<CpuCompilationContext>(std::move(execution_engine));
 #else
 
   llvm::EngineBuilder eb(std::move(owner));
@@ -518,10 +519,8 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
     return cached_code;
   }
 
-  auto execution_engine =
-      CodeGenerator::generateNativeCPUCode(query_func, live_funcs, co);
   auto cpu_compilation_context =
-      std::make_shared<CpuCompilationContext>(std::move(execution_engine));
+      CodeGenerator::generateNativeCPUCode(query_func, live_funcs, co);
   cpu_compilation_context->setFunctionPointer(multifrag_query_func);
   cpu_code_accessor->put(key, cpu_compilation_context);
   return std::dynamic_pointer_cast<CompilationContext>(cpu_compilation_context);

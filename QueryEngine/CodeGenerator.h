@@ -74,7 +74,7 @@ class CodeGenerator {
       const std::vector<llvm::Function*>& roots,
       const std::vector<llvm::Function*>& leaves);
 
-  static ExecutionEngineWrapper generateNativeCPUCode(
+  static std::shared_ptr<CpuCompilationContext> generateNativeCPUCode(
       llvm::Function* func,
       const std::unordered_set<llvm::Function*>& live_funcs,
       const CompilationOptions& co);
@@ -548,11 +548,12 @@ class ScalarCodeGenerator : public CodeGenerator {
                                            const CompilationOptions& co);
 
   std::unique_ptr<llvm::Module> module_;
-  ExecutionEngineWrapper execution_engine_;
+  //   ExecutionEngineWrapper execution_engine_;
   std::unique_ptr<CgenState> own_cgen_state_;
   std::unique_ptr<PlanState> own_plan_state_;
   std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr_;
   std::shared_ptr<GpuCompilationContext> gpu_compilation_context_;
+  std::shared_ptr<CpuCompilationContext> cpu_compilation_context_;
   std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 };
 

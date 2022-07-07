@@ -547,9 +547,8 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
                                                 co,
                                                 gpu_target);
   } else {
-    auto ee =
+    auto cpu_code =
         CodeGenerator::generateNativeCPUCode(entry_point_func_, {entry_point_func_}, co);
-    auto cpu_code = std::make_shared<CpuCompilationContext>(std::move(ee));
     cpu_code->setFunctionPointer(entry_point_func_);
     code = cpu_code;
   }

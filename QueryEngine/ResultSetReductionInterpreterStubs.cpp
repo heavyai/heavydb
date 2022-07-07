@@ -261,8 +261,8 @@ StubGenerator::Stub StubGenerator::generateStub(const size_t executor_id,
   verify_function_ir(function);
   CompilationOptions co{
       ExecutorDeviceType::CPU, false, ExecutorOptLevel::ReductionJIT, false};
-  auto ee = CodeGenerator::generateNativeCPUCode(function, {function}, co);
-  auto cpu_compilation_context = std::make_shared<CpuCompilationContext>(std::move(ee));
+  auto cpu_compilation_context =
+      CodeGenerator::generateNativeCPUCode(function, {function}, co);
   cpu_compilation_context->setFunctionPointer(function);
   auto func_ptr = reinterpret_cast<StubGenerator::Stub>(cpu_compilation_context->func());
   Executor::s_stubs_accessor->put(key, std::move(cpu_compilation_context));
