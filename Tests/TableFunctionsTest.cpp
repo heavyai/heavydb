@@ -2758,6 +2758,29 @@ TEST_F(TableFunctions, MetadataSetGet) {
                std::runtime_error);
 }
 
+TEST_F(TableFunctions, ColumnArray20KLimit) {
+  // See https://heavyai.atlassian.net/browse/QE-461
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+
+    {  // row count below the 20K limit
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ARRAY_COPIER(CURSOR(SELECT {generate_series} FROM "
+          "TABLE(generate_series(1, 500)))));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(500));
+    }
+
+    {  // row count above the 20K limit
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ARRAY_COPIER(CURSOR(SELECT {generate_series} FROM "
+          "TABLE(generate_series(1, 30000)))));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(30000));
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

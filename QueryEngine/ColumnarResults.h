@@ -119,7 +119,8 @@ class ColumnarResults {
       , padded_target_sizes_(padded_target_sizes) {}
   inline void writeBackCell(const TargetValue& col_val,
                             const size_t row_idx,
-                            const size_t column_idx);
+                            const size_t column_idx,
+                            std::mutex* write_mutex = nullptr);
   void materializeAllColumnsDirectly(const ResultSet& rows, const size_t num_columns);
   void materializeAllColumnsThroughIteration(const ResultSet& rows,
                                              const size_t num_columns);

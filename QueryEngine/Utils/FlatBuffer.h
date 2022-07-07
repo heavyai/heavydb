@@ -106,6 +106,22 @@
   For the detailed description of values, compressed_indices, and
   storage_indices, as well as how empty arrays and null arrays are
   represented, see https://pearu.github.io/variable_length_arrays.html .
+
+  FlatBuffer usage
+  ----------------
+
+  FlatBuffer implements various methods for accessing its content for
+  retriving or storing data. These methods usually are provided as
+  pairs of safe and unsafe methods. Safe methods validate method
+  inputs and return success or error status depending on the
+  validation results. Unsafe methods (that names have "NoValidation"
+  suffix) performs no validation on the inputs and (almost) always
+  return the success status. Use unsafe methods (for efficency) only
+  when one can prove that the inputs are always valid (e.g. indices
+  are in the expected range, buffer memory allocation is sufficient
+  for storing data, etc). Otherwise, use safe methods that will lead
+  to predictable and non-server-crashing behaviour in the case of
+  possibly invalid input data.
 */
 // clang-format on
 
@@ -316,8 +332,7 @@ struct FlatBufferManager {
       int64_t& storage_count = VarlenArray_storage_count();
       int64_t* compressed_indices = VarlenArray_compressed_indices();
       int64_t* storage_indices = VarlenArray_storage_indices();
-      int8_t* values = VarlenArray_values();
-      int64_t itemsize = dtypeSize();
+      const int64_t itemsize = dtypeSize();
       if (size % itemsize != 0) {
         return SizeError;  // size must be multiple of itemsize. Perhaps size is not in
                            // bytes?
@@ -325,32 +340,47 @@ struct FlatBufferManager {
       if (storage_indices[index] >= 0) {
         return ItemExistsError;
       }
-      int64_t values_count = size / itemsize;
-      int64_t cindex = compressed_indices[storage_count];
-      int64_t values_buffer_size = VarlenArray_values_buffer_size();
-      if (cindex * itemsize + size > values_buffer_size) {
+      const int64_t cindex = compressed_indices[storage_count];
+      const int64_t values_buffer_size = VarlenArray_values_buffer_size();
+      const int64_t csize = cindex * itemsize;
+      if (csize + size > values_buffer_size) {
         return ValuesBufferTooSmallError;
       }
-      storage_indices[index] = storage_count;
-      compressed_indices[storage_count + 1] = cindex + values_count;
-      if (size > 0 && src != nullptr &&
-          memcpy(values + cindex * itemsize, src, size) == nullptr) {
-        return MemoryError;
-      }
-      if (dest != nullptr) {
-        *dest = values + cindex * itemsize;
-      }
-      storage_count++;
-      return Success;
+      return setItemNoValidation(index, src, size, dest);
     }
     return UnknownFormatError;
   }
 
+  // Same as setItem but performs no input validation
+  Status setItemNoValidation(int64_t index,
+                             const int8_t* src,
+                             int64_t size,
+                             int8_t** dest) {
+    int64_t& storage_count = VarlenArray_storage_count();
+    int64_t* storage_indices = VarlenArray_storage_indices();
+    int64_t* compressed_indices = VarlenArray_compressed_indices();
+    int8_t* values = VarlenArray_values();
+    const int64_t itemsize = dtypeSize();
+    const int64_t values_count = size / itemsize;
+    const int64_t cindex = compressed_indices[storage_count];
+    const int64_t csize = cindex * itemsize;
+    storage_indices[index] = storage_count;
+    compressed_indices[storage_count + 1] = cindex + values_count;
+    if (size > 0 && src != nullptr && memcpy(values + csize, src, size) == nullptr) {
+      return MemoryError;
+    }
+    if (dest != nullptr) {
+      *dest = values + csize;
+    }
+    storage_count++;
+    return Success;
+  }
+
   // Set a new item with index and size but without initializing item
   // elements. The buffer pointer of the new item will be stored in
-  // *dest if dest != nullptr.
-  Status setEmptyItem(int64_t index, int64_t size, int8_t** dest) {
-    return setItem(index, nullptr, size, dest);
+  // *dest if dest != nullptr. Inputs are not validated!
+  Status setEmptyItemNoValidation(int64_t index, int64_t size, int8_t** dest) {
+    return setItemNoValidation(index, nullptr, size, dest);
   }
 
   Status concatItem(int64_t index, const int8_t* src, int64_t size) {
@@ -404,15 +434,22 @@ struct FlatBufferManager {
       if (storage_indices[index] >= 0) {
         return ItemExistsError;
       }
-      int64_t& storage_count = VarlenArray_storage_count();
-      int64_t* compressed_indices = VarlenArray_compressed_indices();
-      storage_indices[index] = storage_count;
-      compressed_indices[storage_count + 1] = compressed_indices[storage_count];
-      compressed_indices[storage_count] = -(compressed_indices[storage_count] + 1);
-      storage_count++;
-      return Success;
+      return setNullNoValidation(index);
     }
     return UnknownFormatError;
+  }
+
+  // Same as setNull but performs no input validation
+  Status setNullNoValidation(int64_t index) {
+    int64_t& storage_count = VarlenArray_storage_count();
+    int64_t* storage_indices = VarlenArray_storage_indices();
+    int64_t* compressed_indices = VarlenArray_compressed_indices();
+    const int64_t cindex = compressed_indices[storage_count];
+    storage_indices[index] = storage_count;
+    compressed_indices[storage_count] = -(cindex + 1);
+    compressed_indices[storage_count + 1] = cindex;
+    storage_count++;
+    return Success;
   }
 
   // Check if the item is unspecified or null.
