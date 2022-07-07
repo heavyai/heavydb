@@ -785,17 +785,28 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
                                              /*is_projection=*/false,
                                              /*use_geo_expressions=*/true);
       CHECK_EQ(geoargs.size(), size_t(1));
+      if (geo_ti.get_output_srid() > 0) {
+        // Pick up the arg's srid
+        arg_ti.set_input_srid(geo_ti.get_output_srid());
+        arg_ti.set_output_srid(geo_ti.get_output_srid());
+      }
       if (try_to_compress) {
-        // Request point compression
-        arg_ti.set_input_srid(4326);
-        arg_ti.set_output_srid(4326);
+        // Point compression is requested by a higher level [4326] operation
+        if (geo_ti.get_output_srid() == 0) {
+          // srid-less geo is considered and is forced to be 4326
+          arg_ti.set_input_srid(4326);
+          arg_ti.set_output_srid(4326);
+        } else {
+          CHECK_EQ(arg_ti.get_output_srid(), 4326);
+        }
         arg_ti.set_compression(kENCODING_GEOINT);
         arg_ti.set_comp_param(32);
       }
       if (geo_ti.get_input_srid() != geo_ti.get_output_srid() &&
           geo_ti.get_output_srid() > 0 &&
           std::dynamic_pointer_cast<Analyzer::ColumnVar>(geoargs.front())) {
-        // legacy transform
+        // Centroid argument is transformed before use,
+        // pass the transform to the geo operator
         legacy_transform_srid = geo_ti.get_output_srid();
       }
       return {makeExpr<Analyzer::GeoOperator>(

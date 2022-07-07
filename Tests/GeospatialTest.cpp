@@ -1084,6 +1084,16 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
             dt)),
         double(0.0),
         double(10e-5));
+    // make sure ST_Centroid picks up its argument's srid
+    // TODO: make ST_Distance and other geo operators complain about srid mismatches
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_DWithin(ST_Centroid(gpoly4326), ST_GeomFromText('POINT (1.6666666 1.66666666)',4326),0.001) FROM geospatial_test WHERE id = 4;)",
+            dt)));
+    EXPECT_ANY_THROW(run_simple_agg(
+        R"(SELECT ST_DWithin(ST_Centroid(gpoly4326), 'POINT (1.6666666 1.66666666)',0.001) FROM geospatial_test WHERE id = 4;)",
+        dt));
 
     // order by (unsupported)
     EXPECT_ANY_THROW(run_multiple_agg("SELECT p FROM geospatial_test ORDER BY p;", dt));
