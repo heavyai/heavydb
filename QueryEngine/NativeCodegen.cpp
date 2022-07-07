@@ -68,6 +68,7 @@ static_assert(false, "LLVM Version >= 9 is required.");
 
 #include "CudaMgr/CudaMgr.h"
 #include "QueryEngine/CodeGenerator.h"
+#include "QueryEngine/Compiler/Backend.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/GpuSharedMemoryUtils.h"
 #include "QueryEngine/LLVMFunctionAttributesUtil.h"
@@ -519,8 +520,13 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
     return cached_code;
   }
 
-  auto cpu_compilation_context =
-      CodeGenerator::generateNativeCPUCode(query_func, live_funcs, co);
+  // todo: move up to workunit compilation
+  CodeGenerator::GPUTarget target{};
+  auto backend = compiler::getBackend(co.device_type, this, false, target);
+
+  std::shared_ptr<CpuCompilationContext> cpu_compilation_context =
+      std::dynamic_pointer_cast<CpuCompilationContext>(
+          backend->generateNativeCode(query_func, nullptr, live_funcs, co));
   cpu_compilation_context->setFunctionPointer(multifrag_query_func);
   cpu_code_accessor->put(key, cpu_compilation_context);
   return std::dynamic_pointer_cast<CompilationContext>(cpu_compilation_context);

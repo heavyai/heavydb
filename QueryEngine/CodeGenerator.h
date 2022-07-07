@@ -548,7 +548,6 @@ class ScalarCodeGenerator : public CodeGenerator {
                                            const CompilationOptions& co);
 
   std::unique_ptr<llvm::Module> module_;
-  //   ExecutionEngineWrapper execution_engine_;
   std::unique_ptr<CgenState> own_cgen_state_;
   std::unique_ptr<PlanState> own_plan_state_;
   std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr_;
