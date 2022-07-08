@@ -2707,9 +2707,8 @@ void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session,
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   RelAlgExecutor ra_executor(executor.get(), catalog);
 
-  Fragmenter_Namespace::LocalInsertConnector local_connector;
   if (!leafs_connector_) {
-    leafs_connector_ = &local_connector;
+    leafs_connector_ = std::make_unique<Fragmenter_Namespace::LocalInsertConnector>();
   }
   Fragmenter_Namespace::InsertDataLoader insert_data_loader(*leafs_connector_);
   try {
@@ -3618,14 +3617,12 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto& catalog = session->getCatalog();
   foreign_storage::validate_non_foreign_table_write(td);
-
-  LocalQueryConnector local_connector;
   bool populate_table = false;
 
   if (leafs_connector_) {
     populate_table = true;
   } else {
-    leafs_connector_ = &local_connector;
+    leafs_connector_ = std::make_unique<LocalQueryConnector>();
     if (!g_cluster) {
       populate_table = true;
     }
@@ -3668,6 +3665,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
     // only validate the select query so we get the target types
     // correctly, but do not populate the result set
+    LocalQueryConnector local_connector;
     auto result = local_connector.query(query_state_proxy, select_query_, {}, true, true);
     auto source_column_descriptors = local_connector.getColumnDescriptors(result, false);
 
@@ -6103,10 +6101,8 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session,
   auto stdlog = STDLOG(query_state);
   auto query_state_proxy = query_state->createQueryStateProxy();
 
-  LocalQueryConnector local_connector;
-
   if (!leafs_connector_) {
-    leafs_connector_ = &local_connector;
+    leafs_connector_ = std::make_unique<LocalQueryConnector>();
   }
 
   import_export::CopyParams copy_params;
@@ -6148,6 +6144,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session,
       session_ptr->getCatalog(), *select_stmt_, query_state_proxy);
 
   // get column info
+  LocalQueryConnector local_connector;
   auto column_info_result =
       local_connector.query(query_state_proxy, *select_stmt_, {}, true, false);
 

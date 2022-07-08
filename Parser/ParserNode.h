@@ -1153,7 +1153,7 @@ class InsertIntoTableAsSelectStmt : public DDLStmt {
 
   std::string& get_select_query() { return select_query_; }
 
-  QueryConnector* leafs_connector_ = nullptr;
+  std::unique_ptr<QueryConnector> leafs_connector_;
 
  protected:
   std::vector<std::unique_ptr<std::string>> column_list_;
@@ -1905,7 +1905,7 @@ class ExportQueryStmt : public DDLStmt {
                bool read_only_mode) override;
   const std::string get_select_stmt() const { return *select_stmt_; }
 
-  QueryConnector* leafs_connector_ = nullptr;
+  std::unique_ptr<QueryConnector> leafs_connector_;
 
  private:
   std::unique_ptr<std::string> select_stmt_;
@@ -2137,7 +2137,8 @@ class InsertValuesStmt : public InsertStmt {
 
   void execute(const Catalog_Namespace::SessionInfo& session, bool read_only_mode);
 
-  Fragmenter_Namespace::InsertDataLoader::InsertConnector* leafs_connector_ = nullptr;
+  std::unique_ptr<Fragmenter_Namespace::InsertDataLoader::InsertConnector>
+      leafs_connector_;
 
  private:
   std::vector<std::unique_ptr<ValuesList>> values_lists_;
