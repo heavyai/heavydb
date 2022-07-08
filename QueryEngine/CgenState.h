@@ -361,7 +361,7 @@ struct CgenState {
   llvm::LLVMContext& context_;    // LLVMContext instance is held by an Executor instance.
   llvm::ValueToValueMapTy vmap_;  // used for cloning the runtime module
   llvm::IRBuilder<> ir_builder_;
-  std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;
+  std::unordered_map<size_t, std::vector<llvm::Value*>> fetch_cache_;
   struct FunctionOperValue {
     const Analyzer::FunctionOper* foper;
     llvm::Value* lv;

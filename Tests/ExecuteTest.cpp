@@ -3202,11 +3202,20 @@ TEST(Select, CountDistinct) {
     SKIP_ON_AGGREGATOR(c("SELECT COUNT(distinct ENCODE_TEXT(real_str)) FROM test;",
                          "SELECT COUNT(distinct real_str) FROM test;",
                          dt));
-    for (const std::string& col_name :
+    for (const std::string col_name :
          {"d16", "d32", "ti", "tie", "tm0", "tm0e", "tm3", "tm6", "tm9"}) {
       c("SELECT COUNT(DISTINCT " + col_name + ") FROM dt_cd_test;", dt);
       c("SELECT COUNT(DISTINCT " + col_name + ") FROM dt_cd_test_frag;", dt);
       c("SELECT COUNT(DISTINCT " + col_name + ") FROM dt_cd_test_sharded;", dt);
+      c("SELECT COUNT(DISTINCT " + col_name + "), MIN(" + col_name + "), MAX(" +
+            col_name + ") FROM dt_cd_test;",
+        dt);
+      c("SELECT COUNT(DISTINCT " + col_name + "), MIN(" + col_name + "), MAX(" +
+            col_name + ") FROM dt_cd_test_frag;",
+        dt);
+      c("SELECT COUNT(DISTINCT " + col_name + "), MIN(" + col_name + "), MAX(" +
+            col_name + ") FROM dt_cd_test_sharded;",
+        dt);
     }
   }
 }
