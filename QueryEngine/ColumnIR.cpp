@@ -154,13 +154,16 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
   if (grouped_col_lv) {
     return {grouped_col_lv};
   }
-  const int local_col_id = plan_state_->getLocalColumnId(col_var, fetch_column);
+  const auto col_var_hash = boost::hash_value(col_var->toString());
   const auto window_func_context =
       WindowProjectNodeContext::getActiveWindowFunctionContext(executor());
   // only generate the decoding code once; if a column has been previously
   // fetched in the generated IR, we'll reuse it
+  // here, we do not just use (local) column id since our analyzer may cast the same
+  // col_var with different types depending on the (aggregate) function that the col_var
+  // is used i.e., SELECT COUNT(DISTINCT x), MIN(x) FROM ...
   if (!window_func_context) {
-    auto it = cgen_state_->fetch_cache_.find(local_col_id);
+    auto it = cgen_state_->fetch_cache_.find(col_var_hash);
     if (it != cgen_state_->fetch_cache_.end()) {
       return {it->second};
     }
@@ -205,7 +208,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
         codegenVariableLengthStringColVar(col_byte_stream, pos_arg);
     if (!window_func_context) {
       auto it_ok = cgen_state_->fetch_cache_.insert(
-          std::make_pair(local_col_id, varlen_str_column_lvs));
+          std::make_pair(col_var_hash, varlen_str_column_lvs));
       CHECK(it_ok.second);
     }
     return varlen_str_column_lvs;
@@ -219,7 +222,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
   const auto fixed_length_column_lv =
       codegenFixedLengthColVar(col_var, col_byte_stream, pos_arg);
   auto it_ok = cgen_state_->fetch_cache_.insert(
-      std::make_pair(local_col_id, std::vector<llvm::Value*>{fixed_length_column_lv}));
+      std::make_pair(col_var_hash, std::vector<llvm::Value*>{fixed_length_column_lv}));
   return {it_ok.first->second};
 }
 

@@ -1248,7 +1248,7 @@ class Executor {
 
    private:
     CgenState* cgen_state_;
-    std::unordered_map<int, std::vector<llvm::Value*>> saved_fetch_cache;
+    std::unordered_map<size_t, std::vector<llvm::Value*>> saved_fetch_cache;
   };
 
   llvm::Value* spillDoubleElement(llvm::Value* elem_val, llvm::Type* elem_ty);
