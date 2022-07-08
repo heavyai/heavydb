@@ -205,7 +205,8 @@ class WindowFunctionContext {
 
   IndexPair computeNullRangeOfSortedPartition(SQLTypeInfo order_col_ti,
                                               size_t partition_idx,
-                                              const int64_t* orederd_col_idx_buf);
+                                              const int32_t* original_col_idx_buf,
+                                              const int64_t* ordered_col_idx_buf);
 
   void buildAggregationTreeForPartition(SqlWindowFunctionKind agg_type,
                                         size_t partition_idx,

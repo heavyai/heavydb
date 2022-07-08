@@ -63,6 +63,9 @@ const char* get_extract_function_name(ExtractField field) {
       return "extract_quarter";
     case kYEAR:
       return "extract_year";
+    case kUNKNOWN_FIELD:
+      UNREACHABLE();
+      return "";
   }
   UNREACHABLE();
   return "";

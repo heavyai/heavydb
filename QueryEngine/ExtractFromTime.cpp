@@ -331,6 +331,8 @@ DEVICE int64_t ExtractFromTime(ExtractField field, const int64_t timeval) {
       return extract_quarter(timeval);
     case kYEAR:
       return extract_year(timeval);
+    case kUNKNOWN_FIELD:
+      return -1;
   }
 
 #ifdef __CUDACC__

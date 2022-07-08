@@ -525,18 +525,18 @@ class SegmentTree {
     if (num_elem <= 0) {
       return std::make_pair(0, std::make_pair(0, 0));
     }
-    int64_t cur_level_start_offset = 1;
+    int64_t cur_level_start_offset = 0;
     size_t depth = 0;
     IndexPair index_pair = std::make_pair(0, 0);
     while (true) {
-      if (num_elem < cur_level_start_offset) {
+      size_t maximum_node_at_next_level = pow(fan_out, depth);
+      if (num_elem < maximum_node_at_next_level) {
+        index_pair = std::make_pair(cur_level_start_offset,
+                                    cur_level_start_offset + maximum_node_at_next_level);
         return std::make_pair(depth, index_pair);
       }
       depth++;
-      size_t maximum_node_at_next_level = pow(fan_out, depth);
-      index_pair = std::make_pair(cur_level_start_offset,
-                                  cur_level_start_offset + maximum_node_at_next_level);
-      cur_level_start_offset = index_pair.second;
+      cur_level_start_offset += maximum_node_at_next_level;
     }
   }
 

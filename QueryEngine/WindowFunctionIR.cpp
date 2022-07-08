@@ -288,7 +288,9 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
         llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
     const auto ppi64_type = llvm::PointerType::get(pi64_type, 0);
     // this lambda function is only used for window framing codegen
-    auto get_col_type_name_for_framing = [](const SQLTypes type) {
+    const auto order_key_size =
+        window_func->getOrderKeys().front()->get_type_info().get_size();
+    auto get_col_type_name_for_framing = [order_key_size](const SQLTypes type) {
       switch (type) {
         case kTINYINT:
           return "int8_t";
@@ -298,6 +300,18 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
           return "int32_t";
         case kBIGINT:
           return "int64_t";
+        case kTIME:
+        case kTIMESTAMP:
+        case kDATE: {
+          if (order_key_size == 2) {
+            return "int16_t";
+          } else if (order_key_size == 4) {
+            return "int32_t";
+          } else {
+            CHECK_EQ(order_key_size, static_cast<size_t>(8));
+            return "int64_t";
+          }
+        }
         case kFLOAT:
           return "float";
         case kDOUBLE:
@@ -386,55 +400,69 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
     llvm::Value* order_key_col_null_val_lv{nullptr};
     llvm::Value* null_start_pos_lv{nullptr};
     llvm::Value* null_end_pos_lv{nullptr};
-    std::vector<llvm::Value*> frame_start_bound_expr_lvs;
-    std::vector<llvm::Value*> frame_end_bound_expr_lvs;
-    llvm::Value* frame_start_bound_expr_lv = nullptr;
-    llvm::Value* frame_end_bound_expr_lv = nullptr;
-    llvm::Value* frame_start_bound_lv = nullptr;
-    llvm::Value* frame_end_bound_lv = nullptr;
+    llvm::Value* frame_start_bound_expr_lv{nullptr};
+    llvm::Value* frame_end_bound_expr_lv{nullptr};
+    llvm::Value* frame_start_bound_lv{nullptr};
+    llvm::Value* frame_end_bound_lv{nullptr};
 
     // codegen frame bound expr if necessary
     auto needs_bound_expr_codegen = [](const Analyzer::WindowFrame* window_frame) {
       return window_frame->getBoundType() == SqlWindowFrameBoundType::EXPR_FOLLOWING ||
              window_frame->getBoundType() == SqlWindowFrameBoundType::EXPR_PRECEDING;
     };
-    if (needs_bound_expr_codegen(frame_start_bound)) {
-      frame_start_bound_expr_lvs =
-          code_generator.codegen(frame_start_bound->getBoundExpr(), true, co);
-      frame_start_bound_expr_lv = frame_start_bound_expr_lvs.front();
-      if (frame_start_bound->getBoundExpr()->get_type_info().get_size() != 8) {
-        frame_start_bound_expr_lv =
-            cgen_state_->castToTypeIn(frame_start_bound_expr_lv, 64);
+    const auto order_col_ti = window_func->getOrderKeys().front()->get_type_info();
+    auto encode_date_col_val = [&order_col_ti, this](llvm::Value* bound_expr_lv) {
+      if (order_col_ti.get_comp_param() == 16) {
+        return cgen_state_->emitCall(
+            "fixed_width_date_encode_noinline",
+            {bound_expr_lv,
+             cgen_state_->castToTypeIn(cgen_state_->inlineIntNull(SQLTypeInfo(kSMALLINT)),
+                                       32),
+             cgen_state_->inlineIntNull(SQLTypeInfo(kBIGINT))});
+      } else {
+        return cgen_state_->emitCall("fixed_width_date_encode_noinline",
+                                     {bound_expr_lv,
+                                      cgen_state_->inlineIntNull(SQLTypeInfo(kINT)),
+                                      cgen_state_->inlineIntNull(SQLTypeInfo(kBIGINT))});
       }
-    } else {
-      frame_start_bound_expr_lv = cgen_state_->llInt((int64_t)-1);
-    }
-    if (needs_bound_expr_codegen(frame_end_bound)) {
-      frame_end_bound_expr_lvs =
-          code_generator.codegen(frame_end_bound->getBoundExpr(), true, co);
-      frame_end_bound_expr_lv = frame_end_bound_expr_lvs.front();
-      if (frame_end_bound->getBoundExpr()->get_type_info().get_size() != 8) {
-        frame_end_bound_expr_lv = cgen_state_->castToTypeIn(frame_end_bound_expr_lv, 64);
+    };
+    auto codegen_frame_bound_expr = [&](const Analyzer::WindowFrame* frame_bound) {
+      llvm::Value* bound_expr_lv{nullptr};
+      if (needs_bound_expr_codegen(frame_bound)) {
+        auto bound_expr_lvs =
+            code_generator.codegen(frame_bound->getBoundExpr(), true, co);
+        bound_expr_lv = bound_expr_lvs.front();
+        if (order_col_ti.is_date() && window_func->hasRangeModeFraming()) {
+          if (g_cluster) {
+            throw std::runtime_error(
+                "Range mode with date type ordering column is not supported yet.");
+          }
+          bound_expr_lv = encode_date_col_val(bound_expr_lv);
+        }
+        if (frame_bound->getBoundExpr()->get_type_info().get_size() != 8) {
+          bound_expr_lv = cgen_state_->castToTypeIn(bound_expr_lv, 64);
+        }
+      } else {
+        bound_expr_lv = cgen_state_->llInt((int64_t)-1);
       }
-    } else {
-      frame_end_bound_expr_lv = cgen_state_->llInt((int64_t)-1);
-    }
+      return bound_expr_lv;
+    };
+    frame_start_bound_expr_lv = codegen_frame_bound_expr(frame_start_bound);
+    frame_end_bound_expr_lv = codegen_frame_bound_expr(frame_end_bound);
 
     // for range mode, we need to collect various info regarding ordering column
     // to determine the frame boundary correctly
     std::string order_col_type_name{""};
-    if (window_func->getFrameBoundType() ==
-        Analyzer::WindowFunction::FrameBoundType::RANGE) {
+    if (window_func->hasRangeModeFraming()) {
       CHECK(window_func_context->getOrderKeyColumnBuffers().size() == 1);
       CHECK(window_func->getOrderKeys().size() == 1UL);
       CHECK(window_func_context->getOrderKeyColumnBuffers().size() == 1UL);
       order_col_type_name = get_col_type_name_for_framing(
           window_func_context->getOrderKeyColumnBufferTypes().front().get_type());
       // ordering column buffer
-      size_t order_key_size =
-          window_func->getOrderKeys().front()->get_type_info().get_size() * 8;
-      const auto order_key_buf_type =
-          llvm::PointerType::get(get_int_type(order_key_size, cgen_state_->context_), 0);
+      size_t order_key_size_in_byte = order_key_size * 8;
+      const auto order_key_buf_type = llvm::PointerType::get(
+          get_int_type(order_key_size_in_byte, cgen_state_->context_), 0);
       const auto order_key_buf = cgen_state_->llInt(reinterpret_cast<int64_t>(
           window_func_context->getOrderKeyColumnBuffers().front()));
       order_key_buf_ptr =
@@ -444,7 +472,7 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
       const auto rowid_in_partition =
           code_generator.codegenWindowPosition(window_func_context, current_row_pos);
       const auto current_col_value_ptr = cgen_state_->ir_builder_.CreateGEP(
-          get_int_type(order_key_size, cgen_state_->context_),
+          get_int_type(order_key_size_in_byte, cgen_state_->context_),
           order_key_buf_ptr,
           rowid_in_partition);
       current_col_value_lv = cgen_state_->ir_builder_.CreateLoad(
@@ -473,8 +501,43 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
                                              current_partition_start_offset_lv);
 
       // null value of the ordering column
-      order_key_col_null_val_lv = cgen_state_->inlineNull(
-          window_func_context->getOrderKeyColumnBufferTypes().front());
+      const auto order_key_buf_ti =
+          window_func_context->getOrderKeyColumnBufferTypes().front();
+      switch (order_key_buf_ti.get_type()) {
+        case kDATE:
+        case kTIME:
+        case kTIMESTAMP: {
+          switch (order_key_buf_ti.get_size()) {
+            case 1: {
+              order_key_col_null_val_lv =
+                  cgen_state_->inlineNull(SQLTypeInfo(SQLTypes::kTINYINT));
+              break;
+            }
+            case 2: {
+              order_key_col_null_val_lv =
+                  cgen_state_->inlineNull(SQLTypeInfo(SQLTypes::kSMALLINT));
+              break;
+            }
+            case 4: {
+              order_key_col_null_val_lv =
+                  cgen_state_->inlineNull(SQLTypeInfo(SQLTypes::kINT));
+              break;
+            }
+            case 8: {
+              order_key_col_null_val_lv =
+                  cgen_state_->inlineNull(SQLTypeInfo(SQLTypes::kBIGINT));
+              break;
+            }
+            default:
+              break;
+          }
+          break;
+        }
+        default: {
+          order_key_col_null_val_lv = cgen_state_->inlineNull(order_key_buf_ti);
+          break;
+        }
+      }
 
       // null range of the aggregate tree
       const auto null_start_pos_buf = cgen_state_->llInt(
@@ -512,41 +575,55 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
                SqlWindowFrameBoundType::EXPR_PRECEDING) {
       // frame starts at the position before X rows of the current row
       CHECK(frame_start_bound_expr_lv);
-      if (window_func->getFrameBoundType() ==
-          Analyzer::WindowFunction::FrameBoundType::ROW) {
+      if (window_func->hasRowModeFraming()) {
         frame_start_bound_lv = cgen_state_->emitCall("compute_row_mode_start_index_sub",
                                                      {current_row_pos,
                                                       current_partition_start_offset_lv,
                                                       frame_start_bound_expr_lv});
       } else {
-        CHECK(window_func->getFrameBoundType() ==
-              Analyzer::WindowFunction::FrameBoundType::RANGE);
-        std::string lower_bound_func_name{"range_mode_"};
-        lower_bound_func_name.append(order_col_type_name);
-        lower_bound_func_name.append("_sub_frame_lower_bound");
-        frame_start_bound_lv = cgen_state_->emitCall(lower_bound_func_name,
-                                                     {num_elem_current_partition_lv,
-                                                      current_col_value_lv,
-                                                      order_key_buf_ptr,
-                                                      target_partition_rowid_ptr,
-                                                      target_partition_sorted_rowid_ptr,
-                                                      frame_start_bound_expr_lv,
-                                                      order_key_col_null_val_lv,
-                                                      null_start_pos_lv,
-                                                      null_end_pos_lv});
+        CHECK(window_func->hasRangeModeFraming());
+        if (frame_start_bound->getBoundExpr()->get_type_info().is_date() ||
+            frame_start_bound->getBoundExpr()->get_type_info().is_timestamp()) {
+          std::string lower_bound_func_name{"compute_"};
+          lower_bound_func_name.append(order_col_type_name);
+          lower_bound_func_name.append(
+              "_lower_bound_from_ordered_index_for_timeinterval");
+          frame_start_bound_lv = cgen_state_->emitCall(
+              lower_bound_func_name,
+              {num_elem_current_partition_lv,
+               frame_start_bound_expr_lv,
+               order_key_buf_ptr,
+               target_partition_rowid_ptr,
+               target_partition_sorted_rowid_ptr,
+               cgen_state_->castToTypeIn(order_key_col_null_val_lv, 64),
+               null_start_pos_lv,
+               null_end_pos_lv});
+        } else {
+          std::string lower_bound_func_name{"range_mode_"};
+          lower_bound_func_name.append(order_col_type_name);
+          lower_bound_func_name.append("_sub_frame_lower_bound");
+          frame_start_bound_lv = cgen_state_->emitCall(lower_bound_func_name,
+                                                       {num_elem_current_partition_lv,
+                                                        current_col_value_lv,
+                                                        order_key_buf_ptr,
+                                                        target_partition_rowid_ptr,
+                                                        target_partition_sorted_rowid_ptr,
+                                                        frame_start_bound_expr_lv,
+                                                        order_key_col_null_val_lv,
+                                                        null_start_pos_lv,
+                                                        null_end_pos_lv});
+        }
       }
     } else if (frame_start_bound->getBoundType() ==
                SqlWindowFrameBoundType::CURRENT_ROW) {
       // frame start at the current row
-      if (window_func->getFrameBoundType() ==
-          Analyzer::WindowFunction::FrameBoundType::ROW) {
+      if (window_func->hasRowModeFraming()) {
         frame_start_bound_lv = cgen_state_->emitCall("compute_row_mode_start_index_sub",
                                                      {current_row_pos,
                                                       current_partition_start_offset_lv,
                                                       cgen_state_->llInt(((int64_t)0))});
       } else {
-        CHECK(window_func->getFrameBoundType() ==
-              Analyzer::WindowFunction::FrameBoundType::RANGE);
+        CHECK(window_func->hasRangeModeFraming());
         std::string lower_bound_func_name{"compute_"};
         lower_bound_func_name.append(order_col_type_name);
         lower_bound_func_name.append("_lower_bound_from_ordered_index");
@@ -564,29 +641,45 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
                SqlWindowFrameBoundType::EXPR_FOLLOWING) {
       // frame start at the position after X rows of the current row
       CHECK(frame_start_bound_expr_lv);
-      if (window_func->getFrameBoundType() ==
-          Analyzer::WindowFunction::FrameBoundType::ROW) {
+      if (window_func->hasRowModeFraming()) {
         frame_start_bound_lv = cgen_state_->emitCall("compute_row_mode_start_index_add",
                                                      {current_row_pos,
                                                       current_partition_start_offset_lv,
                                                       frame_start_bound_expr_lv,
                                                       num_elem_current_partition_lv});
       } else {
-        CHECK(window_func->getFrameBoundType() ==
-              Analyzer::WindowFunction::FrameBoundType::RANGE);
-        std::string lower_bound_func_name{"range_mode_"};
-        lower_bound_func_name.append(order_col_type_name);
-        lower_bound_func_name.append("_add_frame_lower_bound");
-        frame_start_bound_lv = cgen_state_->emitCall(lower_bound_func_name,
-                                                     {num_elem_current_partition_lv,
-                                                      current_col_value_lv,
-                                                      order_key_buf_ptr,
-                                                      target_partition_rowid_ptr,
-                                                      target_partition_sorted_rowid_ptr,
-                                                      frame_start_bound_expr_lv,
-                                                      order_key_col_null_val_lv,
-                                                      null_start_pos_lv,
-                                                      null_end_pos_lv});
+        CHECK(window_func->hasRangeModeFraming());
+        if (frame_start_bound->getBoundExpr()->get_type_info().is_date() ||
+            frame_start_bound->getBoundExpr()->get_type_info().is_timestamp()) {
+          std::string lower_bound_func_name{"compute_"};
+          lower_bound_func_name.append(order_col_type_name);
+          lower_bound_func_name.append(
+              "_lower_bound_from_ordered_index_for_timeinterval");
+          frame_start_bound_lv = cgen_state_->emitCall(
+              lower_bound_func_name,
+              {num_elem_current_partition_lv,
+               frame_start_bound_expr_lv,
+               order_key_buf_ptr,
+               target_partition_rowid_ptr,
+               target_partition_sorted_rowid_ptr,
+               cgen_state_->castToTypeIn(order_key_col_null_val_lv, 64),
+               null_start_pos_lv,
+               null_end_pos_lv});
+        } else {
+          std::string lower_bound_func_name{"range_mode_"};
+          lower_bound_func_name.append(order_col_type_name);
+          lower_bound_func_name.append("_add_frame_lower_bound");
+          frame_start_bound_lv = cgen_state_->emitCall(lower_bound_func_name,
+                                                       {num_elem_current_partition_lv,
+                                                        current_col_value_lv,
+                                                        order_key_buf_ptr,
+                                                        target_partition_rowid_ptr,
+                                                        target_partition_sorted_rowid_ptr,
+                                                        frame_start_bound_expr_lv,
+                                                        order_key_col_null_val_lv,
+                                                        null_start_pos_lv,
+                                                        null_end_pos_lv});
+        }
       }
     } else {
       CHECK(false) << "frame start cannot be UNBOUNDED FOLLOWING";
@@ -600,40 +693,54 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
                SqlWindowFrameBoundType::EXPR_PRECEDING) {
       // frame ends at the position X rows before the current row
       CHECK(frame_end_bound_expr_lv);
-      if (window_func->getFrameBoundType() ==
-          Analyzer::WindowFunction::FrameBoundType::ROW) {
+      if (window_func->hasRowModeFraming()) {
         frame_end_bound_lv = cgen_state_->emitCall("compute_row_mode_end_index_sub",
                                                    {current_row_pos,
                                                     current_partition_start_offset_lv,
                                                     frame_end_bound_expr_lv});
       } else {
-        CHECK(window_func->getFrameBoundType() ==
-              Analyzer::WindowFunction::FrameBoundType::RANGE);
-        std::string upper_bound_func_name{"range_mode_"};
-        upper_bound_func_name.append(order_col_type_name);
-        upper_bound_func_name.append("_sub_frame_upper_bound");
-        frame_end_bound_lv = cgen_state_->emitCall(upper_bound_func_name,
-                                                   {num_elem_current_partition_lv,
-                                                    current_col_value_lv,
-                                                    order_key_buf_ptr,
-                                                    target_partition_rowid_ptr,
-                                                    target_partition_sorted_rowid_ptr,
-                                                    frame_end_bound_expr_lv,
-                                                    order_key_col_null_val_lv,
-                                                    null_start_pos_lv,
-                                                    null_end_pos_lv});
+        CHECK(window_func->hasRangeModeFraming());
+        if (frame_end_bound->getBoundExpr()->get_type_info().is_date() ||
+            frame_end_bound->getBoundExpr()->get_type_info().is_timestamp()) {
+          std::string upper_bound_func_name{"compute_"};
+          upper_bound_func_name.append(order_col_type_name);
+          upper_bound_func_name.append(
+              "_upper_bound_from_ordered_index_for_timeinterval");
+          frame_end_bound_lv = cgen_state_->emitCall(
+              upper_bound_func_name,
+              {num_elem_current_partition_lv,
+               frame_end_bound_expr_lv,
+               order_key_buf_ptr,
+               target_partition_rowid_ptr,
+               target_partition_sorted_rowid_ptr,
+               cgen_state_->castToTypeIn(order_key_col_null_val_lv, 64),
+               null_start_pos_lv,
+               null_end_pos_lv});
+        } else {
+          std::string upper_bound_func_name{"range_mode_"};
+          upper_bound_func_name.append(order_col_type_name);
+          upper_bound_func_name.append("_sub_frame_upper_bound");
+          frame_end_bound_lv = cgen_state_->emitCall(upper_bound_func_name,
+                                                     {num_elem_current_partition_lv,
+                                                      current_col_value_lv,
+                                                      order_key_buf_ptr,
+                                                      target_partition_rowid_ptr,
+                                                      target_partition_sorted_rowid_ptr,
+                                                      frame_end_bound_expr_lv,
+                                                      order_key_col_null_val_lv,
+                                                      null_start_pos_lv,
+                                                      null_end_pos_lv});
+        }
       }
     } else if (frame_end_bound->getBoundType() == SqlWindowFrameBoundType::CURRENT_ROW) {
       // frame ends at the current row
-      if (window_func->getFrameBoundType() ==
-          Analyzer::WindowFunction::FrameBoundType::ROW) {
+      if (window_func->hasRowModeFraming()) {
         frame_end_bound_lv = cgen_state_->emitCall("compute_row_mode_end_index_sub",
                                                    {current_row_pos,
                                                     current_partition_start_offset_lv,
                                                     cgen_state_->llInt((int64_t)0)});
       } else {
-        CHECK(window_func->getFrameBoundType() ==
-              Analyzer::WindowFunction::FrameBoundType::RANGE);
+        CHECK(window_func->hasRangeModeFraming());
         std::string upper_bound_func_name{"compute_"};
         upper_bound_func_name.append(order_col_type_name);
         upper_bound_func_name.append("_upper_bound_from_ordered_index");
@@ -651,29 +758,45 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
                SqlWindowFrameBoundType::EXPR_FOLLOWING) {
       // frame ends at the position X rows after the current row
       CHECK(frame_end_bound_expr_lv);
-      if (window_func->getFrameBoundType() ==
-          Analyzer::WindowFunction::FrameBoundType::ROW) {
+      if (window_func->hasRowModeFraming()) {
         frame_end_bound_lv = cgen_state_->emitCall("compute_row_mode_end_index_add",
                                                    {current_row_pos,
                                                     current_partition_start_offset_lv,
                                                     frame_end_bound_expr_lv,
                                                     num_elem_current_partition_lv});
       } else {
-        CHECK(window_func->getFrameBoundType() ==
-              Analyzer::WindowFunction::FrameBoundType::RANGE);
-        std::string upper_bound_func_name{"range_mode_"};
-        upper_bound_func_name.append(order_col_type_name);
-        upper_bound_func_name.append("_add_frame_upper_bound");
-        frame_end_bound_lv = cgen_state_->emitCall(upper_bound_func_name,
-                                                   {num_elem_current_partition_lv,
-                                                    current_col_value_lv,
-                                                    order_key_buf_ptr,
-                                                    target_partition_rowid_ptr,
-                                                    target_partition_sorted_rowid_ptr,
-                                                    frame_end_bound_expr_lv,
-                                                    order_key_col_null_val_lv,
-                                                    null_start_pos_lv,
-                                                    null_end_pos_lv});
+        CHECK(window_func->hasRangeModeFraming());
+        if (frame_end_bound->getBoundExpr()->get_type_info().is_date() ||
+            frame_end_bound->getBoundExpr()->get_type_info().is_timestamp()) {
+          std::string upper_bound_func_name{"compute_"};
+          upper_bound_func_name.append(order_col_type_name);
+          upper_bound_func_name.append(
+              "_upper_bound_from_ordered_index_for_timeinterval");
+          frame_end_bound_lv = cgen_state_->emitCall(
+              upper_bound_func_name,
+              {num_elem_current_partition_lv,
+               frame_end_bound_expr_lv,
+               order_key_buf_ptr,
+               target_partition_rowid_ptr,
+               target_partition_sorted_rowid_ptr,
+               cgen_state_->castToTypeIn(order_key_col_null_val_lv, 64),
+               null_start_pos_lv,
+               null_end_pos_lv});
+        } else {
+          std::string upper_bound_func_name{"range_mode_"};
+          upper_bound_func_name.append(order_col_type_name);
+          upper_bound_func_name.append("_add_frame_upper_bound");
+          frame_end_bound_lv = cgen_state_->emitCall(upper_bound_func_name,
+                                                     {num_elem_current_partition_lv,
+                                                      current_col_value_lv,
+                                                      order_key_buf_ptr,
+                                                      target_partition_rowid_ptr,
+                                                      target_partition_sorted_rowid_ptr,
+                                                      frame_end_bound_expr_lv,
+                                                      order_key_col_null_val_lv,
+                                                      null_start_pos_lv,
+                                                      null_end_pos_lv});
+        }
       }
     } else {
       // frame ends at the last row of the partition

@@ -25,6 +25,9 @@
 static constexpr int64_t kNanoSecsPerSec = 1000000000;
 static constexpr int64_t kMicroSecsPerSec = 1000000;
 static constexpr int64_t kMilliSecsPerSec = 1000;
+static constexpr int64_t kMilliSecsPerMin = 60000;
+static constexpr int64_t kMilliSecsPerHour = 3600000;
+static constexpr int64_t kMilliSecsPerDay = 86400000;
 static constexpr int64_t kSecsPerMin = 60;
 static constexpr int64_t kMinsPerHour = 60;
 static constexpr int64_t kHoursPerDay = 24;
@@ -90,7 +93,8 @@ enum ExtractField {
   kWEEK,
   kWEEK_SUNDAY,
   kWEEK_SATURDAY,
-  kDATEEPOCH
+  kDATEEPOCH,
+  kUNKNOWN_FIELD
 };
 
 DEVICE int64_t ExtractFromTime(ExtractField field, const int64_t timeval);

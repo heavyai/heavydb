@@ -22770,6 +22770,243 @@ TEST(Select, WindowFunctionFraming) {
   }
 }
 
+TEST(Select, WindowFunctionFramingWithDateAndTimeColumn) {
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+
+  const std::string drop_test_table1{"DROP TABLE IF EXISTS TD_RANGE;"};
+  const std::string drop_test_table2{"DROP TABLE IF EXISTS TD_RANGE_NULL;"};
+  const std::vector<std::string> drop_table_ddls{drop_test_table1, drop_test_table2};
+  for (const auto& drop_table_ddl : drop_table_ddls) {
+    run_ddl_statement(drop_table_ddl);
+  }
+  ScopeGuard drop_table_at_end = [&drop_table_ddls]() {
+    for (const auto& drop_table_ddl : drop_table_ddls) {
+      run_ddl_statement(drop_table_ddl);
+    }
+  };
+  std::string columns_definition{
+      "(rid INT, pc INT, ti TIME, tie TIME ENCODING FIXED(32), d32 DATE ENCODING "
+      "DAYS(32), d16 DATE ENCODING DAYS(16), tm0 TIMESTAMP(0), tm0e TIMESTAMP ENCODING "
+      "FIXED(32), tm3 TIMESTAMP(3), tm6 TIMESTAMP(6), tm9 TIMESTAMP(9), tm3_ms "
+      "TIMESTAMP(3), tm6_us TIMESTAMP(6), tm6_ms TIMESTAMP(6), tm9_ns TIMESTAMP(9), "
+      "tm9_us TIMESTAMP(9), tm9_ms TIMESTAMP(9))"};
+  auto gen_table_creation_ddl = [&columns_definition](const std::string& table_name) {
+    return "CREATE TABLE " + table_name + " " + columns_definition + ";";
+  };
+  run_ddl_statement(gen_table_creation_ddl("TD_RANGE"));
+  run_ddl_statement(gen_table_creation_ddl("TD_RANGE_NULL"));
+  run_ddl_statement(
+      "copy TD_RANGE from "
+      "'../../Tests/Import/datafiles/window_frame_date_time.csv' with "
+      "(header='true');");
+  run_ddl_statement(
+      "copy TD_RANGE_NULL from "
+      "'../../Tests/Import/datafiles/window_frame_date_time_null.csv' with "
+      "(header='true');");
+  std::vector<std::string> date_type_cols{"d16", "d32"};
+
+  // test 1. check framing functionality in various frame bounds
+  std::vector<std::string> time_unit_string = {"YEAR",
+                                               "MONTH",
+                                               "DAY",
+                                               "HOUR",
+                                               "MINUTE",
+                                               "SECOND",
+                                               "MILLISECOND",
+                                               "MICROSECOND",
+                                               "NANOSECOND"};
+  std::vector<std::string> frame_bound_string = {
+      "UNBOUNDED PRECEDING", "CURRENT ROW", "UNBOUNDED FOLLOWING"};
+  auto generate_interval_bound =
+      [](int time_value, bool is_preceding, const std::string& time_unit) {
+        const auto frame_extent = is_preceding ? "PRECEDING" : "FOLLOWING";
+        std::ostringstream oss;
+        oss << "INTERVAL " << std::to_string(time_value) << " " << time_unit << " "
+            << frame_extent;
+        return oss.str();
+      };
+  {
+    std::vector<std::pair<std::string, std::string>> test_frame_bounds;
+    const std::string test_time_unit = time_unit_string[7];
+    test_frame_bounds.emplace_back(std::make_pair(
+        frame_bound_string[0], generate_interval_bound(3, true, test_time_unit)));
+    test_frame_bounds.emplace_back(std::make_pair(
+        frame_bound_string[0], generate_interval_bound(3, false, test_time_unit)));
+    test_frame_bounds.emplace_back(
+        std::make_pair(generate_interval_bound(3, true, test_time_unit),
+                       generate_interval_bound(2, true, test_time_unit)));
+    test_frame_bounds.emplace_back(std::make_pair(
+        generate_interval_bound(3, true, test_time_unit), frame_bound_string[1]));
+    test_frame_bounds.emplace_back(
+        std::make_pair(generate_interval_bound(3, true, test_time_unit),
+                       generate_interval_bound(2, false, test_time_unit)));
+    test_frame_bounds.emplace_back(std::make_pair(
+        generate_interval_bound(3, true, test_time_unit), frame_bound_string[2]));
+    test_frame_bounds.emplace_back(std::make_pair(
+        frame_bound_string[1], generate_interval_bound(3, false, test_time_unit)));
+    test_frame_bounds.emplace_back(
+        std::make_pair(frame_bound_string[1], frame_bound_string[2]));
+    test_frame_bounds.emplace_back(
+        std::make_pair(generate_interval_bound(2, false, test_time_unit),
+                       generate_interval_bound(3, false, test_time_unit)));
+    test_frame_bounds.emplace_back(std::make_pair(
+        generate_interval_bound(2, false, test_time_unit), frame_bound_string[2]));
+
+    auto generate_query = [&test_frame_bounds](const std::string& table_name,
+                                               size_t frame_bound_idx) {
+      std::ostringstream oss;
+      oss << "SELECT SUM(res) FROM (SELECT rid, SUM(rid) ";
+      oss << "OVER (PARTITION BY pc ORDER BY tm6_us RANGE BETWEEN ";
+      oss << test_frame_bounds[frame_bound_idx].first << " AND "
+          << test_frame_bounds[frame_bound_idx].second;
+      oss << ") as res FROM ";
+      oss << table_name << " ORDER BY rid);";
+      return oss.str();
+    };
+
+    // 1.1 TD_RANGE
+    {
+      // retrieved from the Postgres v9.6
+      std::vector<int64_t> answer_sheet = {
+          10459, 12865, 92, 2303, 2406, 13862, 2314, 13770, 103, 11559};
+      const std::string table_name{"TD_RANGE"};
+      for (size_t i = 0; i < test_frame_bounds.size(); i++) {
+        const auto generated_query = generate_query(table_name, i);
+        EXPECT_EQ(answer_sheet[i], v<int64_t>(run_simple_agg(generated_query, dt)))
+            << generated_query;
+      }
+    }
+
+    // 1.2 TD_RANGE_NULL
+    {
+      std::vector<int64_t> answer_sheet = {
+          10953, 13081, 490, 2467, 2546, 13786, 2474, 13714, 497, 11737};
+      const std::string table_name{"TD_RANGE_NULL"};
+      for (size_t i = 0; i < test_frame_bounds.size(); i++) {
+        const auto generated_query = generate_query(table_name, i);
+        EXPECT_EQ(answer_sheet[i], v<int64_t>(run_simple_agg(generated_query, dt)))
+            << generated_query;
+      }
+    }
+  }
+
+  // test 2. check various data types
+  {
+    std::vector<std::pair<std::string, std::string>> col_time_unit_pair;
+    std::vector<std::string> time_units{
+        time_unit_string[3], time_unit_string[4], time_unit_string[5]};
+    std::vector<std::string> date_units{
+        time_unit_string[0], time_unit_string[1], time_unit_string[2]};
+    enum TimeUnitClass { TIMES = 1, DAYS, TIME_AND_DAYS, SMALL_TIMES };
+    auto map_col_name_to_time_unit = [&col_time_unit_pair, &time_units, &date_units](
+                                         const std::string& col_name,
+                                         TimeUnitClass time_unit_class) {
+      switch (time_unit_class) {
+        case TIMES: {
+          for (auto u : time_units) {
+            col_time_unit_pair.emplace_back(std::make_pair(col_name, u));
+          }
+          break;
+        }
+        case DAYS: {
+          for (auto u : date_units) {
+            col_time_unit_pair.emplace_back(std::make_pair(col_name, u));
+          }
+          break;
+        }
+        case TIME_AND_DAYS: {
+          for (auto u : time_units) {
+            col_time_unit_pair.emplace_back(std::make_pair(col_name, u));
+          }
+          for (auto u : date_units) {
+            col_time_unit_pair.emplace_back(std::make_pair(col_name, u));
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    };
+    map_col_name_to_time_unit("ti", TimeUnitClass::TIMES);
+    map_col_name_to_time_unit("tie", TimeUnitClass::TIMES);
+    map_col_name_to_time_unit("d16", TimeUnitClass::DAYS);
+    map_col_name_to_time_unit("d32", TimeUnitClass::DAYS);
+    map_col_name_to_time_unit("tm0", TimeUnitClass::TIME_AND_DAYS);
+    map_col_name_to_time_unit("tm0e", TimeUnitClass::TIME_AND_DAYS);
+    col_time_unit_pair.emplace_back(std::make_pair("tm3", "SECOND"));
+    col_time_unit_pair.emplace_back(std::make_pair("tm6", "SECOND"));
+    col_time_unit_pair.emplace_back(std::make_pair("tm9", "SECOND"));
+    col_time_unit_pair.emplace_back(std::make_pair("tm3_ms", "MILLISECOND"));
+    col_time_unit_pair.emplace_back(std::make_pair("tm6_ms", "MILLISECOND"));
+    col_time_unit_pair.emplace_back(std::make_pair("tm6_us", "MICROSECOND"));
+    col_time_unit_pair.emplace_back(std::make_pair("tm9_ms", "MILLISECOND"));
+    col_time_unit_pair.emplace_back(std::make_pair("tm9_us", "MICROSECOND"));
+
+    auto generate_query = [&](const std::string& table_name,
+                              const std::string& col_name,
+                              const std::string& time_unit) {
+      std::ostringstream oss;
+      oss << "SELECT SUM(res) FROM (SELECT rid, SUM(rid) ";
+      oss << "OVER (PARTITION BY pc ORDER BY " << col_name << " RANGE BETWEEN ";
+      oss << generate_interval_bound(2, true, time_unit) << " AND ";
+      oss << generate_interval_bound(2, false, time_unit);
+      oss << ") as res FROM ";
+      oss << table_name << " ORDER BY rid);";
+      return oss.str();
+    };
+
+    // 2.1 TD_RANGE
+    {
+      std::vector<int64_t> answer_sheet = {
+          22305, 20017, 18939, 22305, 20017, 18939, 19929, 14011, 9303, 19929, 14011,
+          9303,  11305, 9017,  7939,  19929, 17611, 14803, 11305, 9017, 7939,  19929,
+          17611, 14803, 2439,  2439,  2439,  2406,  2406,  2406,  2406, 2406};
+      const std::string table_name{"TD_RANGE"};
+      for (size_t i = 0; i < col_time_unit_pair.size(); i++) {
+        if (g_aggregator && (col_time_unit_pair[i].first.compare("d16") == 0 ||
+                             col_time_unit_pair[i].first.compare("d32") == 0)) {
+          continue;
+        }
+        const auto generated_query = generate_query(
+            table_name, col_time_unit_pair[i].first, col_time_unit_pair[i].second);
+        EXPECT_EQ(answer_sheet[i], v<int64_t>(run_simple_agg(generated_query, dt)))
+            << generated_query;
+      }
+      EXPECT_NO_THROW(
+          run_simple_agg(generate_query("TD_RANGE", "tm9_ns", "NANOSECOND"), dt));
+    }
+
+    // 2.2 TD_RANGE_NULL
+    {
+      std::vector<int64_t> answer_sheet = {
+          18641, 17354, 16777, 18641, 17354, 16777, 16463, 11533, 7225, 16463, 11533,
+          7225,  8897,  7610,  7033,  16463, 14533, 11725, 8897,  7610, 7033,  16463,
+          14533, 11725, 2533,  2533,  2533,  2546,  2546,  2546,  2546, 2546};
+      const std::string table_name{"TD_RANGE_NULL"};
+      for (size_t i = 0; i < col_time_unit_pair.size(); i++) {
+        if (g_aggregator && (col_time_unit_pair[i].first.compare("d16") == 0 ||
+                             col_time_unit_pair[i].first.compare("d32") == 0)) {
+          continue;
+        }
+        const auto generated_query = generate_query(
+            table_name, col_time_unit_pair[i].first, col_time_unit_pair[i].second);
+        EXPECT_EQ(answer_sheet[i], v<int64_t>(run_simple_agg(generated_query, dt)))
+            << generated_query;
+      }
+    }
+  }
+
+  // check 3. exceptions
+  EXPECT_ANY_THROW(
+      run_simple_agg("SELECT SUM(rid) OVER (ORDER BY tm3 RANGE BETWEEN INTERVAL -3 "
+                     "MILLISECOND PRECEDING AND CURRENT ROW) FROM TD_RANGE",
+                     dt));
+  EXPECT_ANY_THROW(
+      run_simple_agg("SELECT SUM(rid) OVER (ORDER BY tm3 RANGE BETWEEN INTERVAL 3.3 "
+                     "MILLISECOND PRECEDING AND CURRENT ROW) FROM TD_RANGE",
+                     dt));
+}
+
 TEST(Select, FilterNodeCoalesce) {
   // If we do not coalesce the filter with a subsequent project (manufacturing one if
   // neccessary), we currently pull all table columns into memory, which is highly

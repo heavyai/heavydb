@@ -494,6 +494,37 @@ DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX(float)
 DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX(double)
 #undef DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX
 
+#define DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(value_type)   \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t                                 \
+      compute_##value_type##_lower_bound_from_ordered_index_for_timeinterval(     \
+          const int64_t num_elems,                                                \
+          const int64_t target_value,                                             \
+          const value_type* col_buf,                                              \
+          const int32_t* partition_rowid_buf,                                     \
+          const int64_t* ordered_index_buf,                                       \
+          const int64_t null_val,                                                 \
+          const int64_t null_start_pos,                                           \
+          const int64_t null_end_pos) {                                           \
+    if (target_value == null_val) {                                               \
+      return null_start_pos;                                                      \
+    }                                                                             \
+    int64_t l = get_valid_buf_start_pos(null_start_pos, null_end_pos);            \
+    int64_t h = get_valid_buf_end_pos(num_elems, null_start_pos, null_end_pos);   \
+    while (l < h) {                                                               \
+      int64_t mid = l + (h - l) / 2;                                              \
+      if (target_value <= col_buf[partition_rowid_buf[ordered_index_buf[mid]]]) { \
+        h = mid;                                                                  \
+      } else {                                                                    \
+        l = mid + 1;                                                              \
+      }                                                                           \
+    }                                                                             \
+    return h;                                                                     \
+  }
+DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(int16_t)
+DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(int32_t)
+DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(int64_t)
+#undef DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL
+
 #define DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX(value_type)                    \
   extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t                                 \
       compute_##value_type##_upper_bound_from_ordered_index(                      \
@@ -527,6 +558,37 @@ DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX(int64_t)
 DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX(float)
 DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX(double)
 #undef DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX
+
+#define DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(value_type)   \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t                                 \
+      compute_##value_type##_upper_bound_from_ordered_index_for_timeinterval(     \
+          const int64_t num_elems,                                                \
+          const int64_t target_value,                                             \
+          const value_type* col_buf,                                              \
+          const int32_t* partition_rowid_buf,                                     \
+          const int64_t* ordered_index_buf,                                       \
+          const int64_t null_val,                                                 \
+          const int64_t null_start_pos,                                           \
+          const int64_t null_end_pos) {                                           \
+    if (target_value == null_val) {                                               \
+      return null_end_pos;                                                        \
+    }                                                                             \
+    int64_t l = get_valid_buf_start_pos(null_start_pos, null_end_pos);            \
+    int64_t h = get_valid_buf_end_pos(num_elems, null_start_pos, null_end_pos);   \
+    while (l < h) {                                                               \
+      int64_t mid = l + (h - l) / 2;                                              \
+      if (target_value >= col_buf[partition_rowid_buf[ordered_index_buf[mid]]]) { \
+        l = mid + 1;                                                              \
+      } else {                                                                    \
+        h = mid;                                                                  \
+      }                                                                           \
+    }                                                                             \
+    return l;                                                                     \
+  }
+DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(int16_t)
+DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(int32_t)
+DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(int64_t)
+#undef DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t
 compute_row_mode_start_index_sub(int64_t candidate_index,
@@ -705,6 +767,8 @@ getStartOffsetForSegmentTreeTraversal(size_t level, size_t tree_fanout) {
           }                                                             \
         }                                                               \
         return all_nulls ? null_val : res;                              \
+      } else if (parentBegin > parentEnd) {                             \
+        return null_val;                                                \
       }                                                                 \
       size_t group_begin = (parentBegin * tree_fanout) + 1;             \
       if (begin != group_begin) {                                       \
@@ -762,6 +826,8 @@ DEF_COMPUTE_FRAME_MIN(double)
           }                                                             \
         }                                                               \
         return all_nulls ? null_val : res;                              \
+      } else if (parentBegin > parentEnd) {                             \
+        return null_val;                                                \
       }                                                                 \
       size_t group_begin = (parentBegin * tree_fanout) + 1;             \
       if (begin != group_begin) {                                       \
@@ -819,6 +885,8 @@ DEF_COMPUTE_FRAME_MAX(double)
           }                                                             \
         }                                                               \
         return all_nulls ? null_val : res;                              \
+      } else if (parentBegin > parentEnd) {                             \
+        return null_val;                                                \
       }                                                                 \
       size_t group_begin = (parentBegin * tree_fanout) + 1;             \
       if (begin != group_begin) {                                       \
@@ -830,6 +898,8 @@ DEF_COMPUTE_FRAME_MAX(double)
           }                                                             \
         }                                                               \
         parentBegin++;                                                  \
+      } else if (parentBegin > parentEnd) {                             \
+        return null_val;                                                \
       }                                                                 \
       size_t group_end = (parentEnd * tree_fanout) + 1;                 \
       if (end != group_end) {                                           \
@@ -880,6 +950,10 @@ DEF_COMPUTE_FRAME_SUM(double)
           res.sum = null_val;                                              \
           res.count = 0;                                                   \
         }                                                                  \
+        return;                                                            \
+      } else if (parentBegin > parentEnd) {                                \
+        res.sum = null_val;                                                \
+        res.count = 0;                                                     \
         return;                                                            \
       }                                                                    \
       size_t group_begin = (parentBegin * tree_fanout) + 1;                \

@@ -214,7 +214,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
     return {col_byte_stream};
   }
   if (window_func_context) {
-    return {codegenFixedLengthColVarInWindow(col_var, col_byte_stream, pos_arg)};
+    return {codegenFixedLengthColVarInWindow(
+        col_var, col_byte_stream, pos_arg, window_func_context)};
   }
   const auto fixed_length_column_lv =
       codegenFixedLengthColVar(col_var, col_byte_stream, pos_arg);
@@ -236,9 +237,11 @@ llvm::Value* CodeGenerator::codegenWindowPosition(
 
 // Generate code for fixed length column types (number, timestamp or date,
 // dictionary-encoded string)
-llvm::Value* CodeGenerator::codegenFixedLengthColVar(const Analyzer::ColumnVar* col_var,
-                                                     llvm::Value* col_byte_stream,
-                                                     llvm::Value* pos_arg) {
+llvm::Value* CodeGenerator::codegenFixedLengthColVar(
+    const Analyzer::ColumnVar* col_var,
+    llvm::Value* col_byte_stream,
+    llvm::Value* pos_arg,
+    const WindowFunctionContext* window_function_context) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto decoder = get_col_decoder(col_var);
   auto dec_val = decoder->codegenDecode(col_byte_stream, pos_arg, cgen_state_->module_);
@@ -254,7 +257,19 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVar(const Analyzer::ColumnVar* 
                                                    : llvm::Instruction::CastOps::Trunc,
         dec_val,
         get_int_type(col_width, cgen_state_->context_));
-    if ((col_ti.get_compression() == kENCODING_FIXED ||
+    bool adjust_fixed_enc_null = true;
+    if (window_function_context &&
+        window_function_context->getWindowFunction()->hasRangeModeFraming()) {
+      // we only need to cast it to 8 byte iff it is encoded type
+      // (i.e., the size of non-encoded timestamp type is 8 byte)
+      const auto order_key_ti =
+          window_function_context->getOrderKeyColumnBufferTypes().front();
+      if (order_key_ti.is_timestamp() && order_key_ti.get_size() == 4) {
+        adjust_fixed_enc_null = false;
+      }
+    }
+    if (adjust_fixed_enc_null &&
+        (col_ti.get_compression() == kENCODING_FIXED ||
          (col_ti.get_compression() == kENCODING_DICT && col_ti.get_size() < 4)) &&
         !col_ti.get_notnull()) {
       dec_val_cast = codgenAdjustFixedEncNull(dec_val_cast, col_ti);
@@ -276,7 +291,8 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVar(const Analyzer::ColumnVar* 
 llvm::Value* CodeGenerator::codegenFixedLengthColVarInWindow(
     const Analyzer::ColumnVar* col_var,
     llvm::Value* col_byte_stream,
-    llvm::Value* pos_arg) {
+    llvm::Value* pos_arg,
+    const WindowFunctionContext* window_function_context) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto orig_bb = cgen_state_->ir_builder_.GetInsertBlock();
   const auto pos_is_valid =
@@ -287,8 +303,8 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVarInWindow(
       cgen_state_->context_, "window.pos_notvalid", cgen_state_->current_func_);
   cgen_state_->ir_builder_.CreateCondBr(pos_is_valid, pos_valid_bb, pos_notvalid_bb);
   cgen_state_->ir_builder_.SetInsertPoint(pos_valid_bb);
-  const auto fixed_length_column_lv =
-      codegenFixedLengthColVar(col_var, col_byte_stream, pos_arg);
+  const auto fixed_length_column_lv = codegenFixedLengthColVar(
+      col_var, col_byte_stream, pos_arg, window_function_context);
   cgen_state_->ir_builder_.CreateBr(pos_notvalid_bb);
   cgen_state_->ir_builder_.SetInsertPoint(pos_notvalid_bb);
   const auto window_func_call_phi =

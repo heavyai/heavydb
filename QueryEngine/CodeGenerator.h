@@ -301,14 +301,18 @@ class CodeGenerator {
                                           const bool update_query_plan,
                                           const CompilationOptions&);
 
-  llvm::Value* codegenFixedLengthColVar(const Analyzer::ColumnVar* col_var,
-                                        llvm::Value* col_byte_stream,
-                                        llvm::Value* pos_arg);
+  llvm::Value* codegenFixedLengthColVar(
+      const Analyzer::ColumnVar* col_var,
+      llvm::Value* col_byte_stream,
+      llvm::Value* pos_arg,
+      const WindowFunctionContext* window_function_context = nullptr);
 
   // Generates code for a fixed length column when a window function is active.
-  llvm::Value* codegenFixedLengthColVarInWindow(const Analyzer::ColumnVar* col_var,
-                                                llvm::Value* col_byte_stream,
-                                                llvm::Value* pos_arg);
+  llvm::Value* codegenFixedLengthColVarInWindow(
+      const Analyzer::ColumnVar* col_var,
+      llvm::Value* col_byte_stream,
+      llvm::Value* pos_arg,
+      const WindowFunctionContext* window_function_context = nullptr);
 
   std::vector<llvm::Value*> codegenVariableLengthStringColVar(
       llvm::Value* col_byte_stream,

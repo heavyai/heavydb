@@ -723,102 +723,67 @@ void WindowFunctionContext::compute(
 IndexPair WindowFunctionContext::computeNullRangeOfSortedPartition(
     SQLTypeInfo order_col_ti,
     size_t partition_idx,
+    const int32_t* original_col_idx_buf,
     const int64_t* ordered_col_idx_buf) {
-  IndexPair null_range;
-  null_range.first = std::numeric_limits<int64_t>::max();
-  null_range.second = std::numeric_limits<int64_t>::min();
+  IndexPair null_range{std::numeric_limits<int64_t>::max(),
+                       std::numeric_limits<int64_t>::min()};
   const auto& collation = window_func_->getCollation().front();
   const auto partition_size = counts()[partition_idx];
   if (partition_size > 0 && (order_col_ti.is_integer() || order_col_ti.is_decimal() ||
                              order_col_ti.is_time() || order_col_ti.is_boolean())) {
-    const auto null_val = inline_int_null_val(order_col_ti);
+    auto find_null_range_int = [&null_range,
+                                &collation,
+                                &original_col_idx_buf,
+                                &ordered_col_idx_buf,
+                                &partition_size](const auto order_col_buf,
+                                                 const auto null_val) {
+      if (collation.nulls_first &&
+          order_col_buf[original_col_idx_buf[ordered_col_idx_buf[0]]] == null_val) {
+        int64_t null_range_max = 1;
+        while (null_range_max < partition_size &&
+               order_col_buf[original_col_idx_buf[ordered_col_idx_buf[null_range_max]]] ==
+                   null_val) {
+          null_range_max++;
+        }
+        null_range.first = 0;
+        null_range.second = null_range_max - 1;
+      } else if (!collation.nulls_first &&
+                 order_col_buf[original_col_idx_buf[ordered_col_idx_buf[partition_size -
+                                                                        1]]] ==
+                     null_val) {
+        int64_t null_range_min = partition_size - 2;
+        while (null_range_min >= 0 &&
+               order_col_buf[original_col_idx_buf[ordered_col_idx_buf[null_range_min]]] ==
+                   null_val) {
+          null_range_min--;
+        }
+        null_range.first = null_range_min + 1;
+        null_range.second = partition_size - 1;
+      }
+    };
     switch (order_col_ti.get_size()) {
       case 8: {
         const auto order_col_buf =
-            reinterpret_cast<const int64_t*>(order_columns_.front()) +
-            offsets()[partition_idx];
-        if (collation.nulls_first && order_col_buf[ordered_col_idx_buf[0]] == null_val) {
-          int64_t null_range_max = 1;
-          while (order_col_buf[null_range_max] == null_val) {
-            null_range_max++;
-          }
-          null_range.first = 0;
-          null_range.second = null_range_max - 1;
-        } else if (!collation.nulls_first &&
-                   order_col_buf[ordered_col_idx_buf[partition_size - 1]] == null_val) {
-          int64_t null_range_min = partition_size - 2;
-          while (order_col_buf[ordered_col_idx_buf[null_range_min]] == null_val) {
-            null_range_min--;
-          }
-          null_range.first = null_range_min + 1;
-          null_range.second = partition_size - 1;
-        }
+            reinterpret_cast<const int64_t*>(order_columns_.front());
+        find_null_range_int(order_col_buf, inline_int_null_value<int64_t>());
         break;
       }
       case 4: {
         const auto order_col_buf =
-            reinterpret_cast<const int32_t*>(order_columns_.front()) +
-            offsets()[partition_idx];
-        if (collation.nulls_first && order_col_buf[ordered_col_idx_buf[0]] == null_val) {
-          int64_t null_range_max = 1;
-          while (order_col_buf[ordered_col_idx_buf[null_range_max]] == null_val) {
-            null_range_max++;
-          }
-          null_range.first = 0;
-          null_range.second = null_range_max - 1;
-        } else if (!collation.nulls_first &&
-                   order_col_buf[ordered_col_idx_buf[partition_size - 1]] == null_val) {
-          int64_t null_range_min = partition_size - 2;
-          while (order_col_buf[ordered_col_idx_buf[null_range_min]] == null_val) {
-            null_range_min--;
-          }
-          null_range.first = null_range_min + 1;
-          null_range.second = partition_size - 1;
-        }
+            reinterpret_cast<const int32_t*>(order_columns_.front());
+        find_null_range_int(order_col_buf, inline_int_null_value<int32_t>());
         break;
       }
       case 2: {
         const auto order_col_buf =
-            reinterpret_cast<const int16_t*>(order_columns_.front()) +
-            offsets()[partition_idx];
-        if (collation.nulls_first && order_col_buf[ordered_col_idx_buf[0]] == null_val) {
-          int64_t null_range_max = 1;
-          while (order_col_buf[ordered_col_idx_buf[null_range_max]] == null_val) {
-            null_range_max++;
-          }
-          null_range.first = 0;
-          null_range.second = null_range_max - 1;
-        } else if (!collation.nulls_first &&
-                   order_col_buf[ordered_col_idx_buf[partition_size - 1]] == null_val) {
-          int64_t null_range_min = partition_size - 2;
-          while (order_col_buf[ordered_col_idx_buf[null_range_min]] == null_val) {
-            null_range_min--;
-          }
-          null_range.first = null_range_min + 1;
-          null_range.second = partition_size - 1;
-        }
+            reinterpret_cast<const int16_t*>(order_columns_.front());
+        find_null_range_int(order_col_buf, inline_int_null_value<int16_t>());
         break;
       }
       case 1: {
         const auto order_col_buf =
-            reinterpret_cast<const int8_t*>(order_columns_.front()) +
-            offsets()[partition_idx];
-        if (collation.nulls_first && order_col_buf[ordered_col_idx_buf[0]] == null_val) {
-          int64_t null_range_max = 1;
-          while (order_col_buf[ordered_col_idx_buf[null_range_max]] == null_val) {
-            null_range_max++;
-          }
-          null_range.first = 0;
-          null_range.second = null_range_max - 1;
-        } else if (!collation.nulls_first &&
-                   order_col_buf[ordered_col_idx_buf[partition_size - 1]] == null_val) {
-          int64_t null_range_min = partition_size - 2;
-          while (order_col_buf[ordered_col_idx_buf[null_range_min]] == null_val) {
-            null_range_min--;
-          }
-          null_range.first = null_range_min + 1;
-          null_range.second = partition_size - 1;
-        }
+            reinterpret_cast<const int8_t*>(order_columns_.front());
+        find_null_range_int(order_col_buf, inline_int_null_value<int8_t>());
         break;
       }
       default: {
@@ -831,28 +796,25 @@ IndexPair WindowFunctionContext::computeNullRangeOfSortedPartition(
         null_val_bit_pattern(order_col_ti, order_col_ti.get_type() == kFLOAT);
     switch (order_col_ti.get_type()) {
       case kFLOAT: {
-        const auto order_col_buf =
-            reinterpret_cast<const float*>(order_columns_.front()) +
-            offsets()[partition_idx];
-        if (collation.nulls_first &&
-            *reinterpret_cast<const int32_t*>(may_alias_ptr(
-                &order_col_buf[ordered_col_idx_buf[0]])) == null_bit_pattern) {
+        const auto order_col_buf = reinterpret_cast<const float*>(order_columns_.front());
+        auto check_null_val = [&null_bit_pattern,
+                               &order_col_buf,
+                               &original_col_idx_buf,
+                               &ordered_col_idx_buf](size_t idx) {
+          return *reinterpret_cast<const int32_t*>(may_alias_ptr(
+                     &order_col_buf[original_col_idx_buf[ordered_col_idx_buf[idx]]])) ==
+                 null_bit_pattern;
+        };
+        if (collation.nulls_first && check_null_val(0)) {
           int64_t null_range_max = 1;
-          while (*reinterpret_cast<const int32_t*>(may_alias_ptr(
-                     &order_col_buf[ordered_col_idx_buf[null_range_max]])) ==
-                 null_bit_pattern) {
+          while (null_range_max < partition_size && check_null_val(null_range_max)) {
             null_range_max++;
           }
           null_range.first = 0;
           null_range.second = null_range_max - 1;
-        } else if (!collation.nulls_first &&
-                   *reinterpret_cast<const int32_t*>(may_alias_ptr(
-                       &order_col_buf[ordered_col_idx_buf[partition_size - 1]])) ==
-                       null_bit_pattern) {
+        } else if (!collation.nulls_first && check_null_val(partition_size - 1)) {
           int64_t null_range_min = partition_size - 2;
-          while (*reinterpret_cast<const int32_t*>(may_alias_ptr(
-                     &order_col_buf[ordered_col_idx_buf[null_range_min]])) ==
-                 null_bit_pattern) {
+          while (null_range_min >= 0 && check_null_val(null_range_min)) {
             null_range_min--;
           }
           null_range.first = null_range_min + 1;
@@ -862,27 +824,25 @@ IndexPair WindowFunctionContext::computeNullRangeOfSortedPartition(
       }
       case kDOUBLE: {
         const auto order_col_buf =
-            reinterpret_cast<const double*>(order_columns_.front()) +
-            offsets()[partition_idx];
-        if (collation.nulls_first &&
-            *reinterpret_cast<const int64_t*>(may_alias_ptr(
-                &order_col_buf[ordered_col_idx_buf[0]])) == null_bit_pattern) {
+            reinterpret_cast<const double*>(order_columns_.front());
+        auto check_null_val = [&null_bit_pattern,
+                               &order_col_buf,
+                               &original_col_idx_buf,
+                               &ordered_col_idx_buf](size_t idx) {
+          return *reinterpret_cast<const int64_t*>(may_alias_ptr(
+                     &order_col_buf[original_col_idx_buf[ordered_col_idx_buf[idx]]])) ==
+                 null_bit_pattern;
+        };
+        if (collation.nulls_first && check_null_val(0)) {
           int64_t null_range_max = 1;
-          while (*reinterpret_cast<const int64_t*>(may_alias_ptr(
-                     &order_col_buf[ordered_col_idx_buf[null_range_max]])) ==
-                 null_bit_pattern) {
+          while (null_range_max < partition_size && check_null_val(null_range_max)) {
             null_range_max++;
           }
           null_range.first = 0;
           null_range.second = null_range_max - 1;
-        } else if (!collation.nulls_first &&
-                   *reinterpret_cast<const int64_t*>(may_alias_ptr(
-                       &order_col_buf[ordered_col_idx_buf[partition_size - 1]])) ==
-                       null_bit_pattern) {
+        } else if (!collation.nulls_first && check_null_val(partition_size - 1)) {
           int64_t null_range_min = partition_size - 2;
-          while (*reinterpret_cast<const int64_t*>(may_alias_ptr(
-                     &order_col_buf[ordered_col_idx_buf[null_range_min]])) ==
-                 null_bit_pattern) {
+          while (null_range_min >= 0 && check_null_val(null_range_min)) {
             null_range_min--;
           }
           null_range.first = null_range_min + 1;
@@ -1295,15 +1255,18 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
   const int64_t* ordered_rowid_buf_for_partition =
       ordered_rowid_buf + offsets()[partition_idx];
   if (partition_size > 0) {
-    VLOG(2) << "Build Aggregation Tree For Partition-" << ::toString(partition_idx)
-            << " (# elems: " << ::toString(partition_size) << ")";
     // compute null range first
     order_col_null_range = computeNullRangeOfSortedPartition(
         window_func_->getOrderKeys().front()->get_type_info(),
         partition_idx,
+        original_rowid_buf,
         ordered_rowid_buf_for_partition);
     aggregate_tree_null_start_pos_[partition_idx] = order_col_null_range.first;
     aggregate_tree_null_end_pos_[partition_idx] = order_col_null_range.second + 1;
+    VLOG(2) << "Build Aggregation Tree For Partition-" << ::toString(partition_idx)
+            << " (# elems: " << ::toString(partition_size)
+            << ", null_range: " << order_col_null_range.first << " ~ "
+            << order_col_null_range.second << ")";
     switch (type) {
       case kTINYINT: {
         const auto segment_tree = std::make_shared<SegmentTree<int8_t, int64_t>>(

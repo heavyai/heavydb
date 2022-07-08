@@ -479,13 +479,15 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1,
   std::string timeinterval_op_error{
       "Operator type not supported for time interval arithmetic: "};
   if (type1.is_timeinterval()) {
-    if (!type2.is_integer()) {
+    if (!type2.is_number()) {
+      // allow `number` types to interpret millisecond / microsecond / nanosecond b/c it
+      // may require double and decimal types to represent their time value correctly
       throw std::runtime_error(timeinterval_op_error + type2.get_type_name());
     }
     return type1;
   }
   if (type2.is_timeinterval()) {
-    if (!type1.is_integer()) {
+    if (!type1.is_number()) {
       throw std::runtime_error(timeinterval_op_error + type1.get_type_name());
     }
     return type2;

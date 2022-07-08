@@ -315,7 +315,13 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
     case kDOUBLE: {
       Datum d;
       d.doubleval = rex_literal->getVal<double>();
-      auto lit_expr = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
+      auto lit_expr =
+          makeExpr<Analyzer::Constant>(SQLTypeInfo(rex_literal->getType(),
+                                                   rex_literal->getPrecision(),
+                                                   rex_literal->getScale(),
+                                                   false),
+                                       false,
+                                       d);
       return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
     }
     case kINTERVAL_DAY_TIME:
@@ -1889,6 +1895,47 @@ std::vector<Analyzer::OrderEntry> translate_collation(
   }
   return collation;
 }
+
+size_t determineTimeValMultiplierForTimeType(const SQLTypes& window_frame_bound_type,
+                                             const Analyzer::Constant* const_expr) {
+  const auto time_unit_val = const_expr->get_constval().bigintval;
+  if (window_frame_bound_type == kINTERVAL_DAY_TIME) {
+    if (time_unit_val == kMilliSecsPerSec) {
+      return 1;
+    } else if (time_unit_val == kMilliSecsPerMin) {
+      return kSecsPerMin;
+    } else if (time_unit_val == kMilliSecsPerHour) {
+      return kSecsPerHour;
+    }
+  }
+  CHECK(false);
+  return kUNKNOWN_FIELD;
+}
+
+ExtractField determineTimeUnit(const SQLTypes& window_frame_bound_type,
+                               const Analyzer::Constant* const_expr) {
+  const auto time_unit_val = const_expr->get_constval().bigintval;
+  if (window_frame_bound_type == kINTERVAL_DAY_TIME) {
+    if (time_unit_val == kMilliSecsPerSec) {
+      return kSECOND;
+    } else if (time_unit_val == kMilliSecsPerMin) {
+      return kMINUTE;
+    } else if (time_unit_val == kMilliSecsPerHour) {
+      return kHOUR;
+    } else if (time_unit_val == kMilliSecsPerDay) {
+      return kDAY;
+    }
+  } else {
+    CHECK(window_frame_bound_type == kINTERVAL_YEAR_MONTH);
+    if (time_unit_val == 1) {
+      return kMONTH;
+    } else if (time_unit_val == 12) {
+      return kYEAR;
+    }
+  }
+  CHECK(false);
+  return kUNKNOWN_FIELD;
+}
 }  // namespace
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
@@ -1989,33 +2036,57 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
     }
     // todo (yoonmin) : support window framing based on numeric, date and time type
     auto order_key_expr = order_keys.front();
-    auto is_negative_framing_bound = [&](const SQLTypes t, const Datum& d) {
-      switch (t) {
-        case kTINYINT: {
-          return d.tinyintval < 0;
-        }
-        case kSMALLINT: {
-          return d.smallintval < 0;
-        }
-        case kINT: {
-          return d.intval < 0;
-        }
-        case kBIGINT: {
-          return d.bigintval < 0;
-        }
-        default: {
-          throw std::runtime_error(
-              "We currently only support integer-type literal expression as a window "
-              "frame "
-              "bound "
-              "expression");
-          break;
-        }
-      }
-    };
+    auto is_negative_framing_bound =
+        [&](const SQLTypes t, const Datum& d, bool is_time_unit = false) {
+          switch (t) {
+            case kTINYINT: {
+              return d.tinyintval < 0;
+            }
+            case kSMALLINT: {
+              return d.smallintval < 0;
+            }
+            case kINT: {
+              return d.intval < 0;
+            }
+            case kDOUBLE: {
+              // the only case that double type is used is for handling time interval
+              // i.e., represent tiny time units like nanosecond and microsecond as the
+              // equivalent time value with SECOND time unit
+              CHECK(is_time_unit);
+              return d.doubleval < 0;
+            }
+            case kDECIMAL:
+            case kNUMERIC:
+            case kBIGINT: {
+              return d.bigintval < 0;
+            }
+            default: {
+              throw std::runtime_error(
+                  "We currently only support integer-type literal expression as a window "
+                  "frame "
+                  "bound "
+                  "expression");
+              break;
+            }
+          }
+        };
 
     auto translate_frame_bound_expr = [&](const RexScalar* bound_expr) {
       std::shared_ptr<Analyzer::Expr> translated_expr;
+      const auto rex_oper = dynamic_cast<const RexOperator*>(bound_expr);
+      if (rex_oper && rex_oper->getType().is_timeinterval()) {
+        translated_expr = translateScalarRex(rex_oper);
+        const auto bin_oper =
+            dynamic_cast<const Analyzer::BinOper*>(translated_expr.get());
+        auto time_literal_expr =
+            dynamic_cast<const Analyzer::Constant*>(bin_oper->get_left_operand());
+        CHECK(time_literal_expr);
+        negative_constant =
+            is_negative_framing_bound(time_literal_expr->get_type_info().get_type(),
+                                      time_literal_expr->get_constval(),
+                                      true);
+        return std::make_pair(false, translated_expr);
+      }
       if (dynamic_cast<const RexLiteral*>(bound_expr)) {
         translated_expr = translateScalarRex(bound_expr);
         if (auto literal_expr =
@@ -2051,6 +2122,28 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
       throw std::runtime_error(
           "A constant expression for window framing should have nonnegative value.");
     }
+
+    auto handle_time_interval_expr_if_necessary = [&](const Analyzer::Expr* bound_expr,
+                                                      SqlWindowFrameBoundType bound_type,
+                                                      bool for_start_bound) {
+      if (bound_expr && bound_expr->get_type_info().is_timeinterval()) {
+        const auto bound_bin_oper = dynamic_cast<const Analyzer::BinOper*>(bound_expr);
+        CHECK(bound_bin_oper->get_optype() == kMULTIPLY);
+        auto translated_expr = translateIntervalExprForWindowFraming(
+            order_key_expr,
+            bound_type == SqlWindowFrameBoundType::EXPR_PRECEDING,
+            bound_bin_oper);
+        if (for_start_bound) {
+          frame_start_bound_expr = translated_expr;
+        } else {
+          frame_end_bound_expr = translated_expr;
+        }
+      }
+    };
+    handle_time_interval_expr_if_necessary(
+        frame_start_bound_expr.get(), frame_start_bound_type, true);
+    handle_time_interval_expr_if_necessary(
+        frame_end_bound_expr.get(), frame_end_bound_type, false);
   }
 
   if (frame_start_bound.following) {
@@ -2086,7 +2179,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
           colvar_set(Analyzer::ColumnVar::colvar_comp);
       order_keys.front()->collect_column_var(colvar_set, false);
       for (auto cv : colvar_set) {
-        if (!(cv->get_type_info().is_integer() || cv->get_type_info().is_fp())) {
+        if (!(cv->get_type_info().is_integer() || cv->get_type_info().is_fp() ||
+              cv->get_type_info().is_time())) {
           has_framing_clause = false;
           VLOG(1) << "Range framing mode with non-number type ordering column is not "
                      "supported yet, skip window framing";
@@ -2110,6 +2204,250 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
       makeExpr<Analyzer::WindowFrame>(frame_start_bound_type, frame_start_bound_expr),
       makeExpr<Analyzer::WindowFrame>(frame_end_bound_type, frame_end_bound_expr),
       translate_collation(rex_window_function->getCollation()));
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateIntervalExprForWindowFraming(
+    std::shared_ptr<Analyzer::Expr> order_key,
+    bool for_preceding_bound,
+    const Analyzer::BinOper* frame_bound_expr) const {
+  // translate time interval expression and prepare appropriate frame bound expression:
+  // a) manually compute time unit datum: time type
+  // b) use dateadd expression: date and timestamp
+  const auto order_key_ti = order_key->get_type_info();
+  const auto frame_bound_ti = frame_bound_expr->get_type_info();
+  const auto time_val_expr =
+      dynamic_cast<const Analyzer::Constant*>(frame_bound_expr->get_left_operand());
+  const auto time_unit_val_expr =
+      dynamic_cast<const Analyzer::Constant*>(frame_bound_expr->get_right_operand());
+  ExtractField time_unit =
+      determineTimeUnit(frame_bound_ti.get_type(), time_unit_val_expr);
+  bool invalid_time_unit_type = false;
+  bool invalid_frame_bound_expr_type = false;
+  Datum d;
+  auto prepare_time_value_datum = [&d,
+                                   &invalid_frame_bound_expr_type,
+                                   &time_val_expr,
+                                   &for_preceding_bound](bool is_timestamp_second) {
+    // currently, Calcite only accepts interval with second, so to represent
+    // smaller time units like  millisecond, we have to use decimal point like
+    // INTERVAL 0.003 SECOND (for millisecond)
+    // thus, depending on what time unit we want to represent, Calcite analyzes
+    // the time value to one of following two types: integer and decimal (and
+    // numeric) types
+    switch (time_val_expr->get_type_info().get_type()) {
+      case kTINYINT: {
+        d.bigintval = time_val_expr->get_constval().tinyintval;
+        break;
+      }
+      case kSMALLINT: {
+        d.bigintval = time_val_expr->get_constval().smallintval;
+        break;
+      }
+      case kINT: {
+        d.bigintval = time_val_expr->get_constval().intval;
+        break;
+      }
+      case kBIGINT: {
+        d.bigintval = time_val_expr->get_constval().bigintval;
+        break;
+      }
+      case kDECIMAL:
+      case kNUMERIC: {
+        if (!is_timestamp_second) {
+          // date and time type only use integer type as their time value
+          invalid_frame_bound_expr_type = true;
+          break;
+        }
+        d.bigintval = time_val_expr->get_constval().bigintval;
+        break;
+      }
+      case kDOUBLE: {
+        if (!is_timestamp_second) {
+          // date and time type only use integer type as their time value
+          invalid_frame_bound_expr_type = true;
+          break;
+        }
+        d.bigintval = time_val_expr->get_constval().doubleval *
+                      pow(10, time_val_expr->get_type_info().get_scale());
+        break;
+      }
+      default: {
+        invalid_frame_bound_expr_type = true;
+        break;
+      }
+    }
+    if (for_preceding_bound) {
+      d.bigintval *= -1;
+    }
+  };
+
+  switch (order_key_ti.get_type()) {
+    case kTIME: {
+      if (time_val_expr->get_type_info().is_integer()) {
+        if (time_unit == kSECOND || time_unit == kMINUTE || time_unit == kHOUR) {
+          const auto time_multiplier = determineTimeValMultiplierForTimeType(
+              frame_bound_ti.get_type(), time_unit_val_expr);
+          switch (time_val_expr->get_type_info().get_type()) {
+            case kTINYINT: {
+              d.bigintval = time_val_expr->get_constval().tinyintval * time_multiplier;
+              break;
+            }
+            case kSMALLINT: {
+              d.bigintval = time_val_expr->get_constval().smallintval * time_multiplier;
+              break;
+            }
+            case kINT: {
+              d.bigintval = time_val_expr->get_constval().intval * time_multiplier;
+              break;
+            }
+            case kBIGINT: {
+              d.bigintval = time_val_expr->get_constval().bigintval * time_multiplier;
+              break;
+            }
+            default: {
+              UNREACHABLE();
+              break;
+            }
+          }
+        } else {
+          invalid_frame_bound_expr_type = true;
+        }
+      } else {
+        invalid_time_unit_type = true;
+      }
+      if (invalid_frame_bound_expr_type) {
+        throw std::runtime_error(
+            "Invalid time unit is used to define window frame bound expression for " +
+            order_key_ti.get_type_name() + " type");
+      } else if (invalid_time_unit_type) {
+        throw std::runtime_error(
+            "Window frame bound expression has an invalid type for " +
+            order_key_ti.get_type_name() + " type");
+      }
+      return std::make_shared<Analyzer::Constant>(kBIGINT, false, d);
+    }
+    case kDATE: {
+      DateaddField daField;
+      if (time_val_expr->get_type_info().is_integer()) {
+        switch (time_unit) {
+          case kDAY: {
+            daField = to_dateadd_field("day");
+            break;
+          }
+          case kMONTH: {
+            daField = to_dateadd_field("month");
+            break;
+          }
+          case kYEAR: {
+            daField = to_dateadd_field("year");
+            break;
+          }
+          default: {
+            invalid_frame_bound_expr_type = true;
+            break;
+          }
+        }
+      } else {
+        invalid_time_unit_type = true;
+      }
+      if (invalid_frame_bound_expr_type) {
+        throw std::runtime_error(
+            "Invalid time unit is used to define window frame bound expression for " +
+            order_key_ti.get_type_name() + " type");
+      } else if (invalid_time_unit_type) {
+        throw std::runtime_error(
+            "Window frame bound expression has an invalid type for " +
+            order_key_ti.get_type_name() + " type");
+      }
+      prepare_time_value_datum(false);
+      const auto cast_number_units = makeExpr<Analyzer::Constant>(kBIGINT, false, d);
+      const int dim = order_key_ti.get_dimension();
+      return makeExpr<Analyzer::DateaddExpr>(
+          SQLTypeInfo(kTIMESTAMP, dim, 0, false), daField, cast_number_units, order_key);
+    }
+    case kTIMESTAMP: {
+      DateaddField daField;
+      switch (time_unit) {
+        case kSECOND: {
+          // classify
+          switch (time_val_expr->get_type_info().get_scale()) {
+            case 0: {
+              daField = to_dateadd_field("second");
+              break;
+            }
+            case 3: {
+              daField = to_dateadd_field("millisecond");
+              break;
+            }
+            case 6: {
+              daField = to_dateadd_field("microsecond");
+              break;
+            }
+            case 9: {
+              daField = to_dateadd_field("nanosecond");
+              break;
+            }
+            default:
+              UNREACHABLE();
+              break;
+          }
+          prepare_time_value_datum(true);
+          break;
+        }
+        case kMINUTE: {
+          daField = to_dateadd_field("minute");
+          prepare_time_value_datum(false);
+          break;
+        }
+        case kHOUR: {
+          daField = to_dateadd_field("hour");
+          prepare_time_value_datum(false);
+          break;
+        }
+        case kDAY: {
+          daField = to_dateadd_field("day");
+          prepare_time_value_datum(false);
+          break;
+        }
+        case kMONTH: {
+          daField = to_dateadd_field("month");
+          prepare_time_value_datum(false);
+          break;
+        }
+        case kYEAR: {
+          daField = to_dateadd_field("year");
+          prepare_time_value_datum(false);
+          break;
+        }
+        default: {
+          invalid_time_unit_type = true;
+          break;
+        }
+      }
+      if (!invalid_time_unit_type) {
+        const auto cast_number_units = makeExpr<Analyzer::Constant>(kBIGINT, false, d);
+        const int dim = order_key_ti.get_dimension();
+        return makeExpr<Analyzer::DateaddExpr>(SQLTypeInfo(kTIMESTAMP, dim, 0, false),
+                                               daField,
+                                               cast_number_units,
+                                               order_key);
+      }
+      return nullptr;
+    }
+    default: {
+      UNREACHABLE();
+      break;
+    }
+  }
+  if (invalid_frame_bound_expr_type) {
+    throw std::runtime_error(
+        "Invalid time unit is used to define window frame bound expression for " +
+        order_key_ti.get_type_name() + " type");
+  } else if (invalid_time_unit_type) {
+    throw std::runtime_error("Window frame bound expression has an invalid type for " +
+                             order_key_ti.get_type_name() + " type");
+  }
+  return nullptr;
 }
 
 Analyzer::ExpressionPtrVector RelAlgTranslator::translateFunctionArgs(
