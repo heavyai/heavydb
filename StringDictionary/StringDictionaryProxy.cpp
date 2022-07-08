@@ -135,6 +135,31 @@ int32_t StringDictionaryProxy::getIdOfStringNoGeneration(const std::string& str)
                                            : StringDictionary::INVALID_STR_ID;
 }
 
+extern "C" DEVICE RUNTIME_EXPORT const char* StringDictionaryProxy_getStringBytes(
+    int8_t* proxy_ptr,
+    int32_t string_id) {
+  CHECK(proxy_ptr != nullptr);
+  auto proxy = reinterpret_cast<StringDictionaryProxy*>(proxy_ptr);
+  auto [c_str, len] = proxy->getStringBytes(string_id);
+  return c_str;
+}
+
+extern "C" DEVICE RUNTIME_EXPORT size_t
+StringDictionaryProxy_getStringLength(int8_t* proxy_ptr, int32_t string_id) {
+  CHECK(proxy_ptr != nullptr);
+  auto proxy = reinterpret_cast<StringDictionaryProxy*>(proxy_ptr);
+  auto [c_str, len] = proxy->getStringBytes(string_id);
+  return len;
+}
+
+extern "C" DEVICE RUNTIME_EXPORT int32_t
+StringDictionaryProxy_getStringId(int8_t* proxy_ptr, char* c_str_ptr) {
+  CHECK(proxy_ptr != nullptr);
+  auto proxy = reinterpret_cast<StringDictionaryProxy*>(proxy_ptr);
+  std::string str(c_str_ptr);
+  return proxy->getOrAddTransient(str);
+}
+
 std::string StringDictionaryProxy::getString(int32_t string_id) const {
   if (inline_int_null_value<int32_t>() == string_id) {
     return "";
