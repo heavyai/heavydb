@@ -313,6 +313,11 @@ TEST(StringDictionary, BuildTranslationMap) {
   }
 }
 
+NEVER_INLINE
+int32_t tsan_safe_getOrAddTransient(StringDictionaryProxy& sdp, std::string const& str) {
+  return sdp.getOrAddTransient(str);
+}
+
 TEST(StringDictionaryProxy, GetOrAddTransient) {
   const DictRef dict_ref(-1, 1);
   std::shared_ptr<StringDictionary> string_dict = std::make_shared<StringDictionary>(
@@ -351,7 +356,7 @@ TEST(StringDictionaryProxy, GetOrAddTransient) {
     }
 
     for (size_t i = 0; i < g_op_count; ++i) {
-      string_ids[i] = string_dict_proxy.getOrAddTransient(strings[i]);
+      string_ids[i] = tsan_safe_getOrAddTransient(string_dict_proxy, strings[i]);
     }
 
     for (int i = 0; i < g_op_count; ++i) {
@@ -377,7 +382,7 @@ TEST(StringDictionaryProxy, GetOrAddTransient) {
     }
 
     for (size_t i = 0; i < g_op_count; ++i) {
-      string_ids[i] = string_dict_proxy.getOrAddTransient(strings[i]);
+      string_ids[i] = tsan_safe_getOrAddTransient(string_dict_proxy, strings[i]);
     }
 
     for (int i = 0; i < g_op_count; ++i) {
@@ -569,12 +574,12 @@ TEST(StringDictionaryProxy, BuildIntersectionTranslationMapToOtherProxy) {
     for (int i = proxy_transient_start;
          i < proxy_transient_start + num_source_proxy_transient_ids;
          ++i) {
-      source_string_dict_proxy->getOrAddTransient(std::to_string(i));
+      tsan_safe_getOrAddTransient(*source_string_dict_proxy, std::to_string(i));
     }
     for (int i = proxy_transient_start;
          i < proxy_transient_start + num_dest_proxy_transient_ids;
          ++i) {
-      dest_string_dict_proxy->getOrAddTransient(std::to_string(i));
+      tsan_safe_getOrAddTransient(*dest_string_dict_proxy, std::to_string(i));
     }
 
     const auto str_proxy_translation_map =
@@ -754,12 +759,23 @@ void verify_translation(const StringDictionaryProxy& source_proxy,
   }
 }
 
+NEVER_INLINE
+std::shared_ptr<StringDictionary> tsan_safe_make_shared_StringDictionary(
+    DictRef const& dict_ref,
+    std::string const& path,
+    bool const is_temp,
+    bool const recover,
+    bool const materialize_hashes) {
+  return std::make_shared<StringDictionary>(
+      dict_ref, path, is_temp, recover, materialize_hashes);
+}
+
 TEST(StringDictionaryProxy, BuildUnionTranslationMapToPartialOverlapProxy) {
   const DictRef dict_ref1(-1, 1);
   const DictRef dict_ref2(-1, 2);
-  std::shared_ptr<StringDictionary> source_sd = std::make_shared<StringDictionary>(
+  std::shared_ptr<StringDictionary> source_sd = tsan_safe_make_shared_StringDictionary(
       dict_ref1, BASE_PATH1, false, false, g_cache_string_hash);
-  std::shared_ptr<StringDictionary> dest_sd = std::make_shared<StringDictionary>(
+  std::shared_ptr<StringDictionary> dest_sd = tsan_safe_make_shared_StringDictionary(
       dict_ref2, BASE_PATH2, false, false, g_cache_string_hash);
 
   constexpr size_t num_source_persisted_entries{10};
@@ -835,7 +851,7 @@ TEST(StringDictionary, TransientUnion) {
 #endif
 
   dict_ref_t const dict_ref_lhs(100, 10);
-  auto sd_lhs = std::make_shared<StringDictionary>(
+  auto sd_lhs = tsan_safe_make_shared_StringDictionary(
       dict_ref_lhs, sd_lhs_path, false, true, g_cache_string_hash);
   sd_lhs->getOrAdd("a");  // id = 0
   sd_lhs->getOrAdd("b");  // id = 1
@@ -844,7 +860,7 @@ TEST(StringDictionary, TransientUnion) {
   sd_lhs->getOrAdd("e");  // id = 4
 
   dict_ref_t const dict_ref_rhs(100, 20);
-  auto sd_rhs = std::make_shared<StringDictionary>(
+  auto sd_rhs = tsan_safe_make_shared_StringDictionary(
       dict_ref_rhs, sd_rhs_path, false, true, g_cache_string_hash);
   sd_rhs->getOrAdd("c");  // id = 0
   sd_rhs->getOrAdd("d");  // id = 1
@@ -858,11 +874,11 @@ TEST(StringDictionary, TransientUnion) {
     // TODO cleanup redundancy of setting SD id here.
     StringDictionaryProxy sdp_lhs(
         sd_lhs, dict_ref_lhs.dictId, sd_lhs->storageEntryCount());
-    sdp_lhs.getOrAddTransient("t0");  // id = -2
+    tsan_safe_getOrAddTransient(sdp_lhs, "t0");  // id = -2
     StringDictionaryProxy sdp_rhs(
         sd_rhs, dict_ref_rhs.dictId, sd_rhs->storageEntryCount());
-    sdp_rhs.getOrAddTransient("t0");  // id = -2
-    sdp_rhs.getOrAddTransient("t1");  // id = -3
+    tsan_safe_getOrAddTransient(sdp_rhs, "t0");  // id = -2
+    tsan_safe_getOrAddTransient(sdp_rhs, "t1");  // id = -3
     auto const id_map = sdp_lhs.transientUnion(sdp_rhs);
     // Expected output:
     // source_domain_min_ = -3 = -1 - number of transients in sdp_rhs
@@ -896,11 +912,11 @@ TEST(StringDictionary, TransientUnion) {
   {  // Swap sd_lhs <-> sd_rhs
     StringDictionaryProxy sdp_lhs(
         sd_rhs, dict_ref_lhs.dictId, sd_rhs->storageEntryCount());
-    sdp_lhs.getOrAddTransient("t0");
+    tsan_safe_getOrAddTransient(sdp_lhs, "t0");
     StringDictionaryProxy sdp_rhs(
         sd_lhs, dict_ref_rhs.dictId, sd_lhs->storageEntryCount());
-    sdp_rhs.getOrAddTransient("t0");
-    sdp_rhs.getOrAddTransient("t1");
+    tsan_safe_getOrAddTransient(sdp_rhs, "t0");
+    tsan_safe_getOrAddTransient(sdp_rhs, "t1");
     auto const id_map = sdp_lhs.transientUnion(sdp_rhs);
     // Expected output:
     // source_domain_min_ = -3 = -1 - number of transients in sdp_rhs
