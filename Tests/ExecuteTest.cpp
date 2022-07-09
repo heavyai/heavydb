@@ -22794,9 +22794,9 @@ TEST(Select, WindowFunctionFramingWithDateAndTimeColumn) {
     }
   };
   std::string columns_definition{
-      "(rid INT, pc INT, ti TIME, tie TIME ENCODING FIXED(32), d32 DATE ENCODING "
-      "DAYS(32), d16 DATE ENCODING DAYS(16), tm0 TIMESTAMP(0), tm0e TIMESTAMP ENCODING "
-      "FIXED(32), tm3 TIMESTAMP(3), tm6 TIMESTAMP(6), tm9 TIMESTAMP(9), tm3_ms "
+      "(rid INT, pc INT, ti TIME, tie TIME, d32 DATE ENCODING "
+      "DAYS(32), d16 DATE ENCODING DAYS(16), tm0 TIMESTAMP(0), tm0e TIMESTAMP, tm3 "
+      "TIMESTAMP(3), tm6 TIMESTAMP(6), tm9 TIMESTAMP(9), tm3_ms "
       "TIMESTAMP(3), tm6_us TIMESTAMP(6), tm6_ms TIMESTAMP(6), tm9_ns TIMESTAMP(9), "
       "tm9_us TIMESTAMP(9), tm9_ms TIMESTAMP(9))"};
   auto gen_table_creation_ddl = [&columns_definition](const std::string& table_name) {

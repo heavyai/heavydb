@@ -2034,8 +2034,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
       // computation logic returns exactly the same result)
       has_framing_clause = false;
     }
-    // todo (yoonmin) : support window framing based on numeric, date and time type
     auto order_key_expr = order_keys.front();
+    const auto order_key_ti = order_key_expr->get_type_info();
+    if ((order_key_ti.get_type() == kTIME || order_key_ti.get_type() == kTIMESTAMP) &&
+        order_key_ti.get_compression() == kENCODING_FIXED) {
+      throw std::runtime_error(
+          "Window framing with ordering column having time and timestamp types with "
+          "fixed encoding is not supported yet");
+    }
     auto is_negative_framing_bound =
         [&](const SQLTypes t, const Datum& d, bool is_time_unit = false) {
           switch (t) {

@@ -85,12 +85,11 @@ llvm::ConstantInt* CgenState::inlineIntNull(const SQLTypeInfo& type_info) {
     case kBIGINT:
       return llInt(static_cast<int64_t>(inline_int_null_val(type_info)));
     case kDATE:
-      return llInt(inline_int_null_val(type_info));
     case kTIME:
     case kTIMESTAMP:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
-      return llInt(inline_fixed_encoding_null_val(type_info));
+      return llInt(inline_int_null_val(type_info));
     case kDECIMAL:
     case kNUMERIC:
       return llInt(inline_int_null_val(type_info));
