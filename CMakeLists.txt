@@ -1045,12 +1045,6 @@ configure_file(
   )
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/MapDRelease.h)
-# required to force regen of heavyai_git_hash.txt, MapDRelease.h
-add_custom_target(rerun_cmake ALL
-  COMMAND cmake .
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-  )
-add_dependencies(heavydb rerun_cmake)
 
 target_link_libraries(heavydb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG})
 
@@ -1289,3 +1283,16 @@ if(DOXYGEN_FOUND)
 
   add_dependencies(sphinx doxygen)
 endif(DOXYGEN_FOUND)
+
+# rerun_cmake: required to force regen of heavyai_git_hash.txt, MapDRelease.h
+add_custom_target(rerun_cmake ALL
+  COMMAND cmake .
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  )
+add_dependencies(heavydb rerun_cmake)
+
+# heavy: build our main executables (the entire bin/ directory)
+list(APPEND HEAVY_TARGETS heavydb initheavy heavysql)
+add_dependencies(initheavy mapd_java_components)
+add_dependencies(heavydb mapd_java_components)
+add_custom_target(heavy ALL DEPENDS ${HEAVY_TARGETS})

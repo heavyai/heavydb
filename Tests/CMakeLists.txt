@@ -409,6 +409,11 @@ endif()
 
 ##########
 
+endif()  # Partition 3
+if(${HEAVYAI_PARTITION} EQUAL 0 OR ${HEAVYAI_PARTITION} EQUAL 4)  # Partition 4
+
+##########
+
 add_executable(OverlapsJoinTest OverlapsJoinTest.cpp)
 target_link_libraries(OverlapsJoinTest ${EXECUTE_TEST_LIBS})
 add_test(OverlapsJoinTest OverlapsJoinTest ${TEST_ARGS})
@@ -443,11 +448,6 @@ add_executable(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest.cpp
 target_link_libraries(ResultSetBaselineRadixSortTest ${EXECUTE_TEST_LIBS})
 add_test(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS ResultSetBaselineRadixSortTest)
-
-##########
-
-endif()  # Partition 3
-if(${HEAVYAI_PARTITION} EQUAL 0 OR ${HEAVYAI_PARTITION} EQUAL 4)  # Partition 4
 
 ##########
 
@@ -696,68 +696,71 @@ add_test(UtilTest UtilTest ${TEST_ARGS})
 
 ##########
 
-list(APPEND SANITY_TESTS ${SANITY_TEST_PROGRAMS})
-set_tests_properties(${SANITY_TESTS} PROPERTIES LABELS "sanity")
+add_custom_target(clean-unit-tests-tmp-dir
+    COMMAND rm -rf ${TEST_BASE_PATH}
+    USES_TERMINAL)
+add_dependencies(clean-all clean-unit-tests-tmp-dir)
 
-add_custom_target(sanity_tests
+add_custom_target(init_test_dir
     COMMAND mkdir -p ${TEST_BASE_PATH}
     COMMAND initheavy -f ${TEST_BASE_PATH} || exit 0
+    USES_TERMINAL)
+
+foreach(PROGRAM ${SANITY_TEST_PROGRAMS} ${INSANITY_TEST_PROGRAMS})
+  add_dependencies(${PROGRAM} init_test_dir)
+endforeach()
+
+list(APPEND SANITY_TESTS ${SANITY_TEST_PROGRAMS})
+set_tests_properties(${SANITY_TESTS} PROPERTIES LABELS "_sanity_")
+
+add_custom_target(sanity_tests
     COMMAND env AWS_REGION=${AWS_REGION}
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                ${CMAKE_CTEST_COMMAND} --verbose --label-regex "^sanity$"
-    DEPENDS ${SANITY_TEST_PROGRAMS}
+                ${CMAKE_CTEST_COMMAND} --verbose --label-regex "_sanity_"
+    DEPENDS init_test_dir ${SANITY_TEST_PROGRAMS}
     USES_TERMINAL)
 
 if(${HEAVYAI_PARTITION} EQUAL 0 OR ${HEAVYAI_PARTITION} EQUAL 1)  # Partition 1
 
 # list(APPEND INSANITY_TESTS ${INSANITY_TEST_PROGRAMS})
-set_tests_properties(${INSANITY_TESTS} PROPERTIES LABELS "insanity")
+set_tests_properties(${INSANITY_TESTS} PROPERTIES LABELS "_insanity_")
 
 add_custom_target(insanity_tests
-    COMMAND mkdir -p ${TEST_BASE_PATH}
-    COMMAND initheavy -f ${TEST_BASE_PATH} || exit 0
     COMMAND env AWS_REGION=${AWS_REGION}
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                ${CMAKE_CTEST_COMMAND} --verbose --label-regex "^insanity$"
-    DEPENDS ${INSANITY_TEST_PROGRAMS}
+                ${CMAKE_CTEST_COMMAND} --verbose --label-regex "\"_sanity_|_insanity_\""
+    DEPENDS init_test_dir ${SANITY_TEST_PROGRAMS} ${INSANITY_TEST_PROGRAMS}
     USES_TERMINAL)
 
 endif()  # Partition 1
 
 add_custom_target(all_tests
-    COMMAND mkdir -p ${TEST_BASE_PATH}
-    COMMAND initheavy -f ${TEST_BASE_PATH}
     COMMAND env AWS_REGION=${AWS_REGION}
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                 ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS ${SANITY_TEST_PROGRAMS} ${INSANITY_TEST_PROGRAMS} UtilTest RunQueryLoop StringDictionaryTest StringTransformTest StoragePerfTest
+    DEPENDS init_test_dir ${SANITY_TEST_PROGRAMS} ${INSANITY_TEST_PROGRAMS} UtilTest RunQueryLoop StringDictionaryTest StringTransformTest StoragePerfTest
     USES_TERMINAL)
 
 add_custom_target(storage_perf_tests
-    COMMAND mkdir -p ${TEST_BASE_PATH}
-    COMMAND initheavy -f ${TEST_BASE_PATH}
     COMMAND ${CMAKE_CTEST_COMMAND} --verbose --tests-regex "\"(StoragePerfTest)\""
-    DEPENDS StoragePerfTest)
+    DEPENDS init_test_dir StoragePerfTest)
 
 add_custom_target(topk_tests
-    COMMAND mkdir -p ${TEST_BASE_PATH}
-    COMMAND initheavy -f ${TEST_BASE_PATH}
     COMMAND ${CMAKE_CTEST_COMMAND} --verbose --tests-regex "\"(TopKTest)\""
-    DEPENDS TopKTest)
+    DEPENDS init_test_dir TopKTest)
 
 if(ENABLE_DBE)
   set(DBE_TEST_PROGRAMS EmbeddedDatabaseTest)
   set_tests_properties(${DBE_TEST_PROGRAMS} PROPERTIES LABELS "embedded")
   add_custom_target(dbe_all_tests
-    COMMAND mkdir -p ${TEST_BASE_PATH}
     COMMAND env AWS_REGION=${AWS_REGION}
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                 ${CMAKE_CTEST_COMMAND} --verbose --label-regex embedded
-    DEPENDS DBEngine ${DBE_TEST_PROGRAMS}
+    DEPENDS init_test_dir DBEngine ${DBE_TEST_PROGRAMS}
     USES_TERMINAL)
   add_dependencies(dbe_all_tests dbe4py-test)
   add_dependencies(all_tests dbe4py-test)
