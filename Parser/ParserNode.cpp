@@ -3706,6 +3706,14 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
         }
       }
 
+      if (target_cd->columnType.is_string() && !source_cd->columnType.is_string()) {
+        throw std::runtime_error("Source '" + source_cd->columnName + " " +
+                                 source_cd->columnType.get_type_name() +
+                                 "' and target '" + target_cd->columnName + " " +
+                                 target_cd->columnType.get_type_name() +
+                                 "' column types do not match.");
+      }
+
       if (source_cd->columnType.is_decimal() ||
           source_cd->columnType.get_elem_type().is_decimal()) {
         SQLTypeInfo sourceType = source_cd->columnType;

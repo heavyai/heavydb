@@ -3701,6 +3701,76 @@ TEST_F(NullTextArrayTest, InsertIntoTableAsSelect) {
   queryAndAssertExpectedResult("null_text_arrays_2");
 }
 
+using ColumnNameAndType = std::pair<std::string, SQLTypeInfo>;
+class ItasStringConversionValidationTest
+    : public DBHandlerTestFixture,
+      public testing::WithParamInterface<ColumnNameAndType> {
+ protected:
+  static void SetUpTestSuite() {
+    DBHandlerTestFixture::SetUpTestSuite();
+    sql("DROP TABLE IF EXISTS non_text_columns;");
+    sql("CREATE TABLE non_text_columns (b BOOLEAN, bint BIGINT, i INTEGER, sint "
+        "SMALLINT, "
+        "tint TINYINT, f FLOAT, d DOUBLE, dc DECIMAL(5, 2), tm TIME, tstamp TIMESTAMP, "
+        "dt DATE, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON);");
+    sql("INSERT INTO non_text_columns VALUES ('TRUE', 400, 300, 200, 100, 10.5, 20.5, "
+        "30.55, '10:10', '2000-05-01 00:40:30', '2000-01-01', 'POINT (0 0)', "
+        "'LINESTRING (2 2,3 3)', 'POLYGON ((1 1,3 1,2 3,1 1))', "
+        "'MULTIPOLYGON (((0 0,1 0,0 1,0 0)))');");
+  }
+
+  static void TearDownTestSuite() {
+    sql("DROP TABLE IF EXISTS non_text_columns;");
+    DBHandlerTestFixture::TearDownTestSuite();
+  }
+
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS single_text_column;");
+    DBHandlerTestFixture::TearDown();
+  }
+};
+
+TEST_P(ItasStringConversionValidationTest, InsertNonTextValue) {
+  sql("CREATE TABLE single_text_column (t TEXT);");
+  const auto [column_name, column_type] = GetParam();
+  queryAndAssertException(
+      "INSERT INTO single_text_column SELECT " + column_name + " FROM non_text_columns;",
+      "Source '" + column_name + " " + column_type.get_type_name() +
+          "' and target 't TEXT' column types do not match.");
+}
+
+namespace {
+SQLTypeInfo get_geo_type(SQLTypes type) {
+  return {type, kENCODING_NONE, 0, kGEOMETRY};
+}
+}  // namespace
+
+INSTANTIATE_TEST_SUITE_P(
+    NonTextColumnTypes,
+    ItasStringConversionValidationTest,
+    ::testing::Values(ColumnNameAndType{"b", {kBOOLEAN}},
+                      ColumnNameAndType{"bint", {kBIGINT}},
+                      ColumnNameAndType{"i", {kINT}},
+                      ColumnNameAndType{"sint", {kSMALLINT}},
+                      ColumnNameAndType{"tint", {kTINYINT}},
+                      ColumnNameAndType{"f", {kFLOAT}},
+                      ColumnNameAndType{"d", {kDOUBLE}},
+                      ColumnNameAndType{"dc", {kDECIMAL, 5, 2}},
+                      ColumnNameAndType{"tm", {kTIME}},
+                      ColumnNameAndType{"tstamp", {kTIMESTAMP}},
+                      ColumnNameAndType{"dt", {kDATE}},
+                      ColumnNameAndType{"p", get_geo_type(kPOINT)},
+                      ColumnNameAndType{"l", get_geo_type(kLINESTRING)},
+                      ColumnNameAndType{"poly", get_geo_type(kPOLYGON)},
+                      ColumnNameAndType{"mpoly", get_geo_type(kMULTIPOLYGON)}),
+    [](const auto& param_info) {
+      // Remove parenthesis and comma from column type name in order to ensure that
+      // parameter name is valid.
+      static std::regex invalid_char_regex{"\\(|,|\\)"};
+      return std::regex_replace(
+          param_info.param.second.get_type_name(), invalid_char_regex, "_");
+    });
+
 int main(int argc, char* argv[]) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
