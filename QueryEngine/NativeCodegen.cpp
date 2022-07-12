@@ -1360,22 +1360,21 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
     }
   }
 
+  // todo: move to backend
   initializeNVPTXBackend();
+
   CodeGenerator::GPUTarget gpu_target{nvptx_target_machine_.get(),
                                       cuda_mgr,
                                       blockSize(),
                                       cgen_state_.get(),
                                       row_func_not_inlined};
+  auto backend = compiler::getBackend(co.device_type, this, is_gpu_smem_used, gpu_target);
   std::shared_ptr<GpuCompilationContext> compilation_context;
 
   try {
-    compilation_context = CodeGenerator::generateNativeGPUCode(this,
-                                                               query_func,
-                                                               multifrag_query_func,
-                                                               live_funcs,
-                                                               is_gpu_smem_used,
-                                                               co,
-                                                               gpu_target);
+    compilation_context = std::dynamic_pointer_cast<GpuCompilationContext>(
+        backend->generateNativeCode(query_func, multifrag_query_func, live_funcs, co));
+
   } catch (CudaMgr_Namespace::CudaErrorException& cuda_error) {
     if (cuda_error.getStatus() == CUDA_ERROR_OUT_OF_MEMORY) {
       // Thrown if memory not able to be allocated on gpu
@@ -1385,13 +1384,10 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
                    << "% of GPU code cache and re-trying.";
       Executor::gpu_code_accessor->evictFractionEntries(
           config_->cache.gpu_fraction_code_cache_to_evict);
-      compilation_context = CodeGenerator::generateNativeGPUCode(this,
-                                                                 query_func,
-                                                                 multifrag_query_func,
-                                                                 live_funcs,
-                                                                 is_gpu_smem_used,
-                                                                 co,
-                                                                 gpu_target);
+
+      compilation_context = std::dynamic_pointer_cast<GpuCompilationContext>(
+          backend->generateNativeCode(query_func, multifrag_query_func, live_funcs, co));
+
     } else {
       throw;
     }
