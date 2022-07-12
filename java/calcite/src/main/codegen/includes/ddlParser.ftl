@@ -74,10 +74,10 @@ SqlNodeList idList() :
 }
 {
     { s = span(); }
-    id = CompoundIdentifier() { list.add(id); }
+    id = HyphenatedCompoundIdentifier() { list.add(id); }
     (
         <COMMA> 
-        id = CompoundIdentifier() { list.add(id); }
+        id = HyphenatedCompoundIdentifier() { list.add(id); }
     )*
     {
         return new SqlNodeList(list, s.end(this));
@@ -975,7 +975,7 @@ SqlCreate SqlCreateUser(Span s, boolean replace) :
 }
 {
     <USER> 
-    userName = CompoundIdentifier()
+    userName = HyphenatedCompoundIdentifier()
     [ userOptions = OptionsOpt() ]
     {
         return new SqlCreateUser(s.end(this), userName.toString(), userOptions);
@@ -997,7 +997,7 @@ SqlDdl SqlDropUser(Span s) :
 {
     <USER>
     ifExists = IfExistsOpt()
-    userName = CompoundIdentifier()
+    userName = HyphenatedCompoundIdentifier()
     {
         return new SqlDropUser(s.end(this), ifExists, userName.toString());
     }
@@ -1020,11 +1020,11 @@ SqlDdl SqlAlterUser(Span s) :
 {
     <ALTER>
     <USER>
-    userName = CompoundIdentifier()
+    userName = HyphenatedCompoundIdentifier()
     (
         <RENAME>
         <TO>
-        newUserName = CompoundIdentifier()
+        newUserName = HyphenatedCompoundIdentifier()
     |
         userOptions = OptionsOpt()
     )
@@ -1033,6 +1033,106 @@ SqlDdl SqlAlterUser(Span s) :
             return new SqlAlterUser(s.end(this), userName.toString(), userOptions);           
         } else {
             return new SqlRenameUser(s.end(this), userName.toString(), newUserName.toString()); 
+        }
+    }
+}
+
+/**
+ * Parses a compound identifier with hyphens/minus as valid characters 
+ *     for consistency with the old Bison parser
+ *
+ * A (better?) solution might be to rewrite the token generator in Calcite to allow hypens, 
+ * but this is a very narrow use case, so allow hypens by recreating the full hyphenated 
+ * token by reconstructing from the individual token - pieces. A by-product of this 
+ * approach is that spaces can now appear before/after the hypens, so test for them 
+ * and trigger failure by not creating the compoundIdentifier.
+ *
+ */
+public void HyphenatedIdentifierSegment(List<String> nameList, List<SqlParserPos> posList) :
+{
+    // use local lists/variables as it'll collapse them before returning
+    final List<String> localNameList = new ArrayList<String>();
+    final List<SqlParserPos> localPosList = new ArrayList<SqlParserPos>();
+    boolean trailingHyphen = false;
+}
+{
+    IdentifierSegment(localNameList, localPosList)
+    (
+        LOOKAHEAD(2)
+        <MINUS>
+        IdentifierSegment(localNameList, localPosList)
+    )*
+    (
+        <MINUS>
+        { trailingHyphen = true; }
+    )?
+    {
+        if(localNameList.size() > 0 && localPosList.size() > 0) {
+            // Rebuild the hyphenated name from the identifiers
+            String recreatedName = "";
+            SqlParserPos pos = SqlParserPos.ZERO;
+            int startCol = 0;
+
+            for (int i = 0; i < localNameList.size() && i < localPosList.size(); i++){
+                if(i == 0){
+                    startCol = localPosList.get(i).getColumnNum();
+                } else {
+                    if((localPosList.get(i).getColumnNum() - localPosList.get(i-1).getEndColumnNum()) != 2){
+                        // detected error or spaces around the hypen ... just fail outright
+                        return;                       
+                    }
+                    recreatedName += "-";
+                }
+                recreatedName += localNameList.get(i);
+                pos = localPosList.get(i);
+            }
+            if(trailingHyphen){
+                recreatedName += "-";
+            }
+
+            SqlParserPos recreatedPos = new SqlParserPos(pos.getLineNum(), startCol, pos.getLineNum(), pos.getEndColumnNum());
+
+            // add the collapsed name/pos to the incoming/outgoing Lists
+            nameList.add(recreatedName);
+            posList.add(recreatedPos);
+        }
+    }
+}
+
+/**
+ * Parses a compound identifier.
+ *
+ * Copied (almost) verbatum from Calcite's CompoundIdentifier(), except that
+ *    it'll call HyphenatedIdentifierSegment() instead of IdentifierSegment()
+ */
+SqlIdentifier HyphenatedCompoundIdentifier() :
+{
+    final List<String> nameList = new ArrayList<String>();
+    final List<SqlParserPos> posList = new ArrayList<SqlParserPos>();
+    boolean star = false;
+}
+{
+    HyphenatedIdentifierSegment(nameList, posList)
+    (
+        LOOKAHEAD(2)
+        <DOT>
+        HyphenatedIdentifierSegment(nameList, posList)
+    )*
+    (
+        LOOKAHEAD(2)
+        <DOT>
+        <STAR> {
+            star = true;
+            nameList.add("");
+            posList.add(getPos());
+        }
+    )?
+    {
+        SqlParserPos pos = SqlParserPos.sum(posList);
+        if (star) {
+            return SqlIdentifier.star(nameList, pos, posList);
+        } else if (nameList.size() > 0) {
+            return new SqlIdentifier(nameList, null, pos, posList);
         }
     }
 }
@@ -1048,7 +1148,7 @@ SqlCreate SqlCreateRole(Span s, boolean replace) :
     final SqlIdentifier role;
 }
 {
-    <ROLE> role = CompoundIdentifier()
+    <ROLE> role = HyphenatedCompoundIdentifier()
     {
         return new SqlCreateRole(s.end(this), role);
     }
@@ -1068,7 +1168,7 @@ SqlDrop SqlDropRole(Span s) :
 {
     <ROLE> 
     ifExists = IfExistsOpt()
-    role = CompoundIdentifier()
+    role = HyphenatedCompoundIdentifier()
     {
         return new SqlDropRole(s.end(this), ifExists, role.toString());
     }
@@ -1376,20 +1476,20 @@ SqlDdl SqlReassignOwned(Span s) :
 }
 {
     <REASSIGN> <OWNED> <BY>
-    userName = CompoundIdentifier()
+    userName = HyphenatedCompoundIdentifier()
     {
         oldOwners = new ArrayList<String>();
         oldOwners.add(userName.toString());
     }
     (
         <COMMA>
-        userName = CompoundIdentifier()
+        userName = HyphenatedCompoundIdentifier()
         {
             oldOwners.add(userName.toString());
         }
     )*
     <TO>
-    userName = CompoundIdentifier()
+    userName = HyphenatedCompoundIdentifier()
     {
         return new SqlReassignOwned(s.end(this), oldOwners, userName.toString());
     }
