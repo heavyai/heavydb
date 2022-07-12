@@ -1440,13 +1440,11 @@ std::string CodeGenerator::generatePTX(const std::string& cuda_llir,
 std::unique_ptr<llvm::TargetMachine> CodeGenerator::initializeNVPTXBackend(
     const CudaMgr_Namespace::NvidiaDeviceArch arch) {
   auto timer = DEBUG_TIMER(__func__);
+
   llvm::InitializeAllTargets();
-#ifndef ENABLE_ORCJIT
   llvm::InitializeAllTargetMCs();
-#else
-  // Fails with ORC backend on CUDA
   llvm::InitializeAllAsmPrinters();
-#endif
+
   std::string err;
   auto target = llvm::TargetRegistry::lookupTarget("nvptx64", err);
   if (!target) {
