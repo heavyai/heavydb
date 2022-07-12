@@ -84,7 +84,7 @@ kConstant, kUserSpecifiedConstantParameter, kUserSpecifiedRowMultiplier, kTableF
 '''.strip().replace(' ', '').split(',')
 
 SupportedAnnotations = '''
-input_id, name, fields, require
+input_id, name, fields, require, range
 '''.strip().replace(' ', '').split(',')
 
 # TODO: support `gpu`, `cpu`, `template` as function annotations
@@ -898,6 +898,27 @@ class SupportedAnnotationsTransformer(AstTransformer):
         return udtf_node
 
 
+class RangeAnnotationTransformer(AstTransformer):
+    """
+    * Append require annotation if range is used
+    """
+    def visit_arg_node(self, arg_node):
+        for ann in arg_node.annotations:
+            if ann.key == 'range':
+                name = arg_node.get_annotation('name')
+                if name is None:
+                    raise TransformerException('"range" requires a named argument')
+
+                l = ann.value
+                if len(l) == 2:
+                    lo, hi = ann.value
+                    value = '"{lo} <= {name} && {name} <= {hi}"'.format(lo=lo, hi=hi, name=name)
+                else:
+                    raise TransformerException('"range" requires an interval. Got {l}'.format(l=l))
+                arg_node.add_annotation(AnnotationNode('require', value))
+        return arg_node
+
+
 class DeclBracketTransformer(AstTransformer):
 
     def visit_udtf_node(self, udtf_node):
@@ -1064,8 +1085,8 @@ class ArgNode(Node, IterableNode):
         t = str(self.type)
         anns = ""
         if self.annotations:
-            anns = "| ".join([str(a) for a in self.annotations])
-            return "ArgNode(%s %s)" % (t, anns)
+            anns = " | ".join([str(a) for a in self.annotations])
+            return "ArgNode(%s | %s)" % (t, anns)
         return "ArgNode(%s)" % (t)
 
     def __iter__(self):
@@ -1080,6 +1101,10 @@ class ArgNode(Node, IterableNode):
             if a.key == key:
                 return a.value
         return default
+
+    def add_annotation(self, annotation):
+        assert isinstance(annotation, AnnotationNode)
+        self.annotations.append(annotation)
 
 
 class TypeNode(Node):
@@ -1635,6 +1660,7 @@ def find_signatures(input_file):
                                   FieldAnnotationTransformer,
                                   TextEncodingDictTransformer,
                                   SupportedAnnotationsTransformer,
+                                  RangeAnnotationTransformer,
                                   FixRowMultiplierPosArgTransformer,
                                   RenameNodesTransformer,
                                   AstPrinter)(ast)
@@ -1656,6 +1682,7 @@ def find_signatures(input_file):
                              FieldAnnotationTransformer,
                              TextEncodingDictTransformer,
                              SupportedAnnotationsTransformer,
+                             RangeAnnotationTransformer,
                              FixRowMultiplierPosArgTransformer,
                              RenameNodesTransformer,
                              DeclBracketTransformer)(ast)
@@ -1729,14 +1756,15 @@ def build_preflight_function(fn_name, sizer, input_types, output_types, uses_man
         fn += "%s(%s) {\n" % (fn_name.lower() + "__preflight", cpp_args)
 
     for typ in input_types:
-        ann = typ.annotations
-        for key, value in ann:
-            if key == 'require':
-                err_msg = '"Constraint `%s` is not satisfied."' % (value[1:-1])
+        if isinstance(typ, Declaration):
+            ann = typ.annotations
+            for key, value in ann:
+                if key == 'require':
+                    err_msg = '"Constraint `%s` is not satisfied."' % (value[1:-1])
 
-                fn += "  if (!(%s)) {\n" % (value[1:-1].replace('\\', ''),)
-                fn += format_error_msg(err_msg, uses_manager)
-                fn += "  }\n"
+                    fn += "  if (!(%s)) {\n" % (value[1:-1].replace('\\', ''),)
+                    fn += format_error_msg(err_msg, uses_manager)
+                    fn += "  }\n"
 
     if sizer.is_arg_sizer():
         precomputed_nrows = str(sizer.args[0])

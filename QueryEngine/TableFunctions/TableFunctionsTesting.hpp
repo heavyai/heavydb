@@ -2228,3 +2228,17 @@ NEVER_INLINE HOST int32_t tf_metadata_getter_bad__cpu_template(TableFunctionMana
 }
 
 #endif  // ifndef __CUDACC__
+
+// clang-format off
+/*
+  UDTF: ct_require_range__cpu_(Column<int32_t>, int x | range=[1, 5], RowMultiplier) -> Column<int32_t>
+*/
+// clang-format on
+
+EXTENSION_NOINLINE int32_t ct_require_range__cpu_(const Column<int32_t>& input1,
+                                                  const int32_t x,
+                                                  const int32_t multiplier,
+                                                  Column<int32_t>& out) {
+  out[0] = 0;
+  return 1;
+}

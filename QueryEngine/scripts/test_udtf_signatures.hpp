@@ -115,5 +115,15 @@
 
   UDTF: foo_39(TableFunctionManager) -> Column<TextEncodingDict> new_dict | input_id=args<> $=>$
         foo_39(TableFunctionManager) -> ColumnTextEncodingDict | name=new_dict | input_id=args<-1>
+
+  UDTF: foo_40(int32_t y | range=[1, 10]) -> Column<int32_t> $=>$
+        foo_40(Int32 | name=y | range=[1,10] | require="1 <= y && y <= 10") -> ColumnInt32
+
+  UDTF: foo_41(int32_t x | range=[1]) -> Column<int32_t> $=>$
+        TransformerException: "range" requires an interval. Got [1]
+
+  UDTF: foo_42(int32_t x | range=[1, 10], RowMultiplier) -> Column<int32_t> $=>$
+        foo_42(Int32 | name=x | range=[1,10] | require="1 <= x && x <= 10", kUserSpecifiedRowMultiplier<2>) -> ColumnInt32
+
  */
 // clang-format on

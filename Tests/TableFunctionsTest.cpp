@@ -595,6 +595,16 @@ TEST_F(TableFunctions, BasicProjection) {
         ASSERT_EQ(v, 12345);
       }
     }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_require_range(cursor(SELECT x"
+          " FROM tf_test), 3, 1));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto row = rows->getNextRow(true, false);
+      auto v = TestHelpers::v<int64_t>(row[0]);
+      ASSERT_EQ(v, 0);
+    }
 
     // Test for columns containing null values (QE-163)
     {
@@ -1658,6 +1668,12 @@ TEST_F(TableFunctions, ThrowingTests) {
                              dt),
             TableFunctionError);
       }
+    }
+    {
+      EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(ct_require_range(cursor(SELECT x"
+                                    " FROM tf_test), 0, 1));",
+                                    dt),
+                   TableFunctionError);
     }
     {
       EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(ct_require_mgr(cursor(SELECT x"
