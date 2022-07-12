@@ -3018,8 +3018,8 @@ void get_table_definitions_for_ctas(TableDescriptor& td,
         "Invalid CREATE TABLE AS option " + *p->get_name() +
         ". Should be FRAGMENT_SIZE, MAX_CHUNK_SIZE, PAGE_SIZE, MAX_ROLLBACK_EPOCHS, "
         "MAX_ROWS, "
-        "PARTITIONS, SHARD_COUNT, VACUUM, SORT_COLUMN, STORAGE_TYPE or "
-        "USE_SHARED_DICTIONARIES.");
+        "PARTITIONS, SHARD_COUNT, VACUUM, SORT_COLUMN, STORAGE_TYPE,  "
+        "USE_SHARED_DICTIONARIES or FORCE_GEO_COMPRESSION.");
   }
   return it->second(td, p.get(), columns);
 }
@@ -4269,7 +4269,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     auto validate_result = local_connector.query(
         query_state->createQueryStateProxy(), select_query_, {}, true, false);
 
-    const auto column_descriptors_for_create =
+    auto column_descriptors_for_create =
         local_connector.getColumnDescriptors(validate_result, true);
 
     // some validation as the QE might return some out of range column types
@@ -4298,6 +4298,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     }
 
     bool use_shared_dictionaries = true;
+    bool force_geo_compression = true;
 
     if (!storage_options_.empty()) {
       for (auto& p : storage_options_) {
@@ -4311,6 +4312,15 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
           }
           std::string val = boost::to_lower_copy<std::string>(*literal->get_stringval());
           use_shared_dictionaries = val == "true" || val == "1" || val == "t";
+        } else if (boost::to_lower_copy<std::string>(*p->get_name()) ==
+                   "force_geo_compression") {
+          const StringLiteral* literal =
+              dynamic_cast<const StringLiteral*>(p->get_value());
+          if (nullptr == literal) {
+            throw std::runtime_error("FORCE_GEO_COMPRESSION must be a string parameter");
+          }
+          std::string val = boost::to_lower_copy<std::string>(*literal->get_stringval());
+          force_geo_compression = val == "true" || val == "1" || val == "t";
         } else {
           get_table_definitions_for_ctas(td, p, column_descriptors_for_create);
         }
@@ -4342,6 +4352,17 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
                   source_cd.columnName, targetTable->tableName, targetColumn->columnName);
             }
           }
+        }
+      }
+    }
+
+    if (force_geo_compression) {
+      for (auto& cd_for_create : column_descriptors_for_create) {
+        auto& ti = cd_for_create.columnType;
+        if (ti.is_geometry() && ti.get_output_srid() == 4326) {
+          // turn on GEOINT32 compression
+          ti.set_compression(kENCODING_GEOINT);
+          ti.set_comp_param(32);
         }
       }
     }

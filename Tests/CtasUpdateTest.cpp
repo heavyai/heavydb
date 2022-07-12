@@ -2805,6 +2805,179 @@ TEST_F(Select, CtasItasNullGeoPoint) {
   }
 }
 
+TEST_F(Select, CtasGeoCompress4326) {
+  auto drop_table = []() {
+    sql("DROP TABLE IF EXISTS GeoScalarCoords;");
+    sql("DROP TABLE IF EXISTS GeoLines4326;");
+    sql("DROP TABLE IF EXISTS CTAS_GeoPoint4326;");
+    sql("DROP TABLE IF EXISTS CTAS_GeoPoint4326_mc;");
+    sql("DROP TABLE IF EXISTS CTAS_GeoLines4326;");
+    sql("DROP TABLE IF EXISTS CTAS_GeoLines4326_mc;");
+  };
+
+  auto create_table = []() {
+    sql("CREATE TABLE GeoScalarCoords (x DOUBLE, y DOUBLE);");
+    sql("CREATE TABLE GeoLines4326 ("
+        "l LINESTRING,"
+        "l4326 GEOMETRY(LINESTRING, 4326) ENCODING NONE,"
+        "ml4326c GEOMETRY(MULTILINESTRING, 4326) ENCODING COMPRESSED(32));");
+  };
+
+  drop_table();
+  create_table();
+
+  sql("INSERT INTO GeoScalarCoords VALUES (0, 1);");
+  sql("INSERT INTO GeoScalarCoords VALUES (0, 2);");
+  sql("INSERT INTO GeoScalarCoords VALUES (NULL, NULL);");
+  sql("INSERT INTO GeoScalarCoords VALUES (NULL, 4);");
+
+  {
+    // CTAS with forced geo compression turned on by default
+    sql("CREATE TABLE CTAS_GeoPoint4326 AS "
+        "SELECT ST_SetSRID(ST_Point(x,y),4326) as pt FROM GeoScalarCoords;");
+
+    sqlAndCompareResult("SELECT COUNT(1) FROM CTAS_GeoPoint4326 WHERE pt is not null;",
+                        {{i(2)}});
+    sqlAndCompareResult("SELECT COUNT(1) FROM CTAS_GeoPoint4326 WHERE pt is null;",
+                        {{i(2)}});
+
+    auto& cat = getCatalog();
+    const TableDescriptor* td = cat.getMetadataForTable("CTAS_GeoPoint4326");
+
+    auto cols = cat.getAllColumnMetadataForTable(td->tableId, false, true, false);
+
+    ASSERT_EQ(cols.size(), (size_t)1);
+
+    auto col = cols.back();
+    ASSERT_EQ(col->columnType.get_type(), kPOINT);
+    ASSERT_EQ(col->columnType.get_subtype(), kGEOMETRY);
+    ASSERT_EQ(col->columnType.get_compression(), kENCODING_GEOINT);
+    ASSERT_EQ(col->columnType.get_comp_param(), 32);
+
+    sqlAndCompareResult(
+        "SELECT count(*) FROM CTAS_GeoPoint4326 "
+        "WHERE ST_Distance(ST_GeomFromText('POINT(0 0)', 4326), pt)<0.9;",
+        {{i(0)}});
+    sqlAndCompareResult(
+        "SELECT count(*) FROM CTAS_GeoPoint4326 "
+        "WHERE ST_Distance(ST_GeomFromText('POINT(0 0)', 4326), pt)<1.9;",
+        {{i(1)}});
+    sqlAndCompareResult(
+        "SELECT count(*) FROM CTAS_GeoPoint4326 "
+        "WHERE ST_Distance(ST_GeomFromText('POINT(0 0)', 4326), pt)<2.9;",
+        {{i(2)}});
+  }
+
+  {
+    // CTAS with forced geo compression turned off (mirrored compression)
+    sql("CREATE TABLE CTAS_GeoPoint4326_mc AS "
+        "SELECT ST_SetSRID(ST_Point(x,y),4326) as pt FROM GeoScalarCoords "
+        "WITH ( FORCE_GEO_COMPRESSION='false' );");
+
+    sqlAndCompareResult("SELECT COUNT(1) FROM CTAS_GeoPoint4326_mc WHERE pt is not null;",
+                        {{i(2)}});
+    sqlAndCompareResult("SELECT COUNT(1) FROM CTAS_GeoPoint4326_mc WHERE pt is null;",
+                        {{i(2)}});
+
+    auto& cat = getCatalog();
+    const TableDescriptor* td = cat.getMetadataForTable("CTAS_GeoPoint4326_mc");
+
+    auto cols = cat.getAllColumnMetadataForTable(td->tableId, false, true, false);
+
+    ASSERT_EQ(cols.size(), (size_t)1);
+
+    auto col = cols.back();
+    ASSERT_EQ(col->columnType.get_type(), kPOINT);
+    ASSERT_EQ(col->columnType.get_subtype(), kGEOMETRY);
+    ASSERT_EQ(col->columnType.get_compression(), kENCODING_NONE);
+    ASSERT_EQ(col->columnType.get_comp_param(), 0);
+
+    sqlAndCompareResult(
+        "SELECT count(*) FROM CTAS_GeoPoint4326_mc "
+        "WHERE ST_Distance(ST_GeomFromText('POINT(0 0)', 4326), pt)<0.9;",
+        {{i(0)}});
+    sqlAndCompareResult(
+        "SELECT count(*) FROM CTAS_GeoPoint4326_mc "
+        "WHERE ST_Distance(ST_GeomFromText('POINT(0 0)', 4326), pt)<1.9;",
+        {{i(1)}});
+    sqlAndCompareResult(
+        "SELECT count(*) FROM CTAS_GeoPoint4326_mc "
+        "WHERE ST_Distance(ST_GeomFromText('POINT(0 0)', 4326), pt)<2.9;",
+        {{i(2)}});
+  }
+
+  sql("INSERT INTO GeoLines4326 VALUES ("
+      "'LINESTRING(0 0,1 1)', "
+      "'LINESTRING(0 0,1 1)', "
+      "'MULTILINESTRING((0 0,1 1),(2 2,3 3))');");
+
+  {
+    sql("CREATE TABLE CTAS_GeoLines4326 AS SELECT * FROM GeoLines4326 "
+        "WITH ( FORCE_GEO_COMPRESSION='true' );");
+
+    auto& cat = getCatalog();
+    const TableDescriptor* td = cat.getMetadataForTable("CTAS_GeoLines4326");
+
+    auto cols = cat.getAllColumnMetadataForTable(td->tableId, false, true, false);
+
+    ASSERT_EQ(cols.size(), (size_t)3);
+
+    auto col = cols.back();
+    ASSERT_EQ(col->columnType.get_type(), kMULTILINESTRING);
+    ASSERT_EQ(col->columnType.get_subtype(), kGEOMETRY);
+    ASSERT_EQ(col->columnType.get_compression(), kENCODING_GEOINT);
+    ASSERT_EQ(col->columnType.get_comp_param(), 32);
+    cols.pop_back();
+
+    col = cols.back();
+    ASSERT_EQ(col->columnType.get_type(), kLINESTRING);
+    ASSERT_EQ(col->columnType.get_subtype(), kGEOMETRY);
+    ASSERT_EQ(col->columnType.get_compression(), kENCODING_GEOINT);
+    ASSERT_EQ(col->columnType.get_comp_param(), 32);
+    cols.pop_back();
+
+    col = cols.back();
+    ASSERT_EQ(col->columnType.get_type(), kLINESTRING);
+    ASSERT_EQ(col->columnType.get_subtype(), kGEOMETRY);
+    ASSERT_EQ(col->columnType.get_compression(), kENCODING_NONE);
+    cols.pop_back();
+  }
+
+  {
+    sql("CREATE TABLE CTAS_GeoLines4326_mc AS SELECT * FROM GeoLines4326 "
+        "WITH ( FORCE_GEO_COMPRESSION='false' );");
+
+    auto& cat = getCatalog();
+    const TableDescriptor* td = cat.getMetadataForTable("CTAS_GeoLines4326_mc");
+
+    auto cols = cat.getAllColumnMetadataForTable(td->tableId, false, true, false);
+
+    ASSERT_EQ(cols.size(), (size_t)3);
+
+    auto col = cols.back();
+    ASSERT_EQ(col->columnType.get_type(), kMULTILINESTRING);
+    ASSERT_EQ(col->columnType.get_subtype(), kGEOMETRY);
+    ASSERT_EQ(col->columnType.get_compression(), kENCODING_GEOINT);
+    ASSERT_EQ(col->columnType.get_comp_param(), 32);
+    cols.pop_back();
+
+    col = cols.back();
+    ASSERT_EQ(col->columnType.get_type(), kLINESTRING);
+    ASSERT_EQ(col->columnType.get_subtype(), kGEOMETRY);
+    ASSERT_EQ(col->columnType.get_compression(), kENCODING_NONE);
+    ASSERT_EQ(col->columnType.get_comp_param(), 0);
+    cols.pop_back();
+
+    col = cols.back();
+    ASSERT_EQ(col->columnType.get_type(), kLINESTRING);
+    ASSERT_EQ(col->columnType.get_subtype(), kGEOMETRY);
+    ASSERT_EQ(col->columnType.get_compression(), kENCODING_NONE);
+    cols.pop_back();
+  }
+
+  drop_table();
+}
+
 TEST_F(Select, CtasFixedLenBooleanArrayCrash) {
   auto drop_table = []() { sql("DROP TABLE IF EXISTS CtasFBoolArrayCrash;"); };
   auto prepare_table = []() {
