@@ -1740,7 +1740,7 @@ ExecutionResult ShowTableFunctionsCommand::execute(bool read_only_mode) {
     }
   } else {
     // label_infos -> column labels
-    for (const auto& label : {"Tabel UDF"}) {
+    for (const auto& label : {"Table UDF"}) {
       label_infos.emplace_back(label, SQLTypeInfo(kTEXT, true));
     }
 
