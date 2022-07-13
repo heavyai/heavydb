@@ -489,6 +489,7 @@ data: {
         "CACHE"
         "CLUSTER"
         "COPY"
+        "CONTAINS"
         "DASHBOARD"
         "DATABASES"
         "DATAFRAME"

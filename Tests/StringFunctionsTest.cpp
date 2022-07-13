@@ -41,6 +41,9 @@ extern unsigned g_trivial_loop_join_threshold;
 extern bool g_enable_watchdog;
 extern size_t g_watchdog_none_encoded_string_translation_limit;
 
+constexpr int64_t True = 1;
+constexpr int64_t False = 0;
+
 namespace {
 
 using QR = QueryRunner::QueryRunner;
@@ -2329,6 +2332,81 @@ TEST_F(StringFunctionTest, UDF_ExpandDefaults) {
   }
 }
 
+// EXPANDED/REPLACED string operation tests
+
+TEST_F(StringFunctionTest, contains) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set1 = sql("select contains('abcdefghijklmn', 'def');", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set1{{True}};
+    compare_result_set(expected_result_set1, result_set1);
+
+    auto result_set2 = sql("select contains('abcdefghijklmn', 'xyz');", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set2{{False}};
+    compare_result_set(expected_result_set2, result_set2);
+    auto result_set3 = sql("select contains('abcdefghijklmn', 'abc');", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set3{{True}};
+    compare_result_set(expected_result_set3, result_set3);
+    auto result_set4 = sql("select contains('abcdefghijklmn', 'mnop');", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set4{{False}};
+    compare_result_set(expected_result_set4, result_set4);
+
+    // Edge case: empty strings
+    auto result_set_e1 = sql("select contains('', '');");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e1{{True}};
+    compare_result_set(expected_result_set_e1, result_set_e1);
+
+    // contains is non-standard SQL, and returns -128 for NULL strings
+    int64_t kNull = -128;
+
+    // Edge case: NULL string: zip_plus_4 has NULL values in some rows
+    auto result_set_e2 =
+        sql("select contains(zip_plus_4, '94104') from string_function_test_people;");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e2{
+        {False}, {True}, {kNull}, {kNull}, {False}};
+    compare_result_set(expected_result_set_e2, result_set_e2);
+
+    // Note: pattern requires literal string so this is not currently valid
+    //   "select startswith('94104-8123', zip_plus_4) from string_function_test_people;"
+  }
+}
+
+TEST_F(StringFunctionTest, endswith) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set1 = sql("select endswith('abcdefghijklmn', 'lmn');", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set1{{True}};
+    compare_result_set(expected_result_set1, result_set1);
+    auto result_set2 = sql("select endswith('abcdef', 'aaabcdef');", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set2{{False}};
+    compare_result_set(expected_result_set2, result_set2);
+    auto result_set3 = sql("select endswith('abcdefghijklmn', 'abcdefghijklmn');", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set3{{True}};
+    compare_result_set(expected_result_set3, result_set3);
+    auto result_set4 = sql("select endswith('abcdefghijklmn', 'lmnop');", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set4{{False}};
+    compare_result_set(expected_result_set4, result_set4);
+
+    // Edge case: empty strings
+    auto result_set_e1 = sql("select endswith('', '');");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e1{{True}};
+    compare_result_set(expected_result_set_e1, result_set_e1);
+
+    // endswith is non-standard SQL, and returns -128 for NULL strings
+    int64_t kNull = -128;
+
+    // Edge case: NULL string: zip_plus_4 has NULL values in some rows
+    auto result_set_e2 =
+        sql("select endswith(zip_plus_4, '94104') from string_function_test_people;");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e2{
+        {False}, {False}, {kNull}, {kNull}, {False}};
+    compare_result_set(expected_result_set_e2, result_set_e2);
+
+    // Note: pattern requires literal string so this is not currently valid
+    //   "select endswith('94104-8123', zip_plus_4) from string_function_test_people;"
+  }
+}
+
 TEST_F(StringFunctionTest, lcase) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -2338,40 +2416,18 @@ TEST_F(StringFunctionTest, lcase) {
             dt);
     std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"new york city"}};
     compare_result_set(expected_result_set, result_set);
-  }
-}
 
-TEST_F(StringFunctionTest, ucase) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    auto result_set =
-        sql("select ucase(largest_city) from string_function_test_countries where "
-            "code = 'US';",
-            dt);
-    std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"NEW YORK CITY"}};
-    compare_result_set(expected_result_set, result_set);
-  }
-}
+    // Edge case: empty string
+    auto result_set_e1 = sql("select lcase('');");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e1{{""}};
+    compare_result_set(expected_result_set_e1, result_set_e1);
 
-TEST_F(StringFunctionTest, len) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    // LEN is an alias for LENGTH, just test the alias as
-    //    LENGTH functionality should be covered by other tests
-    auto result_set = sql("select len('abcdefghi');", dt);
-    std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(9)}};
-    compare_result_set(expected_result_set, result_set);
-  }
-}
-
-TEST_F(StringFunctionTest, mid) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    // MID is an alias for SUBSTRING, just test the alias as
-    //    substring functionality should be covered by other tests
-    auto result_set = sql("select mid('abcdef', 2,4);", dt);
-    std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"bcde"}};
-    compare_result_set(expected_result_set, result_set);
+    // Edge case: NULL string: zip_plus_4 has NULL values in some rows
+    auto result_set_e2 =
+        sql("select lcase(zip_plus_4) from string_function_test_people;");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e2{
+        {"90210-7743"}, {"94104-8123"}, {""}, {""}, {"12345-8765"}};
+    compare_result_set(expected_result_set_e2, result_set_e2);
   }
 }
 
@@ -2390,6 +2446,146 @@ TEST_F(StringFunctionTest, left) {
     auto result_set4 = sql("select left('abcdef', 10);", dt);
     std::vector<std::vector<ScalarTargetValue>> expected_result_set4{{"abcdef"}};
     compare_result_set(expected_result_set4, result_set4);
+
+    // Edge case: empty string
+    auto result_set_e1 = sql("select left('', 2);");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e1{{""}};
+    compare_result_set(expected_result_set_e1, result_set_e1);
+
+    // Edge case: NULL string: zip_plus_4 has NULL values in some rows
+    auto result_set_e2 =
+        sql("select left(zip_plus_4, 4) from string_function_test_people;");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e2{
+        {"9021"}, {"9410"}, {""}, {""}, {"1234"}};
+    compare_result_set(expected_result_set_e2, result_set_e2);
+  }
+}
+
+TEST_F(StringFunctionTest, len) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // LEN is an alias for LENGTH, just test the alias as
+    //    LENGTH functionality should be covered by other tests
+    auto result_set = sql("select len('abcdefghi');", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(9)}};
+    compare_result_set(expected_result_set, result_set);
+
+    // Edge case: empty strings
+    auto result_set_e1 = sql("select len('');");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e1{{int64_t(0)}};
+    compare_result_set(expected_result_set_e1, result_set_e1);
+
+    // Edge case: NULL string: zip_plus_4 has NULL values in some rows
+    auto result_set_e2 = sql("select len(zip_plus_4) from string_function_test_people;");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e2{
+        {int64_t(10)},
+        {int64_t(10)},
+        {int64_t(-2147483648)},
+        {int64_t(-2147483648)},
+        {int64_t(10)}};
+    compare_result_set(expected_result_set_e2, result_set_e2);
+  }
+}
+
+TEST_F(StringFunctionTest, max) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set1 = sql("select MAX(7,4);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set1{{(int64_t)7}};
+    compare_result_set(expected_result_set1, result_set1);
+    auto result_set2 = sql("select MAX(-7,220);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set2{{(int64_t)220}};
+    compare_result_set(expected_result_set2, result_set2);
+    auto result_set3 = sql("select MAX('bf','sh');", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set3{{"sh"}};
+    compare_result_set(expected_result_set3, result_set3);
+    auto result_set4 = sql("select MAX(123,456);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set4{{(int64_t)456}};
+    compare_result_set(expected_result_set4, result_set4);
+
+    auto result_set5 =
+        sql("select MIN(count(*),count(*)) from string_function_test_people;", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set5{{(int64_t)5}};
+    compare_result_set(expected_result_set5, result_set5);
+
+    // this will assert as the types mismatch
+    ASSERT_THROW(sql("select MAX(3,'f');", dt), std::runtime_error);
+
+    // Edge case: empty strings
+    auto result_set_e1 = sql("select max('', '');");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e1{{""}};
+    compare_result_set(expected_result_set_e1, result_set_e1);
+
+    // Edge case: NULL string: zip_plus_4 has NULL values in some rows
+    auto result_set_e2 =
+        sql("select max(zip_plus_4, zip_plus_4) from string_function_test_people;");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e2{
+        {"90210-7743"}, {"94104-8123"}, {""}, {""}, {"12345-8765"}};
+    compare_result_set(expected_result_set_e2, result_set_e2);
+  }
+}
+
+TEST_F(StringFunctionTest, mid) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // MID is an alias for SUBSTRING, just test the alias as
+    //    substring functionality should be covered by other tests
+    auto result_set1 = sql("select mid('abcdef', 2,4);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set1{{"bcde"}};
+    compare_result_set(expected_result_set1, result_set1);
+    auto result_set2 = sql("select mid('abcdef', 4);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set2{{"def"}};
+    compare_result_set(expected_result_set2, result_set2);
+
+    // Edge case: empty strings
+    auto result_set_e1 = sql("select mid('', 4);");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e1{{""}};
+    compare_result_set(expected_result_set_e1, result_set_e1);
+
+    // Edge case: NULL string: zip_plus_4 has NULL values in some rows
+    auto result_set_e2 =
+        sql("select mid(zip_plus_4, 3,5) from string_function_test_people;");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e2{
+        {"210-7"}, {"104-8"}, {""}, {""}, {"345-8"}};
+    compare_result_set(expected_result_set_e2, result_set_e2);
+  }
+}
+
+TEST_F(StringFunctionTest, min) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set1 = sql("select MIN(7,4);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set1{{(int64_t)4}};
+    compare_result_set(expected_result_set1, result_set1);
+    auto result_set2 = sql("select MIN(-7,220);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set2{{(int64_t)-7}};
+    compare_result_set(expected_result_set2, result_set2);
+    auto result_set3 = sql("select MIN('bf','sh');", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set3{{"bf"}};
+    compare_result_set(expected_result_set3, result_set3);
+    auto result_set4 = sql("select MIN(123,456);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set4{{(int64_t)123}};
+    compare_result_set(expected_result_set4, result_set4);
+
+    auto result_set5 =
+        sql("select MIN(count(*),count(*)) from string_function_test_people;", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set5{{(int64_t)5}};
+    compare_result_set(expected_result_set5, result_set5);
+
+    // this will assert as the types mismatch
+    ASSERT_THROW(sql("select MIN(3,'f');", dt), std::runtime_error);
+
+    // Edge case: empty strings
+    auto result_set_e1 = sql("select min('', '');");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e1{{""}};
+    compare_result_set(expected_result_set_e1, result_set_e1);
+
+    // Edge case: NULL string: zip_plus_4 has NULL values in some rows
+    auto result_set_e2 =
+        sql("select min(zip_plus_4, zip_plus_4) from string_function_test_people;");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e2{
+        {"90210-7743"}, {"94104-8123"}, {""}, {""}, {"12345-8765"}};
+    compare_result_set(expected_result_set_e2, result_set_e2);
   }
 }
 
@@ -2408,6 +2604,150 @@ TEST_F(StringFunctionTest, right) {
     auto result_set4 = sql("select right('abcdef', 10);", dt);
     std::vector<std::vector<ScalarTargetValue>> expected_result_set4{{"abcdef"}};
     compare_result_set(expected_result_set4, result_set4);
+
+    // Edge case: empty string
+    auto result_set_e1 = sql("select right('', 2);");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e1{{""}};
+    compare_result_set(expected_result_set_e1, result_set_e1);
+
+    // Edge case: NULL string: zip_plus_4 has NULL values in some rows
+    auto result_set_e2 =
+        sql("select right(zip_plus_4, 4) from string_function_test_people;");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e2{
+        {"7743"}, {"8123"}, {""}, {""}, {"8765"}};
+    compare_result_set(expected_result_set_e2, result_set_e2);
+  }
+}
+
+TEST_F(StringFunctionTest, space) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set1 = sql("select space(0);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set1{{""}};
+    compare_result_set(expected_result_set1, result_set1);
+    auto result_set2 = sql("select space(1);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set2{{" "}};
+    compare_result_set(expected_result_set2, result_set2);
+    auto result_set3 = sql("select space(8);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set3{{"        "}};
+    compare_result_set(expected_result_set3, result_set3);
+
+    // this will assert as the -1 is invalid
+    ASSERT_THROW(sql("select space(-1);", dt), std::runtime_error);
+
+    // Edge case: non-fixed value will throw ...
+    //   because SPACE is based upon REPEAT which does not accept non-fixed values
+    ASSERT_THROW(sql("select space(count(*)) from string_function_test_people;", dt),
+                 std::runtime_error);
+  }
+}
+
+TEST_F(StringFunctionTest, split) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // SPLIT is an alias for SPLIT_PART, mainly test the alias as
+    // SPLIT_PART functionality should be covered by other tests
+    auto result_set = sql("select split('123-345-6789', '-', 2);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"345"}};
+    compare_result_set(expected_result_set, result_set);
+
+    // Edge case: empty strings
+    auto result_set_e1 = sql("select split('', '', 3);");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e1{{""}};
+    compare_result_set(expected_result_set_e1, result_set_e1);
+
+    // Edge case: NULL string: zip_plus_4 has NULL values in some rows
+    auto result_set_e2 =
+        sql("select split(zip_plus_4, '-',2) from string_function_test_people;");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e2{
+        {"7743"}, {"8123"}, {""}, {""}, {"8765"}};
+    compare_result_set(expected_result_set_e2, result_set_e2);
+
+    // Note: pattern requires literal string so this is not currently valid
+    //   "select endswith('94104-8123', zip_plus_4) from string_function_test_people;"
+  }
+}
+
+TEST_F(StringFunctionTest, startswith) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set1 = sql("select startswith('abcdef', 'abc');", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set1{{True}};
+    compare_result_set(expected_result_set1, result_set1);
+    auto result_set2 = sql("select startswith('abcdef', 'abcdef');", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set2{{True}};
+    compare_result_set(expected_result_set2, result_set2);
+    auto result_set3 = sql("select startswith('abcdef', 'abcdefghi');", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set3{{False}};
+    compare_result_set(expected_result_set3, result_set3);
+    auto result_set4 = sql("select startswith('abcdef', 'xyz');", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set4{{False}};
+    compare_result_set(expected_result_set4, result_set4);
+
+    // Edge case: empty strings
+    auto result_set5 = sql("select startswith('', '');");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set5{{True}};
+    compare_result_set(expected_result_set5, result_set5);
+
+    // startswith is non-standard SQL, and returns -128 for NULL strings
+    int64_t kNull = -128;
+
+    // NULL string: zip_plus_4 has NULL values in some rows
+    auto result_set6 =
+        sql("select startswith(zip_plus_4, '94104') from string_function_test_people;");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set6{
+        {False}, {True}, {kNull}, {kNull}, {False}};
+    compare_result_set(expected_result_set6, result_set6);
+
+    // Note: pattern requires literal string so this is not currently valid
+    //   "select startswith('94104-8123', zip_plus_4) from string_function_test_people;"
+  }
+}
+
+TEST_F(StringFunctionTest, substr) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // SUBSTR is an alias for SUBSTRING, mostly test the alias as
+    //    substring functionality should be covered by other tests
+    auto result_set = sql("select substr('abcdef', 2,4);", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"bcde"}};
+    compare_result_set(expected_result_set, result_set);
+
+    // Edge case: empty strings
+    auto result_set_e1 = sql("select substr('', 3, 5);");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e1{{""}};
+    compare_result_set(expected_result_set_e1, result_set_e1);
+
+    // Edge case: NULL string: zip_plus_4 has NULL values in some rows
+    auto result_set_e2 =
+        sql("select substr(zip_plus_4, 3,5) from string_function_test_people;");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e2{
+        {"210-7"}, {"104-8"}, {""}, {""}, {"345-8"}};
+    compare_result_set(expected_result_set_e2, result_set_e2);
+  }
+}
+
+TEST_F(StringFunctionTest, ucase) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set =
+        sql("select ucase(largest_city) from string_function_test_countries where "
+            "code = 'US';",
+            dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"NEW YORK CITY"}};
+    compare_result_set(expected_result_set, result_set);
+
+    // Edge case: empty string
+    auto result_set_e1 = sql("select ucase('');");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e1{{""}};
+    compare_result_set(expected_result_set_e1, result_set_e1);
+
+    // Edge case: NULL string: zip_plus_4 has NULL values in some rows
+    auto result_set_e2 =
+        sql("select ucase(zip_plus_4) from string_function_test_people;");
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set_e2{
+        {"90210-7743"}, {"94104-8123"}, {""}, {""}, {"12345-8765"}};
+    compare_result_set(expected_result_set_e2, result_set_e2);
   }
 }
 

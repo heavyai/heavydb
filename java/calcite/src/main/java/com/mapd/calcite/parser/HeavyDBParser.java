@@ -62,6 +62,8 @@ import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.parser.SqlParserPos;
+import org.apache.calcite.sql.type.OperandTypes;
+import org.apache.calcite.sql.type.ReturnTypes;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.type.SqlTypeUtil;
 import org.apache.calcite.sql.util.SqlBasicVisitor;
@@ -1209,16 +1211,16 @@ public final class HeavyDBParser {
           final SqlBasicCall proj_call, RelDataTypeFactory typeFactory) {
     //
     // Expand string functions
-    //   SUBSTR, LCASE, UCASE, LEFT, RIGHT
     //
-    // Note: SUBSTRING doesn't offer much flexibility for the numeric arg's type
-    //    "only constant, column, or other string operator arguments are allowed"
 
     final int operandCount = proj_call.operandCount();
 
-    if (proj_call.getOperator().isName("SUBSTR", false)
-            || proj_call.getOperator().isName("MID", false)) {
-      // Expand SUBSTR to SUBSTRING
+    if (proj_call.getOperator().isName("MID", false)
+            || proj_call.getOperator().isName("SUBSTR", false)) {
+      // Replace MID/SUBSTR with SUBSTRING
+      //
+      // Note: SUBSTRING doesn't offer much flexibility for the numeric arg's type
+      //    "only constant, column, or other string operator arguments are allowed"
       final SqlParserPos pos = proj_call.getParserPosition();
       if (operandCount == 2) {
         final SqlNode primary_operand = proj_call.operand(0);
@@ -1235,8 +1237,52 @@ public final class HeavyDBParser {
       }
       return null;
 
+    } else if (proj_call.getOperator().isName("CONTAINS", false)) {
+      // Replace CONTAINS with LIKE
+      //     as noted by TABLEAU's own published documention
+      final SqlParserPos pos = proj_call.getParserPosition();
+      if (operandCount == 2) {
+        final SqlNode primary = proj_call.operand(0);
+        final SqlNode pattern = proj_call.operand(1);
+
+        if (pattern instanceof SqlLiteral) {
+          // LIKE only supports Literal patterns ... at the moment
+          SqlLiteral literalPattern = (SqlLiteral) pattern;
+          String sPattern = literalPattern.getValueAs(String.class);
+          SqlLiteral withWildcards =
+                  SqlLiteral.createCharString("%" + sPattern + "%", pos);
+          return SqlStdOperatorTable.LIKE.createCall(pos, primary, withWildcards);
+        }
+      }
+      return null;
+
+    } else if (proj_call.getOperator().isName("ENDSWITH", false)) {
+      // Replace ENDSWITH with LIKE
+      final SqlParserPos pos = proj_call.getParserPosition();
+      if (operandCount == 2) {
+        final SqlNode primary = proj_call.operand(0);
+        final SqlNode pattern = proj_call.operand(1);
+
+        if (pattern instanceof SqlLiteral) {
+          // LIKE only supports Literal patterns ... at the moment
+          SqlLiteral literalPattern = (SqlLiteral) pattern;
+          String sPattern = literalPattern.getValueAs(String.class);
+          SqlLiteral withWildcards = SqlLiteral.createCharString("%" + sPattern, pos);
+          return SqlStdOperatorTable.LIKE.createCall(pos, primary, withWildcards);
+        }
+      }
+      return null;
+    } else if (proj_call.getOperator().isName("LCASE", false)) {
+      // Expand LCASE with LOWER
+      final SqlParserPos pos = proj_call.getParserPosition();
+      if (operandCount == 1) {
+        final SqlNode primary = proj_call.operand(0);
+        return SqlStdOperatorTable.LOWER.createCall(pos, primary);
+      }
+      return null;
+
     } else if (proj_call.getOperator().isName("LEFT", false)) {
-      // Expand LEFT to a suitable SUBSTRING
+      // Replace LEFT with SUBSTRING
       final SqlParserPos pos = proj_call.getParserPosition();
 
       if (operandCount == 2) {
@@ -1247,8 +1293,46 @@ public final class HeavyDBParser {
       }
       return null;
 
+    } else if (proj_call.getOperator().isName("LEN", false)) {
+      // Replace LEN with CHARACTER_LENGTH
+      final SqlParserPos pos = proj_call.getParserPosition();
+      if (operandCount == 1) {
+        final SqlNode primary = proj_call.operand(0);
+        return SqlStdOperatorTable.CHARACTER_LENGTH.createCall(pos, primary);
+      }
+      return null;
+
+    } else if (proj_call.getOperator().isName("MAX", false)
+            || proj_call.getOperator().isName("MIN", false)) {
+      // Replace MAX(a,b), MIN(a,b) with CASE
+      final SqlParserPos pos = proj_call.getParserPosition();
+
+      if (operandCount == 2) {
+        final SqlNode arg1 = proj_call.operand(0);
+        final SqlNode arg2 = proj_call.operand(1);
+
+        SqlNodeList whenList = new SqlNodeList(pos);
+        SqlNodeList thenList = new SqlNodeList(pos);
+        SqlNodeList elseClause = new SqlNodeList(pos);
+
+        if (proj_call.getOperator().isName("MAX", false)) {
+          whenList.add(
+                  SqlStdOperatorTable.GREATER_THAN_OR_EQUAL.createCall(pos, arg1, arg2));
+        } else {
+          whenList.add(
+                  SqlStdOperatorTable.LESS_THAN_OR_EQUAL.createCall(pos, arg1, arg2));
+        }
+        thenList.add(arg1);
+        elseClause.add(arg2);
+
+        SqlNode caseIdentifier = null;
+        return SqlCase.createSwitched(
+                pos, caseIdentifier, whenList, thenList, elseClause);
+      }
+      return null;
+
     } else if (proj_call.getOperator().isName("RIGHT", false)) {
-      // Expand RIGHT to a suitable SUBSTRING
+      // Replace RIGHT with SUBSTRING
       final SqlParserPos pos = proj_call.getParserPosition();
 
       if (operandCount == 2) {
@@ -1273,33 +1357,67 @@ public final class HeavyDBParser {
       }
       return null;
 
-    } else if (proj_call.getOperator().isName("LCASE", false)) {
-      // Expand LCASE to LOWER
+    } else if (proj_call.getOperator().isName("SPACE", false)) {
+      // Replace SPACE with REPEAT
       final SqlParserPos pos = proj_call.getParserPosition();
       if (operandCount == 1) {
+        final SqlNode count = proj_call.operand(0);
+        SqlFunction fn_repeat = new SqlFunction("REPEAT",
+                SqlKind.OTHER_FUNCTION,
+                ReturnTypes.ARG0_NULLABLE,
+                null,
+                OperandTypes.CHARACTER,
+                SqlFunctionCategory.STRING);
+        SqlLiteral space = SqlLiteral.createCharString(" ", pos);
+        return fn_repeat.createCall(pos, space, count);
+      }
+      return null;
+
+    } else if (proj_call.getOperator().isName("SPLIT", false)) {
+      // Replace SPLIT with SPLIT_PART
+      final SqlParserPos pos = proj_call.getParserPosition();
+      if (operandCount == 3) {
         final SqlNode primary = proj_call.operand(0);
-        return SqlStdOperatorTable.LOWER.createCall(pos, primary);
+        final SqlNode delimeter = proj_call.operand(1);
+        final SqlNode count = proj_call.operand(2);
+        SqlFunction fn_split = new SqlFunction("SPLIT_PART",
+                SqlKind.OTHER_FUNCTION,
+                ReturnTypes.ARG0_NULLABLE,
+                null,
+                OperandTypes.CHARACTER,
+                SqlFunctionCategory.STRING);
+
+        return fn_split.createCall(pos, primary, delimeter, count);
+      }
+      return null;
+
+    } else if (proj_call.getOperator().isName("STARTSWITH", false)) {
+      // Replace STARTSWITH with LIKE
+      final SqlParserPos pos = proj_call.getParserPosition();
+      if (operandCount == 2) {
+        final SqlNode primary = proj_call.operand(0);
+        final SqlNode pattern = proj_call.operand(1);
+
+        if (pattern instanceof SqlLiteral) {
+          // LIKE only supports Literal patterns ... at the moment
+          SqlLiteral literalPattern = (SqlLiteral) pattern;
+          String sPattern = literalPattern.getValueAs(String.class);
+          SqlLiteral withWildcards = SqlLiteral.createCharString(sPattern + "%", pos);
+          return SqlStdOperatorTable.LIKE.createCall(pos, primary, withWildcards);
+        }
       }
       return null;
 
     } else if (proj_call.getOperator().isName("UCASE", false)) {
-      // Expand UCASE to UPPER
+      // Replace UCASE with UPPER
       final SqlParserPos pos = proj_call.getParserPosition();
       if (operandCount == 1) {
         final SqlNode primary = proj_call.operand(0);
         return SqlStdOperatorTable.UPPER.createCall(pos, primary);
       }
       return null;
-
-    } else if (proj_call.getOperator().isName("LEN", false)) {
-      // Expand LEN to operator CHARACTER_LENGTH
-      final SqlParserPos pos = proj_call.getParserPosition();
-      if (operandCount == 1) {
-        final SqlNode primary = proj_call.operand(0);
-        return SqlStdOperatorTable.CHARACTER_LENGTH.createCall(pos, primary);
-      }
-      return null;
     }
+
     return null;
   }
 
