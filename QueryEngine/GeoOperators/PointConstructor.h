@@ -111,7 +111,7 @@ class PointConstructor : public Codegen {
                                          cgen_state->llFp(inline_fp_null_val(x_ti)));
     }
 
-    auto y_operand = getOperand(0);
+    auto y_operand = getOperand(1);
     const auto& y_ti = y_operand->get_type_info();
     if (!y_ti.get_notnull()) {
       auto y_is_null =
@@ -123,7 +123,8 @@ class PointConstructor : public Codegen {
                                    arg_lvs.front(),
                                    cgen_state->llFp(inline_fp_null_val(y_ti)));
       if (is_null) {
-        is_null = builder.CreateAnd(is_null, y_is_null);
+        // the point is null if at least one of its coordinate has null value
+        is_null = builder.CreateOr(is_null, y_is_null);
       } else {
         is_null = y_is_null;
       }
