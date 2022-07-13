@@ -109,7 +109,7 @@ bool msg_consume(RdKafka::Message* message,
         VLOG(1) << "Timestamp: " << tsname << " " << ts.timestamp << std::endl;
       }
 
-      std::vector<char> buffer(message->len() + 1);
+      std::vector<char> buffer(message->len() + 2);
       sprintf(buffer.data(),
               "%.*s\n",
               static_cast<int>(message->len()),
