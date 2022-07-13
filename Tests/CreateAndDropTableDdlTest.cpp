@@ -2346,28 +2346,60 @@ INSTANTIATE_TEST_SUITE_P(
             "TooManyElementsInFixedTextArray")),
     [](const auto& param_info) { return param_info.param.description; });
 
-class CommentsBeforeCommandTest : public DBHandlerTestFixture {
+class SqlCommentsTest : public DBHandlerTestFixture {
  protected:
   inline static const std::string kCreateTableCommand{
       "CREATE TABLE test_table (i INTEGER);"};
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("DROP TABLE IF EXISTS test_table");
+  }
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS test_table");
+    DBHandlerTestFixture::TearDown();
+  }
 };
 
-TEST_F(CommentsBeforeCommandTest, SingleLineHyphenCommentBeforeCommand) {
-  queryAndAssertException(
-      " -- test comment\n" + kCreateTableCommand,
-      "SQL statements starting with comments are currently not allowed.");
+TEST_F(SqlCommentsTest, SingleLineHyphenCommentBeforeCommand) {
+  sql("-- test comment\n" + kCreateTableCommand);
 }
 
-TEST_F(CommentsBeforeCommandTest, SingleLineSlashCommentBeforeCommand) {
-  queryAndAssertException(
-      "//test comment\n" + kCreateTableCommand,
-      "SQL statements starting with comments are currently not allowed.");
+TEST_F(SqlCommentsTest, SingleLineSlashCommentBeforeCommand) {
+  sql("// test comment\n" + kCreateTableCommand);
 }
 
-TEST_F(CommentsBeforeCommandTest, MultiLineCommentBeforeCommand) {
-  queryAndAssertException(
-      "/* test comment 1\n test comment2*/" + kCreateTableCommand,
-      "SQL statements starting with comments are currently not allowed.");
+TEST_F(SqlCommentsTest, MultiLineCommentBeforeCommand) {
+  sql("/* test comment 1\n test comment2*/" + kCreateTableCommand);
+}
+
+TEST_F(SqlCommentsTest, NestedSlashCommentBeforeCommand) {
+  sql("/* test comment 1 // slash comment ignored */" + kCreateTableCommand);
+}
+
+TEST_F(SqlCommentsTest, NestedCppCommentBeforeCommand) {
+  sql("// test comment 1 /* C++-style non-teminated comment ignored \n" +
+      kCreateTableCommand);
+}
+
+TEST_F(SqlCommentsTest, CppCommentWithinSql) {
+  // uses same table name as other tests, so it'll be dropped on TearDown()
+  sql(std::string("/*c1*/ CREATE /*c2*/ TABLE /*c3*/ test_table /*c4*/") +
+      "(i /*c5*/ INTEGER /*c6*/ ) /*c7*/;");
+}
+
+TEST_F(SqlCommentsTest, SingleLineHyphenCommentAfterCommand) {
+  queryAndAssertException(kCreateTableCommand + "-- test comment\n",
+                          "multiple SQL statements not allowed");
+}
+
+TEST_F(SqlCommentsTest, SingleLineSlashCommentAfterCommand) {
+  queryAndAssertException(kCreateTableCommand + "// test comment\n",
+                          "multiple SQL statements not allowed");
+}
+
+TEST_F(SqlCommentsTest, MultiLineCommentAfterCommand) {
+  queryAndAssertException(kCreateTableCommand + "/* test comment 1\n test comment2*/",
+                          "multiple SQL statements not allowed");
 }
 
 int main(int argc, char** argv) {
