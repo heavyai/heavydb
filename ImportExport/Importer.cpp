@@ -165,6 +165,9 @@ static constexpr bool PROMOTE_POLYGON_TO_MULTIPOLYGON = true;
 static heavyai::shared_mutex status_mutex;
 static std::map<std::string, ImportStatus> import_status_map;
 
+// max # rows to import
+static const size_t kImportRowLimit = 10000;
+
 Importer::Importer(Catalog_Namespace::Catalog& c,
                    const TableDescriptor* t,
                    const std::string& f,
@@ -3233,7 +3236,8 @@ ImportStatus Detector::importDelimited(
       line.clear();
       ++import_status_.rows_completed;
       if (std::chrono::steady_clock::now() > end_time) {
-        if (import_status_.rows_completed > 10000) {
+        if (import_status_.rows_completed >= kImportRowLimit) {
+          // stop import when row limit reached
           break;
         }
       }
@@ -4358,6 +4362,11 @@ void DataStreamSink::import_compressed(
                   if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
                     // ignore these, assume nothing written, try again
                     nwritten = 0;
+                  } else if (errno == EPIPE &&
+                             import_status_.rows_completed >= kImportRowLimit) {
+                    // the reader thread has shut down the pipe from the read end
+                    stop = true;
+                    break;
                   } else {
                     // a real error
                     throw std::runtime_error(
@@ -4399,6 +4408,11 @@ void DataStreamSink::import_compressed(
                 if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
                   // ignore these, assume nothing written, try again
                   nwritten = 0;
+                } else if (errno == EPIPE &&
+                           import_status_.rows_completed >= kImportRowLimit) {
+                  // the reader thread has shut down the pipe from the read end
+                  stop = true;
+                  break;
                 } else {
                   // a real error
                   throw std::runtime_error(
