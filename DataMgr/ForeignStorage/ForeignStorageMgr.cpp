@@ -252,6 +252,10 @@ void ForeignStorageMgr::removeTableRelatedDS(const int db_id, const int table_id
   const ChunkKey table_key{db_id, table_id};
   {
     std::lock_guard data_wrapper_lock(data_wrapper_mutex_);
+    if (auto mock_it = mocked_wrapper_map_.find(table_key);
+        mock_it != mocked_wrapper_map_.end()) {
+      mock_it->second->unsetParentWrapper();
+    }
     data_wrapper_map_.erase(table_key);
   }
   clearTempChunkBufferMapEntriesForTable(table_key);

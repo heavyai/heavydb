@@ -5587,6 +5587,8 @@ class MockDataWrapper : public foreign_storage::MockForeignDataWrapper {
     parent_data_wrapper_ = parent_data_wrapper;
   }
 
+  void unsetParentWrapper() override { parent_data_wrapper_ = nullptr; }
+
   void throwOnMetadataScan(bool throw_on_metadata_scan) {
     throw_on_metadata_scan_ = throw_on_metadata_scan;
   }

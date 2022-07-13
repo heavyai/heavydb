@@ -28,10 +28,13 @@ void ForeignStorageBuffer::read(int8_t* const destination,
   memcpy(destination, buffer_.get() + offset, num_bytes);
 }
 
-void ForeignStorageBuffer::reserve(size_t additional_num_bytes) {
-  if (size_ + additional_num_bytes > reserved_byte_count_) {
+void ForeignStorageBuffer::reserve(size_t total_num_bytes) {
+  if (total_num_bytes > reserved_byte_count_) {
     auto old_buffer = std::move(buffer_);
-    reserved_byte_count_ += additional_num_bytes;
+    reserved_byte_count_ = reserved_byte_count_ == 0 ? 1 : reserved_byte_count_;
+    while (total_num_bytes > reserved_byte_count_) {
+      reserved_byte_count_ *= 2;
+    }
     buffer_ = std::make_unique<int8_t[]>(reserved_byte_count_);
     if (old_buffer) {
       memcpy(buffer_.get(), old_buffer.get(), size_);
@@ -44,7 +47,7 @@ void ForeignStorageBuffer::append(int8_t* source,
                                   const MemoryLevel source_buffer_type,
                                   const int device_id) {
   if (size_ + num_bytes > reserved_byte_count_) {
-    reserve(num_bytes);
+    reserve(size_ + num_bytes);
   }
   memcpy(buffer_.get() + size_, source, num_bytes);
   size_ += num_bytes;

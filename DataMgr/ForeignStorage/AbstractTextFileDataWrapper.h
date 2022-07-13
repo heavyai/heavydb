@@ -17,6 +17,7 @@
 #pragma once
 
 #include <map>
+#include <queue>
 #include <set>
 
 #include "AbstractFileStorageDataWrapper.h"
@@ -28,6 +29,51 @@
 #include "DataMgr/ForeignStorage/TextFileBufferParser.h"
 
 namespace foreign_storage {
+
+/**
+ * Data structure used to hold shared objects needed for inter-thread
+ * synchronization or objects containing data that is updated by
+ * multiple threads while scanning files for metadata.
+ */
+struct MetadataScanMultiThreadingParams {
+  std::queue<ParseBufferRequest> pending_requests;
+  std::mutex pending_requests_mutex;
+  std::condition_variable pending_requests_condition;
+  std::queue<ParseBufferRequest> request_pool;
+  std::mutex request_pool_mutex;
+  std::condition_variable request_pool_condition;
+  bool continue_processing;
+  std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_encoder_buffers;
+  std::map<ChunkKey, Chunk_NS::Chunk> cached_chunks;
+  std::mutex chunk_encoder_buffers_mutex;
+  bool disable_cache;
+};
+
+struct ReentrantMetadataScanParameters {
+  std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map;
+  int32_t fragment_id;
+  AbstractBuffer* delete_buffer;
+
+  mutable std::map<int, std::unique_ptr<std::mutex>> column_id_to_chunk_mutex;
+  mutable std::mutex delete_buffer_mutex;
+
+  ReentrantMetadataScanParameters(std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
+                                  int32_t fragment_id,
+                                  AbstractBuffer* delete_buffer)
+      : column_id_to_chunk_map(column_id_to_chunk_map)
+      , fragment_id(fragment_id)
+      , delete_buffer(delete_buffer) {
+    for (const auto& [key, _] : column_id_to_chunk_map) {
+      column_id_to_chunk_mutex[key] = std::make_unique<std::mutex>();
+    }
+  }
+
+  std::mutex& getChunkMutex(const int col_id) const {
+    auto mutex_it = column_id_to_chunk_mutex.find(col_id);
+    CHECK(mutex_it != column_id_to_chunk_mutex.end());
+    return *mutex_it->second;
+  }
+};
 
 class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
  public:
@@ -60,12 +106,31 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
 
   void createRenderGroupAnalyzers() override;
 
+  bool isLazyFragmentFetchingEnabled() const override { return true; }
+
+  struct ResidualBuffer {
+    std::unique_ptr<char[]> residual_data;
+    size_t alloc_size;
+    size_t residual_buffer_size;
+    size_t residual_buffer_alloc_size;
+  };
+
  protected:
   virtual const TextFileBufferParser& getFileBufferParser() const = 0;
   virtual std::optional<size_t> getMaxFileCount() const;
 
  private:
   AbstractTextFileDataWrapper(const ForeignTable* foreign_table);
+
+  /**
+   * Implements a reentrant variant of the `populateChunkMetadata` member,
+   * allowing subsequent calls that respect the current state of the metadata
+   * scan.
+   */
+  void populateChunkMetadataReentrant(
+      ChunkMetadataVector& chunk_metadata_vector,
+      const std::optional<ReentrantMetadataScanParameters>&
+          reentrant_metadata_scan_param = std::nullopt);
 
   /**
    * Populates provided chunks with appropriate data by parsing all file regions
@@ -113,9 +178,19 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
   // Force cache to be disabled
   const bool disable_cache_;
 
+  bool is_first_metadata_scan_call_;
+  bool is_reentrant_metadata_scan_in_progress_;
+
   // declared in three derived classes to avoid
   // polluting ForeignDataWrapper virtual base
   // @TODO refactor to lower class if needed
   RenderGroupAnalyzerMap render_group_analyzer_map_;
+
+  // These parameters may be reused in a reentrant metadata scan
+  MetadataScanMultiThreadingParams multi_threading_params_;
+  size_t buffer_size_;
+  size_t thread_count_;
+
+  ResidualBuffer residual_buffer_;
 };
 }  // namespace foreign_storage

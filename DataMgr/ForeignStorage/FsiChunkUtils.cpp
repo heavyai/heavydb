@@ -54,16 +54,18 @@ void init_chunk_for_column(
     } else {
       UNREACHABLE();
     }
-    CHECK(chunk_metadata_map.find(data_chunk_key) != chunk_metadata_map.end());
-    index_buffer->reserve(index_offset_size *
-                          (chunk_metadata_map.at(data_chunk_key)->numElements + 1));
+    if (chunk_metadata_map.find(data_chunk_key) != chunk_metadata_map.end()) {
+      index_buffer->reserve(index_offset_size *
+                            (chunk_metadata_map.at(data_chunk_key)->numElements + 1));
+    }
   } else {
     data_chunk_key = chunk_key;
     CHECK(buffers.find(data_chunk_key) != buffers.end());
     data_buffer = buffers.find(data_chunk_key)->second;
   }
-  CHECK(chunk_metadata_map.find(data_chunk_key) != chunk_metadata_map.end());
-  data_buffer->reserve(chunk_metadata_map.at(data_chunk_key)->numBytes);
+  if (chunk_metadata_map.find(data_chunk_key) != chunk_metadata_map.end()) {
+    data_buffer->reserve(chunk_metadata_map.at(data_chunk_key)->numBytes);
+  }
 
   chunk.setPinnable(false);
   chunk.setColumnDesc(column);

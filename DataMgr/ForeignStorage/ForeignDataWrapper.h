@@ -160,5 +160,18 @@ class ForeignDataWrapper {
    *
    */
   virtual void createRenderGroupAnalyzers() {}
+
+  /**
+   * If `true` data wrapper implements a lazy fragment fetching mode. This mode
+   * allows requests for fragments to be issued to `populateChunks` *without*
+   * the prerequisite that `populateChunkMetadata` has successfully finished
+   * execution. This is an optimization that has some specific use-cases and is
+   * not required.
+   *
+   * NOTE: this mode is not guaranteed to work as expected when combined with
+   * certain types of refresh modes such as append. This is subject to change
+   * in the future, but has no impact on the intended use-cases of this mode.
+   */
+  virtual bool isLazyFragmentFetchingEnabled() const { return false; }
 };
 }  // namespace foreign_storage

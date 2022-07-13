@@ -72,7 +72,7 @@ class NoneEncoder : public Encoder {
                                                    const size_t start_idx,
                                                    const size_t num_elements) override {
     auto current_data = data + sizeof(T) * start_idx;
-    return appendData(current_data, num_elements, SQLTypeInfo{}, false);
+    return appendValidatedOrNonValidatedData(current_data, num_elements, false, -1, true);
   }
 
   std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
@@ -80,40 +80,8 @@ class NoneEncoder : public Encoder {
                                             const SQLTypeInfo&,
                                             const bool replicating = false,
                                             const int64_t offset = -1) override {
-    if (offset == 0 && num_elems_to_append >= num_elems_) {
-      resetChunkStats();
-    }
-    T* unencodedData = reinterpret_cast<T*>(src_data);
-    std::vector<T> encoded_data;
-    if (replicating) {
-      if (num_elems_to_append > 0) {
-        encoded_data.resize(num_elems_to_append);
-        T data = validateDataAndUpdateStats(unencodedData[0]);
-        std::fill(encoded_data.begin(), encoded_data.end(), data);
-      }
-    } else {
-      updateStats(src_data, num_elems_to_append);
-    }
-    if (offset == -1) {
-      auto append_data_size = num_elems_to_append * sizeof(T);
-      buffer_->reserve(buffer_->size() + append_data_size);
-      num_elems_ += num_elems_to_append;
-      buffer_->append(
-          replicating ? reinterpret_cast<int8_t*>(encoded_data.data()) : src_data,
-          append_data_size);
-      if (!replicating) {
-        src_data += num_elems_to_append * sizeof(T);
-      }
-    } else {
-      num_elems_ = offset + num_elems_to_append;
-      CHECK(!replicating);
-      CHECK_GE(offset, 0);
-      buffer_->write(
-          src_data, num_elems_to_append * sizeof(T), static_cast<size_t>(offset));
-    }
-    auto chunk_metadata = std::make_shared<ChunkMetadata>();
-    getMetadata(chunk_metadata);
-    return chunk_metadata;
+    return appendValidatedOrNonValidatedData(
+        src_data, num_elems_to_append, replicating, offset, false);
   }
 
   void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) override {
@@ -151,10 +119,7 @@ class NoneEncoder : public Encoder {
   }
 
   void updateStats(const int8_t* const src_data, const size_t num_elements) override {
-    const T* unencoded_data = reinterpret_cast<const T*>(src_data);
-    for (size_t i = 0; i < num_elements; ++i) {
-      validateDataAndUpdateStats(unencoded_data[i]);
-    }
+    updateStats(src_data, num_elements, false);
   }
 
   void updateStatsEncoded(const int8_t* const dst_data,
@@ -257,15 +222,69 @@ class NoneEncoder : public Encoder {
   bool has_nulls;
 
  private:
-  T validateDataAndUpdateStats(const T& unencoded_data) {
+  std::shared_ptr<ChunkMetadata> appendValidatedOrNonValidatedData(
+      int8_t*& src_data,
+      const size_t num_elems_to_append,
+      const bool replicating,
+      const int64_t offset,
+      const bool is_validated_data) {
+    if (offset == 0 && num_elems_to_append >= num_elems_) {
+      resetChunkStats();
+    }
+    T* unencodedData = reinterpret_cast<T*>(src_data);
+    std::vector<T> encoded_data;
+    if (replicating) {
+      if (num_elems_to_append > 0) {
+        encoded_data.resize(num_elems_to_append);
+        T data = validateDataAndUpdateStats(unencodedData[0]);
+        std::fill(encoded_data.begin(), encoded_data.end(), data);
+      }
+    } else {
+      updateStats(src_data, num_elems_to_append, is_validated_data);
+    }
+    if (offset == -1) {
+      auto append_data_size = num_elems_to_append * sizeof(T);
+      buffer_->reserve(buffer_->size() + append_data_size);
+      num_elems_ += num_elems_to_append;
+      buffer_->append(
+          replicating ? reinterpret_cast<int8_t*>(encoded_data.data()) : src_data,
+          append_data_size);
+      if (!replicating) {
+        src_data += num_elems_to_append * sizeof(T);
+      }
+    } else {
+      num_elems_ = offset + num_elems_to_append;
+      CHECK(!replicating);
+      CHECK_GE(offset, 0);
+      buffer_->write(
+          src_data, num_elems_to_append * sizeof(T), static_cast<size_t>(offset));
+    }
+    auto chunk_metadata = std::make_shared<ChunkMetadata>();
+    getMetadata(chunk_metadata);
+    return chunk_metadata;
+  }
+
+  T validateDataAndUpdateStats(const T& unencoded_data,
+                               const bool is_validated_data = false) {
     if (unencoded_data == none_encoded_null_value<T>()) {
       has_nulls = true;
     } else {
-      decimal_overflow_validator_.validate(unencoded_data);
+      if (!is_validated_data) {  // does not need validation
+        decimal_overflow_validator_.validate(unencoded_data);
+      }
       dataMin = std::min(dataMin, unencoded_data);
       dataMax = std::max(dataMax, unencoded_data);
     }
     return unencoded_data;
+  }
+
+  void updateStats(const int8_t* const src_data,
+                   const size_t num_elements,
+                   const bool is_validated_data) {
+    const T* unencoded_data = reinterpret_cast<const T*>(src_data);
+    for (size_t i = 0; i < num_elements; ++i) {
+      validateDataAndUpdateStats(unencoded_data[i], is_validated_data);
+    }
   }
 };  // class NoneEncoder
 

@@ -27,10 +27,10 @@ class ForeignStorageException : public std::runtime_error {
       : std::runtime_error(error_message) {}
 };
 
-class MetadataScanInfeasibleFragmentSizeException : public std::runtime_error {
+class MetadataScanInfeasibleFragmentSizeException : public ForeignStorageException {
  public:
   MetadataScanInfeasibleFragmentSizeException(const std::string& error_message)
-      : std::runtime_error(error_message), min_feasible_fragment_size_(-1) {}
+      : ForeignStorageException(error_message), min_feasible_fragment_size_(-1) {}
 
   int32_t
       min_feasible_fragment_size_;  // may be set to indicate what the minimum feasible
@@ -48,6 +48,12 @@ inline void throw_unexpected_number_of_items(const size_t& num_expected,
       ". Please use the \"REFRESH FOREIGN TABLES\" command on the foreign table "
       "if data source has been updated.");
 }
+
+class RequestedFragmentIdOutOfBoundsException : public ForeignStorageException {
+ public:
+  RequestedFragmentIdOutOfBoundsException(const std::string& error_message)
+      : ForeignStorageException(error_message) {}
+};
 
 inline void throw_removed_row_in_result_set_error(const std::string& select_statement) {
   throw ForeignStorageException{

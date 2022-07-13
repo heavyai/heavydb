@@ -71,6 +71,8 @@ class MockForeignDataWrapper : public ForeignDataWrapper {
  public:
   virtual void setParentWrapper(
       std::shared_ptr<ForeignDataWrapper> parent_data_wrapper) = 0;
+
+  virtual void unsetParentWrapper() = 0;
 };
 
 class ForeignStorageMgr : public AbstractBufferMgr {
