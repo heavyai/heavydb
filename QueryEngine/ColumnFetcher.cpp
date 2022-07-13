@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -543,8 +543,8 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
   auto merged_index_buffer = res.second;
 
   // prepare ChunkIter for the linearized chunk
-  auto merged_chunk =
-      std::make_shared<Chunk_NS::Chunk>(merged_data_buffer, merged_index_buffer, cd);
+  auto merged_chunk = std::make_shared<Chunk_NS::Chunk>(
+      merged_data_buffer, merged_index_buffer, cd, false);
   // to prepare chunk_iter for the merged chunk, we pass one of local chunk iter
   // to fill necessary metadata that is a common for all merged chunks
   auto merged_chunk_iter = prepareChunkIter(merged_data_buffer,
@@ -664,7 +664,6 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
 
   // linearize buffers if we don't have corresponding buf in cache
   size_t sum_data_buf_size = 0;
-  size_t sum_idx_buf_size = 0;
   size_t cur_sum_num_tuples = 0;
   size_t total_idx_size_modifier = 0;
   auto chunk_holder_it = local_chunk_holder.begin();
@@ -826,7 +825,6 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
         }
       }
     }
-    sum_idx_buf_size += idx_buf_size;
     cur_sum_num_tuples += cur_chunk_num_tuples;
     sum_data_buf_size += target_chunk_data_buffer->size();
     if (target_idx_buf_ptr[*chunk_num_tuple_it] < 0) {

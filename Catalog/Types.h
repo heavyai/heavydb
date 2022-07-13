@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ using ColumnKey = std::tuple<int, std::string>;
 using ColumnDescriptorMap = std::map<ColumnKey, ColumnDescriptor*>;
 using ColumnIdKey = std::tuple<int, int>;
 using ColumnDescriptorMapById = std::map<ColumnIdKey, ColumnDescriptor*>;
+using TableDictColumnsMap = std::map<int32_t, std::set<const ColumnDescriptor*>>;
 using DictDescriptorMapById = std::map<DictRef, std::unique_ptr<DictDescriptor>>;
 using DashboardDescriptorMap =
     std::map<std::string, std::shared_ptr<DashboardDescriptor>>;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,9 @@
 
 RenderInfo::RenderInfo(const ::QueryRenderer::RenderSessionKey& in_render_session_key,
                        const RenderQueryOptions& in_render_query_opts,
-                       const bool force_non_in_situ_data)
-    : render_session_key(in_render_session_key)
+                       const heavyai::InSituFlags in_insitu_flags)
+    : heavyai::InSituFlagsOwnerInterface(in_insitu_flags)
+    , render_session_key(in_render_session_key)
     , render_query_opts_(in_render_query_opts) {
   CHECK(false);
 }
@@ -41,28 +42,12 @@ std::shared_ptr<Catalog_Namespace::SessionInfo const> RenderInfo::getSessionInfo
   return {};
 }
 
-void RenderInfo::setForceNonInSituData() {
+void RenderInfo::forceNonInSitu() {
   CHECK(false);
 }
 
-bool RenderInfo::queryRanWithInSituData() const {
+void RenderInfo::setNonInSitu() {
   CHECK(false);
-  return false;
-}
-
-bool RenderInfo::hasInSituData() const {
-  CHECK(false);
-  return false;
-}
-
-bool RenderInfo::isInSituDataFlagUnset() const {
-  CHECK(false);
-  return false;
-}
-
-bool RenderInfo::isPotentialInSituRender() const {
-  CHECK(false);
-  return false;
 }
 
 bool RenderInfo::useCudaBuffers() const {
@@ -94,18 +79,12 @@ void RenderInfo::setQuerySsboLayout(
   CHECK(false);
 }
 
-bool RenderInfo::setInSituDataIfUnset(const bool is_in_situ_data) {
-  CHECK(false);
-  return false;
-}
-
 const RenderQueryOptions& RenderInfo::getRenderQueryOptions() const {
   CHECK(false);
   return render_query_opts_;
 }
 
 void RenderInfo::reset(std::unique_ptr<RenderQueryOptions> in_query_opts,
-                       const bool in_force_non_in_situ_data,
-                       const bool in_disallow_in_situ_only_if_final_ED_is_aggregate) {
+                       const bool in_force_non_in_situ_data) {
   CHECK(false);
 }

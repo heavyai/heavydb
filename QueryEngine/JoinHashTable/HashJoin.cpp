@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,11 @@
 
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 
+#include "QueryEngine/CodeGenerator.h"
 #include "QueryEngine/ColumnFetcher.h"
 #include "QueryEngine/EquiJoinCondition.h"
 #include "QueryEngine/Execute.h"
+#include "QueryEngine/ExpressionRewrite.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
@@ -26,8 +28,7 @@
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryEngine/ScalarExprVisitor.h"
 
-std::unique_ptr<HashTablePropertyRecycler> HashJoin::hash_table_property_cache_ =
-    std::make_unique<HashTablePropertyRecycler>();
+#include <sstream>
 
 extern bool g_enable_overlaps_hashjoin;
 
@@ -43,6 +44,7 @@ void ColumnsForDevice::setBucketInfo(
     const auto inner_col = inner_outer_pair.first;
     const auto& ti = inner_col->get_type_info();
     const auto elem_ti = ti.get_elem_type();
+    // CHECK(elem_ti.is_fp());
 
     join_buckets.emplace_back(JoinBucketInfo{inverse_bucket_sizes_for_dimension,
                                              elem_ti.get_type() == kDOUBLE});
@@ -165,6 +167,42 @@ std::ostream& operator<<(std::ostream& os, const DecodedJoinHashBufferSet& s) {
   return os;
 }
 
+std::ostream& operator<<(std::ostream& os,
+                         const InnerOuterStringOpInfos& inner_outer_string_op_infos) {
+  os << "(" << inner_outer_string_op_infos.first << ", "
+     << inner_outer_string_op_infos.second << ")";
+  return os;
+}
+
+std::string toString(const InnerOuterStringOpInfos& inner_outer_string_op_infos) {
+  std::ostringstream os;
+  os << inner_outer_string_op_infos;
+  return os.str();
+}
+
+std::ostream& operator<<(
+    std::ostream& os,
+    const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_infos_pairs) {
+  os << "[";
+  bool first_elem = true;
+  for (const auto& inner_outer_string_op_infos : inner_outer_string_op_infos_pairs) {
+    if (!first_elem) {
+      os << ", ";
+    }
+    first_elem = false;
+    os << inner_outer_string_op_infos;
+  }
+  os << "]";
+  return os;
+}
+
+std::string toString(
+    const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_infos_pairs) {
+  std::ostringstream os;
+  os << inner_outer_string_op_infos_pairs;
+  return os.str();
+}
+
 HashJoinMatchingSet HashJoin::codegenMatchingSet(
     const std::vector<llvm::Value*>& hash_join_idx_args_in,
     const bool is_sharded,
@@ -261,39 +299,6 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
     throw std::runtime_error(
         "Overlaps hash join disabled, attempting to fall back to loop join");
   }
-  auto delivered_query_hint = query_hint;
-  auto hashtable_type =
-      dynamic_cast<const Analyzer::ExpressionTuple*>(qual_bin_oper->get_left_operand())
-          ? std::make_pair(HashTableHashingType::BASELINE, "Baseline")
-          : std::make_pair(HashTableHashingType::PERFECT, "Perfect");
-  // since we have two separate caches for perfect and baseline join hash tables,
-  // we check a hashing scheme hint here to invoke specific hash table builder
-  bool hashing_hint_delivered =
-      delivered_query_hint.isHintRegistered(QueryHint::kHashJoin) &&
-      delivered_query_hint.hash_join && delivered_query_hint.hash_join->hashing;
-  if (hashing_hint_delivered) {
-    auto delivered_hashtable_type = delivered_query_hint.hash_join->hashing.value();
-    if (delivered_hashtable_type != hashtable_type.first) {
-      if (delivered_hashtable_type == HashTableHashingType::PERFECT &&
-          hashtable_type.first == HashTableHashingType::BASELINE) {
-        VLOG(1)
-            << "Skipping hash table hashing type hint: cannot build Perfect hash table "
-               "with more than one join column";
-        // invalidate hashing scheme hint
-        if (!delivered_query_hint.hash_join->layout) {
-          // if no layout hint is delivered, then we completely remove hash join hint
-          delivered_query_hint.unregisterHint(QueryHint::kHashJoin);
-        }
-        delivered_query_hint.hash_join->hashing = std::nullopt;
-      } else {
-        hashtable_type.first = delivered_query_hint.hash_join->hashing.value();
-        hashtable_type.second = hashtable_type.first == HashTableHashingType::BASELINE
-                                    ? "Baseline"
-                                    : "Perfect";
-        VLOG(1) << "A user forces to build " << hashtable_type.second << " hash table";
-      }
-    }
-  }
   if (qual_bin_oper->is_overlaps_oper()) {
     VLOG(1) << "Trying to build geo hash table:";
     join_hash_table = OverlapsJoinHashTable::getInstance(qual_bin_oper,
@@ -304,12 +309,41 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                          column_cache,
                                                          executor,
                                                          hashtable_build_dag_map,
-                                                         delivered_query_hint,
+                                                         query_hint,
+                                                         table_id_to_node_map);
+  } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
+                 qual_bin_oper->get_left_operand())) {
+    VLOG(1) << "Trying to build keyed hash table:";
+    join_hash_table = BaselineJoinHashTable::getInstance(qual_bin_oper,
+                                                         query_infos,
+                                                         memory_level,
+                                                         join_type,
+                                                         preferred_hash_type,
+                                                         device_count,
+                                                         column_cache,
+                                                         executor,
+                                                         hashtable_build_dag_map,
                                                          table_id_to_node_map);
   } else {
-    VLOG(1) << "Trying to build " << hashtable_type.second << " hash table";
-    if (hashtable_type.first == HashTableHashingType::BASELINE) {
-      join_hash_table = BaselineJoinHashTable::getInstance(qual_bin_oper,
+    try {
+      VLOG(1) << "Trying to build perfect hash table:";
+      join_hash_table = PerfectJoinHashTable::getInstance(qual_bin_oper,
+                                                          query_infos,
+                                                          memory_level,
+                                                          join_type,
+                                                          preferred_hash_type,
+                                                          device_count,
+                                                          column_cache,
+                                                          executor,
+                                                          hashtable_build_dag_map,
+                                                          table_id_to_node_map);
+    } catch (TooManyHashEntries&) {
+      const auto join_quals = coalesce_singleton_equi_join(qual_bin_oper);
+      CHECK_EQ(join_quals.size(), size_t(1));
+      const auto join_qual =
+          std::dynamic_pointer_cast<Analyzer::BinOper>(join_quals.front());
+      VLOG(1) << "Trying to build keyed hash table after perfect hash table:";
+      join_hash_table = BaselineJoinHashTable::getInstance(join_qual,
                                                            query_infos,
                                                            memory_level,
                                                            join_type,
@@ -318,54 +352,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                            column_cache,
                                                            executor,
                                                            hashtable_build_dag_map,
-                                                           table_id_to_node_map,
-                                                           delivered_query_hint);
-    } else {
-      CHECK(HashTableHashingType::PERFECT == hashtable_type.first);
-      auto buildBaselineJoinHashTable = [&]() {
-        const auto join_quals = coalesce_singleton_equi_join(qual_bin_oper);
-        CHECK_EQ(join_quals.size(), size_t(1));
-        const auto join_qual =
-            std::dynamic_pointer_cast<Analyzer::BinOper>(join_quals.front());
-        VLOG(1) << "Switching to build Baseline hash table after trying to build Perfect "
-                   "hash table";
-        join_hash_table = BaselineJoinHashTable::getInstance(join_qual,
-                                                             query_infos,
-                                                             memory_level,
-                                                             join_type,
-                                                             preferred_hash_type,
-                                                             device_count,
-                                                             column_cache,
-                                                             executor,
-                                                             hashtable_build_dag_map,
-                                                             table_id_to_node_map,
-                                                             delivered_query_hint);
-      };
-      try {
-        join_hash_table = PerfectJoinHashTable::getInstance(qual_bin_oper,
-                                                            query_infos,
-                                                            memory_level,
-                                                            join_type,
-                                                            preferred_hash_type,
-                                                            device_count,
-                                                            column_cache,
-                                                            executor,
-                                                            hashtable_build_dag_map,
-                                                            table_id_to_node_map,
-                                                            delivered_query_hint);
-      } catch (TooManyHashEntries&) {
-        buildBaselineJoinHashTable();
-      } catch (HashingTypeHintDetected& e) {
-        // perfect join hash table which is invoked with a single binary join qual
-        // can be switched to baseline alternative per user-given hashing scheme hint
-        // specifically, perfect join hash table builder may detect a cached hash table
-        // property and we may need to invoke baseline hash table builder depending on the
-        // cached hashing scheme property
-        // note that a baseline join qual having more than one binary join op can never
-        // invoke perfect hash table builder
-        CHECK(e.hashing_type_ == HashTableHashingType::BASELINE);
-        buildBaselineJoinHashTable();
-      }
+                                                           table_id_to_node_map);
     }
   }
   CHECK(join_hash_table);
@@ -389,14 +376,96 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
   return join_hash_table;
 }
 
+std::pair<const StringDictionaryProxy*, StringDictionaryProxy*>
+HashJoin::getStrDictProxies(const InnerOuter& cols,
+                            const Executor* executor,
+                            const bool has_string_ops) {
+  const auto inner_col = cols.first;
+  CHECK(inner_col);
+  const auto inner_ti = inner_col->get_type_info();
+  const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
+  std::pair<const StringDictionaryProxy*, StringDictionaryProxy*>
+      inner_outer_str_dict_proxies{nullptr, nullptr};
+  if (inner_ti.is_string() && outer_col) {
+    CHECK(outer_col->get_type_info().is_string());
+    inner_outer_str_dict_proxies.first =
+        executor->getStringDictionaryProxy(inner_col->get_comp_param(), true);
+    CHECK(inner_outer_str_dict_proxies.first);
+    inner_outer_str_dict_proxies.second =
+        executor->getStringDictionaryProxy(outer_col->get_comp_param(), true);
+    CHECK(inner_outer_str_dict_proxies.second);
+    if (!has_string_ops &&
+        *inner_outer_str_dict_proxies.first == *inner_outer_str_dict_proxies.second) {
+      // Dictionaries are the same - don't need to translate
+      CHECK(inner_col->get_comp_param() == outer_col->get_comp_param());
+      inner_outer_str_dict_proxies.first = nullptr;
+      inner_outer_str_dict_proxies.second = nullptr;
+    }
+  }
+  return inner_outer_str_dict_proxies;
+}
+
+const StringDictionaryProxy::IdMap* HashJoin::translateInnerToOuterStrDictProxies(
+    const InnerOuter& cols,
+    const InnerOuterStringOpInfos& inner_outer_string_op_infos,
+    ExpressionRange& col_range,
+    const Executor* executor) {
+  const bool has_string_ops = inner_outer_string_op_infos.first.size() ||
+                              inner_outer_string_op_infos.second.size();
+  const auto inner_outer_proxies =
+      HashJoin::getStrDictProxies(cols, executor, has_string_ops);
+  const bool translate_dictionary =
+      inner_outer_proxies.first && inner_outer_proxies.second;
+  if (translate_dictionary) {
+    const auto inner_dict_id = inner_outer_proxies.first->getDictId();
+    const auto outer_dict_id = inner_outer_proxies.second->getDictId();
+    CHECK(has_string_ops || inner_dict_id != outer_dict_id);
+    const auto id_map = executor->getJoinIntersectionStringProxyTranslationMap(
+        inner_outer_proxies.first,
+        inner_outer_proxies.second,
+        inner_outer_string_op_infos.first,
+        inner_outer_string_op_infos.second,
+        executor->getRowSetMemoryOwner());
+    if (!inner_outer_string_op_infos.second.empty()) {
+      // String op was applied to lhs table,
+      // need to expand column range appropriately
+      col_range = ExpressionRange::makeIntRange(
+          std::min(col_range.getIntMin(),
+                   static_cast<int64_t>(
+                       inner_outer_proxies.second->transientEntryCount() + 1) *
+                       -1),
+          col_range.getIntMax(),
+          0,
+          col_range.hasNulls());
+    }
+    return id_map;
+  }
+  return nullptr;
+}
+
+std::vector<int> HashJoin::collectFragmentIds(
+    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) {
+  auto const fragment_id = [](auto const& frag_info) { return frag_info.fragmentId; };
+  std::vector<int> frag_ids(fragments.size());
+  std::transform(fragments.cbegin(), fragments.cend(), frag_ids.begin(), fragment_id);
+  std::sort(frag_ids.begin(), frag_ids.end());
+  return frag_ids;
+}
+
 CompositeKeyInfo HashJoin::getCompositeKeyInfo(
     const std::vector<InnerOuter>& inner_outer_pairs,
-    const Executor* executor) {
+    const Executor* executor,
+    const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_infos_pairs) {
   CHECK(executor);
   std::vector<const void*> sd_inner_proxy_per_key;
-  std::vector<const void*> sd_outer_proxy_per_key;
+  std::vector<void*> sd_outer_proxy_per_key;
   std::vector<ChunkKey> cache_key_chunks;  // used for the cache key
   const auto db_id = executor->getCatalog()->getCurrentDB().dbId;
+  const bool has_string_op_infos = inner_outer_string_op_infos_pairs.size();
+  if (has_string_op_infos) {
+    CHECK_EQ(inner_outer_pairs.size(), inner_outer_string_op_infos_pairs.size());
+  }
+  size_t string_op_info_pairs_idx = 0;
   for (const auto& inner_outer_pair : inner_outer_pairs) {
     const auto inner_col = inner_outer_pair.first;
     const auto outer_col = inner_outer_pair.second;
@@ -405,13 +474,16 @@ CompositeKeyInfo HashJoin::getCompositeKeyInfo(
     ChunkKey cache_key_chunks_for_column{
         db_id, inner_col->get_table_id(), inner_col->get_column_id()};
     if (inner_ti.is_string() &&
-        !(inner_ti.get_comp_param() == outer_ti.get_comp_param())) {
+        (!(inner_ti.get_comp_param() == outer_ti.get_comp_param()) ||
+         (has_string_op_infos &&
+          (inner_outer_string_op_infos_pairs[string_op_info_pairs_idx].first.size() ||
+           inner_outer_string_op_infos_pairs[string_op_info_pairs_idx].second.size())))) {
       CHECK(outer_ti.is_string());
       CHECK(inner_ti.get_compression() == kENCODING_DICT &&
             outer_ti.get_compression() == kENCODING_DICT);
       const auto sd_inner_proxy = executor->getStringDictionaryProxy(
           inner_ti.get_comp_param(), executor->getRowSetMemoryOwner(), true);
-      const auto sd_outer_proxy = executor->getStringDictionaryProxy(
+      auto sd_outer_proxy = executor->getStringDictionaryProxy(
           outer_ti.get_comp_param(), executor->getRowSetMemoryOwner(), true);
       CHECK(sd_inner_proxy && sd_outer_proxy);
       sd_inner_proxy_per_key.push_back(sd_inner_proxy);
@@ -422,8 +494,62 @@ CompositeKeyInfo HashJoin::getCompositeKeyInfo(
       sd_outer_proxy_per_key.emplace_back();
     }
     cache_key_chunks.push_back(cache_key_chunks_for_column);
+    string_op_info_pairs_idx++;
   }
   return {sd_inner_proxy_per_key, sd_outer_proxy_per_key, cache_key_chunks};
+}
+
+std::vector<const StringDictionaryProxy::IdMap*>
+HashJoin::translateCompositeStrDictProxies(
+    const CompositeKeyInfo& composite_key_info,
+    const std::vector<InnerOuterStringOpInfos>& string_op_infos_for_keys,
+    const Executor* executor) {
+  const auto& inner_proxies = composite_key_info.sd_inner_proxy_per_key;
+  const auto& outer_proxies = composite_key_info.sd_outer_proxy_per_key;
+  const size_t num_proxies = inner_proxies.size();
+  CHECK_EQ(num_proxies, outer_proxies.size());
+  std::vector<const StringDictionaryProxy::IdMap*> proxy_translation_maps;
+  proxy_translation_maps.reserve(num_proxies);
+  for (size_t proxy_pair_idx = 0; proxy_pair_idx < num_proxies; ++proxy_pair_idx) {
+    const bool translate_proxies =
+        inner_proxies[proxy_pair_idx] && outer_proxies[proxy_pair_idx];
+    if (translate_proxies) {
+      const auto inner_proxy =
+          reinterpret_cast<const StringDictionaryProxy*>(inner_proxies[proxy_pair_idx]);
+      auto outer_proxy =
+          reinterpret_cast<StringDictionaryProxy*>(outer_proxies[proxy_pair_idx]);
+      CHECK(inner_proxy);
+      CHECK(outer_proxy);
+
+      CHECK_NE(inner_proxy->getDictId(), outer_proxy->getDictId());
+      proxy_translation_maps.emplace_back(
+          executor->getJoinIntersectionStringProxyTranslationMap(
+              inner_proxy,
+              outer_proxy,
+              string_op_infos_for_keys[proxy_pair_idx].first,
+              string_op_infos_for_keys[proxy_pair_idx].second,
+              executor->getRowSetMemoryOwner()));
+    } else {
+      proxy_translation_maps.emplace_back(nullptr);
+    }
+  }
+  return proxy_translation_maps;
+}
+
+llvm::Value* HashJoin::codegenColOrStringOper(
+    const Analyzer::Expr* col_or_string_oper,
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+    CodeGenerator& code_generator,
+    const CompilationOptions& co) {
+  if (!string_op_infos.empty()) {
+    const auto coerced_col_var =
+        dynamic_cast<const Analyzer::ColumnVar*>(col_or_string_oper);
+    CHECK(coerced_col_var);
+    std::vector<llvm::Value*> codegen_val_vec{
+        code_generator.codegenPseudoStringOper(coerced_col_var, string_op_infos, co)};
+    return codegen_val_vec[0];
+  }
+  return code_generator.codegen(col_or_string_oper, true, co)[0];
 }
 
 std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(std::string_view table,
@@ -658,13 +784,24 @@ void HashJoin::checkHashJoinReplicationConstraint(const int table_id,
   }
 }
 
-InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
-                                         const Analyzer::Expr* rhs,
-                                         const Catalog_Namespace::Catalog& cat,
-                                         const TemporaryTables* temporary_tables,
-                                         const bool is_overlaps_join) {
-  const auto& lhs_ti = lhs->get_type_info();
-  const auto& rhs_ti = rhs->get_type_info();
+template <typename T>
+const T* HashJoin::getHashJoinColumn(const Analyzer::Expr* expr) {
+  auto* target_expr = expr;
+  if (auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr)) {
+    target_expr = cast_expr->get_operand();
+  }
+  CHECK(target_expr);
+  return dynamic_cast<const T*>(target_expr);
+}
+
+std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
+    const Analyzer::Expr* lhs,
+    const Analyzer::Expr* rhs,
+    const Catalog_Namespace::Catalog& cat,
+    const TemporaryTables* temporary_tables,
+    const bool is_overlaps_join) {
+  SQLTypeInfo lhs_ti = lhs->get_type_info();
+  SQLTypeInfo rhs_ti = rhs->get_type_info();
   if (!is_overlaps_join) {
     if (lhs_ti.get_type() != rhs_ti.get_type()) {
       throw HashJoinFail("Equijoin types must be identical, found: " +
@@ -687,40 +824,86 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
   if (lhs_ti.is_string() && (static_cast<bool>(lhs_cast) != static_cast<bool>(rhs_cast) ||
                              (lhs_cast && lhs_cast->get_optype() != kCAST) ||
                              (rhs_cast && rhs_cast->get_optype() != kCAST))) {
-    throw HashJoinFail("Cannot use hash join for given expression");
+    throw HashJoinFail(
+        "Cannot use hash join for given expression (non-cast unary operator)");
   }
   // Casts to decimal are not suported.
   if (lhs_ti.is_decimal() && (lhs_cast || rhs_cast)) {
-    throw HashJoinFail("Cannot use hash join for given expression");
+    throw HashJoinFail("Cannot use hash join for given expression (cast to decimal)");
   }
-  const auto lhs_col =
-      lhs_cast ? dynamic_cast<const Analyzer::ColumnVar*>(lhs_cast->get_operand())
-               : dynamic_cast<const Analyzer::ColumnVar*>(lhs);
-  const auto rhs_col =
-      rhs_cast ? dynamic_cast<const Analyzer::ColumnVar*>(rhs_cast->get_operand())
-               : dynamic_cast<const Analyzer::ColumnVar*>(rhs);
+  auto lhs_col = getHashJoinColumn<Analyzer::ColumnVar>(lhs);
+  auto rhs_col = getHashJoinColumn<Analyzer::ColumnVar>(rhs);
+
+  const auto lhs_string_oper = getHashJoinColumn<Analyzer::StringOper>(lhs);
+  const auto rhs_string_oper = getHashJoinColumn<Analyzer::StringOper>(rhs);
+
+  auto process_string_op_infos = [](const auto& string_oper, auto& col, auto& ti) {
+    std::vector<StringOps_Namespace::StringOpInfo> string_op_infos;
+    if (string_oper) {
+      col = dynamic_cast<const Analyzer::ColumnVar*>(string_oper->getArg(0));
+      if (!col) {
+        // Todo (todd): Allow for non-colvar inputs into string operators for
+        // join predicates
+        // We now guard against non constant/colvar/stringoper inputs
+        // in Analyzer::StringOper::check_operand_types, but keeping this to not
+        // depend on that logic if and when it changes as allowing non-colvar inputs
+        // for hash joins will be additional work on top of allowing them
+        // outside of join predicates
+        throw HashJoinFail(
+            "Hash joins involving string operators currently restricted to column inputs "
+            "(i.e. not case statements).");
+      }
+      ti = col->get_type_info();
+      CHECK(ti.is_dict_encoded_string());
+      const auto chained_string_op_exprs = string_oper->getChainedStringOpExprs();
+      CHECK_GT(chained_string_op_exprs.size(), 0UL);
+      for (const auto& chained_string_op_expr : chained_string_op_exprs) {
+        auto chained_string_op =
+            dynamic_cast<const Analyzer::StringOper*>(chained_string_op_expr.get());
+        CHECK(chained_string_op);
+        StringOps_Namespace::StringOpInfo string_op_info(
+            chained_string_op->get_kind(), chained_string_op->getLiteralArgs());
+        string_op_infos.emplace_back(string_op_info);
+      }
+    }
+    return string_op_infos;
+  };
+
+  auto outer_string_op_infos = process_string_op_infos(lhs_string_oper, lhs_col, lhs_ti);
+  auto inner_string_op_infos = process_string_op_infos(rhs_string_oper, rhs_col, rhs_ti);
+
   if (!lhs_col && !rhs_col) {
-    throw HashJoinFail("Cannot use hash join for given expression");
+    throw HashJoinFail(
+        "Cannot use hash join for given expression (both lhs and rhs are invalid)",
+        InnerQualDecision::UNKNOWN);
   }
+
   const Analyzer::ColumnVar* inner_col{nullptr};
   const Analyzer::ColumnVar* outer_col{nullptr};
   auto outer_ti = lhs_ti;
   auto inner_ti = rhs_ti;
   const Analyzer::Expr* outer_expr{lhs};
+  InnerQualDecision inner_qual_decision = InnerQualDecision::UNKNOWN;
   if (!lhs_col || (rhs_col && lhs_col->get_rte_idx() < rhs_col->get_rte_idx())) {
+    inner_qual_decision = InnerQualDecision::RHS;
     inner_col = rhs_col;
     outer_col = lhs_col;
   } else {
+    inner_qual_decision = InnerQualDecision::LHS;
     if (lhs_col && lhs_col->get_rte_idx() == 0) {
-      throw HashJoinFail("Cannot use hash join for given expression");
+      throw HashJoinFail(
+          "Cannot use hash join for given expression (lhs' rte idx is zero)",
+          inner_qual_decision);
     }
     inner_col = lhs_col;
     outer_col = rhs_col;
     std::swap(outer_ti, inner_ti);
+    std::swap(outer_string_op_infos, inner_string_op_infos);
     outer_expr = rhs;
   }
   if (!inner_col) {
-    throw HashJoinFail("Cannot use hash join for given expression");
+    throw HashJoinFail("Cannot use hash join for given expression (invalid inner col)",
+                       inner_qual_decision);
   }
   if (!outer_col) {
     // check whether outer_col is a constant, i.e., inner_col = K;
@@ -728,14 +911,17 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
     if (outer_constant_col) {
       throw HashJoinFail(
           "Cannot use hash join for given expression: try to join with a constant "
-          "value");
+          "value",
+          inner_qual_decision);
     }
     MaxRangeTableIndexVisitor rte_idx_visitor;
     int outer_rte_idx = rte_idx_visitor.visit(outer_expr);
     // The inner column candidate is not actually inner; the outer
     // expression contains columns which are at least as deep.
     if (inner_col->get_rte_idx() <= outer_rte_idx) {
-      throw HashJoinFail("Cannot use hash join for given expression");
+      throw HashJoinFail(
+          "Cannot use hash join for given expression (inner's rte <= outer's rte)",
+          inner_qual_decision);
     }
   }
   // We need to fetch the actual type information from the catalog since Analyzer
@@ -753,7 +939,7 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
   // Casts from decimal are not supported.
   if ((inner_col_real_ti.is_decimal() || outer_col_ti.is_decimal()) &&
       (lhs_cast || rhs_cast)) {
-    throw HashJoinFail("Cannot use hash join for given expression");
+    throw HashJoinFail("Cannot use hash join for given expression (cast from decimal)");
   }
   if (is_overlaps_join) {
     if (!inner_col_real_ti.is_array()) {
@@ -795,15 +981,15 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
                                    normalized_inner_ti.get_type_name() + " and " +
                                    normalized_outer_ti.get_type_name()));
   }
-
-  return {normalized_inner_col, normalized_outer_col};
+  return std::make_pair(std::make_pair(normalized_inner_col, normalized_outer_col),
+                        std::make_pair(inner_string_op_infos, outer_string_op_infos));
 }
 
-std::vector<InnerOuter> HashJoin::normalizeColumnPairs(
-    const Analyzer::BinOper* condition,
-    const Catalog_Namespace::Catalog& cat,
-    const TemporaryTables* temporary_tables) {
-  std::vector<InnerOuter> result;
+std::pair<std::vector<InnerOuter>, std::vector<InnerOuterStringOpInfos>>
+HashJoin::normalizeColumnPairs(const Analyzer::BinOper* condition,
+                               const Catalog_Namespace::Catalog& cat,
+                               const TemporaryTables* temporary_tables) {
+  std::pair<std::vector<InnerOuter>, std::vector<InnerOuterStringOpInfos>> result;
   const auto lhs_tuple_expr =
       dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_left_operand());
   const auto rhs_tuple_expr =
@@ -815,22 +1001,33 @@ std::vector<InnerOuter> HashJoin::normalizeColumnPairs(
     const auto& rhs_tuple = rhs_tuple_expr->getTuple();
     CHECK_EQ(lhs_tuple.size(), rhs_tuple.size());
     for (size_t i = 0; i < lhs_tuple.size(); ++i) {
-      result.push_back(normalizeColumnPair(lhs_tuple[i].get(),
-                                           rhs_tuple[i].get(),
-                                           cat,
-                                           temporary_tables,
-                                           condition->is_overlaps_oper()));
+      const auto col_pair = normalizeColumnPair(lhs_tuple[i].get(),
+                                                rhs_tuple[i].get(),
+                                                cat,
+                                                temporary_tables,
+                                                condition->is_overlaps_oper());
+      result.first.emplace_back(col_pair.first);
+      result.second.emplace_back(col_pair.second);
     }
   } else {
     CHECK(!lhs_tuple_expr && !rhs_tuple_expr);
-    result.push_back(normalizeColumnPair(condition->get_left_operand(),
-                                         condition->get_right_operand(),
-                                         cat,
-                                         temporary_tables,
-                                         condition->is_overlaps_oper()));
+    const auto col_pair = normalizeColumnPair(condition->get_left_operand(),
+                                              condition->get_right_operand(),
+                                              cat,
+                                              temporary_tables,
+                                              condition->is_overlaps_oper());
+    result.first.emplace_back(col_pair.first);
+    result.second.emplace_back(col_pair.second);
   }
 
   return result;
+}
+
+bool HashJoin::canAccessHashTable(bool allow_hash_table_recycling,
+                                  bool invalid_cache_key,
+                                  JoinType join_type) {
+  return g_enable_data_recycler && g_use_hashtable_cache && !invalid_cache_key &&
+         allow_hash_table_recycling && join_type != JoinType::INVALID;
 }
 
 namespace {
@@ -840,7 +1037,7 @@ InnerOuter get_cols(const Analyzer::BinOper* qual_bin_oper,
                     const TemporaryTables* temporary_tables) {
   const auto lhs = qual_bin_oper->get_left_operand();
   const auto rhs = qual_bin_oper->get_right_operand();
-  return HashJoin::normalizeColumnPair(lhs, rhs, cat, temporary_tables);
+  return HashJoin::normalizeColumnPair(lhs, rhs, cat, temporary_tables).first;
 }
 
 }  // namespace

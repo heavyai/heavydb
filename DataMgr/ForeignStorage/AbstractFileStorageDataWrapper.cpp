@@ -1,14 +1,28 @@
 #include "AbstractFileStorageDataWrapper.h"
 
+#include <codecvt>
+#include <locale>
+
 #include "Catalog/ForeignServer.h"
 #include "Catalog/ForeignTable.h"
 #include "Shared/StringTransform.h"
 #include "Shared/misc.h"
+#include "Shared/thread_count.h"
 #include "Utils/DdlUtils.h"
 
 extern bool g_enable_s3_fsi;
 
 namespace foreign_storage {
+
+size_t get_num_threads(const ForeignTable& table) {
+  auto num_threads = 0;
+  if (auto opt = table.getOption(AbstractFileStorageDataWrapper::THREADS_KEY);
+      opt.has_value()) {
+    num_threads = std::stoi(opt.value());
+  }
+  return import_export::num_import_threads(num_threads);
+}
+
 AbstractFileStorageDataWrapper::AbstractFileStorageDataWrapper() {}
 
 void AbstractFileStorageDataWrapper::validateServerOptions(
@@ -44,8 +58,8 @@ void AbstractFileStorageDataWrapper::validateTableOptions(
     const ForeignTable* foreign_table) const {
   validateFilePathOptionKey(foreign_table);
   validateFilePath(foreign_table);
-  shared::validate_sort_options(foreign_table->getOption(FILE_SORT_ORDER_BY_KEY),
-                                foreign_table->getOption(FILE_SORT_REGEX_KEY));
+  shared::validate_sort_options(getFilePathOptions(foreign_table));
+  validateFileRollOffOption(foreign_table);
 }
 
 const std::set<std::string_view>&
@@ -77,7 +91,14 @@ void AbstractFileStorageDataWrapper::validateFilePath(const ForeignTable* foreig
 namespace {
 std::string append_file_path(const std::optional<std::string>& base,
                              const std::optional<std::string>& subdirectory) {
+#ifdef _WIN32
+  const std::wstring str_to_cov{boost::filesystem::path::preferred_separator};
+  using convert_type = std::codecvt_utf8<wchar_t>;
+  std::wstring_convert<convert_type, wchar_t> converter;
+  std::string separator = converter.to_bytes(str_to_cov);
+#else
   const std::string separator{boost::filesystem::path::preferred_separator};
+#endif
   return std::regex_replace(
       (base ? *base + separator : "") + (subdirectory ? *subdirectory : ""),
       std::regex{separator + "{2,}"},
@@ -97,7 +118,14 @@ std::string AbstractFileStorageDataWrapper::getFullFilePath(
   auto storage_type = foreign_server->getOption(STORAGE_TYPE_KEY);
   CHECK(storage_type);
 
+#ifdef _WIN32
+  const std::wstring str_to_cov{boost::filesystem::path::preferred_separator};
+  using convert_type = std::codecvt_utf8<wchar_t>;
+  std::wstring_convert<convert_type, wchar_t> converter;
+  std::string separator = converter.to_bytes(str_to_cov);
+#else
   const std::string separator{boost::filesystem::path::preferred_separator};
+#endif
   if (*storage_type == LOCAL_FILE_STORAGE_TYPE) {
     base_path = foreign_server->getOption(BASE_PATH_KEY);
   }
@@ -140,11 +168,71 @@ void AbstractFileStorageDataWrapper::validateFilePathOptionKey(
   }
 }
 
+shared::FilePathOptions AbstractFileStorageDataWrapper::getFilePathOptions(
+    const ForeignTable* foreign_table) {
+  return {
+      foreign_table->getOption(AbstractFileStorageDataWrapper::REGEX_PATH_FILTER_KEY),
+      foreign_table->getOption(AbstractFileStorageDataWrapper::FILE_SORT_ORDER_BY_KEY),
+      foreign_table->getOption(AbstractFileStorageDataWrapper::FILE_SORT_REGEX_KEY)};
+}
+
+namespace {
+std::optional<bool> get_file_roll_off_value(const ForeignTable* foreign_table) {
+  auto option =
+      foreign_table->getOption(AbstractFileStorageDataWrapper::ALLOW_FILE_ROLL_OFF_KEY);
+  if (option.has_value()) {
+    if (to_upper(option.value()) == "TRUE") {
+      return true;
+    } else if (to_upper(option.value()) == "FALSE") {
+      return false;
+    } else {
+      return {};
+    }
+  }
+  return false;
+}
+}  // namespace
+
+void AbstractFileStorageDataWrapper::validateFileRollOffOption(
+    const ForeignTable* foreign_table) {
+  auto allow_file_roll_off = get_file_roll_off_value(foreign_table);
+  if (allow_file_roll_off.has_value()) {
+    if (allow_file_roll_off.value() && !foreign_table->isAppendMode()) {
+      throw std::runtime_error{"The \"" + ALLOW_FILE_ROLL_OFF_KEY +
+                               "\" option can only be set to 'true' for foreign tables "
+                               "with append refresh updates."};
+    }
+  } else {
+    throw std::runtime_error{
+        "Invalid boolean value specified for \"" + ALLOW_FILE_ROLL_OFF_KEY +
+        "\" foreign table option. Value must be either 'true' or 'false'."};
+  }
+}
+
+bool AbstractFileStorageDataWrapper::allowFileRollOff(const ForeignTable* foreign_table) {
+  auto allow_file_roll_off = get_file_roll_off_value(foreign_table);
+  if (allow_file_roll_off.has_value()) {
+    return allow_file_roll_off.value();
+  } else {
+    auto option = foreign_table->getOption(ALLOW_FILE_ROLL_OFF_KEY);
+    CHECK(option.has_value());
+    UNREACHABLE() << "Unexpected " << ALLOW_FILE_ROLL_OFF_KEY
+                  << " value: " << option.value();
+    return false;
+  }
+}
+
+const std::set<std::string> AbstractFileStorageDataWrapper::getAlterableTableOptions()
+    const {
+  return {ALLOW_FILE_ROLL_OFF_KEY};
+}
+
 const std::set<std::string_view> AbstractFileStorageDataWrapper::supported_table_options_{
     FILE_PATH_KEY,
     REGEX_PATH_FILTER_KEY,
     FILE_SORT_ORDER_BY_KEY,
-    FILE_SORT_REGEX_KEY};
+    FILE_SORT_REGEX_KEY,
+    ALLOW_FILE_ROLL_OFF_KEY};
 
 const std::set<std::string_view>
     AbstractFileStorageDataWrapper::supported_server_options_{STORAGE_TYPE_KEY,

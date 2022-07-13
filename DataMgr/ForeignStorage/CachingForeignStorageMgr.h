@@ -1,6 +1,5 @@
-
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +44,8 @@ class CachingForeignStorageMgr : public ForeignStorageMgr {
 
   bool createDataWrapperIfNotExists(const ChunkKey& chunk_key) override;
 
+  bool hasStoredDataWrapper(int32_t db, int32_t tb) const;
+
  private:
   void refreshTableInCache(const ChunkKey& table_key);
 
@@ -62,6 +63,8 @@ class CachingForeignStorageMgr : public ForeignStorageMgr {
   void populateChunkBuffersSafely(ForeignDataWrapper& data_wrapper,
                                   ChunkToBufferMap& required_buffers,
                                   ChunkToBufferMap& optional_buffers);
+
+  void eraseDataWrapper(const ChunkKey& key) override;
 
   void clearTable(const ChunkKey& table_key);
 

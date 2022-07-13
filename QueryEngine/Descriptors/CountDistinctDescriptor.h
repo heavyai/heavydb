@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,10 @@
 
 /**
  * @file    CountDistinctDescriptor.h
- * @author  Alex Suhan <alex@mapd.com>
  * @brief   Descriptor for the storage layout use for (approximate) count distinct
- *operations.
+ * operations.
  *
- * Copyright (c) 2017 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
 
 #ifndef QUERYENGINE_COUNTDISTINCTDESCRIPTOR_H
 #define QUERYENGINE_COUNTDISTINCTDESCRIPTOR_H
@@ -38,7 +36,7 @@ inline size_t bitmap_bits_to_bytes(const size_t bitmap_sz) {
   return bitmap_byte_sz;
 }
 
-enum class CountDistinctImplType { Invalid, Bitmap, StdSet };
+enum class CountDistinctImplType { Invalid, Bitmap, UnorderedSet };
 
 struct CountDistinctDescriptor {
   CountDistinctImplType impl_type_;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-/*
+/**
  * @file    InPlaceSort.h
- * @author  Alex Suhan <alex@mapd.com>
+ * @brief
  *
- * Copyright (c) 2015 MapD Technologies, Inc.  All rights reserved.
  */
 
 #ifndef INPLACESORT_H
@@ -41,7 +40,7 @@ void inplace_sort_gpu(const std::list<Analyzer::OrderEntry>&,
                       const QueryMemoryDescriptor&,
                       const GpuGroupByBuffers&,
                       Data_Namespace::DataMgr*,
-                      const int);
+                      const int device_id);
 
 void sort_groups_cpu(int64_t* val_buff,
                      int32_t* key_buff,

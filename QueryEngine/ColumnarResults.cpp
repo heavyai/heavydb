@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,9 @@
 #include "Shared/Intervals.h"
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"
+#include "Utils/FlatBuffer.h"
 
+#include <tbb/parallel_reduce.h>
 #include <atomic>
 #include <future>
 #include <numeric>
@@ -39,6 +41,106 @@ inline int64_t fixed_encoding_nullable_val(const int64_t val,
     }
   }
   return val;
+}
+
+std::vector<size_t> get_padded_target_sizes(
+    const ResultSet& rows,
+    const std::vector<SQLTypeInfo>& target_types) {
+  std::vector<size_t> padded_target_sizes;
+  // We have to check that the result set is valid as one entry point
+  // to columnar results constructs effectively a fake result set.
+  // In these cases it should be safe to assume that we can use the type
+  // target widths
+  if (!rows.hasValidBuffer() ||
+      rows.getQueryMemDesc().getColCount() < target_types.size()) {
+    for (const auto& target_type : target_types) {
+      padded_target_sizes.emplace_back(target_type.get_size());
+    }
+    return padded_target_sizes;
+  }
+
+  // If here we have a valid result set, so use it's QMD padded widths
+  const auto col_context = rows.getQueryMemDesc().getColSlotContext();
+  for (size_t col_idx = 0; col_idx < target_types.size(); col_idx++) {
+    // Lazy fetch columns will have 0 as a padded with, so use the type's
+    // logical width for those
+    const auto idx = col_context.getSlotsForCol(col_idx).front();
+    const size_t padded_slot_width =
+        static_cast<size_t>(rows.getPaddedSlotWidthBytes(idx));
+    padded_target_sizes.emplace_back(
+        padded_slot_width == 0UL ? target_types[col_idx].get_size() : padded_slot_width);
+  }
+  return padded_target_sizes;
+}
+
+int64_t toBuffer(const TargetValue& col_val, const SQLTypeInfo& type_info, int8_t* buf) {
+  if (type_info.is_array()) {
+    const auto array_col_val = boost::get<ArrayTargetValue>(&col_val);
+    CHECK(array_col_val);
+    const auto& vec = array_col_val->get();
+    int64_t offset = 0;
+    for (const auto& item : vec) {
+      offset += toBuffer(item, type_info.get_subtype(), buf + offset);
+    }
+    return offset;
+  } else if (type_info.is_fp()) {
+    const auto scalar_col_val = boost::get<ScalarTargetValue>(&col_val);
+    switch (type_info.get_type()) {
+      case kFLOAT: {
+        auto float_p = boost::get<float>(scalar_col_val);
+        *((float*)buf) = static_cast<float>(*float_p);
+        return 4;
+      }
+      case kDOUBLE: {
+        auto double_p = boost::get<double>(scalar_col_val);
+        *((double*)buf) = static_cast<double>(*double_p);
+        return 8;
+      }
+      default:
+        UNREACHABLE();
+    }
+  } else {
+    const auto scalar_col_val = boost::get<ScalarTargetValue>(&col_val);
+    CHECK(scalar_col_val);
+    auto i64_p = boost::get<int64_t>(scalar_col_val);
+    const auto val = fixed_encoding_nullable_val(*i64_p, type_info);
+    switch (type_info.get_size()) {
+      case 1:
+        *buf = static_cast<int8_t>(val);
+        return 1;
+      case 2:
+        *((int16_t*)buf) = static_cast<int16_t>(val);
+        return 2;
+      case 4:
+        *((int32_t*)buf) = static_cast<int32_t>(val);
+        return 4;
+      case 8:
+        *((int64_t*)buf) = static_cast<int64_t>(val);
+        return 8;
+      default:
+        UNREACHABLE();
+    }
+  }
+  return 0;
+}
+
+int64_t countNumberOfValues(const ResultSet& rows, const size_t column_idx) {
+  return tbb::parallel_reduce(
+      tbb::blocked_range<int64_t>(0, rows.rowCount()),
+      static_cast<int64_t>(0),
+      [&](tbb::blocked_range<int64_t> r, int64_t running_count) {
+        for (int i = r.begin(); i < r.end(); ++i) {
+          const auto crt_row = rows.getRowAtNoTranslations(i);
+          const auto arr_tv = boost::get<ArrayTargetValue>(&crt_row[column_idx]);
+          CHECK(arr_tv);
+          if (arr_tv->is_initialized()) {
+            const auto& vec = arr_tv->get();
+            running_count += vec.size();
+          }
+        }
+        return running_count;
+      },
+      std::plus<int64_t>());
 }
 
 }  // namespace
@@ -60,23 +162,41 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
                                ? true
                                : result_set::use_parallel_algorithms(rows))
     , direct_columnar_conversion_(rows.isDirectColumnarConversionPossible())
-    , thread_idx_(thread_idx) {
+    , thread_idx_(thread_idx)
+    , padded_target_sizes_(get_padded_target_sizes(rows, target_types)) {
   auto timer = DEBUG_TIMER(__func__);
   column_buffers_.resize(num_columns);
   executor_ = Executor::getExecutor(executor_id);
   CHECK(executor_);
+  CHECK_EQ(padded_target_sizes_.size(), target_types.size());
   for (size_t i = 0; i < num_columns; ++i) {
-    const bool is_varlen = target_types[i].is_array() ||
-                           (target_types[i].is_string() &&
-                            target_types[i].get_compression() == kENCODING_NONE) ||
-                           target_types[i].is_geometry();
-    if (is_varlen) {
-      throw ColumnarConversionNotSupported();
-    }
-    if (!isDirectColumnarConversionPossible() ||
-        !rows.isZeroCopyColumnarConversionPossible(i)) {
-      column_buffers_[i] = row_set_mem_owner->allocate(
-          num_rows_ * target_types[i].get_size(), thread_idx_);
+    if (target_types[i].is_array()) {
+      if (isDirectColumnarConversionPossible() &&
+          rows.isZeroCopyColumnarConversionPossible(i)) {
+        const int8_t* col_buf = rows.getColumnarBuffer(i);
+        CHECK(FlatBufferManager::isFlatBuffer(col_buf));
+      } else {
+        int64_t values_count = countNumberOfValues(rows, i);
+        const size_t array_item_width = target_types[i].get_elem_type().get_size();
+        const int64_t flatbuffer_size =
+            FlatBufferManager::get_VarlenArray_flatbuffer_size(
+                num_rows_, values_count, array_item_width);
+        column_buffers_[i] = row_set_mem_owner->allocate(flatbuffer_size, thread_idx_);
+        FlatBufferManager m{column_buffers_[i]};
+        m.initializeVarlenArray(num_rows_, values_count, array_item_width);
+      }
+    } else {
+      const bool is_varlen = (target_types[i].is_string() &&
+                              target_types[i].get_compression() == kENCODING_NONE) ||
+                             target_types[i].is_geometry();
+      if (is_varlen) {
+        throw ColumnarConversionNotSupported();
+      }
+      if (!isDirectColumnarConversionPossible() ||
+          !rows.isZeroCopyColumnarConversionPossible(i)) {
+        column_buffers_[i] =
+            row_set_mem_owner->allocate(num_rows_ * padded_target_sizes_[i], thread_idx_);
+      }
     }
   }
 
@@ -108,6 +228,7 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
     throw ColumnarConversionNotSupported();
   }
   executor_ = Executor::getExecutor(executor_id);
+  padded_target_sizes_.emplace_back(target_type.get_size());
   CHECK(executor_);
   const auto buf_size = num_rows * target_type.get_size();
   column_buffers_[0] =
@@ -129,7 +250,9 @@ std::unique_ptr<ColumnarResults> ColumnarResults::mergeResults(
         return init + result->size();
       });
   std::unique_ptr<ColumnarResults> merged_results(
-      new ColumnarResults(total_row_count, sub_results[0]->target_types_));
+      new ColumnarResults(total_row_count,
+                          sub_results[0]->target_types_,
+                          sub_results[0]->padded_target_sizes_));
   const auto col_count = sub_results[0]->column_buffers_.size();
   const auto nonempty_it = std::find_if(
       sub_results.begin(),
@@ -139,7 +262,7 @@ std::unique_ptr<ColumnarResults> ColumnarResults::mergeResults(
     return nullptr;
   }
   for (size_t col_idx = 0; col_idx < col_count; ++col_idx) {
-    const auto byte_width = (*nonempty_it)->getColumnType(col_idx).get_size();
+    const auto byte_width = merged_results->padded_target_sizes_[col_idx];
     auto write_ptr = row_set_mem_owner->allocate(byte_width * total_row_count);
     merged_results->column_buffers_.push_back(write_ptr);
     for (auto& rs : sub_results) {
@@ -147,7 +270,7 @@ std::unique_ptr<ColumnarResults> ColumnarResults::mergeResults(
       if (!rs->size()) {
         continue;
       }
-      CHECK_EQ(byte_width, rs->getColumnType(col_idx).get_size());
+      CHECK_EQ(byte_width, rs->padded_target_sizes_[col_idx]);
       memcpy(write_ptr, rs->column_buffers_[col_idx], rs->size() * byte_width);
       write_ptr += rs->size() * byte_width;
     }
@@ -165,15 +288,17 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
   if (isParallelConversion()) {
     const size_t worker_count = cpu_threads();
     std::vector<std::future<void>> conversion_threads;
-    const auto do_work = [num_columns, &rows, &row_idx, this](const size_t i) {
-      const auto crt_row = rows.getRowAtNoTranslations(i);
-      if (!crt_row.empty()) {
-        auto cur_row_idx = row_idx.fetch_add(1);
-        for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
-          writeBackCell(crt_row[col_idx], cur_row_idx, col_idx);
-        }
-      }
-    };
+    std::mutex write_mutex;
+    const auto do_work =
+        [num_columns, &rows, &row_idx, &write_mutex, this](const size_t i) {
+          const auto crt_row = rows.getRowAtNoTranslations(i);
+          if (!crt_row.empty()) {
+            auto cur_row_idx = row_idx.fetch_add(1);
+            for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+              writeBackCell(crt_row[col_idx], cur_row_idx, col_idx, &write_mutex);
+            }
+          }
+        };
     for (auto interval : makeIntervals(size_t(0), rows.entryCount(), worker_count)) {
       conversion_threads.push_back(std::async(
           std::launch::async,
@@ -248,50 +373,50 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
  * and write it into its corresponding column buffer's cell (with corresponding
  * row and column indices)
  *
- * NOTE: this is not supposed to be processing varlen types, and they should be
- * handled differently outside this function.
+ * NOTE: this is not supposed to be processing varlen types (except
+ * FlatBuffer supported varlen types such as Array), and they should
+ * be handled differently outside this function.
  */
 inline void ColumnarResults::writeBackCell(const TargetValue& col_val,
                                            const size_t row_idx,
-                                           const size_t column_idx) {
-  const auto scalar_col_val = boost::get<ScalarTargetValue>(&col_val);
-  CHECK(scalar_col_val);
-  auto i64_p = boost::get<int64_t>(scalar_col_val);
-  const auto& type_info = target_types_[column_idx];
-  if (i64_p) {
-    const auto val = fixed_encoding_nullable_val(*i64_p, type_info);
-    switch (target_types_[column_idx].get_size()) {
-      case 1:
-        ((int8_t*)column_buffers_[column_idx])[row_idx] = static_cast<int8_t>(val);
-        break;
-      case 2:
-        ((int16_t*)column_buffers_[column_idx])[row_idx] = static_cast<int16_t>(val);
-        break;
-      case 4:
-        ((int32_t*)column_buffers_[column_idx])[row_idx] = static_cast<int32_t>(val);
-        break;
-      case 8:
-        ((int64_t*)column_buffers_[column_idx])[row_idx] = val;
-        break;
-      default:
-        CHECK(false);
+                                           const size_t column_idx,
+                                           std::mutex* write_mutex) {
+  auto& type_info = target_types_[column_idx];
+  if (type_info.is_array()) {
+    CHECK(FlatBufferManager::isFlatBuffer(column_buffers_[column_idx]));
+    FlatBufferManager m{column_buffers_[column_idx]};
+    const auto arr_tv = boost::get<ArrayTargetValue>(&col_val);
+    CHECK(arr_tv);
+    if (arr_tv->is_initialized()) {
+      const auto& vec = arr_tv->get();
+      auto array_item_size = type_info.get_elem_type().get_size();
+      // setEmptyItem reserves a buffer in FlatBuffer instance
+      // that corresponds to varlen array at row_idx row
+      // index. The pointer value to the corresponding buffer is
+      // stored in buf:
+      int8_t* buf = nullptr;
+      FlatBufferManager::Status status{};
+      {
+        auto lock_scope =
+            (write_mutex == nullptr ? std::unique_lock<std::mutex>()
+                                    : std::unique_lock<std::mutex>(*write_mutex));
+        status = m.setEmptyItemNoValidation(row_idx, vec.size() * array_item_size, &buf);
+      }
+      CHECK_EQ(status, FlatBufferManager::Status::Success);
+      CHECK(buf);
+      // toBuffer initializes varlen array buffer buf using the
+      // result set row with row_idx row index:
+      toBuffer(col_val, type_info, buf);
+    } else {
+      auto lock_scope =
+          (write_mutex == nullptr ? std::unique_lock<std::mutex>()
+                                  : std::unique_lock<std::mutex>(*write_mutex));
+      m.setNullNoValidation(row_idx);
     }
+
   } else {
-    CHECK(target_types_[column_idx].is_fp());
-    switch (target_types_[column_idx].get_type()) {
-      case kFLOAT: {
-        auto float_p = boost::get<float>(scalar_col_val);
-        ((float*)column_buffers_[column_idx])[row_idx] = static_cast<float>(*float_p);
-        break;
-      }
-      case kDOUBLE: {
-        auto double_p = boost::get<double>(scalar_col_val);
-        ((double*)column_buffers_[column_idx])[row_idx] = static_cast<double>(*double_p);
-        break;
-      }
-      default:
-        CHECK(false);
-    }
+    int8_t* buf = column_buffers_[column_idx];
+    toBuffer(col_val, type_info, buf + type_info.get_size() * row_idx);
   }
 }
 
@@ -437,6 +562,7 @@ void ColumnarResults::copyAllNonLazyColumns(
   for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
     if (rows.isZeroCopyColumnarConversionPossible(col_idx)) {
       CHECK(!column_buffers_[col_idx]);
+      // The name of the method implies a copy but this is not a copy!!
       column_buffers_[col_idx] = const_cast<int8_t*>(rows.getColumnarBuffer(col_idx));
     } else if (is_column_non_lazily_fetched(col_idx)) {
       CHECK(!(rows.query_mem_desc_.getQueryDescriptionType() ==
@@ -444,7 +570,7 @@ void ColumnarResults::copyAllNonLazyColumns(
       direct_copy_threads.push_back(std::async(
           std::launch::async,
           [&rows, this](const size_t column_index) {
-            const size_t column_size = num_rows_ * target_types_[column_index].get_size();
+            const size_t column_size = num_rows_ * padded_target_sizes_[column_index];
             rows.copyColumnIntoBuffer(
                 column_index, column_buffers_[column_index], column_size);
           },
@@ -473,13 +599,14 @@ void ColumnarResults::materializeAllLazyColumns(
   CHECK(isDirectColumnarConversionPossible());
   CHECK(!(rows.query_mem_desc_.getQueryDescriptionType() ==
           QueryDescriptionType::TableFunction));
-  const auto do_work_just_lazy_columns = [num_columns, &rows, this](
+  std::mutex write_mutex;
+  const auto do_work_just_lazy_columns = [num_columns, &rows, &write_mutex, this](
                                              const size_t row_idx,
                                              const std::vector<bool>& targets_to_skip) {
     const auto crt_row = rows.getRowAtNoTranslations(row_idx, targets_to_skip);
     for (size_t i = 0; i < num_columns; ++i) {
       if (!targets_to_skip.empty() && !targets_to_skip[i]) {
-        writeBackCell(crt_row[i], row_idx, i);
+        writeBackCell(crt_row[i], row_idx, i, &write_mutex);
       }
     }
   };
@@ -736,6 +863,7 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
       initAllConversionFunctions(rows, slot_idx_per_target_idx, targets_to_skip);
   CHECK_EQ(write_functions.size(), num_columns);
   CHECK_EQ(read_functions.size(), num_columns);
+  std::mutex write_mutex;
   auto do_work = [this,
                   &bitmap,
                   &rows,
@@ -743,6 +871,7 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
                   &global_offsets,
                   &targets_to_skip,
                   &num_columns,
+                  &write_mutex,
                   &write_functions = write_functions,
                   &read_functions = read_functions](size_t& non_empty_idx,
                                                     const size_t total_non_empty,
@@ -760,7 +889,8 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
       const auto crt_row = rows.getRowAtNoTranslations(entry_idx, targets_to_skip);
       for (size_t column_idx = 0; column_idx < num_columns; ++column_idx) {
         if (!targets_to_skip.empty() && !targets_to_skip[column_idx]) {
-          writeBackCell(crt_row[column_idx], output_buffer_row_idx, column_idx);
+          writeBackCell(
+              crt_row[column_idx], output_buffer_row_idx, column_idx, &write_mutex);
         }
       }
       // targets that are copied directly without any translation/decoding from

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include "DataMgr/OmniSciAwsSdk.h"
 #include "Shared/ThriftTypesConvert.h"
 #endif  // HAVE_AWS_S3
+#include "Geospatial/ColumnNames.h"
 #include "Shared/ArrowUtil.h"
 #include "Tests/DBHandlerTestHelpers.h"
 #include "Tests/TestHelpers.h"
@@ -73,33 +74,40 @@ class LoadTableTest : public DBHandlerTestFixture {
   const std::string MULTIPOLYGON =
       "MULTIPOLYGON (((0 0,4 0,4 4,0 4,0 0),"
       "(1 1,1 2,2 2,2 1,1 1)),((-1 -1,-2 -1,-2 -2,-1 -2,-1 -1)))";
-  TColumn i1_column, s_column, nns_column, ls_column, mp_column;
-  TDatum i1_datum, s_datum, nns_datum, ls_datum, mp_datum;
-  std::shared_ptr<arrow::Field> i1_field, s_field, nns_field, ls_field, mp_field;
+  const std::string POLYGON = "POLYGON ((0 0,4 0,4 4,0 4,0 0),(1 1,1 2,2 2,2 1,1 1))";
+  const std::string POLYGON_PROMOTED =
+      "MULTIPOLYGON (((0 0,4 0,4 4,0 4,0 0),(1 1,1 2,2 2,2 1,1 1)))";
+
+  TColumn i1_column, s_column, nns_column, ls_column, mp_column, p_column;
+  TDatum i1_datum, s_datum, nns_datum, ls_datum, mp_datum, p_datum;
+  std::shared_ptr<arrow::Field> i1_field, s_field, nns_field, ls_field, mp_field, p_field;
 
  private:
   void initData() {
     i1_column.nulls = s_column.nulls = nns_column.nulls = ls_column.nulls =
-        mp_column.nulls = {false};
+        mp_column.nulls = p_column.nulls = {false};
     i1_column.data.int_col = {1};
     s_column.data.str_col = {"s"};
     nns_column.data.str_col = {"nns"};
     ls_column.data.str_col = {LINESTRING};
     mp_column.data.str_col = {MULTIPOLYGON};
+    p_column.data.str_col = {POLYGON};
 
     i1_datum.is_null = s_datum.is_null = nns_datum.is_null = ls_datum.is_null =
-        mp_datum.is_null = false;
+        mp_datum.is_null = p_datum.is_null = false;
     i1_datum.val.int_val = 1;
     s_datum.val.str_val = "s";
     nns_datum.val.str_val = "nns";
     ls_datum.val.str_val = LINESTRING;
     mp_datum.val.str_val = MULTIPOLYGON;
+    p_datum.val.str_val = POLYGON;
 
     i1_field = arrow::field("i1", arrow::int32());
     s_field = arrow::field("s", arrow::utf8());
     nns_field = arrow::field("nns", arrow::utf8());
     ls_field = arrow::field("ls", arrow::utf8());
     mp_field = arrow::field("mp", arrow::utf8());
+    p_field = arrow::field("mp", arrow::utf8());
   }
 };
 
@@ -121,6 +129,16 @@ TEST_F(LoadTableTest, AllColumns) {
   handler->load_table(session, "geo_load_test", {row}, {});
   sqlAndCompareResult("SELECT * FROM geo_load_test",
                       {{i(1), LINESTRING, "s", MULTIPOLYGON, "nns"}});
+}
+
+TEST_F(LoadTableTest, AllColumnsPromotePolyToMPoly) {
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  TStringRow row;
+  row.cols = {getSV("1"), getSV(LINESTRING), getSV("s"), getSV(POLYGON), getSV("nns")};
+  handler->load_table(session, "geo_load_test", {row}, {});
+  sqlAndCompareResult("SELECT * FROM geo_load_test",
+                      {{i(1), LINESTRING, "s", POLYGON_PROMOTED, "nns"}});
 }
 
 TEST_F(LoadTableTest, AllColumnsReordered) {
@@ -154,7 +172,7 @@ TEST_F(LoadTableTest, OmitNotNullableColumn) {
   row.cols = {getSV(MULTIPOLYGON), getSV(LINESTRING)};
   executeLambdaAndAssertException(
       [&]() { handler->load_table(session, "geo_load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "Column 'nns' cannot be omitted due to NOT NULL constraint)");
 }
 
@@ -177,7 +195,7 @@ TEST_F(LoadTableTest, DuplicateColumns) {
   row.cols = {getSV(MULTIPOLYGON), getSV(LINESTRING), getSV(MULTIPOLYGON), getSV("nns")};
   executeLambdaAndAssertException(
       [&]() { handler->load_table(session, "geo_load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "Column mp is mentioned multiple times)");
 }
 
@@ -189,7 +207,7 @@ TEST_F(LoadTableTest, UnexistingColumn) {
   row.cols = {getSV(MULTIPOLYGON), getSV(LINESTRING), getSV(MULTIPOLYGON), getSV("nns")};
   executeLambdaAndAssertException(
       [&]() { handler->load_table(session, "geo_load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "Column mp2 does not exist)");
 }
 
@@ -201,7 +219,7 @@ TEST_F(LoadTableTest, ColumnNumberMismatch) {
   row.cols = {getSV(MULTIPOLYGON), getSV(LINESTRING), getSV("nns")};
   executeLambdaAndAssertException(
       [&]() { handler->load_table(session, "geo_load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "Number of columns specified does not match the number of columns given (3 vs 4))");
 }
 
@@ -210,7 +228,7 @@ TEST_F(LoadTableTest, NoColumns) {
   auto& session = getDbHandlerAndSessionId().second;
   executeLambdaAndAssertException(
       [&]() { handler->load_table(session, "geo_load_test", {}, {}); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "No rows to insert)");
 }
 
@@ -260,14 +278,25 @@ TEST_F(LoadTableTest, DictOutOfBounds) {
   }
   executeLambdaAndAssertPartialException(
       [&]() { handler->load_table_binary(session, "load_test", rows, {}); },
-      "has exceeded its limit of 8 bits (255 unique values). There was an attempt to add "
-      "the new string '255'. Table will need to be recreated with larger String "
-      "Dictionary Capacity");
+      "has exceeded it's limit of 8 bits (255 unique values) while attempting to "
+      "add the new string '255'. To load more data, please re-create the table "
+      "with this column as type TEXT ENCODING DICT(16) or TEXT ENCODING DICT(32) "
+      "and reload your data.");
 
   sqlAndCompareResult("SELECT count(*) FROM load_test", {{i(0)}});
 }
 
 // TODO(max): load_table_binary doesn't support tables with geo columns yet
+TEST_F(LoadTableTest, DISABLED_BinaryAllColumnsPromotePolyToMPoly) {
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  TRow row;
+  row.cols = {i1_datum, ls_datum, s_datum, p_datum, nns_datum};
+  handler->load_table_binary(session, "geo_load_test", {row}, {});
+  sqlAndCompareResult("SELECT * FROM geo_load_test",
+                      {{i(1), LINESTRING, "s", POLYGON_PROMOTED, "nns"}});
+}
+
 TEST_F(LoadTableTest, DISABLED_BinaryAllColumns) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
@@ -306,7 +335,7 @@ TEST_F(LoadTableTest, BinaryOmitNotNullableColumnNoGeo) {
   row.cols = {i1_datum, s_datum};
   executeLambdaAndAssertException(
       [&]() { handler->load_table_binary(session, "load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "Column 'nns' cannot be omitted due to NOT NULL constraint)");
 }
 
@@ -318,7 +347,7 @@ TEST_F(LoadTableTest, BinaryDuplicateColumnsNoGeo) {
   row.cols = {nns_datum, i1_datum, i1_datum};
   executeLambdaAndAssertException(
       [&]() { handler->load_table_binary(session, "load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "Column i1 is mentioned multiple times)");
 }
 
@@ -330,7 +359,7 @@ TEST_F(LoadTableTest, BinaryUnexistingColumnNoGeo) {
   row.cols = {nns_datum, i1_datum, i1_datum};
   executeLambdaAndAssertException(
       [&]() { handler->load_table_binary(session, "load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "Column i2 does not exist)");
 }
 
@@ -342,7 +371,7 @@ TEST_F(LoadTableTest, BinaryColumnNumberMismatchNoGeo) {
   row.cols = {nns_datum, i1_datum};
   executeLambdaAndAssertException(
       [&]() { handler->load_table_binary(session, "load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "Number of columns specified does not match the number of columns given "
       "(2 vs 3))");
 }
@@ -352,7 +381,7 @@ TEST_F(LoadTableTest, BinaryNoColumns) {
   auto& session = getDbHandlerAndSessionId().second;
   executeLambdaAndAssertException(
       [&]() { handler->load_table_binary(session, "load_test", {}, {}); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "No rows to insert)");
 }
 
@@ -384,6 +413,18 @@ TEST_F(LoadTableTest, ColumnarAllColumns) {
       {});
   sqlAndCompareResult("SELECT * FROM geo_load_test",
                       {{i(1), LINESTRING, "s", MULTIPOLYGON, "nns"}});
+}
+
+TEST_F(LoadTableTest, ColumnarAllColumnsPromotePolyToMPoly) {
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  handler->load_table_binary_columnar(
+      session,
+      "geo_load_test",
+      {i1_column, ls_column, s_column, p_column, nns_column},
+      {});
+  sqlAndCompareResult("SELECT * FROM geo_load_test",
+                      {{i(1), LINESTRING, "s", POLYGON_PROMOTED, "nns"}});
 }
 
 TEST_F(LoadTableTest, ColumnarAllColumnsReordered) {
@@ -558,6 +599,21 @@ TEST_F(LoadTableTest, ArrowAllColumnsNoGeo) {
 }
 
 // TODO (max) load_table_binary_arrow doesn't support tables with geocolumns properly yet
+TEST_F(LoadTableTest, DISABLED_ArrowAllColumnsPromotePolyToMPoly) {
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  auto schema = arrow::schema({i1_field, ls_field, s_field, p_field, nns_field});
+  ArrowStreamBuilder builder(schema);
+  builder.appendInt32({1});
+  builder.appendString({LINESTRING});
+  builder.appendString({"s"});
+  builder.appendString({POLYGON});
+  builder.appendString({"nns"});
+  handler->load_table_binary_arrow(session, "geo_load_test", builder.finish(), false);
+  sqlAndCompareResult("SELECT * FROM geo_load_test",
+                      {{i(1), LINESTRING, "s", POLYGON_PROMOTED, "nns"}});
+}
+
 TEST_F(LoadTableTest, DISABLED_ArrowAllColumns) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
@@ -664,6 +720,78 @@ TEST_F(LoadTableTest, ArrowDefaultStr) {
   sqlAndCompareResult("SELECT * FROM load_test", {{i(1), "default str", "nns"}});
 }
 
+namespace {
+struct MemorySignature {
+  Buffer_Namespace::MemStatus memStatus_;
+  Data_Namespace::MemoryLevel memLevel_;
+};
+
+void assert_memory_signature_for_chunk_key_prefix(
+    const std::shared_ptr<DataMgr> data_mgr,
+    const ChunkKey& table_chunk_key,
+    const std::vector<MemorySignature>& expected_memory_signature) {
+  std::vector<MemorySignature> actual_memory_signature;
+
+  for (int memory_level = Data_Namespace::MemoryLevel::DISK_LEVEL;
+       memory_level <= Data_Namespace::MemoryLevel::GPU_LEVEL;
+       ++memory_level) {
+    auto memory_level_info_vec =
+        data_mgr->getMemoryInfo(static_cast<Data_Namespace::MemoryLevel>(memory_level));
+    for (auto memory_info : memory_level_info_vec) {
+      for (auto memory_data : memory_info.nodeMemoryData) {
+        if (has_table_prefix(memory_data.chunk_key) &&
+            in_same_table(table_chunk_key, memory_data.chunk_key)) {
+          actual_memory_signature.push_back(
+              {memory_data.memStatus,
+               static_cast<Data_Namespace::MemoryLevel>(memory_level)});
+        }
+      }
+    }
+  }
+
+  ASSERT_EQ(actual_memory_signature.size(), expected_memory_signature.size());
+  for (size_t i = 0; i < actual_memory_signature.size(); i++) {
+    ASSERT_EQ(actual_memory_signature[i].memStatus_,
+              expected_memory_signature[i].memStatus_);
+    ASSERT_EQ(actual_memory_signature[i].memLevel_,
+              expected_memory_signature[i].memLevel_);
+  }
+}
+}  // namespace
+
+TEST_F(LoadTableTest, TemporaryTableChunkBufferCleanup) {
+  // create a temporary table with multiple fragments to make that we're not leaking any
+  // buffers on fragment creation
+  sql("drop table if exists temp_table_cleanup_chuk_buffers;");
+  sql("create temporary table temp_table_cleanup_chuk_buffers (i1 integer) with "
+      "(FRAGMENT_SIZE=1);");
+  sql("insert into temp_table_cleanup_chuk_buffers values(1);");
+  sql("insert into temp_table_cleanup_chuk_buffers values(2);");
+
+  auto [db_handler, _] = getDbHandlerAndSessionId();
+  auto data_mgr = db_handler->data_mgr_;
+  auto tb_id = getCatalog().getTableId("temp_table_cleanup_chuk_buffers");
+  CHECK(tb_id.has_value());
+  ChunkKey table_chunk_key;
+  table_chunk_key.push_back(getCatalog().getDatabaseId());
+  table_chunk_key.push_back(tb_id.value());
+  CHECK(has_table_prefix(table_chunk_key));
+
+  assert_memory_signature_for_chunk_key_prefix(
+      data_mgr,
+      table_chunk_key,
+      {{Buffer_Namespace::MemStatus::USED, MemoryLevel::CPU_LEVEL},
+       {Buffer_Namespace::MemStatus::USED, MemoryLevel::CPU_LEVEL},
+       {Buffer_Namespace::MemStatus::USED, MemoryLevel::CPU_LEVEL},
+       {Buffer_Namespace::MemStatus::USED, MemoryLevel::CPU_LEVEL}});
+
+  sql("drop table temp_table_cleanup_chuk_buffers;");
+  assert_memory_signature_for_chunk_key_prefix(
+      data_mgr,
+      table_chunk_key,
+      {{Buffer_Namespace::MemStatus::FREE, MemoryLevel::CPU_LEVEL}});
+}
+
 class ImportGeoTableTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
@@ -682,7 +810,7 @@ class ImportGeoTableTest : public DBHandlerTestFixture {
 
   const TCopyParams getCopyParams() const {
     TCopyParams copy_params;
-    copy_params.file_type = TFileType::GEO;
+    copy_params.source_type = TSourceType::GEO_FILE;
     return copy_params;
   }
 
@@ -762,12 +890,9 @@ TEST_F(ImportGeoTableTest, ImportGeoTableExplicit) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::FLOAT),
-                                getPolyColumnType("omnisci_geo")};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TFileType::type::GEO,
-                                        getCreateParams()));
+                                getPolyColumnType(Geospatial::kGeoColumnName)};
+  EXPECT_NO_THROW(handler->create_table(
+      session, "import_geo_table_test", row_descriptor, getCreateParams()));
   EXPECT_NO_THROW(handler->import_geo_table(session,
                                             "import_geo_table_test",
                                             getGeoFileName(),
@@ -785,12 +910,9 @@ TEST_F(ImportGeoTableTest, ImportGeoTableOverride) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::INT),
-                                getPolyColumnType("omnisci_geo")};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TFileType::type::GEO,
-                                        getCreateParams()));
+                                getPolyColumnType(Geospatial::kGeoColumnName)};
+  EXPECT_NO_THROW(handler->create_table(
+      session, "import_geo_table_test", row_descriptor, getCreateParams()));
   EXPECT_NO_THROW(handler->import_geo_table(session,
                                             "import_geo_table_test",
                                             getGeoFileName(),
@@ -810,19 +932,16 @@ TEST_F(ImportGeoTableTest, ImportGeoTableTypeMismatch1) {
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor{
       getPolyColumnType("trip"),
-      getScalarColumnType("omnisci_geo", TDatumType::type::FLOAT)};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TFileType::type::GEO,
-                                        getCreateParams()));
+      getScalarColumnType(Geospatial::kGeoColumnName, TDatumType::type::FLOAT)};
+  EXPECT_NO_THROW(handler->create_table(
+      session, "import_geo_table_test", row_descriptor, getCreateParams()));
   EXPECT_THROW(handler->import_geo_table(session,
                                          "import_geo_table_test",
                                          getGeoFileName(),
                                          getCopyParams(),
                                          row_descriptor,
                                          getCreateParams()),
-               TOmniSciException);
+               TDBException);
   sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
 }
 
@@ -834,20 +953,17 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailTypeMismatch2) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor{
-      getScalarColumnType("omnisci_geo", TDatumType::type::FLOAT),
+      getScalarColumnType(Geospatial::kGeoColumnName, TDatumType::type::FLOAT),
       getPolyColumnType("trip")};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TFileType::type::GEO,
-                                        getCreateParams()));
+  EXPECT_NO_THROW(handler->create_table(
+      session, "import_geo_table_test", row_descriptor, getCreateParams()));
   EXPECT_THROW(handler->import_geo_table(session,
                                          "import_geo_table_test",
                                          getGeoFileName(),
                                          getCopyParams(),
                                          row_descriptor,
                                          getCreateParams()),
-               TOmniSciException);
+               TDBException);
   sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
 }
 
@@ -859,18 +975,15 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailNoGeoColumns) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::FLOAT)};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TFileType::type::GEO,
-                                        getCreateParams()));
+  EXPECT_NO_THROW(handler->create_table(
+      session, "import_geo_table_test", row_descriptor, getCreateParams()));
   EXPECT_THROW(handler->import_geo_table(session,
                                          "import_geo_table_test",
                                          getGeoFileName(),
                                          getCopyParams(),
                                          row_descriptor,
                                          getCreateParams()),
-               TOmniSciException);
+               TDBException);
   sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
 }
 
@@ -882,20 +995,17 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailTooManyGeoColumns) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::FLOAT),
-                                getPolyColumnType("omnisci_geo1"),
-                                getPolyColumnType("omnisci_geo2")};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TFileType::type::GEO,
-                                        getCreateParams()));
+                                getPolyColumnType("geo1"),
+                                getPolyColumnType("geo2")};
+  EXPECT_NO_THROW(handler->create_table(
+      session, "import_geo_table_test", row_descriptor, getCreateParams()));
   EXPECT_THROW(handler->import_geo_table(session,
                                          "import_geo_table_test",
                                          getGeoFileName(),
                                          getCopyParams(),
                                          row_descriptor,
                                          getCreateParams()),
-               TOmniSciException);
+               TDBException);
   sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
 }
 
@@ -935,7 +1045,7 @@ class ThriftDetectServerPrivilegeTest : public DBHandlerTestFixture {
     TDetectResult thrift_result;
     TCopyParams copy_params;
     // Setting S3 credentials through copy params simulates
-    // environment variables configured on the omnisql client
+    // environment variables configured on the heavysql client
     copy_params.s3_access_key = s3_access_key;
     copy_params.s3_secret_key = s3_secret_key;
     copy_params.s3_session_token = s3_session_token;
@@ -990,7 +1100,7 @@ TEST_F(ThriftDetectServerPrivilegeTest, S3_Private_without_credentials) {
     GTEST_SKIP();
   }
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_THROW(detectTable(PRIVATE_S3_FILE), TOmniSciException);
+  EXPECT_THROW(detectTable(PRIVATE_S3_FILE), TDBException);
 }
 
 TEST_F(ThriftDetectServerPrivilegeTest, S3_Private_with_invalid_specified_credentials) {
@@ -999,7 +1109,7 @@ TEST_F(ThriftDetectServerPrivilegeTest, S3_Private_with_invalid_specified_creden
   }
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
   EXPECT_THROW(detectTable(PRIVATE_S3_FILE, "invalid_access_key", "invalid_secret_key"),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ThriftDetectServerPrivilegeTest, S3_Private_with_valid_specified_credentials) {
@@ -1066,7 +1176,7 @@ class ThriftImportServerPrivilegeTest : public ThriftDetectServerPrivilegeTest {
     const auto& db_handler_and_session_id = getDbHandlerAndSessionId();
     TCopyParams copy_params;
     // Setting S3 credentials through copy params simulates
-    // environment variables configured on the omnisql client
+    // environment variables configured on the heavysql client
     copy_params.s3_access_key = s3_access_key;
     copy_params.s3_secret_key = s3_secret_key;
     copy_params.s3_session_token = s3_session_token;
@@ -1087,7 +1197,7 @@ TEST_F(ThriftImportServerPrivilegeTest, S3_Private_without_credentials) {
     GTEST_SKIP();
   }
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_THROW(importTable(PRIVATE_S3_FILE, "import_test_table"), TOmniSciException);
+  EXPECT_THROW(importTable(PRIVATE_S3_FILE, "import_test_table"), TDBException);
 }
 
 TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_invalid_specified_credentials) {
@@ -1099,7 +1209,7 @@ TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_invalid_specified_creden
                            "import_test_table",
                            "invalid_access_key",
                            "invalid_secret_key"),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_valid_specified_credentials) {
@@ -1146,11 +1256,219 @@ TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_role_credentials) {
 
 #endif  // HAVE_AWS_S3
 
+class ThriftFileGlobbingTest : public DBHandlerTestFixture,
+                               public testing::WithParamInterface<std::string> {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("DROP TABLE IF EXISTS " + test_table_name_ + ";");
+    createTable();
+  }
+
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS " + test_table_name_ + ";");
+    if (boost::filesystem::exists(empty_dir_path_)) {
+      boost::filesystem::remove_all(empty_dir_path_);
+    }
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void createTable() {
+    if (isGeoImport()) {
+      sql("CREATE TABLE " + test_table_name_ + " (trip DOUBLE, geom POINT);");
+    } else if (isRasterImport()) {
+      sql("CREATE TABLE " + test_table_name_ +
+          " (raster_lon DOUBLE, raster_lat DOUBLE, band_1_1 INTEGER);");
+    } else {
+      sql("CREATE TABLE " + test_table_name_ + " (i INTEGER);");
+    }
+  }
+
+  bool isGeoImport() { return GetParam() == "geo"; }
+
+  bool isRasterImport() { return GetParam() == "raster"; }
+
+  bool isParquetImport() { return GetParam() == "parquet"; }
+
+  bool isDelimitedImport() { return GetParam() == "delimited"; }
+
+  void assertDetectResult(const TDetectResult& result) {
+    const auto& row_set = result.row_set;
+    if (isGeoImport()) {
+      ASSERT_EQ(row_set.row_desc.size(), static_cast<size_t>(2));
+      ASSERT_EQ(row_set.row_desc[0].col_name, "trip");
+      ASSERT_EQ(row_set.row_desc[0].col_type.type, TDatumType::DOUBLE);
+      ASSERT_EQ(row_set.row_desc[1].col_name, "geom");
+      ASSERT_EQ(row_set.row_desc[1].col_type.type, TDatumType::POINT);
+      ASSERT_EQ(row_set.rows.size(), static_cast<size_t>(10));
+      for (const auto& row : row_set.rows) {
+        ASSERT_EQ(row.cols.size(), static_cast<size_t>(2));
+      }
+    } else if (isRasterImport()) {
+      ASSERT_EQ(row_set.row_desc.size(), static_cast<size_t>(3));
+      ASSERT_EQ(row_set.row_desc[0].col_name, "raster_lon");
+      ASSERT_EQ(row_set.row_desc[0].col_type.type, TDatumType::DOUBLE);
+      ASSERT_EQ(row_set.row_desc[1].col_name, "raster_lat");
+      ASSERT_EQ(row_set.row_desc[1].col_type.type, TDatumType::DOUBLE);
+      ASSERT_EQ(row_set.row_desc[2].col_name, "band_1_1");
+      ASSERT_EQ(row_set.row_desc[2].col_type.type, TDatumType::INT);
+      ASSERT_TRUE(row_set.rows.empty());
+    } else {
+      CHECK(isParquetImport() || isDelimitedImport());
+      ASSERT_EQ(row_set.row_desc.size(), static_cast<size_t>(1));
+      ASSERT_EQ(row_set.row_desc[0].col_name, "i");
+      if (isParquetImport()) {
+        ASSERT_EQ(row_set.row_desc[0].col_type.type, TDatumType::BIGINT);
+      } else {
+        ASSERT_EQ(row_set.row_desc[0].col_type.type, TDatumType::SMALLINT);
+      }
+      ASSERT_EQ(row_set.rows.size(), static_cast<size_t>(2));
+      ASSERT_EQ(row_set.rows[0].cols.size(), static_cast<size_t>(1));
+      ASSERT_EQ(row_set.rows[0].cols[0].val.str_val, "2");
+      ASSERT_EQ(row_set.rows[1].cols.size(), static_cast<size_t>(1));
+      ASSERT_EQ(row_set.rows[1].cols[0].val.str_val, "1");
+    }
+  }
+
+  TCopyParams getCopyParams() {
+    TCopyParams copy_params;
+    if (isGeoImport()) {
+      copy_params.source_type = TSourceType::GEO_FILE;
+    } else if (isRasterImport()) {
+      copy_params.source_type = TSourceType::RASTER_FILE;
+    } else if (isParquetImport()) {
+      copy_params.source_type = TSourceType::PARQUET_FILE;
+    } else if (isDelimitedImport()) {
+      copy_params.source_type = TSourceType::DELIMITED_FILE;
+    } else {
+      UNREACHABLE() << "Unexpected import type: " << GetParam();
+    }
+    return copy_params;
+  }
+
+  std::string getTestGlobPath() {
+    auto path = boost::filesystem::canonical("../../Tests").string();
+    if (isGeoImport()) {
+      path += "/Import/datafiles/geospatial_point/geospatial_point_*.geojson";
+    } else if (isRasterImport()) {
+      path += "/Import/datafiles/raster/s1b_*.tiff";
+    } else if (isParquetImport()) {
+      path += "/FsiDataFiles/sorted_dir/parquet/*1.parquet";
+    } else if (isDelimitedImport()) {
+      path += "/FsiDataFiles/sorted_dir/csv/*1.csv";
+    } else {
+      UNREACHABLE() << "Unexpected import type: " << GetParam();
+    }
+    return path;
+  }
+
+  static std::string getNonExistentGlobPath() {
+    return boost::filesystem::canonical("../../Tests/FsiDataFiles/sorted_dir").string() +
+           "/nonexistent*";
+  }
+
+  static std::string getEmptyDirectoryPath() {
+    return boost::filesystem::canonical(empty_dir_path_).string();
+  }
+
+  void importTable(const std::string& file_path) {
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    if (isGeoImport() || isRasterImport()) {
+      db_handler->import_geo_table(
+          session_id, test_table_name_, file_path, getCopyParams(), {}, {});
+    } else {
+      CHECK(isParquetImport() || isDelimitedImport());
+      db_handler->import_table(session_id, test_table_name_, file_path, getCopyParams());
+    }
+  }
+
+  int64_t getTestImportRowCount() {
+    if (isGeoImport()) {
+      return 30;
+    } else if (isRasterImport()) {
+      return 40000;
+    } else {
+      CHECK(isParquetImport() || isDelimitedImport());
+      return 2;
+    }
+  }
+
+  inline static const std::string test_table_name_{"test_table"};
+  inline static const std::string empty_dir_path_{"./test_import_empty_dir"};
+};
+
+TEST_P(ThriftFileGlobbingTest, Detect) {
+  auto [db_handler, session_id] = getDbHandlerAndSessionId();
+  TDetectResult result;
+  db_handler->detect_column_types(result, session_id, getTestGlobPath(), getCopyParams());
+  assertDetectResult(result);
+}
+
+TEST_P(ThriftFileGlobbingTest, DetectWithNonExistentGlobPath) {
+  executeLambdaAndAssertException(
+      [this] {
+        const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+        TDetectResult result;
+        db_handler->detect_column_types(
+            result, session_id, getNonExistentGlobPath(), getCopyParams());
+      },
+      "File or directory \"" + getNonExistentGlobPath() + "\" does not exist.");
+}
+
+TEST_P(ThriftFileGlobbingTest, Import) {
+  sqlAndCompareResult("SELECT * FROM " + test_table_name_ + ";", {});
+  importTable(getTestGlobPath());
+  sqlAndCompareResult("SELECT COUNT(*) FROM " + test_table_name_ + ";",
+                      {{getTestImportRowCount()}});
+  if (isParquetImport() || isDelimitedImport()) {
+    sqlAndCompareResult("SELECT * FROM " + test_table_name_ + " ORDER BY i;",
+                        {{i(1)}, {i(2)}});
+  }
+}
+
+TEST_P(ThriftFileGlobbingTest, ImportWithNonExistentGlobPath) {
+  executeLambdaAndAssertException(
+      [this] { importTable(getNonExistentGlobPath()); },
+      "File or directory \"" + getNonExistentGlobPath() + "\" does not exist.");
+}
+
+TEST_P(ThriftFileGlobbingTest, DetectEmptyDirectory) {
+  boost::filesystem::create_directory(empty_dir_path_);
+  std::string error_message{"detect_column_types error: "};
+  if (isGeoImport()) {
+    error_message +=
+        "openGDALDataSource Error: Unable to open geo file " + getEmptyDirectoryPath();
+  } else if (isRasterImport()) {
+    error_message +=
+        "Raster Importer: Unable to open raster file " + getEmptyDirectoryPath();
+  } else if (isParquetImport()) {
+    error_message += "No file found at \"" + getEmptyDirectoryPath() + "\"";
+  } else if (isDelimitedImport()) {
+    error_message += "No rows found in: test_import_empty_dir";
+  } else {
+    UNREACHABLE() << "Unexpected import type: " << GetParam();
+  }
+  executeLambdaAndAssertException(
+      [this] {
+        const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+        TDetectResult result;
+        db_handler->detect_column_types(
+            result, session_id, getEmptyDirectoryPath(), getCopyParams());
+      },
+      error_message);
+}
+
+INSTANTIATE_TEST_SUITE_P(DifferentImportTypes,
+                         ThriftFileGlobbingTest,
+                         testing::Values("delimited", "parquet", "geo", "raster"),
+                         [](const auto& param_info) { return param_info.param; });
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   int err{0};
   try {
+    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();

@@ -16,7 +16,7 @@
  */
 package com.mapd.parser.extension.ddl;
 
-import com.mapd.parser.extension.ddl.omnisci.OmniSciOptionsMap;
+import com.mapd.parser.extension.ddl.heavydb.HeavyDBOptionsMap;
 
 import org.apache.calcite.runtime.CalciteException;
 import org.apache.calcite.sql.SqlCall;
@@ -48,7 +48,7 @@ public class SqlCreateTable extends SqlCreate {
   public final SqlIdentifier name;
   public final SqlNodeList columnList;
   public SqlNode query = null;
-  private final OmniSciOptionsMap options;
+  private final HeavyDBOptionsMap options;
 
   private static final SqlOperator OPERATOR =
           new SqlSpecialOperator("CREATE TABLE", SqlKind.CREATE_TABLE);
@@ -60,7 +60,7 @@ public class SqlCreateTable extends SqlCreate {
           boolean ifNotExists,
           SqlIdentifier name,
           SqlNodeList columnList,
-          OmniSciOptionsMap withOptions,
+          HeavyDBOptionsMap withOptions,
           SqlNode query) {
     super(OPERATOR, pos, replace, ifNotExists);
     this.temporary = temporary;

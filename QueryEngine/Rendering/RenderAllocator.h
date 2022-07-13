@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,6 +62,7 @@ class RenderAllocator : public Allocator {
   size_t getCurrentChunkOffset() const;
   size_t getCurrentChunkSize() const;
   size_t getAllocatedSize() const;
+  size_t getPeakAllocatedSize() const;
 
   int8_t* getBasePtr() const;
 
@@ -71,6 +72,7 @@ class RenderAllocator : public Allocator {
   const size_t device_id_;
   size_t crt_chunk_offset_bytes_;
   size_t crt_allocated_bytes_;
+  size_t peak_allocated_bytes_;
 
   std::unique_ptr<std::mutex> alloc_mtx_ptr_;
 };

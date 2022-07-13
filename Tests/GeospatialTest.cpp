@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -124,7 +124,7 @@ void import_geospatial_test(const bool use_temporary_tables) {
   const std::string geospatial_test("DROP TABLE IF EXISTS geospatial_test;");
   run_ddl_statement(geospatial_test);
   const auto create_ddl = build_create_table_statement(
-      R"(id INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gp GEOMETRY(POINT), gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), gp4326none GEOMETRY(POINT,4326) ENCODING NONE, gp900913 GEOMETRY(POINT,900913), gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, gpoly4326 GEOMETRY(POLYGON,4326), gpoly900913 GEOMETRY(POLYGON,900913))",
+      R"(id INT, p POINT, l LINESTRING, ml MULTILINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gp GEOMETRY(POINT), gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), gp4326none GEOMETRY(POINT,4326) ENCODING NONE, gp900913 GEOMETRY(POINT,900913), gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, gml4326 GEOMETRY(MULTILINESTRING,4326), gpoly4326 GEOMETRY(POLYGON,4326), gpoly900913 GEOMETRY(POLYGON,900913))",
       "geospatial_test",
       {"", 0},
       {},
@@ -143,6 +143,12 @@ void import_geospatial_test(const bool use_temporary_tables) {
         ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1))
                  : "") +
         ")'"};
+    const std::string multilinestring{
+        "'MULTILINESTRING((" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " +
+        std::to_string(2 * i) +
+        ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1))
+                 : "") +
+        "))'"};
     const std::string poly{"'POLYGON((0 0, " + std::to_string(i + 1) + " 0, 0 " +
                            std::to_string(i + 1) + ", 0 0))'"};
     const std::string mpoly{"'MULTIPOLYGON(((0 0, " + std::to_string(i + 1) + " 0, 0 " +
@@ -150,6 +156,7 @@ void import_geospatial_test(const bool use_temporary_tables) {
     run_multiple_agg(gen(i,
                          point,
                          linestring,
+                         multilinestring,
                          poly,
                          mpoly,
                          point,
@@ -157,6 +164,7 @@ void import_geospatial_test(const bool use_temporary_tables) {
                          point,
                          point,
                          linestring,
+                         multilinestring,
                          poly,
                          poly),
                      ExecutorDeviceType::CPU);
@@ -205,11 +213,11 @@ void import_geospatial_null_test(const bool use_temporary_tables) {
   const std::string geospatial_null_test("DROP TABLE IF EXISTS geospatial_null_test;");
   run_ddl_statement(geospatial_null_test);
   const auto create_ddl = build_create_table_statement(
-      "id INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gpnotnull "
-      "GEOMETRY(POINT) NOT NULL, gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), "
-      "gp4326none GEOMETRY(POINT,4326) ENCODING NONE, gp900913 GEOMETRY(POINT,900913), "
-      "gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, gpoly4326 "
-      "GEOMETRY(POLYGON,4326)",
+      "id INT, p POINT, l LINESTRING, ml MULTILINESTRING, poly POLYGON, mpoly "
+      "MULTIPOLYGON, gpnotnull GEOMETRY(POINT) NOT NULL, gp4326 GEOMETRY(POINT,4326) "
+      "ENCODING COMPRESSED(32), gp4326none GEOMETRY(POINT,4326) ENCODING NONE, gp900913 "
+      "GEOMETRY(POINT,900913), gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, "
+      "gml4326 GEOMETRY(MULTILINESTRING,4326), gpoly4326 GEOMETRY(POLYGON,4326)",
       "geospatial_null_test",
       {"", 0},
       {},
@@ -228,6 +236,12 @@ void import_geospatial_null_test(const bool use_temporary_tables) {
         ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1))
                  : "") +
         ")'"};
+    const std::string multilinestring{
+        "'MULTILINESTRING((" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " +
+        std::to_string(2 * i) +
+        ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1))
+                 : "") +
+        "))'"};
     const std::string poly{"'POLYGON((0 0, " + std::to_string(i + 1) + " 0, 0 " +
                            std::to_string(i + 1) + ", 0 0))'"};
     const std::string mpoly{"'MULTIPOLYGON(((0 0, " + std::to_string(i + 1) + " 0, 0 " +
@@ -235,6 +249,7 @@ void import_geospatial_null_test(const bool use_temporary_tables) {
     run_multiple_agg(gen(i,
                          (i % 2 == 0) ? "NULL" : point,
                          (i == 1) ? "NULL" : linestring,
+                         (i == 7) ? "NULL" : multilinestring,
                          (i == 2) ? "'NULL'" : poly,
                          (i == 3) ? "NULL" : mpoly,
                          point,
@@ -242,6 +257,7 @@ void import_geospatial_null_test(const bool use_temporary_tables) {
                          (i == 5) ? "NULL" : point,
                          (i == 6) ? "NULL" : point,
                          (i == 7) ? "NULL" : linestring,
+                         (i == 1) ? "NULL" : multilinestring,
                          (i == 8) ? "NULL" : poly),
                      ExecutorDeviceType::CPU);
   }
@@ -303,6 +319,8 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT count(l) FROM geospatial_test;", dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT count(ml) FROM geospatial_test;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT count(poly) FROM geospatial_test;", dt)));
     ASSERT_EQ(
         static_cast<int64_t>(g_num_rows),
@@ -335,6 +353,35 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
                                   "WHERE ST_Distance(p, 'LINESTRING(-1 0, 0 1)') < 2.5;",
                                   dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(5),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(ml,p) <= 2.0;", dt)));
+    // yet unsupported native implementations
+    EXPECT_THROW(
+        run_simple_agg("SELECT ST_Distance(ml,ml) FROM geospatial_test limit 1;", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_simple_agg("SELECT ST_Distance(ml,poly) FROM geospatial_test limit 1;", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_simple_agg("SELECT ST_Distance(mpoly,ml) FROM geospatial_test limit 1;", dt),
+        std::runtime_error);
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM geospatial_test "
+                  "WHERE ST_Distance('MULTILINESTRING((-1 0, 0 1))', p) < 0.8;",
+                  dt)));
+    ASSERT_EQ(static_cast<int64_t>(2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM geospatial_test "
+                  "WHERE ST_Distance('MULTILINESTRING((-1 0, 0 1))', p) < 1.1;",
+                  dt)));
+    ASSERT_EQ(static_cast<int64_t>(3),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM geospatial_test "
+                  "WHERE ST_Distance(p, 'MULTILINESTRING((-1 0, 0 1))') < 2.5;",
+                  dt)));
 
     // distance transforms
     EXPECT_EQ(double(0),
@@ -384,7 +431,7 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
       const auto rows =
           run_multiple_agg("SELECT * FROM geospatial_test WHERE id = 1", dt);
       const auto row = rows->getNextRow(false, false);
-      ASSERT_EQ(row.size(), size_t(12));
+      ASSERT_EQ(row.size(), size_t(14));
     }
 
     // Projection (return GeoTargetValue)
@@ -392,6 +439,8 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
                        GeoPointTargetValue({1., 1.}));
     compare_geo_target(run_simple_agg("SELECT l FROM geospatial_test WHERE id = 1;", dt),
                        GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.}));
+    compare_geo_target(run_simple_agg("SELECT ml FROM geospatial_test WHERE id = 1;", dt),
+                       GeoMultiLineStringTargetValue({1., 0., 2., 2., 3., 3.}, {3}));
     compare_geo_target(
         run_simple_agg("SELECT poly FROM geospatial_test WHERE id = 1;", dt),
         GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}));
@@ -406,6 +455,9 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
     THROW_ON_AGGREGATOR(compare_geo_target(
         run_simple_agg("SELECT SAMPLE(l) FROM geospatial_test WHERE id = 1;", dt),
         GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.})));
+    THROW_ON_AGGREGATOR(compare_geo_target(
+        run_simple_agg("SELECT SAMPLE(ml) FROM geospatial_test WHERE id = 1;", dt),
+        GeoMultiLineStringTargetValue({1., 0., 2., 2., 3., 3.}, {3})));
     THROW_ON_AGGREGATOR(compare_geo_target(
         run_simple_agg("SELECT SAMPLE(poly) FROM geospatial_test WHERE id = 1;", dt),
         GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3})));
@@ -422,6 +474,10 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
         run_simple_agg("SELECT SAMPLE(l) FROM geospatial_test WHERE id = 1 GROUP BY id;",
                        dt),
         GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.}));
+    compare_geo_target(
+        run_simple_agg("SELECT SAMPLE(ml) FROM geospatial_test WHERE id = 1 GROUP BY id;",
+                       dt),
+        GeoMultiLineStringTargetValue({1., 0., 2., 2., 3., 3.}, {3}));
     compare_geo_target(
         run_simple_agg(
             "SELECT SAMPLE(poly) FROM geospatial_test WHERE id = 1 GROUP BY id;", dt),
@@ -544,6 +600,9 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
     ASSERT_EQ("LINESTRING (1 0,2 2,3 3)",
               boost::get<std::string>(v<NullableString>(run_simple_agg(
                   "SELECT l FROM geospatial_test WHERE id = 1;", dt, false))));
+    ASSERT_EQ("MULTILINESTRING ((1 0,2 2,3 3))",
+              boost::get<std::string>(v<NullableString>(run_simple_agg(
+                  "SELECT ml FROM geospatial_test WHERE id = 1;", dt, false))));
     ASSERT_EQ("POLYGON ((0 0,2 0,0 2,0 0))",
               boost::get<std::string>(v<NullableString>(run_simple_agg(
                   "SELECT poly FROM geospatial_test WHERE id = 1;", dt, false))));
@@ -675,6 +734,31 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
                   "WHERE ST_Intersects(mpoly, ST_GeomFromText('MULTIPOLYGON(((0 4.5, 7 "
                   "0.5, 10 10)))'));",
                   dt)));
+    // Pip running on double coords (point literal blocking switch to compressed coords)
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM geospatial_test WHERE ST_Intersects(gpoly4326, ST_GeomFromText('POINT(0.1 0.1)', 4326));)",
+            dt)));
+    // Pip running on compressed coords (centroid is dynamically compressed)
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM geospatial_test WHERE ST_Intersects(gpoly4326, ST_SetSRID(ST_Centroid(gpoly4326),4326));)",
+            dt)));
+    // Pip running on compressed coords (arguments are swapped for consistency)
+    ASSERT_EQ(
+        static_cast<int64_t>(2),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM geospatial_test WHERE ST_Intersects(gp4326,gpoly4326);)",
+            dt)));
+    // Pip running on compressed coords (centroid arg is proactively dynamically
+    // compressed, additionally arguments are swapped for consistency)
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM geospatial_test WHERE ST_Intersects(ST_SetSRID(ST_Centroid(gpoly4326),4326),gpoly4326);)",
+            dt)));
 
     // disjoint
     ASSERT_EQ(static_cast<int64_t>(0),
@@ -711,6 +795,13 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
         v<int64_t>(run_simple_agg(
             "SELECT count(*) FROM geospatial_test "
             "WHERE ST_Disjoint(mpoly, ST_GeomFromText('LINESTRING(0 4.5, 7 0.5)'));",
+            dt)));
+    // Disjoint runs as negated Intersects, compressed geometries will result in a switch
+    // to pip running on compressed coords (arguments are swapped for consistency)
+    ASSERT_EQ(
+        static_cast<int64_t>(8),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM geospatial_test WHERE ST_Disjoint(gp4326,gpoly4326);)",
             dt)));
 
     // contains, within
@@ -884,6 +975,11 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
               v<int64_t>(run_simple_agg("SELECT ST_NPoints(l) FROM geospatial_test ORDER "
                                         "BY ST_NPoints(l) DESC LIMIT 1;",
                                         dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(3),
+        v<int64_t>(run_simple_agg("SELECT ST_NPoints(ml) FROM geospatial_test ORDER "
+                                  "BY ST_NPoints(l) DESC LIMIT 1;",
+                                  dt)));
     ASSERT_EQ(static_cast<int64_t>(3),
               v<int64_t>(run_simple_agg("SELECT ST_NPoints(poly) FROM geospatial_test "
                                         "ORDER BY ST_NPoints(l) DESC LIMIT 1;",
@@ -988,11 +1084,27 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
             dt)),
         double(0.0),
         double(10e-5));
+    // make sure ST_Centroid picks up its argument's srid
+    // TODO: make ST_Distance and other geo operators complain about srid mismatches
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_DWithin(ST_Centroid(gpoly4326), ST_GeomFromText('POINT (1.6666666 1.66666666)',4326),0.001) FROM geospatial_test WHERE id = 4;)",
+            dt)));
+    EXPECT_ANY_THROW(run_simple_agg(
+        R"(SELECT ST_DWithin(ST_Centroid(gpoly4326), 'POINT (1.6666666 1.66666666)',0.001) FROM geospatial_test WHERE id = 4;)",
+        dt));
 
     // order by (unsupported)
     EXPECT_ANY_THROW(run_multiple_agg("SELECT p FROM geospatial_test ORDER BY p;", dt));
     EXPECT_ANY_THROW(run_multiple_agg(
         "SELECT poly, l, id FROM geospatial_test ORDER BY id, poly;", dt));
+
+    // geo operator with non-geo column
+    EXPECT_ANY_THROW(
+        run_multiple_agg("SELECT ST_OVERLAPS(l, id) FROM geospatial_test", dt));
+    EXPECT_ANY_THROW(
+        run_multiple_agg("SELECT ST_OVERLAPS(id, l) FROM geospatial_test", dt));
   }
 }
 
@@ -1293,6 +1405,11 @@ TEST_P(GeoSpatialNullTablesFixture, GeoWithNulls) {
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM geospatial_null_test WHERE ST_Distance(p,l) < 2.0;",
             dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(2),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM geospatial_null_test WHERE ST_Distance(p,ml) < 2.0;",
+            dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_null_test WHERE "
                                         "ST_Distance(p,gpnotnull) >= 0.0;",
@@ -1306,6 +1423,11 @@ TEST_P(GeoSpatialNullTablesFixture, GeoWithNulls) {
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_null_test "
                                   "WHERE ST_Distance('LINESTRING(-1 0, 0 1)', p) < 6.0;",
                                   dt)));
+    ASSERT_EQ(static_cast<int64_t>(2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM geospatial_null_test "
+                  "WHERE ST_Distance('MULTILINESTRING((-1 0, 0 1))', p) < 6.0;",
+                  dt)));
 
     ASSERT_EQ("POINT (1 1)",
               boost::get<std::string>(v<NullableString>(run_simple_agg(
@@ -1561,6 +1683,13 @@ TEST(GeoSpatial, Math) {
             R"(SELECT ST_Length(CAST (ST_GeomFromText('LINESTRING(-76.6168198439371 39.9703199555959, -80.5189990254673 40.6493554919257, -82.5189990254673 42.6493554919257)', 4326) as GEOGRAPHY));)",
             dt)),
         static_cast<double>(0.01));
+    // Cartesian length of a planar multi path
+    ASSERT_NEAR(
+        static_cast<double>(6.65685),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Length('MULTILINESTRING((1 0, 0 1, -1 0, 0 -1, 1 0),(2 2,2 3))');)",
+            dt)),
+        static_cast<double>(0.0001));
 
     // ST_Perimeter
     // Cartesian perimeter of a planar polygon
@@ -1821,6 +1950,11 @@ TEST(GeoSpatial, Math) {
         v<int64_t>(run_simple_agg(
             R"(SELECT ST_Contains(ST_GeomFromText('LINESTRING(1 -1.0000000001, 3 -1.0000000001)'), ST_GeomFromText('POINT(0.9999999992 -1)'));)",
             dt)));
+
+    // ST_Contains doesn't yet support MULTILINESTRING
+    EXPECT_ANY_THROW(run_simple_agg(
+        R"(SELECT ST_Contains(ST_GeomFromText('POLYGON((2 0, 0 2, -2 0, 0 -2, 2 0))'), ST_GeomFromText('MULTILINESTRING((1 0, 0 1, -1 0), (0 -1, 1 0))'));)",
+        dt));
 
     // Postgis compatibility
     ASSERT_EQ(
@@ -2218,6 +2352,34 @@ TEST_F(GeoSpatialTempTables, Geos) {
             R"(SELECT ST_Area(ST_Buffer('LINESTRING(0 0, 10 0, 10 10)', 1.0)) FROM geospatial_test WHERE id = 3;)",
             dt)),
         static_cast<double>(0.03)));
+    EXPECT_GPU_THROW(ASSERT_NEAR(
+        static_cast<double>(42.9018),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Area(ST_Buffer('MULTILINESTRING((0 0, 10 0, 10 10))', 1.0)) FROM geospatial_test WHERE id = 3;)",
+            dt)),
+        static_cast<double>(0.03)));
+    // ST_ConcaveHull
+#if (GEOS_VERSION_MAJOR > 3) || (GEOS_VERSION_MAJOR == 3 && GEOS_VERSION_MINOR >= 11)
+    EXPECT_GPU_THROW(ASSERT_NEAR(
+        static_cast<double>(22565.6485058608),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Area(ST_ConcaveHull(ST_GeomFromText('MULTILINESTRING((106 164,30 112,74 70,82 112,130 94,130 62,122 40,156 32,162 76,172 88),(132 178,134 148,128 136,96 128,132 108,150 130,170 142,174 110,156 96,158 90,158 88),(22 64,66 28,94 38,94 68,114 76,112 30,132 10,168 18,178 34,186 52,184 74,190 100,190 122,182 148,178 170,176 184,156 164,146 178,132 186,92 182,56 158,36 150,62 150,76 128,88 118))'),0.99));)",
+            dt)),
+        static_cast<double>(0.03)));
+#else
+    // geo operators can't deal with geo operator output transforms yet
+    EXPECT_THROW(
+        run_simple_agg(
+            R"(SELECT ST_Area(ST_ConcaveHull('LINESTRING(0 0, 10 0, 10 10)', 1.0));)",
+            dt),
+        std::runtime_error);
+#endif
+    // ST_ConvexHull
+    EXPECT_GPU_THROW(ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_Area(ST_ConvexHull(ST_GeomFromText('MULTILINESTRING((100 190,10 8),(150 10, 20 30),(50 5, 150 30, 50 10, 10 10))'))) = ST_Area('POLYGON((50 5,10 8,10 10,100 190,150 30,150 10,50 5))');)",
+            dt))));  // ConvexHull = POLYGON((50 5,10 8,10 10,100 190,150 30,150 10,50 5))
     // ST_IsValid
     EXPECT_GPU_THROW(
         ASSERT_EQ(static_cast<int64_t>(1),
@@ -2349,28 +2511,54 @@ TEST_F(GeoSpatialTempTables, Geos) {
             R"(SELECT ST_Area(ST_Buffer(ST_Transform(ST_GeomFromText('POLYGON((-118.240356 34.04880299999999,-118.64035599999998 34.04880300000001,-118.440356 34.24880300000001))',4326), 26945), 1.0));)",
             dt)),
         static_cast<double>(0.00001)));
-    // geos runtime support for any gdal-recognized transforms on geos call outputs
+    // expect throw for now: geos call output transforms can be sunk into geos runtime but
+    // geo operators can't deal with it yet
+    EXPECT_THROW(
+        // geos runtime support for any gdal-recognized transforms on geos call outputs
+        ASSERT_NEAR(
+            static_cast<double>(409421494.3899536),
+            v<double>(run_simple_agg(
+                R"(SELECT ST_Area(ST_Transform(ST_Buffer(ST_GeomFromText('POLYGON((-118.240356 34.04880299999999,-118.64035599999998 34.04880300000001,-118.440356 34.24880300000001))',4326), 1.0), 26945));)",
+                dt)),
+            static_cast<double>(0.00001)),
+        std::runtime_error);
+    EXPECT_THROW(
+        // geos runtime support for both input and output geo transforms (gdal-backed)
+        ASSERT_NEAR(
+            static_cast<double>(1756.549591064453),
+            v<double>(run_simple_agg(
+                R"(SELECT ST_Area(ST_Transform(ST_Buffer(ST_Transform(ST_GeomFromText('POLYGON((-71.11603599316368 42.37469906933211,-71.11600627260486 42.37479327587576,-71.11582940503467 42.37476302224121,-71.11582340452516 42.37478309974037,-71.11570078841396 42.37476310907647,-71.11565279759817 42.37492120281317,-71.11577467489042 42.374941582218895,-71.11576735791459 42.374966813944184,-71.11631216001115 42.37505880035607,-71.11631985924761 42.37503569400519,-71.11641211477945 42.37505132899332,-71.11646061071951 42.37489401310859,-71.11636318099954 42.37487692897568,-71.11636960854412 42.37485520073258,-71.11618998476843 42.37482420784997,-71.11621803803246 42.37472943072518,-71.11603599316368 42.37469906933211))',4326), 26919), 1.0), 26986));)",
+                dt)),
+            static_cast<double>(0.00001)),
+        std::runtime_error);
+    EXPECT_THROW(
+        // geos runtime support for both input and output geo transforms (gdal-backed),
+        // case of geos noop call, it's short-circuited leaving in place just transforms
+        ASSERT_NEAR(
+            static_cast<double>(1558.806243896484),
+            v<double>(run_simple_agg(
+                R"(SELECT ST_Area(ST_Transform(ST_Buffer(ST_Transform(ST_GeomFromText('POLYGON((-71.11603599316368 42.37469906933211,-71.11600627260486 42.37479327587576,-71.11582940503467 42.37476302224121,-71.11582340452516 42.37478309974037,-71.11570078841396 42.37476310907647,-71.11565279759817 42.37492120281317,-71.11577467489042 42.374941582218895,-71.11576735791459 42.374966813944184,-71.11631216001115 42.37505880035607,-71.11631985924761 42.37503569400519,-71.11641211477945 42.37505132899332,-71.11646061071951 42.37489401310859,-71.11636318099954 42.37487692897568,-71.11636960854412 42.37485520073258,-71.11618998476843 42.37482420784997,-71.11621803803246 42.37472943072518,-71.11603599316368 42.37469906933211))',4326), 26919), 0.0), 26986));)",
+                dt)),
+            static_cast<double>(0.00001)),
+        std::runtime_error);
+    // geos runtime support for input transforms (gdal-backed) of geo columns,
+    // also can be used for projection of gdal-transformed constructed geometries, e.g.
+    // SELECT ST_Buffer(ST_Transform(gpoly4326, 900913),0) from geospatial_test;
     EXPECT_GPU_THROW(ASSERT_NEAR(
-        static_cast<double>(409421494.3899536),
+        static_cast<double>(37106.49473665067),
         v<double>(run_simple_agg(
-            R"(SELECT ST_Area(ST_Transform(ST_Buffer(ST_GeomFromText('POLYGON((-118.240356 34.04880299999999,-118.64035599999998 34.04880300000001,-118.440356 34.24880300000001))',4326), 1.0), 26945));)",
+            R"(SELECT ST_X(ST_Centroid(ST_Buffer(ST_Transform(gpoly4326, 900913),0))) from geospatial_test limit 1;)",
             dt)),
         static_cast<double>(0.00001)));
-    // geos runtime support for both input and output geo transforms (gdal-backed)
-    EXPECT_GPU_THROW(ASSERT_NEAR(
-        static_cast<double>(1756.549591064453),
-        v<double>(run_simple_agg(
-            R"(SELECT ST_Area(ST_Transform(ST_Buffer(ST_Transform(ST_GeomFromText('POLYGON((-71.11603599316368 42.37469906933211,-71.11600627260486 42.37479327587576,-71.11582940503467 42.37476302224121,-71.11582340452516 42.37478309974037,-71.11570078841396 42.37476310907647,-71.11565279759817 42.37492120281317,-71.11577467489042 42.374941582218895,-71.11576735791459 42.374966813944184,-71.11631216001115 42.37505880035607,-71.11631985924761 42.37503569400519,-71.11641211477945 42.37505132899332,-71.11646061071951 42.37489401310859,-71.11636318099954 42.37487692897568,-71.11636960854412 42.37485520073258,-71.11618998476843 42.37482420784997,-71.11621803803246 42.37472943072518,-71.11603599316368 42.37469906933211))',4326), 26919), 1.0), 26986));)",
-            dt)),
-        static_cast<double>(0.00001)));
-    // geos runtime support for both input and output geo transforms (gdal-backed),
-    // case of geos noop call, it's short-circuited leaving in place just transforms
-    EXPECT_GPU_THROW(ASSERT_NEAR(
-        static_cast<double>(1558.806243896484),
-        v<double>(run_simple_agg(
-            R"(SELECT ST_Area(ST_Transform(ST_Buffer(ST_Transform(ST_GeomFromText('POLYGON((-71.11603599316368 42.37469906933211,-71.11600627260486 42.37479327587576,-71.11582940503467 42.37476302224121,-71.11582340452516 42.37478309974037,-71.11570078841396 42.37476310907647,-71.11565279759817 42.37492120281317,-71.11577467489042 42.374941582218895,-71.11576735791459 42.374966813944184,-71.11631216001115 42.37505880035607,-71.11631985924761 42.37503569400519,-71.11641211477945 42.37505132899332,-71.11646061071951 42.37489401310859,-71.11636318099954 42.37487692897568,-71.11636960854412 42.37485520073258,-71.11618998476843 42.37482420784997,-71.11621803803246 42.37472943072518,-71.11603599316368 42.37469906933211))',4326), 26919), 0.0), 26986));)",
-            dt)),
-        static_cast<double>(0.00001)));
+    // geo operators can't deal with geo operator output transforms yet
+    EXPECT_THROW(
+        ASSERT_NEAR(
+            static_cast<double>(37106.49473665067),
+            v<double>(run_simple_agg(
+                R"(SELECT ST_X(ST_Centroid(ST_Transform(ST_Buffer(gpoly4326,0),900913))) from geospatial_test limit 1;)",
+                dt)),
+            static_cast<double>(0.00001)),
+        std::runtime_error);
     // Handling geos returning a MULTIPOINT
     EXPECT_GPU_THROW(ASSERT_NEAR(
         static_cast<double>(0.9),
@@ -2861,6 +3049,12 @@ int main(int argc, char** argv) {
 
   int err{0};
   try {
+    ScopeGuard resetFlag = [orig = g_allow_cpu_retry] {
+      // sample on varlen col on multi-fragmented table is now
+      // punt to cpu, so we turn cpu_retry on to properly perform the test
+      g_allow_cpu_retry = orig;
+    };
+    g_allow_cpu_retry = true;
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();

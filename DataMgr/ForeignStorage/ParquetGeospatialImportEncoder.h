@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,13 +30,13 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
  public:
   ParquetGeospatialImportEncoder()
       : ParquetEncoder(nullptr)
-      , GeospatialEncoder()
+      , GeospatialEncoder(nullptr)
       , current_batch_offset_(0)
       , invalid_indices_(nullptr) {}
 
   ParquetGeospatialImportEncoder(std::list<Chunk_NS::Chunk>& chunks)
       : ParquetEncoder(nullptr)
-      , GeospatialEncoder(chunks)
+      , GeospatialEncoder(chunks, nullptr)
       , current_batch_offset_(0)
       , invalid_indices_(nullptr)
       , base_column_buffer_(nullptr)
@@ -155,6 +155,14 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
     current_batch_offset_ += levels_read;
   }
 
+  void appendDataTrackErrors(const int16_t* def_levels,
+                             const int16_t* rep_levels,
+                             const int64_t values_read,
+                             const int64_t levels_read,
+                             int8_t* values) override {
+    UNREACHABLE() << "unexpected call to appendDataTrackErrors from unsupported encoder";
+  }
+
  private:
   void appendArrayDatumsIfApplicable(TypedParquetStorageBuffer<ArrayDatum>* column_buffer,
                                      const std::vector<ArrayDatum>& datum_buffer) {
@@ -179,8 +187,7 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
       base_column_buffer_->appendElement("");
     }
     if (render_group_column_buffer_) {
-      render_group_values_.resize(row_count, 0);
-      auto data_ptr = reinterpret_cast<int8_t*>(render_group_values_.data());
+      auto data_ptr = reinterpret_cast<int8_t*>(render_group_value_buffer_.data());
       render_group_column_buffer_->append(data_ptr, sizeof(int32_t) * row_count);
     }
   }

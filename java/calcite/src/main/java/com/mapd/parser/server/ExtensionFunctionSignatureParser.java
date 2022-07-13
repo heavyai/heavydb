@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.mapd.parser.server;
 
 import org.slf4j.Logger;
@@ -30,12 +31,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-/**
- *
- * @author alex
- */
+
 class ExtensionFunctionSignatureParser {
-  final static Logger MAPDLOGGER =
+  final static Logger HEAVYDBLOGGER =
           LoggerFactory.getLogger(ExtensionFunctionSignatureParser.class);
   // Windows DE supports slightly different types sizes.
   private static String OS = System.getProperty("os.name").toLowerCase();
@@ -231,6 +229,9 @@ class ExtensionFunctionSignatureParser {
     if (type_name.equals("Array<bool>")) {
       return ExtensionFunction.ExtArgumentType.ArrayBool;
     }
+    if (type_name.equals("Timestamp")) {
+      return ExtensionFunction.ExtArgumentType.Timestamp;
+    }
     if (type_name.equals("Column<int8_t>") || type_name.equals("Column<char>")) {
       return ExtensionFunction.ExtArgumentType.ColumnInt8;
     }
@@ -253,6 +254,9 @@ class ExtensionFunctionSignatureParser {
     if (type_name.equals("Column<TextEncodingDict>")) {
       return ExtensionFunction.ExtArgumentType.ColumnTextEncodingDict;
     }
+    if (type_name.equals("Column<Timestamp>")) {
+      return ExtensionFunction.ExtArgumentType.ColumnTimestamp;
+    }
     if (type_name.equals("Cursor")) {
       return ExtensionFunction.ExtArgumentType.Cursor;
     }
@@ -261,6 +265,9 @@ class ExtensionFunctionSignatureParser {
     }
     if (type_name.equals("GeoLineString")) {
       return ExtensionFunction.ExtArgumentType.GeoLineString;
+    }
+    if (type_name.equals("GeoMultiLineString")) {
+      return ExtensionFunction.ExtArgumentType.GeoMultiLineString;
     }
     if (type_name.equals("GeoPolygon")) {
       return ExtensionFunction.ExtArgumentType.GeoPolygon;
@@ -291,7 +298,7 @@ class ExtensionFunctionSignatureParser {
     if (type_name.equals("ColumnList<TextEncodingDict>")) {
       return ExtensionFunction.ExtArgumentType.ColumnListTextEncodingDict;
     }
-    MAPDLOGGER.info(
+    HEAVYDBLOGGER.info(
             "ExtensionfunctionSignatureParser::deserializeType: unknown type_name=`"
             + type_name + "`");
     // TODO: Return void for convenience. Consider sanitizing functions for supported

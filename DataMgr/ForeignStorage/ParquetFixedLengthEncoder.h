@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,6 +106,8 @@ class ParquetFixedLengthEncoder : public TypedParquetInPlaceEncoder<V, T, NullTy
       IntegralFixedLengthBoundsValidator<T>::validateValue(value, column_type);
     } else if (column_type.is_timestamp()) {
       TimestampBoundsValidator<T>::validateValue(value, column_type);
+    } else if (column_type.is_date()) {
+      DateInDaysBoundsValidator<T>::validateValue(value, column_type);
     }
   }
 

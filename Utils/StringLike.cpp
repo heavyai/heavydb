@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,10 @@
 
 /**
  * @file		StringLike.cpp
- * @author	Wei Hong <wei@mapd.com>
  * @brief		Functions to support the LIKE and ILIKE operator in SQL.  Only
  * single-byte character set is supported for now.
  *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
 
 #include "StringLike.h"
 

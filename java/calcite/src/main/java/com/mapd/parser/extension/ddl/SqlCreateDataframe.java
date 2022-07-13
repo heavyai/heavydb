@@ -1,7 +1,7 @@
 package com.mapd.parser.extension.ddl;
 
 import com.google.gson.annotations.Expose;
-import com.mapd.parser.extension.ddl.omnisci.OmniSciOptionsMap;
+import com.mapd.parser.extension.ddl.heavydb.HeavyDBOptionsMap;
 
 import org.apache.calcite.runtime.CalciteException;
 import org.apache.calcite.sql.SqlCall;
@@ -35,13 +35,13 @@ public class SqlCreateDataframe extends SqlCreate {
   @Expose
   private SqlNode filePath;
   @Expose
-  OmniSciOptionsMap options;
+  HeavyDBOptionsMap options;
 
   public SqlCreateDataframe(final SqlParserPos pos,
           SqlIdentifier name,
           SqlNodeList elementList,
           SqlNode filePath,
-          OmniSciOptionsMap options) {
+          HeavyDBOptionsMap options) {
     super(OPERATOR, pos, false, false);
     this.command = OPERATOR.getName();
     this.name = name;

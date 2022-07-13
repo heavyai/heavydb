@@ -1,8 +1,5 @@
 package com.mapd.tests;
 
-import com.omnisci.thrift.server.TOmniSciException;
-import com.omnisci.thrift.server.TTypeInfo;
-
 import org.apache.commons.math3.util.Pair;
 
 import java.time.LocalDateTime;
@@ -14,6 +11,9 @@ import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Random;
 import java.util.function.Function;
+
+import ai.heavy.thrift.server.TDBException;
+import ai.heavy.thrift.server.TTypeInfo;
 
 /**
  * a (hopefully) complete test case for date/time functions in OmniSci.
@@ -98,23 +98,23 @@ public class DateTimeTest {
         return t;
       }
     }),
-    //		dtMILLENNIUM("MILLENNIUM", new Function<LocalDateTime, LocalDateTime>() {
-    //			@Override
-    //			public LocalDateTime apply(LocalDateTime t) {
-    //				int year = t.getYear();
-    //				int range = 1000;
-    //				int diff = year % range;
-    //				if (diff == 0) {
-    //					diff = range;
-    //				}
-    //				year -= diff;
-    //				t = t.withYear(year + 1);
-    //				t = t.withMonth(1);
-    //				t = t.withDayOfMonth(1);
-    //				t = t.truncatedTo(ChronoUnit.DAYS);
-    //				return t;
-    //			}
-    //		}),
+    // dtMILLENNIUM("MILLENNIUM", new Function<LocalDateTime, LocalDateTime>() {
+    // @Override
+    // public LocalDateTime apply(LocalDateTime t) {
+    // int year = t.getYear();
+    // int range = 1000;
+    // int diff = year % range;
+    // if (diff == 0) {
+    // diff = range;
+    // }
+    // year -= diff;
+    // t = t.withYear(year + 1);
+    // t = t.withMonth(1);
+    // t = t.withDayOfMonth(1);
+    // t = t.truncatedTo(ChronoUnit.DAYS);
+    // return t;
+    // }
+    // }),
     dtCENTURY("CENTURY", new Function<LocalDateTime, LocalDateTime>() {
       @Override
       public LocalDateTime apply(LocalDateTime t) {
@@ -176,18 +176,18 @@ public class DateTimeTest {
         return t;
       }
     }),
-    //		  dtQUARTERDAY("QUERTERDAY", new Function<LocalDateTime, LocalDateTime>()
-    //{
-    //			  @Override
-    //			public LocalDateTime apply(LocalDateTime t) {
-    //				  int hour = t.getHour();
-    //				  hour /= 4;
+    // dtQUARTERDAY("QUERTERDAY", new Function<LocalDateTime, LocalDateTime>()
+    // {
+    // @Override
+    // public LocalDateTime apply(LocalDateTime t) {
+    // int hour = t.getHour();
+    // hour /= 4;
     //
-    //				  t = t.withHour(hour);
-    //				t = t.truncatedTo(ChronoUnit.SECONDS);
-    //				return t;
-    //			}
-    //		  })
+    // t = t.withHour(hour);
+    // t = t.truncatedTo(ChronoUnit.SECONDS);
+    // return t;
+    // }
+    // })
     ;
 
     private String sqlToken;
@@ -261,9 +261,9 @@ public class DateTimeTest {
         return (long) t.get(ChronoField.SECOND_OF_MINUTE);
       }
     }),
-    //		daMILLENNIUM("MILLENNIUM", ChronoField.YEAR, 1000),
-    //		daCENTURY("CENTURY", ChronoField.YEAR, 100),
-    //		daDECADE("DECADE", ChronoField.YEAR, 10),
+    // daMILLENNIUM("MILLENNIUM", ChronoField.YEAR, 1000),
+    // daCENTURY("CENTURY", ChronoField.YEAR, 100),
+    // daDECADE("DECADE", ChronoField.YEAR, 10),
     daMILLISECOND("MILLISECOND", new Function<LocalDateTime, Long>() {
       @Override
       public Long apply(LocalDateTime t) {
@@ -309,18 +309,18 @@ public class DateTimeTest {
         return (long) weeks;
       }
     }),
-    //		daQUARTERDAY("QUERTERDAY", new Function<LocalDateTime, Integer>() {
-    //			@Override
-    //			public Integer apply(LocalDateTime t) {
-    //				return ((t.get(ChronoField.HOUR_OF_DAY) -1 ) / 4) + 1;
-    //			}
-    //		}),
-    //		daWEEKDAY("WEEKDAYS", new Function<LocalDateTime, Integer>() {
-    //			@Override
-    //			public Integer apply(LocalDateTime t) {
-    //				return t.get(ChronoField.DAY_OF_WEEK);
-    //			}
-    //		}),
+    // daQUARTERDAY("QUERTERDAY", new Function<LocalDateTime, Integer>() {
+    // @Override
+    // public Integer apply(LocalDateTime t) {
+    // return ((t.get(ChronoField.HOUR_OF_DAY) -1 ) / 4) + 1;
+    // }
+    // }),
+    // daWEEKDAY("WEEKDAYS", new Function<LocalDateTime, Integer>() {
+    // @Override
+    // public Integer apply(LocalDateTime t) {
+    // return t.get(ChronoField.DAY_OF_WEEK);
+    // }
+    // }),
     daDAYOFYEAR("DOY", new Function<LocalDateTime, Long>() {
       @Override
       public Long apply(LocalDateTime t) {
@@ -357,7 +357,7 @@ public class DateTimeTest {
         }
 
         start = DateTruncUnit.dtQUARTER.trunc.apply(start);
-        //				end = DateTruncUnit.dtQUARTER.trunc.apply(end);
+        // end = DateTruncUnit.dtQUARTER.trunc.apply(end);
         long rc = 0;
 
         while (start.compareTo(end) <= 0) {
@@ -398,9 +398,9 @@ public class DateTimeTest {
         return d.getFirst().until(d.getSecond(), ChronoUnit.SECONDS);
       }
     }),
-    //		daMILLENNIUM("MILLENNIUM", ChronoField.YEAR, 1000),
-    //		daCENTURY("CENTURY", ChronoField.YEAR, 100),
-    //		daDECADE("DECADE", ChronoField.YEAR, 10),
+    // daMILLENNIUM("MILLENNIUM", ChronoField.YEAR, 1000),
+    // daCENTURY("CENTURY", ChronoField.YEAR, 100),
+    // daDECADE("DECADE", ChronoField.YEAR, 10),
     daMILLISECOND(
             "MILLISECOND", new Function<Pair<LocalDateTime, LocalDateTime>, Long>() {
               public Long apply(Pair<LocalDateTime, LocalDateTime> d) {
@@ -423,18 +423,18 @@ public class DateTimeTest {
         return d.getFirst().until(d.getSecond(), ChronoUnit.WEEKS);
       }
     }),
-    //		daQUARTERDAY("QUERTERDAY", new Function<LocalDateTime, Integer>() {
-    //			@Override
-    //			public Integer apply(LocalDateTime t) {
-    //				return ((t.get(ChronoField.HOUR_OF_DAY) -1 ) / 4) + 1;
-    //			}
-    //		}),
-    //		daWEEKDAY("WEEKDAYS", new Function<LocalDateTime, Integer>() {
-    //			@Override
-    //			public Integer apply(LocalDateTime t) {
-    //				return t.get(ChronoField.DAY_OF_WEEK);
-    //			}
-    //		}),
+    // daQUARTERDAY("QUERTERDAY", new Function<LocalDateTime, Integer>() {
+    // @Override
+    // public Integer apply(LocalDateTime t) {
+    // return ((t.get(ChronoField.HOUR_OF_DAY) -1 ) / 4) + 1;
+    // }
+    // }),
+    // daWEEKDAY("WEEKDAYS", new Function<LocalDateTime, Integer>() {
+    // @Override
+    // public Integer apply(LocalDateTime t) {
+    // return t.get(ChronoField.DAY_OF_WEEK);
+    // }
+    // }),
     ;
 
     private String sqlToken;
@@ -491,9 +491,9 @@ public class DateTimeTest {
         return t.getFirst().plus(t.getSecond(), ChronoUnit.SECONDS);
       }
     }),
-    //		daMILLENNIUM("MILLENNIUM", ChronoField.YEAR, 1000),
-    //		daCENTURY("CENTURY", ChronoField.YEAR, 100),
-    //		daDECADE("DECADE", ChronoField.YEAR, 10),
+    // daMILLENNIUM("MILLENNIUM", ChronoField.YEAR, 1000),
+    // daCENTURY("CENTURY", ChronoField.YEAR, 100),
+    // daDECADE("DECADE", ChronoField.YEAR, 10),
     daMILLISECOND("MILLISECOND",
             12 * 30 * 24 * 60 * 60 * 1000L,
             new Function<Pair<LocalDateTime, Long>, LocalDateTime>() {
@@ -524,18 +524,18 @@ public class DateTimeTest {
         return t.getFirst().plus(t.getSecond(), ChronoUnit.WEEKS);
       }
     }),
-    //		daQUARTERDAY("QUERTERDAY", new Function<LocalDateTime, Integer>() {
-    //			@Override
-    //			public Integer apply(LocalDateTime t) {
-    //				return ((t.get(ChronoField.HOUR_OF_DAY) -1 ) / 4) + 1;
-    //			}
-    //		}),
-    //		daWEEKDAY("WEEKDAYS", new Function<LocalDateTime, Integer>() {
-    //			@Override
-    //			public Integer apply(LocalDateTime t) {
-    //				return t.get(ChronoField.DAY_OF_WEEK);
-    //			}
-    //		}),
+    // daQUARTERDAY("QUERTERDAY", new Function<LocalDateTime, Integer>() {
+    // @Override
+    // public Integer apply(LocalDateTime t) {
+    // return ((t.get(ChronoField.HOUR_OF_DAY) -1 ) / 4) + 1;
+    // }
+    // }),
+    // daWEEKDAY("WEEKDAYS", new Function<LocalDateTime, Integer>() {
+    // @Override
+    // public Integer apply(LocalDateTime t) {
+    // return t.get(ChronoField.DAY_OF_WEEK);
+    // }
+    // }),
     ;
 
     private String sqlToken;
@@ -669,10 +669,10 @@ public class DateTimeTest {
     }
   }
 
-  static LocalDateTime getDateTimeFromQuery(MapdTestClient client, String sql)
+  static LocalDateTime getDateTimeFromQuery(HeavyDBTestClient client, String sql)
           throws Exception {
     try {
-      com.omnisci.thrift.server.TQueryResult res = client.runSql(sql);
+      ai.heavy.thrift.server.TQueryResult res = client.runSql(sql);
       LocalDateTime r = null;
       if (res.row_set.is_columnar) {
         TTypeInfo tt = res.row_set.row_desc.get(0).col_type;
@@ -692,7 +692,7 @@ public class DateTimeTest {
       }
 
       return r;
-    } catch (TOmniSciException e) {
+    } catch (TDBException e) {
       System.out.println("Query failed: " + sql + " -- " + e.getError_msg());
       return LocalDateTime.MIN;
 
@@ -702,9 +702,9 @@ public class DateTimeTest {
     }
   }
 
-  static long getLongFromQuery(MapdTestClient client, String sql) throws Exception {
+  static long getLongFromQuery(HeavyDBTestClient client, String sql) throws Exception {
     try {
-      com.omnisci.thrift.server.TQueryResult res = client.runSql(sql);
+      ai.heavy.thrift.server.TQueryResult res = client.runSql(sql);
       long r = -1;
       if (res.row_set.is_columnar) {
         long val = res.row_set.columns.get(0).data.int_col.get(0);
@@ -713,7 +713,7 @@ public class DateTimeTest {
         throw new RuntimeException("Unsupported!");
       }
       return r;
-    } catch (TOmniSciException e) {
+    } catch (TDBException e) {
       System.out.println("Query failed: " + sql + " -- " + e.getError_msg());
       return Long.MIN_VALUE;
     } catch (Exception e) {
@@ -723,7 +723,7 @@ public class DateTimeTest {
   }
 
   public static LocalDateTime testDateTrunc(
-          LocalDateTime d, DateTruncUnit f, MapdTestClient client, Encoding enc)
+          LocalDateTime d, DateTruncUnit f, HeavyDBTestClient client, Encoding enc)
           throws Exception {
     if (!enc.isValid(d)) {
       return d;
@@ -743,12 +743,12 @@ public class DateTimeTest {
     return testDateTruncTable(d, f, client, enc);
   }
 
-  private static void updateValues(MapdTestClient client, LocalDateTime a, Encoding aEnc)
-          throws Exception {
+  private static void updateValues(
+          HeavyDBTestClient client, LocalDateTime a, Encoding aEnc) throws Exception {
     updateValues(client, a, aEnc, null, null);
   }
 
-  private static void updateValues(MapdTestClient client,
+  private static void updateValues(HeavyDBTestClient client,
           LocalDateTime a,
           Encoding aEnc,
           LocalDateTime b,
@@ -764,13 +764,13 @@ public class DateTimeTest {
 
     try {
       client.runSql(sqlUpdate);
-    } catch (TOmniSciException e) {
+    } catch (TDBException e) {
       System.out.println("Update failed: " + sqlUpdate + " " + e.getError_msg());
     }
   }
 
   public static LocalDateTime testDateTruncTable(
-          LocalDateTime d, DateTruncUnit f, MapdTestClient client, Encoding enc)
+          LocalDateTime d, DateTruncUnit f, HeavyDBTestClient client, Encoding enc)
           throws Exception {
     updateValues(client, d, enc);
     String sql = "SELECT DATE_TRUNC('" + f.sqlToken + "', " + enc.toSqlColumn("a", d)
@@ -789,7 +789,7 @@ public class DateTimeTest {
   }
 
   public static void testDateExtract(
-          LocalDateTime d, DateExtractUnit f, MapdTestClient client, Encoding enc)
+          LocalDateTime d, DateExtractUnit f, HeavyDBTestClient client, Encoding enc)
           throws Exception {
     String sql = "SELECT EXTRACT(" + f.sqlToken + " FROM " + enc.toSql(d) + ");";
     long r = getLongFromQuery(client, sql);
@@ -807,7 +807,7 @@ public class DateTimeTest {
   }
 
   public static void testDateExtractTable(
-          LocalDateTime d, DateExtractUnit f, MapdTestClient client, Encoding enc)
+          LocalDateTime d, DateExtractUnit f, HeavyDBTestClient client, Encoding enc)
           throws Exception {
     if (!enc.isValid(d)) {
       return;
@@ -832,7 +832,7 @@ public class DateTimeTest {
           LocalDateTime d0,
           LocalDateTime d1,
           DateDiffUnit f,
-          MapdTestClient client,
+          HeavyDBTestClient client,
           Encoding enc0,
           Encoding enc1) throws Exception {
     String sql = "SELECT " + fn + "(" + f.sqlToken + ", " + enc0.toSql(d0) + ", "
@@ -856,7 +856,7 @@ public class DateTimeTest {
           LocalDateTime d0,
           LocalDateTime d1,
           DateDiffUnit f,
-          MapdTestClient client,
+          HeavyDBTestClient client,
           Encoding enc0,
           Encoding enc1) throws Exception {
     if (!enc0.isValid(d0) || !enc1.isValid(d1)) {
@@ -883,7 +883,7 @@ public class DateTimeTest {
           LocalDateTime d,
           DateAddUnit f,
           long units,
-          MapdTestClient client,
+          HeavyDBTestClient client,
           Encoding enc) throws Exception {
     String sql =
             "SELECT " + fn + "(" + f.sqlToken + ", " + units + ", " + enc.toSql(d) + ");";
@@ -905,7 +905,7 @@ public class DateTimeTest {
           LocalDateTime d,
           DateAddUnit f,
           long units,
-          MapdTestClient client,
+          HeavyDBTestClient client,
           Encoding enc) throws Exception {
     if (!enc.isValid(d)) {
       return;
@@ -938,9 +938,11 @@ public class DateTimeTest {
     addAllowed.remove(DateAddUnit.daWEEK);
   }
 
-  public static void testAdd(
-          LocalDateTime d, DateAddUnit f, long units, MapdTestClient client, Encoding enc)
-          throws Exception {
+  public static void testAdd(LocalDateTime d,
+          DateAddUnit f,
+          long units,
+          HeavyDBTestClient client,
+          Encoding enc) throws Exception {
     if (!addAllowed.contains(f)) {
       return;
     }
@@ -959,9 +961,11 @@ public class DateTimeTest {
     }
   }
 
-  public static void testSub(
-          LocalDateTime d, DateAddUnit f, long units, MapdTestClient client, Encoding enc)
-          throws Exception {
+  public static void testSub(LocalDateTime d,
+          DateAddUnit f,
+          long units,
+          HeavyDBTestClient client,
+          Encoding enc) throws Exception {
     if (!addAllowed.contains(f)) {
       return;
     }
@@ -1045,7 +1049,7 @@ public class DateTimeTest {
     }
   }
 
-  public static void createTestTable(MapdTestClient client) throws Exception {
+  public static void createTestTable(HeavyDBTestClient client) throws Exception {
     client.runSql("DROP TABLE IF EXISTS DateTimeTest;");
     String sqlCreate = "CREATE TABLE DateTimeTest(id int";
     String sqlInsert = "INSERT INTO DateTimeTest VALUES(0";
@@ -1078,8 +1082,8 @@ public class DateTimeTest {
     System.out.println("Seed: " + seed);
     Random r = new Random(seed);
 
-    MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
+            "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     LocalDateTime d0 = createRandomDateTime(r);
     LocalDateTime d1 = createRandomDateTime(r);
 

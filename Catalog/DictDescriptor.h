@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ struct DictDescriptor {
                  int nbits,
                  bool shared,
                  const int rc,
-                 std::string& fname,
+                 const std::string& fname,
                  bool temp)
       : dictRef(dict_ref)
       , dictName(name)
@@ -63,7 +63,7 @@ struct DictDescriptor {
                  int nbits,
                  bool shared,
                  const int rc,
-                 std::string& fname,
+                 const std::string& fname,
                  bool temp)
       : dictName(name)
       , dictNBits(nbits)

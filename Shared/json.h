@@ -1,23 +1,25 @@
-// Copyright (c) 2021 OmniSci, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * Copyright 2022 HEAVY.AI, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 // OmniSci JSON
 
 // EXAMPLE #1
 //
 //   #include "Shared/json.h"
-//   using JSON = omnisci::JSON;
+//   using JSON = heavyai::JSON;
 //   JSON json;
 //   json["item1"] = "abc";
 //   json["item2"] = 123;
@@ -30,7 +32,7 @@
 // EXAMPLE #2
 //
 //   #include "Shared/json.h"
-//   using JSON = omnisci::JSON;
+//   using JSON = heavyai::JSON;
 //   std::string text = R"json(
 //     {
 //       "item1": "abc",
@@ -60,7 +62,7 @@
 // Calling any public JSON constructor except the move constructor creates a new document.
 // Calling JSON's operator[] creates a reference into an existing document.
 
-namespace omnisci {
+namespace heavyai {
 
 class JSON final {
   std::shared_ptr<rapidjson::Document> doc_;
@@ -348,4 +350,4 @@ inline bool operator!=(const T& value, const JSON& json) {
   return (json != value);
 }
 
-}  // namespace omnisci
+}  // namespace heavyai

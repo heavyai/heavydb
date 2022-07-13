@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,10 @@
  * limitations under the License.
  */
 
-/*
+/**
  * @file    QueryPhysicalInputsCollector.h
- * @author  Alex Suhan <alex@mapd.com>
  * @brief   Find out all the physical inputs (columns) a query is using.
  *
- * Copyright (c) 2016 MapD Technologies, Inc.  All rights reserved.
  */
 
 #ifndef QUERYENGINE_QUERYPHYSICALINPUTSCOLLECTOR_H
@@ -34,6 +32,12 @@ struct PhysicalInput {
   int col_id;
   int table_id;
 
+  size_t hash() const {
+    static_assert(sizeof(table_id) + sizeof(col_id) <= sizeof(size_t));
+    return static_cast<size_t>(table_id) << 8 * sizeof(col_id) |
+           static_cast<size_t>(col_id);
+  }
+
   bool operator==(const PhysicalInput& that) const {
     return col_id == that.col_id && table_id == that.table_id;
   }
@@ -45,9 +49,7 @@ namespace std {
 
 template <>
 struct hash<PhysicalInput> {
-  size_t operator()(const PhysicalInput& phys_input) const {
-    return phys_input.col_id ^ phys_input.table_id;
-  }
+  size_t operator()(const PhysicalInput& phys_input) const { return phys_input.hash(); }
 };
 
 }  // namespace std

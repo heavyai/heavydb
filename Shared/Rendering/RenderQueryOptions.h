@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,20 +21,31 @@ class RenderQueryOptions {
   enum FlagBits {
     // enableHitTesting field not available in Vega
     // attempt to support it automatically
-    // requires physical tables and will enable kInjectRowId for non-insitu renders
+    // requires physical tables and will enable kInjectRowIdForHitTesting for non-insitu
+    // renders
     kLegacyHitTestLogic = 1u << 0,
     // automatically inject rowid for projection queries.
     // For example, this should be true when hit-testing is enabled.
-    kInjectRowId = 1u << 1,
+    kInjectRowIdForHitTesting = 1u << 1,
     // physical tables are required in the results
     // For example, this should be true when hit-testing is enabled.
     kRequiresPhysicalTables = 1u << 2,
+    // automatically inject rowid for ppll poly rendering.
+    kInjectRowIdForPPLL = 1u << 3,
   };
 
-  bool shouldAlterRA() const { return flags_ & FlagBits::kInjectRowId; }
+  bool shouldAlterRA() const {
+    return flags_ & (FlagBits::kInjectRowIdForHitTesting | FlagBits::kInjectRowIdForPPLL);
+  }
 
   bool useLegacyHitTestLogic() const { return flags_ & FlagBits::kLegacyHitTestLogic; }
-  bool injectRowId() const { return flags_ & FlagBits::kInjectRowId; }
+  bool injectRowIdForHitTesting() const {
+    return flags_ & FlagBits::kInjectRowIdForHitTesting;
+  }
+  bool isHitTestingEnabled() const {
+    return useLegacyHitTestLogic() || injectRowIdForHitTesting();
+  }
+  bool injectRowIdForPPLL() const { return flags_ & FlagBits::kInjectRowIdForPPLL; }
   bool requiresPhysicalTables() const {
     return flags_ & FlagBits::kRequiresPhysicalTables;
   }

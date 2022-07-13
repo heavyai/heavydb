@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,6 +69,9 @@ inline SQLOps to_sql_op(const std::string& op_str) {
   }
   if (op_str == std::string("CAST")) {
     return kCAST;
+  }
+  if (op_str == std::string("ENCODE_TEXT")) {
+    return kENCODE_TEXT;
   }
   if (op_str == std::string("NOT")) {
     return kNOT;
@@ -149,7 +152,8 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("DECIMAL")) {
     return kDECIMAL;
   }
-  if (type_name == std::string("CHAR") || type_name == std::string("VARCHAR")) {
+  if (type_name == std::string("CHAR") || type_name == std::string("VARCHAR") ||
+      type_name == std::string("SYMBOL")) {
     return kTEXT;
   }
   if (type_name == std::string("BOOLEAN")) {
@@ -191,6 +195,9 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
   }
   if (type_name == std::string("LINESTRING")) {
     return kLINESTRING;
+  }
+  if (type_name == std::string("MULTILINESTRING")) {
+    return kMULTILINESTRING;
   }
   if (type_name == std::string("POLYGON")) {
     return kPOLYGON;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,5 +44,22 @@ class CsvFileBufferParser : public TextFileBufferParser {
 
   void validateFiles(const FileReader* file_reader,
                      const ForeignTable* foreign_table) const override{};
+
+  // @TODO(se) more?
+  inline static const std::string DELIMITER_KEY = "DELIMITER";
+  inline static const std::string NULLS_KEY = "NULLS";
+  inline static const std::string HEADER_KEY = "HEADER";
+  inline static const std::string QUOTED_KEY = "QUOTED";
+  inline static const std::string QUOTE_KEY = "QUOTE";
+  inline static const std::string ESCAPE_KEY = "ESCAPE";
+  inline static const std::string LINE_DELIMITER_KEY = "LINE_DELIMITER";
+  inline static const std::string ARRAY_DELIMITER_KEY = "ARRAY_DELIMITER";
+  inline static const std::string ARRAY_MARKER_KEY = "ARRAY_MARKER";
+  inline static const std::string LONLAT_KEY = "LONLAT";
+  inline static const std::string GEO_ASSIGN_RENDER_GROUPS_KEY =
+      "GEO_ASSIGN_RENDER_GROUPS";
+  inline static const std::string GEO_EXPLODE_COLLECTIONS_KEY = "GEO_EXPLODE_COLLECTIONS";
+  inline static const std::string SOURCE_SRID_KEY = "SOURCE_SRID";
+  inline static const std::string TRIM_SPACES_KEY = "TRIM_SPACES";
 };
 }  // namespace foreign_storage

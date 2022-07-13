@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,10 @@
 
 /**
  * @file    RowToColumnLoader.cpp
- * @author  Michael <michael@mapd.com>
  * @brief   Based on StreamInsert code but using binary columnar format for inserting a
- *stream of rows with optional transformations from stdin to a MapD table.
+ * stream of rows with optional transformations from stdin to a MapD table.
  *
- * Copyright (c) 2017 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
 
 #include "ImportExport/RowToColumnLoader.h"
 #include "ImportExport/DelimitedParserUtils.h"
@@ -67,6 +65,8 @@ SQLTypes get_sql_types(const TColumnType& ct) {
       return SQLTypes::kPOINT;
     case TDatumType::LINESTRING:
       return SQLTypes::kLINESTRING;
+    case TDatumType::MULTILINESTRING:
+      return SQLTypes::kMULTILINESTRING;
     case TDatumType::POLYGON:
       return SQLTypes::kPOLYGON;
     case TDatumType::MULTIPOLYGON:
@@ -166,6 +166,7 @@ void remove_partial_row(size_t failed_column,
         break;
       case SQLTypes::kPOINT:
       case SQLTypes::kLINESTRING:
+      case SQLTypes::kMULTILINESTRING:
       case SQLTypes::kPOLYGON:
       case SQLTypes::kMULTIPOLYGON:
         input_col_vec[idx].nulls.pop_back();
@@ -191,6 +192,7 @@ void populate_TColumn(TStringValue ts,
     case SQLTypes::kVARCHAR:
     case SQLTypes::kPOINT:
     case SQLTypes::kLINESTRING:
+    case SQLTypes::kMULTILINESTRING:
     case SQLTypes::kPOLYGON:
     case SQLTypes::kMULTIPOLYGON:
       if (ts.is_null) {
@@ -208,6 +210,7 @@ void populate_TColumn(TStringValue ts,
           case SQLTypes::kTEXT:
           case SQLTypes::kPOINT:
           case SQLTypes::kLINESTRING:
+          case SQLTypes::kMULTILINESTRING:
           case SQLTypes::kPOLYGON:
           case SQLTypes::kMULTIPOLYGON:
             input_col.data.str_col.push_back(ts.str_val);
@@ -375,11 +378,11 @@ RowToColumnLoader::~RowToColumnLoader() {
 }
 
 void RowToColumnLoader::createConnection(const ThriftClientConnection& con) {
-  client_.reset(new OmniSciClient(conn_details_.get_protocol()));
+  client_.reset(new HeavyClient(conn_details_.get_protocol()));
 
   try {
     client_->connect(session_, user_name_, passwd_, db_name_);
-  } catch (TOmniSciException& e) {
+  } catch (TDBException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
     std::cerr << "Thrift error on connect: " << te.what() << std::endl;
@@ -388,8 +391,8 @@ void RowToColumnLoader::createConnection(const ThriftClientConnection& con) {
 
 void RowToColumnLoader::closeConnection() {
   try {
-    client_->disconnect(session_);  // disconnect from omnisci_server
-  } catch (TOmniSciException& e) {
+    client_->disconnect(session_);  // disconnect from heavydb
+  } catch (TDBException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
     std::cerr << "Thrift error on close: " << te.what() << std::endl;
@@ -427,7 +430,7 @@ void RowToColumnLoader::do_load(int& nrows,
         input_columns_.push_back(t);
       }
       return;
-    } catch (TOmniSciException& e) {
+    } catch (TDBException& e) {
       std::cerr << "Exception trying to insert data " << e.error_msg << std::endl;
       exit(2);
     } catch (TException& te) {

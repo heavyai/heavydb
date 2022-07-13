@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ struct ColRangeInfo {
   int64_t max;
   int64_t bucket;
   bool has_nulls;
-  bool isEmpty() { return min == 0 && max == -1; }
+  bool isEmpty() const;
 };
 
 struct KeylessInfo {

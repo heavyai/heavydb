@@ -79,15 +79,6 @@ separator = '$=>$'
 
 Signature = namedtuple('Signature', ['name', 'inputs', 'outputs', 'input_annotations', 'output_annotations', 'function_annotations', 'sizer'])
 
-ExtArgumentTypes = ''' Int8, Int16, Int32, Int64, Float, Double, Void, PInt8, PInt16,
-PInt32, PInt64, PFloat, PDouble, PBool, Bool, ArrayInt8, ArrayInt16,
-ArrayInt32, ArrayInt64, ArrayFloat, ArrayDouble, ArrayBool, GeoPoint,
-GeoLineString, Cursor, GeoPolygon, GeoMultiPolygon, ColumnInt8,
-ColumnInt16, ColumnInt32, ColumnInt64, ColumnFloat, ColumnDouble,
-ColumnBool, ColumnTextEncodingDict, TextEncodingNone, TextEncodingDict,
-ColumnListInt8, ColumnListInt16, ColumnListInt32, ColumnListInt64,
-ColumnListFloat, ColumnListDouble, ColumnListBool, ColumnListTextEncodingDict'''.strip().replace(' ', '').replace('\n', '').split(',')
-
 OutputBufferSizeTypes = '''
 kConstant, kUserSpecifiedConstantParameter, kUserSpecifiedRowMultiplier, kTableFunctionSpecifiedParameter, kPreFlightParameter
 '''.strip().replace(' ', '').split(',')
@@ -98,7 +89,7 @@ input_id, name, fields, require
 
 # TODO: support `gpu`, `cpu`, `template` as function annotations
 SupportedFunctionAnnotations = '''
-filter_table_function_transpose
+filter_table_function_transpose, uses_manager
 '''.strip().replace(' ', '').split(',')
 
 translate_map = dict(
@@ -250,14 +241,14 @@ class Bracket:
     def is_column(self):
         return self.name.rsplit("::", 1)[-1].startswith('Column') and not self.is_column_list()
 
-    def is_any_text_encoded_dict(self):
-        return self.name.rsplit("::", 1)[-1].endswith('TextEncodedDict')
+    def is_any_text_encoding_dict(self):
+        return self.name.rsplit("::", 1)[-1].endswith('TextEncodingDict')
 
-    def is_column_text_encoded_dict(self):
-        return self.name.rsplit("::", 1)[-1] == 'ColumnTextEncodedDict'
+    def is_column_text_encoding_dict(self):
+        return self.name.rsplit("::", 1)[-1] == 'ColumnTextEncodingDict'
 
-    def is_column_list_text_encoded_dict(self):
-        return self.name.rsplit("::", 1)[-1] == 'ColumnListTextEncodedDict'
+    def is_column_list_text_encoding_dict(self):
+        return self.name.rsplit("::", 1)[-1] == 'ColumnListTextEncodingDict'
 
     def is_output_buffer_sizer(self):
         return self.name.rsplit("::", 1)[-1] in OutputBufferSizeTypes
@@ -281,12 +272,20 @@ class Bracket:
     def get_cpp_type(self):
         name = self.name.rsplit("::", 1)[-1]
         clsname = None
+        subclsname = None
         if name.startswith('ColumnList'):
             name = name.lstrip('ColumnList')
             clsname = 'ColumnList'
         elif name.startswith('Column'):
             name = name.lstrip('Column')
             clsname = 'Column'
+        if name.startswith('Array'):
+            name = name.lstrip('Array')
+            if clsname is None:
+                clsname = 'Array'
+            else:
+                subclsname = 'Array'
+
         if name.startswith('Bool'):
             ctype = name.lower()
         elif name.startswith('Int'):
@@ -297,11 +296,15 @@ class Bracket:
             ctype = name
         elif name == 'TextEncodingNone':
             ctype = name
+        elif name == 'Timestamp':
+            ctype = name
         else:
             raise NotImplementedError(self)
         if clsname is None:
             return ctype
-        return '%s<%s>' % (clsname, ctype)
+        if subclsname is None:
+            return '%s<%s>' % (clsname, ctype)
+        return '%s<%s<%s>>' % (clsname, subclsname, ctype)
 
     def format_cpp_type(self, idx, use_generic_arg_name=False, real_arg_name=None, is_input=True):
         col_typs = ('Column', 'ColumnList')
@@ -315,7 +318,6 @@ class Bracket:
             arg_name = 'input' + str(idx) if is_input else 'output' + str(idx)
         const = 'const ' if is_input else ''
         cpp_type = self.get_cpp_type()
-
         if any(cpp_type.startswith(t) for t in col_typs + literal_ref_typs):
             return '%s%s& %s' % (const, cpp_type, arg_name), arg_name
         else:
@@ -743,10 +745,6 @@ class AstPrinter(AstVisitor):
 class AstDebugger(AstTransformer):
     """Like AstPrinter but returns a node instead of a string
     """
-    def visit_udtf_node(self, udtf_node):
-        if udtf_node.name == 'ct_union_pushdown_projection__cpu_template':
-            print(udtf_node.accept(AstPrinter()))
-        return udtf_node
 
 
 def product_dict(**kwargs):
@@ -763,7 +761,7 @@ class TemplateTransformer(AstTransformer):
         if not udtf_node.templates:
             return udtf_node
 
-        udtfs = []
+        udtfs = dict()
 
         d = dict([(node.key, node.types) for node in udtf_node.templates])
         name = udtf_node.name
@@ -772,8 +770,11 @@ class TemplateTransformer(AstTransformer):
             self.mapping_dict = product
             inputs = [input_arg.accept(self) for input_arg in udtf_node.inputs]
             outputs = [output_arg.accept(self) for output_arg in udtf_node.outputs]
-            udtfs.append(UdtfNode(name, inputs, outputs, udtf_node.annotations, None, udtf_node.sizer, udtf_node.line))
+            udtf = UdtfNode(name, inputs, outputs, udtf_node.annotations, None, udtf_node.sizer, udtf_node.line)
+            udtfs[str(udtf)] = udtf
             self.mapping_dict = {}
+
+        udtfs = list(udtfs.values())
 
         if len(udtfs) == 1:
             return udtfs[0]
@@ -866,7 +867,6 @@ class FieldAnnotationTransformer(AstTransformer):
 
             if not isinstance(t.type, ComposedNode):
                 continue
-
 
             if t.type.is_cursor() and t.get_annotation('fields') is None:
                 fields = list(PrimitiveNode(a.get_annotation('name', 'field%s' % i)) for i, a in enumerate(t.type.inner))
@@ -1145,6 +1145,9 @@ class ComposedNode(TypeNode, IterableNode):
     def __iter__(self):
         for i in self.inner:
             yield i
+
+    def is_text_encoding_dict(self):
+        return False
 
     def is_column_text_encoding_dict(self):
         return self.is_column() and self.inner[0].is_text_encoding_dict()
@@ -1501,13 +1504,16 @@ class Parser:
             value = self.parse_identifier()
             if not self.is_at_end() and self.match(Token.LESS):
                 self.consume(Token.LESS)
-                num1 = self.parse_number()
-                if self.match(Token.COMMA):
-                    self.consume(Token.COMMA)
-                    num2 = self.parse_number()
-                    value += "<%s,%s>" % (num1, num2)
+                if self.match(Token.GREATER):
+                    value += "<%s>" % (-1) # Signifies no input
                 else:
-                    value += "<%s>" % (num1)
+                    num1 = self.parse_number()
+                    if self.match(Token.COMMA):
+                        self.consume(Token.COMMA)
+                        num2 = self.parse_number()
+                        value += "<%s,%s>" % (num1, num2)
+                    else:
+                        value += "<%s>" % (num1)
                 self.consume(Token.GREATER)
         return AnnotationNode(key, value)
 
@@ -1598,7 +1604,7 @@ def find_signatures(input_file):
     for line in open(input_file).readlines():
         line = line.strip()
         if last_line is not None:
-            line = last_line + line
+            line = last_line + ' ' + line
             last_line = None
         if not line.startswith('UDTF:'):
             continue
@@ -1635,6 +1641,10 @@ def find_signatures(input_file):
             except TransformerException as msg:
                 result = ['%s: %s' % (type(msg).__name__, msg)]
                 skip_signature = True
+            assert len(result) == len(expected_result), "\n\tresult:   %s \n!= \n\texpected: %s" % (
+                '\n\t\t  '.join(result),
+                '\n\t\t  '.join(expected_result)
+            )
             assert set(result) == set(expected_result), "\n\tresult:   %s != \n\texpected: %s" % (
                 result,
                 expected_result,
@@ -1655,7 +1665,7 @@ def find_signatures(input_file):
     return signatures
 
 
-def format_function_args(input_types, output_types, uses_manager, use_generic_arg_name):
+def format_function_args(input_types, output_types, uses_manager, use_generic_arg_name, emit_output_args):
     cpp_args = []
     name_args = []
 
@@ -1670,12 +1680,13 @@ def format_function_args(input_types, output_types, uses_manager, use_generic_ar
         cpp_args.append(cpp_arg)
         name_args.append(name)
 
-    for idx, typ in enumerate(output_types):
-        cpp_arg, name = typ.format_cpp_type(idx,
-                                            use_generic_arg_name=use_generic_arg_name,
-                                            is_input=False)
-        cpp_args.append(cpp_arg)
-        name_args.append(name)
+    if emit_output_args:
+        for idx, typ in enumerate(output_types):
+            cpp_arg, name = typ.format_cpp_type(idx,
+                                                use_generic_arg_name=use_generic_arg_name,
+                                                is_input=False)
+            cpp_args.append(cpp_arg)
+            name_args.append(name)
 
     cpp_args = ', '.join(cpp_args)
     name_args = ', '.join(name_args)
@@ -1683,7 +1694,11 @@ def format_function_args(input_types, output_types, uses_manager, use_generic_ar
 
 
 def build_template_function_call(caller, called, input_types, output_types, uses_manager):
-    cpp_args, name_args = format_function_args(input_types, output_types, uses_manager, use_generic_arg_name=True)
+    cpp_args, name_args = format_function_args(input_types,
+                                               output_types,
+                                               uses_manager,
+                                               use_generic_arg_name=True,
+                                               emit_output_args=True)
 
     template = ("EXTENSION_NOINLINE int32_t\n"
                 "%s(%s) {\n"
@@ -1700,7 +1715,11 @@ def build_preflight_function(fn_name, sizer, input_types, output_types, uses_man
         else:
             return "    return table_function_error(%s);\n" % (err_msg,)
 
-    cpp_args, _ = format_function_args(input_types, output_types, uses_manager, use_generic_arg_name=False)
+    cpp_args, _ = format_function_args(input_types,
+                                       output_types,
+                                       uses_manager,
+                                       use_generic_arg_name=False,
+                                       emit_output_args=False)
 
     if uses_manager:
         fn = "EXTENSION_NOINLINE int32_t\n"
@@ -1919,6 +1938,24 @@ add_stmts, cpu_template_functions, gpu_template_functions, cpu_address_expressio
 canonical_input_files = [input_file[input_file.find("/QueryEngine/") + 1:] for input_file in input_files]
 header_includes = ['#include "' + canonical_input_file + '"' for canonical_input_file in canonical_input_files]
 
+# Split up calls to TableFunctionsFactory::add() into chunks
+ADD_FUNC_CHUNK_SIZE = 100
+
+def add_method(i, chunk):
+	return '''
+  NO_OPT_ATTRIBUTE void add_table_functions_%d() const {
+    %s
+  }
+''' % (i, '\n    '.join(chunk))
+
+def add_methods(add_stmts):
+	chunks = [ add_stmts[n:n+ADD_FUNC_CHUNK_SIZE] for n in range(0, len(add_stmts), ADD_FUNC_CHUNK_SIZE) ]
+	return [ add_method(i,chunk) for i,chunk in enumerate(chunks) ]
+
+def call_methods(add_stmts):
+	quot, rem = divmod(len(add_stmts), ADD_FUNC_CHUNK_SIZE)
+	return [ 'add_table_functions_%d();' % (i) for i in range(quot + int(0 < rem)) ]
+
 content = '''
 /*
   This file is generated by %s. Do no edit!
@@ -1957,6 +1994,28 @@ namespace table_functions {
 
 std::once_flag init_flag;
 
+#if defined(__clang__)
+#define NO_OPT_ATTRIBUTE __attribute__((optnone))
+
+#elif defined(__GNUC__) || defined(__GNUG__)
+#define NO_OPT_ATTRIBUTE __attribute((optimize("O0")))
+
+#elif defined(_MSC_VER)
+#define NO_OPT_ATTRIBUTE
+
+#endif
+
+#if defined(_MSC_VER)
+#pragma optimize("", off)
+#endif
+
+struct AddTableFunctions {
+%s
+  NO_OPT_ATTRIBUTE void operator()() {
+    %s
+  }
+};
+
 void TableFunctionsFactory::init() {
   if (!g_enable_table_functions) {
     return;
@@ -1967,10 +2026,11 @@ void TableFunctionsFactory::init() {
     return;
   }
 
-  std::call_once(init_flag, []() {
-    %s
-  });
+  std::call_once(init_flag, AddTableFunctions{});
 }
+#if defined(_MSC_VER)
+#pragma optimize("", on)
+#endif
 
 // conditional check functions
 %s
@@ -1980,7 +2040,8 @@ void TableFunctionsFactory::init() {
 ''' % (sys.argv[0],
         '\n'.join(header_includes),
         ' &&\n'.join(cpu_address_expressions),
-        '\n    '.join(add_stmts),
+        ''.join(add_methods(add_stmts)),
+        '\n    '.join(call_methods(add_stmts)),
         ''.join(cond_fns))
 
 header_content = '''

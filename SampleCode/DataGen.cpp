@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,12 @@
  *
  * Usage: <table> <database> <user> <password> [<num rows>] [hostname[:port]]
  * The program executes the following:
- * 1. connect to omnisci_server at hostname:port (default: localhost:6274)
+ * 1. connect to heavydb at hostname:port (default: localhost:6274)
  *    with <database> <user> <password>
  * 2. get the table descriptor of <table>
  * 3. randomly generate tab-delimited data that can be imported to <table>
- * 4. disconnect from omnisci_server
- **/
+ * 4. disconnect from heavydb
+ */
 
 #ifdef HAVE_THRIFT_MESSAGE_LIMIT
 #include "Shared/ThriftConfig.h"
@@ -45,7 +45,7 @@
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/TSocket.h>
-#include "gen-cpp/OmniSci.h"
+#include "gen-cpp/Heavy.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -209,17 +209,17 @@ int main(int argc, char** argv) {
   std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
 #endif
   std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  OmniSciClient client(protocol);
+  HeavyClient client(protocol);
   TSessionId session;
   try {
     transport->open();                                    // open transport
-    client.connect(session, user_name, passwd, db_name);  // connect to omnisci_server
+    client.connect(session, user_name, passwd, db_name);  // connect to heavydb
     TTableDetails table_details;
     client.get_table_details(table_details, session, table_name);
     data_gen(table_details.row_desc, delimiter, num_rows);
-    client.disconnect(session);  // disconnect from omnisci_server
+    client.disconnect(session);  // disconnect from heavydb
     transport->close();          // close transport
-  } catch (TOmniSciException& e) {
+  } catch (TDBException& e) {
     std::cerr << e.error_msg << std::endl;
     return 1;
   } catch (TException& te) {

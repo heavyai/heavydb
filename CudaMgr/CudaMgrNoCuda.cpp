@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,20 +32,23 @@ void CudaMgr::synchronizeDevices() const {
 void CudaMgr::copyHostToDevice(int8_t* device_ptr,
                                const int8_t* host_ptr,
                                const size_t num_bytes,
-                               const int device_num) {
+                               const int device_num,
+                               CUstream cuda_stream) {
   CHECK(false);
 }
 void CudaMgr::copyDeviceToHost(int8_t* host_ptr,
                                const int8_t* device_ptr,
                                const size_t num_bytes,
-                               const int device_num) {
+                               const int device_num,
+                               CUstream cuda_stream) {
   CHECK(false);
 }
 void CudaMgr::copyDeviceToDevice(int8_t* dest_ptr,
                                  int8_t* src_ptr,
                                  const size_t num_bytes,
                                  const int dest_device_num,
-                                 const int src_device_num) {
+                                 const int src_device_num,
+                                 CUstream cuda_stream) {
   CHECK(false);
 }
 
@@ -65,13 +68,15 @@ void CudaMgr::freeDeviceMem(int8_t* device_ptr) {
 }
 void CudaMgr::zeroDeviceMem(int8_t* device_ptr,
                             const size_t num_bytes,
-                            const int device_num) {
+                            const int device_num,
+                            CUstream cuda_stream) {
   CHECK(false);
 }
 void CudaMgr::setDeviceMem(int8_t* device_ptr,
                            const unsigned char uc,
                            const size_t num_bytes,
-                           const int device_num) {
+                           const int device_num,
+                           CUstream cuda_stream) {
   CHECK(false);
 }
 
@@ -86,6 +91,11 @@ bool CudaMgr::isArchVoltaOrGreaterForAll() const {
 
 void CudaMgr::setContext(const int) const {
   CHECK(false);
+}
+
+int CudaMgr::getContext() const {
+  CHECK(false);
+  return 0;
 }
 
 }  // namespace CudaMgr_Namespace

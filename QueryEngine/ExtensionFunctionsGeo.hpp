@@ -1175,6 +1175,36 @@ double ST_Length_LineString_Geodesic(int8_t* coords,
   return length_linestring(coords, coords_sz, ic, isr, osr, true, false);
 }
 
+EXTENSION_NOINLINE
+double ST_Length_MultiLineString(int8_t* coords,
+                                 int64_t coords_sz,
+                                 int8_t* linestring_sizes_in,
+                                 int64_t linestring_sizes_sz,
+                                 int32_t ic,
+                                 int32_t isr,
+                                 int32_t osr) {
+  if (linestring_sizes_sz <= 0) {
+    return 0.0;
+  }
+  double mls_length = 0.0;
+
+  auto next_linestring_coords = coords;
+
+  for (auto l = 0; l < linestring_sizes_sz; l++) {
+    auto linestring_coords = next_linestring_coords;
+    auto linestring_sizes = reinterpret_cast<int32_t*>(linestring_sizes_in);
+    auto linestring_num_points = linestring_sizes[l];
+    auto linestring_num_coords = 2 * linestring_num_points;
+    auto linestring_coords_size = linestring_num_coords * compression_unit_size(ic);
+    next_linestring_coords += linestring_coords_size;
+    double ls_length = length_linestring(
+        linestring_coords, linestring_coords_size, ic, isr, osr, false, false);
+    mls_length += ls_length;
+  }
+
+  return mls_length;
+}
+
 //
 // ST_Perimeter
 //
@@ -1902,6 +1932,58 @@ double ST_Distance_Point_LineString(int8_t* p,
 }
 
 EXTENSION_NOINLINE
+double ST_Distance_Point_MultiLineString(int8_t* p,
+                                         int64_t psize,
+                                         int8_t* mls,
+                                         int64_t mls_size,
+                                         int32_t* mls_ls_sizes,
+                                         int64_t mls_ls_num,
+                                         int32_t ic1,
+                                         int32_t isr1,
+                                         int32_t ic2,
+                                         int32_t isr2,
+                                         int32_t osr,
+                                         double threshold) {
+  if (mls_ls_num <= 0) {
+    return 0.0;
+  }
+  double min_distance = 0.0;
+
+  auto next_linestring_coords = mls;
+
+  for (auto l = 0; l < mls_ls_num; l++) {
+    auto linestring_coords = next_linestring_coords;
+    auto linestring_num_points = mls_ls_sizes[l];
+    auto linestring_num_coords = 2 * linestring_num_points;
+    auto linestring_coords_size = linestring_num_coords * compression_unit_size(ic2);
+    next_linestring_coords += linestring_coords_size;
+    double distance = distance_point_linestring(p,
+                                                psize,
+                                                linestring_coords,
+                                                linestring_coords_size,
+                                                ic1,
+                                                isr1,
+                                                ic2,
+                                                isr2,
+                                                osr,
+                                                false,
+                                                threshold);
+    if (l == 0 || min_distance > distance) {
+      min_distance = distance;
+      if (tol_zero(min_distance)) {
+        min_distance = 0.0;
+        break;
+      }
+      if (min_distance <= threshold) {
+        break;
+      }
+    }
+  }
+
+  return min_distance;
+}
+
+EXTENSION_NOINLINE
 double ST_Distance_Point_Polygon(int8_t* p,
                                  int64_t psize,
                                  int8_t* poly,
@@ -2211,6 +2293,33 @@ double ST_Distance_LineString_MultiPolygon(int8_t* l,
   }
 
   return min_distance;
+}
+
+EXTENSION_INLINE
+double ST_Distance_MultiLineString_Point(int8_t* mls,
+                                         int64_t mls_size,
+                                         int32_t* mls_ls_sizes,
+                                         int64_t mls_ls_num,
+                                         int8_t* p,
+                                         int64_t psize,
+                                         int32_t ic1,
+                                         int32_t isr1,
+                                         int32_t ic2,
+                                         int32_t isr2,
+                                         int32_t osr,
+                                         double threshold) {
+  return ST_Distance_Point_MultiLineString(p,
+                                           psize,
+                                           mls,
+                                           mls_size,
+                                           mls_ls_sizes,
+                                           mls_ls_num,
+                                           ic2,
+                                           isr2,
+                                           ic1,
+                                           isr1,
+                                           osr,
+                                           threshold);
 }
 
 EXTENSION_INLINE
@@ -2578,6 +2687,24 @@ double ST_Distance_MultiPolygon_MultiPolygon(int8_t* mpoly1_coords,
   }
 
   return min_distance;
+}
+
+EXTENSION_NOINLINE
+double ST_Distance_MultiLineString_MultiLineString(int8_t* mls1,
+                                                   int64_t mls1size,
+                                                   int32_t* mls1_ls_sizes,
+                                                   int64_t mls1_ls_num,
+                                                   int8_t* mls2,
+                                                   int64_t mls2size,
+                                                   int32_t* mls2_ls_sizes,
+                                                   int64_t mls2_ls_num,
+                                                   int32_t ic1,
+                                                   int32_t isr1,
+                                                   int32_t ic2,
+                                                   int32_t isr2,
+                                                   int32_t osr,
+                                                   double threshold) {
+  return 0.0;
 }
 
 //
@@ -3790,21 +3917,22 @@ bool ST_Intersects_Point_MultiPolygon(int8_t* p,
                                       int32_t ic2,
                                       int32_t isr2,
                                       int32_t osr) {
-  return ST_Contains_MultiPolygon_Point(mpoly_coords,
-                                        mpoly_coords_size,
-                                        mpoly_ring_sizes,
-                                        mpoly_num_rings,
-                                        mpoly_poly_sizes,
-                                        mpoly_num_polys,
-                                        mpoly_bounds,
-                                        mpoly_bounds_size,
-                                        p,
-                                        psize,
-                                        ic2,
-                                        isr2,
-                                        ic1,
-                                        isr1,
-                                        osr);
+  return Contains_MultiPolygon_Point_Impl<double, EdgeBehavior::kIncludePointOnEdge>(
+      mpoly_coords,
+      mpoly_coords_size,
+      mpoly_ring_sizes,
+      mpoly_num_rings,
+      mpoly_poly_sizes,
+      mpoly_num_polys,
+      mpoly_bounds,
+      mpoly_bounds_size,
+      p,
+      psize,
+      ic1,
+      isr1,
+      ic2,
+      isr2,
+      osr);
 }
 
 EXTENSION_INLINE
@@ -3952,6 +4080,36 @@ bool ST_Intersects_Polygon_Point(int8_t* poly,
                                  int32_t isr2,
                                  int32_t osr) {
   return Contains_Polygon_Point_Impl<double, EdgeBehavior::kIncludePointOnEdge>(
+      poly,
+      polysize,
+      poly_ring_sizes,
+      poly_num_rings,
+      poly_bounds,
+      poly_bounds_size,
+      p,
+      psize,
+      ic1,
+      isr1,
+      ic2,
+      isr2,
+      osr);
+}
+
+EXTENSION_INLINE
+bool ST_cIntersects_Polygon_Point(int8_t* poly,
+                                  int64_t polysize,
+                                  int32_t* poly_ring_sizes,
+                                  int64_t poly_num_rings,
+                                  double* poly_bounds,
+                                  int64_t poly_bounds_size,
+                                  int8_t* p,
+                                  int64_t psize,
+                                  int32_t ic1,
+                                  int32_t isr1,
+                                  int32_t ic2,
+                                  int32_t isr2,
+                                  int32_t osr) {
+  return Contains_Polygon_Point_Impl<int64_t, EdgeBehavior::kIncludePointOnEdge>(
       poly,
       polysize,
       poly_ring_sizes,
@@ -4121,6 +4279,40 @@ bool ST_Intersects_MultiPolygon_Point(int8_t* mpoly_coords,
 }
 
 EXTENSION_INLINE
+bool ST_cIntersects_MultiPolygon_Point(int8_t* mpoly_coords,
+                                       int64_t mpoly_coords_size,
+                                       int32_t* mpoly_ring_sizes,
+                                       int64_t mpoly_num_rings,
+                                       int32_t* mpoly_poly_sizes,
+                                       int64_t mpoly_num_polys,
+                                       double* mpoly_bounds,
+                                       int64_t mpoly_bounds_size,
+                                       int8_t* p,
+                                       int64_t psize,
+                                       int32_t ic1,
+                                       int32_t isr1,
+                                       int32_t ic2,
+                                       int32_t isr2,
+                                       int32_t osr) {
+  return Contains_MultiPolygon_Point_Impl<int64_t, EdgeBehavior::kIncludePointOnEdge>(
+      mpoly_coords,
+      mpoly_coords_size,
+      mpoly_ring_sizes,
+      mpoly_num_rings,
+      mpoly_poly_sizes,
+      mpoly_num_polys,
+      mpoly_bounds,
+      mpoly_bounds_size,
+      p,
+      psize,
+      ic1,
+      isr1,
+      ic2,
+      isr2,
+      osr);
+}
+
+EXTENSION_INLINE
 bool ST_Intersects_MultiPolygon_LineString(int8_t* mpoly_coords,
                                            int64_t mpoly_coords_size,
                                            int32_t* mpoly_ring_sizes,
@@ -4250,29 +4442,15 @@ bool ST_Intersects_MultiPolygon_MultiPolygon(int8_t* mpoly1_coords,
 //
 // Accessors for poly bounds and render group for in-situ poly render queries
 //
-// The MapD_* varieties are deprecated and renamed to "OmniSci_Geo*"
-// There may be some clients out there who are playing with the MapD_* so leaving
-// them for backwards compatibility.
-//
 
 EXTENSION_INLINE
-int64_t OmniSci_Geo_PolyBoundsPtr(double* bounds, int64_t size) {
+int64_t HeavyDB_Geo_PolyBoundsPtr(double* bounds, int64_t size) {
   return reinterpret_cast<int64_t>(bounds);
 }
 
 EXTENSION_INLINE
-int32_t OmniSci_Geo_PolyRenderGroup(int32_t render_group) {
+int32_t HeavyDB_Geo_PolyRenderGroup(int32_t render_group) {
   return render_group;
-}
-
-EXTENSION_INLINE
-int64_t MapD_GeoPolyBoundsPtr(double* bounds, int64_t size) {
-  return OmniSci_Geo_PolyBoundsPtr(bounds, size);
-}
-
-EXTENSION_INLINE
-int32_t MapD_GeoPolyRenderGroup(int32_t render_group) {
-  return OmniSci_Geo_PolyRenderGroup(render_group);
 }
 
 // TODO Update for UTM. This assumes x and y are independent, which is not true for UTM.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-/*
+/**
  * @file    quantile.h
- * @author  Matt Pulver <matt.pulver@omnisci.com>
- * @description Calculate approximate median and general quantiles, based on
+ * @brief Calculate approximate median and general quantiles, based on
  *   "Computing Extremely Accurate Quantiles Using t-Digests" by T. Dunning et al.
  *   https://arxiv.org/abs/1902.04023
  *
@@ -32,6 +31,7 @@
 
 #ifndef __CUDACC__
 #include <iomanip>
+#include <mutex>
 #include <ostream>
 #endif
 
@@ -182,9 +182,15 @@ class CentroidsMemory {
 
 template <typename RealType, typename IndexType = size_t>
 class TDigest {
-  Centroids<RealType, IndexType> buf_;  // incoming buffer
+  // buf_ has two purposes, unless an externally managed buffer is used instead:
+  //  * Used as the incoming buffer that gets filled before merging into centroids_.
+  //  * After all data has been merged, it is used as a partial sum for centroids_.
+  Centroids<RealType, IndexType> buf_;
   Centroids<RealType, IndexType> centroids_;
   bool forward_{true};  // alternate direction on each call to mergeCentroids().
+#ifndef __CUDACC__
+  std::once_flag merge_buffer_final_once_;
+#endif
 
   // simple_allocator_, buf_allocate_, centroids_allocate_ are used only by allocate().
   std::optional<RealType> const q_{std::nullopt};  // Optional preset quantile parameter.
@@ -203,14 +209,14 @@ class TDigest {
   // Require: centroids are sorted by (mean, -count)
   DEVICE void mergeCentroids(Centroids<RealType, IndexType>&);
 
-  DEVICE RealType firstCentroid(RealType const x);
+  DEVICE RealType firstCentroid(RealType const x) const;
   DEVICE RealType interiorCentroid(RealType const x,
                                    IndexType const idx1,
-                                   IndexType const prefix_sum);
-  DEVICE RealType lastCentroid(RealType const x, IndexType const N);
-  DEVICE RealType oneCentroid(RealType const x);
+                                   IndexType const prefix_sum) const;
+  DEVICE RealType lastCentroid(RealType const x, IndexType const N) const;
+  DEVICE RealType oneCentroid(RealType const x) const;
 
-  DEVICE RealType slope(IndexType const idx1, IndexType const idx2);
+  DEVICE RealType slope(IndexType const idx1, IndexType const idx2) const;
 
  public:
   using Memory = CentroidsMemory<RealType, IndexType>;
@@ -242,6 +248,9 @@ class TDigest {
 
   DEVICE void mergeBuffer();
 
+  // Calls mergeBuffer() w/ std::call_once and turns buf_ into a partial sum of counts.
+  DEVICE void mergeBufferFinal();
+
   // Import from sorted memory range. Ok to change values during merge.
   DEVICE void mergeSorted(RealType* sums, IndexType* counts, IndexType size);
 
@@ -251,13 +260,15 @@ class TDigest {
     mergeCentroids(t_digest.centroids_);
   }
 
-  // Uses buf as scratch space.
-  DEVICE RealType quantile(IndexType* buf, RealType const q);
+  // Write partial sum of centroids_.counts_ into buf and return as a VectorView.
+  DEVICE VectorView<IndexType const> partialSumOfCounts(IndexType* const buf) const;
 
-  // Uses buf_ as scratch space.
-  DEVICE RealType quantile(RealType const q) {
-    assert(centroids_.size() <= buf_.capacity());
-    return quantile(buf_.counts_.data(), q);
+  DEVICE RealType quantile(VectorView<IndexType const> const partial_sum,
+                           RealType const q) const;
+
+  // Must be called after mergeBufferFinal().
+  DEVICE RealType quantile(RealType const q) const {
+    return quantile({buf_.counts_.data(), centroids_.size()}, q);
   }
 
   DEVICE RealType quantile() { return q_ ? quantile(*q_) : centroids_.nan; }
@@ -635,6 +646,21 @@ DEVICE void TDigest<RealType, IndexType>::mergeBuffer() {
   }
 }
 
+// [QE-383] Make concurrent calls to mergeBufferFinal() thread-safe.
+template <typename RealType, typename IndexType>
+DEVICE void TDigest<RealType, IndexType>::mergeBufferFinal() {
+  auto const call_once = [this] {
+    mergeBuffer();
+    assert(centroids_.size() <= buf_.capacity());
+    partialSumOfCounts(buf_.counts_.data());
+  };
+#ifdef __CUDACC__
+  call_once();
+#else
+  std::call_once(merge_buffer_final_once_, call_once);
+#endif
+}
+
 template <typename RealType, typename IndexType>
 DEVICE void TDigest<RealType, IndexType>::mergeSorted(RealType* sums,
                                                       IndexType* counts,
@@ -689,7 +715,7 @@ DEVICE bool isSingleton(CountsIterator itr) {
 
 // Assumes x < centroids_.counts_.front().
 template <typename RealType, typename IndexType>
-DEVICE RealType TDigest<RealType, IndexType>::firstCentroid(RealType const x) {
+DEVICE RealType TDigest<RealType, IndexType>::firstCentroid(RealType const x) const {
   if (x < 1) {
     return min();
   } else if (centroids_.size() == 1) {
@@ -710,7 +736,7 @@ template <typename RealType, typename IndexType>
 DEVICE RealType
 TDigest<RealType, IndexType>::interiorCentroid(RealType const x,
                                                IndexType const idx1,
-                                               IndexType const prefix_sum) {
+                                               IndexType const prefix_sum) const {
   if (isSingleton(centroids_.counts_.begin() + idx1)) {
     RealType const sum1 = centroids_.sums_[idx1];
     if (x == prefix_sum - centroids_.counts_[idx1]) {
@@ -731,7 +757,7 @@ TDigest<RealType, IndexType>::interiorCentroid(RealType const x,
 // Assumes N - centroids_.counts_.back() <= x < N, and there is more than 1 centroid.
 template <typename RealType, typename IndexType>
 DEVICE RealType TDigest<RealType, IndexType>::lastCentroid(RealType const x,
-                                                           IndexType const N) {
+                                                           IndexType const N) const {
   if (N - 1 < x) {
     return max();
   }
@@ -767,7 +793,7 @@ DEVICE RealType TDigest<RealType, IndexType>::lastCentroid(RealType const x,
 
 // Assumes there is only 1 centroid, and 1 <= x < centroids_.counts_.front().
 template <typename RealType, typename IndexType>
-DEVICE RealType TDigest<RealType, IndexType>::oneCentroid(RealType const x) {
+DEVICE RealType TDigest<RealType, IndexType>::oneCentroid(RealType const x) const {
   IndexType const N = centroids_.counts_.front();
   if (N - 1 < x) {  // includes case N == 1
     return max();
@@ -788,13 +814,19 @@ DEVICE RealType TDigest<RealType, IndexType>::oneCentroid(RealType const x) {
   }
 }
 
-// No need to calculate entire partial_sum unless multiple calls to quantile() are made.
+// Return a partial sum of centroids_.counts_ stored in buf.
 template <typename RealType, typename IndexType>
-DEVICE RealType TDigest<RealType, IndexType>::quantile(IndexType* buf, RealType const q) {
+DEVICE VectorView<IndexType const> TDigest<RealType, IndexType>::partialSumOfCounts(
+    IndexType* const buf) const {
+  gpu_enabled::partial_sum(centroids_.counts_.begin(), centroids_.counts_.end(), buf);
+  return {buf, centroids_.size()};
+}
+
+template <typename RealType, typename IndexType>
+DEVICE RealType
+TDigest<RealType, IndexType>::quantile(VectorView<IndexType const> const partial_sum,
+                                       RealType const q) const {
   if (centroids_.size()) {
-    VectorView<IndexType> partial_sum(buf, centroids_.size(), centroids_.size());
-    gpu_enabled::partial_sum(
-        centroids_.counts_.begin(), centroids_.counts_.end(), partial_sum.begin());
     IndexType const N = partial_sum.back();
     RealType const x = q * N;
     auto const it1 = gpu_enabled::upper_bound(partial_sum.begin(), partial_sum.end(), x);
@@ -817,7 +849,8 @@ DEVICE RealType TDigest<RealType, IndexType>::quantile(IndexType* buf, RealType 
 // If equal then assume it is the section contained within an extrema.
 // Centroid for idx1 is not a singleton, but idx2 may be.
 template <typename RealType, typename IndexType>
-DEVICE RealType TDigest<RealType, IndexType>::slope(IndexType idx1, IndexType idx2) {
+DEVICE RealType TDigest<RealType, IndexType>::slope(IndexType idx1,
+                                                    IndexType idx2) const {
   IndexType const M = centroids_.size();
   if (idx1 == idx2) {  // Line segment is contained in either the first or last centroid.
     RealType const n = static_cast<RealType>(centroids_.counts_[idx1]);

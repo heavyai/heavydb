@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 /*
  * @file DelimitedParserUtils.cpp
- * @author Mehmet Sariyuce <mehmet.sariyuce@omnisci.com>
  * @brief Implementation of delimited parser utils.
+ *
  */
 
 #include "ImportExport/DelimitedParserUtils.h"
@@ -225,7 +225,9 @@ const char* get_row(const char* buf,
       if (!in_quote) {
         if (!has_escape && !strip_quotes) {
           const char* field_end = p;
-          trim_space(field, field_end);
+          if (copy_params.trim_spaces) {
+            trim_space(field, field_end);
+          }
           row.emplace_back(field, field_end - field);
         } else {
           tmp_buffers.emplace_back(std::make_unique<char[]>(p - field + 1));
@@ -242,7 +244,9 @@ const char* get_row(const char* buf,
           }
           const char* field_begin = field_buf;
           const char* field_end = field_buf + j;
-          trim_space(field_begin, field_end);
+          if (copy_params.trim_spaces) {
+            trim_space(field_begin, field_end);
+          }
           trim_quotes(field_begin, field_end, copy_params);
           row.emplace_back(field_begin, field_end - field_begin);
         }
@@ -303,7 +307,8 @@ template const char* get_row(const char* buf,
 
 void parse_string_array(const std::string& s,
                         const import_export::CopyParams& copy_params,
-                        std::vector<std::string>& string_vec) {
+                        std::vector<std::string>& string_vec,
+                        bool truncate_values) {
   if (s == copy_params.null_str || s == "NULL" || s.size() < 1 || s.empty()) {
     return;
   }
@@ -333,8 +338,12 @@ void parse_string_array(const std::string& s,
 
   for (size_t i = 0; i < string_vec.size(); ++i) {
     if (string_vec[i].size() > StringDictionary::MAX_STRLEN) {
-      throw std::runtime_error("Array String too long : " + string_vec[i] + " max is " +
-                               std::to_string(StringDictionary::MAX_STRLEN));
+      if (truncate_values) {
+        string_vec[i] = string_vec[i].substr(0, StringDictionary::MAX_STRLEN);
+      } else {
+        throw std::runtime_error("Array String too long : " + string_vec[i] + " max is " +
+                                 std::to_string(StringDictionary::MAX_STRLEN));
+      }
     }
   }
 

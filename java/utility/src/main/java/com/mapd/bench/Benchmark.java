@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,6 @@
 package com.mapd.bench;
 
 // STEP 1. Import required packages
-import com.omnisci.jdbc.OmniSciStatement;
-
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,12 +29,14 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
+import ai.heavy.jdbc.HeavyAIStatement;
+
 public class Benchmark {
   final static Logger logger = LoggerFactory.getLogger(Benchmark.class);
 
   // JDBC driver name and database URL
-  static final String JDBC_DRIVER = "com.omnisci.jdbc.OmniSciDriver";
-  static final String DB_URL = "jdbc:omnisci:localhost:6274:mapd";
+  static final String JDBC_DRIVER = "ai.heavy.jdbc.HeavyAIDriver";
+  static final String DB_URL = "jdbc:heavyai:localhost:6274:mapd";
 
   // Database credentials
   static final String USER = "admin";
@@ -187,9 +187,9 @@ public class Benchmark {
         long executeTime = 0;
         long jdbcTime = 0;
 
-        // gather internal execute time for OmniSci as we are interested in that
+        // gather internal execute time for HeavyAI as we are interested in that
         if (driver.equals(JDBC_DRIVER)) {
-          executeTime = ((OmniSciStatement) stmt).getQueryInternalExecuteTime();
+          executeTime = ((HeavyAIStatement) stmt).getQueryInternalExecuteTime();
           jdbcTime = (System.currentTimeMillis() - timer) - executeTime;
         } else {
           jdbcTime = (System.currentTimeMillis() - timer);

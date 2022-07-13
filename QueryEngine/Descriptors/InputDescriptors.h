@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,12 @@ class InputDescriptor {
     return table_id_ > 0 ? InputSourceType::TABLE : InputSourceType::RESULT;
   }
 
+  size_t hash() const {
+    static_assert(sizeof(table_id_) + sizeof(nest_level_) <= sizeof(size_t));
+    return static_cast<size_t>(table_id_) << 8 * sizeof(nest_level_) |
+           static_cast<size_t>(nest_level_);
+  }
+
   std::string toString() const {
     return ::typeName(this) + "(table_id=" + std::to_string(table_id_) +
            ", nest_level=" + std::to_string(nest_level_) + ")";
@@ -57,16 +63,7 @@ inline std::ostream& operator<<(std::ostream& os, InputDescriptor const& id) {
             << id.getNestLevel() << "))";
 }
 
-namespace std {
-template <>
-struct hash<InputDescriptor> {
-  size_t operator()(const InputDescriptor& input_desc) const {
-    return input_desc.getTableId() ^ input_desc.getNestLevel();
-  }
-};
-}  // namespace std
-
-class InputColDescriptor {
+class InputColDescriptor final {
  public:
   InputColDescriptor(const int col_id, const int table_id, const int nest_level)
       : col_id_(col_id), input_desc_(table_id, nest_level) {}
@@ -79,7 +76,9 @@ class InputColDescriptor {
 
   const InputDescriptor& getScanDesc() const { return input_desc_; }
 
-  virtual ~InputColDescriptor() {}
+  size_t hash() const {
+    return input_desc_.hash() ^ (static_cast<size_t>(col_id_) << 16);
+  }
 
   std::string toString() const {
     return ::typeName(this) + "(col_id=" + std::to_string(col_id_) +
@@ -106,18 +105,16 @@ namespace std {
 template <>
 struct hash<InputColDescriptor> {
   size_t operator()(const InputColDescriptor& input_col_desc) const {
-    hash<InputDescriptor> input_col_desc_hasher;
-    return input_col_desc_hasher(input_col_desc.getScanDesc()) ^
-           static_cast<size_t>(input_col_desc.getColId());
+    return input_col_desc.hash();
   }
 };
 
+// Used by hash<std::shared_ptr<const InputColDescriptor>>.
 template <>
 struct hash<const InputColDescriptor*> {
   size_t operator()(const InputColDescriptor* input_col_desc) const {
-    hash<InputColDescriptor> input_col_desc_hasher;
     CHECK(input_col_desc);
-    return input_col_desc_hasher(*input_col_desc);
+    return input_col_desc->hash();
   }
 };
 

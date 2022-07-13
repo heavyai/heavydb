@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,10 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.mapd.parser.server;
 
-import com.mapd.calcite.parser.MapDParser;
-import com.mapd.calcite.parser.MapDSqlOperatorTable;
+import com.mapd.calcite.parser.HeavyDBParser;
+import com.mapd.calcite.parser.HeavyDBSqlOperatorTable;
 import com.mapd.common.SockTransportProperties;
 
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
@@ -28,22 +29,18 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.function.Supplier;
 
-/**
- *
- * @author michael
- */
 class CalciteParserFactory implements PoolableObjectFactory {
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteParserFactory.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(CalciteParserFactory.class);
 
   private final String dataDir;
   private final Map<String, ExtensionFunction> extSigs;
-  private final int mapdPort;
+  private final int dbPort;
   private final SockTransportProperties socket_transport_properties;
-  private volatile MapDSqlOperatorTable tableOperator;
-  private final Supplier<MapDSqlOperatorTable> tableOperatorSupplier =
-          new Supplier<MapDSqlOperatorTable>() {
+  private volatile HeavyDBSqlOperatorTable tableOperator;
+  private final Supplier<HeavyDBSqlOperatorTable> tableOperatorSupplier =
+          new Supplier<HeavyDBSqlOperatorTable>() {
             @Override
-            public MapDSqlOperatorTable get() {
+            public HeavyDBSqlOperatorTable get() {
               return tableOperator;
             }
           };
@@ -59,27 +56,27 @@ class CalciteParserFactory implements PoolableObjectFactory {
 
   public CalciteParserFactory(String dataDir,
           final Map<String, ExtensionFunction> extSigs,
-          int mapdPort,
+          int dbPort,
           SockTransportProperties skT) {
     this.dataDir = dataDir;
     this.extSigs = extSigs;
-    this.mapdPort = mapdPort;
+    this.dbPort = dbPort;
     this.socket_transport_properties = skT;
 
     updateOperatorTable();
   }
 
   public void updateOperatorTable() {
-    MapDSqlOperatorTable tableOperator =
-            new MapDSqlOperatorTable(SqlStdOperatorTable.instance());
-    MapDSqlOperatorTable.addUDF(tableOperator, extSigs);
+    HeavyDBSqlOperatorTable tableOperator =
+            new HeavyDBSqlOperatorTable(SqlStdOperatorTable.instance());
+    HeavyDBSqlOperatorTable.addUDF(tableOperator, extSigs);
     this.tableOperator = tableOperator;
   }
 
   @Override
   public Object makeObject() throws Exception {
-    MapDParser obj = new MapDParser(
-            dataDir, tableOperatorSupplier, mapdPort, socket_transport_properties);
+    HeavyDBParser obj = new HeavyDBParser(
+            dataDir, tableOperatorSupplier, dbPort, socket_transport_properties);
     return obj;
   }
 
@@ -90,11 +87,11 @@ class CalciteParserFactory implements PoolableObjectFactory {
 
   @Override
   public boolean validateObject(Object obj) {
-    MapDParser mdp = (MapDParser) obj;
+    HeavyDBParser mdp = (HeavyDBParser) obj;
     if (mdp.getCallCount() < 1000) {
       return true;
     } else {
-      MAPDLOGGER.debug(" invalidating object due to max use count");
+      HEAVYDBLOGGER.debug(" invalidating object due to max use count");
       return false;
     }
   }

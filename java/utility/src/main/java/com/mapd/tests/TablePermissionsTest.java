@@ -15,7 +15,7 @@
  */
 package com.mapd.tests;
 
-import static com.mapd.tests.MapdAsserts.shouldThrowException;
+import static com.mapd.tests.HeavyDBAsserts.shouldThrowException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +31,7 @@ public class TablePermissionsTest {
   public void testTablePermissions() throws Exception {
     logger.info("testTablePermissions()");
 
-    MapdTestClient su = MapdTestClient.getClient(
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
             "localhost", 6274, "mapd", "mapd", "HyperInteractive");
 
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
@@ -50,14 +50,14 @@ public class TablePermissionsTest {
     su.runSql("GRANT ACCESS on database db1 TO foo;");
     su.runSql("GRANT ACCESS on database db1 TO dba;");
 
-    MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 6274, "db1", "dba", "password");
-    MapdTestClient bill =
-            MapdTestClient.getClient("localhost", 6274, "db1", "bill", "password");
-    MapdTestClient bob =
-            MapdTestClient.getClient("localhost", 6274, "db1", "bob", "password");
-    MapdTestClient foo =
-            MapdTestClient.getClient("localhost", 6274, "db1", "foo", "password");
+    HeavyDBTestClient dba =
+            HeavyDBTestClient.getClient("localhost", 6274, "db1", "dba", "password");
+    HeavyDBTestClient bill =
+            HeavyDBTestClient.getClient("localhost", 6274, "db1", "bill", "password");
+    HeavyDBTestClient bob =
+            HeavyDBTestClient.getClient("localhost", 6274, "db1", "bob", "password");
+    HeavyDBTestClient foo =
+            HeavyDBTestClient.getClient("localhost", 6274, "db1", "foo", "password");
 
     shouldThrowException("bill should not be able to create tables",
             () -> bill.runSql("CREATE TABLE bill_table(id integer);"));

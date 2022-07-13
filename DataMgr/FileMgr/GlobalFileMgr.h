@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,7 @@
 
 /**
  * @file        GlobalFileMgr.h
- * @author      Norair Khachiyan <norair@map-d.com>
- * @author      Todd Mostak <todd@map-d.com>
+ * @brief
  *
  * This file includes the class specification for the FILE manager (FileMgr), and related
  * data structures and types.
@@ -30,7 +29,7 @@
 #include <map>
 #include <mutex>
 #include <set>
-#include "../Shared/mapd_shared_mutex.h"
+#include "../Shared/heavyai_shared_mutex.h"
 
 #include "../AbstractBuffer.h"
 #include "../AbstractBufferMgr.h"
@@ -156,7 +155,7 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
 
  public:
   AbstractBufferMgr* findFileMgr(const int32_t db_id, const int32_t tb_id) {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(fileMgrs_mutex_);
+    heavyai::shared_lock<heavyai::shared_mutex> read_lock(fileMgrs_mutex_);
     return findFileMgrUnlocked(db_id, tb_id);
   }
   void setFileMgrParams(const int32_t db_id,
@@ -219,8 +218,9 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   std::map<TablePair, std::shared_ptr<FileMgr>> ownedFileMgrs_;
   std::map<TablePair, AbstractBufferMgr*> allFileMgrs_;
   std::map<TablePair, int32_t> max_rollback_epochs_per_table_;
+  std::map<TablePair, StorageStats> lazy_initialized_stats_;
 
-  mapd_shared_mutex fileMgrs_mutex_;
+  heavyai::shared_mutex fileMgrs_mutex_;
 };
 
 }  // namespace File_Namespace

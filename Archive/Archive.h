@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,26 +17,14 @@
 #ifndef ARCHIVE_ARCHIVE_H_
 #define ARCHIVE_ARCHIVE_H_
 
+#include <archive.h>
+#include <archive_entry.h>
 #include <map>
 #include <regex>
 #include <string>
 
-#if defined(_WIN32) && !defined(WIN32_LEAN_AND_MEAN)
-// One of these archive includes on win32 includes Windows.h
-// and we need to clean up macros such as ERROR and GetObject
-// For some compilation paths  the lean and mean must
-// also be be set, or conflicts can arrise with ws2def.h
-// (DelimtedParserUtils.cpp has this issue when buidling initdb)
-#define WIN32_LEAN_AND_MEAN
-#endif
-
-#include <archive.h>
-#include <archive_entry.h>
-
-#if defined(_WIN32) && defined(WIN32_LEAN_AND_MEAN)
-#undef WIN32_LEAN_AND_MEAN
+// archive_entry.h includes windows.h
 #include "Shared/cleanup_global_namespace.h"
-#endif
 
 // this is the base class from which all archives that represent files sources
 // hosted on native/netwrok filesystems, AWS S3, HDFS, HTTP URL, FTP URL, ...

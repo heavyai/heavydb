@@ -18,9 +18,12 @@ set(catalog_source_files
 get_target_property(StringDictionary_BINARY_DIR StringDictionary BINARY_DIR)
 include_directories(${StringDictionary_BINARY_DIR})
 
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+  list(APPEND catalog_source_files ee/UserMapping.cpp)
+endif()
+
 add_library(Catalog ${catalog_source_files})
-add_dependencies(Catalog Calcite)
-add_dependencies(Catalog StringDictionary)
+add_dependencies(Catalog Calcite StringDictionary thrift_gen)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   add_subdirectory(ee)

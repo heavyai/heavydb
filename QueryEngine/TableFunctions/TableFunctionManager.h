@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include "QueryEngine/QueryMemoryInitializer.h"
+#include "QueryEngine/Utils/FlatBuffer.h"
 
 /*
   The TableFunctionManager implements the following features:
@@ -72,9 +73,11 @@ struct TableFunctionManager {
     auto num_out_columns = get_ncols();
     output_col_buf_ptrs.reserve(num_out_columns);
     output_column_ptrs.reserve(num_out_columns);
+    output_array_values_total_number_.reserve(num_out_columns);
     for (size_t i = 0; i < num_out_columns; i++) {
       output_col_buf_ptrs.emplace_back(nullptr);
       output_column_ptrs.emplace_back(nullptr);
+      output_array_values_total_number_.emplace_back(-1);
     }
   }
 
@@ -99,10 +102,25 @@ struct TableFunctionManager {
     output_column_ptrs[index] = ptr;
   }
 
+  // Set the total number of array values in a column of arrays
+  void set_output_array_values_total_number(int32_t index,
+                                            int64_t output_array_values_total_number) {
+    CHECK_EQ(output_num_rows_,
+             size_t(-1));  // set_output_array_size must be called
+                           // before set_output_row_size because
+                           // set_output_row_size allocates the output
+                           // buffers
+    int32_t num_out_columns = get_ncols();
+    CHECK_LE(0, index);
+    CHECK_LT(index, num_out_columns);
+    output_array_values_total_number_[index] = output_array_values_total_number;
+  }
+
   void allocate_output_buffers(int64_t output_num_rows) {
     check_thread_id();
     CHECK_EQ(output_num_rows_,
              size_t(-1));  // re-allocation of output buffers is not supported
+
     output_num_rows_ = output_num_rows;
     auto num_out_columns = get_ncols();
     QueryMemoryDescriptor query_mem_desc(executor_,
@@ -113,12 +131,31 @@ struct TableFunctionManager {
 
     for (size_t i = 0; i < num_out_columns; i++) {
       // All outputs have padded width set to logical column width
-      const size_t col_width = exe_unit_.target_exprs[i]->get_type_info().get_size();
-      query_mem_desc.addColSlotInfo({std::make_tuple(col_width, col_width)});
+      auto ti = exe_unit_.target_exprs[i]->get_type_info();
+      if (ti.is_array()) {
+        const size_t array_item_width = ti.get_elem_type().get_size();
+        CHECK_NE(output_array_values_total_number_[i],
+                 -1);  // set_output_array_values_total_number(i, ...) is not called
+        /*
+          Here we compute the byte size of flatbuffer and store it in
+          query memory descriptor's ColSlotContext instance. The
+          flatbuffer memory will be allocated in
+          QueryMemoryInitializer constructor and the memory will be
+          initialized below.
+         */
+        const int64_t flatbuffer_size =
+            FlatBufferManager::get_VarlenArray_flatbuffer_size(
+                output_num_rows_, output_array_values_total_number_[i], array_item_width);
+        query_mem_desc.addColSlotInfoFlatBuffer(
+            flatbuffer_size);  // used by QueryMemoryInitializer
+      } else {
+        const size_t col_width = ti.get_size();
+        query_mem_desc.addColSlotInfo({std::make_tuple(col_width, col_width)});
+      }
     }
 
     // The members layout of Column must match with Column defined in
-    // OmniSciTypes.h
+    // heavydbTypes.h
     struct Column {
       int8_t* ptr;
       int64_t size;
@@ -127,7 +164,8 @@ struct TableFunctionManager {
         return "Column{" + ::toString(ptr) + ", " + ::toString(size) + "}";
       }
     };
-
+    // We do not init output buffers for CPU currently, so CPU
+    // table functions are expected to handle their own initialization
     query_buffers = std::make_unique<QueryMemoryInitializer>(
         exe_unit_,
         query_mem_desc,
@@ -151,9 +189,18 @@ struct TableFunctionManager {
         col->ptr = output_buffers_ptr;
         col->size = output_num_rows_;
 
-        const size_t col_width = exe_unit_.target_exprs[i]->get_type_info().get_size();
-        output_buffers_ptr =
-            align_to_int64(output_buffers_ptr + col_width * output_num_rows_);
+        auto ti = exe_unit_.target_exprs[i]->get_type_info();
+        if (ti.is_array()) {
+          const size_t array_item_width = ti.get_elem_type().get_size();
+          FlatBufferManager m{output_buffers_ptr};
+          m.initializeVarlenArray(
+              output_num_rows_, output_array_values_total_number_[i], array_item_width);
+          output_buffers_ptr = align_to_int64(output_buffers_ptr + m.flatbufferSize());
+        } else {
+          const size_t col_width = ti.get_size();
+          output_buffers_ptr =
+              align_to_int64(output_buffers_ptr + col_width * output_num_rows_);
+        }
       }
     }
   }
@@ -166,6 +213,22 @@ struct TableFunctionManager {
   void set_error_message(const char* msg) {
     check_thread_id();
     error_message_ = std::string(msg);
+  }
+
+  void set_metadata(const char* key,
+                    const uint8_t* raw_bytes,
+                    const size_t num_bytes,
+                    const TableFunctionMetadataType value_type) const {
+    CHECK(row_set_mem_owner_);
+    row_set_mem_owner_->setTableFunctionMetadata(key, raw_bytes, num_bytes, value_type);
+  }
+
+  void get_metadata(const char* key,
+                    const uint8_t*& raw_bytes,
+                    size_t& num_bytes,
+                    TableFunctionMetadataType& value_type) const {
+    CHECK(row_set_mem_owner_);
+    row_set_mem_owner_->getTableFunctionMetadata(key, raw_bytes, num_bytes, value_type);
   }
 
   // Methods for managing singleton instance of TableFunctionManager:
@@ -210,6 +273,8 @@ struct TableFunctionManager {
   std::vector<int64_t*> output_col_buf_ptrs;
   // Number of rows of output Columns
   size_t output_num_rows_;
+  // Total number of array values in the output columns of arrays
+  std::vector<int64_t> output_array_values_total_number_;
   // Pointers to output Column instances
   std::vector<int8_t*> output_column_ptrs;
   // If TableFunctionManager is global

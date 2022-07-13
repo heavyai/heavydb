@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 #define QUERYENGINE_RELALGTRANSLATOR_H
 
 #include "Execute.h"
-#include "RelAlgDagBuilder.h"
+#include "RelAlgDag.h"
 
 #include <ctime>
 #include <memory>
@@ -118,7 +118,7 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateCurrentUser(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateLower(const RexFunctionOperator*) const;
+  std::shared_ptr<Analyzer::Expr> translateStringOper(const RexFunctionOperator*) const;
 
   std::shared_ptr<Analyzer::Expr> translateCardinality(const RexFunctionOperator*) const;
 
@@ -148,6 +148,11 @@ class RelAlgTranslator {
   std::shared_ptr<Analyzer::Expr> translateWindowFunction(
       const RexWindowFunctionOperator*) const;
 
+  std::shared_ptr<Analyzer::Expr> translateIntervalExprForWindowFraming(
+      std::shared_ptr<Analyzer::Expr> order_key,
+      bool for_preceding_bound,
+      const Analyzer::BinOper* frame_bound_expr) const;
+
   Analyzer::ExpressionPtrVector translateFunctionArgs(const RexFunctionOperator*) const;
 
   std::shared_ptr<Analyzer::Expr> translateUnaryGeoFunction(
@@ -172,6 +177,12 @@ class RelAlgTranslator {
       const RexFunctionOperator*,
       SQLTypeInfo&,
       const bool with_bounds) const;
+
+  std::shared_ptr<Analyzer::Expr> translateUnaryGeoConstructor(
+      const RexFunctionOperator*,
+      SQLTypeInfo&,
+      const bool with_bounds) const;
+
   std::shared_ptr<Analyzer::Expr> translateBinaryGeoPredicate(
       const RexFunctionOperator*,
       SQLTypeInfo&,

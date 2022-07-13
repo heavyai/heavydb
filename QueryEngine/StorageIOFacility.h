@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -143,10 +143,17 @@ class StorageIOFacility {
 
     auto const* getTableDescriptor() const { return table_descriptor_; }
 
+    const RelAlgNode* getInputSourceNode() const { return input_source_node_; }
+
+    void setInputSourceNode(const RelAlgNode* input_source_node) {
+      input_source_node_ = input_source_node;
+    }
+
    private:
     typename StorageIOFacility::TransactionLog transaction_tracker_;
     TableDescriptorType const* table_descriptor_;
     bool table_is_temporary_;
+    const RelAlgNode* input_source_node_;
   };
 
   struct DeleteTransactionParameters : public TransactionParameters {
@@ -369,8 +376,19 @@ class StorageIOFacility {
 
         auto const* table_descriptor =
             catalog_.getMetadataForTable(update_log.getPhysicalTableId());
-        CHECK(table_descriptor);
         auto fragment_id = update_log.getFragmentId();
+        auto table_id = update_log.getPhysicalTableId();
+        if (!table_descriptor) {
+          const auto* input_source_node = update_parameters.getInputSourceNode();
+          if (auto proj_node = dynamic_cast<const RelProject*>(input_source_node)) {
+            if (proj_node->hasPushedDownWindowExpr() ||
+                proj_node->hasWindowFunctionExpr()) {
+              table_id = proj_node->getModifiedTableDescriptor()->tableId;
+              table_descriptor = catalog_.getMetadataForTable(table_id);
+            }
+          }
+        }
+        CHECK(table_descriptor);
 
         // Iterate over each column
         for (decltype(update_parameters.getUpdateColumnCount()) column_index = 0;
@@ -415,8 +433,6 @@ class StorageIOFacility {
           }
 
           CHECK(row_idx == rows_per_column);
-
-          const auto table_id = update_log.getPhysicalTableId();
           const auto fragmenter = table_descriptor->fragmenter;
           CHECK(fragmenter);
           auto const* target_column = catalog_.getMetadataForColumn(

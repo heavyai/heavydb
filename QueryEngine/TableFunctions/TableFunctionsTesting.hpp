@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include "../../QueryEngine/OmniSciTypes.h"
-#include "../../QueryEngine/TableFunctions/SystemFunctions/os/Shared/TableFunctionsCommon.h"
+#include "../../QueryEngine/TableFunctions/SystemFunctions/os/Shared/TableFunctionsCommon.hpp"
+#include "../../QueryEngine/heavydbTypes.h"
 
 /*
   This file contains tesing compile-time UDTFs. The unit-tests are
@@ -618,6 +618,130 @@ NEVER_INLINE HOST int32_t ct_binding_scalar_multiply__cpu_template(const Column<
   return num_rows;
 }
 
+// clang-format off
+/*
+  UDTF: ct_binding_str_length__cpu_(Cursor<TextEncodingDict>) -> Column<TextEncodingDict> string | input_id=args<0>, Column<int64_t> string_length
+*/
+// clang-format on
+EXTENSION_NOINLINE_HOST
+int32_t ct_binding_str_length__cpu_(const Column<TextEncodingDict>& input_str,
+                                    Column<TextEncodingDict>& out_str,
+                                    Column<int64_t>& out_size) {
+  const int64_t num_rows = input_str.size();
+  set_output_row_size(num_rows);
+  for (int64_t i = 0; i < num_rows; i++) {
+    out_str[i] = input_str[i];
+    const std::string str = input_str.getString(i);
+    out_size[i] = str.size();
+  }
+  return num_rows;
+}
+
+// clang-format off
+/*
+  UDTF: ct_binding_str_equals__cpu_(Cursor<ColumnList<TextEncodingDict>>) -> Column<TextEncodingDict> string_if_equal | input_id=args<0, 0>, Column<bool> strings_are_equal
+*/
+// clang-format on
+EXTENSION_NOINLINE_HOST
+int32_t ct_binding_str_equals__cpu_(const ColumnList<TextEncodingDict>& input_strings,
+                                    Column<TextEncodingDict>& string_if_equal,
+                                    Column<bool>& strings_are_equal) {
+  const int64_t num_rows = input_strings.size();
+  const int64_t num_cols = input_strings.numCols();
+  set_output_row_size(num_rows);
+  for (int64_t r = 0; r < num_rows; r++) {
+    bool are_equal = true;
+    if (num_cols > 0) {
+      std::string first_str = input_strings[0].getString(r);
+      for (int64_t c = 1; c != num_cols; ++c) {
+        if (input_strings[c].getString(r) != first_str) {
+          are_equal = false;
+          break;
+        }
+      }
+      strings_are_equal[r] = are_equal;
+      if (are_equal && num_cols > 0) {
+        string_if_equal[r] = input_strings[0][r];
+      } else {
+        string_if_equal.setNull(r);
+      }
+    }
+  }
+  return num_rows;
+}
+
+// clang-format off
+/*
+  UDTF: ct_substr__cpu_(TableFunctionManager, Cursor<Column<TextEncodingDict> str, Column<int> pos, Column<int> len>) -> Column<TextEncodingDict> substr | input_id=args<0>
+*/
+// clang-format on
+
+EXTENSION_NOINLINE_HOST
+int32_t ct_substr__cpu_(TableFunctionManager& mgr,
+                        const Column<TextEncodingDict>& input_str,
+                        const Column<int>& pos,
+                        const Column<int>& len,
+                        Column<TextEncodingDict>& output_substr) {
+  const int64_t num_rows = input_str.size();
+  mgr.set_output_row_size(num_rows);
+  for (int64_t row_idx = 0; row_idx < num_rows; row_idx++) {
+    const std::string input_string{input_str.getString(row_idx)};
+    const std::string substring = input_string.substr(pos[row_idx], len[row_idx]);
+    const TextEncodingDict substr_id = output_substr.getStringId(substring);
+    output_substr[row_idx] = substr_id;
+  }
+  return num_rows;
+}
+
+// clang-format off
+/*
+  UDTF: ct_string_concat__cpu_(TableFunctionManager, Cursor<ColumnList<TextEncodingDict>>, TextEncodingNone separator) -> Column<TextEncodingDict> concatted_str | input_id=args<0, 0>
+*/
+// clang-format on
+EXTENSION_NOINLINE_HOST
+int32_t ct_string_concat__cpu_(TableFunctionManager& mgr,
+                               const ColumnList<TextEncodingDict>& input_strings,
+                               const TextEncodingNone& separator,
+                               Column<TextEncodingDict>& concatted_string) {
+  const int64_t num_rows = input_strings.size();
+  const int64_t num_cols = input_strings.numCols();
+  const std::string separator_str{separator.getString()};
+  mgr.set_output_row_size(num_rows);
+  for (int64_t row_idx = 0; row_idx < num_rows; row_idx++) {
+    if (num_cols > 0) {
+      std::string concatted_output{input_strings[0].getString(row_idx)};
+      for (int64_t col_idx = 1; col_idx < num_cols; ++col_idx) {
+        concatted_output += separator_str;
+        concatted_output += input_strings[col_idx].getString(row_idx);
+      }
+      const TextEncodingDict concatted_str_id =
+          concatted_string.getStringId(concatted_output);
+      concatted_string[row_idx] = concatted_str_id;
+    } else {
+      concatted_string.setNull(row_idx);
+    }
+  }
+  return num_rows;
+}
+
+// clang-format off
+/*
+  UDTF: ct_synthesize_new_dict__cpu_(TableFunctionManager, int32_t num_strings) -> Column<TextEncodingDict> new_dict_col | input_id=args<0>
+*/
+// clang-format on
+EXTENSION_NOINLINE_HOST
+int32_t ct_synthesize_new_dict__cpu_(TableFunctionManager& mgr,
+                                     const int64_t num_strings,
+                                     Column<TextEncodingDict>& new_dict_col) {
+  mgr.set_output_row_size(num_strings);
+  for (int32_t s = 0; s < num_strings; ++s) {
+    const std::string new_string = "String_" + std::to_string(s);
+    const int32_t string_id = new_dict_col.getStringId(new_string);
+    new_dict_col[s] = string_id;
+  }
+  return num_strings;
+}
+
 #endif  // #ifndef __CUDACC__
 
 #ifndef __CUDACC__
@@ -1016,6 +1140,17 @@ column_list_safe_row_sum__cpu_template(const ColumnList<T>& input, Column<T>& ou
 
 // clang-format off
 /*
+  UDTF: ct_gpu_default_init__gpu_(Constant<1>) -> Column<int32_t> output_buffer
+*/
+// clang-format on
+
+EXTENSION_NOINLINE int32_t ct_gpu_default_init__gpu_(Column<int32_t>& output_buffer) {
+  // output_buffer[0] should always be 0 due to default initialization for GPU
+  return 1;
+}
+
+// clang-format off
+/*
   UDTF: ct_hamming_distance(TextEncodingNone, TextEncodingNone, Constant<1>) -> Column<int32_t> hamming_distance
 */
 // clang-format on
@@ -1028,11 +1163,7 @@ EXTENSION_NOINLINE int32_t ct_hamming_distance(const TextEncodingNone& str1,
 #ifdef __CUDACC__
   const int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   const int32_t step = blockDim.x * gridDim.x;
-  if (start == 0) {
-    hamming_distance[0] = 0;
-  }
   int32_t* output_ptr = hamming_distance.ptr_;
-  __syncthreads();
 #else
   const int32_t start = 0;
   const int32_t step = 1;
@@ -1062,8 +1193,8 @@ TEMPLATE_NOINLINE int32_t ct_get_string_chars__template(const Column<T>& indices
                                                         Column<int32_t>& idx,
                                                         Column<int8_t>& char_bytes) {
   const int32_t str_len = str.size();
-  // Note: we assume RowMultiplier is 1 for this test, was to make running on GPU easy
-  // Todo: Provide Constant RowMultiplier interface
+  // Note: we assume RowMultiplier is 1 for this test, was to make running on
+  // GPU easy Todo: Provide Constant RowMultiplier interface
   if (multiplier != 1) {
     return 0;
   }
@@ -1533,6 +1664,7 @@ ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
   UDTF: ct_require_and__cpu_(Column<int>, int i | require="i > 0 && i < 5") -> Column<int>
   UDTF: ct_require_or_str__cpu_(Column<int>, TextEncodingNone i | require="i == \"MAX\" || i == \"MIN\"") -> Column<int>
   UDTF: ct_require_str_diff__cpu_(Column<int>, TextEncodingNone i | require="i != \"MAX\"") -> Column<int>
+  UDTF: ct_require_text_enc_dict__cpu_(Cursor<Column<TextEncodingDict>>, int64_t x | require="x >= 1") -> Column<int64_t>
 */
 // clang-format on
 
@@ -1597,6 +1729,15 @@ EXTENSION_NOINLINE_HOST int32_t ct_require_str_diff__cpu_(const Column<int32_t>&
                                                           Column<int32_t>& out) {
   set_output_row_size(1);
   out[0] = 9;
+  return 1;
+}
+
+EXTENSION_NOINLINE_HOST int32_t
+ct_require_text_enc_dict__cpu_(const Column<TextEncodingDict>& input,
+                               const int64_t x,
+                               Column<int64_t>& out) {
+  set_output_row_size(1);
+  out[0] = 10;
   return 1;
 }
 
@@ -1731,4 +1872,359 @@ ct_test_preflight_multicursor_qe227__cpu_(TableFunctionManager& mgr,
   return out.size();
 }
 
+// clang-format off
+/*
+  UDTF: ct_scalar_named_args__cpu_(TableFunctionManager, int32_t arg1, int32_t arg2) ->
+  Column<int32_t> out1, Column<int32_t> out2
+*/
+
+EXTENSION_NOINLINE_HOST int32_t
+ct_scalar_named_args__cpu_(TableFunctionManager& mgr, const int32_t arg1,
+ const int32_t arg2, Column<int32_t>& out1, Column<int32_t>& out2) {
+  mgr.set_output_row_size(1);
+  out1[0] = arg1;
+  out2[0] = arg2;
+  return 1;
+ }
+
+// clang-format off
+/*
+  UDTF: ct_cursor_named_args__cpu_(TableFunctionManager, Cursor<Column<int32_t> input_table_arg1, 
+  Column<int32_t> input_table_arg2> input_table, int32_t arg1, int32_t arg2) ->
+  Column<int32_t> out1, Column<int32_t> out2
+*/
+
+EXTENSION_NOINLINE_HOST int32_t
+ct_cursor_named_args__cpu_(TableFunctionManager& mgr, const Column<int32_t>& input_arg1,
+const Column<int32_t>& input_arg2, const int32_t arg1, const int32_t arg2,
+ Column<int32_t>& out1, Column<int32_t>& out2) {
+  const int32_t num_rows = input_arg1.size();
+  mgr.set_output_row_size(num_rows);
+  for (int32_t r = 0; r < num_rows; ++r) {
+    out1[r] = input_arg1[r] + arg1;
+    out2[r] = input_arg2[r] + arg2;
+  }
+  return num_rows;
+}
+
 #endif
+
+#ifndef __CUDACC__
+
+// clang-format off
+/*
+  UDTF: ct_timestamp_extract(TableFunctionManager, Column<Timestamp>) -> Column<int64_t> ns, Column<int64_t> us, Column<int64_t> ms, Column<int64_t> s, Column<int64_t> m, Column<int64_t> h, Column<int64_t> d, Column<int64_t> mo, Column<int64_t> y
+  UDTF: ct_timestamp_add_offset(TableFunctionManager, Column<Timestamp>, Timestamp) -> Column<Timestamp>
+  UDTF: ct_timestamp_test_columns_and_scalars__cpu(Column<Timestamp>, int64_t, RowMultiplier, Column<Timestamp>) -> Column<Timestamp>
+  UDTF: ct_timestamp_column_list_input(TableFunctionManager, ColumnList<int64_t>, Column<Timestamp>) -> Column<Timestamp>
+  UDTF: ct_timestamp_truncate(TableFunctionManager, Column<Timestamp>) -> Column<Timestamp> y, Column<Timestamp> mo, Column<Timestamp> d, Column<Timestamp> h, Column<Timestamp> m, Column<Timestamp> s, Column<Timestamp> ms, Column<Timestamp> us
+*/
+// clang-format on
+
+// Test table functions with Timestamp Column inputs
+// and Timestamp type helper functions
+EXTENSION_NOINLINE_HOST int32_t ct_timestamp_extract(TableFunctionManager& mgr,
+                                                     const Column<Timestamp>& input,
+                                                     Column<int64_t>& ns,
+                                                     Column<int64_t>& us,
+                                                     Column<int64_t>& ms,
+                                                     Column<int64_t>& s,
+                                                     Column<int64_t>& m,
+                                                     Column<int64_t>& h,
+                                                     Column<int64_t>& d,
+                                                     Column<int64_t>& mo,
+                                                     Column<int64_t>& y) {
+  int size = input.size();
+  mgr.set_output_row_size(size);
+  for (int i = 0; i < size; ++i) {
+    if (input.isNull(i)) {
+      ns.setNull(i);
+      us.setNull(i);
+      ms.setNull(i);
+      s.setNull(i);
+      m.setNull(i);
+      h.setNull(i);
+      d.setNull(i);
+      mo.setNull(i);
+      y.setNull(i);
+    } else {
+      ns[i] = input[i].getNanoseconds();
+      us[i] = input[i].getMicroseconds();
+      ms[i] = input[i].getMilliseconds();
+      s[i] = input[i].getSeconds();
+      m[i] = input[i].getMinutes();
+      h[i] = input[i].getHours();
+      d[i] = input[i].getDay();
+      mo[i] = input[i].getMonth();
+      y[i] = input[i].getYear();
+    }
+  }
+  return size;
+}
+
+// Test table functions with scalar Timestamp inputs
+EXTENSION_NOINLINE_HOST int32_t ct_timestamp_add_offset(TableFunctionManager& mgr,
+                                                        const Column<Timestamp>& input,
+                                                        const Timestamp offset,
+                                                        Column<Timestamp>& out) {
+  int size = input.size();
+  mgr.set_output_row_size(size);
+  for (int i = 0; i < size; ++i) {
+    if (input.isNull(i)) {
+      out.setNull(i);
+    } else {
+      out[i] = input[i] + offset;
+    }
+  }
+  return size;
+}
+
+// Test table function with sizer argument, and mix of scalar/column inputs.
+EXTENSION_NOINLINE int32_t
+ct_timestamp_test_columns_and_scalars__cpu(const Column<Timestamp>& input,
+                                           const int64_t dummy,
+                                           const int32_t multiplier,
+                                           const Column<Timestamp>& input2,
+                                           Column<Timestamp>& out) {
+  int size = input.size();
+  for (int i = 0; i < size; ++i) {
+    if (input.isNull(i)) {
+      out.setNull(i);
+    } else {
+      out[i] = input[i] + input2[i] + dummy;
+    }
+  }
+  return size;
+}
+
+// Dummy test for ColumnList inputs + Column Timestamp input
+EXTENSION_NOINLINE_HOST int32_t
+ct_timestamp_column_list_input(TableFunctionManager& mgr,
+                               const ColumnList<int64_t>& input,
+                               const Column<Timestamp>& input2,
+                               Column<int64_t>& out) {
+  mgr.set_output_row_size(1);
+  out[0] = 1;
+  return 1;
+}
+
+EXTENSION_NOINLINE_HOST int32_t ct_timestamp_truncate(TableFunctionManager& mgr,
+                                                      const Column<Timestamp>& input,
+                                                      Column<Timestamp>& y,
+                                                      Column<Timestamp>& mo,
+                                                      Column<Timestamp>& d,
+                                                      Column<Timestamp>& h,
+                                                      Column<Timestamp>& m,
+                                                      Column<Timestamp>& s,
+                                                      Column<Timestamp>& ms,
+                                                      Column<Timestamp>& us) {
+  int size = input.size();
+  mgr.set_output_row_size(size);
+  for (int i = 0; i < size; ++i) {
+    y[i] = input[i].truncateToYear();
+    mo[i] = input[i].truncateToMonth();
+    d[i] = input[i].truncateToDay();
+    h[i] = input[i].truncateToHours();
+    m[i] = input[i].truncateToMinutes();
+    s[i] = input[i].truncateToSeconds();
+    ms[i] = input[i].truncateToMilliseconds();
+    us[i] = input[i].truncateToMicroseconds();
+  }
+
+  return size;
+}
+
+// clang-format off
+/*
+  UDTF: sum_along_row__cpu_template(Column<Array<T>> input) -> Column<T>, T=[float, double, int8_t, int16_t, int32_t, int64_t, bool] | output_row_size="input.size()"
+*/
+// clang-format on
+template <typename T>
+NEVER_INLINE HOST int32_t sum_along_row__cpu_template(const Column<Array<T>>& input,
+                                                      Column<T>& output) {
+  int size = input.size();
+  for (int i = 0; i < size; i++) {
+    const Array<T> arr = input[i];
+    if (arr.isNull()) {
+      output.setNull(i);
+    } else {
+      T acc{0};
+      for (auto j = 0; j < arr.getSize(); j++) {
+        if constexpr (std::is_same_v<T, bool>) {
+          // todo: arr.isNull(i) returns arr[i] because bool does not
+          // have null value, we should introduce 8-bit boolean type
+          // for Arrays
+          acc |= arr[j];
+        } else {
+          if (!arr.isNull(j)) {
+            acc += arr[j];
+          }
+        }
+      }
+      output[i] = acc;
+    }
+  }
+  return size;
+}
+
+// clang-format off
+/*
+  UDTF: array_copier__cpu_template(TableFunctionManager mgr, Column<Array<T>> input) -> Column<Array<T>>, T=[float, double, int8_t, int16_t, int32_t, int64_t, bool]
+*/
+// clang-format on
+template <typename T>
+NEVER_INLINE HOST int32_t array_copier__cpu_template(TableFunctionManager& mgr,
+                                                     const Column<Array<T>>& input,
+                                                     Column<Array<T>>& output) {
+  int size = input.size();
+
+  // count the number of items in all input arrays:
+  int output_values_size = 0;
+  for (int i = 0; i < size; i++) {
+    output_values_size += input[i].getSize();
+  }
+
+  // set the size and allocate the output columns buffers:
+  mgr.set_output_array_values_total_number(
+      /*output column index=*/0,
+      /*upper bound to the number of items in all output arrays=*/output_values_size);
+  mgr.set_output_row_size(size);
+
+  // set the items of output colums:
+  for (int i = 0; i < size; i++) {
+    output.setItem(i, input[i]);
+  }
+
+  return size;
+}
+
+// clang-format off
+/*
+  UDTF: array_concat__cpu_template(TableFunctionManager mgr, ColumnList<Array<T>> input) -> Column<Array<T>>, T=[float, double, int8_t, int16_t, int32_t, int64_t, bool]
+*/
+// clang-format on
+template <typename T>
+NEVER_INLINE HOST int32_t array_concat__cpu_template(TableFunctionManager& mgr,
+                                                     const ColumnList<Array<T>>& inputs,
+                                                     Column<Array<T>>& output) {
+  int size = inputs.size();
+
+  int output_values_size = 0;
+  for (int j = 0; j < inputs.numCols(); j++) {
+    for (int i = 0; i < size; i++) {
+      output_values_size += inputs[j][i].getSize();
+    }
+  }
+  mgr.set_output_array_values_total_number(
+      /*output column index=*/0,
+      /*upper bound to the number of items in all output arrays=*/output_values_size);
+
+  mgr.set_output_row_size(size);
+
+  for (int i = 0; i < size; i++) {
+    for (int j = 0; j < inputs.numCols(); j++) {
+      Column<Array<T>> col = inputs[j];
+      output.concatItem(i,
+                        col[i]);  // works only if i is the last row set, otherwise throws
+    }
+  }
+  return size;
+}
+
+// clang-format off
+/*
+  UDTF: tf_metadata_setter__cpu_template(TableFunctionManager) -> Column<bool> success
+*/
+// clang-format on
+
+NEVER_INLINE HOST int32_t tf_metadata_setter__cpu_template(TableFunctionManager& mgr,
+                                                           Column<bool>& success) {
+  // set one of each type
+  mgr.set_metadata("test_int8_t", int8_t(1));
+  mgr.set_metadata("test_int16_t", int16_t(2));
+  mgr.set_metadata("test_int32_t", int32_t(3));
+  mgr.set_metadata("test_int64_t", int64_t(4));
+  mgr.set_metadata("test_float", 5.0f);
+  mgr.set_metadata("test_double", 6.0);
+  mgr.set_metadata("test_bool", true);
+
+  mgr.set_output_row_size(1);
+  success[0] = true;
+  return 1;
+}
+
+// clang-format off
+/*
+  UDTF: tf_metadata_setter_bad__cpu_template(TableFunctionManager) -> Column<bool> success
+*/
+// clang-format on
+
+NEVER_INLINE HOST int32_t tf_metadata_setter_bad__cpu_template(TableFunctionManager& mgr,
+                                                               Column<bool>& success) {
+  // set the same name twice
+  mgr.set_metadata("test_int8_t", int8_t(1));
+  mgr.set_metadata("test_int8_t", int16_t(2));
+
+  mgr.set_output_row_size(1);
+  success[0] = true;
+  return 1;
+}
+
+// clang-format off
+/*
+  UDTF: tf_metadata_getter__cpu_template(TableFunctionManager, Column<bool>) -> Column<bool> success
+*/
+// clang-format on
+
+NEVER_INLINE HOST int32_t tf_metadata_getter__cpu_template(TableFunctionManager& mgr,
+                                                           const Column<bool>& input,
+                                                           Column<bool>& success) {
+  // get them all back and check values
+  int8_t i8{};
+  int16_t i16{};
+  int32_t i32{};
+  int64_t i64{};
+  float f{};
+  double d{};
+  bool b{};
+  mgr.get_metadata("test_int8_t", i8);
+  mgr.get_metadata("test_int16_t", i16);
+  mgr.get_metadata("test_int32_t", i32);
+  mgr.get_metadata("test_int64_t", i64);
+  mgr.get_metadata("test_float", f);
+  mgr.get_metadata("test_double", d);
+  mgr.get_metadata("test_bool", b);
+
+  // return value indicates values were correct
+  // types are implicitly correct by this point, or the above would have thrown
+  bool result = (i8 == 1) && (i16 == 2) && (i32 == 3) && (i64 == 4) && (f == 5.0f) &&
+                (d == 6.0) && b;
+  if (!result) {
+    throw std::runtime_error("Metadata return values are incorrect");
+  }
+
+  mgr.set_output_row_size(1);
+  success[0] = true;
+  return 1;
+}
+
+// clang-format off
+/*
+  UDTF: tf_metadata_getter_bad__cpu_template(TableFunctionManager, Column<bool>) -> Column<bool> success
+*/
+// clang-format on
+
+NEVER_INLINE HOST int32_t tf_metadata_getter_bad__cpu_template(TableFunctionManager& mgr,
+                                                               const Column<bool>& input,
+                                                               Column<bool>& success) {
+  // get one back as the wrong type
+  // this should throw
+  float f{};
+  mgr.get_metadata("test_double", f);
+
+  mgr.set_output_row_size(1);
+  success[0] = true;
+  return 1;
+}
+
+#endif  // ifndef __CUDACC__

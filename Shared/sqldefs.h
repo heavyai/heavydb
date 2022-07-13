@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,10 @@
 
 /**
  * @file		sqldefs.h
- * @author	Wei Hong <wei@map-d.com>
  * @brief		Common Enum definitions for SQL processing.
  *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
+
 #ifndef SQLDEFS_H
 #define SQLDEFS_H
 
@@ -51,7 +50,8 @@ enum SQLOps {
   kUNNEST,
   kFUNCTION,
   kIN,
-  kOVERLAPS
+  kOVERLAPS,
+  kENCODE_TEXT
 };
 
 #define IS_COMPARISON(X)                                                          \
@@ -62,8 +62,9 @@ enum SQLOps {
   ((X) == kMINUS || (X) == kPLUS || (X) == kMULTIPLY || (X) == kDIVIDE || (X) == kMODULO)
 #define COMMUTE_COMPARISON(X) \
   ((X) == kLT ? kGT : (X) == kLE ? kGE : (X) == kGT ? kLT : (X) == kGE ? kLE : (X))
-#define IS_UNARY(X) \
-  ((X) == kNOT || (X) == kUMINUS || (X) == kISNULL || (X) == kEXISTS || (X) == kCAST)
+#define IS_UNARY(X)                                                                     \
+  ((X) == kNOT || (X) == kUMINUS || (X) == kISNULL || (X) == kEXISTS || (X) == kCAST || \
+   (X) == kENCODE_TEXT)
 #define IS_EQUIVALENCE(X) ((X) == kEQ || (X) == kBW_EQ || (X) == kOVERLAPS)
 
 enum SQLQualifier { kONE, kANY, kALL };
@@ -80,7 +81,48 @@ enum SQLAgg {
   kSINGLE_VALUE
 };
 
+enum class SqlStringOpKind {
+  /* Unary */
+  LOWER = 1,
+  UPPER,
+  INITCAP,
+  REVERSE,
+  /* Binary */
+  REPEAT,
+  CONCAT,
+  RCONCAT,
+  /* Ternary */
+  LPAD,
+  RPAD,
+  TRIM,
+  LTRIM,
+  RTRIM,
+  SUBSTRING,
+  OVERLAY,
+  REPLACE,
+  SPLIT_PART,
+  /* 6 args */
+  REGEXP_REPLACE,
+  REGEXP_SUBSTR,
+  JSON_VALUE,
+  BASE64_ENCODE,
+  BASE64_DECODE,
+  INVALID
+};
+
 enum class SqlWindowFunctionKind {
+  // set MIN's enum val as one, and we use window function kind's enum vals
+  // to classify a behavior of our runtime code for window framing
+  // i.e., aggregate_##value_type##_values functions
+  // todo (yoonmin): support FIRST_EXPR, LAST_EXPR, AND NTH_EXPR with framing
+  MIN = 1,
+  MAX,
+  AVG,
+  SUM,
+  COUNT,
+  FIRST_EXPR,
+  LAST_EXPR,
+  NTH_EXPR,
   ROW_NUMBER,
   RANK,
   DENSE_RANK,
@@ -91,12 +133,16 @@ enum class SqlWindowFunctionKind {
   LEAD,
   FIRST_VALUE,
   LAST_VALUE,
-  AVG,
-  MIN,
-  MAX,
-  SUM,
-  COUNT,
   SUM_INTERNAL  // For deserialization from Calcite only. Gets rewritten to a regular SUM.
+};
+
+enum class SqlWindowFrameBoundType {
+  UNBOUNDED_PRECEDING = 1,
+  EXPR_PRECEDING,
+  CURRENT_ROW,
+  EXPR_FOLLOWING,
+  UNBOUNDED_FOLLOWING,
+  UNKNOWN
 };
 
 enum SQLStmtType { kSELECT, kUPDATE, kINSERT, kDELETE, kCREATE_TABLE };
@@ -107,7 +153,7 @@ enum ViewRefreshOption { kMANUAL = 0, kAUTO = 1, kIMMEDIATE = 2 };
 
 enum class JoinType { INNER, LEFT, SEMI, ANTI, INVALID };
 
-#ifndef __CUDACC__
+#if !(defined(__CUDACC__) || defined(NO_BOOST))
 
 #include <string>
 #include "Logger/Logger.h"
@@ -217,8 +263,127 @@ inline std::string toString(const SQLOps& op) {
       return "IN";
     case kOVERLAPS:
       return "OVERLAPS";
+    case kENCODE_TEXT:
+      return "ENCODE_TEXT";
   }
   LOG(FATAL) << "Invalid operation kind: " << op;
+  return "";
+}
+
+inline SqlStringOpKind name_to_string_op_kind(const std::string& func_name) {
+  if (func_name == "LOWER") {
+    return SqlStringOpKind::LOWER;
+  }
+  if (func_name == "UPPER") {
+    return SqlStringOpKind::UPPER;
+  }
+  if (func_name == "INITCAP") {
+    return SqlStringOpKind::INITCAP;
+  }
+  if (func_name == "REVERSE") {
+    return SqlStringOpKind::REVERSE;
+  }
+  if (func_name == "REPEAT") {
+    return SqlStringOpKind::REPEAT;
+  }
+  if (func_name == "||") {
+    return SqlStringOpKind::CONCAT;
+  }
+  if (func_name == "LPAD") {
+    return SqlStringOpKind::LPAD;
+  }
+  if (func_name == "RPAD") {
+    return SqlStringOpKind::RPAD;
+  }
+  if (func_name == "TRIM") {
+    return SqlStringOpKind::TRIM;
+  }
+  if (func_name == "LTRIM") {
+    return SqlStringOpKind::LTRIM;
+  }
+  if (func_name == "RTRIM") {
+    return SqlStringOpKind::RTRIM;
+  }
+  if (func_name == "SUBSTRING") {
+    return SqlStringOpKind::SUBSTRING;
+  }
+  if (func_name == "OVERLAY") {
+    return SqlStringOpKind::OVERLAY;
+  }
+  if (func_name == "REPLACE") {
+    return SqlStringOpKind::REPLACE;
+  }
+  if (func_name == "SPLIT_PART") {
+    return SqlStringOpKind::SPLIT_PART;
+  }
+  if (func_name == "REGEXP_REPLACE") {
+    return SqlStringOpKind::REGEXP_REPLACE;
+  }
+  if (func_name == "REGEXP_SUBSTR") {
+    return SqlStringOpKind::REGEXP_SUBSTR;
+  }
+  if (func_name == "REGEXP_MATCH") {
+    return SqlStringOpKind::REGEXP_SUBSTR;
+  }
+  if (func_name == "JSON_VALUE") {
+    return SqlStringOpKind::JSON_VALUE;
+  }
+  if (func_name == "BASE64_ENCODE") {
+    return SqlStringOpKind::BASE64_ENCODE;
+  }
+  if (func_name == "BASE64_DECODE") {
+    return SqlStringOpKind::BASE64_DECODE;
+  }
+  LOG(FATAL) << "Invalid string function " << func_name << ".";
+  return SqlStringOpKind::INVALID;
+}
+
+inline std::string toString(const SqlStringOpKind& kind) {
+  switch (kind) {
+    case SqlStringOpKind::LOWER:
+      return "LOWER";
+    case SqlStringOpKind::UPPER:
+      return "UPPER";
+    case SqlStringOpKind::INITCAP:
+      return "INITCAP";
+    case SqlStringOpKind::REVERSE:
+      return "REVERSE";
+    case SqlStringOpKind::REPEAT:
+      return "REPEAT";
+    case SqlStringOpKind::CONCAT:
+    case SqlStringOpKind::RCONCAT:
+      return "||";
+    case SqlStringOpKind::LPAD:
+      return "LPAD";
+    case SqlStringOpKind::RPAD:
+      return "RPAD";
+    case SqlStringOpKind::TRIM:
+      return "TRIM";
+    case SqlStringOpKind::LTRIM:
+      return "LTRIM";
+    case SqlStringOpKind::RTRIM:
+      return "RTRIM";
+    case SqlStringOpKind::SUBSTRING:
+      return "SUBSTRING";
+    case SqlStringOpKind::OVERLAY:
+      return "OVERLAY";
+    case SqlStringOpKind::REPLACE:
+      return "REPLACE";
+    case SqlStringOpKind::SPLIT_PART:
+      return "SPLIT_PART";
+    case SqlStringOpKind::REGEXP_REPLACE:
+      return "REGEXP_REPLACE";
+    case SqlStringOpKind::REGEXP_SUBSTR:
+      return "REGEXP_SUBSTR";
+    case SqlStringOpKind::JSON_VALUE:
+      return "JSON_VALUE";
+    case SqlStringOpKind::BASE64_ENCODE:
+      return "BASE64_ENCODE";
+    case SqlStringOpKind::BASE64_DECODE:
+      return "BASE64_DECODE";
+    default:
+      LOG(FATAL) << "Invalid string operation";
+  }
   return "";
 }
 
@@ -256,11 +421,36 @@ inline std::string toString(const SqlWindowFunctionKind& kind) {
       return "COUNT";
     case SqlWindowFunctionKind::SUM_INTERNAL:
       return "SUM_INTERNAL";
+    case SqlWindowFunctionKind::FIRST_EXPR:
+      return "FIRST_EXPR";
+    case SqlWindowFunctionKind::LAST_EXPR:
+      return "LAST_EXPR";
+    case SqlWindowFunctionKind::NTH_EXPR:
+      return "NTH_EXPR";
   }
   LOG(FATAL) << "Invalid window function kind.";
   return "";
 }
 
-#endif
+inline std::string toString(const SqlWindowFrameBoundType& kind) {
+  switch (kind) {
+    case SqlWindowFrameBoundType::UNBOUNDED_PRECEDING:
+      return "UNBOUNDED_PRECEDING";
+    case SqlWindowFrameBoundType::EXPR_PRECEDING:
+      return "EXPR_PRECEDING";
+    case SqlWindowFrameBoundType::CURRENT_ROW:
+      return "CURRENT_ROW";
+    case SqlWindowFrameBoundType::EXPR_FOLLOWING:
+      return "EXPR_FOLLOWING";
+    case SqlWindowFrameBoundType::UNBOUNDED_FOLLOWING:
+      return "UNBOUNDED_FOLLOWING";
+    case SqlWindowFrameBoundType::UNKNOWN:
+      return "UNKNOWN";
+  }
+  LOG(FATAL) << "Invalid window function bound type.";
+  return "";
+}
+
+#endif  // #if !(defined(__CUDACC__) || defined(NO_BOOST))
 
 #endif  // SQLDEFS_H

@@ -12,7 +12,6 @@ double-conversion | [BSD-like](<https://github.com/google/double-conversion/blob
 EGL, KHR | [MIT]() | Rendering Support |
 fmt | [MIT](https://github.com/fmtlib/fmt/blob/master/LICENSE.rst) | Folly |
 Folly | [Apache](https://github.com/facebook/folly/blob/master/LICENSE) | Multiple |
-glbinding | [MIT](<https://github.com/cginternals/glbinding/blob/master/LICENSE>) | OpenGL management |
 gflags | [BSD-like](<https://github.com/gflags/gflags/blob/master/COPYING.txt>) | Folly |
 glog | [BSD-like](<https://github.com/google/glog/blob/master/COPYING>) | C++ logging |
 cpp-jwt | [MIT](<https://github.com/arun11299/cpp-jwt/blob/master/LICENSE>) | Elliptical Curve Digital Signature |
@@ -27,6 +26,7 @@ muparserx | [BSD](<https://github.com/beltoforion/muparserx/blob/master/License.
 ncurses | [X11](<http://invisible-island.net/ncurses/ncurses.faq.html#who_owns_it>) | CLI/password entry |
 PicoSHA2 | [MIT](<https://github.com/okdshin/PicoSHA2/blob/master/LICENSE>) | SHA256 Library |
 rapidjson | [MIT](<https://github.com/miloyip/rapidjson/blob/master/license.txt>) | JSON parsing |
+robin_hood | [MIT](<https://github.com/martinus/robin-hood-hashing/blob/master/LICENSE>) | Unordered Map and Set |
 SQLite | [Public Domain](<https://www.sqlite.org/copyright.html>) | Catalog management |
 TBB | [Apache-2.0](https://raw.githubusercontent.com/oneapi-src/oneTBB/tbb_2020/LICENSE) | Threadpool support |
 TimeGM | [BSD](<https://cdn.netbsd.org/pub/pkgsrc/current/pkgsrc/pkgtools/libnbcompat/files/timegm.c>) | Date/time support |
@@ -38,11 +38,17 @@ glslang | [BSD BSD-like MIT](https://github.com/KhronosGroup/glslang/blob/master
 spirv-tools | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Tools/blob/master/LICENSE) | Rendering support
 spirv-cross | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Cross/blob/master/LICENSE) | Rendering support
 Vulkan Memory Allocator | [MIT](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/blob/master/LICENSE.txt) | Rendering support
+GLM | [MIT](https://github.com/g-truc/glm/blob/master/copying.txt) | Rendering support
+GLFW | [zlib](https://github.com/glfw/glfw/blob/master/LICENSE.md) | Rendering support
+STB | [MIT](https://github.com/nothings/stb/blob/master/LICENSE) | Rendering support
+ImGui | [MIT](https://github.com/ocornut/imgui/blob/master/LICENSE.txt) | Rendering support
 --- | --- | --- |
 gdal | [MIT](<http://svn.osgeo.org/gdal/trunk/gdal/LICENSE.TXT>) | GDAL, Geospatial import |
+hdf5 | [BSD](<https://github.com/HDFGroup/hdf5/blob/develop/COPYING>) | GDAL, netcdf import |
 libexpat | [MIT](<https://github.com/LuaDist/libexpat/blob/master/COPYING>) | GDAL, KML import |
 libkml | [BSD](<https://github.com/google/libkml/blob/master/LICENSE>) | GDAL, KML import |
 minizip | [zlib](<http://zlib.net/zlib_license.html>) | GDAL, zip support |
+netcdf-c | [BSD](<https://github.com/Unidata/netcdf-c/blob/main/COPYRIGHT>) | GDAL, netcdf import |
 pcre | [BSD](<http://www.pcre.org/licence.txt>) | GDAL, KML import |
 proj4 | [MIT](<http://proj4.org/license.html>) | GDAL, Geospatial reprojection |
 shapelib | [MIT](<http://shapelib.maptools.org/license.html>) | GDAL, Shapefile import |
@@ -152,4 +158,3 @@ geos | [LGPLv2.1](<https://github.com/libgeos/geos/blob/master/COPYING>) | Geo s
 Canonical Raft | [LGPLv3](<https://github.com/canonical/raft/blob/master/LICENSE>) | Distributed consensus |
 libuv | [MIT](<https://github.com/libuv/libuv/blob/v1.x/LICENSE>) | Distributed consensus |
 --- | --- | --- |
-stb_image | [MIT](<https://github.com/nothings/stb/blob/master/LICENSE>) | Image file utils

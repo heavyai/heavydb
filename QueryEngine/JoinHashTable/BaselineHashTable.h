@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,7 +93,6 @@ class BaselineHashTable : public HashTable {
   }
 
   HashType getLayout() const override { return layout_; }
-  void setLayout(HashType layout) override { layout_ = layout; }
   size_t getEntryCount() const override { return entry_count_; }
   size_t getEmittedKeysCount() const override { return emitted_keys_count_; }
 

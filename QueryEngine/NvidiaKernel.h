@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,4 +98,30 @@ class GpuCompilationContext : public CompilationContext {
   std::vector<std::unique_ptr<GpuDeviceCompilationContext>> contexts_per_device_;
 };
 
-#define checkCudaErrors(err) CHECK_EQ(err, CUDA_SUCCESS)
+#ifdef HAVE_CUDA
+inline std::string ourCudaErrorStringHelper(CUresult error) {
+  char const* c1;
+  CUresult res1 = cuGetErrorName(error, &c1);
+  char const* c2;
+  CUresult res2 = cuGetErrorString(error, &c2);
+  std::string text;
+  if (res1 == CUDA_SUCCESS) {
+    text += c1;
+    text += " (";
+    text += std::to_string(error);
+    text += ")";
+  }
+  if (res2 == CUDA_SUCCESS) {
+    if (!text.empty()) {
+      text += ": ";
+    }
+    text += c2;
+  }
+  if (text.empty()) {
+    text = std::to_string(error);  // never return an empty error string
+  }
+  return text;
+}
+
+#define checkCudaErrors(err) CHECK_EQ(err, CUDA_SUCCESS) << ourCudaErrorStringHelper(err)
+#endif  // HAVE_CUDA

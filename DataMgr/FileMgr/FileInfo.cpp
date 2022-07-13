@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,9 @@
 
 #include <utility>
 using namespace std;
+
+extern bool g_read_only;
+extern bool g_multi_instance;
 
 namespace File_Namespace {
 
@@ -78,6 +81,9 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec) {
   int32_t oldVersionEpoch = -99;
   int32_t skipped = 0;
   for (size_t pageNum = 0; pageNum < numPages; ++pageNum) {
+    // TODO(Misiu): It would be nice to replace this array with a struct that would
+    // clarify what is being read and have a single definition (currently this code is
+    // replicated in TableArchiver and possibly elsewhere).
     constexpr size_t MAX_INTS_TO_READ{10};  // currently use 1+6 ints
     int32_t ints[MAX_INTS_TO_READ];
     CHECK_EQ(fseek(f, pageNum * pageSize, SEEK_SET), 0);
@@ -134,12 +140,13 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec) {
     if (versionEpoch > fileMgrEpoch) {
       // First write 0 to first four bytes of
       // header to mark as free
-      if (!g_read_only) {
+      if (!g_read_only && !g_multi_instance) {
+        // TODO(sy): Confirm that proper locking is held before writing here.
         freePageImmediate(pageNum);
+        LOG(WARNING) << "Was not checkpointed: Chunk key: " << show_chunk(chunkKey)
+                     << " Page id: " << pageId << " Epoch: " << versionEpoch
+                     << " FileMgrEpoch " << fileMgrEpoch << endl;
       }
-      LOG(WARNING) << "Was not checkpointed: Chunk key: " << show_chunk(chunkKey)
-                   << " Page id: " << pageId << " Epoch: " << versionEpoch
-                   << " FileMgrEpoch " << fileMgrEpoch << endl;
     } else {  // page was checkpointed properly
       Page page(fileId, pageNum);
       headerVec.emplace_back(chunkKey, pageId, versionEpoch, page);
@@ -226,7 +233,7 @@ int32_t FileInfo::syncToDisk() {
 #ifdef __APPLE__
     const int32_t sync_result = fcntl(fileno(f), 51);
 #else
-    const int32_t sync_result = omnisci::fsync(fileno(f));
+    const int32_t sync_result = heavyai::fsync(fileno(f));
 #endif
     if (sync_result == 0) {
       isDirty = false;
@@ -240,7 +247,7 @@ void FileInfo::freePageImmediate(int32_t page_num) {
   // we should not get here but putting protection in place
   // as it seems we are no guaranteed to have f/synced so
   // protecting from RO trying to write
-  if (!g_read_only) {
+  if (!g_read_only && !g_multi_instance) {
     int32_t zero{0};
     File_Namespace::write(
         f, page_num * pageSize, sizeof(int32_t), reinterpret_cast<const int8_t*>(&zero));
@@ -253,11 +260,35 @@ void FileInfo::recoverPage(const ChunkKey& chunk_key, int32_t page_num) {
   // we should not get here but putting protection in place
   // as it seems we are no guaranteed to have f/synced so
   // protecting from RO trying to write
-  if (!g_read_only) {
+  if (!g_read_only && !g_multi_instance) {
     File_Namespace::write(f,
                           page_num * pageSize + sizeof(int32_t),
                           2 * sizeof(int32_t),
                           reinterpret_cast<const int8_t*>(chunk_key.data()));
   }
+}
+
+bool is_page_deleted_with_checkpoint(int32_t table_epoch,
+                                     int32_t page_epoch,
+                                     int32_t contingent) {
+  const bool delete_contingent =
+      (contingent == DELETE_CONTINGENT || contingent == ROLLOFF_CONTINGENT);
+  // Check if page was deleted with a checkpointed epoch
+  if (delete_contingent && (table_epoch >= page_epoch)) {
+    return true;
+  }
+  return false;
+}
+
+bool is_page_deleted_without_checkpoint(int32_t table_epoch,
+                                        int32_t page_epoch,
+                                        int32_t contingent) {
+  const bool delete_contingent =
+      (contingent == DELETE_CONTINGENT || contingent == ROLLOFF_CONTINGENT);
+  // Check if page was deleted but the epoch was not yet checkpointed.
+  if (delete_contingent && (table_epoch < page_epoch)) {
+    return true;
+  }
+  return false;
 }
 }  // namespace File_Namespace

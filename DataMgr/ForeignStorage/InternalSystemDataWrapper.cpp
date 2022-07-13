@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,52 @@
 
 #include "Catalog/Catalog.h"
 #include "Catalog/SysCatalog.h"
+#include "ForeignStorageException.h"
 #include "ForeignTableSchema.h"
 #include "FsiChunkUtils.h"
 #include "ImportExport/Importer.h"
+#include "Shared/SysDefinitions.h"
+#include "Shared/distributed.h"
 #include "TextFileBufferParser.h"
 #include "UserMapping.h"
 
 namespace foreign_storage {
+std::string get_db_name(int32_t db_id) {
+  Catalog_Namespace::DBMetadata db_metadata;
+  auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
+  if (sys_catalog.getMetadataForDBById(db_id, db_metadata)) {
+    return db_metadata.dbName;
+  } else {
+    // Database has been deleted.
+    return kDeletedValueIndicator;
+  }
+}
+
+std::string get_table_name(int32_t db_id, int32_t table_id) {
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+  CHECK(catalog);
+  auto table_name = catalog->getTableName(table_id);
+  if (table_name.has_value()) {
+    return table_name.value();
+  } else {
+    // It is possible for the table to be concurrently deleted while querying the system
+    // table.
+    return kDeletedValueIndicator;
+  }
+}
+
+void set_node_name(
+    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+  if (import_buffers.find("node") != import_buffers.end()) {
+    if (dist::is_leaf_node()) {
+      std::string leaf_string{"Leaf " + to_string(g_distributed_leaf_idx)};
+      import_buffers["node"]->addString(leaf_string);
+    } else {
+      import_buffers["node"]->addString("Server");
+    }
+  }
+}
+
 InternalSystemDataWrapper::InternalSystemDataWrapper()
     : db_id_(-1), foreign_table_(nullptr) {}
 
@@ -126,49 +165,39 @@ void InternalSystemDataWrapper::populateChunkMetadata(
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
   auto catalog = sys_catalog.getCatalog(db_id_);
   CHECK(catalog);
-  CHECK_EQ(catalog->name(), INFORMATION_SCHEMA_DB);
+  CHECK_EQ(catalog->name(), shared::kInfoSchemaDbName);
 
   initializeObjectsForTable(foreign_table_->tableName);
+  if (row_count_ > static_cast<size_t>(foreign_table_->maxFragRows)) {
+    throw ForeignStorageException{
+        "System table size exceeds the maximum supported size."};
+  }
   foreign_storage::ForeignTableSchema schema(db_id_, foreign_table_);
   for (auto column : schema.getLogicalColumns()) {
     ChunkKey chunk_key = {db_id_, foreign_table_->tableId, column->columnId, 0};
     if (column->columnType.is_varlen_indeed()) {
       chunk_key.emplace_back(1);
     }
-    ForeignStorageBuffer empty_buffer;
-    // Use default encoder metadata
-    empty_buffer.initEncoder(column->columnType);
-    auto chunk_metadata = empty_buffer.getEncoder()->getMetadata(column->columnType);
-    chunk_metadata->numElements = row_count_;
-    if (!column->columnType.is_varlen_indeed()) {
-      chunk_metadata->numBytes = column->columnType.get_size() * row_count_;
-    }
-    if (column->columnType.is_array()) {
-      ForeignStorageBuffer scalar_buffer;
-      scalar_buffer.initEncoder(column->columnType.get_elem_type());
-      auto scalar_metadata =
-          scalar_buffer.getEncoder()->getMetadata(column->columnType.get_elem_type());
-      chunk_metadata->chunkStats.min = scalar_metadata->chunkStats.min;
-      chunk_metadata->chunkStats.max = scalar_metadata->chunkStats.max;
-    }
-    chunk_metadata->chunkStats.has_nulls = true;
-    chunk_metadata_vector.emplace_back(chunk_key, chunk_metadata);
+    chunk_metadata_vector.emplace_back(
+        chunk_key, get_placeholder_metadata(column->columnType, row_count_));
   }
 }
 
 void InternalSystemDataWrapper::populateChunkBuffers(
     const ChunkToBufferMap& required_buffers,
-    const ChunkToBufferMap& optional_buffers) {
+    const ChunkToBufferMap& optional_buffers,
+    AbstractBuffer* delete_buffer) {
   auto timer = DEBUG_TIMER(__func__);
   CHECK(optional_buffers.empty());
 
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
   auto catalog = sys_catalog.getCatalog(db_id_);
   CHECK(catalog);
-  CHECK_EQ(catalog->name(), INFORMATION_SCHEMA_DB);
+  CHECK_EQ(catalog->name(), shared::kInfoSchemaDbName);
 
   auto fragment_id = required_buffers.begin()->first[CHUNK_KEY_FRAGMENT_IDX];
-  CHECK_EQ(fragment_id, 0);
+  CHECK_EQ(fragment_id, 0)
+      << "In-memory system tables are expected to have a single fragment.";
 
   std::map<ChunkKey, Chunk_NS::Chunk> chunks;
   std::set<const ColumnDescriptor*> columns_to_parse;
@@ -189,12 +218,6 @@ void InternalSystemDataWrapper::populateChunkBuffers(
         column_id_to_data_blocks_map.find(chunk_key[CHUNK_KEY_COLUMN_IDX]);
     CHECK(data_block_entry != column_id_to_data_blocks_map.end());
     chunk.appendData(data_block_entry->second, row_count_, 0);
-    auto cd = chunk.getColumnDesc();
-    if (!cd->columnType.is_varlen_indeed()) {
-      CHECK(foreign_table_->fragmenter);
-      auto metadata = chunk.getBuffer()->getEncoder()->getMetadata(cd->columnType);
-      foreign_table_->fragmenter->updateColumnChunkMetadata(cd, fragment_id, metadata);
-    }
     chunk.setBuffer(nullptr);
     chunk.setIndexBuffer(nullptr);
   }

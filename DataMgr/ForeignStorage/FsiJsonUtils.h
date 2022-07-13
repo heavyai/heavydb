@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,14 @@
 
 #pragma once
 
-#include <rapidjson/document.h>
 #include <map>
+#include <optional>
 #include <vector>
+
+#include <rapidjson/document.h>
+
 #include "Logger/Logger.h"
+
 namespace foreign_storage {
 
 // helper functions for serializing/deserializing objects to rapidjson value
@@ -36,6 +40,10 @@ template <class T>
 void get_value_from_object(const rapidjson::Value& object,
                            T& value,
                            const std::string& name);
+
+std::optional<std::string> get_optional_string_value_from_object(
+    const rapidjson::Value& object,
+    const std::string& name);
 
 // Basic types (more can be added as required) will be defined in source file
 // int
@@ -151,7 +159,7 @@ void add_value_to_object(rapidjson::Value& object,
                          const std::string& name,
                          rapidjson::Document::AllocatorType& allocator) {
   CHECK(object.IsObject());
-  CHECK(!object.HasMember(name));
+  CHECK(!object.HasMember(name)) << "Found unexpected member: " << name;
   rapidjson::Value json_val;
   set_value(json_val, value, allocator);
   rapidjson::Value json_name;
@@ -165,7 +173,7 @@ void get_value_from_object(const rapidjson::Value& object,
                            T& value,
                            const std::string& name) {
   CHECK(object.IsObject());
-  CHECK(object.HasMember(name));
+  CHECK(object.HasMember(name)) << "Could not find member: " << name;
   get_value(object[name], value);
 }
 

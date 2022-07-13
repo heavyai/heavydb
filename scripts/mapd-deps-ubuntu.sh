@@ -111,7 +111,11 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     libxerces-c-dev \
     libxmlsec1-dev \
     libtool \
-    patchelf
+    patchelf \
+    libxrandr-dev \
+    libxinerama-dev \
+    libxcursor-dev \
+    libxi-dev
 
 # Set up gcc-8 as default gcc
 sudo update-alternatives \
@@ -135,6 +139,9 @@ install_memkind
 LLVM_BUILD_DYLIB=true
 install_llvm
 
+# c-blosc
+install_blosc
+
 # Geo Support
 install_gdal
 install_geos
@@ -142,46 +149,11 @@ install_geos
 # install AWS core and s3 sdk
 install_awscpp -j $(nproc)
 
-VERS=0.15.0
-wget --continue http://dlcdn.apache.org/thrift/$VERS/thrift-$VERS.tar.gz
-tar xvf thrift-$VERS.tar.gz
-pushd thrift-$VERS
-CFLAGS="-fPIC" CXXFLAGS="-fPIC" JAVA_PREFIX=$PREFIX/lib ./configure \
-    --with-lua=no \
-    --with-python=no \
-    --with-php=no \
-    --with-ruby=no \
-    --with-qt4=no \
-    --with-qt5=no \
-    --with-java=no \
-    --prefix=$PREFIX
-make -j $(nproc)
-make install
-popd
+# thrift
+install_thrift
 
 VERS=3.52.15
 CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libiodbc-${VERS}.tar.gz
-
-#c-blosc
-VERS=1.14.4
-wget --continue https://github.com/Blosc/c-blosc/archive/v$VERS.tar.gz
-tar xvf v$VERS.tar.gz
-BDIR="c-blosc-$VERS/build"
-rm -rf "$BDIR"
-mkdir -p "$BDIR"
-pushd "$BDIR"
-cmake \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=$PREFIX \
-    -DBUILD_BENCHMARKS=off \
-    -DBUILD_TESTS=off \
-    -DPREFER_EXTERNAL_SNAPPY=off \
-    -DPREFER_EXTERNAL_ZLIB=off \
-    -DPREFER_EXTERNAL_ZSTD=off \
-    ..
-make -j $(nproc)
-make install
-popd
 
 install_folly
 
@@ -196,25 +168,6 @@ install_arrow
 
 # Go
 install_go
-
-VERS=3.1.0
-wget --continue https://github.com/cginternals/glbinding/archive/v$VERS.tar.gz
-tar xvf v$VERS.tar.gz
-mkdir -p glbinding-$VERS/build
-pushd glbinding-$VERS/build
-cmake \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=$PREFIX \
-    -DOPTION_BUILD_DOCS=OFF \
-    -DOPTION_BUILD_EXAMPLES=OFF \
-    -DOPTION_BUILD_GPU_TESTS=OFF \
-    -DOPTION_BUILD_TESTS=OFF \
-    -DOPTION_BUILD_TOOLS=OFF \
-    -DOPTION_BUILD_WITH_BOOST_THREAD=OFF \
-    ..
-make -j $(nproc)
-make install
-popd
 
 # librdkafka
 install_rdkafka
@@ -265,9 +218,44 @@ popd # build
 popd # SPIRV-Cross-$VERS
 popd # spirv-cross
 
+# GLM (GL Mathematics)
+install_glm
+
+# GLFW
+VERS=3.3.6
+download https://github.com/glfw/glfw/archive/refs/tags/${VERS}.tar.gz
+extract ${VERS}.tar.gz
+pushd glfw-${VERS}
+mkdir -p build
+pushd build
+cmake \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DCMAKE_INSTALL_PREFIX=$PREFIX \
+    -DBUILD_SHARED_LIBS=ON \
+    -DGLFW_BUILD_EXAMPLES=OFF \
+    -DGLFW_BUILD_TESTS=OFF \
+    -DGLFW_BUILD_DOCS=OFF \
+    ..
+make -j $(nproc)
+make install
+popd #build
+popd #glfw
+
+# ImGui
+VERS=1.87
+rm -rf imgui
+mkdir -p imgui
+pushd imgui
+download https://github.com/ocornut/imgui/archive/refs/tags/v${VERS}.tar.gz
+extract v${VERS}.tar.gz
+mkdir -p $PREFIX/include
+mkdir -p $PREFIX/include/imgui
+mv imgui-${VERS}/* $PREFIX/include/imgui
+popd #imgui
+
 # Vulkan
 # Custom tarball which excludes the spir-v toolchain
-VERS=1.2.162.0 # stable 12/11/20
+VERS=1.2.198.1 # stable 12/3/21
 rm -rf vulkan
 mkdir -p vulkan
 pushd vulkan

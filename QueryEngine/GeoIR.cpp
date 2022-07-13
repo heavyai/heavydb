@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,6 +73,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoColumnVar(
   switch (ti.get_type()) {
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON: {
       std::vector<llvm::Value*> geo_lvs;
@@ -203,10 +204,10 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
   argument_list.insert(argument_list.begin(),
                        cgen_state_->llInt(static_cast<int>(geo_expr->getOp())));
   for (auto i = 3; i > geo_expr->getTypeInfo0().get_physical_coord_cols(); i--) {
-    argument_list.insert(argument_list.end(), cgen_state_->llInt(int64_t(0)));
     argument_list.insert(argument_list.end(),
                          llvm::ConstantPointerNull::get(
                              llvm::Type::getInt32PtrTy(cgen_state_->context_, 0)));
+    argument_list.insert(argument_list.end(), cgen_state_->llInt(int64_t(0)));
   }
   // Append geo expr compression
   argument_list.insert(
@@ -226,6 +227,17 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
   if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kISEMPTY ||
       geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kISVALID) {
     return codegenGeosPredicateCall(func, argument_list, co);
+  }
+
+  if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kCONVEXHULL) {
+    func += "_double"s;  // Use same interface as ST_ConcaveHull, with a dummy double
+
+    // Insert that dummy double arg
+    argument_list.insert(argument_list.end(), cgen_state_->llFp(double(0)));
+
+    auto result_srid = cgen_state_->llInt(geo_expr->get_type_info().get_output_srid());
+
+    return codegenGeosConstructorCall(func, argument_list, result_srid, co);
   }
 
   throw std::runtime_error("Unsupported unary geo operation.");
@@ -264,10 +276,10 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
   argument_list.insert(argument_list.begin(),
                        cgen_state_->llInt(static_cast<int>(geo_expr->getOp())));
   for (auto i = 3; i > geo_expr->getTypeInfo0().get_physical_coord_cols(); i--) {
-    argument_list.insert(argument_list.end(), cgen_state_->llInt(int64_t(0)));
     argument_list.insert(argument_list.end(),
                          llvm::ConstantPointerNull::get(
                              llvm::Type::getInt32PtrTy(cgen_state_->context_, 0)));
+    argument_list.insert(argument_list.end(), cgen_state_->llInt(int64_t(0)));
   }
   // Append geo expr compression
   argument_list.insert(
@@ -298,10 +310,10 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
         arg1_list.begin(),
         cgen_state_->llInt(static_cast<int>(geo_expr->getTypeInfo1().get_type())));
     for (auto i = 3; i > geo_expr->getTypeInfo1().get_physical_coord_cols(); i--) {
-      arg1_list.insert(arg1_list.end(), cgen_state_->llInt(int64_t(0)));
       arg1_list.insert(arg1_list.end(),
                        llvm::ConstantPointerNull::get(
                            llvm::Type::getInt32PtrTy(cgen_state_->context_, 0)));
+      arg1_list.insert(arg1_list.end(), cgen_state_->llInt(int64_t(0)));
     }
     // Append geo expr compression
     arg1_list.insert(arg1_list.end(),
@@ -316,6 +328,13 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
   } else if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kBUFFER) {
     // Extra argument in this case is double
     func += "_double"s;
+  } else if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kCONCAVEHULL) {
+#if (GEOS_VERSION_MAJOR > 3) || (GEOS_VERSION_MAJOR == 3 && GEOS_VERSION_MINOR >= 11)
+    // Extra argument in this case is double
+    func += "_double"s;
+#else
+    throw std::runtime_error("ST_ConcaveHull requires GEOS 3.11 or newer");
+#endif
   } else {
     throw std::runtime_error("Unsupported binary geo operation.");
   }
@@ -323,7 +342,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
   // Append arg1 to the list
   argument_list.insert(argument_list.end(), arg1_list.begin(), arg1_list.end());
 
-  // Deal with unary geo predicates
+  // Deal with binary geo predicates
   if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kEQUALS) {
     return codegenGeosPredicateCall(func, argument_list, co);
   }

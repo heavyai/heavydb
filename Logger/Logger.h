@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 /*
  * @file    Logger.h
- * @author  Matt Pulver <matt.pulver@omnisci.com>
  * @description Use Boost.Log for logging data compatible with previous API.
  *
  * Usage:
@@ -52,10 +51,22 @@
 #include <string>
 #include <thread>
 
-#ifdef _WIN32
-#if defined(ERROR) || defined(INFO) || defined(WARNING) || defined(FATAL)
-#include "Shared/cleanup_global_namespace.h"
-#endif
+#ifdef ERROR
+// A common way for this to occur is with a #include <windows.h> which globally defines a
+// number of macros, such as ERROR, that interferes with other headers. This may be
+// resolved by locating the new #include that directly or indirectly includes windows.h
+// (or something else that #defines ERROR) and placing a
+// #include "Shared/cleanup_global_namespace.h" after it.
+//
+// Q: Why not just #include "Shared/cleanup_global_namespace.h" here?
+//
+// A: Two reasons:
+//    * ERROR is not the only macro that windows.h defines, e.g. GetObject which
+//      interferes with rapidjson.
+//    * By not cleaning up the global macros at the source requires potential cleaning
+//      on a much larger scale: all places that call LOG(ERROR). (Due to header guards,
+//      #include "Logger.h" may not be included where it needs to in order to clean up.)
+#error "ERROR must not be globally defined during preprocessing."
 #endif
 
 namespace boost {
@@ -197,10 +208,10 @@ inline bool fast_logging_check(Severity severity) {
 // These can be changed to for/while loops with slight performance degradation.
 
 #define SLOG(severity_or_channel)                                                     \
-  if (auto _omnisci_logger_severity_or_channel_ = severity_or_channel;                \
-      logger::fast_logging_check(_omnisci_logger_severity_or_channel_))               \
-    if (auto _omnisci_logger_ = logger::Logger(_omnisci_logger_severity_or_channel_)) \
-  _omnisci_logger_.stream(__FILE__, __LINE__)
+  if (auto _heavydb_logger_severity_or_channel_ = severity_or_channel;                \
+      logger::fast_logging_check(_heavydb_logger_severity_or_channel_))               \
+    if (auto _heavydb_logger_ = logger::Logger(_heavydb_logger_severity_or_channel_)) \
+  _heavydb_logger_.stream(__FILE__, __LINE__)
 
 #define LOG(tag) SLOG(logger::tag)
 
@@ -235,7 +246,7 @@ BOOST_NOINLINE std::string* check_failed(X const& x,
 }
 
 // Complexity comes from requirement that x and y be evaluated only once.
-#define OMINSCI_CHECKOP_FUNCTION(name, op)                          \
+#define HEAVYDB_CHECKOP_FUNCTION(name, op)                          \
   template <typename X, typename Y>                                 \
   inline std::string* Check##name(                                  \
       X const& x, Y const& y, char const* xstr, char const* ystr) { \
@@ -244,13 +255,13 @@ BOOST_NOINLINE std::string* check_failed(X const& x,
     else                                                            \
       return logger::check_failed(x, y, xstr, ystr, " " #op " ");   \
   }
-OMINSCI_CHECKOP_FUNCTION(EQ, ==)
-OMINSCI_CHECKOP_FUNCTION(NE, !=)
-OMINSCI_CHECKOP_FUNCTION(LT, <)
-OMINSCI_CHECKOP_FUNCTION(LE, <=)
-OMINSCI_CHECKOP_FUNCTION(GT, >)
-OMINSCI_CHECKOP_FUNCTION(GE, >=)
-#undef OMINSCI_CHECKOP_FUNCTION
+HEAVYDB_CHECKOP_FUNCTION(EQ, ==)
+HEAVYDB_CHECKOP_FUNCTION(NE, !=)
+HEAVYDB_CHECKOP_FUNCTION(LT, <)
+HEAVYDB_CHECKOP_FUNCTION(LE, <=)
+HEAVYDB_CHECKOP_FUNCTION(GT, >)
+HEAVYDB_CHECKOP_FUNCTION(GE, >=)
+#undef HEAVYDB_CHECKOP_FUNCTION
 
 #define UNREACHABLE() LOG(FATAL) << "UNREACHABLE "
 
@@ -344,6 +355,8 @@ class QidScopeGuard {
   ~QidScopeGuard();
   QueryId id() const { return id_; }
 };
+
+boost::filesystem::path get_log_dir_path();
 
 // Set logger::g_query_id based on given parameter.
 QidScopeGuard set_thread_local_query_id(QueryId const);

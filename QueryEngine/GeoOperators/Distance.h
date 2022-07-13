@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -166,6 +166,17 @@ class Distance : public Codegen {
                           second_operand_ti.get_type() == kLINESTRING))) {
       throw std::runtime_error(getName() +
                                " currently doesn't accept non-POINT geographies");
+    }
+
+    bool unsupported_args = false;
+    if (first_operand_ti.get_type() == kMULTILINESTRING) {
+      unsupported_args = (second_operand_ti.get_type() != kPOINT);
+    } else if (second_operand_ti.get_type() == kMULTILINESTRING) {
+      unsupported_args = (first_operand_ti.get_type() != kPOINT);
+    }
+    if (unsupported_args) {
+      throw std::runtime_error(getName() +
+                               " currently doesn't support this argument combination");
     }
 
     std::string func_name = getName() + suffix(first_operand_ti.get_type()) +

@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include "Execute.h"
 #include "GpuInitGroups.h"
 #include "InPlaceSort.h"
+#include "QueryEngine/QueryEngine.h"
 #include "QueryMemoryInitializer.h"
 #include "RelAlgExecutionUnit.h"
 #include "ResultSet.h"
@@ -53,10 +54,11 @@ QueryExecutionContext::QueryExecutionContext(
   CHECK(executor);
   auto data_mgr = executor->getDataMgr();
   if (device_type == ExecutorDeviceType::GPU) {
-    gpu_allocator_ = std::make_unique<CudaAllocator>(data_mgr, device_id);
+    gpu_allocator_ = std::make_unique<CudaAllocator>(
+        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   }
 
-  auto render_allocator_map = render_info && render_info->isPotentialInSituRender()
+  auto render_allocator_map = render_info && render_info->isInSitu()
                                   ? render_info->render_allocator_map_ptr.get()
                                   : nullptr;
   query_buffers_ = std::make_unique<QueryMemoryInitializer>(ra_exe_unit,
@@ -255,7 +257,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   }
 
   if (allow_runtime_interrupt && !render_allocator) {
-    kernel->initializeRuntimeInterrupter();
+    kernel->initializeRuntimeInterrupter(device_id);
   }
 
   auto kernel_params = prepareKernelParams(col_buffers,
@@ -536,6 +538,9 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   }
 
   if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
+    if (allow_runtime_interrupt) {
+      kernel->resetRuntimeInterrupter(device_id);
+    }
     auto finishTime = finishClock->stop();
     VLOG(1) << "Device " << std::to_string(device_id)
             << ": launchGpuCode: finish: " << std::to_string(finishTime) << " ms";

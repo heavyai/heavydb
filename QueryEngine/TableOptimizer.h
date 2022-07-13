@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ class TableOptimizer {
  public:
   TableOptimizer(const TableDescriptor* td,
                  Executor* executor,
-                 const Catalog_Namespace::Catalog& cat);
+                 Catalog_Namespace::Catalog& cat);
 
   /**
    * @brief Recomputes per-chunk metadata for each fragment in the table.
@@ -95,7 +95,7 @@ class TableOptimizer {
 
   const TableDescriptor* td_;
   Executor* executor_;
-  const Catalog_Namespace::Catalog& cat_;
+  Catalog_Namespace::Catalog& cat_;
 
   // We can use a smaller block size here, since we won't be running projection queries
   static constexpr size_t ROW_SET_SIZE{1000000000};

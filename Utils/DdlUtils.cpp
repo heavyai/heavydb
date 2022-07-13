@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include "Fragmenter/FragmentDefaultValues.h"
 #include "Geospatial/Types.h"
 #include "Parser/ReservedKeywords.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/file_path_util.h"
 #include "Shared/misc.h"
 #include "Shared/sqltypes.h"
@@ -188,6 +189,7 @@ void SqlType::check_type() {
       break;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       // Storing SRID in param1
@@ -467,6 +469,10 @@ void validate_and_set_encoding(ColumnDescriptor& cd,
 void validate_and_set_type(ColumnDescriptor& cd, SqlType* column_type) {
   column_type->check_type();
 
+  if (column_type->get_type() == kGEOMETRY) {
+    throw std::runtime_error("Unsupported type \"GEOMETRY\" specified.");
+  }
+
   if (column_type->get_is_array()) {
     cd.columnType.set_type(kARRAY);
     cd.columnType.set_subtype(column_type->get_type());
@@ -578,6 +584,7 @@ void validate_literal(const std::string& val,
     }
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       if (val.empty()) {
@@ -598,6 +605,8 @@ void validate_literal(const std::string& val,
           if ((geo_type == Geospatial::GeoBase::GeoType::kPOINT && sql_type != kPOINT) ||
               (geo_type == Geospatial::GeoBase::GeoType::kLINESTRING &&
                sql_type != kLINESTRING) ||
+              (geo_type == Geospatial::GeoBase::GeoType::kMULTILINESTRING &&
+               sql_type != kMULTILINESTRING) ||
               (geo_type == Geospatial::GeoBase::GeoType::kPOLYGON &&
                sql_type != kPOLYGON) ||
               (geo_type == Geospatial::GeoBase::GeoType::kMULTIPOLYGON &&
@@ -747,8 +756,7 @@ std::vector<std::string> get_expanded_file_paths(
     const DataTransferType data_transfer_type) {
   std::vector<std::string> file_paths;
   if (data_transfer_type == DataTransferType::IMPORT) {
-    file_paths = shared::local_glob_filter_sort_files(
-        file_path, std::nullopt, std::nullopt, std::nullopt);
+    file_paths = shared::local_glob_filter_sort_files(file_path, {});
   } else {
     std::string path;
     if (!boost::filesystem::exists(file_path)) {
@@ -831,10 +839,12 @@ void FilePathWhitelist::initialize(const std::string& data_dir,
 
   auto data_dir_path = boost::filesystem::canonical(data_dir);
   CHECK(whitelisted_import_paths_.empty());
-  whitelisted_import_paths_.emplace_back((data_dir_path / "mapd_import").string());
+  whitelisted_import_paths_.emplace_back(
+      (data_dir_path / shared::kDefaultImportDirName).string());
 
   CHECK(whitelisted_export_paths_.empty());
-  whitelisted_export_paths_.emplace_back((data_dir_path / "mapd_export").string());
+  whitelisted_export_paths_.emplace_back(
+      (data_dir_path / shared::kDefaultExportDirName).string());
 
   if (!allowed_import_paths.empty()) {
     set_whitelisted_paths(

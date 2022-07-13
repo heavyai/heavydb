@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ float g_vacuum_min_selectivity{0.1};
 
 TableOptimizer::TableOptimizer(const TableDescriptor* td,
                                Executor* executor,
-                               const Catalog_Namespace::Catalog& cat)
+                               Catalog_Namespace::Catalog& cat)
     : td_(td), executor_(executor), cat_(cat) {
   CHECK(td);
 }
@@ -101,8 +101,9 @@ RelAlgExecutionUnit build_ra_exe_unit(
                              {},
                              {},
                              target_exprs,
+                             {},
                              nullptr,
-                             SortInfo{{}, SortAlgorithm::Default, 0, 0},
+                             SortInfo{{}, SortAlgorithm::Default, 0, 0, false},
                              0};
 }
 
@@ -111,15 +112,27 @@ inline CompilationOptions get_compilation_options(const ExecutorDeviceType& devi
 }
 
 inline ExecutionOptions get_execution_options() {
-  return ExecutionOptions{
-      false, false, false, false, false, false, false, false, 0, false, false, 0, false};
+  return ExecutionOptions{false,
+                          false,
+                          false,
+                          false,
+                          false,
+                          false,
+                          false,
+                          false,
+                          false,
+                          0,
+                          false,
+                          false,
+                          0,
+                          false};
 }
 
 }  // namespace
 
 void TableOptimizer::recomputeMetadata() const {
   auto timer = DEBUG_TIMER(__func__);
-  mapd_unique_lock<mapd_shared_mutex> lock(executor_->execute_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> lock(executor_->execute_mutex_);
 
   LOG(INFO) << "Recomputing metadata for " << td_->tableName;
 
@@ -503,7 +516,8 @@ void TableOptimizer::vacuumFragmentsAboveMinSelectivity(
 
     DeletedColumnStats deleted_column_stats;
     {
-      mapd_unique_lock<mapd_shared_mutex> executor_lock(executor_->execute_mutex_);
+      heavyai::unique_lock<heavyai::shared_mutex> executor_lock(
+          executor_->execute_mutex_);
       ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
       executor_->row_set_mem_owner_ =
           std::make_shared<RowSetMemoryOwner>(ROW_SET_SIZE, /*num_threads=*/1);

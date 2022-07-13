@@ -15,7 +15,7 @@
  */
 package com.mapd.tests;
 
-import static com.mapd.tests.MapdAsserts.shouldThrowException;
+import static com.mapd.tests.HeavyDBAsserts.shouldThrowException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,13 +34,13 @@ public class CalciteViewsConcurrencyTest {
   public void testViewsResolutionConcurrency() throws Exception {
     logger.info("testViewsResolutionConcurrency()");
 
-    MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
+            "localhost", 6274, "heavyai", "admin", "HyperInteractive");
 
     su.runSql("CREATE DATABASE db1;");
     su.runSql("CREATE DATABASE db2;");
 
-    MapdTestClient db1 = MapdTestClient.getClient(
+    HeavyDBTestClient db1 = HeavyDBTestClient.getClient(
             "localhost", 6274, "db1", "admin", "HyperInteractive");
     db1.runSql("create table table1 (id integer, description varchar(30));");
     db1.runSql("create table table2 (id integer, description varchar(30));");
@@ -49,7 +49,7 @@ public class CalciteViewsConcurrencyTest {
     db1.runSql(
             "create view v_goodview as select t1.id, t1.description, t2.description as tbl2Desc from db1.table1 t1, db1.table2 t2;");
 
-    MapdTestClient db2 = MapdTestClient.getClient(
+    HeavyDBTestClient db2 = HeavyDBTestClient.getClient(
             "localhost", 6274, "db2", "admin", "HyperInteractive");
     db2.runSql("create table table1 (id integer, description varchar(30));");
     db2.runSql("create table table2 (id integer, description varchar(30));");
@@ -63,9 +63,9 @@ public class CalciteViewsConcurrencyTest {
     List<Thread> threads = new ArrayList<>();
     for (int i = 0; i < num_threads; i++) {
       final int threadId = i;
-      MapdTestClient con1 = MapdTestClient.getClient(
+      HeavyDBTestClient con1 = HeavyDBTestClient.getClient(
               "localhost", 6274, "db1", "admin", "HyperInteractive");
-      MapdTestClient con2 = MapdTestClient.getClient(
+      HeavyDBTestClient con2 = HeavyDBTestClient.getClient(
               "localhost", 6274, "db2", "admin", "HyperInteractive");
       Thread t = new Thread(new Runnable() {
         @Override

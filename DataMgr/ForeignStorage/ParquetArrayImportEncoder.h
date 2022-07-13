@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ class ParquetArrayImportEncoder : public ParquetArrayEncoder,
                              const SQLTypeInfo& column_type, /* may not be used */
                              InvalidRowGroupIndices& invalid_indices) override {
     // validate all elements
-    is_valid_item_.assign(levels_read, true);
+    is_valid_item_.assign(values_read, true);
     for (int64_t j = 0; j < values_read; ++j) {
       try {
         scalar_encoder_->validate(values, j, column_type);

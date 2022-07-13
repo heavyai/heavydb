@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,9 @@
 
 /**
  * @file    ArrayOps.cpp
- * @author  Alex Suhan <alex@mapd.com>
  * @brief   Functions to support array operations used by the executor.
  *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
 
 #include <cstdint>
 #include "../Shared/funcannotations.h"
@@ -290,8 +288,6 @@ extern "C" DEVICE RUNTIME_EXPORT int8_t* array_buff(int8_t* chunk_iter_,
 
 #ifndef __CUDACC__
 
-#include <set>
-
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t elem_bitcast_int8_t(const int8_t val) {
   return val;
 }
@@ -328,7 +324,7 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t elem_bitcast_double(const double
     for (size_t i = 0; i < elem_count; ++i) {                                           \
       const auto val = reinterpret_cast<type*>(ad.pointer)[i];                          \
       if (val != null_val) {                                                            \
-        reinterpret_cast<std::set<int64_t>*>(*agg)->insert(elem_bitcast_##type(val));   \
+        reinterpret_cast<CountDistinctSet*>(*agg)->insert(elem_bitcast_##type(val));    \
       }                                                                                 \
     }                                                                                   \
   }

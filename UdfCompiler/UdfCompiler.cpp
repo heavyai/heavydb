@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,9 @@
 #include <llvm/Support/Program.h>
 #include <llvm/Support/raw_ostream.h>
 #include <boost/process/search_path.hpp>
+#include <cctype>
 #include <iterator>
-#include <memory>
+#include <locale>
 #include "clang/Basic/Version.h"
 
 #if LLVM_VERSION_MAJOR >= 11
@@ -39,7 +40,7 @@
 #endif
 
 #include "Logger/Logger.h"
-#include "OSDependent/omnisci_fs.h"
+#include "OSDependent/heavyai_fs.h"
 
 using namespace clang;
 using namespace clang::tooling;
@@ -163,10 +164,10 @@ const char* convert(const std::string& s) {
 std::string exec_output(std::string cmd) {
   std::array<char, 128> buffer;
   std::string result;
-  std::unique_ptr<FILE, decltype(&omnisci::pclose)> pipe(omnisci::popen(cmd.c_str(), "r"),
-                                                         omnisci::pclose);
+  std::unique_ptr<FILE, decltype(&heavyai::pclose)> pipe(heavyai::popen(cmd.c_str(), "r"),
+                                                         heavyai::pclose);
   if (!pipe) {
-    throw std::runtime_error("omnisci::popen(\"" + cmd + "\") failed!");
+    throw std::runtime_error("heavyai::popen(\"" + cmd + "\") failed!");
   }
   while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
     result += buffer.data();
@@ -296,6 +297,8 @@ UdfCompiler::UdfCompiler(CudaMgr_Namespace::NvidiaDeviceArch target_arch,
     , target_arch_(target_arch)
 #endif
 {
+  // To ifguard unsupported code included in heavydbTypes.h (i.e. <shared_mutex>)
+  clang_options_.emplace_back(std::string("-D UDF_COMPILED"));
 }
 
 UdfCompiler::UdfCompiler(CudaMgr_Namespace::NvidiaDeviceArch target_arch,
@@ -307,6 +310,8 @@ UdfCompiler::UdfCompiler(CudaMgr_Namespace::NvidiaDeviceArch target_arch,
     , target_arch_(target_arch)
 #endif
 {
+  // To ifguard unsupported code included in heavydbTypes.h (i.e. <shared_mutex>)
+  clang_options_.emplace_back(std::string("-D UDF_COMPILED"));
 }
 
 std::pair<std::string, std::string> UdfCompiler::compileUdf(
@@ -547,7 +552,7 @@ std::string UdfCompiler::compileToNVVMIR(const std::string& udf_file_name) const
                                         "-emit-llvm",
                                         "-o",
                                         gpu_out_filename,
-                                        "-std=c++14",
+                                        "-std=c++17",
                                         "-DNO_BOOST"};
 
   command_line.emplace_back("--cuda-gpu-arch=" +
@@ -585,7 +590,7 @@ std::string UdfCompiler::compileToLLVMIR(const std::string& udf_file_name) const
                                         "-emit-llvm",
                                         "-o",
                                         cpu_out_filename,
-                                        "-std=c++14",
+                                        "-std=c++17",
                                         "-DNO_BOOST",
                                         udf_file_name};
   auto res = compileFromCommandLine(command_line);
@@ -612,6 +617,7 @@ void UdfCompiler::generateAST(const std::string& file_name) const {
   arg_vector.emplace_back("--");
   arg_vector.emplace_back("-DNO_BOOST");
   arg_vector.emplace_back(include_option);
+  arg_vector.emplace_back("-std=c++17");
 
   if (clang_options_.size() > 0) {
     std::copy(

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,13 @@
 
 /**
  * @file    File.h
- * @author  Steven Stewart <steve@map-d.com>
  * @brief   A selection of helper methods for File I/O.
  *
  */
+
 #pragma once
 
-#define MAPD_FILE_EXT ".mapd"
+#define DATA_FILE_EXT ".data"
 
 #include <cstdint>
 #include <cstdio>
@@ -33,9 +33,13 @@
 
 namespace File_Namespace {
 
+constexpr auto kLegacyDataFileExtension{".mapd"};
+
 std::string get_data_file_path(const std::string& base_path,
                                int file_id,
                                size_t page_size);
+
+std::string get_legacy_data_file_path(const std::string& new_data_file_path);
 
 FILE* create(const std::string& basePath,
              const int fileId,

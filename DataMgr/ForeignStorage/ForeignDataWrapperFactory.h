@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,30 +22,80 @@
 
 namespace foreign_storage {
 class UserMapping;
+
+bool is_s3_uri(const std::string& file_path);
+
+/**
+ * Verify if `source_type` is valid.
+ */
+bool is_valid_source_type(const import_export::CopyParams& copy_params);
+
+void validate_regex_parser_options(const import_export::CopyParams& copy_params);
+
+/**
+ * @brief Create proxy fsi objects for use outside FSI
+ *
+ * @param copy_from_source - the source that will be copied
+ * @param copy_params - CopyParams that specify parameters around use case
+ * @param db_id - db id of database in use case
+ * @param table - the table descriptor of the table in use case
+ * @param user_id - the user id of user in use case
+ *
+ * @return tuple of FSI objects that can be used for particular use case (for example
+ * import or detect)
+ */
+std::tuple<std::unique_ptr<foreign_storage::ForeignServer>,
+           std::unique_ptr<foreign_storage::UserMapping>,
+           std::unique_ptr<foreign_storage::ForeignTable>>
+create_proxy_fsi_objects(const std::string& copy_from_source,
+                         const import_export::CopyParams& copy_params,
+                         const int db_id,
+                         const TableDescriptor* table,
+                         const int32_t user_id);
+
+/**
+ * @brief Create proxy fsi objects for use outside FSI
+ * NOTE: parameters mirror function above
+ */
+std::tuple<std::unique_ptr<foreign_storage::ForeignServer>,
+           std::unique_ptr<foreign_storage::UserMapping>,
+           std::unique_ptr<foreign_storage::ForeignTable>>
+create_proxy_fsi_objects(const std::string& copy_from_source,
+                         const import_export::CopyParams& copy_params,
+                         const TableDescriptor* table);
+
 /**
  * @type DataWrapperType
  * @brief Encapsulates an enumeration of foreign data wrapper type strings
  */
 struct DataWrapperType {
-  static constexpr char const* CSV = "OMNISCI_CSV";
-  static constexpr char const* PARQUET = "OMNISCI_PARQUET";
-  static constexpr char const* REGEX_PARSER = "OMNISCI_REGEX_PARSER";
-  static constexpr char const* INTERNAL_CATALOG = "OMNISCI_INTERNAL_CATALOG";
-  static constexpr char const* INTERNAL_MEMORY_STATS = "INTERNAL_OMNISCI_MEMORY_STATS";
-  static constexpr char const* INTERNAL_STORAGE_STATS = "INTERNAL_OMNISCI_STORAGE_STATS";
+  static constexpr char const* CSV = "DELIMITED_FILE";
+  static constexpr char const* PARQUET = "PARQUET_FILE";
+  static constexpr char const* REGEX_PARSER = "REGEX_PARSED_FILE";
+  static constexpr char const* INTERNAL_CATALOG = "INTERNAL_CATALOG";
+  static constexpr char const* INTERNAL_MEMORY_STATS = "INTERNAL_MEMORY_STATS";
+  static constexpr char const* INTERNAL_STORAGE_STATS = "INTERNAL_STORAGE_STATS";
+  static constexpr char const* INTERNAL_LOGS = "INTERNAL_LOGS";
 
-  static constexpr std::array<char const*, 3> INTERNAL_DATA_WRAPPERS{
+  static constexpr std::array<char const*, 4> INTERNAL_DATA_WRAPPERS{
+      INTERNAL_CATALOG,
+      INTERNAL_MEMORY_STATS,
+      INTERNAL_STORAGE_STATS,
+      INTERNAL_LOGS};
+
+  static constexpr std::array<char const*, 3> IN_MEMORY_DATA_WRAPPERS{
       INTERNAL_CATALOG,
       INTERNAL_MEMORY_STATS,
       INTERNAL_STORAGE_STATS};
 
-  static constexpr std::array<std::string_view, 6> supported_data_wrapper_types{
+  static constexpr std::array<std::string_view, 7> supported_data_wrapper_types{
       PARQUET,
       CSV,
       REGEX_PARSER,
       INTERNAL_CATALOG,
       INTERNAL_MEMORY_STATS,
-      INTERNAL_STORAGE_STATS};
+      INTERNAL_STORAGE_STATS,
+      INTERNAL_LOGS};
 };
 
 class ForeignDataWrapperFactory {
@@ -88,15 +138,15 @@ class ForeignDataWrapperFactory {
       const UserMapping* user_mapping);
 
   static std::unique_ptr<ForeignDataWrapper> createForGeneralImport(
-      const std::string& data_wrapper_type,
+      const import_export::CopyParams& copy_params,
       const int db_id,
       const ForeignTable* foreign_table,
       const UserMapping* user_mapping);
 
   /**
-   * Creates an instance (or gets an existing instance) of an immutable ForeignDataWrapper
-   * to be used for validation purposes. Returned instance should not be used for any
-   * stateful operations, such as fetching foreign table data/metadata.
+   * Creates an instance (or gets an existing instance) of an immutable
+   * ForeignDataWrapper to be used for validation purposes. Returned instance should not
+   * be used for any stateful operations, such as fetching foreign table data/metadata.
    */
   static const ForeignDataWrapper& createForValidation(
       const std::string& data_wrapper_type,

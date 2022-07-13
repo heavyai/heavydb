@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,14 @@ class ParquetStringImportEncoder : public ParquetEncoder, public ParquetImportEn
         string_buffer_->appendElement("");  // empty strings encode nulls
       }
     }
+  }
+
+  void appendDataTrackErrors(const int16_t* def_levels,
+                             const int16_t* rep_levels,
+                             const int64_t values_read,
+                             const int64_t levels_read,
+                             int8_t* values) override {
+    UNREACHABLE() << "unexpected call to appendDataTrackErrors from unsupported encoder";
   }
 
   void validateAndAppendData(const int16_t* def_levels,

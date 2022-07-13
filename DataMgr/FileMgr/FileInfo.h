@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #pragma once
 
 #include <cstdio>
@@ -27,9 +28,8 @@
 
 #include "../../Shared/types.h"
 #include "Logger/Logger.h"
-#include "OSDependent/omnisci_fs.h"
+#include "OSDependent/heavyai_fs.h"
 #include "Page.h"
-extern bool g_read_only;
 namespace File_Namespace {
 
 struct Page;
@@ -110,5 +110,13 @@ struct FileInfo {
   void freePageImmediate(int32_t page_num);
   void recoverPage(const ChunkKey& chunk_key, int32_t page_num);
 };
+
+bool is_page_deleted_with_checkpoint(int32_t table_epoch,
+                                     int32_t page_epoch,
+                                     int32_t contingent);
+
+bool is_page_deleted_without_checkpoint(int32_t table_epoch,
+                                        int32_t page_epoch,
+                                        int32_t contingent);
 
 }  // namespace File_Namespace

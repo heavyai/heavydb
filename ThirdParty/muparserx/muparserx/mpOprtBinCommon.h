@@ -170,7 +170,7 @@ public:
 class OprtLOr : public IOprtBin
 {
 public:
-    OprtLOr(const char_type *szIdent = _T("||"));
+    OprtLOr();
     virtual void Eval(ptr_val_type& ret, const ptr_val_type *a_pArg, int) override;
     virtual const char_type* GetDesc() const override;
     virtual IToken* Clone() const override;
@@ -183,7 +183,7 @@ public:
 class OprtLAnd : public IOprtBin
 {
 public:
-    OprtLAnd(const char_type *szIdent = _T("&&"));
+    OprtLAnd();
     virtual void Eval(ptr_val_type& ret, const ptr_val_type *a_pArg, int) override;
     virtual const char_type* GetDesc() const override;
     virtual IToken* Clone() const override;

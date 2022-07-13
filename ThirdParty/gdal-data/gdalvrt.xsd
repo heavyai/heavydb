@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
 /******************************************************************************
- * $Id: gdalvrt.xsd 0141707f36f13d35ae404b99609069464eb51928 2020-09-21 14:37:18 +0200 Even Rouault $
+ * $Id: gdalvrt.xsd ff6940238a51c58d14421fd94665e946afde76a7 2021-05-07 14:24:02 +0200 Even Rouault $
  *
  * Project:  GDAL/OGR
  * Purpose:  XML Schema for GDAL VRT files.
@@ -44,7 +44,7 @@
                     <xs:element name="MaskBand" type="MaskBandType"/>
                     <xs:element name="GDALWarpOptions" type="GDALWarpOptionsType"/> <!-- only if subClass="VRTWarpedDataset" -->
                     <xs:element name="PansharpeningOptions" type="PansharpeningOptionsType"/> <!-- only if subClass="VRTPansharpenedDataset" -->
-                    <xs:element name="Group" type="GroupType"/> <!-- only for multidimensionnal dataset -->
+                    <xs:element name="Group" type="GroupType"/> <!-- only for multidimensional dataset -->
                     <xs:element name="OverviewList" type="OverviewListType"/>
                 </xs:choice>
             </xs:sequence>
@@ -70,6 +70,7 @@
         <xs:simpleContent>
             <xs:extension base="xs:string">
                 <xs:attribute name="dataAxisToSRSAxisMapping" type="xs:string"/>
+                <xs:attribute name="coordinateEpoch" type="xs:float"/>
             </xs:extension>
         </xs:simpleContent>
     </xs:complexType>
@@ -183,7 +184,7 @@
                 <xs:element name="Histograms" type="HistogramsType"/>
 
                 <!-- for a VRTSourcedRasterBand. Each element may be repeated -->
-                <xs:element name="SimpleSource" type="SimpleSourceType"/> 
+                <xs:element name="SimpleSource" type="SimpleSourceType"/>
                 <xs:element name="ComplexSource" type="ComplexSourceType"/>
                 <xs:element name="AveragedSource" type="SimpleSourceType"/>
                 <xs:element name="KernelFilteredSource" type="KernelFilteredSourceType"/>
@@ -210,10 +211,9 @@
         </xs:sequence>
         <xs:attribute name="dataType" type="DataTypeType"/>
         <xs:attribute name="band" type="xs:unsignedInt"/>
+        <xs:attribute name="blockXSize" type="nonNegativeInteger32"/>
+        <xs:attribute name="blockYSize" type="nonNegativeInteger32"/>
         <xs:attribute name="subClass" type="VRTRasterBandSubClassType"/>
-
-        <xs:attribute name="BlockXSize" type="xs:unsignedInt"/> <!-- ignored -->
-        <xs:attribute name="BlockYSize" type="xs:unsignedInt"/> <!-- ignored -->
     </xs:complexType>
 
     <xs:simpleType name="ZeroOrOne">
@@ -390,7 +390,8 @@
                 <xs:element name="SrcMax" type="xs:double"/>
                 <xs:element name="DstMin" type="xs:double"/>
                 <xs:element name="DstMax" type="xs:double"/>
-                <xs:element name="NODATA" type="DoubleOrNanType"/>
+                <xs:element name="NODATA" type="DoubleOrNanType"/> <!-- NODATA and UseMaskBand are mutually exclusive -->
+                <xs:element name="UseMaskBand" type="xs:boolean"/> <!-- NODATA and UseMaskBand are mutually exclusive -->
                 <xs:element name="LUT" type="xs:string"/>
             </xs:choice>
         </xs:sequence>

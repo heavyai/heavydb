@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,10 +23,13 @@
 namespace foreign_storage {
 
 void ForeignTableRefreshScheduler::invalidateQueryEngineCaches() {
-  auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
+  // todo (yoonmin): support per-table invalidation
   UpdateTriggeredCacheInvalidator::invalidateCaches();
+  ResultSetCacheInvalidator::invalidateCaches();
 }
 
 void ForeignTableRefreshScheduler::start(std::atomic<bool>& is_program_running) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,10 @@
 
 /*
  * @file Importer.h
- * @author Wei Hong < wei@mapd.com>
  * @brief Importer class for table import from file
+ *
  */
+
 #ifndef _IMPORTER_H_
 #define _IMPORTER_H_
 
@@ -43,6 +44,9 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/TableDescriptor.h"
 #include "DataMgr/Chunk/Chunk.h"
+#if defined(ENABLE_IMPORT_PARQUET)
+#include "DataMgr/ForeignStorage/DataPreview.h"
+#endif
 #include "Fragmenter/Fragmenter.h"
 #include "Geospatial/GDAL.h"
 #include "ImportExport/CopyParams.h"
@@ -151,6 +155,7 @@ class TypedImportBuffer : boost::noncopyable {
         break;
       case kPOINT:
       case kLINESTRING:
+      case kMULTILINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON:
         geo_string_buffer_ = new std::vector<std::string>();
@@ -218,6 +223,7 @@ class TypedImportBuffer : boost::noncopyable {
         break;
       case kPOINT:
       case kLINESTRING:
+      case kMULTILINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON:
         delete geo_string_buffer_;
@@ -469,6 +475,7 @@ class TypedImportBuffer : boost::noncopyable {
       }
       case kPOINT:
       case kLINESTRING:
+      case kMULTILINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON:
         geo_string_buffer_->clear();
@@ -489,7 +496,8 @@ class TypedImportBuffer : boost::noncopyable {
   void add_value(const ColumnDescriptor* cd,
                  const std::string_view val,
                  const bool is_null,
-                 const CopyParams& copy_params);
+                 const CopyParams& copy_params,
+                 const bool check_not_null = true);
 
   void add_value(const ColumnDescriptor* cd, const TDatum& val, const bool is_null);
 
@@ -701,7 +709,7 @@ class DataStreamSink {
   const std::string file_path;
   FILE* p_file = nullptr;
   ImportStatus import_status_;
-  mapd_shared_mutex import_mutex_;
+  heavyai::shared_mutex import_mutex_;
   size_t total_file_size{0};
   std::vector<size_t> file_offsets;
   std::mutex file_offsets_mutex;
@@ -709,11 +717,8 @@ class DataStreamSink {
 
 class Detector : public DataStreamSink {
  public:
-  Detector(const boost::filesystem::path& fp, CopyParams& cp)
-      : DataStreamSink(cp, fp.string()), file_path(fp) {
-    read_file();
-    init();
-  };
+  Detector(const boost::filesystem::path& fp, CopyParams& cp);
+
 #ifdef ENABLE_IMPORT_PARQUET
   void import_local_parquet(const std::string& file_path,
                             const Catalog_Namespace::SessionInfo* session_info) override;
@@ -722,9 +727,11 @@ class Detector : public DataStreamSink {
   std::vector<std::string> get_headers();
   std::vector<std::vector<std::string>> raw_rows;
   std::vector<std::vector<std::string>> get_sample_rows(size_t n);
-  std::vector<SQLTypes> best_sqltypes;
-  std::vector<EncodingType> best_encodings;
   bool has_headers = false;
+
+  std::vector<SQLTypeInfo> getBestColumnTypes() const;
+
+  static constexpr size_t kDefaultSampleRowsCount{100};
 
  private:
   void init();
@@ -758,6 +765,11 @@ class Detector : public DataStreamSink {
   boost::filesystem::path file_path;
   std::chrono::duration<double> timeout{1};
   std::string line1;
+#if defined(ENABLE_IMPORT_PARQUET)
+  std::optional<foreign_storage::DataPreview> data_preview_;
+#endif
+  std::vector<SQLTypes> best_sqltypes;
+  std::vector<EncodingType> best_encodings;
 };
 
 class Importer : public DataStreamSink, public AbstractImporter {
@@ -833,7 +845,8 @@ class Importer : public DataStreamSink, public AbstractImporter {
       std::vector<double>& bounds,
       std::vector<int>& ring_sizes,
       std::vector<int>& poly_rings,
-      int render_group);
+      int render_group,
+      const bool force_null = false);
   static void set_geo_physical_import_buffer_columnar(
       const Catalog_Namespace::Catalog& catalog,
       const ColumnDescriptor* cd,
@@ -885,6 +898,12 @@ std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
 std::vector<std::unique_ptr<TypedImportBuffer>> fill_missing_columns(
     const Catalog_Namespace::Catalog* cat,
     Fragmenter_Namespace::InsertData& insert_data);
+
+std::unique_ptr<AbstractImporter> create_importer(
+    Catalog_Namespace::Catalog& catalog,
+    const TableDescriptor* td,
+    const std::string& copy_from_source,
+    const import_export::CopyParams& copy_params);
 
 }  // namespace import_export
 

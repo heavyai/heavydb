@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -123,6 +123,7 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
                                   {},
                                   {group_expr},
                                   {count_expr.get()},
+                                  {},
                                   nullptr,
                                   SortInfo{},
                                   0};
@@ -219,6 +220,7 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
                                   {},
                                   {group_expr},
                                   {count_expr.get()},
+                                  {},
                                   nullptr,
                                   SortInfo{},
                                   0};
@@ -300,6 +302,7 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
                                   {},
                                   {group_expr},
                                   {count_expr.get()},
+                                  {},
                                   nullptr,
                                   SortInfo{},
                                   0};

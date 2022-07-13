@@ -1,15 +1,15 @@
-# Copy and extract OmniSci tarball. In own stage so that the temporary tarball
+# Copy and extract HEAVY.AI tarball. In own stage so that the temporary tarball
 # isn't included in a layer.
 FROM ubuntu:18.04 AS extract
 
-WORKDIR /omnisci/
-COPY omnisci-latest-Linux-x86_64-cpu.tar.gz /omnisci/
-RUN tar xvf omnisci-latest-Linux-x86_64-cpu.tar.gz --strip-components=1 && \
-    rm -rf omnisci-latest-Linux-x86_64-cpu.tar.gz
+WORKDIR /opt/heavyai/
+COPY heavyai-latest-Linux-x86_64-cpu.tar.gz /opt/heavyai/
+RUN tar xvf heavyai-latest-Linux-x86_64-cpu.tar.gz --strip-components=1 && \
+    rm -rf heavyai-latest-Linux-x86_64-cpu.tar.gz
 
 # Build final stage
 FROM ubuntu:18.04
-LABEL maintainer "Andrew Seidl <andrew@omnisci.com>"
+LABEL maintainer "Andrew Seidl <andrew@heavy.ai>"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libldap-2.4-2 \
@@ -21,10 +21,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-get remove --purge -y && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=extract /omnisci /omnisci
+COPY --from=extract /opt/heavyai /opt/heavyai
 
-WORKDIR /omnisci
+WORKDIR /opt/heavyai
 
 EXPOSE 6274 6273
 
-CMD /omnisci/startomnisci --non-interactive --data /omnisci-storage/data --config /omnisci-storage/omnisci.conf
+CMD /opt/heavyai/startheavy --non-interactive --data /var/lib/heavyai/storage --config /var/lib/heavyai/heavy.conf

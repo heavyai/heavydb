@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,11 +111,16 @@ class ColumnarResults {
   size_t num_rows_;
 
  private:
-  ColumnarResults(const size_t num_rows, const std::vector<SQLTypeInfo>& target_types)
-      : num_rows_(num_rows), target_types_(target_types) {}
+  ColumnarResults(const size_t num_rows,
+                  const std::vector<SQLTypeInfo>& target_types,
+                  const std::vector<size_t>& padded_target_sizes)
+      : num_rows_(num_rows)
+      , target_types_(target_types)
+      , padded_target_sizes_(padded_target_sizes) {}
   inline void writeBackCell(const TargetValue& col_val,
                             const size_t row_idx,
-                            const size_t column_idx);
+                            const size_t column_idx,
+                            std::mutex* write_mutex = nullptr);
   void materializeAllColumnsDirectly(const ResultSet& rows, const size_t num_columns);
   void materializeAllColumnsThroughIteration(const ResultSet& rows,
                                              const size_t num_columns);
@@ -200,6 +205,7 @@ class ColumnarResults {
   // with minimal ussage of result set's iterator access
   size_t thread_idx_;
   std::shared_ptr<Executor> executor_;
+  std::vector<size_t> padded_target_sizes_;
 };
 
 using ColumnCacheMap =

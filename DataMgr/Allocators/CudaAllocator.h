@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 /**
  * @file    CudaAllocator.h
- * @author  Alex Baden <alex.baden@mapd.com>
  * @brief   Allocate GPU memory using GpuBuffers via DataMgr
  */
 
@@ -42,7 +41,9 @@ class RenderAllocator;
 
 class CudaAllocator : public DeviceAllocator {
  public:
-  CudaAllocator(Data_Namespace::DataMgr* data_mgr, const int device_id);
+  CudaAllocator(Data_Namespace::DataMgr* data_mgr,
+                const int device_id,
+                CUstream cuda_stream);
 
   ~CudaAllocator() override;
 
@@ -77,4 +78,5 @@ class CudaAllocator : public DeviceAllocator {
 
   Data_Namespace::DataMgr* data_mgr_;
   int device_id_;
+  CUstream cuda_stream_;
 };

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
 #include "QueryEngine/CompilationOptions.h"
@@ -56,7 +55,9 @@ class TableFunctionExecutionContext {
       const std::shared_ptr<CpuCompilationContext>& compilation_context,
       std::vector<const int8_t*>& col_buf_ptrs,
       std::vector<int64_t>& col_sizes,
+      std::vector<const int8_t*>& input_str_dict_proxy_ptrs,
       const size_t elem_count,
+      std::vector<int8_t*>& output_str_dict_proxy_ptrs,
       Executor* executor);
 
   ResultSetPtr launchGpuCode(
@@ -64,7 +65,9 @@ class TableFunctionExecutionContext {
       const std::shared_ptr<GpuCompilationContext>& compilation_context,
       std::vector<const int8_t*>& col_buf_ptrs,
       std::vector<int64_t>& col_sizes,
+      std::vector<const int8_t*>& input_str_dict_proxy_ptrs,
       const size_t elem_count,
+      std::vector<int8_t*>& output_str_dict_proxy_ptrs,
       const int device_id,
       Executor* executor);
 

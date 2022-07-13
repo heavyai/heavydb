@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -154,13 +154,16 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
   if (grouped_col_lv) {
     return {grouped_col_lv};
   }
-  const int local_col_id = plan_state_->getLocalColumnId(col_var, fetch_column);
+  const auto col_var_hash = boost::hash_value(col_var->toString());
   const auto window_func_context =
       WindowProjectNodeContext::getActiveWindowFunctionContext(executor());
   // only generate the decoding code once; if a column has been previously
   // fetched in the generated IR, we'll reuse it
+  // here, we do not just use (local) column id since our analyzer may cast the same
+  // col_var with different types depending on the (aggregate) function that the col_var
+  // is used i.e., SELECT COUNT(DISTINCT x), MIN(x) FROM ...
   if (!window_func_context) {
-    auto it = cgen_state_->fetch_cache_.find(local_col_id);
+    auto it = cgen_state_->fetch_cache_.find(col_var_hash);
     if (it != cgen_state_->fetch_cache_.end()) {
       return {it->second};
     }
@@ -205,7 +208,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
         codegenVariableLengthStringColVar(col_byte_stream, pos_arg);
     if (!window_func_context) {
       auto it_ok = cgen_state_->fetch_cache_.insert(
-          std::make_pair(local_col_id, varlen_str_column_lvs));
+          std::make_pair(col_var_hash, varlen_str_column_lvs));
       CHECK(it_ok.second);
     }
     return varlen_str_column_lvs;
@@ -214,17 +217,18 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
     return {col_byte_stream};
   }
   if (window_func_context) {
-    return {codegenFixedLengthColVarInWindow(col_var, col_byte_stream, pos_arg)};
+    return {codegenFixedLengthColVarInWindow(
+        col_var, col_byte_stream, pos_arg, window_func_context)};
   }
   const auto fixed_length_column_lv =
       codegenFixedLengthColVar(col_var, col_byte_stream, pos_arg);
   auto it_ok = cgen_state_->fetch_cache_.insert(
-      std::make_pair(local_col_id, std::vector<llvm::Value*>{fixed_length_column_lv}));
+      std::make_pair(col_var_hash, std::vector<llvm::Value*>{fixed_length_column_lv}));
   return {it_ok.first->second};
 }
 
 llvm::Value* CodeGenerator::codegenWindowPosition(
-    WindowFunctionContext* window_func_context,
+    const WindowFunctionContext* window_func_context,
     llvm::Value* pos_arg) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto window_position = cgen_state_->emitCall(
@@ -236,9 +240,11 @@ llvm::Value* CodeGenerator::codegenWindowPosition(
 
 // Generate code for fixed length column types (number, timestamp or date,
 // dictionary-encoded string)
-llvm::Value* CodeGenerator::codegenFixedLengthColVar(const Analyzer::ColumnVar* col_var,
-                                                     llvm::Value* col_byte_stream,
-                                                     llvm::Value* pos_arg) {
+llvm::Value* CodeGenerator::codegenFixedLengthColVar(
+    const Analyzer::ColumnVar* col_var,
+    llvm::Value* col_byte_stream,
+    llvm::Value* pos_arg,
+    const WindowFunctionContext* window_function_context) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto decoder = get_col_decoder(col_var);
   auto dec_val = decoder->codegenDecode(col_byte_stream, pos_arg, cgen_state_->module_);
@@ -254,7 +260,19 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVar(const Analyzer::ColumnVar* 
                                                    : llvm::Instruction::CastOps::Trunc,
         dec_val,
         get_int_type(col_width, cgen_state_->context_));
-    if ((col_ti.get_compression() == kENCODING_FIXED ||
+    bool adjust_fixed_enc_null = true;
+    if (window_function_context &&
+        window_function_context->getWindowFunction()->hasRangeModeFraming()) {
+      // we only need to cast it to 8 byte iff it is encoded type
+      // (i.e., the size of non-encoded timestamp type is 8 byte)
+      const auto order_key_ti =
+          window_function_context->getOrderKeyColumnBufferTypes().front();
+      if (order_key_ti.is_timestamp() && order_key_ti.get_size() == 4) {
+        adjust_fixed_enc_null = false;
+      }
+    }
+    if (adjust_fixed_enc_null &&
+        (col_ti.get_compression() == kENCODING_FIXED ||
          (col_ti.get_compression() == kENCODING_DICT && col_ti.get_size() < 4)) &&
         !col_ti.get_notnull()) {
       dec_val_cast = codgenAdjustFixedEncNull(dec_val_cast, col_ti);
@@ -276,7 +294,8 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVar(const Analyzer::ColumnVar* 
 llvm::Value* CodeGenerator::codegenFixedLengthColVarInWindow(
     const Analyzer::ColumnVar* col_var,
     llvm::Value* col_byte_stream,
-    llvm::Value* pos_arg) {
+    llvm::Value* pos_arg,
+    const WindowFunctionContext* window_function_context) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto orig_bb = cgen_state_->ir_builder_.GetInsertBlock();
   const auto pos_is_valid =
@@ -287,8 +306,8 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVarInWindow(
       cgen_state_->context_, "window.pos_notvalid", cgen_state_->current_func_);
   cgen_state_->ir_builder_.CreateCondBr(pos_is_valid, pos_valid_bb, pos_notvalid_bb);
   cgen_state_->ir_builder_.SetInsertPoint(pos_valid_bb);
-  const auto fixed_length_column_lv =
-      codegenFixedLengthColVar(col_var, col_byte_stream, pos_arg);
+  const auto fixed_length_column_lv = codegenFixedLengthColVar(
+      col_var, col_byte_stream, pos_arg, window_function_context);
   cgen_state_->ir_builder_.CreateBr(pos_notvalid_bb);
   cgen_state_->ir_builder_.SetInsertPoint(pos_notvalid_bb);
   const auto window_func_call_phi =
@@ -446,6 +465,13 @@ std::vector<llvm::Value*> CodeGenerator::codegenOuterJoinNullPlaceholder(
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_args_bb);
   Executor::FetchCacheAnchor anchor(cgen_state_);
   const auto orig_lvs = codegenColVar(col_var, fetch_column, true, co);
+  // sometimes col_var used in the join qual needs to cast its column to sync with
+  // the target join column's type which generates a code with a new bb like cast_bb
+  // if so, we need to keep that bb to correctly construct phi_bb
+  // i.e., use cast_bb instead of outer_join_args_bb for the "casted" column
+  // which is the right end point
+  const auto needs_casting_col_var = needCastForHashJoinLhs(col_var);
+  auto* cast_bb = cgen_state_->ir_builder_.GetInsertBlock();
   cgen_state_->ir_builder_.CreateBr(phi_bb);
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_nulls_bb);
   const auto& null_ti = col_var->get_type_info();
@@ -468,7 +494,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenOuterJoinNullPlaceholder(
     const auto target_type = orig_lvs[i]->getType();
     CHECK_EQ(target_type, null_target_lvs[i]->getType());
     auto target_phi = cgen_state_->ir_builder_.CreatePHI(target_type, 2);
-    target_phi->addIncoming(orig_lvs[i], outer_join_args_bb);
+    const auto orig_lvs_bb = needs_casting_col_var ? cast_bb : outer_join_args_bb;
+    target_phi->addIncoming(orig_lvs[i], orig_lvs_bb);
     target_phi->addIncoming(null_target_lvs[i], outer_join_nulls_bb);
     target_lvs.push_back(target_phi);
   }
@@ -585,7 +612,15 @@ std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
           // skip cast for a constructed point lhs
           return nullptr;
         }
-        const auto eq_left_op_col = dynamic_cast<const Analyzer::ColumnVar*>(eq_left_op);
+        auto eq_left_op_col = dynamic_cast<const Analyzer::ColumnVar*>(eq_left_op);
+        if (!eq_left_op_col) {
+          if (dynamic_cast<const Analyzer::StringOper*>(eq_left_op)) {
+            return nullptr;
+          }
+          if (dynamic_cast<const Analyzer::FunctionOper*>(eq_left_op)) {
+            return nullptr;
+          }
+        }
         CHECK(eq_left_op_col);
         if (eq_left_op_col->get_rte_idx() != 0) {
           return nullptr;
@@ -606,6 +641,69 @@ std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
     }
   }
   return nullptr;
+}
+
+bool CodeGenerator::needCastForHashJoinLhs(const Analyzer::ColumnVar* rhs) const {
+  for (const auto& tautological_eq : plan_state_->join_info_.equi_join_tautologies_) {
+    CHECK(IS_EQUIVALENCE(tautological_eq->get_optype()));
+    if (dynamic_cast<const Analyzer::ExpressionTuple*>(
+            tautological_eq->get_left_operand())) {
+      auto lhs_col = hashJoinLhsTuple(rhs, tautological_eq.get());
+      if (lhs_col) {
+        // our join column normalizer falls back to the loop join
+        // when columns of two join tables do not have the same types
+        // todo (yoonmin): relax this
+        return false;
+      }
+    } else {
+      auto eq_right_op = tautological_eq->get_right_operand();
+      if (!rhs->get_type_info().is_string()) {
+        eq_right_op = remove_cast_to_int(eq_right_op);
+      }
+      if (!eq_right_op) {
+        eq_right_op = tautological_eq->get_right_operand();
+      }
+      if (*eq_right_op == *rhs) {
+        auto eq_left_op = tautological_eq->get_left_operand();
+        if (!eq_left_op->get_type_info().is_string()) {
+          eq_left_op = remove_cast_to_int(eq_left_op);
+        }
+        if (!eq_left_op) {
+          eq_left_op = tautological_eq->get_left_operand();
+        }
+        if (eq_left_op->get_type_info().is_geometry()) {
+          // skip cast for a geospatial lhs, since the rhs is likely to be a geospatial
+          // physical col without geospatial type info
+          return false;
+        }
+        if (is_constructed_point(eq_left_op)) {
+          // skip cast for a constructed point lhs
+          return false;
+        }
+        auto eq_left_op_col = dynamic_cast<const Analyzer::ColumnVar*>(eq_left_op);
+        if (!eq_left_op_col) {
+          if (dynamic_cast<const Analyzer::StringOper*>(eq_left_op)) {
+            return false;
+          }
+          if (dynamic_cast<const Analyzer::FunctionOper*>(eq_left_op)) {
+            return false;
+          }
+        }
+        CHECK(eq_left_op_col);
+        if (eq_left_op_col->get_rte_idx() != 0) {
+          return false;
+        }
+        if (rhs->get_type_info().is_string()) {
+          return false;
+        }
+        if (rhs->get_type_info().is_array()) {
+          return false;
+        }
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 std::shared_ptr<const Analyzer::ColumnVar> CodeGenerator::hashJoinLhsTuple(

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,8 @@
 #include "Catalog/Catalog.h"
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
+#include "DataMgr/ForeignStorage/FsiChunkUtils.h"
+#include "OSDependent/heavyai_path.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/AggregateUtils.h"
 #include "QueryEngine/AggregatedColRange.h"
@@ -55,6 +57,7 @@
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/OutputBufferInitialization.h"
 #include "QueryEngine/QueryDispatchQueue.h"
+#include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/QueryRewrite.h"
 #include "QueryEngine/QueryTemplateGenerator.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
@@ -75,6 +78,7 @@
 
 bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
+size_t g_watchdog_none_encoded_string_translation_limit{1000000UL};
 bool g_enable_cpu_sub_tasks{false};
 size_t g_cpu_sub_task_size{500'000};
 bool g_enable_filter_function{true};
@@ -107,6 +111,8 @@ size_t g_big_group_threshold{g_default_max_groups_buffer_entry_guess};
 bool g_enable_window_functions{true};
 bool g_enable_table_functions{true};
 bool g_enable_dev_table_functions{false};
+bool g_enable_geo_ops_on_uncompressed_coords{true};
+bool g_enable_rf_prop_table_functions{true};
 size_t g_max_memory_allocation_size{2000000000};  // set to max slab size
 size_t g_min_memory_allocation_size{
     256};  // minimum memory allocation required for projection query output buffer
@@ -114,7 +120,7 @@ size_t g_min_memory_allocation_size{
 bool g_enable_bump_allocator{false};
 double g_bump_allocator_step_reduction{0.75};
 bool g_enable_direct_columnarization{true};
-extern bool g_enable_experimental_string_functions;
+extern bool g_enable_string_functions;
 bool g_enable_lazy_fetch{true};
 bool g_enable_runtime_query_interrupt{true};
 bool g_enable_non_kernel_time_query_interrupt{true};
@@ -139,8 +145,15 @@ size_t g_enable_parallel_linearization{
     10000};  // # rows that we are trying to linearize varlen col in parallel
 bool g_enable_data_recycler{true};
 bool g_use_hashtable_cache{true};
+bool g_use_query_resultset_cache{true};
+bool g_use_chunk_metadata_cache{true};
+bool g_allow_auto_resultset_caching{false};
+bool g_allow_query_step_skipping{true};
 size_t g_hashtable_cache_total_bytes{size_t(1) << 32};
 size_t g_max_cacheable_hashtable_size_bytes{size_t(1) << 31};
+size_t g_query_resultset_cache_total_bytes{size_t(1) << 32};
+size_t g_max_cacheable_query_resultset_size_bytes{size_t(1) << 31};
+size_t g_auto_resultset_caching_threshold{size_t(1) << 20};
 
 size_t g_approx_quantile_buffer{1000};
 size_t g_approx_quantile_centroids{300};
@@ -155,6 +168,79 @@ int const Executor::max_gpu_count;
 
 const int32_t Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES;
 
+std::map<Executor::ExtModuleKinds, std::string> Executor::extension_module_sources;
+
+extern std::unique_ptr<llvm::Module> read_llvm_module_from_bc_file(
+    const std::string& udf_ir_filename,
+    llvm::LLVMContext& ctx);
+extern std::unique_ptr<llvm::Module> read_llvm_module_from_ir_file(
+    const std::string& udf_ir_filename,
+    llvm::LLVMContext& ctx,
+    bool is_gpu = false);
+extern std::unique_ptr<llvm::Module> read_llvm_module_from_ir_string(
+    const std::string& udf_ir_string,
+    llvm::LLVMContext& ctx,
+    bool is_gpu = false);
+
+namespace {
+// This function is notably different from that in RelAlgExecutor because it already
+// expects SPI values and therefore needs to avoid that transformation.
+void prepare_string_dictionaries(const std::unordered_set<PhysicalInput>& phys_inputs,
+                                 const Catalog_Namespace::Catalog& catalog) {
+  for (const auto [col_id, table_id] : phys_inputs) {
+    foreign_storage::populate_string_dictionary(table_id, col_id, catalog);
+  }
+}
+
+bool is_empty_table(Fragmenter_Namespace::AbstractFragmenter* fragmenter) {
+  const auto& fragments = fragmenter->getFragmentsForQuery().fragments;
+  // The fragmenter always returns at least one fragment, even when the table is empty.
+  return (fragments.size() == 1 && fragments[0].getChunkMetadataMap().empty());
+}
+}  // namespace
+
+namespace foreign_storage {
+// Foreign tables skip the population of dictionaries during metadata scan.  This function
+// will populate a dictionary's missing entries by fetching any unpopulated chunks.
+void populate_string_dictionary(const int32_t table_id,
+                                const int32_t col_id,
+                                const Catalog_Namespace::Catalog& catalog) {
+  if (const auto foreign_table = dynamic_cast<const ForeignTable*>(
+          catalog.getMetadataForTable(table_id, false))) {
+    const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
+    if (col_desc->columnType.is_dict_encoded_type()) {
+      auto& fragmenter = foreign_table->fragmenter;
+      CHECK(fragmenter != nullptr);
+      if (is_empty_table(fragmenter.get())) {
+        return;
+      }
+      for (const auto& frag : fragmenter->getFragmentsForQuery().fragments) {
+        ChunkKey chunk_key = {catalog.getDatabaseId(), table_id, col_id, frag.fragmentId};
+        // If the key is sharded across leaves, only populate fragments that are sharded
+        // to this leaf.
+        if (key_does_not_shard_to_leaf(chunk_key)) {
+          continue;
+        }
+
+        const ChunkMetadataMap& metadata_map = frag.getChunkMetadataMap();
+        CHECK(metadata_map.find(col_id) != metadata_map.end());
+        if (auto& meta = metadata_map.at(col_id); meta->isPlaceholder()) {
+          // When this goes out of scope it will stay in CPU cache but become
+          // evictable
+          auto chunk = Chunk_NS::Chunk::getChunk(col_desc,
+                                                 &(catalog.getDataMgr()),
+                                                 chunk_key,
+                                                 Data_Namespace::CPU_LEVEL,
+                                                 0,
+                                                 0,
+                                                 0);
+        }
+      }
+    }
+  }
+}
+}  // namespace foreign_storage
+
 Executor::Executor(const ExecutorId executor_id,
                    Data_Namespace::DataMgr* data_mgr,
                    const size_t block_size_x,
@@ -162,19 +248,222 @@ Executor::Executor(const ExecutorId executor_id,
                    const size_t max_gpu_slab_size,
                    const std::string& debug_dir,
                    const std::string& debug_file)
-    : cgen_state_(new CgenState({}, false))
-    , cpu_code_cache_(code_cache_size)
-    , gpu_code_cache_(code_cache_size)
+    : executor_id_(executor_id)
+    , context_(new llvm::LLVMContext())
+    , cgen_state_(new CgenState({}, false, this))
     , block_size_x_(block_size_x)
     , grid_size_x_(grid_size_x)
     , max_gpu_slab_size_(max_gpu_slab_size)
     , debug_dir_(debug_dir)
     , debug_file_(debug_file)
-    , executor_id_(executor_id)
     , catalog_(nullptr)
     , data_mgr_(data_mgr)
     , temporary_tables_(nullptr)
-    , input_table_info_cache_(this) {}
+    , input_table_info_cache_(this)
+    , thread_id_(logger::thread_id()) {
+  Executor::initialize_extension_module_sources();
+  update_extension_modules();
+}
+
+void Executor::initialize_extension_module_sources() {
+  if (Executor::extension_module_sources.find(
+          Executor::ExtModuleKinds::template_module) ==
+      Executor::extension_module_sources.end()) {
+    auto root_path = heavyai::get_root_abs_path();
+    auto template_path = root_path + "/QueryEngine/RuntimeFunctions.bc";
+    CHECK(boost::filesystem::exists(template_path));
+    Executor::extension_module_sources[Executor::ExtModuleKinds::template_module] =
+        template_path;
+#ifdef ENABLE_GEOS
+    auto rt_geos_path = root_path + "/QueryEngine/GeosRuntime.bc";
+    CHECK(boost::filesystem::exists(rt_geos_path));
+    Executor::extension_module_sources[Executor::ExtModuleKinds::rt_geos_module] =
+        rt_geos_path;
+#endif
+#ifdef HAVE_CUDA
+    auto rt_libdevice_path = get_cuda_home() + "/nvvm/libdevice/libdevice.10.bc";
+    if (boost::filesystem::exists(rt_libdevice_path)) {
+      Executor::extension_module_sources[Executor::ExtModuleKinds::rt_libdevice_module] =
+          rt_libdevice_path;
+    } else {
+      LOG(WARNING) << "File " << rt_libdevice_path
+                   << " does not exist; support for some UDF "
+                      "functions might not be available.";
+    }
+#endif
+  }
+}
+
+void Executor::reset(bool discard_runtime_modules_only) {
+  // TODO: keep cached results that do not depend on runtime UDF/UDTFs
+  auto qe = QueryEngine::getInstance();
+  qe->s_code_accessor->clear();
+  qe->s_stubs_accessor->clear();
+  qe->cpu_code_accessor->clear();
+  qe->gpu_code_accessor->clear();
+  qe->tf_code_accessor->clear();
+
+  if (discard_runtime_modules_only) {
+    extension_modules_.erase(Executor::ExtModuleKinds::rt_udf_cpu_module);
+#ifdef HAVE_CUDA
+    extension_modules_.erase(Executor::ExtModuleKinds::rt_udf_gpu_module);
+#endif
+    cgen_state_->module_ = nullptr;
+  } else {
+    extension_modules_.clear();
+    cgen_state_.reset();
+    context_.reset(new llvm::LLVMContext());
+    cgen_state_.reset(new CgenState({}, false, this));
+  }
+}
+
+void Executor::update_extension_modules(bool update_runtime_modules_only) {
+  auto read_module = [&](Executor::ExtModuleKinds module_kind,
+                         const std::string& source) {
+    /*
+      source can be either a filename of a LLVM IR
+      or LLVM BC source, or a string containing
+      LLVM IR code.
+     */
+    CHECK(!source.empty());
+    switch (module_kind) {
+      case Executor::ExtModuleKinds::template_module:
+      case Executor::ExtModuleKinds::rt_geos_module:
+      case Executor::ExtModuleKinds::rt_libdevice_module: {
+        return read_llvm_module_from_bc_file(source, getContext());
+      }
+      case Executor::ExtModuleKinds::udf_cpu_module: {
+        return read_llvm_module_from_ir_file(source, getContext(), /**is_gpu=*/false);
+      }
+      case Executor::ExtModuleKinds::udf_gpu_module: {
+        return read_llvm_module_from_ir_file(source, getContext(), /**is_gpu=*/true);
+      }
+      case Executor::ExtModuleKinds::rt_udf_cpu_module: {
+        return read_llvm_module_from_ir_string(source, getContext(), /**is_gpu=*/false);
+      }
+      case Executor::ExtModuleKinds::rt_udf_gpu_module: {
+        return read_llvm_module_from_ir_string(source, getContext(), /**is_gpu=*/true);
+      }
+      default: {
+        UNREACHABLE();
+        return std::unique_ptr<llvm::Module>();
+      }
+    }
+  };
+  auto update_module = [&](Executor::ExtModuleKinds module_kind,
+                           bool erase_not_found = false) {
+    auto it = Executor::extension_module_sources.find(module_kind);
+    if (it != Executor::extension_module_sources.end()) {
+      auto llvm_module = read_module(module_kind, it->second);
+      if (llvm_module) {
+        extension_modules_[module_kind] = std::move(llvm_module);
+      } else if (erase_not_found) {
+        extension_modules_.erase(module_kind);
+      } else {
+        if (extension_modules_.find(module_kind) == extension_modules_.end()) {
+          LOG(WARNING) << "Failed to update " << ::toString(module_kind)
+                       << " LLVM module. The module will be unavailable.";
+        } else {
+          LOG(WARNING) << "Failed to update " << ::toString(module_kind)
+                       << " LLVM module. Using the existing module.";
+        }
+      }
+    } else {
+      if (erase_not_found) {
+        extension_modules_.erase(module_kind);
+      } else {
+        if (extension_modules_.find(module_kind) == extension_modules_.end()) {
+          LOG(WARNING) << "Source of " << ::toString(module_kind)
+                       << " LLVM module is unavailable. The module will be unavailable.";
+        } else {
+          LOG(WARNING) << "Source of " << ::toString(module_kind)
+                       << " LLVM module is unavailable. Using the existing module.";
+        }
+      }
+    }
+  };
+
+  if (!update_runtime_modules_only) {
+    // required compile-time modules, their requirements are enforced
+    // by Executor::initialize_extension_module_sources():
+    update_module(Executor::ExtModuleKinds::template_module);
+#ifdef ENABLE_GEOS
+    update_module(Executor::ExtModuleKinds::rt_geos_module);
+#endif
+    // load-time modules, these are optional:
+    update_module(Executor::ExtModuleKinds::udf_cpu_module, true);
+#ifdef HAVE_CUDA
+    update_module(Executor::ExtModuleKinds::udf_gpu_module, true);
+    update_module(Executor::ExtModuleKinds::rt_libdevice_module);
+#endif
+  }
+  // run-time modules, these are optional and erasable:
+  update_module(Executor::ExtModuleKinds::rt_udf_cpu_module, true);
+#ifdef HAVE_CUDA
+  update_module(Executor::ExtModuleKinds::rt_udf_gpu_module, true);
+#endif
+}
+
+// Used by StubGenerator::generateStub
+Executor::CgenStateManager::CgenStateManager(Executor& executor)
+    : executor_(executor)
+    , lock_queue_clock_(timer_start())
+    , lock_(executor_.compilation_mutex_)
+    , cgen_state_(std::move(executor_.cgen_state_))  // store old CgenState instance
+{
+  executor_.compilation_queue_time_ms_ += timer_stop(lock_queue_clock_);
+  executor_.cgen_state_.reset(new CgenState(0, false, &executor));
+}
+
+Executor::CgenStateManager::CgenStateManager(
+    Executor& executor,
+    const bool allow_lazy_fetch,
+    const std::vector<InputTableInfo>& query_infos,
+    const PlanState::DeletedColumnsMap& deleted_cols_map,
+    const RelAlgExecutionUnit* ra_exe_unit)
+    : executor_(executor)
+    , lock_queue_clock_(timer_start())
+    , lock_(executor_.compilation_mutex_)
+    , cgen_state_(std::move(executor_.cgen_state_))  // store old CgenState instance
+{
+  executor_.compilation_queue_time_ms_ += timer_stop(lock_queue_clock_);
+  // nukeOldState creates new CgenState and PlanState instances for
+  // the subsequent code generation.  It also resets
+  // kernel_queue_time_ms_ and compilation_queue_time_ms_ that we do
+  // not currently restore.. should we accumulate these timings?
+  executor_.nukeOldState(allow_lazy_fetch, query_infos, deleted_cols_map, ra_exe_unit);
+}
+
+Executor::CgenStateManager::~CgenStateManager() {
+  // prevent memory leak from hoisted literals
+  for (auto& p : executor_.cgen_state_->row_func_hoisted_literals_) {
+    auto inst = llvm::dyn_cast<llvm::LoadInst>(p.first);
+    if (inst && inst->getNumUses() == 0 && inst->getParent() == nullptr) {
+      // The llvm::Value instance stored in p.first is created by the
+      // CodeGenerator::codegenHoistedConstantsPlaceholders method.
+      p.first->deleteValue();
+    }
+  }
+  executor_.cgen_state_->row_func_hoisted_literals_.clear();
+
+  // move generated StringDictionaryTranslationMgrs and InValueBitmaps
+  // to the old CgenState instance as the execution of the generated
+  // code uses these bitmaps
+
+  for (auto& str_dict_translation_mgr :
+       executor_.cgen_state_->str_dict_translation_mgrs_) {
+    cgen_state_->moveStringDictionaryTranslationMgr(std::move(str_dict_translation_mgr));
+  }
+  executor_.cgen_state_->str_dict_translation_mgrs_.clear();
+
+  for (auto& bm : executor_.cgen_state_->in_values_bitmaps_) {
+    cgen_state_->moveInValuesBitmap(bm);
+  }
+  executor_.cgen_state_->in_values_bitmaps_.clear();
+
+  // restore the old CgenState instance
+  executor_.cgen_state_.reset(cgen_state_.release());
+}
 
 std::shared_ptr<Executor> Executor::getExecutor(
     const ExecutorId executor_id,
@@ -183,12 +472,11 @@ std::shared_ptr<Executor> Executor::getExecutor(
     const SystemParameters& system_parameters) {
   INJECT_TIMER(getExecutor);
 
-  mapd_unique_lock<mapd_shared_mutex> write_lock(executors_cache_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(executors_cache_mutex_);
   auto it = executors_.find(executor_id);
   if (it != executors_.end()) {
     return it->second;
   }
-
   auto& data_mgr = Catalog_Namespace::SysCatalog::instance().getDataMgr();
   auto executor = std::make_shared<Executor>(executor_id,
                                              &data_mgr,
@@ -205,10 +493,9 @@ void Executor::clearMemory(const Data_Namespace::MemoryLevel memory_level) {
   switch (memory_level) {
     case Data_Namespace::MemoryLevel::CPU_LEVEL:
     case Data_Namespace::MemoryLevel::GPU_LEVEL: {
-      mapd_unique_lock<mapd_shared_mutex> flush_lock(
+      heavyai::unique_lock<heavyai::shared_mutex> flush_lock(
           execute_mutex_);  // Don't flush memory while queries are running
 
-      Catalog_Namespace::SysCatalog::instance().getDataMgr().clearMemory(memory_level);
       if (memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
         // The hash table cache uses CPU memory not managed by the buffer manager. In the
         // future, we should manage these allocations with the buffer manager directly.
@@ -216,6 +503,8 @@ void Executor::clearMemory(const Data_Namespace::MemoryLevel memory_level) {
         // CPU memory (currently used in ExecuteTest to lower memory pressure)
         JoinHashTableCacheInvalidator::invalidateCaches();
       }
+      ResultSetCacheInvalidator::invalidateCaches();
+      Catalog_Namespace::SysCatalog::instance().getDataMgr().clearMemory(memory_level);
       break;
     }
     default: {
@@ -255,14 +544,70 @@ StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
         with_generation ? string_dictionary_generations_.getGeneration(dict_id) : -1;
     return addStringDict(dd->stringDict, dict_id, generation);
   }
-  CHECK_EQ(0, dict_id);
+  CHECK_EQ(dict_id, DictRef::literalsDictId);
   if (!lit_str_dict_proxy_) {
-    std::shared_ptr<StringDictionary> tsd =
-        std::make_shared<StringDictionary>("", false, true, g_cache_string_hash);
-    lit_str_dict_proxy_.reset(new StringDictionaryProxy(
-        tsd, 0, 0));  // use 0 string_dict_id to denote literal proxy
+    DictRef literal_dict_ref(catalog->getDatabaseId(), DictRef::literalsDictId);
+    std::shared_ptr<StringDictionary> tsd = std::make_shared<StringDictionary>(
+        literal_dict_ref, "", false, true, g_cache_string_hash);
+    lit_str_dict_proxy_ =
+        std::make_shared<StringDictionaryProxy>(tsd, literal_dict_ref.dictId, 0);
   }
   return lit_str_dict_proxy_.get();
+}
+
+const StringDictionaryProxy::IdMap* Executor::getStringProxyTranslationMap(
+    const int source_dict_id,
+    const int dest_dict_id,
+    const RowSetMemoryOwner::StringTranslationType translation_type,
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const bool with_generation) const {
+  CHECK(row_set_mem_owner);
+  std::lock_guard<std::mutex> lock(
+      str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
+  return row_set_mem_owner->getOrAddStringProxyTranslationMap(source_dict_id,
+                                                              dest_dict_id,
+                                                              with_generation,
+                                                              translation_type,
+                                                              string_op_infos,
+                                                              catalog_);
+}
+
+const StringDictionaryProxy::IdMap*
+Executor::getJoinIntersectionStringProxyTranslationMap(
+    const StringDictionaryProxy* source_proxy,
+    StringDictionaryProxy* dest_proxy,
+    const std::vector<StringOps_Namespace::StringOpInfo>& source_string_op_infos,
+    const std::vector<StringOps_Namespace::StringOpInfo>& dest_string_op_infos,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const {
+  CHECK(row_set_mem_owner);
+  std::lock_guard<std::mutex> lock(
+      str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
+  // First translate lhs onto itself if there are string ops
+  if (!dest_string_op_infos.empty()) {
+    row_set_mem_owner->addStringProxyUnionTranslationMap(
+        dest_proxy, dest_proxy, dest_string_op_infos);
+  }
+  return row_set_mem_owner->addStringProxyIntersectionTranslationMap(
+      source_proxy, dest_proxy, source_string_op_infos);
+}
+
+const StringDictionaryProxy::IdMap* RowSetMemoryOwner::getOrAddStringProxyTranslationMap(
+    const int source_dict_id_in,
+    const int dest_dict_id_in,
+    const bool with_generation,
+    const RowSetMemoryOwner::StringTranslationType translation_type,
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+    const Catalog_Namespace::Catalog* catalog) {
+  const auto source_proxy =
+      getOrAddStringDictProxy(source_dict_id_in, with_generation, catalog);
+  auto dest_proxy = getOrAddStringDictProxy(dest_dict_id_in, with_generation, catalog);
+  if (translation_type == RowSetMemoryOwner::StringTranslationType::SOURCE_INTERSECTION) {
+    return addStringProxyIntersectionTranslationMap(
+        source_proxy, dest_proxy, string_op_infos);
+  } else {
+    return addStringProxyUnionTranslationMap(source_proxy, dest_proxy, string_op_infos);
+  }
 }
 
 quantile::TDigest* RowSetMemoryOwner::nullTDigest(double const q) {
@@ -561,7 +906,7 @@ std::vector<int8_t> Executor::serializeLiterals(
         const auto p = boost::get<std::pair<std::string, int>>(&lit);
         CHECK(p);
         const auto str_id =
-            g_enable_experimental_string_functions
+            g_enable_string_functions
                 ? getStringDictionaryProxy(p->second, row_set_mem_owner_, true)
                       ->getOrAddTransient(p->first)
                 : getStringDictionaryProxy(p->second, row_set_mem_owner_, true)
@@ -893,13 +1238,13 @@ ResultSetPtr get_merged_result(
   CHECK(first);
   auto const first_target_idx = result_set::first_dict_encoded_idx(targets);
   if (first_target_idx) {
-    first->translateDictEncodedString(targets, *first_target_idx);
+    first->translateDictEncodedColumns(targets, *first_target_idx);
   }
   for (size_t dev_idx = 1; dev_idx < results_per_device.size(); ++dev_idx) {
     const auto& next = results_per_device[dev_idx].first;
     CHECK(next);
     if (first_target_idx) {
-      next->translateDictEncodedString(targets, *first_target_idx);
+      next->translateDictEncodedColumns(targets, *first_target_idx);
     }
     first->append(*next);
   }
@@ -972,15 +1317,17 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
 namespace {
 
 ReductionCode get_reduction_code(
+    const size_t executor_id,
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
     int64_t* compilation_queue_time) {
   auto clock_begin = timer_start();
-  std::lock_guard<std::mutex> compilation_lock(Executor::compilation_mutex_);
+  // ResultSetReductionJIT::codegen compilation-locks if new code will be generated
   *compilation_queue_time = timer_stop(clock_begin);
   const auto& this_result_set = results_per_device[0].first;
   ResultSetReductionJIT reduction_jit(this_result_set->getQueryMemDesc(),
                                       this_result_set->getTargetInfos(),
-                                      this_result_set->getTargetInitVals());
+                                      this_result_set->getTargetInitVals(),
+                                      executor_id);
   return reduction_jit.codegen();
 };
 
@@ -1036,11 +1383,11 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
 
   int64_t compilation_queue_time = 0;
   const auto reduction_code =
-      get_reduction_code(results_per_device, &compilation_queue_time);
+      get_reduction_code(executor_id_, results_per_device, &compilation_queue_time);
 
   for (size_t i = 1; i < results_per_device.size(); ++i) {
     reduced_results->getStorage()->reduce(
-        *(results_per_device[i].first->getStorage()), {}, reduction_code);
+        *(results_per_device[i].first->getStorage()), {}, reduction_code, executor_id_);
   }
   reduced_results->addCompilationQueueTime(compilation_queue_time);
   return reduced_results;
@@ -1309,9 +1656,7 @@ std::string ra_exec_unit_desc_for_caching(const RelAlgExecutionUnit& ra_exe_unit
 }
 
 std::ostream& operator<<(std::ostream& os, const RelAlgExecutionUnit& ra_exe_unit) {
-  auto query_plan_dag =
-      ra_exe_unit.query_plan_dag == EMPTY_QUERY_PLAN ? "N/A" : ra_exe_unit.query_plan_dag;
-  os << "\n\tExtracted Query Plan Dag: " << query_plan_dag;
+  os << "\n\tExtracted Query Plan Dag Hash: " << ra_exe_unit.query_plan_dag_hash;
   os << "\n\tTable/Col/Levels: ";
   for (const auto& input_col_desc : ra_exe_unit.input_col_descs) {
     const auto& scan_desc = input_col_desc->getScanDesc();
@@ -1369,11 +1714,12 @@ RelAlgExecutionUnit replace_scan_limit(const RelAlgExecutionUnit& ra_exe_unit_in
           ra_exe_unit_in.join_quals,
           ra_exe_unit_in.groupby_exprs,
           ra_exe_unit_in.target_exprs,
+          ra_exe_unit_in.target_exprs_original_type_infos,
           ra_exe_unit_in.estimator,
           ra_exe_unit_in.sort_info,
           new_scan_limit,
           ra_exe_unit_in.query_hint,
-          ra_exe_unit_in.query_plan_dag,
+          ra_exe_unit_in.query_plan_dag_hash,
           ra_exe_unit_in.hash_table_build_plan_dag,
           ra_exe_unit_in.table_id_to_node_map,
           ra_exe_unit_in.use_bump_allocator,
@@ -1401,6 +1747,7 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
     plan_state_.reset(nullptr);
     if (cgen_state_) {
       cgen_state_->in_values_bitmaps_.clear();
+      cgen_state_->str_dict_translation_mgrs_.clear();
     }
   };
 
@@ -1489,10 +1836,6 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     if (eo.executor_type == ExecutorType::Native) {
       try {
         INJECT_TIMER(query_step_compilation);
-        auto clock_begin = timer_start();
-        std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
-        compilation_queue_time_ms_ += timer_stop(clock_begin);
-
         query_mem_desc_owned =
             query_comp_desc_owned->compile(max_groups_buffer_entry_guess,
                                            crt_min_byte_width,
@@ -1578,7 +1921,8 @@ ResultSetPtr Executor::executeWorkUnitImpl(
         std::string curRunningQuerySubmittedTime{""};
         bool sessionEnrolled = false;
         {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+              executor_session_mutex_);
           curRunningSession = getCurrentQuerySession(session_read_lock);
           curRunningQuerySubmittedTime = ra_exe_unit.query_state->getQuerySubmittedTime();
           sessionEnrolled =
@@ -1639,9 +1983,6 @@ void Executor::executeWorkUnitPerFragment(
   auto query_comp_desc_owned = std::make_unique<QueryCompilationDescriptor>();
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
   {
-    auto clock_begin = timer_start();
-    std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
-    compilation_queue_time_ms_ += timer_stop(clock_begin);
     query_mem_desc_owned =
         query_comp_desc_owned->compile(0,
                                        8,
@@ -1711,7 +2052,6 @@ ResultSetPtr Executor::executeTableFunction(
     const ExecutionOptions& eo,
     const Catalog_Namespace::Catalog& cat) {
   INJECT_TIMER(Exec_executeTableFunction);
-
   if (eo.just_validate) {
     QueryMemoryDescriptor query_mem_desc(this,
                                          /*entry_count=*/0,
@@ -1745,15 +2085,15 @@ ResultSetPtr Executor::executeTableFunction(
   if (exe_unit.table_func.containsPreFlightFn()) {
     std::shared_ptr<CompilationContext> compilation_context;
     {
-      auto clock_begin = timer_start();
-      std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
-      compilation_queue_time_ms_ += timer_stop(clock_begin);
-      nukeOldState(false, table_infos, PlanState::DeletedColumnsMap{}, nullptr);
-      TableFunctionCompilationContext tf_compilation_context(this);
+      Executor::CgenStateManager cgenstate_manager(*this,
+                                                   false,
+                                                   table_infos,
+                                                   PlanState::DeletedColumnsMap{},
+                                                   nullptr);  // locks compilation_mutex
+      CompilationOptions pre_flight_co = CompilationOptions::makeCpuOnly(co);
+      TableFunctionCompilationContext tf_compilation_context(this, pre_flight_co);
       compilation_context =
-          tf_compilation_context.compile(exe_unit,
-                                         CompilationOptions::makeCpuOnly(co),
-                                         true /* emit_only_preflight_fn*/);
+          tf_compilation_context.compile(exe_unit, true /* emit_only_preflight_fn*/);
     }
     exe_context.execute(exe_unit,
                         table_infos,
@@ -1763,19 +2103,17 @@ ResultSetPtr Executor::executeTableFunction(
                         this,
                         true /* is_pre_launch_udtf */);
   }
-
   std::shared_ptr<CompilationContext> compilation_context;
   {
-    auto clock_begin = timer_start();
-    std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
-    compilation_queue_time_ms_ += timer_stop(clock_begin);
-
-    nukeOldState(false, table_infos, PlanState::DeletedColumnsMap{}, nullptr);
-    TableFunctionCompilationContext tf_compilation_context(this);
+    Executor::CgenStateManager cgenstate_manager(*this,
+                                                 false,
+                                                 table_infos,
+                                                 PlanState::DeletedColumnsMap{},
+                                                 nullptr);  // locks compilation_mutex
+    TableFunctionCompilationContext tf_compilation_context(this, co);
     compilation_context =
-        tf_compilation_context.compile(exe_unit, co, false /* emit_only_preflight_fn */);
+        tf_compilation_context.compile(exe_unit, false /* emit_only_preflight_fn */);
   }
-
   return exe_context.execute(exe_unit,
                              table_infos,
                              compilation_context,
@@ -1803,7 +2141,7 @@ void Executor::addTransientStringLiterals(
         if (dict_id >= 0) {
           auto sdp = getStringDictionaryProxy(dict_id, row_set_mem_owner, true);
           CHECK(sdp);
-          TransientStringLiteralsVisitor visitor(sdp);
+          TransientStringLiteralsVisitor visitor(sdp, this);
           visitor.visit(expr);
         }
       };
@@ -1900,8 +2238,8 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
         entry.push_back(reinterpret_cast<int64_t>(count_distinct_buffer));
         continue;
       }
-      if (count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet) {
-        auto count_distinct_set = new std::set<int64_t>();
+      if (count_distinct_desc.impl_type_ == CountDistinctImplType::UnorderedSet) {
+        auto count_distinct_set = new CountDistinctSet();
         CHECK(row_set_mem_owner);
         row_set_mem_owner->addCountDistinctSet(count_distinct_set);
         entry.push_back(reinterpret_cast<int64_t>(count_distinct_set));
@@ -2440,7 +2778,8 @@ bool Executor::skipFragmentPair(
   if (dynamic_cast<const Analyzer::ExpressionTuple*>(
           join_condition->get_left_operand())) {
     auto inner_outer_pairs = HashJoin::normalizeColumnPairs(
-        join_condition, *getCatalog(), getTemporaryTables());
+                                 join_condition, *getCatalog(), getTemporaryTables())
+                                 .first;
     shard_count = BaselineJoinHashTable::getShardCountForCondition(
         join_condition, this, inner_outer_pairs);
   } else {
@@ -2609,7 +2948,8 @@ FetchResult Executor::fetchChunks(
       if (allow_runtime_interrupt) {
         bool isInterrupted = false;
         {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+              executor_session_mutex_);
           const auto query_session = getCurrentQuerySession(session_read_lock);
           isInterrupted =
               checkIsQuerySessionInterrupted(query_session, session_read_lock);
@@ -2710,8 +3050,55 @@ FetchResult Executor::fetchChunks(
   return {all_frag_col_buffers, all_num_rows, all_frag_offsets};
 }
 
-// fetchChunks() is written under the assumption that multiple inputs implies a JOIN.
-// This is written under the assumption that multiple inputs implies a UNION ALL.
+namespace {
+size_t get_selected_input_descs_index(int const table_id,
+                                      std::vector<InputDescriptor> const& input_descs) {
+  auto const has_table_id = [table_id](InputDescriptor const& input_desc) {
+    return table_id == input_desc.getTableId();
+  };
+  return std::find_if(input_descs.begin(), input_descs.end(), has_table_id) -
+         input_descs.begin();
+}
+
+size_t get_selected_input_col_descs_index(
+    int const table_id,
+    std::list<std::shared_ptr<InputColDescriptor const>> const& input_col_descs) {
+  auto const has_table_id = [table_id](auto const& input_desc) {
+    return table_id == input_desc->getScanDesc().getTableId();
+  };
+  return std::distance(
+      input_col_descs.begin(),
+      std::find_if(input_col_descs.begin(), input_col_descs.end(), has_table_id));
+}
+
+std::list<std::shared_ptr<const InputColDescriptor>> get_selected_input_col_descs(
+    int const table_id,
+    std::list<std::shared_ptr<InputColDescriptor const>> const& input_col_descs) {
+  std::list<std::shared_ptr<const InputColDescriptor>> selected;
+  for (auto const& input_col_desc : input_col_descs) {
+    if (table_id == input_col_desc->getScanDesc().getTableId()) {
+      selected.push_back(input_col_desc);
+    }
+  }
+  return selected;
+}
+
+// Set N consecutive elements of frag_col_buffers to ptr in the range of local_col_id.
+void set_mod_range(std::vector<int8_t const*>& frag_col_buffers,
+                   int8_t const* const ptr,
+                   size_t const local_col_id,
+                   size_t const N) {
+  size_t const begin = local_col_id - local_col_id % N;  // N divides begin
+  size_t const end = begin + N;
+  CHECK_LE(end, frag_col_buffers.size()) << (void*)ptr << ' ' << local_col_id << ' ' << N;
+  for (size_t i = begin; i < end; ++i) {
+    frag_col_buffers[i] = ptr;
+  }
+}
+}  // namespace
+
+// fetchChunks() assumes that multiple inputs implies a JOIN.
+// fetchUnionChunks() assumes that multiple inputs implies a UNION ALL.
 FetchResult Executor::fetchUnionChunks(
     const ColumnFetcher& column_fetcher,
     const RelAlgExecutionUnit& ra_exe_unit,
@@ -2728,166 +3115,108 @@ FetchResult Executor::fetchUnionChunks(
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(fetchUnionChunks);
 
-  std::vector<std::vector<const int8_t*>> all_frag_col_buffers;
-  std::vector<std::vector<int64_t>> all_num_rows;
-  std::vector<std::vector<uint64_t>> all_frag_offsets;
-
-  CHECK(!selected_fragments.empty());
+  CHECK_EQ(1u, selected_fragments.size());
   CHECK_LE(2u, ra_exe_unit.input_descs.size());
   CHECK_LE(2u, ra_exe_unit.input_col_descs.size());
+  auto const& input_descs = ra_exe_unit.input_descs;
   using TableId = int;
   TableId const selected_table_id = selected_fragments.front().table_id;
-  bool const input_descs_index =
-      selected_table_id == ra_exe_unit.input_descs[1].getTableId();
-  if (!input_descs_index) {
-    CHECK_EQ(selected_table_id, ra_exe_unit.input_descs[0].getTableId());
-  }
-  bool const input_col_descs_index =
-      selected_table_id ==
-      (*std::next(ra_exe_unit.input_col_descs.begin()))->getScanDesc().getTableId();
-  if (!input_col_descs_index) {
-    CHECK_EQ(selected_table_id,
-             ra_exe_unit.input_col_descs.front()->getScanDesc().getTableId());
-  }
-  VLOG(2) << "selected_fragments.size()=" << selected_fragments.size()
-          << " selected_table_id=" << selected_table_id
-          << " input_descs_index=" << int(input_descs_index)
-          << " input_col_descs_index=" << int(input_col_descs_index)
-          << " ra_exe_unit.input_descs="
-          << shared::printContainer(ra_exe_unit.input_descs)
+  size_t const input_descs_index =
+      get_selected_input_descs_index(selected_table_id, input_descs);
+  CHECK_LT(input_descs_index, input_descs.size());
+  size_t const input_col_descs_index =
+      get_selected_input_col_descs_index(selected_table_id, ra_exe_unit.input_col_descs);
+  CHECK_LT(input_col_descs_index, ra_exe_unit.input_col_descs.size());
+  VLOG(2) << "selected_table_id=" << selected_table_id
+          << " input_descs_index=" << input_descs_index
+          << " input_col_descs_index=" << input_col_descs_index
+          << " input_descs=" << shared::printContainer(input_descs)
           << " ra_exe_unit.input_col_descs="
           << shared::printContainer(ra_exe_unit.input_col_descs);
 
-  // Partition col_global_ids by table_id
-  std::unordered_map<TableId, std::list<std::shared_ptr<const InputColDescriptor>>>
-      table_id_to_input_col_descs;
-  for (auto const& input_col_desc : ra_exe_unit.input_col_descs) {
-    TableId const table_id = input_col_desc->getScanDesc().getTableId();
-    table_id_to_input_col_descs[table_id].push_back(input_col_desc);
-  }
-  for (auto const& pair : table_id_to_input_col_descs) {
-    std::vector<std::vector<size_t>> selected_fragments_crossjoin;
-    std::vector<size_t> local_col_to_frag_pos;
+  std::list<std::shared_ptr<const InputColDescriptor>> selected_input_col_descs =
+      get_selected_input_col_descs(selected_table_id, ra_exe_unit.input_col_descs);
+  std::vector<std::vector<size_t>> selected_fragments_crossjoin;
 
-    buildSelectedFragsMappingForUnion(selected_fragments_crossjoin,
-                                      local_col_to_frag_pos,
-                                      pair.second,
-                                      selected_fragments,
-                                      ra_exe_unit);
+  buildSelectedFragsMappingForUnion(
+      selected_fragments_crossjoin, selected_fragments, ra_exe_unit);
 
-    CartesianProduct<std::vector<std::vector<size_t>>> frag_ids_crossjoin(
-        selected_fragments_crossjoin);
+  CartesianProduct<std::vector<std::vector<size_t>>> frag_ids_crossjoin(
+      selected_fragments_crossjoin);
 
-    for (const auto& selected_frag_ids : frag_ids_crossjoin) {
-      if (allow_runtime_interrupt) {
-        bool isInterrupted = false;
-        {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
-          const auto query_session = getCurrentQuerySession(session_read_lock);
-          isInterrupted =
-              checkIsQuerySessionInterrupted(query_session, session_read_lock);
-        }
-        if (isInterrupted) {
-          throw QueryExecutionError(ERR_INTERRUPTED);
-        }
-      }
-      std::vector<const int8_t*> frag_col_buffers(
-          plan_state_->global_to_local_col_ids_.size());
-      for (const auto& col_id : pair.second) {
-        CHECK(col_id);
-        const int table_id = col_id->getScanDesc().getTableId();
-        CHECK_EQ(table_id, pair.first);
-        const auto cd = try_get_column_descriptor(col_id.get(), cat);
-        if (cd && cd->isVirtualCol) {
-          CHECK_EQ("rowid", cd->columnName);
-          continue;
-        }
-        const auto fragments_it = all_tables_fragments.find(table_id);
-        CHECK(fragments_it != all_tables_fragments.end());
-        const auto fragments = fragments_it->second;
-        auto it = plan_state_->global_to_local_col_ids_.find(*col_id);
-        CHECK(it != plan_state_->global_to_local_col_ids_.end());
-        CHECK_LT(static_cast<size_t>(it->second),
-                 plan_state_->global_to_local_col_ids_.size());
-        const size_t frag_id = ra_exe_unit.union_all
-                                   ? 0
-                                   : selected_frag_ids[local_col_to_frag_pos[it->second]];
-        if (!fragments->size()) {
-          return {};
-        }
-        CHECK_LT(frag_id, fragments->size());
-        auto memory_level_for_column = memory_level;
-        if (plan_state_->columns_to_fetch_.find(
-                std::make_pair(col_id->getScanDesc().getTableId(), col_id->getColId())) ==
-            plan_state_->columns_to_fetch_.end()) {
-          memory_level_for_column = Data_Namespace::CPU_LEVEL;
-        }
-        if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
-          frag_col_buffers[it->second] =
-              column_fetcher.getResultSetColumn(col_id.get(),
-                                                memory_level_for_column,
-                                                device_id,
-                                                device_allocator,
-                                                thread_idx);
-        } else {
-          if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
-            frag_col_buffers[it->second] =
-                column_fetcher.getAllTableColumnFragments(table_id,
-                                                          col_id->getColId(),
-                                                          all_tables_fragments,
-                                                          memory_level_for_column,
-                                                          device_id,
-                                                          device_allocator,
-                                                          thread_idx);
-          } else {
-            frag_col_buffers[it->second] =
-                column_fetcher.getOneTableColumnFragment(table_id,
-                                                         frag_id,
-                                                         col_id->getColId(),
-                                                         all_tables_fragments,
-                                                         chunks,
-                                                         chunk_iterators,
-                                                         memory_level_for_column,
-                                                         device_id,
-                                                         device_allocator);
-          }
-        }
-      }
-      all_frag_col_buffers.push_back(frag_col_buffers);
+  if (allow_runtime_interrupt) {
+    bool isInterrupted = false;
+    {
+      heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+          executor_session_mutex_);
+      const auto query_session = getCurrentQuerySession(session_read_lock);
+      isInterrupted = checkIsQuerySessionInterrupted(query_session, session_read_lock);
     }
-    std::vector<std::vector<int64_t>> num_rows;
-    std::vector<std::vector<uint64_t>> frag_offsets;
-    std::tie(num_rows, frag_offsets) = getRowCountAndOffsetForAllFrags(
-        ra_exe_unit, frag_ids_crossjoin, ra_exe_unit.input_descs, all_tables_fragments);
-    all_num_rows.insert(all_num_rows.end(), num_rows.begin(), num_rows.end());
-    all_frag_offsets.insert(
-        all_frag_offsets.end(), frag_offsets.begin(), frag_offsets.end());
+    if (isInterrupted) {
+      throw QueryExecutionError(ERR_INTERRUPTED);
+    }
   }
-  // The hack below assumes a particular table traversal order which is not
-  // always achieved due to unordered map in the outermost loop. According
-  // to the code below we expect NULLs in even positions of all_frag_col_buffers[0]
-  // and odd positions of all_frag_col_buffers[1]. As an additional hack we
-  // swap these vectors if NULLs are not on expected positions.
-  if (all_frag_col_buffers[0].size() > 1 && all_frag_col_buffers[0][0] &&
-      !all_frag_col_buffers[0][1]) {
-    std::swap(all_frag_col_buffers[0], all_frag_col_buffers[1]);
+  std::vector<const int8_t*> frag_col_buffers(
+      plan_state_->global_to_local_col_ids_.size());
+  for (const auto& col_id : selected_input_col_descs) {
+    CHECK(col_id);
+    const auto cd = try_get_column_descriptor(col_id.get(), cat);
+    if (cd && cd->isVirtualCol) {
+      CHECK_EQ("rowid", cd->columnName);
+      continue;
+    }
+    const auto fragments_it = all_tables_fragments.find(selected_table_id);
+    CHECK(fragments_it != all_tables_fragments.end());
+    const auto fragments = fragments_it->second;
+    auto it = plan_state_->global_to_local_col_ids_.find(*col_id);
+    CHECK(it != plan_state_->global_to_local_col_ids_.end());
+    size_t const local_col_id = it->second;
+    CHECK_LT(local_col_id, plan_state_->global_to_local_col_ids_.size());
+    constexpr size_t frag_id = 0;
+    if (fragments->empty()) {
+      return {};
+    }
+    MemoryLevel const memory_level_for_column =
+        plan_state_->columns_to_fetch_.count({selected_table_id, col_id->getColId()})
+            ? memory_level
+            : Data_Namespace::CPU_LEVEL;
+    int8_t const* ptr;
+    if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
+      ptr = column_fetcher.getResultSetColumn(
+          col_id.get(), memory_level_for_column, device_id, device_allocator, thread_idx);
+    } else if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
+      ptr = column_fetcher.getAllTableColumnFragments(selected_table_id,
+                                                      col_id->getColId(),
+                                                      all_tables_fragments,
+                                                      memory_level_for_column,
+                                                      device_id,
+                                                      device_allocator,
+                                                      thread_idx);
+    } else {
+      ptr = column_fetcher.getOneTableColumnFragment(selected_table_id,
+                                                     frag_id,
+                                                     col_id->getColId(),
+                                                     all_tables_fragments,
+                                                     chunks,
+                                                     chunk_iterators,
+                                                     memory_level_for_column,
+                                                     device_id,
+                                                     device_allocator);
+    }
+    // Set frag_col_buffers[i]=ptr for i in mod input_descs.size() range of local_col_id.
+    set_mod_range(frag_col_buffers, ptr, local_col_id, input_descs.size());
   }
-  // UNION ALL hacks.
-  VLOG(2) << "all_frag_col_buffers=" << shared::printContainer(all_frag_col_buffers);
-  for (size_t i = 0; i < all_frag_col_buffers.front().size(); ++i) {
-    all_frag_col_buffers[i & 1][i] = all_frag_col_buffers[i & 1][i ^ 1];
-  }
-  if (input_descs_index == input_col_descs_index) {
-    std::swap(all_frag_col_buffers[0], all_frag_col_buffers[1]);
-  }
+  auto const [num_rows, frag_offsets] = getRowCountAndOffsetForAllFrags(
+      ra_exe_unit, frag_ids_crossjoin, input_descs, all_tables_fragments);
 
-  VLOG(2) << "all_frag_col_buffers=" << shared::printContainer(all_frag_col_buffers)
-          << " all_num_rows=" << shared::printContainer(all_num_rows)
-          << " all_frag_offsets=" << shared::printContainer(all_frag_offsets)
+  VLOG(2) << "frag_col_buffers=" << shared::printContainer(frag_col_buffers)
+          << " num_rows=" << shared::printContainer(num_rows)
+          << " frag_offsets=" << shared::printContainer(frag_offsets)
+          << " input_descs_index=" << input_descs_index
           << " input_col_descs_index=" << input_col_descs_index;
-  return {{all_frag_col_buffers[input_descs_index]},
-          {{all_num_rows[0][input_descs_index]}},
-          {{all_frag_offsets[0][input_descs_index]}}};
+  return {{std::move(frag_col_buffers)},
+          {{num_rows[0][input_descs_index]}},
+          {{frag_offsets[0][input_descs_index]}}};
 }
 
 std::vector<size_t> Executor::getFragmentCount(const FragmentsList& selected_fragments,
@@ -2937,38 +3266,14 @@ void Executor::buildSelectedFragsMapping(
 
 void Executor::buildSelectedFragsMappingForUnion(
     std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
-    std::vector<size_t>& local_col_to_frag_pos,
-    const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
     const FragmentsList& selected_fragments,
     const RelAlgExecutionUnit& ra_exe_unit) {
-  local_col_to_frag_pos.resize(plan_state_->global_to_local_col_ids_.size());
-  size_t frag_pos{0};
   const auto& input_descs = ra_exe_unit.input_descs;
   for (size_t scan_idx = 0; scan_idx < input_descs.size(); ++scan_idx) {
-    const int table_id = input_descs[scan_idx].getTableId();
-    // selected_fragments here is from assignFragsToKernelDispatch
-    // execution_kernel.fragments
-    if (selected_fragments[0].table_id != table_id) {  // TODO 0
-      continue;
+    // selected_fragments is set in assignFragsToKernelDispatch execution_kernel.fragments
+    if (selected_fragments[0].table_id == input_descs[scan_idx].getTableId()) {
+      selected_fragments_crossjoin.push_back({size_t(1)});
     }
-    // CHECK_EQ(selected_fragments[scan_idx].table_id, table_id);
-    selected_fragments_crossjoin.push_back(
-        // getFragmentCount(selected_fragments, scan_idx, ra_exe_unit));
-        {size_t(1)});  // TODO
-    for (const auto& col_id : col_global_ids) {
-      CHECK(col_id);
-      const auto& input_desc = col_id->getScanDesc();
-      if (input_desc.getTableId() != table_id ||
-          input_desc.getNestLevel() != static_cast<int>(scan_idx)) {
-        continue;
-      }
-      auto it = plan_state_->global_to_local_col_ids_.find(*col_id);
-      CHECK(it != plan_state_->global_to_local_col_ids_.end());
-      CHECK_LT(static_cast<size_t>(it->second),
-               plan_state_->global_to_local_col_ids_.size());
-      local_col_to_frag_pos[it->second] = frag_pos;
-    }
-    ++frag_pos;
   }
 }
 
@@ -3017,7 +3322,7 @@ int32_t Executor::executePlanWithoutGroupBy(
   if (render_info) {
     // TODO(adb): make sure that we either never get here in the CPU case, or if we do get
     // here, we are in non-insitu mode.
-    CHECK(render_info->useCudaBuffers() || !render_info->isPotentialInSituRender())
+    CHECK(render_info->useCudaBuffers() || !render_info->isInSitu())
         << "CUDA disabled rendering in the executePlanWithoutGroupBy query path is "
            "currently unsupported.";
     render_allocator_map_ptr = render_info->render_allocator_map_ptr.get();
@@ -3031,7 +3336,8 @@ int32_t Executor::executePlanWithoutGroupBy(
   if (allow_runtime_interrupt) {
     bool isInterrupted = false;
     {
-      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+      heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+          executor_session_mutex_);
       const auto query_session = getCurrentQuerySession(session_read_lock);
       isInterrupted = checkIsQuerySessionInterrupted(query_session, session_read_lock);
     }
@@ -3043,11 +3349,11 @@ int32_t Executor::executePlanWithoutGroupBy(
     throw QueryExecutionError(ERR_INTERRUPTED);
   }
   if (device_type == ExecutorDeviceType::CPU) {
-    auto cpu_generated_code = std::dynamic_pointer_cast<CpuCompilationContext>(
-        compilation_result.generated_code);
+    CpuCompilationContext* cpu_generated_code =
+        dynamic_cast<CpuCompilationContext*>(compilation_result.generated_code.get());
     CHECK(cpu_generated_code);
     out_vec = query_exe_context->launchCpuCode(ra_exe_unit,
-                                               cpu_generated_code.get(),
+                                               cpu_generated_code,
                                                hoist_literals,
                                                hoist_buf,
                                                col_buffers,
@@ -3060,13 +3366,13 @@ int32_t Executor::executePlanWithoutGroupBy(
                                                rows_to_process);
     output_memory_scope.reset(new OutVecOwner(out_vec));
   } else {
-    auto gpu_generated_code = std::dynamic_pointer_cast<GpuCompilationContext>(
-        compilation_result.generated_code);
+    GpuCompilationContext* gpu_generated_code =
+        dynamic_cast<GpuCompilationContext*>(compilation_result.generated_code.get());
     CHECK(gpu_generated_code);
     try {
       out_vec = query_exe_context->launchGpuCode(
           ra_exe_unit,
-          gpu_generated_code.get(),
+          gpu_generated_code,
           hoist_literals,
           hoist_buf,
           col_buffers,
@@ -3246,7 +3552,8 @@ int32_t Executor::executePlanWithGroupBy(
   if (allow_runtime_interrupt) {
     bool isInterrupted = false;
     {
-      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+      heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+          executor_session_mutex_);
       const auto query_session = getCurrentQuerySession(session_read_lock);
       isInterrupted = checkIsQuerySessionInterrupted(query_session, session_read_lock);
     }
@@ -3308,12 +3615,11 @@ int32_t Executor::executePlanWithGroupBy(
     const int32_t max_matched = scan_limit_for_query == 0
                                     ? query_exe_context->query_mem_desc_.getEntryCount()
                                     : scan_limit_for_query;
-
-    auto cpu_generated_code = std::dynamic_pointer_cast<CpuCompilationContext>(
-        compilation_result.generated_code);
+    CpuCompilationContext* cpu_generated_code =
+        dynamic_cast<CpuCompilationContext*>(compilation_result.generated_code.get());
     CHECK(cpu_generated_code);
     query_exe_context->launchCpuCode(ra_exe_unit_copy,
-                                     cpu_generated_code.get(),
+                                     cpu_generated_code,
                                      hoist_literals,
                                      hoist_buf,
                                      col_buffers,
@@ -3326,12 +3632,12 @@ int32_t Executor::executePlanWithGroupBy(
                                      rows_to_process);
   } else {
     try {
-      auto gpu_generated_code = std::dynamic_pointer_cast<GpuCompilationContext>(
-          compilation_result.generated_code);
+      GpuCompilationContext* gpu_generated_code =
+          dynamic_cast<GpuCompilationContext*>(compilation_result.generated_code.get());
       CHECK(gpu_generated_code);
       query_exe_context->launchGpuCode(
           ra_exe_unit_copy,
-          gpu_generated_code.get(),
+          gpu_generated_code,
           hoist_literals,
           hoist_buf,
           col_buffers,
@@ -3423,7 +3729,8 @@ void Executor::nukeOldState(const bool allow_lazy_fetch,
                                   [](const JoinCondition& join_condition) {
                                     return join_condition.type == JoinType::LEFT;
                                   }) != ra_exe_unit->join_quals.end();
-  cgen_state_.reset(new CgenState(query_infos.size(), contains_left_deep_outer_join));
+  cgen_state_.reset(
+      new CgenState(query_infos.size(), contains_left_deep_outer_join, this));
   plan_state_.reset(new PlanState(allow_lazy_fetch && !contains_left_deep_outer_join,
                                   query_infos,
                                   deleted_cols_map,
@@ -3819,7 +4126,6 @@ std::pair<bool, int64_t> Executor::skipFragment(
         !lhs->get_type_info().is_fp()) {
       continue;
     }
-
     if (lhs->get_type_info().is_fp()) {
       const auto fragment_skip_status =
           canSkipFragmentForFpQual(comp_expr.get(), lhs_col, fragment, rhs_const);
@@ -3837,6 +4143,14 @@ std::pair<bool, int64_t> Executor::skipFragment(
 
     // Everything below is logic for integer and integer-backed timestamps
     // TODO: Factor out into separate function per canSkipFragmentForFpQual above
+
+    if (lhs_col->get_type_info().is_timestamp() &&
+        rhs_const->get_type_info().is_any(kTIME)) {
+      // when casting from a timestamp to time
+      // is not possible to get a valid range
+      // so we can't skip any fragment
+      continue;
+    }
 
     const int col_id = lhs_col->get_column_id();
     auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
@@ -3892,6 +4206,15 @@ std::pair<bool, int64_t> Executor::skipFragment(
                 << std::to_string(rhs_const->get_type_info().get_dimension()) << ".";
         return {false, -1};
       }
+    }
+    if (lhs_col->get_type_info().is_timestamp() && rhs_const->get_type_info().is_date()) {
+      // It is obvious that a cast from timestamp to date is happening here,
+      // so we have to correct the chunk min and max values to lower the precision as of
+      // the date
+      chunk_min = DateTruncateHighPrecisionToDate(
+          chunk_min, pow(10, lhs_col->get_type_info().get_dimension()));
+      chunk_max = DateTruncateHighPrecisionToDate(
+          chunk_max, pow(10, lhs_col->get_type_info().get_dimension()));
     }
     llvm::LLVMContext local_context;
     CgenState local_cgen_state(local_context);
@@ -4022,6 +4345,10 @@ StringDictionaryGenerations Executor::computeStringDictionaryGenerations(
     const std::unordered_set<PhysicalInput>& phys_inputs) {
   StringDictionaryGenerations string_dictionary_generations;
   CHECK(catalog_);
+  // Foreign tables may have not populated dictionaries for encoded columns.  If this is
+  // the case then we need to populate them here to make sure that the generations are set
+  // correctly.
+  prepare_string_dictionaries(phys_inputs, *catalog_);
   for (const auto& phys_input : phys_inputs) {
     const auto cd =
         catalog_->getMetadataForColumn(phys_input.table_id, phys_input.col_id);
@@ -4062,7 +4389,7 @@ void Executor::setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs
   table_generations_ = computeTableGenerations(phys_table_ids);
 }
 
-mapd_shared_mutex& Executor::getDataRecyclerLock() {
+heavyai::shared_mutex& Executor::getDataRecyclerLock() {
   return recycler_mutex_;
 }
 
@@ -4070,24 +4397,22 @@ QueryPlanDagCache& Executor::getQueryPlanDagCache() {
   return query_plan_dag_cache_;
 }
 
-JoinColumnsInfo Executor::getJoinColumnsInfo(const Analyzer::Expr* join_expr,
-                                             JoinColumnSide target_side,
-                                             bool extract_only_col_id) {
-  return query_plan_dag_cache_.getJoinColumnsInfoString(
-      join_expr, target_side, extract_only_col_id);
+ResultSetRecyclerHolder& Executor::getRecultSetRecyclerHolder() {
+  return resultset_recycler_holder_;
 }
 
-mapd_shared_mutex& Executor::getSessionLock() {
+heavyai::shared_mutex& Executor::getSessionLock() {
   return executor_session_mutex_;
 }
 
 QuerySessionId& Executor::getCurrentQuerySession(
-    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+    heavyai::shared_lock<heavyai::shared_mutex>& read_lock) {
   return current_query_session_;
 }
 
-bool Executor::checkCurrentQuerySession(const QuerySessionId& candidate_query_session,
-                                        mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+bool Executor::checkCurrentQuerySession(
+    const QuerySessionId& candidate_query_session,
+    heavyai::shared_lock<heavyai::shared_mutex>& read_lock) {
   // if current_query_session is equal to the candidate_query_session,
   // or it is empty session we consider
   return !candidate_query_session.empty() &&
@@ -4097,7 +4422,7 @@ bool Executor::checkCurrentQuerySession(const QuerySessionId& candidate_query_se
 // used only for testing
 QuerySessionStatus::QueryStatus Executor::getQuerySessionStatus(
     const QuerySessionId& candidate_query_session,
-    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+    heavyai::shared_lock<heavyai::shared_mutex>& read_lock) {
   if (queries_session_map_.count(candidate_query_session) &&
       !queries_session_map_.at(candidate_query_session).empty()) {
     return queries_session_map_.at(candidate_query_session)
@@ -4108,7 +4433,7 @@ QuerySessionStatus::QueryStatus Executor::getQuerySessionStatus(
 }
 
 void Executor::invalidateRunningQuerySession(
-    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+    heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
   current_query_session_ = "";
 }
 
@@ -4118,7 +4443,7 @@ CurrentQueryStatus Executor::attachExecutorToQuerySession(
     const std::string& query_submitted_time) {
   if (!query_session_id.empty()) {
     // if session is valid, do update 1) the exact executor id and 2) query status
-    mapd_unique_lock<mapd_shared_mutex> write_lock(executor_session_mutex_);
+    heavyai::unique_lock<heavyai::shared_mutex> write_lock(executor_session_mutex_);
     updateQuerySessionExecutorAssignment(
         query_session_id, query_submitted_time, executor_id_, write_lock);
     updateQuerySessionStatusWithLock(query_session_id,
@@ -4132,7 +4457,7 @@ CurrentQueryStatus Executor::attachExecutorToQuerySession(
 void Executor::checkPendingQueryStatus(const QuerySessionId& query_session) {
   // check whether we are okay to execute the "pending" query
   // i.e., before running the query check if this query session is "ALREADY" interrupted
-  mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(executor_session_mutex_);
   if (query_session.empty()) {
     return;
   }
@@ -4157,7 +4482,7 @@ void Executor::checkPendingQueryStatus(const QuerySessionId& query_session) {
 
 void Executor::clearQuerySessionStatus(const QuerySessionId& query_session,
                                        const std::string& submitted_time_str) {
-  mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor_session_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> session_write_lock(executor_session_mutex_);
   // clear the interrupt-related info for a finished query
   if (query_session.empty()) {
     return;
@@ -4174,7 +4499,7 @@ void Executor::updateQuerySessionStatus(
     const std::string& submitted_time_str,
     const QuerySessionStatus::QueryStatus new_query_status) {
   // update the running query session's the current status
-  mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor_session_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> session_write_lock(executor_session_mutex_);
   if (query_session.empty()) {
     return;
   }
@@ -4192,7 +4517,7 @@ void Executor::enrollQuerySession(
     const size_t executor_id,
     const QuerySessionStatus::QueryStatus query_session_status) {
   // enroll the query session into the Executor's session map
-  mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor_session_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> session_write_lock(executor_session_mutex_);
   if (query_session.empty()) {
     return;
   }
@@ -4210,16 +4535,17 @@ void Executor::enrollQuerySession(
 }
 
 size_t Executor::getNumCurentSessionsEnrolled() const {
-  mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(executor_session_mutex_);
   return queries_session_map_.size();
 }
 
-bool Executor::addToQuerySessionList(const QuerySessionId& query_session,
-                                     const std::string& query_str,
-                                     const std::string& submitted_time_str,
-                                     const size_t executor_id,
-                                     const QuerySessionStatus::QueryStatus query_status,
-                                     mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+bool Executor::addToQuerySessionList(
+    const QuerySessionId& query_session,
+    const std::string& query_str,
+    const std::string& submitted_time_str,
+    const size_t executor_id,
+    const QuerySessionStatus::QueryStatus query_status,
+    heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
   // an internal API that enrolls the query session into the Executor's session map
   if (queries_session_map_.count(query_session)) {
     if (queries_session_map_.at(query_session).count(submitted_time_str)) {
@@ -4255,7 +4581,7 @@ bool Executor::updateQuerySessionStatusWithLock(
     const QuerySessionId& query_session,
     const std::string& submitted_time_str,
     const QuerySessionStatus::QueryStatus updated_query_status,
-    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+    heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
   // an internal API that updates query session status
   if (query_session.empty()) {
     return false;
@@ -4281,7 +4607,7 @@ bool Executor::updateQuerySessionExecutorAssignment(
     const QuerySessionId& query_session,
     const std::string& submitted_time_str,
     const size_t executor_id,
-    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+    heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
   // update the executor id of the query session
   if (query_session.empty()) {
     return false;
@@ -4305,7 +4631,7 @@ bool Executor::updateQuerySessionExecutorAssignment(
 bool Executor::removeFromQuerySessionList(
     const QuerySessionId& query_session,
     const std::string& submitted_time_str,
-    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+    heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
   if (query_session.empty()) {
     return false;
   }
@@ -4338,7 +4664,7 @@ bool Executor::removeFromQuerySessionList(
 
 void Executor::setQuerySessionAsInterrupted(
     const QuerySessionId& query_session,
-    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+    heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
   if (query_session.empty()) {
     return;
   }
@@ -4349,7 +4675,7 @@ void Executor::setQuerySessionAsInterrupted(
 
 bool Executor::checkIsQuerySessionInterrupted(
     const QuerySessionId& query_session,
-    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+    heavyai::shared_lock<heavyai::shared_mutex>& read_lock) {
   if (query_session.empty()) {
     return false;
   }
@@ -4360,7 +4686,7 @@ bool Executor::checkIsQuerySessionInterrupted(
 
 bool Executor::checkIsQuerySessionEnrolled(
     const QuerySessionId& query_session,
-    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+    heavyai::shared_lock<heavyai::shared_mutex>& read_lock) {
   if (query_session.empty()) {
     return false;
   }
@@ -4385,14 +4711,14 @@ void Executor::enableRuntimeQueryInterrupt(
 void Executor::addToCardinalityCache(const std::string& cache_key,
                                      const size_t cache_value) {
   if (g_use_estimator_result_cache) {
-    mapd_unique_lock<mapd_shared_mutex> lock(recycler_mutex_);
+    heavyai::unique_lock<heavyai::shared_mutex> lock(recycler_mutex_);
     cardinality_cache_[cache_key] = cache_value;
     VLOG(1) << "Put estimated cardinality to the cache";
   }
 }
 
 Executor::CachedCardinality Executor::getCachedCardinality(const std::string& cache_key) {
-  mapd_shared_lock<mapd_shared_mutex> lock(recycler_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> lock(recycler_mutex_);
   if (g_use_estimator_result_cache &&
       cardinality_cache_.find(cache_key) != cardinality_cache_.end()) {
     VLOG(1) << "Reuse cached cardinality";
@@ -4403,7 +4729,7 @@ Executor::CachedCardinality Executor::getCachedCardinality(const std::string& ca
 
 std::vector<QuerySessionStatus> Executor::getQuerySessionInfo(
     const QuerySessionId& query_session,
-    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+    heavyai::shared_lock<heavyai::shared_mutex>& read_lock) {
   if (!queries_session_map_.empty() && queries_session_map_.count(query_session)) {
     auto& query_infos = queries_session_map_.at(query_session);
     std::vector<QuerySessionStatus> ret;
@@ -4422,7 +4748,7 @@ std::vector<QuerySessionStatus> Executor::getQuerySessionInfo(
 const std::vector<size_t> Executor::getExecutorIdsRunningQuery(
     const QuerySessionId& interrupt_session) const {
   std::vector<size_t> res;
-  mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(executor_session_mutex_);
   auto it = queries_session_map_.find(interrupt_session);
   if (it != queries_session_map_.end()) {
     for (auto& kv : it->second) {
@@ -4442,20 +4768,20 @@ bool Executor::checkNonKernelTimeInterrupted() const {
   if (executor_id_ == UNITARY_EXECUTOR_ID) {
     return false;
   };
-  mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(executor_session_mutex_);
   auto flag_it = queries_interrupt_flag_.find(current_query_session_);
   return !current_query_session_.empty() && flag_it != queries_interrupt_flag_.end() &&
          flag_it->second;
 }
 
-void Executor::registerExtractedQueryPlanDag(const QueryPlan& query_plan_dag) {
+void Executor::registerExtractedQueryPlanDag(const QueryPlanDAG& query_plan_dag) {
   // this function is called under the recycler lock
   // e.g., QueryPlanDagExtractor::extractQueryPlanDagImpl()
   latest_query_plan_extracted_ = query_plan_dag;
 }
 
-const QueryPlan Executor::getLatestQueryPlanDagExtracted() const {
-  mapd_shared_lock<mapd_shared_mutex> lock(recycler_mutex_);
+const QueryPlanDAG Executor::getLatestQueryPlanDagExtracted() const {
+  heavyai::shared_lock<heavyai::shared_mutex> lock(recycler_mutex_);
   return latest_query_plan_extracted_;
 }
 
@@ -4466,19 +4792,42 @@ InterruptFlagMap Executor::queries_interrupt_flag_;
 // contain a list of queries per query session
 QuerySessionMap Executor::queries_session_map_;
 // session lock
-mapd_shared_mutex Executor::executor_session_mutex_;
+heavyai::shared_mutex Executor::executor_session_mutex_;
 
-mapd_shared_mutex Executor::execute_mutex_;
-mapd_shared_mutex Executor::executors_cache_mutex_;
+heavyai::shared_mutex Executor::execute_mutex_;
+heavyai::shared_mutex Executor::executors_cache_mutex_;
 
 std::mutex Executor::gpu_active_modules_mutex_;
 uint32_t Executor::gpu_active_modules_device_mask_{0x0};
 void* Executor::gpu_active_modules_[max_gpu_count];
 
-std::mutex Executor::compilation_mutex_;
+std::mutex Executor::register_runtime_extension_functions_mutex_;
 std::mutex Executor::kernel_mutex_;
 
 QueryPlanDagCache Executor::query_plan_dag_cache_;
-mapd_shared_mutex Executor::recycler_mutex_;
+heavyai::shared_mutex Executor::recycler_mutex_;
 std::unordered_map<std::string, size_t> Executor::cardinality_cache_;
-QueryPlan Executor::latest_query_plan_extracted_{EMPTY_QUERY_PLAN};
+// Executor has a single global result set recycler holder
+// which contains two recyclers related to query resultset
+ResultSetRecyclerHolder Executor::resultset_recycler_holder_;
+QueryPlanDAG Executor::latest_query_plan_extracted_{EMPTY_QUERY_PLAN};
+
+// Useful for debugging.
+std::string Executor::dumpCache() const {
+  std::stringstream ss;
+  ss << "colRangeCache: ";
+  for (auto& [phys_input, exp_range] : agg_col_range_cache_.asMap()) {
+    ss << "{" << phys_input.col_id << ", " << phys_input.table_id
+       << "} = " << exp_range.toString() << ", ";
+  }
+  ss << "stringDictGenerations: ";
+  for (auto& [key, val] : row_set_mem_owner_->getStringDictionaryGenerations().asMap()) {
+    ss << "{" << key << "} = " << val << ", ";
+  }
+  ss << "tableGenerations: ";
+  for (auto& [key, val] : table_generations_.asMap()) {
+    ss << "{" << key << "} = {" << val.tuple_count << ", " << val.start_rowid << "}, ";
+  }
+  ss << "\n";
+  return ss.str();
+}

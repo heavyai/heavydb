@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ inline void throw_parquet_metadata_out_of_bounds_error(
     const std::string& encountered_value) {
   std::stringstream error_message;
   error_message << "Parquet column contains values that are outside the range of the "
-                   "OmniSci column "
+                   "HeavyDB column "
                    "type. Consider using a wider column type. Min allowed value: "
                 << min_value << ". Max allowed value: " << max_value
                 << ". Encountered value: " << encountered_value << ".";
@@ -205,8 +205,8 @@ class IntegralFixedLengthBoundsValidator {
   }
 };
 
-template <typename T>
-class DateInSecondsBoundsValidator {
+template <typename T, bool is_in_seconds = true>
+class BaseDateBoundsValidator {
   static_assert(
       std::is_integral<T>::value && std::is_signed<T>::value,
       "DateInSecondsBoundsValidator is only defined for signed integral types.");
@@ -254,7 +254,11 @@ class DateInSecondsBoundsValidator {
   template <typename D>
   static bool checkBounds(const T& value) {
     auto [min_value, max_value] = get_min_max_bounds<D>();
-    return value >= kSecsPerDay * min_value && value <= kSecsPerDay * max_value;
+    if (is_in_seconds) {
+      return value >= kSecsPerDay * min_value && value <= kSecsPerDay * max_value;
+    } else {
+      return value >= min_value && value <= max_value;
+    }
   }
 
   template <typename D>
@@ -265,6 +269,12 @@ class DateInSecondsBoundsValidator {
             datetime_to_string(kSecsPerDay * max_value, column_type)};
   }
 };
+
+template <typename T>
+using DateInSecondsBoundsValidator = BaseDateBoundsValidator<T, true>;
+
+template <typename T>
+using DateInDaysBoundsValidator = BaseDateBoundsValidator<T, false>;
 
 template <typename T>
 class FloatPointValidator {

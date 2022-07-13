@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,6 +46,77 @@ enum class Type {
   VoidPtr,
   Int64PtrPtr,
 };
+
+inline std::ostream& operator<<(std::ostream& os, const Type& type) {
+  switch (type) {
+    case Type::Int1: {
+      os << "Int1";
+      break;
+    }
+    case Type::Int8: {
+      os << "Int8";
+      break;
+    }
+    case Type::Int32: {
+      os << "Int32";
+      break;
+    }
+    case Type::Int64: {
+      os << "Int64";
+      break;
+    }
+    case Type::Float: {
+      os << "Float";
+      break;
+    }
+    case Type::Double: {
+      os << "Double";
+      break;
+    }
+    case Type::Void: {
+      os << "Void";
+      break;
+    }
+    case Type::Int8Ptr: {
+      os << "Int8Ptr";
+      break;
+    }
+    case Type::Int32Ptr: {
+      os << "Int32Ptr";
+      break;
+    }
+    case Type::Int64Ptr: {
+      os << "Int64Ptr";
+      break;
+    }
+    case Type::FloatPtr: {
+      os << "FloatPtr";
+      break;
+    }
+    case Type::DoublePtr: {
+      os << "DoublePtr";
+      break;
+    }
+    case Type::VoidPtr: {
+      os << "VoidPtr";
+      break;
+    }
+    case Type::Int64PtrPtr: {
+      os << "Int64PtrPtr";
+      break;
+    }
+  }
+  return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const std::vector<Type>& types) {
+  os << "(";
+  for (const Type& type : types) {
+    os << type << ", ";
+  }
+  os << ")";
+  return os;
+}
 
 // Retrieves the type a pointer type points to.
 inline Type pointee_type(const Type pointer) {

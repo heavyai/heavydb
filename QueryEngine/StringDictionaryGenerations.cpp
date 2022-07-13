@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,9 @@ int64_t StringDictionaryGenerations::getGeneration(const uint32_t id) const {
   const auto it = id_to_generation_.find(id);
   if (it != id_to_generation_.end()) {
     return it->second;
+  }
+  if (id == TRANSIENT_DICT_ID) {
+    return 0;
   }
   // This happens when the query didn't need to do any translation from string
   // to id. Return an invalid generation and StringDictionaryProxy will assert

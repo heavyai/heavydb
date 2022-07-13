@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@
 #include "NvidiaKernel.h"
 
 #ifdef HAVE_CUDA
+CUstream getQueryEngineCudaStreamForDevice(int device_num);
+
 class CudaEventClock : public DeviceClock {
  public:
   CudaEventClock() {
@@ -57,6 +59,7 @@ class NvidiaKernel : public DeviceKernel {
               unsigned int blockDimZ,
               unsigned int sharedMemBytes,
               void** kernelParams) override {
+    auto qe_cuda_stream = getQueryEngineCudaStreamForDevice(device_id);
     checkCudaErrors(cuLaunchKernel(function_ptr,
                                    gridDimX,
                                    gridDimY,
@@ -65,9 +68,10 @@ class NvidiaKernel : public DeviceKernel {
                                    blockDimY,
                                    blockDimZ,
                                    sharedMemBytes,
-                                   nullptr,
+                                   qe_cuda_stream,
                                    kernelParams,
                                    nullptr));
+    checkCudaErrors(cuStreamSynchronize(qe_cuda_stream));
   }
 
   void initializeDynamicWatchdog(bool could_interrupt, uint64_t cycle_budget) override {
@@ -85,18 +89,23 @@ class NvidiaKernel : public DeviceKernel {
                 << std::to_string(g_dynamic_watchdog_time_limit) << "ms, "
                 << std::to_string(cycle_budget) << " cycles";
     }
+    auto qe_cuda_stream = getQueryEngineCudaStreamForDevice(device_id);
     checkCudaErrors(cuModuleGetGlobal(
         &dw_cycle_budget, &dw_cycle_budget_size, module_ptr, "dw_cycle_budget"));
     CHECK_EQ(dw_cycle_budget_size, sizeof(uint64_t));
-    checkCudaErrors(cuMemcpyHtoD(
-        dw_cycle_budget, reinterpret_cast<void*>(&cycle_budget), sizeof(uint64_t)));
+    checkCudaErrors(cuMemcpyHtoDAsync(dw_cycle_budget,
+                                      reinterpret_cast<void*>(&cycle_budget),
+                                      sizeof(uint64_t),
+                                      qe_cuda_stream));
+    checkCudaErrors(cuStreamSynchronize(qe_cuda_stream));
 
     CUdeviceptr dw_sm_cycle_start;
     size_t dw_sm_cycle_start_size;
     checkCudaErrors(cuModuleGetGlobal(
         &dw_sm_cycle_start, &dw_sm_cycle_start_size, module_ptr, "dw_sm_cycle_start"));
     CHECK_EQ(dw_sm_cycle_start_size, 128 * sizeof(uint64_t));
-    checkCudaErrors(cuMemsetD32(dw_sm_cycle_start, 0, 128 * 2));
+    checkCudaErrors(cuMemsetD32Async(dw_sm_cycle_start, 0, 128 * 2, qe_cuda_stream));
+    checkCudaErrors(cuStreamSynchronize(qe_cuda_stream));
 
     if (!could_interrupt) {
       // Executor is not marked as interrupted, make sure dynamic watchdog doesn't block
@@ -106,7 +115,8 @@ class NvidiaKernel : public DeviceKernel {
       checkCudaErrors(
           cuModuleGetGlobal(&dw_abort, &dw_abort_size, module_ptr, "dw_abort"));
       CHECK_EQ(dw_abort_size, sizeof(uint32_t));
-      checkCudaErrors(cuMemsetD32(dw_abort, 0, 1));
+      checkCudaErrors(cuMemsetD32Async(dw_abort, 0, 1, qe_cuda_stream));
+      checkCudaErrors(cuStreamSynchronize(qe_cuda_stream));
     }
 
     cuEventRecord(stop, 0);
@@ -118,7 +128,7 @@ class NvidiaKernel : public DeviceKernel {
             << " ms\n";
   }
 
-  void initializeRuntimeInterrupter() override {
+  void initializeRuntimeInterrupter(const int device_id) override {
     CHECK(module_ptr);
     CUevent start, stop;
     cuEventCreate(&start, 0);
@@ -132,7 +142,9 @@ class NvidiaKernel : public DeviceKernel {
                                       module_ptr,
                                       "runtime_interrupt_flag"));
     CHECK_EQ(runtime_interrupt_flag_size, sizeof(uint32_t));
-    checkCudaErrors(cuMemsetD32(runtime_interrupt_flag, 0, 1));
+    auto qe_cuda_stream = getQueryEngineCudaStreamForDevice(device_id);
+    checkCudaErrors(cuMemsetD32Async(runtime_interrupt_flag, 0, 1, qe_cuda_stream));
+    checkCudaErrors(cuStreamSynchronize(qe_cuda_stream));
 
     cuEventRecord(stop, 0);
     cuEventSynchronize(stop);
@@ -141,6 +153,11 @@ class NvidiaKernel : public DeviceKernel {
     VLOG(1) << "Device " << std::to_string(device_id)
             << ": launchGpuCode: runtime query interrupter init: "
             << std::to_string(milliseconds) << " ms";
+    Executor::registerActiveModule(module_ptr, device_id);
+  }
+
+  void resetRuntimeInterrupter(const int device_id) override {
+    Executor::unregisterActiveModule(device_id);
   }
 
   std::unique_ptr<DeviceClock> make_clock() override {

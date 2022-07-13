@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,6 +71,9 @@ std::string suffix(SQLTypes type) {
   }
   if (type == kLINESTRING) {
     return std::string("_LineString");
+  }
+  if (type == kMULTILINESTRING) {
+    return std::string("_MultiLineString");
   }
   if (type == kPOLYGON) {
     return std::string("_Polygon");

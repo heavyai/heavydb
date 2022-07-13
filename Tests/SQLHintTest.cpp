@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 
 #include "Catalog/Catalog.h"
 #include "Catalog/DBObject.h"
-#include "DBHandlerTestHelpers.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/QueryHint.h"
 #include "QueryRunner/QueryRunner.h"
@@ -67,12 +66,12 @@ std::shared_ptr<ResultSet> run_query(const std::string& query_str,
 std::pair<std::shared_ptr<HashTable>, std::optional<RegisteredQueryHint>>
 getCachedHashTable(std::set<QueryPlanHash>& already_visited,
                    CacheItemType cache_item_type) {
-  auto cached_ht_info = QR::get()->getCachedHashtableWithoutCacheKey(
-      already_visited, cache_item_type, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  auto cache_key = std::get<0>(cached_ht_info);
+  auto cached_ht = QR::get()->getCachedHashtableWithoutCacheKey(
+      already_visited, cache_item_type, 0 /* CPU_DEVICE_IDENTIFIER*/);
+  auto cache_key = std::get<0>(cached_ht);
   already_visited.insert(cache_key);
-  return std::make_pair(std::get<1>(cached_ht_info),
-                        std::get<2>(cached_ht_info)->registered_query_hint);
+  return std::make_pair(std::get<1>(cached_ht),
+                        std::get<2>(cached_ht)->registered_query_hint);
 }
 
 void createTable() {
@@ -87,8 +86,6 @@ void createTable() {
   QR::get()->runDDLStatement(
       "CREATE TABLE complex_windowing(str text encoding dict(32), ts timestamp(0), lat "
       "float, lon float);");
-  QR::get()->runDDLStatement("CREATE TABLE T1 (v1 INT, v2 INT, v3 INT);");
-  QR::get()->runDDLStatement("CREATE TABLE T2 (v1 INT, v2 INT, v3 INT);");
 }
 
 void populateTable() {
@@ -137,12 +134,6 @@ void populateTable() {
     const auto data_str = "INSERT INTO complex_windowing VALUES(" + data + ");";
     run_query(data_str, ExecutorDeviceType::CPU);
   }
-
-  std::vector<std::string> hash_join_hint_test_data{"1,1,1", "2,1,1", "3,1,1", "4,1,1"};
-  for (const auto& data : hash_join_hint_test_data) {
-    run_query("INSERT INTO T1 VALUES(" + data + ");", ExecutorDeviceType::CPU);
-    run_query("INSERT INTO T2 VALUES(" + data + ");", ExecutorDeviceType::CPU);
-  }
 }
 
 void dropTable() {
@@ -150,8 +141,6 @@ void dropTable() {
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS geospatial_test;");
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS geospatial_inner_join_test;");
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS complex_windowing;");
-  QR::get()->runDDLStatement("DROP TABLE IF EXISTS T1;");
-  QR::get()->runDDLStatement("DROP TABLE IF EXISTS T2;");
 }
 
 TEST(kCpuMode, ForceToCPUMode) {
@@ -167,11 +156,11 @@ TEST(kCpuMode, ForceToCPUMode) {
 }
 
 TEST(QueryHint, QueryHintForOverlapsJoin) {
-  const auto overlaps_join_status_backup = g_enable_overlaps_hashjoin;
-  g_enable_overlaps_hashjoin = true;
-  ScopeGuard reset_loop_join_state = [&overlaps_join_status_backup] {
-    g_enable_overlaps_hashjoin = overlaps_join_status_backup;
+  ScopeGuard reset_loop_join_state = [orig_overlaps_hash_join =
+                                          g_enable_overlaps_hashjoin] {
+    g_enable_overlaps_hashjoin = orig_overlaps_hash_join;
   };
+  g_enable_overlaps_hashjoin = true;
 
   {
     const auto q1 =
@@ -294,11 +283,10 @@ TEST(QueryHint, QueryHintForOverlapsJoin) {
 }
 
 TEST(QueryHint, QueryLayoutHintWithEnablingColumnarOutput) {
-  const auto enable_columnar_output = g_enable_columnar_output;
-  g_enable_columnar_output = true;
-  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
-    g_enable_columnar_output = enable_columnar_output;
+  ScopeGuard reset_columnar_output = [orig_columnar_output = g_enable_columnar_output] {
+    g_enable_columnar_output = orig_columnar_output;
   };
+  g_enable_columnar_output = true;
 
   const auto q1 = "SELECT /*+ columnar_output */ * FROM SQL_HINT_DUMMY";
   const auto q2 = "SELECT /*+ rowwise_output */ * FROM SQL_HINT_DUMMY";
@@ -353,11 +341,11 @@ TEST(QueryHint, QueryLayoutHintWithEnablingColumnarOutput) {
 }
 
 TEST(QueryHint, QueryLayoutHintWithoutEnablingColumnarOutput) {
-  const auto enable_columnar_output = g_enable_columnar_output;
-  g_enable_columnar_output = false;
-  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
-    g_enable_columnar_output = enable_columnar_output;
+  ScopeGuard reset_columnar_output = [orig_columnar_output = g_enable_columnar_output] {
+    g_enable_columnar_output = orig_columnar_output;
   };
+  g_enable_columnar_output = false;
+
   const auto q1 = "SELECT /*+ columnar_output */ * FROM SQL_HINT_DUMMY";
   const auto q2 = "SELECT /*+ rowwise_output */ * FROM SQL_HINT_DUMMY";
   const auto q3 = "SELECT /*+ columnar_output, rowwise_output */ * FROM SQL_HINT_DUMMY";
@@ -411,11 +399,10 @@ TEST(QueryHint, QueryLayoutHintWithoutEnablingColumnarOutput) {
 }
 
 TEST(QueryHint, UDF) {
-  const auto enable_columnar_output = g_enable_columnar_output;
-  g_enable_columnar_output = false;
-  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
-    g_enable_columnar_output = enable_columnar_output;
+  ScopeGuard reset_columnar_output = [orig_columnar_output = g_enable_columnar_output] {
+    g_enable_columnar_output = orig_columnar_output;
   };
+  g_enable_columnar_output = false;
 
   const auto q1 =
       "SELECT out0 FROM TABLE(get_max_with_row_offset(cursor(SELECT /*+ columnar_output "
@@ -442,11 +429,10 @@ TEST(QueryHint, UDF) {
 }
 
 TEST(QueryHint, PerQueryBlockHint) {
-  const auto enable_columnar_output = g_enable_columnar_output;
-  g_enable_columnar_output = false;
-  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
-    g_enable_columnar_output = enable_columnar_output;
+  ScopeGuard reset_columnar_output = [orig_columnar_output = g_enable_columnar_output] {
+    g_enable_columnar_output = orig_columnar_output;
   };
+  g_enable_columnar_output = false;
 
   const auto q1 =
       "SELECT /*+ cpu_mode */ T2.k FROM SQL_HINT_DUMMY T1, (SELECT /*+ columnar_output "
@@ -494,11 +480,10 @@ TEST(QueryHint, PerQueryBlockHint) {
 }
 
 TEST(QueryHint, WindowFunction) {
-  const auto enable_columnar_output = g_enable_columnar_output;
-  g_enable_columnar_output = false;
-  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
-    g_enable_columnar_output = enable_columnar_output;
+  ScopeGuard reset_columnar_output = [orig_columnar_output = g_enable_columnar_output] {
+    g_enable_columnar_output = orig_columnar_output;
   };
+  g_enable_columnar_output = false;
 
   const auto q1 =
       "SELECT /*+ columnar_output */ str1, timestampdiff(minute, lag(ts1) over "
@@ -555,20 +540,12 @@ TEST(QueryHint, WindowFunction) {
             static_cast<size_t>(7));
 }
 
-TEST(QueryHint, GlobalHint_OverlapsJoinHashTable) {
-  const auto overlaps_join_status_backup = g_enable_overlaps_hashjoin;
-  const auto data_recycler_flag_backup = g_enable_data_recycler;
-  const auto hashtable_cache_flag_backup = g_use_hashtable_cache;
-  g_enable_overlaps_hashjoin = true;
-  g_enable_data_recycler = true;
-  g_use_hashtable_cache = true;
-  ScopeGuard reset_loop_join_state = [&overlaps_join_status_backup,
-                                      &data_recycler_flag_backup,
-                                      &hashtable_cache_flag_backup] {
-    g_enable_overlaps_hashjoin = overlaps_join_status_backup;
-    g_enable_data_recycler = data_recycler_flag_backup;
-    g_use_hashtable_cache = hashtable_cache_flag_backup;
+TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
+  ScopeGuard reset_loop_join_state = [orig_overlaps_hash_join =
+                                          g_enable_overlaps_hashjoin] {
+    g_enable_overlaps_hashjoin = orig_overlaps_hash_join;
   };
+  g_enable_overlaps_hashjoin = true;
 
   // testing global query hint for overlaps join is tricky since we apply all registered
   // hint during hashtable building time, so it's hard to get the result at that time
@@ -713,11 +690,10 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashTable) {
 }
 
 TEST(QueryHint, GlobalHint_ResultsetLayoutAndCPUMode) {
-  const auto enable_columnar_output = g_enable_columnar_output;
-  g_enable_columnar_output = false;
-  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
-    g_enable_columnar_output = enable_columnar_output;
+  ScopeGuard reset_columnar_output = [orig_columnar_output = g_enable_columnar_output] {
+    g_enable_columnar_output = orig_columnar_output;
   };
+  g_enable_columnar_output = false;
 
   // check whether we can see the enabled global hint in the outer query block
   const auto q1 =
@@ -818,235 +794,34 @@ TEST(QueryHint, GlobalHint_ResultsetLayoutAndCPUMode) {
     EXPECT_TRUE(global_query_hints->isHintRegistered(QueryHint::kColumnarOutput));
     EXPECT_FALSE(global_query_hints->isHintRegistered(QueryHint::kRowwiseOutput));
   }
-}
 
-TEST(QueryHint, ManipulatingPerfectAndBaselineHashJoinProperty) {
-  std::vector<std::string> queries{
-      "  */ COUNT(1) FROM T1, T2 WHERE T1.v1 = T2.v1",  // Perfect-OneToOne
-      "  */ COUNT(1) FROM T1, T2 WHERE T1.v2 = T2.v2",  // Perfect-OneToMany
-      "  */ COUNT(1) FROM T1, T2 WHERE T1.v1 = T2.v1 AND T1.v2 = T2.v2",  // Baseline-OneToOne
-      "  */ COUNT(1) FROM T1, T2 WHERE T1.v2 = T2.v2 AND T1.v3 = T2.v3"  // Baseline-OneToMany
-  };
+  ScopeGuard reset_resultset_recycler_state =
+      [orig_data_recycler = g_enable_data_recycler,
+       orig_resultset_recycler = g_use_query_resultset_cache] {
+        g_enable_data_recycler = orig_data_recycler,
+        g_use_query_resultset_cache = orig_resultset_recycler;
+      };
+  g_enable_data_recycler = true;
+  g_use_query_resultset_cache = true;
 
-  auto gen_query_string = [](const std::string& hint, const std::string& query) {
-    return hint + query;
-  };
-
-  auto check_hashtable = [](HashTable* hashtable,
-                            HashTableHashingType expected_hashing_type,
-                            HashTableLayoutType expected_layout_type) {
-    CHECK(hashtable);
-    if (expected_hashing_type == HashTableHashingType::PERFECT) {
-      auto perfect_ht = dynamic_cast<PerfectHashTable*>(hashtable);
-      EXPECT_TRUE(perfect_ht);
-      EXPECT_EQ(perfect_ht->getLayout(),
-                HashTablePropertyRecycler::translateLayoutType(expected_layout_type));
-    } else if (expected_hashing_type == HashTableHashingType::BASELINE) {
-      auto baseline_ht = dynamic_cast<BaselineHashTable*>(hashtable);
-      EXPECT_TRUE(baseline_ht);
-      EXPECT_EQ(baseline_ht->getLayout(),
-                HashTablePropertyRecycler::translateLayoutType(expected_layout_type));
-    } else {
-      CHECK(false);
-    }
-  };
-
-  std::set<QueryPlanHash> visited_hashtable_key;
+  // check the resultset hint for table function
+  const auto q6 =
+      "SELECT /*+ keep_table_function_result */ out0 FROM "
+      "TABLE(get_max_with_row_offset(cursor(SELECT key FROM SQL_HINT_DUMMY)));";
   {
-    auto hint = "SELECT /*+ hash_join(hashing=\'Perfect\', layout=\'OneToOne\')";
-
-    // Perfect-OneToOne, expect
-    auto res1 = run_query(gen_query_string(hint, queries[0]), ExecutorDeviceType::CPU);
-    {
-      auto cached_ht_info =
-          getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT);
-      check_hashtable(cached_ht_info.first.get(),
-                      HashTableHashingType::PERFECT,
-                      HashTableLayoutType::ONE);
-    }
-
-    auto res2 = run_query(gen_query_string(hint, queries[1]), ExecutorDeviceType::CPU);
-    {
-      // even though we give a layout hint as OneToOne, the actual hashtable has OneToMany
-      // layout and it is expected
-      auto cached_ht_info =
-          getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT);
-      check_hashtable(cached_ht_info.first.get(),
-                      HashTableHashingType::PERFECT,
-                      HashTableLayoutType::MANY);
-    }
-
-    auto res3 = run_query(gen_query_string(hint, queries[2]), ExecutorDeviceType::CPU);
-    {
-      // since this query has more than one join column, its hashtable is now baseline
-      // join hashtable
-      auto cached_ht_info =
-          getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT);
-      check_hashtable(cached_ht_info.first.get(),
-                      HashTableHashingType::BASELINE,
-                      HashTableLayoutType::ONE);
-    }
-
-    auto res4 = run_query(gen_query_string(hint, queries[3]), ExecutorDeviceType::CPU);
-    {
-      // since this query has more than one join column, its hashtable is now baseline
-      // join hashtable
-      auto cached_ht_info =
-          getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT);
-      check_hashtable(cached_ht_info.first.get(),
-                      HashTableHashingType::BASELINE,
-                      HashTableLayoutType::MANY);
-    }
+    auto global_query_hints = QR::get()->getParsedGlobalQueryHints(q6);
+    EXPECT_TRUE(global_query_hints);
+    EXPECT_TRUE(global_query_hints->isHintRegistered(QueryHint::kKeepTableFuncResult));
   }
 
-  QR::get()->clearCpuMemory();
-  visited_hashtable_key.clear();
-
+  // check the resultset hint for table function
+  const auto q7 =
+      "SELECT out0 FROM TABLE(get_max_with_row_offset(cursor(SELECT /*+ "
+      "keep_table_function_result */ key FROM SQL_HINT_DUMMY)));";
   {
-    auto hint = "SELECT /*+ hash_join(hashing=\'Perfect\', layout=\'OneToMany\') ";
-
-    // Perfect-OneToOne, expect
-    auto res1 = run_query(gen_query_string(hint, queries[0]), ExecutorDeviceType::CPU);
-    {
-      auto cached_ht_info =
-          getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT);
-      check_hashtable(cached_ht_info.first.get(),
-                      HashTableHashingType::PERFECT,
-                      HashTableLayoutType::MANY);
-    }
-
-    auto res2 = run_query(gen_query_string(hint, queries[1]), ExecutorDeviceType::CPU);
-    {
-      // even though we give a layout hint as OneToOne, the actual hashtable has OneToMany
-      // layout and it is expected
-      auto cached_ht_info =
-          getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT);
-      check_hashtable(cached_ht_info.first.get(),
-                      HashTableHashingType::PERFECT,
-                      HashTableLayoutType::MANY);
-    }
-
-    auto res3 = run_query(gen_query_string(hint, queries[2]), ExecutorDeviceType::CPU);
-    {
-      // since this query has more than one join column, its hashtable is now baseline
-      // join hashtable
-      auto cached_ht_info =
-          getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT);
-      check_hashtable(cached_ht_info.first.get(),
-                      HashTableHashingType::BASELINE,
-                      HashTableLayoutType::MANY);
-    }
-
-    auto res4 = run_query(gen_query_string(hint, queries[3]), ExecutorDeviceType::CPU);
-    {
-      // since this query has more than one join column, its hashtable is now baseline
-      // join hashtable
-      auto cached_ht_info =
-          getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT);
-      check_hashtable(cached_ht_info.first.get(),
-                      HashTableHashingType::BASELINE,
-                      HashTableLayoutType::MANY);
-    }
-  }
-
-  QR::get()->clearCpuMemory();
-  visited_hashtable_key.clear();
-
-  {
-    auto hint = "SELECT /*+ hash_join(hashing=\'Baseline\', layout=\'OneToOne\') ";
-
-    // Perfect-OneToOne, expect
-    auto res1 = run_query(gen_query_string(hint, queries[0]), ExecutorDeviceType::CPU);
-    {
-      auto cached_ht_info =
-          getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT);
-      check_hashtable(cached_ht_info.first.get(),
-                      HashTableHashingType::BASELINE,
-                      HashTableLayoutType::ONE);
-    }
-
-    auto res2 = run_query(gen_query_string(hint, queries[1]), ExecutorDeviceType::CPU);
-    {
-      // even though we give a layout hint as OneToOne, the actual hashtable has OneToMany
-      // layout and it is expected
-      auto cached_ht_info =
-          getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT);
-      check_hashtable(cached_ht_info.first.get(),
-                      HashTableHashingType::BASELINE,
-                      HashTableLayoutType::MANY);
-    }
-
-    auto res3 = run_query(gen_query_string(hint, queries[2]), ExecutorDeviceType::CPU);
-    {
-      // since this query has more than one join column, its hashtable is now baseline
-      // join hashtable
-      auto cached_ht_info =
-          getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT);
-      check_hashtable(cached_ht_info.first.get(),
-                      HashTableHashingType::BASELINE,
-                      HashTableLayoutType::ONE);
-    }
-
-    auto res4 = run_query(gen_query_string(hint, queries[3]), ExecutorDeviceType::CPU);
-    {
-      // since this query has more than one join column, its hashtable is now baseline
-      // join hashtable
-      auto cached_ht_info =
-          getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT);
-      check_hashtable(cached_ht_info.first.get(),
-                      HashTableHashingType::BASELINE,
-                      HashTableLayoutType::MANY);
-    }
-  }
-
-  QR::get()->clearCpuMemory();
-  visited_hashtable_key.clear();
-
-  {
-    auto hint = "SELECT /*+ hash_join(hashing=\'Baseline\', layout=\'OneToMany\') ";
-
-    // Perfect-OneToOne, expect
-    auto res1 = run_query(gen_query_string(hint, queries[0]), ExecutorDeviceType::CPU);
-    {
-      auto cached_ht_info =
-          getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT);
-      check_hashtable(cached_ht_info.first.get(),
-                      HashTableHashingType::BASELINE,
-                      HashTableLayoutType::MANY);
-    }
-
-    auto res2 = run_query(gen_query_string(hint, queries[1]), ExecutorDeviceType::CPU);
-    {
-      // even though we give a layout hint as OneToOne, the actual hashtable has OneToMany
-      // layout and it is expected
-      auto cached_ht_info =
-          getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT);
-      check_hashtable(cached_ht_info.first.get(),
-                      HashTableHashingType::BASELINE,
-                      HashTableLayoutType::MANY);
-    }
-
-    auto res3 = run_query(gen_query_string(hint, queries[2]), ExecutorDeviceType::CPU);
-    {
-      // since this query has more than one join column, its hashtable is now baseline
-      // join hashtable
-      auto cached_ht_info =
-          getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT);
-      check_hashtable(cached_ht_info.first.get(),
-                      HashTableHashingType::BASELINE,
-                      HashTableLayoutType::MANY);
-    }
-
-    auto res4 = run_query(gen_query_string(hint, queries[3]), ExecutorDeviceType::CPU);
-    {
-      // since this query has more than one join column, its hashtable is now baseline
-      // join hashtable
-      auto cached_ht_info =
-          getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT);
-      check_hashtable(cached_ht_info.first.get(),
-                      HashTableHashingType::BASELINE,
-                      HashTableLayoutType::MANY);
-    }
+    auto global_query_hints = QR::get()->getParsedGlobalQueryHints(q7);
+    EXPECT_TRUE(global_query_hints);
+    EXPECT_TRUE(global_query_hints->isHintRegistered(QueryHint::kKeepTableFuncResult));
   }
 }
 

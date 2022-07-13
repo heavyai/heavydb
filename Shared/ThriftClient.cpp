@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,18 +133,19 @@ class ProxyTHttpClient : public THttpClient {
     uint32_t len;
     writeBuffer_.getBuffer(&buf, &len);
 
+    constexpr static const char* CRLF = "\r\n";
+
     std::ostringstream h;
-    h << "POST " << path_ << " HTTP/1.1" << THttpClient::CRLF << "Host: " << host_
-      << THttpClient::CRLF << "Content-Type: application/x-thrift" << THttpClient::CRLF
-      << "Content-Length: " << len << THttpClient::CRLF << "Accept: application/x-thrift"
-      << THttpClient::CRLF << "User-Agent: Thrift/" << THRIFT_PACKAGE_VERSION
-      << " (C++/THttpClient)" << THttpClient::CRLF << "Connection: keep-alive"
-      << THttpClient::CRLF;
+    h << "POST " << path_ << " HTTP/1.1" << CRLF << "Host: " << host_ << CRLF
+      << "Content-Type: application/x-thrift" << CRLF << "Content-Length: " << len << CRLF
+      << "Accept: application/x-thrift" << CRLF << "User-Agent: Thrift/"
+      << THRIFT_PACKAGE_VERSION << " (C++/THttpClient)" << CRLF
+      << "Connection: keep-alive" << CRLF;
     if (!cookies_.empty()) {
       std::string cookie = "Cookie:" + boost::algorithm::join(cookies_, ";");
-      h << cookie << THttpClient::CRLF;
+      h << cookie << CRLF;
     }
-    h << THttpClient::CRLF;
+    h << CRLF;
 
     cookies_.clear();
     std::string header = h.str();

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
  * @file CommandLineTest.cpp
  * @brief Test suite for executables, scripts, their respecitve flags,
  * and other functionality invoked from the command line.
+ *
  */
 
 #include <gtest/gtest.h>
@@ -25,7 +26,11 @@
 #include <boost/filesystem.hpp>
 #include <boost/process.hpp>
 
+// boost/process.hpp > ... > boost/asio/detail/socket_types.hpp > winsock2.h > windows.h
+#include "Shared/cleanup_global_namespace.h"
+
 #include "Logger/Logger.h"
+#include "Shared/SysDefinitions.h"
 #include "TestHelpers.h"
 
 namespace bp = boost::process;
@@ -49,7 +54,7 @@ bool find_file(const path& root, const path& fileName, path& result) {
 }
 }  // namespace
 
-// Class to test the initdb executable.
+// Class to test the initheavy executable.
 class InitDBTest : public testing::Test {
  private:
   path initdb_;
@@ -61,7 +66,7 @@ class InitDBTest : public testing::Test {
     ASSERT_FALSE(bf::exists(temp_dir_));
     ASSERT_FALSE(bf::exists(nonexistant_dir_));
     bf::create_directory(temp_dir_);
-    ASSERT_TRUE(find_file(bf::relative(path("../")), "initdb", initdb_));
+    ASSERT_TRUE(find_file(bf::relative(path("../")), "initheavy", initdb_));
   }
   void TearDown() override { bf::remove_all(temp_dir_); }
 
@@ -95,7 +100,10 @@ class CommandLineTestcase {
     boost::erase_all(expected_std_out_, "\n");
     boost::erase_all(expected_std_err_, "\n");
 
-    ASSERT_EQ(returnCode, expected_return_code_);
+    ASSERT_EQ(returnCode, expected_return_code_)
+        << "std_out_string_(" << std_out_string_ << ") expected_std_out_("
+        << expected_std_out_ << ") std_err_string_(" << std_err_string_
+        << ") expected_std_err_(" << expected_std_err_ << ')';
     ASSERT_EQ(std_out_string_, expected_std_out_);
     ASSERT_EQ(std_err_string_, expected_std_err_);
   }
@@ -126,20 +134,20 @@ TEST_F(InitDBTest, Help) {
                       0,
                       R"(Options:
   -h [ --help ]                         Print help messages 
-  --data arg                            Directory path to OmniSci catalogs
-  -f [ --force ]                        Force overwriting of existing OmniSci 
+  --data arg                            Directory path to HeavyDB catalogs
+  -f [ --force ]                        Force overwriting of existing HeavyDB 
                                         instance
   --skip-geo                            Skip inserting sample geo data
   --enable-thrift-logs [=arg(=1)] (=0)  Enable writing messages directly from 
                                         thrift to stdout/stderr.
 
 Logging:
-  --log-directory arg (="mapd_log")     Logging directory. May be relative to 
+  --log-directory arg (="log")          Logging directory. May be relative to 
                                         data directory, or absolute.
-  --log-file-name arg (=initdb.{SEVERITY}.%Y%m%d-%H%M%S.log)
+  --log-file-name arg (=initheavy.{SEVERITY}.%Y%m%d-%H%M%S.log)
                                         Log file name relative to 
                                         log-directory.
-  --log-symlink arg (=initdb.{SEVERITY})
+  --log-symlink arg (=initheavy.{SEVERITY})
                                         Symlink to active log.
   --log-severity arg (=INFO)            Log to file severity level: INFO 
                                         WARNING ERROR FATAL
@@ -167,18 +175,21 @@ TEST_F(InitDBTest, AlreadyInit) {
                       get_temp_dir(),
                       1,
                       "",
-                      "OmniSci catalogs already initialized at " + get_temp_dir() +
+                      "HeavyDB catalogs directory already exists at " + get_temp_dir() +
+                          "/" + shared::kCatalogDirectoryName +
                           ". Use -f to force reinitialization.");
 }
 // Blocked by existing cache.
 TEST_F(InitDBTest, ExistingCache) {
-  boost::filesystem::create_directory(get_temp_dir() + "/omnisci_disk_cache");
+  boost::filesystem::create_directory(get_temp_dir() + "/" +
+                                      shared::kDefaultDiskCacheDirName);
   CommandLineTestcase(get_executable(),
                       get_temp_dir(),
                       1,
                       "",
-                      "OmniSci disk cache already exists at " + get_temp_dir() +
-                          "/omnisci_disk_cache" + ". Use -f to force reinitialization.");
+                      "HeavyDB disk cache already exists at " + get_temp_dir() + "/" +
+                          shared::kDefaultDiskCacheDirName +
+                          ". Use -f to force reinitialization.");
 }
 // Override existing database.
 TEST_F(InitDBTest, Force) {
@@ -187,10 +198,13 @@ TEST_F(InitDBTest, Force) {
 }
 // Override existing cache
 TEST_F(InitDBTest, ForceCache) {
-  boost::filesystem::create_directory(get_temp_dir() + "/omnisci_disk_cache");
-  boost::filesystem::create_directory(get_temp_dir() + "/omnisci_disk_cache/temp");
+  boost::filesystem::create_directory(get_temp_dir() + "/" +
+                                      shared::kDefaultDiskCacheDirName);
+  boost::filesystem::create_directory(get_temp_dir() + "/" +
+                                      shared::kDefaultDiskCacheDirName + "/temp");
   CommandLineTestcase(get_executable(), get_temp_dir() + " -f", 0, "", "");
-  ASSERT_FALSE(boost::filesystem::exists(get_temp_dir() + "/omnisci_disk_cache/temp"));
+  ASSERT_FALSE(boost::filesystem::exists(get_temp_dir() + "/" +
+                                         shared::kDefaultDiskCacheDirName + "/temp"));
 }
 // Data directory does not exist.
 TEST_F(InitDBTest, MissingDir) {

@@ -1,5 +1,5 @@
 <#--
- Copyright 2020 OmniSci, Inc.
+ Copyright 2022 HEAVY.AI, Inc.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -85,33 +85,33 @@ SqlNodeList idList() :
 }
 
 // Parse an optional data type encoding, default is NONE.
-Pair<OmniSciEncoding, Integer> OmniSciEncodingOpt() :
+Pair<HeavyDBEncoding, Integer> HeavyDBEncodingOpt() :
 {
-    OmniSciEncoding encoding;
+    HeavyDBEncoding encoding;
     Integer size = 0;
 }
 {
     <ENCODING>
     (
-        <NONE> { encoding = OmniSciEncoding.NONE; }
+        <NONE> { encoding = HeavyDBEncoding.NONE; }
     |
-        <FIXED> { encoding = OmniSciEncoding.FIXED; }
+        <FIXED> { encoding = HeavyDBEncoding.FIXED; }
         [ <LPAREN> size = IntLiteral() <RPAREN> ]
     |
-        <DAYS> { encoding = OmniSciEncoding.DAYS; }
+        <DAYS> { encoding = HeavyDBEncoding.DAYS; }
         [ <LPAREN> size = IntLiteral() <RPAREN> ]
     | 
-        <DICT> { encoding = OmniSciEncoding.DICT; }
+        <DICT> { encoding = HeavyDBEncoding.DICT; }
         [ <LPAREN> size = IntLiteral() <RPAREN> ]
     | 
-        <COMPRESSED> { encoding = OmniSciEncoding.COMPRESSED; }
+        <COMPRESSED> { encoding = HeavyDBEncoding.COMPRESSED; }
         [ <LPAREN> size = IntLiteral() <RPAREN> ]
     )
     { return new Pair(encoding, size); }
 }
 
 // Parse sql type name that allow arrays
-SqlTypeNameSpec OmniSciArrayTypeName(Span s) :
+SqlTypeNameSpec HeavyDBArrayTypeName(Span s) :
 {
     final SqlTypeName sqlTypeName;
     boolean isText = false;
@@ -150,12 +150,12 @@ SqlTypeNameSpec OmniSciArrayTypeName(Span s) :
         <RBRACKET>
     )
     {
-        return new OmniSciTypeNameSpec(sqlTypeName, isText, size, s.end(this));
+        return new HeavyDBTypeNameSpec(sqlTypeName, isText, size, s.end(this));
     }
 }
 
 // Parse DECIMAL that allows arrays
-SqlTypeNameSpec OmniSciDecimalArrayTypeName(Span s) :
+SqlTypeNameSpec HeavyDBDecimalArrayTypeName(Span s) :
 {
     final SqlTypeName sqlTypeName;
     Integer size = -1;
@@ -181,12 +181,12 @@ SqlTypeNameSpec OmniSciDecimalArrayTypeName(Span s) :
         <RBRACKET>
     )
     {
-        return new OmniSciTypeNameSpec(sqlTypeName, false, size, precision, scale, s.end(this));
+        return new HeavyDBTypeNameSpec(sqlTypeName, false, size, precision, scale, s.end(this));
     }
 }
 
 // Parse sql TIMESTAMP that allow arrays 
-SqlTypeNameSpec OmniSciTimestampArrayTypeName(Span s) :
+SqlTypeNameSpec HeavyDBTimestampArrayTypeName(Span s) :
 {
     final SqlTypeName sqlTypeName;
     Integer size = -1;
@@ -208,12 +208,12 @@ SqlTypeNameSpec OmniSciTimestampArrayTypeName(Span s) :
         <RBRACKET>
     )
     {
-        return new OmniSciTypeNameSpec(sqlTypeName, false, size, precision, scale, s.end(this));
+        return new HeavyDBTypeNameSpec(sqlTypeName, false, size, precision, scale, s.end(this));
     }
 }
 
 // Parse sql TEXT type 
-SqlTypeNameSpec OmniSciTextTypeName(Span s) :
+SqlTypeNameSpec HeavyDBTextTypeName(Span s) :
 {
     final SqlTypeName sqlTypeName;
     boolean isText = false;
@@ -225,23 +225,25 @@ SqlTypeNameSpec OmniSciTextTypeName(Span s) :
         sqlTypeName = SqlTypeName.VARCHAR; // TODO: consider overloading / adding TEXT as base type
     }
     {
-        return new OmniSciTypeNameSpec(sqlTypeName, isText, s.end(this));
+        return new HeavyDBTypeNameSpec(sqlTypeName, isText, s.end(this));
     }
 }
 
-OmniSciGeo OmniSciGeoType() :
+HeavyDBGeo HeavyDBGeoType() :
 {
-    final OmniSciGeo geoType;
+    final HeavyDBGeo geoType;
 }
 {
     (
-        <POINT> { geoType = OmniSciGeo.POINT; }
+        <POINT> { geoType = HeavyDBGeo.POINT; }
     |   
-        <LINESTRING> { geoType = OmniSciGeo.LINESTRING; }
+        <LINESTRING> { geoType = HeavyDBGeo.LINESTRING; }
     | 
-        <POLYGON> { geoType = OmniSciGeo.POLYGON; }
+        <MULTILINESTRING> { geoType = HeavyDBGeo.MULTILINESTRING; }
+    | 
+        <POLYGON> { geoType = HeavyDBGeo.POLYGON; }
     |
-        <MULTIPOLYGON> { geoType = OmniSciGeo.MULTIPOLYGON; }
+        <MULTIPOLYGON> { geoType = HeavyDBGeo.MULTIPOLYGON; }
     )
     {
         return geoType;
@@ -249,16 +251,16 @@ OmniSciGeo OmniSciGeoType() :
 }
 
 // Parse sql type name for geospatial data 
-SqlTypeNameSpec OmniSciGeospatialTypeName(Span s) :
+SqlTypeNameSpec HeavyDBGeospatialTypeName(Span s) :
 {
-    final OmniSciGeo geoType;
+    final HeavyDBGeo geoType;
     boolean isGeography = false;
     Integer coordinateSystem = 0;
-    Pair<OmniSciEncoding, Integer> encoding = null;
+    Pair<HeavyDBEncoding, Integer> encoding = null;
 }
 {
     (
-        geoType = OmniSciGeoType()
+        geoType = HeavyDBGeoType()
         |
         (
             <GEOMETRY> { 
@@ -269,17 +271,17 @@ SqlTypeNameSpec OmniSciGeospatialTypeName(Span s) :
                 isGeography = true;
             }
         )
-        <LPAREN> geoType = OmniSciGeoType() [ <COMMA> coordinateSystem = IntLiteral() ] <RPAREN>
-        [ encoding = OmniSciEncodingOpt() ]
+        <LPAREN> geoType = HeavyDBGeoType() [ <COMMA> coordinateSystem = IntLiteral() ] <RPAREN>
+        [ encoding = HeavyDBEncodingOpt() ]
     )
     {
-        return new OmniSciGeoTypeNameSpec(geoType, coordinateSystem, isGeography, encoding, s.end(this));
+        return new HeavyDBGeoTypeNameSpec(geoType, coordinateSystem, isGeography, encoding, s.end(this));
     }
 }
 
 // Some SQL type names need special handling due to the fact that they have
 // spaces in them but are not quoted.
-SqlTypeNameSpec OmniSciTypeName() :
+SqlTypeNameSpec HeavyDBTypeName() :
 {
     final SqlTypeNameSpec typeNameSpec;
     final SqlIdentifier typeName;
@@ -290,19 +292,19 @@ SqlTypeNameSpec OmniSciTypeName() :
 <#-- additional types are included here -->
 <#-- put custom data types in front of Calcite core data types -->
         LOOKAHEAD(2)
-        typeNameSpec = OmniSciArrayTypeName(s)
+        typeNameSpec = HeavyDBArrayTypeName(s)
     |
         LOOKAHEAD(5)
-        typeNameSpec = OmniSciTimestampArrayTypeName(s)
+        typeNameSpec = HeavyDBTimestampArrayTypeName(s)
     |
         LOOKAHEAD(7)
-        typeNameSpec = OmniSciDecimalArrayTypeName(s)
+        typeNameSpec = HeavyDBDecimalArrayTypeName(s)
     |
         LOOKAHEAD(2)
-        typeNameSpec = OmniSciTextTypeName(s)
+        typeNameSpec = HeavyDBTextTypeName(s)
     |
         LOOKAHEAD(2)
-        typeNameSpec = OmniSciGeospatialTypeName(s)
+        typeNameSpec = HeavyDBGeospatialTypeName(s)
     |
 <#list parser.dataTypeParserMethods as method>
         LOOKAHEAD(2)
@@ -325,26 +327,26 @@ SqlTypeNameSpec OmniSciTypeName() :
 
 
 // Type name with optional scale and precision.
-OmniSciSqlDataTypeSpec OmniSciDataType() :
+HeavyDBSqlDataTypeSpec HeavyDBDataType() :
 {
     SqlTypeNameSpec typeName;
     final Span s;
 }
 {
-    typeName = OmniSciTypeName() {
+    typeName = HeavyDBTypeName() {
         s = span();
     }
     (
         typeName = CollectionsTypeName(typeName)
     )*
     {
-        return new OmniSciSqlDataTypeSpec(
+        return new HeavyDBSqlDataTypeSpec(
             typeName,
             s.end(this));
     }
 }
 
-void OmniSciShardKeyOpt(List<SqlNode> list) : 
+void HeavyDBShardKeyOpt(List<SqlNode> list) : 
 {
     final Span s;
     final SqlIdentifier name;
@@ -357,7 +359,7 @@ void OmniSciShardKeyOpt(List<SqlNode> list) :
     <RPAREN> 
 }
 
-SqlIdentifier OmniSciSharedDictReferences() :
+SqlIdentifier HeavyDBSharedDictReferences() :
 {
     final Span s = Span.of();
     SqlIdentifier name;
@@ -378,7 +380,7 @@ SqlIdentifier OmniSciSharedDictReferences() :
     }
 }
 
-void OmniSciSharedDictOpt(List<SqlNode> list) :
+void HeavyDBSharedDictOpt(List<SqlNode> list) :
 {
     final Span s;
     final SqlIdentifier columnName;
@@ -388,7 +390,7 @@ void OmniSciSharedDictOpt(List<SqlNode> list) :
     <SHARED> { s = span(); } <DICTIONARY>
     <LPAREN> columnName = SimpleIdentifier() <RPAREN>
     <REFERENCES> 
-    referencesColumn = OmniSciSharedDictReferences()
+    referencesColumn = HeavyDBSharedDictReferences()
     {
         list.add(SqlDdlNodes.sharedDict(s.end(this), columnName, referencesColumn));
     }
@@ -397,9 +399,9 @@ void OmniSciSharedDictOpt(List<SqlNode> list) :
 void TableElement(List<SqlNode> list) :
 {
     final SqlIdentifier id;
-    final OmniSciSqlDataTypeSpec type;
+    final HeavyDBSqlDataTypeSpec type;
     final boolean nullable;
-    Pair<OmniSciEncoding, Integer> encoding = null;
+    Pair<HeavyDBEncoding, Integer> encoding = null;
     final SqlNode defval;
     final SqlNode constraint;
     SqlIdentifier name = null;
@@ -409,14 +411,14 @@ void TableElement(List<SqlNode> list) :
 {
     (
         LOOKAHEAD(3)
-        OmniSciShardKeyOpt(list)
+        HeavyDBShardKeyOpt(list)
     |
-        OmniSciSharedDictOpt(list)
+        HeavyDBSharedDictOpt(list)
     |
         (
             id = SimpleIdentifier()
             (
-                type = OmniSciDataType()
+                type = HeavyDBDataType()
                 nullable = NullableOptDefaultTrue()
                 (
                     <DEFAULT_> defval = Expression(ExprContext.ACCEPT_SUB_QUERY) {
@@ -429,7 +431,7 @@ void TableElement(List<SqlNode> list) :
                             : ColumnStrategy.NOT_NULLABLE;
                     }
                 )
-                [ encoding = OmniSciEncodingOpt() ]
+                [ encoding = HeavyDBEncodingOpt() ]
                 {
                     list.add(
                         SqlDdlNodes.column(s.add(id).end(this), id,
@@ -483,19 +485,19 @@ Pair<String, SqlNode> KVOption() :
  *
  * ( <option> = <value> [, ... ] )
  */
-OmniSciOptionsMap OptionsOpt() :
+HeavyDBOptionsMap OptionsOpt() :
 {
-    OmniSciOptionsMap optionMap = new OmniSciOptionsMap();
+    HeavyDBOptionsMap optionMap = new HeavyDBOptionsMap();
     Pair<String, SqlNode> optionPair = null;
 }
 {
   <LPAREN>
   optionPair = KVOption()
-  { OmniSciOptionsMap.add(optionMap, optionPair.getKey(), optionPair.getValue()); }
+  { HeavyDBOptionsMap.add(optionMap, optionPair.getKey(), optionPair.getValue()); }
   (
     <COMMA>
     optionPair = KVOption()
-    { OmniSciOptionsMap.add(optionMap, optionPair.getKey(), optionPair.getValue()); }
+    { HeavyDBOptionsMap.add(optionMap, optionPair.getKey(), optionPair.getValue()); }
   )*
   <RPAREN>
   { return optionMap; }
@@ -526,7 +528,7 @@ SqlCreate SqlCreateTable(Span s, boolean replace) :
     boolean ifNotExists = false;
     final SqlIdentifier id;
     SqlNodeList tableElementList = null;
-    OmniSciOptionsMap withOptions = null;
+    HeavyDBOptionsMap withOptions = null;
     SqlNode query = null;
 }
 {
@@ -547,61 +549,15 @@ SqlCreate SqlCreateTable(Span s, boolean replace) :
 }
 
 /**
- * Parses a SHOW statement.
- *
- *  These SHOW statements used to be listed directly in statementParserMethods in
- *  config.fmpp but those all default to LOOKAHEAD(2), hardcoded in Calcite's Parser.jj
- *  source code. Some SHOW statements needed LOOKAHEAD(3) there so all SHOW statements
- *  had to be moved into this two-stage SqlCustomShow definition (where they only have
- *  LOOKAHEAD(1) or LOOKAHEAD(2) because the <SHOW> is no longer part of that count).
- */
-SqlDdl SqlCustomShow(Span s) :
-{
-    final SqlDdl show;
-}
-{
-    <SHOW>
-    (
-        LOOKAHEAD(2) show = SqlShowUserDetails(s)
-        |
-        LOOKAHEAD(2) show = SqlShowUserSessions(s)
-        |
-        LOOKAHEAD(1) show = SqlShowTables(s)
-        |
-        LOOKAHEAD(1) show = SqlShowTableDetails(s)
-        |
-        LOOKAHEAD(1) show = SqlShowDatabases(s)
-        |
-        LOOKAHEAD(1) show = SqlShowForeignServers(s)
-        |
-        LOOKAHEAD(1) show = SqlShowQueries(s)
-        |
-        LOOKAHEAD(1) show = SqlShowDiskCacheUsage(s)
-        |
-        LOOKAHEAD(1) show = SqlShowCreateTable(s)
-        |
-        LOOKAHEAD(2) show = SqlShowRoles(s)
-        |
-        LOOKAHEAD(2) show = SqlShowPolicies(s)
-    )
-    {
-        return show;
-    }
-}
-
-/**
  * Parses a DROP statement.
  *
  *  This broke away from the default Calcite implementation because it was
  *  necessary to use LOOKAHEAD(2) for the USER commands in order for them 
  *  to parse correctly.
  *
- *   "replace" was never used, but appeared in SqlDrop's original signature
- *
  */
 SqlDdl SqlCustomDrop(Span s) :
 {
-    boolean replace = false;  
     final SqlDdl drop;
 }
 {
@@ -759,46 +715,35 @@ SqlDdl SqlAlterTable(Span s) :
     }
 }
 
-SqlNode WrappedOrderedQueryOrExpr(ExprContext exprContext) :
-{
-    final SqlNode query;
-}
-{
-        <LPAREN>
-        query = OrderedQueryOrExpr(exprContext)
-        <RPAREN>
-        { return query; }
-    |
-        query = OrderedQueryOrExpr(exprContext)
-        { return query; }
-}
-
-/* 
- * Insert into table(s) using the following syntax:
+/*
+ * Insert into table(s) using one of the following forms:
  *
- * INSERT INTO <table_name> [columns] <select>
+ * 1) INSERT INTO <table_name> [columns] <values>
+ * 2) INSERT INTO <table_name> [columns] <select>
  */
-SqlInsertIntoTable SqlInsertIntoTable(Span s) :
+SqlNode SqlInsertIntoTable(Span s) :
 {
-    final SqlIdentifier table;
-    final SqlNode query;
+    final List<SqlLiteral> keywords = new ArrayList<SqlLiteral>();
+    final SqlNodeList keywordList = new SqlNodeList(SqlParserPos.ZERO);
+    SqlNode table;
+    SqlNode source;
     SqlNodeList columnList = null;
 }
 {
-    <INSERT>
-    <INTO>
-    table = CompoundIdentifier()
-    (
+    <INSERT> <INTO> table = CompoundIdentifier()
+    [
         LOOKAHEAD(3)
-        columnList = ParenthesizedSimpleIdentifierList() 
-        query = WrappedOrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
+        columnList = ParenthesizedSimpleIdentifierList()
+    ]
+    (
+        source = TableConstructor() {
+             return new SqlInsertValues(s.end(this), table, source, columnList);
+        }
     |
-        query = WrappedOrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
+        source = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY) {
+            return new SqlInsertIntoTable(s.end(this), table, source, columnList);
+        }
     )
-
-    {
-        return new SqlInsertIntoTable(s.end(this), table, query, columnList);
-    }
 }
 
 /*
@@ -810,7 +755,7 @@ SqlInsertIntoTable SqlInsertIntoTable(Span s) :
 SqlDdl SqlDumpTable(Span s) :
 {
     final SqlIdentifier tableName;
-    OmniSciOptionsMap withOptions = null;
+    HeavyDBOptionsMap withOptions = null;
     SqlNode filePath = null;
 }
 {
@@ -834,7 +779,7 @@ SqlDdl SqlDumpTable(Span s) :
 SqlDdl SqlRestoreTable(Span s) :
 {
     final SqlIdentifier tableName;
-    OmniSciOptionsMap withOptions = null;
+    HeavyDBOptionsMap withOptions = null;
     SqlNode filePath = null; 
 }
 {
@@ -877,7 +822,7 @@ SqlDdl SqlTruncateTable(Span s) :
 SqlDdl SqlOptimizeTable(Span s) :
 {
     final SqlIdentifier tableName;
-    OmniSciOptionsMap withOptions = null;   
+    HeavyDBOptionsMap withOptions = null;   
 }
 {
     <OPTIMIZE>
@@ -944,7 +889,7 @@ SqlCreate SqlCreateDB(Span s, boolean replace) :
 {
     final boolean ifNotExists;
     final SqlIdentifier dbName;
-    OmniSciOptionsMap dbOptions = null;
+    HeavyDBOptionsMap dbOptions = null;
 }
 {
     <DATABASE> ifNotExists = IfNotExistsOpt() dbName = CompoundIdentifier()
@@ -976,26 +921,45 @@ SqlDdl SqlDropDB(Span s) :
 
 
 /*
- * Rename database using the following syntax:
+ * Alter an existing database using one of two currently supported variants with
+ * the following syntax:
  *
- * ALTER DATABASE <db_name> RENAME TO <new_db_name>
+ * ALTER DATABASE <database_name> OWNER TO <new_owner>
+ * ALTER DATABASE <database_name> RENAME TO <new_database_name>
  */
-SqlRenameDB SqlRenameDB(Span s) :
-{   
-    SqlIdentifier dbName;
-    SqlIdentifier newDBName;
+SqlDdl SqlAlterDatabase(Span s) :
+{
+    SqlAlterDatabase.Builder sqlAlterDatabaseBuilder = new SqlAlterDatabase.Builder();
+    SqlIdentifier databaseName;
+    SqlIdentifier sqlIdentifier;
 }
 {
-    <ALTER>
-    <DATABASE>
-    dbName = CompoundIdentifier()
-    <RENAME>
-    <TO>
-    newDBName = CompoundIdentifier()
+    <ALTER> <DATABASE>
+    databaseName=CompoundIdentifier()
     {
-        return new SqlRenameDB(s.end(this), dbName.toString(), newDBName.toString());
+        sqlAlterDatabaseBuilder.setDatabaseName(databaseName.toString());
+    }
+    (
+        <OWNER> <TO> 
+        sqlIdentifier=CompoundIdentifier()
+        { 
+            sqlAlterDatabaseBuilder.setNewOwner(sqlIdentifier.toString());
+            sqlAlterDatabaseBuilder.setAlterType(SqlAlterDatabase.AlterType.CHANGE_OWNER);
+        }
+    |
+        <RENAME> <TO>
+        sqlIdentifier=CompoundIdentifier()
+        {
+            sqlAlterDatabaseBuilder.setNewDatabaseName(sqlIdentifier.toString());
+            sqlAlterDatabaseBuilder.setAlterType(SqlAlterDatabase.AlterType.RENAME_DATABASE);
+        }
+    )
+    {
+        sqlAlterDatabaseBuilder.setPos(s.end(this));
+        return sqlAlterDatabaseBuilder.build();
     }
 }
+
 
 /*
  * Create a user using the following syntax:
@@ -1007,7 +971,7 @@ SqlRenameDB SqlRenameDB(Span s) :
 SqlCreate SqlCreateUser(Span s, boolean replace) :
 {
     final SqlIdentifier userName;
-    OmniSciOptionsMap userOptions = null;
+    HeavyDBOptionsMap userOptions = null;
 }
 {
     <USER> 
@@ -1051,7 +1015,7 @@ SqlDdl SqlAlterUser(Span s) :
 {   
     SqlIdentifier userName;
     SqlIdentifier newUserName = null;
-    OmniSciOptionsMap userOptions = null;
+    HeavyDBOptionsMap userOptions = null;
 }
 {
     <ALTER>
@@ -1341,7 +1305,7 @@ SqlCreate SqlCreateDataframe(Span s, boolean replace) :
     SqlIdentifier name;
     SqlNodeList elementList = null;
     SqlNode filePath = null;
-    OmniSciOptionsMap dataframeOptions = null;
+    HeavyDBOptionsMap dataframeOptions = null;
 }
 {
     <DATAFRAME> 
@@ -1436,9 +1400,9 @@ SqlDdl SqlReassignOwned(Span s) :
  *
  *		VALIDATE [CLUSTER [WITH options]]
  */
-SqlCreate SqlValidateSystem(Span s) :
+SqlDdl SqlValidateSystem(Span s) :
 {
-    OmniSciOptionsMap validateOptions = null;
+    HeavyDBOptionsMap validateOptions = null;
     String type = "";
 }
 {
@@ -1461,7 +1425,7 @@ SqlCreate SqlValidateSystem(Span s) :
  */
 SqlDdl SqlCopyTable(Span s) :
 {
-    OmniSciOptionsMap copyOptions = null;
+    HeavyDBOptionsMap copyOptions = null;
     SqlNode filePath = null;
     SqlIdentifier table = null;
     SqlNode query = null;
@@ -1485,5 +1449,26 @@ SqlDdl SqlCopyTable(Span s) :
         } else {
             return new SqlExportQuery(s.end(this), query, filePath.toString(), copyOptions);
         }
+    }
+}
+
+/** Parses an ARRAY constructor */
+SqlNode CurlyArrayConstructor() :
+{
+    SqlNodeList args;
+    SqlNode e;
+    final Span s;
+}
+{
+    <LBRACE> { s = span(); }
+    (
+        args = ExpressionCommaList(s, ExprContext.ACCEPT_NON_QUERY)
+    |
+        { args = SqlNodeList.EMPTY; }
+    )
+    <RBRACE>
+    {
+        return SqlStdOperatorTable.ARRAY_VALUE_CONSTRUCTOR.createCall(
+            s.end(this), args.getList());
     }
 }

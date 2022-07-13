@@ -1,5 +1,5 @@
 /*
- * Copyright 2020, OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -296,7 +296,9 @@ TEST_F(OverlapsTest, InnerJoinPolyInPointIntersects) {
     } else {
       // Note(jclay): We return 0, postgis returns 4
       // Note(adb): Now we return 3. Progress?
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, ctx.device_type)));
+      // Note(ds): After switching to cIntersects we return 0 again. Progress?
+      int64_t expected_value = (g_enable_geo_ops_on_uncompressed_coords) ? 0 : 3;
+      ASSERT_EQ(expected_value, v<int64_t>(execSQL(sql, ctx.device_type)));
     }
   });
 }
@@ -739,7 +741,8 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
             executor,
             HashJoin::normalizeColumnPairs(condition.get(),
                                            *executor->getCatalog(),
-                                           executor->getTemporaryTables()),
+                                           executor->getTemporaryTables())
+                .first,
             device_count,
             {},
             {})
@@ -1575,8 +1578,8 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Nullable_Geo_Exhaustive) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     int64_t single_frag_res1 = 114;
     int64_t single_frag_res2 = 5163;
-    int64_t single_frag_res3 = 2178;
-    int64_t single_frag_res4 = 2178;
+    int64_t single_frag_res3 = (g_enable_geo_ops_on_uncompressed_coords) ? 2144 : 2178;
+    int64_t single_frag_res4 = (g_enable_geo_ops_on_uncompressed_coords) ? 2144 : 2178;
     std::ostringstream mq1, mq2, mq3, mq4;
     mq1 << "SELECT COUNT(1) FROM mfgeo_n_v2 r, mfgeo_n_v2 s WHERE ST_INTERSECTS(r.pt, "
            "s.pt);";
@@ -1611,8 +1614,8 @@ TEST_F(ParallelLinearization, GeoJoin) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     int64_t single_frag_res1 = 1020;
     int64_t single_frag_res2 = 80940;
-    int64_t single_frag_res3 = 38378;
-    int64_t single_frag_res4 = 38378;
+    int64_t single_frag_res3 = (g_enable_geo_ops_on_uncompressed_coords) ? 38080 : 38378;
+    int64_t single_frag_res4 = (g_enable_geo_ops_on_uncompressed_coords) ? 38080 : 38378;
     std::ostringstream mq1, mq2, mq3, mq4;
     mq1 << "SELECT COUNT(1) FROM mfgeo_p r, mfgeo_p s WHERE ST_INTERSECTS(r.pt, s.pt);";
     mq2 << "SELECT COUNT(1) FROM mfgeo_p r, mfgeo_p s WHERE ST_INTERSECTS(s.p, r.l);";
@@ -1635,8 +1638,8 @@ TEST_F(ParallelLinearization, GeoJoin) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     int64_t single_frag_res1 = 895;
     int64_t single_frag_res2 = 70115;
-    int64_t single_frag_res3 = 33096;
-    int64_t single_frag_res4 = 33096;
+    int64_t single_frag_res3 = (g_enable_geo_ops_on_uncompressed_coords) ? 32820 : 33096;
+    int64_t single_frag_res4 = (g_enable_geo_ops_on_uncompressed_coords) ? 32820 : 33096;
     std::ostringstream mq1, mq2, mq3, mq4;
     mq1 << "SELECT COUNT(1) FROM mfgeo_n_p r, mfgeo_n_p s WHERE ST_INTERSECTS(r.pt, "
            "s.pt);";
@@ -1662,8 +1665,8 @@ TEST_F(ParallelLinearization, GeoJoin) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     int64_t single_frag_res1 = 914;
     int64_t single_frag_res2 = 71556;
-    int64_t single_frag_res3 = 33905;
-    int64_t single_frag_res4 = 33905;
+    int64_t single_frag_res3 = (g_enable_geo_ops_on_uncompressed_coords) ? 33619 : 33905;
+    int64_t single_frag_res4 = (g_enable_geo_ops_on_uncompressed_coords) ? 33619 : 33905;
     std::ostringstream mq1, mq2, mq3, mq4;
     mq1 << "SELECT COUNT(1) FROM mfgeo_n2_p r, mfgeo_n2_p s WHERE ST_INTERSECTS(r.pt, "
            "s.pt);";

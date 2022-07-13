@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include <algorithm>
 #include <limits>
 #include <vector>
@@ -444,6 +445,135 @@ TEST_F(DumpAndRestoreTest, TableWithDefaultColumnValues) {
       "TIMESTAMP(0)[] DEFAULT ARRAY['2011-10-23 07:15:01', '2012-09-17 11:59:11'], f "
       "FLOAT DEFAULT 1.15, n DECIMAL(3,2) DEFAULT 1.25 ENCODING FIXED(16));";
   ASSERT_EQ(schema, expected_schema);
+}
+
+void compression_test_create_table(std::string table, int nrows) {
+  run_ddl_statement("CREATE TABLE " + table + " (i INTEGER, s TEXT);");
+  for (int i = 0; i < nrows; i++) {
+    run_multiple_agg("INSERT INTO " + table + " VALUES(" + std::to_string(i) + ", '_" +
+                     std::to_string(i) + "_');");
+  }
+}
+
+TargetValue compression_test_query(const std::string& query_str,
+                                   const ExecutorDeviceType device_type) {
+  auto rows = QR::get()->runSQL(query_str, device_type, true);
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size()) << query_str;
+  return crt_row[0];
+}
+
+void compression_test_clean(std::string file_path) {
+  // files
+  boost::filesystem::remove(file_path + ".df");
+  boost::filesystem::remove(file_path + ".gz");
+  boost::filesystem::remove(file_path + ".lz");
+  boost::filesystem::remove(file_path + ".nn");
+
+  // tables
+  run_ddl_statement("DROP TABLE IF EXISTS test_src;");
+  run_ddl_statement("DROP TABLE IF EXISTS test_dst_df;");
+  run_ddl_statement("DROP TABLE IF EXISTS test_dst_gz;");
+  run_ddl_statement("DROP TABLE IF EXISTS test_dst_lz;");
+  run_ddl_statement("DROP TABLE IF EXISTS test_dst_nn;");
+}
+
+TEST_F(DumpAndRestoreTest, CompressionOptions) {
+  std::string test_file_path = "/tmp/compression_test";
+  compression_test_clean(test_file_path);
+
+  // create a table
+  int64_t nRows = 173;
+  compression_test_create_table("test_src", nRows);
+
+  // DUMP/RESTORE table: default compression
+  run_ddl_statement("DUMP TABLE test_src TO '" + test_file_path + ".df';");
+  run_ddl_statement("RESTORE TABLE test_dst_df FROM '" + test_file_path + ".df';");
+  auto query = "SELECT count(*) FROM test_dst_df;";
+  EXPECT_EQ(nRows, v<int64_t>(compression_test_query(query, ExecutorDeviceType::CPU)));
+
+  // DUMP/RESTORE table: none compression
+  run_ddl_statement("DUMP TABLE test_src TO '" + test_file_path + ".nn" +
+                    "' WITH (compression='none');");
+  run_ddl_statement("RESTORE TABLE test_dst_nn FROM '" + test_file_path +
+                    ".nn' WITH (compression='none');");
+  query = "SELECT count(*) FROM test_dst_nn;";
+  EXPECT_EQ(nRows, v<int64_t>(compression_test_query(query, ExecutorDeviceType::CPU)));
+
+  // DUMP/RESTORE table: GZIP compression
+  bool hasGZIP = !boost::process::search_path("gzip").string().empty();
+  if (hasGZIP) {
+    run_ddl_statement("DUMP TABLE test_src TO '" + test_file_path + ".gz" +
+                      "' WITH (compression='gzip');");
+    run_ddl_statement("RESTORE TABLE test_dst_gz FROM '" + test_file_path +
+                      ".gz' WITH (compression='gzip');");
+    auto query = "SELECT count(*) FROM test_dst_gz;";
+    EXPECT_EQ(nRows, v<int64_t>(compression_test_query(query, ExecutorDeviceType::CPU)));
+  }
+
+  // DUMP/RESTORE table: LZ4 compression
+  bool hasLZ4 = !boost::process::search_path("lz4").string().empty();
+  if (hasLZ4) {
+    run_ddl_statement("DUMP TABLE test_src TO '" + test_file_path + ".lz" +
+                      "' WITH (compression='lz4');");
+    run_ddl_statement("RESTORE TABLE test_dst_lz FROM '" + test_file_path +
+                      ".lz' WITH (compression='lz4');");
+    query = "SELECT count(*) FROM test_dst_lz;";
+    EXPECT_EQ(nRows, v<int64_t>(compression_test_query(query, ExecutorDeviceType::CPU)));
+  }
+
+  // DUMP/RESTORE table: bogus compression type should throw
+  EXPECT_THROW(run_ddl_statement("DUMP TABLE test_src TO '" + test_file_path + ".bg" +
+                                 "' WITH (compression='bogus');"),
+               std::runtime_error);
+
+  // check file sizes on disk
+  if (hasGZIP && hasLZ4) {
+    uint64_t sz_df = boost::filesystem::file_size(test_file_path + ".df");
+    uint64_t sz_gz = boost::filesystem::file_size(test_file_path + ".gz");
+    uint64_t sz_lz = boost::filesystem::file_size(test_file_path + ".lz");
+    uint64_t sz_nn = boost::filesystem::file_size(test_file_path + ".nn");
+
+    // size :  uncompressed(none) > lz4 > gzip  ... default is gzip
+    ASSERT_GT(sz_nn, sz_lz);
+    ASSERT_GT(sz_lz, sz_gz);
+
+    // sz_gz - sz_df should be equal, but might differ by a few bytes
+    //   use 100 as a 'close-enough' tolerance
+    ASSERT_TRUE(abs((int)(sz_gz - sz_df)) < 100);
+  }
+
+  // cleanup
+  compression_test_clean(test_file_path);
+}
+
+TEST_F(DumpAndRestoreTest, PreRebrandTableDump) {
+  auto file_path =
+      boost::filesystem::canonical("../../Tests/Export/TableDump/pre_rebrand.gz")
+          .string();
+  run_ddl_statement("RESTORE TABLE test_table FROM '" + file_path + "';");
+  sqlAndCompareResult("SELECT * FROM test_table;", {1, 2, 3});
+}
+
+// Make sure that files are adjusted for altered tables even if using pre-rebrand files.
+TEST_F(DumpAndRestoreTest, PreRebrandAlteredTable) {
+  auto file_path =
+      boost::filesystem::canonical("../../Tests/Export/TableDump/altered_table.gz")
+          .string();
+  run_ddl_statement("RESTORE TABLE test_table FROM '" + file_path +
+                    "' WITH (compression='gzip');");
+  sqlAndCompareResult("SELECT * FROM test_table;", std::vector<int64_t>{1});
+}
+
+// Check for error when restoring a table that contains pages from a deleted column.
+TEST_F(DumpAndRestoreTest, DumpAlteredTable) {
+  run_ddl_statement("CREATE TABLE test_table (c1 int, c2 int);");
+  run_multiple_agg("INSERT INTO test_table VALUES(1, 2);");
+  run_ddl_statement("ALTER TABLE test_table DROP COLUMN c2;");
+  run_ddl_statement("DUMP TABLE test_table TO '" + tar_ball_path + "';");
+  run_ddl_statement("DROP TABLE test_table;");
+  run_ddl_statement("RESTORE TABLE test_table FROM '" + tar_ball_path + "';");
+  sqlAndCompareResult("SELECT * FROM test_table;", std::vector<int64_t>{1});
 }
 
 int main(int argc, char** argv) {

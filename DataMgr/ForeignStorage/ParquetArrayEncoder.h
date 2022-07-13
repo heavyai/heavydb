@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,27 @@ class ParquetArrayEncoder : public ParquetEncoder {
       , has_assembly_started_(false)
       , is_null_array_(false)
       , is_empty_array_(false)
-      , num_elements_in_array_(0) {}
+      , num_elements_in_array_(0)
+      , num_array_assembled_(0)
+      , is_invalid_array_(false) {}
+
+  void appendDataTrackErrors(const int16_t* def_levels,
+                             const int16_t* rep_levels,
+                             const int64_t values_read,
+                             const int64_t levels_read,
+                             int8_t* values) override {
+    CHECK(is_error_tracking_enabled_);
+    // validate all elements
+    is_valid_item_.assign(values_read, true);
+    for (int64_t j = 0; j < values_read; ++j) {
+      try {
+        scalar_encoder_->validateUsingEncodersColumnType(values, j);
+      } catch (const std::runtime_error& error) {
+        is_valid_item_[j] = false;
+      }
+    }
+    appendData(def_levels, rep_levels, values_read, levels_read, values);
+  }
 
   void appendData(const int16_t* def_levels,
                   const int16_t* rep_levels,
@@ -72,8 +92,24 @@ class ParquetArrayEncoder : public ParquetEncoder {
     return metadata;
   }
 
+  virtual void disableMetadataStatsValidation() override {
+    ParquetEncoder::disableMetadataStatsValidation();
+    scalar_encoder_->disableMetadataStatsValidation();
+  }
+
+  virtual void initializeErrorTracking(const SQLTypeInfo& column_type) override {
+    ParquetEncoder::initializeErrorTracking(column_type);
+    scalar_encoder_->initializeErrorTracking(column_type.get_elem_type());
+  }
+
  protected:
-  virtual void processLastArray() = 0;
+  virtual void processLastArray() {
+    if (is_error_tracking_enabled_ &&
+        (is_invalid_array_ || (isLastArrayNull() && column_type_.get_notnull()))) {
+      invalid_indices_.insert(num_array_assembled_);
+    }
+    ++num_array_assembled_;
+  }
 
   virtual void appendArraysToBuffer() {
     buffer_->append(data_buffer_bytes_.data(), data_buffer_bytes_.size());
@@ -107,18 +143,35 @@ class ParquetArrayEncoder : public ParquetEncoder {
     is_empty_array_ = false;
     is_null_array_ = false;
     num_elements_in_array_ = 0;
+    if (is_error_tracking_enabled_) {
+      is_invalid_array_ = false;
+    }
   }
 
   bool isNewArray(const int16_t rep_level) const {
     return rep_level == 0 && has_assembly_started_;
   }
 
+  int8_t* encodedDataAtIndex(const size_t index) {
+    return encode_buffer_.data() + (index)*omnisci_data_type_byte_size_;
+  }
+
+  void updateMetadataForAppendedArrayItem(const int64_t encoded_index) {
+    num_elements_in_array_++;
+    if (is_error_tracking_enabled_ && !is_valid_item_[encoded_index]) {
+      is_invalid_array_ = true;
+    }
+  }
+
   virtual void appendArrayItem(const int64_t encoded_index) {
     auto omnisci_data_ptr = resizeArrayDataBytes(1);
-    scalar_encoder_->copy(
-        encode_buffer_.data() + (encoded_index)*omnisci_data_type_byte_size_,
-        omnisci_data_ptr);
-    num_elements_in_array_++;
+    scalar_encoder_->copy(encodedDataAtIndex(encoded_index), omnisci_data_ptr);
+    updateMetadataForAppendedArrayItem(encoded_index);
+  }
+
+  virtual void encodeAllValues(const int8_t* values, const int64_t values_read) {
+    encode_buffer_.resize(values_read * omnisci_data_type_byte_size_);
+    scalar_encoder_->encodeAndCopyContiguous(values, encode_buffer_.data(), values_read);
   }
 
  private:
@@ -139,11 +192,6 @@ class ParquetArrayEncoder : public ParquetEncoder {
     }
   }
 
-  void encodeAllValues(const int8_t* values, const int64_t values_read) {
-    encode_buffer_.resize(values_read * omnisci_data_type_byte_size_);
-    scalar_encoder_->encodeAndCopyContiguous(values, encode_buffer_.data(), values_read);
-  }
-
   void markArrayAsNull() { is_null_array_ = true; }
 
   void markArrayAsEmpty() { is_empty_array_ = true; }
@@ -158,5 +206,10 @@ class ParquetArrayEncoder : public ParquetEncoder {
   bool is_null_array_;
   bool is_empty_array_;
   size_t num_elements_in_array_;
+
+  // error tracking related members
+  size_t num_array_assembled_;
+  bool is_invalid_array_;
+  std::vector<bool> is_valid_item_;
 };
 }  // namespace foreign_storage

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 /**
  * @file    ResultSet.cpp
- * @author  Alex Suhan <alex@mapd.com>
  * @brief   Basic constructors and methods of the row set interface.
+ *
  */
 
 #include "ResultSet.h"
@@ -27,6 +27,8 @@
 #include "GpuMemUtils.h"
 #include "InPlaceSort.h"
 #include "OutputBufferInitialization.h"
+#include "QueryEngine/QueryEngine.h"
+#include "RelAlgExecutionUnit.h"
 #include "RuntimeFunctions.h"
 #include "Shared/Intervals.h"
 #include "Shared/SqlTypesLayout.h"
@@ -81,7 +83,11 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , just_explain_(false)
     , for_validation_only_(false)
     , cached_row_count_(uninitialized_cached_row_count)
-    , geo_return_type_(GeoReturnType::WktString) {}
+    , geo_return_type_(GeoReturnType::WktString)
+    , cached_(false)
+    , query_exec_time_(0)
+    , query_plan_(EMPTY_HASHED_PLAN_DAG_KEY)
+    , can_use_speculative_top_n_sort(std::nullopt) {}
 
 ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
@@ -116,7 +122,11 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , just_explain_(false)
     , for_validation_only_(false)
     , cached_row_count_(uninitialized_cached_row_count)
-    , geo_return_type_(GeoReturnType::WktString) {}
+    , geo_return_type_(GeoReturnType::WktString)
+    , cached_(false)
+    , query_exec_time_(0)
+    , query_plan_(EMPTY_HASHED_PLAN_DAG_KEY)
+    , can_use_speculative_top_n_sort(std::nullopt) {}
 
 ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
                      const ExecutorDeviceType device_type,
@@ -132,13 +142,18 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
     , just_explain_(false)
     , for_validation_only_(false)
     , cached_row_count_(uninitialized_cached_row_count)
-    , geo_return_type_(GeoReturnType::WktString) {
+    , geo_return_type_(GeoReturnType::WktString)
+    , cached_(false)
+    , query_exec_time_(0)
+    , query_plan_(EMPTY_HASHED_PLAN_DAG_KEY)
+    , can_use_speculative_top_n_sort(std::nullopt) {
   if (device_type == ExecutorDeviceType::GPU) {
     device_estimator_buffer_ = CudaAllocator::allocGpuAbstractBuffer(
         data_mgr_, estimator_->getBufferSize(), device_id_);
     data_mgr->getCudaMgr()->zeroDeviceMem(device_estimator_buffer_->getMemoryPtr(),
                                           estimator_->getBufferSize(),
-                                          device_id_);
+                                          device_id_,
+                                          getQueryEngineCudaStreamForDevice(device_id_));
   } else {
     host_estimator_buffer_ =
         static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
@@ -154,7 +169,11 @@ ResultSet::ResultSet(const std::string& explanation)
     , just_explain_(true)
     , for_validation_only_(false)
     , cached_row_count_(uninitialized_cached_row_count)
-    , geo_return_type_(GeoReturnType::WktString) {}
+    , geo_return_type_(GeoReturnType::WktString)
+    , cached_(false)
+    , query_exec_time_(0)
+    , query_plan_(EMPTY_HASHED_PLAN_DAG_KEY)
+    , can_use_speculative_top_n_sort(std::nullopt) {}
 
 ResultSet::ResultSet(int64_t queue_time_ms,
                      int64_t render_time_ms,
@@ -168,7 +187,11 @@ ResultSet::ResultSet(int64_t queue_time_ms,
     , just_explain_(true)
     , for_validation_only_(false)
     , cached_row_count_(uninitialized_cached_row_count)
-    , geo_return_type_(GeoReturnType::WktString){};
+    , geo_return_type_(GeoReturnType::WktString)
+    , cached_(false)
+    , query_exec_time_(0)
+    , query_plan_(EMPTY_HASHED_PLAN_DAG_KEY)
+    , can_use_speculative_top_n_sort(std::nullopt) {}
 
 ResultSet::~ResultSet() {
   if (storage_) {
@@ -303,6 +326,86 @@ void ResultSet::append(ResultSet& that) {
   }
 }
 
+ResultSetPtr ResultSet::copy() {
+  auto timer = DEBUG_TIMER(__func__);
+  if (!storage_) {
+    return nullptr;
+  }
+
+  auto executor = getExecutor();
+  CHECK(executor);
+  ResultSetPtr copied_rs = std::make_shared<ResultSet>(targets_,
+                                                       device_type_,
+                                                       query_mem_desc_,
+                                                       row_set_mem_owner_,
+                                                       executor->getCatalog(),
+                                                       executor->blockSize(),
+                                                       executor->gridSize());
+
+  auto allocate_and_copy_storage =
+      [&](const ResultSetStorage* prev_storage) -> std::unique_ptr<ResultSetStorage> {
+    const auto& prev_qmd = prev_storage->query_mem_desc_;
+    const auto storage_size = prev_qmd.getBufferSizeBytes(device_type_);
+    auto buff = row_set_mem_owner_->allocate(storage_size, /*thread_idx=*/0);
+    std::unique_ptr<ResultSetStorage> new_storage;
+    new_storage.reset(new ResultSetStorage(
+        prev_storage->targets_, prev_qmd, buff, /*buff_is_provided=*/true));
+    new_storage->target_init_vals_ = prev_storage->target_init_vals_;
+    if (prev_storage->varlen_output_info_) {
+      new_storage->varlen_output_info_ = prev_storage->varlen_output_info_;
+    }
+    memcpy(new_storage->buff_, prev_storage->buff_, storage_size);
+    new_storage->query_mem_desc_ = prev_qmd;
+    return new_storage;
+  };
+
+  copied_rs->storage_ = allocate_and_copy_storage(storage_.get());
+  if (!appended_storage_.empty()) {
+    for (const auto& storage : appended_storage_) {
+      copied_rs->appended_storage_.push_back(allocate_and_copy_storage(storage.get()));
+    }
+  }
+  std::copy(chunks_.begin(), chunks_.end(), std::back_inserter(copied_rs->chunks_));
+  std::copy(chunk_iters_.begin(),
+            chunk_iters_.end(),
+            std::back_inserter(copied_rs->chunk_iters_));
+  std::copy(col_buffers_.begin(),
+            col_buffers_.end(),
+            std::back_inserter(copied_rs->col_buffers_));
+  std::copy(frag_offsets_.begin(),
+            frag_offsets_.end(),
+            std::back_inserter(copied_rs->frag_offsets_));
+  std::copy(consistent_frag_sizes_.begin(),
+            consistent_frag_sizes_.end(),
+            std::back_inserter(copied_rs->consistent_frag_sizes_));
+  if (separate_varlen_storage_valid_) {
+    std::copy(serialized_varlen_buffer_.begin(),
+              serialized_varlen_buffer_.end(),
+              std::back_inserter(copied_rs->serialized_varlen_buffer_));
+  }
+  std::copy(literal_buffers_.begin(),
+            literal_buffers_.end(),
+            std::back_inserter(copied_rs->literal_buffers_));
+  std::copy(lazy_fetch_info_.begin(),
+            lazy_fetch_info_.end(),
+            std::back_inserter(copied_rs->lazy_fetch_info_));
+
+  copied_rs->permutation_ = permutation_;
+  copied_rs->drop_first_ = drop_first_;
+  copied_rs->keep_first_ = keep_first_;
+  copied_rs->separate_varlen_storage_valid_ = separate_varlen_storage_valid_;
+  copied_rs->query_exec_time_ = query_exec_time_;
+  copied_rs->input_table_keys_ = input_table_keys_;
+  copied_rs->target_meta_info_ = target_meta_info_;
+  copied_rs->geo_return_type_ = geo_return_type_;
+  copied_rs->query_plan_ = query_plan_;
+  if (can_use_speculative_top_n_sort) {
+    copied_rs->can_use_speculative_top_n_sort = can_use_speculative_top_n_sort;
+  }
+
+  return copied_rs;
+}
+
 const ResultSetStorage* ResultSet::getStorage() const {
   return storage_.get();
 }
@@ -327,39 +430,50 @@ StringDictionaryProxy* ResultSet::getStringDictionaryProxy(int const dict_id) co
                   : row_set_mem_owner_->getStringDictProxy(dict_id);
 }
 
+class ResultSet::CellCallback {
+  StringDictionaryProxy::IdMap const id_map_;
+  int64_t const null_int_;
+
+ public:
+  CellCallback(StringDictionaryProxy::IdMap&& id_map, int64_t const null_int)
+      : id_map_(std::move(id_map)), null_int_(null_int) {}
+  void operator()(int8_t const* const cell_ptr) const {
+    using StringId = int32_t;
+    StringId* const string_id_ptr =
+        const_cast<StringId*>(reinterpret_cast<StringId const*>(cell_ptr));
+    if (*string_id_ptr != null_int_) {
+      *string_id_ptr = id_map_[*string_id_ptr];
+    }
+  }
+};
+
 // Update any dictionary-encoded targets within storage_ with the corresponding
 // dictionary in the given targets parameter, if their comp_param (dictionary) differs.
 // This may modify both the storage_ values and storage_ targets.
 // Does not iterate through appended_storage_.
 // Iterate over targets starting at index target_idx.
-void ResultSet::translateDictEncodedString(std::vector<TargetInfo> const& targets,
-                                           size_t const start_idx) {
-  using StringId = int32_t;
-  if (!storage_) {
-    return;
-  }
-  CHECK_EQ(targets.size(), storage_->targets_.size());
-  RowIterationState state;
-  for (size_t target_idx = start_idx; target_idx < targets.size(); ++target_idx) {
-    auto const& type0 = targets[target_idx].sql_type;
-    if (type0.is_dict_encoded_string()) {
-      auto& type1 = const_cast<SQLTypeInfo&>(storage_->targets_[target_idx].sql_type);
-      CHECK(type1.is_dict_encoded_string());
-      if (type0.get_comp_param() != type1.get_comp_param()) {
-        auto* const sdp0 = getStringDictionaryProxy(type0.get_comp_param());
-        CHECK(sdp0);
-        auto const* const sdp1 = getStringDictionaryProxy(type1.get_comp_param());
-        CHECK(sdp1);
-        state.cur_target_idx_ = target_idx;
-        eachCellInColumn(state, [sdp0, sdp1](int8_t const* const cell_ptr) {
-          StringId* const string_id_ptr =
-              const_cast<StringId*>(reinterpret_cast<StringId const*>(cell_ptr));
-          if (*string_id_ptr != NULL_INT) {
-            std::string const str = sdp1->getString(*string_id_ptr);
-            *string_id_ptr = sdp0->getOrAddTransient(str);
-          }
-        });
-        type1.set_comp_param(type0.get_comp_param());
+void ResultSet::translateDictEncodedColumns(std::vector<TargetInfo> const& targets,
+                                            size_t const start_idx) {
+  if (storage_) {
+    CHECK_EQ(targets.size(), storage_->targets_.size());
+    RowIterationState state;
+    for (size_t target_idx = start_idx; target_idx < targets.size(); ++target_idx) {
+      auto const& type_lhs = targets[target_idx].sql_type;
+      if (type_lhs.is_dict_encoded_string()) {
+        auto& type_rhs =
+            const_cast<SQLTypeInfo&>(storage_->targets_[target_idx].sql_type);
+        CHECK(type_rhs.is_dict_encoded_string());
+        if (type_lhs.get_comp_param() != type_rhs.get_comp_param()) {
+          auto* const sdp_lhs = getStringDictionaryProxy(type_lhs.get_comp_param());
+          CHECK(sdp_lhs);
+          auto const* const sdp_rhs = getStringDictionaryProxy(type_rhs.get_comp_param());
+          CHECK(sdp_rhs);
+          state.cur_target_idx_ = target_idx;
+          CellCallback const translate_string_ids(sdp_lhs->transientUnion(*sdp_rhs),
+                                                  inline_int_null_val(type_rhs));
+          eachCellInColumn(state, translate_string_ids);
+          type_rhs.set_comp_param(type_lhs.get_comp_param());
+        }
       }
     }
   }
@@ -368,8 +482,7 @@ void ResultSet::translateDictEncodedString(std::vector<TargetInfo> const& target
 // For each cell in column target_idx, callback func with pointer to datum.
 // This currently assumes the column type is a dictionary-encoded string, but this logic
 // can be generalized to other types.
-void ResultSet::eachCellInColumn(RowIterationState& state,
-                                 std::function<void(int8_t const*)> func) {
+void ResultSet::eachCellInColumn(RowIterationState& state, CellCallback const& func) {
   size_t const target_idx = state.cur_target_idx_;
   QueryMemoryDescriptor& storage_qmd = storage_->query_mem_desc_;
   CHECK_LT(target_idx, lazy_fetch_info_.size());
@@ -588,7 +701,8 @@ void ResultSet::syncEstimatorBuffer() const {
       static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
   CHECK(device_estimator_buffer_);
   auto device_buffer_ptr = device_estimator_buffer_->getMemoryPtr();
-  auto allocator = data_mgr_->createGpuAllocator(device_id_);
+  auto allocator = std::make_unique<CudaAllocator>(
+      data_mgr_, device_id_, getQueryEngineCudaStreamForDevice(device_id_));
   allocator->copyFromDevice(
       host_estimator_buffer_, device_buffer_ptr, estimator_->getBufferSize());
 }
@@ -894,7 +1008,7 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeCountDistinctCo
 double ResultSet::calculateQuantile(quantile::TDigest* const t_digest) {
   static_assert(sizeof(int64_t) == sizeof(quantile::TDigest*));
   CHECK(t_digest);
-  t_digest->mergeBuffer();
+  t_digest->mergeBufferFinal();
   double const quantile = t_digest->quantile();
   return boost::math::isnan(quantile) ? NULL_DOUBLE : quantile;
 }
@@ -1110,7 +1224,8 @@ void ResultSet::radixSortOnGpu(
   auto timer = DEBUG_TIMER(__func__);
   auto data_mgr = &catalog_->getDataMgr();
   const int device_id{0};
-  auto allocator = data_mgr->createGpuAllocator(device_id);
+  auto allocator = std::make_unique<CudaAllocator>(
+      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   CHECK_GT(block_size_, 0);
   CHECK_GT(grid_size_, 0);
   std::vector<int64_t*> group_by_buffers(block_size_);
@@ -1194,6 +1309,56 @@ const std::vector<std::string> ResultSet::getStringDictionaryPayloadCopy(
       dict_id, /*with_generation=*/true, catalog_);
   CHECK(sdp);
   return sdp->getDictionary()->copyStrings();
+}
+
+const std::pair<std::vector<int32_t>, std::vector<std::string>>
+ResultSet::getUniqueStringsForDictEncodedTargetCol(const size_t col_idx) const {
+  const auto col_type_info = getColType(col_idx);
+  std::unordered_set<int32_t> unique_string_ids_set;
+  const size_t num_entries = entryCount();
+  std::vector<bool> targets_to_skip(colCount(), true);
+  targets_to_skip[col_idx] = false;
+  CHECK(col_type_info.is_dict_encoded_type());  // Array<Text> or Text
+  const int64_t null_val = inline_fixed_encoding_null_val(
+      col_type_info.is_array() ? col_type_info.get_elem_type() : col_type_info);
+
+  for (size_t row_idx = 0; row_idx < num_entries; ++row_idx) {
+    const auto result_row = getRowAtNoTranslations(row_idx, targets_to_skip);
+    if (!result_row.empty()) {
+      if (const auto scalar_col_val =
+              boost::get<ScalarTargetValue>(&result_row[col_idx])) {
+        const int32_t string_id =
+            static_cast<int32_t>(boost::get<int64_t>(*scalar_col_val));
+        if (string_id != null_val) {
+          unique_string_ids_set.emplace(string_id);
+        }
+      } else if (const auto array_col_val =
+                     boost::get<ArrayTargetValue>(&result_row[col_idx])) {
+        if (*array_col_val) {
+          for (const ScalarTargetValue& scalar : array_col_val->value()) {
+            const int32_t string_id = static_cast<int32_t>(boost::get<int64_t>(scalar));
+            if (string_id != null_val) {
+              unique_string_ids_set.emplace(string_id);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  const size_t num_unique_strings = unique_string_ids_set.size();
+  std::vector<int32_t> unique_string_ids(num_unique_strings);
+  size_t string_idx{0};
+  for (const auto unique_string_id : unique_string_ids_set) {
+    unique_string_ids[string_idx++] = unique_string_id;
+  }
+
+  const int32_t dict_id = col_type_info.get_comp_param();
+  const auto sdp = row_set_mem_owner_->getOrAddStringDictProxy(
+      dict_id, /*with_generation=*/true, catalog_);
+  CHECK(sdp);
+
+  return std::make_pair(unique_string_ids, sdp->getStrings(unique_string_ids));
 }
 
 /**

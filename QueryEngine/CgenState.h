@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include "InValuesBitmap.h"
 #include "InputMetadata.h"
 #include "LLVMGlobalContext.h"
+#include "StringDictionaryTranslationMgr.h"
 
 #include "../Analyzer/Analyzer.h"
 #include "../Shared/InsertionOrderedMap.h"
@@ -36,39 +37,16 @@ struct ArrayLoadCodegen {
 
 struct CgenState {
  public:
-  CgenState(const size_t num_query_infos, const bool contains_left_deep_outer_join)
-      : module_(nullptr)
-      , row_func_(nullptr)
-      , filter_func_(nullptr)
-      , current_func_(nullptr)
-      , row_func_bb_(nullptr)
-      , filter_func_bb_(nullptr)
-      , row_func_call_(nullptr)
-      , filter_func_call_(nullptr)
-      , context_(getGlobalLLVMContext())
-      , ir_builder_(context_)
-      , contains_left_deep_outer_join_(contains_left_deep_outer_join)
-      , outer_join_match_found_per_level_(std::max(num_query_infos, size_t(1)) - 1)
-      , needs_error_check_(false)
-      , needs_geos_(false)
-      , query_func_(nullptr)
-      , query_func_entry_ir_builder_(context_){};
+  CgenState(const size_t num_query_infos,
+            const bool contains_left_deep_outer_join,
+            Executor* executor);
+  CgenState(const size_t num_query_infos, const bool contains_left_deep_outer_join);
+  CgenState(llvm::LLVMContext& context);
 
-  CgenState(llvm::LLVMContext& context)
-      : module_(nullptr)
-      , row_func_(nullptr)
-      , context_(context)
-      , ir_builder_(context_)
-      , contains_left_deep_outer_join_(false)
-      , needs_error_check_(false)
-      , needs_geos_(false)
-      , query_func_(nullptr)
-      , query_func_entry_ir_builder_(context_){};
-
-  size_t getOrAddLiteral(const Analyzer::Constant* constant,
-                         const EncodingType enc_type,
-                         const int dict_id,
-                         const int device_id) {
+  std::tuple<size_t, size_t> getOrAddLiteral(const Analyzer::Constant* constant,
+                                             const EncodingType enc_type,
+                                             const int dict_id,
+                                             const int device_id) {
     const auto& ti = constant->get_type_info();
     const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
     switch (type) {
@@ -215,6 +193,12 @@ struct CgenState {
     return str_lv;
   }
 
+  const StringDictionaryTranslationMgr* moveStringDictionaryTranslationMgr(
+      std::unique_ptr<const StringDictionaryTranslationMgr>&& str_dict_translation_mgr) {
+    str_dict_translation_mgrs_.emplace_back(std::move(str_dict_translation_mgr));
+    return str_dict_translation_mgrs_.back().get();
+  }
+
   const InValuesBitmap* addInValuesBitmap(
       std::unique_ptr<InValuesBitmap>& in_values_bitmap) {
     if (in_values_bitmap->isEmpty()) {
@@ -222,6 +206,11 @@ struct CgenState {
     }
     in_values_bitmaps_.emplace_back(std::move(in_values_bitmap));
     return in_values_bitmaps_.back().get();
+  }
+  void moveInValuesBitmap(std::unique_ptr<const InValuesBitmap>& in_values_bitmap) {
+    if (!in_values_bitmap->isEmpty()) {
+      in_values_bitmaps_.emplace_back(std::move(in_values_bitmap));
+    }
   }
   // look up a runtime function based on the name, return type and type of
   // the arguments and call it; x64 only, don't call from GPU codegen
@@ -290,6 +279,8 @@ struct CgenState {
   }
 
   llvm::Value* emitCall(const std::string& fname, const std::vector<llvm::Value*>& args);
+  llvm::Value* emitEntryCall(const std::string& fname,
+                             const std::vector<llvm::Value*>& args);
 
   size_t getLiteralBufferUsage(const int device_id) { return literal_bytes_[device_id]; }
 
@@ -326,6 +317,38 @@ struct CgenState {
 
   void replaceFunctionForGpu(const std::string& fcn_to_replace, llvm::Function* fn);
 
+  std::shared_ptr<Executor> getExecutor() const;
+  llvm::LLVMContext& getExecutorContext() const;
+  void set_module_shallow_copy(const std::unique_ptr<llvm::Module>& module,
+                               bool always_clone = false);
+
+  size_t executor_id_;
+  /*
+    Quoting https://groups.google.com/g/llvm-dev/c/kuil5XjasUs/m/7PBpOWZFDAAJ :
+    """
+    The state of Module/Context ownership is very muddled in the
+    codebase. As you have discovered: LLVMContext’s notionally own
+    their modules (via raw pointers deleted upon destruction of the
+    context), however in practice we always hold llvm Modules by
+    unique_ptr. Since the Module destructor removes the raw pointer
+    from the Context, this doesn’t usually blow up. It’s pretty broken
+    though.
+
+    I would argue that you should use unique_ptr and ignore
+    LLVMContext ownership.
+    """
+
+    Here we do the opposite to the last argument because we store
+    llvm::Module pointers in CodeCache and it is hard to sync the
+    destruction of LLVMContext and removing its modules from the
+    CodeCache. Instead, we'll never explicitly delete llvm::Module
+    instances and we'll let LLVMContext or unique_ptr to manage the
+    destruction of llvm::Modules. As a result, whenever LLVMContext is
+    destroyed, the corresponding llvm::Module pointers in CodeCache
+    become invalid and it is recommended to clear the CodeCache as
+    well.
+   */
+
   llvm::Module* module_;
   llvm::Function* row_func_;
   llvm::Function* filter_func_;
@@ -335,10 +358,10 @@ struct CgenState {
   llvm::CallInst* row_func_call_;
   llvm::CallInst* filter_func_call_;
   std::vector<llvm::Function*> helper_functions_;
-  llvm::LLVMContext& context_;
+  llvm::LLVMContext& context_;    // LLVMContext instance is held by an Executor instance.
   llvm::ValueToValueMapTy vmap_;  // used for cloning the runtime module
   llvm::IRBuilder<> ir_builder_;
-  std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;
+  std::unordered_map<size_t, std::vector<llvm::Value*>> fetch_cache_;
   struct FunctionOperValue {
     const Analyzer::FunctionOper* foper;
     llvm::Value* lv;
@@ -352,6 +375,8 @@ struct CgenState {
   std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
   InsertionOrderedMap filter_func_args_;
   std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
+  std::vector<std::unique_ptr<const StringDictionaryTranslationMgr>>
+      str_dict_translation_mgrs_;
   std::map<std::pair<llvm::Value*, llvm::Value*>, ArrayLoadCodegen>
       array_load_cache_;  // byte stream to array info
   std::unordered_map<std::string, llvm::Value*> geo_target_cache_;
@@ -411,7 +436,7 @@ struct CgenState {
 
  private:
   template <class T>
-  size_t getOrAddLiteral(const T& val, const int device_id) {
+  std::tuple<size_t, size_t> getOrAddLiteral(const T& val, const int device_id) {
     const LiteralValue var_val(val);
     size_t literal_found_off{0};
     auto& literals = literals_[device_id];
@@ -419,13 +444,13 @@ struct CgenState {
       const auto lit_bytes = literalBytes(literal);
       literal_found_off = addAligned(literal_found_off, lit_bytes);
       if (literal == var_val) {
-        return literal_found_off - lit_bytes;
+        return {literal_found_off - lit_bytes, lit_bytes};
       }
     }
     literals.emplace_back(val);
     const auto lit_bytes = literalBytes(var_val);
     literal_bytes_[device_id] = addAligned(literal_bytes_[device_id], lit_bytes);
-    return literal_bytes_[device_id] - lit_bytes;
+    return {literal_bytes_[device_id] - lit_bytes, lit_bytes};
   }
 
   std::unordered_map<int, LiteralValues> literals_;

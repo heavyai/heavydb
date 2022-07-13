@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ void S3Archive::init_for_read() {
     objects_request.WithPrefix(prefix_name);
     objects_request.SetMaxKeys(1 << 20);
 
-    // for a daemon like omnisci_server it seems improper to set s3 credentials
+    // for a daemon like heavydb it seems improper to set s3 credentials
     // via AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env's because that way
     // credentials are configured *globally* while different users with private
     // s3 resources may need separate credentials to access.in that case, use
@@ -85,7 +85,7 @@ void S3Archive::init_for_read() {
         // Importer::import_compressed or else, depending on copy_params (eg. .is_parquet)
         auto object_list = list_objects_outcome.GetResult().GetContents();
         object_list = foreign_storage::s3_objects_filter_sort_files(
-            object_list, regex_path_filter, file_sort_order_by, file_sort_regex);
+            object_list, {regex_path_filter, file_sort_order_by, file_sort_regex});
 
         if (0 == object_list.size()) {
           if (objkeys.empty()) {
@@ -151,7 +151,9 @@ void S3Archive::init_for_read() {
 // land entirely to be imported... (avro?)
 const std::string S3Archive::land(const std::string& objkey,
                                   std::exception_ptr& teptr,
-                                  const bool for_detection) {
+                                  const bool for_detection,
+                                  const bool allow_named_pipe_use,
+                                  const bool track_file_paths) {
   // 7z file needs entire landing; other file types use a named pipe
   static std::atomic<int64_t> seqno(((int64_t)getpid() << 32) | time(0));
   // need a dummy ext b/c no-ext now indicate plain_text
@@ -163,6 +165,9 @@ const std::string S3Archive::land(const std::string& objkey,
 #ifdef ENABLE_IMPORT_PARQUET
   use_pipe = use_pipe && (nullptr == ext || 0 != strcmp(ext, ".parquet"));
 #endif
+  if (!allow_named_pipe_use) {  // override using a named pipe no matter the configuration
+    use_pipe = false;
+  }
   if (use_pipe) {
     if (mkfifo(file_path.c_str(), 0660) < 0) {
       throw std::runtime_error("failed to create named pipe '" + file_path +
@@ -269,7 +274,10 @@ const std::string S3Archive::land(const std::string& objkey,
     }
   }
 
-  file_paths.insert(std::pair<const std::string, const std::string>(objkey, file_path));
+  if (track_file_paths) {  // `file_paths` may be shared between threads, so is not
+                           // thread-safe
+    file_paths.insert(std::pair<const std::string, const std::string>(objkey, file_path));
+  }
   return file_path;
 }
 

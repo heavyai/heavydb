@@ -7,8 +7,10 @@ set(ENABLE_CONDA OFF)
 if(DEFINED ENV{CONDA_PREFIX})
   set(ENABLE_CONDA ON)
   list(APPEND CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}")
+  # add a compile definition for conda build
+  add_definitions("-DCONDA_BUILD")
   # resolves link issue for zlib
-  link_directories("$ENV{CONDA_PREFIX}/lib")
+  link_directories("$ENV{CONDA_PREFIX}/lib" "$ENV{CONDA_PREFIX}/Library/lib")
   # various fixes and workarounds
   add_definitions("-Dsecure_getenv=getenv")
   # fixes `undefined reference to `boost::system::detail::system_category_instance'`:
@@ -45,7 +47,7 @@ if(ENABLE_IWYU)
   endif()
 endif()
 
-project(omnisci)
+project(heavyai)
 
 if(NOT EXISTS "${CMAKE_SOURCE_DIR}/Rendering")
   set(MAPD_EDITION "OS")
@@ -58,7 +60,7 @@ add_definitions("-DMAPD_EDITION_${MAPD_EDITION}")
 string(TOLOWER "${MAPD_EDITION}" MAPD_EDITION_LOWER)
 
 set(MAPD_VERSION_MAJOR "6")
-set(MAPD_VERSION_MINOR "0")
+set(MAPD_VERSION_MINOR "2")
 set(MAPD_VERSION_PATCH "0")
 set(MAPD_VERSION_EXTRA "dev")
 set(MAPD_VERSION_RAW "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}${MAPD_VERSION_EXTRA}")
@@ -364,11 +366,19 @@ if(ENABLE_FOLLY)
   endif()
 endif()
 
-
 option(ENABLE_SYSTEM_TFS "Enable system table functions" ON)
-option(ENABLE_RF_PROP_TFS "Enable RF Propagation module" OFF)
+option(ENABLE_ML_ONEDAL_TFS "Enable Intel oneDal ML system table functions" OFF)
+option(ENABLE_ML_MLPACK_TFS "Enable MLPack ML system table functions" OFF)
+
 option(ENABLE_POINT_CLOUD_TFS "Enable point cloud table functions" OFF)
 option(ENABLE_PDAL "Enable PDAL support" OFF)
+
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+  # Clang will not complile these tests quickly enough to avoid timeout
+  option(ENABLE_RF_PROP_TFS "Enable RF Propagation module" OFF)
+else()
+  option(ENABLE_RF_PROP_TFS "Enable RF Propagation module" ON)
+endif()
 
 if (ENABLE_PDAL)
   find_package(PDAL REQUIRED)
@@ -400,15 +410,45 @@ else()
   set(ENABLE_RF_PROP_TFS OFF CACHE BOOL "Enable RF Propagation module" FORCE)
 endif()
 
+if(ENABLE_RF_PROP_TFS)
+  if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "ee")
+    set(ENABLE_RF_PROP_TFS OFF CACHE BOOL "Enable RF Propagation module" FORCE)
+  endif()
+endif()
 
-option(ENABLE_MLPACK "Use mlpack" OFF)
-if(ENABLE_MLPACK)
-  find_package(OpenMP REQUIRED)
-  find_package(Armadillo REQUIRED)
-  find_package(Boost COMPONENTS serialization REQUIRED)
-  find_package(MLPACK REQUIRED)
-  include_directories(${MLPACK_INCLUDE_DIRS})
-  add_definitions("-DHAVE_MLPACK")
+if(ENABLE_ML_ONEDAL_TFS)
+  if(NOT ENABLE_SYSTEM_TFS)
+    set(ENABLE_ML_ONEDAL_TFS OFF CACHE BOOL "Enable Intel oneDal ML system table functions" FORCE)
+    message(STATUS "System table functions must be enabled to use oneDal ML functions, disabling oneDal support.")
+  else()
+    set(USE_DPCPP no)
+    set(USE_NEW_IFACES no)
+    set(TARGET_LINK static)
+    find_package(oneDAL REQUIRED)
+    if (oneDAL_FOUND)
+      message(STATUS "Building with oneDal ML function support.")
+      message(${DAL_LIBRARIES})
+      include_directories(${oneDAL_INCLUDE_DIRS})
+      add_definitions("-DHAVE_ONEDAL")
+    else()
+      set(ENABLE_ML_ONEDAL_TFS OFF CACHE BOOL "Enable Intel oneDal ML system table functions" FORCE)
+      message(STATUS "oneDal library not found, disabling oneDal support.")
+    endif()
+  endif()
+endif()
+
+if(ENABLE_ML_MLPACK_TFS)
+  if(NOT ENABLE_SYSTEM_TFS)
+    set(ENABLE_ML_MLPACK_TFS OFF CACHE BOOL "Enable MLPACK ML system table functions" FORCE)
+    message(STATUS "System table functions must be enabled to use MLPACK ML functions, disabling MLPACK support.")
+  else()
+    find_package(OpenMP REQUIRED)
+    find_package(Armadillo REQUIRED)
+    find_package(Boost COMPONENTS serialization REQUIRED)
+    find_package(MLPACK REQUIRED)
+    include_directories(${MLPACK_INCLUDE_DIRS})
+    add_definitions("-DHAVE_MLPACK")
+  endif()
 endif()
 
 if(MSVC)
@@ -454,7 +494,14 @@ set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 
 if(MSVC)
   option(ENABLE_NO_WINWARNINGS "disable most windows warnings" ON)
+  add_compile_definitions("_USE_MATH_DEFINES") # M_PI https://stackoverflow.com/q/6563810/2700898
   add_compile_definitions("NOMINMAX")
+  add_compile_definitions("WIN32_LEAN_AND_MEAN")
+  # Fix for thrift_handler.lib(DBHandler.cpp.obj) : error LNK2038: mismatch detected for
+  # 'boost_log_abi': value 'v2_mt_nt6' doesn't match value 'v2_mt_nt62' in initdb.cpp.obj
+  # https://github.com/microsoft/vcpkg/discussions/22762
+  # If a future vcpkg release causes the reverse error message, then this line should be removed.
+  add_compile_definitions("BOOST_USE_WINAPI_VERSION=0x0601") #=BOOST_WINAPI_VERSION_WIN7
   if(ENABLE_NO_WINWARNINGS)
     add_compile_definitions("_STL_EXTRA_DISABLED_WARNINGS=4146 4242 4244 4267 4355 4365 4458 4624 4820 4996 5204 5219" "NOMINMAX")
     # disable 4702 unreachable code warning
@@ -474,7 +521,7 @@ else()
   endif()
 endif()
 
-if (ENABLE_MLPACK)
+if (ENABLE_ML_MLPACK_TFS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}") 
 endif()
 
@@ -678,6 +725,16 @@ endif()
 # RapidJSON
 include_directories(ThirdParty/rapidjson)
 add_definitions(-DRAPIDJSON_HAS_STDSTRING)
+if(NOT MSVC)
+  # At the present time the current vcpkg version of rapidjson is 2020-09-14:
+  # https://github.com/microsoft/vcpkg/blob/master/versions/r-/rapidjson.json
+  # and the Windows build fails because it does not have this fix:
+  # https://github.com/Tencent/rapidjson/pull/1568
+  # Once vcpkg's rapidjson has this fix then let's try not making this exception for MSVC.
+  # When this changes, remove this exception from all other similar CMakeLists.txt files too.
+  add_definitions(-DRAPIDJSON_NOMEMBERITERATORCLASS)
+endif()
+
 
 # Linenoise
 add_subdirectory(ThirdParty/linenoise)
@@ -749,9 +806,9 @@ if(DISABLE_CONCURRENCY)
 endif()
 
 set(gen_cpp_files
-    ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.h
-    ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_types.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/Heavy.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/Heavy.h
+    ${CMAKE_BINARY_DIR}/gen-cpp/heavy_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
@@ -760,14 +817,14 @@ set(gen_cpp_files
 )
 add_custom_command(
   DEPENDS
-    ${CMAKE_SOURCE_DIR}/omnisci.thrift
+    ${CMAKE_SOURCE_DIR}/heavy.thrift
     ${CMAKE_SOURCE_DIR}/common.thrift
     ${CMAKE_SOURCE_DIR}/completion_hints.thrift
     ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
     ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
   OUTPUT ${gen_cpp_files}
   COMMAND ${Thrift_EXECUTABLE}
-  ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/omnisci.thrift)
+  ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/heavy.thrift)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
 
 add_custom_target(thrift_gen DEPENDS ${gen_cpp_files})
@@ -788,14 +845,13 @@ else()
   include_directories(Distributed/os)
 endif()
 
+include_directories(ThirdParty/muparserx)
+add_subdirectory(ThirdParty/muparserx)
+
 set(MAPD_RENDERING_LIBRARIES "")
 if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
   option(ENABLE_RENDERING "Build backend renderer" OFF)
   if(ENABLE_RENDERING)
-    # muparserx - currently render-only
-    include_directories(ThirdParty/muparserx)
-    add_subdirectory(ThirdParty/muparserx)
-
     option(ENABLE_RENDER_TESTS "Build backend renderer tests" ON)
 
     add_definitions("-DHAVE_RENDERING")
@@ -840,6 +896,7 @@ get_target_property(CalciteThrift_BINARY_DIR calciteserver_thrift BINARY_DIR)
 include_directories(${CalciteThrift_BINARY_DIR})
 
 add_subdirectory(Catalog)
+add_subdirectory(StringOps)
 add_subdirectory(Parser)
 add_subdirectory(Analyzer)
 add_subdirectory(ImportExport)
@@ -871,7 +928,7 @@ if(ENABLE_ODBC)
   add_subdirectory(ODBC)
 endif()
 
-set(MAPD_LIBRARIES OSDependent Shared Catalog SqliteConnector MigrationMgr TableArchiver Parser Analyzer ImportExport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter Logger Geospatial)
+set(MAPD_LIBRARIES OSDependent Shared Catalog SqliteConnector MigrationMgr TableArchiver Parser Analyzer StringOps ImportExport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter Logger Geospatial)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND MAPD_LIBRARIES Distributed)
@@ -884,7 +941,7 @@ list(APPEND MAPD_LIBRARIES Calcite)
 
 if(ENABLE_RENDERING)
   add_dependencies(QueryRenderer Parser)
-  list(APPEND MAPD_LIBRARIES "${MAPD_RENDERING_LIBRARIES}")
+  list(APPEND MAPD_LIBRARIES ${MAPD_RENDERING_LIBRARIES})
 endif()
 
 list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
@@ -897,12 +954,17 @@ if(ENABLE_PDAL)
   list(APPEND MAPD_LIBRARIES ${PDAL_LIBRARIES})
 endif()
 
-if(ENABLE_MLPACK)
-  list(APPEND MAPD_LIBRARIES ${MLPACK_LIBRARIES} ${ARMADILLO_LIBRARIES})
-endif()
-
 if(ENABLE_LICENSING_AWS)
   list(APPEND MAPD_LIBRARIES AWSMarketplace)
+endif()
+
+if (ENABLE_ML_ONEDAL_TFS)
+    list(APPEND MAPD_LIBRARIES ${DAL_LIBRARIES})
+    list(APPEND TBB_LIBS ${TBB_MALLOC_LIBRARY})
+endif()
+
+if(ENABLE_ML_MLPACK_TFS)
+  list(APPEND MAPD_LIBRARIES ${MLPACK_LIBRARIES} ${ARMADILLO_LIBRARIES})
 endif()
 
 list(APPEND MAPD_LIBRARIES ${TBB_LIBS})
@@ -927,27 +989,24 @@ if (ENABLE_MEMKIND)
   set(CMAKE_INSTALL_RPATH "$ORIGIN/../ThirdParty/lib")
 endif()
 
-set(initdb_source_files initdb.cpp)
-add_executable(initdb ${initdb_source_files})
+add_executable(initheavy initdb.cpp)
 
-set(omnisci_server_source_files MapDServer.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
-
-add_executable(omnisci_server ${omnisci_server_source_files})
-set_target_properties(omnisci_server PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")
+add_executable(heavydb HeavyDB.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
+set_target_properties(heavydb PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")
 
 add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/omnisci.thrift
+    DEPENDS ${CMAKE_SOURCE_DIR}/heavy.thrift
     OUTPUT
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/OmniSci.java
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/TRow.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/server/Heavy.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/server/TRow.java
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/omnisci.thrift)
+    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/heavy.thrift)
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/common.thrift
     OUTPUT
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/common.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/server/common.java
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/common.thrift)
@@ -955,14 +1014,14 @@ add_custom_command(
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
     OUTPUT
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/serialized_result_set.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/server/serialized_result_set.java
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift)
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift ${CMAKE_SOURCE_DIR}/completion_hints.thrift ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
-    OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/calciteserver/CalciteServer.java
+    OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/calciteserver/CalciteServer.java
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen java -r -I ${CMAKE_SOURCE_DIR} -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift)
@@ -975,8 +1034,8 @@ execute_process(
   OUTPUT_VARIABLE MAPD_GIT_HASH
   OUTPUT_STRIP_TRAILING_WHITESPACE
   )
-file(WRITE ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt "${MAPD_GIT_HASH}\n")
-file(STRINGS ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt MAPD_GIT_HASH)
+file(WRITE ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt "${MAPD_GIT_HASH}\n")
+file(STRINGS ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt MAPD_GIT_HASH)
 set(CPACK_PACKAGE_VERSION "${MAPD_VERSION_RAW}-${MAPD_BUILD_DATE}-${MAPD_GIT_HASH}")
 
 configure_file(
@@ -984,18 +1043,18 @@ configure_file(
   "${CMAKE_BINARY_DIR}/MapDRelease.h"
   @ONLY
   )
-list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt)
+list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/MapDRelease.h)
-# required to force regen of MAPD_GIT_HASH.txt, MapDRelease.h
+# required to force regen of heavyai_git_hash.txt, MapDRelease.h
 add_custom_target(rerun_cmake ALL
   COMMAND cmake .
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   )
-add_dependencies(omnisci_server rerun_cmake)
+add_dependencies(heavydb rerun_cmake)
 
-target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG})
+target_link_libraries(heavydb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG})
 
-target_link_libraries(initdb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
+target_link_libraries(initheavy mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
     ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
     ${LOCALE_LINK_FLAG})
 
@@ -1038,9 +1097,9 @@ if(NOT "${CMAKE_BUILD_TYPE_LOWER}" STREQUAL "debug" AND NOT "${CMAKE_BUILD_TYPE_
 else()
   set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-debug")
 endif()
-set(CPACK_PACKAGE_VENDOR "OmniSci, Inc.")
-set(CPACK_PACKAGE_CONTACT "support@omnisci.com")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OmniSci Core Database")
+set(CPACK_PACKAGE_VENDOR "HEAVY.AI, Inc.")
+set(CPACK_PACKAGE_CONTACT "support@heavy.ai")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "HeavyDB Database")
 set(CPACK_PROJECT_CONFIG_FILE ${CMAKE_SOURCE_DIR}/CMakePackaging.txt)
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "default-jre-headless | openjdk-8-jre-headless | java8-runtime-headless, bsdmainutils, curl | wget")
 set(CPACK_RPM_PACKAGE_REQUIRES "java-headless, util-linux, curl")
@@ -1058,7 +1117,7 @@ set_dpkg_arch(${CMAKE_SYSTEM_PROCESSOR} CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
 
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses" DESTINATION "ThirdParty" COMPONENT "doc")
 
-# OmniSciTypes.h local includes (for UDF/UDTF)
+# heavydbTypes.h local includes (for UDF/UDTF)
 install(FILES Shared/funcannotations.h DESTINATION "Shared/" COMPONENT "include")
 install(FILES Shared/InlineNullValues.h DESTINATION "Shared/" COMPONENT "include")
 install(FILES Logger/Logger.h DESTINATION "Logger/" COMPONENT "include")
@@ -1094,12 +1153,12 @@ add_subdirectory(ThirdParty/generate_cert)
 # systemd
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-    install(FILES systemd/omnisci_sd_server.service.in systemd/omnisci_sd_server@.service.in DESTINATION systemd)
-    install(FILES systemd/omnisci-sds.conf.in DESTINATION systemd)
+    install(FILES systemd/heavydb_sd_server.service.in systemd/heavydb_sd_server@.service.in DESTINATION systemd)
+    install(FILES systemd/heavy-sds.conf.in DESTINATION systemd)
   endif()
-  install(FILES systemd/omnisci_server.service.in systemd/omnisci_server@.service.in DESTINATION systemd)
-  install(FILES systemd/omnisci.conf.in DESTINATION systemd)
-  install(PROGRAMS systemd/install_omnisci_systemd.sh DESTINATION systemd)
+  install(FILES systemd/heavydb.service.in systemd/heavydb@.service.in DESTINATION systemd)
+  install(FILES systemd/heavy.conf.in DESTINATION systemd)
+  install(PROGRAMS systemd/install_heavy_systemd.sh DESTINATION systemd)
 endif()
 
 ## mvn process for java code
@@ -1118,8 +1177,8 @@ if("${MAPD_VERSION_EXTRA}" STREQUAL "dev")
   set (OMNISCI_JAR_RELEASE_VERSION "${OMNISCI_JAR_RELEASE_VERSION}-SNAPSHOT")
 endif()
 
-set (OMNISCI_JDBC_JAR "omnisci-jdbc-${OMNISCI_JAR_RELEASE_VERSION}.jar")
-set (OMNISCI_UTILITY_JAR "omnisci-utility-${OMNISCI_JAR_RELEASE_VERSION}.jar")
+set (JDBC_JAR "heavyai-jdbc-${OMNISCI_JAR_RELEASE_VERSION}.jar")
+set (UTILITY_JAR "heavyai-utility-${OMNISCI_JAR_RELEASE_VERSION}.jar")
 
 set(MVN_PATH_COMMAND "")
 if(NOT MSVC) 
@@ -1128,35 +1187,35 @@ endif()
 
 add_custom_command(
   OUTPUT
-    ${CMAKE_BINARY_DIR}/bin/${OMNISCI_UTILITY_JAR}
-    ${CMAKE_BINARY_DIR}/bin/${OMNISCI_JDBC_JAR}
+    ${CMAKE_BINARY_DIR}/bin/${UTILITY_JAR}
+    ${CMAKE_BINARY_DIR}/bin/${JDBC_JAR}
     ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar
-    COMMAND ${MVN_PATH_COMMAND} ${MVN_EXECUTABLE} -l ${CMAKE_BINARY_DIR}/mvn_build.log -e clean install -Dthrift.version="${Thrift_VERSION}" -Dmaven.compiler.showDeprecation=true -Dmaven.compiler.showWarnings=true -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}" -Djava.net.preferIPv4Stack=true -Dmaven.wagon.http.retryHandler.count=3 -DMAPD_LOG_DIR="${CMAKE_BINARY_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapd/target/${OMNISCI_UTILITY_JAR} ${CMAKE_BINARY_DIR}/bin
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/omniscijdbc/target/${OMNISCI_JDBC_JAR} ${CMAKE_BINARY_DIR}/bin
+    COMMAND ${MVN_PATH_COMMAND} ${MVN_EXECUTABLE} -T 4 -l ${CMAKE_BINARY_DIR}/mvn_build.log -e clean install -Dthrift.version="${Thrift_VERSION}" -Dmaven.compiler.showDeprecation=true -Dmaven.compiler.showWarnings=true -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}" -Djava.net.preferIPv4Stack=true -Dmaven.wagon.http.retryHandler.count=3 -DLOG_DIR="${CMAKE_BINARY_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/heavydb/target/${UTILITY_JAR} ${CMAKE_BINARY_DIR}/bin
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/heavyaijdbc/target/${JDBC_JAR} ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   DEPENDS
-    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/OmniSci.java
-    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/calciteserver/CalciteServer.java
+    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/server/Heavy.java
+    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/calciteserver/CalciteServer.java
     ${CMAKE_SOURCE_DIR}/java/calcite/src/main/codegen/config.fmpp
     ${CMAKE_SOURCE_DIR}/java/pom.xml
-    ${CMAKE_SOURCE_DIR}/omnisci.thrift
+    ${CMAKE_SOURCE_DIR}/heavy.thrift
     ${JAVA_POM}
     ${JAVA_SOURCES}
     ${JAVA_FTL}
   )
 add_custom_target(mapd_java_components ALL DEPENDS
-  ${CMAKE_BINARY_DIR}/bin/${OMNISCI_UTILITY_JAR}
-  ${CMAKE_BINARY_DIR}/bin/${OMNISCI_JDBC_JAR}
+  ${CMAKE_BINARY_DIR}/bin/${UTILITY_JAR}
+  ${CMAKE_BINARY_DIR}/bin/${JDBC_JAR}
   ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar)
 add_custom_target(mapd_java_clean
   COMMAND ${MVN_PATH_COMMAND} ${MVN_EXECUTABLE} -q clean -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}"
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   )
 add_dependencies(clean-all mapd_java_clean)
-install(FILES ${CMAKE_SOURCE_DIR}/java/mapd/target/${OMNISCI_UTILITY_JAR} DESTINATION bin COMPONENT "jar")
-install(FILES ${CMAKE_SOURCE_DIR}/java/omniscijdbc/target/${OMNISCI_JDBC_JAR} DESTINATION bin COMPONENT "jar")
+install(FILES ${CMAKE_SOURCE_DIR}/java/heavydb/target/${UTILITY_JAR} DESTINATION bin COMPONENT "jar")
+install(FILES ${CMAKE_SOURCE_DIR}/java/heavyaijdbc/target/${JDBC_JAR} DESTINATION bin COMPONENT "jar")
 install(FILES ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin COMPONENT "jar")
 
 add_custom_target(maven_populate_cache
@@ -1166,13 +1225,13 @@ add_custom_target(maven_populate_cache
 
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${ADDITIONAL_MAKE_CLEAN_FILES}")
 
-install(TARGETS initdb omnisci_server DESTINATION bin COMPONENT "exe")
-install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION "." COMPONENT "doc")
+install(TARGETS initheavy heavydb DESTINATION bin COMPONENT "exe")
+install(FILES ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt DESTINATION "." COMPONENT "doc")
 if(ENABLE_CUDA)
   install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.fatbin DESTINATION QueryEngine COMPONENT "exe")
 endif()
 install(FILES completion_hints.thrift DESTINATION "." COMPONENT "thrift")
-install(FILES omnisci.thrift DESTINATION "." COMPONENT "thrift")
+install(FILES heavy.thrift DESTINATION "." COMPONENT "thrift")
 install(FILES common.thrift DESTINATION "." COMPONENT "thrift")
 install(FILES QueryEngine/serialized_result_set.thrift DESTINATION "QueryEngine/" COMPONENT "thrift")
 install(FILES QueryEngine/extension_functions.thrift DESTINATION "QueryEngine/" COMPONENT "thrift")
@@ -1194,12 +1253,16 @@ endif()
 set(CPACK_RESOURCE_FILE_LICENSE "${EULA_FILE}")
 install(FILES "${EULA_FILE}" DESTINATION "."  COMPONENT "doc")
 
-install(PROGRAMS startomnisci DESTINATION ".")
-install(PROGRAMS scripts/inneromnisci DESTINATION "scripts")
+install(PROGRAMS startheavy DESTINATION ".")
+install(PROGRAMS scripts/innerstartheavy DESTINATION "scripts")
 install(PROGRAMS insert_sample_data DESTINATION ".")
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  install(DIRECTORY docker/sds DESTINATION "docker")
+  if(ENABLE_CUDA)
+    install(FILES docker/sds/Dockerfile.cuda RENAME Dockerfile DESTINATION "docker/sds")
+  else()
+    install(FILES docker/sds/Dockerfile.cpu RENAME Dockerfile DESTINATION "docker/sds")
+  endif()
 endif()
 install(FILES docker/README.md DESTINATION "docker")
 if(ENABLE_CUDA OR ENABLE_RENDERING)

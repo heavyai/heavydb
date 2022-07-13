@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,6 +82,10 @@ bool SingleFileReader::isEndOfLastFile() {
   return isScanFinished();
 }
 
+std::string SingleFileReader::getCurrentFilePath() const {
+  return file_path_;
+}
+
 SingleTextFileReader::SingleTextFileReader(const std::string& file_path,
                                            const import_export::CopyParams& copy_params)
     : SingleFileReader(file_path, copy_params)
@@ -99,6 +103,10 @@ SingleTextFileReader::SingleTextFileReader(const std::string& file_path,
   fseek(file_, 0, SEEK_END);
 
   data_size_ = get_data_size(ftell(file_), header_offset_);
+  // Empty file
+  if (data_size_ == 0) {
+    scan_finished_ = true;
+  }
 
   if (fseek(file_, static_cast<long int>(header_offset_), SEEK_SET) != 0) {
     throw std::runtime_error{"An error occurred when attempting to open file \"" +
@@ -134,6 +142,7 @@ void SingleTextFileReader::serialize(
 }
 
 void SingleTextFileReader::checkForMoreRows(size_t file_offset,
+                                            const shared::FilePathOptions& options,
                                             const ForeignServer* server_options,
                                             const UserMapping* user_mapping) {
   CHECK(isScanFinished());
@@ -411,6 +420,7 @@ void CompressedFileReader::skipBytes(size_t n_bytes) {
 }
 
 void CompressedFileReader::checkForMoreRows(size_t file_offset,
+                                            const shared::FilePathOptions& options,
                                             const ForeignServer* server_options,
                                             const UserMapping* user_mapping) {
   CHECK(initial_scan_ == false);
@@ -501,7 +511,7 @@ void CompressedFileReader::checkForMoreRows(size_t file_offset,
       }
     }
   }
-};
+}
 
 void CompressedFileReader::serialize(
     rapidjson::Value& value,
@@ -522,6 +532,7 @@ MultiFileReader::MultiFileReader(const std::string& file_path,
     : FileReader(file_path, copy_params)
     , current_index_(0)
     , current_offset_(0)
+    , starting_offset_(0)
     , is_end_of_last_file_(false) {}
 
 MultiFileReader::MultiFileReader(const std::string& file_path,
@@ -530,11 +541,15 @@ MultiFileReader::MultiFileReader(const std::string& file_path,
     : FileReader(file_path, copy_params)
     , current_index_(0)
     , current_offset_(0)
+    , starting_offset_(0)
     , is_end_of_last_file_(false) {
   json_utils::get_value_from_object(value, file_locations_, "file_locations");
   json_utils::get_value_from_object(value, cumulative_sizes_, "cumulative_sizes");
   json_utils::get_value_from_object(value, current_offset_, "current_offset");
   json_utils::get_value_from_object(value, current_index_, "current_index");
+  if (value.HasMember("starting_offset")) {
+    json_utils::get_value_from_object(value, starting_offset_, "starting_offset");
+  }
 
   // Validate files_metadata here, but objects will be recreated by child class
   CHECK(value.HasMember("files_metadata"));
@@ -549,6 +564,7 @@ void MultiFileReader::serialize(rapidjson::Value& value,
       value, cumulative_sizes_, "cumulative_sizes", allocator);
   json_utils::add_value_to_object(value, current_offset_, "current_offset", allocator);
   json_utils::add_value_to_object(value, current_index_, "current_index", allocator);
+  json_utils::add_value_to_object(value, starting_offset_, "starting_offset", allocator);
 
   // Serialize metadata from all files
   rapidjson::Value files_metadata(rapidjson::kArrayType);
@@ -588,17 +604,42 @@ bool MultiFileReader::isEndOfLastFile() {
   return (isScanFinished() || is_end_of_last_file_);
 }
 
-LocalMultiFileReader::LocalMultiFileReader(
-    const std::string& file_path,
-    const import_export::CopyParams& copy_params,
-    const std::optional<std::string>& regex_path_filter,
-    const std::optional<std::string>& file_sort_order_by,
-    const std::optional<std::string>& file_sort_regex)
+std::string MultiFileReader::getCurrentFilePath() const {
+  if (isScanFinished()) {
+    return files_.back()->getCurrentFilePath();
+  }
+  CHECK_LT(current_index_, files_.size());
+  return files_[current_index_]->getCurrentFilePath();
+}
+
+std::set<std::string> MultiFileReader::checkForRolledOffFiles(
+    const shared::FilePathOptions& file_path_options) {
+  auto all_file_paths = getAllFilePaths(file_path_options);
+  auto rolled_off_files =
+      shared::check_for_rolled_off_file_paths(all_file_paths, file_locations_);
+  if (!rolled_off_files.empty()) {
+    files_.erase(files_.begin(), files_.begin() + rolled_off_files.size());
+    CHECK_LE(rolled_off_files.size(), cumulative_sizes_.size());
+    starting_offset_ = cumulative_sizes_[rolled_off_files.size() - 1];
+    cumulative_sizes_.erase(cumulative_sizes_.begin(),
+                            cumulative_sizes_.begin() + rolled_off_files.size());
+    current_index_ -= rolled_off_files.size();
+  }
+  return rolled_off_files;
+}
+
+LocalMultiFileReader::LocalMultiFileReader(const std::string& file_path,
+                                           const import_export::CopyParams& copy_params,
+                                           const shared::FilePathOptions& options,
+                                           const std::optional<size_t>& max_file_count)
     : MultiFileReader(file_path, copy_params) {
-  auto found_file_locations = shared::local_glob_filter_sort_files(
-      file_path, regex_path_filter, file_sort_order_by, file_sort_regex);
-  for (const auto& location : found_file_locations) {
-    insertFile(location);
+  auto file_paths = shared::local_glob_filter_sort_files(file_path, options);
+  if (max_file_count.has_value() && file_paths.size() > max_file_count.value()) {
+    file_paths.erase(file_paths.begin(),
+                     file_paths.begin() + (file_paths.size() - max_file_count.value()));
+  }
+  for (const auto& file_path : file_paths) {
+    insertFile(file_path);
   }
 }
 
@@ -636,48 +677,58 @@ void LocalMultiFileReader::insertFile(std::string location) {
   }
 }
 
-void LocalMultiFileReader::checkForMoreRows(size_t file_offset,
-                                            const ForeignServer* server_options,
-                                            const UserMapping* user_mapping) {
+void LocalMultiFileReader::checkForMoreRows(
+    size_t file_offset,
+    const shared::FilePathOptions& file_path_options,
+    const ForeignServer* server_options,
+    const UserMapping* user_mapping) {
   // Look for new files
   std::set<std::string> new_locations;
   CHECK(isScanFinished());
   CHECK(file_offset == current_offset_);
   if (boost::filesystem::is_directory(file_path_)) {
     // Find all files in this directory
-    std::set<std::string> all_file_paths;
-    for (boost::filesystem::recursive_directory_iterator
-             it(file_path_, boost::filesystem::symlink_option::recurse),
-         eit;
-         it != eit;
-         ++it) {
-      bool new_file =
-          std::find(file_locations_.begin(), file_locations_.end(), it->path()) ==
-          file_locations_.end();
-      if (!boost::filesystem::is_directory(it->path()) && new_file) {
-        new_locations.insert(it->path().string());
+    auto all_file_paths = getAllFilePaths(file_path_options);
+    for (const auto& path : all_file_paths) {
+      if (!shared::contains(file_locations_, path)) {
+        new_locations.insert(path);
       }
-      all_file_paths.emplace(it->path().string());
     }
 
     for (const auto& file_path : file_locations_) {
-      if (all_file_paths.find(file_path) == all_file_paths.end()) {
+      if (!shared::contains(all_file_paths, file_path)) {
         throw_removed_file_error(file_path);
       }
     }
   }
+
+  if (!files_.empty()) {
+    // Check if last file has new data
+    size_t base = starting_offset_;
+    CHECK_GT(current_index_, size_t(0));
+    auto last_file_index = current_index_ - 1;
+    if (last_file_index > 0) {
+      base = cumulative_sizes_[last_file_index - 1];
+    }
+    files_.back()->checkForMoreRows(current_offset_ - base, file_path_options);
+    if (!files_.back()->isScanFinished()) {
+      // Go back to the last file, if more rows are found.
+      current_index_ = last_file_index;
+      is_end_of_last_file_ = false;
+      cumulative_sizes_.pop_back();
+    }
+  }
+
   if (new_locations.size() > 0) {
     for (const auto& location : new_locations) {
       insertFile(location);
     }
-  } else if (files_.size() == 1) {
-    // Single file, check if it has new data
-    files_[0].get()->checkForMoreRows(file_offset);
-    if (!files_[0].get()->isScanFinished()) {
-      current_index_ = 0;
-      cumulative_sizes_ = {};
-    }
   }
+}
+
+std::vector<std::string> LocalMultiFileReader::getAllFilePaths(
+    const shared::FilePathOptions& file_path_options) const {
+  return shared::local_glob_filter_sort_files(file_path_, file_path_options);
 }
 
 size_t MultiFileReader::read(void* buffer, size_t max_size) {
@@ -705,7 +756,7 @@ size_t MultiFileReader::readRegion(void* buffer, size_t offset, size_t size) {
   // Get file index
   auto index = offset_to_index(cumulative_sizes_, offset);
   // Get offset into this file
-  size_t base = 0;
+  size_t base = starting_offset_;
   if (index > 0) {
     base = cumulative_sizes_[index - 1];
   }

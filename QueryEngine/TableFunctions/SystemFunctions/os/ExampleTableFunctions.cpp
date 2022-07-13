@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -124,16 +124,6 @@ TEMPLATE_NOINLINE
                             Column<T>& output_x,
                             Column<T>& output_y,
                             Column<int32_t>& output_num_iterations) {
-  if (max_iterations < 1) {
-    return mgr.ERROR_MESSAGE("max_iterations must be a positive integer");
-  }
-  if (x_pixels < 1 || y_pixels < 1) {
-    return mgr.ERROR_MESSAGE("x_pixels and y_pixels must be positive integers");
-  }
-  if (x_max <= x_min || y_max <= y_min) {
-    return mgr.ERROR_MESSAGE(
-        "Max x and y bounds must be greater than min x and y bounds");
-  }
 
   const T x_scale = get_scale(x_min, x_max, x_pixels);
   const T y_scale = get_scale(y_min, y_max, y_pixels);
@@ -200,7 +190,7 @@ TEMPLATE_NOINLINE
     const T cx = x * x_scale + x_min;
     T zx = 0;
     T zy = 0;
-    int32_t num_iterations = 0;
+    int32_t num_iterations = 1;
     for (; num_iterations < max_iterations; ++num_iterations) {
       const T temp_x = zx * zx - zy * zy + cx;
       zy = 2 * zx * zy + cy;

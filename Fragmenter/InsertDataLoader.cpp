@@ -1,5 +1,5 @@
 /*
- * Copyright 2019, OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,6 +85,7 @@ size_t size_of_raw_column(const Catalog_Namespace::Catalog& cat,
   switch (cd->columnType.get_type()) {
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
     case kARRAY:
@@ -300,7 +301,8 @@ copy_data_of_shard(const Catalog_Namespace::Catalog& cat,
   const auto* table = cat.getMetadataForTable(insert_chunks.table_id);
   const auto* physical_table = cat.getPhysicalTablesDescriptors(table)[shardTableIndex];
 
-  InsertChunks insert_chunks_for_shard{physical_table->tableId, insert_chunks.db_id, {}};
+  InsertChunks insert_chunks_for_shard{
+      physical_table->tableId, insert_chunks.db_id, {}, {}};
 
   std::list<std::unique_ptr<foreign_storage::ForeignStorageBuffer>> buffers;
 
@@ -318,6 +320,19 @@ copy_data_of_shard(const Catalog_Namespace::Catalog& cat,
     }
     chunk_for_shard.initEncoder();
     chunk_for_shard.appendEncodedDataAtIndices(*chunk, rowIndices);
+    CHECK_EQ(chunk_for_shard.getBuffer()->getEncoder()->getNumElems(), rowIndices.size());
+  }
+
+  // mark which row indices are valid for import
+  auto row_count = rowIndices.size();
+  insert_chunks_for_shard.valid_row_indices.reserve(row_count);
+  for (size_t irow = 0; irow < row_count; ++irow) {
+    auto row_index = rowIndices[irow];
+    if (std::binary_search(insert_chunks.valid_row_indices.begin(),
+                           insert_chunks.valid_row_indices.end(),
+                           row_index)) {
+      insert_chunks_for_shard.valid_row_indices.emplace_back(irow);
+    }
   }
 
   return {std::move(buffers), insert_chunks_for_shard};
@@ -468,6 +483,7 @@ void InsertDataLoader::insertData(const Catalog_Namespace::SessionInfo& session_
 
           InsertData shardData = copyDataOfShard(
               cat, shardDataOwner, insert_data, stardTableIdx, rowIndicesOfShard);
+          CHECK(shardData.numRows > 0);
           connector_.insertDataToLeaf(session_info, shardLeafIdx, shardData);
         };
 
@@ -486,4 +502,38 @@ void InsertDataLoader::insertData(const Catalog_Namespace::SessionInfo& session_
     }
   }
 }
+
+void LocalInsertConnector::insertChunksToLeaf(
+    const Catalog_Namespace::SessionInfo& session,
+    const size_t leaf_idx,
+    const Fragmenter_Namespace::InsertChunks& insert_chunks) {
+  CHECK(leaf_idx == 0);
+  auto& catalog = session.getCatalog();
+  auto created_td = catalog.getMetadataForTable(insert_chunks.table_id);
+  created_td->fragmenter->insertChunksNoCheckpoint(insert_chunks);
+}
+
+void LocalInsertConnector::insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
+                                            const size_t leaf_idx,
+                                            InsertData& insert_data) {
+  CHECK(leaf_idx == 0);
+  auto& catalog = session.getCatalog();
+  auto created_td = catalog.getMetadataForTable(insert_data.tableId);
+  created_td->fragmenter->insertDataNoCheckpoint(insert_data);
+}
+
+void LocalInsertConnector::checkpoint(const Catalog_Namespace::SessionInfo& session,
+                                      int table_id) {
+  auto& catalog = session.getCatalog();
+  catalog.checkpointWithAutoRollback(table_id);
+}
+
+void LocalInsertConnector::rollback(const Catalog_Namespace::SessionInfo& session,
+                                    int table_id) {
+  auto& catalog = session.getCatalog();
+  auto db_id = catalog.getDatabaseId();
+  auto table_epochs = catalog.getTableEpochs(db_id, table_id);
+  catalog.setTableEpochs(db_id, table_epochs);
+}
+
 }  // namespace Fragmenter_Namespace

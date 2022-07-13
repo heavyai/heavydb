@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 /*
  * @file DelimitedParserUtils.h
- * @author Mehmet Sariyuce <mehmet.sariyuce@omnisci.com>
  * @brief utilities for parsing delimited data
+ *
  */
 
 #pragma once
@@ -127,7 +127,8 @@ const char* get_row(const char* buf,
  */
 void parse_string_array(const std::string& s,
                         const import_export::CopyParams& copy_params,
-                        std::vector<std::string>& string_vec);
+                        std::vector<std::string>& string_vec,
+                        bool truncate_values = false);
 
 /**
  * Extends the given buffer to the lesser of max_buffer_resize or twice the given

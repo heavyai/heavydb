@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #pragma once
 
 #include <cstdlib>
@@ -56,7 +57,7 @@ class CudaErrorException : public std::runtime_error {
 
 struct DeviceProperties {
   CUdevice device;
-  omnisci::UUID uuid;
+  heavyai::UUID uuid;
   int computeMajor;
   int computeMinor;
   size_t globalMem;
@@ -85,31 +86,38 @@ class CudaMgr {
   void synchronizeDevices() const;
   int getDeviceCount() const { return device_count_; }
   int getStartGpu() const { return start_gpu_; }
-  const omnisci::DeviceGroup& getDeviceGroup() const { return device_group_; }
+  const heavyai::DeviceGroup& getDeviceGroup() const { return device_group_; }
 
   void copyHostToDevice(int8_t* device_ptr,
                         const int8_t* host_ptr,
                         const size_t num_bytes,
-                        const int device_num);
+                        const int device_num,
+                        CUstream cuda_stream = 0);
   void copyDeviceToHost(int8_t* host_ptr,
                         const int8_t* device_ptr,
                         const size_t num_bytes,
-                        const int device_num);
+                        const int device_num,
+                        CUstream cuda_stream = 0);
   void copyDeviceToDevice(int8_t* dest_ptr,
                           int8_t* src_ptr,
                           const size_t num_bytes,
                           const int dest_device_num,
-                          const int src_device_num);
+                          const int src_device_num,
+                          CUstream cuda_stream = 0);
 
   int8_t* allocatePinnedHostMem(const size_t num_bytes);
   int8_t* allocateDeviceMem(const size_t num_bytes, const int device_num);
   void freePinnedHostMem(int8_t* host_ptr);
   void freeDeviceMem(int8_t* device_ptr);
-  void zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes, const int device_num);
+  void zeroDeviceMem(int8_t* device_ptr,
+                     const size_t num_bytes,
+                     const int device_num,
+                     CUstream cuda_stream = 0);
   void setDeviceMem(int8_t* device_ptr,
                     const unsigned char uc,
                     const size_t num_bytes,
-                    const int device_num);
+                    const int device_num,
+                    CUstream cuda_stream = 0);
 
   size_t getMinSharedMemoryPerBlockForAllDevices() const {
     return min_shared_memory_per_block_for_all_devices;
@@ -197,6 +205,7 @@ class CudaMgr {
   }
 
   void setContext(const int device_num) const;
+  int getContext() const;
 
 #ifdef HAVE_CUDA
 
@@ -238,7 +247,7 @@ class CudaMgr {
   size_t min_shared_memory_per_block_for_all_devices;
   size_t min_num_mps_for_all_devices;
   std::vector<DeviceProperties> device_properties_;
-  omnisci::DeviceGroup device_group_;
+  heavyai::DeviceGroup device_group_;
   std::vector<CUcontext> device_contexts_;
 
   mutable std::mutex device_cleanup_mutex_;

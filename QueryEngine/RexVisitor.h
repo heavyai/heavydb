@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #ifndef QUERYENGINE_REXVISITOR_H
 #define QUERYENGINE_REXVISITOR_H
 
-#include "RelAlgDagBuilder.h"
+#include "RelAlgDag.h"
 
 #include <memory>
 
@@ -50,7 +50,8 @@ class RexVisitorBase {
     if (rex_ref) {
       return visitRef(rex_ref);
     }
-    LOG(FATAL) << "No visit path for " << rex_scalar->toString();
+    LOG(FATAL) << "No visit path for "
+               << rex_scalar->toString(RelRexToStringConfig::defaults());
     return defaultResult();
   }
 

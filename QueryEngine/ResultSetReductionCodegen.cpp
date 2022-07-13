@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -140,7 +140,7 @@ void return_early(llvm::Value* cond,
                   const ReductionCode& reduction_code,
                   llvm::Function* func,
                   llvm::Value* error_code) {
-  auto cgen_state = reduction_code.cgen_state.get();
+  auto cgen_state = reduction_code.cgen_state;
   AUTOMATIC_IR_METADATA(cgen_state);
   auto& ctx = cgen_state->context_;
   const auto early_return = llvm::BasicBlock::Create(ctx, ".early_return", func, 0);
@@ -205,7 +205,7 @@ void translate_body(const std::vector<std::unique_ptr<Instruction>>& body,
                     const ReductionCode& reduction_code,
                     std::unordered_map<const Value*, llvm::Value*>& m,
                     const std::unordered_map<const Function*, llvm::Function*>& f) {
-  auto cgen_state = reduction_code.cgen_state.get();
+  auto cgen_state = reduction_code.cgen_state;
   AUTOMATIC_IR_METADATA(cgen_state);
   auto& ctx = cgen_state->context_;
   for (const auto& instr : body) {
@@ -295,7 +295,7 @@ void translate_for(const For* for_loop,
                    const ReductionCode& reduction_code,
                    std::unordered_map<const Value*, llvm::Value*>& m,
                    const std::unordered_map<const Function*, llvm::Function*>& f) {
-  auto cgen_state = reduction_code.cgen_state.get();
+  auto cgen_state = reduction_code.cgen_state;
   AUTOMATIC_IR_METADATA(cgen_state);
   const auto bb_entry = cgen_state->ir_builder_.GetInsertBlock();
   auto& ctx = cgen_state->context_;
@@ -320,6 +320,7 @@ void translate_for(const For* for_loop,
       nullptr,
       nullptr,
       nullptr,
+      false,
       "reduction_loop");
   const auto bb_loop_body = JoinLoop::codegen(
       {join_loop},
@@ -366,7 +367,7 @@ void translate_function(const Function* function,
                         llvm::Function* llvm_function,
                         const ReductionCode& reduction_code,
                         const std::unordered_map<const Function*, llvm::Function*>& f) {
-  auto cgen_state = reduction_code.cgen_state.get();
+  auto cgen_state = reduction_code.cgen_state;
   AUTOMATIC_IR_METADATA(cgen_state);
   create_entry_block(llvm_function, cgen_state);
   // Set the value mapping based on the input arguments.

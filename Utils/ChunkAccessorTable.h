@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,16 @@
 
 /**
  * @file ChunkAccessorTable.h
- * @author Simon Eves <simon.eves@mapd.com>
+ * @brief
  *
  */
-#ifndef _CHUNK_ACCESSOR_TABLE_H_
-#define _CHUNK_ACCESSOR_TABLE_H_
 
-#include "Catalog/Catalog.h"
+#pragma once
+
+#include "Catalog/CatalogFwd.h"
 #include "DataMgr/Chunk/Chunk.h"
 
+#include <tuple>
 #include <vector>
 
 // convenience functions for multi-fragment support in multi-threaded worker functions
@@ -41,5 +42,3 @@ ChunkAccessorTable getChunkAccessorTable(const Catalog_Namespace::Catalog& cat,
 ChunkIterVector& getChunkItersAndRowOffset(ChunkAccessorTable& table,
                                            size_t rowid,
                                            size_t& rowOffset);
-
-#endif  // _CHUNK_ACCESSOR_TABLE_H_

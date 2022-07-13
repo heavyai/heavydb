@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <parquet/schema.h>
 
 #include "DataMgr/Chunk/Chunk.h"
+#include "DataPreview.h"
 #include "ForeignTableSchema.h"
 #include "Interval.h"
 #include "ParquetEncoder.h"
@@ -41,7 +42,9 @@ class LazyParquetChunkLoader {
   const static int batch_reader_num_elements = 4096;
 
   LazyParquetChunkLoader(std::shared_ptr<arrow::fs::FileSystem> file_system,
-                         FileReaderMap* file_reader_cache);
+                         FileReaderMap* file_reader_cache,
+                         const RenderGroupAnalyzerMap* render_group_analyzer_map,
+                         const std::string& foreign_table_name);
 
   /**
    * Load a number of row groups of a column in a parquet file into a chunk
@@ -53,12 +56,12 @@ class LazyParquetChunkLoader {
    * @param chunks - a list containing the chunks to load
    * @param string_dictionary - a string dictionary for the column corresponding to the
    * column, if applicable
+   * @param rejected_row_indices - optional, if specified errors will be
+   * tracked in this data structure while loading
    *
    * @return An empty list when no metadata update is applicable, otherwise a
    * list of ChunkMetadata shared pointers with which to update the
-   * corresponding column chunk metadata.  NOTE: Only ChunkMetadata.sqlType and
-   * the min & max values of the ChunkMetadata.chunkStats are valid, other
-   * values are not set.
+   * corresponding column chunk metadata.
    *
    * NOTE: if more than one chunk is supplied, the first chunk is required to
    * be the chunk corresponding to the logical column, while the remaining
@@ -70,18 +73,23 @@ class LazyParquetChunkLoader {
       const std::vector<RowGroupInterval>& row_group_intervals,
       const int parquet_column_index,
       std::list<Chunk_NS::Chunk>& chunks,
-      StringDictionary* string_dictionary = nullptr);
+      StringDictionary* string_dictionary = nullptr,
+      RejectedRowIndices* rejected_row_indices = nullptr);
 
   /**
    * @brief Perform a metadata scan for the paths specified
    *
    * @param file_paths -  (ordered) files of the metadata scan
    * @param schema - schema of the foreign table to perform metadata scan for
+   * @param do_metadata_stats_validation - validate stats in metadata of parquet files if
+   * true
    *
    * @return a list of the row group metadata extracted from `file_paths`
    */
-  std::list<RowGroupMetadata> metadataScan(const std::vector<std::string>& file_paths,
-                                           const ForeignTableSchema& schema);
+  std::list<RowGroupMetadata> metadataScan(
+      const std::vector<std::string>& file_paths,
+      const ForeignTableSchema& schema,
+      const bool do_metadata_stats_validation = true);
 
   /**
    * Determine if a Parquet to OmniSci column mapping is supported.
@@ -120,15 +128,50 @@ class LazyParquetChunkLoader {
       const std::map<int, StringDictionary*>& column_dictionaries,
       const int num_threads = 1);
 
+  /**
+   * @brief Preview rows of data and column types in a set of files
+   *
+   * @param files - files to preview
+   * @param max_num_rows - maximum number of rows to preview
+   * @param table - foreign table for preview
+   *
+   * @return a `DataPreview` instance that contains relevant preview
+   * information
+   */
+  DataPreview previewFiles(const std::vector<std::string>& files,
+                           const size_t max_num_rows,
+                           const ForeignTable& table);
+
  private:
-  std::shared_ptr<arrow::fs::FileSystem> file_system_;
-  FileReaderMap* file_reader_cache_;
+  /**
+   * Suggest a possible Parquet to OmniSci column mapping based on heuristics.
+   *
+   * @param parquet_column - the column descriptor of the Parquet column
+   *
+   * @return a supported OmniSci `SQLTypeInfo` given the Parquet column type
+   *
+   * NOTE: the suggested type may be entirely inappropriate given a specific
+   * use-case; however, it is guaranteed to be an allowed mapping. For example,
+   * geo-types are never attempted to be detected and instead strings are
+   * always suggested in their place.
+   */
+  static SQLTypeInfo suggestColumnMapping(
+      const parquet::ColumnDescriptor* parquet_column);
 
   std::list<std::unique_ptr<ChunkMetadata>> appendRowGroups(
       const std::vector<RowGroupInterval>& row_group_intervals,
       const int parquet_column_index,
       const ColumnDescriptor* column_descriptor,
       std::list<Chunk_NS::Chunk>& chunks,
-      StringDictionary* string_dictionary);
+      StringDictionary* string_dictionary,
+      RejectedRowIndices* rejected_row_indices,
+      const bool is_for_detect = false,
+      const std::optional<int64_t> max_levels_read = std::nullopt);
+
+  std::shared_ptr<arrow::fs::FileSystem> file_system_;
+  FileReaderMap* file_reader_cache_;
+
+  const RenderGroupAnalyzerMap* render_group_analyzer_map_;
+  std::string foreign_table_name_;
 };
 }  // namespace foreign_storage

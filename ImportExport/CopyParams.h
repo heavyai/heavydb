@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,13 @@
 
 /*
  * @file CopyParams.h
- * @author Mehmet Sariyuce <mehmet.sariyuce@omnisci.com>
  * @brief CopyParams struct
+ *
  */
 
 #pragma once
 
+#include <optional>
 #include <string>
 
 #include "ImportExport/SourceType.h"
@@ -55,17 +56,21 @@ struct CopyParams {
       max_reject;  // maximum number of records that can be rejected before copy is failed
   import_export::SourceType source_type;
   bool plain_text = false;
+  bool trim_spaces;
   // s3/parquet related params
   std::string s3_access_key;  // per-query credentials to override the
   std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
   std::string s3_session_token = "";
   std::string s3_region;
   std::string s3_endpoint;
+  int32_t s3_max_concurrent_downloads =
+      8;  // maximum number of concurrent file downloads from S3
   // kafka related params
   size_t retry_count;
   size_t retry_wait;
   size_t batch_size;
   size_t buffer_size;
+  size_t max_import_batch_row_count;
   // geospatial params
   bool lonlat;
   EncodingType geo_coords_encoding;
@@ -86,6 +91,20 @@ struct CopyParams {
   RasterPointTransform raster_point_transform;
   bool raster_point_compute_angle;
   std::string raster_import_dimensions;
+  std::string add_metadata_columns;
+  // odbc parameters
+  std::string sql_select;
+  std::string sql_order_by;
+  // odbc user mapping parameters
+  std::string username;
+  std::string password;
+  std::string credential_string;
+  // odbc server parameters
+  std::string dsn;
+  std::string connection_string;
+  // regex parameters
+  std::string line_start_regex;
+  std::string line_regex;
 
   CopyParams()
       : delimiter(',')
@@ -101,10 +120,12 @@ struct CopyParams {
       , threads(0)
       , max_reject(100000)
       , source_type(import_export::SourceType::kDelimitedFile)
+      , trim_spaces(true)
       , retry_count(100)
       , retry_wait(5)
       , batch_size(1000)
       , buffer_size(kImportFileBufferSize)
+      , max_import_batch_row_count(0)
       , lonlat(true)
       , geo_coords_encoding(kENCODING_GEOINT)
       , geo_coords_comp_param(32)
@@ -133,10 +154,12 @@ struct CopyParams {
       , threads(0)
       , max_reject(100000)
       , source_type(import_export::SourceType::kDelimitedFile)
+      , trim_spaces(true)
       , retry_count(retries)
       , retry_wait(wait)
       , batch_size(b)
       , buffer_size(kImportFileBufferSize)
+      , max_import_batch_row_count(0)
       , lonlat(true)
       , geo_coords_encoding(kENCODING_GEOINT)
       , geo_coords_comp_param(32)

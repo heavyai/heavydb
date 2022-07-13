@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,7 +50,10 @@ class ParquetVariableLengthArrayEncoder : public ParquetArrayEncoder {
     ParquetArrayEncoder::appendArraysToBuffer();
   }
 
-  void processLastArray() override { appendLastArrayOffset(); }
+  void processLastArray() override {
+    ParquetArrayEncoder::processLastArray();
+    appendLastArrayOffset();
+  }
 
  private:
   void setFirstOffsetForBuffer(const int16_t def_level) {

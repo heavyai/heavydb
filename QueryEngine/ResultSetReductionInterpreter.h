@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,9 @@ class ReductionInterpreter {
     void* mutable_ptr;
   };
 
-  static EvalValue run(const Function* function, const std::vector<EvalValue>& inputs);
+  static EvalValue run(const size_t execution_id,
+                       const Function* function,
+                       const std::vector<EvalValue>& inputs);
 
   template <typename T>
   static EvalValue MakeEvalValue(const T& val) {
@@ -49,6 +51,7 @@ class ReductionInterpreter {
   }
 
   static std::optional<EvalValue> run(
+      const size_t execution_id,
       const std::vector<std::unique_ptr<Instruction>>& body,
       const std::vector<EvalValue>& vars);
 };

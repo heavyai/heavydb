@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,17 +24,12 @@
 #include "../Shared/checked_alloc.h"
 #include "GroupByAndAggregate.h"
 #include "Logger/Logger.h"
+#include "QueryEngine/QueryEngine.h"
 #include "RuntimeFunctions.h"
 
-#include <boost/multiprecision/cpp_int.hpp>
 #include <limits>
 
-using checked_int64_t = boost::multiprecision::number<
-    boost::multiprecision::cpp_int_backend<64,
-                                           64,
-                                           boost::multiprecision::signed_magnitude,
-                                           boost::multiprecision::checked,
-                                           void>>;
+extern int64_t g_bitmap_memory_limit;
 
 InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
                                const int64_t null_val,
@@ -75,13 +70,12 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
     CHECK(rhs_has_null_);
     return;
   }
-  const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000LL};
-  const auto bitmap_sz_bits =
-      static_cast<int64_t>(checked_int64_t(max_val_) - min_val_ + 1);
-  if (bitmap_sz_bits > MAX_BITMAP_BITS) {
+  uint64_t const bitmap_sz_bits_minus_one = max_val_ - min_val_;
+  if (static_cast<uint64_t>(g_bitmap_memory_limit) <= bitmap_sz_bits_minus_one) {
     throw FailedToCreateBitmap();
   }
-  const auto bitmap_sz_bytes = bitmap_bits_to_bytes(bitmap_sz_bits);
+  // bitmap_sz_bytes = ceil(bitmap_sz_bits / 8.0) = (bitmap_sz_bits-1) / 8 + 1
+  uint64_t const bitmap_sz_bytes = bitmap_sz_bits_minus_one / 8 + 1;
   auto cpu_bitset = static_cast<int8_t*>(checked_calloc(bitmap_sz_bytes, 1));
   for (const auto value : values) {
     if (value == null_val) {
@@ -92,7 +86,8 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
 #ifdef HAVE_CUDA
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
     for (int device_id = 0; device_id < device_count_; ++device_id) {
-      auto device_allocator = data_mgr_->createGpuAllocator(device_id);
+      auto device_allocator = std::make_unique<CudaAllocator>(
+          data_mgr_, device_id, getQueryEngineCudaStreamForDevice(device_id));
       gpu_buffers_.emplace_back(
           data_mgr->alloc(Data_Namespace::GPU_LEVEL, device_id, bitmap_sz_bytes));
       auto gpu_bitset = gpu_buffers_.back()->getMemoryPtr();

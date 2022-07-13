@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,11 @@
 #include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 #include "Fragmenter/FragmentDefaultValues.h"
 #include "Parser/ParserWrapper.h"
-#include "Parser/parser.h"
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
+#include "Shared/SysDefinitions.h"
 #include "ThriftHandler/CommandLineOptions.h"
 #include "ThriftHandler/DBHandler.h"
 
@@ -162,7 +162,6 @@ class DBEngineImpl : public DBEngine {
                                       prog_config_opts.read_only,
                                       prog_config_opts.allow_loop_joins,
                                       prog_config_opts.enable_rendering,
-                                      prog_config_opts.renderer_use_vulkan_driver,
                                       prog_config_opts.renderer_use_ppll_polys,
                                       prog_config_opts.renderer_prefer_igpu,
                                       prog_config_opts.renderer_vulkan_timeout_ms,
@@ -178,7 +177,6 @@ class DBEngineImpl : public DBEngine {
                                       prog_config_opts.enable_legacy_syntax,
                                       prog_config_opts.idle_session_duration,
                                       prog_config_opts.max_session_duration,
-                                      prog_config_opts.enable_runtime_udf,
                                       prog_config_opts.udf_file_name,
                                       prog_config_opts.udf_compiler_path,
                                       prog_config_opts.udf_compiler_options,
@@ -190,8 +188,10 @@ class DBEngineImpl : public DBEngine {
     } catch (const std::exception& e) {
       LOG(FATAL) << "Failed to initialize database handler: " << e.what();
     }
-    db_handler_->connect(
-        session_id_, OMNISCI_ROOT_USER, OMNISCI_ROOT_PASSWD_DEFAULT, OMNISCI_DEFAULT_DB);
+    db_handler_->connect(session_id_,
+                         shared::kRootUsername,
+                         shared::kDefaultRootPasswd,
+                         shared::kDefaultDbName);
     base_path_ = base_path;
     initialized = true;
     return true;
@@ -438,9 +438,9 @@ class DBEngineImpl : public DBEngine {
   bool is_temp_db_;
   std::string udf_filename_;
 
-  std::vector<std::string> system_folders_ = {"mapd_catalogs",
-                                              "mapd_data",
-                                              "mapd_export"};
+  std::vector<std::string> system_folders_ = {shared::kCatalogDirectoryName,
+                                              shared::kDataDirectoryName,
+                                              shared::kDefaultExportDirName};
 };
 
 namespace {

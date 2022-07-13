@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +44,7 @@
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
 #include <cstring>  // strcat()
+#include <limits>
 #include <numeric>
 #include <string_view>
 #include <thread>
@@ -52,7 +53,46 @@ bool g_cluster{false};
 bool g_bigint_count{false};
 int g_hll_precision_bits{11};
 size_t g_watchdog_baseline_max_groups{120000000};
+extern int64_t g_bitmap_memory_limit;
 extern size_t g_leaf_count;
+
+bool ColRangeInfo::isEmpty() const {
+  return min == 0 && max == -1;
+}
+
+std::ostream& operator<<(std::ostream& out, const ColRangeInfo& info) {
+  out << "Hash Type = " << info.hash_type_ << " min = " << info.min
+      << " max = " << info.max << " bucket = " << info.bucket
+      << " has_nulls = " << info.has_nulls << "\n";
+  return out;
+}
+
+std::ostream& operator<<(std::ostream& out, const CountDistinctImplType& type) {
+  switch (type) {
+    case CountDistinctImplType::Invalid:
+      out << "Invalid";
+      break;
+    case CountDistinctImplType::Bitmap:
+      out << "Bitmap";
+      break;
+    case CountDistinctImplType::UnorderedSet:
+      out << "UnorderedSet";
+      break;
+    default:
+      out << "<Unkown Type>";
+      break;
+  }
+  return out;
+}
+
+std::ostream& operator<<(std::ostream& out, const CountDistinctDescriptor& desc) {
+  out << "Type = " << desc.impl_type_ << " min val = " << desc.min_val
+      << " bitmap_sz_bits = " << desc.bitmap_sz_bits
+      << " bool approximate = " << desc.approximate
+      << " device_type = " << desc.device_type
+      << " sub_bitmap_count = " << desc.sub_bitmap_count;
+  return out;
+}
 
 namespace {
 
@@ -304,6 +344,22 @@ int64_t GroupByAndAggregate::getBucketedCardinality(const ColRangeInfo& col_rang
   return static_cast<int64_t>(crt_col_cardinality +
                               (1 + (col_range_info.has_nulls ? 1 : 0)));
 }
+
+namespace {
+// Like getBucketedCardinality() without counting nulls.
+int64_t get_bucketed_cardinality_without_nulls(const ColRangeInfo& col_range_info) {
+  if (col_range_info.min <= col_range_info.max) {
+    size_t size = col_range_info.max - col_range_info.min;
+    if (col_range_info.bucket) {
+      size /= col_range_info.bucket;
+    }
+    CHECK_LT(size, std::numeric_limits<int64_t>::max());
+    return static_cast<int64_t>(size + 1);
+  } else {
+    return 0;
+  }
+}
+}  // namespace
 
 #define LL_CONTEXT executor_->cgen_state_->context_
 #define LL_BUILDER executor_->cgen_state_->ir_builder_
@@ -564,7 +620,8 @@ CountDistinctDescriptors init_count_distinct_descriptors(
     const ExecutorDeviceType device_type,
     Executor* executor) {
   CountDistinctDescriptors count_distinct_descriptors;
-  for (const auto target_expr : ra_exe_unit.target_exprs) {
+  for (size_t i = 0; i < ra_exe_unit.target_exprs.size(); i++) {
+    const auto target_expr = ra_exe_unit.target_exprs[i];
     auto agg_info = get_target_info(target_expr, g_bigint_count);
     if (is_distinct_target(agg_info)) {
       CHECK(agg_info.is_agg);
@@ -590,7 +647,34 @@ CountDistinctDescriptors init_count_distinct_descriptors(
           arg_ti.is_fp() ? no_range_info
                          : get_expr_range_info(
                                ra_exe_unit, query_infos, agg_expr->get_arg(), executor);
-      CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};
+      const auto it = ra_exe_unit.target_exprs_original_type_infos.find(i);
+      if (it != ra_exe_unit.target_exprs_original_type_infos.end()) {
+        const auto& original_target_expr_ti = it->second;
+        if (original_target_expr_ti.get_type() == kDATE &&
+            original_target_expr_ti.get_compression() == kENCODING_DATE_IN_DAYS) {
+          // manually encode the col range of date col if necessary
+          // (see conditionally_change_arg_to_int_type function in RelAlgExecutor.cpp)
+          auto is_date_value_not_encoded = [&original_target_expr_ti](int64_t date_val) {
+            if (original_target_expr_ti.get_comp_param() == 16) {
+              return date_val < INT16_MIN || date_val > INT16_MAX;
+            } else {
+              return date_val < INT32_MIN || date_val > INT32_MIN;
+            }
+          };
+          if (is_date_value_not_encoded(arg_range_info.min)) {
+            // chunk metadata of the date column contains decoded value
+            // so we manually encode it again here to represent its column range correctly
+            arg_range_info.min =
+                DateConverters::get_epoch_days_from_seconds(arg_range_info.min);
+          }
+          if (is_date_value_not_encoded(arg_range_info.max)) {
+            arg_range_info.max =
+                DateConverters::get_epoch_days_from_seconds(arg_range_info.max);
+          }
+        }
+      }
+
+      CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::UnorderedSet};
       int64_t bitmap_sz_bits{0};
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
         const auto error_rate = agg_expr->get_arg1();
@@ -617,21 +701,20 @@ CountDistinctDescriptors init_count_distinct_descriptors(
                                                             // implementation for arrays
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
         if (agg_info.agg_kind == kCOUNT) {
-          bitmap_sz_bits = arg_range_info.max - arg_range_info.min + 1;
-          const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000LL};
-          if (bitmap_sz_bits <= 0 || bitmap_sz_bits > MAX_BITMAP_BITS) {
-            count_distinct_impl_type = CountDistinctImplType::StdSet;
+          bitmap_sz_bits = get_bucketed_cardinality_without_nulls(arg_range_info);
+          if (bitmap_sz_bits <= 0 || g_bitmap_memory_limit <= bitmap_sz_bits) {
+            count_distinct_impl_type = CountDistinctImplType::UnorderedSet;
           }
         }
       }
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT &&
-          count_distinct_impl_type == CountDistinctImplType::StdSet &&
+          count_distinct_impl_type == CountDistinctImplType::UnorderedSet &&
           !(arg_ti.is_array() || arg_ti.is_geometry())) {
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
       }
 
       if (g_enable_watchdog && !(arg_range_info.isEmpty()) &&
-          count_distinct_impl_type == CountDistinctImplType::StdSet) {
+          count_distinct_impl_type == CountDistinctImplType::UnorderedSet) {
         throw WatchdogException("Cannot use a fast path for COUNT distinct");
       }
       const auto sub_bitmap_count =
@@ -1632,7 +1715,7 @@ void GroupByAndAggregate::codegenEstimator(std::stack<llvm::BasicBlock*>& array_
 }
 
 extern "C" RUNTIME_EXPORT void agg_count_distinct(int64_t* agg, const int64_t val) {
-  reinterpret_cast<std::set<int64_t>*>(*agg)->insert(val);
+  reinterpret_cast<CountDistinctSet*>(*agg)->insert(val);
 }
 
 extern "C" RUNTIME_EXPORT void agg_count_distinct_skip_val(int64_t* agg,

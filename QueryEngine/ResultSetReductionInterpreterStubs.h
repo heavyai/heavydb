@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,17 +30,11 @@ class StubGenerator {
                                                    const void* inputs_handle);
   using InputsType = std::vector<ReductionInterpreter::EvalValue>;
 
-  static Stub generateStub(const std::string& name,
+  static Stub generateStub(const size_t executor_id,
+                           const std::string& name,
                            const std::vector<Type>& arg_types,
                            const Type ret_type,
                            const bool is_external);
-
-  static void clearCache();
-
- private:
-  // Cache of the stubs. Keys are the runtime function names.
-  static CodeCache s_stubs_cache;
-  static std::mutex s_stubs_cache_mutex;
 };
 
 bool is_integer_type(const Type type);

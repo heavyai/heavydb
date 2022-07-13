@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ SslConfig omnisci_aws_sdk::get_ssl_config() {
     Fix a wrong ca path established at building libcurl on Centos being carried to
     Ubuntu. To fix the issue, this is this sequence of locating ca file: 1) if
     `SSL_CERT_DIR` or `SSL_CERT_FILE` is set, set it to S3 ClientConfiguration. 2) if
-    none ^ is set, omnisci_server searches a list of known ca file paths. 3) if 2)
+    none ^ is set, heavydb searches a list of known ca file paths. 3) if 2)
     finds nothing, it is users' call to set correct SSL_CERT_DIR or SSL_CERT_FILE. S3
     c++ sdk: "we only want to override the default path if someone has explicitly told
     us to."

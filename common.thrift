@@ -1,5 +1,5 @@
-namespace java com.omnisci.thrift.server
-namespace py omnisci.common
+namespace java ai.heavy.thrift.server
+namespace py heavydb.common
 
 enum TDeviceType {
   CPU,
@@ -26,7 +26,8 @@ enum TDatumType {
   MULTIPOLYGON,
   TINYINT,
   GEOMETRY,
-  GEOGRAPHY
+  GEOGRAPHY,
+  MULTILINESTRING
 }
 
 enum TEncodingType {

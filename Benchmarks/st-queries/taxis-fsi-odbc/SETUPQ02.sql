@@ -52,4 +52,4 @@ CREATE FOREIGN TABLE ##TAB## (
     dropoff_ntacode         TEXT  ENCODING DICT,
     dropoff_ntaname         TEXT ENCODING DICT,
     dropoff_puma            TEXT  ENCODING DICT
-) SERVER odbc_server WITH ( sql_select = 'SELECT * FROM trips;')
+) SERVER odbc_server WITH ( sql_select = 'SELECT * FROM trips;', sql_order_by  = 'trip_id')

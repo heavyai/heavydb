@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,22 @@ ExtArgumentType get_column_arg_elem_type(const ExtArgumentType ext_arg_column_ty
       return ExtArgumentType::Bool;
     case ExtArgumentType::ColumnTextEncodingDict:
       return ExtArgumentType::TextEncodingDict;
+    case ExtArgumentType::ColumnTimestamp:
+      return ExtArgumentType::Timestamp;
+    case ExtArgumentType::ColumnArrayInt8:
+      return ExtArgumentType::ArrayInt8;
+    case ExtArgumentType::ColumnArrayInt16:
+      return ExtArgumentType::ArrayInt16;
+    case ExtArgumentType::ColumnArrayInt32:
+      return ExtArgumentType::ArrayInt32;
+    case ExtArgumentType::ColumnArrayInt64:
+      return ExtArgumentType::ArrayInt64;
+    case ExtArgumentType::ColumnArrayFloat:
+      return ExtArgumentType::ArrayFloat;
+    case ExtArgumentType::ColumnArrayDouble:
+      return ExtArgumentType::ArrayDouble;
+    case ExtArgumentType::ColumnArrayBool:
+      return ExtArgumentType::ArrayBool;
     default:
       UNREACHABLE();
   }
@@ -76,6 +92,20 @@ ExtArgumentType get_column_list_arg_elem_type(
       return ExtArgumentType::Bool;
     case ExtArgumentType::ColumnListTextEncodingDict:
       return ExtArgumentType::TextEncodingDict;
+    case ExtArgumentType::ColumnListArrayInt8:
+      return ExtArgumentType::ArrayInt8;
+    case ExtArgumentType::ColumnListArrayInt16:
+      return ExtArgumentType::ArrayInt16;
+    case ExtArgumentType::ColumnListArrayInt32:
+      return ExtArgumentType::ArrayInt32;
+    case ExtArgumentType::ColumnListArrayInt64:
+      return ExtArgumentType::ArrayInt64;
+    case ExtArgumentType::ColumnListArrayFloat:
+      return ExtArgumentType::ArrayFloat;
+    case ExtArgumentType::ColumnListArrayDouble:
+      return ExtArgumentType::ArrayDouble;
+    case ExtArgumentType::ColumnListArrayBool:
+      return ExtArgumentType::ArrayBool;
     default:
       UNREACHABLE();
   }
@@ -253,6 +283,18 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         return 1;
       }
       return -1;
+    case kMULTILINESTRING:
+      if (sig_type == ExtArgumentType::PInt8 && sig_pos + 3 < max_pos &&
+          sig_types[sig_pos + 1] == ExtArgumentType::Int64 &&
+          sig_types[sig_pos + 2] == ExtArgumentType::PInt8 &&
+          sig_types[sig_pos + 3] == ExtArgumentType::Int64) {
+        penalty_score += 1000;
+        return 4;
+      } else if (sig_type == ExtArgumentType::GeoMultiLineString) {
+        penalty_score += 1000;
+        return 1;
+      }
+      break;
     case kARRAY:
       if ((sig_type == ExtArgumentType::PInt8 || sig_type == ExtArgumentType::PInt16 ||
            sig_type == ExtArgumentType::PInt32 || sig_type == ExtArgumentType::PInt64 ||
@@ -266,7 +308,8 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         CHECK(arg_type.is_array());
         const auto sig_type_ti =
             ext_arg_type_to_type_info(get_array_arg_elem_type(sig_type));
-        if (arg_type.get_elem_type() == kBOOLEAN && sig_type_ti.get_type() == kTINYINT) {
+        if (arg_type.get_elem_type().get_type() == kBOOLEAN &&
+            sig_type_ti.get_type() == kTINYINT) {
           /* Boolean array has the same low-level structure as Int8 array. */
           penalty_score += 1000;
           return 1;
@@ -319,7 +362,17 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         // column arguments must match exactly
         const auto sig_type_ti =
             ext_arg_type_to_type_info(get_column_arg_elem_type(sig_type));
-        if (arg_type.get_elem_type() == kBOOLEAN && sig_type_ti.get_type() == kTINYINT) {
+        if (arg_type.get_elem_type().get_type() == kARRAY &&
+            sig_type_ti.get_type() == kARRAY) {
+          if (arg_type.get_elem_type().get_elem_type().get_type() ==
+              sig_type_ti.get_elem_type().get_type()) {
+            penalty_score += 1000;
+            return 1;
+          } else {
+            return -1;
+          }
+        } else if (arg_type.get_elem_type().get_type() == kBOOLEAN &&
+                   sig_type_ti.get_type() == kTINYINT) {
           /* Boolean column has the same low-level structure as Int8 column. */
           penalty_score += 1000;
           return 1;
@@ -336,7 +389,17 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         // column_list arguments must match exactly
         const auto sig_type_ti =
             ext_arg_type_to_type_info(get_column_list_arg_elem_type(sig_type));
-        if (arg_type.get_elem_type() == kBOOLEAN && sig_type_ti.get_type() == kTINYINT) {
+        if (arg_type.get_elem_type().get_type() == kARRAY &&
+            sig_type_ti.get_type() == kARRAY) {
+          if (arg_type.get_elem_type().get_elem_type().get_type() ==
+              sig_type_ti.get_elem_type().get_type()) {
+            penalty_score += 1000;
+            return 1;
+          } else {
+            return -1;
+          }
+        } else if (arg_type.get_elem_type().get_type() == kBOOLEAN &&
+                   sig_type_ti.get_type() == kTINYINT) {
           /* Boolean column_list has the same low-level structure as Int8 column_list. */
           penalty_score += 10000;
           return 1;
@@ -375,10 +438,18 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         default:
           UNREACHABLE();
       }
+    case kTIMESTAMP:
+      if (arg_type.is_timestamp()) {
+        if (arg_type.get_precision() != 9) {
+          return -1;
+        }
+        penalty_score += 1000;
+        return 1;
+      }
+      break;
       /* Not implemented types:
          kCHAR
          kTIME
-         kTIMESTAMP
          kDATE
          kINTERVAL_DAY_TIME
          kINTERVAL_YEAR_MONTH
@@ -471,12 +542,16 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
     if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
       if (dynamic_cast<const Analyzer::ColumnVar*>(atype.get())) {
         SQLTypeInfo type_info = atype->get_type_info();
-        if (atype->get_type_info().get_type() == kTEXT) {
+        if (type_info.get_type() == kTEXT) {
           auto ti = generate_column_type(type_info.get_type(),         // subtype
                                          type_info.get_compression(),  // compression
                                          type_info.get_comp_param());  // comp_param
           type_infos_input.push_back(ti);
           args_are_constants.push_back(false);
+        } else if (type_info.get_type() == kARRAY) {
+          auto ti = generate_column_array_type(type_info.get_elem_type().get_type());
+          type_infos_input.push_back(ti);
+          args_are_constants.push_back(true);
         } else {
           auto ti = generate_column_type(type_info.get_type());
           type_infos_input.push_back(ti);
@@ -553,7 +628,11 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
     if (type_infos_variants.begin() == type_infos_variants.end()) {
       type_infos_variants.push_back({ti});
       if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
-        if (ti.is_column()) {
+        if (ti.is_column_array()) {
+          auto mti = generate_column_list_array_type(ti.get_subtype());
+          mti.set_dimension(1);
+          type_infos_variants.push_back({mti});
+        } else if (ti.is_column()) {
           auto mti = generate_column_list_type(ti.get_subtype());
           mti.set_dimension(1);
           type_infos_variants.push_back({mti});
@@ -567,12 +646,14 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
         if (ti.is_column()) {
           auto new_type_infos = type_infos;  // makes a copy
           const auto& last = type_infos.back();
-          if (last.is_column_list() && last.get_subtype() == ti.get_subtype()) {
-            // last column_list consumes column argument if types match
+          if (last.is_column_list() && last.has_same_itemtype(ti)) {
+            // last column_list consumes column argument if item types match
             new_type_infos.back().set_dimension(last.get_dimension() + 1);
           } else {
             // add column as column_list argument
-            auto mti = generate_column_list_type(ti.get_subtype());
+            auto mti =
+                (ti.is_column_array() ? generate_column_list_array_type(ti.get_subtype())
+                                      : generate_column_list_type(ti.get_subtype()));
             mti.set_dimension(1);
             new_type_infos.push_back(mti);
           }

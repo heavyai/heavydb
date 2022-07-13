@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,17 @@
 
 /**
  * @file    RelAlgExecutionUnit.h
- * @author  Alex Suhan <alex@mapd.com>
  * @brief   Execution unit for relational algebra. It's a low-level description
  *          of any relational algebra operation in a format understood by our VM.
  *
- * Copyright (c) 2016 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
 
 #ifndef QUERYENGINE_RELALGEXECUTIONUNIT_H
 #define QUERYENGINE_RELALGEXECUTIONUNIT_H
 
 #include "Descriptors/InputDescriptors.h"
 #include "QueryHint.h"
-#include "RelAlgDagBuilder.h"
+#include "RelAlgDag.h"
 #include "Shared/sqldefs.h"
 #include "Shared/toString.h"
 #include "TableFunctions/TableFunctionOutputBufferSizeType.h"
@@ -49,37 +47,33 @@ using AdjacentList = boost::adjacency_list<boost::setS, boost::vecS, boost::dire
 // extract a DAG from the query plan DAG extractor skips to assign unique IDs to rel nodes
 // in that query plan
 using RelNodeId = size_t;
-// toString content of each extracted rel node
-using RelNodeExplained = std::string;
 // hash value of explained rel node
 using RelNodeExplainedHash = size_t;
 // a string representation of a query plan that is collected by visiting query plan DAG
 // starting from root to leaf and concatenate each rel node's id
-// where two adjacent rel nodes in a QueryPlan are connected via '|' delimiter
+// where two adjacent rel nodes in a QueryPlanDAG are connected via '|' delimiter
 // i.e., 1|2|3|4|
-using QueryPlan = std::string;
-// join column's column id info
-using JoinColumnsInfo = std::string;
+using QueryPlanDAG = std::string;
 // hashed value of QueryPlanNodeIds
 using QueryPlanHash = size_t;
 // hold query plan dag and column info of join columns
 // used to detect a correct cached hashtable
 struct HashTableBuildDag {
  public:
-  HashTableBuildDag(const JoinColumnsInfo& in_inner_cols_info,
-                    const JoinColumnsInfo& in_outer_cols_info,
-                    const QueryPlan& in_inner_cols_access_path,
-                    const QueryPlan& in_outer_cols_access_path,
+  HashTableBuildDag(size_t in_inner_cols_info,
+                    size_t in_outer_cols_info,
+                    QueryPlanHash in_inner_cols_access_path,
+                    QueryPlanHash in_outer_cols_access_path,
                     std::unordered_set<size_t>&& inputTableKeys)
       : inner_cols_info(in_inner_cols_info)
       , outer_cols_info(in_outer_cols_info)
       , inner_cols_access_path(in_inner_cols_access_path)
       , outer_cols_access_path(in_outer_cols_access_path)
       , inputTableKeys(std::move(inputTableKeys)) {}
-  JoinColumnsInfo inner_cols_info;
-  JoinColumnsInfo outer_cols_info;
-  QueryPlan inner_cols_access_path;
-  QueryPlan outer_cols_access_path;
+  size_t inner_cols_info;
+  size_t outer_cols_info;
+  QueryPlanHash inner_cols_access_path;
+  QueryPlanHash outer_cols_access_path;
   std::unordered_set<size_t>
       inputTableKeys;  // table keys of input(s), e.g., scan node or subquery's DAG
 };
@@ -89,7 +83,7 @@ struct HashTableBuildDag {
 // access plan DAG) is required since we have to extract query plan before deciding which
 // join col becomes inner since rel alg related metadata is required to extract query
 // plan, and the actual decision happens at the time of building hashtable
-using HashTableBuildDagMap = std::unordered_map<JoinColumnsInfo, HashTableBuildDag>;
+using HashTableBuildDagMap = std::unordered_map<size_t, HashTableBuildDag>;
 // A map btw. join column's input table id to its corresponding rel node
 // for each hash join operation, we can determine whether its input source
 // has inconsistency in its source data, e.g., row ordering
@@ -124,6 +118,7 @@ struct SortInfo {
   const SortAlgorithm algorithm;
   const size_t limit;
   const size_t offset;
+  bool limit_delivered{false};
 };
 
 struct JoinCondition {
@@ -141,11 +136,12 @@ struct RelAlgExecutionUnit {
   const JoinQualsPerNestingLevel join_quals;
   const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
   std::vector<Analyzer::Expr*> target_exprs;
+  std::unordered_map<size_t, SQLTypeInfo> target_exprs_original_type_infos;
   const std::shared_ptr<Analyzer::Estimator> estimator;
   const SortInfo sort_info;
   size_t scan_limit;
   RegisteredQueryHint query_hint;
-  QueryPlan query_plan_dag{EMPTY_QUERY_PLAN};
+  QueryPlanHash query_plan_dag_hash{EMPTY_HASHED_PLAN_DAG_KEY};
   HashTableBuildDagMap hash_table_build_plan_dag{};
   TableIdToNodeMap table_id_to_node_map{};
   bool use_bump_allocator{false};
@@ -170,6 +166,7 @@ struct TableFunctionExecutionUnit {
   std::vector<Analyzer::Expr*> target_exprs;
   mutable size_t output_buffer_size_param;
   const table_functions::TableFunction table_func;
+  QueryPlanHash query_plan_dag_hash;
 
  public:
   std::string toString() const {
@@ -177,7 +174,8 @@ struct TableFunctionExecutionUnit {
            ", table_func_inputs=" + ::toString(table_func_inputs) +
            ", target_exprs=" + ::toString(target_exprs) +
            ", output_buffer_size_param=" + ::toString(output_buffer_size_param) +
-           ", table_func=" + ::toString(table_func) + ")";
+           ", table_func=" + ::toString(table_func) +
+           ", query_plan_dag=" + ::toString(query_plan_dag_hash) + ")";
   }
 };
 

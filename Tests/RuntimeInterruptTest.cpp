@@ -1,5 +1,5 @@
 /*
- * Copyright 2020, OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <stdexcept>
 
 #include "Catalog/Catalog.h"
+#include "Geospatial/ColumnNames.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/ErrorHandling.h"
@@ -114,9 +115,9 @@ int create_and_populate_table() {
     run_ddl_statement("CREATE TABLE t_small (x int not null);");
     const char* create_table_geo = "CREATE TABLE t_geo (p1 POINT);";
     run_ddl_statement(create_table_geo);
-    run_ddl_statement(
-        "CREATE TABLE t_gdal (trip DOUBLE, omnisci_geo GEOMETRY(POINT, 4326) ENCODING "
-        "NONE);");
+    run_ddl_statement("CREATE TABLE t_gdal (trip DOUBLE, " + Geospatial::kGeoColumnName +
+                      " GEOMETRY(POINT, 4326) ENCODING "
+                      "NONE);");
 
     // write a temporary datafile used in the test
     // because "INSERT INTO ..." stmt for this takes too much time
@@ -340,78 +341,80 @@ T v(const TargetValue& r) {
 }  // namespace
 
 TEST(Interrupt, Kill_RunningQuery) {
-  auto dt = ExecutorDeviceType::CPU;
   // assume a single executor is allowed for this test
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   bool startQueryExec = false;
   executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
                                         PENDING_QUERY_INTERRUPT_CHECK_FREQ);
-  std::shared_ptr<ResultSet> res1 = nullptr;
-  std::exception_ptr exception_ptr = nullptr;
-  std::vector<size_t> assigned_executor_ids;
-  try {
-    std::string query_session = generate_random_string(32);
-    // we first run the query as async function call
-    auto query_thread1 = std::async(std::launch::async, [&] {
-      std::shared_ptr<ResultSet> res = nullptr;
-      try {
-        res = run_query(test_query_large, dt, query_session);
-      } catch (...) {
-        exception_ptr = std::current_exception();
-      }
-      return res;
-    });
-
-    while (assigned_executor_ids.empty()) {
-      assigned_executor_ids = executor->getExecutorIdsRunningQuery(query_session);
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    CHECK_EQ(assigned_executor_ids.size(), static_cast<size_t>(1));
-
-    // wait until our server starts to process the first query
-    std::string curRunningSession = "";
-    size_t assigned_executor_id = *assigned_executor_ids.begin();
-    auto assigned_executor_ptr = Executor::getExecutor(assigned_executor_id);
-    CHECK(assigned_executor_ptr);
-    while (!startQueryExec) {
-      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-      curRunningSession =
-          assigned_executor_ptr->getCurrentQuerySession(session_read_lock);
-      if (curRunningSession == query_session) {
-        startQueryExec = true;
-      }
-    }
-    // then, after query execution is started, we try to interrupt the running query
-    // by providing the interrupt signal with the running session info
-    executor->interrupt(query_session, query_session);
-    res1 = query_thread1.get();
-    if (exception_ptr != nullptr) {
-      std::rethrow_exception(exception_ptr);
-    } else {
-      // when we reach here, it means the query is finished without interrupted
-      // due to some reasons, i.e., very fast query execution
-      // so, instead, we check whether query result is correct
-      CHECK_EQ(1, (int64_t)res1.get()->rowCount());
-      auto crt_row = res1.get()->getNextRow(false, false);
-      auto ret_val = v<int64_t>(crt_row[0]);
-      CHECK_EQ((int64_t)1000000 * 1000000, ret_val);
-    }
-  } catch (const std::runtime_error& e) {
-    std::string received_err_msg = e.what();
-    auto check_interrupted_msg = received_err_msg.find("interrupted");
-    CHECK(check_interrupted_msg != std::string::npos) << received_err_msg;
-
+  for (const auto& dt : {ExecutorDeviceType::GPU, ExecutorDeviceType::CPU}) {
+    std::shared_ptr<ResultSet> res1 = nullptr;
+    std::exception_ptr exception_ptr = nullptr;
+    std::vector<size_t> assigned_executor_ids;
     try {
-      // Check_Query_Runs_After_Interruption
-      std::string query_session2 = generate_random_string(32);
-      auto res2 = run_query(test_query_small, dt, query_session2);
-      CHECK_EQ(1, (int64_t)res2.get()->rowCount());
-      auto crt_row = res2.get()->getNextRow(false, false);
-      auto ret_val = v<int64_t>(crt_row[0]);
-      CHECK_EQ((int64_t)1000 * 1000, ret_val);
-    } catch (...) {
-      CHECK(false);
+      std::string query_session = generate_random_string(32);
+      // we first run the query as async function call
+      auto query_thread1 = std::async(std::launch::async, [&] {
+        std::shared_ptr<ResultSet> res = nullptr;
+        try {
+          res = run_query(test_query_large, dt, query_session);
+        } catch (...) {
+          exception_ptr = std::current_exception();
+        }
+        return res;
+      });
+
+      while (assigned_executor_ids.empty()) {
+        assigned_executor_ids = executor->getExecutorIdsRunningQuery(query_session);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
+      CHECK_EQ(assigned_executor_ids.size(), static_cast<size_t>(1));
+
+      // wait until our server starts to process the first query
+      std::string curRunningSession = "";
+      size_t assigned_executor_id = *assigned_executor_ids.begin();
+      auto assigned_executor_ptr = Executor::getExecutor(assigned_executor_id);
+      CHECK(assigned_executor_ptr);
+      while (!startQueryExec) {
+        heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+            executor->getSessionLock());
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        curRunningSession =
+            assigned_executor_ptr->getCurrentQuerySession(session_read_lock);
+        if (curRunningSession == query_session) {
+          startQueryExec = true;
+        }
+      }
+      // then, after query execution is started, we try to interrupt the running query
+      // by providing the interrupt signal with the running session info
+      executor->interrupt(query_session, query_session);
+      res1 = query_thread1.get();
+      if (exception_ptr != nullptr) {
+        std::rethrow_exception(exception_ptr);
+      } else {
+        // when we reach here, it means the query is finished without interrupted
+        // due to some reasons, i.e., very fast query execution
+        // so, instead, we check whether query result is correct
+        CHECK_EQ(1, (int64_t)res1.get()->rowCount());
+        auto crt_row = res1.get()->getNextRow(false, false);
+        auto ret_val = v<int64_t>(crt_row[0]);
+        CHECK_EQ((int64_t)1000000 * 1000000, ret_val);
+      }
+    } catch (const std::runtime_error& e) {
+      std::string received_err_msg = e.what();
+      auto check_interrupted_msg = received_err_msg.find("interrupted");
+      CHECK(check_interrupted_msg != std::string::npos) << received_err_msg;
+
+      try {
+        // Check_Query_Runs_After_Interruption
+        std::string query_session2 = generate_random_string(32);
+        auto res2 = run_query(test_query_small, dt, query_session2);
+        CHECK_EQ(1, (int64_t)res2.get()->rowCount());
+        auto crt_row = res2.get()->getNextRow(false, false);
+        auto ret_val = v<int64_t>(crt_row[0]);
+        CHECK_EQ((int64_t)1000 * 1000, ret_val);
+      } catch (...) {
+        CHECK(false);
+      }
     }
   }
 }
@@ -458,7 +461,8 @@ TEST(Interrupt, Kill_PendingQuery) {
         Executor::getExecutor(assigned_executor_id_for_session1);
     CHECK(assigned_executor_ptr_for_session1);
     while (!startQueryExec) {
-      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+      heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+          executor->getSessionLock());
       curRunningSession =
           assigned_executor_ptr_for_session1->getCurrentQuerySession(session_read_lock);
       if (curRunningSession == session1) {
@@ -488,7 +492,8 @@ TEST(Interrupt, Kill_PendingQuery) {
     CHECK(assigned_executor_ptr_for_session2);
     while (!s2_enrolled) {
       {
-        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+            executor->getSessionLock());
         s2_enrolled = assigned_executor_ptr_for_session2->checkIsQuerySessionEnrolled(
             session2, session_read_lock);
       }
@@ -554,7 +559,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV) {
       int cnt = 0;
       while (cnt < 6000) {
         {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
               executor->getSessionLock());
           curRunningSessionStatus =
               executor->getQuerySessionStatus(session1, session_read_lock);
@@ -636,7 +641,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Parquet) {
       int cnt = 0;
       while (cnt < 6000) {
         {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
               executor->getSessionLock());
           curRunningSessionStatus =
               executor->getQuerySessionStatus(session1, session_read_lock);
@@ -719,7 +724,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV_Sharded) {
       int cnt = 0;
       while (cnt < 6000) {
         {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
               executor->getSessionLock());
           curRunningSessionStatus =
               executor->getQuerySessionStatus(session1, session_read_lock);
@@ -802,7 +807,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_GDAL) {
       int cnt = 0;
       while (cnt < 6000) {
         {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
               executor->getSessionLock());
           curRunningSessionStatus =
               executor->getQuerySessionStatus(session1, session_read_lock);
@@ -883,7 +888,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Geo) {
       int cnt = 0;
       while (cnt < 600) {
         {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
               executor->getSessionLock());
           curRunningSession = executor->getCurrentQuerySession(session_read_lock);
         }
@@ -979,7 +984,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_During_Reduction) {
       int cnt = 0;
       while (cnt < 6000) {
         {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
               executor->getSessionLock());
           curRunningSession =
               assigned_executor_ptr->getCurrentQuerySession(session_read_lock);

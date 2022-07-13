@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,9 +32,9 @@ std::optional<AutoTunerMetaInfo> OverlapsTuningParamRecycler::getItemFromCache(
       key, item_type, device_identifier, *param_cache, lock);
   if (cached_param) {
     CHECK(!cached_param->isDirty());
-    VLOG(1) << "[" << DataRecyclerUtil::toStringCacheItemType(item_type) << ", "
+    VLOG(1) << "[" << item_type << ", "
             << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
-            << "] Recycle auto tuner parameters in cache";
+            << "] Recycle auto tuner parameters in cache (key: " << key << ")";
     return cached_param->cached_item;
   }
   return std::nullopt;
@@ -61,9 +61,9 @@ void OverlapsTuningParamRecycler::putItemToCache(
     return;
   }
   param_cache->emplace_back(key, item, nullptr, meta_info);
-  VLOG(1) << "[" << DataRecyclerUtil::toStringCacheItemType(item_type) << ", "
+  VLOG(1) << "[" << item_type << ", "
           << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
-          << "] Put auto tuner parameters to cache";
+          << "] Put auto tuner parameters to cache (key: " << key << ")";
   return;
 }
 
@@ -98,6 +98,9 @@ void OverlapsTuningParamRecycler::removeItemFromCache(
   if (itr == param_cache->cend()) {
     return;
   } else {
+    VLOG(1) << "[" << item_type << ", "
+            << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
+            << "] remove cached item from cache (key: " << key << ")";
     param_cache->erase(itr);
   }
 }
@@ -106,6 +109,9 @@ void OverlapsTuningParamRecycler::clearCache() {
   std::lock_guard<std::mutex> lock(getCacheLock());
   auto param_cache = getCachedItemContainer(CacheItemType::OVERLAPS_AUTO_TUNER_PARAM,
                                             PARAM_CACHE_DEVICE_IDENTIFIER);
+  VLOG(1) << "[" << CacheItemType::OVERLAPS_AUTO_TUNER_PARAM << ", "
+          << DataRecyclerUtil::getDeviceIdentifierString(PARAM_CACHE_DEVICE_IDENTIFIER)
+          << "] clear cache (# items: " << param_cache->size() << ")";
   param_cache->clear();
 }
 

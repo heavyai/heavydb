@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,10 @@
 #include "Archive/PosixFileArchive.h"
 #include "Catalog/ForeignTable.h"
 #include "ImportExport/CopyParams.h"
+
+namespace shared {
+struct FilePathOptions;
+}
 
 namespace foreign_storage {
 
@@ -55,7 +59,7 @@ class FileReader {
   /**
    * @return true if the entire file has been read
    */
-  virtual bool isScanFinished() = 0;
+  virtual bool isScanFinished() const = 0;
 
   /**
    * Read up to max_size bytes from archive, starting at given offset
@@ -87,6 +91,7 @@ class FileReader {
    * @param user_mapping - only needed for S3 backed files
    */
   virtual void checkForMoreRows(size_t file_offset,
+                                const shared::FilePathOptions& options,
                                 const ForeignServer* server_options = nullptr,
                                 const UserMapping* user_mapping = nullptr) {
     throw std::runtime_error{"APPEND mode not yet supported for this table."};
@@ -114,6 +119,11 @@ class FileReader {
    */
   virtual bool isEndOfLastFile() = 0;
 
+  /**
+   * Returns the path of the currently processed file.
+   */
+  virtual std::string getCurrentFilePath() const = 0;
+
  protected:
   import_export::CopyParams copy_params_;
   std::string file_path_;
@@ -129,6 +139,8 @@ class SingleFileReader : public FileReader {
   FirstLineByFilePath getFirstLineForEachFile() const override;
 
   bool isEndOfLastFile() override;
+
+  std::string getCurrentFilePath() const override;
 
  protected:
   virtual std::string getFirstLine() const = 0;
@@ -171,12 +183,14 @@ class SingleTextFileReader : public SingleFileReader {
     return fread(buffer, 1, size, file_);
   }
 
-  bool isScanFinished() override { return scan_finished_; }
+  bool isScanFinished() const override { return scan_finished_; }
 
   size_t getRemainingSize() override { return data_size_ - total_bytes_read_; }
 
   bool isRemainingSizeKnown() override { return true; };
+
   void checkForMoreRows(size_t file_offset,
+                        const shared::FilePathOptions& options,
                         const ForeignServer* server_options,
                         const UserMapping* user_mapping) override;
 
@@ -263,7 +277,7 @@ class CompressedFileReader : public SingleFileReader {
 
   size_t readRegion(void* buffer, size_t offset, size_t size) override;
 
-  bool isScanFinished() override { return scan_finished_; }
+  bool isScanFinished() const override { return scan_finished_; }
 
   bool isRemainingSizeKnown() override { return false; };
   size_t getRemainingSize() override { return 0; }
@@ -278,6 +292,7 @@ class CompressedFileReader : public SingleFileReader {
   void resetArchive();
 
   void checkForMoreRows(size_t file_offset,
+                        const shared::FilePathOptions& options,
                         const ForeignServer* server_options,
                         const UserMapping* user_mapping) override;
 
@@ -344,7 +359,7 @@ class MultiFileReader : public FileReader {
 
   size_t readRegion(void* buffer, size_t offset, size_t size) override;
 
-  bool isScanFinished() override { return (current_index_ >= files_.size()); }
+  bool isScanFinished() const override { return (current_index_ >= files_.size()); }
 
   void serialize(rapidjson::Value& value,
                  rapidjson::Document::AllocatorType& allocator) const override;
@@ -353,7 +368,15 @@ class MultiFileReader : public FileReader {
 
   bool isEndOfLastFile() override;
 
+  std::string getCurrentFilePath() const override;
+
+  virtual std::set<std::string> checkForRolledOffFiles(
+      const shared::FilePathOptions& file_path_options);
+
  protected:
+  virtual std::vector<std::string> getAllFilePaths(
+      const shared::FilePathOptions& file_path_options) const = 0;
+
   std::vector<std::unique_ptr<FileReader>> files_;
   std::vector<std::string> file_locations_;
 
@@ -364,6 +387,8 @@ class MultiFileReader : public FileReader {
   // Overall number of bytes read in the directory (minus headers)
   size_t current_offset_;
 
+  size_t starting_offset_;
+
   bool is_end_of_last_file_;
 };
 
@@ -372,19 +397,22 @@ class LocalMultiFileReader : public MultiFileReader {
  public:
   LocalMultiFileReader(const std::string& file_path,
                        const import_export::CopyParams& copy_params,
-                       const std::optional<std::string>& regex_path_filter,
-                       const std::optional<std::string>& file_sort_order_by,
-                       const std::optional<std::string>& file_sort_regex);
+                       const shared::FilePathOptions& options,
+                       const std::optional<size_t>& max_file_count);
 
   LocalMultiFileReader(const std::string& file_path,
                        const import_export::CopyParams& copy_params,
                        const rapidjson::Value& value);
 
   void checkForMoreRows(size_t file_offset,
+                        const shared::FilePathOptions& options,
                         const ForeignServer* server_options,
                         const UserMapping* user_mapping) override;
 
  private:
+  std::vector<std::string> getAllFilePaths(
+      const shared::FilePathOptions& file_path_options) const override;
+
   void insertFile(std::string location);
 };
 

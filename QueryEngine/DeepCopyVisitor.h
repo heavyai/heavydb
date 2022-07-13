@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,10 +81,6 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
 
   RetType visitSampleRatio(const Analyzer::SampleRatioExpr* expr) const override {
     return makeExpr<Analyzer::SampleRatioExpr>(visit(expr->get_arg()));
-  }
-
-  RetType visitLower(const Analyzer::LowerExpr* expr) const override {
-    return makeExpr<Analyzer::LowerExpr>(visit(expr->get_arg()));
   }
 
   RetType visitCardinality(const Analyzer::CardinalityExpr* cardinality) const override {
@@ -194,12 +190,20 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
       order_keys_copy.push_back(visit(order_key.get()));
     }
     const auto& type_info = window_func->get_type_info();
-    return makeExpr<Analyzer::WindowFunction>(type_info,
-                                              window_func->getKind(),
-                                              args_copy,
-                                              partition_keys_copy,
-                                              order_keys_copy,
-                                              window_func->getCollation());
+    return makeExpr<Analyzer::WindowFunction>(
+        type_info,
+        window_func->getKind(),
+        args_copy,
+        partition_keys_copy,
+        order_keys_copy,
+        window_func->getFrameBoundType(),
+        window_func->getFrameStartBound()->deep_copy(),
+        window_func->getFrameEndBound()->deep_copy(),
+        window_func->getCollation());
+  }
+
+  RetType visitStringOper(const Analyzer::StringOper* string_oper) const override {
+    return string_oper->deep_copy();
   }
 
   RetType visitFunctionOper(const Analyzer::FunctionOper* func_oper) const override {

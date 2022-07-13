@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,8 +90,9 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
                                   {},
                                   {},
                                   {count_expr.get()},
+                                  {},
                                   nullptr,
-                                  {{}, SortAlgorithm::Default, 0, 0},
+                                  {{}, SortAlgorithm::Default, 0, 0, false},
                                   0};
   size_t one{1};
   ResultSetPtr filtered_result;
@@ -158,6 +159,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
                              eo.find_push_down_candidates);
     }
     const ExecutionOptions eo_modified{eo.output_columnar_hint,
+                                       eo.keep_result,
                                        eo.allow_multifrag,
                                        eo.just_explain,
                                        eo.allow_loop_joins,
@@ -179,7 +181,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
       RelAlgExecutor ra_executor(executor_, cat_);
       const auto subquery_ra = subquery->getRelAlg();
       CHECK(subquery_ra);
-      RaExecutionSequence subquery_seq(subquery_ra);
+      RaExecutionSequence subquery_seq(subquery_ra, executor_);
       auto result =
           ra_executor.executeRelAlgSeq(subquery_seq, co, eo_modified, nullptr, 0);
       subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));

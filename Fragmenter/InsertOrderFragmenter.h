@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,8 @@
 
 /**
  * @file	InsertOrderFragmenter.h
- * @author	Todd Mostak <todd@mapd.com>
+ * @brief
+ *
  */
 
 #pragma once
@@ -32,7 +33,7 @@
 #include "FragmentDefaultValues.h"
 #include "Fragmenter/AbstractFragmenter.h"
 #include "QueryEngine/TargetValue.h"
-#include "Shared/mapd_shared_mutex.h"
+#include "Shared/heavyai_shared_mutex.h"
 #include "Shared/types.h"
 
 class Executor;
@@ -191,6 +192,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   std::vector<int> chunkKeyPrefix_;
   std::map<int, Chunk_NS::Chunk>
       columnMap_; /**< stores a map of column id to metadata about that column */
+  std::vector<std::unique_ptr<Chunk_NS::Chunk>> tracked_in_memory_chunks_;
   std::deque<std::unique_ptr<FragmentInfo>>
       fragmentInfoVec_; /**< data about each fragment stored - id and number of rows */
   // int currentInsertBufferFragmentId_;
@@ -206,9 +208,9 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   size_t maxChunkSize_;
   size_t maxRows_;
   std::string fragmenterType_;
-  mapd_shared_mutex
+  heavyai::shared_mutex
       fragmentInfoMutex_;  // to prevent read-write conflicts for fragmentInfoVec_
-  mapd_shared_mutex
+  heavyai::shared_mutex
       insertMutex_;  // to prevent race conditions on insert - only one insert statement
                      // should be going to a table at a time
   Data_Namespace::MemoryLevel defaultInsertLevel_;
@@ -262,6 +264,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
                                 const size_t num_rows_to_insert,
                                 size_t& num_rows_inserted,
                                 size_t& num_rows_left,
+                                std::vector<size_t>& valid_row_indices,
                                 const size_t start_fragment);
 };
 

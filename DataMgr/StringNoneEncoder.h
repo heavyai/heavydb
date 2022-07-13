@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,10 @@
 
 /**
  * @file		StringNoneEncoder.h
- * @author	Wei Hong <wei@map-d.com>
  * @brief		For unencoded strings
  *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
+
 #ifndef STRING_NONE_ENCODER_H
 #define STRING_NONE_ENCODER_H
 #include "Logger/Logger.h"
@@ -45,10 +44,9 @@ class StringNoneEncoder : public Encoder {
                                        const size_t byteLimit,
                                        const bool replicating = false);
 
-  size_t getNumElemsForBytesEncodedData(const int8_t* index_data,
-                                        const int start_idx,
-                                        const size_t num_elements,
-                                        const size_t byte_limit) override;
+  size_t getNumElemsForBytesEncodedDataAtIndices(const int8_t* index_data,
+                                                 const std::vector<size_t>& selected_idx,
+                                                 const size_t byte_limit) override;
 
   std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
                                             const size_t num_elems_to_append,
@@ -75,21 +73,10 @@ class StringNoneEncoder : public Encoder {
                                             const size_t numAppendElems,
                                             const bool replicating = false);
 
-  void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) override {
-    Encoder::getMetadata(chunkMetadata);  // call on parent class
-    chunkMetadata->chunkStats.min.stringval = nullptr;
-    chunkMetadata->chunkStats.max.stringval = nullptr;
-    chunkMetadata->chunkStats.has_nulls = has_nulls;
-  }
+  void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) override;
 
   // Only called from the executor for synthesized meta-information.
-  std::shared_ptr<ChunkMetadata> getMetadata(const SQLTypeInfo& ti) override {
-    auto chunk_stats = ChunkStats{};
-    chunk_stats.min.stringval = nullptr;
-    chunk_stats.max.stringval = nullptr;
-    chunk_stats.has_nulls = has_nulls;
-    return std::make_shared<ChunkMetadata>(ti, 0, 0, chunk_stats);
-  }
+  std::shared_ptr<ChunkMetadata> getMetadata(const SQLTypeInfo& ti) override;
 
   void updateStats(const int64_t, const bool) override { CHECK(false); }
 
@@ -142,6 +129,10 @@ class StringNoneEncoder : public Encoder {
   void resetChunkStats() override { has_nulls = false; }
 
  private:
+  std::pair<StringOffsetT, StringOffsetT> getStringOffsets(const int8_t* index_data,
+                                                           size_t index);
+
+  size_t getStringSizeAtIndex(const int8_t* index_data, size_t index);
   std::string_view getStringAtIndex(const int8_t* index_data,
                                     const int8_t* data,
                                     size_t index);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,13 @@
 
 /**
  * @file    StreamImporter.cpp
- * @author  Michael <michael@mapd.com>
  * @brief   Based on StreamInsert code but using binary columnar format for inserting a
- *stream of rows with optional transformations from stdin to a DB table.
+ * stream of rows with optional transformations from stdin to a DB table.
  *
- **/
+ */
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/trim.hpp>
-#include <boost/regex.hpp>
 #include <cstring>
 #include <iostream>
 #include <iterator>
@@ -33,6 +31,7 @@
 #include "Logger/Logger.h"
 #include "RowToColumnLoader.h"
 #include "Shared/ThriftClient.h"
+#include "Shared/clean_boost_regex.hpp"
 #include "Shared/sqltypes.h"
 
 #include <chrono>
@@ -223,9 +222,9 @@ int main(int argc, char** argv) {
       "passwd,p", po::value<std::string>(&passwd)->required(), "User Password");
   desc.add_options()("host",
                      po::value<std::string>(&server_host)->default_value(server_host),
-                     "OmniSci Server Hostname");
+                     "HeavyDB Server Hostname");
   desc.add_options()(
-      "port", po::value<int>(&port)->default_value(port), "OmniSci Server Port Number");
+      "port", po::value<int>(&port)->default_value(port), "HeavyDB Server Port Number");
   desc.add_options()("http",
                      po::bool_switch(&http)->default_value(http)->implicit_value(true),
                      "Use HTTP transport");

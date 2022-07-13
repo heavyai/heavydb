@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -100,12 +100,13 @@ RelAlgExecutionUnit RelAlgExecutionUnit::createNdvExecutionUnit(
           join_quals,
           {},
           {},
+          {},
           use_large_estimator ? makeExpr<Analyzer::LargeNDVEstimator>(groupby_exprs)
                               : makeExpr<Analyzer::NDVEstimator>(groupby_exprs),
-          SortInfo{{}, SortAlgorithm::Default, 0, 0},
+          SortInfo{{}, SortAlgorithm::Default, 0, 0, false},
           0,
           query_hint,
-          query_plan_dag,
+          query_plan_dag_hash,
           hash_table_build_plan_dag,
           table_id_to_node_map,
           false,
@@ -123,11 +124,12 @@ RelAlgExecutionUnit RelAlgExecutionUnit::createCountAllExecutionUnit(
           join_quals,
           {},
           {replacement_target},
+          {},
           nullptr,
-          SortInfo{{}, SortAlgorithm::Default, 0, 0},
+          SortInfo{{}, SortAlgorithm::Default, 0, 0, false},
           0,
           query_hint,
-          query_plan_dag,
+          query_plan_dag_hash,
           hash_table_build_plan_dag,
           table_id_to_node_map,
           false,

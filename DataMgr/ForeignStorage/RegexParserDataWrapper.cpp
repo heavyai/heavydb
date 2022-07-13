@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,9 @@
  */
 
 #include "RegexParserDataWrapper.h"
-
-#include <boost/regex.hpp>
-
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "DataMgr/ForeignStorage/FsiChunkUtils.h"
+#include "Shared/clean_boost_regex.hpp"
 
 namespace foreign_storage {
 RegexParserDataWrapper::RegexParserDataWrapper()
@@ -28,6 +26,13 @@ RegexParserDataWrapper::RegexParserDataWrapper()
 RegexParserDataWrapper::RegexParserDataWrapper(const int db_id,
                                                const ForeignTable* foreign_table)
     : AbstractTextFileDataWrapper(db_id, foreign_table)
+    , regex_file_buffer_parser_{foreign_table} {}
+
+RegexParserDataWrapper::RegexParserDataWrapper(const int db_id,
+                                               const ForeignTable* foreign_table,
+                                               const UserMapping* user_mapping,
+                                               const bool disable_cache)
+    : AbstractTextFileDataWrapper(db_id, foreign_table, user_mapping, disable_cache)
     , regex_file_buffer_parser_{foreign_table} {}
 
 namespace {
@@ -87,5 +92,6 @@ const TextFileBufferParser& RegexParserDataWrapper::getFileBufferParser() const 
 const std::set<std::string_view> RegexParserDataWrapper::regex_table_options_{
     RegexFileBufferParser::LINE_REGEX_KEY,
     RegexFileBufferParser::LINE_START_REGEX_KEY,
-    RegexFileBufferParser::BUFFER_SIZE_KEY};
+    RegexFileBufferParser::BUFFER_SIZE_KEY,
+    RegexFileBufferParser::HEADER_KEY};
 }  // namespace foreign_storage

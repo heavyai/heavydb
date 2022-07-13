@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include "QueryEngine/ScalarExprVisitor.h"
 #include "QueryEngine/WindowExpressionRewrite.h"
 #include "Shared/sqldefs.h"
+#include "StringOps/StringOps.h"
 
 namespace {
 
@@ -606,6 +607,22 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
       }
     }
     if (*lhs == *rhs) {
+      if (!lhs_ti.get_notnull()) {
+        CHECK(!rhs_ti.get_notnull());
+        // We can't fold the ostensible tautaulogy
+        // for nullable lhs and rhs types, as
+        // lhs <> rhs when they are null
+
+        // We likely could turn this into a lhs is not null
+        // operatation, but is it worth it?
+        return makeExpr<Analyzer::BinOper>(ti,
+                                           bin_oper->get_contains_agg(),
+                                           bin_oper->get_optype(),
+                                           bin_oper->get_qualifier(),
+                                           lhs,
+                                           rhs);
+      }
+      CHECK(rhs_ti.get_notnull());
       // Tautologies: v=v; v<=v; v>=v
       if (optype == kEQ || optype == kLE || optype == kGE) {
         Datum d;
@@ -665,18 +682,59 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
                                        rhs);
   }
 
-  std::shared_ptr<Analyzer::Expr> visitLower(
-      const Analyzer::LowerExpr* lower_expr) const override {
-    const auto constant_arg_expr =
-        dynamic_cast<const Analyzer::Constant*>(lower_expr->get_arg());
-    if (constant_arg_expr) {
-      return Parser::StringLiteral::analyzeValue(
-          boost::locale::to_lower(*constant_arg_expr->get_constval().stringval));
+  std::shared_ptr<Analyzer::Expr> visitStringOper(
+      const Analyzer::StringOper* string_oper) const override {
+    // Todo(todd): For clarity and modularity we should move string
+    // operator rewrites into their own visitor class.
+    // String operation rewrites were originally put here as they only
+    // handled string operators on rewrite, but now handle variable
+    // inputs as well.
+    const auto original_args = string_oper->getOwnArgs();
+    std::vector<std::shared_ptr<Analyzer::Expr>> rewritten_args;
+    const bool parent_in_string_op_chain = in_string_op_chain_;
+    if (!parent_in_string_op_chain) {
+      chained_string_op_exprs_.clear();
+      in_string_op_chain_ = true;
     }
-    return makeExpr<Analyzer::LowerExpr>(lower_expr->get_own_arg());
+    size_t rewritten_arg_literal_arity = 0;
+    for (auto original_arg : original_args) {
+      rewritten_args.emplace_back(visit(original_arg.get()));
+      if (dynamic_cast<const Analyzer::Constant*>(rewritten_args.back().get())) {
+        rewritten_arg_literal_arity++;
+      }
+    }
+    if (!parent_in_string_op_chain) {
+      in_string_op_chain_ = false;
+    }
+    const auto kind = string_oper->get_kind();
+
+    if (string_oper->getArity() == rewritten_arg_literal_arity) {
+      Analyzer::StringOper literal_string_oper(kind, rewritten_args);
+      const auto literal_args = literal_string_oper.getLiteralArgs();
+      const auto string_op_info = StringOps_Namespace::StringOpInfo(kind, literal_args);
+      const auto literal_result =
+          StringOps_Namespace::apply_string_op_to_literals(string_op_info);
+      return Parser::StringLiteral::analyzeValue(literal_result.first,
+                                                 literal_result.second /* is null */);
+    }
+    chained_string_op_exprs_.emplace_back(
+        makeExpr<Analyzer::StringOper>(kind, rewritten_args));
+    if (parent_in_string_op_chain) {
+      CHECK(in_string_op_chain_);
+      CHECK(rewritten_args[0]->get_type_info().is_string());
+      CHECK(
+          dynamic_cast<const Analyzer::ColumnVar*>(remove_cast(rewritten_args[0].get())));
+      return rewritten_args[0]->deep_copy();
+    } else {
+      CHECK(!in_string_op_chain_);
+      return makeExpr<Analyzer::StringOper>(
+          kind, rewritten_args, chained_string_op_exprs_);
+    }
   }
 
  protected:
+  mutable bool in_string_op_chain_{false};
+  mutable std::vector<std::shared_ptr<Analyzer::Expr>> chained_string_op_exprs_;
   mutable std::unordered_map<const Analyzer::Expr*, const SQLTypeInfo> casts_;
   mutable int32_t num_overflows_;
 
@@ -737,11 +795,13 @@ static const std::unordered_set<std::string> overlaps_supported_functions = {
     "ST_Contains_MultiPolygon_MultiPolygon",
     "ST_Contains_MultiPolygon_Polygon",
     "ST_Intersects_Polygon_Point",
+    "ST_cIntersects_Polygon_Point",
     "ST_Intersects_Polygon_Polygon",
     "ST_Intersects_Polygon_MultiPolygon",
     "ST_Intersects_MultiPolygon_MultiPolygon",
     "ST_Intersects_MultiPolygon_Polygon",
     "ST_Intersects_MultiPolygon_Point",
+    "ST_cIntersects_MultiPolygon_Point",
     "ST_Approx_Overlaps_MultiPolygon_Point",
     "ST_Overlaps"};
 

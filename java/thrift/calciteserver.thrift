@@ -1,4 +1,4 @@
-namespace java com.omnisci.thrift.calciteserver
+namespace java ai.heavy.thrift.calciteserver
 
 include "completion_hints.thrift"
 include "QueryEngine/extension_functions.thrift"
@@ -47,6 +47,7 @@ struct TOptimizationOption {
   1: bool is_view_optimize;
   2: bool enable_watchdog;
   3: list<TFilterPushDownInfo> filter_push_down_info;
+  4: bool distributed_mode;
 }
 
 service CalciteServer {

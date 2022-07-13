@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,10 @@
 
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
-#include <tbb/task_group.h>
 #include <future>
+
+extern bool g_enable_data_recycler;
+extern bool g_use_chunk_metadata_cache;
 
 InputTableInfoCache::InputTableInfoCache(Executor* executor) : executor_(executor) {}
 
@@ -171,47 +173,43 @@ void compute_table_function_col_chunk_stats(
     std::vector<T> threads_local_maxes(num_threads, std::numeric_limits<T>::lowest());
     std::vector<bool> threads_local_has_nulls(num_threads, false);
     tbb::task_arena limited_arena(num_threads);
-    tbb::task_group tg;
 
     limited_arena.execute([&] {
-      tg.run([&] {
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, row_count, min_grain_size),
-            [&](const tbb::blocked_range<size_t>& r) {
-              const size_t start_idx = r.begin();
-              const size_t end_idx = r.end();
-              T local_min_val = std::numeric_limits<T>::max();
-              T local_max_val = std::numeric_limits<T>::lowest();
-              bool local_has_nulls = false;
-              for (size_t row_idx = start_idx; row_idx < end_idx; ++row_idx) {
-                const T cell_val = col_buffer[row_idx];
-                if (cell_val == null_val) {
-                  local_has_nulls = true;
-                  continue;
-                }
-                if (cell_val < local_min_val) {
-                  local_min_val = cell_val;
-                }
-                if (cell_val > local_max_val) {
-                  local_max_val = cell_val;
-                }
+      tbb::parallel_for(
+          tbb::blocked_range<size_t>(0, row_count, min_grain_size),
+          [&](const tbb::blocked_range<size_t>& r) {
+            const size_t start_idx = r.begin();
+            const size_t end_idx = r.end();
+            T local_min_val = std::numeric_limits<T>::max();
+            T local_max_val = std::numeric_limits<T>::lowest();
+            bool local_has_nulls = false;
+            for (size_t row_idx = start_idx; row_idx < end_idx; ++row_idx) {
+              const T cell_val = col_buffer[row_idx];
+              if (cell_val == null_val) {
+                local_has_nulls = true;
+                continue;
               }
-              size_t thread_idx = tbb::this_task_arena::current_thread_index();
-              if (local_min_val < threads_local_mins[thread_idx]) {
-                threads_local_mins[thread_idx] = local_min_val;
+              if (cell_val < local_min_val) {
+                local_min_val = cell_val;
               }
-              if (local_max_val > threads_local_maxes[thread_idx]) {
-                threads_local_maxes[thread_idx] = local_max_val;
+              if (cell_val > local_max_val) {
+                local_max_val = cell_val;
               }
-              if (local_has_nulls) {
-                threads_local_has_nulls[thread_idx] = true;
-              }
-            },
-            tbb::simple_partitioner());
-      });
+            }
+            size_t thread_idx = tbb::this_task_arena::current_thread_index();
+            if (local_min_val < threads_local_mins[thread_idx]) {
+              threads_local_mins[thread_idx] = local_min_val;
+            }
+            if (local_max_val > threads_local_maxes[thread_idx]) {
+              threads_local_maxes[thread_idx] = local_max_val;
+            }
+            if (local_has_nulls) {
+              threads_local_has_nulls[thread_idx] = true;
+            }
+          },
+          tbb::simple_partitioner());
     });
 
-    limited_arena.execute([&] { tg.wait(); });
     for (size_t thread_idx = 0; thread_idx < num_threads; ++thread_idx) {
       if (threads_local_mins[thread_idx] < min_val) {
         min_val = threads_local_mins[thread_idx];
@@ -271,6 +269,7 @@ ChunkMetadataMap synthesize_metadata_table_function(const ResultSet* rows) {
             static_cast<int32_t>(inline_fixed_encoding_null_val(col_sql_type_info)));
         break;
       case kBIGINT:
+      case kTIMESTAMP:
         compute_table_function_col_chunk_stats(
             chunk_metadata,
             reinterpret_cast<const int64_t*>(columnar_buffer),
@@ -306,11 +305,20 @@ ChunkMetadataMap synthesize_metadata_table_function(const ResultSet* rows) {
 
 ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
   auto timer = DEBUG_TIMER(__func__);
-  rows->moveToBegin();
-  if (rows->getQueryMemDesc().getQueryDescriptionType() ==
-      QueryDescriptionType::TableFunction) {
-    return synthesize_metadata_table_function(rows);
+  ChunkMetadataMap metadata_map;
+
+  if (rows->definitelyHasNoRows()) {
+    // resultset has no valid storage, so we fill dummy metadata and return early
+    std::vector<std::unique_ptr<Encoder>> decoders;
+    for (size_t i = 0; i < rows->colCount(); ++i) {
+      decoders.emplace_back(Encoder::Create(nullptr, rows->getColType(i)));
+      const auto it_ok =
+          metadata_map.emplace(i, decoders.back()->getMetadata(rows->getColType(i)));
+      CHECK(it_ok.second);
+    }
+    return metadata_map;
   }
+
   std::vector<std::vector<std::unique_ptr<Encoder>>> dummy_encoders;
   const size_t worker_count =
       result_set::use_parallel_algorithms(*rows) ? cpu_threads() : 1;
@@ -321,6 +329,12 @@ ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
       dummy_encoders.back().emplace_back(Encoder::Create(nullptr, col_ti));
     }
   }
+
+  if (rows->getQueryMemDesc().getQueryDescriptionType() ==
+      QueryDescriptionType::TableFunction) {
+    return synthesize_metadata_table_function(rows);
+  }
+  rows->moveToBegin();
   const auto do_work = [rows](const std::vector<TargetValue>& crt_row,
                               std::vector<std::unique_ptr<Encoder>>& dummy_encoders) {
     for (size_t i = 0; i < rows->colCount(); ++i) {
@@ -396,9 +410,8 @@ ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
       }
       do_work(crt_row, dummy_encoders[0]);
     }
-    rows->moveToBegin();
   }
-  ChunkMetadataMap metadata_map;
+  rows->moveToBegin();
   for (size_t worker_idx = 1; worker_idx < worker_count; ++worker_idx) {
     CHECK_LT(worker_idx, dummy_encoders.size());
     const auto& worker_encoders = dummy_encoders[worker_idx];
@@ -445,7 +458,32 @@ std::vector<InputTableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_un
 
 const ChunkMetadataMap& Fragmenter_Namespace::FragmentInfo::getChunkMetadataMap() const {
   if (resultSet && !synthesizedMetadataIsValid) {
-    chunkMetadataMap = synthesize_metadata(resultSet);
+    bool need_to_compute_metadata = true;
+    // we disable chunk metadata recycler when filter pushdown is enabled
+    // since re-executing the query invalidates the cached metdata
+    // todo(yoonmin): relax this
+    bool enable_chunk_metadata_cache = g_enable_data_recycler &&
+                                       g_use_chunk_metadata_cache &&
+                                       !g_enable_filter_push_down;
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+    if (enable_chunk_metadata_cache) {
+      std::optional<ChunkMetadataMap> cached =
+          executor->getRecultSetRecyclerHolder().getCachedChunkMetadata(
+              resultSet->getQueryPlanHash());
+      if (cached) {
+        chunkMetadataMap = *cached;
+        need_to_compute_metadata = false;
+      }
+    }
+    if (need_to_compute_metadata) {
+      chunkMetadataMap = synthesize_metadata(resultSet);
+      if (enable_chunk_metadata_cache && !chunkMetadataMap.empty()) {
+        executor->getRecultSetRecyclerHolder().putChunkMetadataToCache(
+            resultSet->getQueryPlanHash(),
+            resultSet->getInputTableKeys(),
+            chunkMetadataMap);
+      }
+    }
     synthesizedMetadataIsValid = true;
   }
   return chunkMetadataMap;

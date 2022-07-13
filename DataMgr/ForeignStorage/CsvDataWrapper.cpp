@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,9 @@ CsvDataWrapper::CsvDataWrapper(const int db_id, const ForeignTable* foreign_tabl
 
 CsvDataWrapper::CsvDataWrapper(const int db_id,
                                const ForeignTable* foreign_table,
-                               const UserMapping* user_mapping)
-    : AbstractTextFileDataWrapper(db_id, foreign_table, user_mapping) {}
+                               const UserMapping* user_mapping,
+                               const bool disable_cache)
+    : AbstractTextFileDataWrapper(db_id, foreign_table, user_mapping, disable_cache) {}
 
 void CsvDataWrapper::validateTableOptions(const ForeignTable* foreign_table) const {
   AbstractTextFileDataWrapper::validateTableOptions(foreign_table);
@@ -92,7 +93,8 @@ const std::set<std::string_view> CsvDataWrapper::csv_table_options_{"ARRAY_DELIM
                                                                     "NULLS",
                                                                     "QUOTE",
                                                                     "QUOTED",
-                                                                    "S3_ACCESS_TYPE"};
+                                                                    "S3_ACCESS_TYPE",
+                                                                    "TRIM_SPACES"};
 
 const CsvFileBufferParser CsvDataWrapper::csv_file_buffer_parser_{};
 }  // namespace foreign_storage

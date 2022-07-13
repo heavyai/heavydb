@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.mapd.metadata;
 
 import com.google.common.collect.ImmutableList;
@@ -20,19 +21,11 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.mapd.calcite.parser.MapDParser;
-import com.mapd.calcite.parser.MapDTable;
-import com.mapd.calcite.parser.MapDUser;
-import com.mapd.calcite.parser.MapDView;
+import com.mapd.calcite.parser.HeavyDBParser;
+import com.mapd.calcite.parser.HeavyDBTable;
+import com.mapd.calcite.parser.HeavyDBUser;
+import com.mapd.calcite.parser.HeavyDBView;
 import com.mapd.common.SockTransportProperties;
-import com.omnisci.thrift.server.OmniSci;
-import com.omnisci.thrift.server.TColumnType;
-import com.omnisci.thrift.server.TDBInfo;
-import com.omnisci.thrift.server.TDatumType;
-import com.omnisci.thrift.server.TEncodingType;
-import com.omnisci.thrift.server.TOmniSciException;
-import com.omnisci.thrift.server.TTableDetails;
-import com.omnisci.thrift.server.TTypeInfo;
 
 import org.apache.calcite.schema.Table;
 import org.apache.thrift.TException;
@@ -61,18 +54,23 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- *
- * @author michael
- */
+import ai.heavy.thrift.server.Heavy;
+import ai.heavy.thrift.server.TColumnType;
+import ai.heavy.thrift.server.TDBException;
+import ai.heavy.thrift.server.TDBInfo;
+import ai.heavy.thrift.server.TDatumType;
+import ai.heavy.thrift.server.TEncodingType;
+import ai.heavy.thrift.server.TTableDetails;
+import ai.heavy.thrift.server.TTypeInfo;
+
 public class MetaConnect {
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(MetaConnect.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(MetaConnect.class);
   private final String dataDir;
   private final String default_db;
-  private final MapDUser currentUser;
-  private final int mapdPort;
+  private final HeavyDBUser currentUser;
+  private final int dbPort;
   private Connection catConn;
-  private final MapDParser parser;
+  private final HeavyDBParser parser;
 
   private static final int KBOOLEAN = 1;
   private static final int KCHAR = 2;
@@ -96,31 +94,33 @@ public class MetaConnect {
   private static final int KPOLYGON = 20;
   private static final int KMULTIPOLYGON = 21;
   private static final int KTINYINT = 22;
+  private static final int KMULTILINESTRING = 30;
 
+  private static final String CATALOG_DIR_NAME = "catalogs";
   private static volatile Map<String, Set<String>> DATABASE_TO_TABLES =
           new ConcurrentHashMap<>();
-  private static volatile Map<List<String>, Table> MAPD_TABLE_DETAILS =
+  private static volatile Map<List<String>, Table> DB_TABLE_DETAILS =
           new ConcurrentHashMap<>();
   private final SockTransportProperties sock_transport_properties;
 
-  public MetaConnect(int mapdPort,
+  public MetaConnect(int dbPort,
           String dataDir,
-          MapDUser currentMapDUser,
-          MapDParser parser,
+          HeavyDBUser currentHeavyDBUser,
+          HeavyDBParser parser,
           SockTransportProperties skT,
           String db) {
     this.dataDir = dataDir;
     if (db != null) {
       this.default_db = db;
     } else {
-      if (currentMapDUser != null) {
-        this.default_db = currentMapDUser.getDB();
+      if (currentHeavyDBUser != null) {
+        this.default_db = currentHeavyDBUser.getDB();
       } else {
         this.default_db = null;
       }
     }
-    this.currentUser = currentMapDUser;
-    this.mapdPort = mapdPort;
+    this.currentUser = currentHeavyDBUser;
+    this.dbPort = dbPort;
     this.parser = parser;
     this.sock_transport_properties = skT;
 
@@ -134,12 +134,12 @@ public class MetaConnect {
     }
   }
 
-  public MetaConnect(int mapdPort,
+  public MetaConnect(int dbPort,
           String dataDir,
-          MapDUser currentMapDUser,
-          MapDParser parser,
+          HeavyDBUser currentHeavyDBUser,
+          HeavyDBParser parser,
           SockTransportProperties skT) {
-    this(mapdPort, dataDir, currentMapDUser, parser, skT, null);
+    this(dbPort, dataDir, currentHeavyDBUser, parser, skT, null);
   }
 
   public List<String> getDatabases() {
@@ -157,19 +157,19 @@ public class MetaConnect {
     } catch (ClassNotFoundException ex) {
       String err = "Could not find class for metadata connection; DB: '" + catalog
               + "' data dir '" + dataDir + "', error was " + ex.getMessage();
-      MAPDLOGGER.error(err);
+      HEAVYDBLOGGER.error(err);
       throw new RuntimeException(err);
     }
-    String connectURL = "jdbc:sqlite:" + dataDir + "/mapd_catalogs/" + catalog;
+    String connectURL = "jdbc:sqlite:" + dataDir + "/" + CATALOG_DIR_NAME + "/" + catalog;
     try {
       catConn = DriverManager.getConnection(connectURL);
     } catch (SQLException ex) {
       String err = "Could not establish a connection for metadata; DB: '" + catalog
               + "' data dir '" + dataDir + "', error was " + ex.getMessage();
-      MAPDLOGGER.error(err);
+      HEAVYDBLOGGER.error(err);
       throw new RuntimeException(err);
     }
-    MAPDLOGGER.debug("Opened database successfully");
+    HEAVYDBLOGGER.debug("Opened database successfully");
   }
 
   private void disconnectFromCatalog() {
@@ -178,7 +178,7 @@ public class MetaConnect {
     } catch (SQLException ex) {
       String err = "Could not disconnect from metadata "
               + " data dir '" + dataDir + "', error was " + ex.getMessage();
-      MAPDLOGGER.error(err);
+      HEAVYDBLOGGER.error(err);
       throw new RuntimeException(err);
     }
   }
@@ -190,9 +190,9 @@ public class MetaConnect {
   public Table getTable(String tableName) {
     List<String> dbTable =
             ImmutableList.of(default_db.toUpperCase(), tableName.toUpperCase());
-    Table cTable = MAPD_TABLE_DETAILS.get(dbTable);
+    Table cTable = DB_TABLE_DETAILS.get(dbTable);
     if (cTable != null) {
-      MAPDLOGGER.debug("Metaconnect DB " + default_db + " get table " + tableName
+      HEAVYDBLOGGER.debug("Metaconnect DB " + default_db + " get table " + tableName
               + " details " + cTable);
       return cTable;
     }
@@ -200,17 +200,17 @@ public class MetaConnect {
     TTableDetails td = get_table_details(tableName);
 
     if (td.getView_sql() == null || td.getView_sql().isEmpty()) {
-      MAPDLOGGER.debug("Processing a table");
-      Table rTable = new MapDTable(td);
-      MAPD_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
-      MAPDLOGGER.debug("Metaconnect DB " + default_db + " get table " + tableName
+      HEAVYDBLOGGER.debug("Processing a table");
+      Table rTable = new HeavyDBTable(td);
+      DB_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
+      HEAVYDBLOGGER.debug("Metaconnect DB " + default_db + " get table " + tableName
               + " details " + rTable + " Not in buffer");
       return rTable;
     } else {
-      MAPDLOGGER.debug("Processing a view");
-      Table rTable = new MapDView(getViewSql(tableName), td, parser);
-      MAPD_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
-      MAPDLOGGER.debug("Metaconnect DB " + default_db + " get view " + tableName
+      HEAVYDBLOGGER.debug("Processing a view");
+      Table rTable = new HeavyDBView(getViewSql(tableName), td, parser);
+      DB_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
+      HEAVYDBLOGGER.debug("Metaconnect DB " + default_db + " get view " + tableName
               + " details " + rTable + " Not in buffer");
       return rTable;
     }
@@ -219,17 +219,17 @@ public class MetaConnect {
   public Set<String> getTables() {
     Set<String> mSet = DATABASE_TO_TABLES.get(default_db.toUpperCase());
     if (mSet != null && mSet.size() > 0) {
-      MAPDLOGGER.debug("Metaconnect DB getTables " + default_db + " tables " + mSet);
+      HEAVYDBLOGGER.debug("Metaconnect DB getTables " + default_db + " tables " + mSet);
       return mSet;
     }
 
-    if (mapdPort == -1) {
+    if (dbPort == -1) {
       // use sql
       connectToDBCatalog();
       Set<String> ts = getTables_SQL();
       disconnectFromCatalog();
       DATABASE_TO_TABLES.put(default_db.toUpperCase(), ts);
-      MAPDLOGGER.debug(
+      HEAVYDBLOGGER.debug(
               "Metaconnect DB getTables " + default_db + " tables " + ts + " from catDB");
       return ts;
     }
@@ -237,11 +237,11 @@ public class MetaConnect {
     try {
       TProtocol protocol = null;
       TTransport transport =
-              sock_transport_properties.openClientTransport("localhost", mapdPort);
+              sock_transport_properties.openClientTransport("localhost", dbPort);
       if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
-      OmniSci.Client client = new OmniSci.Client(protocol);
+      Heavy.Client client = new Heavy.Client(protocol);
       List<String> tablesList =
               client.get_tables_for_database(currentUser.getSession(), default_db);
       Set<String> ts = new HashSet<String>(tablesList.size());
@@ -251,19 +251,19 @@ public class MetaConnect {
 
       transport.close();
       DATABASE_TO_TABLES.put(default_db.toUpperCase(), ts);
-      MAPDLOGGER.debug("Metaconnect DB getTables " + default_db + " tables " + ts
+      HEAVYDBLOGGER.debug("Metaconnect DB getTables " + default_db + " tables " + ts
               + " from server");
       return ts;
 
     } catch (TTransportException ex) {
-      MAPDLOGGER.error("TTransportException on port [" + mapdPort + "]");
-      MAPDLOGGER.error(ex.toString());
+      HEAVYDBLOGGER.error("TTransportException on port [" + dbPort + "]");
+      HEAVYDBLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
-    } catch (TOmniSciException ex) {
-      MAPDLOGGER.error(ex.getError_msg());
+    } catch (TDBException ex) {
+      HEAVYDBLOGGER.error(ex.getError_msg());
       throw new RuntimeException(ex.getError_msg());
     } catch (TException ex) {
-      MAPDLOGGER.error(ex.toString());
+      HEAVYDBLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
     }
   }
@@ -282,14 +282,14 @@ public class MetaConnect {
       while (rs.next()) {
         tableSet.add(rs.getString("name"));
         /*--*/
-        MAPDLOGGER.debug("Object name = " + rs.getString("name"));
+        HEAVYDBLOGGER.debug("Object name = " + rs.getString("name"));
       }
       rs.close();
       stmt.close();
 
     } catch (Exception e) {
       String err = "error trying to get all the tables, error was " + e.getMessage();
-      MAPDLOGGER.error(err);
+      HEAVYDBLOGGER.error(err);
       throw new RuntimeException(err);
     }
     disconnectFromCatalog();
@@ -297,8 +297,8 @@ public class MetaConnect {
     try {
       // open temp table json file
       final String filePath =
-              dataDir + "/mapd_catalogs/" + default_db + "_temp_tables.json";
-      MAPDLOGGER.debug("Opening temp table file at " + filePath);
+              dataDir + "/" + CATALOG_DIR_NAME + "/" + default_db + "_temp_tables.json";
+      HEAVYDBLOGGER.debug("Opening temp table file at " + filePath);
       String tempTablesJsonStr;
       try {
         File tempTablesFile = new File(filePath);
@@ -318,13 +318,13 @@ public class MetaConnect {
         String tableName = member.getKey();
         tableSet.add(tableName);
         /*--*/
-        MAPDLOGGER.debug("Temp table object name = " + tableName);
+        HEAVYDBLOGGER.debug("Temp table object name = " + tableName);
       }
 
     } catch (Exception e) {
       String err = "error trying to load temporary tables from json file, error was "
               + e.getMessage();
-      MAPDLOGGER.error(err);
+      HEAVYDBLOGGER.error(err);
       throw new RuntimeException(err);
     }
 
@@ -332,37 +332,36 @@ public class MetaConnect {
   }
 
   public TTableDetails get_table_details(String tableName) {
-    if (mapdPort == -1) {
+    if (dbPort == -1) {
       // use sql
       connectToDBCatalog();
       TTableDetails td = get_table_detail_SQL(tableName);
       disconnectFromCatalog();
       return td;
     }
-    // use thrift direct to local server
     try {
+      // use thrift direct to local server
       TProtocol protocol = null;
 
       TTransport transport =
-              sock_transport_properties.openClientTransport("localhost", mapdPort);
+              sock_transport_properties.openClientTransport("localhost", dbPort);
       if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
-      OmniSci.Client client = new OmniSci.Client(protocol);
+      Heavy.Client client = new Heavy.Client(protocol);
       TTableDetails td = client.get_internal_table_details_for_database(
               currentUser.getSession(), tableName, default_db);
       transport.close();
 
       return td;
-
     } catch (TTransportException ex) {
-      MAPDLOGGER.error(ex.toString());
+      HEAVYDBLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
-    } catch (TOmniSciException ex) {
-      MAPDLOGGER.error(ex.getError_msg());
+    } catch (TDBException ex) {
+      HEAVYDBLOGGER.error(ex.getError_msg());
       throw new RuntimeException(ex.getError_msg());
     } catch (TException ex) {
-      MAPDLOGGER.error(ex.toString());
+      HEAVYDBLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
     }
   }
@@ -373,6 +372,8 @@ public class MetaConnect {
         return 1; // coords
       case KLINESTRING:
         return 2; // coords, bounds
+      case KMULTILINESTRING:
+        return 3; // coords, linestring_sizes, bounds
       case KPOLYGON:
         return 4; // coords, ring_sizes, bounds, render_group
       case KMULTIPOLYGON:
@@ -384,8 +385,8 @@ public class MetaConnect {
   }
 
   public static final boolean is_geometry(int type) {
-    return type == KPOINT || type == KLINESTRING || type == KPOLYGON
-            || type == KMULTIPOLYGON;
+    return type == KPOINT || type == KLINESTRING || type == KMULTILINESTRING
+            || type == KPOLYGON || type == KMULTIPOLYGON;
   }
 
   private TTableDetails get_table_detail_SQL(String tableName) {
@@ -401,7 +402,7 @@ public class MetaConnect {
       } catch (Exception e) {
         String err =
                 "Table '" + tableName + "' does not exist for DB '" + default_db + "'";
-        MAPDLOGGER.error(err);
+        HEAVYDBLOGGER.error(err);
         throw new RuntimeException(err);
       }
     }
@@ -411,32 +412,38 @@ public class MetaConnect {
     ResultSet rs = null;
     try {
       stmt = catConn.createStatement();
-      MAPDLOGGER.debug("table id is " + id);
-      MAPDLOGGER.debug("table name is " + tableName);
+      HEAVYDBLOGGER.debug("table id is " + id);
+      HEAVYDBLOGGER.debug("table name is " + tableName);
       String query = String.format(
               "SELECT * FROM mapd_columns where tableid = %d and not is_deletedcol order by columnid;",
               id);
-      MAPDLOGGER.debug(query);
+      HEAVYDBLOGGER.debug(query);
       rs = stmt.executeQuery(query);
       int skip_physical_cols = 0;
       while (rs.next()) {
         String colName = rs.getString("name");
-        MAPDLOGGER.debug("name = " + colName);
+        HEAVYDBLOGGER.debug("name = " + colName);
         int colType = rs.getInt("coltype");
-        MAPDLOGGER.debug("coltype = " + colType);
+        HEAVYDBLOGGER.debug("coltype = " + colType);
         int colSubType = rs.getInt("colsubtype");
-        MAPDLOGGER.debug("colsubtype = " + colSubType);
+        HEAVYDBLOGGER.debug("colsubtype = " + colSubType);
+        int compression = rs.getInt("compression");
+        HEAVYDBLOGGER.debug("compression = " + compression);
+        int compression_param = rs.getInt("comp_param");
+        HEAVYDBLOGGER.debug("comp_param = " + compression_param);
+        int size = rs.getInt("size");
+        HEAVYDBLOGGER.debug("size = " + size);
         int colDim = rs.getInt("coldim");
-        MAPDLOGGER.debug("coldim = " + colDim);
+        HEAVYDBLOGGER.debug("coldim = " + colDim);
         int colScale = rs.getInt("colscale");
-        MAPDLOGGER.debug("colscale = " + colScale);
+        HEAVYDBLOGGER.debug("colscale = " + colScale);
         boolean isNotNull = rs.getBoolean("is_notnull");
-        MAPDLOGGER.debug("is_notnull = " + isNotNull);
+        HEAVYDBLOGGER.debug("is_notnull = " + isNotNull);
         boolean isSystemCol = rs.getBoolean("is_systemcol");
-        MAPDLOGGER.debug("is_systemcol = " + isSystemCol);
+        HEAVYDBLOGGER.debug("is_systemcol = " + isSystemCol);
         boolean isVirtualCol = rs.getBoolean("is_virtualcol");
-        MAPDLOGGER.debug("is_vitrualcol = " + isVirtualCol);
-        MAPDLOGGER.debug("");
+        HEAVYDBLOGGER.debug("is_vitrualcol = " + isVirtualCol);
+        HEAVYDBLOGGER.debug("");
         TColumnType tct = new TColumnType();
         TTypeInfo tti = new TTypeInfo();
         TDatumType tdt;
@@ -450,7 +457,9 @@ public class MetaConnect {
         }
 
         tti.nullable = !isNotNull;
-        tti.encoding = TEncodingType.NONE;
+        tti.encoding = encodingToThrift(compression);
+        tti.comp_param = compression_param;
+        tti.size = size;
         tti.type = tdt;
         tti.scale = colScale;
         tti.precision = colDim;
@@ -464,7 +473,7 @@ public class MetaConnect {
       }
     } catch (Exception e) {
       String err = "error trying to read from mapd_columns, error was " + e.getMessage();
-      MAPDLOGGER.error(err);
+      HEAVYDBLOGGER.error(err);
       throw new RuntimeException(err);
     } finally {
       if (rs != null) {
@@ -472,7 +481,7 @@ public class MetaConnect {
           rs.close();
         } catch (SQLException ex) {
           String err = "Could not close resultset, error was " + ex.getMessage();
-          MAPDLOGGER.error(err);
+          HEAVYDBLOGGER.error(err);
           throw new RuntimeException(err);
         }
       }
@@ -481,7 +490,7 @@ public class MetaConnect {
           stmt.close();
         } catch (SQLException ex) {
           String err = "Could not close stmt, error was " + ex.getMessage();
-          MAPDLOGGER.error(err);
+          HEAVYDBLOGGER.error(err);
           throw new RuntimeException(err);
         }
       }
@@ -500,8 +509,8 @@ public class MetaConnect {
 
     // open table json file
     final String filePath =
-            dataDir + "/mapd_catalogs/" + default_db + "_temp_tables.json";
-    MAPDLOGGER.debug("Opening temp table file at " + filePath);
+            dataDir + "/" + CATALOG_DIR_NAME + "/" + default_db + "_temp_tables.json";
+    HEAVYDBLOGGER.debug("Opening temp table file at " + filePath);
 
     String tempTablesJsonStr;
     try {
@@ -531,8 +540,8 @@ public class MetaConnect {
     String jsonTableName = tableObject.get("name").getAsString();
     assert (tableName == jsonTableName);
     int id = tableObject.get("id").getAsInt();
-    MAPDLOGGER.debug("table id is " + id);
-    MAPDLOGGER.debug("table name is " + tableName);
+    HEAVYDBLOGGER.debug("table id is " + id);
+    HEAVYDBLOGGER.debug("table name is " + tableName);
 
     JsonArray jsonColumns = tableObject.getAsJsonArray("columns");
     assert (jsonColumns != null);
@@ -542,27 +551,33 @@ public class MetaConnect {
       JsonObject columnObject = columnElement.getAsJsonObject();
 
       String colName = columnObject.get("name").getAsString();
-      MAPDLOGGER.debug("name = " + colName);
+      HEAVYDBLOGGER.debug("name = " + colName);
       int colType = columnObject.get("coltype").getAsInt();
-      MAPDLOGGER.debug("coltype = " + colType);
+      HEAVYDBLOGGER.debug("coltype = " + colType);
       int colSubType = columnObject.get("colsubtype").getAsInt();
-      MAPDLOGGER.debug("colsubtype = " + colSubType);
+      HEAVYDBLOGGER.debug("colsubtype = " + colSubType);
+      int compression = columnObject.get("compression").getAsInt();
+      HEAVYDBLOGGER.debug("compression = " + compression);
+      int compression_param = columnObject.get("comp_param").getAsInt();
+      HEAVYDBLOGGER.debug("comp_param = " + compression_param);
+      int size = columnObject.get("size").getAsInt();
+      HEAVYDBLOGGER.debug("size = " + size);
       int colDim = columnObject.get("coldim").getAsInt();
-      MAPDLOGGER.debug("coldim = " + colDim);
+      HEAVYDBLOGGER.debug("coldim = " + colDim);
       int colScale = columnObject.get("colscale").getAsInt();
-      MAPDLOGGER.debug("colscale = " + colScale);
+      HEAVYDBLOGGER.debug("colscale = " + colScale);
       boolean isNotNull = columnObject.get("is_notnull").getAsBoolean();
-      MAPDLOGGER.debug("is_notnull = " + isNotNull);
+      HEAVYDBLOGGER.debug("is_notnull = " + isNotNull);
       boolean isSystemCol = columnObject.get("is_systemcol").getAsBoolean();
-      MAPDLOGGER.debug("is_systemcol = " + isSystemCol);
+      HEAVYDBLOGGER.debug("is_systemcol = " + isSystemCol);
       boolean isVirtualCol = columnObject.get("is_virtualcol").getAsBoolean();
-      MAPDLOGGER.debug("is_vitrualcol = " + isVirtualCol);
+      HEAVYDBLOGGER.debug("is_vitrualcol = " + isVirtualCol);
       boolean isDeletedCol = columnObject.get("is_deletedcol").getAsBoolean();
-      MAPDLOGGER.debug("is_deletedcol = " + isDeletedCol);
-      MAPDLOGGER.debug("");
+      HEAVYDBLOGGER.debug("is_deletedcol = " + isDeletedCol);
+      HEAVYDBLOGGER.debug("");
 
       if (isDeletedCol) {
-        MAPDLOGGER.debug("Skipping delete column.");
+        HEAVYDBLOGGER.debug("Skipping delete column.");
         continue;
       }
 
@@ -579,7 +594,9 @@ public class MetaConnect {
       }
 
       tti.nullable = !isNotNull;
-      tti.encoding = TEncodingType.NONE;
+      tti.encoding = encodingToThrift(compression);
+      tti.comp_param = compression_param;
+      tti.size = size;
       tti.type = tdt;
       tti.scale = colScale;
       tti.precision = colDim;
@@ -606,15 +623,15 @@ public class MetaConnect {
               tableName));
       while (rs.next()) {
         tableId = rs.getInt("tableid");
-        MAPDLOGGER.debug("tableId = " + tableId);
-        MAPDLOGGER.debug("");
+        HEAVYDBLOGGER.debug("tableId = " + tableId);
+        HEAVYDBLOGGER.debug("");
       }
       rs.close();
       stmt.close();
     } catch (Exception e) {
       String err = "Error trying to read from metadata table mapd_tables;DB: "
               + default_db + " data dir " + dataDir + ", error was " + e.getMessage();
-      MAPDLOGGER.error(err);
+      HEAVYDBLOGGER.error(err);
       throw new RuntimeException(err);
     } finally {
       if (rs != null) {
@@ -622,7 +639,7 @@ public class MetaConnect {
           rs.close();
         } catch (SQLException ex) {
           String err = "Could not close resultset, error was " + ex.getMessage();
-          MAPDLOGGER.error(err);
+          HEAVYDBLOGGER.error(err);
           throw new RuntimeException(err);
         }
       }
@@ -631,7 +648,7 @@ public class MetaConnect {
           stmt.close();
         } catch (SQLException ex) {
           String err = "Could not close stmt, error was " + ex.getMessage();
-          MAPDLOGGER.error(err);
+          HEAVYDBLOGGER.error(err);
           throw new RuntimeException(err);
         }
       }
@@ -650,14 +667,14 @@ public class MetaConnect {
               tableName));
       while (rs.next()) {
         viewFlag = rs.getInt("isview");
-        MAPDLOGGER.debug("viewFlag = " + viewFlag);
-        MAPDLOGGER.debug("");
+        HEAVYDBLOGGER.debug("viewFlag = " + viewFlag);
+        HEAVYDBLOGGER.debug("");
       }
       rs.close();
       stmt.close();
     } catch (Exception e) {
       String err = "error trying to read from mapd_views, error was " + e.getMessage();
-      MAPDLOGGER.error(err);
+      HEAVYDBLOGGER.error(err);
       throw new RuntimeException(err);
     }
     return (viewFlag == 1);
@@ -665,7 +682,7 @@ public class MetaConnect {
 
   private String getViewSql(String tableName) {
     String sqlText;
-    if (mapdPort == -1) {
+    if (dbPort == -1) {
       // use sql
       connectToDBCatalog();
       sqlText = getViewSqlViaSql(getTableId(tableName));
@@ -676,11 +693,11 @@ public class MetaConnect {
         TProtocol protocol = null;
 
         TTransport transport =
-                sock_transport_properties.openClientTransport("localhost", mapdPort);
+                sock_transport_properties.openClientTransport("localhost", dbPort);
         if (!transport.isOpen()) transport.open();
         protocol = new TBinaryProtocol(transport);
 
-        OmniSci.Client client = new OmniSci.Client(protocol);
+        Heavy.Client client = new Heavy.Client(protocol);
         TTableDetails td = client.get_table_details_for_database(
                 currentUser.getSession(), tableName, default_db);
         transport.close();
@@ -688,13 +705,13 @@ public class MetaConnect {
         sqlText = td.getView_sql();
 
       } catch (TTransportException ex) {
-        MAPDLOGGER.error(ex.toString());
+        HEAVYDBLOGGER.error(ex.toString());
         throw new RuntimeException(ex.toString());
-      } catch (TOmniSciException ex) {
-        MAPDLOGGER.error(ex.getError_msg());
+      } catch (TDBException ex) {
+        HEAVYDBLOGGER.error(ex.getError_msg());
         throw new RuntimeException(ex.getError_msg());
       } catch (TException ex) {
-        MAPDLOGGER.error(ex.toString());
+        HEAVYDBLOGGER.error(ex.toString());
         throw new RuntimeException(ex.toString());
       }
     }
@@ -718,19 +735,19 @@ public class MetaConnect {
               tableId));
       while (rs.next()) {
         sqlText = rs.getString("sql");
-        MAPDLOGGER.debug("View definition = " + sqlText);
-        MAPDLOGGER.debug("");
+        HEAVYDBLOGGER.debug("View definition = " + sqlText);
+        HEAVYDBLOGGER.debug("");
       }
       rs.close();
       stmt.close();
     } catch (Exception e) {
       String err = "error trying to read from mapd_views, error was " + e.getMessage();
-      MAPDLOGGER.error(err);
+      HEAVYDBLOGGER.error(err);
       throw new RuntimeException(err);
     }
     if (sqlText == null || sqlText.length() == 0) {
       String err = "No view text found";
-      MAPDLOGGER.error(err);
+      HEAVYDBLOGGER.error(err);
       throw new RuntimeException(err);
     }
     return sqlText;
@@ -773,10 +790,35 @@ public class MetaConnect {
         return TDatumType.POINT;
       case KLINESTRING:
         return TDatumType.LINESTRING;
+      case KMULTILINESTRING:
+        return TDatumType.MULTILINESTRING;
       case KPOLYGON:
         return TDatumType.POLYGON;
       case KMULTIPOLYGON:
         return TDatumType.MULTIPOLYGON;
+      default:
+        return null;
+    }
+  }
+
+  private TEncodingType encodingToThrift(int comp) {
+    switch (comp) {
+      case 0:
+        return TEncodingType.NONE;
+      case 1:
+        return TEncodingType.FIXED;
+      case 2:
+        return TEncodingType.RL;
+      case 3:
+        return TEncodingType.DIFF;
+      case 4:
+        return TEncodingType.DICT;
+      case 5:
+        return TEncodingType.SPARSE;
+      case 6:
+        return TEncodingType.GEOINT;
+      case 7:
+        return TEncodingType.DATE_IN_DAYS;
       default:
         return null;
     }
@@ -789,14 +831,14 @@ public class MetaConnect {
     // as a user may not be able to see all schemas and this sets it for the life
     // of the server.
     // Proceeding this way as a WIP
-    if (mapdPort == 0) {
+    if (dbPort == 0) {
       // seems to be a condition that is expected
       // for FSI testing
       return;
     }
-    if (mapdPort == -1) {
+    if (dbPort == -1) {
       // use sql
-      connectToCatalog("omnisci_system_catalog"); // hardcoded sys catalog
+      connectToCatalog("system_catalog"); // hardcoded sys catalog
       Set<String> dbNames = getDatabases_SQL();
       disconnectFromCatalog();
       for (String dbName : dbNames) {
@@ -809,11 +851,11 @@ public class MetaConnect {
     try {
       TProtocol protocol = null;
       TTransport transport =
-              sock_transport_properties.openClientTransport("localhost", mapdPort);
+              sock_transport_properties.openClientTransport("localhost", dbPort);
       if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
-      OmniSci.Client client = new OmniSci.Client(protocol);
+      Heavy.Client client = new Heavy.Client(protocol);
 
       List<TDBInfo> dbList = client.get_databases(currentUser.getSession());
       for (TDBInfo dbInfo : dbList) {
@@ -823,14 +865,14 @@ public class MetaConnect {
       transport.close();
 
     } catch (TTransportException ex) {
-      MAPDLOGGER.error("TTransportException on port [" + mapdPort + "]");
-      MAPDLOGGER.error(ex.toString());
+      HEAVYDBLOGGER.error("TTransportException on port [" + dbPort + "]");
+      HEAVYDBLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
-    } catch (TOmniSciException ex) {
-      MAPDLOGGER.error(ex.getError_msg());
+    } catch (TDBException ex) {
+      HEAVYDBLOGGER.error(ex.getError_msg());
       throw new RuntimeException(ex.getError_msg());
     } catch (TException ex) {
-      MAPDLOGGER.error(ex.toString());
+      HEAVYDBLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
     }
   }
@@ -848,14 +890,14 @@ public class MetaConnect {
       while (rs.next()) {
         dbSet.add(rs.getString("name"));
         /*--*/
-        MAPDLOGGER.debug("Object name = " + rs.getString("name"));
+        HEAVYDBLOGGER.debug("Object name = " + rs.getString("name"));
       }
       rs.close();
       stmt.close();
 
     } catch (Exception e) {
       String err = "error trying to get all the databases, error was " + e.getMessage();
-      MAPDLOGGER.error(err);
+      HEAVYDBLOGGER.error(err);
       throw new RuntimeException(err);
     }
     return dbSet;
@@ -868,36 +910,36 @@ public class MetaConnect {
     if (table.equals("")) {
       // Drop db and all tables
       // iterate through all and remove matching schema
-      Set<List<String>> all = new HashSet<>(MAPD_TABLE_DETAILS.keySet());
+      Set<List<String>> all = new HashSet<>(DB_TABLE_DETAILS.keySet());
       for (List<String> keys : all) {
         if (keys.get(0).equals(schema.toUpperCase())) {
-          MAPDLOGGER.debug(
+          HEAVYDBLOGGER.debug(
                   "removing all for schema " + keys.get(0) + " table " + keys.get(1));
-          MAPD_TABLE_DETAILS.remove(keys);
+          DB_TABLE_DETAILS.remove(keys);
         }
       }
     } else {
-      MAPDLOGGER.debug("removing schema " + schema.toUpperCase() + " table "
+      HEAVYDBLOGGER.debug("removing schema " + schema.toUpperCase() + " table "
               + table.toUpperCase());
-      MAPD_TABLE_DETAILS.remove(
+      DB_TABLE_DETAILS.remove(
               ImmutableList.of(schema.toUpperCase(), table.toUpperCase()));
     }
     // Invalidate views
-    Set<List<String>> all = new HashSet<>(MAPD_TABLE_DETAILS.keySet());
+    Set<List<String>> all = new HashSet<>(DB_TABLE_DETAILS.keySet());
     for (List<String> keys : all) {
       if (keys.get(0).equals(schema.toUpperCase())) {
-        Table ttable = MAPD_TABLE_DETAILS.get(keys);
-        if (ttable instanceof MapDView) {
-          MAPDLOGGER.debug(
+        Table ttable = DB_TABLE_DETAILS.get(keys);
+        if (ttable instanceof HeavyDBView) {
+          HEAVYDBLOGGER.debug(
                   "removing view in schema " + keys.get(0) + " view " + keys.get(1));
-          MAPD_TABLE_DETAILS.remove(keys);
+          DB_TABLE_DETAILS.remove(keys);
         }
       }
     }
     // Could be a removal or an add request for a DB
     Set<String> mSet = DATABASE_TO_TABLES.get(schema.toUpperCase());
     if (mSet != null) {
-      MAPDLOGGER.debug("removing schema " + schema.toUpperCase());
+      HEAVYDBLOGGER.debug("removing schema " + schema.toUpperCase());
       DATABASE_TO_TABLES.remove(schema.toUpperCase());
     } else {
       // add a empty database descriptor for new DB, it will be lazily populated when

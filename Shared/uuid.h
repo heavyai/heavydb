@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 /**
  * @file    uuid.h
- * @author  Steve Blackmon <steve.blackmon@omnisci.com>
  * @brief   No-frills UUID type class to allow easy containerization and comparison of
  *          device UUIDs from different APIs.
  *
@@ -30,7 +29,7 @@
 #include <iterator>
 #include <sstream>
 
-namespace omnisci {
+namespace heavyai {
 
 class UUID {
   using value_type = uint8_t;
@@ -39,7 +38,7 @@ class UUID {
   // Constructors
   constexpr UUID() noexcept : data_({}) {}
 
-  // copy from value_type[16] (OpenGL / Vulkan)
+  // copy from value_type[16] (Vulkan)
   explicit UUID(const value_type (&arr)[16]) noexcept {
     std::copy(std::cbegin(arr), std::cend(arr), std::begin(data_));
   }
@@ -116,4 +115,4 @@ inline std::string to_string(const UUID& uuid) {
 
 constexpr UUID empty_uuid{};
 
-}  // namespace omnisci
+}  // namespace heavyai

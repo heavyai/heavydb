@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-/*
+/**
  * @file    InPlaceSortImpl.h
- * @author  Alex Suhan <alex@mapd.com>
+ * @brief
  *
- * Copyright (c) 2015 MapD Technologies, Inc.  All rights reserved.
  */
 
 #ifndef INPLACESORTIMPL_H
@@ -33,7 +32,8 @@ void sort_on_gpu(int64_t* val_buff,
                  const uint64_t entry_count,
                  const bool desc,
                  const uint32_t chosen_bytes,
-                 ThrustAllocator& alloc);
+                 ThrustAllocator& alloc,
+                 const int device_id);
 
 void sort_on_cpu(int64_t* val_buff,
                  int32_t* key_buff,
@@ -45,7 +45,8 @@ void apply_permutation_on_gpu(int64_t* val_buff,
                               int32_t* idx_buff,
                               const uint64_t entry_count,
                               const uint32_t chosen_bytes,
-                              ThrustAllocator& alloc);
+                              ThrustAllocator& alloc,
+                              const int device_id);
 
 void apply_permutation_on_cpu(int64_t* val_buff,
                               int32_t* idx_buff,

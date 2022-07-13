@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 /*
  * @file RasterImporter.cpp
- * @author Simon Eves <simon.eves@omnisci.com>
  * @brief GDAL Raster File Importer
+ *
  */
 
 #include "ImportExport/RasterImporter.h"
@@ -265,7 +265,8 @@ void RasterImporter::detect(const std::string& file_name,
                             const PointType point_type,
                             const PointTransform point_transform,
                             const bool point_compute_angle,
-                            const bool throw_on_error) {
+                            const bool throw_on_error,
+                            const MetadataColumnInfos& metadata_column_infos) {
   // open base file to check for subdatasources
   bool has_spatial_reference{false};
   {
@@ -417,7 +418,8 @@ void RasterImporter::detect(const std::string& file_name,
   };
 
   // initialize filtering
-  initializeFiltering(specified_band_names, specified_band_dimensions);
+  initializeFiltering(
+      specified_band_names, specified_band_dimensions, metadata_column_infos);
 
   // process datasources
   uint32_t datasource_idx{0u};
@@ -876,8 +878,10 @@ void RasterImporter::getRawBandNamesForFormat(
   }
 }
 
-void RasterImporter::initializeFiltering(const std::string& specified_band_names,
-                                         const std::string& specified_band_dimensions) {
+void RasterImporter::initializeFiltering(
+    const std::string& specified_band_names,
+    const std::string& specified_band_dimensions,
+    const MetadataColumnInfos& metadata_column_infos) {
   // specified names?
   if (specified_band_names.length()) {
     // tokenize names
@@ -906,7 +910,8 @@ void RasterImporter::initializeFiltering(const std::string& specified_band_names
   // in case there are bands with the same name
   auto const names_and_sql_types = getPointNamesAndSQLTypes();
   for (auto const& name_and_sql_type : names_and_sql_types) {
-    column_name_repeats_map_.emplace(name_and_sql_type.first, 1);
+    column_name_repeats_map_.emplace(
+        boost::algorithm::to_lower_copy(name_and_sql_type.first), 1);
   }
 
   // specified band dimensions?
@@ -935,6 +940,19 @@ void RasterImporter::initializeFiltering(const std::string& specified_band_names
       throw std::runtime_error("Raster Importer: Out-of-range specified dimensions (" +
                                std::string(e.what()) + ")");
     }
+  }
+
+  // also any metadata column names
+  for (auto const& mci : metadata_column_infos) {
+    auto column_name_lower =
+        boost::algorithm::to_lower_copy(mci.column_descriptor.columnName);
+    if (column_name_repeats_map_.find(column_name_lower) !=
+        column_name_repeats_map_.end()) {
+      throw std::runtime_error("Invalid metadata column name '" +
+                               mci.column_descriptor.columnName +
+                               "' (clashes with existing column name)");
+    }
+    column_name_repeats_map_.emplace(column_name_lower, 1);
   }
 }
 
@@ -980,12 +998,13 @@ std::string RasterImporter::getBandName(const uint32_t datasource_idx,
   }
 
   // additional suffix if not unique
-  auto itr = column_name_repeats_map_.find(band_name);
+  auto band_name_lower = boost::algorithm::to_lower_copy(band_name);
+  auto itr = column_name_repeats_map_.find(band_name_lower);
   if (itr != column_name_repeats_map_.end()) {
     auto const suffix = ++(itr->second);
     band_name += "_" + std::to_string(suffix);
   } else {
-    column_name_repeats_map_.emplace(band_name, 1);
+    column_name_repeats_map_.emplace(band_name_lower, 1);
   }
 
   // sanitize and return

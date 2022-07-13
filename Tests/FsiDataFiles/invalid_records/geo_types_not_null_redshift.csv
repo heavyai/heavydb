@@ -1,0 +1,6 @@
+index,point,linestring,polygon,multipolygon
+1, ST_GeomFromText("POINT (0 0)"), "LINESTRING (0 0,0 0)", ST_GeomFromText("POLYGON ((0 0,1 0,1 1,0 1,0 0))"), ST_GeomFromText("MULTIPOLYGON (((0 0,1 0,0 1,0 0)))")
+2,NULL, "LINESTRING (0 0,0 0)", ST_GeomFromText("POLYGON ((0 0,1 0,1 1,0 1,0 0))"), ST_GeomFromText("MULTIPOLYGON (((0 0,1 0,0 1,0 0)))")
+3, ST_GeomFromText("POINT (0 0)"),NULL, ST_GeomFromText("POLYGON ((0 0,1 0,1 1,0 1,0 0))"), ST_GeomFromText("MULTIPOLYGON (((0 0,1 0,0 1,0 0)))")
+4, ST_GeomFromText("POINT (0 0)"), "LINESTRING (0 0,0 0)",NULL, ST_GeomFromText("MULTIPOLYGON (((0 0,1 0,0 1,0 0)))")
+5, ST_GeomFromText("POINT (0 0)"), "LINESTRING (0 0,0 0)", ST_GeomFromText("POLYGON ((0 0,1 0,1 1,0 1,0 0))"),NULL

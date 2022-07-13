@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,21 +19,10 @@
 
 #ifndef __CUDACC__
 #include <boost/config.hpp>
-#if defined(_WIN32) && !defined(WIN32_LEAN_AND_MEAN)
-// boost/regex.hpp on win32 includes Windows.h
-// and we need to clean up macros such as ERROR and GetObject
-#define WIN32_LEAN_AND_MEAN
-#endif
-
-#include <boost/regex.hpp>
-
-#if defined(_WIN32)
-#include "Shared/cleanup_global_namespace.h"
-#undef WIN32_LEAN_AND_MEAN
-#endif
-
 #include <optional>
 #include <string_view>
+
+#include "Shared/clean_boost_regex.hpp"
 #endif  // __CUDACC__
 
 #include <algorithm>
@@ -118,6 +107,9 @@ std::string generate_random_string(const size_t len);
 std::vector<std::string> split(std::string_view str,
                                std::string_view delim = {},
                                std::optional<size_t> maxsplit = std::nullopt);
+
+//! return trimmed string_view
+std::string_view sv_strip(std::string_view str);
 
 //! trim any whitespace from the left and right ends of a string
 std::string strip(std::string_view str);

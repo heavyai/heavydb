@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@
 #include "../Catalog/Catalog.h"
 #include "../Catalog/DBObject.h"
 #include "../DataMgr/DataMgr.h"
-#include "../Parser/parser.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "ThriftHandler/QueryState.h"
 #include "gen-cpp/CalciteServer.h"
@@ -97,7 +96,7 @@ TEST_F(ViewObject, BasicTest) {
   auto calciteQueryParsingOption =
       g_calcite->getCalciteQueryParsingOption(true, false, true);
   auto calciteOptimizationOption =
-      g_calcite->getCalciteOptimizationOption(false, false, {});
+      g_calcite->getCalciteOptimizationOption(false, false, {}, false);
 
   auto qs1 = QR::create_query_state(session, "select i1 from table1");
   TPlanResult tresult = g_calcite->process(qs1->createQueryStateProxy(),
@@ -147,7 +146,7 @@ TEST_F(ViewObject, Joins) {
   auto calciteQueryParsingOption =
       g_calcite->getCalciteQueryParsingOption(true, false, true);
   auto calciteOptimizationOption =
-      g_calcite->getCalciteOptimizationOption(true, false, {});
+      g_calcite->getCalciteOptimizationOption(true, false, {}, false);
 
   {
     auto qs1 = QR::create_query_state(
@@ -193,11 +192,12 @@ int main(int argc, char* argv[]) {
     LOG(ERROR) << e.what();
   }
 
-  Catalog_Namespace::SysCatalog::instance().dropUser(TEST_USER);
   Catalog_Namespace::DBMetadata db_metadata;
   if (Catalog_Namespace::SysCatalog::instance().getMetadataForDB(TEST_DB, db_metadata)) {
     Catalog_Namespace::SysCatalog::instance().dropDatabase(db_metadata);
   }
+  Catalog_Namespace::SysCatalog::instance().dropUser(TEST_USER);
+
   QR::reset();
   return err;
 }

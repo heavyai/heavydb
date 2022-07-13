@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 /**
  * @file    SysCatalog.h
- * @author  Todd Mostak <todd@map-d.com>, Wei Hong <wei@map-d.com>
  * @brief   This file contains the class specification and related data structures for
  * SysCatalog.
  *
@@ -47,15 +46,14 @@
 #include "ObjectRoleDescriptor.h"
 #include "PkiServer.h"
 
-#include "../DataMgr/DataMgr.h"
-#include "../SqliteConnector/SqliteConnector.h"
+#include "Calcite/Calcite.h"
+#include "DataMgr/DataMgr.h"
 #include "LeafHostInfo.h"
-
-#include "../Calcite/Calcite.h"
-#include "Shared/mapd_shared_mutex.h"
-
-#include "Catalog/SysDefinitions.h"
-// "information_schema_db_created";
+#include "MigrationMgr/MigrationMgr.h"
+#include "OSDependent/heavyai_locks.h"
+#include "Shared/SysDefinitions.h"
+#include "Shared/heavyai_shared_mutex.h"
+#include "SqliteConnector/SqliteConnector.h"
 
 class Calcite;
 
@@ -107,12 +105,22 @@ struct UserMetadata {
   std::string userName;
   std::string passwd_hash;
   std::atomic<bool> isSuper{false};
-  int32_t defaultDbId;
+  int32_t defaultDbId{-1};
   bool can_login{true};
   bool is_temporary{false};
 
   // Return a string that is safe to log for the username based on --log-user-id.
   std::string userLoggable() const;
+};
+
+struct UserAlterations {
+  std::optional<std::string> passwd;
+  std::optional<bool> is_super;
+  std::optional<std::string> default_db;
+  std::optional<bool> can_login;
+
+  bool wouldChange(UserMetadata const& user_meta) const;
+  std::string toString(bool hide_password = true) const;
 };
 
 /*
@@ -177,22 +185,43 @@ class SysCatalog : private CommonFileOperations {
                                  bool check_password = true);
   std::shared_ptr<Catalog> switchDatabase(std::string& dbname,
                                           const std::string& username);
-  void createUser(const std::string& name,
-                  const std::string& passwd,
-                  bool is_super,
-                  const std::string& dbname,
-                  bool can_login,
-                  bool is_temporary);
+  UserMetadata createUser(std::string const& name,
+                          UserAlterations alts,
+                          bool is_temporary);
   void dropUser(const std::string& name);
-  void alterUser(const std::string& name,
-                 const std::string* passwd,
-                 bool* issuper,
-                 const std::string* dbname,
-                 bool* can_login);
+  // TODO(Misiu): This method is needed only by tests and should otherwise be private and
+  // accessed via friendship.
+  void dropUserUnchecked(const std::string& name, const UserMetadata& user);
+  UserMetadata alterUser(std::string const& name, UserAlterations alts);
   void renameUser(std::string const& old_name, std::string const& new_name);
   void createDatabase(const std::string& dbname, int owner);
   void renameDatabase(std::string const& old_name, std::string const& new_name);
+  void changeDatabaseOwner(std::string const& dbname, const std::string& new_owner);
   void dropDatabase(const DBMetadata& db);
+  std::optional<UserMetadata> getUser(std::string const& uname) {
+    if (UserMetadata user; getMetadataForUser(uname, user)) {
+      return user;
+    }
+    return {};
+  }
+  std::optional<UserMetadata> getUser(int32_t const uid) {
+    if (UserMetadata user; getMetadataForUserById(uid, user)) {
+      return user;
+    }
+    return {};
+  }
+  std::optional<DBMetadata> getDB(std::string const& dbname) {
+    if (DBMetadata db; getMetadataForDB(dbname, db)) {
+      return db;
+    }
+    return {};
+  }
+  std::optional<DBMetadata> getDB(int32_t const dbid) {
+    if (DBMetadata db; getMetadataForDBById(dbid, db)) {
+      return db;
+    }
+    return {};
+  }
   bool getMetadataForUser(const std::string& name, UserMetadata& user);
   bool getMetadataForUserById(const int32_t idIn, UserMetadata& user);
   bool checkPasswordForUser(const std::string& passwd,
@@ -310,28 +339,30 @@ class SysCatalog : private CommonFileOperations {
   std::set<std::string> getCreatedRoles() const;
   bool isAggregator() const { return aggregator_; }
   static SysCatalog& instance() {
+    std::unique_lock lk(instance_mutex_);
     if (!instance_) {
       instance_.reset(new SysCatalog());
     }
     return *instance_;
   }
 
-  static void destroy() { instance_.reset(); }
+  static void destroy() {
+    std::unique_lock lk(instance_mutex_);
+    instance_.reset();
+    migrations::MigrationMgr::destroy();
+  }
 
   void populateRoleDbObjects(const std::vector<DBObject>& objects);
-  std::string name() const { return OMNISCI_DEFAULT_DB; }
+  std::string name() const { return shared::kDefaultDbName; }
   void renameObjectsInDescriptorMap(DBObject& object,
                                     const Catalog_Namespace::Catalog& cat);
   void syncUserWithRemoteProvider(const std::string& user_name,
                                   std::vector<std::string> idp_roles,
-                                  bool* issuper,
-                                  const std::string& default_db = {});
+                                  UserAlterations alts);
   std::unordered_map<std::string, std::vector<std::string>> getGranteesOfSharedDashboards(
       const std::vector<std::string>& dashboard_ids);
   void check_for_session_encryption(const std::string& pki_cert, std::string& session);
   std::vector<Catalog*> getCatalogsForAllDbs();
-
-  std::shared_ptr<Catalog> getDummyCatalog() { return dummyCatalog_; }
 
   std::shared_ptr<Catalog> getCatalog(const std::string& dbName);
   std::shared_ptr<Catalog> getCatalog(const int32_t db_id);
@@ -365,10 +396,12 @@ class SysCatalog : private CommonFileOperations {
   SysCatalog();
 
   void initDB();
-  void buildRoleMap();
-  void buildUserRoleMap();
-  void buildObjectDescriptorMap();
-  void rebuildObjectMaps();
+  void buildMaps(bool is_new_db = false);
+  void buildMapsUnlocked(bool is_new_db = false);
+  void buildRoleMapUnlocked();
+  void buildUserRoleMapUnlocked();
+  void buildObjectDescriptorMapUnlocked();
+  void rebuildObjectMapsUnlocked();
   void checkAndExecuteMigrations();
   void importDataFromOldMapdDB();
   void createRoles();
@@ -387,6 +420,18 @@ class SysCatalog : private CommonFileOperations {
   bool checkPasswordForUserImpl(const std::string& passwd,
                                 std::string& name,
                                 UserMetadata& user);
+
+  struct UpdateQuery {
+    std::string query;
+    std::vector<std::string> text_params;
+  };
+  using UpdateQueries = std::list<UpdateQuery>;
+  void runUpdateQueriesAndChangeOwnership(const UserMetadata& new_owner,
+                                          const UserMetadata& previous_owner,
+                                          DBObject object,
+                                          const Catalog_Namespace::Catalog& catalog,
+                                          const UpdateQueries& update_queries,
+                                          bool revoke_privileges = true);
 
   // Here go functions not wrapped into transactions (necessary for nested calls)
   void grantDefaultPrivilegesToRole_unsafe(const std::string& name, bool issuper);
@@ -470,11 +515,14 @@ class SysCatalog : private CommonFileOperations {
   using dbid_to_cat_map = tbb::concurrent_hash_map<std::string, std::shared_ptr<Catalog>>;
   dbid_to_cat_map cat_map_;
 
+  static std::mutex instance_mutex_;
   static std::unique_ptr<SysCatalog> instance_;
 
  public:
+  mutable std::unique_ptr<heavyai::DistributedSharedMutex> dcatalogMutex_;
+  mutable std::unique_ptr<heavyai::DistributedSharedMutex> dsqliteMutex_;
   mutable std::mutex sqliteMutex_;
-  mutable mapd_shared_mutex sharedMutex_;
+  mutable heavyai::shared_mutex sharedMutex_;
   mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;
   mutable std::atomic<std::thread::id> thread_holding_write_lock;
   static thread_local bool thread_holds_read_lock;
@@ -482,7 +530,7 @@ class SysCatalog : private CommonFileOperations {
   std::shared_ptr<Catalog> dummyCatalog_;
   std::unordered_map<std::string, std::shared_ptr<UserMetadata>> temporary_users_by_name_;
   std::unordered_map<int32_t, std::shared_ptr<UserMetadata>> temporary_users_by_id_;
-  int32_t next_temporary_user_id_{OMNISCI_TEMPORARY_USER_ID_RANGE};
+  int32_t next_temporary_user_id_{shared::kTempUserIdRange};
 };
 
 }  // namespace Catalog_Namespace

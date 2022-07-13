@@ -1,0 +1,16 @@
+[Unit]
+Description=HEAVY.AI HeavyDB database server
+After=network.target remote-fs.target
+
+[Service]
+User=@HEAVYAI_USER@
+Group=@HEAVYAI_GROUP@
+WorkingDirectory=@HEAVYAI_PATH@
+ExecStart=@HEAVYAI_PATH@/bin/heavydb --config @HEAVYAI_BASE@/heavy.conf
+KillMode=control-group
+SuccessExitStatus=143
+LimitNOFILE=65536
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

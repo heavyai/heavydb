@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include "DataMgr/ForeignStorage/CsvFileBufferParser.h"
+#include "DataMgr/ForeignStorage/AbstractFileStorageDataWrapper.h"
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "ImportExport/Importer.h"
@@ -147,14 +148,18 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
     }
   }
 
+  size_t current_row_id = 0;
   size_t row_count = 0;
   size_t remaining_row_count = request.process_row_count;
   std::vector<size_t> row_offsets{};
   row_offsets.emplace_back(request.file_offset + (p - request.buffer.get()));
 
+  ParseBufferResult result{};
+
   std::string file_path = request.getFilePath();
   for (; p < thread_buf_end && remaining_row_count > 0; p++, remaining_row_count--) {
     row.clear();
+    current_row_id = row_count;
     row_count++;
     std::vector<std::unique_ptr<char[]>>
         tmp_buffers;  // holds string w/ removed escape chars, etc
@@ -170,35 +175,77 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
                                                  !columns_are_pre_filtered);
 
     row_index_plus_one++;
-    validate_expected_column_count(row, num_cols, point_cols, file_path);
+
+    bool incorrect_column_count = false;
+    try {
+      validate_expected_column_count(row, num_cols, point_cols, file_path);
+    } catch (const ForeignStorageException& e) {
+      if (request.track_rejected_rows) {
+        result.rejected_rows.insert(current_row_id);
+        incorrect_column_count = true;
+      } else {
+        throw;
+      }
+    }
 
     size_t import_idx = 0;
     size_t col_idx = 0;
+
     try {
       auto columns = request.getColumns();
-      for (auto cd_it = columns.begin(); cd_it != columns.end(); cd_it++) {
+      if (incorrect_column_count) {
+        auto cd_it = columns.begin();
+        fillRejectedRowWithInvalidData(columns, cd_it, 0, request);
+        continue;
+      }
+      for (auto cd_it = columns.begin(); cd_it != columns.end(); ++cd_it) {
         auto cd = *cd_it;
         const auto& col_ti = cd->columnType;
         bool column_is_present =
             !(skip_column_import(request, col_idx) && columns_are_pre_filtered);
         CHECK(row.size() > import_idx || !column_is_present);
-        bool is_null =
-            column_is_present
-                ? isNullDatum(row[import_idx], cd, request.copy_params.null_str)
-                : true;
-
+        bool is_null = false;
+        try {
+          is_null = column_is_present
+                        ? isNullDatum(row[import_idx], cd, request.copy_params.null_str)
+                        : true;
+        } catch (const std::exception& e) {
+          if (request.track_rejected_rows) {
+            result.rejected_rows.insert(current_row_id);
+            fillRejectedRowWithInvalidData(columns, cd_it, col_idx, request);
+            break;  // skip rest of row
+          } else {
+            throw;
+          }
+        }
+        if (!col_ti.is_string() && !request.copy_params.trim_spaces) {
+          // everything but strings should be always trimmed
+          row[import_idx] = sv_strip(row[import_idx]);
+        }
         if (col_ti.is_geometry()) {
           if (!skip_column_import(request, col_idx)) {
-            processGeoColumn(request.import_buffers,
-                             col_idx,
-                             request.copy_params,
-                             cd_it,
-                             row,
-                             import_idx,
-                             is_null,
-                             request.first_row_index,
-                             row_index_plus_one,
-                             request.getCatalog());
+            auto starting_col_idx = col_idx;
+            try {
+              processGeoColumn(request.import_buffers,
+                               col_idx,
+                               request.copy_params,
+                               cd_it,
+                               row,
+                               import_idx,
+                               is_null,
+                               request.first_row_index,
+                               row_index_plus_one,
+                               request.getCatalog(),
+                               request.render_group_analyzer_map);
+            } catch (const std::exception& e) {
+              if (request.track_rejected_rows) {
+                result.rejected_rows.insert(current_row_id);
+                fillRejectedRowWithInvalidData(columns, cd_it, starting_col_idx, request);
+                break;  // skip rest of row
+              } else {
+                throw;
+              }
+            }
           } else {
             // update import/col idx according to types
             if (!is_null && cd->columnType == kPOINT &&
@@ -219,8 +266,18 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
           }
         } else {
           if (!skip_column_import(request, col_idx)) {
-            request.import_buffers[col_idx]->add_value(
-                cd, row[import_idx], is_null, request.copy_params);
+            try {
+              request.import_buffers[col_idx]->add_value(
+                  cd, row[import_idx], is_null, request.copy_params);
+            } catch (const std::exception& e) {
+              if (request.track_rejected_rows) {
+                result.rejected_rows.insert(current_row_id);
+                fillRejectedRowWithInvalidData(columns, cd_it, col_idx, request);
+                break;  // skip rest of row
+              } else {
+                throw;
+              }
+            }
           }
           if (column_is_present) {
             ++import_idx;
@@ -236,7 +293,6 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
   }
   row_offsets.emplace_back(request.file_offset + (p - request.buffer.get()));
 
-  ParseBufferResult result{};
   result.row_offsets = row_offsets;
   result.row_count = row_count;
   if (convert_data_blocks) {
@@ -278,30 +334,15 @@ import_export::CopyParams CsvFileBufferParser::validateAndGetCopyParams(
     const ForeignTable* foreign_table) const {
   import_export::CopyParams copy_params{};
   copy_params.plain_text = true;
-  if (const auto& value =
-          validate_and_get_string_with_length(foreign_table, "ARRAY_DELIMITER", 1);
-      !value.empty()) {
-    copy_params.array_delim = value[0];
-  }
-  if (const auto& value =
-          validate_and_get_string_with_length(foreign_table, "ARRAY_MARKER", 2);
-      !value.empty()) {
-    copy_params.array_begin = value[0];
-    copy_params.array_end = value[1];
-  }
-  if (auto it = foreign_table->options.find("BUFFER_SIZE");
-      it != foreign_table->options.end()) {
-    copy_params.buffer_size = std::stoi(it->second);
-  }
-  if (const auto& value = validate_and_get_delimiter(foreign_table, "DELIMITER");
+  if (const auto& value = validate_and_get_delimiter(foreign_table, DELIMITER_KEY);
       !value.empty()) {
     copy_params.delimiter = value[0];
   }
-  if (const auto& value = validate_and_get_string_with_length(foreign_table, "ESCAPE", 1);
-      !value.empty()) {
-    copy_params.escape = value[0];
+  if (auto it = foreign_table->options.find(NULLS_KEY);
+      it != foreign_table->options.end()) {
+    copy_params.null_str = it->second;
   }
-  auto has_header = validate_and_get_bool_value(foreign_table, "HEADER");
+  auto has_header = validate_and_get_bool_value(foreign_table, HEADER_KEY);
   if (has_header.has_value()) {
     if (has_header.value()) {
       copy_params.has_header = import_export::ImportHeaderRow::kHasHeader;
@@ -309,23 +350,57 @@ import_export::CopyParams CsvFileBufferParser::validateAndGetCopyParams(
       copy_params.has_header = import_export::ImportHeaderRow::kNoHeader;
     }
   }
-  if (const auto& value = validate_and_get_delimiter(foreign_table, "LINE_DELIMITER");
-      !value.empty()) {
-    copy_params.line_delim = value[0];
-  }
-  copy_params.lonlat =
-      validate_and_get_bool_value(foreign_table, "LONLAT").value_or(copy_params.lonlat);
-
-  if (auto it = foreign_table->options.find("NULLS");
-      it != foreign_table->options.end()) {
-    copy_params.null_str = it->second;
-  }
-  if (const auto& value = validate_and_get_string_with_length(foreign_table, "QUOTE", 1);
+  copy_params.quoted =
+      validate_and_get_bool_value(foreign_table, QUOTED_KEY).value_or(copy_params.quoted);
+  if (const auto& value =
+          validate_and_get_string_with_length(foreign_table, QUOTE_KEY, 1);
       !value.empty()) {
     copy_params.quote = value[0];
   }
-  copy_params.quoted =
-      validate_and_get_bool_value(foreign_table, "QUOTED").value_or(copy_params.quoted);
+  if (const auto& value =
+          validate_and_get_string_with_length(foreign_table, ESCAPE_KEY, 1);
+      !value.empty()) {
+    copy_params.escape = value[0];
+  }
+  if (const auto& value = validate_and_get_delimiter(foreign_table, LINE_DELIMITER_KEY);
+      !value.empty()) {
+    copy_params.line_delim = value[0];
+  }
+  if (const auto& value =
+          validate_and_get_string_with_length(foreign_table, ARRAY_DELIMITER_KEY, 1);
+      !value.empty()) {
+    copy_params.array_delim = value[0];
+  }
+  if (const auto& value =
+          validate_and_get_string_with_length(foreign_table, ARRAY_MARKER_KEY, 2);
+      !value.empty()) {
+    copy_params.array_begin = value[0];
+    copy_params.array_end = value[1];
+  }
+  copy_params.lonlat =
+      validate_and_get_bool_value(foreign_table, LONLAT_KEY).value_or(copy_params.lonlat);
+  copy_params.geo_assign_render_groups =
+      validate_and_get_bool_value(foreign_table, GEO_ASSIGN_RENDER_GROUPS_KEY)
+          .value_or(copy_params.geo_assign_render_groups);
+  copy_params.geo_explode_collections =
+      validate_and_get_bool_value(foreign_table, GEO_EXPLODE_COLLECTIONS_KEY)
+          .value_or(copy_params.geo_explode_collections);
+  if (auto it = foreign_table->options.find(SOURCE_SRID_KEY);
+      it != foreign_table->options.end()) {
+    copy_params.source_srid = std::stoi(it->second);
+  }
+
+  if (auto it = foreign_table->options.find(BUFFER_SIZE_KEY);
+      it != foreign_table->options.end()) {
+    copy_params.buffer_size = std::stoi(it->second);
+  }
+  if (auto it = foreign_table->options.find(AbstractFileStorageDataWrapper::THREADS_KEY);
+      it != foreign_table->options.end()) {
+    copy_params.threads = std::stoi(it->second);
+  }
+  copy_params.trim_spaces = validate_and_get_bool_value(foreign_table, TRIM_SPACES_KEY)
+                                .value_or(copy_params.trim_spaces);
+
   return copy_params;
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,8 @@
 
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "QueryEngine/GroupByAndAggregate.h"
-#include "QueryEngine/RelAlgDagBuilder.h"
+#include "QueryEngine/QueryPlanDagExtractor.h"
+#include "QueryEngine/RelAlgDag.h"
 
 #include <boost/graph/topological_sort.hpp>
 
@@ -131,41 +132,11 @@ const RelAlgNode* RaExecutionDesc::getBody() const {
 
 namespace {
 
-std::vector<Vertex> merge_sort_with_input(const std::vector<Vertex>& vertices,
-                                          const DAG& graph) {
-  DAG::in_edge_iterator ie_iter, ie_end;
-  std::unordered_set<Vertex> inputs;
-  for (const auto vert : vertices) {
-    if (const auto sort = dynamic_cast<const RelSort*>(graph[vert])) {
-      boost::tie(ie_iter, ie_end) = boost::in_edges(vert, graph);
-      CHECK(size_t(1) == sort->inputCount() && boost::next(ie_iter) == ie_end);
-      const auto in_vert = boost::source(*ie_iter, graph);
-      const auto input = graph[in_vert];
-      if (dynamic_cast<const RelScan*>(input)) {
-        throw std::runtime_error("Standalone sort not supported yet");
-      }
-      if (boost::out_degree(in_vert, graph) > 1) {
-        throw std::runtime_error("Sort's input node used by others not supported yet");
-      }
-      inputs.insert(in_vert);
-    }
-  }
-
-  std::vector<Vertex> new_vertices;
-  for (const auto vert : vertices) {
-    if (inputs.count(vert)) {
-      continue;
-    }
-    new_vertices.push_back(vert);
-  }
-  return new_vertices;
-}
-
-DAG build_dag(const RelAlgNode* sink) {
+DAG build_dag(const RelAlgNode* sink,
+              std::unordered_map<const RelAlgNode*, int>& node_ptr_to_vert_idx) {
   DAG graph(1);
   graph[0] = sink;
-  std::unordered_map<const RelAlgNode*, int> node_ptr_to_vert_idx{
-      std::make_pair(sink, 0)};
+  node_ptr_to_vert_idx.emplace(std::make_pair(sink, 0));
   std::vector<const RelAlgNode*> stack(1, sink);
   while (!stack.empty()) {
     const auto node = stack.back();
@@ -236,23 +207,30 @@ std::unordered_set<Vertex> get_join_vertices(const std::vector<Vertex>& vertices
 }  // namespace
 
 RaExecutionSequence::RaExecutionSequence(const RelAlgNode* sink,
+                                         Executor* executor,
                                          const bool build_sequence) {
   CHECK(sink);
+  CHECK(executor);
   if (dynamic_cast<const RelScan*>(sink) || dynamic_cast<const RelJoin*>(sink)) {
     throw std::runtime_error("Query not supported yet");
   }
-
-  graph_ = build_dag(sink);
+  executor_ = executor;
+  graph_ = build_dag(sink, node_ptr_to_vert_idx_);
 
   boost::topological_sort(graph_, std::back_inserter(ordering_));
   std::reverse(ordering_.begin(), ordering_.end());
 
-  ordering_ = merge_sort_with_input(ordering_, graph_);
+  ordering_ = mergeSortWithInput(ordering_, graph_);
   joins_ = get_join_vertices(ordering_, graph_);
 
   if (build_sequence) {
     while (next()) {
       // noop
+    }
+    if (g_enable_data_recycler && g_use_query_resultset_cache &&
+        g_allow_query_step_skipping && !has_step_for_union_ && !g_cluster) {
+      extractQueryStepSkippingInfo();
+      skipQuerySteps();
     }
   }
 }
@@ -262,6 +240,18 @@ RaExecutionSequence::RaExecutionSequence(std::unique_ptr<RaExecutionDesc> exec_d
 }
 
 RaExecutionDesc* RaExecutionSequence::next() {
+  auto checkQueryStepSkippable =
+      [&](RelAlgNode const* node, QueryPlanHash key, size_t step_id) {
+        CHECK_GE(step_id, 0);
+        if (executor_->getRecultSetRecyclerHolder().hasCachedQueryResultSet(key)) {
+          cached_query_steps_.insert(step_id);
+          cached_resultset_keys_.emplace(-node->getId(), key);
+          const auto output_meta_info =
+              executor_->getRecultSetRecyclerHolder().getOutputMetaInfo(key);
+          CHECK(output_meta_info);
+          node->setOutputMetainfo(*output_meta_info);
+        }
+      };
   while (current_vertex_ < ordering_.size()) {
     auto vert = ordering_[current_vertex_++];
     if (joins_.count(vert)) {
@@ -274,9 +264,53 @@ RaExecutionDesc* RaExecutionSequence::next() {
       continue;
     }
     descs_.emplace_back(std::make_unique<RaExecutionDesc>(node));
+    auto logical_union = dynamic_cast<const RelLogicalUnion*>(node);
+    if (logical_union) {
+      has_step_for_union_ = true;
+    }
+    auto extracted_query_plan_dag =
+        QueryPlanDagExtractor::extractQueryPlanDag(node, executor_);
+    if (g_allow_query_step_skipping &&
+        !boost::iequals(extracted_query_plan_dag.extracted_dag, EMPTY_QUERY_PLAN)) {
+      checkQueryStepSkippable(node, node->getQueryPlanDagHash(), descs_.size() - 1);
+    }
     return descs_.back().get();
   }
   return nullptr;
+}
+
+std::vector<Vertex> RaExecutionSequence::mergeSortWithInput(
+    const std::vector<Vertex>& vertices,
+    const DAG& graph) {
+  DAG::in_edge_iterator ie_iter, ie_end;
+  std::unordered_set<Vertex> inputs;
+  for (const auto vert : vertices) {
+    if (const auto sort = dynamic_cast<const RelSort*>(graph[vert])) {
+      boost::tie(ie_iter, ie_end) = boost::in_edges(vert, graph);
+      CHECK(size_t(1) == sort->inputCount() && boost::next(ie_iter) == ie_end);
+      if (sort->isLimitDelivered()) {
+        has_limit_clause_ = true;
+      }
+      const auto in_vert = boost::source(*ie_iter, graph);
+      const auto input = graph[in_vert];
+      if (dynamic_cast<const RelScan*>(input)) {
+        throw std::runtime_error("Standalone sort not supported yet");
+      }
+      if (boost::out_degree(in_vert, graph) > 1) {
+        throw std::runtime_error("Sort's input node used by others not supported yet");
+      }
+      inputs.insert(in_vert);
+    }
+  }
+
+  std::vector<Vertex> new_vertices;
+  for (const auto vert : vertices) {
+    if (inputs.count(vert)) {
+      continue;
+    }
+    new_vertices.push_back(vert);
+  }
+  return new_vertices;
 }
 
 RaExecutionDesc* RaExecutionSequence::prev() {
@@ -289,6 +323,96 @@ RaExecutionDesc* RaExecutionSequence::prev() {
   CHECK_GE(descs_.size(), size_t(2));
   auto itr = descs_.rbegin();
   return (++itr)->get();
+}
+
+void RaExecutionSequence::extractQueryStepSkippingInfo() {
+  const auto pushChildNodes = [&](auto& stack, const auto node_id) {
+    auto [in_edge_iter, in_edge_end] = boost::in_edges(node_id, graph_);
+    while (in_edge_iter != in_edge_end) {
+      const auto child_node_id = boost::source(*in_edge_iter, graph_);
+      stack.push(graph_[child_node_id]);
+      std::advance(in_edge_iter, 1);
+    }
+  };
+  auto top_node_id = descs_.size() - 1;
+  auto top_res = skippable_steps_.emplace(top_node_id, std::unordered_set<int>{});
+  CHECK(top_res.second);
+  for (auto it = descs_.begin(); it != std::prev(descs_.end()); ++it) {
+    const auto step = it->get();
+    const auto body = step->getBody();
+    const auto step_id = static_cast<int>(std::distance(descs_.begin(), it));
+    auto res = skippable_steps_.emplace(step_id, std::unordered_set<int>{});
+    CHECK(res.second);
+    skippable_steps_[top_node_id].insert(step_id);  // top-desc can skip all child descs
+    std::stack<const RelAlgNode*> stack;
+    pushChildNodes(stack, node_ptr_to_vert_idx_[body]);
+    while (!stack.empty()) {
+      auto child_node = stack.top();
+      stack.pop();
+      // descs_ is based on the topologically sorted (flattened) DAG, so we can limit the
+      // search range for child descs
+      auto is_desc_body = std::find_if(
+          descs_.begin(), it, [&child_node](std::unique_ptr<RaExecutionDesc>& ptr) {
+            return ptr->getBody() == child_node;
+          });
+      if (is_desc_body != it) {
+        // due to the topological sorting of query plan DAG, we can avoid visiting "all"
+        // child nodes
+        const auto child_step_id =
+            static_cast<int>(std::distance(descs_.begin(), is_desc_body));
+        skippable_steps_[step_id].insert(child_step_id);
+        skippable_steps_[step_id].insert(skippable_steps_[child_step_id].begin(),
+                                         skippable_steps_[child_step_id].end());
+      } else {
+        pushChildNodes(stack, node_ptr_to_vert_idx_[child_node]);
+      }
+    }
+  }
+}
+
+void RaExecutionSequence::skipQuerySteps() {
+  CHECK_LE(cached_query_steps_.size(), descs_.size());
+
+  // extract skippable query steps`
+  std::unordered_set<int> skippable_query_steps;
+  for (const auto cached_step_id : cached_query_steps_) {
+    auto it = skippable_steps_.find(cached_step_id);
+    CHECK(it != skippable_steps_.end());
+    const auto& child_steps = it->second;
+    std::for_each(
+        child_steps.begin(), child_steps.end(), [&](const auto& skippable_step_id) {
+          if (skippable_step_id != cached_step_id) {
+            skippable_query_steps.insert(skippable_step_id);
+          }
+        });
+  }
+
+  // modify query step sequence based on the skippable query steps
+  if (!skippable_query_steps.empty()) {
+    std::vector<std::unique_ptr<RaExecutionDesc>> new_descs;
+    for (size_t step_id = 0; step_id < descs_.size(); ++step_id) {
+      const auto body = descs_[step_id]->getBody();
+      if (!skippable_query_steps.count(step_id)) {
+        new_descs.push_back(std::make_unique<RaExecutionDesc>(body));
+      }
+    }
+    const auto prev_num_steps = descs_.size();
+    if (!new_descs.empty()) {
+      std::swap(descs_, new_descs);
+    }
+    VLOG(1) << "Skip " << prev_num_steps - descs_.size() << " query steps from "
+            << prev_num_steps << " steps";
+  }
+
+  for (const auto& desc : descs_) {
+    // remove cached resultset info for each desc since
+    // it is not skipped
+    auto body = desc->getBody();
+    auto it = cached_resultset_keys_.find(-body->getId());
+    if (it != cached_resultset_keys_.end()) {
+      cached_resultset_keys_.erase(it);
+    }
+  }
 }
 
 std::optional<size_t> RaExecutionSequence::nextStepId(const bool after_broadcast) const {

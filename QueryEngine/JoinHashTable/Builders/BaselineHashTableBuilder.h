@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinKeyHandlers.h"
 #include "QueryEngine/JoinHashTable/Runtime/JoinHashTableGpuUtils.h"
+#include "QueryEngine/QueryEngine.h"
 #include "Shared/thread_count.h"
 
 template <typename SIZE,
@@ -36,6 +37,7 @@ int fill_baseline_hash_join_buff(int8_t* hash_buff,
                                  const size_t num_elems,
                                  const int32_t cpu_thread_idx,
                                  const int32_t cpu_thread_count) {
+  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     return fill_baseline_hash_join_buff_32(hash_buff,
                                            entry_count,
@@ -85,6 +87,7 @@ int fill_baseline_hash_join_buff(int8_t* hash_buff,
                                  const size_t num_elems,
                                  const int32_t cpu_thread_idx,
                                  const int32_t cpu_thread_count) {
+  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     return fill_baseline_hash_join_buff_64(hash_buff,
                                            entry_count,
@@ -133,6 +136,7 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                             int* dev_err_buff,
                                             const KEY_HANDLER* key_handler,
                                             const size_t num_elems) {
+  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_baseline_hash_join_buff_on_device_32(hash_buff,
                                               entry_count,
@@ -164,6 +168,7 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                             int* dev_err_buff,
                                             const KEY_HANDLER* key_handler,
                                             const size_t num_elems) {
+  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_baseline_hash_join_buff_on_device_64(hash_buff,
                                               entry_count,
@@ -203,15 +208,14 @@ template <typename SIZE,
 void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const SIZE* composite_key_dict,
                                                     const size_t hash_entry_count,
-                                                    const int32_t invalid_slot_val,
                                                     const size_t key_component_count,
                                                     const KEY_HANDLER* key_handler,
                                                     const size_t num_elems) {
+  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_one_to_many_baseline_hash_table_on_device_32(buff,
                                                       composite_key_dict,
                                                       hash_entry_count,
-                                                      invalid_slot_val,
                                                       key_component_count,
                                                       key_handler,
                                                       num_elems);
@@ -229,46 +233,35 @@ template <typename SIZE,
 void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const SIZE* composite_key_dict,
                                                     const size_t hash_entry_count,
-                                                    const int32_t invalid_slot_val,
                                                     const size_t key_component_count,
                                                     const KEY_HANDLER* key_handler,
                                                     const size_t num_elems) {
+  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
-    fill_one_to_many_baseline_hash_table_on_device_64(buff,
-                                                      composite_key_dict,
-                                                      hash_entry_count,
-                                                      invalid_slot_val,
-                                                      key_handler,
-                                                      num_elems);
+    fill_one_to_many_baseline_hash_table_on_device_64(
+        buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
   } else if constexpr (std::is_same<KEY_HANDLER, RangeKeyHandler>::value) {
-    range_fill_one_to_many_baseline_hash_table_on_device_64(buff,
-                                                            composite_key_dict,
-                                                            hash_entry_count,
-                                                            invalid_slot_val,
-                                                            key_handler,
-                                                            num_elems);
+    range_fill_one_to_many_baseline_hash_table_on_device_64(
+        buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
   } else {
     static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value,
                   "Only Generic, Overlaps, and Range Key Handlers are supported.");
-    overlaps_fill_one_to_many_baseline_hash_table_on_device_64(buff,
-                                                               composite_key_dict,
-                                                               hash_entry_count,
-                                                               invalid_slot_val,
-                                                               key_handler,
-                                                               num_elems);
+    overlaps_fill_one_to_many_baseline_hash_table_on_device_64(
+        buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
   }
 }
 
 class BaselineJoinHashTableBuilder {
  public:
   BaselineJoinHashTableBuilder() = default;
-
   template <class KEY_HANDLER>
   int initHashTableOnCpu(KEY_HANDLER* key_handler,
                          const CompositeKeyInfo& composite_key_info,
                          const std::vector<JoinColumn>& join_columns,
                          const std::vector<JoinColumnTypeInfo>& join_column_types,
                          const std::vector<JoinBucketInfo>& join_bucket_info,
+                         const StrProxyTranslationMapsPtrsAndOffsets&
+                             str_proxy_translation_maps_ptrs_and_offsets,
                          const size_t keyspace_entry_count,
                          const size_t keys_for_all_rows,
                          const HashType layout,
@@ -307,42 +300,66 @@ class BaselineJoinHashTableBuilder {
     int thread_count = cpu_threads();
     std::vector<std::future<void>> init_cpu_buff_threads;
     setHashLayout(layout);
-    for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-      init_cpu_buff_threads.emplace_back(
-          std::async(std::launch::async,
-                     [keyspace_entry_count,
-                      key_component_count,
-                      key_component_width,
-                      thread_idx,
-                      thread_count,
-                      cpu_hash_table_ptr,
-                      layout] {
-                       switch (key_component_width) {
-                         case 4:
-                           init_baseline_hash_join_buff_32(cpu_hash_table_ptr,
-                                                           keyspace_entry_count,
-                                                           key_component_count,
-                                                           layout == HashType::OneToOne,
-                                                           -1,
-                                                           thread_idx,
-                                                           thread_count);
-                           break;
-                         case 8:
-                           init_baseline_hash_join_buff_64(cpu_hash_table_ptr,
-                                                           keyspace_entry_count,
-                                                           key_component_count,
-                                                           layout == HashType::OneToOne,
-                                                           -1,
-                                                           thread_idx,
-                                                           thread_count);
-                           break;
-                         default:
-                           CHECK(false);
-                       }
-                     }));
-    }
-    for (auto& child : init_cpu_buff_threads) {
-      child.get();
+    {
+      auto timer_init = DEBUG_TIMER("CPU Baseline-Hash: init_baseline_hash_join_buff_32");
+#ifdef HAVE_TBB
+      switch (key_component_width) {
+        case 4:
+          init_baseline_hash_join_buff_tbb_32(cpu_hash_table_ptr,
+                                              keyspace_entry_count,
+                                              key_component_count,
+                                              layout == HashType::OneToOne,
+                                              -1);
+          break;
+        case 8:
+          init_baseline_hash_join_buff_tbb_64(cpu_hash_table_ptr,
+                                              keyspace_entry_count,
+                                              key_component_count,
+                                              layout == HashType::OneToOne,
+                                              -1);
+          break;
+        default:
+          CHECK(false);
+      }
+#else   // #ifdef HAVE_TBB
+      for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+        init_cpu_buff_threads.emplace_back(
+            std::async(std::launch::async,
+                       [keyspace_entry_count,
+                        key_component_count,
+                        key_component_width,
+                        thread_idx,
+                        thread_count,
+                        cpu_hash_table_ptr,
+                        layout] {
+                         switch (key_component_width) {
+                           case 4:
+                             init_baseline_hash_join_buff_32(cpu_hash_table_ptr,
+                                                             keyspace_entry_count,
+                                                             key_component_count,
+                                                             layout == HashType::OneToOne,
+                                                             -1,
+                                                             thread_idx,
+                                                             thread_count);
+                             break;
+                           case 8:
+                             init_baseline_hash_join_buff_64(cpu_hash_table_ptr,
+                                                             keyspace_entry_count,
+                                                             key_component_count,
+                                                             layout == HashType::OneToOne,
+                                                             -1,
+                                                             thread_idx,
+                                                             thread_count);
+                             break;
+                           default:
+                             CHECK(false);
+                         }
+                       }));
+      }
+      for (auto& child : init_cpu_buff_threads) {
+        child.get();
+      }
+#endif  // !HAVE_TBB
     }
     std::vector<std::future<int>> fill_cpu_buff_threads;
     for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
@@ -404,7 +421,11 @@ class BaselineJoinHashTableBuilder {
     if (HashJoin::layoutRequiresAdditionalBuffers(layout)) {
       auto one_to_many_buff = reinterpret_cast<int32_t*>(
           cpu_hash_table_ptr + keyspace_entry_count * entry_size);
-      init_hash_join_buff(one_to_many_buff, keyspace_entry_count, -1, 0, 1);
+      {
+        auto timer_init_additional_buffers =
+            DEBUG_TIMER("CPU Baseline-Hash: Additional Buffers init_hash_join_buff");
+        init_hash_join_buff(one_to_many_buff, keyspace_entry_count, -1, 0, 1);
+      }
       bool is_geo_compressed = false;
       if constexpr (std::is_same_v<KEY_HANDLER, RangeKeyHandler>) {
         if (const auto range_handler =
@@ -413,6 +434,7 @@ class BaselineJoinHashTableBuilder {
         }
       }
       setHashLayout(layout);
+
       switch (key_component_width) {
         case 4: {
           const auto composite_key_dict = reinterpret_cast<int32_t*>(cpu_hash_table_ptr);
@@ -420,13 +442,12 @@ class BaselineJoinHashTableBuilder {
               one_to_many_buff,
               composite_key_dict,
               keyspace_entry_count,
-              -1,
               key_component_count,
               join_columns,
               join_column_types,
               join_bucket_info,
-              composite_key_info.sd_inner_proxy_per_key,
-              composite_key_info.sd_outer_proxy_per_key,
+              str_proxy_translation_maps_ptrs_and_offsets.first,
+              str_proxy_translation_maps_ptrs_and_offsets.second,
               thread_count,
               std::is_same_v<KEY_HANDLER, RangeKeyHandler>,
               is_geo_compressed);
@@ -438,13 +459,12 @@ class BaselineJoinHashTableBuilder {
               one_to_many_buff,
               composite_key_dict,
               keyspace_entry_count,
-              -1,
               key_component_count,
               join_columns,
               join_column_types,
               join_bucket_info,
-              composite_key_info.sd_inner_proxy_per_key,
-              composite_key_info.sd_outer_proxy_per_key,
+              str_proxy_translation_maps_ptrs_and_offsets.first,
+              str_proxy_translation_maps_ptrs_and_offsets.second,
               thread_count,
               std::is_same_v<KEY_HANDLER, RangeKeyHandler>,
               is_geo_compressed);
@@ -525,7 +545,8 @@ class BaselineJoinHashTableBuilder {
       return 0;
     }
     auto data_mgr = executor->getDataMgr();
-    auto allocator = data_mgr->createGpuAllocator(device_id);
+    auto allocator = std::make_unique<CudaAllocator>(
+        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
     auto dev_err_buff = allocator->alloc(sizeof(int));
 
     allocator->copyToDevice(dev_err_buff, &err, sizeof(err));
@@ -602,7 +623,6 @@ class BaselineJoinHashTableBuilder {
               one_to_many_buff,
               composite_key_dict,
               keyspace_entry_count,
-              -1,
               key_component_count,
               key_handler_gpu,
               join_columns.front().num_elems);
@@ -615,7 +635,6 @@ class BaselineJoinHashTableBuilder {
               one_to_many_buff,
               composite_key_dict,
               keyspace_entry_count,
-              -1,
               key_component_count,
               key_handler_gpu,
               join_columns.front().num_elems);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,17 +16,17 @@
 
 /**
  * @file    ResultSetIteration.cpp
- * @author  Alex Suhan <alex@mapd.com>
  * @brief   Iteration part of the row set interface.
  *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  */
 
 #include "Execute.h"
 #include "Geospatial/Compression.h"
 #include "Geospatial/Types.h"
 #include "ParserNode.h"
+#include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/TargetValue.h"
+#include "QueryEngine/Utils/FlatBuffer.h"
 #include "ResultSet.h"
 #include "ResultSetGeoSerialization.h"
 #include "RuntimeFunctions.h"
@@ -131,7 +131,6 @@ std::vector<TargetValue> ResultSet::getRowAt(
   if (!fixup_count_distinct_pointers && storage->isEmptyEntry(local_entry_idx)) {
     return {};
   }
-
   const auto buff = storage->buff_;
   CHECK(buff);
   std::vector<TargetValue> row;
@@ -632,7 +631,8 @@ InternalTargetValue ResultSet::getVarlenOrderEntry(const int64_t str_ptr,
     const auto executor = query_mem_desc_.getExecutor();
     CHECK(executor);
     auto data_mgr = executor->getDataMgr();
-    auto allocator = data_mgr->createGpuAllocator(device_id_);
+    auto allocator = std::make_unique<CudaAllocator>(
+        data_mgr, device_id_, getQueryEngineCudaStreamForDevice(device_id_));
     allocator->copyFromDevice(
         &cpu_buffer[0], reinterpret_cast<int8_t*>(str_ptr), str_len);
     host_str_ptr = reinterpret_cast<char*>(&cpu_buffer[0]);
@@ -930,7 +930,8 @@ inline std::unique_ptr<ArrayDatum> fetch_data_from_gpu(int64_t varlen_ptr,
                                                        const int device_id) {
   auto cpu_buf =
       std::shared_ptr<int8_t>(new int8_t[length], std::default_delete<int8_t[]>());
-  auto allocator = data_mgr->createGpuAllocator(device_id);
+  auto allocator = std::make_unique<CudaAllocator>(
+      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   allocator->copyFromDevice(cpu_buf.get(), reinterpret_cast<int8_t*>(varlen_ptr), length);
   // Just fetching the data from gpu, not checking geo nullness
   return std::make_unique<ArrayDatum>(length, cpu_buf, false);
@@ -1354,14 +1355,11 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
       auto& frag_col_buffers =
           getColumnFrag(storage_idx.first, target_logical_idx, varlen_ptr);
       bool is_end{false};
+      auto col_buf = const_cast<int8_t*>(frag_col_buffers[col_lazy_fetch.local_col_id]);
       if (target_info.sql_type.is_string()) {
         VarlenDatum vd;
-        ChunkIter_get_nth(reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(
-                              frag_col_buffers[col_lazy_fetch.local_col_id])),
-                          varlen_ptr,
-                          false,
-                          &vd,
-                          &is_end);
+        ChunkIter_get_nth(
+            reinterpret_cast<ChunkIter*>(col_buf), varlen_ptr, false, &vd, &is_end);
         CHECK(!is_end);
         if (vd.is_null) {
           return TargetValue(nullptr);
@@ -1373,11 +1371,17 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
       } else {
         CHECK(target_info.sql_type.is_array());
         ArrayDatum ad;
-        ChunkIter_get_nth(reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(
-                              frag_col_buffers[col_lazy_fetch.local_col_id])),
-                          varlen_ptr,
-                          &ad,
-                          &is_end);
+        if (FlatBufferManager::isFlatBuffer(col_buf)) {
+          FlatBufferManager m{col_buf};
+          int64_t length;
+          auto status = m.getItem(varlen_ptr, length, ad.pointer, ad.is_null);
+          CHECK_EQ(status, FlatBufferManager::Status::Success);
+          CHECK_GE(length, 0);
+          ad.length = length;
+        } else {
+          ChunkIter_get_nth(
+              reinterpret_cast<ChunkIter*>(col_buf), varlen_ptr, &ad, &is_end);
+        }
         CHECK(!is_end);
         if (ad.is_null) {
           return ArrayTargetValue(boost::optional<std::vector<ScalarTargetValue>>{});
@@ -1412,7 +1416,8 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
     const auto executor = query_mem_desc_.getExecutor();
     CHECK(executor);
     auto data_mgr = executor->getDataMgr();
-    auto allocator = data_mgr->createGpuAllocator(device_id_);
+    auto allocator = std::make_unique<CudaAllocator>(
+        data_mgr, device_id_, getQueryEngineCudaStreamForDevice(device_id_));
 
     allocator->copyFromDevice(
         &cpu_buffer[0], reinterpret_cast<int8_t*>(varlen_ptr), length);
@@ -1635,6 +1640,49 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
             device_id_,
             getCoordsDataPtr(geo_target_ptr),
             getCoordsLength(geo_target_ptr));
+      }
+      break;
+    }
+    case kMULTILINESTRING: {
+      if (separate_varlen_storage_valid_ && !target_info.is_agg) {
+        const auto& varlen_buffer = getSeparateVarlenStorage();
+        CHECK_LT(static_cast<size_t>(getCoordsDataPtr(geo_target_ptr) + 1),
+                 varlen_buffer.size());
+
+        return GeoTargetValueBuilder<kMULTILINESTRING, GeoQueryOutputFetchHandler>::build(
+            target_info.sql_type,
+            geo_return_type_,
+            nullptr,
+            false,
+            device_id_,
+            reinterpret_cast<int64_t>(
+                varlen_buffer[getCoordsDataPtr(geo_target_ptr)].data()),
+            static_cast<int64_t>(varlen_buffer[getCoordsDataPtr(geo_target_ptr)].size()),
+            reinterpret_cast<int64_t>(
+                varlen_buffer[getCoordsDataPtr(geo_target_ptr) + 1].data()),
+            static_cast<int64_t>(
+                varlen_buffer[getCoordsDataPtr(geo_target_ptr) + 1].size()));
+      } else if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
+        const auto& frag_col_buffers = getFragColBuffers();
+
+        return GeoTargetValueBuilder<kMULTILINESTRING, GeoLazyFetchHandler>::build(
+            target_info.sql_type,
+            geo_return_type_,
+            frag_col_buffers[col_lazy_fetch->local_col_id],
+            getCoordsDataPtr(geo_target_ptr),
+            frag_col_buffers[col_lazy_fetch->local_col_id + 1],
+            getCoordsDataPtr(geo_target_ptr));
+      } else {
+        return GeoTargetValueBuilder<kMULTILINESTRING, GeoQueryOutputFetchHandler>::build(
+            target_info.sql_type,
+            geo_return_type_,
+            is_gpu_fetch ? getDataMgr() : nullptr,
+            is_gpu_fetch,
+            device_id_,
+            getCoordsDataPtr(geo_target_ptr),
+            getCoordsLength(geo_target_ptr),
+            getRingSizesPtr(geo_target_ptr),
+            getRingSizesLength(geo_target_ptr) * 4);
       }
       break;
     }

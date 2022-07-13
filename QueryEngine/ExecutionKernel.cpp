@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExternalExecutor.h"
+#include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/SerializeToSql.h"
 
 namespace {
@@ -185,7 +186,8 @@ void ExecutionKernel::runImpl(Executor* executor,
   if (chosen_device_type == ExecutorDeviceType::GPU) {
     gpu_lock.reset(
         new std::lock_guard<std::mutex>(executor->gpu_exec_mutex_[chosen_device_id]));
-    device_allocator = std::make_unique<CudaAllocator>(data_mgr, chosen_device_id);
+    device_allocator = std::make_unique<CudaAllocator>(
+        data_mgr, chosen_device_id, getQueryEngineCudaStreamForDevice(chosen_device_id));
   }
   std::shared_ptr<FetchResult> fetch_result(new FetchResult);
   try {
@@ -265,7 +267,7 @@ void ExecutionKernel::runImpl(Executor* executor,
   }
   const CompilationResult& compilation_result = query_comp_desc.getCompilationResult();
   std::unique_ptr<QueryExecutionContext> query_exe_context_owned;
-  const bool do_render = render_info_ && render_info_->isPotentialInSituRender();
+  const bool do_render = render_info_ && render_info_->isInSitu();
 
   int64_t total_num_input_rows{-1};
   if (kernel_dispatch_mode == ExecutorDispatchMode::KernelPerFragment &&
@@ -469,8 +471,7 @@ void KernelSubtask::run(Executor* executor) {
 
 void KernelSubtask::runImpl(Executor* executor) {
   auto& query_exe_context_owned = shared_context_.getTlsExecutionContext().local();
-  const bool do_render =
-      kernel_.render_info_ && kernel_.render_info_->isPotentialInSituRender();
+  const bool do_render = kernel_.render_info_ && kernel_.render_info_->isInSitu();
   const CompilationResult& compilation_result =
       kernel_.query_comp_desc.getCompilationResult();
   const int outer_table_id = kernel_.ra_exe_unit_.union_all

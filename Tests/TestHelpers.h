@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,12 +43,20 @@ void compare_array(const TargetValue& r,
   ASSERT_EQ(scalar_tv_vector.size(), arr.size());
   size_t ctr = 0;
   for (const ScalarTargetValue& scalar_tv : scalar_tv_vector) {
-    auto p = boost::get<T>(&scalar_tv);
-    CHECK(p);
-    if (tol < 0.) {
-      ASSERT_EQ(*p, arr[ctr++]);
+    T value;
+    if constexpr (std::is_integral_v<T>) {
+      auto p = boost::get<int64_t>(&scalar_tv);
+      CHECK(p);
+      value = *p;
     } else {
-      ASSERT_NEAR(*p, arr[ctr++], tol);
+      auto p = boost::get<T>(&scalar_tv);
+      CHECK(p);
+      value = *p;
+    }
+    if (tol < 0.) {
+      ASSERT_EQ(value, arr[ctr++]);
+    } else {
+      ASSERT_NEAR(value, arr[ctr++], tol);
     }
   }
 }
@@ -99,6 +107,12 @@ struct GeoTargetComparator {
                       const GeoLineStringTargetValue& b,
                       const double tol = -1.) {
     compare_array(*a.coords, *b.coords, tol);
+  }
+  static void compare(const GeoMultiLineStringTargetValue& a,
+                      const GeoMultiLineStringTargetValue& b,
+                      const double tol = -1.) {
+    compare_array(*a.coords, *b.coords, tol);
+    compare_array(*a.linestring_sizes, *b.linestring_sizes);
   }
   static void compare(const GeoPolyTargetValue& a,
                       const GeoPolyTargetValue& b,

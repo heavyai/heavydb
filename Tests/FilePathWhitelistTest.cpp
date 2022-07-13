@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
  * @brief Test suite for file path whitelist validation for COPY FROM, COPY TO, and CREATE
  * FOREIGN TABLE use cases
  */
+
 #include <fstream>
 
 #include <gtest/gtest.h>
@@ -27,6 +28,8 @@
 #ifdef HAVE_AWS_S3
 #include "DataMgr/OmniSciAwsSdk.h"
 #endif  // HAVE_AWS_S3
+#include "Geospatial/ColumnNames.h"
+#include "Shared/SysDefinitions.h"
 #include "Tests/DBHandlerTestHelpers.h"
 #include "Tests/TestHelpers.h"
 #include "Utils/DdlUtils.h"
@@ -84,7 +87,7 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
     } else if (GetParam() == "ForeignTable") {
       query =
           "CREATE FOREIGN TABLE test_foreign_table (col1 text) "
-          "SERVER omnisci_local_csv "
+          "SERVER default_local_delimited "
           "WITH (file_path = '" +
           file_path + "');";
     } else {
@@ -192,10 +195,10 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
 
   inline static const std::string CONFIG_FILE_PATH{"./file_path_whitelist_test.conf"};
   inline static std::string temp_file_path_;
-  inline static const std::string DEFAULT_IMPORT_PATH{std::string{BASE_PATH} +
-                                                      "/mapd_import"};
-  inline static const std::string DEFAULT_EXPORT_PATH{std::string{BASE_PATH} +
-                                                      "/mapd_export"};
+  inline static const std::string DEFAULT_IMPORT_PATH{std::string{BASE_PATH} + "/" +
+                                                      shared::kDefaultImportDirName};
+  inline static const std::string DEFAULT_EXPORT_PATH{std::string{BASE_PATH} + "/" +
+                                                      shared::kDefaultExportDirName};
 };
 
 TEST_P(FilePathWhitelistTest, WhitelistedPath) {
@@ -495,7 +498,8 @@ class DBHandlerFilePathTest
 
     createDBHandler();
     sql("CREATE TABLE IF NOT EXISTS test_table (col1 TEXT);");
-    sql("CREATE TABLE IF NOT EXISTS test_table_2 (omnisci_geo POINT);");
+    sql("CREATE TABLE IF NOT EXISTS test_table_2 (" + Geospatial::kGeoColumnName +
+        " POINT);");
     boost::filesystem::create_directory(getImportPath());
     ddl_utils::FilePathWhitelist::initialize(BASE_PATH, "", "");
   }
@@ -511,7 +515,7 @@ class DBHandlerFilePathTest
   }
 
   static boost::filesystem::path getImportPath() {
-    return boost::filesystem::canonical(BASE_PATH) / "mapd_import";
+    return boost::filesystem::canonical(BASE_PATH) / shared::kDefaultImportDirName;
   }
 
   std::string getFilePath(const std::string& file_name_prefix) {
@@ -577,27 +581,6 @@ TEST_P(DBHandlerFilePathTest, ImportTable) {
       session_id, "test_table", getFilePath("example.csv"), TCopyParams{});
 }
 
-TEST_P(DBHandlerFilePathTest, ImportGeoTable) {
-// TODO: Undo test case skipping when GDAL failure is resolved
-#ifdef HAVE_AWS_S3
-  if (auto [file_location_type, suffix] = getTestParams();
-      file_location_type == FileLocationType::S3 && suffix == "_tar_gz") {
-    GTEST_SKIP();
-  }
-#endif  // HAVE_AWS_S3
-
-  TCopyParams copy_params;
-  copy_params.file_type = TFileType::GEO;
-
-  auto [db_handler, session_id] = getDbHandlerAndSessionId();
-  db_handler->import_geo_table(session_id,
-                               "test_table_2",
-                               getFilePath("example.geojson"),
-                               copy_params,
-                               TRowDescriptor{},
-                               TCreateParams{});
-}
-
 TEST_P(DBHandlerFilePathTest, GetFirstGeoFileInArchive) {
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   std::string result;
@@ -622,7 +605,7 @@ TEST_P(DBHandlerFilePathTest, GetLayersInGeoFile) {
 #endif  // HAVE_AWS_S3
 
   TCopyParams copy_params;
-  copy_params.file_type = TFileType::GEO;
+  copy_params.source_type = TSourceType::GEO_FILE;
 
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   std::vector<TGeoFileLayerInfo> result;
@@ -635,7 +618,7 @@ INSTANTIATE_TEST_SUITE_P(
     DBHandlerFilePathTest,
     testing::Combine(testing::Range(static_cast<int>(FileLocationType::First),
                                     static_cast<int>(FileLocationType::Last) + 1),
-                     testing::Values("", "_tar", "_gz", "_tar_gz")),
+                     testing::Values("", "_gz", "_tar_gz")),
     [](const auto& param_info) {
       return DBHandlerFilePathTest::testParamsToString(param_info.param);
     });
@@ -678,7 +661,9 @@ TEST_F(FilePathWhitelistTest, ThrowOnAsterisk) {
 
 TEST_F(FilePathWhitelistTest, AllowAsteriskForWildcard) {
   whitelistRootPath();
-  validate_allowed_file_path("./tmp/*", ddl_utils::DataTransferType::IMPORT, true);
+  auto test_path =
+      boost::filesystem::canonical("../../Tests/FilePathWhitelist").string() + "/*";
+  validate_allowed_file_path(test_path, ddl_utils::DataTransferType::IMPORT, true);
 }
 
 TEST_F(FilePathWhitelistTest, AllowRelativePath) {
@@ -706,6 +691,7 @@ int main(int argc, char** argv) {
 
   int err{0};
   try {
+    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();

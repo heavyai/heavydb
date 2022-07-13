@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,24 +16,6 @@
 
 #pragma once
 
-/*
- * Note on WIN32 GetObject error in rapidson.
- *
- * Rapidjson has defined a GetObject method which
- * wil; 'conflict' with the GetObject defined in Window.h
- *
- * Further boost/regex.hpp includes windows.h.  If that files
- * is included in the same compilation unit as this one this
- * can cause issues.
- *
- * At the moment the best way to solve the boost problem is to
- * wrap the boost include in #defines which clean the name space.
- *
- * TODO work out exactly what is causing the boost/regex.hpp rapidjson
- * conflict.
- *
-
-*/
 #include <string>
 #include <unordered_map>
 
@@ -71,9 +53,9 @@ struct OptionsContainer {
     if (clear) {
       options.clear();
     }
-    for (const auto& member : ddl_options.GetObject()) {
-      std::string key = to_upper(member.name.GetString());
-      options[key] = member.value.GetString();
+    for (auto itr = ddl_options.MemberBegin(); itr != ddl_options.MemberEnd(); ++itr) {
+      std::string key = to_upper(itr->name.GetString());
+      options[key] = itr->value.GetString();
     }
   }
 

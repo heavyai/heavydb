@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -190,13 +190,17 @@ std::vector<std::string> split(std::string_view str,
   }
 }
 
-std::string strip(std::string_view str) {
+std::string_view sv_strip(std::string_view str) {
   std::string::size_type i, j;
   for (i = 0; i < str.size() && std::isspace(str[i]); ++i) {
   }
   for (j = str.size(); j > i && std::isspace(str[j - 1]); --j) {
   }
-  return std::string(str.substr(i, j - i));
+  return str.substr(i, j - i);
+}
+
+std::string strip(std::string_view str) {
+  return std::string(sv_strip(str));
 }
 
 std::optional<size_t> inside_string_literal(

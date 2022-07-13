@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,11 @@
 #ifndef IMPORT_HELPERS_H_
 #define IMPORT_HELPERS_H_
 
+#include "Shared/clean_boost_regex.hpp"
+
 #include <Parser/ReservedKeywords.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/regex.hpp>
 
 namespace ImportHelpers {
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,18 +49,18 @@ TEST(StringTransform, HideSensitiveDataFromQuery) {
        "s3_region='us-west-1', s3_access_key='XXXXXXXX',s3_secret_key='XXXXXXXX');"},
       {"CREATE USER jason (password = 'OmniSciRocks!', is_super = 'true')",
        "CREATE USER jason (password = 'XXXXXXXX', is_super = 'true')"},
-      {"ALTER USER omnisci (password = 'OmniSciIsFast!')",
-       "ALTER USER omnisci (password = 'XXXXXXXX')"},
+      {"ALTER USER test_user (password = 'OmniSciIsFast!')",
+       "ALTER USER test_user (password = 'XXXXXXXX')"},
       {"ALTER USER jason (is_super = 'false', password = 'SilkySmooth')",
        "ALTER USER jason (is_super = 'false', password = 'XXXXXXXX')"},
-      {"ALTER USER omnisci (password = 'short')",
-       "ALTER USER omnisci (password = 'XXXXXXXX')"},
-      {"ALTER USER omnisci (password='short', future_parameter = 3)",
-       "ALTER USER omnisci (password='XXXXXXXX', future_parameter = 3)"},
+      {"ALTER USER test_user (password = 'short')",
+       "ALTER USER test_user (password = 'XXXXXXXX')"},
+      {"ALTER USER test_user (password='short', future_parameter = 3)",
+       "ALTER USER test_user (password='XXXXXXXX', future_parameter = 3)"},
       {"CREATE USER jason (password = 'OmniSciRocks!', is_super = 'true'); CREATE "
-       "USER omnisci (password = 'OmniSciIsFast!')",
+       "USER test_user (password = 'OmniSciIsFast!')",
        "CREATE USER jason (password = 'XXXXXXXX', is_super = 'true'); CREATE USER "
-       "omnisci (password = 'XXXXXXXX')"},
+       "test_user (password = 'XXXXXXXX')"},
       {"\\set_license DONTSHOWTHISSTRING", "\\set_license XXXXXXXX"},
       {"   \\set_license 'DONTSHOWTHISSTRING';", "   \\set_license XXXXXXXX"}};
   for (auto const& test : tests) {

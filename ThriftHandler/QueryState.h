@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-/*
- * File:   QueryState.h
- * Author: matt.pulver@omnisci.com
+/**
+ * @file   QueryState.h
+ * @brief
  *
  */
 

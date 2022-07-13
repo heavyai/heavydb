@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,7 @@
 
 /**
  * @file    ColSlotContext.cpp
- * @author  Alex Baden <alex.baden@omnisci.com>
- * @brief   Provides column info and slot info for the output buffer and some metadata
- * helpers
+ * @brief   Provides column and slot info for the output buffer and some metadata helpers
  *
  */
 
@@ -265,6 +263,23 @@ void ColSlotContext::addColumn(
   for (const auto& slot_info : slots_for_col) {
     addSlotForColumn(std::get<1>(slot_info), std::get<0>(slot_info), col_idx);
   }
+}
+
+void ColSlotContext::addColumnFlatBuffer(const int64_t flatbuffer_size) {
+  const auto col_idx = col_to_slot_map_.size();
+  col_to_slot_map_.emplace_back();
+  addSlotForColumn(0, 0, col_idx);
+  // reusing varlenOutput infrastructure for storing the size of a flatbuffer:
+  varlen_output_slot_map_.insert(std::make_pair(col_idx, flatbuffer_size));
+}
+
+int64_t ColSlotContext::getFlatBufferSize(const size_t slot_idx) const {
+  const auto varlen_map_it = varlen_output_slot_map_.find(slot_idx);
+  if (varlen_map_it == varlen_output_slot_map_.end()) {
+    throw std::runtime_error("Failed to find FlatBuffer map entry for slot " +
+                             std::to_string(slot_idx));
+  }
+  return varlen_map_it->second;
 }
 
 void ColSlotContext::addSlotForColumn(const int8_t logical_size,

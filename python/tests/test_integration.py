@@ -1,34 +1,32 @@
 """
 Tests that rely on a server running
 """
-import base64
-import json
 import datetime
 import os
 
 import pytest
-from omnisci import connect, ProgrammingError, DatabaseError
-from omnisci.cursor import Cursor
-from omnisci._parsers import Description, ColumnDetails
-from omnisci.thrift.ttypes import TOmniSciException
+from heavydb import connect, ProgrammingError, DatabaseError
+from heavydb.cursor import Cursor
+from heavydb._parsers import Description
+from heavydb.thrift.ttypes import TDBException
 
 # XXX: Make it hashable to silence warnings; see if this can be done upstream
 # This isn't a huge deal, but our testing context mangers for asserting
 # exceptions need hashability
-TOmniSciException.__hash__ = lambda x: id(x)
-omniscihost = os.environ.get('OMNISCI_HOST', 'localhost')
+TDBException.__hash__ = lambda x: id(x)
+heavydb_host = os.environ.get('HEAVYDB_HOST', 'localhost')
 
 
-@pytest.mark.usefixtures("omnisci_server")
+@pytest.mark.usefixtures("heavydb_server")
 class TestIntegration:
     def test_connect_binary(self):
         con = connect(
             user="admin",
             password='HyperInteractive',
-            host=omniscihost,
+            host=heavydb_host,
             port=6274,
             protocol='binary',
-            dbname='omnisci',
+            dbname='heavyai',
         )
         assert con is not None
 
@@ -36,33 +34,33 @@ class TestIntegration:
         con = connect(
             user="admin",
             password='HyperInteractive',
-            host=omniscihost,
+            host=heavydb_host,
             port=6278,
             protocol='http',
-            dbname='omnisci',
+            dbname='heavyai',
         )
         assert con is not None
 
     def test_connect_uri(self):
         uri = (
-            'omnisci://admin:HyperInteractive@{0}:6274/omnisci?'
-            'protocol=binary'.format(omniscihost)
+            'heavydb://admin:HyperInteractive@{0}:6274/heavyai?'
+            'protocol=binary'.format(heavydb_host)
         )
         con = connect(uri=uri)
         assert con._user == 'admin'
         assert con._password == 'HyperInteractive'
-        assert con._host == omniscihost
+        assert con._host == heavydb_host
         assert con._port == 6274
-        assert con._dbname == 'omnisci'
+        assert con._dbname == 'heavyai'
         assert con._protocol == 'binary'
 
     def test_connect_uri_and_others_raises(self):
         uri = (
-            'omnisci://admin:HyperInteractive@{0}:6274/omnisci?'
-            'protocol=binary'.format(omniscihost)
+            'heavydb://admin:HyperInteractive@{0}:6274/heavyai?'
+            'protocol=binary'.format(heavydb_host)
         )
         with pytest.raises(TypeError):
-            connect(username='omnisci', uri=uri)
+            connect(username='heavyai', uri=uri)
 
     def test_invalid_sql(self, con):
         with pytest.raises(ProgrammingError) as r:
@@ -267,7 +265,7 @@ class TestIntegration:
 
 class TestExtras:
     def test_sql_validate(self, con):
-        from omnisci.common.ttypes import TTypeInfo
+        from heavydb.common.ttypes import TTypeInfo
 
         c = con.cursor()
         c.execute('drop table if exists stocks;')

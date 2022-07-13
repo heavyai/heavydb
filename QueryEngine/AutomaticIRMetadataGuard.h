@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,9 +39,10 @@ class AutomaticIRMetadataGuard {
       , ppline_(ppline)
       , ppfunc_(ppfunc)
       , our_instructions_(nullptr)
-      , done_(false)
-      , this_is_root_(!instructions_.count(cgen_state_))
-      , enabled_(g_enable_automatic_ir_metadata) {
+      , done_(false) {
+    std::lock_guard<std::mutex> lock(instructions_mutex_);
+    this_is_root_ = !instructions_.count(cgen_state_);
+    enabled_ = g_enable_automatic_ir_metadata;
     if (enabled_) {
       CHECK(cgen_state_);
       CHECK(cgen_state_->module_);
@@ -54,6 +55,7 @@ class AutomaticIRMetadataGuard {
 
   void done() noexcept {
     if (enabled_ && !done_) {
+      std::lock_guard<std::mutex> lock(instructions_mutex_);
       rememberOurInstructions();
       if (this_is_root_) {
         markInstructions();
@@ -92,7 +94,7 @@ class AutomaticIRMetadataGuard {
           if (!preexisting_instructions_.count(i)) {
             std::string qefile = makeQueryEngineFilename();
             std::string footnote =
-                ppfunc_ + " near " + qefile + " line #" + std::to_string(ppline_);
+                ppfunc_ + " after " + qefile + " line #" + std::to_string(ppline_);
             auto it = our_instructions_->find(i);
             if (it == our_instructions_->end()) {
               std::string bfile = replacePunctuation(makeBaseFilename());
@@ -196,6 +198,8 @@ class AutomaticIRMetadataGuard {
   inline static std::unordered_map<CgenState*, OurInstructions> instructions_;
 
   inline static const std::string detailed_footnote_prefix_{"Omnisci Debugging Info: "};
+
+  inline static std::mutex instructions_mutex_;
 };
 
 #define AUTOMATIC_IR_METADATA(CGENSTATE)                \

@@ -2,7 +2,7 @@
 #include <limits>
 #include <type_traits>
 
-#include "../../QueryEngine/OmniSciTypes.h"
+#include "../../QueryEngine/heavydbTypes.h"
 
 EXTENSION_NOINLINE
 bool array_is_null_double(Array<double> arr) {
@@ -210,6 +210,15 @@ double ST_Length_LineString(int8_t* coords,
                             int32_t isr,
                             int32_t osr);
 
+EXTENSION_NOINLINE
+double ST_Length_MultiLineString(int8_t* coords,
+                                 int64_t coords_sz,
+                                 int8_t* linestring_sizes,
+                                 int64_t linestring_sizes_sz,
+                                 int32_t ic,
+                                 int32_t isr,
+                                 int32_t osr);
+
 // LineString udf
 
 EXTENSION_NOINLINE
@@ -234,6 +243,19 @@ EXTENSION_NOINLINE
 double linestring_length(GeoLineString l) {
   return ST_Length_LineString(
       l.ptr, l.getSize(), l.getCompression(), l.getInputSrid(), l.getOutputSrid());
+}
+
+// MultiLineString udf
+
+EXTENSION_NOINLINE
+double multilinestring_length(GeoMultiLineString ml) {
+  return ST_Length_MultiLineString(ml.ptr,
+                                   ml.getCoordsSize(),
+                                   ml.getLineStringSizes(),
+                                   ml.getNumLineStrings(),
+                                   ml.getCompression(),
+                                   ml.getInputSrid(),
+                                   ml.getOutputSrid());
 }
 
 // Polygon udf

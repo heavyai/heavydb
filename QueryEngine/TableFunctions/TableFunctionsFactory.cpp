@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -122,8 +122,31 @@ SQLTypeInfo ext_arg_type_to_type_info_output(const ExtArgumentType ext_arg_type)
     case ExtArgumentType::ColumnListTextEncodingDict:
     case ExtArgumentType::TextEncodingDict:
       return SQLTypeInfo(kTEXT, false, kENCODING_DICT);
+    case ExtArgumentType::ColumnTimestamp:
+      return SQLTypeInfo(kTIMESTAMP, 9, 0, false);
+    case ExtArgumentType::ColumnArrayInt8:
+    case ExtArgumentType::ColumnListArrayInt8:
+      return generate_array_type(kTINYINT);
+    case ExtArgumentType::ColumnArrayInt16:
+    case ExtArgumentType::ColumnListArrayInt16:
+      return generate_array_type(kSMALLINT);
+    case ExtArgumentType::ColumnArrayInt32:
+    case ExtArgumentType::ColumnListArrayInt32:
+      return generate_array_type(kINT);
+    case ExtArgumentType::ColumnArrayInt64:
+    case ExtArgumentType::ColumnListArrayInt64:
+      return generate_array_type(kBIGINT);
+    case ExtArgumentType::ColumnArrayFloat:
+    case ExtArgumentType::ColumnListArrayFloat:
+      return generate_array_type(kFLOAT);
+    case ExtArgumentType::ColumnArrayDouble:
+    case ExtArgumentType::ColumnListArrayDouble:
+      return generate_array_type(kDOUBLE);
+    case ExtArgumentType::ColumnArrayBool:
+    case ExtArgumentType::ColumnListArrayBool:
+      return generate_array_type(kBOOLEAN);
     default:
-      LOG(WARNING) << "ext_arg_pointer_type_to_type_info: ExtArgumentType `"
+      LOG(WARNING) << "ext_arg_type_to_type_info_output: ExtArgumentType `"
                    << ExtensionFunctionsWhitelist::toString(ext_arg_type)
                    << "` conversion to SQLTypeInfo not implemented.";
       UNREACHABLE();
@@ -161,7 +184,7 @@ bool TableFunction::containsPreFlightFn() const {
   }
   // workaround for default args
   for (size_t idx = 0; idx < std::min(input_args_.size(), annotations_.size()); idx++) {
-    const auto& ann = getInputAnnotation(idx);
+    const auto& ann = getInputAnnotations(idx);
     if (ann.find("require") != ann.end()) {
       return true;
     }
@@ -169,7 +192,7 @@ bool TableFunction::containsPreFlightFn() const {
   return false;
 }
 
-const std::map<std::string, std::string>& TableFunction::getAnnotation(
+const std::map<std::string, std::string> TableFunction::getAnnotations(
     const size_t idx) const {
   CHECK_LE(idx, sql_args_.size() + output_args_.size());
   if (annotations_.empty() || idx >= annotations_.size()) {
@@ -179,26 +202,118 @@ const std::map<std::string, std::string>& TableFunction::getAnnotation(
   return annotations_[idx];
 }
 
-const std::map<std::string, std::string>& TableFunction::getInputAnnotation(
+const std::map<std::string, std::string> TableFunction::getInputAnnotations(
     const size_t input_arg_idx) const {
   CHECK_LT(input_arg_idx, input_args_.size());
-  return getAnnotation(input_arg_idx);
+  return getAnnotations(input_arg_idx);
 }
 
-const std::map<std::string, std::string>& TableFunction::getOutputAnnotation(
+const std::string TableFunction::getInputAnnotation(const size_t input_arg_idx,
+                                                    const std::string& key,
+                                                    const std::string& default_) const {
+  const std::map<std::string, std::string> ann = getInputAnnotations(input_arg_idx);
+  const auto& it = ann.find(key);
+  if (it != ann.end()) {
+    return it->second;
+  }
+  return default_;
+}
+
+const std::map<std::string, std::string> TableFunction::getOutputAnnotations(
     const size_t output_arg_idx) const {
   CHECK_LT(output_arg_idx, output_args_.size());
-  return getAnnotation(output_arg_idx + sql_args_.size());
+  return getAnnotations(output_arg_idx + sql_args_.size());
 }
 
-const std::map<std::string, std::string>& TableFunction::getFunctionAnnotation() const {
-  return getAnnotation(sql_args_.size() + output_args_.size());
+const std::string TableFunction::getOutputAnnotation(const size_t output_arg_idx,
+                                                     const std::string& key,
+                                                     const std::string& default_) const {
+  const std::map<std::string, std::string> ann = getOutputAnnotations(output_arg_idx);
+  const auto& it = ann.find(key);
+  if (it != ann.end()) {
+    return it->second;
+  }
+  return default_;
+}
+
+const std::map<std::string, std::string> TableFunction::getFunctionAnnotations() const {
+  return getAnnotations(sql_args_.size() + output_args_.size());
+}
+
+const std::string TableFunction::getFunctionAnnotation(
+    const std::string& key,
+    const std::string& default_) const {
+  const std::map<std::string, std::string> ann = getFunctionAnnotations();
+  const auto& it = ann.find(key);
+  if (it != ann.end()) {
+    return it->second;
+  }
+  return default_;
+}
+
+const std::vector<std::string> TableFunction::getCursorFields(
+    const size_t sql_idx) const {
+  std::vector<std::string> fields;
+  const std::string& line = getInputAnnotation(sql_idx, "fields", "");
+  if (line.empty()) {
+    static const std::vector<std::string> empty = {};
+    return empty;
+  }
+  std::string substr = line.substr(1, line.size() - 2);
+  boost::split(fields, substr, boost::is_any_of(", "), boost::token_compress_on);
+  return fields;
+}
+
+const std::string TableFunction::getArgTypes(bool use_input_args) const {
+  if (use_input_args) {
+    std::vector<std::string> arg_types;
+    size_t arg_idx = 0;
+    for (size_t sql_idx = 0; sql_idx < sql_args_.size(); sql_idx++) {
+      const std::vector<std::string> cursor_fields = getCursorFields(sql_idx);
+      if (cursor_fields.empty()) {
+        // fields => {}
+        arg_types.emplace_back(
+            ExtensionFunctionsWhitelist::toString(input_args_[arg_idx++]));
+      } else {
+        std::vector<std::string> vec;
+        for (size_t i = 0; i < cursor_fields.size(); i++) {
+          vec.emplace_back(ExtensionFunctionsWhitelist::toString(input_args_[arg_idx++]));
+        }
+        arg_types.emplace_back("Cursor<" + boost::algorithm::join(vec, ", ") + ">");
+      }
+    }
+    return "[" + boost::algorithm::join(arg_types, ", ") + "]";
+  } else {
+    return "[" + ExtensionFunctionsWhitelist::toString(output_args_) + "]";
+  }
+}
+
+const std::string TableFunction::getArgNames(bool use_input_args) const {
+  std::vector<std::string> names;
+  if (use_input_args) {
+    for (size_t idx = 0; idx < sql_args_.size(); idx++) {
+      const std::vector<std::string> cursor_fields = getCursorFields(idx);
+      if (cursor_fields.empty()) {
+        const std::string& name = getInputAnnotation(idx, "name", "''");
+        names.emplace_back(name);
+      } else {
+        names.emplace_back("Cursor<" + boost::algorithm::join(cursor_fields, ", ") + ">");
+      }
+    }
+  } else {
+    for (size_t idx = 0; idx < output_args_.size(); idx++) {
+      const std::string& name = getOutputAnnotation(idx, "name", "''");
+      names.emplace_back(name);
+    }
+  }
+
+  return "[" + boost::algorithm::join(names, ", ") + "]";
 }
 
 std::pair<int32_t, int32_t> TableFunction::getInputID(const size_t idx) const {
   // if the annotation is of the form args<INT,INT>, it is refering to a column list
 #define PREFIX_LENGTH 5
-  const auto& annotation = getOutputAnnotation(idx);
+  const auto& annotation = getOutputAnnotations(idx);
   auto annot = annotation.find("input_id");
   if (annot == annotation.end()) {
     size_t lo = 0;
@@ -216,6 +331,11 @@ std::pair<int32_t, int32_t> TableFunction::getInputID(const size_t idx) const {
   }
 
   const std::string& input_id = annot->second;
+
+  if (input_id == "args<-1>") {
+    // empty input id! -1 seems to be the magic number used in RelAlgExecutor.cpp
+    return {-1, -1};
+  }
 
   size_t comma = input_id.find(",");
   int32_t gt = input_id.size() - 1;
@@ -277,17 +397,27 @@ bool is_table_function_whitelisted(const std::string& function_name) {
   // must be added to the whitelisted_table_functions set below.
   static const std::unordered_set<std::string> whitelisted_table_functions = {
       "generate_series",
+      "generate_random_strings",
       "tf_mandelbrot",
       "tf_mandelbrot_float",
       "tf_mandelbrot_cuda",
       "tf_mandelbrot_cuda_float",
       "tf_geo_rasterize",
       "tf_geo_rasterize_slope",
-      "tf_rf_prop",
-      "tf_rf_prop_max_signal"};
+      "tf_compute_dwell_times",
+      "tf_feature_similarity",
+      "tf_feature_self_similarity",
+      "supported_ml_frameworks",
+      "kmeans",
+      "dbscan",
+      "linear_reg_fit",
+      "linear_reg_predict",
+      "linear_reg_fit_predict",
+      "tf_point_cloud_metadata",
+      "tf_load_point_cloud"};
 
-  return (whitelisted_table_functions.find(function_name) !=
-          whitelisted_table_functions.end());
+  return whitelisted_table_functions.find(function_name) !=
+         whitelisted_table_functions.end();
 }
 
 void TableFunctionsFactory::add(
@@ -315,12 +445,12 @@ void TableFunctionsFactory::add(
                           annotations,
                           is_runtime,
                           uses_manager);
+  const auto tf_name = tf.getName(true /* drop_suffix */, true /* lower */);
   if (!g_enable_dev_table_functions && !is_runtime &&
-      !is_table_function_whitelisted(
-          tf.getName(true /* drop_suffix */, true /* lower */))) {
+      !is_table_function_whitelisted(tf_name)) {
     return;
   }
-  auto sig = tf.getSignature();
+  auto sig = tf.getSignature(/* include_name */ true, /* include_output */ false);
   for (auto it = functions_.begin(); it != functions_.end();) {
     if (it->second.getName() == name) {
       if (it->second.isRuntime()) {
@@ -333,7 +463,8 @@ void TableFunctionsFactory::add(
                                  name);
       }
     } else {
-      if (sig == it->second.getSignature() &&
+      if (sig == it->second.getSignature(/* include_name */ true,
+                                         /* include_output */ false) &&
           ((tf.isCPU() && it->second.isCPU()) || (tf.isGPU() && it->second.isGPU()))) {
         LOG(WARNING)
             << "The existing (1) and added (2) table functions have the same signature `"
@@ -361,9 +492,10 @@ void TableFunctionsFactory::add(
                              annotations,
                              is_runtime,
                              uses_manager);
-    auto sig = tf2.getSignature();
+    auto sig = tf2.getSignature(/* include_name */ true, /* include_output */ false);
     for (auto it = functions_.begin(); it != functions_.end();) {
-      if (sig == it->second.getSignature() &&
+      if (sig == it->second.getSignature(/* include_name */ true,
+                                         /* include_output */ false) &&
           ((tf2.isCPU() && it->second.isCPU()) || (tf2.isGPU() && it->second.isGPU()))) {
         LOG(WARNING)
             << "The existing (1) and added (2) table functions have the same signature `"
@@ -419,6 +551,38 @@ std::string TableFunction::getName(const bool drop_suffix, const bool lower) con
   return result;
 }
 
+std::string TableFunction::getSignature(const bool include_name,
+                                        const bool include_output) const {
+  std::string sig;
+  if (include_name) {
+    sig += getName(/*drop_suffix=*/true, /*lower=*/true);
+  }
+
+  size_t arg_idx = 0;
+  std::vector<std::string> args;
+  for (size_t sql_idx = 0; sql_idx < sql_args_.size(); sql_idx++) {
+    const std::vector<std::string> cursor_fields = getCursorFields(sql_idx);
+    if (cursor_fields.empty()) {
+      const auto& type = ExtensionFunctionsWhitelist::toString(input_args_[arg_idx++]);
+      const auto& name = getInputAnnotation(sql_idx, "name", "");
+      args.emplace_back(name.empty() ? type : (type + " " + name));
+    } else {
+      std::vector<std::string> vec;
+      for (size_t i = 0; i < cursor_fields.size(); i++) {
+        const auto& type = ExtensionFunctionsWhitelist::toString(input_args_[arg_idx++]);
+        const auto& name = cursor_fields[i];
+        vec.emplace_back((name.empty() ? type : type + " " + name));
+      }
+      args.emplace_back("Cursor<" + boost::algorithm::join(vec, ", ") + ">");
+    }
+  }
+  sig += "(" + boost::algorithm::join(args, ", ") + ")";
+  if (include_output) {
+    sig += " -> " + ExtensionFunctionsWhitelist::toString(output_args_);
+  }
+  return sig;
+}
+
 std::string TableFunction::getPreFlightFnName() const {
   // gets the name of the pre flight function associated with this table function
   return getName(false, true) + PREFLIGHT_SUFFIX;
@@ -427,12 +591,22 @@ std::string TableFunction::getPreFlightFnName() const {
 std::vector<TableFunction> TableFunctionsFactory::get_table_funcs(const std::string& name,
                                                                   const bool is_gpu) {
   std::vector<TableFunction> table_funcs;
+  for (const auto& tf : get_table_funcs(name)) {
+    if (is_gpu ? tf.isGPU() : tf.isCPU()) {
+      table_funcs.emplace_back(tf);
+    }
+  }
+  return table_funcs;
+}
+
+std::vector<TableFunction> TableFunctionsFactory::get_table_funcs(
+    const std::string& name) {
+  std::vector<TableFunction> table_funcs;
   auto table_func_name = name;
   boost::algorithm::to_lower(table_func_name);
   for (const auto& pair : functions_) {
     auto fname = drop_suffix_impl(pair.first);
-    if (fname == table_func_name &&
-        (is_gpu ? pair.second.isGPU() : pair.second.isCPU())) {
+    if (fname == table_func_name) {
       table_funcs.push_back(pair.second);
     }
   }
@@ -445,6 +619,14 @@ std::vector<TableFunction> TableFunctionsFactory::get_table_funcs(const bool is_
     if (pair.second.isRuntime() == is_runtime) {
       table_funcs.push_back(pair.second);
     }
+  }
+  return table_funcs;
+}
+
+std::vector<TableFunction> TableFunctionsFactory::get_table_funcs() {
+  std::vector<TableFunction> table_funcs;
+  for (const auto& pair : functions_) {
+    table_funcs.push_back(pair.second);
   }
   return table_funcs;
 }

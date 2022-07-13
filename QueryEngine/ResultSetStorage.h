@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,8 @@
 
 /**
  * @file    ResultSetStorage.h
- * @author
  * @brief   Basic constructors and methods of the row set interface.
  *
- * Copyright (c) 2020 OmniSci, Inc.  All rights reserved.
  */
 
 #ifndef QUERYENGINE_RESULTSETSTORAGE_H
@@ -105,7 +103,8 @@ class ResultSetStorage {
  public:
   void reduce(const ResultSetStorage& that,
               const std::vector<std::string>& serialized_varlen_buffer,
-              const ReductionCode& reduction_code) const;
+              const ReductionCode& reduction_code,
+              const size_t executor_id) const;
 
   void rewriteAggregateBufferOffsets(
       const std::vector<std::string>& serialized_varlen_buffer) const;

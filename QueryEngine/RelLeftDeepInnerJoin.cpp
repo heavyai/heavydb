@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #include "RelLeftDeepInnerJoin.h"
 #include "Logger/Logger.h"
-#include "RelAlgDagBuilder.h"
+#include "RelAlgDag.h"
 #include "RexVisitor.h"
 
 #include <numeric>
@@ -107,11 +107,19 @@ const JoinType RelLeftDeepInnerJoin::getJoinType(const size_t nesting_level) con
   return original_joins_[original_joins_.size() - nesting_level]->getJoinType();
 }
 
-std::string RelLeftDeepInnerJoin::toString() const {
+std::string RelLeftDeepInnerJoin::toString(RelRexToStringConfig config) const {
   std::string ret = ::typeName(this) + "(";
-  ret += ::toString(condition_);
-  for (const auto& input : inputs_) {
-    ret += " " + ::toString(input);
+  ret += condition_->toString(config);
+  if (!config.skip_input_nodes) {
+    for (const auto& input : inputs_) {
+      ret += " " + input->toString(config);
+    }
+  } else {
+    ret += ", input node id={";
+    for (auto& input : inputs_) {
+      ret += std::to_string(input->getId()) + " ";
+    }
+    ret += "}";
   }
   ret += ")";
   return ret;
@@ -120,8 +128,11 @@ std::string RelLeftDeepInnerJoin::toString() const {
 size_t RelLeftDeepInnerJoin::toHash() const {
   if (!hash_) {
     hash_ = typeid(RelLeftDeepInnerJoin).hash_code();
-    boost::hash_combine(*hash_,
-                        condition_ ? condition_->toHash() : boost::hash_value("n"));
+    boost::hash_combine(*hash_, condition_ ? condition_->toHash() : HASH_N);
+    for (auto& expr : outer_conditions_per_level_) {
+      boost::hash_combine(*hash_, expr ? expr->toHash() : HASH_N);
+    }
+    boost::hash_combine(*hash_, original_filter_ ? original_filter_->toHash() : HASH_N);
     for (auto& node : inputs_) {
       boost::hash_combine(*hash_, node->toHash());
     }
@@ -322,6 +333,6 @@ void create_left_deep_join(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
 
   // insert the new left join nodes to the front of the owned RelAlgNode list.
   // This is done to ensure all created RelAlgNodes exist in this list for later
-  // visitation, such as RelAlgDagBuilder::resetQueryExecutionState.
+  // visitation, such as RelAlgDag::resetQueryExecutionState.
   nodes.insert(nodes.begin(), new_nodes.begin(), new_nodes.end());
 }

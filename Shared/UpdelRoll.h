@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #ifndef UPDELROLL_H
 #define UPDELROLL_H
 
@@ -86,7 +87,7 @@ struct UpdelRoll {
                                Fragmenter_Namespace::FragmentInfo& fragment_info);
 
   // Used to guard internal data structures that track chunk/chunk metadata updates
-  mutable mapd_shared_mutex chunk_update_tracker_mutex;
+  mutable heavyai::shared_mutex chunk_update_tracker_mutex;
 
   // chunks changed during this query
   std::map<ChunkKey, std::shared_ptr<Chunk_NS::Chunk>> dirty_chunks;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,16 @@
 
 #include "InternalCatalogDataWrapper.h"
 
+#include <regex>
+
 #include "Catalog/Catalog.h"
 #include "Catalog/SysCatalog.h"
 #include "FsiChunkUtils.h"
+#include "FsiJsonUtils.h"
 #include "ImportExport/Importer.h"
+#include "Shared/StringTransform.h"
+#include "Shared/SysDefinitions.h"
+#include "Shared/distributed.h"
 
 namespace foreign_storage {
 InternalCatalogDataWrapper::InternalCatalogDataWrapper() : InternalSystemDataWrapper() {}
@@ -29,6 +35,10 @@ InternalCatalogDataWrapper::InternalCatalogDataWrapper(const int db_id,
     : InternalSystemDataWrapper(db_id, foreign_table) {}
 
 namespace {
+void set_null(import_export::TypedImportBuffer* import_buffer) {
+  import_buffer->add_value(import_buffer->getColumnDesc(), "", true, {});
+}
+
 void populate_import_buffers_for_catalog_users(
     const std::list<Catalog_Namespace::UserMetadata>& all_users,
     std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
@@ -45,10 +55,52 @@ void populate_import_buffers_for_catalog_users(
     if (import_buffers.find("default_db_id") != import_buffers.end()) {
       import_buffers["default_db_id"]->addInt(user.defaultDbId);
     }
+    if (import_buffers.find("default_db_name") != import_buffers.end()) {
+      if (user.defaultDbId > 0) {
+        import_buffers["default_db_name"]->addString(get_db_name(user.defaultDbId));
+      } else {
+        set_null(import_buffers["default_db_name"]);
+      }
+    }
     if (import_buffers.find("can_login") != import_buffers.end()) {
       import_buffers["can_login"]->addBoolean(user.can_login);
     }
   }
+}
+
+std::string get_user_name(int32_t user_id) {
+  Catalog_Namespace::UserMetadata user_metadata;
+  auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
+  if (sys_catalog.getMetadataForUserById(user_id, user_metadata)) {
+    return user_metadata.userName;
+  } else {
+    // User has been deleted.
+    return kDeletedValueIndicator;
+  }
+}
+
+std::string get_table_type(const TableDescriptor& td) {
+  std::string table_type{"DEFAULT"};
+  if (td.isView) {
+    table_type = "VIEW";
+  } else if (td.isTemporaryTable()) {
+    table_type = "TEMPORARY";
+  } else if (td.isForeignTable()) {
+    table_type = "FOREIGN";
+  }
+  return table_type;
+}
+
+std::string get_table_ddl(int32_t db_id, const TableDescriptor& td) {
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+  CHECK(catalog);
+  auto ddl = catalog->dumpCreateTable(td.tableId);
+  if (!ddl.has_value()) {
+    // It is possible for the table to be concurrently deleted while querying the system
+    // table.
+    return kDeletedValueIndicator;
+  }
+  return ddl.value();
 }
 
 void populate_import_buffers_for_catalog_tables(
@@ -59,6 +111,9 @@ void populate_import_buffers_for_catalog_tables(
       if (import_buffers.find("database_id") != import_buffers.end()) {
         import_buffers["database_id"]->addInt(db_id);
       }
+      if (import_buffers.find("database_name") != import_buffers.end()) {
+        import_buffers["database_name"]->addString(get_db_name(db_id));
+      }
       if (import_buffers.find("table_id") != import_buffers.end()) {
         import_buffers["table_id"]->addInt(table.tableId);
       }
@@ -68,11 +123,14 @@ void populate_import_buffers_for_catalog_tables(
       if (import_buffers.find("owner_id") != import_buffers.end()) {
         import_buffers["owner_id"]->addInt(table.userId);
       }
+      if (import_buffers.find("owner_user_name") != import_buffers.end()) {
+        import_buffers["owner_user_name"]->addString(get_user_name(table.userId));
+      }
       if (import_buffers.find("column_count") != import_buffers.end()) {
         import_buffers["column_count"]->addInt(table.nColumns);
       }
-      if (import_buffers.find("is_view") != import_buffers.end()) {
-        import_buffers["is_view"]->addBoolean(table.isView);
+      if (import_buffers.find("table_type") != import_buffers.end()) {
+        import_buffers["table_type"]->addString(get_table_type(table));
       }
       if (import_buffers.find("view_sql") != import_buffers.end()) {
         import_buffers["view_sql"]->addString(table.viewSQL);
@@ -95,8 +153,36 @@ void populate_import_buffers_for_catalog_tables(
       if (import_buffers.find("shard_count") != import_buffers.end()) {
         import_buffers["shard_count"]->addInt(table.nShards);
       }
+      if (import_buffers.find("ddl_statement") != import_buffers.end()) {
+        import_buffers["ddl_statement"]->addString(get_table_ddl(db_id, table));
+      }
     }
   }
+}
+
+std::vector<std::string> get_data_sources(const std::string& dashboard_metadata) {
+  rapidjson::Document document;
+  document.Parse(dashboard_metadata);
+  if (!document.IsObject()) {
+    return {};
+  }
+  auto data_sources_str =
+      json_utils::get_optional_string_value_from_object(document, "table");
+  std::vector<std::string> data_sources;
+  if (data_sources_str.has_value()) {
+    data_sources = split(data_sources_str.value(), ",");
+    for (auto it = data_sources.begin(); it != data_sources.end();) {
+      *it = strip(*it);
+      static std::regex parameter_regex{"\\$\\{.+\\}"};
+      if (std::regex_match(*it, parameter_regex)) {
+        // Remove custom SQL sources.
+        it = data_sources.erase(it);
+      } else {
+        it++;
+      }
+    }
+  }
+  return data_sources;
 }
 
 void populate_import_buffers_for_catalog_dashboards(
@@ -107,6 +193,9 @@ void populate_import_buffers_for_catalog_dashboards(
       if (import_buffers.find("database_id") != import_buffers.end()) {
         import_buffers["database_id"]->addInt(db_id);
       }
+      if (import_buffers.find("database_name") != import_buffers.end()) {
+        import_buffers["database_name"]->addString(get_db_name(db_id));
+      }
       if (import_buffers.find("dashboard_id") != import_buffers.end()) {
         import_buffers["dashboard_id"]->addInt(dashboard.dashboardId);
       }
@@ -116,10 +205,17 @@ void populate_import_buffers_for_catalog_dashboards(
       if (import_buffers.find("owner_id") != import_buffers.end()) {
         import_buffers["owner_id"]->addInt(dashboard.userId);
       }
+      if (import_buffers.find("owner_user_name") != import_buffers.end()) {
+        import_buffers["owner_user_name"]->addString(get_user_name(dashboard.userId));
+      }
       if (import_buffers.find("last_updated_at") != import_buffers.end()) {
         auto& buffer = import_buffers["last_updated_at"];
         import_buffers["last_updated_at"]->add_value(
             buffer->getColumnDesc(), dashboard.updateTime, false, {});
+      }
+      if (import_buffers.find("data_sources") != import_buffers.end()) {
+        import_buffers["data_sources"]->addStringArray(
+            get_data_sources(dashboard.dashboardMetadata));
       }
     }
   }
@@ -272,6 +368,9 @@ void populate_import_buffers_for_catalog_permissions(
     if (import_buffers.find("database_id") != import_buffers.end()) {
       import_buffers["database_id"]->addInt(permission.dbId);
     }
+    if (import_buffers.find("database_name") != import_buffers.end()) {
+      import_buffers["database_name"]->addString(get_db_name(permission.dbId));
+    }
     if (import_buffers.find("object_name") != import_buffers.end()) {
       import_buffers["object_name"]->addString(permission.objectName);
     }
@@ -280,6 +379,10 @@ void populate_import_buffers_for_catalog_permissions(
     }
     if (import_buffers.find("object_owner_id") != import_buffers.end()) {
       import_buffers["object_owner_id"]->addInt(permission.objectOwnerId);
+    }
+    if (import_buffers.find("object_owner_user_name") != import_buffers.end()) {
+      import_buffers["object_owner_user_name"]->addString(
+          get_user_name(permission.objectOwnerId));
     }
     if (import_buffers.find("object_permission_type") != import_buffers.end()) {
       import_buffers["object_permission_type"]->addString(
@@ -305,6 +408,9 @@ void populate_import_buffers_for_catalog_databases(
     }
     if (import_buffers.find("owner_id") != import_buffers.end()) {
       import_buffers["owner_id"]->addInt(db.dbOwner);
+    }
+    if (import_buffers.find("owner_user_name") != import_buffers.end()) {
+      import_buffers["owner_user_name"]->addString(get_user_name(db.dbOwner));
     }
   }
 }
@@ -337,7 +443,7 @@ std::map<int32_t, std::vector<TableDescriptor>> get_all_tables() {
   std::map<int32_t, std::vector<TableDescriptor>> tables_by_database;
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
   for (const auto& catalog : sys_catalog.getCatalogsForAllDbs()) {
-    if (catalog->name() != INFORMATION_SCHEMA_DB) {
+    if (catalog->name() != shared::kInfoSchemaDbName) {
       for (const auto& td : catalog->getAllTableMetadataCopy()) {
         tables_by_database[catalog->getDatabaseId()].emplace_back(td);
       }
@@ -350,7 +456,7 @@ std::map<int32_t, std::vector<DashboardDescriptor>> get_all_dashboards() {
   std::map<int32_t, std::vector<DashboardDescriptor>> dashboards_by_database;
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
   for (const auto& catalog : sys_catalog.getCatalogsForAllDbs()) {
-    if (catalog->name() != INFORMATION_SCHEMA_DB) {
+    if (catalog->name() != shared::kInfoSchemaDbName) {
       for (const auto& dashboard : catalog->getAllDashboardsMetadataCopy()) {
         dashboards_by_database[catalog->getDatabaseId()].emplace_back(dashboard);
       }
@@ -376,6 +482,27 @@ std::map<std::string, std::vector<std::string>> get_all_role_assignments() {
 void InternalCatalogDataWrapper::initializeObjectsForTable(
     const std::string& table_name) {
   row_count_ = 0;
+
+  // Dashboads are handled separately since they are only on the aggregator in
+  // distributed.  All others are only on the first leaf.
+  if (foreign_table_->tableName == Catalog_Namespace::DASHBOARDS_SYS_TABLE_NAME) {
+    if (dist::is_distributed() && !dist::is_aggregator()) {
+      // Only the aggregator can contain dashboards in distributed.
+      return;
+    }
+    dashboards_by_database_.clear();
+    dashboards_by_database_ = get_all_dashboards();
+    for (const auto& [db_id, dashboards] : dashboards_by_database_) {
+      row_count_ += dashboards.size();
+    }
+    return;
+  }
+
+  if (dist::is_distributed() && !dist::is_first_leaf()) {
+    // For every table except dashboards, only the first leaf returns information in
+    // distributed.
+    return;
+  }
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
   if (foreign_table_->tableName == Catalog_Namespace::USERS_SYS_TABLE_NAME) {
     users_.clear();
@@ -386,12 +513,6 @@ void InternalCatalogDataWrapper::initializeObjectsForTable(
     tables_by_database_ = get_all_tables();
     for (const auto& [db_id, tables] : tables_by_database_) {
       row_count_ += tables.size();
-    }
-  } else if (foreign_table_->tableName == Catalog_Namespace::DASHBOARDS_SYS_TABLE_NAME) {
-    dashboards_by_database_.clear();
-    dashboards_by_database_ = get_all_dashboards();
-    for (const auto& [db_id, dashboards] : dashboards_by_database_) {
-      row_count_ += dashboards.size();
     }
   } else if (foreign_table_->tableName == Catalog_Namespace::PERMISSIONS_SYS_TABLE_NAME) {
     object_permissions_.clear();

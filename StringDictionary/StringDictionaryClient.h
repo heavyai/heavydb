@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,6 +69,9 @@ class StringDictionaryClient {
     CHECK(false);
     return std::vector<int32_t>{};
   };
+
+  template <class String>
+  void get_bulk(std::vector<int32_t>& string_ids, const std::vector<String>& strings);
 
   template <class String>
   void get_or_add_bulk(std::vector<int32_t>& string_ids,

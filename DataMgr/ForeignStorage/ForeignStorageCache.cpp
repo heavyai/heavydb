@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,8 +26,8 @@
 #include "Shared/measure.h"
 
 namespace foreign_storage {
-using read_lock = mapd_shared_lock<mapd_shared_mutex>;
-using write_lock = mapd_unique_lock<mapd_shared_mutex>;
+using read_lock = heavyai::shared_lock<heavyai::shared_mutex>;
+using write_lock = heavyai::unique_lock<heavyai::shared_mutex>;
 
 namespace {
 template <typename Func, typename T>
@@ -180,9 +180,7 @@ void ForeignStorageCache::getCachedMetadataVecForKeyPrefix(
 
 bool ForeignStorageCache::hasCachedMetadataForKeyPrefix(
     const ChunkKey& chunk_prefix) const {
-  ChunkMetadataVector meta_vec;
-  caching_file_mgr_->getChunkMetadataVecForKeyPrefix(meta_vec, chunk_prefix);
-  return (meta_vec.size() > 0);
+  return caching_file_mgr_->hasChunkMetadataForKeyPrefix(chunk_prefix);
 }
 
 void ForeignStorageCache::clearForTablePrefix(const ChunkKey& chunk_prefix) {
@@ -242,19 +240,6 @@ void ForeignStorageCache::validatePath(const std::string& base_path) const {
   }
 }
 
-void ForeignStorageCache::cacheMetadataWithFragIdGreaterOrEqualTo(
-    const ChunkMetadataVector& metadata_vec,
-    const int frag_id) {
-  // Only re-cache last fragment and above
-  ChunkMetadataVector new_metadata_vec;
-  for (const auto& chunk_metadata : metadata_vec) {
-    if (chunk_metadata.first[CHUNK_KEY_FRAGMENT_IDX] >= frag_id) {
-      new_metadata_vec.push_back(chunk_metadata);
-    }
-  }
-  cacheMetadataVec(new_metadata_vec);
-}
-
 ChunkToBufferMap ForeignStorageCache::getChunkBuffersForCaching(
     const std::set<ChunkKey>& keys) const {
   ChunkToBufferMap chunk_buffer_map;
@@ -287,6 +272,11 @@ void ForeignStorageCache::storeDataWrapper(const std::string& doc,
                                            int32_t db_id,
                                            int32_t tb_id) {
   caching_file_mgr_->writeWrapperFile(doc, db_id, tb_id);
+}
+
+bool ForeignStorageCache::hasStoredDataWrapperMetadata(int32_t db_id,
+                                                       int32_t table_id) const {
+  return caching_file_mgr_->hasWrapperFile(db_id, table_id);
 }
 
 }  // namespace foreign_storage

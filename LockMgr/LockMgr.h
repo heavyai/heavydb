@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 #include <string>
 
 #include "Catalog/Catalog.h"
-#include "Shared/mapd_shared_mutex.h"
+#include "Shared/heavyai_shared_mutex.h"
 #include "Shared/types.h"
 
 namespace lockmgr {
@@ -43,7 +43,8 @@ class TableSchemaLockMgr : public TableLockMgrImpl<TableSchemaLockMgr> {
   }
 
  private:
-  TableSchemaLockMgr() {}
+  friend class TableLockMgrImpl<TableSchemaLockMgr>;
+  static inline constexpr std::string_view kind = "schema";
 };
 
 /**
@@ -60,7 +61,8 @@ class InsertDataLockMgr : public TableLockMgrImpl<InsertDataLockMgr> {
   }
 
  protected:
-  InsertDataLockMgr() {}
+  friend class TableLockMgrImpl<InsertDataLockMgr>;
+  static inline constexpr std::string_view kind = "insert";
 };
 
 /**
@@ -79,22 +81,13 @@ class TableDataLockMgr : public TableLockMgrImpl<TableDataLockMgr> {
   }
 
  protected:
-  TableDataLockMgr() {}
-};
-
-class TableLockContainerImpl {
-  std::string getTableName() const { return table_name_; }
-
- protected:
-  TableLockContainerImpl(const std::string& table_name) : table_name_(table_name) {}
-
-  std::string table_name_;
+  friend class TableLockMgrImpl<TableDataLockMgr>;
+  static inline constexpr std::string_view kind = "data";
 };
 
 template <typename LOCK_TYPE>
 class TableSchemaLockContainer
-    : public LockContainerImpl<const TableDescriptor*, LOCK_TYPE>,
-      public TableLockContainerImpl {
+    : public LockContainerImpl<const TableDescriptor*, LOCK_TYPE> {
   static_assert(std::is_same<LOCK_TYPE, ReadLock>::value ||
                 std::is_same<LOCK_TYPE, WriteLock>::value);
 
@@ -102,76 +95,93 @@ class TableSchemaLockContainer
   TableSchemaLockContainer(const TableSchemaLockContainer&) = delete;  // non-copyable
 };
 
+inline void validate_table_descriptor_after_lock(const TableDescriptor* td_prelock,
+                                                 const Catalog_Namespace::Catalog& cat,
+                                                 const std::string& table_name,
+                                                 const bool populate_fragmenter) {
+  auto td_postlock = cat.getMetadataForTable(table_name, populate_fragmenter);
+  if (td_prelock != td_postlock) {
+    if (td_postlock == nullptr) {
+      throw std::runtime_error("Table/View ID " + table_name + " for catalog " +
+                               cat.getCurrentDB().dbName + " does not exist");
+    } else {
+      // This should be very unusual case where a table has moved
+      // read DROP, CREATE kind of pattern
+      // but kept same name
+      // it is not safe to proceed here as the locking was based on the old
+      // chunk attributes of the table, which could belong to a different table now
+      throw std::runtime_error("Table/View ID " + table_name + " for catalog " +
+                               cat.getCurrentDB().dbName +
+                               " changed whilst attempting to acquire table lock");
+    }
+  }
+}
+
 template <>
 class TableSchemaLockContainer<ReadLock>
-    : public LockContainerImpl<const TableDescriptor*, ReadLock>,
-      public TableLockContainerImpl {
+    : public LockContainerImpl<const TableDescriptor*, ReadLock> {
  public:
-  static auto acquireTableDescriptor(const Catalog_Namespace::Catalog& cat,
+  static auto acquireTableDescriptor(Catalog_Namespace::Catalog& cat,
                                      const std::string& table_name,
                                      const bool populate_fragmenter = true) {
     VLOG(1) << "Acquiring Table Schema Read Lock for table: " << table_name;
-    return TableSchemaLockContainer<ReadLock>(
-        cat.getMetadataForTable(table_name, populate_fragmenter),
-        TableSchemaLockMgr::getReadLockForTable(cat, table_name));
+    auto lock = TableSchemaLockMgr::getReadLockForTable(cat, table_name);
+    auto ret = TableSchemaLockContainer<ReadLock>(
+        cat.getMetadataForTable(table_name, populate_fragmenter), std::move(lock));
+    validate_table_descriptor_after_lock(ret(), cat, table_name, populate_fragmenter);
+    return ret;
   }
 
-  static auto acquireTableDescriptor(const Catalog_Namespace::Catalog& cat,
+  static auto acquireTableDescriptor(Catalog_Namespace::Catalog& cat,
                                      const int table_id) {
-    const auto td = cat.getMetadataForTable(table_id);
-    if (!td) {
+    const auto table_name = cat.getTableName(table_id);
+    if (!table_name.has_value()) {
       throw std::runtime_error("Table/View ID " + std::to_string(table_id) +
                                " for catalog " + cat.getCurrentDB().dbName +
                                " does not exist. Cannot aquire read lock");
     }
-    VLOG(1) << "Acquiring Table Schema Read Lock for table: " << td->tableName;
-    return TableSchemaLockContainer<ReadLock>(
-        td, TableSchemaLockMgr::getReadLockForTable(cat, td->tableName));
+    return acquireTableDescriptor(cat, table_name.value());
   }
 
  private:
   TableSchemaLockContainer<ReadLock>(const TableDescriptor* obj, ReadLock&& lock)
-      : LockContainerImpl<const TableDescriptor*, ReadLock>(obj, std::move(lock))
-      , TableLockContainerImpl(obj ? obj->tableName : "") {}
+      : LockContainerImpl<const TableDescriptor*, ReadLock>(obj, std::move(lock)) {}
 };
 
 template <>
 class TableSchemaLockContainer<WriteLock>
-    : public LockContainerImpl<const TableDescriptor*, WriteLock>,
-      public TableLockContainerImpl {
+    : public LockContainerImpl<const TableDescriptor*, WriteLock> {
  public:
-  static auto acquireTableDescriptor(const Catalog_Namespace::Catalog& cat,
+  static auto acquireTableDescriptor(Catalog_Namespace::Catalog& cat,
                                      const std::string& table_name,
                                      const bool populate_fragmenter = true) {
     VLOG(1) << "Acquiring Table Schema Write Lock for table: " << table_name;
-    return TableSchemaLockContainer<WriteLock>(
-        cat.getMetadataForTable(table_name, populate_fragmenter),
-        TableSchemaLockMgr::getWriteLockForTable(cat, table_name));
+    auto lock = TableSchemaLockMgr::getWriteLockForTable(cat, table_name);
+    auto ret = TableSchemaLockContainer<WriteLock>(
+        cat.getMetadataForTable(table_name, populate_fragmenter), std::move(lock));
+    validate_table_descriptor_after_lock(ret(), cat, table_name, populate_fragmenter);
+    return ret;
   }
 
-  static auto acquireTableDescriptor(const Catalog_Namespace::Catalog& cat,
+  static auto acquireTableDescriptor(Catalog_Namespace::Catalog& cat,
                                      const int table_id) {
-    const auto td = cat.getMetadataForTable(table_id);
-    if (!td) {
+    const auto table_name = cat.getTableName(table_id);
+    if (!table_name.has_value()) {
       throw std::runtime_error("Table/View ID " + std::to_string(table_id) +
                                " for catalog " + cat.getCurrentDB().dbName +
                                " does not exist. Cannot aquire write lock");
     }
-    VLOG(1) << "Acquiring Table Schema Write Lock for table: " << td->tableName;
-    return TableSchemaLockContainer<WriteLock>(
-        td, TableSchemaLockMgr::getWriteLockForTable(cat, td->tableName));
+    return acquireTableDescriptor(cat, table_name.value());
   }
 
  private:
   TableSchemaLockContainer<WriteLock>(const TableDescriptor* obj, WriteLock&& lock)
-      : LockContainerImpl<const TableDescriptor*, WriteLock>(obj, std::move(lock))
-      , TableLockContainerImpl(obj ? obj->tableName : "") {}
+      : LockContainerImpl<const TableDescriptor*, WriteLock>(obj, std::move(lock)) {}
 };
 
 template <typename LOCK_TYPE>
 class TableDataLockContainer
-    : public LockContainerImpl<const TableDescriptor*, LOCK_TYPE>,
-      public TableLockContainerImpl {
+    : public LockContainerImpl<const TableDescriptor*, LOCK_TYPE> {
   static_assert(std::is_same<LOCK_TYPE, ReadLock>::value ||
                 std::is_same<LOCK_TYPE, WriteLock>::value);
 
@@ -181,8 +191,7 @@ class TableDataLockContainer
 
 template <>
 class TableDataLockContainer<WriteLock>
-    : public LockContainerImpl<const TableDescriptor*, WriteLock>,
-      public TableLockContainerImpl {
+    : public LockContainerImpl<const TableDescriptor*, WriteLock> {
  public:
   static auto acquire(const int db_id, const TableDescriptor* td) {
     CHECK(td);
@@ -194,14 +203,12 @@ class TableDataLockContainer<WriteLock>
 
  private:
   TableDataLockContainer<WriteLock>(const TableDescriptor* obj, WriteLock&& lock)
-      : LockContainerImpl<const TableDescriptor*, WriteLock>(obj, std::move(lock))
-      , TableLockContainerImpl(obj->tableName) {}
+      : LockContainerImpl<const TableDescriptor*, WriteLock>(obj, std::move(lock)) {}
 };
 
 template <>
 class TableDataLockContainer<ReadLock>
-    : public LockContainerImpl<const TableDescriptor*, ReadLock>,
-      public TableLockContainerImpl {
+    : public LockContainerImpl<const TableDescriptor*, ReadLock> {
  public:
   static auto acquire(const int db_id, const TableDescriptor* td) {
     CHECK(td);
@@ -213,14 +220,12 @@ class TableDataLockContainer<ReadLock>
 
  private:
   TableDataLockContainer<ReadLock>(const TableDescriptor* obj, ReadLock&& lock)
-      : LockContainerImpl<const TableDescriptor*, ReadLock>(obj, std::move(lock))
-      , TableLockContainerImpl(obj->tableName) {}
+      : LockContainerImpl<const TableDescriptor*, ReadLock>(obj, std::move(lock)) {}
 };
 
 template <typename LOCK_TYPE>
 class TableInsertLockContainer
-    : public LockContainerImpl<const TableDescriptor*, LOCK_TYPE>,
-      public TableLockContainerImpl {
+    : public LockContainerImpl<const TableDescriptor*, LOCK_TYPE> {
   static_assert(std::is_same<LOCK_TYPE, ReadLock>::value ||
                 std::is_same<LOCK_TYPE, WriteLock>::value);
 
@@ -230,8 +235,7 @@ class TableInsertLockContainer
 
 template <>
 class TableInsertLockContainer<WriteLock>
-    : public LockContainerImpl<const TableDescriptor*, WriteLock>,
-      public TableLockContainerImpl {
+    : public LockContainerImpl<const TableDescriptor*, WriteLock> {
  public:
   static auto acquire(const int db_id, const TableDescriptor* td) {
     CHECK(td);
@@ -243,14 +247,12 @@ class TableInsertLockContainer<WriteLock>
 
  private:
   TableInsertLockContainer<WriteLock>(const TableDescriptor* obj, WriteLock&& lock)
-      : LockContainerImpl<const TableDescriptor*, WriteLock>(obj, std::move(lock))
-      , TableLockContainerImpl(obj->tableName) {}
+      : LockContainerImpl<const TableDescriptor*, WriteLock>(obj, std::move(lock)) {}
 };
 
 template <>
 class TableInsertLockContainer<ReadLock>
-    : public LockContainerImpl<const TableDescriptor*, ReadLock>,
-      public TableLockContainerImpl {
+    : public LockContainerImpl<const TableDescriptor*, ReadLock> {
  public:
   static auto acquire(const int db_id, const TableDescriptor* td) {
     CHECK(td);
@@ -262,8 +264,7 @@ class TableInsertLockContainer<ReadLock>
 
  private:
   TableInsertLockContainer<ReadLock>(const TableDescriptor* obj, ReadLock&& lock)
-      : LockContainerImpl<const TableDescriptor*, ReadLock>(obj, std::move(lock))
-      , TableLockContainerImpl(obj->tableName) {}
+      : LockContainerImpl<const TableDescriptor*, ReadLock>(obj, std::move(lock)) {}
 };
 
 using LockedTableDescriptors =

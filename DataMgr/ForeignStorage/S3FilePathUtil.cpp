@@ -21,19 +21,20 @@ std::vector<Aws::S3::Model::Object> s3_objects_regex_file_filter(
 
 std::vector<Aws::S3::Model::Object> s3_objects_filter_sort_files(
     const std::vector<Aws::S3::Model::Object>& file_paths,
-    const std::optional<std::string>& filter_regex,
-    const std::optional<std::string>& sort_by,
-    const std::optional<std::string>& sort_regex) {
-  auto result_files = filter_regex.has_value()
-                          ? s3_objects_regex_file_filter(filter_regex.value(), file_paths)
-                          : file_paths;
+    const shared::FilePathOptions& options) {
+  auto result_files =
+      options.filter_regex.has_value()
+          ? s3_objects_regex_file_filter(options.filter_regex.value(), file_paths)
+          : file_paths;
   // initial lexicographical order ensures a determinisitc ordering for files not matching
   // sort_regex
-  auto initial_file_order = FileOrderS3(std::nullopt, shared::PATHNAME_ORDER_TYPE);
+  shared::FilePathOptions temp_options;
+  temp_options.sort_by = shared::PATHNAME_ORDER_TYPE;
+  auto initial_file_order = FileOrderS3(temp_options);
   auto lexi_comp = initial_file_order.getFileComparator();
   std::stable_sort(result_files.begin(), result_files.end(), lexi_comp);
 
-  auto file_order = FileOrderS3(sort_regex, sort_by);
+  auto file_order = FileOrderS3(options);
   auto comp = file_order.getFileComparator();
   std::stable_sort(result_files.begin(), result_files.end(), comp);
   return result_files;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,21 +133,27 @@ void ForeignTable::validateDataWrapperOptions() const {
 OptionsMap ForeignTable::createOptionsMap(const rapidjson::Value& json_options) {
   OptionsMap options_map;
   CHECK(json_options.IsObject());
-  for (const auto& member : json_options.GetObject()) {
-    auto key = to_upper(member.name.GetString());
+  for (auto itr = json_options.MemberBegin(); itr != json_options.MemberEnd(); ++itr) {
+    auto key = to_upper(itr->name.GetString());
     if (std::find(upper_case_options.begin(), upper_case_options.end(), key) !=
         upper_case_options.end()) {
-      options_map[key] = to_upper(member.value.GetString());
+      options_map[key] = to_upper(itr->value.GetString());
     } else {
-      options_map[key] = member.value.GetString();
+      options_map[key] = itr->value.GetString();
     }
   }
   return options_map;
 }
 
-void ForeignTable::validateAlterOptions(const OptionsMap& options_map) {
+void ForeignTable::validateAlterOptions(const OptionsMap& options_map) const {
+  const auto& data_wrapper_options =
+      foreign_storage::ForeignDataWrapperFactory::createForValidation(
+          foreign_server->data_wrapper_type, this)
+          .getAlterableTableOptions();
+
   for (const auto& [key, value] : options_map) {
-    if (!shared::contains(alterable_options, key)) {
+    if (!shared::contains(alterable_options, key) &&
+        !shared::contains(data_wrapper_options, key)) {
       throw std::runtime_error{std::string("Altering foreign table option \"") + key +
                                "\" is not currently supported."};
     }

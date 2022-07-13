@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,10 @@
 #include "Catalog/CatalogFwd.h"
 
 namespace foreign_storage {
+void refresh_foreign_table_unlocked(Catalog_Namespace::Catalog& catalog,
+                                    const ForeignTable& foreign_table,
+                                    const bool evict_cached_entries);
+
 void refresh_foreign_table(Catalog_Namespace::Catalog& catalog,
                            const std::string& table_name,
                            const bool evict_cached_entries);

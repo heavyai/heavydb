@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include "Encoder.h"
 
 #include <Shared/DatumFetchers.h>
+#include <Shared/Iteration.h>
 
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
@@ -39,12 +40,12 @@ class NoneEncoder : public Encoder {
     resetChunkStats();
   }
 
-  size_t getNumElemsForBytesEncodedData(const int8_t* index_data,
-                                        const int start_idx,
-                                        const size_t num_elements,
-                                        const size_t byte_limit) override {
-    UNREACHABLE() << "getNumElemsForBytesEncodedData unexpectedly called for non varlen"
-                     " encoder";
+  size_t getNumElemsForBytesEncodedDataAtIndices(const int8_t* index_data,
+                                                 const std::vector<size_t>& selected_idx,
+                                                 const size_t byte_limit) override {
+    UNREACHABLE()
+        << "getNumElemsForBytesEncodedDataAtIndices unexpectedly called for non varlen"
+           " encoder";
     return {};
   }
 
@@ -52,14 +53,18 @@ class NoneEncoder : public Encoder {
       const int8_t*,
       int8_t* data,
       const std::vector<size_t>& selected_idx) override {
-    std::vector<T> data_subset;
-    data_subset.reserve(selected_idx.size());
-    auto encoded_data = reinterpret_cast<T*>(data);
-    for (const auto& index : selected_idx) {
-      data_subset.emplace_back(encoded_data[index]);
-    }
-    auto append_data = reinterpret_cast<int8_t*>(data_subset.data());
-    return appendData(append_data, selected_idx.size(), SQLTypeInfo{}, false);
+    std::shared_ptr<ChunkMetadata> chunk_metadata;
+    // NOTE: the use of `execute_over_contiguous_indices` is an optimization;
+    // it prevents having to copy or move the indexed data and instead performs
+    // an append over contiguous sections of indices.
+    shared::execute_over_contiguous_indices(
+        selected_idx, [&](const size_t start_pos, const size_t end_pos) {
+          size_t elem_count = end_pos - start_pos;
+          auto data_ptr = data + sizeof(T) * selected_idx[start_pos];
+          chunk_metadata = appendData(data_ptr, elem_count, SQLTypeInfo{}, false);
+        });
+
+    return chunk_metadata;
   }
 
   std::shared_ptr<ChunkMetadata> appendEncodedData(const int8_t*,
@@ -81,20 +86,21 @@ class NoneEncoder : public Encoder {
     T* unencodedData = reinterpret_cast<T*>(src_data);
     std::vector<T> encoded_data;
     if (replicating) {
-      encoded_data.resize(num_elems_to_append);
-    }
-    for (size_t i = 0; i < num_elems_to_append; ++i) {
-      size_t ri = replicating ? 0 : i;
-      T data = validateDataAndUpdateStats(unencodedData[ri]);
-      if (replicating) {
-        encoded_data[i] = data;
+      if (num_elems_to_append > 0) {
+        encoded_data.resize(num_elems_to_append);
+        T data = validateDataAndUpdateStats(unencodedData[0]);
+        std::fill(encoded_data.begin(), encoded_data.end(), data);
       }
+    } else {
+      updateStats(src_data, num_elems_to_append);
     }
     if (offset == -1) {
+      auto append_data_size = num_elems_to_append * sizeof(T);
+      buffer_->reserve(buffer_->size() + append_data_size);
       num_elems_ += num_elems_to_append;
       buffer_->append(
           replicating ? reinterpret_cast<int8_t*>(encoded_data.data()) : src_data,
-          num_elems_to_append * sizeof(T));
+          append_data_size);
       if (!replicating) {
         src_data += num_elems_to_append * sizeof(T);
       }

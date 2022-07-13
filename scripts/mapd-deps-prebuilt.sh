@@ -220,7 +220,8 @@ elif [ "$ID" == "centos" ] ; then
   # Install packages from EPEL
   sudo yum install -y \
     cloc \
-    jq
+    jq \
+    pxz
 
   if ! type module >/dev/null 2>&1 ; then
     sudo $PACKAGER install environment-modules

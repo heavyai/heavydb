@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package com.mapd.tests;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
@@ -37,32 +38,32 @@ public class SystemTableConcurrencyTest {
   }
 
   private void runTest() throws Exception {
-    final List<ThreadDbQueries> queriesPerThread = Arrays.asList(
-            new ThreadDbQueries("omnisci",
+    List<ThreadDbQueries> queriesPerThread = new ArrayList<ThreadDbQueries>(Arrays.asList(
+            new ThreadDbQueries("heavyai",
                     Arrays.asList("CREATE USER user_1 (password = 'HyperInteractive');",
                             "ALTER USER user_1 (password = 'HyperInteractive2');",
                             "DROP USER user_1;",
                             "CREATE USER user_2 (password = 'HyperInteractive');",
                             "ALTER USER user_2 (password = 'HyperInteractive2');",
                             "DROP USER user_2;")),
-            new ThreadDbQueries("omnisci",
+            new ThreadDbQueries("heavyai",
                     Arrays.asList("CREATE USER user_3 (password = 'HyperInteractive');",
-                            "GRANT SELECT ON DATABASE omnisci TO user_3;",
-                            "REVOKE SELECT ON DATABASE omnisci FROM user_3;",
-                            "GRANT CREATE ON DATABASE omnisci TO user_3;",
-                            "REVOKE CREATE ON DATABASE omnisci FROM user_3;",
+                            "GRANT SELECT ON DATABASE heavyai TO user_3;",
+                            "REVOKE SELECT ON DATABASE heavyai FROM user_3;",
+                            "GRANT CREATE ON DATABASE heavyai TO user_3;",
+                            "REVOKE CREATE ON DATABASE heavyai FROM user_3;",
                             "DROP USER user_3;")),
-            new ThreadDbQueries("omnisci",
+            new ThreadDbQueries("heavyai",
                     Arrays.asList("CREATE DATABASE db_1;",
                             "CREATE DATABASE db_2;",
                             "DROP DATABASE db_1;",
                             "DROP DATABASE db_2;")),
-            new ThreadDbQueries("omnisci",
+            new ThreadDbQueries("heavyai",
                     Arrays.asList("CREATE ROLE role_1;",
                             "CREATE ROLE role_2;",
                             "DROP ROLE role_1;",
                             "DROP ROLE role_2;")),
-            new ThreadDbQueries("omnisci",
+            new ThreadDbQueries("heavyai",
                     Arrays.asList("CREATE TABLE table_1 (i INTEGER, t TEXT);",
                             "INSERT INTO table_1 VALUES (1, 'abc');",
                             "SELECT AVG(i) FROM table_1;",
@@ -70,7 +71,7 @@ public class SystemTableConcurrencyTest {
                             "SELECT * FROM view_1;",
                             "DROP VIEW view_1;",
                             "DROP TABLE table_1;")),
-            new ThreadDbQueries("omnisci",
+            new ThreadDbQueries("heavyai",
                     Arrays.asList("CREATE USER user_4 (password = 'HyperInteractive');",
                             "CREATE USER user_5 (password = 'HyperInteractive');",
                             "CREATE ROLE role_3;",
@@ -82,27 +83,26 @@ public class SystemTableConcurrencyTest {
                             "DROP USER user_4;",
                             "DROP USER user_5;",
                             "DROP ROLE role_3;",
-                            "DROP ROLE role_4;")),
-            new ThreadDbQueries(
-                    "information_schema", Arrays.asList("SELECT * FROM users;")),
-            new ThreadDbQueries(
-                    "information_schema", Arrays.asList("SELECT * FROM permissions;")),
-            new ThreadDbQueries(
-                    "information_schema", Arrays.asList("SELECT * FROM databases;")),
-            new ThreadDbQueries(
-                    "information_schema", Arrays.asList("SELECT * FROM roles;")),
-            new ThreadDbQueries(
-                    "information_schema", Arrays.asList("SELECT * FROM tables;")),
-            new ThreadDbQueries("information_schema",
-                    Arrays.asList("SELECT * FROM role_assignments;")),
-            new ThreadDbQueries(
-                    "information_schema", Arrays.asList("SELECT * FROM dashboards;")),
-            new ThreadDbQueries(
-                    "information_schema", Arrays.asList("SELECT * FROM memory_summary;")),
-            new ThreadDbQueries(
-                    "information_schema", Arrays.asList("SELECT * FROM memory_details;")),
-            new ThreadDbQueries("information_schema",
-                    Arrays.asList("SELECT * FROM storage_details;")));
+                            "DROP ROLE role_4;"))));
+    final List<String> systemTableQueries = Arrays.asList("SELECT * FROM users;",
+            "SELECT * FROM permissions;",
+            "SELECT * FROM databases;",
+            "SELECT * FROM roles;",
+            "SELECT * FROM tables;",
+            "SELECT * FROM role_assignments;",
+            "SELECT * FROM dashboards;",
+            "SELECT * FROM memory_summary;",
+            "SELECT * FROM memory_details;",
+            "SELECT * FROM storage_details;");
+
+    for (int i = 0; i < systemTableQueries.size(); i++) {
+      // Run queries for the same system table in parallel.
+      final int parallelQueryCount = 5;
+      for (int j = 0; j < parallelQueryCount; j++) {
+        queriesPerThread.add(new ThreadDbQueries(
+                "information_schema", Arrays.asList(systemTableQueries.get(i))));
+      }
+    }
 
     final int num_threads = queriesPerThread.size()
             + 1; // +1 for dashboard creation/update thread, which is created separately.
@@ -118,8 +118,8 @@ public class SystemTableConcurrencyTest {
     threads[0] = new Thread(() -> {
       try {
         logger.info("Starting thread[0]");
-        MapdTestClient user = MapdTestClient.getClient(
-                "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+        HeavyDBTestClient user = HeavyDBTestClient.getClient(
+                "localhost", 6274, "heavyai", "admin", "HyperInteractive");
         barrier.await();
         logger.info("0 create dashboard \"dashboard_1\"");
         int dashboardId = user.create_dashboard("dashboard_1");
@@ -143,7 +143,7 @@ public class SystemTableConcurrencyTest {
       threads[threadId] = new Thread(() -> {
         try {
           logger.info("Starting thread[" + threadId + "]");
-          MapdTestClient user = MapdTestClient.getClient(
+          HeavyDBTestClient user = HeavyDBTestClient.getClient(
                   "localhost", 6274, threadQueries.database, "admin", "HyperInteractive");
           barrier.await();
           for (final String query : threadQueries.queries) {
@@ -170,7 +170,7 @@ public class SystemTableConcurrencyTest {
     }
   }
 
-  private void runSqlAsUser(String sql, MapdTestClient user, int threadId)
+  private void runSqlAsUser(String sql, HeavyDBTestClient user, int threadId)
           throws Exception {
     logger.info(threadId + " " + sql);
     user.runSql(sql);

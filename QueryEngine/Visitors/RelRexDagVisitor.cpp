@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,8 +37,7 @@ RelRexDagVisitor::Handlers<T, sizeof...(Ts)> RelRexDagVisitor::make_handlers() {
 }
 
 // RelAlgNode types
-
-void RelRexDagVisitor::visit(RelAlgNode const* rel_alg_node) {
+void RelRexDagVisitor::castAndVisit(RelAlgNode const* rel_alg_node) {
   // Array that pairs std::type_index(typeid(*rel_alg_node)) -> method pointer.
   static auto const handlers = make_handlers<RelAlgNode,
                                              RelAggregate,
@@ -61,8 +60,13 @@ void RelRexDagVisitor::visit(RelAlgNode const* rel_alg_node) {
   if (itr != handlers.cend() && itr->type_index == type_index) {
     (this->*itr->handler)(rel_alg_node);
   } else {
-    LOG(FATAL) << "Unhandled RelAlgNode type: " << rel_alg_node->toString();
+    LOG(FATAL) << "Unhandled RelAlgNode type: "
+               << rel_alg_node->toString(RelRexToStringConfig::defaults());
   }
+}
+
+void RelRexDagVisitor::visit(RelAlgNode const* rel_alg_node) {
+  castAndVisit(rel_alg_node);
   for (size_t i = 0; i < rel_alg_node->inputCount(); ++i) {
     visit(rel_alg_node->getInput(i));
   }
@@ -123,7 +127,6 @@ void RelRexDagVisitor::visit(RelTranslatedJoin const* rel_translated_join) {
 }
 
 // RexScalar types
-
 void RelRexDagVisitor::visit(RexScalar const* rex_scalar) {
   // Array that pairs std::type_index(typeid(*rex_scalar)) -> method pointer.
   static auto const handlers = make_handlers<RexScalar,
@@ -143,7 +146,8 @@ void RelRexDagVisitor::visit(RexScalar const* rex_scalar) {
   if (itr != handlers.cend() && itr->type_index == type_index) {
     (this->*itr->handler)(rex_scalar);
   } else {
-    LOG(FATAL) << "Unhandled RexScalar type: " << rex_scalar->toString();
+    LOG(FATAL) << "Unhandled RexScalar type: "
+               << rex_scalar->toString(RelRexToStringConfig::defaults());
   }
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -103,9 +103,9 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   if (sample_ratio_expr) {
     return {codegen(sample_ratio_expr, co)};
   }
-  auto lower_expr = dynamic_cast<const Analyzer::LowerExpr*>(expr);
-  if (lower_expr) {
-    return {codegen(lower_expr, co)};
+  auto string_oper_expr = dynamic_cast<const Analyzer::StringOper*>(expr);
+  if (string_oper_expr) {
+    return {codegen(string_oper_expr, co)};
   }
   auto cardinality_expr = dynamic_cast<const Analyzer::CardinalityExpr*>(expr);
   if (cardinality_expr) {
@@ -253,7 +253,6 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::WidthBucketExpr* expr,
   CHECK(upper_bound_expr);
   CHECK(partition_count_expr);
 
-  llvm::Value* computed_bucket_lv{nullptr};
   auto is_constant_expr = [](const Analyzer::Expr* expr) {
     auto target_expr = expr;
     if (auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr)) {
@@ -297,21 +296,8 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::WidthBucketExpr* expr,
       expr->skip_out_of_bound_check();
     }
   }
-  if (expr->is_constant_expr()) {
-    computed_bucket_lv = codegenConstantWidthBucketExpr(expr, co);
-  } else {
-    computed_bucket_lv = codegenWidthBucketExpr(expr, co);
-  }
-  CHECK(computed_bucket_lv);
-  // return the largest integer equal to or less than the computed bucket number
-  // truncate double type computed bucket number
-  // the reason of casting it to float is the restriction of fptrunc func
-  // fptrunc value to ty2 --> The size of value must be larger than the size of ty2
-  auto truncated = cgen_state_->ir_builder_.CreateFPTrunc(
-      computed_bucket_lv, llvm::Type::getFloatTy(cgen_state_->context_), "truncated");
-  // cast 4-byte fp type to int32_t type
-  return cgen_state_->ir_builder_.CreateFPToSI(
-      truncated, llvm::Type::getInt32Ty(cgen_state_->context_), "bucket_number");
+  return expr->is_constant_expr() ? codegenConstantWidthBucketExpr(expr, co)
+                                  : codegenWidthBucketExpr(expr, co);
 }
 
 llvm::Value* CodeGenerator::codegenConstantWidthBucketExpr(
@@ -341,17 +327,9 @@ llvm::Value* CodeGenerator::codegenConstantWidthBucketExpr(
         "numeric constants.");
   }
 
-  bool reversed = false;
-  double scale_factor = num_partitions / (upper - lower);
-  if (lower > upper) {
-    reversed = true;
-    scale_factor = num_partitions / (lower - upper);
-  }
-
-  std::string func_name = "width_bucket";
-  if (reversed) {
-    func_name += "_reversed";
-  }
+  bool const reversed = lower > upper;
+  double const scale_factor = num_partitions / (reversed ? lower - upper : upper - lower);
+  std::string func_name = reversed ? "width_bucket_reversed" : "width_bucket";
 
   auto get_double_constant_lvs = [this, &co](double const_val) {
     Datum d;
@@ -623,7 +601,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
                 : nullptr,
             /*hoisted_filters=*/hoisted_filters_cb,
-            /*is_deleted=*/is_deleted_cb);
+            /*is_deleted=*/is_deleted_cb,
+            /*nested_loop_join=*/false);
       } else if (auto range_join_table =
                      dynamic_cast<RangeJoinHashTable*>(current_level_hash_table.get())) {
         join_loops.emplace_back(
@@ -655,7 +634,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
                 : nullptr,
             /* hoisted_filters= */ nullptr,  // <<! TODO
-            /* is_deleted= */ is_deleted_cb);
+            /* is_deleted= */ is_deleted_cb,
+            /*nested_loop_join=*/false);
       } else {
         join_loops.emplace_back(
             /*kind=*/JoinLoopKind::Set,
@@ -680,7 +660,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
                 : nullptr,
             /*hoisted_filters=*/hoisted_filters_cb,
-            /*is_deleted=*/is_deleted_cb);
+            /*is_deleted=*/is_deleted_cb,
+            /*nested_loop_join=*/false);
       }
       ++current_hash_table_idx;
     } else {
@@ -739,7 +720,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
               ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
               : nullptr,
           /*hoisted_filters=*/nullptr,
-          /*is_deleted=*/is_deleted_cb);
+          /*is_deleted=*/is_deleted_cb,
+          /*nested_loop_join=*/true);
     }
   }
   return join_loops;
@@ -1001,7 +983,7 @@ std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
     } else {
       fail_reasons.push_back(hash_table_or_error.fail_reason);
       if (!current_level_hash_table) {
-        VLOG(2) << "Building a hash table based on a qual " << qual_bin_oper->toString()
+        VLOG(2) << "Building a hashtable based on a qual " << qual_bin_oper->toString()
                 << " fails: " << hash_table_or_error.fail_reason;
       }
       handleNonHashtableQual(current_level_join_conditions.type, qual_bin_oper);
@@ -1248,6 +1230,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
                   createErrorCheckControlFlow(query_func,
                                               eo.with_dynamic_watchdog,
                                               eo.allow_runtime_query_interrupt,
+                                              join_loops,
                                               co.device_type,
                                               group_by_and_aggregate.query_infos_);
                 }
@@ -1291,6 +1274,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
             createErrorCheckControlFlow(query_func,
                                         eo.with_dynamic_watchdog,
                                         eo.allow_runtime_query_interrupt,
+                                        join_loops,
                                         co.device_type,
                                         group_by_and_aggregate.query_infos_);
           }
@@ -1421,7 +1405,8 @@ CodeGenerator::NullCheckCodegen::NullCheckCodegen(CgenState* cgen_state,
                                                   const std::string& name)
     : cgen_state(cgen_state), name(name) {
   AUTOMATIC_IR_METADATA(cgen_state);
-  CHECK(nullable_ti.is_number() || nullable_ti.is_time() || nullable_ti.is_boolean());
+  CHECK(nullable_ti.is_number() || nullable_ti.is_time() || nullable_ti.is_boolean() ||
+        nullable_ti.is_dict_encoded_string());
 
   llvm::Value* is_null_lv{nullptr};
   if (nullable_ti.is_fp()) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,8 @@ class GeoBase {
     kPOLYGON,
     kMULTIPOLYGON,
     kGEOMETRY,
-    kGEOMETRYCOLLECTION
+    kGEOMETRYCOLLECTION,
+    kMULTILINESTRING
   };
   enum class GeoOp {
     kPROJECTION = 0,
@@ -65,7 +66,9 @@ class GeoBase {
     kBUFFER = 4,
     kISVALID = 5,
     kISEMPTY = 6,
-    kEQUALS = 7
+    kEQUALS = 7,
+    kCONCAVEHULL = 8,
+    kCONVEXHULL = 9
   };
   virtual GeoType getType() const = 0;
   const OGRGeometry* getOGRGeometry() const { return geom_; }
@@ -132,6 +135,26 @@ class GeoLineString : public GeoBase {
   friend class GeoTypesFactory;
 };
 
+class GeoMultiLineString : public GeoBase {
+ public:
+  GeoMultiLineString(const std::vector<double>& coords,
+                     const std::vector<int32_t>& linestring_sizes);
+  GeoMultiLineString(const std::string& wkt);
+
+  void getColumns(std::vector<double>& coords,
+                  std::vector<int32_t>& linestring_sizes,
+                  std::vector<double>& bounds) const;
+  GeoType getType() const final { return GeoType::kMULTILINESTRING; }
+
+  std::unique_ptr<GeoBase> clone() const final;
+
+ protected:
+  GeoMultiLineString(OGRGeometry* geom, const bool owns_geom_obj)
+      : GeoBase(geom, owns_geom_obj) {}
+
+  friend class GeoTypesFactory;
+};
+
 class GeoPolygon : public GeoBase {
  public:
   GeoPolygon(const std::vector<double>& coords, const std::vector<int32_t>& ring_sizes);
@@ -174,6 +197,17 @@ class GeoMultiPolygon : public GeoBase {
 
   friend class GeoTypesFactory;
 };
+
+// TODO: with addition of MULTILINESTING and generic GEOMETRY, GEOMETRYCOLLECTION types
+// need to rename poly-specific ring_sizes and poly_rings arrays and columns to meta
+// names. First meta layer above the coords: meta1 array will contain component sizes
+//   - for MULTILINESTRING it will hold linestring sizes
+//   - for POLYGON and MULTIPOLYGON it will hold ring sizes
+// Second meta layer above the coords: meta2 array will contain larger component sizes
+//   - for MULTIPOLYGON it will hold poly sizes in terms of rings (ring counts)
+// Thrid meta layer above the coords: meta3 array will contain geometry kinds
+//   - for GEOMETRY it will hold the single geometry kind
+//   - for GEOMETRYCOLLECTION it will hold geometry kinds included in the collection
 
 class GeoGeometry : public GeoBase {
  public:

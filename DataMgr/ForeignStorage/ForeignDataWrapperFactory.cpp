@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include "CsvDataWrapper.h"
 #include "ForeignDataWrapper.h"
 #include "InternalCatalogDataWrapper.h"
+#include "InternalLogsDataWrapper.h"
 #include "InternalMemoryStatsDataWrapper.h"
 #include "InternalStorageStatsDataWrapper.h"
 #ifdef ENABLE_IMPORT_PARQUET
@@ -28,36 +29,131 @@
 #endif
 #include "Catalog/os/UserMapping.h"
 #include "RegexParserDataWrapper.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/misc.h"
+#include "Shared/thread_count.h"
 
 namespace {
-
-bool is_s3_uri(const std::string& file_path) {
-  const std::string s3_prefix = "s3://";
-  return file_path.find(s3_prefix) != std::string::npos;
+std::string get_data_wrapper_type(const import_export::CopyParams& copy_params) {
+  std::string data_wrapper_type;
+  if (copy_params.source_type == import_export::SourceType::kDelimitedFile) {
+    data_wrapper_type = foreign_storage::DataWrapperType::CSV;
+  } else if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
+    data_wrapper_type = foreign_storage::DataWrapperType::REGEX_PARSER;
+#ifdef ENABLE_IMPORT_PARQUET
+  } else if (copy_params.source_type == import_export::SourceType::kParquetFile) {
+    data_wrapper_type = foreign_storage::DataWrapperType::PARQUET;
+#endif
+  } else {
+    UNREACHABLE();
+  }
+  return data_wrapper_type;
 }
 }  // namespace
 
 namespace foreign_storage {
+bool is_s3_uri(const std::string& file_path) {
+  const std::string s3_prefix = "s3://";
+  return file_path.find(s3_prefix) != std::string::npos;
+}
+
+std::tuple<std::unique_ptr<foreign_storage::ForeignServer>,
+           std::unique_ptr<foreign_storage::UserMapping>,
+           std::unique_ptr<foreign_storage::ForeignTable>>
+create_proxy_fsi_objects(const std::string& copy_from_source,
+                         const import_export::CopyParams& copy_params,
+                         const int db_id,
+                         const TableDescriptor* table,
+                         const int32_t user_id) {
+  auto server = foreign_storage::ForeignDataWrapperFactory::createForeignServerProxy(
+      db_id, user_id, copy_from_source, copy_params);
+
+  CHECK(server);
+  server->validate();
+
+  auto user_mapping =
+      foreign_storage::ForeignDataWrapperFactory::createUserMappingProxyIfApplicable(
+          db_id, user_id, copy_from_source, copy_params, server.get());
+
+  if (user_mapping) {
+    user_mapping->validate(server.get());
+  }
+
+  auto foreign_table =
+      foreign_storage::ForeignDataWrapperFactory::createForeignTableProxy(
+          db_id, table, copy_from_source, copy_params, server.get());
+
+  CHECK(foreign_table);
+  foreign_table->validateOptionValues();
+
+  return {std::move(server), std::move(user_mapping), std::move(foreign_table)};
+}
+
+std::tuple<std::unique_ptr<foreign_storage::ForeignServer>,
+           std::unique_ptr<foreign_storage::UserMapping>,
+           std::unique_ptr<foreign_storage::ForeignTable>>
+create_proxy_fsi_objects(const std::string& copy_from_source,
+                         const import_export::CopyParams& copy_params,
+                         const TableDescriptor* table) {
+  return create_proxy_fsi_objects(copy_from_source, copy_params, -1, table, -1);
+}
+
+}  // namespace foreign_storage
+
+namespace {
+
+
+bool is_valid_data_wrapper(const std::string& data_wrapper_type) {
+  return
+#ifdef ENABLE_IMPORT_PARQUET
+      data_wrapper_type == foreign_storage::DataWrapperType::PARQUET ||
+#endif
+      data_wrapper_type == foreign_storage::DataWrapperType::CSV ||
+      data_wrapper_type == foreign_storage::DataWrapperType::REGEX_PARSER;
+}
+
+}  // namespace
+
+namespace foreign_storage {
+
+void validate_regex_parser_options(const import_export::CopyParams& copy_params) {
+  if (copy_params.line_regex.empty()) {
+    throw std::runtime_error{"Regex parser options must contain a line regex."};
+  }
+}
+
+bool is_valid_source_type(const import_export::CopyParams& copy_params) {
+  return
+#ifdef ENABLE_IMPORT_PARQUET
+      copy_params.source_type == import_export::SourceType::kParquetFile ||
+#endif
+      copy_params.source_type == import_export::SourceType::kDelimitedFile ||
+      copy_params.source_type == import_export::SourceType::kRegexParsedFile;
+}
+
+std::string bool_to_option_value(const bool value) {
+  return value ? "TRUE" : "FALSE";
+}
 
 std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::createForGeneralImport(
-    const std::string& data_wrapper_type,
+    const import_export::CopyParams& copy_params,
     const int db_id,
     const ForeignTable* foreign_table,
     const UserMapping* user_mapping) {
-#ifdef ENABLE_IMPORT_PARQUET
-  CHECK(data_wrapper_type == DataWrapperType::PARQUET ||
-        data_wrapper_type == DataWrapperType::CSV);
-#else
-  CHECK(data_wrapper_type == DataWrapperType::CSV);
-#endif
+  auto data_wrapper_type = get_data_wrapper_type(copy_params);
+  CHECK(is_valid_data_wrapper(data_wrapper_type));
 
   if (data_wrapper_type == DataWrapperType::CSV) {
-    return std::make_unique<CsvDataWrapper>(db_id, foreign_table, user_mapping);
+    return std::make_unique<CsvDataWrapper>(
+        db_id, foreign_table, user_mapping, /*disable_cache=*/true);
+  } else if (data_wrapper_type == DataWrapperType::REGEX_PARSER) {
+    return std::make_unique<RegexParserDataWrapper>(
+        db_id, foreign_table, user_mapping, true);
   }
 #ifdef ENABLE_IMPORT_PARQUET
   else if (data_wrapper_type == DataWrapperType::PARQUET) {
-    return std::make_unique<ParquetDataWrapper>(db_id, foreign_table, user_mapping);
+    return std::make_unique<ParquetDataWrapper>(
+        db_id, foreign_table, /*do_metadata_stats_validation=*/false);
   }
 #endif
 
@@ -93,26 +189,28 @@ std::unique_ptr<ForeignServer> ForeignDataWrapperFactory::createForeignServerPro
     const int user_id,
     const std::string& file_path,
     const import_export::CopyParams& copy_params) {
-#ifdef ENABLE_IMPORT_PARQUET
-  CHECK(copy_params.source_type == import_export::SourceType::kParquetFile ||
-        copy_params.source_type == import_export::SourceType::kDelimitedFile);
-#else
-  CHECK(copy_params.source_type == import_export::SourceType::kDelimitedFile);
-#endif
+  CHECK(is_valid_source_type(copy_params));
 
   auto foreign_server = std::make_unique<foreign_storage::ForeignServer>();
 
   foreign_server->id = -1;
   foreign_server->user_id = user_id;
-  if (copy_params.source_type == import_export::SourceType::kParquetFile) {
-    foreign_server->data_wrapper_type = DataWrapperType::PARQUET;
-  } else if (copy_params.source_type == import_export::SourceType::kDelimitedFile) {
+  if (copy_params.source_type == import_export::SourceType::kDelimitedFile) {
     foreign_server->data_wrapper_type = DataWrapperType::CSV;
+  } else if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
+    foreign_server->data_wrapper_type = DataWrapperType::REGEX_PARSER;
+#ifdef ENABLE_IMPORT_PARQUET
+  } else if (copy_params.source_type == import_export::SourceType::kParquetFile) {
+    foreign_server->data_wrapper_type = DataWrapperType::PARQUET;
+#endif
+  } else {
+    UNREACHABLE();
   }
   foreign_server->name = "import_proxy_server";
 
-  bool is_aws_s3_storage_type = is_s3_uri(file_path);
-  if (is_aws_s3_storage_type) {
+  if (copy_params.source_type == import_export::SourceType::kOdbc) {
+    throw std::runtime_error("ODBC storage not supported");
+  } else if (is_s3_uri(file_path)) {
     throw std::runtime_error("AWS storage not supported");
   } else {
     foreign_server->options[AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY] =
@@ -122,18 +220,31 @@ std::unique_ptr<ForeignServer> ForeignDataWrapperFactory::createForeignServerPro
   return foreign_server;
 }
 
+namespace {
+void set_header_option(OptionsMap& options,
+                       const import_export::ImportHeaderRow& has_header) {
+  switch (has_header) {
+    case import_export::ImportHeaderRow::kNoHeader:
+      options[CsvFileBufferParser::HEADER_KEY] = "FALSE";
+      break;
+    case import_export::ImportHeaderRow::kHasHeader:
+    case import_export::ImportHeaderRow::kAutoDetect:
+      options[CsvFileBufferParser::HEADER_KEY] = "TRUE";
+      break;
+    default:
+      CHECK(false);
+  }
+}
+}  // namespace
+
 std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy(
     const int db_id,
     const TableDescriptor* table,
-    const std::string& file_path,
+    const std::string& copy_from_source,
     const import_export::CopyParams& copy_params,
     const ForeignServer* server) {
-#ifdef ENABLE_IMPORT_PARQUET
-  CHECK(copy_params.source_type == import_export::SourceType::kParquetFile ||
-        copy_params.source_type == import_export::SourceType::kDelimitedFile);
-#else
-  CHECK(copy_params.source_type == import_export::SourceType::kDelimitedFile);
-#endif
+  CHECK(is_valid_source_type(copy_params));
+
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
   auto foreign_table = std::make_unique<ForeignTable>();
 
@@ -143,11 +254,82 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
   CHECK(server);
   foreign_table->foreign_server = server;
 
-  bool is_aws_s3_storage_type = is_s3_uri(file_path);
-  if (is_aws_s3_storage_type) {
+  // populate options for regex filtering of file-paths in supported data types
+  if (copy_params.source_type == import_export::SourceType::kRegexParsedFile ||
+      copy_params.source_type == import_export::SourceType::kDelimitedFile ||
+      copy_params.source_type == import_export::SourceType::kParquetFile) {
+    if (copy_params.regex_path_filter.has_value()) {
+      foreign_table->options[AbstractFileStorageDataWrapper::REGEX_PATH_FILTER_KEY] =
+          copy_params.regex_path_filter.value();
+    }
+    if (copy_params.file_sort_order_by.has_value()) {
+      foreign_table->options[AbstractFileStorageDataWrapper::FILE_SORT_ORDER_BY_KEY] =
+          copy_params.file_sort_order_by.value();
+    }
+    if (copy_params.file_sort_regex.has_value()) {
+      foreign_table->options[AbstractFileStorageDataWrapper::FILE_SORT_REGEX_KEY] =
+          copy_params.file_sort_regex.value();
+    }
+    foreign_table->options[AbstractFileStorageDataWrapper::THREADS_KEY] =
+        std::to_string(import_export::num_import_threads(copy_params.threads));
+  }
+
+  if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
+    CHECK(!copy_params.line_regex.empty());
+    foreign_table->options[RegexFileBufferParser::LINE_REGEX_KEY] =
+        copy_params.line_regex;
+    if (!copy_params.line_start_regex.empty()) {
+      foreign_table->options[RegexFileBufferParser::LINE_START_REGEX_KEY] =
+          copy_params.line_start_regex;
+    }
+    if (copy_params.has_header != import_export::ImportHeaderRow::kAutoDetect) {
+      set_header_option(foreign_table->options, copy_params.has_header);
+    }
+  }
+
+  // setup data source options based on various criteria
+  if (copy_params.source_type == import_export::SourceType::kOdbc) {
+    throw std::runtime_error("ODBC storage not supported");
+  } else if (is_s3_uri(copy_from_source)) {
     throw std::runtime_error("AWS storage not supported");
   } else {
-    foreign_table->options["FILE_PATH"] = file_path;
+    foreign_table->options["FILE_PATH"] = copy_from_source;
+  }
+
+  // for CSV import
+  if (copy_params.source_type == import_export::SourceType::kDelimitedFile) {
+    foreign_table->options[CsvFileBufferParser::DELIMITER_KEY] = copy_params.delimiter;
+    foreign_table->options[CsvFileBufferParser::NULLS_KEY] = copy_params.null_str;
+    set_header_option(foreign_table->options, copy_params.has_header);
+    foreign_table->options[CsvFileBufferParser::QUOTED_KEY] =
+        bool_to_option_value(copy_params.quoted);
+    foreign_table->options[CsvFileBufferParser::QUOTE_KEY] = copy_params.quote;
+    foreign_table->options[CsvFileBufferParser::ESCAPE_KEY] = copy_params.escape;
+    foreign_table->options[CsvFileBufferParser::LINE_DELIMITER_KEY] =
+        copy_params.line_delim;
+    foreign_table->options[CsvFileBufferParser::ARRAY_DELIMITER_KEY] =
+        copy_params.array_delim;
+    const std::array<char, 3> array_marker{
+        copy_params.array_begin, copy_params.array_end, 0};
+    foreign_table->options[CsvFileBufferParser::ARRAY_MARKER_KEY] = array_marker.data();
+    foreign_table->options[CsvFileBufferParser::LONLAT_KEY] =
+        bool_to_option_value(copy_params.lonlat);
+    foreign_table->options[CsvFileBufferParser::GEO_ASSIGN_RENDER_GROUPS_KEY] =
+        bool_to_option_value(copy_params.geo_assign_render_groups);
+    if (copy_params.geo_explode_collections) {
+      throw std::runtime_error(
+          "geo_explode_collections is not yet supported for FSI CSV import");
+    }
+    foreign_table->options[CsvFileBufferParser::GEO_EXPLODE_COLLECTIONS_KEY] =
+        bool_to_option_value(copy_params.geo_explode_collections);
+    foreign_table->options[CsvFileBufferParser::SOURCE_SRID_KEY] =
+        std::to_string(copy_params.source_srid);
+
+    foreign_table->options[TextFileBufferParser::BUFFER_SIZE_KEY] =
+        std::to_string(copy_params.buffer_size);
+
+    foreign_table->options[CsvFileBufferParser::TRIM_SPACES_KEY] =
+        bool_to_option_value(copy_params.trim_spaces);
   }
 
   foreign_table->initializeOptions();
@@ -178,6 +360,8 @@ std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::create(
   } else if (data_wrapper_type == DataWrapperType::INTERNAL_STORAGE_STATS) {
     data_wrapper =
         std::make_unique<InternalStorageStatsDataWrapper>(db_id, foreign_table);
+  } else if (data_wrapper_type == DataWrapperType::INTERNAL_LOGS) {
+    data_wrapper = std::make_unique<InternalLogsDataWrapper>(db_id, foreign_table);
   } else {
     throw std::runtime_error("Unsupported data wrapper");
   }
@@ -222,6 +406,9 @@ const ForeignDataWrapper& ForeignDataWrapperFactory::createForValidation(
     } else if (data_wrapper_type == DataWrapperType::INTERNAL_STORAGE_STATS) {
       validation_data_wrappers_[data_wrapper_type_key] =
           std::make_unique<InternalStorageStatsDataWrapper>();
+    } else if (data_wrapper_type == DataWrapperType::INTERNAL_LOGS) {
+      validation_data_wrappers_[data_wrapper_type_key] =
+          std::make_unique<InternalLogsDataWrapper>();
     } else {
       UNREACHABLE();
     }
@@ -249,6 +436,6 @@ void ForeignDataWrapperFactory::validateDataWrapperType(
   }
 }
 
-std::map<std::string, std::unique_ptr<ForeignDataWrapper>>
+std::map<std::string, std::unique_ptr<ForeignDataWrapper> >
     ForeignDataWrapperFactory::validation_data_wrappers_;
 }  // namespace foreign_storage

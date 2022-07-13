@@ -1,7 +1,7 @@
 #cython: language_level=3
 
 import pytest
-import dbe
+import heavydbe as dbe
 import ctypes
 import pyarrow as pa
 

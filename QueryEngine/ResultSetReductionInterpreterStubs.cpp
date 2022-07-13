@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include "CodeGenerator.h"
 #include "ResultSetReductionCodegen.h"
 
+#include "QueryEngine/QueryEngine.h"
 #include "Shared/funcannotations.h"
 
 namespace {
@@ -180,25 +181,33 @@ extern "C" RUNTIME_EXPORT void write_stub_result_int(void* output_handle,
 // NOTE: this is currently thread safe because only one interpreter reduction can run at a
 // time. If the interpreter allows multiple stubs to run at a time we will need to ensure
 // proper ownership of the compilation context.
-StubGenerator::Stub StubGenerator::generateStub(const std::string& name,
+StubGenerator::Stub StubGenerator::generateStub(const size_t executor_id,
+                                                const std::string& name,
                                                 const std::vector<Type>& arg_types,
                                                 const Type ret_type,
                                                 const bool is_external) {
+  // Multiple executors may trigger the generation of the same
+  // stub. We'll use get_or_wait/put methods of code cache accessor to
+  // let the first executor to generate the stub while other executors
+  // will wait until the stub has been put to the code cache.
+
+  auto executor = Executor::getExecutor(executor_id);
   const auto stub_name = name + "_stub";
   CodeCacheKey key{stub_name};
-  std::lock_guard<std::mutex> s_stubs_cache_lock(s_stubs_cache_mutex);
-  const auto compilation_context = s_stubs_cache.get(key);
+
+  // get_or_wait locks globally unless (i) this is the first attempt
+  // to compile for given key, or (ii) when key exists in code cache.
+  const auto compilation_context =
+      QueryEngine::getInstance()->s_stubs_accessor->get_or_wait(key);
   if (compilation_context) {
-    auto cpu_context =
-        std::dynamic_pointer_cast<CpuCompilationContext>(compilation_context->first);
-    CHECK(cpu_context);
-    return reinterpret_cast<StubGenerator::Stub>(cpu_context->func());
+    return reinterpret_cast<StubGenerator::Stub>(compilation_context->get()->func());
   }
-  auto cgen_state = std::make_unique<CgenState>(/*num_query_infos=*/0,
-                                                /*contains_left_deep_outer_join=*/false);
-  std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state.get()));
-  cgen_state->module_ = module.get();
-  const auto function = create_stub_function(stub_name, cgen_state.get());
+
+  // compilation is locked per executor
+  Executor::CgenStateManager cgenstate_manager(*executor.get());
+  auto cgen_state = executor->getCgenStatePtr();
+  cgen_state->set_module_shallow_copy(executor->get_rt_module());
+  const auto function = create_stub_function(stub_name, cgen_state);
   CHECK(function);
   auto& ctx = cgen_state->context_;
   std::vector<llvm::Value*> callee_args;
@@ -253,22 +262,11 @@ StubGenerator::Stub StubGenerator::generateStub(const std::string& name,
   verify_function_ir(function);
   CompilationOptions co{
       ExecutorDeviceType::CPU, false, ExecutorOptLevel::ReductionJIT, false};
-  module.release();
   auto ee = CodeGenerator::generateNativeCPUCode(function, {function}, co);
-  auto func_ptr =
-      reinterpret_cast<StubGenerator::Stub>(ee->getPointerToFunction(function));
-
   auto cpu_compilation_context = std::make_shared<CpuCompilationContext>(std::move(ee));
   cpu_compilation_context->setFunctionPointer(function);
-  Executor::addCodeToCache(
-      key, cpu_compilation_context, function->getParent(), s_stubs_cache);
+  auto func_ptr = reinterpret_cast<StubGenerator::Stub>(cpu_compilation_context->func());
+  QueryEngine::getInstance()->s_stubs_accessor->swap(key,
+                                                     std::move(cpu_compilation_context));
   return func_ptr;
 }
-
-void StubGenerator::clearCache() {
-  std::lock_guard<std::mutex> s_stubs_cache_lock(s_stubs_cache_mutex);
-  s_stubs_cache.clear();
-}
-
-CodeCache StubGenerator::s_stubs_cache(10000);
-std::mutex StubGenerator::s_stubs_cache_mutex;

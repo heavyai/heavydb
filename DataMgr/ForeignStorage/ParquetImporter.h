@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,8 @@ class ParquetImporter : public AbstractFileStorageDataWrapper {
   void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override;
 
   void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
-                            const ChunkToBufferMap& optional_buffers) override;
+                            const ChunkToBufferMap& optional_buffers,
+                            AbstractBuffer* delete_buffer) override;
 
   std::string getSerializedDataWrapper() const override;
 

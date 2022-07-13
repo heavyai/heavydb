@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,35 +14,20 @@
  * limitations under the License.
  */
 
-#ifndef _ROWTOCOLUMNLOADER_H_
-#define _ROWTOCOLUMNLOADER_H_
-
 /**
  * @file    RowToColumnLoader.h
- * @author  Michael <michael@mapd.com>
  * @brief   Utility Function to convert rows to input columns for loading via
- *load_table_binary_columnar
+ * load_table_binary_columnar
  *
- * Copyright (c) 2017 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
+
+#ifndef _ROWTOCOLUMNLOADER_H_
+#define _ROWTOCOLUMNLOADER_H_
 
 #include "Logger/Logger.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/trim.hpp>
-
-#if defined(_WIN32) && !defined(WIN32_LEAN_AND_MEAN)
-// boost/regex.hpp on win32 includes Windows.h
-// and we need to clean up macros such as ERROR and GetObject
-#define WIN32_LEAN_AND_MEAN
-#endif
-
-#include <boost/regex.hpp>
-
-#if defined(_WIN32) && defined(WIN32_LEAN_AND_MEAN)
-#include "Shared/cleanup_global_namespace.h"
-#undef WIN32_LEAN_AND_MEAN
-#endif
 
 #include <cstring>
 #include <iostream>
@@ -59,8 +44,8 @@
 
 // include files for Thrift and MapD Thrift Services
 #include "CopyParams.h"
-#include "gen-cpp/OmniSci.h"
-#include "gen-cpp/omnisci_types.h"
+#include "gen-cpp/Heavy.h"
+#include "gen-cpp/heavy_types.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -94,7 +79,7 @@ class RowToColumnLoader {
 
   TRowDescriptor row_desc_;
 
-  std::shared_ptr<OmniSciClient> client_;
+  std::shared_ptr<HeavyClient> client_;
   TSessionId session_;
 
   void createConnection(const ThriftClientConnection& con);

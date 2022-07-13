@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,17 @@
 
 /**
  * @file    StreamInsert.cpp
- * @author  Wei Hong <wei@mapd.com>
  * @brief   Sample MapD Client code for inserting a stream of rows
  * with optional transformations from stdin to a MapD table.
- **/
+ *
+ */
 
 #ifdef HAVE_THRIFT_MESSAGE_LIMIT
 #include "Shared/ThriftConfig.h"
 #endif
 
-#include <boost/regex.hpp>
+#include "Shared/clean_boost_regex.hpp"
+
 #include <cstring>
 #include <iostream>
 #include <iterator>
@@ -40,7 +41,7 @@
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/TSocket.h>
-#include "gen-cpp/OmniSci.h"
+#include "gen-cpp/Heavy.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -83,7 +84,7 @@ struct ConnectionDetails {
 bool print_error_data = false;
 bool print_transformation = false;
 
-std::shared_ptr<OmniSciClient> client;
+std::shared_ptr<HeavyClient> client;
 TSessionId session;
 std::shared_ptr<apache::thrift::transport::TTransport> mytransport;
 
@@ -103,12 +104,12 @@ void createConnection(ConnectionDetails con) {
 #endif
   std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(mytransport));
 
-  client.reset(new OmniSciClient(protocol));
+  client.reset(new HeavyClient(protocol));
   try {
     mytransport->open();  // open transport
     client->connect(
-        session, con.user_name, con.passwd, con.db_name);  // connect to omnisci_server
-  } catch (TOmniSciException& e) {
+        session, con.user_name, con.passwd, con.db_name);  // connect to heavydb
+  } catch (TDBException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
     std::cerr << "Thrift error: " << te.what() << std::endl;
@@ -117,9 +118,9 @@ void createConnection(ConnectionDetails con) {
 
 void closeConnection() {
   try {
-    client->disconnect(session);  // disconnect from omnisci_server
+    client->disconnect(session);  // disconnect from heavydb
     mytransport->close();         // close transport
-  } catch (TOmniSciException& e) {
+  } catch (TDBException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
     std::cerr << "Thrift error: " << te.what() << std::endl;
@@ -153,7 +154,7 @@ void do_load(int& nrows,
                 << std::endl;
       // we successfully loaded the data, lets move on
       return;
-    } catch (TOmniSciException& e) {
+    } catch (TDBException& e) {
       std::cerr << "Exception trying to insert data " << e.error_msg << std::endl;
       wait_disconnet_reconnnect_retry(tries, copy_params, conn_details);
     } catch (TException& te) {
@@ -342,9 +343,9 @@ int main(int argc, char** argv) {
       "passwd,p", po::value<std::string>(&passwd)->required(), "User Password");
   desc.add_options()("host",
                      po::value<std::string>(&server_host)->default_value(server_host),
-                     "OmniSci Server Hostname");
+                     "HeavyDB Server Hostname");
   desc.add_options()(
-      "port", po::value<int>(&port)->default_value(port), "OmniSci Server Port Number");
+      "port", po::value<int>(&port)->default_value(port), "HeavyDB Server Port Number");
   desc.add_options()("delim",
                      po::value<std::string>(&delim_str)->default_value(delim_str),
                      "Field delimiter");

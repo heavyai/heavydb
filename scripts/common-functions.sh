@@ -79,7 +79,7 @@ ARROW_VERSION=apache-arrow-5.0.0
 function install_arrow() {
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz
   extract $ARROW_VERSION.tar.gz
-  
+
   mkdir -p arrow-$ARROW_VERSION/cpp/build
   pushd arrow-$ARROW_VERSION/cpp/build
   cmake \
@@ -190,7 +190,7 @@ function install_llvm() {
     # Patch llvm 9 for glibc 2.31+ support
     # from: https://bugs.gentoo.org/708430
     pushd llvm-$VERS.src/projects/
-    sudo patch -p0 < $SCRIPTS_DIR/llvm-9-glibc-2.31-708430.patch
+    sudo patch -p0 < $SCRIPTS_DIR/llvm-9-glibc-2.31-708430-remove-cyclades.patch
     popd
 
     rm -rf build.llvm-$VERS
@@ -208,8 +208,40 @@ function install_llvm() {
     popd
 }
 
-PROJ_VERSION=7.2.1
-GDAL_VERSION=3.2.2
+THRIFT_VERSION=0.15.0
+
+function install_thrift() {
+    # http://dlcdn.apache.org/thrift/$THRIFT_VERSION/thrift-$THRIFT_VERSION.tar.gz
+    download ${HTTP_DEPS}/thrift-$THRIFT_VERSION.tar.gz
+    extract thrift-$THRIFT_VERSION.tar.gz
+    pushd thrift-$THRIFT_VERSION
+    if [ "$TSAN" = "false" ]; then
+      THRIFT_CFLAGS="-fPIC"
+      THRIFT_CXXFLAGS="-fPIC"
+    elif [ "$TSAN" = "true" ]; then
+      THRIFT_CFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
+      THRIFT_CXXFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
+    fi
+    source /etc/os-release
+    if [ "$ID" == "ubuntu"  ] ; then
+      BOOST_LIBDIR=""
+    else
+      BOOST_LIBDIR="--with-boost-libdir=$PREFIX/lib"
+    fi
+    CFLAGS="$THRIFT_CFLAGS" CXXFLAGS="$THRIFT_CXXFLAGS" JAVA_PREFIX=$PREFIX/lib ./configure \
+        --prefix=$PREFIX \
+        --enable-libs=off \
+        --with-cpp \
+        --without-go \
+        --without-python \
+        $BOOST_LIBDIR
+    makej
+    make install
+    popd
+}
+
+PROJ_VERSION=8.2.1
+GDAL_VERSION=3.4.1
 
 function install_gdal() {
     # sqlite3
@@ -228,16 +260,28 @@ function install_gdal() {
     make install
     popd
 
+    # hdf5
+    download_make_install ${HTTP_DEPS}/hdf5-1.12.1.tar.gz "" "--enable-hl"
+
+    # netcdf
+    download https://github.com/Unidata/netcdf-c/archive/refs/tags/v4.8.1.tar.gz
+    tar xzvf v4.8.1.tar.gz
+    pushd netcdf-c-4.8.1
+    CPPFLAGS=-I${PREFIX}/include LDFLAGS=-L${PREFIX}/lib ./configure --prefix=$PREFIX
+    makej
+    make install
+    popd
+
     # proj
     download_make_install ${HTTP_DEPS}/proj-${PROJ_VERSION}.tar.gz "" "--disable-tiff"
 
-    # gdal (with patch for GRIB raster thread contention)
+    # gdal (with patch for memory leak in VSICurlClearCache)
     download ${HTTP_DEPS}/gdal-${GDAL_VERSION}.tar.gz
     extract gdal-${GDAL_VERSION}.tar.gz
     pushd gdal-${GDAL_VERSION}
-    patch -p0 frmts/grib/degrib/degrib/myerror.c $SCRIPTS_DIR/gdal-3.2.2_grib_thread_contention.patch
-    mv frmts/grib/degrib/degrib/myerror.c frmts/grib/degrib/degrib/myerror.cpp
-    ./configure --prefix=$PREFIX --without-geos --with-libkml=$PREFIX --with-proj=$PREFIX --with-libtiff=internal --with-libgeotiff=internal
+    patch -p0 port/cpl_vsil_curl.cpp $SCRIPTS_DIR/gdal-3.4.1_memory_leak_fix_1.patch
+    patch -p0 port/cpl_vsil_curl_streaming.cpp $SCRIPTS_DIR/gdal-3.4.1_memory_leak_fix_2.patch
+    ./configure --prefix=$PREFIX --without-geos --with-libkml=$PREFIX --with-proj=$PREFIX --with-libtiff=internal --with-libgeotiff=internal --with-netcdf=$PREFIX --with-blosc=$PREFIX
     makej
     make_install
     popd
@@ -437,14 +481,14 @@ MEMKIND_VERSION=1.11.0
 
 function install_memkind() {
   download_make_install https://github.com/numactl/numactl/releases/download/v${LIBNUMA_VERSION}/numactl-${LIBNUMA_VERSION}.tar.gz
-  
+
   download https://github.com/memkind/memkind/archive/refs/tags/v${MEMKIND_VERSION}.tar.gz
   extract v${MEMKIND_VERSION}.tar.gz
   pushd memkind-${MEMKIND_VERSION}
   ./autogen.sh
   if [[ $(cat /etc/os-release) = *"fedora"* ]]; then
     memkind_dir=${PREFIX}/lib64
-  else 
+  else
     memkind_dir=${PREFIX}/lib
   fi
   ./configure --prefix=${PREFIX} --libdir=${memkind_dir}
@@ -455,5 +499,51 @@ function install_memkind() {
     && patchelf --force-rpath --set-rpath '$ORIGIN/../lib' ${memkind_dir}/libmemkind.so) \
     || echo "${memkind_dir}/libmemkind.so was not found"
 
+  popd
+}
+
+GLM_VERSION=0.9.9.8
+
+function install_glm() {
+  download https://github.com/g-truc/glm/archive/refs/tags/${GLM_VERSION}.tar.gz
+  extract ${GLM_VERSION}.tar.gz
+  mkdir -p $PREFIX/include
+  mv glm-${GLM_VERSION}/glm $PREFIX/include/
+}
+
+BLOSC_VERSION=1.21.1
+
+function install_blosc() {
+  wget --continue https://github.com/Blosc/c-blosc/archive/v${BLOSC_VERSION}.tar.gz
+  tar xvf v${BLOSC_VERSION}.tar.gz
+  BDIR="c-blosc-${BLOSC_VERSION}/build"
+  rm -rf "${BDIR}"
+  mkdir -p "${BDIR}"
+  pushd "${BDIR}"
+  cmake \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=${PREFIX} \
+      -DBUILD_BENCHMARKS=off \
+      -DBUILD_TESTS=off \
+      -DPREFER_EXTERNAL_SNAPPY=off \
+      -DPREFER_EXTERNAL_ZLIB=off \
+      -DPREFER_EXTERNAL_ZSTD=off \
+      ..
+  make -j $(nproc)
+  make install
+  popd
+}
+
+oneDAL_VERSION=2021.5
+# Todo(todd): Still hitting in TBB linker issues, solve before adding oneDAL as a dep
+function install_onedal() {
+  download https://github.com/oneapi-src/oneDAL/archive/refs/tags/${oneDAL_VERSION}.tar.gz
+  extract ${oneDAL_VERSION}.tar.gz
+  pushd oneDAL-${oneDAL_VERSION}
+  ./dev/download_micromkl.sh
+  make -f makefile _daal PLAT=lnx32e REQCPU="avx2 avx" COMPILER=gnu -j
+  mkdir -p $PREFIX/include
+  cp -r __release_lnx_gnu/daal/latest/include/* $PREFIX/include
+  cp -r __release_lnx_gnu/daal/latest/lib/* $PREFIX/lib
   popd
 }

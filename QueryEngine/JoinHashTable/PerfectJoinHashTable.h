@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-/*
- * @file    JoinHashTable.h
- * @author  Alex Suhan <alex@mapd.com>
+/**
+ * @file    PerfectJoinHashTable.h
+ * @brief
  *
  */
 
@@ -26,8 +26,8 @@
 #include "DataMgr/Allocators/ThrustAllocator.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "QueryEngine/ColumnarResults.h"
-#include "QueryEngine/DataRecycler/HashTablePropertyRecycler.h"
-#include "QueryEngine/DataRecycler/HashTableRecycler.h"
+#include "QueryEngine/DataRecycler/HashingSchemeRecycler.h"
+#include "QueryEngine/DataRecycler/HashtableRecycler.h"
 #include "QueryEngine/Descriptors/InputDescriptors.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/ExpressionRange.h"
@@ -60,8 +60,7 @@ class PerfectJoinHashTable : public HashJoin {
       ColumnCacheMap& column_cache,
       Executor* executor,
       const HashTableBuildDagMap& hashtable_build_dag_map,
-      const TableIdToNodeMap& table_id_to_node_map,
-      const RegisteredQueryHint& query_hint);
+      const TableIdToNodeMap& table_id_to_node_map);
 
   std::string toString(const ExecutorDeviceType device_type,
                        const int device_id = 0,
@@ -97,33 +96,36 @@ class PerfectJoinHashTable : public HashJoin {
 
   size_t payloadBufferOff() const noexcept override;
 
-  const RegisteredQueryHint& getRegisteredQueryHint() override { return query_hint_; }
-
-  void registerQueryHint(const RegisteredQueryHint& query_hint) override {
-    query_hint_ = query_hint;
-  }
-
   std::string getHashJoinType() const final { return "Perfect"; }
 
-  static HashTableRecycler* getHashTableCache() {
+  static HashtableRecycler* getHashTableCache() {
     CHECK(hash_table_cache_);
     return hash_table_cache_.get();
   }
-  static HashTablePropertyRecycler* getHashtablePropertyCache() {
-    CHECK(hash_table_property_cache_);
-    return hash_table_property_cache_.get();
+  static HashingSchemeRecycler* getHashingSchemeCache() {
+    CHECK(hash_table_layout_cache_);
+    return hash_table_layout_cache_.get();
   }
 
   static void invalidateCache() {
+    CHECK(hash_table_layout_cache_);
+    hash_table_layout_cache_->clearCache();
+
     CHECK(hash_table_cache_);
     hash_table_cache_->clearCache();
   }
 
   static void markCachedItemAsDirty(size_t table_key) {
+    CHECK(hash_table_layout_cache_);
     CHECK(hash_table_cache_);
     auto candidate_table_keys =
         hash_table_cache_->getMappedQueryPlanDagsWithTableKey(table_key);
     if (candidate_table_keys.has_value()) {
+      hash_table_layout_cache_->markCachedItemAsDirty(
+          table_key,
+          *candidate_table_keys,
+          CacheItemType::HT_HASHING_SCHEME,
+          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
       hash_table_cache_->markCachedItemAsDirty(table_key,
                                                *candidate_table_keys,
                                                CacheItemType::PERFECT_HT,
@@ -135,6 +137,9 @@ class PerfectJoinHashTable : public HashJoin {
 
  private:
   // Equijoin API
+  bool isOneToOneHashPossible(
+      const std::vector<ColumnsForDevice>& columns_per_device) const;
+
   ColumnsForDevice fetchColumnsForDevice(
       const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
       const int device_id,
@@ -166,11 +171,13 @@ class PerfectJoinHashTable : public HashJoin {
                        const JoinType join_type,
                        const HashType preferred_hash_type,
                        const ExpressionRange& col_range,
+                       const ExpressionRange& rhs_source_col_range,
                        ColumnCacheMap& column_cache,
                        Executor* executor,
                        const int device_count,
-                       HashtableAccessPathInfo hashtable_access_path_info,
-                       const TableIdToNodeMap& table_id_to_node_map)
+                       const HashTableBuildDagMap& hashtable_build_dag_map,
+                       const TableIdToNodeMap& table_id_to_node_map,
+                       const InnerOuterStringOpInfos& inner_outer_string_op_infos = {})
       : qual_bin_oper_(qual_bin_oper)
       , join_type_(join_type)
       , col_var_(std::dynamic_pointer_cast<Analyzer::ColumnVar>(col_var->deep_copy()))
@@ -178,18 +185,17 @@ class PerfectJoinHashTable : public HashJoin {
       , memory_level_(memory_level)
       , hash_type_(preferred_hash_type)
       , col_range_(col_range)
+      , rhs_source_col_range_(rhs_source_col_range)
       , executor_(executor)
       , column_cache_(column_cache)
       , device_count_(device_count)
       , needs_dict_translation_(false)
-      , hashtable_cache_key_(hashtable_access_path_info.hashed_query_plan_dag)
-      , hashtable_cache_meta_info_(hashtable_access_path_info.meta_info)
-      , table_keys_(hashtable_access_path_info.table_keys)
-      , table_id_to_node_map_(table_id_to_node_map) {
+      , hashtable_build_dag_map_(hashtable_build_dag_map)
+      , table_id_to_node_map_(table_id_to_node_map)
+      , inner_outer_string_op_infos_(inner_outer_string_op_infos) {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
     CHECK_GT(device_count_, 0);
     hash_tables_for_device_.resize(device_count_);
-    query_hint_ = RegisteredQueryHint::defaults();
   }
 
   ChunkKey genChunkKey(const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
@@ -200,8 +206,7 @@ class PerfectJoinHashTable : public HashJoin {
   std::shared_ptr<PerfectHashTable> initHashTableOnCpuFromCache(
       QueryPlanHash key,
       CacheItemType item_type,
-      DeviceIdentifier device_identifier,
-      HashType expected_layout);
+      DeviceIdentifier device_identifier);
   void putHashTableOnCpuToCache(QueryPlanHash key,
                                 CacheItemType item_type,
                                 std::shared_ptr<PerfectHashTable> hashtable_ptr,
@@ -215,6 +220,7 @@ class PerfectJoinHashTable : public HashJoin {
   llvm::Value* codegenHashTableLoad(const size_t table_idx);
 
   std::vector<llvm::Value*> getHashJoinArgs(llvm::Value* hash_ptr,
+                                            llvm::Value* key_lvs,
                                             const Analyzer::Expr* key_col,
                                             const int shard_count,
                                             const CompilationOptions& co);
@@ -225,10 +231,15 @@ class PerfectJoinHashTable : public HashJoin {
 
   HashTable* getHashTableForDevice(const size_t device_id) const;
 
+  void copyCpuHashTableToGpu(std::shared_ptr<PerfectHashTable>& cpu_hash_table,
+                             const int device_id,
+                             Data_Namespace::DataMgr* data_mgr);
+
   struct AlternativeCacheKeyForPerfectHashJoin {
     const ExpressionRange col_range;
     const Analyzer::ColumnVar* inner_col;
     const Analyzer::ColumnVar* outer_col;
+    InnerOuterStringOpInfos inner_outer_string_op_infos;
     const ChunkKey chunk_key;
     const size_t num_elements;
     const SQLOps optype;
@@ -242,10 +253,11 @@ class PerfectJoinHashTable : public HashJoin {
     if (info.inner_col->get_type_info().is_string()) {
       boost::hash_combine(hash, info.outer_col->toString());
     }
+    boost::hash_combine(hash, ::toString(info.inner_outer_string_op_infos));
     boost::hash_combine(hash, info.col_range.toString());
     boost::hash_combine(hash, info.num_elements);
-    boost::hash_combine(hash, ::toString(info.optype));
-    boost::hash_combine(hash, ::toString(info.join_type));
+    boost::hash_combine(hash, info.optype);
+    boost::hash_combine(hash, info.join_type);
     return hash;
   }
 
@@ -255,26 +267,40 @@ class PerfectJoinHashTable : public HashJoin {
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
   HashType hash_type_;
-
   std::mutex cpu_hash_table_buff_mutex_;
+  std::mutex str_proxy_translation_mutex_;
+  const StringDictionaryProxy::IdMap* str_proxy_translation_map_{nullptr};
   ExpressionRange col_range_;
+  ExpressionRange rhs_source_col_range_;
   Executor* executor_;
   ColumnCacheMap& column_cache_;
   const int device_count_;
   mutable bool needs_dict_translation_;
-
-  RegisteredQueryHint query_hint_;
-  QueryPlanHash hashtable_cache_key_;
+  HashTableBuildDagMap hashtable_build_dag_map_;
+  // per-device cache key to cover hash table for sharded table
+  std::vector<QueryPlanHash> hashtable_cache_key_;
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
   std::unordered_set<size_t> table_keys_;
   const TableIdToNodeMap table_id_to_node_map_;
+  const InnerOuterStringOpInfos inner_outer_string_op_infos_;
 
-  static std::unique_ptr<HashTableRecycler> hash_table_cache_;
+  static std::unique_ptr<HashtableRecycler> hash_table_cache_;
+  static std::unique_ptr<HashingSchemeRecycler> hash_table_layout_cache_;
 };
 
-bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
-                                  const Analyzer::Expr* outer_col,
-                                  const Executor* executor);
+bool needs_dictionary_translation(
+    const InnerOuter& inner_outer_col_pair,
+    const InnerOuterStringOpInfos& inner_outer_string_op_infos,
+    const Executor* executor);
+
+inline Data_Namespace::MemoryLevel get_effective_memory_level(
+    const Data_Namespace::MemoryLevel memory_level,
+    const bool needs_dict_translation) {
+  if (needs_dict_translation) {
+    return Data_Namespace::CPU_LEVEL;
+  }
+  return memory_level;
+}
 
 std::vector<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,

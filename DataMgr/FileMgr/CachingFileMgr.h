@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Omnisci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 /**
  * @file	CachingFileMgr.h
+ * @brief
  *
  * This file details an extension of the FileMgr that can contain pages from multiple
  * tables (CachingFileMgr).
@@ -32,6 +33,7 @@
 #include "DataMgr/ForeignStorage/CacheEvictionAlgorithms/LRUEvictionAlgorithm.h"
 #include "FileMgr.h"
 #include "Shared/File.h"
+#include "Shared/SysDefinitions.h"
 
 namespace File_Namespace {
 
@@ -75,7 +77,7 @@ struct DiskCacheConfig {
     return "";
   }
   static std::string getDefaultPath(const std::string& base_path) {
-    return base_path + "/omnisci_disk_cache";
+    return base_path + "/" + shared::kDefaultDiskCacheDirName;
   }
 };
 
@@ -127,6 +129,11 @@ class TableFileMgr {
    */
   void writeWrapperFile(const std::string& doc) const;
 
+  /**
+   * Checks if data wrapper file has been written to disk/cached.
+   */
+  bool hasWrapperFile() const;
+
  private:
   std::string table_path_;
   std::string epoch_file_path_;
@@ -135,7 +142,7 @@ class TableFileMgr {
   bool is_checkpointed_ = true;
   FILE* epoch_file_ = nullptr;
 
-  mutable mapd_shared_mutex table_mutex_;
+  mutable heavyai::shared_mutex table_mutex_;
 };
 
 // Extension of FileBuffer with restricted behaviour.
@@ -322,6 +329,11 @@ class CachingFileMgr : public FileMgr {
    **/
   void writeWrapperFile(const std::string& doc, int32_t db, int32_t tb);
 
+  /**
+   * Checks if data wrapper file has been written to disk/cached.
+   */
+  bool hasWrapperFile(int32_t db_id, int32_t table_id) const;
+
   std::string getTableFileMgrPath(int32_t db, int32_t tb) const;
 
   /**
@@ -472,13 +484,13 @@ class CachingFileMgr : public FileMgr {
    **/
   void setMaxSizes();
 
-  FileBuffer* getBufferUnlocked(const ChunkKeyToChunkMap::iterator chunk_it,
-                                const size_t numBytes = 0) override;
+  FileBuffer* getBufferUnlocked(const ChunkKey& key,
+                                const size_t numBytes = 0) const override;
   ChunkKeyToChunkMap::iterator deleteBufferUnlocked(
       const ChunkKeyToChunkMap::iterator chunk_it,
       const bool purge = true) override;
 
-  mutable mapd_shared_mutex table_dirs_mutex_;  // mutex for table_dirs_.
+  mutable heavyai::shared_mutex table_dirs_mutex_;  // mutex for table_dirs_.
   // each table gest a separate epoch.  Uses pointers for move semantics.
   std::map<TablePair, std::unique_ptr<TableFileMgr>> table_dirs_;
 

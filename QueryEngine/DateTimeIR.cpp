@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,6 +63,9 @@ const char* get_extract_function_name(ExtractField field) {
       return "extract_quarter";
     case kYEAR:
       return "extract_year";
+    case kUNKNOWN_FIELD:
+      UNREACHABLE();
+      return "";
   }
   UNREACHABLE();
   return "";

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cassert>
 #include <optional>
 #include <string>
+#include "../Shared/StringTransform.h"
 #include "../Shared/sqltypes.h"
 #include "../Shared/toString.h"
 

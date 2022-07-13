@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
   desc.add_options()("help,h", "Print help messages ")(
       "data",
       po::value<std::string>(&base_path)->required(),
-      "Directory path to OmniSci catalogs")(
+      "Directory path to HeavyDB catalogs")(
       "calcite-port",
       po::value<int>(&calcite_port)->default_value(calcite_port),
       "Calcite port")("columnar-output",

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,6 +74,7 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
           return new NoneEncoder<int64_t>(buffer);
         case kPOINT:
         case kLINESTRING:
+        case kMULTILINESTRING:
         case kPOLYGON:
         case kMULTIPOLYGON:
           return new StringNoneEncoder(buffer);
@@ -201,6 +202,7 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
       switch (sqlType.get_type()) {
         case kPOINT:
         case kLINESTRING:
+        case kMULTILINESTRING:
         case kPOLYGON:
         case kMULTIPOLYGON:
           return new StringNoneEncoder(buffer);

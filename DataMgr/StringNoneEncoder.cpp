@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,9 @@
 
 /**
  * @file		StringNoneEncoder.cpp
- * @author	Wei Hong <wei@map-d.com>
  * @brief		For unencoded strings
  *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
 
 #include "StringNoneEncoder.h"
 #include <algorithm>
@@ -48,26 +46,21 @@ size_t StringNoneEncoder::getNumElemsForBytesInsertData(
   return n - start_idx;
 }
 
-size_t StringNoneEncoder::getNumElemsForBytesEncodedData(const int8_t* index_data,
-                                                         const int start_idx,
-                                                         const size_t num_elements,
-                                                         const size_t byte_limit) {
+size_t StringNoneEncoder::getNumElemsForBytesEncodedDataAtIndices(
+    const int8_t* index_data,
+    const std::vector<size_t>& selected_idx,
+    const size_t byte_limit) {
+  size_t num_elements = 0;
   size_t data_size = 0;
-  auto string_offsets = reinterpret_cast<const StringOffsetT*>(index_data);
-  size_t count;
-  for (count = 1; count <= num_elements; ++count) {
-    auto current_index = start_idx + count;
-    auto offset = string_offsets[current_index];
-    CHECK(offset >= 0);
-    int64_t last_offset = string_offsets[current_index - 1];
-    CHECK(last_offset >= 0 && last_offset <= offset);
-    size_t string_byte_size = offset - last_offset;
-    if (data_size + string_byte_size > byte_limit) {
+  for (const auto& offset_index : selected_idx) {
+    auto element_size = getStringSizeAtIndex(index_data, offset_index);
+    if (data_size + element_size > byte_limit) {
       break;
     }
-    data_size += string_byte_size;
+    data_size += element_size;
+    num_elements++;
   }
-  return count - 1;
+  return num_elements;
 }
 
 std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendEncodedDataAtIndices(
@@ -76,8 +69,8 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendEncodedDataAtIndices(
     const std::vector<size_t>& selected_idx) {
   std::vector<std::string_view> data_subset;
   data_subset.reserve(selected_idx.size());
-  for (const auto& index : selected_idx) {
-    data_subset.emplace_back(getStringAtIndex(index_data, data, index));
+  for (const auto& offset_index : selected_idx) {
+    data_subset.emplace_back(getStringAtIndex(index_data, data, offset_index));
   }
   return appendData(&data_subset, 0, selected_idx.size(), false);
 }
@@ -103,11 +96,11 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
     const size_t numAppendElems,
     const bool replicating) {
   CHECK(index_buf);  // index_buf must be set before this.
-  size_t index_size = numAppendElems * sizeof(StringOffsetT);
+  size_t append_index_size = numAppendElems * sizeof(StringOffsetT);
   if (num_elems_ == 0) {
-    index_size += sizeof(StringOffsetT);  // plus one for the initial offset of 0.
+    append_index_size += sizeof(StringOffsetT);  // plus one for the initial offset of 0.
   }
-  index_buf->reserve(index_size);
+  index_buf->reserve(index_buf->size() + append_index_size);
   StringOffsetT offset = 0;
   if (num_elems_ == 0) {
     index_buf->append((int8_t*)&offset,
@@ -123,15 +116,15 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
                     Data_Namespace::CPU_LEVEL);
     CHECK_GE(last_offset, 0);
   }
-  size_t data_size = 0;
+  size_t append_data_size = 0;
   for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {
     size_t len = (*srcData)[replicating ? 0 : n].length();
-    data_size += len;
+    append_data_size += len;
   }
-  buffer_->reserve(data_size);
+  buffer_->reserve(buffer_->size() + append_data_size);
 
   size_t inbuf_size =
-      std::min(std::max(index_size, data_size), (size_t)MAX_INPUT_BUF_SIZE);
+      std::min(std::max(append_index_size, append_data_size), (size_t)MAX_INPUT_BUF_SIZE);
   auto inbuf = std::make_unique<int8_t[]>(inbuf_size);
   for (size_t num_appended = 0; num_appended < numAppendElems;) {
     StringOffsetT* p = reinterpret_cast<StringOffsetT*>(inbuf.get());
@@ -204,15 +197,28 @@ void StringNoneEncoder::update_elem_stats(const StringType& elem) {
   }
 }
 
-std::string_view StringNoneEncoder::getStringAtIndex(const int8_t* index_data,
-                                                     const int8_t* data,
-                                                     size_t index) {
+std::pair<StringOffsetT, StringOffsetT> StringNoneEncoder::getStringOffsets(
+    const int8_t* index_data,
+    size_t index) {
   auto string_offsets = reinterpret_cast<const StringOffsetT*>(index_data);
   auto current_index = index + 1;
   auto offset = string_offsets[current_index];
   CHECK(offset >= 0);
   int64_t last_offset = string_offsets[current_index - 1];
   CHECK(last_offset >= 0 && last_offset <= offset);
+  return {offset, last_offset};
+}
+
+size_t StringNoneEncoder::getStringSizeAtIndex(const int8_t* index_data, size_t index) {
+  auto [offset, last_offset] = getStringOffsets(index_data, index);
+  size_t string_byte_size = offset - last_offset;
+  return string_byte_size;
+}
+
+std::string_view StringNoneEncoder::getStringAtIndex(const int8_t* index_data,
+                                                     const int8_t* data,
+                                                     size_t index) {
+  auto [offset, last_offset] = getStringOffsets(index_data, index);
   size_t string_byte_size = offset - last_offset;
   auto current_data = reinterpret_cast<const char*>(data + last_offset);
   return std::string_view{current_data, string_byte_size};
@@ -233,3 +239,19 @@ template std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData<std::strin
 template void StringNoneEncoder::update_elem_stats<std::string>(const std::string& elem);
 template void StringNoneEncoder::update_elem_stats<std::string_view>(
     const std::string_view& elem);
+
+void StringNoneEncoder::getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) {
+  Encoder::getMetadata(chunkMetadata);  // call on parent class
+  chunkMetadata->chunkStats.min.stringval = nullptr;
+  chunkMetadata->chunkStats.max.stringval = nullptr;
+  chunkMetadata->chunkStats.has_nulls = has_nulls;
+}
+
+// Only called from the executor for synthesized meta-information.
+std::shared_ptr<ChunkMetadata> StringNoneEncoder::getMetadata(const SQLTypeInfo& ti) {
+  auto chunk_stats = ChunkStats{};
+  chunk_stats.min.stringval = nullptr;
+  chunk_stats.max.stringval = nullptr;
+  chunk_stats.has_nulls = has_nulls;
+  return std::make_shared<ChunkMetadata>(ti, 0, 0, chunk_stats);
+}

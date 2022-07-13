@@ -16,8 +16,13 @@ public class SqlShowUserDetails extends SqlCustomDdl {
   @Expose
   private List<String> userNames;
 
-  public SqlShowUserDetails(final SqlParserPos pos, final List<String> userNames) {
+  @Expose
+  private boolean all;
+
+  public SqlShowUserDetails(
+          final SqlParserPos pos, final List<String> userNames, final boolean all) {
     super(OPERATOR, pos);
     this.userNames = userNames;
+    this.all = all;
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,20 +17,26 @@
 #ifndef STRINGDICTIONARY_STRINGDICTIONARY_H
 #define STRINGDICTIONARY_STRINGDICTIONARY_H
 
-#include "../Shared/mapd_shared_mutex.h"
 #include "DictRef.h"
 #include "DictionaryCache.hpp"
-#include "LeafHostInfo.h"
+#include "StringOps/StringOpInfo.h"
 
+#include <functional>
 #include <future>
 #include <map>
+#include <shared_mutex>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
 extern bool g_enable_stringdict_parallel;
 
 class StringDictionaryClient;
+
+namespace StringOps_Namespace {
+struct StringOpInfo;
+}
 
 class DictPayloadUnavailable : public std::runtime_error {
  public:
@@ -39,11 +45,16 @@ class DictPayloadUnavailable : public std::runtime_error {
   DictPayloadUnavailable(const std::string& err) : std::runtime_error(err) {}
 };
 
+class LeafHostInfo;
+
 using string_dict_hash_t = uint32_t;
+
+using StringLookupCallback = std::function<bool(std::string_view, int32_t string_id)>;
 
 class StringDictionary {
  public:
-  StringDictionary(const std::string& folder,
+  StringDictionary(const DictRef& dict_ref,
+                   const std::string& folder,
                    const bool isTemp,
                    const bool recover,
                    const bool materializeHashes = false,
@@ -51,7 +62,30 @@ class StringDictionary {
   StringDictionary(const LeafHostInfo& host, const DictRef dict_ref);
   ~StringDictionary() noexcept;
 
+  int32_t getDbId() const noexcept;
+  int32_t getDictId() const noexcept;
+
+  class StringCallback {
+   public:
+    virtual ~StringCallback() = default;
+    virtual void operator()(std::string const&, int32_t const string_id) = 0;
+    virtual void operator()(std::string_view const, int32_t const string_id) = 0;
+  };
+
+  // Functors passed to eachStringSerially() must derive from StringCallback.
+  // Each std::string const& (if isClient()) or std::string_view (if !isClient())
+  // plus string_id is passed to the callback functor.
+  void eachStringSerially(int64_t const generation, StringCallback&) const;
+  std::function<int32_t(std::string const&)> makeLambdaStringToId() const;
+  friend class StringLocalCallback;
+
   int32_t getOrAdd(const std::string& str) noexcept;
+  template <class T, class String>
+  size_t getBulk(const std::vector<String>& string_vec, T* encoded_vec) const;
+  template <class T, class String>
+  size_t getBulk(const std::vector<String>& string_vec,
+                 T* encoded_vec,
+                 const int64_t generation) const;
   template <class T, class String>
   void getOrAddBulk(const std::vector<String>& string_vec, T* encoded_vec);
   template <class T, class String>
@@ -59,7 +93,8 @@ class StringDictionary {
   template <class String>
   void getOrAddBulkArray(const std::vector<std::vector<String>>& string_array_vec,
                          std::vector<std::vector<int32_t>>& ids_array_vec);
-  int32_t getIdOfString(const std::string& str) const;
+  template <class String>
+  int32_t getIdOfString(const String&) const;
   std::string getString(int32_t string_id) const;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
   size_t storageEntryCount() const;
@@ -80,7 +115,25 @@ class StringDictionary {
 
   std::vector<std::string> copyStrings() const;
 
+  std::vector<std::string_view> getStringViews() const;
+  std::vector<std::string_view> getStringViews(const size_t generation) const;
+
+  std::vector<int32_t> buildDictionaryTranslationMap(
+      const std::shared_ptr<StringDictionary> dest_dict,
+      StringLookupCallback const& dest_transient_lookup_callback) const;
+
+  size_t buildDictionaryTranslationMap(
+      const StringDictionary* dest_dict,
+      int32_t* translated_ids,
+      const int64_t source_generation,
+      const int64_t dest_generation,
+      const bool dest_has_transients,
+      StringLookupCallback const& dest_transient_lookup_callback,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const;
+
   bool checkpoint() noexcept;
+
+  bool isClient() const noexcept;
 
   /**
    * @brief Populates provided \p dest_ids vector with string ids corresponding to given
@@ -97,14 +150,14 @@ class StringDictionary {
    * @param dest_dict - destination dictionary
    * @param source_ids - vector of source string ids for which destination ids are needed
    * @param source_dict - source dictionary
-   * @param transient_mapping - map of transient source string ids to string values
+   * @param transient_string_vec - ordered vector of string value pointers
    */
   static void populate_string_ids(
       std::vector<int32_t>& dest_ids,
       StringDictionary* dest_dict,
       const std::vector<int32_t>& source_ids,
       const StringDictionary* source_dict,
-      const std::map<int32_t, std::string> transient_mapping = {});
+      const std::vector<std::string const*>& transient_string_vec = {});
 
   static void populate_string_array_ids(
       std::vector<std::vector<int32_t>>& dest_array_ids,
@@ -115,6 +168,8 @@ class StringDictionary {
   static constexpr int32_t INVALID_STR_ID = -1;
   static constexpr size_t MAX_STRLEN = (1 << 15) - 1;
   static constexpr size_t MAX_STRCOUNT = (1U << 31) - 1;
+
+  void update_leaf(const LeafHostInfo& host_info);
 
  private:
   struct StringIdxEntry {
@@ -154,9 +209,8 @@ class StringDictionary {
   template <class String>
   void hashStrings(const std::vector<String>& string_vec,
                    std::vector<string_dict_hash_t>& hashes) const noexcept;
-  template <class T, class String>
-  void getOrAddBulkRemote(const std::vector<String>& string_vec, T* encoded_vec);
-  int32_t getUnlocked(const std::string& str) const noexcept;
+
+  int32_t getUnlocked(const std::string_view sv) const noexcept;
   std::string getStringUnlocked(int32_t string_id) const noexcept;
   std::string getStringChecked(const int string_id) const noexcept;
   std::pair<char*, size_t> getStringBytesChecked(const int string_id) const noexcept;
@@ -203,6 +257,7 @@ class StringDictionary {
   void mergeSortedCache(std::vector<int32_t>& temp_sorted_cache);
   compare_cache_value_t* binary_search_cache(const std::string& pattern) const;
 
+  const DictRef dict_ref_;
   const std::string folder_;
   size_t str_count_;
   size_t collisions_;
@@ -219,15 +274,15 @@ class StringDictionary {
   size_t offset_file_size_;
   size_t payload_file_size_;
   size_t payload_file_off_;
-  mutable mapd_shared_mutex rw_mutex_;
+  mutable std::shared_mutex rw_mutex_;
   mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<int32_t>>
       like_cache_;
   mutable std::map<std::pair<std::string, char>, std::vector<int32_t>> regex_cache_;
   mutable std::map<std::string, int32_t> equal_cache_;
   mutable DictionaryCache<std::string, compare_cache_value_t> compare_cache_;
   mutable std::shared_ptr<std::vector<std::string>> strings_cache_;
-  std::unique_ptr<StringDictionaryClient> client_;
-  std::unique_ptr<StringDictionaryClient> client_no_timeout_;
+  mutable std::unique_ptr<StringDictionaryClient> client_;
+  mutable std::unique_ptr<StringDictionaryClient> client_no_timeout_;
 
   char* CANARY_BUFFER{nullptr};
   size_t canary_buffer_size = 0;

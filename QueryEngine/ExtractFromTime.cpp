@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,8 +45,35 @@ DEVICE unsigned week_start_from_yoe(unsigned const yoe) {
 
 }  // namespace
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
-extract_hour(const int64_t lcltime) {
+extern "C" ALWAYS_INLINE DEVICE int64_t ExtractTimeFromHPTimestamp(const int64_t timeval,
+                                                                   const int64_t scale) {
+  return unsigned_mod(floor_div(timeval, scale), kSecsPerDay);
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t
+ExtractTimeFromHPTimestampNullable(const int64_t timeval,
+                                   const int64_t scale,
+                                   const int64_t null_val) {
+  if (timeval == null_val) {
+    return null_val;
+  }
+  return ExtractTimeFromHPTimestamp(timeval, scale);
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t
+ExtractTimeFromLPTimestamp(const int64_t timeval) {
+  return unsigned_mod(timeval, kSecsPerDay);
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t
+ExtractTimeFromLPTimestampNullable(const int64_t timeval, const int64_t null_val) {
+  if (timeval == null_val) {
+    return null_val;
+  }
+  return ExtractTimeFromLPTimestamp(timeval);
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t extract_hour(const int64_t lcltime) {
   return unsigned_mod(lcltime, kSecsPerDay) / kSecsPerHour;
 }
 
@@ -304,6 +331,8 @@ DEVICE int64_t ExtractFromTime(ExtractField field, const int64_t timeval) {
       return extract_quarter(timeval);
     case kYEAR:
       return extract_year(timeval);
+    case kUNKNOWN_FIELD:
+      return -1;
   }
 
 #ifdef __CUDACC__

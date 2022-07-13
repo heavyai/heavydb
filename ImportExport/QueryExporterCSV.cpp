@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ void QueryExporterCSV::beginExport(const std::string& file_path,
   }
 
   // write header?
-  if (copy_params.has_header == import_export::ImportHeaderRow::kHasHeader) {
+  if (copy_params.has_header != import_export::ImportHeaderRow::kNoHeader) {
     bool not_first{false};
     int column_index = 0;
     for (auto const& column_info : column_infos) {
@@ -103,7 +103,10 @@ std::string target_value_to_string(const TargetValue& tv,
     return "NULL";
   }
   const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
-  if (ti.is_time() || ti.is_decimal()) {
+  if (ti.is_time()) {
+    return shared::convert_temporal_to_iso_format(ti, *boost::get<int64_t>(scalar_tv));
+  }
+  if (ti.is_decimal()) {
     Datum datum;
     datum.bigintval = *boost::get<int64_t>(scalar_tv);
     if (datum.bigintval == NULL_BIGINT) {
@@ -195,12 +198,10 @@ void QueryExporterCSV::exportResults(const std::vector<AggregatedResult>& query_
           }
           if (is_null) {
             outfile_ << copy_params_.null_str;
-          } else if (ti.get_type() == kTIME) {
-            constexpr size_t buf_size = 9;
-            char buf[buf_size];
-            size_t const len = shared::formatHMS(buf, buf_size, int_val);
-            CHECK_EQ(8u, len);  // 8 == strlen("HH:MM:SS")
-            outfile_ << buf;
+          } else if (ti.is_time()) {
+            outfile_ << shared::convert_temporal_to_iso_format(ti, int_val);
+          } else if (ti.is_boolean()) {
+            outfile_ << (int_val ? "true" : "false");
           } else {
             outfile_ << int_val;
           }

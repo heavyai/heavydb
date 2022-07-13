@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 /*
  * @file RasterImporter.h
- * @author Simon Eves <simon.eves@omnisci.com>
  * @brief GDAL Raster File Importer
+ *
  */
 
 #pragma once
@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "Geospatial/GDAL.h"
+#include "ImportExport/MetadataColumn.h"
 #include "Shared/sqltypes.h"
 
 class GDALRasterBand;
@@ -65,7 +66,8 @@ class RasterImporter {
               const PointType point_type,
               const PointTransform point_transform,
               const bool point_compute_angle,
-              const bool throw_on_error);
+              const bool throw_on_error,
+              const MetadataColumnInfos& metadata_column_infos);
 
   void import(const uint32_t max_threads);
 
@@ -121,7 +123,8 @@ class RasterImporter {
 
   void getRawBandNamesForFormat(const Geospatial::GDAL::DataSourceUqPtr& datasource);
   void initializeFiltering(const std::string& specified_band_names,
-                           const std::string& specified_band_dimensions);
+                           const std::string& specified_band_dimensions,
+                           const MetadataColumnInfos& metadata_column_infos);
   bool shouldImportBandWithName(const std::string& name);
   bool shouldImportBandWithDimensions(const int width, const int height);
   std::string getBandName(const uint32_t datasource_idx, const int band_idx);

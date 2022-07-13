@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@
 #include <thrift/protocol/TProtocol.h>
 #include <thrift/transport/TSSLSocket.h>
 #include <string>
+// TProtocol.h > winsock2.h > windows.h
+#include "cleanup_global_namespace.h"
 
 using namespace ::apache::thrift::transport;
 using namespace ::apache::thrift::protocol;

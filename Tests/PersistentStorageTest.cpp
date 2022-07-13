@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 
 #include "Catalog/Catalog.h"
 
-const std::string data_path = "./tmp/mapd_data";
+const std::string data_path = "./tmp/" + shared::kDataDirectoryName;
 extern bool g_enable_fsi;
 
 using namespace foreign_storage;

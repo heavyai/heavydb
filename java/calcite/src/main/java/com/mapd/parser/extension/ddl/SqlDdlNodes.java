@@ -16,8 +16,8 @@
  */
 package com.mapd.parser.extension.ddl;
 
-import com.mapd.parser.extension.ddl.omnisci.OmniSciOptionsMap;
-import com.mapd.parser.extension.ddl.omnisci.OmniSciSqlDataTypeSpec;
+import com.mapd.parser.extension.ddl.heavydb.HeavyDBOptionsMap;
+import com.mapd.parser.extension.ddl.heavydb.HeavyDBSqlDataTypeSpec;
 
 import org.apache.calcite.schema.ColumnStrategy;
 import org.apache.calcite.sql.SqlCollation;
@@ -41,7 +41,7 @@ public class SqlDdlNodes {
           boolean ifNotExists,
           SqlIdentifier name,
           SqlNodeList columnList,
-          OmniSciOptionsMap withOptions,
+          HeavyDBOptionsMap withOptions,
           SqlNode query) {
     return new SqlCreateTable(
             pos, replace, temporary, ifNotExists, name, columnList, withOptions, query);
@@ -60,7 +60,7 @@ public class SqlDdlNodes {
   /** Creates a column declaration. */
   public static SqlNode column(SqlParserPos pos,
           SqlIdentifier name,
-          OmniSciSqlDataTypeSpec dataType,
+          HeavyDBSqlDataTypeSpec dataType,
           SqlNode defaultValue,
           ColumnStrategy strategy) {
     return new SqlColumnDeclaration(pos, name, dataType, defaultValue, strategy);

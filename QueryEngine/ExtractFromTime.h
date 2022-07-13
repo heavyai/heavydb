@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,15 @@
 
 #include <cstdint>
 #include <ctime>
-#include "Shared/funcannotations.h"
+/* `../` is required for UDFCompiler */
+#include "../Shared/funcannotations.h"
 
 static constexpr int64_t kNanoSecsPerSec = 1000000000;
 static constexpr int64_t kMicroSecsPerSec = 1000000;
 static constexpr int64_t kMilliSecsPerSec = 1000;
+static constexpr int64_t kMilliSecsPerMin = 60000;
+static constexpr int64_t kMilliSecsPerHour = 3600000;
+static constexpr int64_t kMilliSecsPerDay = 86400000;
 static constexpr int64_t kSecsPerMin = 60;
 static constexpr int64_t kMinsPerHour = 60;
 static constexpr int64_t kHoursPerDay = 24;
@@ -89,7 +93,8 @@ enum ExtractField {
   kWEEK,
   kWEEK_SUNDAY,
   kWEEK_SATURDAY,
-  kDATEEPOCH
+  kDATEEPOCH,
+  kUNKNOWN_FIELD
 };
 
 DEVICE int64_t ExtractFromTime(ExtractField field, const int64_t timeval);

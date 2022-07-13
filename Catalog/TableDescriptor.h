@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,6 +76,7 @@ struct TableDescriptor {
 
   int32_t maxRollbackEpochs;
   bool is_system_table;
+  bool is_in_memory_system_table;
 
   // write mutex, only to be used inside catalog package
   std::shared_ptr<std::mutex> mutex_;
@@ -90,6 +91,7 @@ struct TableDescriptor {
       , hasDeletedCol(true)
       , maxRollbackEpochs(DEFAULT_MAX_ROLLBACK_EPOCHS)
       , is_system_table(false)
+      , is_in_memory_system_table(false)
       , mutex_(std::make_shared<std::mutex>()) {}
 
   virtual ~TableDescriptor() = default;
@@ -98,6 +100,17 @@ struct TableDescriptor {
 
   inline bool isTemporaryTable() const {
     return persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
+  }
+
+  std::vector<int> getTableChunkKey(const int getCurrentDBId) const {
+    std::vector<int> table_chunk_key_prefix;
+    if (fragmenter) {
+      table_chunk_key_prefix = fragmenter->getFragmentsForQuery().chunkKeyPrefix;
+    } else {
+      table_chunk_key_prefix.push_back(getCurrentDBId);
+      table_chunk_key_prefix.push_back(tableId);
+    }
+    return table_chunk_key_prefix;
   }
 };
 

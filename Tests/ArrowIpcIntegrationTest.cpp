@@ -1,5 +1,5 @@
 /*
- * Copyright 2020, OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/TSocket.h>
 #include <boost/program_options.hpp>
+#include "Shared/SysDefinitions.h"
 #include "Shared/ThriftJSONProtocolInclude.h"
 
 #ifdef HAVE_CUDA
@@ -50,10 +51,10 @@ using namespace std::literals;
 #include "Shared/ThriftClient.h"
 #include "Shared/scope.h"
 
-#include "gen-cpp/OmniSci.h"
+#include "gen-cpp/Heavy.h"
 
 TSessionId g_session_id;
-std::shared_ptr<OmniSciClient> g_client;
+std::shared_ptr<HeavyClient> g_client;
 
 #ifdef HAVE_CUDA
 bool g_cpu_only{false};
@@ -278,6 +279,132 @@ void test_scalar_values(const std::shared_ptr<arrow::RecordBatch>& read_batch) {
   }
 }
 
+void test_text_values(const std::shared_ptr<arrow::RecordBatch>& record_batch) {
+  using namespace std;
+
+  // string column
+  ASSERT_EQ(record_batch->schema()->num_fields(), 1);
+  auto column = record_batch->column(0);
+  const auto& string_array = static_cast<const arrow::StringArray&>(*column);
+
+  std::shared_ptr<arrow::StringArray> text_truth_array;
+  {
+    arrow::StringBuilder builder(arrow::default_memory_pool());
+    ARROW_THROW_NOT_OK(
+        builder.AppendValues(std::vector<std::string>{"hello", "", "world", "", "text"}));
+    ARROW_THROW_NOT_OK(builder.Finish(&text_truth_array));
+  }
+  std::vector<bool> null_strings{0, 1, 0, 1, 0};
+  for (int i = 0; i < string_array.length(); i++) {
+    if (null_strings[i]) {
+      ASSERT_TRUE(string_array.IsNull(i));
+    } else {
+      const auto str = string_array.GetString(i);
+      ASSERT_EQ(str, text_truth_array->GetString(i));
+    }
+  }
+}
+
+// Verify that column types match
+void test_array_values(const std::shared_ptr<arrow::RecordBatch>& read_batch) {
+  using namespace arrow;
+  using namespace std;
+
+  const std::vector expected_types = {
+      make_pair(BooleanType::type_id, BooleanType::type_name()),
+      make_pair(Int8Type::type_id, Int8Type::type_name()),
+      make_pair(Int16Type::type_id, Int16Type::type_name()),
+      make_pair(Int32Type::type_id, Int32Type::type_name()),
+      make_pair(Int64Type::type_id, Int64Type::type_name()),
+      make_pair(FloatType::type_id, FloatType::type_name()),
+      make_pair(DoubleType::type_id, DoubleType::type_name())};
+
+  ASSERT_EQ(read_batch->schema()->num_fields(), 7);
+
+  for (size_t i = 0; i < expected_types.size(); i++) {
+    auto [type, type_name] = expected_types[i];
+
+    const auto arr = read_batch->column(i);
+    const auto& list = static_cast<const arrow::ListArray&>(*arr);
+    ASSERT_EQ(list.value_type()->id(), type)
+        << fmt::format("Expected column {} to have type {}", i, type_name);
+    std::string bool_expected = R"([
+  [
+    true,
+    false,
+    true
+  ],
+  [],
+  null,
+  [
+    true,
+    null,
+    false
+  ]
+])";
+
+    std::string expected = R"([
+  [
+    0,
+    1,
+    2
+  ],
+  [],
+  null,
+  [
+    0,
+    null,
+    2
+  ]
+])";
+    std::stringstream ss;
+    ss << *arr;
+    if (i == 0) {
+      ASSERT_EQ(bool_expected, ss.str());
+    } else {
+      ASSERT_EQ(expected, ss.str());
+    }
+  }
+}
+
+void test_array_text_values(const std::shared_ptr<arrow::RecordBatch>& read_batch) {
+  using namespace arrow;
+  using namespace arrow::internal;
+  ASSERT_EQ(read_batch->schema()->num_fields(), 1);
+
+  const auto column = read_batch->column(0);
+  const auto& list_array = dynamic_cast<arrow::ListArray&>(*column);
+
+  std::vector<bool> null_values = {0, 0, 0, 1, 0};
+  std::vector<std::vector<std::string>> values;
+
+  for (int i = 0; i < list_array.length(); i++) {
+    std::shared_ptr<Array> array = list_array.value_slice(i);
+    const auto dict = dynamic_cast<DictionaryArray*>(array.get());
+    if (!null_values[i]) {
+      values.emplace_back(std::vector<std::string>());
+      for (int j = 0; j < dict->indices()->length(); j++) {
+        int64_t idx = dict->GetValueIndex(j);
+        if (idx < 6) {
+          values.back().emplace_back(
+              dict->dictionary()->GetScalar(idx).ValueOrDie()->ToString());
+        } else {
+          values.back().emplace_back("");
+        }
+      }
+    } else {
+      ASSERT_EQ(dict->indices()->length(), 0);
+    }
+  }
+
+  std::vector<std::vector<std::string>> expected = {
+      {"hello", "world", "hello", "test", "world"},
+      {"1", "2", "3"},
+      {},
+      {"hello", "", "world"}};
+  ASSERT_EQ(expected, values);
+}
+
 }  // namespace
 
 class ArrowIpcBasic : public ::testing::Test {
@@ -285,10 +412,13 @@ class ArrowIpcBasic : public ::testing::Test {
   void SetUp() override {
     run_ddl_statement("DROP TABLE IF EXISTS arrow_ipc_test;");
     run_ddl_statement("DROP TABLE IF EXISTS test_data_scalars;");
+    run_ddl_statement("DROP TABLE IF EXISTS test_data_text;");
+    run_ddl_statement("DROP TABLE IF EXISTS test_data_array;");
+    run_ddl_statement("DROP TABLE IF EXISTS test_data_array_text;");
 
     run_ddl_statement(R"(
-      CREATE TABLE 
-        arrow_ipc_test(x INT, 
+      CREATE TABLE
+        arrow_ipc_test(x INT,
                        y DOUBLE,
                        t TEXT ENCODING DICT(32))
         WITH (FRAGMENT_SIZE=2);
@@ -304,6 +434,27 @@ class ArrowIpcBasic : public ::testing::Test {
                             double_ DOUBLE);
     )");
 
+    run_ddl_statement(R"(
+        CREATE TABLE
+          test_data_text(text_ TEXT ENCODING NONE);
+    )");
+
+    run_ddl_statement(R"(
+        CREATE TABLE
+          test_data_array(b  BOOLEAN[],
+                          i1 TINYINT[],
+                          i2 SMALLINT[],
+                          i4 INT[],
+                          i8 BIGINT[],
+                          f4 FLOAT[],
+                          f8 DOUBLE[]);
+    )");
+
+    run_ddl_statement(R"(
+        CREATE TABLE
+          test_data_array_text(t TEXT[] ENCODING DICT);
+    )");
+
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (1, 1.1, 'foo');");
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (2, 2.1, NULL);");
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (NULL, 3.1, 'bar');");
@@ -314,6 +465,43 @@ class ArrowIpcBasic : public ::testing::Test {
         "INSERT INTO test_data_scalars VALUES (1, 2, 3, 123.456, 0.1, 0.001);");
     run_ddl_statement(
         "INSERT INTO test_data_scalars VALUES (1, 2, 3, 345.678, 0.1, 0.001);");
+
+    run_ddl_statement("INSERT INTO test_data_text VALUES ('hello');");
+    run_ddl_statement("INSERT INTO test_data_text VALUES (NULL);");
+    run_ddl_statement("INSERT INTO test_data_text VALUES ('world');");
+    run_ddl_statement("INSERT INTO test_data_text VALUES ('');");
+    run_ddl_statement("INSERT INTO test_data_text VALUES ('text');");
+
+    {
+      std::string arr = "{0, 1, 2}";
+      std::string barr = "{'true', 'false', 'true'}";
+      std::string tarr = "{'hello', 'world', 'hello', 'test', 'world'}";
+      std::string iarr = "{'1', '2', '3'}";
+      std::string empty_arr = "{}";
+      std::string null_arr = "NULL";
+      std::string null_elem_arr = "{0, NULL, 2}";
+      std::string null_elem_barr = "{'true', NULL, 'false'}";
+      std::string null_elem_tarr = "{'hello', NULL, 'world'}";
+
+      const std::vector vals = {make_pair(barr, arr),
+                                make_pair(empty_arr, empty_arr),
+                                make_pair(null_arr, null_arr),
+                                make_pair(null_elem_barr, null_elem_arr)};
+      for (const auto& val : vals) {
+        auto [b, i] = val;
+        std::string query = fmt::format(
+            "INSERT INTO test_data_array VALUES ({0}, {1}, {1}, {1}, {1}, {1}, {1});",
+            b,
+            i);
+        run_ddl_statement(query);
+      }
+
+      for (const auto& t : {tarr, iarr, empty_arr, null_arr, null_elem_tarr}) {
+        std::string query =
+            fmt::format("INSERT INTO test_data_array_text VALUES ({0});", t);
+        run_ddl_statement(query);
+      }
+    }
   }
 
   void TearDown()
@@ -543,6 +731,48 @@ TEST_F(ArrowIpcBasic, IpcGpuScalarValues) {
   deallocate_df(data_frame, ExecutorDeviceType::GPU);
 }
 
+TEST_F(ArrowIpcBasic, IpcCpuTextValues) {
+  auto data_frame =
+      execute_arrow_ipc("SELECT * FROM test_data_text;", ExecutorDeviceType::CPU);
+
+  ASSERT_TRUE(data_frame.df_size > 0);
+
+  auto df =
+      ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::SHARED_MEMORY);
+
+  test_text_values(df.record_batch);
+
+  deallocate_df(data_frame, ExecutorDeviceType::CPU);
+}
+
+TEST_F(ArrowIpcBasic, IpcCpuArrayValues) {
+  auto data_frame =
+      execute_arrow_ipc("SELECT * FROM test_data_array;", ExecutorDeviceType::CPU);
+
+  ASSERT_TRUE(data_frame.df_size > 0);
+
+  auto df =
+      ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::SHARED_MEMORY);
+
+  test_array_values(df.record_batch);
+
+  deallocate_df(data_frame, ExecutorDeviceType::CPU);
+}
+
+TEST_F(ArrowIpcBasic, IpcCpuArrayTextValues) {
+  auto data_frame =
+      execute_arrow_ipc("SELECT * FROM test_data_array_text;", ExecutorDeviceType::CPU);
+
+  ASSERT_TRUE(data_frame.df_size > 0);
+
+  auto df =
+      ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::SHARED_MEMORY);
+
+  test_array_text_values(df.record_batch);
+
+  deallocate_df(data_frame, ExecutorDeviceType::CPU);
+}
+
 TEST_F(ArrowIpcBasic, IpcGpu) {
   const size_t device_id = 0;
   if (g_cpu_only) {
@@ -739,7 +969,7 @@ int main(int argc, char* argv[]) {
 
     std::string user = "admin";
     std::string pwd = "HyperInteractive";
-    std::string db = "omnisci";
+    std::string db = shared::kDefaultDbName;
 
     po::options_description desc("Options");
 
@@ -789,7 +1019,7 @@ int main(int argc, char* argv[]) {
     auto transport = conn_mgr->open_buffered_client_transport(host, port, cert);
     transport->open();
     auto protocol = std::make_shared<TBinaryProtocol>(transport);
-    g_client = std::make_shared<OmniSciClient>(protocol);
+    g_client = std::make_shared<HeavyClient>(protocol);
 
     g_client->connect(g_session_id, user, pwd, db);
 

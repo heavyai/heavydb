@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/Importer.h"
-#include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/UpdelRoll.h"
@@ -143,7 +142,7 @@ void import_table_file(const std::string& table, const std::string& file) {
                          "../../Tests/Import/datafiles/" + file +
                          "' WITH (header='true');";
 
-  auto stmt = QR::get()->createDDLStatement(query_str);
+  auto stmt = QR::get()->createStatement(query_str);
 
   auto copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(stmt.get());
   if (!copy_stmt) {
@@ -517,6 +516,7 @@ int main(int argc, char** argv) {
 
   int err{0};
   try {
+    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();

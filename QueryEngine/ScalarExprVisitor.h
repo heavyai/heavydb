@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ class ScalarExprVisitor {
  public:
   T visit(const Analyzer::Expr* expr) const {
     CHECK(expr);
+    visitBegin();
     const auto var = dynamic_cast<const Analyzer::Var*>(expr);
     if (var) {
       return visitVar(var);
@@ -76,9 +77,9 @@ class ScalarExprVisitor {
     if (width_bucket) {
       return visitWidthBucket(width_bucket);
     }
-    const auto lower = dynamic_cast<const Analyzer::LowerExpr*>(expr);
-    if (lower) {
-      return visitLower(lower);
+    const auto string_oper = dynamic_cast<const Analyzer::StringOper*>(expr);
+    if (string_oper) {
+      return visitStringOper(string_oper);
     }
     const auto cardinality = dynamic_cast<const Analyzer::CardinalityExpr*>(expr);
     if (cardinality) {
@@ -157,7 +158,6 @@ class ScalarExprVisitor {
     if (range_join_oper) {
       return visitRangeJoinOper(range_join_oper);
     }
-
     return defaultResult();
   }
 
@@ -225,8 +225,12 @@ class ScalarExprVisitor {
     return result;
   }
 
-  virtual T visitLower(const Analyzer::LowerExpr* lower_expr) const {
-    return visit(lower_expr->get_arg());
+  virtual T visitStringOper(const Analyzer::StringOper* string_oper) const {
+    T result = defaultResult();
+    for (const auto& arg : string_oper->getOwnArgs()) {
+      result = aggregateResult(result, visit(arg.get()));
+    }
+    return result;
   }
 
   virtual T visitCardinality(const Analyzer::CardinalityExpr* cardinality) const {
@@ -365,7 +369,10 @@ class ScalarExprVisitor {
 
   virtual T visitAggExpr(const Analyzer::AggExpr* agg) const {
     T result = defaultResult();
-    return aggregateResult(result, visit(agg->get_arg()));
+    if (agg->get_arg()) {
+      return aggregateResult(result, visit(agg->get_arg()));
+    }
+    return defaultResult();
   }
 
   virtual T visitRangeJoinOper(const Analyzer::RangeOper* range_oper) const {
@@ -379,6 +386,8 @@ class ScalarExprVisitor {
   virtual T aggregateResult(const T& aggregate, const T& next_result) const {
     return next_result;
   }
+
+  virtual void visitBegin() const {}
 
   virtual T defaultResult() const { return T{}; }
 };

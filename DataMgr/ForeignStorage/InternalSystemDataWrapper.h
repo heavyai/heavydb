@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,13 @@ class TypedImportBuffer;
 }
 
 namespace foreign_storage {
+constexpr const char* kDeletedValueIndicator{"<DELETED>"};
+
+std::string get_db_name(int32_t db_id);
+std::string get_table_name(int32_t db_id, int32_t table_id);
+
+void set_node_name(
+    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers);
 
 class InternalSystemDataWrapper : public ForeignDataWrapper {
  public:
@@ -33,7 +40,8 @@ class InternalSystemDataWrapper : public ForeignDataWrapper {
   void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override;
 
   void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
-                            const ChunkToBufferMap& optional_buffers) override;
+                            const ChunkToBufferMap& optional_buffers,
+                            AbstractBuffer* delete_buffer) override;
 
   void validateServerOptions(const ForeignServer* foreign_server) const override;
 

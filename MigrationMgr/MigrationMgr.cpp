@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 
 #include <algorithm>
 #include <exception>
+#include <filesystem>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -25,16 +27,71 @@
 #include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/sqltypes.h"
 
 #include "MapDRelease.h"
 
+extern bool g_multi_instance;
+
 namespace migrations {
+
+void MigrationMgr::takeMigrationLock(const std::string& base_path) {
+// TODO: support lock on Windows
+#ifndef _WIN32
+  // Only used for --multi-instance clusters.
+  if (!g_multi_instance) {
+    migration_enabled_ = true;
+    return;
+  }
+
+  // If we already have the migration lock then do nothing.
+  if (migration_mutex_) {
+    return;
+  }
+
+  // Initialize the migration mutex. Will be locked until process exit.
+  migration_mutex_ = std::make_unique<heavyai::DistributedSharedMutex>(
+      std::filesystem::path(base_path) / shared::kLockfilesDirectoryName /
+      "migration.lockfile");
+
+  // Take an exclusive lock if we can. If we get the exclusive lock, then later it will be
+  // relaxed to a shared lock, after we run migrations.
+  migration_enabled_ = migration_mutex_->try_lock();
+  if (!g_multi_instance && !migration_enabled_) {
+    throw std::runtime_error(
+        "another HeavyDB server instance is already using data directory: " + base_path);
+  }
+
+  // If we didn't get the exclusive lock, we'll wait for a shared lock instead, and we
+  // won't run migrations.
+  if (!migration_enabled_) {
+    migration_mutex_->lock_shared();
+  }
+#else
+  migration_enabled_ = true;
+#endif  // _WIN32
+}
+
+void MigrationMgr::relaxMigrationLock() {
+// TODO: support lock on Windows
+#ifndef _WIN32
+  // Only used for --multi-instance clusters.
+  if (!g_multi_instance) {
+    return;
+  }
+
+  // If we ran migrations, now relax the exclusive lock to a shared lock.
+  if (migration_enabled_ && migration_mutex_) {
+    migration_mutex_->convert_lock_shared();
+  }
+#endif  // _WIN32
+}
 
 void MigrationMgr::migrateDateInDaysMetadata(
     const Catalog_Namespace::TableDescriptorMapById& table_descriptors_by_id,
     const int database_id,
-    const Catalog_Namespace::Catalog* cat,
+    Catalog_Namespace::Catalog* cat,
     SqliteConnector& sqlite) {
   std::vector<int> tables_migrated = {};
   std::unordered_map<int, std::vector<std::string>> tables_to_migrate;
@@ -146,4 +203,150 @@ void MigrationMgr::migrateDateInDaysMetadata(
   LOG(INFO) << "Successfully migrated all date in days column metadata.";
 }
 
+namespace {
+bool rename_and_symlink_path(const std::filesystem::path& old_path,
+                             const std::filesystem::path& new_path) {
+  bool file_updated{false};
+  if (std::filesystem::exists(old_path)) {
+    // Skip if we have already created a symlink for the old path.
+    if (std::filesystem::is_symlink(old_path)) {
+      if (std::filesystem::read_symlink(old_path) != new_path.filename()) {
+        std::stringstream ss;
+        ss << "Rebrand migration: Encountered an unexpected symlink at path: " << old_path
+           << ". Symlink does not reference file: " << new_path.filename();
+        throw std::runtime_error(ss.str());
+      }
+      if (!std::filesystem::exists(new_path)) {
+        std::stringstream ss;
+        ss << "Rebrand migration: Encountered symlink at legacy path: " << old_path
+           << " but no corresponding file at new path: " << new_path;
+        throw std::runtime_error(ss.str());
+      }
+    } else {
+      if (std::filesystem::exists(new_path)) {
+        std::stringstream ss;
+        ss << "Rebrand migration: Encountered existing non-symlink files at the legacy "
+              "path: "
+           << old_path << " and new path: " << new_path;
+        throw std::runtime_error(ss.str());
+      }
+      std::filesystem::rename(old_path, new_path);
+      std::cout << "Rebrand migration: Renamed " << old_path << " to " << new_path
+                << std::endl;
+      file_updated = true;
+    }
+  }
+
+  if (std::filesystem::exists(old_path)) {
+    if (!std::filesystem::is_symlink(old_path)) {
+      std::stringstream ss;
+      ss << "Rebrand migration: An unexpected error occurred. A symlink should have been "
+            "created at "
+         << old_path;
+      throw std::runtime_error(ss.str());
+    }
+    if (std::filesystem::read_symlink(old_path) != new_path.filename()) {
+      std::stringstream ss;
+      ss << "Rebrand migration: Encountered an unexpected symlink at path: " << old_path
+         << ". Symlink does not reference file: " << new_path.filename();
+      throw std::runtime_error(ss.str());
+    }
+  } else if (std::filesystem::exists(new_path)) {
+    std::filesystem::create_symlink(new_path.filename(), old_path);
+    std::cout << "Rebrand migration: Added symlink from " << old_path << " to "
+              << new_path.filename() << std::endl;
+    file_updated = true;
+  }
+  return file_updated;
+}
+
+bool rename_and_symlink_file(const std::filesystem::path& base_path,
+                             const std::string& dir_name,
+                             const std::string& old_file_name,
+                             const std::string& new_file_name) {
+  auto old_path = std::filesystem::canonical(base_path);
+  auto new_path = std::filesystem::canonical(base_path);
+  if (!dir_name.empty()) {
+    old_path /= dir_name;
+    new_path /= dir_name;
+  }
+  if (old_file_name.empty()) {
+    throw std::runtime_error(
+        "Unexpected error in rename_and_symlink_file: old_file_name is empty");
+  }
+  old_path /= old_file_name;
+
+  if (new_file_name.empty()) {
+    throw std::runtime_error(
+        "Unexpected error in rename_and_symlink_file: new_file_name is empty");
+  }
+  new_path /= new_file_name;
+
+  return rename_and_symlink_path(old_path, new_path);
+}
+}  // namespace
+
+void MigrationMgr::executeRebrandMigration(const std::string& base_path) {
+  bool migration_occurred{false};
+
+  // clang-format off
+  const std::map<std::string, std::string> old_to_new_dir_names {
+    {"mapd_catalogs", shared::kCatalogDirectoryName},
+    {"mapd_data", shared::kDataDirectoryName},
+    {"mapd_log", shared::kDefaultLogDirName},
+    {"mapd_export", shared::kDefaultExportDirName},
+    {"mapd_import", shared::kDefaultImportDirName},
+    {"omnisci_key_store", shared::kDefaultKeyStoreDirName}
+  };
+  // clang-format on
+
+  const auto storage_base_path = std::filesystem::canonical(base_path);
+  // Rename legacy directories (if they exist), and create symlinks from legacy directory
+  // names to the new names (if they don't already exist).
+  for (const auto& [old_dir_name, new_dir_name] : old_to_new_dir_names) {
+    auto old_path = storage_base_path / old_dir_name;
+    auto new_path = storage_base_path / new_dir_name;
+    if (rename_and_symlink_path(old_path, new_path)) {
+      migration_occurred = true;
+    }
+  }
+
+  // Rename legacy files and create symlinks to them.
+  const auto license_updated = rename_and_symlink_file(
+      storage_base_path, "", "omnisci.license", shared::kDefaultLicenseFileName);
+  const auto key_updated = rename_and_symlink_file(storage_base_path,
+                                                   shared::kDefaultKeyStoreDirName,
+                                                   "omnisci.pem",
+                                                   shared::kDefaultKeyFileName);
+  const auto sys_catalog_updated = rename_and_symlink_file(storage_base_path,
+                                                           shared::kCatalogDirectoryName,
+                                                           "omnisci_system_catalog",
+                                                           shared::kSystemCatalogName);
+  if (license_updated || key_updated || sys_catalog_updated) {
+    migration_occurred = true;
+  }
+
+  // Delete the disk cache directory and legacy files that will no longer be used.
+  const std::array<std::filesystem::path, 9> files_to_delete{
+      storage_base_path / "omnisci_disk_cache",
+      storage_base_path / "omnisci_server_pid.lck",
+      storage_base_path / "mapd_server_pid.lck",
+      storage_base_path / shared::kDefaultLogDirName / "omnisci_server.FATAL",
+      storage_base_path / shared::kDefaultLogDirName / "omnisci_server.ERROR",
+      storage_base_path / shared::kDefaultLogDirName / "omnisci_server.WARNING",
+      storage_base_path / shared::kDefaultLogDirName / "omnisci_server.INFO",
+      storage_base_path / shared::kDefaultLogDirName / "omnisci_web_server.ALL",
+      storage_base_path / shared::kDefaultLogDirName / "omnisci_web_server.ACCESS"};
+
+  for (const auto& file_path : files_to_delete) {
+    if (std::filesystem::exists(file_path)) {
+      std::filesystem::remove_all(file_path);
+      std::cout << "Rebrand migration: Deleted file " << file_path << std::endl;
+      migration_occurred = true;
+    }
+  }
+  if (migration_occurred) {
+    std::cout << "Rebrand migration completed" << std::endl;
+  }
+}
 }  // namespace migrations

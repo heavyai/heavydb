@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #pragma once
 
 #include <stdexcept>
@@ -35,6 +36,18 @@ class MetadataScanInfeasibleFragmentSizeException : public std::runtime_error {
       min_feasible_fragment_size_;  // may be set to indicate what the minimum feasible
                                     // fragment size for metadata scan should be
 };
+
+inline void throw_unexpected_number_of_items(const size_t& num_expected,
+                                             const size_t& num_loaded,
+                                             const std::string& item_type) {
+  throw ForeignStorageException(
+      "Unexpected number of " + item_type +
+      " while loading from foreign data source: expected " +
+      std::to_string(num_expected) + " , obtained " + std::to_string(num_loaded) + " " +
+      item_type +
+      ". Please use the \"REFRESH FOREIGN TABLES\" command on the foreign table "
+      "if data source has been updated.");
+}
 
 inline void throw_removed_row_in_result_set_error(const std::string& select_statement) {
   throw ForeignStorageException{

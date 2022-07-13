@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,11 +77,12 @@ RelAlgExecutionUnit QueryRewriter::rewriteOverlapsJoin(
           join_condition_per_nesting_level,
           ra_exe_unit_in.groupby_exprs,
           ra_exe_unit_in.target_exprs,
+          ra_exe_unit_in.target_exprs_original_type_infos,
           ra_exe_unit_in.estimator,
           ra_exe_unit_in.sort_info,
           ra_exe_unit_in.scan_limit,
           ra_exe_unit_in.query_hint,
-          ra_exe_unit_in.query_plan_dag,
+          ra_exe_unit_in.query_plan_dag_hash,
           ra_exe_unit_in.hash_table_build_plan_dag,
           ra_exe_unit_in.table_id_to_node_map,
           ra_exe_unit_in.use_bump_allocator};
@@ -117,6 +118,24 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(
   }
   if (dynamic_cast<const Analyzer::CaseExpr*>(in_vals->get_arg())) {
     return ra_exe_unit_in;
+  }
+  auto in_val_cv = dynamic_cast<const Analyzer::ColumnVar*>(in_vals->get_arg());
+  if (in_val_cv) {
+    auto it = std::find_if(
+        ra_exe_unit_in.groupby_exprs.begin(),
+        ra_exe_unit_in.groupby_exprs.end(),
+        [&in_val_cv](std::shared_ptr<Analyzer::Expr> groupby_expr) {
+          if (auto groupby_cv =
+                  std::dynamic_pointer_cast<Analyzer::ColumnVar>(groupby_expr)) {
+            return *in_val_cv == *groupby_cv.get();
+          }
+          return false;
+        });
+    if (it != ra_exe_unit_in.groupby_exprs.end()) {
+      // we do not need to deploy case-when rewriting when in_val cv is listed as groupby
+      // col i.e., ... WHERE v IN (SELECT DISTINCT v FROM ...)
+      return ra_exe_unit_in;
+    }
   }
   auto case_expr = generateCaseForDomainValues(in_vals.get());
   return rewriteConstrainedByInImpl(ra_exe_unit_in, case_expr, in_vals.get());
@@ -173,11 +192,12 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByInImpl(
           ra_exe_unit_in.join_quals,
           new_groupby_list,
           new_target_exprs,
+          ra_exe_unit_in.target_exprs_original_type_infos,
           nullptr,
           ra_exe_unit_in.sort_info,
           ra_exe_unit_in.scan_limit,
           ra_exe_unit_in.query_hint,
-          ra_exe_unit_in.query_plan_dag,
+          ra_exe_unit_in.query_plan_dag_hash,
           ra_exe_unit_in.hash_table_build_plan_dag,
           ra_exe_unit_in.table_id_to_node_map};
 }
@@ -398,11 +418,12 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
                                          ra_exe_unit_in.join_quals,
                                          ra_exe_unit_in.groupby_exprs,
                                          target_exprs,
+                                         ra_exe_unit_in.target_exprs_original_type_infos,
                                          ra_exe_unit_in.estimator,
                                          ra_exe_unit_in.sort_info,
                                          ra_exe_unit_in.scan_limit,
                                          ra_exe_unit_in.query_hint,
-                                         ra_exe_unit_in.query_plan_dag,
+                                         ra_exe_unit_in.query_plan_dag_hash,
                                          ra_exe_unit_in.hash_table_build_plan_dag,
                                          ra_exe_unit_in.table_id_to_node_map,
                                          ra_exe_unit_in.use_bump_allocator,
@@ -502,11 +523,12 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarDelete(
                                          ra_exe_unit_in.join_quals,
                                          ra_exe_unit_in.groupby_exprs,
                                          target_exprs,
+                                         ra_exe_unit_in.target_exprs_original_type_infos,
                                          ra_exe_unit_in.estimator,
                                          ra_exe_unit_in.sort_info,
                                          ra_exe_unit_in.scan_limit,
                                          ra_exe_unit_in.query_hint,
-                                         ra_exe_unit_in.query_plan_dag,
+                                         ra_exe_unit_in.query_plan_dag_hash,
                                          ra_exe_unit_in.hash_table_build_plan_dag,
                                          ra_exe_unit_in.table_id_to_node_map,
                                          ra_exe_unit_in.use_bump_allocator,
@@ -609,11 +631,12 @@ RelAlgExecutionUnit QueryRewriter::rewriteAggregateOnGroupByColumn(
                                          ra_exe_unit_in.join_quals,
                                          ra_exe_unit_in.groupby_exprs,
                                          new_target_exprs,
+                                         ra_exe_unit_in.target_exprs_original_type_infos,
                                          ra_exe_unit_in.estimator,
                                          ra_exe_unit_in.sort_info,
                                          ra_exe_unit_in.scan_limit,
                                          ra_exe_unit_in.query_hint,
-                                         ra_exe_unit_in.query_plan_dag,
+                                         ra_exe_unit_in.query_plan_dag_hash,
                                          ra_exe_unit_in.hash_table_build_plan_dag,
                                          ra_exe_unit_in.table_id_to_node_map,
                                          ra_exe_unit_in.use_bump_allocator,

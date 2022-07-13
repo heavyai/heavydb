@@ -4,7 +4,7 @@ import datetime
 import pytest
 import pyarrow as pa
 from pyarrow import csv
-import omniscidbe as dbe
+import heavydbe as dbe
 import ctypes
 ctypes._dlopen('libDBEngine.so', ctypes.RTLD_GLOBAL)
 

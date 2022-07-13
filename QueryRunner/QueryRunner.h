@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,11 +31,13 @@
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 #include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
 #include "QueryEngine/QueryDispatchQueue.h"
+#include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/QueryHint.h"
 #include "QueryEngine/QueryPlanDagExtractor.h"
-#include "QueryEngine/RelAlgDagBuilder.h"
+#include "QueryEngine/RelAlgDag.h"
 #include "QueryEngine/RelAlgExecutionUnit.h"
 #include "QueryEngine/RelAlgTranslator.h"
+#include "Shared/SysDefinitions.h"
 #include "ThriftHandler/QueryState.h"
 
 namespace Catalog_Namespace {
@@ -47,7 +49,7 @@ class ResultSet;
 class ExecutionResult;
 
 namespace Parser {
-class DDLStmt;
+class Stmt;
 class CopyTableStmt;
 }  // namespace Parser
 
@@ -66,6 +68,44 @@ struct QueryPlanDagInfo {
   std::vector<unsigned> left_deep_trees_id;
   std::unordered_map<unsigned, JoinQualsPerNestingLevel> left_deep_trees_info;
   std::shared_ptr<RelAlgTranslator> rel_alg_translator;
+};
+
+// Keep original values of data recycler related flags
+// and restore them when QR instance is destructed
+// Our test environment checks various bare-metal components of the system
+// including computing various relational operations and expressions,
+// building hash table, and so on
+// Thus, unless we explicitly test those cases, we must disable all of them
+// in the test framework by default
+// Since we enable data recycler and hash table recycler by default,
+// we keep them as is, but disable resultset recycler and its relevant
+// stuffs to keep our testing environment as is
+class DataRecyclerFlagsDisabler {
+ public:
+  DataRecyclerFlagsDisabler()
+      : orig_chunk_metadata_cache_(g_use_chunk_metadata_cache)
+      , orig_resultset_cache_(g_use_query_resultset_cache)
+      , orig_allow_query_step_skipping_(g_allow_query_step_skipping)
+      , orig_allow_auto_resultset_caching_(g_allow_auto_resultset_caching) {
+    g_use_chunk_metadata_cache = false;
+    g_use_query_resultset_cache = false;
+    g_allow_query_step_skipping = false;
+    g_allow_auto_resultset_caching = false;
+  }
+
+  ~DataRecyclerFlagsDisabler() {
+    // restore the flag values
+    g_use_chunk_metadata_cache = orig_chunk_metadata_cache_;
+    g_use_query_resultset_cache = orig_resultset_cache_;
+    g_allow_query_step_skipping = orig_allow_query_step_skipping_;
+    g_allow_auto_resultset_caching = orig_allow_auto_resultset_caching_;
+  }
+
+ private:
+  bool orig_chunk_metadata_cache_;
+  bool orig_resultset_cache_;
+  bool orig_allow_query_step_skipping_;
+  bool orig_allow_auto_resultset_caching_;
 };
 
 enum CacheItemStatus {
@@ -112,9 +152,9 @@ class QueryRunner {
                            const std::vector<LeafHostInfo>& string_servers,
                            const std::vector<LeafHostInfo>& leaf_servers) {
     return QueryRunner::init(db_path,
-                             std::string{OMNISCI_ROOT_USER},
+                             shared::kRootUsername,
                              "HyperInteractive",
-                             std::string{OMNISCI_DEFAULT_DB},
+                             shared::kDefaultDbName,
                              string_servers,
                              leaf_servers);
   }
@@ -173,7 +213,7 @@ class QueryRunner {
   BufferPoolStats getBufferPoolStats(const Data_Namespace::MemoryLevel memory_level,
                                      const bool current_db_only) const;
 
-  virtual std::unique_ptr<Parser::DDLStmt> createDDLStatement(const std::string&);
+  virtual std::unique_ptr<Parser::Stmt> createStatement(const std::string&);
   virtual void runDDLStatement(const std::string&);
   virtual void validateDDLStatement(const std::string&);
 
@@ -225,6 +265,10 @@ class QueryRunner {
       const std::string& query_str);
   std::optional<RegisteredQueryHint> getParsedGlobalQueryHints(
       const std::string& query_str);
+  RaExecutionSequence getRaExecutionSequence(const std::string& query_str);
+  virtual std::shared_ptr<ResultSet> getCalcitePlan(const std::string& query_str,
+                                                    bool enable_watchdog,
+                                                    bool as_json_str) const;
 
   std::tuple<QueryPlanHash,
              std::shared_ptr<HashTable>,
@@ -245,7 +289,7 @@ class QueryRunner {
 
   std::shared_ptr<RelAlgTranslator> getRelAlgTranslator(const std::string&, Executor*);
 
-  ExtractedPlanDag extractQueryPlanDag(const std::string&);
+  ExtractedQueryPlanDag extractQueryPlanDag(const std::string&);
 
   QueryRunner(std::unique_ptr<Catalog_Namespace::SessionInfo> session);
 
@@ -284,6 +328,7 @@ class QueryRunner {
   std::shared_ptr<Catalog_Namespace::SessionInfo> session_info_;
   std::unique_ptr<QueryDispatchQueue> dispatch_queue_;
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
+  std::shared_ptr<QueryEngine> query_engine_;
 };
 
 class ImportDriver : public QueryRunner {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +26,8 @@ void QueryPlanDagChecker::detectNonSupportedNode(const std::string& node_tag) {
 }
 
 std::pair<bool, std::string> QueryPlanDagChecker::hasNonSupportedNodeInDag(
-    const RelAlgNode* rel_alg_node,
-    const RelAlgTranslator& rel_alg_translator) {
-  QueryPlanDagChecker checker(rel_alg_translator);
+    const RelAlgNode* rel_alg_node) {
+  QueryPlanDagChecker checker;
   checker.check(rel_alg_node);
   return std::make_pair(checker.getCheckResult(), checker.getNonSupportedNodeTag());
 }
@@ -86,9 +85,16 @@ void QueryPlanDagChecker::visit(const RelLogicalUnion* rel_alg_node) {
 }
 
 void QueryPlanDagChecker::visit(const RelScan* rel_alg_node) {
-  if (rel_alg_node->getTableDescriptor()->storageType == StorageType::FOREIGN_TABLE) {
-    detectNonSupportedNode("Detect ForeignTableScan node");
+  if (rel_alg_node->getTableDescriptor()->isForeignTable()) {
+    detectNonSupportedNode("Detect foreign table");
     return;
+  }
+  if (rel_alg_node->getTableDescriptor()->isTemporaryTable()) {
+    detectNonSupportedNode("Detect temporary table");
+  }
+
+  if (rel_alg_node->getTableDescriptor()->is_system_table) {
+    detectNonSupportedNode("Detect system table");
   }
   RelRexDagVisitor::visit(rel_alg_node);
 }
@@ -108,17 +114,7 @@ void QueryPlanDagChecker::visit(RexOperator const* rex_node) {
 
 void QueryPlanDagChecker::visit(RexFunctionOperator const* rex_node) {
   if (non_supported_functions_.count(rex_node->getName())) {
-    detectNonSupportedNode("Detect non-supported function: " +
-                           non_supported_function_tag_);
-    if (rex_node->getName() == "DATETIME") {
-      const auto arg = rel_alg_translator_.translateScalarRex(rex_node->getOperand(0));
-      const auto arg_lit = std::dynamic_pointer_cast<Analyzer::Constant>(arg);
-      if (arg_lit && !arg_lit->get_is_null() && arg_lit->get_type_info().is_string()) {
-        if (*arg_lit->get_constval().stringval != "NOW"sv) {
-          reset();
-        }
-      }
-    }
+    detectNonSupportedNode("Detect non-supported function: " + rex_node->getName());
   }
   if (getCheckResult()) {
     return;

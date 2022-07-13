@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,10 @@
 
 #include "QueryPhysicalInputsCollector.h"
 
-#include "RelAlgDagBuilder.h"
+#include "RelAlgDag.h"
 #include "RelAlgVisitor.h"
 #include "RexVisitor.h"
+#include "Visitors/RelRexDagVisitor.h"
 
 namespace {
 
@@ -184,19 +185,22 @@ PhysicalInputSet RelAlgPhysicalInputsVisitor::aggregateResult(
   return result;
 }
 
-class RelAlgPhysicalTableInputsVisitor : public RelAlgVisitor<std::unordered_set<int>> {
+class RelAlgPhysicalTableInputsVisitor : public RelRexDagVisitor {
  public:
-  std::unordered_set<int> visitScan(const RelScan* scan) const override {
-    return {scan->getTableDescriptor()->tableId};
+  using RelRexDagVisitor::visit;
+  using TableIds = std::unordered_set<int>;
+
+  static TableIds getTableIds(RelAlgNode const* node) {
+    RelAlgPhysicalTableInputsVisitor visitor;
+    visitor.visit(node);
+    return std::move(visitor.table_ids_);
   }
 
- protected:
-  std::unordered_set<int> aggregateResult(
-      const std::unordered_set<int>& aggregate,
-      const std::unordered_set<int>& next_result) const override {
-    auto result = aggregate;
-    result.insert(next_result.begin(), next_result.end());
-    return result;
+ private:
+  TableIds table_ids_;
+
+  void visit(RelScan const* scan) override {
+    table_ids_.insert(scan->getTableDescriptor()->tableId);
   }
 };
 
@@ -208,8 +212,7 @@ std::unordered_set<PhysicalInput> get_physical_inputs(const RelAlgNode* ra) {
 }
 
 std::unordered_set<int> get_physical_table_inputs(const RelAlgNode* ra) {
-  RelAlgPhysicalTableInputsVisitor phys_table_inputs_visitor;
-  return phys_table_inputs_visitor.visit(ra);
+  return RelAlgPhysicalTableInputsVisitor::getTableIds(ra);
 }
 
 std::ostream& operator<<(std::ostream& os, PhysicalInput const& physical_input) {

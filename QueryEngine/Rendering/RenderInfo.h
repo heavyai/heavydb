@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,13 +20,14 @@
 #include "Catalog/Catalog.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/Rendering/RenderAllocator.h"
+#include "Shared/Rendering/InSituFlags.h"
 #include "Shared/Rendering/RenderQueryOptions.h"
 
 namespace QueryRenderer {
 struct RenderSessionKey;
 }
 
-class RenderInfo {
+class RenderInfo : public heavyai::InSituFlagsOwnerInterface {
  public:
   std::unique_ptr<RenderAllocatorMap> render_allocator_map_ptr;
   const ::QueryRenderer::RenderSessionKey& render_session_key;
@@ -37,20 +38,17 @@ class RenderInfo {
 
   // All the "selected from" tables in a query. Includes resolved and un-resolved views.
   std::unordered_set<std::string> table_names;
-  bool disallow_in_situ_only_if_final_ED_is_aggregate;
 
   RenderInfo(const ::QueryRenderer::RenderSessionKey& in_render_session_key,
              const RenderQueryOptions& in_render_query_opts,
-             const bool force_non_in_situ_data = false);
+             const heavyai::InSituFlags in_insitu_flags = heavyai::InSituFlags::kInSitu);
 
   const Catalog_Namespace::SessionInfo& getSessionInfo() const;
   std::shared_ptr<Catalog_Namespace::SessionInfo const> getSessionInfoPtr() const;
-  void setForceNonInSituData();
-  bool queryRanWithInSituData() const;
-  bool hasInSituData() const;
-  bool isInSituDataFlagUnset() const;
-  bool couldRunInSitu() const;
-  bool isPotentialInSituRender() const;
+
+  void forceNonInSitu();
+  void setNonInSitu();
+
   bool useCudaBuffers() const;
   void disableCudaBuffers();
 
@@ -66,24 +64,19 @@ class RenderInfo {
   bool setInSituDataIfUnset(const bool is_in_situ_data);
 
   void reset(std::unique_ptr<RenderQueryOptions> in_query_opts,
-             const bool in_force_non_in_situ_data,
-             const bool in_disallow_in_situ_only_if_final_ED_is_aggregate);
+             const bool in_force_non_in_situ_data);
 
  private:
   enum class InSituState { UNSET, IS_IN_SITU, IS_NOT_IN_SITU };
   InSituState
-      in_situ_data;  // Should be set to true if query results can be written directly
-                     // to CUDA-mapped opengl buffers for rendering. Should be set
-                     // to false otherwise, meaning results are written to CPU first,
-                     // and buffered back to GPU for rendering.
-                     // An alternative meaning is that when false, you've encountered
-                     // a non-projection query.
-                     // Can only be set once for the lifetime of the object.
+      in_situ_data;  // Should be set to true if query results can be written directly to
+                     // CUDA-mapped buffers for rendering. Should be set to false
+                     // otherwise, meaning results are written to CPU first, and buffered
+                     // back to GPU for rendering. An alternative meaning is that when
+                     // false, you've encountered a non-projection query. Can only be set
+                     // once for the lifetime of the object.
   bool force_non_in_situ_data;
-
-  enum class RendererBufferMode { CUDA, GL };
-  RendererBufferMode buffer_mode_;  // The Renderer buffer mode determines how query
-                                    // results are bused to the Rendering engine.
+  bool cuda_using_buffers_;
 
   std::shared_ptr<QueryRenderer::QueryDataLayout> query_vbo_layout;
   std::shared_ptr<QueryRenderer::QueryDataLayout> query_ssbo_layout;

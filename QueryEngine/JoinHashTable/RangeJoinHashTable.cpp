@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include "QueryEngine/JoinHashTable/RangeJoinHashTable.h"
 
 #include "QueryEngine/CodeGenerator.h"
@@ -122,17 +121,6 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
                                      condition.get(), executor, inner_outer_pairs)
                                : 0;
 
-  std::vector<InnerOuter> inner_outer_pairs_for_cache_access;
-  inner_outer_pairs_for_cache_access.emplace_back(
-      InnerOuter{dynamic_cast<const Analyzer::ColumnVar*>(range_expr->get_left_operand()),
-                 condition->get_left_operand()});
-  auto hashtable_access_path_info =
-      HashTableRecycler::getHashtableAccessPathInfo(inner_outer_pairs_for_cache_access,
-                                                    condition->get_optype(),
-                                                    join_type,
-                                                    hashtable_build_dag_map,
-                                                    executor);
-
   auto join_hash_table = std::make_shared<RangeJoinHashTable>(condition,
                                                               join_type,
                                                               range_expr,
@@ -143,13 +131,10 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
                                                               executor,
                                                               inner_outer_pairs,
                                                               device_count,
-                                                              hashtable_access_path_info,
+                                                              hashtable_build_dag_map,
                                                               table_id_to_node_map);
   HashJoin::checkHashJoinReplicationConstraint(
       HashJoin::getInnerTableId(inner_outer_pairs), shard_count, executor);
-  if (query_hint.isAnyQueryHintDelivered()) {
-    join_hash_table->registerQueryHint(query_hint);
-  }
   try {
     join_hash_table->reifyWithLayout(HashType::OneToMany);
   } catch (const HashJoinFail& e) {
@@ -187,20 +172,23 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
   CHECK(catalog);
 
   auto& data_mgr = catalog->getDataMgr();
+  std::vector<std::vector<Fragmenter_Namespace::FragmentInfo>> fragments_per_device;
   std::vector<std::unique_ptr<CudaAllocator>> dev_buff_owners;
-  if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
-    for (int device_id = 0; device_id < device_count_; ++device_id) {
-      dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(&data_mgr, device_id));
-    }
-  }
   const auto shard_count = shardCount();
   for (int device_id = 0; device_id < device_count_; ++device_id) {
-    const auto fragments =
+    fragments_per_device.emplace_back(
         shard_count
             ? only_shards_for_device(query_info.fragments, device_id, device_count_)
-            : query_info.fragments;
+            : query_info.fragments);
+    if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
+      dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(
+          &data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id)));
+    }
+    // for overlaps join, we need to fetch columns regardless of the availability of
+    // cached hash table to calculate various params, i.e., bucket size info todo
+    // (yoonmin) : relax this
     const auto columns_for_device =
-        fetchColumnsForDevice(fragments,
+        fetchColumnsForDevice(fragments_per_device[device_id],
                               device_id,
                               memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
                                   ? dev_buff_owners[device_id].get()
@@ -225,6 +213,112 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
   setInverseBucketSizeInfo(
       inverse_bucket_sizes_for_dimension_, columns_per_device, device_count_);
 
+  effective_memory_level_ = getEffectiveMemoryLevel(inner_outer_pairs_);
+
+  // to properly lookup cached hash table, we need to use join columns listed as lhs and
+  // rhs of the overlaps op instead of physical (and hidden) column tailored to range join
+  // expr in other words, we need to use geometry column (point) instead of its hidden
+  // array column i.e., see `get_physical_cols` function
+  std::vector<InnerOuter> inner_outer_pairs_for_cache_lookup;
+  inner_outer_pairs_for_cache_lookup.emplace_back(InnerOuter{
+      dynamic_cast<const Analyzer::ColumnVar*>(range_expr_->get_left_operand()),
+      condition_->get_left_operand()});
+  auto hashtable_access_path_info =
+      HashtableRecycler::getHashtableAccessPathInfo(inner_outer_pairs_for_cache_lookup,
+                                                    {},
+                                                    condition_->get_optype(),
+                                                    join_type_,
+                                                    hashtable_build_dag_map_,
+                                                    device_count_,
+                                                    shard_count,
+                                                    fragments_per_device,
+                                                    executor_);
+  hashtable_cache_key_ = hashtable_access_path_info.hashed_query_plan_dag;
+  table_keys_ = hashtable_access_path_info.table_keys;
+
+  auto get_inner_table_id = [&inner_outer_pairs_for_cache_lookup]() {
+    return inner_outer_pairs_for_cache_lookup.front().first->get_table_id();
+  };
+
+  if (table_keys_.empty()) {
+    table_keys_ = DataRecyclerUtil::getAlternativeTableKeys(
+        composite_key_info_.cache_key_chunks,
+        executor_->getCatalog()->getDatabaseId(),
+        get_inner_table_id());
+  }
+  CHECK(!table_keys_.empty());
+
+  setOverlapsHashtableMetaInfo(
+      max_hashtable_size_, bucket_threshold_, inverse_bucket_sizes_for_dimension_);
+  generateCacheKey(max_hashtable_size_,
+                   bucket_threshold_,
+                   inverse_bucket_sizes_for_dimension_,
+                   fragments_per_device,
+                   device_count_);
+
+  if (HashtableRecycler::isInvalidHashTableCacheKey(hashtable_cache_key_) &&
+      get_inner_table_id() > 0) {
+    std::vector<size_t> per_device_chunk_key;
+    for (int device_id = 0; device_id < device_count_; ++device_id) {
+      auto chunk_key_hash = boost::hash_value(composite_key_info_.cache_key_chunks);
+      boost::hash_combine(chunk_key_hash,
+                          HashJoin::collectFragmentIds(fragments_per_device[device_id]));
+      per_device_chunk_key.push_back(chunk_key_hash);
+      AlternativeCacheKeyForOverlapsHashJoin cache_key{
+          inner_outer_pairs_for_cache_lookup,
+          columns_per_device.front().join_columns.front().num_elems,
+          chunk_key_hash,
+          condition_->get_optype(),
+          max_hashtable_size_,
+          bucket_threshold_,
+          {}};
+      hashtable_cache_key_[device_id] = getAlternativeCacheKey(cache_key);
+      hash_table_cache_->addQueryPlanDagForTableKeys(hashtable_cache_key_[device_id],
+                                                     table_keys_);
+    }
+  }
+
+  if (effective_memory_level_ == Data_Namespace::MemoryLevel::CPU_LEVEL) {
+    std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
+    if (auto generic_hash_table =
+            initHashTableOnCpuFromCache(hashtable_cache_key_.front(),
+                                        CacheItemType::OVERLAPS_HT,
+                                        DataRecyclerUtil::CPU_DEVICE_IDENTIFIER)) {
+      if (auto hash_table =
+              std::dynamic_pointer_cast<BaselineHashTable>(generic_hash_table)) {
+        // See if a hash table of a different layout was returned.
+        // If it was OneToMany, we can reuse it on ManyToMany.
+        if (layout == HashType::ManyToMany &&
+            hash_table->getLayout() == HashType::OneToMany) {
+          // use the cached hash table
+          layout_override_ = HashType::ManyToMany;
+        }
+
+        if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
+#ifdef HAVE_CUDA
+          for (int device_id = 0; device_id < device_count_; ++device_id) {
+            auto gpu_hash_table = copyCpuHashTableToGpu(hash_table,
+                                                        layout,
+                                                        hash_table->getEntryCount(),
+                                                        hash_table->getEmittedKeysCount(),
+                                                        device_id);
+            CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
+            hash_tables_for_device_[device_id] = std::move(gpu_hash_table);
+          }
+#else
+          UNREACHABLE();
+#endif
+        } else {
+          CHECK_EQ(Data_Namespace::CPU_LEVEL, memory_level_);
+          CHECK_EQ(hash_tables_for_device_.size(), size_t(1));
+          // do not move hash_table to keep valid ptr of it within the hash table recycler
+          hash_tables_for_device_[0] = hash_table;
+        }
+        return;
+      }
+    }
+  }
+
   auto [entry_count, emitted_keys_count] =
       computeRangeHashTableCounts(shard_count, columns_per_device);
 
@@ -236,10 +330,6 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
 
   std::vector<std::future<void>> init_threads;
   for (int device_id = 0; device_id < device_count_; ++device_id) {
-    const auto fragments =
-        shard_count
-            ? only_shards_for_device(query_info.fragments, device_id, device_count_)
-            : query_info.fragments;
     init_threads.push_back(
         std::async(std::launch::async,
                    &RangeJoinHashTable::reifyForDevice,
@@ -268,9 +358,8 @@ void RangeJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_devi
   DEBUG_TIMER_NEW_THREAD(parent_thread_id);
   CHECK_EQ(getKeyComponentWidth(), size_t(8));
   CHECK(layoutRequiresAdditionalBuffers(layout));
-  const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
 
-  if (effective_memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
+  if (effective_memory_level_ == Data_Namespace::MemoryLevel::CPU_LEVEL) {
     VLOG(1) << "Building range join hash table on CPU.";
     auto hash_table = initHashTableOnCpu(columns_for_device.join_columns,
                                          columns_for_device.join_column_types,
@@ -283,12 +372,12 @@ void RangeJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_devi
 #ifdef HAVE_CUDA
     if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
       auto gpu_hash_table = copyCpuHashTableToGpu(
-          std::move(hash_table), layout, entry_count, emitted_keys_count, device_id);
+          hash_table, layout, entry_count, emitted_keys_count, device_id);
       CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
       hash_tables_for_device_[device_id] = std::move(gpu_hash_table);
     } else {
 #else
-    CHECK_EQ(Data_Namespace::CPU_LEVEL, effective_memory_level);
+    CHECK_EQ(Data_Namespace::CPU_LEVEL, effective_memory_level_);
 #endif
       CHECK_EQ(hash_tables_for_device_.size(), size_t(1));
       hash_tables_for_device_[0] = std::move(hash_table);
@@ -328,7 +417,8 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnGpu(
 
   BaselineJoinHashTableBuilder builder;
   auto data_mgr = executor_->getDataMgr();
-  CudaAllocator allocator(data_mgr, device_id);
+  CudaAllocator allocator(
+      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(join_columns, allocator);
   CHECK_EQ(join_columns.size(), 1u);
   CHECK(!join_bucket_info.empty());
@@ -378,51 +468,6 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnCpu(
   CHECK(!join_columns.empty());
   CHECK(!join_bucket_info.empty());
 
-  setOverlapsHashtableMetaInfo(
-      max_hashtable_size_, bucket_threshold_, inverse_bucket_sizes_for_dimension_);
-  generateCacheKey(
-      max_hashtable_size_, max_hashtable_size_, inverse_bucket_sizes_for_dimension_);
-
-  auto table_keys = table_keys_;
-  if (hashtable_cache_key_ == EMPTY_HASHED_PLAN_DAG_KEY &&
-      inner_outer_pairs_.front().first->get_table_id() > 0) {
-    // sometimes we cannot retrieve query plan dag, so try to recycler cache
-    // with the old-passioned cache key if we deal with hashtable of non-temporary table
-    AlternativeCacheKeyForOverlapsHashJoin cache_key{inner_outer_pairs_,
-                                                     join_columns.front().num_elems,
-                                                     composite_key_info_.cache_key_chunks,
-                                                     condition_->get_optype(),
-                                                     max_hashtable_size_,
-                                                     bucket_threshold_,
-                                                     inverse_bucket_sizes_for_dimension_};
-    hashtable_cache_key_ = getAlternativeCacheKey(cache_key);
-    std::vector<int> alternative_table_key{
-        composite_key_info_.cache_key_chunks.front()[0],
-        composite_key_info_.cache_key_chunks.front()[1]};
-    CHECK(!alternative_table_key.empty());
-    table_keys = std::unordered_set<size_t>{boost::hash_value(alternative_table_key)};
-    VLOG(2) << "Use alternative hash table cache key";
-  }
-  hash_table_cache_->addQueryPlanDagForTableKeys(hashtable_cache_key_, table_keys);
-
-  std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
-  if (auto generic_hash_table =
-          initHashTableOnCpuFromCache(hashtable_cache_key_,
-                                      CacheItemType::OVERLAPS_HT,
-                                      DataRecyclerUtil::CPU_DEVICE_IDENTIFIER)) {
-    if (auto hash_table =
-            std::dynamic_pointer_cast<BaselineHashTable>(generic_hash_table)) {
-      // See if a hash table of a different layout was returned.
-      // If it was OneToMany, we can reuse it on ManyToMany.
-      if (layout == HashType::ManyToMany &&
-          hash_table->getLayout() == HashType::OneToMany) {
-        // use the cached hash table
-        layout_override_ = HashType::ManyToMany;
-        return hash_table;
-      }
-    }
-  }
-
   CHECK(layoutRequiresAdditionalBuffers(layout));
   const auto key_component_count =
       join_bucket_info[0].inverse_bucket_sizes_for_dimension.size();
@@ -434,17 +479,21 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnCpu(
                       join_bucket_info[0].inverse_bucket_sizes_for_dimension.data());
 
   BaselineJoinHashTableBuilder builder;
-  const auto err = builder.initHashTableOnCpu(&key_handler,
-                                              composite_key_info,
-                                              join_columns,
-                                              join_column_types,
-                                              join_bucket_info,
-                                              entry_count,
-                                              emitted_keys_count,
-                                              layout,
-                                              join_type_,
-                                              getKeyComponentWidth(),
-                                              getKeyComponentCount());
+  const StrProxyTranslationMapsPtrsAndOffsets
+      dummy_str_proxy_translation_maps_ptrs_and_offsets;
+  const auto err =
+      builder.initHashTableOnCpu(&key_handler,
+                                 composite_key_info,
+                                 join_columns,
+                                 join_column_types,
+                                 join_bucket_info,
+                                 dummy_str_proxy_translation_maps_ptrs_and_offsets,
+                                 entry_count,
+                                 emitted_keys_count,
+                                 layout,
+                                 join_type_,
+                                 getKeyComponentWidth(),
+                                 getKeyComponentCount());
   ts2 = std::chrono::steady_clock::now();
   if (err) {
     throw HashJoinFail(std::string("Unrecognized error when initializing CPU "
@@ -452,16 +501,9 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnCpu(
                        std::to_string(err) + std::string(")"));
   }
   std::shared_ptr<BaselineHashTable> hash_table = builder.getHashTable();
-  auto& query_hint = OverlapsJoinHashTable::getRegisteredQueryHint();
-  if (query_hint.isHintRegistered(QueryHint::kOverlapsNoCache) ||
-      (query_hint.isHintRegistered(QueryHint::kHashJoin) &&
-       !query_hint.hash_join->caching)) {
-    VLOG(1) << "User requests to skip caching range join hash table";
-    return hash_table;
-  }
   auto hashtable_build_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
-  putHashTableOnCpuToCache(hashtable_cache_key_,
+  putHashTableOnCpuToCache(hashtable_cache_key_.front(),
                            CacheItemType::OVERLAPS_HT,
                            hash_table,
                            DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
@@ -490,7 +532,6 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
     std::vector<ColumnsForDevice>& columns_per_device,
     const size_t chosen_max_hashtable_size,
     const double chosen_bucket_threshold) {
-  const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
 #ifdef _WIN32
   // WIN32 needs have C++20 set for designated initialisation to work
   CountDistinctDescriptor count_distinct_desc{
@@ -498,7 +539,7 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
       0,
       11,
       true,
-      effective_memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
+      effective_memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
           ? ExecutorDeviceType::GPU
           : ExecutorDeviceType::CPU,
       1,
@@ -509,7 +550,7 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
       .min_val = 0,
       .bitmap_sz_bits = 11,
       .approximate = true,
-      .device_type = effective_memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
+      .device_type = effective_memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
                          ? ExecutorDeviceType::GPU
                          : ExecutorDeviceType::CPU,
       .sub_bitmap_count = 1,
@@ -530,20 +571,9 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
   // Number of keys must match dimension of buckets
   CHECK_EQ(columns_per_device.front().join_columns.size(),
            columns_per_device.front().join_buckets.size());
-  if (effective_memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
+  if (effective_memory_level_ == Data_Namespace::MemoryLevel::CPU_LEVEL) {
     const auto composite_key_info =
         HashJoin::getCompositeKeyInfo(inner_outer_pairs_, executor_);
-
-    const auto cached_count_info =
-        getApproximateTupleCountFromCache(hashtable_cache_key_,
-                                          CacheItemType::OVERLAPS_HT,
-                                          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-    if (cached_count_info.has_value() && cached_count_info.value().first) {
-      VLOG(1) << "Using a cached tuple count: " << cached_count_info.value().first
-              << ", emitted keys count: " << cached_count_info.value().second;
-      return std::make_pair(cached_count_info.value().first,
-                            cached_count_info.value().second);
-    }
     int thread_count = cpu_threads();
     std::vector<uint8_t> hll_buffer_all_cpus(thread_count * padded_size_bytes);
     auto hll_result = &hll_buffer_all_cpus[0];
@@ -587,11 +617,15 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
          &host_hll_buffers,
          &emitted_keys_count_device_threads,
          this] {
-          auto allocator = data_mgr.createGpuAllocator(device_id);
+          auto allocator = std::make_unique<CudaAllocator>(
+              &data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
           auto device_hll_buffer =
               allocator->alloc(count_distinct_desc.bitmapPaddedSizeBytes());
           data_mgr.getCudaMgr()->zeroDeviceMem(
-              device_hll_buffer, count_distinct_desc.bitmapPaddedSizeBytes(), device_id);
+              device_hll_buffer,
+              count_distinct_desc.bitmapPaddedSizeBytes(),
+              device_id,
+              getQueryEngineCudaStreamForDevice(device_id));
           const auto& columns_for_device = columns_per_device[device_id];
           auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(
               columns_for_device.join_columns, *allocator);
@@ -608,7 +642,10 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
               columns_per_device.front().join_columns[0].num_elems * sizeof(int32_t);
           auto row_counts_buffer = allocator->alloc(row_counts_buffer_sz);
           data_mgr.getCudaMgr()->zeroDeviceMem(
-              row_counts_buffer, row_counts_buffer_sz, device_id);
+              row_counts_buffer,
+              row_counts_buffer_sz,
+              device_id,
+              getQueryEngineCudaStreamForDevice(device_id));
           const auto key_handler =
               RangeKeyHandler(isInnerColCompressed(),
                               bucket_sizes_for_dimension.size(),
@@ -642,7 +679,7 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
   for (auto& child : approximate_distinct_device_threads) {
     child.get();
   }
-  CHECK_EQ(Data_Namespace::MemoryLevel::GPU_LEVEL, effective_memory_level);
+  CHECK_EQ(Data_Namespace::MemoryLevel::GPU_LEVEL, effective_memory_level_);
   auto& result_hll_buffer = host_hll_buffers.front();
   auto hll_result = reinterpret_cast<int32_t*>(&result_hll_buffer[0]);
   for (int device_id = 1; device_id < device_count_; ++device_id) {

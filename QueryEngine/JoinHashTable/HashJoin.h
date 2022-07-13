@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,11 +25,14 @@
 #include "DataMgr/Allocators/ThrustAllocator.h"
 #include "QueryEngine/ColumnarResults.h"
 #include "QueryEngine/CompilationOptions.h"
-#include "QueryEngine/DataRecycler/HashTablePropertyRecycler.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
+#include "QueryEngine/ExpressionRange.h"
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/JoinHashTable/HashTable.h"
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
+#include "StringOps/StringOpInfo.h"
+
+class CodeGenerator;
 
 class TooManyHashEntries : public std::runtime_error {
  public:
@@ -46,9 +49,23 @@ class TableMustBeReplicated : public std::runtime_error {
                            "' must be replicated.") {}
 };
 
+enum class InnerQualDecision { IGNORE = 0, UNKNOWN, LHS, RHS };
+
+#ifndef __CUDACC__
+inline std::ostream& operator<<(std::ostream& os, InnerQualDecision const decision) {
+  constexpr char const* strings[]{"IGNORE", "UNKNOWN", "LHS", "RHS"};
+  return os << strings[static_cast<int>(decision)];
+}
+#endif
+
 class HashJoinFail : public std::runtime_error {
  public:
-  HashJoinFail(const std::string& reason) : std::runtime_error(reason) {}
+  HashJoinFail(const std::string& err_msg)
+      : std::runtime_error(err_msg), inner_qual_decision(InnerQualDecision::UNKNOWN) {}
+  HashJoinFail(const std::string& err_msg, InnerQualDecision qual_decision)
+      : std::runtime_error(err_msg), inner_qual_decision(qual_decision) {}
+
+  InnerQualDecision inner_qual_decision;
 };
 
 class NeedsOneToManyHash : public HashJoinFail {
@@ -75,18 +92,9 @@ class OverlapsHashTableTooBig : public HashJoinFail {
             std::to_string(overlaps_hash_table_max_bytes) + " bytes") {}
 };
 
-class HashingTypeHintDetected : public std::runtime_error {
- public:
-  HashingTypeHintDetected(HashTableHashingType hashing_type)
-      : std::runtime_error("Detect hashing scheme query hint: " +
-                           HashTablePropertyRecycler::getHashingString(hashing_type)) {
-    hashing_type_ = hashing_type;
-  }
-
-  HashTableHashingType hashing_type_;
-};
-
 using InnerOuter = std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>;
+using InnerOuterStringOpInfos = std::pair<std::vector<StringOps_Namespace::StringOpInfo>,
+                                          std::vector<StringOps_Namespace::StringOpInfo>>;
 
 struct ColumnsForDevice {
   const std::vector<JoinColumn> join_columns;
@@ -107,7 +115,7 @@ struct HashJoinMatchingSet {
 
 struct CompositeKeyInfo {
   std::vector<const void*> sd_inner_proxy_per_key;
-  std::vector<const void*> sd_outer_proxy_per_key;
+  std::vector<void*> sd_outer_proxy_per_key;
   std::vector<ChunkKey> cache_key_chunks;  // used for the cache key
 };
 
@@ -138,10 +146,6 @@ class HashJoin {
   virtual int getInnerTableRteIdx() const noexcept = 0;
 
   virtual HashType getHashType() const noexcept = 0;
-
-  virtual const RegisteredQueryHint& getRegisteredQueryHint() = 0;
-
-  virtual void registerQueryHint(const RegisteredQueryHint& query_hint) = 0;
 
   static bool layoutRequiresAdditionalBuffers(HashType layout) noexcept {
     return (layout == HashType::ManyToMany || layout == HashType::OneToMany);
@@ -237,40 +241,30 @@ class HashJoin {
     return first_inner_col->get_table_id();
   }
 
+  static bool canAccessHashTable(bool allow_hash_table_recycling,
+                                 bool invalid_cache_key,
+                                 JoinType join_type);
+
   static void checkHashJoinReplicationConstraint(const int table_id,
                                                  const size_t shard_count,
                                                  const Executor* executor);
 
   // Swap the columns if needed and make the inner column the first component.
-  static InnerOuter normalizeColumnPair(const Analyzer::Expr* lhs,
-                                        const Analyzer::Expr* rhs,
-                                        const Catalog_Namespace::Catalog& cat,
-                                        const TemporaryTables* temporary_tables,
-                                        const bool is_overlaps_join = false);
+  static std::pair<InnerOuter, InnerOuterStringOpInfos> normalizeColumnPair(
+      const Analyzer::Expr* lhs,
+      const Analyzer::Expr* rhs,
+      const Catalog_Namespace::Catalog& cat,
+      const TemporaryTables* temporary_tables,
+      const bool is_overlaps_join = false);
+
+  template <typename T>
+  static const T* getHashJoinColumn(const Analyzer::Expr* expr);
 
   // Normalize each expression tuple
-  static std::vector<InnerOuter> normalizeColumnPairs(
-      const Analyzer::BinOper* condition,
-      const Catalog_Namespace::Catalog& cat,
-      const TemporaryTables* temporary_tables);
-
-  static void invalidateCache() {
-    CHECK(hash_table_property_cache_);
-    hash_table_property_cache_->clearCache();
-  }
-
-  static void markCachedItemAsDirty(size_t table_key) {
-    CHECK(hash_table_property_cache_);
-    auto candidate_table_keys =
-        hash_table_property_cache_->getMappedQueryPlanDagsWithTableKey(table_key);
-    if (candidate_table_keys.has_value()) {
-      hash_table_property_cache_->markCachedItemAsDirty(
-          table_key,
-          *candidate_table_keys,
-          CacheItemType::HT_PROPERTY,
-          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-    }
-  }
+  static std::pair<std::vector<InnerOuter>, std::vector<InnerOuterStringOpInfos>>
+  normalizeColumnPairs(const Analyzer::BinOper* condition,
+                       const Catalog_Namespace::Catalog& cat,
+                       const TemporaryTables* temporary_tables);
 
   HashTable* getHashTableForDevice(const size_t device_id) const {
     CHECK_LT(device_id, hash_tables_for_device_.size());
@@ -320,25 +314,57 @@ class HashJoin {
     hash_tables_for_device_.swap(empty_hash_tables);
   }
 
+  static std::vector<int> collectFragmentIds(
+      const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments);
+
   static CompositeKeyInfo getCompositeKeyInfo(
       const std::vector<InnerOuter>& inner_outer_pairs,
+      const Executor* executor,
+      const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_infos_pairs = {});
+
+  static std::vector<const StringDictionaryProxy::IdMap*>
+  translateCompositeStrDictProxies(
+      const CompositeKeyInfo& composite_key_info,
+      const std::vector<InnerOuterStringOpInfos>& string_op_infos_for_keys,
       const Executor* executor);
 
-  static HashTablePropertyRecycler* getHashTablePropertyCache() {
-    CHECK(hash_table_property_cache_);
-    return hash_table_property_cache_.get();
-  }
+  static std::pair<const StringDictionaryProxy*, StringDictionaryProxy*>
+  getStrDictProxies(const InnerOuter& cols,
+                    const Executor* executor,
+                    const bool has_string_ops);
+
+  static const StringDictionaryProxy::IdMap* translateInnerToOuterStrDictProxies(
+      const InnerOuter& cols,
+      const InnerOuterStringOpInfos& inner_outer_string_op_infos,
+      ExpressionRange& old_col_range,
+      const Executor* executor);
 
  protected:
+  static llvm::Value* codegenColOrStringOper(
+      const Analyzer::Expr* col_or_string_oper,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+      CodeGenerator& code_generator,
+      const CompilationOptions& co);
+
   virtual size_t getComponentBufferSize() const noexcept = 0;
 
   std::vector<std::shared_ptr<HashTable>> hash_tables_for_device_;
-  static std::unique_ptr<HashTablePropertyRecycler> hash_table_property_cache_;
 };
 
 std::ostream& operator<<(std::ostream& os, const DecodedJoinHashBufferEntry& e);
 
 std::ostream& operator<<(std::ostream& os, const DecodedJoinHashBufferSet& s);
+
+std::ostream& operator<<(std::ostream& os,
+                         const InnerOuterStringOpInfos& inner_outer_string_op_infos);
+std::ostream& operator<<(
+    std::ostream& os,
+    const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_infos_pairs);
+
+std::string toString(const InnerOuterStringOpInfos& inner_outer_string_op_infos);
+
+std::string toString(
+    const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_infos_pairs);
 
 std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(std::string_view table,
                                                            std::string_view column,

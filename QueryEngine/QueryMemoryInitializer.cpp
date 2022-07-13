@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,10 @@
 #include "GpuMemUtils.h"
 #include "Logger/Logger.h"
 #include "OutputBufferInitialization.h"
+#include "QueryEngine/QueryEngine.h"
 #include "ResultSet.h"
 #include "StreamingTopN.h"
+#include "Utils/FlatBuffer.h"
 
 #include <Shared/checked_alloc.h>
 
@@ -361,21 +363,29 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     return;
   }
 
-  const size_t num_columns = query_mem_desc.getBufferColSlotCount();
+  const size_t num_columns =
+      query_mem_desc.getBufferColSlotCount();  // shouldn't we use getColCount() ???
   size_t total_group_by_buffer_size{0};
   for (size_t i = 0; i < num_columns; ++i) {
-    const size_t col_width = exe_unit.target_exprs[i]->get_type_info().get_size();
-    const size_t group_buffer_size = num_rows_ * col_width;
-    total_group_by_buffer_size =
-        align_to_int64(total_group_by_buffer_size + group_buffer_size);
+    auto ti = exe_unit.target_exprs[i]->get_type_info();
+    if (ti.is_array()) {
+      // See TableFunctionManager.h for info regarding flatbuffer
+      // memory managment.
+      auto slot_idx = query_mem_desc.getSlotIndexForSingleSlotCol(i);
+      int64_t flatbuffer_size = query_mem_desc.getFlatBufferSize(slot_idx);
+      total_group_by_buffer_size =
+          align_to_int64(total_group_by_buffer_size + flatbuffer_size);
+    } else {
+      const size_t col_width = ti.get_size();
+      const size_t group_buffer_size = num_rows_ * col_width;
+      total_group_by_buffer_size =
+          align_to_int64(total_group_by_buffer_size + group_buffer_size);
+    }
   }
 
   CHECK_EQ(num_buffers_, size_t(1));
   auto group_by_buffer = alloc_group_by_buffer(
       total_group_by_buffer_size, nullptr, thread_idx_, row_set_mem_owner.get());
-  if (!query_mem_desc.lazyInitGroups(device_type)) {
-    initColumnarGroups(query_mem_desc, group_by_buffer, init_agg_vals_, executor);
-  }
   group_by_buffers_.push_back(group_by_buffer);
 
   const auto column_frag_offsets =
@@ -533,11 +543,7 @@ void QueryMemoryInitializer::initColumnarGroups(
     const std::vector<int64_t>& init_vals,
     const Executor* executor) {
   CHECK(groups_buffer);
-  if (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::TableFunction) {
-    // As an optimization we don't init table function buffers as we expect outputs to be
-    // dense
-    return;
-  }
+
   for (const auto target_expr : executor->plan_state_->target_exprs_) {
     const auto agg_info = get_target_info(target_expr, g_bigint_count);
     CHECK(!is_distinct_target(agg_info));
@@ -712,7 +718,7 @@ std::vector<int64_t> QueryMemoryInitializer::allocateCountDistinctBuffers(
           init_agg_vals_[agg_col_idx] = allocateCountDistinctBitmap(bitmap_byte_sz);
         }
       } else {
-        CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
+        CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::UnorderedSet);
         if (deferred) {
           agg_bitmap_size[agg_col_idx] = -1;
         } else {
@@ -739,7 +745,7 @@ int64_t QueryMemoryInitializer::allocateCountDistinctBitmap(const size_t bitmap_
 }
 
 int64_t QueryMemoryInitializer::allocateCountDistinctSet() {
-  auto count_distinct_set = new std::set<int64_t>();
+  auto count_distinct_set = new CountDistinctSet();
   row_set_mem_owner_->addCountDistinctSet(count_distinct_set);
   return reinterpret_cast<int64_t>(count_distinct_set);
 }
@@ -948,7 +954,8 @@ GpuGroupByBuffers QueryMemoryInitializer::setupTableFunctionGpuBuffers(
     const QueryMemoryDescriptor& query_mem_desc,
     const int device_id,
     const unsigned block_size_x,
-    const unsigned grid_size_x) {
+    const unsigned grid_size_x,
+    const bool zero_initialize_buffers) {
   const size_t num_columns = query_mem_desc.getBufferColSlotCount();
   CHECK_GT(num_columns, size_t(0));
   size_t total_group_by_buffer_size{0};
@@ -968,6 +975,9 @@ GpuGroupByBuffers QueryMemoryInitializer::setupTableFunctionGpuBuffers(
   int8_t* dev_buffers_allocation{nullptr};
   dev_buffers_allocation = device_allocator_->alloc(total_group_by_buffer_size);
   CHECK(dev_buffers_allocation);
+  if (zero_initialize_buffers) {
+    device_allocator_->zeroDeviceMem(dev_buffers_allocation, total_group_by_buffer_size);
+  }
 
   auto dev_buffers_mem = dev_buffers_allocation;
   std::vector<int8_t*> dev_buffers(num_columns);
@@ -1001,7 +1011,8 @@ void QueryMemoryInitializer::copyFromTableFunctionGpuBuffers(
 
   const auto col_slot_context = query_mem_desc.getColSlotContext();
 
-  auto allocator = data_mgr->createGpuAllocator(device_id);
+  auto allocator = std::make_unique<CudaAllocator>(
+      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
 
   for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
     const size_t col_width = col_slot_context.getSlotInfo(col_idx).logical_size;

@@ -4,7 +4,7 @@
 #include <cmath>
 #include <iostream>
 #include <thread>
-#include "gen-cpp/omnisci_types.h"
+#include "gen-cpp/heavy_types.h"
 
 template <typename SERVICE_ENUM, typename CLIENT_CONTEXT>
 bool thrift_with_retry(SERVICE_ENUM which_service,
@@ -17,7 +17,7 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
   int max_reconnect = 4;
   int con_timeout_base = 1;
   if (try_count > max_reconnect) {
-    std::cerr << "Cannot connect to OmniSci Server." << std::endl;
+    std::cerr << "Cannot connect to HeavyDB Server." << std::endl;
     return false;
   }
   try {
@@ -153,7 +153,7 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
             context.dash_return, context.session, context.dash_id);
         break;
     }
-  } catch (TOmniSciException& e) {
+  } catch (TDBException& e) {
     std::cerr << e.error_msg << std::endl;
     return false;
   } catch (TException& te) {

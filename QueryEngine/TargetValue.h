@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,10 @@
  * limitations under the License.
  */
 
-/*
+/**
  * @file    TargetValue.h
- * @author  Alex Suhan <alex@mapd.com>
  * @brief   High-level representation of SQL values.
  *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  */
 
 #ifndef QUERYENGINE_TARGETVALUE_H
@@ -110,6 +108,16 @@ struct GeoLineStringTargetValue {
       : coords(std::make_shared<std::vector<double>>(coords)) {}
 };
 
+struct GeoMultiLineStringTargetValue {
+  std::shared_ptr<std::vector<double>> coords;
+  std::shared_ptr<std::vector<int32_t>> linestring_sizes;
+
+  GeoMultiLineStringTargetValue(const std::vector<double>& coords,
+                                const std::vector<int32_t>& linestring_sizes)
+      : coords(std::make_shared<std::vector<double>>(coords))
+      , linestring_sizes(std::make_shared<std::vector<int32_t>>(linestring_sizes)) {}
+};
+
 struct GeoPolyTargetValue {
   std::shared_ptr<std::vector<double>> coords;
   std::shared_ptr<std::vector<int32_t>> ring_sizes;
@@ -141,6 +149,11 @@ struct GeoLineStringTargetValuePtr {
   std::shared_ptr<VarlenDatum> coords_data;
 };
 
+struct GeoMultiLineStringTargetValuePtr {
+  std::shared_ptr<VarlenDatum> coords_data;
+  std::shared_ptr<VarlenDatum> linestring_sizes_data;
+};
+
 struct GeoPolyTargetValuePtr {
   std::shared_ptr<VarlenDatum> coords_data;
   std::shared_ptr<VarlenDatum> ring_sizes_data;
@@ -157,10 +170,12 @@ using ScalarTargetValue = boost::variant<int64_t, double, float, NullableString>
 using ArrayTargetValue = boost::optional<std::vector<ScalarTargetValue>>;
 using GeoTargetValue = boost::optional<boost::variant<GeoPointTargetValue,
                                                       GeoLineStringTargetValue,
+                                                      GeoMultiLineStringTargetValue,
                                                       GeoPolyTargetValue,
                                                       GeoMultiPolyTargetValue>>;
 using GeoTargetValuePtr = boost::variant<GeoPointTargetValuePtr,
                                          GeoLineStringTargetValuePtr,
+                                         GeoMultiLineStringTargetValuePtr,
                                          GeoPolyTargetValuePtr,
                                          GeoMultiPolyTargetValuePtr>;
 using TargetValue = boost::

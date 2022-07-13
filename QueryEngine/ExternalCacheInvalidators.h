@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,20 +28,18 @@
 #include "JoinHashTable/BaselineJoinHashTable.h"
 #include "JoinHashTable/OverlapsJoinHashTable.h"
 #include "JoinHashTable/PerfectJoinHashTable.h"
+#include "ResultSetRecyclerHolder.h"
 
-using UpdateTriggeredCacheInvalidator = CacheInvalidator<OverlapsJoinHashTable,
-                                                         BaselineJoinHashTable,
-                                                         PerfectJoinHashTable,
-                                                         HashJoin>;
+using UpdateTriggeredCacheInvalidator =
+    CacheInvalidator<OverlapsJoinHashTable, BaselineJoinHashTable, PerfectJoinHashTable>;
 using DeleteTriggeredCacheInvalidator = UpdateTriggeredCacheInvalidator;
 
 // Note that this is functionally the same as the above two invalidators. The
 // JoinHashTableCacheInvalidator is a generic invalidator used during `clear_cpu` calls.
 // The above cache invalidators are specific invalidators called during update/delete and
 // will likely be extended in the future.
-using JoinHashTableCacheInvalidator = CacheInvalidator<OverlapsJoinHashTable,
-                                                       BaselineJoinHashTable,
-                                                       PerfectJoinHashTable,
-                                                       HashJoin>;
+using JoinHashTableCacheInvalidator =
+    CacheInvalidator<OverlapsJoinHashTable, BaselineJoinHashTable, PerfectJoinHashTable>;
+using ResultSetCacheInvalidator = CacheInvalidator<ResultSetRecyclerHolder>;
 
 #endif

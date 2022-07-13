@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-/*
+/**
  * @file   Intervals.h
- * @author Matt Pulver <matt.pulver@omnisci.com>
- * @description Divide up indexes (A, A+1, A+2, ..., B-2, B-1) among
+ * @brief
+ *              Divide up indexes (A, A+1, A+2, ..., B-2, B-1) among
  *              N workers as evenly as possible in a range-based for loop:
  *              for (auto const& interval : makeIntervals(A, B, N)) {}
  *              where interval is a 2-member struct of (begin,end) values.
@@ -86,13 +86,19 @@ class Intervals {
   }
 
  public:
-  class Iterator : public std::iterator<std::input_iterator_tag, Interval<T>> {
+  class Iterator {
     T begin_;
     U const quot_;
     U rem_;
     U index{0};
 
    public:
+    using iterator_category = std::input_iterator_tag;
+    using value_type = Interval<T>;
+    using difference_type = std::ptrdiff_t;
+    using pointer = value_type*;
+    using reference = value_type&;
+
     Iterator(T begin, U quot, U rem) : begin_(begin), quot_(quot), rem_(rem) {}
     Interval<T> operator*() const {
       return {begin_, T(begin_ + quot_ + bool(rem_)), index};

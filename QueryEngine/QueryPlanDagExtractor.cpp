@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,8 +34,7 @@ struct IsEquivBinOp {
 }  // namespace
 
 std::vector<InnerOuterOrLoopQual> QueryPlanDagExtractor::normalizeColumnsPair(
-    const Analyzer::BinOper* condition,
-    const Catalog_Namespace::Catalog& cat) {
+    const Analyzer::BinOper* condition) {
   std::vector<InnerOuterOrLoopQual> result;
   const auto lhs_tuple_expr =
       dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_left_operand());
@@ -43,13 +42,17 @@ std::vector<InnerOuterOrLoopQual> QueryPlanDagExtractor::normalizeColumnsPair(
       dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_right_operand());
 
   CHECK_EQ(static_cast<bool>(lhs_tuple_expr), static_cast<bool>(rhs_tuple_expr));
-  auto do_normalize_inner_outer_pair = [&result, &cat, &condition](
+  auto do_normalize_inner_outer_pair = [&result, &condition, this](
                                            const Analyzer::Expr* lhs,
                                            const Analyzer::Expr* rhs,
                                            const TemporaryTables* temporary_table) {
     try {
-      auto inner_outer_pair = HashJoin::normalizeColumnPair(
-          lhs, rhs, cat, temporary_table, condition->is_overlaps_oper());
+      auto inner_outer_pair = HashJoin::normalizeColumnPair(lhs,
+                                                            rhs,
+                                                            *executor_->getCatalog(),
+                                                            temporary_table,
+                                                            condition->is_overlaps_oper())
+                                  .first;
       InnerOuterOrLoopQual valid_qual{
           std::make_pair(inner_outer_pair.first, inner_outer_pair.second), false};
       result.push_back(valid_qual);
@@ -64,12 +67,12 @@ std::vector<InnerOuterOrLoopQual> QueryPlanDagExtractor::normalizeColumnsPair(
     CHECK_EQ(lhs_tuple.size(), rhs_tuple.size());
     for (size_t i = 0; i < lhs_tuple.size(); ++i) {
       do_normalize_inner_outer_pair(
-          lhs_tuple[i].get(), rhs_tuple[i].get(), &temporary_tables_);
+          lhs_tuple[i].get(), rhs_tuple[i].get(), executor_->getTemporaryTables());
     }
   } else {
     do_normalize_inner_outer_pair(condition->get_left_operand(),
                                   condition->get_right_operand(),
-                                  &temporary_tables_);
+                                  executor_->getTemporaryTables());
   }
   return result;
 }
@@ -79,71 +82,80 @@ std::vector<InnerOuterOrLoopQual> QueryPlanDagExtractor::normalizeColumnsPair(
 // We consider a DAG representation of a query plan as a series of "unique" rel node ids
 // We decide each rel node's node id by searching the cached plan DAG first,
 // and assign a new id iff there exists no duplicated rel node that can reuse
-ExtractedPlanDag QueryPlanDagExtractor::extractQueryPlanDag(
-    const RelAlgNode*
-        node, /* the root node of the query plan tree we want to extract its DAG */
-    const Catalog_Namespace::Catalog& catalog,
-    std::optional<unsigned> left_deep_tree_id,
-    std::unordered_map<unsigned, JoinQualsPerNestingLevel>& left_deep_tree_infos,
-    const TemporaryTables& temporary_tables,
-    Executor* executor,
-    const RelAlgTranslator& rel_alg_translator) {
-  // check if this plan tree has not supported pattern for DAG extraction
-  auto dag_checker_res =
-      QueryPlanDagChecker::hasNonSupportedNodeInDag(node, rel_alg_translator);
+ExtractedQueryPlanDag QueryPlanDagExtractor::extractQueryPlanDag(
+    const RelAlgNode* top_node,
+    Executor* executor) {
+  auto dag_checker_res = QueryPlanDagChecker::hasNonSupportedNodeInDag(top_node);
   if (dag_checker_res.first) {
     VLOG(1) << "Stop DAG extraction (" << dag_checker_res.second << ")";
-    return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, {}, true};
+    return {EMPTY_QUERY_PLAN, true};
   }
-
-  return extractQueryPlanDagImpl(
-      node, catalog, left_deep_tree_id, left_deep_tree_infos, temporary_tables, executor);
+  heavyai::unique_lock<heavyai::shared_mutex> lock(executor->getDataRecyclerLock());
+  auto& cached_dag = executor->getQueryPlanDagCache();
+  QueryPlanDagExtractor dag_extractor(cached_dag, {}, executor, false);
+  extractQueryPlanDagImpl(top_node, dag_extractor);
+  auto extracted_query_plan_dag = dag_extractor.getExtractedQueryPlanDagStr();
+  top_node->setQueryPlanDag(extracted_query_plan_dag);
+  if (auto sort_node = dynamic_cast<RelSort const*>(top_node)) {
+    // we evaluate sort node based on the resultset of its child node
+    // so we need to mark the extracted query plan of the child node
+    // for the resultset recycling
+    auto child_dag = dag_extractor.getExtractedQueryPlanDagStr(1);
+    sort_node->getInput(0)->setQueryPlanDag(child_dag);
+  }
+  return {extracted_query_plan_dag, dag_extractor.isDagExtractionAvailable()};
 }
 
-ExtractedPlanDag QueryPlanDagExtractor::extractQueryPlanDagImpl(
-    const RelAlgNode*
-        node, /* the root node of the query plan tree we want to extract its DAG */
-    const Catalog_Namespace::Catalog& catalog,
+ExtractedJoinInfo QueryPlanDagExtractor::extractJoinInfo(
+    const RelAlgNode* top_node,
     std::optional<unsigned> left_deep_tree_id,
-    std::unordered_map<unsigned, JoinQualsPerNestingLevel>& left_deep_tree_infos,
-    const TemporaryTables& temporary_tables,
+    std::unordered_map<unsigned, JoinQualsPerNestingLevel> left_deep_tree_infos,
     Executor* executor) {
-  mapd_unique_lock<mapd_shared_mutex> lock(executor->getDataRecyclerLock());
-
+  // we already extract a query plan dag for the input query which is stored at top_node
+  if (top_node->getQueryPlanDagHash() == EMPTY_HASHED_PLAN_DAG_KEY) {
+    return {};
+  }
+  heavyai::unique_lock<heavyai::shared_mutex> lock(executor->getDataRecyclerLock());
   auto& cached_dag = executor->getQueryPlanDagCache();
-  QueryPlanDagExtractor dag_extractor(
-      cached_dag, catalog, left_deep_tree_infos, temporary_tables);
+  QueryPlanDagExtractor dag_extractor(cached_dag, left_deep_tree_infos, executor, true);
+  extractQueryPlanDagImpl(top_node, dag_extractor);
+  return {dag_extractor.getHashTableBuildDag(), dag_extractor.getTableIdToNodeMap()};
+}
 
+void QueryPlanDagExtractor::extractQueryPlanDagImpl(
+    const RelAlgNode* top_node,
+    QueryPlanDagExtractor& dag_extractor) {
   // add the root node of this query plan DAG
-  auto res = cached_dag.addNodeIfAbsent(node);
+  auto res = dag_extractor.global_dag_.addNodeIfAbsent(top_node);
   if (!res) {
     VLOG(1) << "Stop DAG extraction (Query plan dag cache reaches the maximum capacity)";
-    return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, {}, true};
+    dag_extractor.contain_not_supported_rel_node_ = true;
+    return;
   }
   CHECK(res.has_value());
-  node->setRelNodeDagId(res.value());
-  dag_extractor.extracted_dag_.push_back(res.value());
+  top_node->setRelNodeDagId(res.value());
+  dag_extractor.extracted_dag_.push_back(::toString(res.value()));
 
   // visit child node if necessary
-  if (auto table_func_node = dynamic_cast<const RelTableFunction*>(node)) {
+  if (auto table_func_node = dynamic_cast<const RelTableFunction*>(top_node)) {
     for (size_t i = 0; i < table_func_node->inputCount(); ++i) {
       dag_extractor.visit(table_func_node, table_func_node->getInput(i));
     }
   } else {
-    auto num_child_node = node->inputCount();
+    auto num_child_node = top_node->inputCount();
     switch (num_child_node) {
       case 1:  // unary op
-        dag_extractor.visit(node, node->getInput(0));
+        dag_extractor.visit(top_node, top_node->getInput(0));
         break;
       case 2:  // binary op
-        if (auto trans_join_node = dynamic_cast<const RelTranslatedJoin*>(node)) {
+        if (auto trans_join_node = dynamic_cast<const RelTranslatedJoin*>(top_node)) {
           dag_extractor.visit(trans_join_node, trans_join_node->getLHS());
           dag_extractor.visit(trans_join_node, trans_join_node->getRHS());
           break;
         }
         VLOG(1) << "Visit an invalid rel node while extracting query plan DAG: "
-                << ::toString(node);
-        return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, {}, true};
+                << ::toString(top_node);
+        return;
       case 0:  // leaf node
         break;
       default:
@@ -155,30 +167,28 @@ ExtractedPlanDag QueryPlanDagExtractor::extractQueryPlanDagImpl(
 
   // check whether extracted DAG is available to use
   if (dag_extractor.extracted_dag_.empty() || dag_extractor.isDagExtractionAvailable()) {
-    return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, {}, true};
+    dag_extractor.contain_not_supported_rel_node_ = true;
+    return;
   }
 
   if (g_is_test_env) {
-    executor->registerExtractedQueryPlanDag(dag_extractor.getExtractedQueryPlanDagStr());
+    dag_extractor.executor_->registerExtractedQueryPlanDag(
+        dag_extractor.getExtractedQueryPlanDagStr());
   }
-
-  return {node,
-          dag_extractor.getExtractedQueryPlanDagStr(),
-          dag_extractor.getTranslatedJoinInfo(),
-          dag_extractor.getPerNestingJoinQualInfo(left_deep_tree_id),
-          dag_extractor.getHashTableBuildDag(),
-          dag_extractor.getTableIdToNodeMap(),
-          false};
+  return;
 }
 
-std::string QueryPlanDagExtractor::getExtractedQueryPlanDagStr() {
+std::string QueryPlanDagExtractor::getExtractedQueryPlanDagStr(size_t start_pos) {
   std::ostringstream oss;
-  if (extracted_dag_.empty() || contain_not_supported_rel_node_) {
-    oss << "N/A";
-  } else {
-    for (auto& dag_node_id : extracted_dag_) {
+  size_t cnt = 0;
+  if (start_pos > extracted_dag_.size()) {
+    return EMPTY_QUERY_PLAN;
+  }
+  for (auto& dag_node_id : extracted_dag_) {
+    if (cnt >= start_pos) {
       oss << dag_node_id << "|";
     }
+    ++cnt;
   }
   return oss.str();
 }
@@ -204,8 +214,21 @@ bool QueryPlanDagExtractor::registerNodeToDagCache(
   CHECK(retrieved_node_id.has_value());
   auto parent_node_id = parent_node->getRelNodeDagId();
   global_dag_.connectNodes(parent_node_id, retrieved_node_id.value());
-  extracted_dag_.push_back(retrieved_node_id.value());
+  extracted_dag_.push_back(::toString(retrieved_node_id.value()));
   return true;
+}
+
+void QueryPlanDagExtractor::register_and_visit(const RelAlgNode* parent_node,
+                                               const RelAlgNode* child_node) {
+  // This function takes a responsibility for all rel nodes
+  // except 1) RelLeftDeepJoinTree and 2) RelTranslatedJoin
+  auto res = global_dag_.addNodeIfAbsent(child_node);
+  if (validateNodeId(child_node, res) &&
+      registerNodeToDagCache(parent_node, child_node, res)) {
+    for (size_t i = 0; i < child_node->inputCount(); i++) {
+      visit(child_node, child_node->getInput(i));
+    }
+  }
 }
 
 // we recursively visit each rel node starting from the root
@@ -217,45 +240,40 @@ void QueryPlanDagExtractor::visit(const RelAlgNode* parent_node,
   if (!child_node || contain_not_supported_rel_node_) {
     return;
   }
-  auto register_and_visit = [this](const RelAlgNode* parent_node,
-                                   const RelAlgNode* child_node) {
-    // This function takes a responsibility for all rel nodes
-    // except 1) RelLeftDeepJoinTree and 2) RelTranslatedJoin
-    auto res = global_dag_.addNodeIfAbsent(child_node);
-    if (validateNodeId(child_node, res) &&
-        registerNodeToDagCache(parent_node, child_node, res)) {
-      for (size_t i = 0; i < child_node->inputCount(); i++) {
-        visit(child_node, child_node->getInput(i));
+  bool child_visited = false;
+  if (analyze_join_ops_) {
+    if (auto left_deep_joins = dynamic_cast<const RelLeftDeepInnerJoin*>(child_node)) {
+      if (left_deep_tree_infos_.empty()) {
+        // we should have left_deep_tree_info for input left deep tree node
+        VLOG(1) << "Stop DAG extraction (Detect non-supported join pattern)";
+        clearInternalStatus();
+        return;
       }
+      auto true_parent_node = parent_node;
+      std::shared_ptr<RelFilter> dummy_filter_node{nullptr};
+      const auto inner_cond = left_deep_joins->getInnerCondition();
+      // we analyze left-deep join tree as per-join qual level, so
+      // when visiting RelLeftDeepInnerJoin we decompose it into individual join node
+      // (RelTranslatedJoin).
+      // Thus, this RelLeftDeepInnerJoin object itself is useless when recycling data
+      // but sometimes it has inner condition that has to consider so we add an extra
+      // RelFilter node containing the condition to keep query semantic correctly
+      if (auto cond = dynamic_cast<const RexOperator*>(inner_cond)) {
+        RexDeepCopyVisitor copier;
+        auto copied_inner_cond = copier.visit(cond);
+        dummy_filter_node = std::make_shared<RelFilter>(copied_inner_cond);
+        register_and_visit(parent_node, dummy_filter_node.get());
+        true_parent_node = dummy_filter_node.get();
+      }
+      handleLeftDeepJoinTree(true_parent_node, left_deep_joins);
+      child_visited = true;
+    } else if (auto translated_join_node =
+                   dynamic_cast<const RelTranslatedJoin*>(child_node)) {
+      handleTranslatedJoin(parent_node, translated_join_node);
+      child_visited = true;
     }
-  };
-  if (auto left_deep_joins = dynamic_cast<const RelLeftDeepInnerJoin*>(child_node)) {
-    if (left_deep_tree_infos_.empty()) {
-      // we should have left_deep_tree_info for input left deep tree node
-      VLOG(1) << "Stop DAG extraction (Detect non-supported join pattern)";
-      clearInternalStatus();
-      return;
-    }
-    const auto inner_cond = left_deep_joins->getInnerCondition();
-    // we analyze left-deep join tree as per-join qual level, so
-    // when visiting RelLeftDeepInnerJoin we decompose it into individual join node
-    // (RelTranslatedJoin).
-    // Thus, this RelLeftDeepInnerJoin object itself is useless when recycling data
-    // but sometimes it has inner condition that has to consider so we add an extra
-    // RelFilter node containing the condition to keep query semantic correctly
-    if (auto cond = dynamic_cast<const RexOperator*>(inner_cond)) {
-      RexDeepCopyVisitor copier;
-      auto copied_inner_cond = copier.visit(cond);
-      auto dummy_filter = std::make_shared<RelFilter>(copied_inner_cond);
-      register_and_visit(parent_node, dummy_filter.get());
-      handleLeftDeepJoinTree(dummy_filter.get(), left_deep_joins);
-    } else {
-      handleLeftDeepJoinTree(parent_node, left_deep_joins);
-    }
-  } else if (auto translated_join_node =
-                 dynamic_cast<const RelTranslatedJoin*>(child_node)) {
-    handleTranslatedJoin(parent_node, translated_join_node);
-  } else {
+  }
+  if (!child_visited) {
     register_and_visit(parent_node, child_node);
   }
 }
@@ -280,19 +298,40 @@ void QueryPlanDagExtractor::handleTranslatedJoin(
   // after visiting LHS node so by comparing 1) and 2) we can extract which query plan DAG
   // is necessary to project join cols that are used to build a hashtable and we use it as
   // hashtable access path
-  QueryPlan current_plan_dag, after_rhs_visited, after_lhs_visited;
+
+  // this lambda function deals with the case of recycled query resultset
+  // specifically, we can avoid unnecessary visiting of child tree(s) when we already have
+  // the extracted query plan DAG for the given child rel node
+  // instead, we just fill the node id vector (a sequence of node ids we visited) by using
+  // the dag of the child node
+  auto fill_node_ids_to_dag_vec = [&](const std::string& node_ids) {
+    auto node_ids_vec = split(node_ids, "|");
+    // the last elem is an empty one
+    std::for_each(node_ids_vec.begin(),
+                  std::prev(node_ids_vec.end()),
+                  [&](const std::string& node_id) { extracted_dag_.push_back(node_id); });
+  };
+  QueryPlanDAG current_plan_dag, after_rhs_visited, after_lhs_visited;
   current_plan_dag = getExtractedQueryPlanDagStr();
   auto rhs_node = rel_trans_join->getRHS();
   std::unordered_set<size_t> rhs_input_keys, lhs_input_keys;
   if (rhs_node) {
-    visit(rel_trans_join, rhs_node);
+    if (rhs_node->getQueryPlanDagHash() == EMPTY_HASHED_PLAN_DAG_KEY) {
+      visit(rel_trans_join, rhs_node);
+    } else {
+      fill_node_ids_to_dag_vec(rhs_node->getQueryPlanDag());
+    }
     after_rhs_visited = getExtractedQueryPlanDagStr();
     addTableIdToNodeLink(rhs_node->getId(), rhs_node);
     rhs_input_keys = ScanNodeTableKeyCollector::getScanNodeTableKey(rhs_node);
   }
   auto lhs_node = rel_trans_join->getLHS();
   if (rel_trans_join->getLHS()) {
-    visit(rel_trans_join, lhs_node);
+    if (lhs_node->getQueryPlanDagHash() == EMPTY_HASHED_PLAN_DAG_KEY) {
+      visit(rel_trans_join, lhs_node);
+    } else {
+      fill_node_ids_to_dag_vec(lhs_node->getQueryPlanDag());
+    }
     after_lhs_visited = getExtractedQueryPlanDagStr();
     addTableIdToNodeLink(lhs_node->getId(), lhs_node);
     lhs_input_keys = ScanNodeTableKeyCollector::getScanNodeTableKey(lhs_node);
@@ -306,18 +345,16 @@ void QueryPlanDagExtractor::handleTranslatedJoin(
   // so, we extract that node id(s) by splitting the new plan dag by the current plan dag
   auto outer_table_identifier = split(after_rhs_visited, current_plan_dag)[1];
   auto hash_table_identfier = split(after_lhs_visited, after_rhs_visited)[1];
-
+  auto join_qual_info = EMPTY_HASHED_PLAN_DAG_KEY;
   if (!rel_trans_join->isNestedLoopQual()) {
-    std::vector<std::string> join_cols_info;
     auto inner_join_cols = rel_trans_join->getJoinCols(true);
     auto inner_join_col_info =
-        global_dag_.translateColVarsToInfoString(inner_join_cols, false);
-    join_cols_info.push_back(inner_join_col_info);
+        global_dag_.translateColVarsToInfoHash(inner_join_cols, false);
+    boost::hash_combine(join_qual_info, inner_join_col_info);
     auto outer_join_cols = rel_trans_join->getJoinCols(false);
     auto outer_join_col_info =
-        global_dag_.translateColVarsToInfoString(outer_join_cols, false);
-    join_cols_info.push_back(outer_join_col_info);
-    auto join_qual_info = boost::join(join_cols_info, "|");
+        global_dag_.translateColVarsToInfoHash(outer_join_cols, false);
+    boost::hash_combine(join_qual_info, outer_join_col_info);
     // collect table keys from both rhs and lhs side
     std::unordered_set<size_t> collected_table_keys;
     collected_table_keys.insert(lhs_input_keys.begin(), lhs_input_keys.end());
@@ -337,8 +374,8 @@ void QueryPlanDagExtractor::handleTranslatedJoin(
           join_qual_info,
           HashTableBuildDag(inner_join_col_info,
                             outer_join_col_info,
-                            hash_table_identfier,
-                            outer_table_identifier,
+                            boost::hash_value(hash_table_identfier),
+                            boost::hash_value(outer_table_identifier),
                             std::move(collected_table_keys)));
     }
   } else {
@@ -428,11 +465,9 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
         current_level_join_conditions.type != JoinType::INVALID &&
         boost::algorithm::any_of(current_level_join_conditions.quals, IsEquivBinOp{});
     const bool nested_loop = !found_eq_join_qual;
-
+    const bool is_left_join = current_level_join_conditions.type == JoinType::LEFT;
     RexScalar const* const outer_join_cond =
-        current_level_join_conditions.type == JoinType::LEFT
-            ? rel_left_deep_join->getOuterCondition(level_idx + 1)
-            : nullptr;
+        is_left_join ? rel_left_deep_join->getOuterCondition(level_idx + 1) : nullptr;
 
     // collect join col, filter ops, and detailed info of join operation, i.e., op_type,
     // qualifier, ...
@@ -450,11 +485,17 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
                            ::toString(qual_bin_oper->get_qualifier()),
                            qual_bin_oper->get_type_info().to_string()};
         }
-        for (auto& col_pair_info : normalizeColumnsPair(qual_bin_oper.get(), catalog_)) {
-          if (col_pair_info.loop_join_qual && !found_eq_join_qual) {
+        for (auto& col_pair_info : normalizeColumnsPair(qual_bin_oper.get())) {
+          // even though we fall back to loop join when left outer join has
+          // non-eq comparator so we additionally check it here to classify the qual
+          // properly todo(yoonmin): relax left join case once we have an improved logic
+          // for this
+          if (!found_eq_join_qual && (is_left_join || col_pair_info.loop_join_qual)) {
             // we only consider that cur level's join is loop join if we have no
             // equi-join qual and both lhs and rhs are not col_var,
             // i.e., lhs: col_var / rhs: constant / bin_op: kGE
+            // also, currently we fallback to loop-join when left outer join
+            // has non-eq join qual
             if (visited_filter_ops.insert(join_qual_str).second) {
               filter_ops.push_back(join_qual);
             }

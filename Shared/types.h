@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-/*
- * File:        types.h
- * Author(s):   steve@map-d.com
+/**
+ * @file        types.h
+ * @brief
  *
- * Created on June 19, 2014, 4:29 PM
  */
 
 #ifndef _TYPES_H
@@ -48,6 +47,11 @@ inline bool is_table_key(const ChunkKey& key) {
 
 inline bool has_table_prefix(const ChunkKey& key) {
   return key.size() >= 2;
+}
+
+inline int get_fragment(const ChunkKey& key) {
+  CHECK(key.size() > CHUNK_KEY_FRAGMENT_IDX);
+  return key[CHUNK_KEY_FRAGMENT_IDX];
 }
 
 inline ChunkKey get_table_key(const ChunkKey& key) {

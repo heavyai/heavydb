@@ -1,6 +1,7 @@
 {
   "statementType": "DDL",
   "payload": {
-    "command": "SHOW_USER_DETAILS"
+    "command": "SHOW_USER_DETAILS",
+    "all": false
   }
 }

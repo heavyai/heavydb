@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ namespace foreign_storage {
  */
 struct FileRegion {
   // Name of file containing region
-  std::string filename;
+  std::string file_path;
   // Byte offset (within file) for the beginning of file region
   size_t first_row_file_offset;
   // Index of first row in file region relative to the first row/non-header line in the
@@ -39,26 +39,19 @@ struct FileRegion {
   // Size of file region in bytes
   size_t region_size;
 
-  FileRegion(std::string name,
+  FileRegion(std::string path,
              size_t first_row_offset,
              size_t first_row_idx,
              size_t row_cnt,
              size_t region_sz)
-      : filename(name)
+      : file_path(path)
       , first_row_file_offset(first_row_offset)
       , first_row_index(first_row_idx)
       , row_count(row_cnt)
       , region_size(region_sz) {}
 
-  FileRegion(size_t first_row_offset,
-             size_t first_row_idx,
-             size_t row_cnt,
-             size_t region_sz)
-      : first_row_file_offset(first_row_offset)
-      , first_row_index(first_row_idx)
-      , row_count(row_cnt)
-      , region_size(region_sz) {}
   FileRegion() {}
+
   bool operator<(const FileRegion& other) const {
     return first_row_file_offset < other.first_row_file_offset;
   }

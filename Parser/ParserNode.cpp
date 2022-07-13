@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,9 @@
 
 /**
  * @file    ParserNode.cpp
- * @author  Wei Hong <wei@map-d.com>
  * @brief   Functions for ParserNode classes
  *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
 
 #include "ParserNode.h"
 
@@ -54,6 +52,7 @@
 #include "Geospatial/Types.h"
 #include "ImportExport/ForeignDataImporter.h"
 #include "ImportExport/Importer.h"
+#include "ImportExport/RenderGroupAnalyzer.h"
 #include "LockMgr/LockMgr.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/CalciteDeserializerUtils.h"
@@ -65,26 +64,27 @@
 #include "QueryEngine/TableOptimizer.h"
 #include "ReservedKeywords.h"
 #include "Shared/StringTransform.h"
+#include "Shared/SysDefinitions.h"
+#include "Shared/enable_assign_render_groups.h"
 #include "Shared/measure.h"
 #include "Shared/shard_key.h"
 #include "TableArchiver/TableArchiver.h"
 #include "Utils/FsiUtils.h"
 
 #include "gen-cpp/CalciteServer.h"
-#include "parser.h"
-
-bool g_enable_calcite_ddl_parser{true};
 
 size_t g_leaf_count{0};
 bool g_test_drop_column_rollback{false};
-extern bool g_enable_experimental_string_functions;
+extern bool g_enable_string_functions;
 extern bool g_enable_fsi;
 
+bool g_enable_legacy_delimited_import{true};
 #ifdef ENABLE_IMPORT_PARQUET
-bool g_enable_parquet_import_fsi{false};
+bool g_enable_legacy_parquet_import{false};
 #endif
+bool g_enable_fsi_regex_import{true};
 
-bool g_enable_general_import_fsi{false};
+bool g_enable_add_metadata_columns{true};
 
 using Catalog_Namespace::SysCatalog;
 using namespace std::string_literals;
@@ -104,7 +104,8 @@ bool check_session_interrupted(const QuerySessionId& query_session, Executor* ex
   // we know the exact session info from a global session map object
   // in the executor
   if (g_enable_non_kernel_time_query_interrupt) {
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+    heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+        executor->getSessionLock());
     return executor->checkIsQuerySessionInterrupted(query_session, session_read_lock);
   }
   return false;
@@ -135,15 +136,19 @@ std::shared_ptr<Analyzer::Expr> StringLiteral::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
-  return analyzeValue(*stringval_);
+  return analyzeValue(*stringval_, false);
 }
 
-std::shared_ptr<Analyzer::Expr> StringLiteral::analyzeValue(
-    const std::string& stringval) {
-  SQLTypeInfo ti(kVARCHAR, stringval.length(), 0, true);
-  Datum d;
-  d.stringval = new std::string(stringval);
-  return makeExpr<Analyzer::Constant>(ti, false, d);
+std::shared_ptr<Analyzer::Expr> StringLiteral::analyzeValue(const std::string& stringval,
+                                                            const bool is_null) {
+  if (!is_null) {
+    const SQLTypeInfo ti(kVARCHAR, stringval.length(), 0, true);
+    Datum d;
+    d.stringval = new std::string(stringval);
+    return makeExpr<Analyzer::Constant>(ti, false, d);
+  }
+  // Null value
+  return makeExpr<Analyzer::Constant>(kVARCHAR, true);
 }
 
 std::shared_ptr<Analyzer::Expr> IntLiteral::analyze(
@@ -304,11 +309,70 @@ std::shared_ptr<Analyzer::Expr> OperExpr::analyze(
   return normalize(optype_, opqualifier_, left_expr, right_expr);
 }
 
+bool exprs_share_one_and_same_rte_idx(const std::shared_ptr<Analyzer::Expr>& lhs_expr,
+                                      const std::shared_ptr<Analyzer::Expr>& rhs_expr) {
+  std::set<int> lhs_rte_idx;
+  lhs_expr->collect_rte_idx(lhs_rte_idx);
+  CHECK(!lhs_rte_idx.empty());
+  std::set<int> rhs_rte_idx;
+  rhs_expr->collect_rte_idx(rhs_rte_idx);
+  CHECK(!rhs_rte_idx.empty());
+  return lhs_rte_idx.size() == 1UL && lhs_rte_idx == rhs_rte_idx;
+}
+
+SQLTypeInfo const& get_str_dict_cast_type(const SQLTypeInfo& lhs_type_info,
+                                          const SQLTypeInfo& rhs_type_info,
+                                          const Executor* executor) {
+  CHECK(lhs_type_info.is_string());
+  CHECK(lhs_type_info.get_compression() == kENCODING_DICT);
+  CHECK(rhs_type_info.is_string());
+  CHECK(rhs_type_info.get_compression() == kENCODING_DICT);
+  const auto lhs_comp_param = lhs_type_info.get_comp_param();
+  const auto rhs_comp_param = rhs_type_info.get_comp_param();
+  CHECK_NE(lhs_comp_param, rhs_comp_param);
+  if (lhs_type_info.get_comp_param() == TRANSIENT_DICT_ID) {
+    return rhs_type_info;
+  }
+  if (rhs_type_info.get_comp_param() == TRANSIENT_DICT_ID) {
+    return lhs_type_info;
+  }
+  // If here then neither lhs or rhs type was transient, we should see which
+  // type has the largest dictionary and make that the destination type
+  const auto lhs_sdp = executor->getStringDictionaryProxy(lhs_comp_param, true);
+  const auto rhs_sdp = executor->getStringDictionaryProxy(rhs_comp_param, true);
+  return lhs_sdp->entryCount() >= rhs_sdp->entryCount() ? lhs_type_info : rhs_type_info;
+}
+
+SQLTypeInfo common_string_type(const SQLTypeInfo& lhs_type_info,
+                               const SQLTypeInfo& rhs_type_info,
+                               const Executor* executor) {
+  CHECK(lhs_type_info.is_string());
+  CHECK(rhs_type_info.is_string());
+  const auto lhs_comp_param = lhs_type_info.get_comp_param();
+  const auto rhs_comp_param = rhs_type_info.get_comp_param();
+  if (lhs_type_info.is_dict_encoded_string() && rhs_type_info.is_dict_encoded_string()) {
+    if (lhs_comp_param == rhs_comp_param ||
+        lhs_comp_param == TRANSIENT_DICT(rhs_comp_param)) {
+      return lhs_comp_param <= rhs_comp_param ? lhs_type_info : rhs_type_info;
+    }
+    return get_str_dict_cast_type(lhs_type_info, rhs_type_info, executor);
+  }
+  CHECK(lhs_type_info.is_none_encoded_string() || rhs_type_info.is_none_encoded_string());
+  SQLTypeInfo ret_ti =
+      rhs_type_info.is_none_encoded_string() ? lhs_type_info : rhs_type_info;
+  if (ret_ti.is_none_encoded_string()) {
+    ret_ti.set_dimension(
+        std::max(lhs_type_info.get_dimension(), rhs_type_info.get_dimension()));
+  }
+  return ret_ti;
+}
+
 std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
     const SQLOps optype,
     const SQLQualifier qual,
     std::shared_ptr<Analyzer::Expr> left_expr,
-    std::shared_ptr<Analyzer::Expr> right_expr) {
+    std::shared_ptr<Analyzer::Expr> right_expr,
+    const Executor* executor) {
   if (left_expr->get_type_info().is_date_in_days() ||
       right_expr->get_type_info().is_date_in_days()) {
     // Do not propogate encoding
@@ -355,9 +419,52 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
     }
 
     if (new_left_type.get_compression() == kENCODING_DICT &&
-        new_right_type.get_compression() == kENCODING_DICT &&
-        new_left_type.get_comp_param() == new_right_type.get_comp_param()) {
-      // do nothing
+        new_right_type.get_compression() == kENCODING_DICT) {
+      if (new_left_type.get_comp_param() != new_right_type.get_comp_param()) {
+        if (optype == kEQ || optype == kNE) {
+          // Join framework does its own string dictionary translation
+          // (at least partly since the rhs table projection does not use
+          // the normal runtime execution framework), so if we detect
+          // that the rte idxs of the two tables are different, bail
+          // on translating
+          const bool should_translate_strings =
+              exprs_share_one_and_same_rte_idx(left_expr, right_expr);
+          if (should_translate_strings && (optype == kEQ || optype == kNE)) {
+            CHECK(executor);
+            // Make the type we're casting to the transient dictionary, if it exists,
+            // otherwise the largest dictionary in terms of number of entries
+            SQLTypeInfo ti(
+                get_str_dict_cast_type(new_left_type, new_right_type, executor));
+            auto& expr_to_cast = ti == new_left_type ? right_expr : left_expr;
+            ti.set_fixed_size();
+            ti.set_dict_intersection();
+            expr_to_cast = expr_to_cast->add_cast(ti);
+          } else {  // Ordered comparison operator
+            // We do not currently support ordered (i.e. >, <=) comparisons between
+            // dictionary-encoded columns, and need to decompress when translation
+            // is turned off even for kEQ and KNE
+            left_expr = left_expr->decompress();
+            right_expr = right_expr->decompress();
+          }
+        } else {  // Ordered comparison operator
+          // We do not currently support ordered (i.e. >, <=) comparisons between
+          // dictionary-encoded columns, and need to decompress when translation
+          // is turned off even for kEQ and KNE
+          left_expr = left_expr->decompress();
+          right_expr = right_expr->decompress();
+        }
+      } else {  // Strings shared comp param
+        if (!(optype == kEQ || optype == kNE)) {
+          // We do not currently support ordered (i.e. >, <=) comparisons between
+          // encoded columns, so try to decode (will only succeed with watchdog off)
+          left_expr = left_expr->decompress();
+          right_expr = right_expr->decompress();
+        } else {
+          // do nothing, can directly support equals/non-equals comparisons between two
+          // dictionary encoded columns sharing the same dictionary as these are
+          // effectively integer comparisons in the same dictionary space
+        }
+      }
     } else if (new_left_type.get_compression() == kENCODING_DICT &&
                new_right_type.get_compression() == kENCODING_NONE) {
       SQLTypeInfo ti(new_right_type);
@@ -377,6 +484,7 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
       right_expr = right_expr->decompress();
     }
   } else {
+    // Is this now a no-op just for pairs of none-encoded string columns
     left_expr = left_expr->decompress();
     right_expr = right_expr->decompress();
   }
@@ -425,6 +533,7 @@ std::shared_ptr<Analyzer::Expr> InValues::analyze(
     auto e = p->analyze(catalog, query, allow_tlist_ref);
     if (ti != e->get_type_info()) {
       if (ti.is_string() && e->get_type_info().is_string()) {
+        // Todo(todd): Can we have this leverage the cast framework as well
         ti = Analyzer::BinOper::common_string_type(ti, e->get_type_info());
       } else if (ti.is_number() && e->get_type_info().is_number()) {
         ti = Analyzer::BinOper::common_numeric_type(ti, e->get_type_info());
@@ -955,14 +1064,6 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::analyze(
 
 namespace {
 
-bool expr_is_null(const Analyzer::Expr* expr) {
-  if (expr->get_type_info().get_type() == kNULLT) {
-    return true;
-  }
-  const auto const_expr = dynamic_cast<const Analyzer::Constant*>(expr);
-  return const_expr && const_expr->get_is_null();
-}
-
 bool bool_from_string_literal(const Parser::StringLiteral* str_literal) {
   const std::string* s = str_literal->get_stringval();
   if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
@@ -974,85 +1075,658 @@ bool bool_from_string_literal(const Parser::StringLiteral* str_literal) {
   }
 }
 
+void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& options_,
+                       import_export::CopyParams& copy_params,
+                       std::vector<std::string>& warnings,
+                       std::string& deferred_copy_from_partitions_) {
+  if (!options_.empty()) {
+    for (auto& p : options_) {
+      if (boost::iequals(*p->get_name(), "max_reject")) {
+        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+        if (int_literal == nullptr) {
+          throw std::runtime_error("max_reject option must be an integer.");
+        }
+        copy_params.max_reject = int_literal->get_intval();
+      } else if (boost::iequals(*p->get_name(), "max_import_batch_row_count")) {
+        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+        if (int_literal == nullptr) {
+          throw std::runtime_error(
+              "max_import_batch_row_count option must be an integer.");
+        }
+        if (int_literal->get_intval() <= 0) {
+          throw std::runtime_error(
+              "max_import_batch_row_count option must be a positive integer (greater "
+              "than 0).");
+        }
+        copy_params.max_import_batch_row_count = int_literal->get_intval();
+      } else if (boost::iequals(*p->get_name(), "buffer_size")) {
+        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+        if (int_literal == nullptr) {
+          throw std::runtime_error("buffer_size option must be an integer.");
+        }
+        copy_params.buffer_size = int_literal->get_intval();
+      } else if (boost::iequals(*p->get_name(), "threads")) {
+        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+        if (int_literal == nullptr) {
+          throw std::runtime_error("Threads option must be an integer.");
+        }
+        copy_params.threads = int_literal->get_intval();
+      } else if (boost::iequals(*p->get_name(), "delimiter")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Delimiter option must be a string.");
+        } else if (str_literal->get_stringval()->length() != 1) {
+          throw std::runtime_error("Delimiter must be a single character string.");
+        }
+        copy_params.delimiter = (*str_literal->get_stringval())[0];
+      } else if (boost::iequals(*p->get_name(), "nulls")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Nulls option must be a string.");
+        }
+        copy_params.null_str = *str_literal->get_stringval();
+      } else if (boost::iequals(*p->get_name(), "header")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Header option must be a boolean.");
+        }
+        copy_params.has_header = bool_from_string_literal(str_literal)
+                                     ? import_export::ImportHeaderRow::kHasHeader
+                                     : import_export::ImportHeaderRow::kNoHeader;
+#ifdef ENABLE_IMPORT_PARQUET
+      } else if (boost::iequals(*p->get_name(), "parquet")) {
+        warnings.push_back(
+            "Deprecation Warning: COPY FROM WITH (parquet='true') is deprecated. Use "
+            "WITH (source_type='parquet_file') instead.");
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'parquet' option must be a boolean.");
+        }
+        if (bool_from_string_literal(str_literal)) {
+          // not sure a parquet "table" type is proper, but to make code
+          // look consistent in some places, let's set "table" type too
+          copy_params.source_type = import_export::SourceType::kParquetFile;
+        }
+#endif  // ENABLE_IMPORT_PARQUET
+      } else if (boost::iequals(*p->get_name(), "s3_access_key")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option s3_access_key must be a string.");
+        }
+        copy_params.s3_access_key = *str_literal->get_stringval();
+      } else if (boost::iequals(*p->get_name(), "s3_secret_key")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option s3_secret_key must be a string.");
+        }
+        copy_params.s3_secret_key = *str_literal->get_stringval();
+      } else if (boost::iequals(*p->get_name(), "s3_session_token")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option s3_session_token must be a string.");
+        }
+        copy_params.s3_session_token = *str_literal->get_stringval();
+      } else if (boost::iequals(*p->get_name(), "s3_region")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option s3_region must be a string.");
+        }
+        copy_params.s3_region = *str_literal->get_stringval();
+      } else if (boost::iequals(*p->get_name(), "s3_endpoint")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option s3_endpoint must be a string.");
+        }
+        copy_params.s3_endpoint = *str_literal->get_stringval();
+      } else if (boost::iequals(*p->get_name(), "s3_max_concurrent_downloads")) {
+        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+        if (int_literal == nullptr) {
+          throw std::runtime_error(
+              "'s3_max_concurrent_downloads' option must be an integer");
+        }
+        const int s3_max_concurrent_downloads = int_literal->get_intval();
+        if (s3_max_concurrent_downloads > 0) {
+          copy_params.s3_max_concurrent_downloads = s3_max_concurrent_downloads;
+        } else {
+          throw std::runtime_error(
+              "Invalid value for 's3_max_concurrent_downloads' option (must be > 0): " +
+              std::to_string(s3_max_concurrent_downloads));
+        }
+      } else if (boost::iequals(*p->get_name(), "quote")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Quote option must be a string.");
+        } else if (str_literal->get_stringval()->length() != 1) {
+          throw std::runtime_error("Quote must be a single character string.");
+        }
+        copy_params.quote = (*str_literal->get_stringval())[0];
+      } else if (boost::iequals(*p->get_name(), "escape")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Escape option must be a string.");
+        } else if (str_literal->get_stringval()->length() != 1) {
+          throw std::runtime_error("Escape must be a single character string.");
+        }
+        copy_params.escape = (*str_literal->get_stringval())[0];
+      } else if (boost::iequals(*p->get_name(), "line_delimiter")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Line_delimiter option must be a string.");
+        } else if (str_literal->get_stringval()->length() != 1) {
+          throw std::runtime_error("Line_delimiter must be a single character string.");
+        }
+        copy_params.line_delim = (*str_literal->get_stringval())[0];
+      } else if (boost::iequals(*p->get_name(), "quoted")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Quoted option must be a boolean.");
+        }
+        copy_params.quoted = bool_from_string_literal(str_literal);
+      } else if (boost::iequals(*p->get_name(), "plain_text")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("plain_text option must be a boolean.");
+        }
+        copy_params.plain_text = bool_from_string_literal(str_literal);
+      } else if (boost::iequals(*p->get_name(), "trim_spaces")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("trim_spaces option must be a boolean.");
+        }
+        copy_params.trim_spaces = bool_from_string_literal(str_literal);
+      } else if (boost::iequals(*p->get_name(), "array_marker")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Array Marker option must be a string.");
+        } else if (str_literal->get_stringval()->length() != 2) {
+          throw std::runtime_error(
+              "Array Marker option must be exactly two characters.  Default is {}.");
+        }
+        copy_params.array_begin = (*str_literal->get_stringval())[0];
+        copy_params.array_end = (*str_literal->get_stringval())[1];
+      } else if (boost::iequals(*p->get_name(), "array_delimiter")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Array Delimiter option must be a string.");
+        } else if (str_literal->get_stringval()->length() != 1) {
+          throw std::runtime_error("Array Delimiter must be a single character string.");
+        }
+        copy_params.array_delim = (*str_literal->get_stringval())[0];
+      } else if (boost::iequals(*p->get_name(), "lonlat")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Lonlat option must be a boolean.");
+        }
+        copy_params.lonlat = bool_from_string_literal(str_literal);
+      } else if (boost::iequals(*p->get_name(), "geo")) {
+        warnings.push_back(
+            "Deprecation Warning: COPY FROM WITH (geo='true') is deprecated. Use WITH "
+            "(source_type='geo_file') instead.");
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'geo' option must be a boolean.");
+        }
+        if (bool_from_string_literal(str_literal)) {
+          copy_params.source_type = import_export::SourceType::kGeoFile;
+        }
+      } else if (boost::iequals(*p->get_name(), "source_type")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'source_type' option must be a string.");
+        }
+        const std::string* s = str_literal->get_stringval();
+        if (boost::iequals(*s, "delimited_file")) {
+          copy_params.source_type = import_export::SourceType::kDelimitedFile;
+        } else if (boost::iequals(*s, "geo_file")) {
+          copy_params.source_type = import_export::SourceType::kGeoFile;
+#if ENABLE_IMPORT_PARQUET
+        } else if (boost::iequals(*s, "parquet_file")) {
+          copy_params.source_type = import_export::SourceType::kParquetFile;
+#endif
+        } else if (boost::iequals(*s, "raster_file")) {
+          copy_params.source_type = import_export::SourceType::kRasterFile;
+        } else if (boost::iequals(*s, "regex_parsed_file")) {
+          copy_params.source_type = import_export::SourceType::kRegexParsedFile;
+        } else {
+          throw std::runtime_error(
+              "Invalid string for 'source_type' option (must be 'GEO_FILE', 'RASTER_FILE'"
+#if ENABLE_IMPORT_PARQUET
+              ", 'PARQUET_FILE'"
+#endif
+              ", 'REGEX_PARSED_FILE'"
+              " or 'DELIMITED_FILE'): " +
+              *s);
+        }
+      } else if (boost::iequals(*p->get_name(), "geo_coords_type")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'geo_coords_type' option must be a string");
+        }
+        const std::string* s = str_literal->get_stringval();
+        if (boost::iequals(*s, "geography")) {
+          throw std::runtime_error(
+              "GEOGRAPHY coords type not yet supported. Please use GEOMETRY.");
+          // copy_params.geo_coords_type = kGEOGRAPHY;
+        } else if (boost::iequals(*s, "geometry")) {
+          copy_params.geo_coords_type = kGEOMETRY;
+        } else {
+          throw std::runtime_error(
+              "Invalid string for 'geo_coords_type' option (must be 'GEOGRAPHY' or "
+              "'GEOMETRY'): " +
+              *s);
+        }
+      } else if (boost::iequals(*p->get_name(), "raster_point_type")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'raster_point_type' option must be a string");
+        }
+        const std::string* s = str_literal->get_stringval();
+        if (boost::iequals(*s, "none")) {
+          copy_params.raster_point_type = import_export::RasterPointType::kNone;
+        } else if (boost::iequals(*s, "auto")) {
+          copy_params.raster_point_type = import_export::RasterPointType::kAuto;
+        } else if (boost::iequals(*s, "smallint")) {
+          copy_params.raster_point_type = import_export::RasterPointType::kSmallInt;
+        } else if (boost::iequals(*s, "int")) {
+          copy_params.raster_point_type = import_export::RasterPointType::kInt;
+        } else if (boost::iequals(*s, "float")) {
+          copy_params.raster_point_type = import_export::RasterPointType::kFloat;
+        } else if (boost::iequals(*s, "double")) {
+          copy_params.raster_point_type = import_export::RasterPointType::kDouble;
+        } else if (boost::iequals(*s, "point")) {
+          copy_params.raster_point_type = import_export::RasterPointType::kPoint;
+        } else {
+          throw std::runtime_error(
+              "Invalid string for 'raster_point_type' option (must be 'NONE', 'AUTO', "
+              "'SMALLINT', 'INT', 'FLOAT', 'DOUBLE' or 'POINT'): " +
+              *s);
+        }
+      } else if (boost::iequals(*p->get_name(), "raster_point_transform")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'raster_point_transform' option must be a string");
+        }
+        const std::string* s = str_literal->get_stringval();
+        if (boost::iequals(*s, "none")) {
+          copy_params.raster_point_transform = import_export::RasterPointTransform::kNone;
+        } else if (boost::iequals(*s, "auto")) {
+          copy_params.raster_point_transform = import_export::RasterPointTransform::kAuto;
+        } else if (boost::iequals(*s, "file")) {
+          copy_params.raster_point_transform = import_export::RasterPointTransform::kFile;
+        } else if (boost::iequals(*s, "world")) {
+          copy_params.raster_point_transform =
+              import_export::RasterPointTransform::kWorld;
+        } else {
+          throw std::runtime_error(
+              "Invalid string for 'raster_point_transform' option (must be 'NONE', "
+              "'AUTO', 'FILE' or 'WORLD'): " +
+              *s);
+        }
+      } else if (boost::iequals(*p->get_name(), "raster_import_bands")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'raster_import_bands' option must be a string");
+        }
+        const std::string* raster_import_bands = str_literal->get_stringval();
+        if (raster_import_bands) {
+          copy_params.raster_import_bands = *raster_import_bands;
+        } else {
+          throw std::runtime_error("Invalid value for 'raster_import_bands' option");
+        }
+      } else if (boost::iequals(*p->get_name(), "raster_import_dimensions")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'raster_import_dimensions' option must be a string");
+        }
+        const std::string* raster_import_dimensions = str_literal->get_stringval();
+        if (raster_import_dimensions) {
+          copy_params.raster_import_dimensions = *raster_import_dimensions;
+        } else {
+          throw std::runtime_error("Invalid value for 'raster_import_dimensions' option");
+        }
+      } else if (boost::iequals(*p->get_name(), "geo_coords_encoding")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'geo_coords_encoding' option must be a string");
+        }
+        const std::string* s = str_literal->get_stringval();
+        if (boost::iequals(*s, "none")) {
+          copy_params.geo_coords_encoding = kENCODING_NONE;
+          copy_params.geo_coords_comp_param = 0;
+        } else if (boost::iequals(*s, "compressed(32)")) {
+          copy_params.geo_coords_encoding = kENCODING_GEOINT;
+          copy_params.geo_coords_comp_param = 32;
+        } else {
+          throw std::runtime_error(
+              "Invalid string for 'geo_coords_encoding' option (must be 'NONE' or "
+              "'COMPRESSED(32)'): " +
+              *s);
+        }
+      } else if (boost::iequals(*p->get_name(), "raster_scanlines_per_thread")) {
+        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+        if (int_literal == nullptr) {
+          throw std::runtime_error(
+              "'raster_scanlines_per_thread' option must be an integer");
+        }
+        const int raster_scanlines_per_thread = int_literal->get_intval();
+        if (raster_scanlines_per_thread < 0) {
+          throw std::runtime_error(
+              "'raster_scanlines_per_thread' option must be >= 0, with 0 denoting auto "
+              "sizing");
+        }
+        copy_params.raster_scanlines_per_thread = raster_scanlines_per_thread;
+      } else if (boost::iequals(*p->get_name(), "geo_coords_srid")) {
+        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+        if (int_literal == nullptr) {
+          throw std::runtime_error("'geo_coords_srid' option must be an integer");
+        }
+        const int srid = int_literal->get_intval();
+        if (srid == 4326 || srid == 3857 || srid == 900913) {
+          copy_params.geo_coords_srid = srid;
+        } else {
+          throw std::runtime_error(
+              "Invalid value for 'geo_coords_srid' option (must be 4326, 3857, or "
+              "900913): " +
+              std::to_string(srid));
+        }
+      } else if (boost::iequals(*p->get_name(), "geo_layer_name")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'geo_layer_name' option must be a string");
+        }
+        const std::string* layer_name = str_literal->get_stringval();
+        if (layer_name) {
+          copy_params.geo_layer_name = *layer_name;
+        } else {
+          throw std::runtime_error("Invalid value for 'geo_layer_name' option");
+        }
+      } else if (boost::iequals(*p->get_name(), "partitions")) {
+        const auto partitions =
+            static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+        CHECK(partitions);
+        const auto partitions_uc = boost::to_upper_copy<std::string>(*partitions);
+        if (partitions_uc != "REPLICATED") {
+          throw std::runtime_error(
+              "Invalid value for 'partitions' option. Must be 'REPLICATED'.");
+        }
+        deferred_copy_from_partitions_ = partitions_uc;
+      } else if (boost::iequals(*p->get_name(), "geo_assign_render_groups")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("geo_assign_render_groups option must be a boolean.");
+        }
+        copy_params.geo_assign_render_groups = bool_from_string_literal(str_literal);
+      } else if (boost::iequals(*p->get_name(), "geo_explode_collections")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("geo_explode_collections option must be a boolean.");
+        }
+        copy_params.geo_explode_collections = bool_from_string_literal(str_literal);
+      } else if (boost::iequals(*p->get_name(), "source_srid")) {
+        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+        if (int_literal == nullptr) {
+          throw std::runtime_error("'source_srid' option must be an integer");
+        }
+        const int srid = int_literal->get_intval();
+        if (copy_params.source_type == import_export::SourceType::kDelimitedFile) {
+          copy_params.source_srid = srid;
+        } else {
+          throw std::runtime_error(
+              "'source_srid' option can only be used on csv/tsv files");
+        }
+      } else if (boost::iequals(*p->get_name(), "regex_path_filter")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option regex_path_filter must be a string.");
+        }
+        const auto string_val = *str_literal->get_stringval();
+        copy_params.regex_path_filter =
+            string_val.empty() ? std::nullopt : std::optional<std::string>{string_val};
+      } else if (boost::iequals(*p->get_name(), "file_sort_order_by")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option file_sort_order_by must be a string.");
+        }
+        const auto string_val = *str_literal->get_stringval();
+        copy_params.file_sort_order_by =
+            string_val.empty() ? std::nullopt : std::optional<std::string>{string_val};
+      } else if (boost::iequals(*p->get_name(), "file_sort_regex")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option file_sort_regex must be a string.");
+        }
+        const auto string_val = *str_literal->get_stringval();
+        copy_params.file_sort_regex =
+            string_val.empty() ? std::nullopt : std::optional<std::string>{string_val};
+      } else if (boost::iequals(*p->get_name(), "raster_point_compute_angle")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error(
+              "'raster_point_compute_angle' option must be a boolean.");
+        }
+        if (bool_from_string_literal(str_literal)) {
+          copy_params.raster_point_compute_angle = true;
+        }
+      } else if (boost::iequals(*p->get_name(), "sql_order_by")) {
+        if (auto str_literal = dynamic_cast<const StringLiteral*>(p->get_value())) {
+          copy_params.sql_order_by = *str_literal->get_stringval();
+        } else {
+          throw std::runtime_error("Option sql_order_by must be a string.");
+        }
+      } else if (boost::iequals(*p->get_name(), "username")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option username must be a string.");
+        }
+        const auto string_val = *str_literal->get_stringval();
+        copy_params.username = string_val;
+      } else if (boost::iequals(*p->get_name(), "password")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option password must be a string.");
+        }
+        const auto string_val = *str_literal->get_stringval();
+        copy_params.password = string_val;
+      } else if (boost::iequals(*p->get_name(), "credential_string")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option credential_string must be a string.");
+        }
+        const auto string_val = *str_literal->get_stringval();
+        copy_params.credential_string = string_val;
+      } else if (boost::iequals(*p->get_name(), "data_source_name")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option data_source_name must be a string.");
+        }
+        const auto string_val = *str_literal->get_stringval();
+        copy_params.dsn = string_val;
+      } else if (boost::iequals(*p->get_name(), "connection_string")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option connection_string must be a string.");
+        }
+        const auto string_val = *str_literal->get_stringval();
+        copy_params.connection_string = string_val;
+      } else if (boost::iequals(*p->get_name(), "line_start_regex")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option line_start_regex must be a string.");
+        }
+        const auto string_val = *str_literal->get_stringval();
+        copy_params.line_start_regex = string_val;
+      } else if (boost::iequals(*p->get_name(), "line_regex")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option line_regex must be a string.");
+        }
+        const auto string_val = *str_literal->get_stringval();
+        copy_params.line_regex = string_val;
+      } else if (boost::iequals(*p->get_name(), "add_metadata_columns") &&
+                 g_enable_add_metadata_columns) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'add_metadata_columns' option must be a string.");
+        }
+        copy_params.add_metadata_columns = *str_literal->get_stringval();
+      } else {
+        throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
+      }
+    }
+  }
+}
+
+bool expr_is_null(const Analyzer::Expr* expr) {
+  if (expr->get_type_info().get_type() == kNULLT) {
+    return true;
+  }
+  const auto const_expr = dynamic_cast<const Analyzer::Constant*>(expr);
+  return const_expr && const_expr->get_is_null();
+}
+
 }  // namespace
 
 std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
     const std::list<std::pair<std::shared_ptr<Analyzer::Expr>,
                               std::shared_ptr<Analyzer::Expr>>>& expr_pair_list,
-    const std::shared_ptr<Analyzer::Expr> else_e_in) {
+    const std::shared_ptr<Analyzer::Expr> else_e_in,
+    const Executor* executor) {
   SQLTypeInfo ti;
   bool has_agg = false;
-  std::set<int> dictionary_ids;
-  bool has_none_encoded_str_projection = false;
+  // We need to keep track of whether there was at
+  // least one none-encoded string literal expression
+  // type among any of the case sub-expressions separately
+  // from rest of type determination logic, as it will
+  // be casted to the output dictionary type if all output
+  // types are either dictionary encoded or none-encoded
+  // literals, or kept as none-encoded if all sub-expression
+  // types are none-encoded (column or literal)
+  SQLTypeInfo none_encoded_literal_ti;
 
   for (auto& p : expr_pair_list) {
     auto e1 = p.first;
     CHECK(e1->get_type_info().is_boolean());
     auto e2 = p.second;
-    if (e2->get_type_info().is_string()) {
-      if (e2->get_type_info().is_dict_encoded_string()) {
-        dictionary_ids.insert(e2->get_type_info().get_comp_param());
-        // allow literals to potentially fall down the transient path
-      } else if (std::dynamic_pointer_cast<const Analyzer::ColumnVar>(e2)) {
-        has_none_encoded_str_projection = true;
-      }
-    }
-
-    if (ti.get_type() == kNULLT) {
-      ti = e2->get_type_info();
-    } else if (e2->get_type_info().get_type() == kNULLT) {
-      ti.set_notnull(false);
-      e2->set_type_info(ti);
-    } else if (ti != e2->get_type_info()) {
-      if (ti.is_string() && e2->get_type_info().is_string()) {
-        ti = Analyzer::BinOper::common_string_type(ti, e2->get_type_info());
-      } else if (ti.is_number() && e2->get_type_info().is_number()) {
-        ti = Analyzer::BinOper::common_numeric_type(ti, e2->get_type_info());
-      } else if (ti.is_boolean() && e2->get_type_info().is_boolean()) {
-        ti = Analyzer::BinOper::common_numeric_type(ti, e2->get_type_info());
-      } else {
-        throw std::runtime_error(
-            "expressions in THEN clause must be of the same or compatible types.");
-      }
-    }
     if (e2->get_contains_agg()) {
       has_agg = true;
     }
+    const auto& e2_ti = e2->get_type_info();
+    if (e2_ti.is_string() && !e2_ti.is_dict_encoded_string() &&
+        !std::dynamic_pointer_cast<const Analyzer::ColumnVar>(e2)) {
+      CHECK(e2_ti.is_none_encoded_string());
+      none_encoded_literal_ti =
+          none_encoded_literal_ti.get_type() == kNULLT
+              ? e2_ti
+              : common_string_type(none_encoded_literal_ti, e2_ti, executor);
+      continue;
+    }
+    if (ti.get_type() == kNULLT) {
+      ti = e2_ti;
+    } else if (e2_ti.get_type() == kNULLT) {
+      ti.set_notnull(false);
+      e2->set_type_info(ti);
+    } else if (ti != e2_ti) {
+      if (ti.is_string() && e2_ti.is_string()) {
+        // Executor is needed to determine which dictionary is the largest
+        // in case of two dictionary types with different encodings
+        ti = common_string_type(ti, e2_ti, executor);
+      } else if (ti.is_number() && e2_ti.is_number()) {
+        ti = Analyzer::BinOper::common_numeric_type(ti, e2_ti);
+      } else if (ti.is_boolean() && e2_ti.is_boolean()) {
+        ti = Analyzer::BinOper::common_numeric_type(ti, e2_ti);
+      } else {
+        throw std::runtime_error(
+            "Expressions in THEN clause must be of the same or compatible types.");
+      }
+    }
   }
   auto else_e = else_e_in;
+  const auto& else_ti = else_e->get_type_info();
   if (else_e) {
     if (else_e->get_contains_agg()) {
       has_agg = true;
     }
-    if (expr_is_null(else_e.get())) {
-      ti.set_notnull(false);
-      else_e->set_type_info(ti);
-    } else if (ti != else_e->get_type_info()) {
-      if (else_e->get_type_info().is_string()) {
-        if (else_e->get_type_info().is_dict_encoded_string()) {
-          dictionary_ids.insert(else_e->get_type_info().get_comp_param());
-          // allow literals to potentially fall down the transient path
-        } else if (std::dynamic_pointer_cast<const Analyzer::ColumnVar>(else_e)) {
-          has_none_encoded_str_projection = true;
+    if (else_ti.is_string() && !else_ti.is_dict_encoded_string() &&
+        !std::dynamic_pointer_cast<const Analyzer::ColumnVar>(else_e)) {
+      CHECK(else_ti.is_none_encoded_string());
+      none_encoded_literal_ti =
+          none_encoded_literal_ti.get_type() == kNULLT
+              ? else_ti
+              : common_string_type(none_encoded_literal_ti, else_ti, executor);
+    } else {
+      if (ti.get_type() == kNULLT) {
+        ti = else_ti;
+      } else if (expr_is_null(else_e.get())) {
+        ti.set_notnull(false);
+        else_e->set_type_info(ti);
+      } else if (ti != else_ti) {
+        ti.set_notnull(false);
+        if (ti.is_string() && else_ti.is_string()) {
+          // Executor is needed to determine which dictionary is the largest
+          // in case of two dictionary types with different encodings
+          ti = common_string_type(ti, else_ti, executor);
+        } else if (ti.is_number() && else_ti.is_number()) {
+          ti = Analyzer::BinOper::common_numeric_type(ti, else_ti);
+        } else if (ti.is_boolean() && else_ti.is_boolean()) {
+          ti = Analyzer::BinOper::common_numeric_type(ti, else_ti);
+        } else if (get_logical_type_info(ti) != get_logical_type_info(else_ti)) {
+          throw std::runtime_error(
+              // types differing by encoding will be resolved at decode
+              "Expressions in ELSE clause must be of the same or compatible types as "
+              "those in the THEN clauses.");
         }
-      }
-      ti.set_notnull(false);
-      if (ti.is_string() && else_e->get_type_info().is_string()) {
-        ti = Analyzer::BinOper::common_string_type(ti, else_e->get_type_info());
-      } else if (ti.is_number() && else_e->get_type_info().is_number()) {
-        ti = Analyzer::BinOper::common_numeric_type(ti, else_e->get_type_info());
-      } else if (ti.is_boolean() && else_e->get_type_info().is_boolean()) {
-        ti = Analyzer::BinOper::common_numeric_type(ti, else_e->get_type_info());
-      } else if (get_logical_type_info(ti) !=
-                 get_logical_type_info(else_e->get_type_info())) {
-        throw std::runtime_error(
-            // types differing by encoding will be resolved at decode
-
-            "expressions in ELSE clause must be of the same or compatible types as those "
-            "in the THEN clauses.");
       }
     }
   }
+
+  if (ti.get_type() == kNULLT && none_encoded_literal_ti.get_type() != kNULLT) {
+    // If we haven't set a type so far it's because
+    // every case sub-expression has a none-encoded
+    // literal output. Make this our output type
+    ti = none_encoded_literal_ti;
+  }
+
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
       cast_expr_pair_list;
   for (auto p : expr_pair_list) {
@@ -1069,21 +1743,10 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
   }
   if (ti.get_type() == kNULLT) {
     throw std::runtime_error(
-        "Can't deduce the type for case expressions, all branches null");
+        "Cannot deduce the type for case expressions, all branches null");
   }
 
   auto case_expr = makeExpr<Analyzer::CaseExpr>(ti, has_agg, cast_expr_pair_list, else_e);
-  if (ti.get_compression() != kENCODING_DICT && dictionary_ids.size() == 1 &&
-      *(dictionary_ids.begin()) > 0 && !has_none_encoded_str_projection) {
-    // the above logic makes two assumptions when strings are present. 1) that all types
-    // in the case statement are either null or strings, and 2) that none-encoded strings
-    // will always win out over dict encoding. If we only have one dictionary, and that
-    // dictionary is not a transient dictionary, we can cast the entire case to be dict
-    // encoded and use transient dictionaries for any literals
-    ti.set_compression(kENCODING_DICT);
-    ti.set_comp_param(*dictionary_ids.begin());
-    case_expr->add_cast(ti);
-  }
   return case_expr;
 }
 
@@ -1329,11 +1992,12 @@ void parse_options(const rapidjson::Value& payload,
                    bool stringToNull = false,
                    bool stringToInteger = false) {
   if (payload.HasMember("options") && payload["options"].IsObject()) {
-    for (const auto& option : payload["options"].GetObject()) {
-      auto option_name = std::make_unique<std::string>(option.name.GetString());
+    const auto& options = payload["options"];
+    for (auto itr = options.MemberBegin(); itr != options.MemberEnd(); ++itr) {
+      auto option_name = std::make_unique<std::string>(itr->name.GetString());
       std::unique_ptr<Literal> literal_value;
-      if (option.value.IsString()) {
-        std::string str = option.value.GetString();
+      if (itr->value.IsString()) {
+        std::string str = itr->value.GetString();
         if (stringToNull && str == "") {
           literal_value = std::make_unique<NullLiteral>();
         } else if (stringToInteger && std::all_of(str.begin(), str.end(), ::isdigit)) {
@@ -1346,9 +2010,9 @@ void parse_options(const rapidjson::Value& payload,
           literal_value =
               std::make_unique<StringLiteral>(unique_literal_string.release());
         }
-      } else if (option.value.IsInt() || option.value.IsInt64()) {
-        literal_value = std::make_unique<IntLiteral>(json_i64(option.value));
-      } else if (option.value.IsNull()) {
+      } else if (itr->value.IsInt() || itr->value.IsInt64()) {
+        literal_value = std::make_unique<IntLiteral>(json_i64(itr->value));
+      } else if (itr->value.IsNull()) {
         literal_value = std::make_unique<NullLiteral>();
       } else {
         throw std::runtime_error("Unable to handle literal for " + *option_name);
@@ -1701,358 +2365,335 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog,
   query.set_result_col_list(result_col_list);
 }
 
-size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& catalog,
-                                            size_t num_leafs) {
-  const TableDescriptor* td = catalog.getMetadataForTable(*table_);
-  if (td == nullptr) {
-    throw std::runtime_error("Table " + *table_ + " does not exist.");
-  }
-  if (td->isView) {
-    throw std::runtime_error("Insert to views is not supported yet.");
-  }
-  foreign_storage::validate_non_foreign_table_write(td);
-  if (td->partitions == "REPLICATED") {
-    throw std::runtime_error("Cannot determine leaf on replicated table.");
-  }
-
-  if (0 == td->nShards) {
-    std::random_device rd;
-    std::mt19937_64 gen(rd());
-    std::uniform_int_distribution<size_t> dis;
-    const auto leaf_idx = dis(gen) % num_leafs;
-    return leaf_idx;
-  }
-
-  size_t indexOfShardColumn = 0;
-  const ColumnDescriptor* shardColumn = catalog.getShardColumnMetadataForTable(td);
-  CHECK(shardColumn);
-  auto shard_count = td->nShards * num_leafs;
-  int64_t shardId = 0;
-
-  if (column_list_.empty()) {
-    auto all_cols =
-        catalog.getAllColumnMetadataForTable(td->tableId, false, false, false);
-    auto iter = std::find(all_cols.begin(), all_cols.end(), shardColumn);
-    CHECK(iter != all_cols.end());
-    indexOfShardColumn = std::distance(all_cols.begin(), iter);
+namespace {
+Literal* parse_insert_literal(const rapidjson::Value& literal) {
+  CHECK(literal.IsObject());
+  CHECK(literal.HasMember("literal"));
+  CHECK(literal.HasMember("type"));
+  auto type = json_str(literal["type"]);
+  if (type == "NULL") {
+    return new NullLiteral();
+  } else if (type == "CHAR" || type == "BOOLEAN") {
+    auto* val = new std::string(json_str(literal["literal"]));
+    return new StringLiteral(val);
+  } else if (type == "DECIMAL") {
+    CHECK(literal.HasMember("scale"));
+    CHECK(literal.HasMember("precision"));
+    auto scale = json_i64(literal["scale"]);
+    auto precision = json_i64(literal["precision"]);
+    if (scale == 0) {
+      auto int_val = std::stol(json_str(literal["literal"]));
+      return new IntLiteral(int_val);
+    } else if (precision > 18) {
+      auto dbl_val = std::stod(json_str(literal["literal"]));
+      return new DoubleLiteral(dbl_val);
+    } else {
+      auto* val = new std::string(json_str(literal["literal"]));
+      return new FixedPtLiteral(val);
+    }
+  } else if (type == "DOUBLE") {
+    auto dbl_val = std::stod(json_str(literal["literal"]));
+    return new DoubleLiteral(dbl_val);
   } else {
-    for (auto& c : column_list_) {
-      if (*c == shardColumn->columnName) {
-        break;
+    CHECK(false) << "Unexpected calcite data type: " << type;
+  }
+  return nullptr;
+}
+
+ArrayLiteral* parse_insert_array_literal(const rapidjson::Value& array) {
+  CHECK(array.IsArray());
+  auto json_elements = array.GetArray();
+  auto* elements = new std::list<Expr*>();
+  for (const auto& e : json_elements) {
+    elements->push_back(parse_insert_literal(e));
+  }
+  return new ArrayLiteral(elements);
+}
+}  // namespace
+
+InsertValuesStmt::InsertValuesStmt(const rapidjson::Value& payload)
+    : InsertStmt(nullptr, nullptr) {
+  CHECK(payload.HasMember("name"));
+  table_ = std::make_unique<std::string>(json_str(payload["name"]));
+
+  if (payload.HasMember("columns")) {
+    CHECK(payload["columns"].IsArray());
+    for (auto& column : payload["columns"].GetArray()) {
+      std::string s = json_str(column);
+      column_list_.emplace_back(std::make_unique<std::string>(s));
+    }
+  }
+
+  CHECK(payload.HasMember("values") && payload["values"].IsArray());
+  auto tuples = payload["values"].GetArray();
+  if (tuples.Empty()) {
+    throw std::runtime_error("Values statement cannot be empty");
+  }
+  values_lists_.reserve(tuples.Size());
+  for (const auto& json_tuple : tuples) {
+    auto values_list = std::make_unique<ValuesList>();
+    CHECK(json_tuple.IsArray());
+    auto tuple = json_tuple.GetArray();
+    for (const auto& value : tuple) {
+      CHECK(value.IsObject());
+      if (value.HasMember("array")) {
+        values_list->push_back(parse_insert_array_literal(value["array"]));
+      } else {
+        values_list->push_back(parse_insert_literal(value));
       }
-      indexOfShardColumn++;
     }
-
-    if (indexOfShardColumn == column_list_.size()) {
-      shardId = SHARD_FOR_KEY(inline_fixed_encoding_null_val(shardColumn->columnType),
-                              shard_count);
-      return shardId / td->nShards;
-    }
+    values_lists_.push_back(std::move(values_list));
   }
-
-  if (indexOfShardColumn >= value_list_.size()) {
-    throw std::runtime_error("No value defined for shard column.");
-  }
-
-  auto& shardColumnValueExpr = *(std::next(value_list_.begin(), indexOfShardColumn));
-
-  Analyzer::Query query;
-  auto e = shardColumnValueExpr->analyze(catalog, query);
-  e = e->add_cast(shardColumn->columnType);
-  const Analyzer::Constant* con = dynamic_cast<Analyzer::Constant*>(e.get());
-  if (!con) {
-    auto col_cast = dynamic_cast<const Analyzer::UOper*>(e.get());
-    CHECK(col_cast);
-    CHECK_EQ(kCAST, col_cast->get_optype());
-    con = dynamic_cast<const Analyzer::Constant*>(col_cast->get_operand());
-  }
-  CHECK(con);
-
-  Datum d = con->get_constval();
-  if (con->get_is_null()) {
-    shardId = SHARD_FOR_KEY(inline_fixed_encoding_null_val(shardColumn->columnType),
-                            shard_count);
-  } else if (shardColumn->columnType.is_string()) {
-    auto dictDesc =
-        catalog.getMetadataForDict(shardColumn->columnType.get_comp_param(), true);
-    auto str_id = dictDesc->stringDict->getOrAdd(*d.stringval);
-    bool invalid = false;
-
-    if (4 == shardColumn->columnType.get_size()) {
-      invalid = str_id > max_valid_int_value<int32_t>();
-    } else if (2 == shardColumn->columnType.get_size()) {
-      invalid = str_id > max_valid_int_value<uint16_t>();
-    } else if (1 == shardColumn->columnType.get_size()) {
-      invalid = str_id > max_valid_int_value<uint8_t>();
-    }
-
-    if (invalid || str_id == inline_int_null_value<int32_t>()) {
-      str_id = inline_fixed_encoding_null_val(shardColumn->columnType);
-    }
-    shardId = SHARD_FOR_KEY(str_id, shard_count);
-  } else {
-    switch (shardColumn->columnType.get_logical_size()) {
-      case 8:
-        shardId = SHARD_FOR_KEY(d.bigintval, shard_count);
-        break;
-      case 4:
-        shardId = SHARD_FOR_KEY(d.intval, shard_count);
-        break;
-      case 2:
-        shardId = SHARD_FOR_KEY(d.smallintval, shard_count);
-        break;
-      case 1:
-        shardId = SHARD_FOR_KEY(d.tinyintval, shard_count);
-        break;
-      default:
-        CHECK(false);
-    }
-  }
-
-  return shardId / td->nShards;
 }
 
 void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
                                Analyzer::Query& query) const {
   InsertStmt::analyze(catalog, query);
-  std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist =
-      query.get_targetlist_nonconst();
-  const auto tableId = query.get_result_table_id();
+  size_t list_size = values_lists_[0]->get_value_list().size();
   if (!column_list_.empty()) {
-    if (value_list_.size() != column_list_.size()) {
+    if (list_size != column_list_.size()) {
       throw std::runtime_error(
           "Numbers of columns and values don't match for the "
           "insert.");
     }
   } else {
+    const auto tableId = query.get_result_table_id();
     const std::list<const ColumnDescriptor*> non_phys_cols =
         catalog.getAllColumnMetadataForTable(tableId, false, false, false);
-    if (non_phys_cols.size() != value_list_.size()) {
+    if (non_phys_cols.size() != list_size) {
       throw std::runtime_error(
           "Number of columns in table does not match the list of values given in the "
           "insert.");
     }
   }
-  std::list<int>::const_iterator it = query.get_result_col_list().begin();
-  for (auto& v : value_list_) {
-    auto e = v->analyze(catalog, query);
-    const ColumnDescriptor* cd =
-        catalog.getMetadataForColumn(query.get_result_table_id(), *it);
+  std::vector<const ColumnDescriptor*> cds;
+  cds.reserve(query.get_result_col_list().size());
+  for (auto id : query.get_result_col_list()) {
+    const auto* cd = catalog.getMetadataForColumn(query.get_result_table_id(), id);
     CHECK(cd);
-    if (cd->columnType.get_notnull()) {
-      auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
-      if (c != nullptr && c->get_is_null()) {
-        throw std::runtime_error("Cannot insert NULL into column " + cd->columnName);
-      }
+    cds.push_back(cd);
+  }
+  auto& query_values_lists = query.get_values_lists();
+  query_values_lists.resize(values_lists_.size());
+  for (size_t i = 0; i < values_lists_.size(); ++i) {
+    const auto& values_list = values_lists_[i]->get_value_list();
+    if (values_list.size() != list_size) {
+      throw std::runtime_error(
+          "Insert values lists should be of the same size. Expected: " +
+          std::to_string(list_size) + ", Got: " + std::to_string(values_list.size()));
     }
-    e = e->add_cast(cd->columnType);
-    tlist.emplace_back(new Analyzer::TargetEntry("", e, false));
-    ++it;
+    auto& query_values_list = query_values_lists[i];
+    size_t cds_id = 0;
+    for (auto& v : values_list) {
+      auto e = v->analyze(catalog, query);
+      const auto* cd = cds[cds_id];
+      const auto& col_ti = cd->columnType;
+      if (col_ti.get_notnull()) {
+        auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
+        if (c != nullptr && c->get_is_null()) {
+          throw std::runtime_error("Cannot insert NULL into column " + cd->columnName);
+        }
+      }
+      e = e->add_cast(col_ti);
+      query_values_list.emplace_back(new Analyzer::TargetEntry("", e, false));
+      ++cds_id;
 
-    const auto& col_ti = cd->columnType;
-    if (col_ti.get_physical_cols() > 0) {
-      CHECK(cd->columnType.is_geometry());
-      auto c = dynamic_cast<const Analyzer::Constant*>(e.get());
-      if (!c) {
-        auto uoper = std::dynamic_pointer_cast<Analyzer::UOper>(e);
-        if (uoper && uoper->get_optype() == kCAST) {
-          c = dynamic_cast<const Analyzer::Constant*>(uoper->get_operand());
+      if (col_ti.get_physical_cols() > 0) {
+        CHECK(cd->columnType.is_geometry());
+        auto c = dynamic_cast<const Analyzer::Constant*>(e.get());
+        if (!c) {
+          auto uoper = std::dynamic_pointer_cast<Analyzer::UOper>(e);
+          if (uoper && uoper->get_optype() == kCAST) {
+            c = dynamic_cast<const Analyzer::Constant*>(uoper->get_operand());
+          }
         }
-      }
-      bool is_null = false;
-      std::string* geo_string{nullptr};
-      if (c) {
-        is_null = c->get_is_null();
-        if (!is_null) {
-          geo_string = c->get_constval().stringval;
+        bool is_null = false;
+        std::string* geo_string{nullptr};
+        if (c) {
+          is_null = c->get_is_null();
+          if (!is_null) {
+            geo_string = c->get_constval().stringval;
+          }
         }
-      }
-      if (!is_null && !geo_string) {
-        throw std::runtime_error("Expecting a WKT or WKB hex string for column " +
-                                 cd->columnName);
-      }
-      std::vector<double> coords;
-      std::vector<double> bounds;
-      std::vector<int> ring_sizes;
-      std::vector<int> poly_rings;
-      int render_group =
-          0;  // @TODO simon.eves where to get render_group from in this context?!
-      SQLTypeInfo import_ti{cd->columnType};
-      if (!is_null) {
-        if (!Geospatial::GeoTypesFactory::getGeoColumns(
-                *geo_string, import_ti, coords, bounds, ring_sizes, poly_rings)) {
-          throw std::runtime_error("Cannot read geometry to insert into column " +
+        if (!is_null && !geo_string) {
+          throw std::runtime_error("Expecting a WKT or WKB hex string for column " +
                                    cd->columnName);
         }
-        if (coords.empty()) {
-          // Importing from geo_string WKT resulted in empty coords: dealing with a NULL
-          is_null = true;
-        }
-        if (cd->columnType.get_type() != import_ti.get_type()) {
-          // allow POLYGON to be inserted into MULTIPOLYGON column
-          if (!(import_ti.get_type() == SQLTypes::kPOLYGON &&
-                cd->columnType.get_type() == SQLTypes::kMULTIPOLYGON)) {
-            throw std::runtime_error(
-                "Imported geometry doesn't match the type of column " + cd->columnName);
-          }
-        }
-      } else {
-        // Special case for NULL POINT, push NULL representation to coords
-        if (cd->columnType.get_type() == kPOINT) {
-          if (!coords.empty()) {
-            throw std::runtime_error("NULL POINT with unexpected coordinates in column " +
+        std::vector<double> coords;
+        std::vector<double> bounds;
+        std::vector<int> ring_sizes;
+        std::vector<int> poly_rings;
+        int render_group =
+            0;  // @TODO simon.eves where to get render_group from in this context?!
+        SQLTypeInfo import_ti{cd->columnType};
+        if (!is_null) {
+          if (!Geospatial::GeoTypesFactory::getGeoColumns(
+                  *geo_string, import_ti, coords, bounds, ring_sizes, poly_rings)) {
+            throw std::runtime_error("Cannot read geometry to insert into column " +
                                      cd->columnName);
           }
-          coords.push_back(NULL_ARRAY_DOUBLE);
-          coords.push_back(NULL_DOUBLE);
+          if (coords.empty()) {
+            // Importing from geo_string WKT resulted in empty coords: dealing with a NULL
+            is_null = true;
+          }
+          if (cd->columnType.get_type() != import_ti.get_type()) {
+            // allow POLYGON to be inserted into MULTIPOLYGON column
+            if (!(import_ti.get_type() == SQLTypes::kPOLYGON &&
+                  cd->columnType.get_type() == SQLTypes::kMULTIPOLYGON)) {
+              throw std::runtime_error(
+                  "Imported geometry doesn't match the type of column " + cd->columnName);
+            }
+          }
+        } else {
+          // Special case for NULL POINT, push NULL representation to coords
+          if (cd->columnType.get_type() == kPOINT) {
+            if (!coords.empty()) {
+              throw std::runtime_error(
+                  "NULL POINT with unexpected coordinates in column " + cd->columnName);
+            }
+            coords.push_back(NULL_ARRAY_DOUBLE);
+            coords.push_back(NULL_DOUBLE);
+          }
         }
-      }
 
-      // TODO: check if import SRID matches columns SRID, may need to transform before
-      // inserting
+        // TODO: check if import SRID matches columns SRID, may need to transform before
+        // inserting
 
-      int nextColumnOffset = 1;
-
-      const ColumnDescriptor* cd_coords = catalog.getMetadataForColumn(
-          query.get_result_table_id(), cd->columnId + nextColumnOffset);
-      CHECK(cd_coords);
-      CHECK_EQ(cd_coords->columnType.get_type(), kARRAY);
-      CHECK_EQ(cd_coords->columnType.get_subtype(), kTINYINT);
-      std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-      if (!is_null || cd->columnType.get_type() == kPOINT) {
-        auto compressed_coords = Geospatial::compress_coords(coords, col_ti);
-        for (auto cc : compressed_coords) {
-          Datum d;
-          d.tinyintval = cc;
-          auto e = makeExpr<Analyzer::Constant>(kTINYINT, false, d);
-          value_exprs.push_back(e);
-        }
-      }
-      tlist.emplace_back(new Analyzer::TargetEntry(
-          "",
-          makeExpr<Analyzer::Constant>(cd_coords->columnType, is_null, value_exprs),
-          false));
-      ++it;
-      nextColumnOffset++;
-
-      if (cd->columnType.get_type() == kPOLYGON ||
-          cd->columnType.get_type() == kMULTIPOLYGON) {
-        // Put ring sizes array into separate physical column
-        const ColumnDescriptor* cd_ring_sizes = catalog.getMetadataForColumn(
-            query.get_result_table_id(), cd->columnId + nextColumnOffset);
-        CHECK(cd_ring_sizes);
-        CHECK_EQ(cd_ring_sizes->columnType.get_type(), kARRAY);
-        CHECK_EQ(cd_ring_sizes->columnType.get_subtype(), kINT);
+        const auto* cd_coords = cds[cds_id];
+        CHECK_EQ(cd_coords->columnType.get_type(), kARRAY);
+        CHECK_EQ(cd_coords->columnType.get_subtype(), kTINYINT);
         std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-        if (!is_null) {
-          for (auto c : ring_sizes) {
+        if (!is_null || cd->columnType.get_type() == kPOINT) {
+          auto compressed_coords = Geospatial::compress_coords(coords, col_ti);
+          for (auto cc : compressed_coords) {
             Datum d;
-            d.intval = c;
-            auto e = makeExpr<Analyzer::Constant>(kINT, false, d);
+            d.tinyintval = cc;
+            auto e = makeExpr<Analyzer::Constant>(kTINYINT, false, d);
             value_exprs.push_back(e);
           }
         }
-        tlist.emplace_back(new Analyzer::TargetEntry(
+        query_values_list.emplace_back(new Analyzer::TargetEntry(
             "",
-            makeExpr<Analyzer::Constant>(cd_ring_sizes->columnType, is_null, value_exprs),
+            makeExpr<Analyzer::Constant>(cd_coords->columnType, is_null, value_exprs),
             false));
-        ++it;
-        nextColumnOffset++;
+        ++cds_id;
 
-        if (cd->columnType.get_type() == kMULTIPOLYGON) {
-          // Put poly_rings array into separate physical column
-          const ColumnDescriptor* cd_poly_rings = catalog.getMetadataForColumn(
-              query.get_result_table_id(), cd->columnId + nextColumnOffset);
-          CHECK(cd_poly_rings);
-          CHECK_EQ(cd_poly_rings->columnType.get_type(), kARRAY);
-          CHECK_EQ(cd_poly_rings->columnType.get_subtype(), kINT);
+        if (cd->columnType.get_type() == kMULTILINESTRING ||
+            cd->columnType.get_type() == kPOLYGON ||
+            cd->columnType.get_type() == kMULTIPOLYGON) {
+          // Put [linest]ring sizes array into separate physical column
+          const auto* cd_ring_sizes = cds[cds_id];
+          CHECK(cd_ring_sizes);
+          CHECK_EQ(cd_ring_sizes->columnType.get_type(), kARRAY);
+          CHECK_EQ(cd_ring_sizes->columnType.get_subtype(), kINT);
           std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
           if (!is_null) {
-            for (auto c : poly_rings) {
+            for (auto c : ring_sizes) {
               Datum d;
               d.intval = c;
               auto e = makeExpr<Analyzer::Constant>(kINT, false, d);
               value_exprs.push_back(e);
             }
           }
-          tlist.emplace_back(new Analyzer::TargetEntry(
+          query_values_list.emplace_back(new Analyzer::TargetEntry(
               "",
               makeExpr<Analyzer::Constant>(
-                  cd_poly_rings->columnType, is_null, value_exprs),
+                  cd_ring_sizes->columnType, is_null, value_exprs),
               false));
-          ++it;
-          nextColumnOffset++;
-        }
-      }
+          ++cds_id;
 
-      if (cd->columnType.get_type() == kLINESTRING ||
-          cd->columnType.get_type() == kPOLYGON ||
-          cd->columnType.get_type() == kMULTIPOLYGON) {
-        const ColumnDescriptor* cd_bounds = catalog.getMetadataForColumn(
-            query.get_result_table_id(), cd->columnId + nextColumnOffset);
-        CHECK(cd_bounds);
-        CHECK_EQ(cd_bounds->columnType.get_type(), kARRAY);
-        CHECK_EQ(cd_bounds->columnType.get_subtype(), kDOUBLE);
-        std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-        if (!is_null) {
-          for (auto b : bounds) {
-            Datum d;
-            d.doubleval = b;
-            auto e = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
-            value_exprs.push_back(e);
+          if (cd->columnType.get_type() == kMULTIPOLYGON) {
+            // Put poly_rings array into separate physical column
+            const auto* cd_poly_rings = cds[cds_id];
+            CHECK(cd_poly_rings);
+            CHECK_EQ(cd_poly_rings->columnType.get_type(), kARRAY);
+            CHECK_EQ(cd_poly_rings->columnType.get_subtype(), kINT);
+            std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
+            if (!is_null) {
+              for (auto c : poly_rings) {
+                Datum d;
+                d.intval = c;
+                auto e = makeExpr<Analyzer::Constant>(kINT, false, d);
+                value_exprs.push_back(e);
+              }
+            }
+            query_values_list.emplace_back(new Analyzer::TargetEntry(
+                "",
+                makeExpr<Analyzer::Constant>(
+                    cd_poly_rings->columnType, is_null, value_exprs),
+                false));
+            ++cds_id;
           }
         }
-        tlist.emplace_back(new Analyzer::TargetEntry(
-            "",
-            makeExpr<Analyzer::Constant>(cd_bounds->columnType, is_null, value_exprs),
-            false));
-        ++it;
-        nextColumnOffset++;
-      }
 
-      if (cd->columnType.get_type() == kPOLYGON ||
-          cd->columnType.get_type() == kMULTIPOLYGON) {
-        // Put render group into separate physical column
-        const ColumnDescriptor* cd_render_group = catalog.getMetadataForColumn(
-            query.get_result_table_id(), cd->columnId + nextColumnOffset);
-        CHECK(cd_render_group);
-        CHECK_EQ(cd_render_group->columnType.get_type(), kINT);
-        Datum d;
-        d.intval = render_group;
-        tlist.emplace_back(new Analyzer::TargetEntry(
-            "",
-            makeExpr<Analyzer::Constant>(cd_render_group->columnType, is_null, d),
-            false));
-        ++it;
-        nextColumnOffset++;
+        if (cd->columnType.get_type() == kLINESTRING ||
+            cd->columnType.get_type() == kMULTILINESTRING ||
+            cd->columnType.get_type() == kPOLYGON ||
+            cd->columnType.get_type() == kMULTIPOLYGON) {
+          const auto* cd_bounds = cds[cds_id];
+          CHECK(cd_bounds);
+          CHECK_EQ(cd_bounds->columnType.get_type(), kARRAY);
+          CHECK_EQ(cd_bounds->columnType.get_subtype(), kDOUBLE);
+          std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
+          if (!is_null) {
+            for (auto b : bounds) {
+              Datum d;
+              d.doubleval = b;
+              auto e = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
+              value_exprs.push_back(e);
+            }
+          }
+          query_values_list.emplace_back(new Analyzer::TargetEntry(
+              "",
+              makeExpr<Analyzer::Constant>(cd_bounds->columnType, is_null, value_exprs),
+              false));
+          ++cds_id;
+        }
+
+        if (cd->columnType.get_type() == kPOLYGON ||
+            cd->columnType.get_type() == kMULTIPOLYGON) {
+          // Put render group into separate physical column
+          const auto* cd_render_group = cds[cds_id];
+          CHECK(cd_render_group);
+          CHECK_EQ(cd_render_group->columnType.get_type(), kINT);
+          Datum d;
+          d.intval = render_group;
+          query_values_list.emplace_back(new Analyzer::TargetEntry(
+              "",
+              makeExpr<Analyzer::Constant>(cd_render_group->columnType, is_null, d),
+              false));
+          ++cds_id;
+        }
       }
     }
   }
 }
 
-void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                               bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("INSERT values invalid in read only mode.");
+  }
+  auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
-
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+          catalog, *table_);
   if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
                                        AccessPrivileges::INSERT_INTO_TABLE,
                                        *table_)) {
     throw std::runtime_error("User has no insert privileges on " + *table_ + ".");
   }
-
-  auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
-
   Analyzer::Query query;
   analyze(catalog, query);
 
-  //  Acquire schema write lock -- leave data lock so the fragmenter can checkpoint. For
-  //  singleton inserts we just take a write lock on the schema, which prevents concurrent
-  //  inserts.
-  auto result_table_id = query.get_result_table_id();
-  const auto td_with_lock =
-      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
-          catalog, result_table_id);
+  // Take an insert data write lock, which prevents concurrent inserts.
+  const auto insert_data_lock =
+      lockmgr::InsertDataLockMgr::getWriteLockForTable(catalog, *table_);
+
   // NOTE(max): we do the same checks as below just a few calls earlier in analyze().
   // Do we keep those intentionally to make sure nothing changed in between w/o
   // catalog locks or is it just a duplicate work?
@@ -2066,7 +2707,24 @@ void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   RelAlgExecutor ra_executor(executor.get(), catalog);
 
-  ra_executor.executeSimpleInsert(query);
+  if (!leafs_connector_) {
+    leafs_connector_ = std::make_unique<Fragmenter_Namespace::LocalInsertConnector>();
+  }
+  Fragmenter_Namespace::InsertDataLoader insert_data_loader(*leafs_connector_);
+  try {
+    ra_executor.executeSimpleInsert(query, insert_data_loader, session);
+  } catch (...) {
+    try {
+      leafs_connector_->rollback(session, td->tableId);
+    } catch (std::exception& e) {
+      LOG(ERROR) << "An error occurred during insert rollback attempt. Table id: "
+                 << td->tableId << ", Error: " << e.what();
+    }
+    throw;
+  }
+  if (!td->isTemporaryTable()) {
+    leafs_connector_->checkpoint(session, td->tableId);
+  }
 }
 
 void UpdateStmt::analyze(const Catalog_Namespace::Catalog& catalog,
@@ -2083,13 +2741,8 @@ namespace {
 
 void validate_shard_column_type(const ColumnDescriptor& cd) {
   const auto& col_ti = cd.columnType;
-  if (col_ti.is_integer() ||
-      (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT) ||
-      col_ti.is_time()) {
-    if (cd.default_value.has_value()) {
-      throw std::runtime_error("Default values for shard keys are not supported yet.");
-    }
-  } else {
+  if (!col_ti.is_integer() && !col_ti.is_time() &&
+      !(col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT)) {
     throw std::runtime_error("Cannot shard on type " + col_ti.get_type_name() +
                              ", encoding " + col_ti.get_compression_name());
   }
@@ -2603,12 +3256,17 @@ void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& sessio
   td.keyMetainfo = serialize_key_metainfo(shard_key_def, shared_dict_defs);
 }
 
-void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                              bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE TABLE invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
 
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   // check access privileges
   if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
@@ -2651,12 +3309,17 @@ CreateDataframeStmt::CreateDataframeStmt(const rapidjson::Value& payload) {
   parse_options(payload, storage_options_);
 }
 
-void CreateDataframeStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void CreateDataframeStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                  bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE DATAFRAME invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
 
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   // check access privileges
   if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
@@ -2743,8 +3406,11 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   // view optimization
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
-  const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+      false,
+      g_enable_watchdog,
+      {},
+      Catalog_Namespace::SysCatalog::instance().isAggregator());
   const auto query_ra = calcite_mgr
                             ->process(query_state_proxy,
                                       pg_shim(select_stmt),
@@ -2759,6 +3425,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
   ExecutionOptions eo = {false,
+                         false,
                          true,
                          false,
                          true,
@@ -2790,8 +3457,8 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   return result.getRows();
 }
 
-size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
-                                             std::string& sql_query_string) {
+size_t LocalQueryConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
+                                                  std::string& sql_query_string) {
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto& catalog = session->getCatalog();
 
@@ -2807,8 +3474,11 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
   // view optimization
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
-  const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+      false,
+      g_enable_watchdog,
+      {},
+      Catalog_Namespace::SysCatalog::instance().isAggregator());
   const auto query_ra = calcite_mgr
                             ->process(query_state_proxy,
                                       pg_shim(sql_query_string),
@@ -2820,6 +3490,7 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
   ExecutionOptions eo = {false,
+                         false,
                          true,
                          false,
                          true,
@@ -2835,11 +3506,11 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
   return ra_executor.getOuterFragmentCount(co, eo);
 }
 
-AggregatedResult LocalConnector::query(QueryStateProxy query_state_proxy,
-                                       std::string& sql_query_string,
-                                       std::vector<size_t> outer_frag_indices,
-                                       bool validate_only,
-                                       bool allow_interrupt) {
+AggregatedResult LocalQueryConnector::query(QueryStateProxy query_state_proxy,
+                                            std::string& sql_query_string,
+                                            std::vector<size_t> outer_frag_indices,
+                                            bool validate_only,
+                                            bool allow_interrupt) {
   // TODO(PS): Should we be using the shimmed query in getResultSet?
   std::string pg_shimmed_select_query = pg_shim(sql_query_string);
 
@@ -2865,7 +3536,7 @@ AggregatedResult LocalConnector::query(QueryStateProxy query_state_proxy,
   return res;
 }
 
-std::vector<AggregatedResult> LocalConnector::query(
+std::vector<AggregatedResult> LocalQueryConnector::query(
     QueryStateProxy query_state_proxy,
     std::string& sql_query_string,
     std::vector<size_t> outer_frag_indices,
@@ -2875,41 +3546,9 @@ std::vector<AggregatedResult> LocalConnector::query(
   return {res};
 }
 
-void LocalConnector::insertChunksToLeaf(
-    const Catalog_Namespace::SessionInfo& session,
-    const size_t leaf_idx,
-    const Fragmenter_Namespace::InsertChunks& insert_chunks) {
-  CHECK(leaf_idx == 0);
-  auto& catalog = session.getCatalog();
-  auto created_td = catalog.getMetadataForTable(insert_chunks.table_id);
-  created_td->fragmenter->insertChunksNoCheckpoint(insert_chunks);
-}
-
-void LocalConnector::insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
-                                      const size_t leaf_idx,
-                                      Fragmenter_Namespace::InsertData& insert_data) {
-  CHECK(leaf_idx == 0);
-  auto& catalog = session.getCatalog();
-  auto created_td = catalog.getMetadataForTable(insert_data.tableId);
-  created_td->fragmenter->insertDataNoCheckpoint(insert_data);
-}
-
-void LocalConnector::checkpoint(const Catalog_Namespace::SessionInfo& session,
-                                int table_id) {
-  auto& catalog = session.getCatalog();
-  catalog.checkpointWithAutoRollback(table_id);
-}
-
-void LocalConnector::rollback(const Catalog_Namespace::SessionInfo& session,
-                              int table_id) {
-  auto& catalog = session.getCatalog();
-  auto db_id = catalog.getDatabaseId();
-  auto table_epochs = catalog.getTableEpochs(db_id, table_id);
-  catalog.setTableEpochs(db_id, table_epochs);
-}
-
-std::list<ColumnDescriptor> LocalConnector::getColumnDescriptors(AggregatedResult& result,
-                                                                 bool for_create) {
+std::list<ColumnDescriptor> LocalQueryConnector::getColumnDescriptors(
+    AggregatedResult& result,
+    bool for_create) {
   std::list<ColumnDescriptor> column_descriptors;
   std::list<ColumnDescriptor> column_descriptors_for_create;
 
@@ -2978,14 +3617,12 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto& catalog = session->getCatalog();
   foreign_storage::validate_non_foreign_table_write(td);
-
-  LocalConnector local_connector;
   bool populate_table = false;
 
   if (leafs_connector_) {
     populate_table = true;
   } else {
-    leafs_connector_ = &local_connector;
+    leafs_connector_ = std::make_unique<LocalQueryConnector>();
     if (!g_cluster) {
       populate_table = true;
     }
@@ -3028,6 +3665,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
     // only validate the select query so we get the target types
     // correctly, but do not populate the result set
+    LocalQueryConnector local_connector;
     auto result = local_connector.query(query_state_proxy, select_query_, {}, true, true);
     auto source_column_descriptors = local_connector.getColumnDescriptors(result, false);
 
@@ -3349,6 +3987,8 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           thread_end_idx[0] = result_rows->entryCount();
         }
 
+        RenderGroupAnalyzerMap render_group_analyzer_map;
+
         for (size_t block_start = 0; block_start < num_rows;
              block_start += rows_per_block) {
           const auto num_rows_this_itr = block_start + rows_per_block < num_rows
@@ -3359,7 +3999,6 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           int colNum = 0;
           for (const auto targetDescriptor : target_column_descriptors) {
             auto sourceDataMetaInfo = res.targets_meta[colNum++];
-
             ConverterCreateParameter param{
                 num_rows_this_itr,
                 catalog,
@@ -3368,11 +4007,16 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
                 targetDescriptor->columnType,
                 !targetDescriptor->columnType.get_notnull(),
                 result_rows->getRowSetMemOwner()->getLiteralStringDictProxy(),
-                g_enable_experimental_string_functions
+                g_enable_string_functions &&
+                        sourceDataMetaInfo.get_type_info().is_dict_encoded_string()
                     ? executor->getStringDictionaryProxy(
                           sourceDataMetaInfo.get_type_info().get_comp_param(),
                           result_rows->getRowSetMemOwner(),
                           true)
+                    : nullptr,
+                IS_GEO_POLY(targetDescriptor->columnType.get_type()) &&
+                        g_enable_assign_render_groups
+                    ? &render_group_analyzer_map
                     : nullptr};
             auto converter = factory.create(param);
             value_converters.push_back(std::move(converter));
@@ -3466,62 +4110,49 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
   }
 }
 
-void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto session_copy = session;
-  auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
-      &session_copy, boost::null_deleter());
-  auto query_state = query_state::QueryState::create(session_ptr, select_query_);
-  auto stdlog = STDLOG(query_state);
-  auto& catalog = session_ptr->getCatalog();
-
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
-
-  if (catalog.getMetadataForTable(table_name_) == nullptr) {
-    throw std::runtime_error("ITAS failed: table " + table_name_ + " does not exist.");
+namespace {
+int32_t get_table_id(const Catalog_Namespace::Catalog& catalog,
+                     const std::string& table_name) {
+  auto table_id = catalog.getTableId(table_name);
+  if (!table_id.has_value()) {
+    throw std::runtime_error{"Table \"" + table_name + "\" does not exist."};
   }
+  return table_id.value();
+}
 
-  lockmgr::LockedTableDescriptors locks;
-  std::vector<std::string> tables;
-
-  // get the table info
+lockmgr::LockedTableDescriptors acquire_query_table_locks(
+    Catalog_Namespace::Catalog& catalog,
+    const std::string& query_str,
+    const QueryStateProxy& query_state_proxy,
+    const std::optional<std::string>& insert_table_name = {}) {
   auto calcite_mgr = catalog.getCalciteMgr();
-
-  // TODO MAT this should actually get the global or the session parameter for
-  // view optimization
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
-  const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
-  const auto result = calcite_mgr->process(query_state->createQueryStateProxy(),
-                                           pg_shim(select_query_),
+  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+      false, g_enable_watchdog, {}, SysCatalog::instance().isAggregator());
+  const auto result = calcite_mgr->process(query_state_proxy,
+                                           pg_shim(query_str),
                                            calciteQueryParsingOption,
                                            calciteOptimizationOption);
-
-  for (auto& tab : result.resolved_accessed_objects.tables_selected_from) {
-    tables.emplace_back(tab[0]);
-  }
-  tables.emplace_back(table_name_);
-
   // force sort into tableid order in case of name change to guarantee fixed order of
   // mutex access
-  std::sort(tables.begin(),
-            tables.end(),
-            [&catalog](const std::string& a, const std::string& b) {
-              return catalog.getMetadataForTable(a, false)->tableId <
-                     catalog.getMetadataForTable(b, false)->tableId;
-            });
-
-  tables.erase(unique(tables.begin(), tables.end()), tables.end());
+  auto comparator = [&catalog](const std::string& table_1, const std::string& table_2) {
+    return get_table_id(catalog, table_1) < get_table_id(catalog, table_2);
+  };
+  std::set<std::string, decltype(comparator)> tables(comparator);
+  for (auto& tab : result.resolved_accessed_objects.tables_selected_from) {
+    tables.emplace(tab[0]);
+  }
+  if (insert_table_name.has_value()) {
+    tables.emplace(insert_table_name.value());
+  }
+  lockmgr::LockedTableDescriptors locks;
   for (const auto& table : tables) {
     locks.emplace_back(
         std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
             lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
                 catalog, table)));
-    if (table == table_name_) {
-      // Aquire an insert data lock for updates/deletes, consistent w/ insert. The
-      // table data lock will be aquired in the fragmenter during checkpoint.
+    if (insert_table_name.has_value() && table == insert_table_name.value()) {
       locks.emplace_back(
           std::make_unique<lockmgr::TableInsertLockContainer<lockmgr::WriteLock>>(
               lockmgr::TableInsertLockContainer<lockmgr::WriteLock>::acquire(
@@ -3533,8 +4164,37 @@ void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& 
                   catalog.getDatabaseId(), (*locks.back())())));
     }
   }
+  return locks;
+}
+}  // namespace
 
+void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                          bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("INSERT INTO TABLE invalid in read only mode.");
+  }
+  auto session_copy = session;
+  auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
+      &session_copy, boost::null_deleter());
+  auto query_state = query_state::QueryState::create(session_ptr, select_query_);
+  auto stdlog = STDLOG(query_state);
+  auto& catalog = session_ptr->getCatalog();
+
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
+
+  if (catalog.getMetadataForTable(table_name_) == nullptr) {
+    throw std::runtime_error("ITAS failed: table " + table_name_ + " does not exist.");
+  }
+
+  auto locks = acquire_query_table_locks(
+      catalog, select_query_, query_state->createQueryStateProxy(), table_name_);
   const TableDescriptor* td = catalog.getMetadataForTable(table_name_);
+
+  Executor::clearExternalCaches(true, td, catalog.getCurrentDB().dbId);
+
   try {
     populateData(query_state->createQueryStateProxy(), td, true, false);
   } catch (...) {
@@ -3559,21 +4219,26 @@ CreateTableAsSelectStmt::CreateTableAsSelectStmt(const rapidjson::Value& payload
   parse_options(payload, storage_options_);
 }
 
-void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                      bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE TABLE invalid in read only mode.");
+  }
   auto session_copy = session;
   auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
       &session_copy, boost::null_deleter());
   auto query_state = query_state::QueryState::create(session_ptr, select_query_);
   auto stdlog = STDLOG(query_state);
-  LocalConnector local_connector;
+  LocalQueryConnector local_connector;
   auto& catalog = session.getCatalog();
   bool create_table = nullptr == leafs_connector_;
 
   std::set<std::string> select_tables;
   if (create_table) {
-    const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-            legacylockmgr::ExecutorOuterLock, true));
+    const auto execute_write_lock =
+        heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+            *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+                legacylockmgr::ExecutorOuterLock, true));
 
     // check access privileges
     if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
@@ -3588,26 +4253,6 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
       }
       throw std::runtime_error("Table " + table_name_ +
                                " already exists and no data was loaded.");
-    }
-
-    // get the table info
-    auto calcite_mgr = catalog.getCalciteMgr();
-
-    // TODO MAT this should actually get the global or the session parameter for
-    // view optimization
-    const auto calciteQueryParsingOption =
-        calcite_mgr->getCalciteQueryParsingOption(true, false, true);
-    const auto calciteOptimizationOption =
-        calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
-    const auto result = calcite_mgr->process(query_state->createQueryStateProxy(),
-                                             pg_shim(select_query_),
-                                             calciteQueryParsingOption,
-                                             calciteOptimizationOption);
-
-    // TODO 12 Apr 2021 MAT schema change need to keep schema in future
-    // just keeping it moving for now
-    for (auto& tab : result.resolved_accessed_objects.tables_selected_from) {
-      select_tables.insert(tab[0]);
     }
 
     // only validate the select query so we get the target types
@@ -3705,46 +4350,14 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
   // note there is a time where we do not have any executor outer lock here. someone could
   // come along and mess with the data or other tables.
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
-  lockmgr::LockedTableDescriptors locks;
-  std::vector<std::string> tables;
-  tables.insert(tables.end(), select_tables.begin(), select_tables.end());
-  CHECK_EQ(tables.size(), select_tables.size());
-  tables.emplace_back(table_name_);
-  // force sort into tableid order in case of name change to guarantee fixed order of
-  // mutex access
-  std::sort(tables.begin(),
-            tables.end(),
-            [&catalog](const std::string& a, const std::string& b) {
-              return catalog.getMetadataForTable(a, false)->tableId <
-                     catalog.getMetadataForTable(b, false)->tableId;
-            });
-  tables.erase(unique(tables.begin(), tables.end()), tables.end());
-  for (const auto& table : tables) {
-    locks.emplace_back(
-        std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
-            lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
-                catalog, table)));
-    if (table == table_name_) {
-      // Aquire an insert data lock for updates/deletes, consistent w/ insert. The
-      // table data lock will be aquired in the fragmenter during checkpoint.
-      locks.emplace_back(
-          std::make_unique<lockmgr::TableInsertLockContainer<lockmgr::WriteLock>>(
-              lockmgr::TableInsertLockContainer<lockmgr::WriteLock>::acquire(
-                  catalog.getDatabaseId(), (*locks.back())())));
-    } else {
-      locks.emplace_back(
-          std::make_unique<lockmgr::TableDataLockContainer<lockmgr::ReadLock>>(
-              lockmgr::TableDataLockContainer<lockmgr::ReadLock>::acquire(
-                  catalog.getDatabaseId(), (*locks.back())())));
-    }
-  }
-
+  auto locks = acquire_query_table_locks(
+      catalog, select_query_, query_state->createQueryStateProxy(), table_name_);
   const TableDescriptor* td = catalog.getMetadataForTable(table_name_);
-
   try {
     populateData(query_state->createQueryStateProxy(), td, false, true);
   } catch (...) {
@@ -3768,17 +4381,18 @@ DropTableStmt::DropTableStmt(const rapidjson::Value& payload) {
   }
 }
 
-void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                            bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("DROP TABLE invalid in read only mode.");
+  }
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
-
-  // TODO(adb): the catalog should be handling this locking.
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
-
   const TableDescriptor* td{nullptr};
   std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>> td_with_lock;
-
   try {
     td_with_lock =
         std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
@@ -3805,23 +4419,19 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   ddl_utils::validate_table_type(td, ddl_utils::TableType::TABLE, "DROP");
 
-  std::vector<int> table_chunk_key_prefix = getTableChunkKey(td, catalog);
+  {
+    auto table_data_read_lock =
+        lockmgr::TableDataLockMgr::getReadLockForTable(catalog, *table_);
+    Executor::clearExternalCaches(false, td, catalog.getCurrentDB().dbId);
+  }
 
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table_);
   catalog.dropTable(td);
-
-  // invalidate cached item
-  if (!table_chunk_key_prefix.empty()) {
-    // todo (yoonmin): need to remove cached item for dropped table immediately?
-    auto table_key = boost::hash_value(table_chunk_key_prefix);
-    DeleteTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
-  } else {
-    DeleteTriggeredCacheInvalidator::invalidateCaches();
-  }
 }
 
-void AlterTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {}
+void AlterTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                             bool read_only_mode) {}
 
 std::unique_ptr<DDLStmt> AlterTableStmt::delegate(const rapidjson::Value& payload) {
   CHECK(payload.HasMember("tableName"));
@@ -3889,13 +4499,13 @@ std::unique_ptr<DDLStmt> AlterTableStmt::delegate(const rapidjson::Value& payloa
 
   } else if (type == "ALTER_OPTIONS") {
     CHECK(payload.HasMember("options"));
-
-    if (payload["options"].IsObject()) {
-      for (const auto& option : payload["options"].GetObject()) {
-        std::string* option_name = new std::string(json_str(option.name));
+    const auto& options = payload["options"];
+    if (options.IsObject()) {
+      for (auto itr = options.MemberBegin(); itr != options.MemberEnd(); ++itr) {
+        std::string* option_name = new std::string(json_str(itr->name));
         Literal* literal_value;
-        if (option.value.IsString()) {
-          std::string literal_string = json_str(option.value);
+        if (itr->value.IsString()) {
+          std::string literal_string = json_str(itr->value);
 
           // iff this string can be converted to INT
           //   ... do so because it is necessary for AlterTableParamStmt
@@ -3906,9 +4516,9 @@ std::unique_ptr<DDLStmt> AlterTableStmt::delegate(const rapidjson::Value& payloa
           } else {
             literal_value = new StringLiteral(&literal_string);
           }
-        } else if (option.value.IsInt() || option.value.IsInt64()) {
-          literal_value = new IntLiteral(json_i64(option.value));
-        } else if (option.value.IsNull()) {
+        } else if (itr->value.IsInt() || itr->value.IsInt64()) {
+          literal_value = new IntLiteral(json_i64(itr->value));
+        } else if (itr->value.IsNull()) {
           literal_value = new NullLiteral();
         } else {
           throw std::runtime_error("Unable to handle literal for " + *option_name);
@@ -3919,9 +4529,8 @@ std::unique_ptr<DDLStmt> AlterTableStmt::delegate(const rapidjson::Value& payloa
         return std::unique_ptr<DDLStmt>(
             new Parser::AlterTableParamStmt(new std::string(tableName), nv));
       }
-
     } else {
-      CHECK(payload["options"].IsNull());
+      CHECK(options.IsNull());
     }
   }
   return nullptr;
@@ -3932,15 +4541,16 @@ TruncateTableStmt::TruncateTableStmt(const rapidjson::Value& payload) {
   table_ = std::make_unique<std::string>(json_str(payload["tableName"]));
 }
 
-void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("TRUNCATE TABLE invalid in read only mode.");
+  }
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
-
-  // TODO: Removal of the FileMgr is not thread safe. Take a global system write lock
-  // when truncating a table
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
-
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
           catalog, *table_, true);
@@ -3966,19 +4576,16 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   foreign_storage::validate_non_foreign_table_write(td);
 
-  // invalidate cached items
-  std::vector<int> table_chunk_key_prefix = getTableChunkKey(td, catalog);
+  // invalidate cached item
+  {
+    auto table_data_read_lock =
+        lockmgr::TableDataLockMgr::getReadLockForTable(catalog, *table_);
+    Executor::clearExternalCaches(false, td, catalog.getCurrentDB().dbId);
+  }
 
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table_);
   catalog.truncateTable(td);
-
-  if (!table_chunk_key_prefix.empty()) {
-    auto table_key = boost::hash_value(table_chunk_key_prefix);
-    DeleteTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
-  } else {
-    DeleteTriggeredCacheInvalidator::invalidateCaches();
-  }
 }
 
 OptimizeTableStmt::OptimizeTableStmt(const rapidjson::Value& payload) {
@@ -4003,12 +4610,17 @@ bool user_can_access_table(const Catalog_Namespace::SessionInfo& session_info,
 };
 }  // namespace
 
-void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("OPTIMIZE TABLE invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
 
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
@@ -4022,6 +4634,10 @@ void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (td->isView) {
     throw std::runtime_error("OPTIMIZE TABLE command is not supported on views.");
   }
+
+  // invalidate cached item
+  std::vector<int> table_key{catalog.getCurrentDB().dbId, td->tableId};
+  ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
 
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   const TableOptimizer optimizer(td, executor, catalog);
@@ -4099,7 +4715,11 @@ RenameUserStmt::RenameUserStmt(const rapidjson::Value& payload) {
   new_username_ = std::make_unique<std::string>(json_str(payload["newName"]));
 }
 
-void RenameUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void RenameUserStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                             bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("RENAME TABLE invalid in read only mode.");
+  }
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error("Only a super user can rename users.");
   }
@@ -4119,13 +4739,18 @@ RenameDBStmt::RenameDBStmt(const rapidjson::Value& payload) {
   new_database_name_ = std::make_unique<std::string>(json_str(payload["newName"]));
 }
 
-void RenameDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void RenameDBStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                           bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("RENAME DATABASE invalid in read only mode.");
+  }
   Catalog_Namespace::DBMetadata db;
 
   // TODO: use database lock instead
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   if (!SysCatalog::instance().getMetadataForDB(*database_name_, db)) {
     throw std::runtime_error("Database " + *database_name_ + " does not exist.");
@@ -4229,13 +4854,18 @@ void disable_foreign_tables(const TableDescriptor* td) {
 }
 }  // namespace
 
-void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                              bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("RENAME TABLE invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
 
   // TODO(adb): the catalog should be handling this locking (see AddColumStmt)
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   // accumulated vector of table names: oldName->newName
   std::vector<std::pair<std::string, std::string>> names;
@@ -4271,7 +4901,7 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       const TableDescriptor* td = catalog.getMetadataForTable(altCurTableName);
       if (td) {
         // Tables *and* views may be renamed here, foreign tables not
-        //    -> just block just foreign tables
+        //    -> just block foreign tables
         disable_foreign_tables(td);
         check_alter_table_privilege(session, td);
       }
@@ -4353,7 +4983,7 @@ void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& sessi
       throw std::runtime_error(
           "Adding columns to temporary tables is not yet supported.");
     }
-  };
+  }
 
   check_alter_table_privilege(session, td);
 
@@ -4369,14 +4999,17 @@ void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& sessi
   }
 }
 
-void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                            bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("ADD COLUMN invalid in read only mode.");
+  }
+  // TODO: Review add and drop column implementation
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
-
-  // TODO(adb): the catalog should be handling this locking.
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
-
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
           catalog, *table_, true);
@@ -4391,6 +5024,10 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         "Adding columns to a table is not supported when using the \"sort_column\" "
         "option.");
   }
+
+  // invalidate cached item
+  std::vector<int> table_key{catalog.getCurrentDB().dbId, td->tableId};
+  ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
 
   // Do not take a data write lock, as the fragmenter may call `deleteFragments`
   // during a cap operation. Note that the schema write lock will prevent concurrent
@@ -4514,14 +5151,17 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
 }
 
-void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                             bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("DROP COLUMN invalid in read only mode.");
+  }
+  // TODO: Review add and drop column implementation
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
-
-  // TODO(adb): the catalog should be handling this locking.
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
-
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
           catalog, *table_, true);
@@ -4549,6 +5189,9 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (td->nColumns <= (td->hasDeletedCol ? 3 : 2)) {
     throw std::runtime_error("Table " + *table_ + " has only one column.");
   }
+
+  // invalidate cached item
+  Executor::clearExternalCaches(false, td, catalog.getCurrentDB().dbId);
 
   catalog.getSqliteConnector().query("BEGIN TRANSACTION");
   try {
@@ -4588,24 +5231,19 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     catalog.getSqliteConnector().query("ROLLBACK TRANSACTION");
     throw;
   }
-
-  // invalidate cached items
-  std::vector<int> table_chunk_key_prefix = getTableChunkKey(td, catalog);
-
-  if (!table_chunk_key_prefix.empty()) {
-    auto table_key = boost::hash_value(table_chunk_key_prefix);
-    DeleteTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
-  } else {
-    DeleteTriggeredCacheInvalidator::invalidateCaches();
-  }
 }
 
-void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                               bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("RENAME COLUMN invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
 
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
@@ -4625,17 +5263,20 @@ void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   catalog.renameColumn(td, cd, *new_column_name_);
 }
 
-void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                  bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("ALTER TABLE invalid in read only mode.");
+  }
   enum TableParamType { MaxRollbackEpochs, Epoch, MaxRows };
   static const std::unordered_map<std::string, TableParamType> param_map = {
       {"max_rollback_epochs", TableParamType::MaxRollbackEpochs},
       {"epoch", TableParamType::Epoch},
       {"max_rows", TableParamType::MaxRows}};
-  // Below is to ensure that executor is not currently executing on table when we might be
-  // changing it's storage. Question: will/should catalog write lock take care of this?
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
@@ -4652,6 +5293,10 @@ void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session)
         "Setting parameters for a temporary table is not yet supported.");
   }
   check_alter_table_privilege(session, td);
+
+  // invalidate cached item
+  std::vector<int> table_key{catalog.getCurrentDB().dbId, td->tableId};
+  ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
 
   std::string param_name(*param_->get_name());
   boost::algorithm::to_lower(param_name);
@@ -4689,7 +5334,7 @@ void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session)
 CopyTableStmt::CopyTableStmt(std::string* t,
                              std::string* f,
                              std::list<NameValueAssign*>* o)
-    : table_(t), file_pattern_(f), success_(true) {
+    : table_(t), copy_from_source_pattern_(f), success_(true) {
   if (o) {
     for (const auto e : *o) {
       options_.emplace_back(e);
@@ -4706,61 +5351,45 @@ CopyTableStmt::CopyTableStmt(const rapidjson::Value& payload) : success_(true) {
   std::string fs = json_str(payload["filePath"]);
   // strip leading/trailing spaces/quotes/single quotes
   boost::algorithm::trim_if(fs, boost::is_any_of(" \"'`"));
-  file_pattern_ = std::make_unique<std::string>(fs);
+  copy_from_source_pattern_ = std::make_unique<std::string>(fs);
 
   parse_options(payload, options_);
 }
 
-void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                            bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("IMPORT invalid in read only mode.");
+  }
   auto importer_factory = [](Catalog_Namespace::Catalog& catalog,
                              const TableDescriptor* td,
-                             const std::string& file_path,
+                             const std::string& copy_from_source,
                              const import_export::CopyParams& copy_params)
       -> std::unique_ptr<import_export::AbstractImporter> {
-    // NOTE: if both g_enable_general_import_fsi and g_enable_parquet_import_fsi
-    // are enabled, the first takes precedence
-    if (copy_params.source_type == import_export::SourceType::kParquetFile ||
-        copy_params.source_type == import_export::SourceType::kDelimitedFile) {
-      if (g_enable_general_import_fsi) {
-        return std::make_unique<import_export::ForeignDataImporter>(
-            file_path, copy_params, td);
-      }
-    }
-    if (copy_params.source_type == import_export::SourceType::kParquetFile) {
-#ifdef ENABLE_IMPORT_PARQUET
-      if (g_enable_parquet_import_fsi) {
-        return std::make_unique<import_export::ForeignDataImporter>(
-            file_path, copy_params, td);
-      }
-#else
-      throw std::runtime_error("Parquet not supported!");
-#endif
-    }
-    return std::make_unique<import_export::Importer>(catalog, td, file_path, copy_params);
+    return import_export::create_importer(catalog, td, copy_from_source, copy_params);
   };
-  return execute(session, importer_factory);
+  return execute(session, read_only_mode, importer_factory);
 }
 
 void CopyTableStmt::execute(
     const Catalog_Namespace::SessionInfo& session,
+    bool read_only_mode,
     const std::function<std::unique_ptr<import_export::AbstractImporter>(
         Catalog_Namespace::Catalog&,
         const TableDescriptor*,
         const std::string&,
         const import_export::CopyParams&)>& importer_factory) {
-  boost::regex non_local_file_regex{R"(^\s*(s3|http|https)://.+)",
-                                    boost::regex::extended | boost::regex::icase};
-  if (!boost::regex_match(*file_pattern_, non_local_file_regex)) {
-    ddl_utils::validate_allowed_file_path(
-        *file_pattern_, ddl_utils::DataTransferType::IMPORT, true);
+  if (read_only_mode) {
+    throw std::runtime_error("COPY FROM invalid in read only mode.");
   }
 
   size_t total_time = 0;
 
   // Prevent simultaneous import / truncate (see TruncateTableStmt::execute)
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   const TableDescriptor* td{nullptr};
   std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>> td_with_lock;
@@ -4793,445 +5422,33 @@ void CopyTableStmt::execute(
                                session.get_currentUser().userLoggable() +
                                " has no insert privileges for table " + *table_ + ".");
     }
+
+    // invalidate cached item
+    Executor::clearExternalCaches(true, td, catalog.getCurrentDB().dbId);
   }
 
+  import_export::CopyParams copy_params;
+  std::vector<std::string> warnings;
+  parse_copy_params(options_, copy_params, warnings, deferred_copy_from_partitions_);
+
+  boost::regex non_local_file_regex{R"(^\s*(s3|http|https)://.+)",
+                                    boost::regex::extended | boost::regex::icase};
+  if (!boost::regex_match(*copy_from_source_pattern_, non_local_file_regex) &&
+      copy_params.source_type != import_export::SourceType::kOdbc) {
+    ddl_utils::validate_allowed_file_path(
+        *copy_from_source_pattern_, ddl_utils::DataTransferType::IMPORT, true);
+  }
   // since we'll have not only posix file names but also s3/hdfs/... url
   // we do not expand wildcard or check file existence here.
-  // from here on, file_path contains something which may be a url
-  // or a wildcard of file names;
-  std::string file_path = *file_pattern_;
-  import_export::CopyParams copy_params;
+  // from here on, copy_from_source contains something which may be a url
+  // a wildcard of file names, or a sql select statement;
+  std::string copy_from_source = *copy_from_source_pattern_;
 
-  std::vector<std::string> warnings;
-
-  if (!options_.empty()) {
-    for (auto& p : options_) {
-      if (boost::iequals(*p->get_name(), "max_reject")) {
-        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
-        if (int_literal == nullptr) {
-          throw std::runtime_error("max_reject option must be an integer.");
-        }
-        copy_params.max_reject = int_literal->get_intval();
-      } else if (boost::iequals(*p->get_name(), "buffer_size")) {
-        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
-        if (int_literal == nullptr) {
-          throw std::runtime_error("buffer_size option must be an integer.");
-        }
-        copy_params.buffer_size = int_literal->get_intval();
-      } else if (boost::iequals(*p->get_name(), "threads")) {
-        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
-        if (int_literal == nullptr) {
-          throw std::runtime_error("Threads option must be an integer.");
-        }
-        copy_params.threads = int_literal->get_intval();
-      } else if (boost::iequals(*p->get_name(), "delimiter")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Delimiter option must be a string.");
-        } else if (str_literal->get_stringval()->length() != 1) {
-          throw std::runtime_error("Delimiter must be a single character string.");
-        }
-        copy_params.delimiter = (*str_literal->get_stringval())[0];
-      } else if (boost::iequals(*p->get_name(), "nulls")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Nulls option must be a string.");
-        }
-        copy_params.null_str = *str_literal->get_stringval();
-      } else if (boost::iequals(*p->get_name(), "header")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Header option must be a boolean.");
-        }
-        copy_params.has_header = bool_from_string_literal(str_literal)
-                                     ? import_export::ImportHeaderRow::kHasHeader
-                                     : import_export::ImportHeaderRow::kNoHeader;
-#ifdef ENABLE_IMPORT_PARQUET
-      } else if (boost::iequals(*p->get_name(), "parquet")) {
-        warnings.push_back(
-            "Deprecation Warning: COPY FROM WITH (parquet='true') is deprecated. Use "
-            "WITH (source_type='parquet_file') instead.");
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("'parquet' option must be a boolean.");
-        }
-        if (bool_from_string_literal(str_literal)) {
-          // not sure a parquet "table" type is proper, but to make code
-          // look consistent in some places, let's set "table" type too
-          copy_params.source_type = import_export::SourceType::kParquetFile;
-        }
-#endif  // ENABLE_IMPORT_PARQUET
-      } else if (boost::iequals(*p->get_name(), "s3_access_key")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Option s3_access_key must be a string.");
-        }
-        copy_params.s3_access_key = *str_literal->get_stringval();
-      } else if (boost::iequals(*p->get_name(), "s3_secret_key")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Option s3_secret_key must be a string.");
-        }
-        copy_params.s3_secret_key = *str_literal->get_stringval();
-      } else if (boost::iequals(*p->get_name(), "s3_session_token")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Option s3_session_token must be a string.");
-        }
-        copy_params.s3_session_token = *str_literal->get_stringval();
-      } else if (boost::iequals(*p->get_name(), "s3_region")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Option s3_region must be a string.");
-        }
-        copy_params.s3_region = *str_literal->get_stringval();
-      } else if (boost::iequals(*p->get_name(), "s3_endpoint")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Option s3_endpoint must be a string.");
-        }
-        copy_params.s3_endpoint = *str_literal->get_stringval();
-      } else if (boost::iequals(*p->get_name(), "quote")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Quote option must be a string.");
-        } else if (str_literal->get_stringval()->length() != 1) {
-          throw std::runtime_error("Quote must be a single character string.");
-        }
-        copy_params.quote = (*str_literal->get_stringval())[0];
-      } else if (boost::iequals(*p->get_name(), "escape")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Escape option must be a string.");
-        } else if (str_literal->get_stringval()->length() != 1) {
-          throw std::runtime_error("Escape must be a single character string.");
-        }
-        copy_params.escape = (*str_literal->get_stringval())[0];
-      } else if (boost::iequals(*p->get_name(), "line_delimiter")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Line_delimiter option must be a string.");
-        } else if (str_literal->get_stringval()->length() != 1) {
-          throw std::runtime_error("Line_delimiter must be a single character string.");
-        }
-        copy_params.line_delim = (*str_literal->get_stringval())[0];
-      } else if (boost::iequals(*p->get_name(), "quoted")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Quoted option must be a boolean.");
-        }
-        copy_params.quoted = bool_from_string_literal(str_literal);
-      } else if (boost::iequals(*p->get_name(), "plain_text")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("plain_text option must be a boolean.");
-        }
-        copy_params.plain_text = bool_from_string_literal(str_literal);
-      } else if (boost::iequals(*p->get_name(), "array_marker")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Array Marker option must be a string.");
-        } else if (str_literal->get_stringval()->length() != 2) {
-          throw std::runtime_error(
-              "Array Marker option must be exactly two characters.  Default is {}.");
-        }
-        copy_params.array_begin = (*str_literal->get_stringval())[0];
-        copy_params.array_end = (*str_literal->get_stringval())[1];
-      } else if (boost::iequals(*p->get_name(), "array_delimiter")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Array Delimiter option must be a string.");
-        } else if (str_literal->get_stringval()->length() != 1) {
-          throw std::runtime_error("Array Delimiter must be a single character string.");
-        }
-        copy_params.array_delim = (*str_literal->get_stringval())[0];
-      } else if (boost::iequals(*p->get_name(), "lonlat")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Lonlat option must be a boolean.");
-        }
-        copy_params.lonlat = bool_from_string_literal(str_literal);
-      } else if (boost::iequals(*p->get_name(), "geo")) {
-        warnings.push_back(
-            "Deprecation Warning: COPY FROM WITH (geo='true') is deprecated. Use WITH "
-            "(source_type='geo_file') instead.");
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("'geo' option must be a boolean.");
-        }
-        if (bool_from_string_literal(str_literal)) {
-          copy_params.source_type = import_export::SourceType::kGeoFile;
-        }
-      } else if (boost::iequals(*p->get_name(), "source_type")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("'source_type' option must be a string.");
-        }
-        const std::string* s = str_literal->get_stringval();
-        if (boost::iequals(*s, "delimited_file")) {
-          copy_params.source_type = import_export::SourceType::kDelimitedFile;
-        } else if (boost::iequals(*s, "geo_file")) {
-          copy_params.source_type = import_export::SourceType::kGeoFile;
-#if ENABLE_IMPORT_PARQUET
-        } else if (boost::iequals(*s, "parquet_file")) {
-          copy_params.source_type = import_export::SourceType::kParquetFile;
-#endif
-        } else if (boost::iequals(*s, "raster_file")) {
-          copy_params.source_type = import_export::SourceType::kRasterFile;
-        } else {
-          throw std::runtime_error(
-              "Invalid string for 'source_type' option (must be 'GEO_FILE', 'RASTER_FILE'"
-#if ENABLE_IMPORT_PARQUET
-              ", 'PARQUET_FILE'"
-#endif
-              " or 'DELIMITED_FILE'): " +
-              *s);
-        }
-      } else if (boost::iequals(*p->get_name(), "geo_coords_type")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("'geo_coords_type' option must be a string");
-        }
-        const std::string* s = str_literal->get_stringval();
-        if (boost::iequals(*s, "geography")) {
-          throw std::runtime_error(
-              "GEOGRAPHY coords type not yet supported. Please use GEOMETRY.");
-          // copy_params.geo_coords_type = kGEOGRAPHY;
-        } else if (boost::iequals(*s, "geometry")) {
-          copy_params.geo_coords_type = kGEOMETRY;
-        } else {
-          throw std::runtime_error(
-              "Invalid string for 'geo_coords_type' option (must be 'GEOGRAPHY' or "
-              "'GEOMETRY'): " +
-              *s);
-        }
-      } else if (boost::iequals(*p->get_name(), "raster_point_type")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("'raster_point_type' option must be a string");
-        }
-        const std::string* s = str_literal->get_stringval();
-        if (boost::iequals(*s, "none")) {
-          copy_params.raster_point_type = import_export::RasterPointType::kNone;
-        } else if (boost::iequals(*s, "auto")) {
-          copy_params.raster_point_type = import_export::RasterPointType::kAuto;
-        } else if (boost::iequals(*s, "smallint")) {
-          copy_params.raster_point_type = import_export::RasterPointType::kSmallInt;
-        } else if (boost::iequals(*s, "int")) {
-          copy_params.raster_point_type = import_export::RasterPointType::kInt;
-        } else if (boost::iequals(*s, "float")) {
-          copy_params.raster_point_type = import_export::RasterPointType::kFloat;
-        } else if (boost::iequals(*s, "double")) {
-          copy_params.raster_point_type = import_export::RasterPointType::kDouble;
-        } else if (boost::iequals(*s, "point")) {
-          copy_params.raster_point_type = import_export::RasterPointType::kPoint;
-        } else {
-          throw std::runtime_error(
-              "Invalid string for 'raster_point_type' option (must be 'NONE', 'AUTO', "
-              "'SMALLINT', 'INT', 'FLOAT', 'DOUBLE' or 'POINT'): " +
-              *s);
-        }
-      } else if (boost::iequals(*p->get_name(), "raster_point_transform")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("'raster_point_transform' option must be a string");
-        }
-        const std::string* s = str_literal->get_stringval();
-        if (boost::iequals(*s, "none")) {
-          copy_params.raster_point_transform = import_export::RasterPointTransform::kNone;
-        } else if (boost::iequals(*s, "auto")) {
-          copy_params.raster_point_transform = import_export::RasterPointTransform::kAuto;
-        } else if (boost::iequals(*s, "file")) {
-          copy_params.raster_point_transform = import_export::RasterPointTransform::kFile;
-        } else if (boost::iequals(*s, "world")) {
-          copy_params.raster_point_transform =
-              import_export::RasterPointTransform::kWorld;
-        } else {
-          throw std::runtime_error(
-              "Invalid string for 'raster_point_transform' option (must be 'NONE', "
-              "'AUTO', 'FILE' or 'WORLD'): " +
-              *s);
-        }
-      } else if (boost::iequals(*p->get_name(), "raster_import_bands")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("'raster_import_bands' option must be a string");
-        }
-        const std::string* raster_import_bands = str_literal->get_stringval();
-        if (raster_import_bands) {
-          copy_params.raster_import_bands = *raster_import_bands;
-        } else {
-          throw std::runtime_error("Invalid value for 'raster_import_bands' option");
-        }
-      } else if (boost::iequals(*p->get_name(), "raster_import_dimensions")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("'raster_import_dimensions' option must be a string");
-        }
-        const std::string* raster_import_dimensions = str_literal->get_stringval();
-        if (raster_import_dimensions) {
-          copy_params.raster_import_dimensions = *raster_import_dimensions;
-        } else {
-          throw std::runtime_error("Invalid value for 'raster_import_dimensions' option");
-        }
-      } else if (boost::iequals(*p->get_name(), "geo_coords_encoding")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("'geo_coords_encoding' option must be a string");
-        }
-        const std::string* s = str_literal->get_stringval();
-        if (boost::iequals(*s, "none")) {
-          copy_params.geo_coords_encoding = kENCODING_NONE;
-          copy_params.geo_coords_comp_param = 0;
-        } else if (boost::iequals(*s, "compressed(32)")) {
-          copy_params.geo_coords_encoding = kENCODING_GEOINT;
-          copy_params.geo_coords_comp_param = 32;
-        } else {
-          throw std::runtime_error(
-              "Invalid string for 'geo_coords_encoding' option (must be 'NONE' or "
-              "'COMPRESSED(32)'): " +
-              *s);
-        }
-      } else if (boost::iequals(*p->get_name(), "raster_scanlines_per_thread")) {
-        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
-        if (int_literal == nullptr) {
-          throw std::runtime_error(
-              "'raster_scanlines_per_thread' option must be an integer");
-        }
-        const int raster_scanlines_per_thread = int_literal->get_intval();
-        if (raster_scanlines_per_thread < 0) {
-          throw std::runtime_error(
-              "'raster_scanlines_per_thread' option must be >= 0, with 0 denoting auto "
-              "sizing");
-        }
-        copy_params.raster_scanlines_per_thread = raster_scanlines_per_thread;
-      } else if (boost::iequals(*p->get_name(), "geo_coords_srid")) {
-        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
-        if (int_literal == nullptr) {
-          throw std::runtime_error("'geo_coords_srid' option must be an integer");
-        }
-        const int srid = int_literal->get_intval();
-        if (srid == 4326 || srid == 3857 || srid == 900913) {
-          copy_params.geo_coords_srid = srid;
-        } else {
-          throw std::runtime_error(
-              "Invalid value for 'geo_coords_srid' option (must be 4326, 3857, or "
-              "900913): " +
-              std::to_string(srid));
-        }
-      } else if (boost::iequals(*p->get_name(), "geo_layer_name")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("'geo_layer_name' option must be a string");
-        }
-        const std::string* layer_name = str_literal->get_stringval();
-        if (layer_name) {
-          copy_params.geo_layer_name = *layer_name;
-        } else {
-          throw std::runtime_error("Invalid value for 'geo_layer_name' option");
-        }
-      } else if (boost::iequals(*p->get_name(), "partitions")) {
-        const auto partitions =
-            static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-        CHECK(partitions);
-        const auto partitions_uc = boost::to_upper_copy<std::string>(*partitions);
-        if (partitions_uc != "REPLICATED") {
-          throw std::runtime_error(
-              "Invalid value for 'partitions' option. Must be 'REPLICATED'.");
-        }
-        deferred_copy_from_partitions_ = partitions_uc;
-      } else if (boost::iequals(*p->get_name(), "geo_assign_render_groups")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("geo_assign_render_groups option must be a boolean.");
-        }
-        copy_params.geo_assign_render_groups = bool_from_string_literal(str_literal);
-      } else if (boost::iequals(*p->get_name(), "geo_explode_collections")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("geo_explode_collections option must be a boolean.");
-        }
-        copy_params.geo_explode_collections = bool_from_string_literal(str_literal);
-      } else if (boost::iequals(*p->get_name(), "source_srid")) {
-        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
-        if (int_literal == nullptr) {
-          throw std::runtime_error("'source_srid' option must be an integer");
-        }
-        const int srid = int_literal->get_intval();
-        if (copy_params.source_type == import_export::SourceType::kDelimitedFile) {
-          copy_params.source_srid = srid;
-        } else {
-          throw std::runtime_error(
-              "'source_srid' option can only be used on csv/tsv files");
-        }
-      } else if (boost::iequals(*p->get_name(), "regex_path_filter")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Option regex_path_filter must be a string.");
-        }
-        const auto string_val = *str_literal->get_stringval();
-        copy_params.regex_path_filter =
-            string_val.empty() ? std::nullopt : std::optional<std::string>{string_val};
-      } else if (boost::iequals(*p->get_name(), "file_sort_order_by")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Option file_sort_order_by must be a string.");
-        }
-        const auto string_val = *str_literal->get_stringval();
-        copy_params.file_sort_order_by =
-            string_val.empty() ? std::nullopt : std::optional<std::string>{string_val};
-      } else if (boost::iequals(*p->get_name(), "file_sort_regex")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Option file_sort_regex must be a string.");
-        }
-        const auto string_val = *str_literal->get_stringval();
-        copy_params.file_sort_regex =
-            string_val.empty() ? std::nullopt : std::optional<std::string>{string_val};
-      } else if (boost::iequals(*p->get_name(), "raster_point_compute_angle")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error(
-              "'raster_point_compute_angle' option must be a boolean.");
-        }
-        if (bool_from_string_literal(str_literal)) {
-          copy_params.raster_point_compute_angle = true;
-        }
-      } else {
-        throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
-      }
+  if (copy_params.source_type == import_export::SourceType::kOdbc) {
+    copy_params.sql_select = copy_from_source;
+    if (copy_params.sql_order_by.empty()) {
+      throw std::runtime_error(
+          "Option \"SQL ORDER BY\" must be specified when copying from an ODBC source.");
     }
   }
 
@@ -5246,7 +5463,7 @@ void CopyTableStmt::execute(
     // geo import
     // we do nothing here, except stash the parameters so we can
     // do the import when we unwind to the top of the handler
-    deferred_copy_from_file_name_ = file_path;
+    deferred_copy_from_file_name_ = copy_from_source;
     deferred_copy_from_copy_params_ = copy_params;
     was_deferred_copy_from_ = true;
 
@@ -5264,7 +5481,7 @@ void CopyTableStmt::execute(
       CHECK(td_with_lock);
 
       // regular import
-      auto importer = importer_factory(catalog, td, file_path, copy_params);
+      auto importer = importer_factory(catalog, td, copy_from_source, copy_params);
       auto start_time = ::toString(std::chrono::system_clock::now());
       auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
       auto query_session = session.get_session_id();
@@ -5313,21 +5530,9 @@ void CopyTableStmt::execute(
       throw std::runtime_error("Table '" + *table_ + "' must exist before COPY FROM");
     }
   }
-
-  // invalidate cached items
-  std::vector<int> table_chunk_key_prefix = getTableChunkKey(td, catalog);
-
-  // invalidate cached item
-  if (!table_chunk_key_prefix.empty()) {
-    auto table_key = boost::hash_value(table_chunk_key_prefix);
-    UpdateTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
-  } else {
-    UpdateTriggeredCacheInvalidator::invalidateCaches();
-  }
-
   return_message.reset(new std::string(tr));
   LOG(INFO) << tr;
-}  // namespace Parser
+}
 
 // CREATE ROLE payroll_dept_role;
 CreateRoleStmt::CreateRoleStmt(const rapidjson::Value& payload) {
@@ -5335,7 +5540,11 @@ CreateRoleStmt::CreateRoleStmt(const rapidjson::Value& payload) {
   role_ = std::make_unique<std::string>(json_str(payload["role"]));
 }
 
-void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                             bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE ROLE invalid in read only mode.");
+  }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
     throw std::runtime_error("CREATE ROLE " + get_role() +
@@ -5356,7 +5565,11 @@ DropRoleStmt::DropRoleStmt(const rapidjson::Value& payload) {
   }
 }
 
-void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                           bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("DROP ROLE invalid in read only mode.");
+  }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
     throw std::runtime_error("DROP ROLE " + get_role() +
@@ -5582,7 +5795,11 @@ GrantPrivilegesStmt::GrantPrivilegesStmt(const rapidjson::Value& payload) {
   }
 }
 
-void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                  bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("GRANT invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
@@ -5645,7 +5862,11 @@ RevokePrivilegesStmt::RevokePrivilegesStmt(const rapidjson::Value& payload) {
   }
 }
 
-void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                   bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("REVOKE invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
@@ -5683,7 +5904,10 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
 
 // NOTE: not used currently, will we ever use it?
 // SHOW ON TABLE payroll_table FOR payroll_dept_role;
-void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                                 bool read_only_mode) {
+  // valid in read_only_mode
+
   auto& catalog = session.getCatalog();
   const auto& currentUser = session.get_currentUser();
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
@@ -5795,13 +6019,17 @@ GrantRoleStmt::GrantRoleStmt(const rapidjson::Value& payload) {
   }
 }
 
-void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                            bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("GRANT ROLE invalid in read only mode.");
+  }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
     throw std::runtime_error(
         "GRANT failed, because it can only be executed by super user.");
   }
-  if (std::find(get_grantees().begin(), get_grantees().end(), OMNISCI_ROOT_USER) !=
+  if (std::find(get_grantees().begin(), get_grantees().end(), shared::kRootUsername) !=
       get_grantees().end()) {
     throw std::runtime_error(
         "Request to grant role failed because mapd root user has all privileges by "
@@ -5828,57 +6056,23 @@ RevokeRoleStmt::RevokeRoleStmt(const rapidjson::Value& payload) {
   }
 }
 
-void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                             bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("REVOKE ROLE invalid in read only mode.");
+  }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
     throw std::runtime_error(
         "REVOKE failed, because it can only be executed by super user.");
   }
-  if (std::find(get_grantees().begin(), get_grantees().end(), OMNISCI_ROOT_USER) !=
+  if (std::find(get_grantees().begin(), get_grantees().end(), shared::kRootUsername) !=
       get_grantees().end()) {
     throw std::runtime_error(
         "Request to revoke role failed because privileges can not be revoked from "
         "mapd root user.");
   }
   SysCatalog::instance().revokeRoleBatch(get_roles(), get_grantees());
-}
-
-ShowCreateTableStmt::ShowCreateTableStmt(const rapidjson::Value& payload) {
-  CHECK(payload.HasMember("tableName"));
-  table_ = std::make_unique<std::string>(json_str(payload["tableName"]));
-}
-
-void ShowCreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  using namespace Catalog_Namespace;
-
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
-
-  auto& catalog = session.getCatalog();
-  auto table_read_lock =
-      lockmgr::TableSchemaLockMgr::getReadLockForTable(catalog, *table_);
-
-  const TableDescriptor* td = catalog.getMetadataForTable(*table_, false);
-  if (!td) {
-    throw std::runtime_error("Table/View " + *table_ + " does not exist.");
-  }
-
-  DBObject dbObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType);
-  dbObject.loadKey(catalog);
-  std::vector<DBObject> privObjects = {dbObject};
-
-  if (!SysCatalog::instance().hasAnyPrivileges(session.get_currentUser(), privObjects)) {
-    throw std::runtime_error("Table/View " + *table_ + " does not exist.");
-  }
-  if (td->isView && !session.get_currentUser().isSuper) {
-    // TODO: we need to run a validate query to ensure the user has access to the
-    // underlying table, but we do not have any of the machinery in here. Disable
-    // for now, unless the current user is a super user.
-    throw std::runtime_error("SHOW CREATE TABLE not yet supported for views");
-  }
-
-  create_stmt_ = catalog.dumpCreateTable(td);
 }
 
 ExportQueryStmt::ExportQueryStmt(const rapidjson::Value& payload) {
@@ -5897,7 +6091,9 @@ ExportQueryStmt::ExportQueryStmt(const rapidjson::Value& payload) {
   parse_options(payload, options_);
 }
 
-void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                              bool read_only_mode) {
+  // valid in read_only_mode
   auto session_copy = session;
   auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
       &session_copy, boost::null_deleter());
@@ -5905,10 +6101,8 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto stdlog = STDLOG(query_state);
   auto query_state_proxy = query_state->createQueryStateProxy();
 
-  LocalConnector local_connector;
-
   if (!leafs_connector_) {
-    leafs_connector_ = &local_connector;
+    leafs_connector_ = std::make_unique<LocalQueryConnector>();
   }
 
   import_export::CopyParams copy_params;
@@ -5927,7 +6121,8 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Invalid file path for COPY TO");
   } else if (!boost::filesystem::path(*file_path_).is_absolute()) {
     std::string file_name = boost::filesystem::path(*file_path_).filename().string();
-    std::string file_dir = g_base_path + "/mapd_export/" + session.get_session_id() + "/";
+    std::string file_dir = g_base_path + "/" + shared::kDefaultExportDirName + "/" +
+                           session.get_session_id() + "/";
     if (!boost::filesystem::exists(file_dir)) {
       if (!boost::filesystem::create_directories(file_dir)) {
         throw std::runtime_error("Directory " + file_dir + " cannot be created.");
@@ -5935,17 +6130,21 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
     *file_path_ = file_dir + file_name;
   } else {
-    // Above branch will create a new file in the mapd_export directory. If that
+    // Above branch will create a new file in the export directory. If that
     // path is not exercised, go through applicable file path validations.
     ddl_utils::validate_allowed_file_path(*file_path_,
                                           ddl_utils::DataTransferType::EXPORT);
   }
 
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
+  auto locks = acquire_query_table_locks(
+      session_ptr->getCatalog(), *select_stmt_, query_state_proxy);
 
   // get column info
+  LocalQueryConnector local_connector;
   auto column_info_result =
       local_connector.query(query_state_proxy, *select_stmt_, {}, true, false);
 
@@ -6161,7 +6360,11 @@ CreateViewStmt::CreateViewStmt(const rapidjson::Value& payload) {
   }
 }
 
-void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                             bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE VIEW invalid in read only mode.");
+  }
   auto session_copy = session;
   auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
       &session_copy, boost::null_deleter());
@@ -6184,17 +6387,18 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   // this now also ensures that access permissions are checked
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
-  const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+      false, g_enable_watchdog, {}, SysCatalog::instance().isAggregator());
   calcite_mgr->process(query_state->createQueryStateProxy(),
                        query_after_shim,
                        calciteQueryParsingOption,
                        calciteOptimizationOption);
 
   // Take write lock after the query is processed to ensure no deadlocks
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   TableDescriptor td;
   td.tableName = view_name_;
@@ -6228,12 +6432,17 @@ DropViewStmt::DropViewStmt(const rapidjson::Value& payload) {
   }
 }
 
-void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                           bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("DROP VIEW invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
 
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   const TableDescriptor* td{nullptr};
   std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>> td_with_lock;
@@ -6285,15 +6494,20 @@ CreateDBStmt::CreateDBStmt(const rapidjson::Value& payload) {
   parse_options(payload, options_);
 }
 
-void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                           bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE DATABASE invalid in read only mode.");
+  }
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error(
         "CREATE DATABASE command can only be executed by super user.");
   }
 
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   Catalog_Namespace::DBMetadata db_meta;
   if (SysCatalog::instance().getMetadataForDB(*db_name_, db_meta) && if_not_exists_) {
@@ -6330,10 +6544,15 @@ DropDBStmt::DropDBStmt(const rapidjson::Value& payload) {
   }
 }
 
-void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                         bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("DROP DATABASE invalid in read only mode.");
+  }
+  const auto execute_write_lock =
+      heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   Catalog_Namespace::DBMetadata db;
   if (!SysCatalog::instance().getMetadataForDB(*db_name_, db)) {
@@ -6374,24 +6593,26 @@ CreateUserStmt::CreateUserStmt(const rapidjson::Value& payload) {
   parse_options(payload, options_);
 }
 
-void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  std::string passwd;
-  bool is_super = false;
-  std::string default_db;
-  bool can_login = true;
+void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                             bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE USER invalid in read only mode.");
+  }
+  Catalog_Namespace::UserAlterations alts;
   for (auto& p : options_) {
     if (boost::iequals(*p->get_name(), "password")) {
       checkStringLiteral("Password", p);
-      passwd = *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+      alts.passwd = *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
     } else if (boost::iequals(*p->get_name(), "is_super")) {
       checkStringLiteral("IS_SUPER", p);
-      is_super = readBooleanLiteral("IS_SUPER", p);
+      alts.is_super = readBooleanLiteral("IS_SUPER", p);
     } else if (boost::iequals(*p->get_name(), "default_db")) {
       checkStringLiteral("DEFAULT_DB", p);
-      default_db = *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+      alts.default_db =
+          *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
     } else if (boost::iequals(*p->get_name(), "can_login")) {
       checkStringLiteral("CAN_LOGIN", p);
-      can_login = readBooleanLiteral("can_login", p);
+      alts.can_login = readBooleanLiteral("can_login", p);
     } else {
       throw std::runtime_error("Invalid CREATE USER option " + *p->get_name() +
                                ". Should be PASSWORD, IS_SUPER, CAN_LOGIN"
@@ -6401,8 +6622,7 @@ void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error("Only super user can create new users.");
   }
-  SysCatalog::instance().createUser(
-      *user_name_, passwd, is_super, default_db, can_login, false);
+  SysCatalog::instance().createUser(*user_name_, alts, /*is_temporary=*/false);
 }
 
 AlterUserStmt::AlterUserStmt(const rapidjson::Value& payload) {
@@ -6412,37 +6632,33 @@ AlterUserStmt::AlterUserStmt(const rapidjson::Value& payload) {
   parse_options(payload, options_, true, false);
 }
 
-void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                            bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("ALTER USER invalid in read only mode.");
+  }
   // Parse the statement
-  const std::string* passwd = nullptr;
-  bool is_super = false;
-  bool* is_superp = nullptr;
-  const std::string* default_db = nullptr;
-  bool can_login = true;
-  bool* can_loginp = nullptr;
+  Catalog_Namespace::UserAlterations alts;
   for (auto& p : options_) {
     if (boost::iequals(*p->get_name(), "password")) {
       checkStringLiteral("Password", p);
-      passwd = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+      alts.passwd = *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
     } else if (boost::iequals(*p->get_name(), "is_super")) {
       checkStringLiteral("IS_SUPER", p);
-      is_super = readBooleanLiteral("IS_SUPER", p);
-      is_superp = &is_super;
+      alts.is_super = readBooleanLiteral("IS_SUPER", p);
     } else if (boost::iequals(*p->get_name(), "default_db")) {
       if (dynamic_cast<const StringLiteral*>(p->get_value())) {
-        default_db = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+        alts.default_db =
+            *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
       } else if (dynamic_cast<const NullLiteral*>(p->get_value())) {
-        static std::string blank;
-        default_db = &blank;
+        alts.default_db = "";
       } else {
         throw std::runtime_error(
             "DEFAULT_DB option must be either a string literal or a NULL "
             "literal.");
       }
     } else if (boost::iequals(*p->get_name(), "can_login")) {
-      checkStringLiteral("CAN_LOGIN", p);
-      can_login = readBooleanLiteral("CAN_LOGIN", p);
-      can_loginp = &can_login;
+      alts.can_login = readBooleanLiteral("CAN_LOGIN", p);
     } else {
       throw std::runtime_error("Invalid ALTER USER option " + *p->get_name() +
                                ". Should be PASSWORD, DEFAULT_DB, CAN_LOGIN"
@@ -6458,16 +6674,13 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!session.get_currentUser().isSuper) {
     if (session.get_currentUser().userId != user.userId) {
       throw std::runtime_error("Only super user can change another user's attributes.");
-    } else if (is_superp || can_loginp) {
+    } else if (alts.is_super || alts.can_login) {
       throw std::runtime_error(
           "A user can only update their own password or default database.");
     }
   }
 
-  if (passwd || is_superp || default_db || can_loginp) {
-    SysCatalog::instance().alterUser(
-        *user_name_, passwd, is_superp, default_db, can_loginp);
-  }
+  SysCatalog::instance().alterUser(*user_name_, alts);
 }
 
 DropUserStmt::DropUserStmt(const rapidjson::Value& payload) {
@@ -6480,7 +6693,11 @@ DropUserStmt::DropUserStmt(const rapidjson::Value& payload) {
   }
 }
 
-void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                           bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("DROP USER invalid in read only mode.");
+  }
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error("Only super user can drop users.");
   }
@@ -6493,6 +6710,14 @@ void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   SysCatalog::instance().dropUser(*user_name_);
 }
 
+namespace Compress {
+const std::string sGZIP = "gzip";
+const std::string sUNGZIP = "gunzip";
+const std::string sLZ4 = "lz4";
+const std::string sUNLZ4 = "unlz4";
+const std::string sNONE = "none";
+}  // namespace Compress
+
 DumpRestoreTableStmtBase::DumpRestoreTableStmtBase(const rapidjson::Value& payload,
                                                    const bool is_restore) {
   CHECK(payload.HasMember("tableName"));
@@ -6501,6 +6726,8 @@ DumpRestoreTableStmtBase::DumpRestoreTableStmtBase(const rapidjson::Value& paylo
   CHECK(payload.HasMember("filePath"));
   path_ = std::make_unique<std::string>(json_str(payload["filePath"]));
 
+  compression_ = defaultCompression(is_restore);
+
   std::list<std::unique_ptr<NameValueAssign>> options;
   parse_options(payload, options);
 
@@ -6508,9 +6735,8 @@ DumpRestoreTableStmtBase::DumpRestoreTableStmtBase(const rapidjson::Value& paylo
     for (auto& p : options) {
       if (boost::iequals(*p->get_name(), "compression")) {
         checkStringLiteral("compression", p);
-        compression_ =
-            *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-        validateCompression(compression_, is_restore);
+        const auto str_literal = static_cast<const StringLiteral*>(p->get_value());
+        compression_ = validateCompression(*str_literal->get_stringval(), is_restore);
       }
     }
   }
@@ -6523,51 +6749,73 @@ DumpRestoreTableStmtBase::DumpRestoreTableStmtBase(const rapidjson::Value& paylo
   }
 }
 
-void DumpRestoreTableStmtBase::validateCompression(std::string& compression_type,
-                                                   const bool is_restore) {
-  // default lz4 compression, next gzip, or none.
-  if (compression_type.empty()) {
-    if (boost::process::search_path(compression_type = "gzip").string().empty()) {
-      if (boost::process::search_path(compression_type = "lz4").string().empty()) {
-        compression_type = "none";
-      }
-    }
-  } else {
-    std::vector<std::string> allowed_compression_programs{"lz4", "gzip", "none"};
-
-    const std::string lowercase_compression =
-        boost::algorithm::to_lower_copy(compression_type);
-    if (allowed_compression_programs.end() ==
-        std::find(allowed_compression_programs.begin(),
-                  allowed_compression_programs.end(),
-                  lowercase_compression)) {
-      throw std::runtime_error("Compression program " + compression_type +
-                               " is not supported.");
-    }
+// select default compression type based upon available executables
+DumpRestoreTableStmtBase::CompressionType DumpRestoreTableStmtBase::defaultCompression(
+    const bool is_restore) {
+  if (boost::process::search_path(is_restore ? Compress::sUNGZIP : Compress::sGZIP)
+          .string()
+          .size()) {
+    return CompressionType::kGZIP;
+  } else if (boost::process::search_path(is_restore ? Compress::sUNLZ4 : Compress::sLZ4)
+                 .string()
+                 .size()) {
+    return CompressionType::kLZ4;
   }
+  return CompressionType::kNONE;
+}
 
-  if (boost::iequals(compression_type, "none")) {
-    compression_type.clear();
-  } else {
-    std::map<std::string, std::string> decompression{{"lz4", "unlz4"},
-                                                     {"gzip", "gunzip"}};
-    const auto use_program =
-        is_restore ? decompression[compression_type] : compression_type;
-    const auto prog_path = boost::process::search_path(use_program);
+DumpRestoreTableStmtBase::CompressionType DumpRestoreTableStmtBase::validateCompression(
+    const std::string& compression_type,
+    const bool is_restore) {
+  // only allow ('gzip', 'lz4', 'none') compression types
+  const std::string compression = boost::algorithm::to_lower_copy(compression_type);
+
+  // verify correct compression executable is available
+  if (boost::iequals(compression, Compress::sGZIP)) {
+    const auto prog_name = is_restore ? Compress::sUNGZIP : Compress::sGZIP;
+    const auto prog_path = boost::process::search_path(prog_name);
     if (prog_path.string().empty()) {
-      throw std::runtime_error("Compression program " + use_program + " is not found.");
+      throw std::runtime_error("Compression program " + prog_name + " is not found.");
     }
-    compression_type = "--use-compress-program=" + use_program;
+    return CompressionType::kGZIP;
+
+  } else if (boost::iequals(compression, Compress::sLZ4)) {
+    const auto prog_name = is_restore ? Compress::sUNLZ4 : Compress::sLZ4;
+    const auto prog_path = boost::process::search_path(prog_name);
+    if (prog_path.string().empty()) {
+      throw std::runtime_error("Compression program " + prog_name + " is not found.");
+    }
+    return CompressionType::kLZ4;
+
+  } else if (!boost::iequals(compression, Compress::sNONE)) {
+    throw std::runtime_error("Compression program " + compression + " is not supported.");
   }
+
+  return CompressionType::kNONE;
+}
+
+// construct a valid tar option string for compression setting
+std::string DumpRestoreTableStmtBase::tarCompressionStr(CompressionType compression_type,
+                                                        const bool is_restore) {
+  if (compression_type == CompressionType::kGZIP) {
+    return "--use-compress-program=" + (is_restore ? Compress::sUNGZIP : Compress::sGZIP);
+  } else if (compression_type == CompressionType::kLZ4) {
+    return "--use-compress-program=" + (is_restore ? Compress::sUNLZ4 : Compress::sLZ4);
+  }
+  // kNONE uses "none' as a user input, but an empty string "" for tar
+  return "";
 }
 
 DumpTableStmt::DumpTableStmt(const rapidjson::Value& payload)
     : DumpRestoreTableStmtBase(payload, false) {}
 
-void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
+void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                            bool read_only_mode) {
+  // valid in read_only_mode
+  const auto execute_read_lock =
+      heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
+          *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
   auto& catalog = session.getCatalog();
   // Prevent modification of the table schema during a dump operation, while allowing
@@ -6589,19 +6837,25 @@ void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   const TableDescriptor* td = catalog.getMetadataForTable(*table_);
   TableArchiver table_archiver(&catalog);
-  table_archiver.dumpTable(td, *path_, compression_);
+  table_archiver.dumpTable(td, *path_, tarCompressionStr(compression_, false));
 }
 
 RestoreTableStmt::RestoreTableStmt(const rapidjson::Value& payload)
     : DumpRestoreTableStmtBase(payload, true) {}
 
-void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
+                               bool read_only_mode) {
+  if (read_only_mode) {
+    throw std::runtime_error("RESTORE TABLE invalid in read only mode.");
+  }
   auto& catalog = session.getCatalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table_, false);
   if (td) {
     // TODO: v1.0 simply throws to avoid accidentally overwrite target table.
     // Will add a REPLACE TABLE to explictly replace target table.
     // catalog.restoreTable(session, td, *path, compression_);
+    // TODO (yoonmin): if the above feature is delivered, we have to invalidate cached
+    // items for the table
     throw std::runtime_error("Table " + *table_ + " exists.");
   } else {
     // check access privileges
@@ -6611,11 +6865,37 @@ void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                                " will not be restored. User has no create privileges.");
     }
     TableArchiver table_archiver(&catalog);
-    table_archiver.restoreTable(session, *table_, *path_, compression_);
+    table_archiver.restoreTable(
+        session, *table_, *path_, tarCompressionStr(compression_, true));
   }
 }
 
-std::unique_ptr<Parser::DDLStmt> create_ddl_from_calcite(const std::string& query_json) {
+std::unique_ptr<Parser::Stmt> create_stmt_for_query(
+    const std::string& queryStr,
+    const Catalog_Namespace::SessionInfo& session_info) {
+  auto session_copy = session_info;
+  auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
+      &session_copy, boost::null_deleter());
+  auto query_state = query_state::QueryState::create(session_ptr, queryStr);
+  const auto& cat = session_info.getCatalog();
+  auto calcite_mgr = cat.getCalciteMgr();
+  const auto calciteQueryParsingOption =
+      calcite_mgr->getCalciteQueryParsingOption(true, false, true);
+  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+      false,
+      g_enable_watchdog,
+      {},
+      Catalog_Namespace::SysCatalog::instance().isAggregator());
+  const auto query_json = calcite_mgr
+                              ->process(query_state->createQueryStateProxy(),
+                                        pg_shim(queryStr),
+                                        calciteQueryParsingOption,
+                                        calciteOptimizationOption)
+                              .plan_result;
+  return create_stmt_for_json(query_json);
+}
+
+std::unique_ptr<Parser::Stmt> create_stmt_for_json(const std::string& query_json) {
   CHECK(!query_json.empty());
   VLOG(2) << "Parsing JSON DDL from Calcite: " << query_json;
   rapidjson::Document ddl_query;
@@ -6629,7 +6909,7 @@ std::unique_ptr<Parser::DDLStmt> create_ddl_from_calcite(const std::string& quer
 
   const auto& ddl_command = std::string_view(payload["command"].GetString());
 
-  Parser::DDLStmt* stmt = nullptr;
+  Parser::Stmt* stmt = nullptr;
   if (ddl_command == "CREATE_TABLE") {
     stmt = new Parser::CreateTableStmt(payload);
   } else if (ddl_command == "DROP_TABLE") {
@@ -6651,8 +6931,6 @@ std::unique_ptr<Parser::DDLStmt> create_ddl_from_calcite(const std::string& quer
     stmt = new Parser::RestoreTableStmt(payload);
   } else if (ddl_command == "OPTIMIZE_TABLE") {
     stmt = new Parser::OptimizeTableStmt(payload);
-  } else if (ddl_command == "SHOW_CREATE_TABLE") {
-    stmt = new Parser::ShowCreateTableStmt(payload);
   } else if (ddl_command == "COPY_TABLE") {
     stmt = new Parser::CopyTableStmt(payload);
   } else if (ddl_command == "EXPORT_QUERY") {
@@ -6695,15 +6973,17 @@ std::unique_ptr<Parser::DDLStmt> create_ddl_from_calcite(const std::string& quer
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }
-  return std::unique_ptr<Parser::DDLStmt>(stmt);
+  return std::unique_ptr<Parser::Stmt>(stmt);
 }
 
-void execute_ddl_from_calcite(
+void execute_stmt_for_json(
     const std::string& query_json,
-    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr) {
-  std::unique_ptr<Parser::DDLStmt> stmt = create_ddl_from_calcite(query_json);
-  if (stmt != nullptr) {
-    (*stmt).execute(*session_ptr);
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr,
+    bool read_only_mode) {
+  std::unique_ptr<Parser::Stmt> stmt = create_stmt_for_json(query_json);
+  auto ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
+  if (ddl != nullptr) {
+    (*ddl).execute(*session_ptr, read_only_mode);
   }
 }
 

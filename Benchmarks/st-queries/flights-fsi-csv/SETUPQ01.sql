@@ -51,4 +51,4 @@ dest_state TEXT ENCODING DICT(8),
 dest_country TEXT ENCODING DICT(8),
 dest_lat FLOAT,
 dest_lon FLOAT
-) SERVER omnisci_local_csv WITH ( file_path = '##FILE##', header = 'false')
+) SERVER default_local_delimited WITH ( file_path = '##FILE##', header = 'false')

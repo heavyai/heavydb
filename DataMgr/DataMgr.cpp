@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 /**
  * @file    DataMgr.cpp
- * @author Todd Mostak <todd@mapd.com>
+ * @brief
  */
 
 #include "DataMgr/DataMgr.h"
@@ -303,15 +303,17 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
 void DataMgr::convertDB(const std::string basePath) {
   // no need for locking, as this is only called in the constructor
 
-  /* check that "mapd_data" directory exists and it's empty */
-  std::string mapdDataPath(basePath + "/../mapd_data/");
+  /* check that the data directory exists and it's empty */
+  std::string mapdDataPath(basePath + "/../" + shared::kDataDirectoryName + "/");
   boost::filesystem::path path(mapdDataPath);
   if (boost::filesystem::exists(path)) {
     if (!boost::filesystem::is_directory(path)) {
-      LOG(FATAL) << "Path to directory mapd_data to convert DB is not a directory.";
+      LOG(FATAL) << "Path to directory \"" + shared::kDataDirectoryName +
+                        "\" to convert DB is not a directory.";
     }
   } else {  // data directory does not exist
-    LOG(FATAL) << "Path to directory mapd_data to convert DB does not exist.";
+    LOG(FATAL) << "Path to directory \"" + shared::kDataDirectoryName +
+                      "\" to convert DB does not exist.";
   }
 
   File_Namespace::GlobalFileMgr* gfm{nullptr};
@@ -521,15 +523,6 @@ AbstractBuffer* DataMgr::alloc(const MemoryLevel memoryLevel,
   const auto level = static_cast<int>(memoryLevel);
   CHECK_LT(deviceId, levelSizes_[level]);
   return bufferMgrs_[level][deviceId]->alloc(numBytes);
-}
-
-std::unique_ptr<DeviceAllocator> DataMgr::createGpuAllocator(int device_id) {
-#ifdef HAVE_CUDA
-  return std::make_unique<CudaAllocator>(this, device_id);
-#else
-  UNREACHABLE();
-  return nullptr;  // avoid warning/error
-#endif
 }
 
 void DataMgr::free(AbstractBuffer* buffer) {

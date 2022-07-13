@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,15 @@
 
 /**
  * @file    Types.h
- * @author  Alex Baden <alex.baden@omnisci.com>
  * @brief   Catch-all for publicly accessible types utilized in various Query Engine
  * Descriptors
+ *
  */
 
 #pragma once
+
+#include <ostream>
+#include <sstream>
 
 enum class QueryDescriptionType {
   GroupByPerfectHash,
@@ -31,3 +34,35 @@ enum class QueryDescriptionType {
   NonGroupedAggregate,
   Estimator
 };
+
+inline std::ostream& operator<<(std::ostream& os, const QueryDescriptionType& type) {
+  switch (type) {
+    case QueryDescriptionType::GroupByPerfectHash:
+      os << "GroupByPerfectHash";
+      break;
+    case QueryDescriptionType::GroupByBaselineHash:
+      os << "GroupByBaselineHash";
+      break;
+    case QueryDescriptionType::Projection:
+      os << "Projection";
+      break;
+    case QueryDescriptionType::TableFunction:
+      os << "TableFunction";
+      break;
+    case QueryDescriptionType::NonGroupedAggregate:
+      os << "NonGroupedAggregate";
+      break;
+    case QueryDescriptionType::Estimator:
+      os << "Estimator";
+      break;
+    default:
+      os << "Unknown QueryDescriptionType";
+  }
+  return os;
+}
+
+inline std::string toString(const QueryDescriptionType& type) {
+  std::ostringstream ss;
+  ss << type;
+  return ss.str();
+}

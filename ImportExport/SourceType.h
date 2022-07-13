@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@
 
 /**
  * @file    SourceType.h
- * @author  Simon Eves <simon.eves@omnisci.com>
  * @brief   Shared Enum
  *
  */
+
 #pragma once
 
 namespace import_export {
@@ -30,7 +30,9 @@ enum class SourceType {
   kDelimitedFile,
   kGeoFile,
   kRasterFile,
-  kParquetFile
+  kParquetFile,
+  kOdbc,
+  kRegexParsedFile,
 };
 
 }  // namespace import_export

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
-/*
- * File:   RenderHandler.h
- * Author: Chris Root
+/**
+ * @file   RenderHandler.h
+ * @brief
  *
- * Created on Dec 18, 2019, 10:00 AM
  */
 
 #pragma once
 
 #include "Shared/SystemParameters.h"
-#include "gen-cpp/OmniSci.h"
+#include "gen-cpp/Heavy.h"
 
 class DBHandler;
 
@@ -53,7 +52,6 @@ class RenderHandler {
                          const bool compositor_use_last_gpu,
                          const bool enable_auto_clear_render_mem,
                          const int render_oom_retry_threshold,
-                         const bool renderer_use_vulkan_driver,
                          const bool renderer_use_ppll_polys,
                          const bool renderer_prefer_igpu,
                          const uint32_t renderer_vulkan_timeout_ms,

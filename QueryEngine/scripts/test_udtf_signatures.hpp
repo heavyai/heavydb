@@ -112,5 +112,8 @@
                int32_t y | require="x > 0" | require="y > 0") ->
                Column<int32_t>, Column<int32_t> $=>$
         foo_38(TableFunctionManager, Cursor<ColumnInt32 | name=a, ColumnListFloat | name=b> | fields=[a,b], Int32 | name=x, Int32 | name=y | require="x > 0" | require="y > 0") -> ColumnInt32, ColumnInt32
+
+  UDTF: foo_39(TableFunctionManager) -> Column<TextEncodingDict> new_dict | input_id=args<> $=>$
+        foo_39(TableFunctionManager) -> ColumnTextEncodingDict | name=new_dict | input_id=args<-1>
  */
 // clang-format on

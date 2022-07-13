@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #ifndef THRIFT_TYPE_CONVERT_H
 #define THRIFT_TYPE_CONVERT_H
 
-#include "gen-cpp/omnisci_types.h"
+#include "gen-cpp/heavy_types.h"
 
 #include "Logger/Logger.h"
 
@@ -64,6 +64,8 @@ inline TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
       return TDatumType::POINT;
     case kLINESTRING:
       return TDatumType::LINESTRING;
+    case kMULTILINESTRING:
+      return TDatumType::MULTILINESTRING;
     case kPOLYGON:
       return TDatumType::POLYGON;
     case kMULTIPOLYGON:
@@ -112,6 +114,8 @@ inline SQLTypes thrift_to_type(const TDatumType::type& type) {
       return kPOINT;
     case TDatumType::LINESTRING:
       return kLINESTRING;
+    case TDatumType::MULTILINESTRING:
+      return kMULTILINESTRING;
     case TDatumType::POLYGON:
       return kPOLYGON;
     case TDatumType::MULTIPOLYGON:

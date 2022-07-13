@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,7 @@
 
 /**
  * @file	FileMgr.h
- * @author	Steven Stewart <steve@map-d.com>
- * @author	Todd Mostak <todd@map-d.com>
+ * @brief
  *
  * This file includes the class specification for the FILE manager (FileMgr), and related
  * data structures and types.
@@ -39,7 +38,7 @@
 #include "DataMgr/FileMgr/FileInfo.h"
 #include "DataMgr/FileMgr/Page.h"
 #include "Fragmenter/FragmentDefaultValues.h"
-#include "Shared/mapd_shared_mutex.h"
+#include "Shared/heavyai_shared_mutex.h"
 
 using namespace Data_Namespace;
 
@@ -260,6 +259,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                        const ChunkKey& keyPrefix) override;
 
+  bool hasChunkMetadataForKeyPrefix(const ChunkKey& keyPrefix);
+
   /**
    * @brief Fsyncs data files, writes out epoch and
    * fsyncs that
@@ -379,6 +380,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
   static void setNumPagesPerDataFile(size_t num_pages);
   static void setNumPagesPerMetadataFile(size_t num_pages);
 
+  static void renameAndSymlinkLegacyFiles(const std::string& table_data_dir);
+
   static constexpr char LEGACY_EPOCH_FILENAME[] = "epoch";
   static constexpr char EPOCH_FILENAME[] = "epoch_metadata";
   static constexpr char DB_META_FILENAME[] = "dbmeta";
@@ -401,13 +404,13 @@ class FileMgr : public AbstractBufferMgr {  // implements
   int32_t db_version_;   /// DB version from dbmeta file, should be compatible with
                          /// GlobalFileMgr::omnisci_db_version_
   int32_t fileMgrVersion_;
-  const int32_t latestFileMgrVersion_{1};
+  const int32_t latestFileMgrVersion_{2};
   FILE* DBMetaFile_ = nullptr;  /// pointer to DB level metadata
   std::mutex getPageMutex_;
-  mutable mapd_shared_mutex chunkIndexMutex_;
-  mutable mapd_shared_mutex files_rw_mutex_;
+  mutable heavyai::shared_mutex chunkIndexMutex_;
+  mutable heavyai::shared_mutex files_rw_mutex_;
 
-  mutable mapd_shared_mutex mutex_free_page_;
+  mutable heavyai::shared_mutex mutex_free_page_;
   std::vector<std::pair<FileInfo*, int32_t>> free_pages_;
   bool isFullyInitted_{false};
 
@@ -457,6 +460,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
   // Migration functions
   void migrateToLatestFileMgrVersion();
   void migrateEpochFileV0();
+  void migrateLegacyFilesV1();
 
   OpenFilesResult openFiles();
 
@@ -494,8 +498,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
   virtual ChunkKeyToChunkMap::iterator deleteBufferUnlocked(
       const ChunkKeyToChunkMap::iterator chunk_it,
       const bool purge = true);
-  virtual FileBuffer* getBufferUnlocked(const ChunkKeyToChunkMap::iterator chunk_it,
-                                        const size_t numBytes = 0);
+  virtual FileBuffer* getBufferUnlocked(const ChunkKey& key,
+                                        const size_t numBytes = 0) const;
 
  private:
   void rollOffOldData(const int32_t epochCeiling, const bool shouldCheckpoint);

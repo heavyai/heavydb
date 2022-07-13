@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 package com.mapd.tests;
-
-import com.omnisci.thrift.server.TOmniSciException;
-import com.omnisci.thrift.server.TQueryInfo;
 
 import org.checkerframework.checker.units.qual.A;
 import org.slf4j.Logger;
@@ -33,6 +30,9 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 
+import ai.heavy.thrift.server.TDBException;
+import ai.heavy.thrift.server.TQueryInfo;
+
 public class RuntimeInterruptConcurrencyTest {
   final static Logger logger =
           LoggerFactory.getLogger(RuntimeInterruptConcurrencyTest.class);
@@ -48,16 +48,16 @@ public class RuntimeInterruptConcurrencyTest {
     return path_obj;
   }
 
-  private MapdTestClient getClient(String db, String username) {
+  private HeavyDBTestClient getClient(String db, String username) {
     try {
-      return MapdTestClient.getClient("localhost", 6274, db, username, "password");
+      return HeavyDBTestClient.getClient("localhost", 6274, db, username, "password");
     } catch (Exception e) {
       e.printStackTrace();
     }
     return null;
   }
 
-  private void cleanupUserAndDB(MapdTestClient su) {
+  private void cleanupUserAndDB(HeavyDBTestClient su) {
     try {
       su.runSql("DROP DATABASE db1;");
       su.runSql("DROP USER u0;");
@@ -97,12 +97,12 @@ public class RuntimeInterruptConcurrencyTest {
     Path geojson_table_path = getAbsolutePath(
             "../java/utility/src/main/java/com/mapd/tests/data/geogdal.geojson");
     try {
-      MapdTestClient dba =
-              MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
+      HeavyDBTestClient dba =
+              HeavyDBTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
       dba.runSql("CREATE TABLE " + large_table + "(x int not null);");
       dba.runSql("CREATE TABLE " + small_table + "(x int not null);");
       dba.runSql("CREATE TABLE " + geo_table
-              + "(trip DOUBLE, omnisci_geo GEOMETRY(POINT, 4326) ENCODING NONE);");
+              + "(trip DOUBLE, pt GEOMETRY(POINT, 4326) ENCODING NONE);");
 
       File large_data = new File(large_table_path.toString());
       try (BufferedWriter writer = new BufferedWriter(new FileWriter(large_data))) {
@@ -192,7 +192,7 @@ public class RuntimeInterruptConcurrencyTest {
         // try to interrupt
         int tid = INTERRUPTER_TID;
         String logPrefix = "[" + tid + "]";
-        MapdTestClient interrupter = getClient(db, "interrupter");
+        HeavyDBTestClient interrupter = getClient(db, "interrupter");
         int check_empty_session_queue = 0;
         while (true) {
           try {
@@ -243,7 +243,7 @@ public class RuntimeInterruptConcurrencyTest {
             @Override
             public void run() {
               logger.info("Starting thread-" + tid);
-              final MapdTestClient user = getClient(db, user_name);
+              final HeavyDBTestClient user = getClient(db, user_name);
               for (int k = 0; k < 5; k++) {
                 boolean interrupted = false;
                 for (int q = 0; q < 3; q++) {
@@ -251,8 +251,8 @@ public class RuntimeInterruptConcurrencyTest {
                     logger.info(logPrefix + " Run SELECT query: " + queries[q]);
                     user.runSql(queries[q]);
                   } catch (Exception e2) {
-                    if (e2 instanceof TOmniSciException) {
-                      TOmniSciException ee = (TOmniSciException) e2;
+                    if (e2 instanceof TDBException) {
+                      TDBException ee = (TDBException) e2;
                       if (q == 2 && ee.error_msg.contains("ERR_INTERRUPTED")) {
                         interrupted = true;
                         logger.info(
@@ -275,7 +275,7 @@ public class RuntimeInterruptConcurrencyTest {
             @Override
             public void run() {
               logger.info("Starting thread-" + tid);
-              final MapdTestClient user = getClient(db, user_name);
+              final HeavyDBTestClient user = getClient(db, user_name);
               for (int k = 0; k < 2; k++) {
                 boolean interrupted = false;
                 try {
@@ -285,8 +285,8 @@ public class RuntimeInterruptConcurrencyTest {
                           + "' WITH (geo='true');");
                   logger.info(logPrefix + " Run Import query");
                 } catch (Exception e2) {
-                  if (e2 instanceof TOmniSciException) {
-                    TOmniSciException ee = (TOmniSciException) e2;
+                  if (e2 instanceof TDBException) {
+                    TDBException ee = (TDBException) e2;
                     if (ee.error_msg.contains("error code 10")) {
                       interrupted = true;
                       logger.info(logPrefix + " Import query has been interrupted");
@@ -312,8 +312,8 @@ public class RuntimeInterruptConcurrencyTest {
       t.join();
     }
 
-    MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
+    HeavyDBTestClient dba =
+            HeavyDBTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
     dba.runSql("DROP TABLE " + large_table + ";");
     dba.runSql("DROP TABLE " + small_table + ";");
     dba.runSql("DROP TABLE " + geo_table + ";");
@@ -334,8 +334,8 @@ public class RuntimeInterruptConcurrencyTest {
   public void testConcurrency() throws Exception {
     logger.info("RuntimeInterruptConcurrencyTest()");
 
-    MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
+            "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     cleanupUserAndDB(su);
     su.runSql("CREATE DATABASE db1;");
     su.runSql("CREATE USER u0 (password = 'password', is_super = 'false');");

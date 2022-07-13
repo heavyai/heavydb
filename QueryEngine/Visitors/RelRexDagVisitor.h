@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-/*
- * @description Visit all RelAlgNode and RexScalar nodes in a RA/Rex DAG.
+/**
+ * @file    RelRexDagVistor.h
+ * @brief   Visit all RelAlgNode and RexScalar nodes in a RA/Rex DAG.
  * How to use:
  * 1) Inherit from RelRexDagVisitor as a public interface.
       Don't forget to add using RelRexDagVisitor::visit.
@@ -26,7 +27,7 @@
 
 #pragma once
 
-#include "../RelAlgDagBuilder.h"
+#include "../RelAlgDag.h"
 #include "TypeHandler.h"
 
 #include <array>
@@ -34,7 +35,7 @@
 class RelRexDagVisitor {
  public:
   virtual ~RelRexDagVisitor() = default;
-  void visit(RelAlgNode const*);
+  virtual void visit(RelAlgNode const*);
   virtual void visit(RexScalar const*);
 
  protected:
@@ -61,6 +62,8 @@ class RelRexDagVisitor {
   virtual void visit(RexRef const*) {}
   virtual void visit(RexSubQuery const*);
   virtual void visit(RexWindowFunctionOperator const*);
+
+  void castAndVisit(RelAlgNode const*);
 
  private:
   template <typename T, typename U>

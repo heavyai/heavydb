@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,14 @@
  * limitations under the License.
  */
 
-#include "GpuMemUtils.h"
+#ifdef HAVE_CUDA
+#include <cuda.h>
+CUstream getQueryEngineCudaStreamForDevice(int device_num);
+#endif  // HAVE_CUDA
+
 #include "DataMgr/Allocators/DeviceAllocator.h"
 #include "GpuInitGroups.h"
+#include "GpuMemUtils.h"
 #include "Logger/Logger.h"
 #include "StreamingTopN.h"
 
@@ -33,17 +38,22 @@ void copy_to_nvidia_gpu(Data_Namespace::DataMgr* data_mgr,
                         const size_t num_bytes,
                         const int device_id) {
 #ifdef HAVE_CUDA
+  auto qe_cuda_stream = getQueryEngineCudaStreamForDevice(device_id);
   if (!data_mgr) {  // only for unit tests
-    cuMemcpyHtoD(dst, src, num_bytes);
+    checkCudaErrors(cuMemcpyHtoDAsync(dst, src, num_bytes, qe_cuda_stream));
+    checkCudaErrors(cuStreamSynchronize(qe_cuda_stream));
     return;
   }
-#endif  // HAVE_CUDA
   const auto cuda_mgr = data_mgr->getCudaMgr();
   CHECK(cuda_mgr);
   cuda_mgr->copyHostToDevice(reinterpret_cast<int8_t*>(dst),
                              static_cast<const int8_t*>(src),
                              num_bytes,
-                             device_id);
+                             device_id,
+                             qe_cuda_stream);
+#else
+  CHECK(false);
+#endif  // HAVE_CUDA
 }
 
 namespace {
@@ -287,11 +297,13 @@ void copy_projection_buffer_from_gpu_columnar(
     int8_t* projection_buffer,
     const size_t projection_count,
     const int device_id) {
+#ifdef HAVE_CUDA
   CHECK(query_mem_desc.didOutputColumnar());
   CHECK(query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection);
   constexpr size_t row_index_width = sizeof(int64_t);
 
-  auto allocator = data_mgr->createGpuAllocator(device_id);
+  auto allocator = std::make_unique<CudaAllocator>(
+      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   // copy all the row indices back to the host
   allocator->copyFromDevice(
       projection_buffer, gpu_group_by_buffers.data, projection_count * row_index_width);
@@ -308,4 +320,7 @@ void copy_projection_buffer_from_gpu_columnar(
       buffer_offset_cpu += align_to_int64(column_proj_size);
     }
   }
+#else
+  CHECK(false);
+#endif  // HAVE_CUDA
 }

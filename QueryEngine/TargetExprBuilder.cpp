@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 /**
  * @file    TargetExprBuilder.cpp
- * @author  Alex Baden <alex.baden@omnisci.com>
  * @brief   Helpers for codegen of target expressions
+ *
  */
 
 #include "TargetExprBuilder.h"
@@ -576,7 +576,9 @@ void TargetExprCodegen::codegenAggregate(
       }
     }
     const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
-    if (window_func && window_function_requires_peer_handling(window_func)) {
+    // window function with framing has a different code path and codegen logic
+    if (window_func && !window_func->hasFraming() &&
+        window_function_requires_peer_handling(window_func)) {
       const auto window_func_context =
           WindowProjectNodeContext::getActiveWindowFunctionContext(executor);
       const auto pending_outputs =

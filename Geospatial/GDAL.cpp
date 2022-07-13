@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
 
 #include <boost/filesystem.hpp>
 #include "Logger/Logger.h"
-#include "OSDependent/omnisci_path.h"
+#include "OSDependent/heavyai_path.h"
 #include "Shared/scope.h"
 
 #ifdef _WIN32
@@ -74,17 +74,17 @@ void GDAL::init() {
 #ifdef _WIN32
     _putenv_s(
         "GDAL_DATA",
-        std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data").c_str());
+        std::string(heavyai::get_root_abs_path() + "/ThirdParty/gdal-data").c_str());
     _putenv_s(
         "PROJ_LIB",
-        std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data/proj").c_str());
+        std::string(heavyai::get_root_abs_path() + "/ThirdParty/gdal-data/proj").c_str());
 #else
     setenv("GDAL_DATA",
-           std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data").c_str(),
+           std::string(heavyai::get_root_abs_path() + "/ThirdParty/gdal-data").c_str(),
            true);
     setenv(
         "PROJ_LIB",
-        std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data/proj").c_str(),
+        std::string(heavyai::get_root_abs_path() + "/ThirdParty/gdal-data/proj").c_str(),
         true);
 #endif
 

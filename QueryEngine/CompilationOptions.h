@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,17 @@
 #define QUERYENGINE_COMPILATIONOPTIONS_H
 
 #include <vector>
+#ifndef __CUDACC__
+#include <ostream>
+#endif
 
-enum class ExecutorDeviceType { CPU, GPU };
+enum class ExecutorDeviceType { CPU = 0, GPU };
+#ifndef __CUDACC__
+inline std::ostream& operator<<(std::ostream& os, ExecutorDeviceType const dt) {
+  constexpr char const* strings[]{"CPU", "GPU"};
+  return os << strings[static_cast<int>(dt)];
+}
+#endif
 
 enum class ExecutorOptLevel { Default, ReductionJIT };
 
@@ -66,6 +75,7 @@ enum class ExecutorType { Native, Extern, TableFunctions };
 
 struct ExecutionOptions {
   bool output_columnar_hint;
+  bool keep_result;
   bool allow_multifrag;
   bool just_explain;  // return the generated IR for the first step
   bool allow_loop_joins;
@@ -85,6 +95,7 @@ struct ExecutionOptions {
 
   static ExecutionOptions defaults() {
     return ExecutionOptions{/*output_columnar_hint=*/false,
+                            /*keep_result=*/false,
                             /*allow_multifrag=*/true,
                             /*just_explain=*/false,
                             /*allow_loop_joins=*/false,

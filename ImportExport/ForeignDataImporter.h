@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,9 +34,13 @@ class ForeignDataImporter : public AbstractImporter {
    */
   ImportStatus import(const Catalog_Namespace::SessionInfo* session_info) override;
 
+  static void setDefaultImportPath(const std::string& base_path);
+
+  // This parameter is publicly exposed for testing purposes only
+  static int32_t proxy_foreign_table_fragment_size_;
+
  protected:
-  std::unique_ptr<Fragmenter_Namespace::InsertDataLoader::DistributedConnector>
-      connector_;
+  std::unique_ptr<Fragmenter_Namespace::InsertDataLoader::InsertConnector> connector_;
 
  private:
   void finalize(const Catalog_Namespace::SessionInfo& parent_session_info,
@@ -44,16 +48,24 @@ class ForeignDataImporter : public AbstractImporter {
                 const std::vector<std::pair<const ColumnDescriptor*, StringDictionary*>>&
                     string_dictionaries);
 
+  void finalize(const Catalog_Namespace::SessionInfo& parent_session_info,
+                ImportStatus& import_status,
+                const int32_t table_id);
+
 #ifdef ENABLE_IMPORT_PARQUET
   ImportStatus importParquet(const Catalog_Namespace::SessionInfo* session_info);
 #endif
 
   ImportStatus importGeneral(const Catalog_Namespace::SessionInfo* session_info);
+  ImportStatus importGeneral(const Catalog_Namespace::SessionInfo* session_info,
+                             const std::string& copy_from_source,
+                             const CopyParams& copy_params);
 
-  std::string file_path_;
+  ImportStatus importGeneralS3(const Catalog_Namespace::SessionInfo* session_info);
+
+  std::string copy_from_source_;
   CopyParams copy_params_;
   const TableDescriptor* table_;
-
-  const static int32_t proxy_foreign_table_fragment_size_;
+  inline static std::string default_import_path_;
 };
 }  // namespace import_export

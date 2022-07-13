@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -168,15 +168,12 @@ class TableFunction {
 
   int32_t countScalarArgs() const;
 
-  auto getInputsSize() const { return input_args_.size(); }
-  auto getOutputsSize() const { return output_args_.size(); }
+  size_t getInputsSize() const { return input_args_.size(); }
+  size_t getOutputsSize() const { return output_args_.size(); }
 
   std::string getName(const bool drop_suffix = false, const bool lower = false) const;
 
-  auto getSignature() const {
-    return getName(/*drop_suffix=*/true, /*lower=*/true) + "(" +
-           ExtensionFunctionsWhitelist::toString(input_args_) + ")";
-  }
+  std::string getSignature(const bool include_name, const bool include_output) const;
 
   bool hasCompileTimeOutputSizeConstant() const {
     return output_sizer_.type == OutputBufferSizeType::kConstant;
@@ -227,6 +224,16 @@ class TableFunction {
     return output_sizer_.type == OutputBufferSizeType::kUserSpecifiedRowMultiplier;
   }
 
+  bool mayRequireCastingInputTypes() const {
+    for (auto& input : input_args_) {
+      if (input == ExtArgumentType::Timestamp ||
+          input == ExtArgumentType::ColumnTimestamp) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   OutputBufferSizeType getOutputRowSizeType() const { return output_sizer_.type; }
 
   size_t getOutputRowSizeParameter() const { return output_sizer_.val; }
@@ -234,13 +241,24 @@ class TableFunction {
   bool containsPreFlightFn() const;
   std::string getPreFlightFnName() const;
 
-  const std::map<std::string, std::string>& getAnnotation(const size_t idx) const;
-  const std::map<std::string, std::string>& getInputAnnotation(
+  const std::map<std::string, std::string> getAnnotations(const size_t idx) const;
+  const std::map<std::string, std::string> getInputAnnotations(
       const size_t input_arg_idx) const;
-  const std::map<std::string, std::string>& getOutputAnnotation(
+  const std::string getInputAnnotation(const size_t input_arg_idx,
+                                       const std::string& key,
+                                       const std::string& default_) const;
+  const std::map<std::string, std::string> getOutputAnnotations(
       const size_t output_arg_idx) const;
-  const std::map<std::string, std::string>& getFunctionAnnotation() const;
+  const std::string getOutputAnnotation(const size_t output_arg_idx,
+                                        const std::string& key,
+                                        const std::string& default_) const;
+  const std::string getFunctionAnnotation(const std::string& key,
+                                          const std::string& default_) const;
+  const std::map<std::string, std::string> getFunctionAnnotations() const;
 
+  const std::vector<std::string> getCursorFields(const size_t sql_idx) const;
+  const std::string getArgTypes(const bool use_input_args) const;
+  const std::string getArgNames(const bool use_input_args) const;
   std::pair<int32_t, int32_t> getInputID(const size_t idx) const;
 
   size_t getSqlOutputRowSizeParameter() const;
@@ -266,9 +284,9 @@ class TableFunction {
     return val;
   }
 
-  bool isRuntime() const { return is_runtime_; }
+  inline bool isRuntime() const { return is_runtime_; }
 
-  bool usesManager() const { return uses_manager_; }
+  inline bool usesManager() const { return uses_manager_; }
 
   inline bool isGPU() const {
     return !usesManager() && (name_.find("_cpu_", name_.find("__")) == std::string::npos);
@@ -341,7 +359,9 @@ class TableFunctionsFactory {
 
   static std::vector<TableFunction> get_table_funcs(const std::string& name,
                                                     const bool is_gpu);
-  static std::vector<TableFunction> get_table_funcs(const bool is_runtime = false);
+  static std::vector<TableFunction> get_table_funcs(const std::string& name);
+  static std::vector<TableFunction> get_table_funcs(const bool is_runtime);
+  static std::vector<TableFunction> get_table_funcs();
   static void init();
   static void reset();
 

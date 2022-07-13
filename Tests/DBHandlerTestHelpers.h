@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,13 +20,17 @@
 #define BASE_PATH "./tmp"
 #endif
 
-#include <gtest/gtest.h>
-#include <boost/format.hpp>
-#include <boost/optional.hpp>
-
 #include "Catalog/Catalog.h"
 #include "QueryRunner/TestProcessSignalHandler.h"
+#include "Shared/clean_boost_regex.hpp"
 #include "ThriftHandler/DBHandler.h"
+
+#include <gtest/gtest.h>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/regex.hpp>
+#include <boost/format.hpp>
+#include <boost/optional.hpp>
+#include <boost/program_options.hpp>
 
 constexpr int64_t True = 1;
 constexpr int64_t False = 0;
@@ -34,10 +38,87 @@ constexpr void* Null = nullptr;
 constexpr int64_t Null_i = NULL_INT;
 
 using NullableTargetValue = boost::variant<TargetValue, void*>;
+using ExpectedResult = std::vector<std::vector<NullableTargetValue>>;
+namespace po = boost::program_options;
 
 extern size_t g_leaf_count;
 extern bool g_cluster;
 extern bool g_enable_system_tables;
+
+namespace {
+using ColumnPair = std::pair<std::string, std::string>;
+
+std::vector<std::string> split_on_regex(const std::string& in, const std::string& regex) {
+  std::vector<std::string> tokens;
+  boost::split_regex(tokens, in, boost::regex{regex});
+  return tokens;
+}
+
+std::vector<ColumnPair> schema_string_to_pairs(const std::string& schema) {
+  auto schema_list = split_on_regex(schema, ",\\s+");
+  std::vector<ColumnPair> result;
+  for (const auto& token : schema_list) {
+    auto tokens = split_on_regex(token, "\\s+");
+    if (tokens[0] == "shard" &&
+        tokens[1].substr(0, 3) == "key") {  // skip `shard key` specifier
+      continue;
+    }
+    CHECK(tokens.size() >= 2);
+    result.push_back({tokens[0], tokens[1]});
+  }
+  return result;
+}
+
+boost::regex make_regex(const std::string& pattern) {
+  std::string whitespace_wrapper = "\\s*" + pattern + "\\s*";
+  return boost::regex(whitespace_wrapper, boost::regex::icase);
+}
+
+const std::map<std::string, std::map<boost::regex, std::string>>
+    k_rdms_column_type_substitutes = {
+        {"sqlite",
+         {{make_regex("DECIMAL\\s*\\(\\d+,\\s*\\d+\\)\\s*(\\[\\d*\\])?"), "double"},
+          {make_regex("FLOAT"), "double"}}},
+        {"postgres",
+         {{make_regex("FLOAT"), "real"},
+          {make_regex("DOUBLE"), "double precision"},
+          {make_regex("TINYINT"), "smallint"},
+          {make_regex("TIME\\b"), "time(0)"},
+          {make_regex("TIMESTAMP"), "timestamp(0)"},
+          {make_regex("TIMESTAMP\\s*\\(6\\)"), "timestamp"},
+          {make_regex("POINT"), "geometry"},
+          {make_regex("LINESTRING"), "geometry"},
+          {make_regex("POLYGON"), "geometry"},
+          {make_regex("MULTIPOLYGON"), "geometry"}}},
+        {"redshift",
+         {{make_regex("FLOAT"), "real"},
+          {make_regex("DOUBLE"), "double precision"},
+          {make_regex("TIMESTAMP\\s*\\(\\d+\\)"), "timestamp"},
+          {make_regex("TINYINT"), "smallint"},
+          {make_regex("POINT"), "geometry"},
+          {make_regex("LINESTRING"), "geometry"},
+          {make_regex("POLYGON"), "geometry"},
+          {make_regex("MULTIPOLYGON"), "geometry"}}},
+        {"snowflake",
+         {{make_regex("TIME\\b"), "time(0)"},
+          {make_regex("POINT"), "geography"},
+          {make_regex("LINESTRING"), "geography"},
+          {make_regex("POLYGON"), "geography"},
+          {make_regex("MULTIPOLYGON"), "geography"}}}};
+
+void substitute_rdms_column_types(const std::string& rdms_type, std::string& type) {
+  if (const auto& rdms_it = k_rdms_column_type_substitutes.find(rdms_type);
+      rdms_it != k_rdms_column_type_substitutes.end()) {
+    for (const auto& substitute : rdms_it->second) {
+      if (boost::regex_match(type, substitute.first)) {
+        type = substitute.second;
+        return;
+      }
+    }
+  }
+}
+
+}  // namespace
 
 /**
  * Helper class for asserting equality between a result set represented as a boost variant
@@ -180,19 +261,24 @@ class AssertValueEqualsOrIsNullVisitor : public boost::static_visitor<> {
  */
 class DBHandlerTestFixture : public testing::Test {
  public:
-  static void initTestArgs(int argc, char** argv) {
-    namespace po = boost::program_options;
-
-    po::options_description desc("Options");
+  static po::variables_map initTestArgs(int argc,
+                                        char** argv,
+                                        po::options_description& desc) {
+    // Default options.  Addional options can be passed in as parameter.
     desc.add_options()("cluster",
                        po::value<std::string>(&cluster_config_file_path_),
                        "Path to data leaves list JSON file.");
     desc.add_options()("use-disk-cache", "Enable disk cache for all tables.");
     po::variables_map vm;
-    po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+    po::store(
+        po::command_line_parser(argc, argv).options(desc).allow_unregistered().run(), vm);
     po::notify(vm);
+    return vm;
+  }
 
-    use_disk_cache_ = (vm.count("use-disk-cache"));
+  static po::variables_map initTestArgs(int argc, char** argv) {
+    po::options_description desc("Options");
+    return initTestArgs(argc, argv, desc);
   }
 
   static void initTestArgs(const std::vector<LeafHostInfo>& string_servers,
@@ -201,20 +287,32 @@ class DBHandlerTestFixture : public testing::Test {
     db_leaves_ = leaf_servers;
   }
 
- protected:
-  void SetUp() override {
-    createDBHandler();
-    switchToAdmin();
+  static bool isOdbc(const std::string& data_wrapper_type) {
+    static const std::vector<std::string> odbc_wrappers{
+        "sqlite", "postgres", "redshift", "snowflake"};
+    return std::find(odbc_wrappers.begin(), odbc_wrappers.end(), data_wrapper_type) !=
+           odbc_wrappers.end();
   }
 
-  static void SetUpTestSuite() { createDBHandler(); }
+  static std::string getOdbcTableName(const std::string& table_name,
+                                      const std::string& data_wrapper_type) {
+    CHECK(false);
+    return "";
+  }
+
+ protected:
+  friend class DBHandlerTestEnvironment;
+
+  void SetUp() override { switchToAdmin(); }
+
+  void TearDown() override {}
+
+  static void SetUpTestSuite() {}
 
   static void TearDownTestSuite() {}
 
   static void createDBHandler() {
     if (!db_handler_) {
-      setupSignalHandler();
-
       // Whitelist root path for tests by default
       ddl_utils::FilePathWhitelist::clear();
       ddl_utils::FilePathWhitelist::initialize(BASE_PATH, "[\"/\"]", "[\"/\"]");
@@ -226,7 +324,6 @@ class DBHandlerTestFixture : public testing::Test {
       const bool read_only{false};
       const bool allow_loop_joins{false};
       const bool enable_rendering{false};
-      const bool renderer_use_vulkan_driver{false};
       const bool renderer_use_ppll_polys{false};
       const bool renderer_prefer_igpu{false};
       const unsigned renderer_vulkan_timeout_ms{300000};
@@ -240,7 +337,8 @@ class DBHandlerTestFixture : public testing::Test {
       const bool legacy_syntax{true};
       const int idle_session_duration{60};
       const int max_session_duration{43200};
-      const bool enable_runtime_udf_registration{false};
+      system_parameters_.runtime_udf_registration_policy =
+          SystemParameters::RuntimeUdfRegistrationPolicy::DISALLOWED;
       system_parameters_.omnisci_server_port = -1;
       system_parameters_.calcite_port = 3280;
 
@@ -261,7 +359,6 @@ class DBHandlerTestFixture : public testing::Test {
                                                 read_only,
                                                 allow_loop_joins,
                                                 enable_rendering,
-                                                renderer_use_vulkan_driver,
                                                 renderer_use_ppll_polys,
                                                 renderer_prefer_igpu,
                                                 renderer_vulkan_timeout_ms,
@@ -277,7 +374,6 @@ class DBHandlerTestFixture : public testing::Test {
                                                 legacy_syntax,
                                                 idle_session_duration,
                                                 max_session_duration,
-                                                enable_runtime_udf_registration,
                                                 udf_filename_,
                                                 udf_compiler_path_,
                                                 udf_compiler_options_,
@@ -292,11 +388,18 @@ class DBHandlerTestFixture : public testing::Test {
       db_handler_->set_execution_mode(session_id_, TExecuteMode::CPU);
     }
   }
-  void TearDown() override {}
+
+  static void destroyDBHandler() { db_handler_.reset(); }
 
   static void sql(const std::string& query) {
     TQueryResult result;
     sql(result, query);
+  }
+
+  static TImportStatus getImportStatus(const std::string& import_id) {
+    TImportStatus import_status;
+    db_handler_->import_table_status(import_status, session_id_, import_id);
+    return import_status;
   }
 
   static void sql(TQueryResult& result, const std::string& query) {
@@ -360,34 +463,98 @@ class DBHandlerTestFixture : public testing::Test {
     }
   }
 
+  static std::string createSchemaString(const std::string& schema,
+                                        const std::string& dbms_type = "") {
+    return createSchemaString(schema_string_to_pairs(schema), dbms_type);
+  }
+
+  static std::string createSchemaString(const std::vector<ColumnPair>& column_pairs,
+                                        const std::string& dbms_type = "") {
+    std::stringstream schema_stream;
+    schema_stream << "(";
+    size_t i = 0;
+    for (auto [name, type] : column_pairs) {
+      if (!dbms_type.empty()) {
+        if (std::string::npos != type.find("TEXT")) {
+          // remove encoding information
+          type = "TEXT";
+        } else {
+          substitute_rdms_column_types(dbms_type, type);
+        }
+      }
+      schema_stream << name << " " << type;
+      schema_stream << ((++i < column_pairs.size()) ? ", " : ") ");
+    }
+    return schema_stream.str();
+  }
+
+  static void createODBCSourceTable(const std::string& table_name,
+                                    const std::string& table_schema,
+                                    const std::string& src_file,
+                                    const std::string& data_wrapper_type,
+                                    const bool is_odbc_geo = false) {}
+
   static const std::vector<LeafHostInfo>& getDbLeaves() { return db_leaves_; }
 
   template <typename Lambda>
-  void executeLambdaAndAssertException(Lambda lambda, const std::string& error_message) {
+  void executeLambdaAndAssertException(Lambda lambda,
+                                       const std::string& error_message,
+                                       const bool i_case = false) {
     try {
       lambda();
       FAIL() << "An exception should have been thrown for this test case.";
-    } catch (const TOmniSciException& e) {
-      assertExceptionMessage(e, error_message);
+    } catch (const TDBException& e) {
+      assertExceptionMessage(e, error_message, i_case);
     } catch (const std::runtime_error& e) {
-      assertExceptionMessage(e, error_message);
+      assertExceptionMessage(e, error_message, i_case);
     }
   }
 
-  void assertExceptionMessage(const TOmniSciException& e,
-                              const std::string& error_message) {
+  void assertExceptionMessage(const TDBException& e,
+                              const std::string& error_message,
+                              bool i_case = false) {
+    std::string actual_err = e.error_msg;
+    std::string expected_err = error_message;
+    if (i_case) {
+      boost::algorithm::to_lower(actual_err);
+      boost::algorithm::to_lower(expected_err);
+    }
+
     if (isDistributedMode()) {
       // In distributed mode, exception messages may be wrapped within
       // another thrift exception. In this case, do a substring check.
-      ASSERT_TRUE(e.error_msg.find(error_message) != std::string::npos);
+      if (actual_err.find(expected_err) == std::string::npos) {
+        std::cerr << "recieved message: " << e.error_msg << "\n";
+        std::cerr << "expected message: " << error_message << "\n";
+      }
+      ASSERT_TRUE(actual_err.find(expected_err) != std::string::npos);
     } else {
-      ASSERT_EQ(error_message, e.error_msg);
+      ASSERT_EQ(expected_err, actual_err);
     }
   }
 
   void assertExceptionMessage(const std::runtime_error& e,
-                              const std::string& error_message) {
-    ASSERT_EQ(error_message, e.what());
+                              const std::string& error_message,
+                              bool i_case = false) {
+    std::string actual_err = e.what();
+    std::string expected_err = error_message;
+    if (i_case) {
+      boost::algorithm::to_lower(actual_err);
+      boost::algorithm::to_lower(expected_err);
+    }
+    ASSERT_EQ(expected_err, actual_err);
+  }
+
+  void assertExceptionMessage(const std::exception& e,
+                              const std::string& error_message,
+                              bool i_case = false) {
+    std::string actual_err = e.what();
+    std::string expected_err = error_message;
+    if (i_case) {
+      boost::algorithm::to_lower(actual_err);
+      boost::algorithm::to_lower(expected_err);
+    }
+    ASSERT_EQ(expected_err, actual_err);
   }
 
   // sometime error message have non deterministic portions
@@ -398,14 +565,14 @@ class DBHandlerTestFixture : public testing::Test {
     try {
       lambda();
       FAIL() << "An exception should have been thrown for this test case.";
-    } catch (const TOmniSciException& e) {
+    } catch (const TDBException& e) {
       assertPartialExceptionMessage(e, error_message);
     } catch (const std::runtime_error& e) {
       assertPartialExceptionMessage(e, error_message);
     }
   }
 
-  void assertPartialExceptionMessage(const TOmniSciException& e,
+  void assertPartialExceptionMessage(const TDBException& e,
                                      const std::string& error_message) {
     ASSERT_TRUE(e.error_msg.find(error_message) != std::string::npos);
   }
@@ -416,8 +583,19 @@ class DBHandlerTestFixture : public testing::Test {
   }
 
   void queryAndAssertException(const std::string& sql_statement,
-                               const std::string& error_message) {
-    executeLambdaAndAssertException([&] { sql(sql_statement); }, error_message);
+                               const std::string& error_message,
+                               const bool i_case = false) {
+    executeLambdaAndAssertException([&] { sql(sql_statement); }, error_message, i_case);
+  }
+
+  void queryAndAssertExceptionWithParam(
+      const std::string& sql_statement,
+      const std::string& key,
+      const std::map<std::string, std::string>& error_message_map) {
+    auto error_message_pair_it = error_message_map.find(key);
+    ASSERT_TRUE(error_message_pair_it != error_message_map.end());
+    auto& error_message = error_message_pair_it->second;
+    queryAndAssertException(sql_statement, error_message);
   }
 
   void queryAndAssertPartialException(const std::string& sql_statement,
@@ -482,6 +660,10 @@ class DBHandlerTestFixture : public testing::Test {
     }
     db_handler_->set_execution_mode(session_id_, mode);
     return true;
+  }
+
+  TExecuteMode::type getExecuteMode() {
+    return db_handler_->getExecutionMode(session_id_);
   }
 
   void resizeDispatchQueue(size_t queue_size) {
@@ -610,6 +792,21 @@ class DBHandlerTestFixture : public testing::Test {
  public:
   static std::string cluster_config_file_path_;
   static bool use_disk_cache_;
+};
+
+// https://google.github.io/googletest/advanced.html#global-set-up-and-tear-down
+class DBHandlerTestEnvironment : public ::testing::Environment {
+ public:
+  ~DBHandlerTestEnvironment() override {}
+
+  // Override this to define how to set up the environment.
+  void SetUp() override {
+    DBHandlerTestFixture::setupSignalHandler();
+    DBHandlerTestFixture::createDBHandler();
+  }
+
+  // Override this to define how to tear down the environment.
+  void TearDown() override { DBHandlerTestFixture::destroyDBHandler(); }
 };
 
 TSessionId DBHandlerTestFixture::session_id_{};

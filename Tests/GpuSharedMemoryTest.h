@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +65,12 @@ class GpuReductionTester : public GpuSharedMemCodeBuilder {
                      const std::vector<TargetInfo>& targets,
                      const std::vector<int64_t>& init_agg_values,
                      CudaMgr_Namespace::CudaMgr* cuda_mgr)
-      : GpuSharedMemCodeBuilder(module, context, qmd, targets, init_agg_values)
+      : GpuSharedMemCodeBuilder(module,
+                                context,
+                                qmd,
+                                targets,
+                                init_agg_values,
+                                Executor::UNITARY_EXECUTOR_ID)
       , cuda_mgr_(cuda_mgr) {
     // CHECK(getReductionFunction());
   }

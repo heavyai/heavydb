@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,13 +45,13 @@ class DistributedValidate {
                       Catalog_Namespace::Catalog& cat,
                       LeafAggregator& leaf_aggregator,
                       const Catalog_Namespace::SessionInfo session_info,
-                      DBHandler& mapd_handler)
+                      DBHandler& db_handler)
       : cat_(cat)
       , type_(type)
       , is_repair_type_remove_(is_repair_type_remove)
       , leaf_aggregator_(leaf_aggregator)
       , session_info_(session_info)
-      , mapd_handler_(mapd_handler) {
+      , db_handler_(db_handler) {
     if (to_upper(type) != "CLUSTER") {
       throw std::runtime_error{
           "Unexpected validation type specified. Only the \"VALIDATE CLUSTER;\" command "
@@ -74,7 +74,7 @@ class DistributedValidate {
   const bool is_repair_type_remove_;
   LeafAggregator& leaf_aggregator_;
   const Catalog_Namespace::SessionInfo session_info_;
-  DBHandler& mapd_handler_;
+  DBHandler& db_handler_;
 };
 
 /**

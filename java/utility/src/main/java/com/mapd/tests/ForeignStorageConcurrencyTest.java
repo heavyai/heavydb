@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,11 +50,11 @@ public class ForeignStorageConcurrencyTest {
       public void run() {
         try {
           logger.info("Barrier acquired.");
-          MapdTestClient dba = MapdTestClient.getClient(
+          HeavyDBTestClient dba = HeavyDBTestClient.getClient(
                   "localhost", 6274, db, adminName, adminPassword);
 
           dba.runSql("CREATE SERVER test_server "
-                  + "FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = 'LOCAL_FILE', "
+                  + "FOREIGN DATA WRAPPER delimited_file WITH (storage_type = 'LOCAL_FILE', "
                   + "base_path = '" + System.getProperty("user.dir") + "');");
 
           dba.runSql("CREATE FOREIGN TABLE test_table "
@@ -81,8 +81,8 @@ public class ForeignStorageConcurrencyTest {
       public void run() {
         try {
           logger.info("Starting thread[0]");
-          MapdTestClient user =
-                  MapdTestClient.getClient("localhost", 6274, db, userName, userPassword);
+          HeavyDBTestClient user = HeavyDBTestClient.getClient(
+                  "localhost", 6274, db, userName, userPassword);
           barrier.await();
           runSqlAsUser(
                   "ALTER FOREIGN TABLE test_table RENAME COLUMN t TO tint", user, "0");
@@ -103,8 +103,8 @@ public class ForeignStorageConcurrencyTest {
       public void run() {
         try {
           logger.info("Starting thread[1]");
-          MapdTestClient user =
-                  MapdTestClient.getClient("localhost", 6274, db, userName, userPassword);
+          HeavyDBTestClient user = HeavyDBTestClient.getClient(
+                  "localhost", 6274, db, userName, userPassword);
           barrier.await();
           runSqlAsUser("SELECT * FROM test_table LIMIT 2", user, "1");
           runSqlAsUser(
@@ -125,8 +125,8 @@ public class ForeignStorageConcurrencyTest {
       public void run() {
         try {
           logger.info("Starting thread[2]");
-          MapdTestClient user =
-                  MapdTestClient.getClient("localhost", 6274, db, userName, userPassword);
+          HeavyDBTestClient user = HeavyDBTestClient.getClient(
+                  "localhost", 6274, db, userName, userPassword);
           barrier.await();
           runSqlAsUser("SELECT * FROM test_table LIMIT 2", user, "2");
           runSqlAsUser("SELECT * FROM test_table WHERE txt = 'quoted text'", user, "2");
@@ -147,8 +147,8 @@ public class ForeignStorageConcurrencyTest {
       public void run() {
         try {
           logger.info("Starting thread[3]");
-          MapdTestClient user =
-                  MapdTestClient.getClient("localhost", 6274, db, userName, userPassword);
+          HeavyDBTestClient user = HeavyDBTestClient.getClient(
+                  "localhost", 6274, db, userName, userPassword);
           barrier.await();
           runSqlAsUser("SELECT * FROM test_table LIMIT 2", user, "3");
           runSqlAsUser("SELECT * FROM test_table WHERE txt = 'quoted text'", user, "3");
@@ -168,8 +168,8 @@ public class ForeignStorageConcurrencyTest {
       t.join();
     }
 
-    MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 6274, db, adminName, adminPassword);
+    HeavyDBTestClient dba =
+            HeavyDBTestClient.getClient("localhost", 6274, db, adminName, adminPassword);
     dba.runSql("DROP FOREIGN TABLE test_table;");
     dba.runSql("DROP SERVER test_server;");
 
@@ -181,13 +181,13 @@ public class ForeignStorageConcurrencyTest {
     }
   }
 
-  public void runSqlAsUser(String sql, MapdTestClient user, String logPrefix)
+  public void runSqlAsUser(String sql, HeavyDBTestClient user, String logPrefix)
           throws Exception {
     logger.info(logPrefix + " " + sql);
     user.runSql(sql);
   }
 
-  public void runSqlValidateAsUser(String sql, MapdTestClient user, String logPrefix)
+  public void runSqlValidateAsUser(String sql, HeavyDBTestClient user, String logPrefix)
           throws Exception {
     logger.info(logPrefix + " " + sql);
     user.sqlValidate(sql);
@@ -196,8 +196,8 @@ public class ForeignStorageConcurrencyTest {
   public void testConcurrency() throws Exception {
     logger.info("ForeignStorageConcurrencyTest()");
 
-    MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
+            "localhost", 6274, "heavyai", "admin", "HyperInteractive");
 
     // Initialize.
     su.runSql("DROP DATABASE IF EXISTS db1;");

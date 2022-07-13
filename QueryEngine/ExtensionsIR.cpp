@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -112,6 +112,7 @@ llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type,
     case ExtArgumentType::ColumnInt8:
     case ExtArgumentType::ColumnDouble:
     case ExtArgumentType::ColumnFloat:
+    case ExtArgumentType::ColumnTimestamp:
     case ExtArgumentType::TextEncodingNone:
     case ExtArgumentType::ColumnListInt64:
     case ExtArgumentType::ColumnListInt32:
@@ -287,8 +288,7 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
     const auto arg0 =
         (arg_cast && arg_cast->get_optype() == kCAST) ? arg_cast->get_operand() : arg;
     const auto array_expr_arg = dynamic_cast<const Analyzer::ArrayExpr*>(arg0);
-    auto is_local_alloc =
-        ret_ti.is_buffer() || (array_expr_arg && array_expr_arg->isLocalAlloc());
+    auto is_local_alloc = array_expr_arg && array_expr_arg->isLocalAlloc();
     const auto& arg_ti = arg->get_type_info();
     const auto arg_lvs = codegen(arg, true, co);
     auto geo_uoper_arg = dynamic_cast<const Analyzer::GeoUOper*>(arg);
@@ -890,6 +890,122 @@ void CodeGenerator::codegenGeoLineStringArgs(const std::string& udf_func_name,
   output_args.push_back(alloc_mem);
 }
 
+llvm::StructType* CodeGenerator::createMultiLineStringStructType(
+    const std::string& udf_func_name,
+    size_t param_num) {
+  llvm::Module* module_for_lookup = cgen_state_->module_;
+  llvm::Function* udf_func = module_for_lookup->getFunction(udf_func_name);
+
+  llvm::StructType* generated_struct_type =
+      llvm::StructType::get(cgen_state_->context_,
+                            {llvm::Type::getInt8PtrTy(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_),
+                             llvm::Type::getInt8PtrTy(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_)},
+                            false);
+
+  if (udf_func) {
+    llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
+    CHECK(param_num < udf_func_type->getNumParams());
+    llvm::Type* param_pointer_type = udf_func_type->getParamType(param_num);
+    CHECK(param_pointer_type->isPointerTy());
+    llvm::Type* param_type = param_pointer_type->getPointerElementType();
+    CHECK(param_type->isStructTy());
+    llvm::StructType* struct_type = llvm::cast<llvm::StructType>(param_type);
+    CHECK(struct_type->isStructTy());
+    CHECK(struct_type->getStructNumElements() == 7);
+
+    const auto expected_elems = generated_struct_type->elements();
+    const auto current_elems = struct_type->elements();
+    for (size_t i = 0; i < expected_elems.size(); i++) {
+      CHECK_EQ(expected_elems[i], current_elems[i]);
+    }
+    if (struct_type->isLiteral()) {
+      return struct_type;
+    }
+
+    llvm::StringRef struct_name = struct_type->getStructName();
+#if LLVM_VERSION_MAJOR >= 12
+    llvm::StructType* multi_linestring_type =
+        struct_type->getTypeByName(cgen_state_->context_, struct_name);
+#else
+    llvm::StructType* multi_linestring_type =
+        module_for_lookup->getTypeByName(struct_name);
+#endif
+    CHECK(multi_linestring_type);
+
+    return (multi_linestring_type);
+  }
+  return generated_struct_type;
+}
+
+void CodeGenerator::codegenGeoMultiLineStringArgs(
+    const std::string& udf_func_name,
+    size_t param_num,
+    llvm::Value* multi_linestring_coords,
+    llvm::Value* multi_linestring_coords_size,
+    llvm::Value* linestring_sizes,
+    llvm::Value* linestring_sizes_size,
+    llvm::Value* compression,
+    llvm::Value* input_srid,
+    llvm::Value* output_srid,
+    std::vector<llvm::Value*>& output_args) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
+  CHECK(multi_linestring_coords);
+  CHECK(multi_linestring_coords_size);
+  CHECK(linestring_sizes);
+  CHECK(linestring_sizes_size);
+  CHECK(compression);
+  CHECK(input_srid);
+  CHECK(output_srid);
+
+  auto multi_linestring_abstraction =
+      createMultiLineStringStructType(udf_func_name, param_num);
+  auto alloc_mem =
+      cgen_state_->ir_builder_.CreateAlloca(multi_linestring_abstraction, nullptr);
+
+  auto multi_linestring_coords_ptr = cgen_state_->ir_builder_.CreateStructGEP(
+      multi_linestring_abstraction, alloc_mem, 0);
+  cgen_state_->ir_builder_.CreateStore(multi_linestring_coords,
+                                       multi_linestring_coords_ptr);
+
+  auto multi_linestring_coords_size_ptr = cgen_state_->ir_builder_.CreateStructGEP(
+      multi_linestring_abstraction, alloc_mem, 1);
+  cgen_state_->ir_builder_.CreateStore(multi_linestring_coords_size,
+                                       multi_linestring_coords_size_ptr);
+
+  auto linestring_sizes_ptr = cgen_state_->ir_builder_.CreateStructGEP(
+      multi_linestring_abstraction, alloc_mem, 2);
+  const auto linestring_sizes_ptr_ty =
+      llvm::dyn_cast<llvm::PointerType>(linestring_sizes_ptr->getType());
+  CHECK(linestring_sizes_ptr_ty);
+  cgen_state_->ir_builder_.CreateStore(
+      cgen_state_->ir_builder_.CreateBitCast(
+          linestring_sizes, linestring_sizes_ptr_ty->getPointerElementType()),
+      linestring_sizes_ptr);
+
+  auto linestring_sizes_size_ptr = cgen_state_->ir_builder_.CreateStructGEP(
+      multi_linestring_abstraction, alloc_mem, 3);
+  cgen_state_->ir_builder_.CreateStore(linestring_sizes_size, linestring_sizes_size_ptr);
+
+  auto multi_linestring_compression_ptr = cgen_state_->ir_builder_.CreateStructGEP(
+      multi_linestring_abstraction, alloc_mem, 4);
+  cgen_state_->ir_builder_.CreateStore(compression, multi_linestring_compression_ptr);
+
+  auto input_srid_ptr = cgen_state_->ir_builder_.CreateStructGEP(
+      multi_linestring_abstraction, alloc_mem, 5);
+  cgen_state_->ir_builder_.CreateStore(input_srid, input_srid_ptr);
+
+  auto output_srid_ptr = cgen_state_->ir_builder_.CreateStructGEP(
+      multi_linestring_abstraction, alloc_mem, 6);
+  cgen_state_->ir_builder_.CreateStore(output_srid, output_srid_ptr);
+
+  output_args.push_back(alloc_mem);
+}
+
 llvm::StructType* CodeGenerator::createPolygonStructType(const std::string& udf_func_name,
                                                          size_t param_num) {
   llvm::Module* module_for_lookup = cgen_state_->module_;
@@ -1137,7 +1253,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(ext_func_sig);
-  const auto& ext_func_args = ext_func_sig->getArgs();
+  const auto& ext_func_args = ext_func_sig->getInputArgs();
   CHECK_LE(function_oper->getArity(), ext_func_args.size());
   const auto func_ti = function_oper->get_type_info();
   std::vector<llvm::Value*> args;
@@ -1317,6 +1433,46 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
         case kPOINT:
         case kLINESTRING:
           break;
+        case kMULTILINESTRING: {
+          if (ext_func_arg == ExtArgumentType::GeoMultiLineString) {
+            auto multi_linestring_coords = castArrayPointer(ptr_lv, elem_ti);
+            auto compression_val = codegenCompression(arg_ti);
+            auto input_srid_val = cgen_state_->llInt(arg_ti.get_input_srid());
+            auto output_srid_val = cgen_state_->llInt(arg_ti.get_output_srid());
+
+            auto [linestring_sizes, linestring_sizes_size] =
+                codegenArrayBuff(orig_arg_lvs[k + 1],
+                                 posArg(arg),
+                                 SQLTypes::kINT,
+                                 /*cast_and_extend=*/false);
+            CHECK_EQ(k, ij);
+            codegenGeoMultiLineStringArgs(ext_func_sig->getName(),
+                                          ij + dj,
+                                          multi_linestring_coords,
+                                          len_lv,
+                                          linestring_sizes,
+                                          linestring_sizes_size,
+                                          compression_val,
+                                          input_srid_val,
+                                          output_srid_val,
+                                          args);
+          } else {
+            CHECK(ext_func_arg == ExtArgumentType::PInt8);
+            // Linestring Sizes
+            auto const_arr = const_arr_size.count(orig_arg_lvs[k + 1]) > 0;
+            auto [linestring_sizes, linestring_sizes_size] =
+                (const_arr) ? std::make_pair(orig_arg_lvs[k + 1],
+                                             const_arr_size.at(orig_arg_lvs[k + 1]))
+                            : codegenArrayBuff(orig_arg_lvs[k + 1],
+                                               posArg(arg),
+                                               SQLTypes::kINT,
+                                               /*cast_and_extend=*/true);
+            args.push_back(linestring_sizes);
+            args.push_back(linestring_sizes_size);
+            j += 2;
+          }
+          break;
+        }
         case kPOLYGON: {
           if (ext_func_arg == ExtArgumentType::GeoPolygon) {
             auto array_buf_arg = castArrayPointer(ptr_lv, elem_ti);

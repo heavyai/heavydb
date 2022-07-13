@@ -1,5 +1,5 @@
-namespace java com.omnisci.thrift.server
-namespace py omnisci.serialized_result_set
+namespace java ai.heavy.thrift.server
+namespace py heavydb.serialized_result_set
 
 include "../common.thrift"
 
@@ -23,7 +23,7 @@ struct TColSlotContext {
 enum TCountDistinctImplType {
   Invalid,
   Bitmap,
-  StdSet
+  UnorderedSet
 }
 
 struct TCountDistinctDescriptor {

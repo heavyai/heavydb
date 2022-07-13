@@ -1,5 +1,5 @@
 /*
- * Copyright 2018, OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include "Geospatial/Compression.h"
 #include "ImportExport/RenderGroupAnalyzer.h"
 #include "Shared/checked_alloc.h"
+#include "Shared/enable_assign_render_groups.h"
 #include "StringDictionary/StringDictionary.h"
 
 #include <atomic>
@@ -205,9 +206,12 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
       CHECK(source_dict_desc_);
     } else {
       if (literals_dict) {
-        for (auto& entry : literals_dict->getTransientMapping()) {
-          auto newId = target_dict_desc_->stringDict->getOrAdd(entry.second);
-          literals_lookup_[entry.first] = newId;
+        auto const& transient_vecmap = literals_dict->getTransientVector();
+        for (unsigned index = 0; index < transient_vecmap.size(); ++index) {
+          auto const old_id = StringDictionaryProxy::transientIndexToId(index);
+          std::string const& str = *transient_vecmap[index];
+          auto const new_id = target_dict_desc_->stringDict->getOrAdd(str);
+          literals_lookup_[old_id] = new_id;
         }
       }
 
@@ -301,12 +305,11 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
         dest_ids.resize(bufferPtr->size());
 
         if (source_dict_proxy_) {
-          StringDictionary::populate_string_ids(
-              dest_ids,
-              target_dict_desc_->stringDict.get(),
-              *bufferPtr,
-              source_dict_desc_->stringDict.get(),
-              source_dict_proxy_->getTransientMapping());
+          StringDictionary::populate_string_ids(dest_ids,
+                                                target_dict_desc_->stringDict.get(),
+                                                *bufferPtr,
+                                                source_dict_desc_->stringDict.get(),
+                                                source_dict_proxy_->getTransientVector());
         } else {
           StringDictionary::populate_string_ids(dest_ids,
                                                 target_dict_desc_->stringDict.get(),
@@ -796,11 +799,106 @@ struct GeoLinestringValueConverter : public GeoPointValueConverter {
   }
 };
 
-struct GeoPolygonValueConverter : public GeoPointValueConverter {
+struct GeoMultiLinestringValueConverter : public GeoPointValueConverter {
+  const ColumnDescriptor* linestring_sizes_column_descriptor_;
+  const ColumnDescriptor* bounds_column_descriptor_;
+
+  std::unique_ptr<std::vector<ArrayDatum>> linestring_sizes_data_;
+  std::unique_ptr<std::vector<ArrayDatum>> bounds_data_;
+
+  GeoMultiLinestringValueConverter(const Catalog_Namespace::Catalog& cat,
+                                   size_t num_rows,
+                                   const ColumnDescriptor* logicalColumnDescriptor)
+      : GeoPointValueConverter(cat, num_rows, logicalColumnDescriptor) {
+    linestring_sizes_column_descriptor_ = cat.getMetadataForColumn(
+        column_descriptor_->tableId, column_descriptor_->columnId + 2);
+    CHECK(linestring_sizes_column_descriptor_);
+    bounds_column_descriptor_ = cat.getMetadataForColumn(
+        column_descriptor_->tableId, column_descriptor_->columnId + 3);
+    CHECK(bounds_column_descriptor_);
+
+    if (num_rows) {
+      allocateColumnarData(num_rows);
+    }
+  }
+
+  ~GeoMultiLinestringValueConverter() override {}
+
+  void allocateColumnarData(size_t num_rows) override {
+    CHECK(num_rows > 0);
+    GeoPointValueConverter::allocateColumnarData(num_rows);
+    linestring_sizes_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
+    bounds_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
+  }
+
+  boost_variant_accessor<GeoMultiLineStringTargetValue>
+      GEO_MULTILINESTRING_VALUE_ACCESSOR;
+
+  void convertToColumnarFormat(size_t row, const TargetValue* value) override {
+    const auto geoValue =
+        checked_get<GeoTargetValue>(row, value, GEO_TARGET_VALUE_ACCESSOR);
+    CHECK(geoValue);
+    if (geoValue->is_initialized()) {
+      const auto geo = geoValue->get();
+      const auto geoMultiLinestring = checked_get<GeoMultiLineStringTargetValue>(
+          row, &geo, GEO_MULTILINESTRING_VALUE_ACCESSOR);
+
+      (*column_data_)[row] = "";
+      (*signed_compressed_coords_data_)[row] =
+          toCompressedCoords(geoMultiLinestring->coords);
+      (*linestring_sizes_data_)[row] =
+          to_array_datum(geoMultiLinestring->linestring_sizes);
+      auto bounds = compute_bounds_of_coords(geoMultiLinestring->coords);
+      (*bounds_data_)[row] = to_array_datum(bounds);
+    } else {
+      // NULL MultiLinestring
+      (*column_data_)[row] = "";
+      (*signed_compressed_coords_data_)[row] = ArrayDatum(0, nullptr, true);
+      (*linestring_sizes_data_)[row] = ArrayDatum(0, nullptr, true);
+      std::vector<double> bounds = {
+          NULL_ARRAY_DOUBLE, NULL_DOUBLE, NULL_DOUBLE, NULL_DOUBLE};
+      auto bounds_datum = to_array_datum(bounds);
+      bounds_datum.is_null = true;
+      (*bounds_data_)[row] = bounds_datum;
+    }
+  }
+
+  void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
+    GeoPointValueConverter::addDataBlocksToInsertData(insertData);
+
+    DataBlockPtr linestringSizes, bounds;
+
+    linestringSizes.arraysPtr = linestring_sizes_data_.get();
+    bounds.arraysPtr = bounds_data_.get();
+
+    insertData.data.emplace_back(linestringSizes);
+    insertData.columnIds.emplace_back(linestring_sizes_column_descriptor_->columnId);
+
+    insertData.data.emplace_back(bounds);
+    insertData.columnIds.emplace_back(bounds_column_descriptor_->columnId);
+  }
+};
+
+struct GeoPolygonRenderGroupManager {
+ protected:
+  GeoPolygonRenderGroupManager(RenderGroupAnalyzerMap* render_group_analyzer_map,
+                               const int column_id)
+      : render_group_analyzer_{nullptr} {
+    if (render_group_analyzer_map) {
+      // NOTE: this is not thread safe
+      auto itr = render_group_analyzer_map->try_emplace(column_id).first;
+      render_group_analyzer_ = &itr->second;
+    }
+  }
+
+  import_export::RenderGroupAnalyzer* render_group_analyzer_;
+};
+
+struct GeoPolygonValueConverter : public GeoPointValueConverter,
+                                  public GeoPolygonRenderGroupManager {
   const ColumnDescriptor* ring_sizes_column_descriptor_;
   const ColumnDescriptor* bounds_column_descriptor_;
   const ColumnDescriptor* render_group_column_descriptor_;
-  import_export::RenderGroupAnalyzer render_group_analyzer_;
 
   std::unique_ptr<std::vector<ArrayDatum>> ring_sizes_data_;
   std::unique_ptr<std::vector<ArrayDatum>> bounds_data_;
@@ -808,8 +906,11 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
 
   GeoPolygonValueConverter(const Catalog_Namespace::Catalog& cat,
                            size_t num_rows,
-                           const ColumnDescriptor* logicalColumnDescriptor)
-      : GeoPointValueConverter(cat, num_rows, logicalColumnDescriptor) {
+                           const ColumnDescriptor* logicalColumnDescriptor,
+                           RenderGroupAnalyzerMap* render_group_analyzer_map)
+      : GeoPointValueConverter(cat, num_rows, logicalColumnDescriptor)
+      , GeoPolygonRenderGroupManager(render_group_analyzer_map,
+                                     logicalColumnDescriptor->columnId) {
     ring_sizes_column_descriptor_ = cat.getMetadataForColumn(
         column_descriptor_->tableId, column_descriptor_->columnId + 2);
     CHECK(ring_sizes_column_descriptor_);
@@ -850,8 +951,12 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
       (*ring_sizes_data_)[row] = to_array_datum(geoPoly->ring_sizes);
       auto bounds = compute_bounds_of_coords(geoPoly->coords);
       (*bounds_data_)[row] = to_array_datum(bounds);
-      render_group_data_[row] =
-          render_group_analyzer_.insertBoundsAndReturnRenderGroup(bounds);
+      if (render_group_analyzer_) {
+        render_group_data_[row] =
+            render_group_analyzer_->insertBoundsAndReturnRenderGroup(bounds);
+      } else {
+        render_group_data_[row] = 0;
+      }
     } else {
       // NULL Polygon
       (*column_data_)[row] = "";
@@ -886,12 +991,12 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
   }
 };
 
-struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
+struct GeoMultiPolygonValueConverter : public GeoPointValueConverter,
+                                       public GeoPolygonRenderGroupManager {
   const ColumnDescriptor* ring_sizes_column_descriptor_;
   const ColumnDescriptor* ring_sizes_solumn_descriptor_;
   const ColumnDescriptor* bounds_column_descriptor_;
   const ColumnDescriptor* render_group_column_descriptor_;
-  import_export::RenderGroupAnalyzer render_group_analyzer_;
 
   std::unique_ptr<std::vector<ArrayDatum>> ring_sizes_data_;
   std::unique_ptr<std::vector<ArrayDatum>> poly_rings_data_;
@@ -900,8 +1005,11 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
 
   GeoMultiPolygonValueConverter(const Catalog_Namespace::Catalog& cat,
                                 size_t num_rows,
-                                const ColumnDescriptor* logicalColumnDescriptor)
-      : GeoPointValueConverter(cat, num_rows, logicalColumnDescriptor) {
+                                const ColumnDescriptor* logicalColumnDescriptor,
+                                RenderGroupAnalyzerMap* render_group_analyzer_map)
+      : GeoPointValueConverter(cat, num_rows, logicalColumnDescriptor)
+      , GeoPolygonRenderGroupManager(render_group_analyzer_map,
+                                     logicalColumnDescriptor->columnId) {
     ring_sizes_column_descriptor_ = cat.getMetadataForColumn(
         column_descriptor_->tableId, column_descriptor_->columnId + 2);
     CHECK(ring_sizes_column_descriptor_);
@@ -947,8 +1055,12 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
       (*poly_rings_data_)[row] = to_array_datum(geoMultiPoly->poly_rings);
       auto bounds = compute_bounds_of_coords(geoMultiPoly->coords);
       (*bounds_data_)[row] = to_array_datum(bounds);
-      render_group_data_[row] =
-          render_group_analyzer_.insertBoundsAndReturnRenderGroup(bounds);
+      if (render_group_analyzer_) {
+        render_group_data_[row] =
+            render_group_analyzer_->insertBoundsAndReturnRenderGroup(bounds);
+      } else {
+        render_group_data_[row] = 0;
+      }
     } else {
       // NULL MultiPolygon
       (*column_data_)[row] = "";

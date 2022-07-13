@@ -1,5 +1,5 @@
 <#--
- Copyright 2020 OmniSci, Inc.
+ Copyright 2022 HEAVY.AI, Inc.
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
  You may obtain a copy of the License at
@@ -11,6 +11,59 @@
  limitations under the License.
 -->
 
+/**
+ * Parses a SHOW statement.
+ *
+ *  These SHOW statements used to be listed directly in statementParserMethods in
+ *  config.fmpp but those all default to LOOKAHEAD(2), hardcoded in Calcite's Parser.jj
+ *  source code. Some SHOW statements needed LOOKAHEAD(3) there so all SHOW statements
+ *  had to be moved into this two-stage SqlCustomShow definition (where they only have
+ *  LOOKAHEAD(1) or LOOKAHEAD(2) because the <SHOW> is no longer part of that count).
+ */
+SqlDdl SqlCustomShow(Span s) :
+{
+    final SqlDdl show;
+}
+{
+    <SHOW>
+    (
+        LOOKAHEAD(3) show = SqlShowUserDetails(s)
+        |
+        LOOKAHEAD(2) show = SqlShowUserSessions(s)
+        |
+        LOOKAHEAD(1) show = SqlShowTables(s)
+        |
+        LOOKAHEAD(2) show = SqlShowTableDetails(s)
+        |
+        LOOKAHEAD(1) show = SqlShowFunctions(s)
+        |
+        LOOKAHEAD(2) show = SqlShowRuntimeFunctions(s)
+        |
+        LOOKAHEAD(2) show = SqlShowTableFunctions(s)
+        |
+        LOOKAHEAD(3) show = SqlShowRuntimeTableFunctions(s)
+        |
+        LOOKAHEAD(1) show = SqlShowDatabases(s)
+        |
+        LOOKAHEAD(1) show = SqlShowForeignServers(s)
+        |
+        LOOKAHEAD(1) show = SqlShowQueries(s)
+        |
+        LOOKAHEAD(1) show = SqlShowDiskCacheUsage(s)
+        |
+        LOOKAHEAD(1) show = SqlShowCreate(s)
+        |
+        LOOKAHEAD(2) show = SqlShowRoles(s)
+        |
+        LOOKAHEAD(2) show = SqlShowPolicies(s)
+        |
+        LOOKAHEAD(1) show = SqlShowDataSources(s)
+    )
+    {
+        return show;
+    }
+}
+
 /*
  *
  * SHOW USER DETAILS
@@ -21,8 +74,10 @@ SqlDdl SqlShowUserDetails(Span s) :
 {
     SqlIdentifier userName = null;
     List<String> userNames = null;
+    boolean all = false;
 }
 {
+    [<ALL> {all = true;}]
     <USER>
     <DETAILS>
     [
@@ -40,7 +95,7 @@ SqlDdl SqlShowUserDetails(Span s) :
         )*
     ]
     {
-        return new SqlShowUserDetails(s.end(this), userNames);
+        return new SqlShowUserDetails(s.end(this), userNames, all);
     }
 }
 
@@ -160,18 +215,113 @@ SqlDdl SqlShowTableDetails(Span s) :
 }
 
 /*
- * SHOW CREATE TABLE <table_name>
+ * SHOW FUNCTIONS [ DETAILS <scalar_fn_name>, <scalar_fn_name>, ...]
  */
-SqlDdl SqlShowCreateTable(Span s) :
+SqlDdl SqlShowFunctions(Span s) :
 {
-    SqlIdentifier tableName = null;
+    SqlIdentifier UdfName = null;
+    List<String> ScalarFnNames = null;
 }
 {
-    <CREATE> <TABLE>
-    tableName = CompoundIdentifier()
+    <FUNCTIONS>
+    [
+        <DETAILS>
+        UdfName = CompoundIdentifier()
+        {
+            ScalarFnNames = new ArrayList<String>();
+            ScalarFnNames.add(UdfName.toString());
+        }
+        (
+            <COMMA>
+            UdfName = CompoundIdentifier()
+            {
+                ScalarFnNames.add(UdfName.toString());
+            }
+        )*
+    ]
     {
-        return new SqlShowCreateTable(s.end(this), tableName.toString());
+        return new SqlShowFunctions(s.end(this), ScalarFnNames);
     }
+}
+
+/*
+ * SHOW RUNTIME FUNCTIONS
+ */
+SqlDdl SqlShowRuntimeFunctions(Span s) :
+{
+}
+{
+    <RUNTIME> <FUNCTIONS>
+    {
+        return new SqlShowRuntimeFunctions(s.end(this));
+    }
+}
+
+/*
+ * SHOW TABLE FUNCTIONS [ DETAILS <table_function_name>, <table_function_name>, ...]
+ */
+SqlDdl SqlShowTableFunctions(Span s) :
+{
+    SqlIdentifier tfName = null;
+    List<String> tfNames = null;
+}
+{
+    <TABLE> <FUNCTIONS>
+    [
+        <DETAILS>
+        tfName = CompoundIdentifier()
+        {
+            tfNames = new ArrayList<String>();
+            tfNames.add(tfName.toString());
+        }
+        (
+            <COMMA>
+            tfName = CompoundIdentifier()
+            {
+                tfNames.add(tfName.toString());
+            }
+        )*
+    ]
+    {
+        return new SqlShowTableFunctions(s.end(this), tfNames);
+    }
+}
+
+/*
+ * SHOW RUNTIME TABLE FUNCTIONS
+ */
+SqlDdl SqlShowRuntimeTableFunctions(Span s) :
+{
+}
+{
+    <RUNTIME> <TABLE> <FUNCTIONS>
+    {
+        return new SqlShowRuntimeTableFunctions(s.end(this));
+    }
+}
+
+/*
+ * SHOW CREATE TABLE <table_name>
+ */
+SqlDdl SqlShowCreate(Span s) :
+{
+    SqlIdentifier name = null;
+}
+{
+    <CREATE>
+    (
+        <TABLE>
+        name = CompoundIdentifier()
+        {
+            return new SqlShowCreateTable(s.end(this), name.toString());
+        }
+    |
+        <SERVER>
+        name = CompoundIdentifier()
+        {
+            return new SqlShowCreateServer(s.end(this), name.toString());
+        }
+    )
 }
 
 /*
@@ -215,5 +365,20 @@ SqlDdl SqlShowPolicies(Span s) :
           n = "";
         }
         return new SqlShowPolicies(s.end(this), effective, n);
+    }
+}
+
+/*
+ * Show supported data sources using the following syntax:
+ *
+ * SHOW SUPPORTED DATA SOURCES
+ */
+SqlDdl SqlShowDataSources(Span s) :
+{
+}
+{
+    <SUPPORTED> <DATA> <SOURCES>
+    {
+        return new SqlShowDataSources(s.end(this));
     }
 }

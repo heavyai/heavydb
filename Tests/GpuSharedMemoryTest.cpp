@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,16 @@
  */
 
 #include "GpuSharedMemoryTest.h"
+#include "CudaMgr/CudaMgr.h"
 #include "QueryEngine/LLVMGlobalContext.h"
 #include "QueryEngine/OutputBufferInitialization.h"
+#include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
 
 extern bool g_is_test_env;
+
+extern std::unique_ptr<CudaMgr_Namespace::CudaMgr> g_cuda_mgr;
+std::shared_ptr<QueryEngine> g_query_engine;
 
 namespace {
 
@@ -256,10 +261,12 @@ void perform_reduction_on_cpu(std::vector<std::unique_ptr<ResultSet>>& result_se
   CHECK(result_sets.size() > 0);
   ResultSetReductionJIT reduction_jit(result_sets.front()->getQueryMemDesc(),
                                       result_sets.front()->getTargetInfos(),
-                                      result_sets.front()->getTargetInitVals());
+                                      result_sets.front()->getTargetInitVals(),
+                                      Executor::UNITARY_EXECUTOR_ID);
   const auto reduction_code = reduction_jit.codegen();
   for (auto& result_set : result_sets) {
-    cpu_result_storage->reduce(*(result_set->getStorage()), {}, reduction_code);
+    cpu_result_storage->reduce(
+        *(result_set->getStorage()), {}, reduction_code, Executor::UNITARY_EXECUTOR_ID);
   }
 }
 
@@ -321,9 +328,11 @@ struct TestInputData {
 };
 
 void perform_test_and_verify_results(TestInputData input) {
+  auto executor = Executor::getExecutor(0);
+  auto& context = executor->getContext();
   auto cgen_state = std::unique_ptr<CgenState>(new CgenState({}, false));
-  llvm::LLVMContext& context = cgen_state->context_;
-  std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state.get()));
+  cgen_state->set_module_shallow_copy(executor->get_rt_module());
+  auto module = cgen_state->module_;
   module->setDataLayout(
       "e-p:64:64:64-i1:8:8-i8:8:8-"
       "i16:16:16-i32:32:32-i64:64:64-"
@@ -354,7 +363,7 @@ void perform_test_and_verify_results(TestInputData input) {
       row_set_mem_owner, query_mem_desc, input.target_infos);
 
   // performing reduciton using the GPU reduction code:
-  GpuReductionTester gpu_smem_tester(module.get(),
+  GpuReductionTester gpu_smem_tester(module,
                                      context,
                                      query_mem_desc,
                                      input.target_infos,
@@ -620,11 +629,18 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
+  g_cuda_mgr.reset(new CudaMgr_Namespace::CudaMgr(0));
+  g_query_engine = QueryEngine::createInstance(g_cuda_mgr.get(), /*cpu_only=*/false);
+
   int err{0};
   try {
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
+
+  g_query_engine.reset();
+  g_cuda_mgr.reset(nullptr);
+
   return err;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,8 @@
 
 /**
  * @file    ResultSetStorage.cpp
- * @author
  * @brief   Basic constructors and methods of the row set interface.
  *
- * Copyright (c) 2020 OmniSci, Inc.,  All rights reserved.
  */
 
 #include "ResultSetStorage.h"

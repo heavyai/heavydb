@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include <algorithm>
 #include <mutex>
 #include <string>
@@ -32,7 +33,7 @@
 #include "Shared/thread_count.h"
 #include "TargetValueConvertersFactories.h"
 
-extern bool g_enable_experimental_string_functions;
+extern bool g_enable_string_functions;
 
 bool g_enable_auto_metadata_update{true};
 
@@ -329,12 +330,14 @@ void InsertOrderFragmenter::updateColumns(
           targetDescriptor->columnType,
           !targetDescriptor->columnType.get_notnull(),
           sourceDataProvider.getLiteralDictionary(),
-          g_enable_experimental_string_functions
+          g_enable_string_functions &&
+                  sourceDataMetaInfo.get_type_info().is_dict_encoded_string()
               ? executor->getStringDictionaryProxy(
                     sourceDataMetaInfo.get_type_info().get_comp_param(),
                     executor->getRowSetMemoryOwner(),
                     true)
-              : nullptr};
+              : nullptr,
+          nullptr};
       auto converter = factory.create(param);
       sourceDataConverters[indexOfTargetColumn] = std::move(converter);
 
@@ -348,7 +351,11 @@ void InsertOrderFragmenter::updateColumns(
           case kPOLYGON:
             indexOfChunk += 4;
             break;
+          case kMULTILINESTRING:
+            indexOfChunk += 3;
+            break;
           case kLINESTRING:
+            // TODO: case kMULTIPOINT:
             indexOfChunk += 2;
             break;
           case kPOINT:
@@ -925,7 +932,7 @@ void InsertOrderFragmenter::updateColumnMetadata(
     const UpdateValuesStats& new_values_stats,
     const SQLTypeInfo& rhs_type,
     UpdelRoll& updel_roll) {
-  mapd_unique_lock<mapd_shared_mutex> write_lock(fragmentInfoMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(fragmentInfoMutex_);
   auto buffer = chunk->getBuffer();
   const auto& lhs_type = cd->columnType;
 
@@ -970,7 +977,7 @@ void InsertOrderFragmenter::updateColumnMetadata(
 void InsertOrderFragmenter::updateMetadata(const Catalog_Namespace::Catalog* catalog,
                                            const MetaDataKey& key,
                                            UpdelRoll& updel_roll) {
-  mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> writeLock(fragmentInfoMutex_);
   const auto chunk_metadata_map = updel_roll.getChunkMetadataMap(key);
   auto& fragmentInfo = *key.second;
   fragmentInfo.setChunkMetadataMap(chunk_metadata_map);
@@ -1481,7 +1488,7 @@ void UpdelRoll::cancelUpdate() {
 
 void UpdelRoll::addDirtyChunk(std::shared_ptr<Chunk_NS::Chunk> chunk,
                               int32_t fragment_id) {
-  mapd_unique_lock<mapd_shared_mutex> lock(chunk_update_tracker_mutex);
+  heavyai::unique_lock<heavyai::shared_mutex> lock(chunk_update_tracker_mutex);
   CHECK(catalog);
   ChunkKey chunk_key{catalog->getDatabaseId(),
                      chunk->getColumnDesc()->tableId,
@@ -1493,7 +1500,7 @@ void UpdelRoll::addDirtyChunk(std::shared_ptr<Chunk_NS::Chunk> chunk,
 void UpdelRoll::initializeUnsetMetadata(
     const TableDescriptor* td,
     Fragmenter_Namespace::FragmentInfo& fragment_info) {
-  mapd_unique_lock<mapd_shared_mutex> lock(chunk_update_tracker_mutex);
+  heavyai::unique_lock<heavyai::shared_mutex> lock(chunk_update_tracker_mutex);
   MetaDataKey key{td, &fragment_info};
   if (chunk_metadata_map_per_fragment.count(key) == 0) {
     chunk_metadata_map_per_fragment[key] =
@@ -1509,7 +1516,7 @@ std::shared_ptr<ChunkMetadata> UpdelRoll::getChunkMetadata(
     int32_t column_id,
     Fragmenter_Namespace::FragmentInfo& fragment_info) {
   initializeUnsetMetadata(key.first, fragment_info);
-  mapd_shared_lock<mapd_shared_mutex> lock(chunk_update_tracker_mutex);
+  heavyai::shared_lock<heavyai::shared_mutex> lock(chunk_update_tracker_mutex);
   auto metadata_map_it = chunk_metadata_map_per_fragment.find(key);
   CHECK(metadata_map_it != chunk_metadata_map_per_fragment.end());
   auto chunk_metadata_it = metadata_map_it->second.find(column_id);
@@ -1518,20 +1525,20 @@ std::shared_ptr<ChunkMetadata> UpdelRoll::getChunkMetadata(
 }
 
 ChunkMetadataMap UpdelRoll::getChunkMetadataMap(const MetaDataKey& key) const {
-  mapd_shared_lock<mapd_shared_mutex> lock(chunk_update_tracker_mutex);
+  heavyai::shared_lock<heavyai::shared_mutex> lock(chunk_update_tracker_mutex);
   auto metadata_map_it = chunk_metadata_map_per_fragment.find(key);
   CHECK(metadata_map_it != chunk_metadata_map_per_fragment.end());
   return metadata_map_it->second;
 }
 
 size_t UpdelRoll::getNumTuple(const MetaDataKey& key) const {
-  mapd_shared_lock<mapd_shared_mutex> lock(chunk_update_tracker_mutex);
+  heavyai::shared_lock<heavyai::shared_mutex> lock(chunk_update_tracker_mutex);
   auto it = num_tuples.find(key);
   CHECK(it != num_tuples.end());
   return it->second;
 }
 
 void UpdelRoll::setNumTuple(const MetaDataKey& key, size_t num_tuple) {
-  mapd_unique_lock<mapd_shared_mutex> lock(chunk_update_tracker_mutex);
+  heavyai::unique_lock<heavyai::shared_mutex> lock(chunk_update_tracker_mutex);
   num_tuples[key] = num_tuple;
 }

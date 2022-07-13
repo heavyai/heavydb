@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,6 @@
 
 #include <cmath>
 #include <string>
-
-const std::string OMNISCI_GEO_PREFIX{"omnisci_geo"};
-const std::string LEGACY_GEO_PREFIX{"mapd_geo"};
 
 inline std::pair<double, double> geotransform_4326_to_900913(const double lon,
                                                              const double lat) {

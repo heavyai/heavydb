@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,8 +29,8 @@
 #include "Analyzer/Analyzer.h"
 #include "DataMgr/MemoryLevel.h"
 #include "QueryEngine/ColumnarResults.h"
-#include "QueryEngine/DataRecycler/HashTablePropertyRecycler.h"
-#include "QueryEngine/DataRecycler/HashTableRecycler.h"
+#include "QueryEngine/DataRecycler/HashingSchemeRecycler.h"
+#include "QueryEngine/DataRecycler/HashtableRecycler.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/JoinHashTable/BaselineHashTable.h"
@@ -38,6 +38,9 @@
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
 
 class Executor;
+
+using StrProxyTranslationMapsPtrsAndOffsets =
+    std::pair<std::vector<const int32_t*>, std::vector<int32_t>>;
 
 // Representation for a hash table using the baseline layout: an open-addressing
 // hash with a fill rate of 50%. It is used for equi-joins on multiple columns and
@@ -56,8 +59,7 @@ class BaselineJoinHashTable : public HashJoin {
       ColumnCacheMap& column_cache,
       Executor* executor,
       const HashTableBuildDagMap& hashtable_build_dag_map,
-      const TableIdToNodeMap& table_id_to_node_map,
-      const RegisteredQueryHint& query_hint);
+      const TableIdToNodeMap& table_id_to_node_map);
 
   static size_t getShardCountForCondition(
       const Analyzer::BinOper* condition,
@@ -94,24 +96,27 @@ class BaselineJoinHashTable : public HashJoin {
 
   size_t payloadBufferOff() const noexcept override;
 
-  const RegisteredQueryHint& getRegisteredQueryHint() override { return query_hint_; }
-
-  void registerQueryHint(const RegisteredQueryHint& query_hint) override {
-    query_hint_ = query_hint;
-  }
-
   std::string getHashJoinType() const final { return "Baseline"; }
 
   static void invalidateCache() {
-    CHECK(hash_table_cache_);
+    CHECK(hash_table_layout_cache_);
     hash_table_cache_->clearCache();
+
+    CHECK(hash_table_cache_);
+    hash_table_layout_cache_->clearCache();
   }
 
   static void markCachedItemAsDirty(size_t table_key) {
     CHECK(hash_table_cache_);
+    CHECK(hash_table_layout_cache_);
     auto candidate_table_keys =
         hash_table_cache_->getMappedQueryPlanDagsWithTableKey(table_key);
     if (candidate_table_keys.has_value()) {
+      hash_table_layout_cache_->markCachedItemAsDirty(
+          table_key,
+          *candidate_table_keys,
+          CacheItemType::HT_HASHING_SCHEME,
+          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
       hash_table_cache_->markCachedItemAsDirty(table_key,
                                                *candidate_table_keys,
                                                CacheItemType::BASELINE_HT,
@@ -119,28 +124,30 @@ class BaselineJoinHashTable : public HashJoin {
     }
   }
 
-  static HashTableRecycler* getHashTableCache() {
+  static HashtableRecycler* getHashTableCache() {
     CHECK(hash_table_cache_);
     return hash_table_cache_.get();
   }
-  static HashTablePropertyRecycler* getHashtablePropertyCache() {
-    CHECK(hash_table_property_cache_);
-    return hash_table_property_cache_.get();
+  static HashingSchemeRecycler* getHashingSchemeCache() {
+    CHECK(hash_table_layout_cache_);
+    return hash_table_layout_cache_.get();
   }
 
   virtual ~BaselineJoinHashTable() {}
 
  protected:
-  BaselineJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
-                        const JoinType join_type,
-                        const std::vector<InputTableInfo>& query_infos,
-                        const Data_Namespace::MemoryLevel memory_level,
-                        ColumnCacheMap& column_cache,
-                        Executor* executor,
-                        const std::vector<InnerOuter>& inner_outer_pairs,
-                        const int device_count,
-                        HashtableAccessPathInfo hashtable_access_path_info,
-                        const TableIdToNodeMap& table_id_to_node_map);
+  BaselineJoinHashTable(
+      const std::shared_ptr<Analyzer::BinOper> condition,
+      const JoinType join_type,
+      const std::vector<InputTableInfo>& query_infos,
+      const Data_Namespace::MemoryLevel memory_level,
+      ColumnCacheMap& column_cache,
+      Executor* executor,
+      const std::vector<InnerOuter>& inner_outer_pairs,
+      const std::vector<InnerOuterStringOpInfos>& col_pairs_string_op_infos,
+      const int device_count,
+      const HashTableBuildDagMap& hashtable_build_dag_map,
+      const TableIdToNodeMap& table_id_to_node_map);
 
   size_t getComponentBufferSize() const noexcept override;
 
@@ -156,10 +163,7 @@ class BaselineJoinHashTable : public HashJoin {
       DeviceAllocator* dev_buff_owner);
 
   virtual std::pair<size_t, size_t> approximateTupleCount(
-      const std::vector<ColumnsForDevice>&,
-      QueryPlanHash key,
-      CacheItemType item_type,
-      DeviceIdentifier device_identifier) const;
+      const std::vector<ColumnsForDevice>&) const;
 
   virtual size_t getKeyComponentWidth() const;
 
@@ -173,6 +177,10 @@ class BaselineJoinHashTable : public HashJoin {
       const std::vector<InnerOuter>& inner_outer_pairs) const;
 
   void reify(const HashType preferred_layout);
+
+  void copyCpuHashTableToGpu(std::shared_ptr<BaselineHashTable>& cpu_hash_table,
+                             const int device_id,
+                             Data_Namespace::DataMgr* data_mgr);
 
   virtual void reifyForDevice(const ColumnsForDevice& columns_for_device,
                               const HashType layout,
@@ -196,8 +204,7 @@ class BaselineJoinHashTable : public HashJoin {
   std::shared_ptr<HashTable> initHashTableOnCpuFromCache(
       QueryPlanHash key,
       CacheItemType item_type,
-      DeviceIdentifier device_identifier,
-      HashType expected_layout);
+      DeviceIdentifier device_identifier);
 
   void putHashTableOnCpuToCache(QueryPlanHash key,
                                 CacheItemType item_type,
@@ -205,18 +212,18 @@ class BaselineJoinHashTable : public HashJoin {
                                 DeviceIdentifier device_identifier,
                                 size_t hashtable_building_time);
 
-  std::pair<std::optional<size_t>, size_t> getApproximateTupleCountFromCache(
-      QueryPlanHash key,
-      CacheItemType item_type,
-      DeviceIdentifier device_identifier) const;
-
   bool isBitwiseEq() const override;
+
+  ChunkKey genChunkKey(
+      const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) const;
 
   struct AlternativeCacheKeyForBaselineHashJoin {
     std::vector<InnerOuter> inner_outer_pairs;
+    std::vector<InnerOuterStringOpInfos> inner_outer_string_op_infos_pairs;
     const size_t num_elements;
     const SQLOps optype;
     const JoinType join_type;
+    const ChunkKey chunk_key;
   };
 
   static QueryPlanHash getAlternativeCacheKey(
@@ -231,8 +238,11 @@ class BaselineJoinHashTable : public HashJoin {
         boost::hash_combine(hash, outer_col->toString());
       }
     }
+    if (info.inner_outer_string_op_infos_pairs.size()) {
+      boost::hash_combine(hash, ::toString(info.inner_outer_string_op_infos_pairs));
+    }
     boost::hash_combine(hash, info.num_elements);
-    boost::hash_combine(hash, ::toString(info.join_type));
+    boost::hash_combine(hash, info.join_type);
     return hash;
   }
 
@@ -243,19 +253,24 @@ class BaselineJoinHashTable : public HashJoin {
   Executor* executor_;
   ColumnCacheMap& column_cache_;
   std::mutex cpu_hash_table_buff_mutex_;
+  std::mutex str_proxy_translation_mutex_;
+  std::vector<const StringDictionaryProxy::IdMap*> str_proxy_translation_maps_;
 
   std::vector<InnerOuter> inner_outer_pairs_;
+  std::vector<InnerOuterStringOpInfos> inner_outer_string_op_infos_pairs_;
   const Catalog_Namespace::Catalog* catalog_;
   const int device_count_;
   mutable bool needs_dict_translation_;
   std::optional<HashType>
       layout_override_;  // allows us to use a 1:many hash table for many:many
 
-  RegisteredQueryHint query_hint_;
-  QueryPlanHash hashtable_cache_key_;
+  HashTableBuildDagMap hashtable_build_dag_map_;
+  // per-device cache key to cover hash table for sharded table
+  std::vector<QueryPlanHash> hashtable_cache_key_;
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
   std::unordered_set<size_t> table_keys_;
   const TableIdToNodeMap table_id_to_node_map_;
 
-  static std::unique_ptr<HashTableRecycler> hash_table_cache_;
+  static std::unique_ptr<HashtableRecycler> hash_table_cache_;
+  static std::unique_ptr<HashingSchemeRecycler> hash_table_layout_cache_;
 };

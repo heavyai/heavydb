@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,10 +24,12 @@
 #include "ExpressionRewrite.h"
 #include "ExtensionFunctionsBinding.h"
 #include "ExtensionFunctionsWhitelist.h"
-#include "RelAlgDagBuilder.h"
+#include "RelAlgDag.h"
+#include "ScalarExprVisitor.h"
 #include "WindowContext.h"
 
 #include <future>
+#include <sstream>
 
 #include "Analyzer/Analyzer.h"
 #include "Parser/ParserNode.h"
@@ -36,7 +38,7 @@
 
 extern bool g_enable_watchdog;
 
-bool g_enable_experimental_string_functions = false;
+bool g_enable_string_functions{true};
 
 namespace {
 
@@ -302,7 +304,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
       return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
     }
     case kTEXT: {
-      return Parser::StringLiteral::analyzeValue(rex_literal->getVal<std::string>());
+      return Parser::StringLiteral::analyzeValue(rex_literal->getVal<std::string>(),
+                                                 false);
     }
     case kBOOLEAN: {
       Datum d;
@@ -312,7 +315,13 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
     case kDOUBLE: {
       Datum d;
       d.doubleval = rex_literal->getVal<double>();
-      auto lit_expr = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
+      auto lit_expr =
+          makeExpr<Analyzer::Constant>(SQLTypeInfo(rex_literal->getType(),
+                                                   rex_literal->getPrecision(),
+                                                   rex_literal->getScale(),
+                                                   false),
+                                       false,
+                                       d);
       return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
     }
     case kINTERVAL_DAY_TIME:
@@ -393,7 +402,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
   const auto source = rex_input->getSourceNode();
   const auto it_rte_idx = input_to_nest_level_.find(source);
   CHECK(it_rte_idx != input_to_nest_level_.end())
-      << "Not found in input_to_nest_level_, source=" << source->toString();
+      << "Not found in input_to_nest_level_, source="
+      << source->toString(RelRexToStringConfig::defaults());
   const int rte_idx = it_rte_idx->second;
   const auto scan_source = dynamic_cast<const RelScan*>(source);
   const auto& in_metainfo = source->getOutputMetainfo();
@@ -422,7 +432,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
     return std::make_shared<Analyzer::ColumnVar>(
         col_ti, table_desc->tableId, cd->columnId, rte_idx);
   }
-  CHECK(!in_metainfo.empty()) << "for " << source->toString();
+  CHECK(!in_metainfo.empty()) << "for "
+                              << source->toString(RelRexToStringConfig::defaults());
   CHECK_GE(rte_idx, 0);
   const size_t col_id = rex_input->getIndex();
   CHECK_LT(col_id, in_metainfo.size());
@@ -462,8 +473,31 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
       if (!operand_ti.is_string() && target_ti.is_string()) {
         return operand_expr->add_cast(target_ti);
       }
-
       return std::make_shared<Analyzer::UOper>(target_ti, false, sql_op, operand_expr);
+    }
+    case kENCODE_TEXT: {
+      const auto& target_ti = rex_operator->getType();
+      CHECK_NE(kNULLT, target_ti.get_type());
+      const auto& operand_ti = operand_expr->get_type_info();
+      CHECK(operand_ti.is_string());
+      if (operand_ti.is_dict_encoded_string()) {
+        // No cast needed
+        return operand_expr;
+      }
+      if (operand_expr->get_num_column_vars(true) == 0UL) {
+        return operand_expr;
+      }
+      if (g_cluster) {
+        throw std::runtime_error(
+            "ENCODE_TEXT is not currently supported in distributed mode at this time.");
+      }
+      SQLTypeInfo casted_target_ti = operand_ti;
+      casted_target_ti.set_type(kTEXT);
+      casted_target_ti.set_compression(kENCODING_DICT);
+      casted_target_ti.set_comp_param(TRANSIENT_DICT_ID);
+      casted_target_ti.set_fixed_size();
+      return makeExpr<Analyzer::UOper>(
+          casted_target_ti, operand_expr->get_contains_agg(), kCAST, operand_expr);
     }
     case kNOT:
     case kISNULL: {
@@ -915,7 +949,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
       rhs = translateScalarRex(rhs_op);
     }
     CHECK(rhs);
-    lhs = Parser::OperExpr::normalize(sql_op, sql_qual, lhs, rhs);
+
+    // Pass in executor to get string proxy info if cast needed between
+    // string columns
+    lhs = Parser::OperExpr::normalize(sql_op, sql_qual, lhs, rhs, executor_);
   }
   return lhs;
 }
@@ -948,7 +985,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCase(
   if (rex_case->getElse()) {
     else_expr = translateScalarRex(rex_case->getElse());
   }
-  return Parser::CaseExpr::normalize(expr_list, else_expr);
+  return Parser::CaseExpr::normalize(expr_list, else_expr, executor_);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWidthBucket(
@@ -1265,6 +1302,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateKeyForString(
     throw std::runtime_error(rex_function->getName() +
                              " expects a dictionary encoded text column.");
   }
+  auto unnest_arg = dynamic_cast<Analyzer::UOper*>(expr);
+  if (unnest_arg && unnest_arg->get_optype() == SQLOps::kUNNEST) {
+    throw std::runtime_error(
+        rex_function->getName() +
+        " does not support unnest operator as its input expression.");
+  }
   return makeExpr<Analyzer::KeyForStringExpr>(args[0]);
 }
 
@@ -1289,19 +1332,74 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentUser(
   return Parser::UserLiteral::get(user);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLower(
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
     const RexFunctionOperator* rex_function) const {
-  const auto& args = translateFunctionArgs(rex_function);
-  CHECK_EQ(size_t(1), args.size());
-  CHECK(args[0]);
-
-  if (args[0]->get_type_info().is_dict_encoded_string() ||
-      dynamic_cast<Analyzer::Constant*>(args[0].get())) {
-    return makeExpr<Analyzer::LowerExpr>(args[0]);
+  const auto func_name = rex_function->getName();
+  if (!g_enable_string_functions) {
+    std::ostringstream oss;
+    oss << "Function " << func_name << " not supported.";
+    throw std::runtime_error(oss.str());
+  }
+  const auto string_op_kind = ::name_to_string_op_kind(func_name);
+  auto args = translateFunctionArgs(rex_function);
+  // Used by watchdog later to gate queries based on
+  if (!args.empty() && !dynamic_cast<const Analyzer::Constant*>(args[0].get())) {
+    const auto& arg0_ti = args[0]->get_type_info();
+    if (arg0_ti.is_none_encoded_string()) {
+      SQLTypeInfo casted_target_ti = arg0_ti;
+      casted_target_ti.set_type(kTEXT);
+      casted_target_ti.set_compression(kENCODING_DICT);
+      casted_target_ti.set_comp_param(TRANSIENT_DICT_ID);
+      casted_target_ti.set_fixed_size();
+      args[0] = makeExpr<Analyzer::UOper>(
+          casted_target_ti, args[0]->get_contains_agg(), kCAST, args[0]);
+    }
   }
 
-  throw std::runtime_error(rex_function->getName() +
-                           " expects a dictionary encoded text column or a literal.");
+  switch (string_op_kind) {
+    case SqlStringOpKind::LOWER:
+      return makeExpr<Analyzer::LowerStringOper>(args);
+    case SqlStringOpKind::UPPER:
+      return makeExpr<Analyzer::UpperStringOper>(args);
+    case SqlStringOpKind::INITCAP:
+      return makeExpr<Analyzer::InitCapStringOper>(args);
+    case SqlStringOpKind::REVERSE:
+      return makeExpr<Analyzer::ReverseStringOper>(args);
+    case SqlStringOpKind::REPEAT:
+      return makeExpr<Analyzer::RepeatStringOper>(args);
+    case SqlStringOpKind::CONCAT:
+      return makeExpr<Analyzer::ConcatStringOper>(args);
+    case SqlStringOpKind::LPAD:
+    case SqlStringOpKind::RPAD: {
+      return makeExpr<Analyzer::PadStringOper>(string_op_kind, args);
+    }
+    case SqlStringOpKind::TRIM:
+    case SqlStringOpKind::LTRIM:
+    case SqlStringOpKind::RTRIM: {
+      return makeExpr<Analyzer::TrimStringOper>(string_op_kind, args);
+    }
+    case SqlStringOpKind::SUBSTRING:
+      return makeExpr<Analyzer::SubstringStringOper>(args);
+    case SqlStringOpKind::OVERLAY:
+      return makeExpr<Analyzer::OverlayStringOper>(args);
+    case SqlStringOpKind::REPLACE:
+      return makeExpr<Analyzer::ReplaceStringOper>(args);
+    case SqlStringOpKind::SPLIT_PART:
+      return makeExpr<Analyzer::SplitPartStringOper>(args);
+    case SqlStringOpKind::REGEXP_REPLACE:
+      return makeExpr<Analyzer::RegexpReplaceStringOper>(args);
+    case SqlStringOpKind::REGEXP_SUBSTR:
+      return makeExpr<Analyzer::RegexpSubstrStringOper>(args);
+    case SqlStringOpKind::JSON_VALUE:
+      return makeExpr<Analyzer::JsonValueStringOper>(args);
+    case SqlStringOpKind::BASE64_ENCODE:
+      return makeExpr<Analyzer::Base64EncodeStringOper>(args);
+    case SqlStringOpKind::BASE64_DECODE:
+      return makeExpr<Analyzer::Base64DecodeStringOper>(args);
+    default: {
+      throw std::runtime_error("Unsupported string function.");
+    }
+  }
 }
 
 Analyzer::ExpressionPtr RelAlgTranslator::translateCardinality(
@@ -1512,8 +1610,29 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   if (rex_function->getName() == "CURRENT_USER"sv) {
     return translateCurrentUser(rex_function);
   }
-  if (g_enable_experimental_string_functions && rex_function->getName() == "LOWER"sv) {
-    return translateLower(rex_function);
+  if (func_resolve(rex_function->getName(),
+                   "LOWER"sv,
+                   "UPPER"sv,
+                   "INITCAP"sv,
+                   "REVERSE"sv,
+                   "REPEAT"sv,
+                   "||"sv,
+                   "LPAD"sv,
+                   "RPAD"sv,
+                   "TRIM"sv,
+                   "LTRIM"sv,
+                   "RTRIM"sv,
+                   "SUBSTRING"sv,
+                   "OVERLAY"sv,
+                   "REPLACE"sv,
+                   "SPLIT_PART"sv,
+                   "REGEXP_REPLACE"sv,
+                   "REGEXP_SUBSTR"sv,
+                   "REGEXP_MATCH"sv,
+                   "JSON_VALUE"sv,
+                   "BASE64_ENCODE"sv,
+                   "BASE64_DECODE"sv)) {
+    return translateStringOper(rex_function);
   }
   if (func_resolve(rex_function->getName(), "CARDINALITY"sv, "ARRAY_LENGTH"sv)) {
     return translateCardinality(rex_function);
@@ -1622,12 +1741,15 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "ST_Perimeter"sv,
                    "ST_Area"sv,
                    "ST_SRID"sv,
-                   "MapD_GeoPolyBoundsPtr"sv /* deprecated */,
-                   "MapD_GeoPolyBoundsPtr"sv /* deprecated */,
-                   "OmniSci_Geo_PolyBoundsPtr"sv,
-                   "OmniSci_Geo_PolyRenderGroup"sv)) {
+                   "HeavyDB_Geo_PolyBoundsPtr"sv,
+                   "HeavyDB_Geo_PolyRenderGroup"sv)) {
     CHECK_EQ(rex_function->size(), size_t(1));
     return translateUnaryGeoFunction(rex_function);
+  }
+  if (func_resolve(rex_function->getName(), "ST_ConvexHull"sv)) {
+    CHECK_EQ(rex_function->size(), size_t(1));
+    SQLTypeInfo ti;
+    return translateUnaryGeoConstructor(rex_function, ti, false);
   }
   if (func_resolve(rex_function->getName(),
                    "convert_meters_to_pixel_width"sv,
@@ -1677,7 +1799,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "ST_Intersection"sv,
                    "ST_Difference"sv,
                    "ST_Union"sv,
-                   "ST_Buffer"sv)) {
+                   "ST_Buffer"sv,
+                   "ST_ConcaveHull"sv)) {
+    CHECK_EQ(rex_function->size(), size_t(2));
     SQLTypeInfo ti;
     return translateBinaryGeoConstructor(rex_function, ti, false);
   }
@@ -1703,6 +1827,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     return makeExpr<Analyzer::FunctionOper>(
         ret_ti, rex_function->getName(), arg_expr_list);
   }
+
   // Reset possibly wrong return type of rex_function to the return
   // type of the optimal valid implementation. The return type can be
   // wrong in the case of multiple implementations of UDF functions
@@ -1711,14 +1836,26 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   SQLTypeInfo ret_ti;
   try {
     auto ext_func_sig = bind_function(rex_function->getName(), arg_expr_list);
-
-    auto ext_func_args = ext_func_sig.getArgs();
-    CHECK_EQ(arg_expr_list.size(), ext_func_args.size());
-    for (size_t i = 0; i < arg_expr_list.size(); i++) {
+    auto ext_func_args = ext_func_sig.getInputArgs();
+    CHECK_LE(arg_expr_list.size(), ext_func_args.size());
+    for (size_t i = 0, di = 0; i < arg_expr_list.size(); i++) {
+      CHECK_LT(i + di, ext_func_args.size());
+      auto ext_func_arg = ext_func_args[i + di];
+      if (ext_func_arg == ExtArgumentType::PInt8 ||
+          ext_func_arg == ExtArgumentType::PInt16 ||
+          ext_func_arg == ExtArgumentType::PInt32 ||
+          ext_func_arg == ExtArgumentType::PInt64 ||
+          ext_func_arg == ExtArgumentType::PFloat ||
+          ext_func_arg == ExtArgumentType::PDouble ||
+          ext_func_arg == ExtArgumentType::PBool) {
+        di++;
+        // pointer argument follows length argument:
+        CHECK(ext_func_args[i + di] == ExtArgumentType::Int64);
+      }
       // fold casts on constants
       if (auto constant =
               std::dynamic_pointer_cast<Analyzer::Constant>(arg_expr_list[i])) {
-        auto ext_func_arg_ti = ext_arg_type_to_type_info(ext_func_args[i]);
+        auto ext_func_arg_ti = ext_arg_type_to_type_info(ext_func_arg);
         if (ext_func_arg_ti != arg_expr_list[i]->get_type_info()) {
           arg_expr_list[i] = constant->add_cast(ext_func_arg_ti);
         }
@@ -1759,45 +1896,50 @@ std::vector<Analyzer::OrderEntry> translate_collation(
   return collation;
 }
 
-bool supported_lower_bound(
-    const RexWindowFunctionOperator::RexWindowBound& window_bound) {
-  return window_bound.unbounded && window_bound.preceding && !window_bound.following &&
-         !window_bound.is_current_row && !window_bound.offset &&
-         window_bound.order_key == 0;
-}
-
-bool supported_upper_bound(const RexWindowFunctionOperator* rex_window_function) {
-  const auto& window_bound = rex_window_function->getUpperBound();
-  const bool to_current_row = !window_bound.unbounded && !window_bound.preceding &&
-                              !window_bound.following && window_bound.is_current_row &&
-                              !window_bound.offset && window_bound.order_key == 1;
-  switch (rex_window_function->getKind()) {
-    case SqlWindowFunctionKind::ROW_NUMBER:
-    case SqlWindowFunctionKind::RANK:
-    case SqlWindowFunctionKind::DENSE_RANK:
-    case SqlWindowFunctionKind::CUME_DIST: {
-      return to_current_row;
-    }
-    default: {
-      return rex_window_function->getOrderKeys().empty()
-                 ? (window_bound.unbounded && !window_bound.preceding &&
-                    window_bound.following && !window_bound.is_current_row &&
-                    !window_bound.offset && window_bound.order_key == 2)
-                 : to_current_row;
+size_t determineTimeValMultiplierForTimeType(const SQLTypes& window_frame_bound_type,
+                                             const Analyzer::Constant* const_expr) {
+  const auto time_unit_val = const_expr->get_constval().bigintval;
+  if (window_frame_bound_type == kINTERVAL_DAY_TIME) {
+    if (time_unit_val == kMilliSecsPerSec) {
+      return 1;
+    } else if (time_unit_val == kMilliSecsPerMin) {
+      return kSecsPerMin;
+    } else if (time_unit_val == kMilliSecsPerHour) {
+      return kSecsPerHour;
     }
   }
+  CHECK(false);
+  return kUNKNOWN_FIELD;
 }
 
+ExtractField determineTimeUnit(const SQLTypes& window_frame_bound_type,
+                               const Analyzer::Constant* const_expr) {
+  const auto time_unit_val = const_expr->get_constval().bigintval;
+  if (window_frame_bound_type == kINTERVAL_DAY_TIME) {
+    if (time_unit_val == kMilliSecsPerSec) {
+      return kSECOND;
+    } else if (time_unit_val == kMilliSecsPerMin) {
+      return kMINUTE;
+    } else if (time_unit_val == kMilliSecsPerHour) {
+      return kHOUR;
+    } else if (time_unit_val == kMilliSecsPerDay) {
+      return kDAY;
+    }
+  } else {
+    CHECK(window_frame_bound_type == kINTERVAL_YEAR_MONTH);
+    if (time_unit_val == 1) {
+      return kMONTH;
+    } else if (time_unit_val == 12) {
+      return kYEAR;
+    }
+  }
+  CHECK(false);
+  return kUNKNOWN_FIELD;
+}
 }  // namespace
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
     const RexWindowFunctionOperator* rex_window_function) const {
-  if (!supported_lower_bound(rex_window_function->getLowerBound()) ||
-      !supported_upper_bound(rex_window_function) ||
-      ((rex_window_function->getKind() == SqlWindowFunctionKind::ROW_NUMBER) !=
-       rex_window_function->isRows())) {
-    throw std::runtime_error("Frame specification not supported");
-  }
   std::vector<std::shared_ptr<Analyzer::Expr>> args;
   for (size_t i = 0; i < rex_window_function->size(); ++i) {
     args.push_back(translateScalarRex(rex_window_function->getOperand(i)));
@@ -1815,13 +1957,503 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
     CHECK_GE(args.size(), 1u);
     ti = args.front()->get_type_info();
   }
+  bool has_framing_clause = true;
+  switch (rex_window_function->getKind()) {
+    case SqlWindowFunctionKind::RANK:
+    case SqlWindowFunctionKind::DENSE_RANK:
+    case SqlWindowFunctionKind::ROW_NUMBER:
+    case SqlWindowFunctionKind::NTILE:
+    case SqlWindowFunctionKind::PERCENT_RANK:
+    case SqlWindowFunctionKind::CUME_DIST:
+    case SqlWindowFunctionKind::LEAD:
+    case SqlWindowFunctionKind::LAG: {
+      VLOG(1) << "Window framing is ignored: given window function "
+              << rex_window_function->getName() + " operates on an entire partition";
+      has_framing_clause = false;
+      break;
+    }
+    default:
+      break;
+  }
+  auto determine_frame_bound_type =
+      [](const RexWindowFunctionOperator::RexWindowBound& bound) {
+        if (bound.unbounded) {
+          CHECK(!bound.bound_expr && !bound.is_current_row);
+          if (bound.following) {
+            return SqlWindowFrameBoundType::UNBOUNDED_FOLLOWING;
+          } else if (bound.preceding) {
+            return SqlWindowFrameBoundType::UNBOUNDED_PRECEDING;
+          }
+        } else {
+          if (bound.is_current_row) {
+            CHECK(!bound.unbounded && !bound.bound_expr);
+            return SqlWindowFrameBoundType::CURRENT_ROW;
+          } else {
+            CHECK(!bound.unbounded && bound.bound_expr);
+            if (bound.following) {
+              return SqlWindowFrameBoundType::EXPR_FOLLOWING;
+            } else if (bound.preceding) {
+              return SqlWindowFrameBoundType::EXPR_PRECEDING;
+            }
+          }
+        }
+        return SqlWindowFrameBoundType::UNKNOWN;
+      };
+
+  bool negative_constant = false;
+  bool detect_invalid_frame_start_bound_expr = false;
+  bool detect_invalid_frame_end_bound_expr = false;
+  auto& frame_start_bound = rex_window_function->getFrameStartBound();
+  auto& frame_end_bound = rex_window_function->getFrameEndBound();
+  bool has_end_bound_frame_expr = false;
+  std::shared_ptr<Analyzer::Expr> frame_start_bound_expr;
+  SqlWindowFrameBoundType frame_start_bound_type =
+      determine_frame_bound_type(frame_start_bound);
+  std::shared_ptr<Analyzer::Expr> frame_end_bound_expr;
+  SqlWindowFrameBoundType frame_end_bound_type =
+      determine_frame_bound_type(frame_end_bound);
+  auto frame_mode = rex_window_function->isRows()
+                        ? Analyzer::WindowFunction::FrameBoundType::ROW
+                        : Analyzer::WindowFunction::FrameBoundType::RANGE;
+  if (order_keys.empty()) {
+    if (frame_start_bound_type == SqlWindowFrameBoundType::UNBOUNDED_PRECEDING &&
+        frame_end_bound_type == SqlWindowFrameBoundType::UNBOUNDED_FOLLOWING) {
+      // Calcite sets UNBOUNDED PRECEDING ~ UNBOUNDED_FOLLOWING as its default frame bound
+      // if the window context has no order by clause regardless of the existence of
+      // user-given window frame bound but at this point we have no way to recognize the
+      // absence of the frame definition of this window context
+      has_framing_clause = false;
+      LOG(INFO) << "The frame clause is ignored in row mode when no order by clause is "
+                   "specified.";
+    }
+  } else {
+    if (frame_start_bound_type == SqlWindowFrameBoundType::UNBOUNDED_PRECEDING &&
+        frame_end_bound_type == SqlWindowFrameBoundType::CURRENT_ROW) {
+      // Calcite sets this frame bound by default when order by clause is given but has no
+      // window frame definition (even if user gives the same bound, our previous window
+      // computation logic returns exactly the same result)
+      has_framing_clause = false;
+    }
+    auto order_key_expr = order_keys.front();
+    const auto order_key_ti = order_key_expr->get_type_info();
+    if ((order_key_ti.get_type() == kTIME || order_key_ti.get_type() == kTIMESTAMP) &&
+        order_key_ti.get_compression() == kENCODING_FIXED) {
+      throw std::runtime_error(
+          "Window framing with ordering column having time and timestamp types with "
+          "fixed encoding is not supported yet");
+    }
+    auto is_negative_framing_bound =
+        [&](const SQLTypes t, const Datum& d, bool is_time_unit = false) {
+          switch (t) {
+            case kTINYINT: {
+              return d.tinyintval < 0;
+            }
+            case kSMALLINT: {
+              return d.smallintval < 0;
+            }
+            case kINT: {
+              return d.intval < 0;
+            }
+            case kDOUBLE: {
+              // the only case that double type is used is for handling time interval
+              // i.e., represent tiny time units like nanosecond and microsecond as the
+              // equivalent time value with SECOND time unit
+              CHECK(is_time_unit);
+              return d.doubleval < 0;
+            }
+            case kDECIMAL:
+            case kNUMERIC:
+            case kBIGINT: {
+              return d.bigintval < 0;
+            }
+            default: {
+              throw std::runtime_error(
+                  "We currently only support integer-type literal expression as a window "
+                  "frame "
+                  "bound "
+                  "expression");
+              break;
+            }
+          }
+        };
+
+    auto translate_frame_bound_expr = [&](const RexScalar* bound_expr) {
+      std::shared_ptr<Analyzer::Expr> translated_expr;
+      const auto rex_oper = dynamic_cast<const RexOperator*>(bound_expr);
+      if (rex_oper && rex_oper->getType().is_timeinterval()) {
+        translated_expr = translateScalarRex(rex_oper);
+        const auto bin_oper =
+            dynamic_cast<const Analyzer::BinOper*>(translated_expr.get());
+        auto time_literal_expr =
+            dynamic_cast<const Analyzer::Constant*>(bin_oper->get_left_operand());
+        CHECK(time_literal_expr);
+        negative_constant =
+            is_negative_framing_bound(time_literal_expr->get_type_info().get_type(),
+                                      time_literal_expr->get_constval(),
+                                      true);
+        return std::make_pair(false, translated_expr);
+      }
+      if (dynamic_cast<const RexLiteral*>(bound_expr)) {
+        translated_expr = translateScalarRex(bound_expr);
+        if (auto literal_expr =
+                dynamic_cast<const Analyzer::Constant*>(translated_expr.get())) {
+          negative_constant = is_negative_framing_bound(
+              literal_expr->get_type_info().get_type(), literal_expr->get_constval());
+          return std::make_pair(false, translated_expr);
+        }
+      }
+      return std::make_pair(true, translated_expr);
+    };
+
+    if (frame_start_bound.bound_expr) {
+      std::tie(detect_invalid_frame_start_bound_expr, frame_start_bound_expr) =
+          translate_frame_bound_expr(frame_start_bound.bound_expr.get());
+    }
+
+    if (frame_end_bound.bound_expr) {
+      std::tie(detect_invalid_frame_end_bound_expr, frame_end_bound_expr) =
+          translate_frame_bound_expr(frame_end_bound.bound_expr.get());
+    }
+
+    // currently we only support literal expression as frame bound expression
+    if (detect_invalid_frame_start_bound_expr || detect_invalid_frame_end_bound_expr) {
+      throw std::runtime_error(
+          "We currently only support literal expression as a window frame bound "
+          "expression");
+    }
+
+    // note that Calcite already has frame-bound constraint checking logic, but we
+    // also check various invalid cases for safety
+    if (negative_constant) {
+      throw std::runtime_error(
+          "A constant expression for window framing should have nonnegative value.");
+    }
+
+    auto handle_time_interval_expr_if_necessary = [&](const Analyzer::Expr* bound_expr,
+                                                      SqlWindowFrameBoundType bound_type,
+                                                      bool for_start_bound) {
+      if (bound_expr && bound_expr->get_type_info().is_timeinterval()) {
+        const auto bound_bin_oper = dynamic_cast<const Analyzer::BinOper*>(bound_expr);
+        CHECK(bound_bin_oper->get_optype() == kMULTIPLY);
+        auto translated_expr = translateIntervalExprForWindowFraming(
+            order_key_expr,
+            bound_type == SqlWindowFrameBoundType::EXPR_PRECEDING,
+            bound_bin_oper);
+        if (for_start_bound) {
+          frame_start_bound_expr = translated_expr;
+        } else {
+          frame_end_bound_expr = translated_expr;
+        }
+      }
+    };
+    handle_time_interval_expr_if_necessary(
+        frame_start_bound_expr.get(), frame_start_bound_type, true);
+    handle_time_interval_expr_if_necessary(
+        frame_end_bound_expr.get(), frame_end_bound_type, false);
+  }
+
+  if (frame_start_bound.following) {
+    if (frame_end_bound.is_current_row) {
+      throw std::runtime_error(
+          "Window framing starting from following row cannot end with current row.");
+    } else if (has_end_bound_frame_expr && frame_end_bound.preceding) {
+      throw std::runtime_error(
+          "Window framing starting from following row cannot have preceding rows.");
+    }
+  }
+  if (frame_start_bound.is_current_row && frame_end_bound.preceding &&
+      !frame_end_bound.unbounded && has_end_bound_frame_expr) {
+    throw std::runtime_error(
+        "Window framing starting from current row cannot have preceding rows.");
+  }
+  if (has_framing_clause) {
+    if (frame_mode == Analyzer::WindowFunction::FrameBoundType::RANGE) {
+      if (order_keys.size() > 1) {
+        throw std::runtime_error(
+            "Window framing with range mode requires a single order-by column");
+      }
+      if (!frame_start_bound_expr &&
+          frame_start_bound_type == SqlWindowFrameBoundType::UNBOUNDED_PRECEDING &&
+          !frame_end_bound_expr &&
+          frame_end_bound_type == SqlWindowFrameBoundType::CURRENT_ROW) {
+        has_framing_clause = false;
+        VLOG(1) << "Ignore range framing mode with a frame bound between "
+                   "UNBOUNDED_PRECEDING and CURRENT_ROW";
+      }
+      std::set<const Analyzer::ColumnVar*,
+               bool (*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)>
+          colvar_set(Analyzer::ColumnVar::colvar_comp);
+      order_keys.front()->collect_column_var(colvar_set, false);
+      for (auto cv : colvar_set) {
+        if (!(cv->get_type_info().is_integer() || cv->get_type_info().is_fp() ||
+              cv->get_type_info().is_time())) {
+          has_framing_clause = false;
+          VLOG(1) << "Range framing mode with non-number type ordering column is not "
+                     "supported yet, skip window framing";
+        }
+      }
+    }
+  }
+  if (!has_framing_clause) {
+    frame_start_bound_type = SqlWindowFrameBoundType::UNKNOWN;
+    frame_end_bound_type = SqlWindowFrameBoundType::UNKNOWN;
+    frame_start_bound_expr = nullptr;
+    frame_end_bound_expr = nullptr;
+  }
   return makeExpr<Analyzer::WindowFunction>(
       ti,
       rex_window_function->getKind(),
       args,
       partition_keys,
       order_keys,
+      has_framing_clause ? frame_mode : Analyzer::WindowFunction::FrameBoundType::NONE,
+      makeExpr<Analyzer::WindowFrame>(frame_start_bound_type, frame_start_bound_expr),
+      makeExpr<Analyzer::WindowFrame>(frame_end_bound_type, frame_end_bound_expr),
       translate_collation(rex_window_function->getCollation()));
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateIntervalExprForWindowFraming(
+    std::shared_ptr<Analyzer::Expr> order_key,
+    bool for_preceding_bound,
+    const Analyzer::BinOper* frame_bound_expr) const {
+  // translate time interval expression and prepare appropriate frame bound expression:
+  // a) manually compute time unit datum: time type
+  // b) use dateadd expression: date and timestamp
+  const auto order_key_ti = order_key->get_type_info();
+  const auto frame_bound_ti = frame_bound_expr->get_type_info();
+  const auto time_val_expr =
+      dynamic_cast<const Analyzer::Constant*>(frame_bound_expr->get_left_operand());
+  const auto time_unit_val_expr =
+      dynamic_cast<const Analyzer::Constant*>(frame_bound_expr->get_right_operand());
+  ExtractField time_unit =
+      determineTimeUnit(frame_bound_ti.get_type(), time_unit_val_expr);
+  bool invalid_time_unit_type = false;
+  bool invalid_frame_bound_expr_type = false;
+  Datum d;
+  auto prepare_time_value_datum = [&d,
+                                   &invalid_frame_bound_expr_type,
+                                   &time_val_expr,
+                                   &for_preceding_bound](bool is_timestamp_second) {
+    // currently, Calcite only accepts interval with second, so to represent
+    // smaller time units like  millisecond, we have to use decimal point like
+    // INTERVAL 0.003 SECOND (for millisecond)
+    // thus, depending on what time unit we want to represent, Calcite analyzes
+    // the time value to one of following two types: integer and decimal (and
+    // numeric) types
+    switch (time_val_expr->get_type_info().get_type()) {
+      case kTINYINT: {
+        d.bigintval = time_val_expr->get_constval().tinyintval;
+        break;
+      }
+      case kSMALLINT: {
+        d.bigintval = time_val_expr->get_constval().smallintval;
+        break;
+      }
+      case kINT: {
+        d.bigintval = time_val_expr->get_constval().intval;
+        break;
+      }
+      case kBIGINT: {
+        d.bigintval = time_val_expr->get_constval().bigintval;
+        break;
+      }
+      case kDECIMAL:
+      case kNUMERIC: {
+        if (!is_timestamp_second) {
+          // date and time type only use integer type as their time value
+          invalid_frame_bound_expr_type = true;
+          break;
+        }
+        d.bigintval = time_val_expr->get_constval().bigintval;
+        break;
+      }
+      case kDOUBLE: {
+        if (!is_timestamp_second) {
+          // date and time type only use integer type as their time value
+          invalid_frame_bound_expr_type = true;
+          break;
+        }
+        d.bigintval = time_val_expr->get_constval().doubleval *
+                      pow(10, time_val_expr->get_type_info().get_scale());
+        break;
+      }
+      default: {
+        invalid_frame_bound_expr_type = true;
+        break;
+      }
+    }
+    if (for_preceding_bound) {
+      d.bigintval *= -1;
+    }
+  };
+
+  switch (order_key_ti.get_type()) {
+    case kTIME: {
+      if (time_val_expr->get_type_info().is_integer()) {
+        if (time_unit == kSECOND || time_unit == kMINUTE || time_unit == kHOUR) {
+          const auto time_multiplier = determineTimeValMultiplierForTimeType(
+              frame_bound_ti.get_type(), time_unit_val_expr);
+          switch (time_val_expr->get_type_info().get_type()) {
+            case kTINYINT: {
+              d.bigintval = time_val_expr->get_constval().tinyintval * time_multiplier;
+              break;
+            }
+            case kSMALLINT: {
+              d.bigintval = time_val_expr->get_constval().smallintval * time_multiplier;
+              break;
+            }
+            case kINT: {
+              d.bigintval = time_val_expr->get_constval().intval * time_multiplier;
+              break;
+            }
+            case kBIGINT: {
+              d.bigintval = time_val_expr->get_constval().bigintval * time_multiplier;
+              break;
+            }
+            default: {
+              UNREACHABLE();
+              break;
+            }
+          }
+        } else {
+          invalid_frame_bound_expr_type = true;
+        }
+      } else {
+        invalid_time_unit_type = true;
+      }
+      if (invalid_frame_bound_expr_type) {
+        throw std::runtime_error(
+            "Invalid time unit is used to define window frame bound expression for " +
+            order_key_ti.get_type_name() + " type");
+      } else if (invalid_time_unit_type) {
+        throw std::runtime_error(
+            "Window frame bound expression has an invalid type for " +
+            order_key_ti.get_type_name() + " type");
+      }
+      return std::make_shared<Analyzer::Constant>(kBIGINT, false, d);
+    }
+    case kDATE: {
+      DateaddField daField;
+      if (time_val_expr->get_type_info().is_integer()) {
+        switch (time_unit) {
+          case kDAY: {
+            daField = to_dateadd_field("day");
+            break;
+          }
+          case kMONTH: {
+            daField = to_dateadd_field("month");
+            break;
+          }
+          case kYEAR: {
+            daField = to_dateadd_field("year");
+            break;
+          }
+          default: {
+            invalid_frame_bound_expr_type = true;
+            break;
+          }
+        }
+      } else {
+        invalid_time_unit_type = true;
+      }
+      if (invalid_frame_bound_expr_type) {
+        throw std::runtime_error(
+            "Invalid time unit is used to define window frame bound expression for " +
+            order_key_ti.get_type_name() + " type");
+      } else if (invalid_time_unit_type) {
+        throw std::runtime_error(
+            "Window frame bound expression has an invalid type for " +
+            order_key_ti.get_type_name() + " type");
+      }
+      prepare_time_value_datum(false);
+      const auto cast_number_units = makeExpr<Analyzer::Constant>(kBIGINT, false, d);
+      const int dim = order_key_ti.get_dimension();
+      return makeExpr<Analyzer::DateaddExpr>(
+          SQLTypeInfo(kTIMESTAMP, dim, 0, false), daField, cast_number_units, order_key);
+    }
+    case kTIMESTAMP: {
+      DateaddField daField;
+      switch (time_unit) {
+        case kSECOND: {
+          // classify
+          switch (time_val_expr->get_type_info().get_scale()) {
+            case 0: {
+              daField = to_dateadd_field("second");
+              break;
+            }
+            case 3: {
+              daField = to_dateadd_field("millisecond");
+              break;
+            }
+            case 6: {
+              daField = to_dateadd_field("microsecond");
+              break;
+            }
+            case 9: {
+              daField = to_dateadd_field("nanosecond");
+              break;
+            }
+            default:
+              UNREACHABLE();
+              break;
+          }
+          prepare_time_value_datum(true);
+          break;
+        }
+        case kMINUTE: {
+          daField = to_dateadd_field("minute");
+          prepare_time_value_datum(false);
+          break;
+        }
+        case kHOUR: {
+          daField = to_dateadd_field("hour");
+          prepare_time_value_datum(false);
+          break;
+        }
+        case kDAY: {
+          daField = to_dateadd_field("day");
+          prepare_time_value_datum(false);
+          break;
+        }
+        case kMONTH: {
+          daField = to_dateadd_field("month");
+          prepare_time_value_datum(false);
+          break;
+        }
+        case kYEAR: {
+          daField = to_dateadd_field("year");
+          prepare_time_value_datum(false);
+          break;
+        }
+        default: {
+          invalid_time_unit_type = true;
+          break;
+        }
+      }
+      if (!invalid_time_unit_type) {
+        const auto cast_number_units = makeExpr<Analyzer::Constant>(kBIGINT, false, d);
+        const int dim = order_key_ti.get_dimension();
+        return makeExpr<Analyzer::DateaddExpr>(SQLTypeInfo(kTIMESTAMP, dim, 0, false),
+                                               daField,
+                                               cast_number_units,
+                                               order_key);
+      }
+      return nullptr;
+    }
+    default: {
+      UNREACHABLE();
+      break;
+    }
+  }
+  if (invalid_frame_bound_expr_type) {
+    throw std::runtime_error(
+        "Invalid time unit is used to define window frame bound expression for " +
+        order_key_ti.get_type_name() + " type");
+  } else if (invalid_time_unit_type) {
+    throw std::runtime_error("Window frame bound expression has an invalid type for " +
+                             order_key_ti.get_type_name() + " type");
+  }
+  return nullptr;
 }
 
 Analyzer::ExpressionPtrVector RelAlgTranslator::translateFunctionArgs(

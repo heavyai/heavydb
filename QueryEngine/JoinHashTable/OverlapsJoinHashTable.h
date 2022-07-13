@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ class OverlapsJoinHashTable : public HashJoin {
                         Executor* executor,
                         const std::vector<InnerOuter>& inner_outer_pairs,
                         const int device_count,
-                        HashtableAccessPathInfo hashtable_access_path_info,
+                        const HashTableBuildDagMap& hashtable_build_dag_map,
                         const TableIdToNodeMap& table_id_to_node_map)
       : condition_(condition)
       , join_type_(join_type)
@@ -41,9 +41,7 @@ class OverlapsJoinHashTable : public HashJoin {
       , column_cache_(column_cache)
       , inner_outer_pairs_(inner_outer_pairs)
       , device_count_(device_count)
-      , hashtable_cache_key_(hashtable_access_path_info.hashed_query_plan_dag)
-      , hashtable_cache_meta_info_(hashtable_access_path_info.meta_info)
-      , table_keys_(hashtable_access_path_info.table_keys)
+      , hashtable_build_dag_map_(hashtable_build_dag_map)
       , table_id_to_node_map_(table_id_to_node_map) {
     CHECK_GT(device_count_, 0);
     hash_tables_for_device_.resize(std::max(device_count_, 1));
@@ -90,7 +88,7 @@ class OverlapsJoinHashTable : public HashJoin {
     }
   }
 
-  static HashTableRecycler* getHashTableCache() {
+  static HashtableRecycler* getHashTableCache() {
     CHECK(hash_table_cache_);
     return hash_table_cache_.get();
   }
@@ -190,7 +188,7 @@ class OverlapsJoinHashTable : public HashJoin {
       const size_t device_id);
 
   std::shared_ptr<BaselineHashTable> copyCpuHashTableToGpu(
-      std::shared_ptr<BaselineHashTable>&& cpu_hash_table,
+      std::shared_ptr<BaselineHashTable>& cpu_hash_table,
       const HashType layout,
       const size_t entry_count,
       const size_t emitted_keys_count,
@@ -212,9 +210,9 @@ class OverlapsJoinHashTable : public HashJoin {
     return nullptr;
   }
 
-  const RegisteredQueryHint& getRegisteredQueryHint() override { return query_hint_; }
+  const RegisteredQueryHint& getRegisteredQueryHint() { return query_hint_; }
 
-  void registerQueryHint(const RegisteredQueryHint& query_hint) override {
+  void registerQueryHint(const RegisteredQueryHint& query_hint) {
     query_hint_ = query_hint;
   }
 
@@ -315,7 +313,7 @@ class OverlapsJoinHashTable : public HashJoin {
   struct AlternativeCacheKeyForOverlapsHashJoin {
     std::vector<InnerOuter> inner_outer_pairs;
     const size_t num_elements;
-    const std::vector<ChunkKey> chunk_key;
+    const size_t chunk_key_hash;
     const SQLOps optype;
     const size_t max_hashtable_size;
     const double bucket_threshold;
@@ -323,7 +321,7 @@ class OverlapsJoinHashTable : public HashJoin {
   };
 
   QueryPlanHash getAlternativeCacheKey(AlternativeCacheKeyForOverlapsHashJoin& info) {
-    auto hash = boost::hash_value(::toString(info.chunk_key));
+    auto hash = info.chunk_key_hash;
     for (InnerOuter inner_outer : info.inner_outer_pairs) {
       auto inner_col = inner_outer.first;
       auto rhs_col_var = dynamic_cast<const Analyzer::ColumnVar*>(inner_outer.second);
@@ -334,25 +332,35 @@ class OverlapsJoinHashTable : public HashJoin {
       }
     }
     boost::hash_combine(hash, info.num_elements);
-    boost::hash_combine(hash, ::toString(info.optype));
+    boost::hash_combine(hash, info.optype);
     boost::hash_combine(hash, info.max_hashtable_size);
     boost::hash_combine(hash, info.bucket_threshold);
-    boost::hash_combine(hash, ::toString(info.inverse_bucket_sizes));
+    boost::hash_combine(hash, info.inverse_bucket_sizes);
     return hash;
   }
 
-  void generateCacheKey(const size_t max_hashtable_size,
-                        const double bucket_threshold,
-                        const std::vector<double>& bucket_sizes) {
-    std::ostringstream oss;
-    oss << hashtable_cache_key_ << "|";
-    oss << max_hashtable_size << "|";
-    oss << bucket_threshold << "|";
-    oss << ::toString(bucket_sizes);
-    hashtable_cache_key_ = boost::hash_value(oss.str());
+  void generateCacheKey(
+      const size_t max_hashtable_size,
+      const double bucket_threshold,
+      const std::vector<double>& bucket_sizes,
+      std::vector<std::vector<Fragmenter_Namespace::FragmentInfo>>& fragments_per_device,
+      int device_count) {
+    for (int device_id = 0; device_id < device_count; ++device_id) {
+      auto hash_val = boost::hash_value(hashtable_cache_key_[device_id]);
+      boost::hash_combine(hash_val, max_hashtable_size);
+      boost::hash_combine(hash_val, bucket_threshold);
+      boost::hash_combine(hash_val, bucket_sizes);
+      boost::hash_combine(hash_val,
+                          HashJoin::collectFragmentIds(fragments_per_device[device_id]));
+      hashtable_cache_key_[device_id] = hash_val;
+      hash_table_cache_->addQueryPlanDagForTableKeys(hashtable_cache_key_[device_id],
+                                                     table_keys_);
+    }
   }
 
-  QueryPlanHash getCacheKey() const { return hashtable_cache_key_; }
+  QueryPlanHash getCacheKey(int device_id) const {
+    return hashtable_cache_key_[device_id];
+  }
 
   const std::vector<InnerOuter>& getInnerOuterPairs() const { return inner_outer_pairs_; }
 
@@ -396,13 +404,14 @@ class OverlapsJoinHashTable : public HashJoin {
   // in this scenario, the rule we follow is cache everything
   // with the assumption that varying P is intended by user
   // for the performance and so worth to keep it for future recycling
-  static std::unique_ptr<HashTableRecycler> hash_table_cache_;
+  static std::unique_ptr<HashtableRecycler> hash_table_cache_;
   // auto tuner cache is maintained separately with hashtable cache
   static std::unique_ptr<OverlapsTuningParamRecycler> auto_tuner_cache_;
 
   RegisteredQueryHint query_hint_;
-  QueryPlan query_plan_dag_;
-  QueryPlanHash hashtable_cache_key_;
+  HashTableBuildDagMap hashtable_build_dag_map_;
+  QueryPlanDAG query_plan_dag_;
+  std::vector<QueryPlanHash> hashtable_cache_key_;
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
   std::unordered_set<size_t> table_keys_;
   const TableIdToNodeMap table_id_to_node_map_;

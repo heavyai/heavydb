@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,11 +43,13 @@
 #include "QueryEngine/CartesianProduct.h"
 #include "QueryEngine/CgenState.h"
 #include "QueryEngine/CodeCache.h"
+#include "QueryEngine/CodeCacheAccessor.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/DateTimeUtils.h"
 #include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
 #include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
 #include "QueryEngine/ExecutionKernel.h"
+#include "QueryEngine/ExternalCacheInvalidators.h"
 #include "QueryEngine/GpuSharedMemoryContext.h"
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
@@ -57,6 +59,7 @@
 #include "QueryEngine/QueryPlanDagCache.h"
 #include "QueryEngine/RelAlgExecutionUnit.h"
 #include "QueryEngine/RelAlgTranslator.h"
+#include "QueryEngine/ResultSetRecyclerHolder.h"
 #include "QueryEngine/StringDictionaryGenerations.h"
 #include "QueryEngine/TableGenerations.h"
 #include "QueryEngine/TargetMetaInfo.h"
@@ -66,7 +69,7 @@
 #include "Logger/Logger.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/funcannotations.h"
-#include "Shared/mapd_shared_mutex.h"
+#include "Shared/heavyai_shared_mutex.h"
 #include "Shared/measure.h"
 #include "Shared/thread_count.h"
 #include "Shared/toString.h"
@@ -148,10 +151,6 @@ class QuerySessionStatus {
 };
 using QuerySessionMap =
     std::map<const QuerySessionId, std::map<std::string, QuerySessionStatus>>;
-
-extern void read_rt_udf_gpu_module(const std::string& udf_ir);
-extern void read_rt_udf_cpu_module(const std::string& udf_ir);
-extern bool is_rt_udf_module_present(bool cpu_only = false);
 
 class ColumnFetcher;
 
@@ -375,6 +374,7 @@ class Executor {
  public:
   using ExecutorId = size_t;
   static const ExecutorId UNITARY_EXECUTOR_ID = 0;
+  static const ExecutorId INVALID_EXECUTOR_ID = SIZE_MAX;
 
   Executor(const ExecutorId id,
            Data_Namespace::DataMgr* data_mgr,
@@ -384,6 +384,69 @@ class Executor {
            const std::string& debug_dir,
            const std::string& debug_file);
 
+  void clearCaches(bool runtime_only = false);
+
+  std::string dumpCache() const;
+
+  static void clearExternalCaches(bool for_update,
+                                  const TableDescriptor* td,
+                                  const int current_db_id) {
+    bool clearEntireCache = true;
+    if (td) {
+      const auto& table_chunk_key_prefix = td->getTableChunkKey(current_db_id);
+      if (!table_chunk_key_prefix.empty()) {
+        auto table_key = boost::hash_value(table_chunk_key_prefix);
+        ResultSetCacheInvalidator::invalidateCachesByTable(table_key);
+        if (for_update) {
+          UpdateTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
+        } else {
+          DeleteTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
+        }
+        clearEntireCache = false;
+      }
+    }
+    if (clearEntireCache) {
+      ResultSetCacheInvalidator::invalidateCaches();
+      if (for_update) {
+        UpdateTriggeredCacheInvalidator::invalidateCaches();
+      } else {
+        DeleteTriggeredCacheInvalidator::invalidateCaches();
+      }
+    }
+  }
+
+  void reset(bool discard_runtime_modules_only = false);
+
+  template <typename F>
+  static void registerExtensionFunctions(F register_extension_functions) {
+    // Don't want native code to vanish while executing:
+    heavyai::unique_lock<heavyai::shared_mutex> flush_lock(execute_mutex_);
+    // Blocks Executor::getExecutor:
+    heavyai::unique_lock<heavyai::shared_mutex> lock(executors_cache_mutex_);
+    // Lock registration to avoid
+    // java.util.ConcurrentModificationException from calcite server
+    // when client registrations arrive too fast.  Also blocks
+    // Executor::get_rt_udf_module for retrieving runtime UDF/UDTF
+    // module until this registration has rebuild it via
+    // Executor::update_after_registration:
+    std::lock_guard<std::mutex> register_lock(
+        register_runtime_extension_functions_mutex_);
+
+    // Reset all executors:
+    for (auto& executor_item : Executor::executors_) {
+      executor_item.second->reset(/*discard_runtime_modules_only=*/true);
+    }
+    // Call registration worker, see
+    // DBHandler::register_runtime_extension_functions for details. In
+    // short, updates Executor::extension_module_sources,
+    // table_functions::TableFunctionsFactory, and registers runtime
+    // extension functions with Calcite:
+    register_extension_functions();
+
+    // Update executors with registered LLVM modules:
+    update_after_registration(/*update_runtime_modules_only=*/true);
+  }
+
   static std::shared_ptr<Executor> getExecutor(
       const ExecutorId id,
       const std::string& debug_dir = "",
@@ -391,10 +454,10 @@ class Executor {
       const SystemParameters& system_parameters = SystemParameters());
 
   static void nukeCacheOfExecutors() {
-    mapd_unique_lock<mapd_shared_mutex> flush_lock(
+    heavyai::unique_lock<heavyai::shared_mutex> flush_lock(
         execute_mutex_);  // don't want native code to vanish while executing
-    mapd_unique_lock<mapd_shared_mutex> lock(executors_cache_mutex_);
-    (decltype(executors_){}).swap(executors_);
+    heavyai::unique_lock<heavyai::shared_mutex> lock(executors_cache_mutex_);
+    executors_.clear();
   }
 
   static void clearMemory(const Data_Namespace::MemoryLevel memory_level);
@@ -402,6 +465,58 @@ class Executor {
   static size_t getArenaBlockSize();
 
   static void addUdfIrToModule(const std::string& udf_ir_filename, const bool is_cuda_ir);
+
+  enum class ExtModuleKinds {
+    template_module,     // RuntimeFunctions.bc
+    udf_cpu_module,      // Load-time UDFs for CPU execution
+    udf_gpu_module,      // Load-time UDFs for GPU execution
+    rt_udf_cpu_module,   // Run-time UDF/UDTFs for CPU execution
+    rt_udf_gpu_module,   // Run-time UDF/UDTFs for GPU execution
+    rt_geos_module,      // geos functions
+    rt_libdevice_module  // math library functions for GPU execution
+  };
+  // Globally available mapping of extension module sources. Not thread-safe.
+  static std::map<ExtModuleKinds, std::string> extension_module_sources;
+  static void initialize_extension_module_sources();
+
+  // Convenience functions for retrieving executor-local extension modules, thread-safe:
+  const std::unique_ptr<llvm::Module>& get_rt_module() const {
+    return get_extension_module(ExtModuleKinds::template_module);
+  }
+  const std::unique_ptr<llvm::Module>& get_udf_module(bool is_gpu = false) const {
+    return get_extension_module(
+        (is_gpu ? ExtModuleKinds::udf_gpu_module : ExtModuleKinds::udf_cpu_module));
+  }
+  const std::unique_ptr<llvm::Module>& get_rt_udf_module(bool is_gpu = false) const {
+    std::lock_guard<std::mutex> lock(
+        Executor::register_runtime_extension_functions_mutex_);
+    return get_extension_module(
+        (is_gpu ? ExtModuleKinds::rt_udf_gpu_module : ExtModuleKinds::rt_udf_cpu_module));
+  }
+  const std::unique_ptr<llvm::Module>& get_geos_module() const {
+    return get_extension_module(ExtModuleKinds::rt_geos_module);
+  }
+  const std::unique_ptr<llvm::Module>& get_libdevice_module() const {
+    return get_extension_module(ExtModuleKinds::rt_libdevice_module);
+  }
+
+  bool has_rt_module() const {
+    return has_extension_module(ExtModuleKinds::template_module);
+  }
+  bool has_udf_module(bool is_gpu = false) const {
+    return has_extension_module(
+        (is_gpu ? ExtModuleKinds::udf_gpu_module : ExtModuleKinds::udf_cpu_module));
+  }
+  bool has_rt_udf_module(bool is_gpu = false) const {
+    return has_extension_module(
+        (is_gpu ? ExtModuleKinds::rt_udf_gpu_module : ExtModuleKinds::rt_udf_cpu_module));
+  }
+  bool has_geos_module() const {
+    return has_extension_module(ExtModuleKinds::rt_geos_module);
+  }
+  bool has_libdevice_module() const {
+    return has_extension_module(ExtModuleKinds::rt_libdevice_module);
+  }
 
   /**
    * Returns pointer to the intermediate tables vector currently stored by this executor.
@@ -421,6 +536,21 @@ class Executor {
       const int dictId,
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
       const bool with_generation) const;
+
+  const StringDictionaryProxy::IdMap* getStringProxyTranslationMap(
+      const int source_dict_id,
+      const int dest_dict_id,
+      const RowSetMemoryOwner::StringTranslationType translation_type,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+      const bool with_generation) const;
+
+  const StringDictionaryProxy::IdMap* getJoinIntersectionStringProxyTranslationMap(
+      const StringDictionaryProxy* source_proxy,
+      StringDictionaryProxy* dest_proxy,
+      const std::vector<StringOps_Namespace::StringOpInfo>& source_string_op_infos,
+      const std::vector<StringOps_Namespace::StringOpInfo>& dest_source_string_op_infos,
+      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const;
 
   bool isCPUOnly() const;
 
@@ -459,8 +589,8 @@ class Executor {
   std::vector<ColumnLazyFetchInfo> getColLazyFetchInfo(
       const std::vector<Analyzer::Expr*>& target_exprs) const;
 
-  void registerActiveModule(void* module, const int device_id) const;
-  void unregisterActiveModule(void* module, const int device_id) const;
+  static void registerActiveModule(void* module, const int device_id);
+  static void unregisterActiveModule(const int device_id);
   void interrupt(const QuerySessionId& query_session = "",
                  const QuerySessionId& interrupt_session = "");
   void resetInterrupt();
@@ -469,7 +599,7 @@ class Executor {
   void enableRuntimeQueryInterrupt(const double runtime_query_check_freq,
                                    const unsigned pending_query_check_freq) const;
 
-  static const size_t high_scan_limit{32000000};
+  static const size_t high_scan_limit{128000000};
 
   int8_t warpSize() const;
   unsigned gridSize() const;
@@ -493,7 +623,7 @@ class Executor {
                                     const TableDescriptor* updated_table_desc,
                                     const CompilationOptions& co,
                                     const ExecutionOptions& eo,
-                                    const Catalog_Namespace::Catalog& cat,
+                                    Catalog_Namespace::Catalog& cat,
                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                     const UpdateLogForFragment::Callback& cb,
                                     const bool is_agg);
@@ -502,10 +632,11 @@ class Executor {
       const RelAlgExecutionUnit& ra_exe_unit,
       const std::shared_ptr<RowSetMemoryOwner>& row_set_mem_owner);
 
+  int deviceCount(const ExecutorDeviceType) const;
+
  private:
   void clearMetaInfoCache();
 
-  int deviceCount(const ExecutorDeviceType) const;
   int deviceCountForMemoryLevel(const Data_Namespace::MemoryLevel memory_level) const;
 
   // Generate code for a window function target.
@@ -694,8 +825,6 @@ class Executor {
 
   void buildSelectedFragsMappingForUnion(
       std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
-      std::vector<size_t>& local_col_to_frag_pos,
-      const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
       const FragmentsList& selected_fragments,
       const RelAlgExecutionUnit& ra_exe_unit);
 
@@ -753,11 +882,6 @@ class Executor {
                                                    const bool is_group_by,
                                                    const bool float_argument_input);
 
-  static void addCodeToCache(const CodeCacheKey&,
-                             std::shared_ptr<CompilationContext>,
-                             llvm::Module*,
-                             CodeCache&);
-
  private:
   ResultSetPtr resultsUnion(SharedKernelContext& shared_context,
                             const RelAlgExecutionUnit& ra_exe_unit);
@@ -792,6 +916,8 @@ class Executor {
                                    ColumnCacheMap& column_cache);
 
   std::vector<llvm::Value*> inlineHoistedLiterals();
+
+  void AutoTrackBuffersInRuntimeIR();
 
   std::tuple<CompilationResult, std::unique_ptr<QueryMemoryDescriptor>> compileWorkUnit(
       const std::vector<InputTableInfo>& query_infos,
@@ -860,6 +986,7 @@ class Executor {
   void createErrorCheckControlFlow(llvm::Function* query_func,
                                    bool run_with_dynamic_watchdog,
                                    bool run_with_allowing_runtime_interrupt,
+                                   const std::vector<JoinLoop>& join_loops,
                                    ExecutorDeviceType device_type,
                                    const std::vector<InputTableInfo>& input_table_infos);
 
@@ -967,43 +1094,49 @@ class Executor {
     agg_col_range_cache_ = aggregated_col_range;
   }
   ExecutorId getExecutorId() const { return executor_id_; };
-  QuerySessionId& getCurrentQuerySession(mapd_shared_lock<mapd_shared_mutex>& read_lock);
+  QuerySessionId& getCurrentQuerySession(
+      heavyai::shared_lock<heavyai::shared_mutex>& read_lock);
   QuerySessionStatus::QueryStatus getQuerySessionStatus(
       const QuerySessionId& candidate_query_session,
-      mapd_shared_lock<mapd_shared_mutex>& read_lock);
+      heavyai::shared_lock<heavyai::shared_mutex>& read_lock);
   bool checkCurrentQuerySession(const std::string& candidate_query_session,
-                                mapd_shared_lock<mapd_shared_mutex>& read_lock);
-  void invalidateRunningQuerySession(mapd_unique_lock<mapd_shared_mutex>& write_lock);
+                                heavyai::shared_lock<heavyai::shared_mutex>& read_lock);
+  void invalidateRunningQuerySession(
+      heavyai::unique_lock<heavyai::shared_mutex>& write_lock);
   bool addToQuerySessionList(const QuerySessionId& query_session,
                              const std::string& query_str,
                              const std::string& submitted,
                              const size_t executor_id,
                              const QuerySessionStatus::QueryStatus query_status,
-                             mapd_unique_lock<mapd_shared_mutex>& write_lock);
-  bool removeFromQuerySessionList(const QuerySessionId& query_session,
-                                  const std::string& submitted_time_str,
-                                  mapd_unique_lock<mapd_shared_mutex>& write_lock);
-  void setQuerySessionAsInterrupted(const QuerySessionId& query_session,
-                                    mapd_unique_lock<mapd_shared_mutex>& write_lock);
-  bool checkIsQuerySessionInterrupted(const std::string& query_session,
-                                      mapd_shared_lock<mapd_shared_mutex>& read_lock);
-  bool checkIsQuerySessionEnrolled(const QuerySessionId& query_session,
-                                   mapd_shared_lock<mapd_shared_mutex>& read_lock);
+                             heavyai::unique_lock<heavyai::shared_mutex>& write_lock);
+  bool removeFromQuerySessionList(
+      const QuerySessionId& query_session,
+      const std::string& submitted_time_str,
+      heavyai::unique_lock<heavyai::shared_mutex>& write_lock);
+  void setQuerySessionAsInterrupted(
+      const QuerySessionId& query_session,
+      heavyai::unique_lock<heavyai::shared_mutex>& write_lock);
+  bool checkIsQuerySessionInterrupted(
+      const std::string& query_session,
+      heavyai::shared_lock<heavyai::shared_mutex>& read_lock);
+  bool checkIsQuerySessionEnrolled(
+      const QuerySessionId& query_session,
+      heavyai::shared_lock<heavyai::shared_mutex>& read_lock);
   bool updateQuerySessionStatusWithLock(
       const QuerySessionId& query_session,
       const std::string& submitted_time_str,
       const QuerySessionStatus::QueryStatus updated_query_status,
-      mapd_unique_lock<mapd_shared_mutex>& write_lock);
+      heavyai::unique_lock<heavyai::shared_mutex>& write_lock);
   bool updateQuerySessionExecutorAssignment(
       const QuerySessionId& query_session,
       const std::string& submitted_time_str,
       const size_t executor_id,
-      mapd_unique_lock<mapd_shared_mutex>& write_lock);
+      heavyai::unique_lock<heavyai::shared_mutex>& write_lock);
   std::vector<QuerySessionStatus> getQuerySessionInfo(
       const QuerySessionId& query_session,
-      mapd_shared_lock<mapd_shared_mutex>& read_lock);
+      heavyai::shared_lock<heavyai::shared_mutex>& read_lock);
 
-  mapd_shared_mutex& getSessionLock();
+  heavyai::shared_mutex& getSessionLock();
   CurrentQueryStatus attachExecutorToQuerySession(
       const QuerySessionId& query_session_id,
       const std::string& query_str,
@@ -1027,26 +1160,31 @@ class Executor {
   // check whether the current session that this executor manages is interrupted
   // while performing non-kernel time task
   bool checkNonKernelTimeInterrupted() const;
-  void registerExtractedQueryPlanDag(const QueryPlan& query_plan_dag);
-  const QueryPlan getLatestQueryPlanDagExtracted() const;
+  void registerExtractedQueryPlanDag(const QueryPlanDAG& query_plan_dag);
+  const QueryPlanDAG getLatestQueryPlanDagExtracted() const;
 
   // true when we have matched cardinality, and false otherwise
   using CachedCardinality = std::pair<bool, size_t>;
   void addToCardinalityCache(const std::string& cache_key, const size_t cache_value);
   CachedCardinality getCachedCardinality(const std::string& cache_key);
 
-  mapd_shared_mutex& getDataRecyclerLock();
+  heavyai::shared_mutex& getDataRecyclerLock();
   QueryPlanDagCache& getQueryPlanDagCache();
-  JoinColumnsInfo getJoinColumnsInfo(const Analyzer::Expr* join_expr,
-                                     JoinColumnSide target_side,
-                                     bool extract_only_col_id);
+  ResultSetRecyclerHolder& getRecultSetRecyclerHolder();
 
   CgenState* getCgenStatePtr() const { return cgen_state_.get(); }
+  PlanState* getPlanStatePtr() const { return plan_state_.get(); }
+
+  llvm::LLVMContext& getContext() { return *context_.get(); }
+  void update_extension_modules(bool update_runtime_modules_only = false);
+
+  static void update_after_registration(bool update_runtime_modules_only = false) {
+    for (auto executor_item : Executor::executors_) {
+      executor_item.second->update_extension_modules(update_runtime_modules_only);
+    }
+  }
 
  private:
-  std::shared_ptr<CompilationContext> getCodeFromCache(const CodeCacheKey&,
-                                                       const CodeCache&);
-
   std::vector<int8_t> serializeLiterals(
       const std::unordered_map<int, CgenState::LiteralValues>& literals,
       const int device_id);
@@ -1059,7 +1197,48 @@ class Executor {
     return off;
   }
 
+  const ExecutorId executor_id_;
+  std::unique_ptr<llvm::LLVMContext> context_;
+
+ public:
+  // CgenStateManager uses RAII pattern to ensure that recursive code
+  // generation (e.g. as in multi-step multi-subqueries) uses a new
+  // CgenState instance for each recursion depth while restoring the
+  // old CgenState instances when returning from recursion.
+  class CgenStateManager {
+   public:
+    CgenStateManager(Executor& executor);
+    CgenStateManager(Executor& executor,
+                     const bool allow_lazy_fetch,
+                     const std::vector<InputTableInfo>& query_infos,
+                     const PlanState::DeletedColumnsMap& deleted_cols_map,
+                     const RelAlgExecutionUnit* ra_exe_unit);
+    ~CgenStateManager();
+
+   private:
+    Executor& executor_;
+    std::chrono::steady_clock::time_point lock_queue_clock_;
+    std::lock_guard<std::mutex> lock_;
+    std::unique_ptr<CgenState> cgen_state_;
+  };
+
+ private:
   std::unique_ptr<CgenState> cgen_state_;
+
+  const std::unique_ptr<llvm::Module>& get_extension_module(ExtModuleKinds kind) const {
+    auto it = extension_modules_.find(kind);
+    if (it != extension_modules_.end()) {
+      return it->second;
+    }
+    static const std::unique_ptr<llvm::Module> empty;
+    return empty;
+  }
+
+  bool has_extension_module(ExtModuleKinds kind) const {
+    return extension_modules_.find(kind) != extension_modules_.end();
+  }
+
+  std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>> extension_modules_;
 
   class FetchCacheAnchor {
    public:
@@ -1069,7 +1248,7 @@ class Executor {
 
    private:
     CgenState* cgen_state_;
-    std::unordered_map<int, std::vector<llvm::Value*>> saved_fetch_cache;
+    std::unordered_map<size_t, std::vector<llvm::Value*>> saved_fetch_cache;
   };
 
   llvm::Value* spillDoubleElement(llvm::Value* elem_val, llvm::Type* elem_ty);
@@ -1090,12 +1269,8 @@ class Executor {
 
   mutable std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 
-  CodeCache cpu_code_cache_;
-  CodeCache gpu_code_cache_;
-
   static const size_t baseline_threshold{
       1000000};  // if a perfect hash needs more entries, use baseline
-  static const size_t code_cache_size{1000};
 
   const unsigned block_size_x_;
   const unsigned grid_size_x_;
@@ -1103,7 +1278,6 @@ class Executor {
   const std::string debug_dir_;
   const std::string debug_file_;
 
-  const ExecutorId executor_id_;
   const Catalog_Namespace::Catalog* catalog_;
   Data_Namespace::DataMgr* data_mgr_;
   const TemporaryTables* temporary_tables_;
@@ -1121,7 +1295,7 @@ class Executor {
   mutable InputTableInfoCache input_table_info_cache_;
   AggregatedColRange agg_col_range_cache_;
   TableGenerations table_generations_;
-  static mapd_shared_mutex executor_session_mutex_;
+  static heavyai::shared_mutex executor_session_mutex_;
   // a query session that this executor manages
   QuerySessionId current_query_session_;
   // a pair of <QuerySessionId, interrupted_flag>
@@ -1132,33 +1306,33 @@ class Executor {
 
   // SQL queries take a shared lock, exclusive options (cache clear, memory clear) take a
   // write lock
-  static mapd_shared_mutex execute_mutex_;
+  static heavyai::shared_mutex execute_mutex_;
 
   struct ExecutorMutexHolder {
-    mapd_shared_lock<mapd_shared_mutex> shared_lock;
-    mapd_unique_lock<mapd_shared_mutex> unique_lock;
+    heavyai::shared_lock<heavyai::shared_mutex> shared_lock;
+    heavyai::unique_lock<heavyai::shared_mutex> unique_lock;
   };
   inline ExecutorMutexHolder acquireExecuteMutex() {
     ExecutorMutexHolder ret;
     if (executor_id_ == Executor::UNITARY_EXECUTOR_ID) {
       // Only one unitary executor can run at a time
-      ret.unique_lock = mapd_unique_lock<mapd_shared_mutex>(execute_mutex_);
+      ret.unique_lock = heavyai::unique_lock<heavyai::shared_mutex>(execute_mutex_);
     } else {
-      ret.shared_lock = mapd_shared_lock<mapd_shared_mutex>(execute_mutex_);
+      ret.shared_lock = heavyai::shared_lock<heavyai::shared_mutex>(execute_mutex_);
     }
     return ret;
   }
 
-  static mapd_shared_mutex executors_cache_mutex_;
+  static heavyai::shared_mutex executors_cache_mutex_;
 
   static QueryPlanDagCache query_plan_dag_cache_;
-  const QueryPlanHash INVALID_QUERY_PLAN_HASH{std::hash<std::string>{}(EMPTY_QUERY_PLAN)};
-  static mapd_shared_mutex recycler_mutex_;
+  static heavyai::shared_mutex recycler_mutex_;
   static std::unordered_map<std::string, size_t> cardinality_cache_;
+  static ResultSetRecyclerHolder resultset_recycler_holder_;
 
   // a variable used for testing query plan DAG extractor when a query has a table
   // function
-  static QueryPlan latest_query_plan_extracted_;
+  static QueryPlanDAG latest_query_plan_extracted_;
 
  public:
   static const int32_t ERR_DIV_BY_ZERO{1};
@@ -1178,8 +1352,25 @@ class Executor {
   static const int32_t ERR_GEOS{16};
   static const int32_t ERR_WIDTH_BUCKET_INVALID_ARGUMENT{17};
 
-  static std::mutex compilation_mutex_;
-  static std::mutex kernel_mutex_;
+  // Although compilation is Executor-local, an executor may trigger
+  // threaded compilations (see executeWorkUnitPerFragment) that share
+  // executor cgen_state and LLVM context, for instance.
+  //
+  // Rule of thumb: when `executor->thread_id_ != logger::thread_id()`
+  // and executor LLVM Context is being modified (modules are cloned,
+  // etc), one should protect such a code with
+  //
+  //  std::lock_guard<std::mutex> compilation_lock(executor->compilation_mutex_);
+  //
+  // to ensure thread safety.
+  std::mutex compilation_mutex_;
+  const logger::ThreadId thread_id_;
+
+  // Runtime extension function registration updates
+  // extension_modules_ that needs to be kept blocked from codegen
+  // until the update is complete.
+  static std::mutex register_runtime_extension_functions_mutex_;
+  static std::mutex kernel_mutex_;  // TODO: should this be executor-local mutex?
 
   friend class BaselineJoinHashTable;
   friend class CodeGenerator;
@@ -1198,6 +1389,7 @@ class Executor {
   friend class QueryExecutionContext;
   friend class ResultSet;
   friend class InValuesBitmap;
+  friend class StringDictionaryTranslationMgr;
   friend class LeafAggregator;
   friend class PerfectJoinHashTable;
   friend class QueryRewriter;
@@ -1252,5 +1444,32 @@ extern "C" RUNTIME_EXPORT void register_buffer_with_executor_rsm(int64_t exec,
                                                                  int8_t* buffer);
 
 const Analyzer::Expr* remove_cast_to_int(const Analyzer::Expr* expr);
+
+inline std::string toString(const Executor::ExtModuleKinds& kind) {
+  switch (kind) {
+    case Executor::ExtModuleKinds::template_module:
+      return "template_module";
+    case Executor::ExtModuleKinds::rt_geos_module:
+      return "rt_geos_module";
+    case Executor::ExtModuleKinds::rt_libdevice_module:
+      return "rt_libdevice_module";
+    case Executor::ExtModuleKinds::udf_cpu_module:
+      return "udf_cpu_module";
+    case Executor::ExtModuleKinds::udf_gpu_module:
+      return "udf_gpu_module";
+    case Executor::ExtModuleKinds::rt_udf_cpu_module:
+      return "rt_udf_cpu_module";
+    case Executor::ExtModuleKinds::rt_udf_gpu_module:
+      return "rt_udf_gpu_module";
+  }
+  LOG(FATAL) << "Invalid LLVM module kind.";
+  return "";
+}
+
+namespace foreign_storage {
+void populate_string_dictionary(const int32_t table_id,
+                                const int32_t col_id,
+                                const Catalog_Namespace::Catalog& cat);
+}
 
 #endif  // QUERYENGINE_EXECUTE_H

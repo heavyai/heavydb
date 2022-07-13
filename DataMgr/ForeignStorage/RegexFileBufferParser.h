@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,8 @@
 
 #pragma once
 
-#if defined(_WIN32) && !defined(WIN32_LEAN_AND_MEAN)
-// boost/regex.hpp on win32 includes Windows.h
-// and we need to clean up macros such as ERROR and GetObject
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <boost/regex.hpp>
-
-#if defined(_WIN32) && defined(WIN32_LEAN_AND_MEAN)
-#include "Shared/cleanup_global_namespace.h"
-#undef WIN32_LEAN_AND_MEAN
-#endif
-
 #include "DataMgr/ForeignStorage/TextFileBufferParser.h"
+#include "Shared/clean_boost_regex.hpp"
 
 namespace foreign_storage {
 class RegexFileBufferParser : public TextFileBufferParser {
@@ -54,12 +43,23 @@ class RegexFileBufferParser : public TextFileBufferParser {
                      const ForeignTable* foreign_table) const override;
 
   // For testing purposes only
-  static void setSkipFirstLineForTesting(bool skip);
   static void setMaxBufferResize(size_t max_buffer_resize);
 
   inline static const std::string LINE_REGEX_KEY = "LINE_REGEX";
   inline static const std::string LINE_START_REGEX_KEY = "LINE_START_REGEX";
-  inline static const std::string BUFFER_SIZE_KEY = "BUFFER_SIZE";
+  inline static const std::string HEADER_KEY = "HEADER";
+
+ protected:
+  virtual bool regexMatchColumns(const std::string& row_str,
+                                 const boost::regex& line_regex,
+                                 size_t logical_column_count,
+                                 std::vector<std::string>& parsed_columns_str,
+                                 std::vector<std::string_view>& parsed_columns_sv,
+                                 const std::string& file_path) const;
+
+  virtual bool shouldRemoveNonMatches() const;
+
+  virtual bool shouldTruncateStringValues() const;
 
  private:
   static size_t getMaxBufferResize();

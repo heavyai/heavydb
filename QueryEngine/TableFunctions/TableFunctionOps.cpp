@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,36 @@ extern "C" DEVICE RUNTIME_EXPORT void TableFunctionManager_set_output_row_size(
 extern "C" DEVICE RUNTIME_EXPORT void set_output_row_size(int64_t num_rows) {
   auto& mgr = TableFunctionManager::get_singleton();
   TableFunctionManager_set_output_row_size(reinterpret_cast<int8_t*>(mgr), num_rows);
+}
+
+/*
+  set_output_array_values_total_number sets the total number of array
+  values in the index-th output Column of arrays.
+
+  set_output_array_values_total_number must be called before
+  set_output_row_size.
+*/
+extern "C" DEVICE RUNTIME_EXPORT void
+TableFunctionManager_set_output_array_values_total_number(
+    int8_t* mgr_ptr,
+    int32_t index,
+    int64_t output_array_values_total_number) {
+  auto mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
+  if (output_array_values_total_number < 0) {
+    throw TableFunctionError(
+        "set_output_array_values_total_number: expected non-negative array size but "
+        "got " +
+        std::to_string(output_array_values_total_number));
+  }
+  mgr->set_output_array_values_total_number(index, output_array_values_total_number);
+}
+
+extern "C" DEVICE RUNTIME_EXPORT void set_output_array_values_total_number(
+    int32_t index,
+    int64_t output_array_values_total_number) {
+  auto& mgr = TableFunctionManager::get_singleton();
+  TableFunctionManager_set_output_array_values_total_number(
+      reinterpret_cast<int8_t*>(mgr), index, output_array_values_total_number);
 }
 
 /*
@@ -98,6 +128,28 @@ extern "C" DEVICE RUNTIME_EXPORT int8_t* TableFunctionManager_get_singleton() {
     throw TableFunctionError("uninitialized TableFunctionManager singleton");
   }
   return reinterpret_cast<int8_t*>(mgr);
+}
+
+extern "C" DEVICE RUNTIME_EXPORT void TableFunctionManager_set_metadata(
+    int8_t* mgr_ptr,
+    const char* key,
+    const uint8_t* raw_bytes,
+    const size_t num_bytes,
+    const TableFunctionMetadataType value_type) {
+  auto mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
+  CHECK(mgr);
+  mgr->set_metadata(key, raw_bytes, num_bytes, value_type);
+}
+
+extern "C" DEVICE RUNTIME_EXPORT void TableFunctionManager_get_metadata(
+    int8_t* mgr_ptr,
+    const char* key,
+    const uint8_t*& raw_bytes,
+    size_t& num_bytes,
+    TableFunctionMetadataType& value_type) {
+  auto mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
+  CHECK(mgr);
+  mgr->get_metadata(key, raw_bytes, num_bytes, value_type);
 }
 
 #endif  // EXECUTE_INCLUDE

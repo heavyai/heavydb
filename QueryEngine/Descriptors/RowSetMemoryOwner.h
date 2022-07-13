@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 #include <list>
 #include <memory>
 #include <mutex>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -29,9 +28,12 @@
 #include "DataMgr/Allocators/ArenaAllocator.h"
 #include "DataMgr/DataMgr.h"
 #include "Logger/Logger.h"
+#include "QueryEngine/CountDistinct.h"
 #include "QueryEngine/StringDictionaryGenerations.h"
+#include "QueryEngine/TableFunctionMetadataType.h"
 #include "Shared/quantile.h"
 #include "StringDictionary/StringDictionaryProxy.h"
+#include "StringOps/StringOps.h"
 
 namespace Catalog_Namespace {
 class Catalog;
@@ -52,6 +54,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     }
     CHECK(!allocators_.empty());
   }
+
+  enum class StringTranslationType { SOURCE_INTERSECTION, SOURCE_UNION };
 
   int8_t* allocate(const size_t num_bytes, const size_t thread_idx = 0) override {
     CHECK_LT(thread_idx, allocators_.size());
@@ -76,7 +80,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
         CountDistinctBitmapBuffer{count_distinct_buffer, bytes, physical_buffer});
   }
 
-  void addCountDistinctSet(std::set<int64_t>* count_distinct_set) {
+  void addCountDistinctSet(CountDistinctSet* count_distinct_set) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     count_distinct_sets_.push_back(count_distinct_set);
   }
@@ -88,7 +92,10 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
 
   void addVarlenBuffer(void* varlen_buffer) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    varlen_buffers_.push_back(varlen_buffer);
+    if (std::find(varlen_buffers_.begin(), varlen_buffers_.end(), varlen_buffer) ==
+        varlen_buffers_.end()) {
+      varlen_buffers_.push_back(varlen_buffer);
+    }
   }
 
   /**
@@ -132,6 +139,74 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     return it->second.get();
   }
 
+  std::string generate_translation_map_key(
+      const int32_t source_proxy_id,
+      const int32_t dest_proxy_id,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
+    std::ostringstream oss;
+    oss << "{source_dict_id: " << source_proxy_id << ", dest_dict_id: " << dest_proxy_id
+        << " StringOps: " << string_op_infos << "}";
+    // for (const auto& string_op_info : string_op_infos) {
+    //  oss << "{" << string_op_info.toString() << "}";
+    //}
+    // oss << "]";
+    return oss.str();
+  }
+
+  const StringDictionaryProxy::IdMap* addStringProxyIntersectionTranslationMap(
+      const StringDictionaryProxy* source_proxy,
+      const StringDictionaryProxy* dest_proxy,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    const auto map_key =
+        generate_translation_map_key(source_proxy->getDictionary()->getDictId(),
+                                     dest_proxy->getDictionary()->getDictId(),
+                                     string_op_infos);
+    auto it = str_proxy_intersection_translation_maps_owned_.find(map_key);
+    if (it == str_proxy_intersection_translation_maps_owned_.end()) {
+      it = str_proxy_intersection_translation_maps_owned_
+               .emplace(map_key,
+                        source_proxy->buildIntersectionTranslationMapToOtherProxy(
+                            dest_proxy, string_op_infos))
+               .first;
+    }
+    return &it->second;
+  }
+
+  const StringDictionaryProxy::IdMap* addStringProxyUnionTranslationMap(
+      const StringDictionaryProxy* source_proxy,
+      StringDictionaryProxy* dest_proxy,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    const auto map_key =
+        generate_translation_map_key(source_proxy->getDictionary()->getDictId(),
+                                     dest_proxy->getDictionary()->getDictId(),
+                                     string_op_infos);
+    auto it = str_proxy_union_translation_maps_owned_.find(map_key);
+    if (it == str_proxy_union_translation_maps_owned_.end()) {
+      it = str_proxy_union_translation_maps_owned_
+               .emplace(map_key,
+                        source_proxy->buildUnionTranslationMapToOtherProxy(
+                            dest_proxy, string_op_infos))
+               .first;
+    }
+    return &it->second;
+  }
+
+  const StringOps_Namespace::StringOps* getStringOps(
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    const auto map_key = generate_translation_map_key(0, 0, string_op_infos);
+    auto it = string_ops_owned_.find(map_key);
+    if (it == string_ops_owned_.end()) {
+      it = string_ops_owned_
+               .emplace(map_key,
+                        std::make_shared<StringOps_Namespace::StringOps>(string_op_infos))
+               .first;
+    }
+    return it->second.get();
+  }
+
   StringDictionaryProxy* getStringDictProxy(const int dict_id) const {
     std::lock_guard<std::mutex> lock(state_mutex_);
     auto it = str_dict_proxy_owned_.find(dict_id);
@@ -154,6 +229,14 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     std::lock_guard<std::mutex> lock(state_mutex_);
     return lit_str_dict_proxy_.get();
   }
+
+  const StringDictionaryProxy::IdMap* getOrAddStringProxyTranslationMap(
+      const int source_dict_id_in,
+      const int dest_dict_id_in,
+      const bool with_generation,
+      const StringTranslationType translation_map_type,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+      const Catalog_Namespace::Catalog* catalog);
 
   void addColBuffer(const void* col_buffer) {
     std::lock_guard<std::mutex> lock(state_mutex_);
@@ -196,6 +279,40 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
 
   quantile::TDigest* nullTDigest(double const q);
 
+  //
+  // key/value store for table function intercommunication
+  //
+
+  void setTableFunctionMetadata(const char* key,
+                                const uint8_t* raw_data,
+                                const size_t num_bytes,
+                                const TableFunctionMetadataType value_type) {
+    std::vector<uint8_t> value(num_bytes);
+    std::memcpy(value.data(), raw_data, num_bytes);
+    std::lock_guard<std::mutex> lock(table_function_metadata_store_mutex_);
+    auto const [itr, emplaced] = table_function_metadata_store_.try_emplace(
+        std::string(key), std::move(value), value_type);
+    if (!emplaced) {
+      throw std::runtime_error("Table Function Metadata with key '" + std::string(key) +
+                               "' already exists");
+    }
+  }
+
+  void getTableFunctionMetadata(const char* key,
+                                const uint8_t*& raw_data,
+                                size_t& num_bytes,
+                                TableFunctionMetadataType& value_type) const {
+    std::lock_guard<std::mutex> lock(table_function_metadata_store_mutex_);
+    auto const itr = table_function_metadata_store_.find(key);
+    if (itr == table_function_metadata_store_.end()) {
+      throw std::runtime_error("Failed to find Table Function Metadata with key '" +
+                               std::string(key) + "'");
+    }
+    raw_data = itr->second.first.data();
+    num_bytes = itr->second.first.size();
+    value_type = itr->second.second;
+  }
+
  private:
   struct CountDistinctBitmapBuffer {
     int8_t* ptr;
@@ -204,22 +321,32 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   };
 
   std::vector<CountDistinctBitmapBuffer> count_distinct_bitmaps_;
-  std::vector<std::set<int64_t>*> count_distinct_sets_;
+  std::vector<CountDistinctSet*> count_distinct_sets_;
   std::vector<int64_t*> group_by_buffers_;
   std::vector<void*> varlen_buffers_;
   std::list<std::string> strings_;
   std::list<std::vector<int64_t>> arrays_;
   std::unordered_map<int, std::shared_ptr<StringDictionaryProxy>> str_dict_proxy_owned_;
+  std::map<std::string, StringDictionaryProxy::IdMap>
+      str_proxy_intersection_translation_maps_owned_;
+  std::map<std::string, StringDictionaryProxy::IdMap>
+      str_proxy_union_translation_maps_owned_;
   std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
   StringDictionaryGenerations string_dictionary_generations_;
   std::vector<void*> col_buffers_;
   std::vector<Data_Namespace::AbstractBuffer*> varlen_input_buffers_;
   std::vector<std::unique_ptr<quantile::TDigest>> t_digests_;
+  std::map<std::string, std::shared_ptr<StringOps_Namespace::StringOps>>
+      string_ops_owned_;
 
   size_t arena_block_size_;  // for cloning
   std::vector<std::unique_ptr<Arena>> allocators_;
 
   mutable std::mutex state_mutex_;
+
+  using MetadataValue = std::pair<std::vector<uint8_t>, TableFunctionMetadataType>;
+  std::map<std::string, MetadataValue> table_function_metadata_store_;
+  mutable std::mutex table_function_metadata_store_mutex_;
 
   friend class ResultSet;
   friend class QueryExecutionContext;

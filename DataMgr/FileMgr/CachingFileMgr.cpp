@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Omnisci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,16 @@
 
 /**
  * @file        CachingFileMgr.h
+ * @brief
+ *
  */
 
 #include "DataMgr/FileMgr/CachingFileMgr.h"
-#include <boost/filesystem.hpp>
 #include "Shared/misc.h"
+
+#include <boost/filesystem.hpp>
+
+#include <fstream>
 
 namespace bf = boost::filesystem;
 
@@ -112,7 +117,7 @@ void CachingFileMgr::init(const size_t num_reader_threads) {
 }
 
 void CachingFileMgr::readTableFileMgrs() {
-  mapd_unique_lock<mapd_shared_mutex> write_lock(table_dirs_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(table_dirs_mutex_);
   bf::path path(fileMgrBasePath_);
   CHECK(bf::exists(path)) << "Cache path: " << fileMgrBasePath_ << " does not exit.";
   CHECK(bf::is_directory(path))
@@ -136,15 +141,24 @@ void CachingFileMgr::readTableFileMgrs() {
 }
 
 int32_t CachingFileMgr::epoch(int32_t db_id, int32_t tb_id) const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(table_dirs_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(table_dirs_mutex_);
   auto tables_it = table_dirs_.find({db_id, tb_id});
-  CHECK(tables_it != table_dirs_.end());
+  if (tables_it == table_dirs_.end()) {
+    // If there is no directory for this table, that means the cache does not recognize
+    // the table that is requested.  This can happen if a table was dropped, and it's
+    // pages were invalidated but not yet freed and then the server crashed before they
+    // were freed.  Upon re-starting the FileMgr will find these pages and attempt to
+    // compare their epoch to know if they are valid or not.  In this case we should
+    // return an invalid epoch to indicate that any page for this table is not valid and
+    // should be freed.
+    return Epoch::min_allowable_epoch();
+  }
   auto& [pair, table_dir] = *tables_it;
   return table_dir->getEpoch();
 }
 
 void CachingFileMgr::incrementEpoch(int32_t db_id, int32_t tb_id) {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(table_dirs_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(table_dirs_mutex_);
   auto tables_it = table_dirs_.find({db_id, tb_id});
   CHECK(tables_it != table_dirs_.end());
   auto& [pair, table_dir] = *tables_it;
@@ -152,7 +166,7 @@ void CachingFileMgr::incrementEpoch(int32_t db_id, int32_t tb_id) {
 }
 
 void CachingFileMgr::writeAndSyncEpochToDisk(int32_t db_id, int32_t tb_id) {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(table_dirs_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(table_dirs_mutex_);
   auto table_it = table_dirs_.find({db_id, tb_id});
   CHECK(table_it != table_dirs_.end());
   table_it->second->writeAndSyncEpochToDisk();
@@ -170,18 +184,18 @@ std::string CachingFileMgr::getTableFileMgrPath(int32_t db_id, int32_t tb_id) co
 
 void CachingFileMgr::closeRemovePhysical() {
   {
-    mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
+    heavyai::unique_lock<heavyai::shared_mutex> write_lock(files_rw_mutex_);
     closePhysicalUnlocked();
   }
   {
-    mapd_unique_lock<mapd_shared_mutex> tables_lock(table_dirs_mutex_);
+    heavyai::unique_lock<heavyai::shared_mutex> tables_lock(table_dirs_mutex_);
     table_dirs_.clear();
   }
   bf::remove_all(getFileMgrBasePath());
 }
 
 size_t CachingFileMgr::getChunkSpaceReservedByTable(int32_t db_id, int32_t tb_id) const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(chunkIndexMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(chunkIndexMutex_);
   size_t space_used = 0;
   ChunkKey min_table_key{db_id, tb_id};
   ChunkKey max_table_key{db_id, tb_id, std::numeric_limits<int32_t>::max()};
@@ -196,7 +210,7 @@ size_t CachingFileMgr::getChunkSpaceReservedByTable(int32_t db_id, int32_t tb_id
 
 size_t CachingFileMgr::getMetadataSpaceReservedByTable(int32_t db_id,
                                                        int32_t tb_id) const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(chunkIndexMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(chunkIndexMutex_);
   size_t space_used = 0;
   ChunkKey min_table_key{db_id, tb_id};
   ChunkKey max_table_key{db_id, tb_id, std::numeric_limits<int32_t>::max()};
@@ -210,7 +224,7 @@ size_t CachingFileMgr::getMetadataSpaceReservedByTable(int32_t db_id,
 }
 
 size_t CachingFileMgr::getTableFileMgrSpaceReserved(int32_t db_id, int32_t tb_id) const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(table_dirs_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(table_dirs_mutex_);
   size_t space = 0;
   auto table_it = table_dirs_.find({db_id, tb_id});
   if (table_it != table_dirs_.end()) {
@@ -233,7 +247,7 @@ std::string CachingFileMgr::describeSelf() const {
 // Similar to FileMgr::checkpoint() but only writes a subset of buffers.
 void CachingFileMgr::checkpoint(const int32_t db_id, const int32_t tb_id) {
   {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(table_dirs_mutex_);
+    heavyai::shared_lock<heavyai::shared_mutex> read_lock(table_dirs_mutex_);
     CHECK(table_dirs_.find({db_id, tb_id}) != table_dirs_.end());
   }
   VLOG(2) << "Checkpointing " << describeSelf() << " (" << db_id << ", " << tb_id
@@ -247,7 +261,7 @@ void CachingFileMgr::checkpoint(const int32_t db_id, const int32_t tb_id) {
 
 void CachingFileMgr::createTableFileMgrIfNoneExists(const int32_t db_id,
                                                     const int32_t tb_id) {
-  mapd_unique_lock<mapd_shared_mutex> write_lock(table_dirs_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(table_dirs_mutex_);
   TablePair table_pair{db_id, tb_id};
   if (table_dirs_.find(table_pair) == table_dirs_.end()) {
     table_dirs_.emplace(
@@ -304,7 +318,7 @@ FileBuffer* CachingFileMgr::putBuffer(const ChunkKey& key,
 }
 
 void CachingFileMgr::incrementAllEpochs() {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(table_dirs_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(table_dirs_mutex_);
   for (auto& table_dir : table_dirs_) {
     table_dir.second->incrementEpoch();
   }
@@ -312,7 +326,7 @@ void CachingFileMgr::incrementAllEpochs() {
 
 void CachingFileMgr::removeTableFileMgr(int32_t db_id, int32_t tb_id) {
   // Delete table-specific directory (stores table epoch data and serialized data wrapper)
-  mapd_unique_lock<mapd_shared_mutex> write_lock(table_dirs_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(table_dirs_mutex_);
   auto it = table_dirs_.find({db_id, tb_id});
   if (it != table_dirs_.end()) {
     it->second->removeDiskContent();
@@ -322,7 +336,7 @@ void CachingFileMgr::removeTableFileMgr(int32_t db_id, int32_t tb_id) {
 
 void CachingFileMgr::removeTableBuffers(int32_t db_id, int32_t tb_id) {
   // Free associated FileBuffers and clear buffer entries.
-  mapd_unique_lock<mapd_shared_mutex> write_lock(chunkIndexMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(chunkIndexMutex_);
   ChunkKey min_table_key{db_id, tb_id};
   ChunkKey max_table_key{db_id, tb_id, std::numeric_limits<int32_t>::max()};
   for (auto it = chunkIndex_.lower_bound(min_table_key);
@@ -364,7 +378,7 @@ bool CachingFileMgr::updatePageIfDeleted(FileInfo* file_info,
 }
 
 void CachingFileMgr::writeDirtyBuffers(int32_t db_id, int32_t tb_id) {
-  mapd_unique_lock<mapd_shared_mutex> chunk_index_write_lock(chunkIndexMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> chunk_index_write_lock(chunkIndexMutex_);
   ChunkKey min_table_key{db_id, tb_id};
   ChunkKey max_table_key{db_id, tb_id, std::numeric_limits<int32_t>::max()};
 
@@ -382,7 +396,7 @@ void CachingFileMgr::writeDirtyBuffers(int32_t db_id, int32_t tb_id) {
 }
 
 void CachingFileMgr::deleteBufferIfExists(const ChunkKey& key) {
-  mapd_unique_lock<mapd_shared_mutex> chunk_index_write_lock(chunkIndexMutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> chunk_index_write_lock(chunkIndexMutex_);
   auto chunk_it = chunkIndex_.find(key);
   if (chunk_it != chunkIndex_.end()) {
     deleteBufferUnlocked(chunk_it);
@@ -390,7 +404,7 @@ void CachingFileMgr::deleteBufferIfExists(const ChunkKey& key) {
 }
 
 size_t CachingFileMgr::getNumDataChunks() const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(chunkIndexMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(chunkIndexMutex_);
   size_t num_chunks = 0;
   for (auto [key, buf] : chunkIndex_) {
     if (buf->hasDataPages()) {
@@ -540,7 +554,7 @@ void CachingFileMgr::removeKey(const ChunkKey& key) const {
 }
 
 size_t CachingFileMgr::getFilesSize() const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(files_rw_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(files_rw_mutex_);
   size_t sum = 0;
   for (auto [id, file] : files_) {
     sum += file->size();
@@ -549,7 +563,7 @@ size_t CachingFileMgr::getFilesSize() const {
 }
 
 size_t CachingFileMgr::getTableFileMgrsSize() const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(table_dirs_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(table_dirs_mutex_);
   size_t space_used = 0;
   for (const auto& [pair, table_dir] : table_dirs_) {
     space_used += table_dir->getReservedSpace();
@@ -558,18 +572,18 @@ size_t CachingFileMgr::getTableFileMgrsSize() const {
 }
 
 size_t CachingFileMgr::getNumDataFiles() const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(files_rw_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(files_rw_mutex_);
   return fileIndex_.count(defaultPageSize_);
 }
 
 size_t CachingFileMgr::getNumMetaFiles() const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(files_rw_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(files_rw_mutex_);
   return fileIndex_.count(METADATA_PAGE_SIZE);
 }
 
 std::vector<ChunkKey> CachingFileMgr::getChunkKeysForPrefix(
     const ChunkKey& prefix) const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(chunkIndexMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(chunkIndexMutex_);
   std::vector<ChunkKey> chunks;
   for (auto [key, buf] : chunkIndex_) {
     if (in_same_table(key, prefix)) {
@@ -595,7 +609,7 @@ void CachingFileMgr::removeChunkKeepMetadata(const ChunkKey& key) {
 }
 
 size_t CachingFileMgr::getNumChunksWithMetadata() const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(chunkIndexMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(chunkIndexMutex_);
   size_t sum = 0;
   for (const auto& [key, buf] : chunkIndex_) {
     if (buf->hasEncoder()) {
@@ -606,7 +620,7 @@ size_t CachingFileMgr::getNumChunksWithMetadata() const {
 }
 
 std::string CachingFileMgr::dumpKeysWithMetadata() const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(chunkIndexMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(chunkIndexMutex_);
   std::string ret_string = "CFM keys with metadata:\n";
   for (const auto& [key, buf] : chunkIndex_) {
     if (buf->hasEncoder()) {
@@ -617,7 +631,7 @@ std::string CachingFileMgr::dumpKeysWithMetadata() const {
 }
 
 std::string CachingFileMgr::dumpKeysWithChunkData() const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(chunkIndexMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(chunkIndexMutex_);
   std::string ret_string = "CFM keys with chunk data:\n";
   for (const auto& [key, buf] : chunkIndex_) {
     if (buf->hasDataPages()) {
@@ -637,7 +651,7 @@ std::unique_ptr<CachingFileMgr> CachingFileMgr::reconstruct() const {
 }
 
 void CachingFileMgr::deleteWrapperFile(int32_t db, int32_t tb) {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(table_dirs_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(table_dirs_mutex_);
   auto it = table_dirs_.find({db, tb});
   CHECK(it != table_dirs_.end());
   it->second->deleteWrapperFile();
@@ -651,8 +665,17 @@ void CachingFileMgr::writeWrapperFile(const std::string& doc, int32_t db, int32_
   while (wrapper_size > getAvailableWrapperSpace()) {
     evictMetadataPages();
   }
-  mapd_shared_lock<mapd_shared_mutex> read_lock(table_dirs_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(table_dirs_mutex_);
   table_dirs_.at({db, tb})->writeWrapperFile(doc);
+}
+
+bool CachingFileMgr::hasWrapperFile(int32_t db_id, int32_t table_id) const {
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(table_dirs_mutex_);
+  auto it = table_dirs_.find({db_id, table_id});
+  if (it != table_dirs_.end()) {
+    return it->second->hasWrapperFile();
+  }
+  return false;
 }
 
 /*
@@ -680,12 +703,12 @@ void CachingFileMgr::setMaxSizes() {
 }
 
 std::optional<FileBuffer*> CachingFileMgr::getBufferIfExists(const ChunkKey& key) {
-  mapd_shared_lock<mapd_shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
   auto chunk_it = chunkIndex_.find(key);
   if (chunk_it == chunkIndex_.end()) {
     return {};
   }
-  return getBufferUnlocked(chunk_it);
+  return getBufferUnlocked(key);
 }
 
 ChunkKeyToChunkMap::iterator CachingFileMgr::deleteBufferUnlocked(
@@ -704,10 +727,10 @@ void CachingFileMgr::getChunkMetadataVecForKeyPrefix(
   }
 }
 
-FileBuffer* CachingFileMgr::getBufferUnlocked(const ChunkKeyToChunkMap::iterator chunk_it,
-                                              const size_t num_bytes) {
-  touchKey(chunk_it->first);
-  return FileMgr::getBufferUnlocked(chunk_it, num_bytes);
+FileBuffer* CachingFileMgr::getBufferUnlocked(const ChunkKey& key,
+                                              const size_t num_bytes) const {
+  touchKey(key);
+  return FileMgr::getBufferUnlocked(key, num_bytes);
 }
 
 void CachingFileMgr::free_page(std::pair<FileInfo*, int32_t>&& page) {
@@ -715,7 +738,7 @@ void CachingFileMgr::free_page(std::pair<FileInfo*, int32_t>&& page) {
 }
 
 std::set<ChunkKey> CachingFileMgr::getKeysWithMetadata() const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(chunkIndexMutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(chunkIndexMutex_);
   std::set<ChunkKey> ret;
   for (const auto& [key, buf] : chunkIndex_) {
     if (buf->hasEncoder()) {
@@ -759,7 +782,7 @@ TableFileMgr::TableFileMgr(const std::string& table_path)
 }
 
 void TableFileMgr::incrementEpoch() {
-  mapd_unique_lock<mapd_shared_mutex> w_lock(table_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> w_lock(table_mutex_);
   epoch_.increment();
   is_checkpointed_ = false;
   CHECK(epoch_.ceiling() <= Epoch::max_allowable_epoch())
@@ -768,31 +791,31 @@ void TableFileMgr::incrementEpoch() {
 }
 
 int32_t TableFileMgr::getEpoch() const {
-  mapd_shared_lock<mapd_shared_mutex> r_lock(table_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> r_lock(table_mutex_);
   return static_cast<int32_t>(epoch_.ceiling());
 }
 
 void TableFileMgr::writeAndSyncEpochToDisk() {
-  mapd_unique_lock<mapd_shared_mutex> w_lock(table_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> w_lock(table_mutex_);
   write(epoch_file_, 0, Epoch::byte_size(), epoch_.storage_ptr());
   int32_t status = fflush(epoch_file_);
   CHECK(status == 0) << "Could not flush epoch file to disk";
 #ifdef __APPLE__
   status = fcntl(fileno(epoch_file_), 51);
 #else
-  status = omnisci::fsync(fileno(epoch_file_));
+  status = heavyai::fsync(fileno(epoch_file_));
 #endif
   CHECK(status == 0) << "Could not sync epoch file to disk";
   is_checkpointed_ = true;
 }
 
 void TableFileMgr::removeDiskContent() const {
-  mapd_unique_lock<mapd_shared_mutex> w_lock(table_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> w_lock(table_mutex_);
   bf::remove_all(table_path_);
 }
 
 size_t TableFileMgr::getReservedSpace() const {
-  mapd_shared_lock<mapd_shared_mutex> r_lock(table_mutex_);
+  heavyai::shared_lock<heavyai::shared_mutex> r_lock(table_mutex_);
   size_t space = 0;
   for (const auto& file : bf::recursive_directory_iterator(table_path_)) {
     if (bf::is_regular_file(file.path())) {
@@ -803,18 +826,23 @@ size_t TableFileMgr::getReservedSpace() const {
 }
 
 void TableFileMgr::deleteWrapperFile() const {
-  mapd_unique_lock<mapd_shared_mutex> w_lock(table_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> w_lock(table_mutex_);
   bf::remove_all(wrapper_file_path_);
 }
 
 void TableFileMgr::writeWrapperFile(const std::string& doc) const {
-  mapd_unique_lock<mapd_shared_mutex> w_lock(table_mutex_);
+  heavyai::unique_lock<heavyai::shared_mutex> w_lock(table_mutex_);
   std::ofstream ofs(wrapper_file_path_);
   if (!ofs) {
     throw std::runtime_error{"Error trying to create file \"" + wrapper_file_path_ +
                              "\". The error was: " + std::strerror(errno)};
   }
   ofs << doc;
+}
+
+bool TableFileMgr::hasWrapperFile() const {
+  heavyai::shared_lock<heavyai::shared_mutex> r_lock(table_mutex_);
+  return bf::exists(wrapper_file_path_);
 }
 
 }  // namespace File_Namespace

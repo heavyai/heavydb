@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,8 @@
 
 /**
  * @file    SqlTypesLayout.h
- * @author  Alex Suhan <alex@mapd.com>
+ * @brief
+ *
  */
 
 #ifndef QUERYENGINE_SQLTYPESLAYOUT_H
@@ -168,8 +169,9 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
   const auto int_type = ti.is_decimal() ? kBIGINT : ti.get_type();
   switch (int_type) {
     case kNULLT:
-      LOG(FATAL) << "Untyped NULL values are not supported. Please CAST any NULL "
-                    "constants to a type.";
+      throw std::runtime_error(
+          "Untyped NULL values are not supported. Please CAST any NULL "
+          "constants to a type.");
     case kBOOLEAN:
       return 8;
     case kTINYINT:
@@ -201,6 +203,7 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
       return ti.get_size() * 8;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       return 32;
@@ -208,9 +211,14 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
     case kCOLUMN_LIST:
       return ti.get_elem_type().get_size() * 8;
     default:
-      LOG(FATAL) << "Unhandled int_type: " << int_type;
-      return {};
+      break;
   }
+#ifdef __CUDACC__
+  UNREACHABLE();
+#else
+  UNREACHABLE() << "Unhandled int_type: " << int_type;
+#endif
+  return {};
 }
 
 inline bool is_unsigned_type(const SQLTypeInfo& ti) {

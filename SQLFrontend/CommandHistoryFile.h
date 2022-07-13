@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,14 +25,13 @@
 #ifdef _WIN32
 using uid_t = int;
 #include <shlobj_core.h>
-#include "Shared/cleanup_global_namespace.h"
 #else
 #include <pwd.h>
 #include <unistd.h>
 #endif
 
 inline constexpr char const* const getDefaultHistoryFilename() {
-  return ".omnisql_history";
+  return ".heavysql_history";
 }
 
 class DefaultEnvResolver {

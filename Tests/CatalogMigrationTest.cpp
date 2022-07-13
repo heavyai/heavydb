@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 /**
  * @file CatalogMigrationTest.cpp
  * @brief Test suite for catalog migrations
+ *
  */
 
 #include <gtest/gtest.h>
@@ -25,6 +26,8 @@
 #include "Catalog/Catalog.h"
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/AbstractFileStorageDataWrapper.h"
+#include "DataMgr/ForeignStorage/ForeignDataWrapperFactory.h"
+#include "Shared/SysDefinitions.h"
 #include "SqliteConnector/SqliteConnector.h"
 #include "TestHelpers.h"
 
@@ -55,7 +58,8 @@ bool has_result(SqliteConnector& conn, const std::string& query) {
 class CatalogTest : public DBHandlerTestFixture {
  protected:
   CatalogTest()
-      : cat_conn_("omnisci", BF::absolute("mapd_catalogs", BASE_PATH).string()) {}
+      : cat_conn_(shared::kDefaultDbName,
+                  BF::absolute(shared::kCatalogDirectoryName, BASE_PATH).string()) {}
 
   static void SetUpTestSuite() {
     DBHandlerTestFixture::createDBHandler();
@@ -79,7 +83,7 @@ class CatalogTest : public DBHandlerTestFixture {
 
   std::unique_ptr<Catalog_Namespace::Catalog> initCatalog() {
     Catalog_Namespace::DBMetadata db_metadata;
-    db_metadata.dbName = "omnisci";
+    db_metadata.dbName = shared::kDefaultDbName;
     std::vector<LeafHostInfo> leaves{};
     return std::make_unique<Catalog_Namespace::Catalog>(
         BASE_PATH, db_metadata, nullptr, leaves, nullptr, false);
@@ -91,8 +95,8 @@ class CatalogTest : public DBHandlerTestFixture {
 class SysCatalogTest : public CatalogTest {
  protected:
   SysCatalogTest()
-      : syscat_conn_("omnisci_system_catalog",
-                     BF::absolute("mapd_catalogs", BASE_PATH).string()) {}
+      : syscat_conn_(shared::kSystemCatalogName,
+                     BF::absolute(shared::kCatalogDirectoryName, BASE_PATH).string()) {}
 
   void TearDown() override {
     if (tableExists("mapd_users")) {
@@ -185,11 +189,14 @@ class FsiSchemaTest : public CatalogTest {
  protected:
   static void SetUpTestSuite() {
     g_enable_s3_fsi = true;
+    g_enable_fsi = true;
     CatalogTest::SetUpTestSuite();
   }
 
   void SetUp() override {
     g_enable_fsi = false;
+    g_enable_s3_fsi = false;
+    g_enable_system_tables = false;
     dropFsiTables();
   }
 
@@ -328,7 +335,7 @@ TEST_F(ForeignTablesTest, ForeignTablesAreNotDroppedWhenFsiIsDisabled) {
   loginAdmin();
 
   const auto file_path = BF::canonical("../../Tests/FsiDataFiles/example_1.csv").string();
-  sql("CREATE FOREIGN TABLE test_foreign_table (c1 int) SERVER omnisci_local_csv "
+  sql("CREATE FOREIGN TABLE test_foreign_table (c1 int) SERVER default_local_delimited "
       "WITH (file_path = '" +
       file_path + "');");
   sql("CREATE TABLE test_table (c1 int);");
@@ -355,19 +362,21 @@ TEST_F(DefaultForeignServersTest, DefaultServersAreCreatedWhenFsiIsEnabled) {
   g_enable_fsi = false;
 
   assertExpectedDefaultServer(catalog.get(),
-                              "omnisci_local_csv",
+                              "default_local_delimited",
                               foreign_storage::DataWrapperType::CSV,
-                              OMNISCI_ROOT_USER_ID);
+                              shared::kRootUserId);
 
   assertExpectedDefaultServer(catalog.get(),
-                              "omnisci_local_parquet",
+                              "default_local_parquet",
                               foreign_storage::DataWrapperType::PARQUET,
-                              OMNISCI_ROOT_USER_ID);
+                              shared::kRootUserId);
 }
 
 class SystemTableMigrationTest : public SysCatalogTest {
  protected:
   void SetUp() override {
+    g_enable_system_tables = true;
+    g_enable_fsi = true;
     dropInformationSchemaDb();
     deleteInformationSchemaMigration();
   }
@@ -382,7 +391,7 @@ class SystemTableMigrationTest : public SysCatalogTest {
   void dropInformationSchemaDb() {
     auto& system_catalog = SC::instance();
     Catalog_Namespace::DBMetadata db_metadata;
-    if (system_catalog.getMetadataForDB(INFORMATION_SCHEMA_DB, db_metadata)) {
+    if (system_catalog.getMetadataForDB(shared::kInfoSchemaDbName, db_metadata)) {
       system_catalog.dropDatabase(db_metadata);
     }
   }
@@ -391,13 +400,13 @@ class SystemTableMigrationTest : public SysCatalogTest {
     if (tableExists("mapd_version_history")) {
       syscat_conn_.query_with_text_param(
           "DELETE FROM mapd_version_history WHERE migration_history = ?",
-          INFORMATION_SCHEMA_MIGRATION);
+          shared::kInfoSchemaMigrationName);
     }
   }
 
   bool isInformationSchemaMigrationRecorded() {
     return hasResult("SELECT * FROM mapd_version_history WHERE migration_history = '" +
-                     INFORMATION_SCHEMA_MIGRATION + "';");
+                     shared::kInfoSchemaMigrationName + "';");
   }
 };
 
@@ -410,12 +419,96 @@ TEST_F(SystemTableMigrationTest, SystemTablesEnabled) {
 
 TEST_F(SystemTableMigrationTest, PreExistingInformationSchemaDatabase) {
   g_enable_system_tables = false;
-  SC::instance().createDatabase("information_schema", OMNISCI_ROOT_USER_ID);
+  SC::instance().createDatabase("information_schema", shared::kRootUserId);
 
   g_enable_system_tables = true;
   g_enable_fsi = true;
   reinitializeSystemCatalog();
   ASSERT_FALSE(isInformationSchemaMigrationRecorded());
+}
+
+class LegacyDataWrapperMigrationTest : public FsiSchemaTest {
+ protected:
+  struct LegacyDataWrapperMapping {
+    std::string test_server_name;
+    std::string old_data_wrapper_name;
+    std::string new_data_wrapper_name;
+  };
+
+  void insertForeignServer(const std::string& server_name,
+                           const std::string& data_wrapper_type) {
+    cat_conn_.query_with_text_params(
+        "INSERT INTO omnisci_foreign_servers (name, data_wrapper_type, owner_user_id, "
+        "creation_time, options) VALUES (?, ?, ?, ?, ?)",
+        std::vector<std::string>{server_name,
+                                 data_wrapper_type,
+                                 shared::kRootUserIdStr,
+                                 std::to_string(std::time(nullptr)),
+                                 "{\"STORAGE_TYPE\":\"LOCAL_FILE\"}"});
+  }
+
+  void assertForeignServerCount(const std::string& server_name,
+                                const std::string& data_wrapper_type,
+                                size_t expected_count) {
+    cat_conn_.query_with_text_params(
+        "SELECT COUNT(*) FROM omnisci_foreign_servers WHERE name = ? AND "
+        "data_wrapper_type = ?",
+        std::vector<std::string>{server_name, data_wrapper_type});
+    ASSERT_EQ(cat_conn_.getNumRows(), static_cast<size_t>(1));
+    ASSERT_EQ(cat_conn_.getData<size_t>(0, 0), expected_count);
+  }
+
+  void clearMigration(const std::string& migration_name) {
+    cat_conn_.query_with_text_params(
+        "DELETE FROM mapd_version_history WHERE migration_history = ?",
+        std::vector<std::string>{migration_name});
+  }
+};
+
+TEST_F(LegacyDataWrapperMigrationTest, LegacyDataWrappersAreRenamed) {
+  g_enable_fsi = true;
+  initCatalog();
+  assertFsiTablesExist();
+
+  using foreign_storage::DataWrapperType;
+  // clang-format off
+  std::vector<LegacyDataWrapperMapping> legacy_data_wrapper_mappings{
+    LegacyDataWrapperMapping{"test_csv_server",
+                             "OMNISCI_CSV",
+                             DataWrapperType::CSV},
+    LegacyDataWrapperMapping{"test_parquet_server",
+                             "OMNISCI_PARQUET",
+                             DataWrapperType::PARQUET},
+    LegacyDataWrapperMapping{"test_regex_server",
+                             "OMNISCI_REGEX_PARSER",
+                             DataWrapperType::REGEX_PARSER},
+    LegacyDataWrapperMapping{"test_catalog_server",
+                             "OMNISCI_INTERNAL_CATALOG",
+                             DataWrapperType::INTERNAL_CATALOG},
+    LegacyDataWrapperMapping{"test_memory_stats_server",
+                             "INTERNAL_OMNISCI_MEMORY_STATS",
+                             DataWrapperType::INTERNAL_MEMORY_STATS},
+    LegacyDataWrapperMapping{"test_storage_stats_server",
+                             "INTERNAL_OMNISCI_STORAGE_STATS",
+                             DataWrapperType::INTERNAL_STORAGE_STATS}
+  };
+  // clang-format on
+
+  for (const auto& mapping : legacy_data_wrapper_mappings) {
+    // Insert foreign servers that use legacy data wrapper names
+    insertForeignServer(mapping.test_server_name, mapping.old_data_wrapper_name);
+
+    assertForeignServerCount(mapping.test_server_name, mapping.old_data_wrapper_name, 1);
+    assertForeignServerCount(mapping.test_server_name, mapping.new_data_wrapper_name, 0);
+  }
+
+  clearMigration("rename_legacy_data_wrappers");
+  initCatalog();
+  for (const auto& mapping : legacy_data_wrapper_mappings) {
+    // Assert that foreign servers now use the new data wrapper names
+    assertForeignServerCount(mapping.test_server_name, mapping.old_data_wrapper_name, 0);
+    assertForeignServerCount(mapping.test_server_name, mapping.new_data_wrapper_name, 1);
+  }
 }
 
 int main(int argc, char** argv) {
@@ -424,6 +517,7 @@ int main(int argc, char** argv) {
 
   int err{0};
   try {
+    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();

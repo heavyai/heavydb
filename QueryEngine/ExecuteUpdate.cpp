@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ TableUpdateMetadata Executor::executeUpdate(
     const TableDescriptor* table_desc_for_update,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
-    const Catalog_Namespace::Catalog& cat,
+    Catalog_Namespace::Catalog& cat,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const UpdateLogForFragment::Callback& cb,
     const bool is_agg) {
@@ -116,10 +116,6 @@ TableUpdateMetadata Executor::executeUpdate(
   auto query_comp_desc = std::make_unique<QueryCompilationDescriptor>();
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
   {
-    auto clock_begin = timer_start();
-    std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
-    compilation_queue_time_ms_ += timer_stop(clock_begin);
-
     query_mem_desc = query_comp_desc->compile(global_max_groups_buffer_entry_guess,
                                               8,
                                               /*has_cardinality_estimation=*/true,

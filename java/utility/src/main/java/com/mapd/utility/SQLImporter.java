@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import static java.lang.System.exit;
 
 import com.mapd.common.SockTransportProperties;
 import com.mapd.utility.db_vendors.Db_vendor_types;
-import com.omnisci.thrift.server.*;
 
 import org.apache.commons.cli.*;
 import org.apache.thrift.TException;
@@ -43,6 +42,8 @@ import java.time.*;
 import java.util.ArrayList;
 import java.util.List;
 
+import ai.heavy.thrift.server.*;
+
 interface DateTimeUtils {
   long getSecondsFromMilliseconds(long milliseconds);
 }
@@ -63,6 +64,7 @@ class MutuallyExlusiveOptionsException extends ParseException {
     return new MutuallyExlusiveOptionsException(sb.toString());
   }
 }
+
 class SQLImporter_args {
   private Options options = new Options();
 
@@ -84,7 +86,7 @@ class SQLImporter_args {
     sb.append(
             "-su <other database user> -sp <other database user password> -ss <other database sql statement>\n");
     sb.append(
-            "-t <OmniSci target table> -b <transfer buffer size> -f <table fragment size>\n");
+            "-t <HEAVYAI target table> -b <transfer buffer size> -f <table fragment size>\n");
     sb.append("[-tr] [-adtf] [-nprg] -i <init commands file>\n");
     sb.append("\nSQLImporter -h | --help\n\n");
 
@@ -99,46 +101,46 @@ class SQLImporter_args {
   SQLImporter_args() {
     options.addOption("r", true, "Row Load Limit");
 
-    // OmniSci authentication options
+    // HEAVYAI authentication options
     options.addOption(Option.builder("h").desc("help message").longOpt("help").build());
     options.addOption(
-            Option.builder("u").hasArg().desc("OmniSci User").longOpt("user").build());
+            Option.builder("u").hasArg().desc("HEAVYAI User").longOpt("user").build());
     options.addOption(Option.builder("p")
                               .hasArg()
-                              .desc("OmniSci Password")
+                              .desc("HEAVYAI Password")
                               .longOpt("passwd")
                               .build());
-    // OmniSci transport options
+    // HEAVYAI transport options
     OptionGroup transport_grp = new OptionGroup();
     transport_grp.addOption(Option.builder()
-                                    .desc("use binary transport to connect to OmniSci ")
+                                    .desc("use binary transport to connect to HEAVYAI ")
                                     .longOpt("binary")
                                     .build());
     transport_grp.addOption(Option.builder()
-                                    .desc("use http transport to connect to OmniSci ")
+                                    .desc("use http transport to connect to HEAVYAI ")
                                     .longOpt("http")
                                     .build());
     transport_grp.addOption(Option.builder()
-                                    .desc("use https transport to connect to OmniSci ")
+                                    .desc("use https transport to connect to HEAVYAI ")
                                     .longOpt("https")
                                     .build());
     options.addOptionGroup(transport_grp);
 
-    // OmniSci database server details
+    // HEAVYAI database server details
     options.addOption(Option.builder("s")
                               .hasArg()
-                              .desc("OmniSci Server")
+                              .desc("HEAVYAI Server")
                               .longOpt("server")
                               .build());
     options.addOption(Option.builder("db")
                               .hasArg()
-                              .desc("OmniSci Database")
+                              .desc("HEAVYAI Database")
                               .longOpt("database")
                               .build());
     options.addOption(
-            Option.builder().hasArg().desc("OmniSci Port").longOpt("port").build());
+            Option.builder().hasArg().desc("HEAVYAI Port").longOpt("port").build());
 
-    // OmniSci server authentication options
+    // HEAVYAI server authentication options
     options.addOption(Option.builder()
                               .hasArg()
                               .desc("CA certificate trust store")
@@ -151,7 +153,7 @@ class SQLImporter_args {
                               .build());
     options.addOption(
             Option.builder()
-                    .desc("Insecure TLS - do not validate server OmniSci server credentials")
+                    .desc("Insecure TLS - do not validate server HEAVYAI server credentials")
                     .longOpt("insecure")
                     .build());
 
@@ -188,7 +190,7 @@ class SQLImporter_args {
 
     options.addOption(Option.builder("t")
                               .hasArg()
-                              .desc("OmniSci Target Table")
+                              .desc("HEAVYAI Target Table")
                               .longOpt("targetTable")
                               .required()
                               .build());
@@ -261,7 +263,7 @@ class SQLImporter_args {
         cmd = super.parse(options, strings);
         if (!cmd.hasOption("user") && !cmd.hasOption("client-cert")) {
           throw new MissingArgumentException(
-                  "Must supply either an OmniSci db user or a user certificate");
+                  "Must supply either an HEAVYAI db user or a user certificate");
         }
         // if user supplied must have password and visa versa
         if (cmd.hasOption("user") || cmd.hasOption("passwd")) {
@@ -319,7 +321,7 @@ class SQLImporter_args {
 
 public class SQLImporter {
   protected String session = null;
-  protected OmniSci.Client client = null;
+  protected Heavy.Client client = null;
   private CommandLine cmd = null;
   final static Logger LOGGER = LoggerFactory.getLogger(SQLImporter.class);
   private DateTimeUtils dateTimeUtils = (milliseconds) -> {
@@ -389,10 +391,10 @@ public class SQLImporter {
 
       ResultSet rs = stmt.executeQuery(cmd.getOptionValue("sqlStmt"));
 
-      // check if table already exists and is compatible in OmniSci with the query
+      // check if table already exists and is compatible in HEAVYAI with the query
       // metadata
       ResultSetMetaData md = rs.getMetaData();
-      checkMapDTable(conn, md);
+      checkDBTable(conn, md);
 
       timer = System.currentTimeMillis();
 
@@ -422,7 +424,7 @@ public class SQLImporter {
         bufferCount++;
         if (bufferCount == bufferSize) {
           bufferCount = 0;
-          // send the buffer to mapD
+          // send the buffer to HEAVY.AI
           if (assignRenderGroups) {
             client.load_table_binary_columnar_polys(
                     session, cmd.getOptionValue("targetTable"), cols, null, true);
@@ -441,7 +443,7 @@ public class SQLImporter {
         }
       }
       if (bufferCount > 0) {
-        // send the LAST buffer to mapD
+        // send the LAST buffer to HEAVY.AI
         if (assignRenderGroups) {
           client.load_table_binary_columnar_polys(
                   session, cmd.getOptionValue("targetTable"), cols, null, true);
@@ -470,8 +472,8 @@ public class SQLImporter {
     } catch (SQLException se) {
       LOGGER.error("SQLException - " + se.toString());
       se.printStackTrace();
-    } catch (TOmniSciException ex) {
-      LOGGER.error("TOmniSciException - " + ex.getError_msg());
+    } catch (TDBException ex) {
+      LOGGER.error("TDBException - " + ex.getError_msg());
       ex.printStackTrace();
     } catch (TException ex) {
       LOGGER.error("TException failed - " + ex.toString());
@@ -496,8 +498,8 @@ public class SQLImporter {
         if (session != null) {
           client.disconnect(session);
         }
-      } catch (TOmniSciException ex) {
-        LOGGER.error("TOmniSciException - in finalization " + ex.getError_msg());
+      } catch (TDBException ex) {
+        LOGGER.error("TDBException - in finalization " + ex.getError_msg());
         ex.printStackTrace();
       } catch (TException ex) {
         LOGGER.error("TException - in finalization" + ex.toString());
@@ -540,22 +542,22 @@ public class SQLImporter {
     formatter.printHelp("SQLImporter", options);
   }
 
-  private void checkMapDTable(Connection otherdb_conn, ResultSetMetaData md)
+  private void checkDBTable(Connection otherdb_conn, ResultSetMetaData md)
           throws SQLException {
-    createMapDConnection();
+    createDBConnection();
     String tName = cmd.getOptionValue("targetTable");
 
     if (tableExists(tName)) {
       // check if we want to truncate
       if (cmd.hasOption("truncate")) {
-        executeMapDCommand("Drop table " + tName);
-        createMapDTable(otherdb_conn, md);
+        executeDBCommand("Drop table " + tName);
+        createDBTable(otherdb_conn, md);
       } else {
         List<TColumnType> columnInfo = getColumnInfo(tName);
         verifyColumnSignaturesMatch(otherdb_conn, columnInfo, md);
       }
     } else {
-      createMapDTable(otherdb_conn, md);
+      createDBTable(otherdb_conn, md);
     }
   }
 
@@ -638,7 +640,8 @@ public class SQLImporter {
         case java.sql.Types.LONGNVARCHAR:
           match = (dstType == TDatumType.STR || dstType == TDatumType.POINT
                   || dstType == TDatumType.POLYGON || dstType == TDatumType.MULTIPOLYGON
-                  || dstType == TDatumType.LINESTRING);
+                  || dstType == TDatumType.LINESTRING
+                  || dstType == TDatumType.MULTILINESTRING);
           break;
         case java.sql.Types.OTHER:
           // NOTE: I ignore subtypes (geography vs geopetry vs none) here just because
@@ -655,6 +658,9 @@ public class SQLImporter {
               break;
             case LINESTRING:
               match = gisType.type.equalsIgnoreCase("LINESTRING");
+              break;
+            case MULTILINESTRING:
+              match = gisType.type.equalsIgnoreCase("MULTILINESTRING");
               break;
             case POLYGON:
               match = gisType.type.equalsIgnoreCase("POLYGON");
@@ -682,7 +688,7 @@ public class SQLImporter {
     }
   }
 
-  private void createMapDTable(Connection otherdb_conn, ResultSetMetaData metaData) {
+  private void createDBTable(Connection otherdb_conn, ResultSetMetaData metaData) {
     StringBuilder sb = new StringBuilder();
     sb.append("Create table ").append(cmd.getOptionValue("targetTable")).append("(");
 
@@ -721,10 +727,10 @@ public class SQLImporter {
       exit(1);
     }
 
-    executeMapDCommand(sb.toString());
+    executeDBCommand(sb.toString());
   }
 
-  private void createMapDConnection() {
+  private void createDBConnection() {
     TTransport transport = null;
     TProtocol protocol = new TBinaryProtocol(transport);
     int port = Integer.valueOf(cmd.getOptionValue("port", "6274"));
@@ -750,7 +756,7 @@ public class SQLImporter {
         protocol = new TBinaryProtocol(transport);
       }
 
-      client = new OmniSci.Client(protocol);
+      client = new Heavy.Client(protocol);
       // This if will be useless until PKI signon
       if (cmd.hasOption("user")) {
         session = client.connect(cmd.getOptionValue("user", "admin"),
@@ -762,7 +768,7 @@ public class SQLImporter {
     } catch (TTransportException ex) {
       LOGGER.error("Connection failed - " + ex.toString());
       exit(1);
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       LOGGER.error("Connection failed - " + ex.getError_msg());
       exit(2);
     } catch (TException ex) {
@@ -780,7 +786,7 @@ public class SQLImporter {
     try {
       TTableDetails table_details = client.get_table_details(session, tName);
       row_descriptor = table_details.row_desc;
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       LOGGER.error("column check failed - " + ex.getError_msg());
       exit(3);
     } catch (TException ex) {
@@ -799,7 +805,7 @@ public class SQLImporter {
           return true;
         }
       }
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       LOGGER.error("Table check failed - " + ex.getError_msg());
       exit(3);
     } catch (TException ex) {
@@ -809,12 +815,12 @@ public class SQLImporter {
     return false;
   }
 
-  private void executeMapDCommand(String sql) {
+  private void executeDBCommand(String sql) {
     LOGGER.info("Run Command - " + sql);
 
     try {
       TQueryResult sqlResult = client.sql_execute(session, sql + ";", true, null, -1, -1);
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       LOGGER.error("SQL Execute failed - " + ex.getError_msg());
       exit(1);
     } catch (TException ex) {

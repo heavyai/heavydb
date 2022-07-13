@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,20 @@ inline ExtArgumentType ext_arg_type_ensure_column(const ExtArgumentType ext_arg_
       return ExtArgumentType::ColumnDouble;
     case ExtArgumentType::Bool:
       return ExtArgumentType::ColumnBool;
+    case ExtArgumentType::ArrayInt8:
+      return ExtArgumentType::ColumnArrayInt8;
+    case ExtArgumentType::ArrayInt16:
+      return ExtArgumentType::ColumnArrayInt16;
+    case ExtArgumentType::ArrayInt32:
+      return ExtArgumentType::ColumnArrayInt32;
+    case ExtArgumentType::ArrayInt64:
+      return ExtArgumentType::ColumnArrayInt64;
+    case ExtArgumentType::ArrayFloat:
+      return ExtArgumentType::ColumnArrayFloat;
+    case ExtArgumentType::ArrayDouble:
+      return ExtArgumentType::ColumnArrayDouble;
+    case ExtArgumentType::ArrayBool:
+      return ExtArgumentType::ColumnArrayBool;
     default:
       return ext_arg_type;
   }
@@ -56,6 +70,20 @@ inline ExtArgumentType ext_arg_type_ensure_column_list(
       return ExtArgumentType::ColumnListDouble;
     case ExtArgumentType::Bool:
       return ExtArgumentType::ColumnListBool;
+    case ExtArgumentType::ArrayInt8:
+      return ExtArgumentType::ColumnListArrayInt8;
+    case ExtArgumentType::ArrayInt16:
+      return ExtArgumentType::ColumnListArrayInt16;
+    case ExtArgumentType::ArrayInt32:
+      return ExtArgumentType::ColumnListArrayInt32;
+    case ExtArgumentType::ArrayInt64:
+      return ExtArgumentType::ColumnListArrayInt64;
+    case ExtArgumentType::ArrayFloat:
+      return ExtArgumentType::ColumnListArrayFloat;
+    case ExtArgumentType::ArrayDouble:
+      return ExtArgumentType::ColumnListArrayDouble;
+    case ExtArgumentType::ArrayBool:
+      return ExtArgumentType::ColumnListArrayBool;
     default:
       return ext_arg_type;
   }
@@ -87,6 +115,14 @@ inline bool is_ext_arg_type_column(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::ColumnDouble:
     case ExtArgumentType::ColumnBool:
     case ExtArgumentType::ColumnTextEncodingDict:
+    case ExtArgumentType::ColumnTimestamp:
+    case ExtArgumentType::ColumnArrayInt8:
+    case ExtArgumentType::ColumnArrayInt16:
+    case ExtArgumentType::ColumnArrayInt32:
+    case ExtArgumentType::ColumnArrayInt64:
+    case ExtArgumentType::ColumnArrayFloat:
+    case ExtArgumentType::ColumnArrayDouble:
+    case ExtArgumentType::ColumnArrayBool:
       return true;
 
     default:
@@ -104,6 +140,13 @@ inline bool is_ext_arg_type_column_list(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::ColumnListDouble:
     case ExtArgumentType::ColumnListBool:
     case ExtArgumentType::ColumnListTextEncodingDict:
+    case ExtArgumentType::ColumnListArrayInt8:
+    case ExtArgumentType::ColumnListArrayInt16:
+    case ExtArgumentType::ColumnListArrayInt32:
+    case ExtArgumentType::ColumnListArrayInt64:
+    case ExtArgumentType::ColumnListArrayFloat:
+    case ExtArgumentType::ColumnListArrayDouble:
+    case ExtArgumentType::ColumnListArrayBool:
       return true;
 
     default:
@@ -115,6 +158,7 @@ inline bool is_ext_arg_type_geo(const ExtArgumentType ext_arg_type) {
   switch (ext_arg_type) {
     case ExtArgumentType::GeoPoint:
     case ExtArgumentType::GeoLineString:
+    case ExtArgumentType::GeoMultiLineString:
     case ExtArgumentType::GeoPolygon:
     case ExtArgumentType::GeoMultiPolygon:
       return true;
@@ -150,6 +194,7 @@ inline bool is_ext_arg_type_scalar(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::Double:
     case ExtArgumentType::Bool:
     case ExtArgumentType::TextEncodingNone:
+    case ExtArgumentType::Timestamp:
       return true;
 
     default:
@@ -163,6 +208,7 @@ inline bool is_ext_arg_type_scalar_integer(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::Int16:
     case ExtArgumentType::Int32:
     case ExtArgumentType::Int64:
+    case ExtArgumentType::Timestamp:
       return true;
     default:
       return false;

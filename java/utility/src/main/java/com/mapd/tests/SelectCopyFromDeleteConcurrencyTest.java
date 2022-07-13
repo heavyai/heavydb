@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,8 +49,8 @@ public class SelectCopyFromDeleteConcurrencyTest {
     test.testSelecyCopyFromConcurrency(shard_count);
   }
 
-  private void run_test(MapdTestClient dba,
-          MapdTestClient user,
+  private void run_test(HeavyDBTestClient dba,
+          HeavyDBTestClient user,
           String prefix,
           Path filepath,
           int shard_count,
@@ -131,10 +131,10 @@ public class SelectCopyFromDeleteConcurrencyTest {
         public void run() {
           try {
             final String username = threadId % 2 == 0 ? "alice" : "bob";
-            MapdTestClient dba = MapdTestClient.getClient(
-                    "localhost", 6274, "omnisci", "admin", "HyperInteractive");
-            MapdTestClient user = MapdTestClient.getClient(
-                    "localhost", 6274, "omnisci", username, "password");
+            HeavyDBTestClient dba = HeavyDBTestClient.getClient(
+                    "localhost", 6274, "heavyai", "admin", "HyperInteractive");
+            HeavyDBTestClient user = HeavyDBTestClient.getClient(
+                    "localhost", 6274, "heavyai", username, "password");
             final String prefix = "for_" + username + "_" + threadId + "_";
 
             run_test(dba, user, prefix, input_file_path_, shard_count, runs);
@@ -168,22 +168,22 @@ public class SelectCopyFromDeleteConcurrencyTest {
     logger.info("Using import file: " + input_file_path_.toString());
 
     // Use the default database for now
-    MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
+            "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     su.runSql("CREATE USER alice (password = 'password', is_super = 'false');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");
 
-    su.runSql("GRANT CREATE on DATABASE omnisci TO alice;");
-    su.runSql("GRANT CREATE on DATABASE omnisci TO bob;");
+    su.runSql("GRANT CREATE on DATABASE heavyai TO alice;");
+    su.runSql("GRANT CREATE on DATABASE heavyai TO bob;");
 
-    su.runSql("GRANT CREATE VIEW on DATABASE omnisci TO alice;");
-    su.runSql("GRANT CREATE VIEW on DATABASE omnisci TO bob;");
+    su.runSql("GRANT CREATE VIEW on DATABASE heavyai TO alice;");
+    su.runSql("GRANT CREATE VIEW on DATABASE heavyai TO bob;");
 
-    su.runSql("GRANT DROP VIEW on DATABASE omnisci TO alice;");
-    su.runSql("GRANT DROP VIEW on DATABASE omnisci TO bob;");
+    su.runSql("GRANT DROP VIEW on DATABASE heavyai TO alice;");
+    su.runSql("GRANT DROP VIEW on DATABASE heavyai TO bob;");
 
-    su.runSql("GRANT ACCESS on database omnisci TO alice;");
-    su.runSql("GRANT ACCESS on database omnisci TO bob;");
+    su.runSql("GRANT ACCESS on database heavyai TO alice;");
+    su.runSql("GRANT ACCESS on database heavyai TO bob;");
 
     final int num_threads = 5;
     runTest(num_threads, shard_count);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-/*
- * File:   Calcite.cpp
- * Author: michael
+/**
+ * @file   Calcite.cpp
+ * @brief
  *
- * Created on November 23, 2015, 9:33 AM
  */
 
 #include "Calcite.h"
 #include "Catalog/Catalog.h"
 #include "Logger/Logger.h"
-#include "OSDependent/omnisci_path.h"
+#include "OSDependent/heavyai_path.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/ThriftClient.h"
 #include "Shared/fixautotools.h"
@@ -79,7 +79,7 @@ static void start_calcite_server_as_daemon(const int db_port,
                                            const std::string& ssl_key_file,
                                            const std::string& db_config_file,
                                            const std::string& udf_filename) {
-  auto root_abs_path = omnisci::get_root_abs_path();
+  auto root_abs_path = heavyai::get_root_abs_path();
   std::string const xDebug = "-Xdebug";
   std::string const remoteDebug =
       "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005";
@@ -101,7 +101,8 @@ static void start_calcite_server_as_daemon(const int db_port,
   std::string KeyStoreP = "-Y";
   std::string KeyStorePasswdP = "-Z";
   // FIXME: this path should be getting pulled from logger rather than hardcoded
-  std::string logDirectory = "-DMAPD_LOG_DIR=" + data_dir + "/mapd_log/";
+  std::string logDirectory =
+      "-DLOG_DIR=" + data_dir + "/" + shared::kDefaultLogDirName + "/";
   std::string userDefinedFunctionsP = "";
   std::string userDefinedFunctionsD = "";
 
@@ -376,7 +377,7 @@ void Calcite::init(const int db_port,
     CHECK(false) << "JNI mode no longer supported.";
   }
   if (calcite_port == 0) {
-    // dummy process for initdb
+    // dummy process for initheavy
     remote_calcite_port_ = calcite_port;
     server_available_ = false;
   } else {
@@ -542,9 +543,12 @@ TPlanResult Calcite::processImpl(query_state::QueryStateProxy query_state_proxy,
   const auto& cat = user_session_info->getCatalog();
   const std::string user = getInternalSessionProxyUserName();
   const std::string catalog = cat.getCurrentDB().dbName;
-  LOG(INFO) << "User " << user << " catalog " << catalog << " sql '" << sql_string << "'";
-  LOG(IR) << "SQL query\n" << sql_string << "\nEnd of SQL query";
-  LOG(PTX) << "SQL query\n" << sql_string << "\nEnd of SQL query";
+  LOG(INFO) << "User " << user << " catalog " << catalog << " sql '"
+            << hide_sensitive_data_from_query(sql_string) << "'";
+  LOG(IR) << "SQL query\n"
+          << hide_sensitive_data_from_query(sql_string) << "\nEnd of SQL query";
+  LOG(PTX) << "SQL query\n"
+           << hide_sensitive_data_from_query(sql_string) << "\nEnd of SQL query";
 
   std::vector<TRestriction> trestrictions;
 
@@ -579,7 +583,7 @@ TPlanResult Calcite::processImpl(query_state::QueryStateProxy query_state_proxy,
     } catch (const std::exception& ex) {
       LOG(FATAL)
           << "Error occurred trying to communicate with Calcite server, the error was: '"
-          << ex.what() << "', omnisci_server restart will be required";
+          << ex.what() << "', heavydb restart will be required";
       return ret;  // satisfy return-type warning
     }
   } else {
@@ -695,10 +699,12 @@ TQueryParsingOption Calcite::getCalciteQueryParsingOption(bool legacy_syntax,
 TOptimizationOption Calcite::getCalciteOptimizationOption(
     bool is_view_optimize,
     bool enable_watchdog,
-    const std::vector<TFilterPushDownInfo>& filter_push_down_info) {
+    const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+    bool distributed_mode) {
   TOptimizationOption optimization_option;
   optimization_option.filter_push_down_info = filter_push_down_info;
   optimization_option.is_view_optimize = is_view_optimize;
   optimization_option.enable_watchdog = enable_watchdog;
+  optimization_option.distributed_mode = distributed_mode;
   return optimization_option;
 }

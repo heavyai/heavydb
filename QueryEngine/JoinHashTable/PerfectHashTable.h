@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,8 +72,6 @@ class PerfectHashTable : public HashTable {
 
   HashType getLayout() const override { return layout_; }
 
-  void setLayout(HashType layout) override { layout_ = layout; }
-
   int8_t* getCpuBuffer() override {
     return reinterpret_cast<int8_t*>(cpu_hash_table_buff_.get());
   }
@@ -86,6 +84,16 @@ class PerfectHashTable : public HashTable {
 
   size_t getEmittedKeysCount() const override { return emitted_keys_count_; }
 
+  void setHashEntryInfo(HashEntryInfo& hash_entry_info) {
+    hash_entry_info_ = hash_entry_info;
+  }
+
+  void setColumnNumElems(size_t elem) { column_num_elems_ = elem; }
+
+  HashEntryInfo getHashEntryInfo() const { return hash_entry_info_; }
+
+  size_t getColumnNumElems() const { return column_num_elems_; }
+
  private:
   Data_Namespace::AbstractBuffer* gpu_hash_table_buff_{nullptr};
   Data_Namespace::DataMgr* data_mgr_;
@@ -95,4 +103,7 @@ class PerfectHashTable : public HashTable {
   HashType layout_;
   size_t entry_count_;         // number of keys in the hash table
   size_t emitted_keys_count_;  // number of keys emitted across all rows
+
+  HashEntryInfo hash_entry_info_;
+  size_t column_num_elems_;
 };

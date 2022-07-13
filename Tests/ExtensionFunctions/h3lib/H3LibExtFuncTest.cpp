@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,10 @@
  */
 
 #include <curl/curl.h>
+
+// curl/curl.h > winsock2.h > windows.h
+#include "Shared/cleanup_global_namespace.h"
+
 #include "Geospatial/Compression.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/Importer.h"

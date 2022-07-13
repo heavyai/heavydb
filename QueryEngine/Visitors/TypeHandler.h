@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-/*
- * @description Sortable utility struct for visitor patterns.
+/**
+ * @file    TypeHandler.h
+ * @brief   Sortable utility struct for visitor patterns.
  */
 
 #pragma once

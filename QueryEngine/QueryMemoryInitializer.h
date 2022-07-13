@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -113,7 +113,9 @@ class QueryMemoryInitializer {
       const QueryMemoryDescriptor& query_mem_desc,
       const int device_id,
       const unsigned block_size_x,
-      const unsigned grid_size_x);
+      const unsigned grid_size_x,
+      const bool zero_initialize_buffers);
+
   void copyFromTableFunctionGpuBuffers(Data_Namespace::DataMgr* data_mgr,
                                        const QueryMemoryDescriptor& query_mem_desc,
                                        const size_t entry_count,

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 #include "../Catalog/ColumnDescriptor.h"
 #include "../DataMgr/Chunk/Chunk.h"
 #include "../DataMgr/ChunkMetadata.h"
-#include "../Shared/mapd_shared_mutex.h"
+#include "../Shared/heavyai_shared_mutex.h"
 #include "../Shared/types.h"
 
 namespace Data_Namespace {
@@ -50,6 +50,8 @@ struct InsertChunks {
   const int table_id;
   const int db_id;
   std::map</*column_id=*/int, std::shared_ptr<Chunk_NS::Chunk> > chunks;
+  std::vector<size_t> valid_row_indices; /* specifies which row indices in chunk are valid
+                                            for insertion */
 };
 
 /**

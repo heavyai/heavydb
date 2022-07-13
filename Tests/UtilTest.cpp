@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include "Shared/Intervals.h"
+#include "Shared/StringTransform.h"
 #include "TestHelpers.h"
 #include "Utils/Regexp.h"
 #include "Utils/StringLike.h"
@@ -145,6 +146,21 @@ TEST(Shared, IntervalsInvalidBounds) {
     loop_body_executed = true;
   }
   EXPECT_TRUE(loop_body_executed);
+}
+
+TEST(Shared, StringViewStrip) {
+  std::vector<std::pair<std::string_view, std::string_view>> svs = {
+      {"", ""},
+      {"   ", ""},
+      {" ", ""},
+      {"  abcd", "abcd"},
+      {"abcd  ", "abcd"},
+      {"  abcd   ", "abcd"},
+      {"  a   b c  d   ", "a   b c  d"},
+  };
+  for (auto& [actual, expected] : svs) {
+    ASSERT_EQ(sv_strip(actual), expected);
+  }
 }
 
 TEST(Utils, StringLike) {

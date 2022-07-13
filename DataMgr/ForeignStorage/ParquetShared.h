@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
 
 #include "Catalog/CatalogFwd.h"
 #include "DataMgr/ChunkMetadata.h"
-#include "Shared/mapd_shared_mutex.h"
+#include "Shared/heavyai_shared_mutex.h"
 
 namespace foreign_storage {
 
@@ -69,7 +69,7 @@ class FileReaderMap {
  public:
   const ReaderPtr getOrInsert(const std::string& path,
                               std::shared_ptr<arrow::fs::FileSystem>& file_system) {
-    mapd_unique_lock<std::mutex> cache_lock(mutex_);
+    heavyai::unique_lock<std::mutex> cache_lock(mutex_);
     if (map_.count(path) < 1 || !(map_.at(path))) {
       map_[path] = open_parquet_table(path, file_system);
     }
@@ -78,20 +78,20 @@ class FileReaderMap {
 
   const ReaderPtr insert(const std::string& path,
                          std::shared_ptr<arrow::fs::FileSystem>& file_system) {
-    mapd_unique_lock<std::mutex> cache_lock(mutex_);
+    heavyai::unique_lock<std::mutex> cache_lock(mutex_);
     map_[path] = open_parquet_table(path, file_system);
     return map_.at(path).get();
   }
 
   void initializeIfEmpty(const std::string& path) {
-    mapd_unique_lock<std::mutex> cache_lock(mutex_);
+    heavyai::unique_lock<std::mutex> cache_lock(mutex_);
     if (map_.count(path) < 1) {
       map_.emplace(path, UniqueReaderPtr());
     }
   }
 
   void clear() {
-    mapd_unique_lock<std::mutex> cache_lock(mutex_);
+    heavyai::unique_lock<std::mutex> cache_lock(mutex_);
     map_.clear();
   }
 

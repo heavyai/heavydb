@@ -1,5 +1,5 @@
 <#--
- Copyright 2020 OmniSci, Inc.
+ Copyright 2022 HEAVY.AI, Inc.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -37,10 +37,10 @@ SqlCreateForeignTable SqlCreateForeignTable(Span s, boolean replace) :
     boolean ifNotExists = false;
     SqlIdentifier tableName = null;
     SqlIdentifier serverName = null;
-    OmniSqlSanitizedString schemaName = null;
+    HeavySqlSanitizedString schemaName = null;
     SqlNode schemaLit = null;
-    List<OmniSqlColumn> columns = null;
-    OmniSqlOptionsMap columnOptions = null;
+    List<HeavySqlColumn> columns = null;
+    HeavySqlOptionsMap columnOptions = null;
 }
 {
     <FOREIGN> <TABLE>
@@ -49,7 +49,7 @@ SqlCreateForeignTable SqlCreateForeignTable(Span s, boolean replace) :
     (
       <SCHEMA>
       schemaLit = Literal()
-      { schemaName = new OmniSqlSanitizedString(schemaLit); }
+      { schemaName = new HeavySqlSanitizedString(schemaLit); }
     |
       columns = Columns()
     )
@@ -65,7 +65,7 @@ SqlCreateForeignTable SqlCreateForeignTable(Span s, boolean replace) :
 }
 
 /*
- * Parse a squence of one or more comma-separated OmniSqlColumns.
+ * Parse a squence of one or more comma-separated HeavySqlColumns.
  *
  * (
  *   { <column_name> <data_type> [NOT NULL] [ENCODING <encoding_spec>]
@@ -73,10 +73,10 @@ SqlCreateForeignTable SqlCreateForeignTable(Span s, boolean replace) :
  *   [, ... ]
  * )
  */
-List<OmniSqlColumn> Columns() :
+List<HeavySqlColumn> Columns() :
 {
-    List<OmniSqlColumn> columns = new ArrayList<OmniSqlColumn>();
-    OmniSqlColumn column = null;
+    List<HeavySqlColumn> columns = new ArrayList<HeavySqlColumn>();
+    HeavySqlColumn column = null;
 }
 {
     <LPAREN>
@@ -92,23 +92,23 @@ List<OmniSqlColumn> Columns() :
 }
 
 /*
- * Parse a single OmniSciColumn.
+ * Parse a single HeavySqlColumn.
  *
  * <column_name> <data_type> [NOT NULL] [ENCODING <encoding_spec>]
  * [ WITH ( <option> = <value> [, ... ] ) ]
  */
-OmniSqlColumn Column() :
+HeavySqlColumn Column() :
 {
     SqlIdentifier columnName;
-    OmniSqlDataType dataType;
-    OmniSqlEncoding encodingType = null;
-    OmniSqlOptionsMap optionsMap = null;
+    HeavySqlDataType dataType;
+    HeavySqlEncoding encodingType = null;
+    HeavySqlOptionsMap optionsMap = null;
 }
 {
     columnName = CompoundIdentifier()
-    dataType = OmniDataType()
+    dataType = HeavyDataType()
     [ optionsMap = WithOptions() ]
-    { return new OmniSqlColumn(columnName, dataType, encodingType, optionsMap); }
+    { return new HeavySqlColumn(columnName, dataType, encodingType, optionsMap); }
 }
 
 /*
@@ -117,7 +117,7 @@ OmniSqlColumn Column() :
  * \[ [ <size> ] \]
  *
  */
-OmniSqlArray OmniArray(SqlDataTypeSpec type) :
+HeavySqlArray HeavyArray(SqlDataTypeSpec type) :
 {
     Integer size = null;
 }
@@ -129,21 +129,21 @@ OmniSqlArray OmniArray(SqlDataTypeSpec type) :
     |
         <RBRACKET>
     )
-    { return new OmniSqlArray(type.toString(), size); }
+    { return new HeavySqlArray(type.toString(), size); }
 }
 
-OmniSqlTypeNameSpec OmniSciGeoDataType():
+HeavySqlTypeNameSpec HeavyDBGeoDataType():
 {
     String typeName = null;
     Integer coordinate = null;
 }
 {
     (
-        typeName = OmniSciGeoDataTypeName()
+        typeName = HeavyDBGeoDataTypeName()
     |
         <GEOMETRY>
         <LPAREN>
-        typeName = OmniSciGeoDataTypeName()
+        typeName = HeavyDBGeoDataTypeName()
         [
             <COMMA>
             coordinate = IntLiteral()
@@ -151,11 +151,11 @@ OmniSqlTypeNameSpec OmniSciGeoDataType():
         <RPAREN>
     )
     {
-        return new OmniSqlTypeNameSpec(typeName, coordinate, SqlTypeName.GEOMETRY, getPos());
+        return new HeavySqlTypeNameSpec(typeName, coordinate, SqlTypeName.GEOMETRY, getPos());
     }
 }
 
-String OmniSciGeoDataTypeName() :
+String HeavyDBGeoDataTypeName() :
 {
     Token type = null;
 }
@@ -164,6 +164,8 @@ String OmniSciGeoDataTypeName() :
         type = <POINT>
     |
         type = <LINESTRING>
+    |
+        type = <MULTILINESTRING>
     |
         type = <POLYGON>
     |
@@ -174,32 +176,32 @@ String OmniSciGeoDataTypeName() :
     }
 }
 
-OmniSqlTypeNameSpec OmniText() : {}
+HeavySqlTypeNameSpec HeavyDBText() : {}
 {
-    <TEXT> { return new OmniSqlTypeNameSpec("TEXT", SqlTypeName.VARCHAR, getPos()); }
+    <TEXT> { return new HeavySqlTypeNameSpec("TEXT", SqlTypeName.VARCHAR, getPos()); }
 }
 
 /*
- * Parse an Omnisci datatype with optional not-null attribute.
+ * Parse an HeavyDB datatype with optional not-null attribute.
  *
  * <data_type>[ \[ [<size>] \] ] [NOT NULL] [ENCODING <encoding_spec>]
  */
-OmniSqlDataType OmniDataType() :
+HeavySqlDataType HeavyDataType() :
 {
     SqlDataTypeSpec type;
-    OmniSqlArray array = null;
+    HeavySqlArray array = null;
     Integer coordinate = null;
-    OmniSqlEncoding encoding = null;
+    HeavySqlEncoding encoding = null;
     boolean notNull = false;
 }
 {
     type = DataType()
     [
-        array = OmniArray(type)
+        array = HeavyArray(type)
     ]
     [ <NOT> <NULL> { notNull = true; } ]
     [ encoding = Encoding() ]
-    { return new OmniSqlDataType(type, notNull, array, encoding); }
+    { return new HeavySqlDataType(type, notNull, array, encoding); }
 }
 
 /*
@@ -218,11 +220,11 @@ SqlDataTypeSpec NullableDataType() :
 }
 
 /*
- * Parse an OmniSql encoding.
+ * Parse an HeavySql encoding.
  *
  * ENCODING <encoding_spec>
  */
-OmniSqlEncoding Encoding() :
+HeavySqlEncoding Encoding() :
 {
     Token type = null;
     Integer size = null;
@@ -238,7 +240,7 @@ OmniSqlEncoding Encoding() :
         ( type = <DICT> | type = <COMPRESSED> )
         [ <LPAREN> size = IntLiteral() <RPAREN> ]
     )
-    { return new OmniSqlEncoding(type.toString(), size); }
+    { return new HeavySqlEncoding(type.toString(), size); }
 }
 
 // TODO: Foreign table and server use different object types
@@ -249,9 +251,9 @@ OmniSqlEncoding Encoding() :
  *
  * SET ( <option> = <value> [, ... ] )
  */
-OmniSqlOptionsMap SetOptions() :
+HeavySqlOptionsMap SetOptions() :
 {
-    OmniSqlOptionsMap optionMap = new OmniSqlOptionsMap();
+    HeavySqlOptionsMap optionMap = new HeavySqlOptionsMap();
 }
 {
   <SET>
@@ -260,13 +262,13 @@ OmniSqlOptionsMap SetOptions() :
 }
 
 /*
- * Parse one or more OmniSqlOptions following the WITH keyword.
+ * Parse one or more HeavySqlOptions following the WITH keyword.
  *
  * WITH ( <option> = <value> [, ... ] )
  */
-OmniSqlOptionsMap WithOptions() :
+HeavySqlOptionsMap WithOptions() :
 {
-    OmniSqlOptionsMap optionMap = new OmniSqlOptionsMap();
+    HeavySqlOptionsMap optionMap = new HeavySqlOptionsMap();
 }
 {
   <WITH>
@@ -274,10 +276,10 @@ OmniSqlOptionsMap WithOptions() :
   { return optionMap; }
 }
 
-OmniSqlOptionsMap TableOptions() :
+HeavySqlOptionsMap TableOptions() :
 {
-    OmniSqlOptionsMap optionMap = new OmniSqlOptionsMap();
-    OmniSqlOptionPair optionPair = null;
+    HeavySqlOptionsMap optionMap = new HeavySqlOptionsMap();
+    HeavySqlOptionPair optionPair = null;
 }
 {
   <LPAREN>
@@ -293,11 +295,11 @@ OmniSqlOptionsMap TableOptions() :
 }
 
 /*
- * Parse an OmniSqlOption.
+ * Parse an HeavySqlOption.
  *
  * <option> = <value>
  */
-OmniSqlOptionPair TableOption() :
+HeavySqlOptionPair TableOption() :
 {
     final SqlIdentifier option;
     final String optionString;
@@ -318,8 +320,8 @@ OmniSqlOptionPair TableOption() :
     )
     <EQ>
     value = Literal()
-    { return new OmniSqlOptionPair(optionString,
-                                   new OmniSqlSanitizedString(value)); }
+    { return new HeavySqlOptionPair(optionString,
+                                   new HeavySqlSanitizedString(value)); }
 }
 
 /*
@@ -350,7 +352,7 @@ SqlDrop SqlDropForeignTable(Span s) :
 SqlDdl SqlRefreshForeignTables(Span s) : {
     List<String> tableNames = new ArrayList<String>();
     SqlIdentifier tableName = null;
-    OmniSqlOptionsMap optionsMap = null;
+    HeavySqlOptionsMap optionsMap = null;
 }
 {
   <REFRESH> <FOREIGN> <TABLES>
@@ -380,7 +382,7 @@ SqlDdl SqlAlterForeignTable(Span s) :
     SqlIdentifier newTableName;
     SqlIdentifier oldColumnName;
     SqlIdentifier newColumnName;
-    OmniSqlOptionsMap optionsMap = null;
+    HeavySqlOptionsMap optionsMap = null;
 }
 {
     <ALTER> <FOREIGN> <TABLE>

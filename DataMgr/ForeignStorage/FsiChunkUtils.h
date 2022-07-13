@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 
 #include "DataMgr/Chunk/Chunk.h"
 #include "DataMgr/ChunkMetadata.h"
+#include "Shared/distributed.h"
 
 namespace foreign_storage {
 void init_chunk_for_column(
@@ -29,7 +30,7 @@ void init_chunk_for_column(
     Chunk_NS::Chunk& chunk);
 
 // Construct default metadata for given column descriptor with num_elements
-std::shared_ptr<ChunkMetadata> get_placeholder_metadata(const ColumnDescriptor* column,
+std::shared_ptr<ChunkMetadata> get_placeholder_metadata(const SQLTypeInfo& type,
                                                         size_t num_elements);
 /*
   Splits up a set of items to be processed into multiple partitions, with the intention
@@ -69,4 +70,31 @@ auto partition_for_threads(const std::vector<T>& items, size_t max_threads) {
   return items_by_thread;
 }
 
+template <typename Container>
+std::vector<std::future<void>> create_futures_for_workers(
+    const Container& items,
+    size_t max_threads,
+    std::function<void(const Container&)> lambda) {
+  auto items_per_thread = partition_for_threads(items, max_threads);
+  std::vector<std::future<void>> futures;
+  for (const auto& items : items_per_thread) {
+    futures.emplace_back(std::async(std::launch::async, lambda, items));
+  }
+
+  return futures;
+}
+
+const foreign_storage::ForeignTable& get_foreign_table_for_key(const ChunkKey& key);
+
+bool is_system_table_chunk_key(const ChunkKey& chunk_key);
+
+bool is_replicated_table_chunk_key(const ChunkKey& chunk_key);
+
+bool is_append_table_chunk_key(const ChunkKey& chunk_key);
+
+bool is_shardable_key(const ChunkKey& key);
+
+bool fragment_maps_to_leaf(const ChunkKey& key);
+
+bool key_does_not_shard_to_leaf(const ChunkKey& key);
 }  // namespace foreign_storage

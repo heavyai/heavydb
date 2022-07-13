@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,9 @@
 
 /**
  * @file		Regex.h
- * @author		Dmitri Shtilman <d@mapd.com>
  * @brief		Support the REGEX operator and REGEX_LIKE function in SQL.
  *
- * Copyright (c) 2016 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
 
 #ifndef REGEX_H
 #define REGEX_H

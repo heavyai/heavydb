@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include "CodeGenerator.h"
 #include "Execute.h"
+#include "StringDictionaryTranslationMgr.h"
 
 llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
                                         const CompilationOptions& co) {
@@ -37,6 +38,20 @@ llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
     }
   } else {
     operand_lv = codegen(operand, true, co).front();
+  }
+
+  // If the operand is a TextEncodingNone struct ({i8*, i64, i8})
+  // unpack it into an int64_t using "string_pack" so that codegenCast
+  // can properly cast it to a TextEncodingDict
+  if (operand_lv->getType()->isPointerTy() &&
+      operand_lv->getType()->getPointerElementType()->isStructTy()) {
+    auto _struct = cgen_state_->ir_builder_.CreateLoad(
+        operand_lv->getType()->getPointerElementType(), operand_lv);
+    auto ptr = cgen_state_->ir_builder_.CreateExtractValue(_struct, {0});
+    auto len = cgen_state_->ir_builder_.CreateTrunc(
+        cgen_state_->ir_builder_.CreateExtractValue(_struct, {1}),
+        get_int_type(32, cgen_state_->context_));
+    operand_lv = cgen_state_->emitCall("string_pack", {ptr, len});
   }
   const auto& operand_ti = operand->get_type_info();
   return codegenCast(operand_lv, operand_ti, ti, operand_as_const, co);
@@ -94,6 +109,10 @@ llvm::Value* CodeGenerator::codegenCast(llvm::Value* operand_lv,
       return codegenCastTimestampToDate(
           operand_lv, operand_ti.get_dimension(), !ti.get_notnull());
     }
+    if (operand_ti.get_type() == kTIMESTAMP && ti.get_type() == kTIME) {
+      return codegenCastTimestampToTime(
+          operand_lv, operand_ti.get_dimension(), !ti.get_notnull());
+    }
     if ((operand_ti.get_type() == kTIMESTAMP || operand_ti.get_type() == kDATE) &&
         ti.get_type() == kTIMESTAMP) {
       const auto operand_dimen =
@@ -113,6 +132,26 @@ llvm::Value* CodeGenerator::codegenCast(llvm::Value* operand_lv,
   }
   CHECK(false);
   return nullptr;
+}
+
+llvm::Value* CodeGenerator::codegenCastTimestampToTime(llvm::Value* ts_lv,
+                                                       const int dimen,
+                                                       const bool nullable) {
+  std::vector<llvm::Value*> datetrunc_args{ts_lv};
+  std::string hptodate_fname;
+  if (dimen > 0) {
+    hptodate_fname = "ExtractTimeFromHPTimestamp";
+    datetrunc_args.push_back(
+        cgen_state_->llInt(DateTimeUtils::get_timestamp_precision_scale(dimen)));
+  } else {
+    hptodate_fname = "ExtractTimeFromLPTimestamp";
+  }
+  if (nullable) {
+    datetrunc_args.push_back(cgen_state_->inlineIntNull(SQLTypeInfo(kBIGINT, false)));
+    hptodate_fname += "Nullable";
+  }
+  return cgen_state_->emitExternalCall(
+      hptodate_fname, get_int_type(64, cgen_state_->context_), datetrunc_args);
 }
 
 llvm::Value* CodeGenerator::codegenCastTimestampToDate(llvm::Value* ts_lv,
@@ -198,16 +237,65 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
       ti.get_compression() == kENCODING_NONE) {
     return operand_lv;
   }
+  if (ti.get_compression() == kENCODING_DICT &&
+      operand_ti.get_compression() == kENCODING_DICT) {
+    if (ti.get_comp_param() == operand_ti.get_comp_param()) {
+      return operand_lv;
+    }
+    if (operand_ti.get_comp_param() == DictRef::literalsDictId) {
+      // Anything being casted from a literal dictionary is not materialized at this point
+      // Should already have been kicked to CPU if it was originally a GPU query
+
+      CHECK(co.device_type == ExecutorDeviceType::CPU);
+      const int64_t source_string_proxy_handle =
+          reinterpret_cast<int64_t>(executor()->getStringDictionaryProxy(
+              operand_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
+
+      const int64_t dest_string_proxy_handle =
+          reinterpret_cast<int64_t>(executor()->getStringDictionaryProxy(
+              ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
+
+      auto source_string_proxy_handle_lv = cgen_state_->llInt(source_string_proxy_handle);
+      auto dest_string_proxy_handle_lv = cgen_state_->llInt(dest_string_proxy_handle);
+
+      std::vector<llvm::Value*> string_cast_lvs{
+          operand_lv, source_string_proxy_handle_lv, dest_string_proxy_handle_lv};
+      if (ti.is_dict_intersection()) {
+        return cgen_state_->emitExternalCall(
+            "intersect_translate_string_id_to_other_dict",
+            get_int_type(32, cgen_state_->context_),
+            string_cast_lvs);
+      } else {
+        return cgen_state_->emitExternalCall("union_translate_string_id_to_other_dict",
+                                             get_int_type(32, cgen_state_->context_),
+                                             string_cast_lvs);
+      }
+    }
+
+    const std::vector<StringOps_Namespace::StringOpInfo> string_op_infos;
+    auto string_dictionary_translation_mgr =
+        std::make_unique<StringDictionaryTranslationMgr>(
+            operand_ti.get_comp_param(),
+            ti.get_comp_param(),
+            ti.is_dict_intersection(),
+            string_op_infos,
+            co.device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
+                                                      : Data_Namespace::CPU_LEVEL,
+            executor()->deviceCount(co.device_type),
+            executor(),
+            &executor()->getCatalog()->getDataMgr(),
+            false /* delay_translation */);
+
+    return cgen_state_
+        ->moveStringDictionaryTranslationMgr(std::move(string_dictionary_translation_mgr))
+        ->codegen(operand_lv, operand_ti, true /* add_nullcheck */, co);
+  }
   // dictionary encode non-constant
   if (operand_ti.get_compression() != kENCODING_DICT && !operand_is_const) {
     if (g_cluster) {
       throw std::runtime_error(
           "Cast from none-encoded string to dictionary-encoded not supported for "
           "distributed queries");
-    }
-    if (g_enable_watchdog) {
-      throw WatchdogException(
-          "Cast from none-encoded string to dictionary-encoded would be slow");
     }
     CHECK_EQ(kENCODING_NONE, operand_ti.get_compression());
     CHECK_EQ(kENCODING_DICT, ti.get_compression());
@@ -226,13 +314,11 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
   if (ti.get_compression() == kENCODING_NONE) {
     if (g_cluster) {
       throw std::runtime_error(
-          "Cast from dictionary-encoded string to none-encoded not supported for "
-          "distributed queries");
+          "Cast from dictionary-encoded string to none-encoded not "
+          "currently supported for distributed queries.");
     }
-    if (g_enable_watchdog) {
-      throw WatchdogException(
-          "Cast from dictionary-encoded string to none-encoded would be slow");
-    }
+    // Removed watchdog check here in exchange for row cardinality based check in
+    // RelAlgExecutor
     CHECK_EQ(kENCODING_DICT, operand_ti.get_compression());
     if (co.device_type == ExecutorDeviceType::GPU) {
       throw QueryMustRunOnCpu();

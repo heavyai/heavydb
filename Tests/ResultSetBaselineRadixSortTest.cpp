@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,13 @@
 
 /**
  * @file    ResultSetBaselineRadixSortTest.cpp
- * @author  Alex Suhan <alex@omnisci.com>
  * @brief   Unit tests for the result set baseline layout sort.
  *
  */
 
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/Execute.h"
+#include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/RuntimeFunctions.h"
 #include "Tests/ResultSetTestUtils.h"
@@ -31,6 +31,7 @@
 #ifdef HAVE_CUDA
 #include "CudaMgr/CudaMgr.h"
 extern std::unique_ptr<CudaMgr_Namespace::CudaMgr> g_cuda_mgr;
+std::shared_ptr<QueryEngine> g_query_engine;
 #endif  // HAVE_CUDA
 
 #include <gtest/gtest.h>
@@ -327,8 +328,10 @@ int main(int argc, char** argv) {
 #ifdef HAVE_CUDA
   try {
     g_cuda_mgr.reset(new CudaMgr_Namespace::CudaMgr(0));
+    g_query_engine = QueryEngine::createInstance(g_cuda_mgr.get(), /*cpu_only=*/false);
   } catch (...) {
     LOG(WARNING) << "Could not instantiate CudaMgr, will run on CPU";
+    g_cuda_mgr.reset();
   }
 #endif  // HAVE_CUDA
 
@@ -340,6 +343,7 @@ int main(int argc, char** argv) {
   }
 
 #ifdef HAVE_CUDA
+  g_query_engine.reset();
   g_cuda_mgr.reset(nullptr);
 #endif  // HAVE_CUDA
 

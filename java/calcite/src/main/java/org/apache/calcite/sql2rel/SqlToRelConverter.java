@@ -37,7 +37,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.mapd.calcite.parser.MapDSqlOperatorTable.ExtTableFunction;
+import com.mapd.calcite.parser.HeavyDBSqlOperatorTable.ExtTableFunction;
 
 import org.apache.calcite.avatica.util.Spaces;
 import org.apache.calcite.linq4j.Ord;
@@ -2489,7 +2489,7 @@ public class SqlToRelConverter {
     // final RelNode node = relBuilder.push(leftRel).push(rightRel).join(joinType,
     // joinCond).build();
 
-    // MAT 8 Jan 2021 this is Omnisci code
+    // MAT 8 Jan 2021 this is HEAVY.AI code
     final Join originalJoin = (Join) RelFactories.DEFAULT_JOIN_FACTORY.createJoin(leftRel,
             rightRel,
             ImmutableList.of(),
@@ -2498,7 +2498,7 @@ public class SqlToRelConverter {
             joinType,
             false);
     RelNode node = originalJoin;
-    // MAT 08 Jan 2021 end of OmniSci Code
+    // MAT 08 Jan 2021 end of HEAVY.AI Code
 
     // If join conditions are pushed down, update the leaves.
     if (node instanceof Project) {
@@ -5638,11 +5638,11 @@ public class SqlToRelConverter {
             c -> c.withPushJoinCondition(true);
     private RelBuilderFactory relBuilderFactory = RelFactories.LOGICAL_BUILDER;
     private HintStrategyTable hintStrategyTable = HintStrategyTable.EMPTY;
-    // MAT 08 Jan 2021 OmniSci code
+    // MAT 08 Jan 2021 HEAVY.AI code
     // pushdown join condition incurs an extra projection overhead, so remove it (21 Apr
     // 2021)
     private BiPredicate<SqlNode, SqlNode> expandPredicate;
-    // MAT 08 Jan 2021 OmniSci code ends
+    // MAT 08 Jan 2021 HEAVY.AI code ends
 
     private ConfigBuilder() {}
 
@@ -5658,11 +5658,11 @@ public class SqlToRelConverter {
       this.relBuilderFactory = config.getRelBuilderFactory();
       this.hintStrategyTable = config.getHintStrategyTable();
 
-      // MAT 08 Jan 2021 OmniSci code
+      // MAT 08 Jan 2021 HEAVY.AI code
       if (!(config.getExpandPredicate() instanceof ConfigImpl.DefaultExpandPredicate)) {
         this.expandPredicate = config.getExpandPredicate();
       }
-      // MAT 08 Jan 2021 OmniSci code ends
+      // MAT 08 Jan 2021 HEAVY.AI code ends
       return this;
     }
 
@@ -5760,7 +5760,7 @@ public class SqlToRelConverter {
 
     private final BiPredicate<SqlNode, SqlNode> expandPredicate;
 
-    // MAT 08 Jab 2021 Omnisci code
+    // MAT 08 Jab 2021 HEAVY.AI code
     private class DefaultExpandPredicate implements BiPredicate<SqlNode, SqlNode> {
       @Override
       public boolean test(SqlNode t, SqlNode u) {
@@ -5768,16 +5768,16 @@ public class SqlToRelConverter {
       }
     }
 
-    // MAT 08 Jan 2021 OmniSci code ends
+    // MAT 08 Jan 2021 HEAVY.AI code ends
 
     private ConfigImpl(boolean decorrelationEnabled,
             boolean trimUnusedFields,
             boolean createValuesRel,
             boolean explain,
             boolean expand,
-            // MAT 08 Jan 2021 OmniSci code
+            // MAT 08 Jan 2021 HEAVY.AI code
             BiPredicate<SqlNode, SqlNode> expandPredicate,
-            // MAT 08 Jan 2021 Omnisci code ends
+            // MAT 08 Jan 2021 HEAVY.AI code ends
             int inSubQueryThreshold,
             UnaryOperator<RelBuilder.Config> relBuilderConfigTransform,
             RelBuilderFactory relBuilderFactory,
@@ -5785,21 +5785,21 @@ public class SqlToRelConverter {
       this.decorrelationEnabled = decorrelationEnabled;
       this.trimUnusedFields = trimUnusedFields;
       this.createValuesRel = createValuesRel;
-      // MAT 08 Jan 2021 OmniSci code
+      // MAT 08 Jan 2021 HEAVY.AI code
       this.explain = explain;
       this.expand = expand;
-      // MAT 08 Jan 2021 OmniSci code ends
+      // MAT 08 Jan 2021 HEAVY.AI code ends
       this.inSubQueryThreshold = inSubQueryThreshold;
       this.relBuilderConfigTransform = relBuilderConfigTransform;
       this.relBuilderFactory = relBuilderFactory;
       this.hintStrategyTable = hintStrategyTable;
-      // MAT 08 Jan 2021 OmniSci code
+      // MAT 08 Jan 2021 HEAVY.AI code
       if (null == expandPredicate) {
         expandPredicate = new DefaultExpandPredicate();
       }
       this.expandPredicate = expandPredicate;
 
-      // MAT 08 Jan 2021 OmniSci code ends
+      // MAT 08 Jan 2021 HEAVY.AI code ends
     }
 
     // TODO MAT 08 Jan 2021 add our added types to this equals
@@ -5865,10 +5865,10 @@ public class SqlToRelConverter {
       return hintStrategyTable;
     }
 
-    // MAT 08 Jan 2021 OmniSci code
+    // MAT 08 Jan 2021 HEAVY.AI code
     public BiPredicate<SqlNode, SqlNode> getExpandPredicate() {
       return expandPredicate;
     }
-    // MAT 08 Jan 2021 OmniSci code ends
+    // MAT 08 Jan 2021 HEAVY.AI code ends
   }
 }

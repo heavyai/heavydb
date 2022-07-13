@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 /**
  * @file DiskCacheQueryTest.cpp
  * @brief Test suite for queries on Disk Cache
+ *
  */
 
 #include <gtest/gtest.h>
@@ -24,6 +25,7 @@
 
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
+#include "Shared/SysDefinitions.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -41,11 +43,11 @@ class TableTest : public DBHandlerTestFixture {
  protected:
   inline static Catalog_Namespace::Catalog* cat_;
   inline static foreign_storage::ForeignStorageCache* cache_;
-  inline static std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache/";
+  inline static std::string cache_path_ =
+      to_string(BASE_PATH) + "/" + shared::kDefaultDiskCacheDirName + "/";
   inline static PersistentStorageMgr* psm_;
 
   static void SetUpTestSuite() {
-    use_disk_cache_ = true;
     DBHandlerTestFixture::SetUpTestSuite();
     cat_ = &getCatalog();
     ASSERT_NE(cat_, nullptr);
@@ -183,13 +185,18 @@ TEST_F(TableTest, RecoverCache_NonFSI) {
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
+  DBHandlerTestFixture::use_disk_cache_ = true;
   g_enable_fsi = true;
+
+  g_enable_data_recycler = false;
+  g_use_query_resultset_cache = false;
 
   // get dirname of test binary
   test_binary_file_path = bf::canonical(argv[0]).parent_path().string();
 
   int err{0};
   try {
+    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();

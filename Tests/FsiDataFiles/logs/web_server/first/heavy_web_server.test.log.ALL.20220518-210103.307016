@@ -1,0 +1,2 @@
+time="2022-05-18T21:01:03-08:00" level=info msg="Test info message"
+time="2022-05-18T21:01:04-08:00" level=error msg="Test error message"

@@ -31,20 +31,21 @@ data: {
         "org.apache.calcite.sql.SqlLiteral"
         "org.apache.calcite.sql.SqlWith"
         "org.apache.calcite.schema.ColumnStrategy"
-        "com.mapd.parser.extension.ddl.omnisci.*"
+        "com.mapd.parser.extension.ddl.heavydb.*"
         "com.mapd.parser.extension.ddl.SqlDdlNodes"
         "com.mapd.parser.extension.ddl.SqlCreateDB"
         "com.mapd.parser.extension.ddl.SqlDropDB"
-        "com.mapd.parser.extension.ddl.SqlRenameDB"
         "com.mapd.parser.extension.ddl.SqlCreateTable"
         "com.mapd.parser.extension.ddl.SqlDropTable"
         "com.mapd.parser.extension.ddl.SqlRenameTable"
         "com.mapd.parser.extension.ddl.SqlInsertIntoTable"
+        "com.mapd.parser.extension.ddl.SqlInsertValues"
         "com.mapd.parser.extension.ddl.SqlDumpTable"
         "com.mapd.parser.extension.ddl.SqlRestoreTable"
         "com.mapd.parser.extension.ddl.SqlTruncateTable"
         "com.mapd.parser.extension.ddl.SqlOptimizeTable"
         "com.mapd.parser.extension.ddl.SqlShowCreateTable"
+        "com.mapd.parser.extension.ddl.SqlShowCreateServer"
         "com.mapd.parser.extension.ddl.SqlCreateView"
         "com.mapd.parser.extension.ddl.SqlCreateUserMapping"
         "com.mapd.parser.extension.ddl.SqlCreateUser"
@@ -53,8 +54,13 @@ data: {
         "com.mapd.parser.extension.ddl.SqlAlterUser"
         "com.mapd.parser.extension.ddl.SqlRenameUser"
         "com.mapd.parser.extension.ddl.SqlShowTableDetails"
+        "com.mapd.parser.extension.ddl.SqlShowTableFunctions"
+        "com.mapd.parser.extension.ddl.SqlShowRuntimeTableFunctions"
+        "com.mapd.parser.extension.ddl.SqlShowFunctions"
+        "com.mapd.parser.extension.ddl.SqlShowRuntimeFunctions"
         "com.mapd.parser.extension.ddl.SqlAlterTable"
         "com.mapd.parser.extension.ddl.SqlAlterServer"
+        "com.mapd.parser.extension.ddl.SqlAlterDatabase"
         "com.mapd.parser.extension.ddl.SqlAlterForeignTable"
         "com.mapd.parser.extension.ddl.SqlCreateForeignTable"
         "com.mapd.parser.extension.ddl.SqlDropForeignTable"
@@ -65,6 +71,7 @@ data: {
         "com.mapd.parser.extension.ddl.SqlShowForeignServers"
         "com.mapd.parser.extension.ddl.SqlShowQueries"
         "com.mapd.parser.extension.ddl.SqlShowDiskCacheUsage"
+        "com.mapd.parser.extension.ddl.SqlShowDataSources"
         "com.mapd.parser.extension.ddl.SqlKillQuery"
         "com.mapd.parser.extension.ddl.SqlCreateRole"
         "com.mapd.parser.extension.ddl.SqlDropRole"
@@ -81,7 +88,7 @@ data: {
         "com.mapd.parser.extension.ddl.SqlExportQuery"
         "com.mapd.parser.extension.ddl.SqlValidateSystem"
         "com.mapd.parser.extension.ddl.SqlAlterSystemClear"
-        "com.mapd.parser.extension.ddl.omnisql.*"
+        "com.mapd.parser.extension.ddl.heavysql.*"
         "java.util.Map"
         "java.util.HashMap"
       ]
@@ -96,6 +103,7 @@ data: {
         "POINT"
         "POLYGON"
         "LINESTRING"
+        "MULTILINESTRING"
         "MULTIPOLYGON"
         "TEXT"
         "REFRESH"
@@ -119,6 +127,7 @@ data: {
         "EDIT"
         "EDITOR"
         "EFFECTIVE"
+        "FUNCTIONS"
         "MAPPING"
         "OPTIMIZE"
         "OWNED"
@@ -128,9 +137,12 @@ data: {
         "REASSIGN"
         "RENAME"
         "RESTORE"
+        "RUNTIME"
         "SERVERS"
         "SESSIONS"
-        "STORED" 
+        "SOURCES"
+        "STORED"
+        "SUPPORTED"
         "TABLES"
         "VALIDATE"
         "VIRTUAL"
@@ -466,6 +478,7 @@ data: {
         "YEARS"
         "ZONE"
         "SYSTEM"
+        "SESSION"
       ]
 
       # List of non-reserved keywords to add;
@@ -485,6 +498,7 @@ data: {
         "EDIT"
         "EDITOR"
         "EFFECTIVE"
+        "FUNCTIONS"
         "MAPPING"
         "OPTIMIZE"
         "OWNED"
@@ -495,9 +509,12 @@ data: {
         "RENAME"
         "RESTORE"
         "ROLES"
+        "RUNTIME"
         "SERVERS"
         "SESSIONS"
-        "STORED" 
+        "SOURCES"
+        "STORED"
+        "SUPPORTED"
         "TABLES"
         "VALIDATE"
         "VIRTUAL"
@@ -526,13 +543,13 @@ data: {
       # all of the statements listed here have LOOKAHEAD(2) which is
       # hardcoded in Calcite's Parser.jj source code.
       statementParserMethods: [
+        "SqlAlterDatabase(span())"
         "SqlAlterTable(span())"
         "SqlAlterServer(span())"
         "SqlAlterForeignTable(span())"
         "SqlAlterUser(span())"
         "SqlReassignOwned(span())"
         "SqlRefreshForeignTables(span())"
-        "SqlRenameDB(span())"
         "SqlRenameTable(span())"
         "SqlInsertIntoTable(span())"
         "SqlKillQuery(span())"
@@ -547,6 +564,7 @@ data: {
         "SqlCopyTable(span())"
         "SqlValidateSystem(span())"
         "SqlAlterSystemClear(span())"
+        "SqlAlterSessionSet(span())"
       ]
 
       # List of methods for parsing custom literals.
@@ -556,14 +574,15 @@ data: {
 
       # List of methods for parsing custom data types.
       dataTypeParserMethods: [
-          "OmniSciGeoDataType()"
-          "OmniText()"
+          "HeavyDBGeoDataType()"
+          "HeavyDBText()"
       ]
 
       # List of methods for parsing builtin function calls.
       # Return type of method implementation should be "SqlNode".
       # Example: DateFunctionCall().
       builtinFunctionCallMethods: [
+        "CurlyArrayConstructor()"
       ]
 
       # List of methods for parsing extensions to "ALTER <scope>" calls.
@@ -620,6 +639,7 @@ data: {
         "userMappingParser.ftl"
         "interruptQueryParser.ftl"
         "ddlParser.ftl"
+        "alterSessionSystem.ftl"
       ]
 
       includePosixOperators: false

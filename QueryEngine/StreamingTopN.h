@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,9 @@
 
 /**
  * @file    StreamingTopN.h
- * @author  Minggang Yu <miyu@mapd.com>
  * @brief   Streaming Top N algorithm.
  *
- * Copyright (c) 2017 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
 
 #ifndef QUERYENGINE_STREAMINGTOPN_H
 #define QUERYENGINE_STREAMINGTOPN_H

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,9 @@
 
 /**
  * @file		DatumString.cpp
- * @author	Wei Hong <wei@map-d.com>
  * @brief		Functions to convert between strings and Datum
- **/
+ *
+ */
 
 #include <algorithm>
 #include <cassert>
@@ -68,7 +68,8 @@ std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
                                                      "VOID",
                                                      "CURSOR",
                                                      "COLUMN",
-                                                     "COLUMN_LIST"};
+                                                     "COLUMN_LIST",
+                                                     "MULTILINESTRING"};
 std::string SQLTypeInfo::comp_name[kENCODING_LAST] =
     {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED", "DAYS"};
 
@@ -323,6 +324,7 @@ Datum StringToDatum(std::string_view s, SQLTypeInfo& ti) {
         break;
       case kPOINT:
       case kLINESTRING:
+      case kMULTILINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON:
         throw std::runtime_error("Internal error: geometry type in StringToDatum.");
@@ -368,6 +370,7 @@ bool DatumEqual(const Datum a, const Datum b, const SQLTypeInfo& ti) {
     case kCHAR:
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       if (ti.get_compression() == kENCODING_DICT) {
@@ -491,19 +494,7 @@ double extract_fp_type_from_datum(const Datum datum, const SQLTypeInfo& ti) {
 }
 
 SQLTypes decimal_to_int_type(const SQLTypeInfo& ti) {
-  switch (ti.get_size()) {
-    case 1:
-      return kTINYINT;
-    case 2:
-      return kSMALLINT;
-    case 4:
-      return kINT;
-    case 8:
-      return kBIGINT;
-    default:
-      CHECK(false);
-  }
-  return kNULLT;
+  return get_int_type_by_size(ti.get_size());
 }
 
 SQLTypes string_dict_to_int_type(const SQLTypeInfo& ti) {

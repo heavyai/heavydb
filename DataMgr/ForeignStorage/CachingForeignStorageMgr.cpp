@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,26 +20,18 @@
 
 #include "Catalog/Catalog.h"
 #include "Catalog/ForeignTable.h"
+#include "DataMgr/ForeignStorage/FsiChunkUtils.h"
 #include "ForeignStorageException.h"
 #include "ForeignTableSchema.h"
 #ifdef ENABLE_IMPORT_PARQUET
 #include "ParquetDataWrapper.h"
 #endif
+#include "Shared/distributed.h"
 
 namespace foreign_storage {
 
 namespace {
 constexpr int64_t MAX_REFRESH_TIME_IN_SECONDS = 60 * 60;
-
-inline bool is_system_table_chunk_key(const ChunkKey& chunk_key) {
-  CHECK(has_table_prefix(chunk_key));
-  auto catalog =
-      Catalog_Namespace::SysCatalog::instance().getCatalog(chunk_key[CHUNK_KEY_DB_IDX]);
-  CHECK(catalog);
-  auto table = catalog->getForeignTable(chunk_key[CHUNK_KEY_TABLE_IDX]);
-  CHECK(table);
-  return table->is_system_table;
-}
 }  // namespace
 
 CachingForeignStorageMgr::CachingForeignStorageMgr(ForeignStorageCache* cache)
@@ -53,7 +45,12 @@ void CachingForeignStorageMgr::populateChunkBuffersSafely(
     ChunkToBufferMap& optional_buffers) {
   CHECK_GT(required_buffers.size(), 0U) << "Must populate at least one buffer";
   try {
+    ChunkSizeValidator chunk_size_validator(required_buffers.begin()->first);
     data_wrapper.populateChunkBuffers(required_buffers, optional_buffers);
+    chunk_size_validator.validateChunkSizes(required_buffers);
+    chunk_size_validator.validateChunkSizes(optional_buffers);
+    updateFragmenterMetadata(required_buffers);
+    updateFragmenterMetadata(optional_buffers);
   } catch (const std::runtime_error& error) {
     // clear any partially loaded but failed chunks (there may be some
     // fully-loaded chunks as well but they will be cleared conservatively
@@ -76,11 +73,17 @@ void CachingForeignStorageMgr::populateChunkBuffersSafely(
   disk_cache_->checkpoint(db, tb);
 }
 
+namespace {
+bool is_in_memory_system_table_chunk_key(const ChunkKey& chunk_key) {
+  return get_foreign_table_for_key(chunk_key).is_in_memory_system_table;
+}
+}  // namespace
+
 void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
                                            AbstractBuffer* destination_buffer,
                                            const size_t num_bytes) {
   ChunkSizeValidator chunk_size_validator(chunk_key);
-  if (is_system_table_chunk_key(chunk_key)) {
+  if (is_in_memory_system_table_chunk_key(chunk_key)) {
     ForeignStorageMgr::fetchBuffer(chunk_key, destination_buffer, num_bytes);
     chunk_size_validator.validateChunkSize(destination_buffer);
     return;
@@ -122,8 +125,6 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
     auto required_buffers = disk_cache_->getChunkBuffersForCaching(column_keys);
     CHECK(required_buffers.find(chunk_key) != required_buffers.end());
     populateChunkBuffersSafely(data_wrapper, required_buffers, optional_buffers);
-    chunk_size_validator.validateChunkSizes(required_buffers);
-    chunk_size_validator.validateChunkSizes(optional_buffers);
 
     AbstractBuffer* buffer = required_buffers.at(chunk_key);
     CHECK(buffer);
@@ -134,7 +135,7 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
 void CachingForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
     ChunkMetadataVector& chunk_metadata,
     const ChunkKey& key_prefix) {
-  if (is_system_table_chunk_key(key_prefix)) {
+  if (is_in_memory_system_table_chunk_key(key_prefix)) {
     ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(chunk_metadata, key_prefix);
     return;
   }
@@ -145,9 +146,36 @@ void CachingForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
   // to go to storage to check.
   if (disk_cache_->hasCachedMetadataForKeyPrefix(key_prefix)) {
     disk_cache_->getCachedMetadataVecForKeyPrefix(chunk_metadata, key_prefix);
+
+    // Assert all metadata in cache is mapped to this leaf node in distributed.
+    if (is_shardable_key(key_prefix)) {
+      for (auto& [key, meta] : chunk_metadata) {
+        CHECK(fragment_maps_to_leaf(key)) << show_chunk(key);
+      }
+    }
+
+    // If the data in cache was restored from disk then it is possible that the wrapper
+    // does not exist yet.  In this case the wrapper will be restored from disk if
+    // possible.
     createDataWrapperIfNotExists(key_prefix);
     return;
+  } else if (dist::is_distributed() &&
+             disk_cache_->hasStoredDataWrapperMetadata(key_prefix[CHUNK_KEY_DB_IDX],
+                                                       key_prefix[CHUNK_KEY_TABLE_IDX])) {
+    // In distributed mode, it is possible to have all the chunk metadata filtered out for
+    // this node, after previously getting the chunk metadata from the wrapper and caching
+    // the wrapper metadata. In this case, return immediately and avoid doing a redundant
+    // metadata scan.
+    return;
   }
+
+  // If we have no cached data then either the data was evicted, was never populated, or
+  // the data for the table is an empty set (no chunks).  In case we are hitting the first
+  // two, we should repopulate the data wrapper so just do it in all cases.
+  auto table_key = get_table_key(key_prefix);
+  eraseDataWrapper(table_key);
+  createDataWrapperIfNotExists(table_key);
+
   getChunkMetadataVecFromDataWrapper(chunk_metadata, key_prefix);
   disk_cache_->cacheMetadataVec(chunk_metadata);
 }
@@ -163,11 +191,14 @@ void CachingForeignStorageMgr::getChunkMetadataVecFromDataWrapper(
     clearTable({db_id, tb_id});
     throw;
   }
-  auto doc = getDataWrapper(chunk_key_prefix)->getSerializedDataWrapper();
-  disk_cache_->storeDataWrapper(doc, db_id, tb_id);
+  // If the table was disabled then we will have no wrapper to serialize.
+  if (is_table_enabled_on_node(chunk_key_prefix)) {
+    auto doc = getDataWrapper(chunk_key_prefix)->getSerializedDataWrapper();
+    disk_cache_->storeDataWrapper(doc, db_id, tb_id);
 
-  // If the wrapper populated buffers we want that action to be checkpointed.
-  disk_cache_->checkpoint(db_id, tb_id);
+    // If the wrapper populated buffers we want that action to be checkpointed.
+    disk_cache_->checkpoint(db_id, tb_id);
+  }
 }
 
 void CachingForeignStorageMgr::refreshTable(const ChunkKey& table_key,
@@ -182,25 +213,47 @@ void CachingForeignStorageMgr::refreshTable(const ChunkKey& table_key,
   }
 }
 
+bool CachingForeignStorageMgr::hasStoredDataWrapper(int32_t db, int32_t tb) const {
+  return disk_cache_->hasStoredDataWrapperMetadata(db, tb);
+}
+
 void CachingForeignStorageMgr::refreshTableInCache(const ChunkKey& table_key) {
   CHECK(is_table_key(table_key));
 
   // Preserve the list of which chunks were cached per table to refresh after clear.
   std::vector<ChunkKey> old_chunk_keys =
       disk_cache_->getCachedChunksForKeyPrefix(table_key);
-  auto catalog =
-      Catalog_Namespace::SysCatalog::instance().getCatalog(table_key[CHUNK_KEY_DB_IDX]);
-  CHECK(catalog);
-  bool append_mode =
-      catalog->getForeignTable(table_key[CHUNK_KEY_TABLE_IDX])->isAppendMode();
+
+  // Assert all data in cache is mapped to this leaf node in distributed.
+  if (is_shardable_key(table_key)) {
+    for (auto& key : old_chunk_keys) {
+      CHECK(fragment_maps_to_leaf(key)) << show_chunk(key);
+    }
+  }
+
+  auto append_mode = is_append_table_chunk_key(table_key);
 
   append_mode ? refreshAppendTableInCache(table_key, old_chunk_keys)
               : refreshNonAppendTableInCache(table_key, old_chunk_keys);
 }
 
+void CachingForeignStorageMgr::eraseDataWrapper(const ChunkKey& key) {
+  CHECK(is_table_key(key));
+  std::lock_guard data_wrapper_lock(data_wrapper_mutex_);
+  // May not be created yet
+  if (data_wrapper_map_.find(key) != data_wrapper_map_.end()) {
+    auto [db, tb] = get_table_prefix(key);
+    // Need to erase serialized version on disk if it exists so we don't accidentally
+    // recover it after deleting.
+    boost::filesystem::remove_all(disk_cache_->getSerializedWrapperPath(db, tb));
+    data_wrapper_map_.erase(key);
+  }
+}
+
 void CachingForeignStorageMgr::clearTable(const ChunkKey& table_key) {
   disk_cache_->clearForTablePrefix(table_key);
-  ForeignStorageMgr::clearDataWrapper(table_key);
+  CHECK(!disk_cache_->hasCachedMetadataForKeyPrefix(table_key));
+  ForeignStorageMgr::eraseDataWrapper(table_key);
 }
 
 int CachingForeignStorageMgr::getHighestCachedFragId(const ChunkKey& table_key) {
@@ -225,7 +278,7 @@ void CachingForeignStorageMgr::refreshAppendTableInCache(
   ChunkMetadataVector storage_metadata;
   getChunkMetadataVecFromDataWrapper(storage_metadata, table_key);
   try {
-    disk_cache_->cacheMetadataWithFragIdGreaterOrEqualTo(storage_metadata, last_frag_id);
+    disk_cache_->cacheMetadataVec(storage_metadata);
     refreshChunksInCacheByFragment(old_chunk_keys, last_frag_id);
   } catch (std::runtime_error& e) {
     throw PostEvictionRefreshException(e);

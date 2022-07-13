@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,14 +15,14 @@
  */
 package com.mapd.tests;
 
-import com.omnisci.thrift.server.TOmniSciException;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.CyclicBarrier;
+
+import ai.heavy.thrift.server.TDBException;
 
 public class CtasItasSelectUpdelConcurrencyTest {
   final static Logger logger =
@@ -67,8 +67,8 @@ public class CtasItasSelectUpdelConcurrencyTest {
     final CyclicBarrier barrier = new CyclicBarrier(num_threads, new Runnable() {
       public void run() {
         try {
-          MapdTestClient dba =
-                  MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
+          HeavyDBTestClient dba = HeavyDBTestClient.getClient(
+                  "localhost", 6274, db, dbaUser, dbaPassword);
           dba.runSql("CREATE TABLE " + tableName
                   + "(x BIGINT, y INTEGER, z SMALLINT, a TINYINT, f FLOAT, d DOUBLE, deci DECIMAL(18,6), str TEXT ENCODING NONE) WITH (FRAGMENT_SIZE = "
                   + fragment_size + ")");
@@ -118,8 +118,8 @@ public class CtasItasSelectUpdelConcurrencyTest {
           try {
             barrier.await();
 
-            MapdTestClient user =
-                    MapdTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
+            HeavyDBTestClient user = HeavyDBTestClient.getClient(
+                    "localhost", 6274, db, dbUser, dbPassword);
 
             Random rand = new Random(tid);
 
@@ -141,7 +141,7 @@ public class CtasItasSelectUpdelConcurrencyTest {
                 sql = "SELECT COUNT(*) FROM " + ctasTableName + ";";
                 logger.info(logPrefix + " VALIDATE " + sql);
                 user.sqlValidate(sql);
-              } catch (TOmniSciException e) {
+              } catch (TDBException e) {
                 if (e.getError_msg().indexOf("not found") != -1) {
                   Thread.sleep(1000);
                   ctas_table_created = false;
@@ -163,7 +163,7 @@ public class CtasItasSelectUpdelConcurrencyTest {
 
               sql = "INSERT INTO " + tableName + " VALUES "
                       + "(" + tid + "," + tid + "," + tid + "," + tid + "," + tid + ","
-                      + tid + "," + tid + "," + (tid % 2 == 0 ? "'mapd'" : "'omnisci'")
+                      + tid + "," + tid + "," + (tid % 2 == 0 ? "'value_1'" : "'value_2'")
                       + ", 'z');";
               logger.info(logPrefix + " " + sql);
               user.runSql(sql);
@@ -198,8 +198,8 @@ public class CtasItasSelectUpdelConcurrencyTest {
       t.join();
     }
 
-    MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
+    HeavyDBTestClient dba =
+            HeavyDBTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
     dba.runSql("DROP TABLE " + tableName + ";");
 
     for (Exception e : exceptions) {
@@ -213,12 +213,12 @@ public class CtasItasSelectUpdelConcurrencyTest {
   public void testConcurrency() throws Exception {
     logger.info("CtasItasSelectUpdelConcurrencyTest()");
 
-    MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
+            "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");
 
-    su.runSql("GRANT CREATE on DATABASE omnisci TO bob;");
+    su.runSql("GRANT CREATE on DATABASE heavyai TO bob;");
 
     su.runSql("CREATE DATABASE db1;");
     su.runSql("GRANT CREATE on DATABASE db1 TO bob;");

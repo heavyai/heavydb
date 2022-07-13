@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,14 @@
 
 /**
  * @file    ResultSetBuilder.h
- * @author
  * @brief   Basic constructors and methods of the row set interface.
  *
- * Copyright (c) 2020 OmniSci, Inc.  All rights reserved.
  */
 
 #ifndef QUERYENGINE_RESULTSETBUILDER_H
 #define QUERYENGINE_RESULTSETBUILDER_H
 
-#include "RelAlgDagBuilder.h"
+#include "RelAlgDag.h"
 #include "ResultSet.h"
 
 // ********************************************************

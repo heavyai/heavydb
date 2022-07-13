@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,8 @@ class DeviceKernel {
                       void** kernelParams) = 0;
 
   virtual void initializeDynamicWatchdog(bool could_interrupt, uint64_t cycle_budget) = 0;
-  virtual void initializeRuntimeInterrupter() = 0;
+  virtual void initializeRuntimeInterrupter(const int device_id) = 0;
+  virtual void resetRuntimeInterrupter(const int device_id) = 0;
 
   virtual std::unique_ptr<DeviceClock> make_clock() = 0;
 

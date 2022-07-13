@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,6 +134,21 @@ bool toWkb(WKB& wkb,
     return linestring.getWkb(wkb);
   }
   std::vector<int32_t> meta1v(meta1, meta1 + meta1_size);
+  if (static_cast<SQLTypes>(type) == kMULTILINESTRING) {
+    GeoMultiLineString multilinestring(*cv, meta1v);
+    if (execute_transform && !multilinestring.transform(srid_in, srid_out)) {
+      return false;
+    }
+    if (best_planar_srid_ptr) {
+      // A non-NULL pointer signifies a request to find the best planar srid
+      // to transform this WGS84 geometry to, based on geometry's centroid.
+      *best_planar_srid_ptr = multilinestring.getBestPlanarSRID();
+      if (!multilinestring.transform(4326, *best_planar_srid_ptr)) {
+        return false;
+      }
+    }
+    return multilinestring.getWkb(wkb);
+  }
   if (static_cast<SQLTypes>(type) == kPOLYGON) {
     GeoPolygon poly(*cv, meta1v);
     if (execute_transform && !poly.transform(srid_in, srid_out)) {
@@ -569,6 +584,12 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_double(
       } else {
         g = GEOSGeom_clone_r(context, g1);
       }
+    } else if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kCONCAVEHULL) {
+#if (GEOS_VERSION_MAJOR > 3) || (GEOS_VERSION_MAJOR == 3 && GEOS_VERSION_MINOR >= 11)
+      g = GEOSConcaveHull_r(context, g1, arg2);
+#endif
+    } else if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kCONVEXHULL) {
+      g = GEOSConvexHull_r(context, g1);
     }
     g = postprocess(context, g);
     if (g) {

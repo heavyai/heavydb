@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-/*
- * File:   parameters.h
- * Author: michael
+/**
+ * @file   SystemParameters.h
+ * @brief
  *
- * Created on January 19, 2017, 4:31 PM
  */
 
 #pragma once
@@ -32,7 +31,7 @@ struct SystemParameters {
   size_t cuda_block_size = 0;       // block size for the kernel execution
   size_t cuda_grid_size = 0;        // grid size for the kernel execution
   size_t calcite_max_mem = 1024;    // max memory for calcite jvm in MB
-  int omnisci_server_port = 6274;   // default port omnisci_server runs on
+  int omnisci_server_port = 6274;   // default port heavydb runs on
   int calcite_port = 6279;          // default port for calcite server to run on
   std::string ha_group_id;          // name of the HA group this server is in
   std::string ha_unique_server_id;  // name of the HA unique id for this server
@@ -72,6 +71,13 @@ struct SystemParameters {
   size_t calcite_keepalive = false;  // calcite keepalive connection
   int num_executors = 2;
   int num_sessions = -1;  // maximum number of user sessions
+  enum class RuntimeUdfRegistrationPolicy {
+    DISALLOWED,
+    ALLOWED_SUPERUSERS_ONLY,
+    ALLOWED_ALL_USERS
+  };
+  RuntimeUdfRegistrationPolicy runtime_udf_registration_policy =
+      RuntimeUdfRegistrationPolicy::DISALLOWED;
 
   SystemParameters() : cuda_block_size(0), cuda_grid_size(0), calcite_max_mem(1024) {}
 };

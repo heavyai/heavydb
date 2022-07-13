@@ -15,6 +15,9 @@
  */
 #include "HashJoinRuntime.cpp"
 
+#include <cuda.h>
+CUstream getQueryEngineCudaStream();
+
 #include <thrust/device_ptr.h>
 #include <thrust/scan.h>
 
@@ -25,8 +28,9 @@ void cuda_kernel_launch_wrapper(F func, ARGS&&... args) {
   int grid_size = -1;
   int block_size = -1;
   checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&grid_size, &block_size, func));
-  func<<<grid_size, block_size>>>(std::forward<ARGS>(args)...);
-  checkCudaErrors(cudaGetLastError());
+  auto qe_cuda_stream = getQueryEngineCudaStream();
+  func<<<grid_size, block_size, 0, qe_cuda_stream>>>(std::forward<ARGS>(args)...);
+  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
 }
 
 __global__ void fill_hash_join_buff_wrapper(int32_t* buff,
@@ -215,14 +219,16 @@ __global__ void set_valid_pos(int32_t* pos_buff,
 template <typename COUNT_MATCHES_FUNCTOR, typename FILL_ROW_IDS_FUNCTOR>
 void fill_one_to_many_hash_table_on_device_impl(int32_t* buff,
                                                 const int64_t hash_entry_count,
-                                                const int32_t invalid_slot_val,
                                                 const JoinColumn& join_column,
                                                 const JoinColumnTypeInfo& type_info,
                                                 COUNT_MATCHES_FUNCTOR count_matches_func,
                                                 FILL_ROW_IDS_FUNCTOR fill_row_ids_func) {
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
-  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  auto qe_cuda_stream = getQueryEngineCudaStream();
+  checkCudaErrors(
+      cudaMemsetAsync(count_buff, 0, hash_entry_count * sizeof(int32_t), qe_cuda_stream));
+  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
   count_matches_func();
 
   cuda_kernel_launch_wrapper(set_valid_pos_flag, pos_buff, count_buff, hash_entry_count);
@@ -232,38 +238,30 @@ void fill_one_to_many_hash_table_on_device_impl(int32_t* buff,
       count_buff_dev_ptr, count_buff_dev_ptr + hash_entry_count, count_buff_dev_ptr);
 
   cuda_kernel_launch_wrapper(set_valid_pos, pos_buff, count_buff, hash_entry_count);
-  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  checkCudaErrors(
+      cudaMemsetAsync(count_buff, 0, hash_entry_count * sizeof(int32_t), qe_cuda_stream));
+  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
   fill_row_ids_func();
 }
 
 void fill_one_to_many_hash_table_on_device(int32_t* buff,
                                            const HashEntryInfo hash_entry_info,
-                                           const int32_t invalid_slot_val,
                                            const JoinColumn& join_column,
                                            const JoinColumnTypeInfo& type_info) {
   auto hash_entry_count = hash_entry_info.hash_entry_count;
-  auto count_matches_func = [hash_entry_count,
-                             count_buff = buff + hash_entry_count,
-                             invalid_slot_val,
+  auto count_matches_func = [count_buff = buff + hash_entry_count,
                              join_column,
                              type_info] {
-    cuda_kernel_launch_wrapper(
-        SUFFIX(count_matches), count_buff, invalid_slot_val, join_column, type_info);
+    cuda_kernel_launch_wrapper(SUFFIX(count_matches), count_buff, join_column, type_info);
   };
 
-  auto fill_row_ids_func =
-      [buff, hash_entry_count, invalid_slot_val, join_column, type_info] {
-        cuda_kernel_launch_wrapper(SUFFIX(fill_row_ids),
-                                   buff,
-                                   hash_entry_count,
-                                   invalid_slot_val,
-                                   join_column,
-                                   type_info);
-      };
+  auto fill_row_ids_func = [buff, hash_entry_count, join_column, type_info] {
+    cuda_kernel_launch_wrapper(
+        SUFFIX(fill_row_ids), buff, hash_entry_count, join_column, type_info);
+  };
 
   fill_one_to_many_hash_table_on_device_impl(buff,
                                              hash_entry_count,
-                                             invalid_slot_val,
                                              join_column,
                                              type_info,
                                              count_matches_func,
@@ -273,19 +271,16 @@ void fill_one_to_many_hash_table_on_device(int32_t* buff,
 void fill_one_to_many_hash_table_on_device_bucketized(
     int32_t* buff,
     const HashEntryInfo hash_entry_info,
-    const int32_t invalid_slot_val,
     const JoinColumn& join_column,
     const JoinColumnTypeInfo& type_info) {
   auto hash_entry_count = hash_entry_info.getNormalizedHashEntryCount();
   auto count_matches_func = [count_buff = buff + hash_entry_count,
-                             invalid_slot_val,
                              join_column,
                              type_info,
                              bucket_normalization =
                                  hash_entry_info.bucket_normalization] {
     cuda_kernel_launch_wrapper(SUFFIX(count_matches_bucketized),
                                count_buff,
-                               invalid_slot_val,
                                join_column,
                                type_info,
                                bucket_normalization);
@@ -294,14 +289,12 @@ void fill_one_to_many_hash_table_on_device_bucketized(
   auto fill_row_ids_func = [buff,
                             hash_entry_count =
                                 hash_entry_info.getNormalizedHashEntryCount(),
-                            invalid_slot_val,
                             join_column,
                             type_info,
                             bucket_normalization = hash_entry_info.bucket_normalization] {
     cuda_kernel_launch_wrapper(SUFFIX(fill_row_ids_bucketized),
                                buff,
                                hash_entry_count,
-                               invalid_slot_val,
                                join_column,
                                type_info,
                                bucket_normalization);
@@ -309,7 +302,6 @@ void fill_one_to_many_hash_table_on_device_bucketized(
 
   fill_one_to_many_hash_table_on_device_impl(buff,
                                              hash_entry_count,
-                                             invalid_slot_val,
                                              join_column,
                                              type_info,
                                              count_matches_func,
@@ -318,20 +310,18 @@ void fill_one_to_many_hash_table_on_device_bucketized(
 
 void fill_one_to_many_hash_table_on_device_sharded(int32_t* buff,
                                                    const HashEntryInfo hash_entry_info,
-                                                   const int32_t invalid_slot_val,
                                                    const JoinColumn& join_column,
                                                    const JoinColumnTypeInfo& type_info,
                                                    const ShardInfo& shard_info) {
   auto hash_entry_count = hash_entry_info.hash_entry_count;
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
-  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
-  cuda_kernel_launch_wrapper(SUFFIX(count_matches_sharded),
-                             count_buff,
-                             invalid_slot_val,
-                             join_column,
-                             type_info,
-                             shard_info);
+  auto qe_cuda_stream = getQueryEngineCudaStream();
+  checkCudaErrors(
+      cudaMemsetAsync(count_buff, 0, hash_entry_count * sizeof(int32_t), qe_cuda_stream));
+  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
+  cuda_kernel_launch_wrapper(
+      SUFFIX(count_matches_sharded), count_buff, join_column, type_info, shard_info);
 
   cuda_kernel_launch_wrapper(set_valid_pos_flag, pos_buff, count_buff, hash_entry_count);
 
@@ -339,11 +329,12 @@ void fill_one_to_many_hash_table_on_device_sharded(int32_t* buff,
   thrust::inclusive_scan(
       count_buff_dev_ptr, count_buff_dev_ptr + hash_entry_count, count_buff_dev_ptr);
   cuda_kernel_launch_wrapper(set_valid_pos, pos_buff, count_buff, hash_entry_count);
-  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  checkCudaErrors(
+      cudaMemsetAsync(count_buff, 0, hash_entry_count * sizeof(int32_t), qe_cuda_stream));
+  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
   cuda_kernel_launch_wrapper(SUFFIX(fill_row_ids_sharded),
                              buff,
                              hash_entry_count,
-                             invalid_slot_val,
                              join_column,
                              type_info,
                              shard_info);
@@ -353,12 +344,14 @@ template <typename T, typename KEY_HANDLER>
 void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const T* composite_key_dict,
                                                     const int64_t hash_entry_count,
-                                                    const int32_t invalid_slot_val,
                                                     const KEY_HANDLER* key_handler,
                                                     const size_t num_elems) {
   auto pos_buff = buff;
   auto count_buff = buff + hash_entry_count;
-  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  auto qe_cuda_stream = getQueryEngineCudaStream();
+  checkCudaErrors(
+      cudaMemsetAsync(count_buff, 0, hash_entry_count * sizeof(int32_t), qe_cuda_stream));
+  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
   cuda_kernel_launch_wrapper(count_matches_baseline_gpu<T, KEY_HANDLER>,
                              count_buff,
                              composite_key_dict,
@@ -372,13 +365,14 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
   thrust::inclusive_scan(
       count_buff_dev_ptr, count_buff_dev_ptr + hash_entry_count, count_buff_dev_ptr);
   cuda_kernel_launch_wrapper(set_valid_pos, pos_buff, count_buff, hash_entry_count);
-  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  checkCudaErrors(
+      cudaMemsetAsync(count_buff, 0, hash_entry_count * sizeof(int32_t), qe_cuda_stream));
+  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
 
   cuda_kernel_launch_wrapper(fill_row_ids_baseline_gpu<T, KEY_HANDLER>,
                              buff,
                              composite_key_dict,
                              hash_entry_count,
-                             invalid_slot_val,
                              key_handler,
                              num_elems);
 }
@@ -538,61 +532,41 @@ void fill_one_to_many_baseline_hash_table_on_device_32(
     int32_t* buff,
     const int32_t* composite_key_dict,
     const int64_t hash_entry_count,
-    const int32_t invalid_slot_val,
     const size_t key_component_count,
     const GenericKeyHandler* key_handler,
     const int64_t num_elems) {
-  fill_one_to_many_baseline_hash_table_on_device<int32_t>(buff,
-                                                          composite_key_dict,
-                                                          hash_entry_count,
-                                                          invalid_slot_val,
-                                                          key_handler,
-                                                          num_elems);
+  fill_one_to_many_baseline_hash_table_on_device<int32_t>(
+      buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
 }
 
 void fill_one_to_many_baseline_hash_table_on_device_64(
     int32_t* buff,
     const int64_t* composite_key_dict,
     const int64_t hash_entry_count,
-    const int32_t invalid_slot_val,
     const GenericKeyHandler* key_handler,
     const int64_t num_elems) {
-  fill_one_to_many_baseline_hash_table_on_device<int64_t>(buff,
-                                                          composite_key_dict,
-                                                          hash_entry_count,
-                                                          invalid_slot_val,
-                                                          key_handler,
-                                                          num_elems);
+  fill_one_to_many_baseline_hash_table_on_device<int64_t>(
+      buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
 }
 
 void overlaps_fill_one_to_many_baseline_hash_table_on_device_64(
     int32_t* buff,
     const int64_t* composite_key_dict,
     const int64_t hash_entry_count,
-    const int32_t invalid_slot_val,
     const OverlapsKeyHandler* key_handler,
     const int64_t num_elems) {
-  fill_one_to_many_baseline_hash_table_on_device<int64_t>(buff,
-                                                          composite_key_dict,
-                                                          hash_entry_count,
-                                                          invalid_slot_val,
-                                                          key_handler,
-                                                          num_elems);
+  fill_one_to_many_baseline_hash_table_on_device<int64_t>(
+      buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
 }
 
 void range_fill_one_to_many_baseline_hash_table_on_device_64(
     int32_t* buff,
     const int64_t* composite_key_dict,
     const size_t hash_entry_count,
-    const int32_t invalid_slot_val,
     const RangeKeyHandler* key_handler,
     const size_t num_elems) {
-  fill_one_to_many_baseline_hash_table_on_device<int64_t>(buff,
-                                                          composite_key_dict,
-                                                          hash_entry_count,
-                                                          invalid_slot_val,
-                                                          key_handler,
-                                                          num_elems);
+  fill_one_to_many_baseline_hash_table_on_device<int64_t>(
+      buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
 }
 
 void approximate_distinct_tuples_on_device_overlaps(uint8_t* hll_buffer,
@@ -619,8 +593,10 @@ void approximate_distinct_tuples_on_device_range(uint8_t* hll_buffer,
                                                  const size_t num_elems,
                                                  const size_t block_size_x,
                                                  const size_t grid_size_x) {
-  approximate_distinct_tuples_impl_gpu<<<grid_size_x, block_size_x>>>(
+  auto qe_cuda_stream = getQueryEngineCudaStream();
+  approximate_distinct_tuples_impl_gpu<<<grid_size_x, block_size_x, 0, qe_cuda_stream>>>(
       hll_buffer, row_counts_buffer, b, num_elems, key_handler);
+  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
 
   auto row_counts_buffer_ptr = thrust::device_pointer_cast(row_counts_buffer);
   thrust::inclusive_scan(

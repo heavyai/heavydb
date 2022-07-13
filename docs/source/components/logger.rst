@@ -33,15 +33,15 @@ See `CHECK`_.
 Program Options
 ---------------
 
-``omnisci_server --help`` includes the logging options::
+``heavydb --help`` includes the logging options::
 
     Logging:
-    --log-directory arg (="mapd_log")     Logging directory. May be relative to
+    --log-directory arg (="log")          Logging directory. May be relative to
                                           data directory, or absolute.
-    --log-file-name arg (=omnisci_server.{SEVERITY}.%Y%m%d-%H%M%S.log)
+    --log-file-name arg (=heavydb.{SEVERITY}.%Y%m%d-%H%M%S.log)
                                           Log file name relative to
                                           log-directory.
-    --log-symlink arg (=omnisci_server.{SEVERITY})
+    --log-symlink arg (=heavydb.{SEVERITY})
                                           Symlink to active log.
     --log-severity arg (=INFO)            Log to file severity level: INFO
                                           WARNING ERROR FATAL
@@ -147,14 +147,14 @@ then the ``INFO`` log file will include all log calls ``LOG(DEBUG1)``, ``LOG(INF
 The name of the log file by default includes the program name, severity, and timestamp of when its first entry
 was made. Example::
 
-    omnisci_server.INFO.20190918-162525.log
+    heavydb.INFO.20190918-162525.log
 
 This can be customized with the ``--log-file-name`` program option.
 
 New log files are started on each (re)start. A symbolic link without the timestamp and file extension
 suffix points to the latest version. Example::
 
-    omnisci_server.INFO -> omnisci_server.INFO.20190918-162525.log
+    heavydb.INFO -> heavydb.INFO.20190918-162525.log
 
 Format
 """"""
@@ -196,7 +196,7 @@ hierarchy is convenient so that the output is not interleaved with unrelated ``I
 
 For example, ``LOG(IR) << "Foo = " << foo.getIr();`` will be activated if any only if ``IR`` is included
 in the ``--log-channels`` program option, which can accept multiple comma-delimited channel names. If activated,
-the output will be logged to a file named after the channel, e.g. ``omnisci_server.IR.20190918-162525.log``.
+the output will be logged to a file named after the channel, e.g. ``heavydb.IR.20190918-162525.log``.
 
 Macros
 ^^^^^^

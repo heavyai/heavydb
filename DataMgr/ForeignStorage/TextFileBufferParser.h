@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,10 @@
 #include "DataMgr/ForeignStorage/ForeignTableSchema.h"
 
 #include "ImportExport/Importer.h"
+#include "ImportExport/RenderGroupAnalyzer.h"
 
 namespace foreign_storage {
+
 struct ParseBufferRequest {
   ParseBufferRequest(const ParseBufferRequest& request) = delete;
   ParseBufferRequest(ParseBufferRequest&& request) = default;
@@ -30,7 +32,9 @@ struct ParseBufferRequest {
                      int db_id,
                      const ForeignTable* foreign_table,
                      const std::set<int> column_filter_set,
-                     const std::string& full_path);
+                     const std::string& full_path,
+                     const RenderGroupAnalyzerMap* render_group_analyzer_map,
+                     const bool track_rejected_rows = false);
 
   inline std::shared_ptr<Catalog_Namespace::Catalog> getCatalog() const {
     auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
@@ -64,6 +68,7 @@ struct ParseBufferRequest {
   const int db_id;
   std::unique_ptr<ForeignTableSchema> foreign_table_schema;
   std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
+  const RenderGroupAnalyzerMap* render_group_analyzer_map;
 
   // These are set during parsing.
   size_t buffer_row_count;
@@ -73,12 +78,16 @@ struct ParseBufferRequest {
   size_t file_offset;
   size_t process_row_count;
   std::string full_path;
+
+  // This parameter controls the behaviour of error handling in the data wrapper
+  const bool track_rejected_rows;
 };
 
 struct ParseBufferResult {
   std::map<int, DataBlockPtr> column_id_to_data_blocks_map;
   size_t row_count;
   std::vector<size_t> row_offsets;
+  std::set<size_t> rejected_rows;
 };
 
 class TextFileBufferParser {
@@ -137,10 +146,31 @@ class TextFileBufferParser {
       bool is_null,
       size_t first_row_index,
       size_t row_index_plus_one,
-      std::shared_ptr<Catalog_Namespace::Catalog> catalog);
+      std::shared_ptr<Catalog_Namespace::Catalog> catalog,
+      const RenderGroupAnalyzerMap* render_group_analyzer_map);
+
+  /**
+   * Fill the current row of the `request` with invalid (null) data as row will
+   * be marked as rejected
+   */
+  static void fillRejectedRowWithInvalidData(
+      const std::list<const ColumnDescriptor*>& columns,
+      std::list<const ColumnDescriptor*>::iterator& cd_it,
+      const size_t col_idx,
+      ParseBufferRequest& request);
 
   static bool isNullDatum(const std::string_view datum,
                           const ColumnDescriptor* column,
                           const std::string& null_indicator);
+
+  inline static const std::string BUFFER_SIZE_KEY = "BUFFER_SIZE";
+
+ private:
+  static void processInvalidGeoColumn(
+      std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
+      size_t& col_idx,
+      const import_export::CopyParams& copy_params,
+      const ColumnDescriptor* cd,
+      std::shared_ptr<Catalog_Namespace::Catalog> catalog);
 };
 }  // namespace foreign_storage

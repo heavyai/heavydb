@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,8 +47,9 @@ static std::set<std::string> reserved_keywords{
     "ILIKE",
     "LAST",
     "LENGTH",
-    "LINESTRING",    // geo type
-    "MULTIPOLYGON",  // geo type
+    "LINESTRING",       // geo type
+    "MULTILINESTRING",  // geo type
+    "MULTIPOLYGON",     // geo type
     "NOW",
     "NULLX",
     "OPTION",
@@ -243,6 +244,8 @@ static std::set<std::string> reserved_keywords{
     "LOCALTIME",
     "LOCALTIMESTAMP",
     "LOWER",
+    "LPAD",
+    "LTRIM",
     "MATCH",
     "MATCHES",
     "MATCH_NUMBER",
@@ -321,6 +324,9 @@ static std::set<std::string> reserved_keywords{
     "REF",
     "REFERENCES",
     "REFERENCING",
+    "REGEXP_REPLACE",
+    "REGEXP_SUBSTR",
+    "REGEXP_MATCH"
     "REGR_AVGX",
     "REGR_AVGY",
     "REGR_COUNT",
@@ -331,10 +337,13 @@ static std::set<std::string> reserved_keywords{
     "REGR_SXY",
     "REGR_SYY",
     "RELEASE",
+    "REPEAT",
+    "REPLACE",
     "RESET",
     "RESULT",
     "RETURN",
     "RETURNS",
+    "REVERSE",
     "REVOKE",
     "RIGHT",
     "ROLLBACK",
@@ -342,7 +351,9 @@ static std::set<std::string> reserved_keywords{
     "ROW",
     "ROWS",
     "ROW_NUMBER",
+    "RPAD",
     "RUNNING",
+    "RTRIM",
     "SAVEPOINT",
     "SCOPE",
     "SCROLL",
@@ -360,6 +371,7 @@ static std::set<std::string> reserved_keywords{
     "SOME",
     "SPECIFIC",
     "SPECIFICTYPE",
+    "SPLIT_PART",
     "SQL",
     "SQLEXCEPTION",
     "SQLSTATE",
@@ -373,7 +385,6 @@ static std::set<std::string> reserved_keywords{
     "SUBMULTISET",
     "SUBSET",
     "SUBSTRING",
-    "SUBSTRING_REGEX",
     "SUCCEEDS",
     "SUM",
     "SYMMETRIC",

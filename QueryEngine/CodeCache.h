@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 #include "StringDictionary/LruCache.hpp"
 
 using CodeCacheKey = std::vector<std::string>;
-using CodeCacheVal = std::shared_ptr<CompilationContext>;
-using CodeCacheValWithModule = std::pair<CodeCacheVal, llvm::Module*>;
-using CodeCache =
-    LruCache<CodeCacheKey, CodeCacheValWithModule, boost::hash<CodeCacheKey>>;
+template <typename CC>
+using CodeCacheVal = std::shared_ptr<CC>;
+template <typename CC>
+using CodeCache = LruCache<CodeCacheKey, CodeCacheVal<CC>, boost::hash<CodeCacheKey>>;

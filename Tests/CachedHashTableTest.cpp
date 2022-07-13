@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -398,7 +398,7 @@ void import_tables_cache_invalidation_for_CPU_one_to_many_join(bool reverse) {
 std::shared_ptr<HashTable> getCachedHashTable(std::set<QueryPlanHash>& already_visited,
                                               CacheItemType cache_item_type) {
   auto cached_ht = QR::get()->getCachedHashtableWithoutCacheKey(
-      already_visited, cache_item_type, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+      already_visited, cache_item_type, 0 /* CPU_DEVICE_IDENTIFIER*/);
   auto cache_key = std::get<0>(cached_ht);
   already_visited.insert(cache_key);
   return std::get<1>(cached_ht);
@@ -563,7 +563,6 @@ TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
   baseline_hashtable_first_run.push_back(std::vector<int32_t>{0, 0});
   baseline_hashtable_first_run.push_back(std::vector<int32_t>{0, 0});
   baseline_hashtable_first_run.push_back(std::vector<int32_t>{1, 1});
-  auto q1_dag_info = QR::get()->extractQueryPlanDag(q1);
   CHECK(check_one_to_many_baseline_hashtable(baseline_hashtable_first_run,
                                              cached_q1_ht->getCpuBuffer(),
                                              cached_q1_ht->getEntryCount()));
@@ -575,7 +574,6 @@ TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
   std::shared_ptr<PerfectHashTable> cached_q2_ht =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  auto q2_dag_info = QR::get()->extractQueryPlanDag(q2);
   EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                              CacheItemType::PERFECT_HT),
             static_cast<size_t>(1));
@@ -589,7 +587,6 @@ TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
   std::shared_ptr<PerfectHashTable> cached_q3_ht =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  auto q3_dag_info = QR::get()->extractQueryPlanDag(q3);
   EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                              CacheItemType::PERFECT_HT),
             static_cast<size_t>(2));

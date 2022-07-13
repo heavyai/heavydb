@@ -1,5 +1,5 @@
 /*
- * Copyright 2018, OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -239,10 +239,21 @@ struct ArraysConverterFactory {
   }
 };
 
-template <typename CONVERTER>
+template <typename CONVERTER, class Enable = void>
 struct GeoConverterFactory {
   std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {
     return std::make_unique<CONVERTER>(param.cat, param.num_rows, param.target);
+  }
+};
+
+template <typename CONVERTER>
+struct GeoConverterFactory<
+    CONVERTER,
+    typename std::enable_if_t<std::is_same_v<GeoPolygonValueConverter, CONVERTER> ||
+                              std::is_same_v<GeoMultiPolygonValueConverter, CONVERTER>>> {
+  std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {
+    return std::make_unique<CONVERTER>(
+        param.cat, param.num_rows, param.target, param.render_group_analyzer_map);
   }
 };
 
@@ -251,26 +262,28 @@ std::unique_ptr<TargetValueConverter> TargetValueConverterFactory::create(
   static const std::map<SQLTypes,
                         std::function<std::unique_ptr<TargetValueConverter>(
                             ConverterCreateParameter param)>>
-      factories{{kBIGINT, NumericConverterFactory<int64_t, int64_t>()},
-                {kINT, NumericConverterFactory<int64_t, int32_t>()},
-                {kSMALLINT, NumericConverterFactory<int64_t, int16_t>()},
-                {kTINYINT, NumericConverterFactory<int64_t, int8_t>()},
-                {kDECIMAL, NumericConverterFactory<int64_t, int64_t>()},
-                {kNUMERIC, NumericConverterFactory<int64_t, int64_t>()},
-                {kTIMESTAMP, NumericConverterFactory<int64_t, int64_t>()},
-                {kDATE, NumericConverterFactory<int64_t, int64_t>()},
-                {kTIME, NumericConverterFactory<int64_t, int64_t>()},
-                {kBOOLEAN, NumericConverterFactory<int64_t, int8_t>()},
-                {kDOUBLE, NumericConverterFactory<double, double>()},
-                {kFLOAT, NumericConverterFactory<float, float>()},
-                {kTEXT, TextConverterFactory()},
-                {kCHAR, TextConverterFactory()},
-                {kVARCHAR, TextConverterFactory()},
-                {kARRAY, ArraysConverterFactory()},
-                {kPOINT, GeoConverterFactory<GeoPointValueConverter>()},
-                {kLINESTRING, GeoConverterFactory<GeoLinestringValueConverter>()},
-                {kPOLYGON, GeoConverterFactory<GeoPolygonValueConverter>()},
-                {kMULTIPOLYGON, GeoConverterFactory<GeoMultiPolygonValueConverter>()}};
+      factories{
+          {kBIGINT, NumericConverterFactory<int64_t, int64_t>()},
+          {kINT, NumericConverterFactory<int64_t, int32_t>()},
+          {kSMALLINT, NumericConverterFactory<int64_t, int16_t>()},
+          {kTINYINT, NumericConverterFactory<int64_t, int8_t>()},
+          {kDECIMAL, NumericConverterFactory<int64_t, int64_t>()},
+          {kNUMERIC, NumericConverterFactory<int64_t, int64_t>()},
+          {kTIMESTAMP, NumericConverterFactory<int64_t, int64_t>()},
+          {kDATE, NumericConverterFactory<int64_t, int64_t>()},
+          {kTIME, NumericConverterFactory<int64_t, int64_t>()},
+          {kBOOLEAN, NumericConverterFactory<int64_t, int8_t>()},
+          {kDOUBLE, NumericConverterFactory<double, double>()},
+          {kFLOAT, NumericConverterFactory<float, float>()},
+          {kTEXT, TextConverterFactory()},
+          {kCHAR, TextConverterFactory()},
+          {kVARCHAR, TextConverterFactory()},
+          {kARRAY, ArraysConverterFactory()},
+          {kPOINT, GeoConverterFactory<GeoPointValueConverter>()},
+          {kLINESTRING, GeoConverterFactory<GeoLinestringValueConverter>()},
+          {kMULTILINESTRING, GeoConverterFactory<GeoMultiLinestringValueConverter>()},
+          {kPOLYGON, GeoConverterFactory<GeoPolygonValueConverter>()},
+          {kMULTIPOLYGON, GeoConverterFactory<GeoMultiPolygonValueConverter>()}};
 
   auto factory = factories.find(param.target->columnType.get_type());
 

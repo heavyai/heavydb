@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 /**
  * @file CreateAndDropTableDdlTest.cpp
  * @brief Test suite for CREATE and DROP DDL commands for tables and foreign tables
+ *
  */
 
 #include <gtest/gtest.h>
@@ -26,12 +27,12 @@
 #include "Catalog/TableDescriptor.h"
 #include "DBHandlerTestHelpers.h"
 #include "Fragmenter/FragmentDefaultValues.h"
+#include "Shared/SysDefinitions.h"
 #include "TestHelpers.h"
 #include "Utils/DdlUtils.h"
 
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
-extern bool g_enable_calcite_ddl_parser;
 
 using namespace std;
 using namespace TestHelpers;
@@ -82,7 +83,7 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
     }
     query += table_name + columns;
     if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
-      query += " SERVER omnisci_local_csv";
+      query += " SERVER default_local_delimited";
       options["file_path"] = "'" + getTestFilePath() + "'";
     }
     if (!options.empty()) {
@@ -125,7 +126,7 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
 
   int createTestUser() {
     sql("CREATE USER test_user (password = 'test_pass');");
-    sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
     Catalog_Namespace::UserMetadata user_metadata;
     Catalog_Namespace::SysCatalog::instance().getMetadataForUser("test_user",
                                                                  user_metadata);
@@ -178,7 +179,7 @@ class CreateTableTest : public CreateAndDropTableDdlTest,
                           const ddl_utils::TableType table_type,
                           const std::string& table_name,
                           const int column_count,
-                          const int user_id = OMNISCI_ROOT_USER_ID,
+                          const int user_id = shared::kRootUserId,
                           const int max_fragment_size = DEFAULT_FRAGMENT_ROWS) {
     EXPECT_EQ(table_name, td->tableName);
     EXPECT_EQ(Fragmenter_Namespace::FragmenterType::INSERT_ORDER, td->fragType);
@@ -204,7 +205,7 @@ class CreateTableTest : public CreateAndDropTableDdlTest,
       ASSERT_TRUE(foreign_table->options.find("FILE_PATH") !=
                   foreign_table->options.end());
       EXPECT_EQ(getTestFilePath(), foreign_table->options.find("FILE_PATH")->second);
-      EXPECT_EQ("omnisci_local_csv", foreign_table->foreign_server->name);
+      EXPECT_EQ("default_local_delimited", foreign_table->foreign_server->name);
     } else {
       EXPECT_EQ(column_count + 2, td->nColumns);  // +2 for rowid and $deleted$ columns
       EXPECT_TRUE(td->hasDeletedCol);
@@ -942,12 +943,7 @@ TEST_P(CreateTableTest, ArrayTypes) {
 TEST_P(CreateTableTest, FixedEncodingForNonNumberOrTimeType) {
   std::string query =
       getCreateTableQuery(GetParam(), "test_table", "(col1 POINT ENCODING FIXED(8))");
-  if (g_enable_calcite_ddl_parser) {
-    EXPECT_ANY_THROW(sql(query));
-  } else {
-    queryAndAssertException(
-        query, "col1: Fixed encoding is only supported for integer or time columns.");
-  }
+  EXPECT_ANY_THROW(sql(query));
 }
 
 TEST_P(CreateTableTest, DictEncodingNonTextType) {
@@ -990,11 +986,7 @@ TEST_P(CreateTableTest, NonEncodedDictArray) {
 TEST_P(CreateTableTest, FixedLengthArrayOfVarLengthType) {
   std::string query =
       getCreateTableQuery(GetParam(), "test_table", "(col1 LINESTRING[5])");
-  if (g_enable_calcite_ddl_parser) {
-    EXPECT_ANY_THROW(sql(query));
-  } else {
-    queryAndAssertException(query, "col1: Unexpected fixed length array size");
-  }
+  EXPECT_ANY_THROW(sql(query));
 }
 
 TEST_P(CreateTableTest, UnsupportedTimestampPrecision) {
@@ -1066,7 +1058,7 @@ TEST_P(CreateTableTest, UnauthorizedUser) {
 
 TEST_P(CreateTableTest, AuthorizedUser) {
   auto user_id = createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
 
   sql(getCreateTableQuery(GetParam(), "test_table", "(col1 INTEGER)"));
@@ -1099,6 +1091,16 @@ TEST_P(CreateTableTest, WithFragmentSizeOption) {
   assertColumnDetails(expected_attributes, column);
 }
 
+TEST_P(CreateTableTest, UnsupportedGeometrySyntax) {
+  auto query = getCreateTableQuery(GetParam(), "test_table", "(geom GEOMETRY)");
+  queryAndAssertException(query, "Unsupported type \"GEOMETRY\" specified.");
+}
+
+TEST_P(CreateTableTest, UnsupportedGeographySyntax) {
+  auto query = getCreateTableQuery(GetParam(), "test_table", "(geom GEOGRAPHY)");
+  queryAndAssertPartialException(query, "Incorrect syntax near the keyword 'GEOGRAPHY'");
+}
+
 INSTANTIATE_TEST_SUITE_P(CreateAndDropTableDdlTest,
                          CreateTableTest,
                          testing::Values(ddl_utils::TableType::TABLE,
@@ -1117,13 +1119,9 @@ TEST_P(NegativePrecisionOrDimensionTest, NegativePrecisionOrDimension) {
   try {
     sql(getCreateTableQuery(table_type, "test_table", "(col1 " + data_type + "(-1))"));
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TOmniSciException& e) {
+  } catch (const TDBException& e) {
     if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
       ASSERT_TRUE(e.error_msg.find("SQL Error") != std::string::npos);
-    } else {
-      if (!g_enable_calcite_ddl_parser) {
-        ASSERT_EQ("No negative number in type definition.", e.error_msg);
-      }
     }
   }
 }
@@ -1232,14 +1230,14 @@ TEST_F(CreateForeignTableTest, NonExistentServer) {
 
 TEST_F(CreateForeignTableTest, DefaultCsvFileServerName) {
   sql("CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (file_path = '" +
+      "SERVER default_local_delimited WITH (file_path = '" +
       getTestFilePath() + "');");
   ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
 }
 
 TEST_F(CreateForeignTableTest, DefaultParquetFileServerName) {
   sql("CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_parquet WITH (file_path = '" +
+      "SERVER default_local_parquet WITH (file_path = '" +
       getTestFilePath() + "');");
   ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
 }
@@ -1247,14 +1245,14 @@ TEST_F(CreateForeignTableTest, DefaultParquetFileServerName) {
 TEST_F(CreateForeignTableTest, InvalidTableOption) {
   std::string query{
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (invalid_option = 'value');"};
+      "SERVER default_local_delimited WITH (invalid_option = 'value');"};
   queryAndAssertException(query, "Invalid foreign table option \"INVALID_OPTION\".");
 }
 
 TEST_F(CreateForeignTableTest, WrongTableOptionCharacterSize) {
   std::string query{
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (delimiter = ',,', file_path = '" +
+      "SERVER default_local_delimited WITH (delimiter = ',,', file_path = '" +
       getTestFilePath() + "');"};
   queryAndAssertException(query,
                           "Invalid value specified for option \"DELIMITER\". "
@@ -1264,7 +1262,7 @@ TEST_F(CreateForeignTableTest, WrongTableOptionCharacterSize) {
 TEST_F(CreateForeignTableTest, InvalidTableOptionBooleanValue) {
   std::string query{
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (header = 'value', file_path = '" +
+      "SERVER default_local_delimited WITH (header = 'value', file_path = '" +
       getTestFilePath() + "');"};
   queryAndAssertException(
       query,
@@ -1283,7 +1281,7 @@ TEST_F(CreateForeignTableTest, FsiDisabled) {
 TEST_F(CreateForeignTableTest, DefaultServerWrapperPathMissingCsv) {
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv;",
+      "SERVER default_local_delimited;",
       "No file_path found for Foreign Table \"test_foreign_table\". "
       "Table must have either set a \"FILE_PATH\" "
       "option, or its parent server must have set a \"BASE_PATH\" option.");
@@ -1292,14 +1290,15 @@ TEST_F(CreateForeignTableTest, DefaultServerWrapperPathMissingCsv) {
 TEST_F(CreateForeignTableTest, DefaultServerWrapperPathMissingParquet) {
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_parquet;",
+      "SERVER default_local_parquet;",
       "No file_path found for Foreign Table \"test_foreign_table\". "
       "Table must have either set a \"FILE_PATH\" "
       "option, or its parent server must have set a \"BASE_PATH\" option.");
 }
 
 TEST_F(CreateForeignTableTest, ServerPathPresentWrapperPathMissing) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file WITH (storage_type "
+      "= "
       "'LOCAL_FILE', base_path = '" +
       bf::canonical("../../Tests/FsiDataFiles/example_1_dir").string() + "');");
   sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
@@ -1308,7 +1307,8 @@ TEST_F(CreateForeignTableTest, ServerPathPresentWrapperPathMissing) {
 }
 
 TEST_F(CreateForeignTableTest, ServerPathPresentWrapperPathEmpty) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file WITH (storage_type "
+      "= "
       "'LOCAL_FILE', base_path = '" +
       bf::canonical("../../Tests/FsiDataFiles/example_1_dir").string() + "');");
   sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
@@ -1317,7 +1317,8 @@ TEST_F(CreateForeignTableTest, ServerPathPresentWrapperPathEmpty) {
 }
 
 TEST_F(CreateForeignTableTest, ServerPathMissingWrapperPathMissing) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file WITH (storage_type "
+      "= "
       "'LOCAL_FILE');");
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
@@ -1330,21 +1331,23 @@ TEST_F(CreateForeignTableTest, ServerPathMissingWrapperPathMissing) {
 TEST_F(CreateForeignTableTest, UnsupportedOption) {
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (file_path = '" +
+      "SERVER default_local_delimited WITH (file_path = '" +
           getTestFilePath() + "', shard_count = 4);",
       "Invalid foreign table option \"SHARD_COUNT\".");
 }
 
 TEST_F(CreateForeignTableTest, ServerPathMissingWrapperPathRelative) {
   sql("CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (file_path = '../../Tests/FsiDataFiles/0.csv');");
+      "SERVER default_local_delimited WITH (file_path = "
+      "'../../Tests/FsiDataFiles/0.csv');");
   sql("SELECT * FROM test_foreign_table;");
 }
 
 TEST_F(CreateForeignTableTest, S3SelectWrongServer) {
-  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
-                      "SERVER omnisci_local_csv WITH (S3_ACCESS_TYPE = 'S3_SELECT', "
-                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
+  std::string query =
+      "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
+      "SERVER default_local_delimited WITH (S3_ACCESS_TYPE = 'S3_SELECT', "
+      "file_path = '../../Tests/FsiDataFiles/0.csv');";
   queryAndAssertException(
       query,
       "The \"S3_ACCESS_TYPE\" option is only valid for foreign tables using "
@@ -1352,10 +1355,10 @@ TEST_F(CreateForeignTableTest, S3SelectWrongServer) {
 }
 
 TEST_F(CreateForeignTableTest, UnauthorizedServerUsage) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
   createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
@@ -1365,10 +1368,10 @@ TEST_F(CreateForeignTableTest, UnauthorizedServerUsage) {
 }
 
 TEST_F(CreateForeignTableTest, AuthorizedServerUsage) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
   createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   sql("GRANT USAGE ON SERVER test_server TO test_user;");
   login("test_user", "test_pass");
   sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
@@ -1378,11 +1381,11 @@ TEST_F(CreateForeignTableTest, AuthorizedServerUsage) {
 }
 
 TEST_F(CreateForeignTableTest, AuthorizedDatabaseServerUser) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
   createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
-  sql("GRANT SERVER USAGE ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  sql("GRANT SERVER USAGE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
       "SERVER test_server WITH (file_path = '" +
@@ -1392,10 +1395,10 @@ TEST_F(CreateForeignTableTest, AuthorizedDatabaseServerUser) {
 
 TEST_F(CreateForeignTableTest, NonSuserServerOwnerUsage) {
   createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
-  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  sql("GRANT CREATE SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
   sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
       "SERVER test_server WITH (file_path = '" +
@@ -1404,10 +1407,10 @@ TEST_F(CreateForeignTableTest, NonSuserServerOwnerUsage) {
 }
 
 TEST_F(CreateForeignTableTest, RevokedServerUsage) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
   createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   sql("GRANT USAGE ON SERVER test_server TO test_user;");
   sql("REVOKE USAGE ON SERVER test_server FROM test_user;");
   login("test_user", "test_pass");
@@ -1419,12 +1422,12 @@ TEST_F(CreateForeignTableTest, RevokedServerUsage) {
 }
 
 TEST_F(CreateForeignTableTest, RevokedDatabaseServerUsage) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
   createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
-  sql("GRANT SERVER USAGE ON DATABASE omnisci TO test_user;");
-  sql("REVOKE SERVER USAGE ON DATABASE omnisci FROM test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  sql("GRANT SERVER USAGE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  sql("REVOKE SERVER USAGE ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
   login("test_user", "test_pass");
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
@@ -1439,6 +1442,16 @@ TEST_F(CreateForeignTableTest, TableDirectoryIsNotCreated) {
                           "(t TEXT, i INTEGER[])"));
   sql("SELECT * FROM test_foreign_table;");
   ASSERT_FALSE(boost::filesystem::exists(getTableDirPath()));
+}
+
+TEST_F(CreateForeignTableTest, NonAppendModeWithFileRollOff) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
+                      "SERVER default_local_regex_parsed WITH ("
+                      "ALLOW_FILE_ROLL_OFF = 'true', "
+                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
+  queryAndAssertException(query,
+                          "The \"ALLOW_FILE_ROLL_OFF\" option can only be set to 'true' "
+                          "for foreign tables with append refresh updates.");
 }
 
 class CreateTableInThrift : public DBHandlerTestFixture {
@@ -1473,7 +1486,7 @@ TEST_F(CreateTableInThrift, ThriftCreateTableWithDefaults) {
   TRowDescriptor row_desc = {c1, c2, c3};
   TCreateParams cp;
   cp.is_replicated = false;
-  handler->create_table(session, "test_table", row_desc, TFileType::DELIMITED, cp);
+  handler->create_table(session, "test_table", row_desc, cp);
   TTableDetails details;
   handler->get_table_details(details, session, "test_table");
   auto created_row_desc = details.row_desc;
@@ -1483,6 +1496,71 @@ TEST_F(CreateTableInThrift, ThriftCreateTableWithDefaults) {
     EXPECT_EQ(created_row_desc[i].default_value, row_desc[i].default_value);
     EXPECT_EQ(created_row_desc[i].col_type.is_array, row_desc[i].col_type.is_array);
     EXPECT_EQ(created_row_desc[i].col_type.type, row_desc[i].col_type.type);
+  }
+}
+
+TEST_F(CreateTableInThrift, ThriftCreateTableDifferentEncodings) {
+  struct ColumnDef {
+    TDatumType::type type;
+    TEncodingType::type encoding;
+    int comp_param;
+  };
+  const vector<ColumnDef> columns = {{TDatumType::TINYINT, TEncodingType::NONE, 0},
+                                     {TDatumType::SMALLINT, TEncodingType::NONE, 0},
+                                     {TDatumType::SMALLINT, TEncodingType::FIXED, 8},
+                                     {TDatumType::INT, TEncodingType::NONE, 0},
+                                     {TDatumType::INT, TEncodingType::FIXED, 8},
+                                     {TDatumType::INT, TEncodingType::FIXED, 16},
+                                     {TDatumType::BIGINT, TEncodingType::NONE, 0},
+                                     {TDatumType::BIGINT, TEncodingType::FIXED, 8},
+                                     {TDatumType::BIGINT, TEncodingType::FIXED, 16},
+                                     {TDatumType::BIGINT, TEncodingType::FIXED, 32},
+                                     {TDatumType::FLOAT, TEncodingType::NONE, 0},
+                                     {TDatumType::DOUBLE, TEncodingType::NONE, 0},
+                                     {TDatumType::DECIMAL, TEncodingType::NONE, 0},
+                                     {TDatumType::STR, TEncodingType::NONE, 0},
+                                     {TDatumType::STR, TEncodingType::DICT, 8},
+                                     {TDatumType::STR, TEncodingType::DICT, 16},
+                                     {TDatumType::STR, TEncodingType::DICT, 32},
+                                     {TDatumType::TIME, TEncodingType::NONE, 0},
+                                     {TDatumType::TIME, TEncodingType::FIXED, 32},
+                                     {TDatumType::TIMESTAMP, TEncodingType::NONE, 0},
+                                     {TDatumType::TIMESTAMP, TEncodingType::FIXED, 32},
+                                     {TDatumType::DATE, TEncodingType::DATE_IN_DAYS, 16},
+                                     {TDatumType::DATE, TEncodingType::DATE_IN_DAYS, 32},
+                                     {TDatumType::BOOL, TEncodingType::NONE, 0},
+                                     {TDatumType::POINT, TEncodingType::NONE, 0},
+                                     {TDatumType::LINESTRING, TEncodingType::NONE, 0},
+                                     {TDatumType::POLYGON, TEncodingType::NONE, 0},
+                                     {TDatumType::MULTIPOLYGON, TEncodingType::NONE, 0}};
+  TCreateParams cp;
+  cp.is_replicated = false;
+  TRowDescriptor row_desc;
+  for (size_t i = 0; i < columns.size(); ++i) {
+    TColumnType c;
+    c.col_name = "c" + to_string(i);
+    c.col_type.type = columns[i].type;
+    c.col_type.encoding = columns[i].encoding;
+    c.col_type.comp_param = columns[i].comp_param;
+    if (c.col_type.type == TDatumType::POINT ||
+        c.col_type.type == TDatumType::LINESTRING ||
+        c.col_type.type == TDatumType::POLYGON ||
+        c.col_type.type == TDatumType::MULTIPOLYGON) {
+      c.col_type.precision = static_cast<int>(SQLTypes::kGEOGRAPHY);
+    }
+    row_desc.push_back(move(c));
+  }
+  auto [handler, session] = getDbHandlerAndSessionId();
+  handler->create_table(session, "test_table", row_desc, cp);
+  TTableDetails details;
+  handler->get_table_details(details, session, "test_table");
+  auto created_row_desc = details.row_desc;
+  EXPECT_EQ(created_row_desc.size(), row_desc.size());
+  for (size_t i = 0; i < row_desc.size(); ++i) {
+    EXPECT_EQ(created_row_desc[i].col_name, row_desc[i].col_name);
+    EXPECT_EQ(created_row_desc[i].col_type.type, row_desc[i].col_type.type);
+    EXPECT_EQ(created_row_desc[i].col_type.encoding, row_desc[i].col_type.encoding);
+    EXPECT_EQ(created_row_desc[i].col_type.comp_param, row_desc[i].col_type.comp_param);
   }
 }
 
@@ -1516,8 +1594,8 @@ TEST_P(DropTableTest, NonExistingTableWithIfExists) {
 TEST_P(DropTableTest, NonExistentTableWithoutIfExists) {
   std::string query = getDropTableQuery(GetParam(), "test_table_2");
   queryAndAssertException(query,
-                          "Table/View test_table_2 for catalog omnisci does "
-                          "not exist");
+                          "Table/View test_table_2 for catalog " +
+                              shared::kDefaultDbName + " does not exist");
 }
 
 TEST_P(DropTableTest, UnauthorizedUser) {
@@ -1555,13 +1633,9 @@ TEST_P(CreateTableTest, InvalidSyntax) {
   try {
     sql(query);
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TOmniSciException& e) {
+  } catch (const TDBException& e) {
     if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
       ASSERT_TRUE(e.error_msg.find("SQL Error") != std::string::npos);
-    } else {
-      if (!g_enable_calcite_ddl_parser) {
-        ASSERT_EQ("Syntax error at: INTEGER", e.error_msg);
-      }
     }
   }
 }
@@ -1572,7 +1646,7 @@ TEST_P(CreateTableTest, InvalidColumnDefinition) {
   try {
     sql(query);
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TOmniSciException& e) {
+  } catch (const TDBException& e) {
     if (GetParam() == ddl_utils::TableType::TABLE) {
       ASSERT_TRUE(e.error_msg.find("Column definition for table test_table") !=
                   std::string::npos);
@@ -2039,12 +2113,13 @@ TEST_F(DefaultValuesTest, InsertAfterAlter) {
   verifyData();
 }
 
-TEST_F(DefaultValuesTest, ProhibitDefaultOnShardedKey) {
-  queryAndAssertException(
-      "CREATE TABLE defval_tbl (i INTEGER default -1, key text "
-      "default 'default', shard key(i)) with (shard_count = 2)",
-      "Default values for shard "
-      "keys are not supported yet.");
+TEST_F(DefaultValuesTest, AllowDefaultOnShardedKey) {
+  sql("CREATE TABLE defval_tbl (i INTEGER default -1, key text "
+      "default 'default', shard key(i)) with (shard_count = 2)");
+  sql("INSERT INTO defval_tbl(i, key) VALUES (1, 'Foo')");
+  sql("INSERT INTO defval_tbl(key) VALUES ('Bar')");
+  sqlAndCompareResult("SELECT i FROM defval_tbl WHERE key = 'Foo'", {{i(1)}});
+  sqlAndCompareResult("SELECT i FROM defval_tbl WHERE key = 'Bar'", {{i(-1)}});
 }
 
 TEST_F(DefaultValuesTest, DefaultAllowsNulls) {
@@ -2271,6 +2346,30 @@ INSTANTIATE_TEST_SUITE_P(
             "TooManyElementsInFixedTextArray")),
     [](const auto& param_info) { return param_info.param.description; });
 
+class CommentsBeforeCommandTest : public DBHandlerTestFixture {
+ protected:
+  inline static const std::string kCreateTableCommand{
+      "CREATE TABLE test_table (i INTEGER);"};
+};
+
+TEST_F(CommentsBeforeCommandTest, SingleLineHyphenCommentBeforeCommand) {
+  queryAndAssertException(
+      " -- test comment\n" + kCreateTableCommand,
+      "SQL statements starting with comments are currently not allowed.");
+}
+
+TEST_F(CommentsBeforeCommandTest, SingleLineSlashCommentBeforeCommand) {
+  queryAndAssertException(
+      "//test comment\n" + kCreateTableCommand,
+      "SQL statements starting with comments are currently not allowed.");
+}
+
+TEST_F(CommentsBeforeCommandTest, MultiLineCommentBeforeCommand) {
+  queryAndAssertException(
+      "/* test comment 1\n test comment2*/" + kCreateTableCommand,
+      "SQL statements starting with comments are currently not allowed.");
+}
+
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
@@ -2278,6 +2377,7 @@ int main(int argc, char** argv) {
 
   int err{0};
   try {
+    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();

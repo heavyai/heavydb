@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,8 @@ class CsvDataWrapper : public AbstractTextFileDataWrapper {
 
   CsvDataWrapper(const int db_id,
                  const ForeignTable* foreign_table,
-                 const UserMapping* user_mapping);
+                 const UserMapping* user_mapping,
+                 const bool disable_cache = false);
 
   void validateTableOptions(const ForeignTable* foreign_table) const override;
 

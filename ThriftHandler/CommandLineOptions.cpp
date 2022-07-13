@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,17 +20,25 @@
 
 #include <filesystem>
 #include <iostream>
+#include <string>
+
+using namespace std::string_literals;
 
 #include "CommandLineOptions.h"
 #include "LeafHostInfo.h"
+#include "ImportExport/ForeignDataImporter.h"
 #include "MapDRelease.h"
+#include "MigrationMgr/MigrationMgr.h"
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "Shared/Compressor.h"
+#include "Shared/SysDefinitions.h"
+#include "Shared/enable_assign_render_groups.h"
 #include "StringDictionary/StringDictionary.h"
 #include "Utils/DdlUtils.h"
 
 #ifdef _WIN32
 #include <io.h>
+#include <process.h>
 #endif
 
 const std::string CommandLineOptions::nodeIds_token = {"node_id"};
@@ -47,7 +55,6 @@ extern bool g_enable_left_join_filter_hoisting;
 extern int64_t g_large_ndv_threshold;
 extern size_t g_large_ndv_multiplier;
 extern int64_t g_bitmap_memory_limit;
-extern bool g_enable_calcite_ddl_parser;
 extern bool g_enable_seconds_refresh;
 extern size_t g_approx_quantile_buffer;
 extern size_t g_approx_quantile_centroids;
@@ -59,6 +66,8 @@ extern bool g_columnar_large_projections;
 extern size_t g_columnar_large_projections_threshold;
 extern bool g_enable_system_tables;
 extern bool g_allow_system_dashboard_update;
+extern bool g_enable_logs_system_tables;
+extern size_t g_logs_system_tables_max_files_count;
 #ifdef ENABLE_MEMKIND
 extern std::string g_pmem_path;
 #endif
@@ -71,6 +80,7 @@ unsigned connect_timeout{20000};
 unsigned recv_timeout{300000};
 unsigned send_timeout{300000};
 bool with_keepalive{false};
+bool g_enable_http_binary_server{true};
 
 void CommandLineOptions::init_logging() {
   if (verbose_logging && logger::Severity::DEBUG1 < log_options_.severity_) {
@@ -133,17 +143,17 @@ void CommandLineOptions::fillOptions() {
   if (!dist_v5_) {
     help_desc.add_options()(
         "data",
-        po::value<std::string>(&base_path)->required()->default_value("data"),
-        "Directory path to OmniSci data storage (catalogs, raw data, log files, etc).");
+        po::value<std::string>(&base_path)->required()->default_value("storage"),
+        "Directory path to HeavyDB data storage (catalogs, raw data, log files, etc).");
     positional_options.add("data", 1);
   }
   help_desc.add_options()("db-query-list",
                           po::value<std::string>(&db_query_file),
-                          "Path to file containing OmniSci warmup queries.");
+                          "Path to file containing HeavyDB warmup queries.");
   help_desc.add_options()(
       "exit-after-warmup",
       po::value<bool>(&exit_after_warmup)->default_value(false)->implicit_value(true),
-      "Exit after OmniSci warmup queries.");
+      "Exit after HeavyDB warmup queries.");
   help_desc.add_options()("dynamic-watchdog-time-limit",
                           po::value<unsigned>(&dynamic_watchdog_time_limit)
                               ->default_value(dynamic_watchdog_time_limit)
@@ -159,18 +169,60 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(use_hashtable_cache)
                               ->implicit_value(true),
                           "Use hashtable cache.");
+  help_desc.add_options()("use-query-resultset-cache",
+                          po::value<bool>(&g_use_query_resultset_cache)
+                              ->default_value(g_use_query_resultset_cache)
+                              ->implicit_value(true),
+                          "Use query resultset cache.");
+  help_desc.add_options()("use-chunk-metadata-cache",
+                          po::value<bool>(&g_use_chunk_metadata_cache)
+                              ->default_value(g_use_chunk_metadata_cache)
+                              ->implicit_value(true),
+                          "Use chunk metadata cache.");
   help_desc.add_options()(
       "hashtable-cache-total-bytes",
       po::value<size_t>(&hashtable_cache_total_bytes)
           ->default_value(hashtable_cache_total_bytes)
           ->implicit_value(4294967296),
-      "Size of total memory space for hash table cache, in bytes (default: 4GB).");
+      "Size of total memory space for hashtable cache, in bytes (default: 4GB).");
   help_desc.add_options()("max-cacheable-hashtable-size-bytes",
                           po::value<size_t>(&max_cacheable_hashtable_size_bytes)
                               ->default_value(max_cacheable_hashtable_size_bytes)
                               ->implicit_value(2147483648),
-                          "The maximum size of hash table that is available to cache, in "
+                          "The maximum size of hashtable that is available to cache, in "
                           "bytes (default: 2GB).");
+  help_desc.add_options()(
+      "query-resultset-cache-total-bytes",
+      po::value<size_t>(&g_query_resultset_cache_total_bytes)
+          ->default_value(g_query_resultset_cache_total_bytes),
+      "Size of total memory space for query resultset cache, in bytes (default: 4GB).");
+  help_desc.add_options()(
+      "max-query-resultset-size-bytes",
+      po::value<size_t>(&g_max_cacheable_query_resultset_size_bytes)
+          ->default_value(g_max_cacheable_query_resultset_size_bytes),
+      "The maximum size of query resultset that is available to cache, in "
+      "bytes (default: 2GB).");
+  help_desc.add_options()("allow-auto-query-resultset-caching",
+                          po::value<bool>(&g_allow_auto_resultset_caching)
+                              ->default_value(g_allow_auto_resultset_caching)
+                              ->implicit_value(true),
+                          "Allow automatic query resultset caching when the size of "
+                          "query resultset is smaller or equal to the threshold defined "
+                          "by `auto-resultset-caching-threshold-bytes`, in bytes (to "
+                          "enable this, query resultset recycler "
+                          "should be enabled, default: 1048576 bytes (or 1MB)).");
+  help_desc.add_options()(
+      "auto-resultset-caching-threshold-bytes",
+      po::value<size_t>(&g_auto_resultset_caching_threshold)
+          ->default_value(g_auto_resultset_caching_threshold),
+      "A threshold that allows caching query resultset automatically if the size of "
+      "resultset is less than it, in bytes (default: 1MB).");
+  help_desc.add_options()("allow-query-step-skipping",
+                          po::value<bool>(&g_allow_query_step_skipping)
+                              ->default_value(g_allow_query_step_skipping)
+                              ->implicit_value(true),
+                          "Allow query step skipping when multi-step query has at least "
+                          "one cached query resultset.");
   help_desc.add_options()("enable-debug-timer",
                           po::value<bool>(&g_enable_debug_timer)
                               ->default_value(g_enable_debug_timer)
@@ -252,6 +304,12 @@ void CommandLineOptions::fillOptions() {
                               ->implicit_value(true),
                           "Enable watchdog.");
   help_desc.add_options()(
+      "watchdog-none-encoded-string-translation-limit",
+      po::value<size_t>(&watchdog_none_encoded_string_translation_limit)
+          ->default_value(watchdog_none_encoded_string_translation_limit),
+      "Max number of none-encoded strings allowed to be translated "
+      "to dictionary-encoded with watchdog enabled");
+  help_desc.add_options()(
       "filter-push-down-low-frac",
       po::value<float>(&g_filter_push_down_low_frac)
           ->default_value(g_filter_push_down_low_frac)
@@ -294,6 +352,10 @@ void CommandLineOptions::fillOptions() {
     help_desc.add_options()("http-port",
                             po::value<int>(&http_port)->default_value(http_port),
                             "HTTP port number.");
+    help_desc.add_options()(
+        "http-binary-port",
+        po::value<int>(&http_binary_port)->default_value(http_binary_port),
+        "HTTP binary port number.");
   }
   help_desc.add_options()(
       "idle-session-duration",
@@ -356,9 +418,9 @@ void CommandLineOptions::fillOptions() {
   help_desc.add_options()(
       "res-gpu-mem",
       po::value<size_t>(&reserved_gpu_mem)->default_value(reserved_gpu_mem),
-      "Reduces GPU memory available to the OmniSci allocator by this amount. Used for "
+      "Reduces GPU memory available to the HeavyDB allocator by this amount. Used for "
       "compiled code cache and ancillary GPU functions and other processes that may also "
-      "be using the GPU concurrent with OmniSciDB.");
+      "be using the GPU concurrent with HeavyDB.");
 
   help_desc.add_options()("start-gpu",
                           po::value<int>(&system_parameters.start_gpu)
@@ -380,32 +442,63 @@ void CommandLineOptions::fillOptions() {
       po::value<bool>(&enable_runtime_udf)
           ->default_value(enable_runtime_udf)
           ->implicit_value(true),
+      "DEPRECATED. Please use `enable-runtime-udfs` instead as this flag will be removed "
+      "in the near future.");
+  help_desc.add_options()(
+      "enable-runtime-udfs",
+      po::value<bool>(&enable_runtime_udfs)
+          ->default_value(enable_runtime_udfs)
+          ->implicit_value(true),
       "Enable runtime UDF registration by passing signatures and corresponding LLVM IR "
       "to the `register_runtime_udf` endpoint. For use with the Python Remote Backend "
       "Compiler server, packaged separately.");
+  help_desc.add_options()("enable-udf-registration-for-all-users",
+                          po::value<bool>(&enable_udf_registration_for_all_users)
+                              ->default_value(enable_udf_registration_for_all_users)
+                              ->implicit_value(true),
+                          "Allow all users, not just superusers, to register runtime "
+                          "UDFs/UDTFs. Option only valid if  "
+                          "`--enable-runtime-udfs` is set to true.");
   help_desc.add_options()("version,v", "Print Version Number.");
-  help_desc.add_options()("enable-experimental-string-functions",
-                          po::value<bool>(&g_enable_experimental_string_functions)
-                              ->default_value(g_enable_experimental_string_functions)
+  help_desc.add_options()("enable-string-functions",
+                          po::value<bool>(&g_enable_string_functions)
+                              ->default_value(g_enable_string_functions)
                               ->implicit_value(true),
                           "Enable experimental string functions.");
+  help_desc.add_options()("enable-experimental-string-functions",
+                          po::value<bool>(&g_enable_string_functions)
+                              ->default_value(g_enable_string_functions)
+                              ->implicit_value(true),
+                          "DEPRECATED. String functions are now enabled by default, "
+                          "but can still be controlled with --enable-string-functions.");
   help_desc.add_options()(
       "enable-fsi",
       po::value<bool>(&g_enable_fsi)->default_value(g_enable_fsi)->implicit_value(true),
       "Enable foreign storage interface.");
 
-  help_desc.add_options()("enable-general-import-fsi",
-                          po::value<bool>(&g_enable_general_import_fsi)
-                              ->default_value(g_enable_general_import_fsi)
+  help_desc.add_options()("enable-legacy-delimited-import",
+                          po::value<bool>(&g_enable_legacy_delimited_import)
+                              ->default_value(g_enable_legacy_delimited_import)
                               ->implicit_value(true),
-                          "Enable foreign storage interface based import.");
+                          "Use legacy importer for delimited sources.");
 #ifdef ENABLE_IMPORT_PARQUET
-  help_desc.add_options()("enable-parquet-import-fsi",
-                          po::value<bool>(&g_enable_parquet_import_fsi)
-                              ->default_value(g_enable_parquet_import_fsi)
+  help_desc.add_options()("enable-legacy-parquet-import",
+                          po::value<bool>(&g_enable_legacy_parquet_import)
+                              ->default_value(g_enable_legacy_parquet_import)
                               ->implicit_value(true),
-                          "Enable foreign storage interface based parquet import.");
+                          "Use legacy importer for parquet sources.");
 #endif
+  help_desc.add_options()("enable-fsi-regex-import",
+                          po::value<bool>(&g_enable_fsi_regex_import)
+                              ->default_value(g_enable_fsi_regex_import)
+                              ->implicit_value(true),
+                          "Use FSI importer for regex parsed sources.");
+
+  help_desc.add_options()("enable-add-metadata-columns",
+                          po::value<bool>(&g_enable_add_metadata_columns)
+                              ->default_value(g_enable_add_metadata_columns)
+                              ->implicit_value(true),
+                          "Enable add_metadata_columns COPY FROM WITH option (Beta).");
 
   help_desc.add_options()("disk-cache-path",
                           po::value<std::string>(&disk_cache_config.path),
@@ -443,7 +536,8 @@ void CommandLineOptions::fillOptions() {
                           po::value<bool>(&g_enable_union)
                               ->default_value(g_enable_union)
                               ->implicit_value(true),
-                          "Enable UNION ALL SQL clause.");
+                          "DEPRECATED. UNION ALL is enabled by default. Please remove "
+                          "use of this option, as it may be disabled in the future.");
   help_desc.add_options()(
       "calcite-service-timeout",
       po::value<size_t>(&system_parameters.calcite_timeout)
@@ -491,6 +585,16 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(g_enable_table_functions)
                               ->implicit_value(true),
                           "Enable system table functions support.");
+  help_desc.add_options()("enable-logs-system-tables",
+                          po::value<bool>(&g_enable_logs_system_tables)
+                              ->default_value(g_enable_logs_system_tables)
+                              ->implicit_value(true),
+                          "Enable use of logs system tables.");
+  help_desc.add_options()(
+      "logs-system-tables-max-files-count",
+      po::value<size_t>(&g_logs_system_tables_max_files_count)
+          ->default_value(g_logs_system_tables_max_files_count),
+      "Maximum number of log files that will be processed by each logs system table.");
 #ifdef ENABLE_MEMKIND
   help_desc.add_options()("enable-tiered-cpu-mem",
                           po::value<bool>(&g_enable_tiered_cpu_mem)
@@ -603,12 +707,24 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_enable_parallel_window_partition_sort)
           ->implicit_value(true),
       "Enable parallel window function partition sorting.");
+  developer_desc.add_options()(
+      "window-function-frame-aggregation-tree-fanout",
+      po::value<size_t>(&g_window_function_aggregation_tree_fanout)->default_value(8),
+      "A tree fanout for aggregation tree used to compute aggregation over "
+      "window frame");
   developer_desc.add_options()("enable-dev-table-functions",
                                po::value<bool>(&g_enable_dev_table_functions)
                                    ->default_value(g_enable_dev_table_functions)
                                    ->implicit_value(true),
                                "Enable dev (test or alpha) table functions. Also "
                                "requires --enable-table-functions to be turned on");
+
+  developer_desc.add_options()(
+      "enable-geo-ops-on-uncompressed-coords",
+      po::value<bool>(&g_enable_geo_ops_on_uncompressed_coords)
+          ->default_value(g_enable_geo_ops_on_uncompressed_coords)
+          ->implicit_value(true),
+      "Enable faster geo operations on uncompressed coords");
   developer_desc.add_options()(
       "jit-debug-ir",
       po::value<bool>(&jit_debug)->default_value(jit_debug)->implicit_value(true),
@@ -812,12 +928,6 @@ void CommandLineOptions::fillAdvancedOptions() {
       "Enable temporary users for SAML and LDAP logins on read-only servers. "
       "Normally should be on but techs might want to disable for troubleshooting.");
   developer_desc.add_options()(
-      "enable-calcite-ddl",
-      po::value<bool>(&g_enable_calcite_ddl_parser)
-          ->default_value(g_enable_calcite_ddl_parser)
-          ->implicit_value(true),
-      "Enable using Calcite for supported DDL parsing when available.");
-  developer_desc.add_options()(
       "enable-seconds-refresh-interval",
       po::value<bool>(&g_enable_seconds_refresh)
           ->default_value(g_enable_seconds_refresh)
@@ -887,6 +997,30 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_allow_query_step_cpu_retry)
           ->implicit_value(true),
       R"(Allow certain query steps to retry on CPU, even when allow-cpu-retry is disabled)");
+  help_desc.add_options()("enable-http-binary-server",
+                          po::value<bool>(&g_enable_http_binary_server)
+                              ->default_value(g_enable_http_binary_server)
+                              ->implicit_value(true),
+                          "Enable binary over HTTP Thrift server");
+
+  help_desc.add_options()("enable-assign-render-groups",
+                          po::value<bool>(&g_enable_assign_render_groups)
+                              ->default_value(g_enable_assign_render_groups)
+                              ->implicit_value(true),
+                          "Enable Render Group assignment");
+
+  help_desc.add_options()("enable-query-engine-cuda-streams",
+                          po::value<bool>(&g_query_engine_cuda_streams)
+                              ->default_value(g_query_engine_cuda_streams)
+                              ->implicit_value(true),
+                          "Enable Query Engine CUDA streams");
+
+  help_desc.add_options()(
+      "allow-invalid-literal-buffer-reads",
+      po::value<bool>(&g_allow_invalid_literal_buffer_reads)
+          ->default_value(g_allow_invalid_literal_buffer_reads)
+          ->implicit_value(true),
+      "For backwards compatibility. Enabling may cause invalid query results.");
 }
 
 namespace {
@@ -926,77 +1060,126 @@ void addOptionalFileToBlacklist(std::string& filename) {
 void CommandLineOptions::validate_base_path() {
   boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
   if (!boost::filesystem::exists(base_path)) {
-    throw std::runtime_error("OmniSci base directory does not exist at " + base_path);
+    throw std::runtime_error("HeavyDB base directory does not exist at " + base_path);
   }
 }
 
 void CommandLineOptions::validate() {
   boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
-  const auto data_path = boost::filesystem::path(base_path) / "mapd_data";
+  const auto data_path = boost::filesystem::path(base_path) / shared::kDataDirectoryName;
   if (!boost::filesystem::exists(data_path)) {
-    throw std::runtime_error("OmniSci data directory does not exist at '" + base_path +
+    throw std::runtime_error("HeavyDB data directory does not exist at '" + base_path +
                              "'");
   }
 
-  {
-    const auto lock_file = boost::filesystem::path(base_path) / "omnisci_server_pid.lck";
-    auto pid = std::to_string(getpid());
-
-    int pid_fd = omnisci::open(lock_file.string().c_str(), O_RDWR | O_CREAT, 0644);
-    if (pid_fd == -1) {
-      auto err = std::string("Failed to open PID file ") + lock_file.string().c_str() +
-                 ". " + strerror(errno) + ".";
-      throw std::runtime_error(err);
-    }
 // TODO: support lock on Windows
 #ifndef _WIN32
-    if (lockf(pid_fd, F_TLOCK, 0) == -1) {
-      omnisci::close(pid_fd);
-      auto err = std::string("Another OmniSci Server is using data directory ") +
-                 base_path + ".";
-      throw std::runtime_error(err);
+  {
+    // If we aren't sharing the data directory, take and hold a write lock on
+    // heavydb_pid.lck to prevent other processes from trying to share our dir.
+    // TODO(sy): Probably need to get rid of this PID file because it doesn't make much
+    // sense to store only one server's PID when we have the --multi-instance option.
+    auto exe_filename = boost::filesystem::path(exe_name).filename().string();
+    const std::string lock_file =
+        (boost::filesystem::path(base_path) / std::string(exe_filename + "_pid.lck"))
+            .string();
+    auto pid = std::to_string(getpid());
+    if (!g_multi_instance) {
+      VLOG(1) << "taking [" << lock_file << "] read+write lock until process exit";
+    } else {
+      VLOG(1) << "taking [" << lock_file << "] read-only lock until process exit";
     }
-#endif
-    if (omnisci::ftruncate(pid_fd, 0) == -1) {
-      omnisci::close(pid_fd);
-      auto err = std::string("Failed to truncate PID file ") +
-                 lock_file.string().c_str() + ". " + strerror(errno) + ".";
-      throw std::runtime_error(err);
+
+    int fd;
+    fd = heavyai::safe_open(lock_file.c_str(), O_RDWR | O_CREAT, 0664);
+    if (fd == -1) {
+      throw std::runtime_error("failed to open lockfile: " + lock_file + ": " +
+                               std::string(strerror(errno)) + " (" +
+                               std::to_string(errno) + ")");
     }
-    if (write(pid_fd, pid.c_str(), pid.length()) == -1) {
-      omnisci::close(pid_fd);
-      auto err = std::string("Failed to write PID file ") + lock_file.string().c_str() +
-                 ". " + strerror(errno) + ".";
-      throw std::runtime_error(err);
+
+    struct flock fl;
+    memset(&fl, 0, sizeof(fl));
+    fl.l_type = !g_multi_instance ? F_WRLCK : F_RDLCK;
+    fl.l_whence = SEEK_SET;
+    int cmd;
+#ifdef __linux__
+    // cmd = F_OFD_SETLK;  // TODO(sy): broken on centos
+    cmd = F_SETLK;
+#else
+    cmd = F_SETLK;
+#endif  // __linux__
+    int ret = heavyai::safe_fcntl(fd, cmd, &fl);
+    if (ret == -1 && (errno == EACCES || errno == EAGAIN)) {  // locked by someone else
+      heavyai::safe_close(fd);
+      throw std::runtime_error(
+          "another HeavyDB server instance is already using data directory: " +
+          base_path);
+    } else if (ret == -1) {
+      auto errno0 = errno;
+      heavyai::safe_close(fd);
+      throw std::runtime_error("failed to lock lockfile: " + lock_file + ": " +
+                               std::string(strerror(errno0)) + " (" +
+                               std::to_string(errno0) + ")");
     }
+
+    if (!g_multi_instance) {
+      if (heavyai::ftruncate(fd, 0) == -1) {
+        auto errno0 = errno;
+        heavyai::safe_close(fd);
+        throw std::runtime_error("failed to truncate lockfile: " + lock_file + ": " +
+                                 std::string(strerror(errno0)) + " (" +
+                                 std::to_string(errno0) + ")");
+      }
+      if (heavyai::safe_write(fd, pid.c_str(), pid.length()) == -1) {
+        auto errno0 = errno;
+        heavyai::safe_close(fd);
+        throw std::runtime_error("failed to write lockfile: " + lock_file + ": " +
+                                 std::string(strerror(errno0)) + " (" +
+                                 std::to_string(errno0) + ")");
+      }
+    }
+
+    // Intentionally leak the file descriptor. Lock will be held until process exit.
   }
+#endif  // _WIN32
+
   boost::algorithm::trim_if(db_query_file, boost::is_any_of("\"'"));
   if (db_query_file.length() > 0 && !boost::filesystem::exists(db_query_file)) {
     throw std::runtime_error("File containing DB queries " + db_query_file +
                              " does not exist.");
   }
-  const auto db_file =
-      boost::filesystem::path(base_path) / "mapd_catalogs" / OMNISCI_SYSTEM_CATALOG;
+  const auto db_file = boost::filesystem::path(base_path) /
+                       shared::kCatalogDirectoryName / shared::kSystemCatalogName;
   if (!boost::filesystem::exists(db_file)) {
     {  // check old system catalog existsense
-      const auto db_file = boost::filesystem::path(base_path) / "mapd_catalogs/mapd";
+      const auto db_file =
+          boost::filesystem::path(base_path) / shared::kCatalogDirectoryName / "mapd";
       if (!boost::filesystem::exists(db_file)) {
-        throw std::runtime_error("OmniSci system catalog " + OMNISCI_SYSTEM_CATALOG +
+        throw std::runtime_error("System catalog " + shared::kSystemCatalogName +
                                  " does not exist.");
       }
     }
   }
   if (license_path.length() == 0) {
-    license_path = base_path + "/omnisci.license";
+    license_path = base_path + "/" + shared::kDefaultLicenseFileName;
   }
 
   // add all parameters to be displayed on startup
-  LOG(INFO) << "OmniSci started with data directory at '" << base_path << "'";
+  LOG(INFO) << "HeavyDB started with data directory at '" << base_path << "'";
   if (vm.count("license-path")) {
     LOG(INFO) << "License key path set to '" << license_path << "'";
   }
   g_read_only = read_only;
-  LOG(INFO) << " Server read-only mode is " << read_only;
+  LOG(INFO) << " Server read-only mode is " << read_only << " (--read-only)";
+  if (g_multi_instance) {
+    LOG(INFO) << " Multiple servers per --data directory is " << g_multi_instance
+              << " (--multi-instance)";
+  }
+  if (g_allow_invalid_literal_buffer_reads) {
+    LOG(WARNING) << " Allowing invalid reads from the literal buffer. May cause invalid "
+                    "query results! (--allow-invalid-literal-buffer-reads)";
+  }
 #if DISABLE_CONCURRENCY
   LOG(INFO) << " Threading layer: serial";
 #elif ENABLE_TBB
@@ -1025,26 +1208,36 @@ void CommandLineOptions::validate() {
   LOG(INFO) << " Maximum active session duration " << max_session_duration;
   LOG(INFO) << " Maximum number of sessions " << system_parameters.num_sessions;
 
+  LOG(INFO) << "Legacy delimited import is set to " << g_enable_legacy_delimited_import;
+#ifdef ENABLE_IMPORT_PARQUET
+  LOG(INFO) << "Legacy parquet import is set to " << g_enable_legacy_parquet_import;
+#endif
+  LOG(INFO) << "FSI regex parsed import is set to " << g_enable_fsi_regex_import;
+
   LOG(INFO) << "Allowed import paths is set to " << allowed_import_paths;
   LOG(INFO) << "Allowed export paths is set to " << allowed_export_paths;
   ddl_utils::FilePathWhitelist::initialize(
       base_path, allowed_import_paths, allowed_export_paths);
 
-  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_catalogs");
-  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/temporary/mapd_catalogs");
-  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_data");
-  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_log");
+  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/" +
+                                               shared::kCatalogDirectoryName);
+  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/temporary/" +
+                                               shared::kCatalogDirectoryName);
+  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/" +
+                                               shared::kDataDirectoryName);
+  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/" +
+                                               shared::kDefaultLogDirName);
+  import_export::ForeignDataImporter::setDefaultImportPath(base_path);
   g_enable_s3_fsi = false;
 
-  if (g_enable_general_import_fsi) {
-    g_enable_fsi = true;  // a requirement for general FSI import is for FSI to be enabled
-  }
-
+  if (!g_enable_legacy_delimited_import ||
 #ifdef ENABLE_IMPORT_PARQUET
-  if (g_enable_parquet_import_fsi) {
-    g_enable_fsi = true;  // a requirement for FSI parquet import is for FSI to be enabled
-  }
+      !g_enable_legacy_parquet_import ||
 #endif
+      g_enable_fsi_regex_import) {
+    g_enable_fsi =
+        true;  // a requirement for FSI import code-paths is for FSI to be enabled
+  }
 
   if (disk_cache_level == "foreign_tables") {
     if (g_enable_fsi) {
@@ -1076,7 +1269,7 @@ void CommandLineOptions::validate() {
   }
 
   if (disk_cache_config.path.empty()) {
-    disk_cache_config.path = base_path + "/omnisci_disk_cache";
+    disk_cache_config.path = base_path + "/" + shared::kDefaultDiskCacheDirName;
   }
   ddl_utils::FilePathBlacklist::addToBlacklist(disk_cache_config.path);
 
@@ -1107,6 +1300,16 @@ void CommandLineOptions::validate() {
       LOG(INFO) << "FSI has been enabled as a side effect of enabling system tables";
     }
   }
+  LOG(INFO) << "Enable FSI is set to " << g_enable_fsi;
+  LOG(INFO) << "Enable logs system tables set to " << g_enable_logs_system_tables;
+
+  if (g_logs_system_tables_max_files_count == 0) {
+    throw std::runtime_error{
+        "Invalid value provided for the \"logs-system-tables-max-files-count\" "
+        "option. Value must be greater than 0."};
+  }
+  LOG(INFO) << "Maximum number of logs system table files set to "
+            << g_logs_system_tables_max_files_count;
 
 #ifdef ENABLE_MEMKIND
   if (g_enable_tiered_cpu_mem) {
@@ -1122,6 +1325,17 @@ void CommandLineOptions::validate() {
     }
   }
 #endif
+}
+
+SystemParameters::RuntimeUdfRegistrationPolicy construct_runtime_udf_registration_policy(
+    const bool enable_runtime_udfs,
+    const bool enable_udf_registration_for_all_users) {
+  return enable_runtime_udfs
+             ? (enable_udf_registration_for_all_users
+                    ? SystemParameters::RuntimeUdfRegistrationPolicy::ALLOWED_ALL_USERS
+                    : SystemParameters::RuntimeUdfRegistrationPolicy::
+                          ALLOWED_SUPERUSERS_ONLY)
+             : SystemParameters::RuntimeUdfRegistrationPolicy::DISALLOWED;
 }
 
 boost::optional<int> CommandLineOptions::parse_command_line(
@@ -1140,7 +1354,7 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     po::notify(vm);
 
     if (vm.count("help")) {
-      std::cerr << "Usage: omnisci_server <data directory path> [-p <port number>] "
+      std::cerr << "Usage: heavydb <data directory path> [-p <port number>] "
                    "[--http-port <http port number>] [--flush-log] [--version|-v]"
                 << std::endl
                 << std::endl;
@@ -1148,7 +1362,7 @@ boost::optional<int> CommandLineOptions::parse_command_line(
       return 0;
     }
     if (vm.count("dev-options")) {
-      std::cout << "Usage: omnisci_server <data directory path> [-p <port number>] "
+      std::cout << "Usage: heavydb <data directory path> [-p <port number>] "
                    "[--http-port <http port number>] [--flush-log] [--version|-v]"
                 << std::endl
                 << std::endl;
@@ -1156,7 +1370,7 @@ boost::optional<int> CommandLineOptions::parse_command_line(
       return 0;
     }
     if (vm.count("version")) {
-      std::cout << "OmniSci Version: " << MAPD_RELEASE << std::endl;
+      std::cout << "HeavyDB Version: " << MAPD_RELEASE << std::endl;
       return 0;
     }
 
@@ -1169,6 +1383,68 @@ boost::optional<int> CommandLineOptions::parse_command_line(
       po::notify(vm);
       settings_file.close();
     }
+
+    if (!g_enable_union) {
+      std::cerr
+          << "The enable-union option is DEPRECATED and is now enabled by default. "
+             "Please remove use of this option, as it may be disabled in the future."
+          << std::endl;
+    }
+
+    // Trim base path before executing migration
+    boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
+
+    // Execute rebrand migration before accessing any system files.
+    std::string lockfiles_path = base_path + "/" + shared::kLockfilesDirectoryName;
+    if (!boost::filesystem::exists(lockfiles_path)) {
+      if (!boost::filesystem::create_directory(lockfiles_path)) {
+        std::cerr << "Cannot create " + shared::kLockfilesDirectoryName +
+                         " subdirectory under "
+                  << base_path << std::endl;
+        return 1;
+      }
+    }
+    std::string lockfiles_path2 = lockfiles_path + "/" + shared::kCatalogDirectoryName;
+    if (!boost::filesystem::exists(lockfiles_path2)) {
+      if (!boost::filesystem::create_directory(lockfiles_path2)) {
+        std::cerr << "Cannot create " + shared::kLockfilesDirectoryName + "/" +
+                         shared::kCatalogDirectoryName + " subdirectory under "
+                  << base_path << std::endl;
+        return 1;
+      }
+    }
+    std::string lockfiles_path3 = lockfiles_path + "/" + shared::kDataDirectoryName;
+    if (!boost::filesystem::exists(lockfiles_path3)) {
+      if (!boost::filesystem::create_directory(lockfiles_path3)) {
+        std::cerr << "Cannot create " + shared::kLockfilesDirectoryName + "/" +
+                         shared::kDataDirectoryName + " subdirectory under "
+                  << base_path << std::endl;
+        return 1;
+      }
+    }
+    migrations::MigrationMgr::takeMigrationLock(base_path);
+    if (migrations::MigrationMgr::migrationEnabled()) {
+      migrations::MigrationMgr::executeRebrandMigration(base_path);
+    }
+
+    if (!vm["enable-runtime-udf"].defaulted()) {
+      if (!vm["enable-runtime-udfs"].defaulted()) {
+        std::cerr << "Usage Error: Both enable-runtime-udf and enable-runtime-udfs "
+                     "specified. Please remove use of the enable-runtime-udfs flag, "
+                     "as it will be deprecated in the future."
+                  << std::endl;
+        return 1;
+      } else {
+        enable_runtime_udfs = enable_runtime_udf;
+        std::cerr << "The enable-runtime-udf flag has been deprecated and replaced "
+                     "with enable-runtime-udfs. Please remove use of this option "
+                     "as it will be disabled in the future."
+                  << std::endl;
+      }
+    }
+    system_parameters.runtime_udf_registration_policy =
+        construct_runtime_udf_registration_policy(enable_runtime_udfs,
+                                                  enable_udf_registration_for_all_users);
 
     if (should_init_logging) {
       init_logging();
@@ -1195,6 +1471,8 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     }
 
     g_enable_watchdog = enable_watchdog;
+    g_watchdog_none_encoded_string_translation_limit =
+        watchdog_none_encoded_string_translation_limit;
     g_enable_dynamic_watchdog = enable_dynamic_watchdog;
     g_dynamic_watchdog_time_limit = dynamic_watchdog_time_limit;
     g_enable_runtime_query_interrupt = enable_runtime_query_interrupt;
@@ -1246,10 +1524,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
 
   if (vm.count("udf-compiler-options")) {
     std::for_each(udf_compiler_options.begin(), udf_compiler_options.end(), trim_string);
-  }
-
-  if (enable_runtime_udf) {
-    LOG(INFO) << " Runtime user defined extension functions enabled globally.";
   }
 
   boost::algorithm::trim_if(system_parameters.ha_brokers, boost::is_any_of("\"'"));
@@ -1305,8 +1579,8 @@ boost::optional<int> CommandLineOptions::parse_command_line(
   LOG(INFO) << " Min GPU buffer pool slab size " << system_parameters.min_gpu_slab_size;
   LOG(INFO) << " Max GPU buffer pool slab size " << system_parameters.max_gpu_slab_size;
   LOG(INFO) << " calcite JVM max memory  " << system_parameters.calcite_max_mem;
-  LOG(INFO) << " OmniSci Server Port  " << system_parameters.omnisci_server_port;
-  LOG(INFO) << " OmniSci Calcite Port  " << system_parameters.calcite_port;
+  LOG(INFO) << " HeavyDB Server Port  " << system_parameters.omnisci_server_port;
+  LOG(INFO) << " HeavyDB Calcite Port  " << system_parameters.calcite_port;
   LOG(INFO) << " Enable Calcite view optimize "
             << system_parameters.enable_calcite_view_optimize;
   LOG(INFO) << " Allow Local Auth Fallback: "
@@ -1324,6 +1598,45 @@ boost::optional<int> CommandLineOptions::parse_command_line(
                 << g_hashtable_cache_total_bytes / (1024 * 1024) << " MB.";
       LOG(INFO) << " \t\t Per-hashtable size limit: "
                 << g_max_cacheable_hashtable_size_bytes / (1024 * 1024) << " MB.";
+    }
+    LOG(INFO) << " \t Use query resultset cache: "
+              << (g_use_query_resultset_cache ? "enabled" : "disabled");
+    if (g_use_query_resultset_cache) {
+      LOG(INFO) << " \t\t Total amount of bytes that query resultset cache keeps: "
+                << g_query_resultset_cache_total_bytes / (1024 * 1024) << " MB.";
+      LOG(INFO) << " \t\t Per-query resultset size limit: "
+                << g_max_cacheable_query_resultset_size_bytes / (1024 * 1024) << " MB.";
+    }
+    LOG(INFO) << " \t\t Use auto query resultset caching: "
+              << (g_allow_auto_resultset_caching ? "enabled" : "disabled");
+    if (g_allow_auto_resultset_caching) {
+      LOG(INFO) << " \t\t\t The maximum bytes of a query resultset which is "
+                   "automatically cached: "
+                << g_auto_resultset_caching_threshold << " Bytes.";
+    }
+    LOG(INFO) << " \t\t Use query step skipping: "
+              << (g_allow_query_step_skipping ? "enabled" : "disabled");
+    LOG(INFO) << " \t Use chunk metadata cache: "
+              << (g_use_chunk_metadata_cache ? "enabled" : "disabled");
+  }
+
+  const std::string udf_reg_policy_log_prefix{
+      " \t\t Runtime UDF/UDTF Registration Policy: "};
+  switch (system_parameters.runtime_udf_registration_policy) {
+    case SystemParameters::RuntimeUdfRegistrationPolicy::DISALLOWED: {
+      LOG(INFO) << udf_reg_policy_log_prefix << " DISALLOWED";
+      break;
+    }
+    case SystemParameters::RuntimeUdfRegistrationPolicy::ALLOWED_SUPERUSERS_ONLY: {
+      LOG(INFO) << udf_reg_policy_log_prefix << " ALLOWED for superusers only";
+      break;
+    }
+    case SystemParameters::RuntimeUdfRegistrationPolicy::ALLOWED_ALL_USERS: {
+      LOG(INFO) << udf_reg_policy_log_prefix << " ALLOWED for all users";
+      break;
+    }
+    default: {
+      UNREACHABLE() << "Unrecognized option for Runtime UDF/UDTF registration policy.";
     }
   }
 

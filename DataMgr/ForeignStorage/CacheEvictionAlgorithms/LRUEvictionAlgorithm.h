@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 /**
  * @file LRUEvictionAlgorithm.h
+ * @brief
  *
  * This file includes the class specification for the Least Recently Used cache eviction
  * algorithm used by the Foreign Storage Interface (FSI).
@@ -33,7 +34,7 @@
 #include <cstddef>
 #include <list>
 #include "CacheEvictionAlgorithm.h"
-#include "Shared/mapd_shared_mutex.h"
+#include "Shared/heavyai_shared_mutex.h"
 
 class LRUEvictionAlgorithm : public CacheEvictionAlgorithm {
  public:
@@ -50,5 +51,5 @@ class LRUEvictionAlgorithm : public CacheEvictionAlgorithm {
  private:
   std::list<ChunkKey> cache_items_list_;
   std::map<const ChunkKey, std::list<ChunkKey>::iterator> cache_items_map_;
-  mutable mapd_shared_mutex cache_mutex_;
+  mutable heavyai::shared_mutex cache_mutex_;
 };

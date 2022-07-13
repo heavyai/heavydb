@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
 #include "QueryEngine/ExpressionRewrite.h"
 #include "QueryEngine/GeoOperators/Transform.h"
 #include "QueryEngine/RelAlgTranslator.h"
+
+extern bool g_enable_geo_ops_on_uncompressed_coords;
 
 std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColumn(
     const RexInput* rex_input,
@@ -72,7 +74,12 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
           "Geospatial columns not yet supported in this temporary table context.");
     }
   }
-  CHECK(IS_GEO(ti.get_type()));
+
+  if (!IS_GEO(ti.get_type())) {
+    throw QueryNotSupported(
+        "Geospatial expression and operator require geospatial column as their input "
+        "argument(s)");
+  }
 
   // Return geo column reference. The geo column may be expanded if required for extension
   // function arguments. Otherwise, the geo column reference will be translated into
@@ -159,8 +166,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiter
   args.push_back(makeExpr<Analyzer::Constant>(arr_ti, false, compressed_coords_exprs));
 
   auto lit_type = ti.get_type();
-  if (lit_type == kPOLYGON || lit_type == kMULTIPOLYGON) {
-    // ring sizes
+  if (lit_type == kMULTILINESTRING || lit_type == kPOLYGON || lit_type == kMULTIPOLYGON) {
+    // [linest]ring sizes
     std::list<std::shared_ptr<Analyzer::Expr>> ring_size_exprs;
     for (auto c : ring_sizes) {
       Datum d;
@@ -216,6 +223,9 @@ std::string suffix(SQLTypes type) {
   if (type == kLINESTRING) {
     return std::string("_LineString");
   }
+  if (type == kMULTILINESTRING) {
+    return std::string("_MultiLineString");
+  }
   if (type == kPOLYGON) {
     return std::string("_Polygon");
   }
@@ -233,6 +243,9 @@ SQLTypes get_ti_from_geo(const Geospatial::GeoBase* geo) {
     }
     case Geospatial::GeoBase::GeoType::kLINESTRING: {
       return kLINESTRING;
+    }
+    case Geospatial::GeoBase::GeoType::kMULTILINESTRING: {
+      return kMULTILINESTRING;
     }
     case Geospatial::GeoBase::GeoType::kPOLYGON: {
       return kPOLYGON;
@@ -311,9 +324,18 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
                                         "ST_Intersection"sv,
                                         "ST_Difference"sv,
                                         "ST_Union"sv,
-                                        "ST_Buffer"sv)) {
+                                        "ST_Buffer"sv,
+                                        "ST_ConcaveHull"sv,
+                                        "ST_ConvexHull"sv)) {
+        // TODO: the design of geo operators currently doesn't allow input srid overrides.
+        // For example, in case of ST_Area(ST_Transform(ST_Buffer(geo_column,0), 900913))
+        // we can ask geos runtime to transform ST_Buffer's output from 4326 to 900913,
+        // however, ST_Area geo operator would still rely on the first arg's typeinfo
+        // to codegen srid arg values in the ST_Area_ extension function call. And it will
+        // still pick up that transform so the coords will be transformed to 900913 twice.
+
         // Sink result transform into geos runtime
-        allow_result_gdal_transform = true;
+        // allow_result_gdal_transform = true;
       }
       if (!allow_gdal_transforms && !allow_result_gdal_transform) {
         if (srid != 900913 && ((use_geo_expressions || is_projection) && srid != 4326 &&
@@ -323,14 +345,17 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         }
       }
       arg_ti.set_output_srid(srid);  // Forward output srid down to argument translation
-      auto arg0 = translateGeoFunctionArg(
-          rex_scalar0,
-          arg_ti,
-          with_bounds,
-          with_render_group,
-          expand_geo_col,
-          is_projection,
-          is_projection ? /*use_geo_expressions=*/true : use_geo_expressions);
+      bool arg0_use_geo_expressions = is_projection ? true : use_geo_expressions;
+      if (allow_gdal_transforms) {
+        arg0_use_geo_expressions = false;
+      }
+      auto arg0 = translateGeoFunctionArg(rex_scalar0,
+                                          arg_ti,
+                                          with_bounds,
+                                          with_render_group,
+                                          expand_geo_col,
+                                          is_projection,
+                                          arg0_use_geo_expressions);
 
       if (use_geo_expressions) {
         CHECK_EQ(arg0.size(), size_t(1));
@@ -384,8 +409,15 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
                                     std::to_string(arg_ti.get_input_srid()));
           }
         }
-        arg_ti.set_output_srid(
-            srid);  // We have a valid input SRID, register the output SRID for transform
+        // Established that the input SRID is valid
+        if (allow_result_gdal_transform) {
+          // If gdal transform has been allowed, then it has been sunk into geos runtime.
+          // The returning geometry has already been transformed, de-register transform.
+          if (arg_ti.get_input_srid() != srid) {
+            arg_ti.set_input_srid(srid);
+          }
+        }
+        arg_ti.set_output_srid(srid);
       } else {
         throw QueryNotSupported(rex_function->getName() +
                                 ": unexpected input SRID, unable to transform");
@@ -753,17 +785,28 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
                                              /*is_projection=*/false,
                                              /*use_geo_expressions=*/true);
       CHECK_EQ(geoargs.size(), size_t(1));
+      if (geo_ti.get_output_srid() > 0) {
+        // Pick up the arg's srid
+        arg_ti.set_input_srid(geo_ti.get_output_srid());
+        arg_ti.set_output_srid(geo_ti.get_output_srid());
+      }
       if (try_to_compress) {
-        // Request point compression
-        arg_ti.set_input_srid(4326);
-        arg_ti.set_output_srid(4326);
+        // Point compression is requested by a higher level [4326] operation
+        if (geo_ti.get_output_srid() == 0) {
+          // srid-less geo is considered and is forced to be 4326
+          arg_ti.set_input_srid(4326);
+          arg_ti.set_output_srid(4326);
+        } else {
+          CHECK_EQ(arg_ti.get_output_srid(), 4326);
+        }
         arg_ti.set_compression(kENCODING_GEOINT);
         arg_ti.set_comp_param(32);
       }
       if (geo_ti.get_input_srid() != geo_ti.get_output_srid() &&
           geo_ti.get_output_srid() > 0 &&
           std::dynamic_pointer_cast<Analyzer::ColumnVar>(geoargs.front())) {
-        // legacy transform
+        // Centroid argument is transformed before use,
+        // pass the transform to the geo operator
         legacy_transform_srid = geo_ti.get_output_srid();
       }
       return {makeExpr<Analyzer::GeoOperator>(
@@ -772,11 +815,16 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
           std::vector<std::shared_ptr<Analyzer::Expr>>{geoargs.front()},
           legacy_transform_srid > 0 ? std::make_optional<int>(legacy_transform_srid)
                                     : std::nullopt)};
+    } else if (func_resolve(rex_function->getName(), "ST_ConvexHull"sv)) {
+      CHECK_EQ(size_t(1), rex_function->size());
+      // What geo type will the constructor return? Could be anything.
+      return {translateUnaryGeoConstructor(rex_function, arg_ti, with_bounds)};
     } else if (func_resolve(rex_function->getName(),
                             "ST_Intersection"sv,
                             "ST_Difference"sv,
                             "ST_Union"sv,
-                            "ST_Buffer"sv)) {
+                            "ST_Buffer"sv,
+                            "ST_ConcaveHull"sv)) {
       CHECK_EQ(size_t(2), rex_function->size());
       // What geo type will the constructor return? Could be anything.
       return {translateBinaryGeoConstructor(rex_function, arg_ti, with_bounds)};
@@ -857,9 +905,24 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoProjection(
     // GeoExpression
     return geoargs.front();
   }
-  if (use_geo_projections) {
+  bool allow_gdal_transform = false;
+  if (rex_function->getName() == "ST_Transform") {
+    const auto rex_scalar0 = dynamic_cast<const RexScalar*>(rex_function->getOperand(0));
+    const auto rex_function0 = dynamic_cast<const RexFunctionOperator*>(rex_scalar0);
+    if (rex_function0 && func_resolve(rex_function0->getName(),
+                                      "ST_Intersection"sv,
+                                      "ST_Difference"sv,
+                                      "ST_Union"sv,
+                                      "ST_Buffer"sv,
+                                      "ST_ConcaveHull"sv,
+                                      "ST_ConvexHull"sv)) {
+      // Allow projection of gdal-transformed geos outputs
+      allow_gdal_transform = true;
+    }
+  }
+  if (use_geo_projections && !allow_gdal_transform) {
     throw std::runtime_error("Geospatial projection for function " +
-                             rex_function->toString() +
+                             rex_function->toString(RelRexToStringConfig::defaults()) +
                              " not yet supported in this context");
   }
   return makeExpr<Analyzer::GeoUOper>(
@@ -881,6 +944,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoConstructor(
     op = Geospatial::GeoBase::GeoOp::kUNION;
   } else if (rex_function->getName() == "ST_Buffer"sv) {
     op = Geospatial::GeoBase::GeoOp::kBUFFER;
+  } else if (rex_function->getName() == "ST_ConcaveHull"sv) {
+    op = Geospatial::GeoBase::GeoOp::kCONCAVEHULL;
   }
 
   Analyzer::ExpressionPtrVector geoargs0{};
@@ -891,7 +956,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoConstructor(
                    "ST_Intersection"sv,
                    "ST_Difference"sv,
                    "ST_Union"sv,
-                   "ST_Buffer"sv)) {
+                   "ST_Buffer"sv,
+                   "ST_ConcaveHull"sv)) {
     // First arg: geometry
     geoargs0 = translateGeoFunctionArg(rex_function->getOperand(0),
                                        arg0_ti,
@@ -921,7 +987,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoConstructor(
       throw QueryNotSupported(rex_function->getName() +
                               " geo constructor requires arguments with matching srids");
     }
-  } else if (func_resolve(rex_function->getName(), "ST_Buffer"sv)) {
+  } else if (func_resolve(rex_function->getName(), "ST_Buffer"sv, "ST_ConcaveHull"sv)) {
     // Second arg: double scalar
     auto param_expr = translateScalarRex(rex_function->getOperand(1));
     arg1_ti = SQLTypeInfo(kDOUBLE, false);
@@ -931,24 +997,31 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoConstructor(
     geoargs1 = {param_expr};
   }
 
+  // Record the optional transform request that can be sent by an ecompassing TRANSFORM
   auto srid = ti.get_output_srid();
-  ti = arg0_ti;
-  ti.set_type(kMULTIPOLYGON);
-  ti.set_subtype(kGEOMETRY);
-  ti.set_compression(kENCODING_NONE);  // Constructed geometries are not compressed
-  ti.set_comp_param(0);
-  ti.set_input_srid(arg0_ti.get_output_srid());
+  // Build the typeinfo of the constructed geometry
+  SQLTypeInfo arg_ti = arg0_ti;
+  arg_ti.set_type(kMULTIPOLYGON);
+  arg_ti.set_subtype(kGEOMETRY);
+  arg_ti.set_compression(kENCODING_NONE);  // Constructed geometries are not compressed
+  arg_ti.set_comp_param(0);
+  arg_ti.set_input_srid(arg0_ti.get_output_srid());
   if (srid > 0) {
-    if (ti.get_input_srid() > 0) {
-      ti.set_output_srid(srid);  // Requested SRID sent from the encompassing transform
+    if (arg_ti.get_input_srid() > 0) {
+      // Constructed geometry to be transformed to srid given by encompassing transform
+      arg_ti.set_output_srid(srid);
     } else {
       throw QueryNotSupported("Transform of geo constructor " + rex_function->getName() +
                               " requires its argument(s) to have a valid srid");
     }
   } else {
-    ti.set_output_srid(ti.get_input_srid());  // No encompassing transform
+    arg_ti.set_output_srid(arg_ti.get_input_srid());  // No encompassing transform
   }
-  return makeExpr<Analyzer::GeoBinOper>(op, ti, arg0_ti, arg1_ti, geoargs0, geoargs1);
+  // If there was an output transform, it's now embedded into arg_ti and the geo operator.
+  // Now de-register the transform from the return typeinfo:
+  ti = arg_ti;
+  ti.set_input_srid(ti.get_output_srid());
+  return makeExpr<Analyzer::GeoBinOper>(op, arg_ti, arg0_ti, arg1_ti, geoargs0, geoargs1);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoPredicate(
@@ -991,6 +1064,58 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoPredicate(
   return makeExpr<Analyzer::GeoBinOper>(op, ti, arg0_ti, arg1_ti, geoargs0, geoargs1);
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoConstructor(
+    const RexFunctionOperator* rex_function,
+    SQLTypeInfo& ti,
+    const bool with_bounds) const {
+#ifndef ENABLE_GEOS
+  throw QueryNotSupported(rex_function->getName() +
+                          " geo constructor requires enabled GEOS support");
+#endif
+  Geospatial::GeoBase::GeoOp op = Geospatial::GeoBase::GeoOp::kCONVEXHULL;
+
+  Analyzer::ExpressionPtrVector geoargs0{};
+  SQLTypeInfo arg0_ti;
+  if (func_resolve(rex_function->getName(), "ST_ConvexHull"sv)) {
+    // First arg: geometry
+    geoargs0 = translateGeoFunctionArg(rex_function->getOperand(0),
+                                       arg0_ti,
+                                       false,
+                                       false,
+                                       true,
+                                       true,
+                                       false,
+                                       false,
+                                       /* allow_gdal_transforms = */ true);
+  }
+
+  // Record the optional transform request that can be sent by an ecompassing TRANSFORM
+  auto srid = ti.get_output_srid();
+  // Build the typeinfo of the constructed geometry
+  SQLTypeInfo arg_ti = arg0_ti;
+  arg_ti.set_type(kMULTIPOLYGON);
+  arg_ti.set_subtype(kGEOMETRY);
+  arg_ti.set_compression(kENCODING_NONE);  // Constructed geometries are not compressed
+  arg_ti.set_comp_param(0);
+  arg_ti.set_input_srid(arg0_ti.get_output_srid());
+  if (srid > 0) {
+    if (arg_ti.get_input_srid() > 0) {
+      // Constructed geometry to be transformed to srid given by encompassing transform
+      arg_ti.set_output_srid(srid);
+    } else {
+      throw QueryNotSupported("Transform of geo constructor " + rex_function->getName() +
+                              " requires its argument(s) to have a valid srid");
+    }
+  } else {
+    arg_ti.set_output_srid(arg_ti.get_input_srid());  // No encompassing transform
+  }
+  // If there was an output transform, it's now embedded into arg_ti and the geo operator.
+  // Now de-register the transform from the return typeinfo:
+  ti = arg_ti;
+  ti.set_input_srid(ti.get_output_srid());
+  return makeExpr<Analyzer::GeoUOper>(op, arg_ti, arg0_ti, geoargs0);
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(1), rex_function->size());
@@ -1008,6 +1133,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
                                            /*expand_geo_col=*/true,
                                            /*is_projection=*/false,
                                            /*use_geo_expressions=*/true);
+    if (!IS_GEO_POLY(arg_ti.get_type())) {
+      throw QueryNotSupported(rex_function->getName() +
+                              " expects a POLYGON or MULTIPOLYGON");
+    }
     CHECK_EQ(geoargs.size(), size_t(1));
     arg_ti = rex_function->getType();  // TODO: remove
     return makeExpr<Analyzer::GeoOperator>(
@@ -1044,13 +1173,13 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
         std::dynamic_pointer_cast<Analyzer::ColumnVar>(geoargs.front())) {
       // legacy transform
       legacy_transform_srid = arg_ti.get_output_srid();
+      // Reset the transform, transform will be given to the operator as an override
+      arg_ti = geoargs.front()->get_type_info();
     }
-    arg_ti = geoargs.front()->get_type_info();
-    if (arg_ti.get_type() != kPOLYGON && arg_ti.get_type() != kMULTIPOLYGON) {
+    if (!IS_GEO_POLY(arg_ti.get_type())) {
       throw QueryNotSupported(rex_function->getName() +
                               " expects a POLYGON or MULTIPOLYGON");
     }
-
     return makeExpr<Analyzer::GeoOperator>(
         rex_function->getType(),
         rex_function->getName(),
@@ -1060,9 +1189,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
   }
 
   // Accessors for poly bounds and render group for in-situ poly render queries
-  if (func_resolve(rex_function->getName(),
-                   "MapD_GeoPolyBoundsPtr"sv /* deprecated */,
-                   "OmniSci_Geo_PolyBoundsPtr"sv)) {
+  if (func_resolve(rex_function->getName(), "HeavyDB_Geo_PolyBoundsPtr"sv)) {
     SQLTypeInfo arg_ti;
     // get geo column plus bounds only (not expanded)
     auto geoargs =
@@ -1077,9 +1204,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     // done
     return makeExpr<Analyzer::FunctionOper>(
         rex_function->getType(), specialized_geofunc, geoargs);
-  } else if (func_resolve(rex_function->getName(),
-                          "MapD_GeoPolyRenderGroup"sv /* deprecated */,
-                          "OmniSci_Geo_PolyRenderGroup"sv)) {
+  } else if (func_resolve(rex_function->getName(), "HeavyDB_Geo_PolyRenderGroup"sv)) {
     SQLTypeInfo arg_ti;
     // get geo column plus render_group only (not expanded)
     auto geoargs =
@@ -1160,19 +1285,33 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     }
   }
 
-  // All geo function calls translated below only need the coords, extras e.g.
-  // ring_sizes are dropped. Specialize for other/new functions if needed.
-  geoargs.erase(geoargs.begin() + 1, geoargs.end());
+  // Unless overriden, function is assumed to be interested in the first geoarg only,
+  // which may be a geo object (e.g. geo column), or a coord array (e.g. geo literal)
+  auto discard_after_arg = 1;
 
   if (rex_function->getName() == "ST_Length"sv) {
-    if (arg_ti.get_type() != kLINESTRING) {
-      throw QueryNotSupported(rex_function->getName() + " expects LINESTRING");
+    if (arg_ti.get_type() != kLINESTRING && arg_ti.get_type() != kMULTILINESTRING) {
+      throw QueryNotSupported(rex_function->getName() +
+                              " expects LINESTRING or MULTILINESTRING");
+    }
+    if (arg_ti.get_type() == kMULTILINESTRING) {
+      auto ti0 = geoargs[0]->get_type_info();
+      if (ti0.get_type() == kARRAY && ti0.get_subtype() == kTINYINT) {
+        // Received expanded geo: widen the reach to grab linestring size array as well
+        discard_after_arg = 2;
+      }
     }
     specialized_geofunc += suffix(arg_ti.get_type());
     if (arg_ti.get_subtype() == kGEOGRAPHY && arg_ti.get_output_srid() == 4326) {
+      if (arg_ti.get_type() == kMULTILINESTRING) {
+        throw QueryNotSupported(rex_function->getName() +
+                                " Geodesic is not supported for MULTILINESTRING");
+      }
       specialized_geofunc += "_Geodesic"s;
     }
   }
+
+  geoargs.erase(geoargs.begin() + discard_after_arg, geoargs.end());
 
   // Add input compression mode and SRID args to enable on-the-fly
   // decompression/transforms
@@ -1308,15 +1447,27 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   SQLTypeInfo arg0_ti;
   SQLTypeInfo arg1_ti;
 
-  auto geoargs0 = translateGeoFunctionArg(
-      rex_function->getOperand(swap_args ? 1 : 0), arg0_ti, with_bounds, false, false);
+  // Proactively try to compress the first arg of ST_Intersects to preempt arg swap
+  bool try_to_compress_arg0 = g_enable_geo_ops_on_uncompressed_coords &&
+                              func_resolve(function_name, "ST_Intersects"sv);
+
+  auto geoargs0 = translateGeoFunctionArg(rex_function->getOperand(swap_args ? 1 : 0),
+                                          arg0_ti,
+                                          with_bounds,
+                                          false,
+                                          false,
+                                          false,
+                                          false,
+                                          try_to_compress_arg0);
   geoargs.insert(geoargs.end(), geoargs0.begin(), geoargs0.end());
 
-  // If first arg of ST_Contains is compressed, try to compress the second one
-  // to be able to switch to ST_cContains
-  bool try_to_compress_arg1 = (function_name == "ST_Contains"sv &&
-                               arg0_ti.get_compression() == kENCODING_GEOINT &&
-                               arg0_ti.get_output_srid() == 4326);
+  // If first arg is compressed, try to compress the second one to be able to
+  // switch to faster implementations working directly on uncompressed coords
+  bool try_to_compress_arg1 =
+      (g_enable_geo_ops_on_uncompressed_coords &&
+       func_resolve(function_name, "ST_Contains"sv, "ST_Intersects"sv) &&
+       arg0_ti.get_compression() == kENCODING_GEOINT &&
+       arg0_ti.get_output_srid() == 4326);
 
   auto geoargs1 = translateGeoFunctionArg(rex_function->getOperand(swap_args ? 0 : 1),
                                           arg1_ti,
@@ -1368,19 +1519,46 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
       }
     }
   }
+  if (arg0_ti.get_type() == kMULTILINESTRING || arg1_ti.get_type() == kMULTILINESTRING) {
+    throw QueryNotSupported(rex_function->getName() +
+                            " currently doesn't support this argument combination");
+  }
 
-  if (function_name == "ST_Contains"sv) {
-    const bool lhs_is_literal =
-        geoargs1.size() == 1 &&
-        std::dynamic_pointer_cast<const Analyzer::Constant>(geoargs1.front()) != nullptr;
-    const bool lhs_is_point = arg1_ti.get_type() == kPOINT;
-    if (!lhs_is_literal && lhs_is_point &&
-        arg0_ti.get_compression() == kENCODING_GEOINT &&
-        arg0_ti.get_input_srid() == arg0_ti.get_output_srid() &&
-        arg0_ti.get_compression() == arg1_ti.get_compression() &&
-        arg1_ti.get_input_srid() == arg1_ti.get_output_srid()) {
-      // use the compressed version of ST_Contains
+  auto can_use_compressed_coords = [](const SQLTypeInfo& i0_ti,
+                                      const Analyzer::ExpressionPtrVector& i0_operands,
+                                      const SQLTypeInfo& i1_ti,
+                                      const Analyzer::ExpressionPtrVector& i1_operands) {
+    const bool i0_is_poly =
+        i0_ti.get_type() == kPOLYGON || i0_ti.get_type() == kMULTIPOLYGON;
+    const bool i1_is_point = i1_ti.get_type() == kPOINT;
+    const bool i1_is_literal =
+        i1_operands.size() == 1 && std::dynamic_pointer_cast<const Analyzer::Constant>(
+                                       i1_operands.front()) != nullptr;
+    return (i0_is_poly && !i1_is_literal && i1_is_point &&
+            i0_ti.get_compression() == kENCODING_GEOINT &&
+            i0_ti.get_input_srid() == i0_ti.get_output_srid() &&
+            i0_ti.get_compression() == i1_ti.get_compression() &&
+            i1_ti.get_input_srid() == i1_ti.get_output_srid());
+  };
+  if (g_enable_geo_ops_on_uncompressed_coords && function_name == "ST_Contains"sv) {
+    if (can_use_compressed_coords(arg0_ti, geoargs0, arg1_ti, geoargs1)) {
+      // Switch to Contains implementation working directly on uncompressed coords
       function_name = "ST_cContains";
+    }
+  }
+  if (g_enable_geo_ops_on_uncompressed_coords && function_name == "ST_Intersects"sv) {
+    if (can_use_compressed_coords(arg0_ti, geoargs0, arg1_ti, geoargs1)) {
+      // Switch to Intersects implementation working directly on uncompressed coords
+      function_name = "ST_cIntersects";
+    } else if (can_use_compressed_coords(arg1_ti, geoargs1, arg0_ti, geoargs0)) {
+      // Switch to Intersects implementation working on uncompressed coords, swapped args
+      function_name = "ST_cIntersects";
+      geoargs.clear();
+      geoargs.insert(geoargs.end(), geoargs1.begin(), geoargs1.end());
+      geoargs.insert(geoargs.end(), geoargs0.begin(), geoargs0.end());
+      auto tmp_ti = arg0_ti;
+      arg0_ti = arg1_ti;
+      arg1_ti = tmp_ti;
     }
   }
 

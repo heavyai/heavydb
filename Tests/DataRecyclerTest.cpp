@@ -1,5 +1,5 @@
 /*
- * Copyright 2021, OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,7 +83,9 @@ void drop_tables_for_overlaps_hashjoin() {
   const auto cleanup_stmts = {R"(drop table if exists overlaps_t11;)",
                               R"(drop table if exists overlaps_t12;)",
                               R"(drop table if exists overlaps_t13;)",
-                              R"(drop table if exists overlaps_t2;)"};
+                              R"(drop table if exists overlaps_t2;)",
+                              R"(drop table if exists overlaps_t3;)",
+                              R"(drop table if exists overlaps_t4;)"};
 
   for (const auto& stmt : cleanup_stmts) {
     QR::get()->runDDLStatement(stmt);
@@ -259,15 +261,8 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
   auto q1_str = "SELECT x FROM T1 ORDER BY x;";
   auto q1_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q1_str);
   EXPECT_TRUE(q1_query_info.left_deep_trees_id.empty());
-  auto q1_rel_alg_translator = QR::get()->getRelAlgTranslator(q1_str, executor);
   auto q1_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q1_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q1_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(), executor);
   // 1. a sort node becomes a root (dag_rel_id = 0)
   // 2. a project node becomes a child of the sort node (dag_rel_id = 1)
   // 3. a scan node (the leaf of the query plan) becomes a child of the project node
@@ -276,30 +271,16 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
   auto q2_str = "SELECT x FROM T1;";
   auto q2_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q2_str);
   EXPECT_TRUE(q2_query_info.left_deep_trees_id.empty());
-  auto q2_rel_alg_translator = QR::get()->getRelAlgTranslator(q2_str, executor);
   auto q2_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q2_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q2_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(), executor);
   // q2 is the same as q1 except sort node
   EXPECT_TRUE(q2_plan_dag.extracted_dag.compare("1|2|") == 0);
 
   auto q3_str = "SELECT x FROM T1 GROUP BY x;";
   auto q3_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q3_str);
   EXPECT_TRUE(q3_query_info.left_deep_trees_id.empty());
-  auto q3_rel_alg_translator = QR::get()->getRelAlgTranslator(q3_str, executor);
   auto q3_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q3_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q3_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q3_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q3_query_info.root_node.get(), executor);
   // compound node becomes the root (dag_rel_id = 3), and the scan node
   // (that is the same node as both q1 and q2) is the leaf of the query plan
   EXPECT_TRUE(q3_plan_dag.extracted_dag.compare("3|2|") == 0);
@@ -307,37 +288,18 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
   auto q4_str = "SELECT x FROM T1 GROUP BY x ORDER BY x;";
   auto q4_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q4_str);
   EXPECT_TRUE(q4_query_info.left_deep_trees_id.empty());
-  auto q4_rel_alg_translator = QR::get()->getRelAlgTranslator(q4_str, executor);
   auto q4_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q4_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q4_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(), executor);
   // this sort node has different input compared with that of q1
   // so we assign the new dag_rel_id (4) to the sort node
   EXPECT_TRUE(q4_plan_dag.extracted_dag.compare("4|3|2|") == 0);
 
   auto q1_dup_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q1_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q1_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(), executor);
   EXPECT_TRUE(q1_dup_plan_dag.extracted_dag.compare("0|1|2|") == 0);
 
   auto q4_dup_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q4_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q4_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(), executor);
   EXPECT_TRUE(q4_dup_plan_dag.extracted_dag.compare("4|3|2|") == 0);
 }
 
@@ -362,15 +324,8 @@ TEST(DataRecycler, QueryPlanDagExtractor_Heavy_IN_clause) {
   auto q1_str = create_query_having_IN_expr("T1", "x", 20);
   auto q1_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q1_str);
   EXPECT_TRUE(q1_query_info.left_deep_trees_id.empty());
-  auto rel_alg_translator_for_q1 = QR::get()->getRelAlgTranslator(q1_str, executor);
   auto q1_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q1_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *rel_alg_translator_for_q1);
+      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(), executor);
   EXPECT_EQ(q1_plan_dag.contain_not_supported_rel_node, false);
   // but we skip to extract a DAG for q2 since it contains IN-expr having 21 elems in its
   // value list
@@ -378,15 +333,8 @@ TEST(DataRecycler, QueryPlanDagExtractor_Heavy_IN_clause) {
   auto q2_str = create_query_having_IN_expr("T1", "x", 21);
   auto q2_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q2_str);
   EXPECT_TRUE(q2_query_info.left_deep_trees_id.empty());
-  auto rel_alg_translator_for_q2 = QR::get()->getRelAlgTranslator(q2_str, executor);
   auto q2_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q2_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *rel_alg_translator_for_q2);
+      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(), executor);
   EXPECT_EQ(q2_plan_dag.contain_not_supported_rel_node, true);
 }
 
@@ -396,72 +344,56 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
   auto q1_str = "SELECT T1.x FROM T1, T2 WHERE T1.x = T2.x;";
   auto q1_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q1_str);
   EXPECT_TRUE(q1_query_info.left_deep_trees_id.size() == 1);
-  auto q1_rel_alg_translator = QR::get()->getRelAlgTranslator(q1_str, executor);
   auto q1_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 q1_query_info.left_deep_trees_id[0],
-                                                 q1_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q1_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(), executor);
 
   auto q2_str = "SELECT T1.x FROM T1 JOIN T2 ON T1.x = T2.x;";
   auto q2_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q2_str);
   EXPECT_TRUE(q2_query_info.left_deep_trees_id.size() == 1);
-  auto q2_rel_alg_translator = QR::get()->getRelAlgTranslator(q2_str, executor);
   auto q2_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 q2_query_info.left_deep_trees_id[0],
-                                                 q2_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q2_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(), executor);
 
-  EXPECT_TRUE(q1_plan_dag.extracted_dag.compare(q2_plan_dag.extracted_dag) == 0);
+  EXPECT_TRUE(q1_plan_dag.extracted_dag.compare(q2_plan_dag.extracted_dag) != 0);
 
   auto q3_str = "SELECT T1.x FROM T1, T2 WHERE T1.x = T2.x and T2.y = T1.y;";
   auto q3_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q3_str);
   EXPECT_TRUE(q3_query_info.left_deep_trees_id.size() == 1);
-  auto q3_rel_alg_translator = QR::get()->getRelAlgTranslator(q3_str, executor);
   auto q3_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q3_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 q3_query_info.left_deep_trees_id[0],
-                                                 q3_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q3_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q3_query_info.root_node.get(), executor);
 
   auto q4_str = "SELECT T1.x FROM T1 JOIN T2 ON T1.x = T2.x and T1.y = T2.y;";
   auto q4_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q4_str);
   EXPECT_TRUE(q4_query_info.left_deep_trees_id.size() == 1);
-  auto q4_rel_alg_translator = QR::get()->getRelAlgTranslator(q4_str, executor);
   auto q4_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 q4_query_info.left_deep_trees_id[0],
-                                                 q4_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q4_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(), executor);
 
   EXPECT_TRUE(q3_plan_dag.extracted_dag.compare(q4_plan_dag.extracted_dag) != 0);
 
   auto q5_str = "SELECT T1.x FROM T1 JOIN T2 ON T1.y = T2.y and T1.x = T2.x;";
   auto q5_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q5_str);
   EXPECT_TRUE(q5_query_info.left_deep_trees_id.size() == 1);
-  auto q5_rel_alg_translator = QR::get()->getRelAlgTranslator(q5_str, executor);
   auto q5_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q5_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 q5_query_info.left_deep_trees_id[0],
-                                                 q5_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q5_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q5_query_info.root_node.get(), executor);
   EXPECT_TRUE(q3_plan_dag.extracted_dag.compare(q5_plan_dag.extracted_dag) != 0);
+
+  std::unordered_set<std::string> query_plan_dag_hash;
+  std::vector<std::string> queries;
+  queries.push_back(
+      "SELECT COUNT(1) FROM T1 LEFT JOIN T2 ON T1.y <= T2.y WHERE T1.x = T2.x");
+  queries.push_back(
+      "SELECT COUNT(1) FROM T1 LEFT JOIN T2 ON T1.y = T2.y WHERE T1.x = T2.x");
+  queries.push_back(
+      "SELECT COUNT(1) FROM T1 INNER JOIN T2 ON T1.y = T2.y WHERE T1.x = T2.x");
+  queries.push_back(
+      "SELECT COUNT(1) FROM T1 INNER JOIN T2 ON T1.y <= T2.y WHERE T1.x = T2.x");
+  for (const auto& sql : queries) {
+    auto query_info = QR::get()->getQueryInfoForDataRecyclerTest(sql);
+    auto dag =
+        QueryPlanDagExtractor::extractQueryPlanDag(query_info.root_node.get(), executor);
+    query_plan_dag_hash.insert(dag.extracted_dag);
+  }
+  // check whether we correctly extract query plan DAG for outer join having loop-join
+  EXPECT_EQ(query_plan_dag_hash.size(), queries.size());
 }
 
 TEST(DataRecycler, QueryPlanDagExtractor_TableFunction) {
@@ -523,47 +455,25 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
   // test: when DAG cache becomes full, it should skip the following query and clear the
   // cached plan
   DAG_CACHE.setNodeMapMaxSize(48);
-  auto q1_rel_alg_translator = QR::get()->getRelAlgTranslator(q1_str, executor);
   auto q1_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q1_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q1_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(), executor);
   // 1. a sort node becomes a root (dag_rel_id = 0)
   // 2. a project node becomes a child of the sort node (dag_rel_id = 1)
   // 3. a scan node (the leaf of the query plan) becomes a child of the project node
   EXPECT_TRUE(q1_plan_dag.extracted_dag.compare("0|1|2|") == 0);
   // 3 unique REL nodes in the cache --> 3 * 2 * 8 = 48
   EXPECT_EQ(DAG_CACHE.getCurrentNodeMapSize(), 48u);
-  auto q2_rel_alg_translator = QR::get()->getRelAlgTranslator(q2_str, executor);
   auto q2_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q2_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q2_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(), executor);
   // we set the DAG cache size be 48, so when we try to cache the q2, it becomes full
   // so it skips to extract DAG plan of this query and also clear the cache itself
   EXPECT_TRUE(q2_plan_dag.extracted_dag.compare("") == 0);
-  // 2 unique REL nodes in the cache --> 2 * 2 * 8 = 32
   EXPECT_EQ(DAG_CACHE.getCurrentNodeMapSize(), 0u);
   DAG_CACHE.clearQueryPlanCache();
 
   // test: when a query size is too large, we skip caching the query
-  auto q3_rel_alg_translator = QR::get()->getRelAlgTranslator(q3_str, executor);
   auto q3_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q3_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 q3_query_info.left_deep_trees_id[0],
-                                                 q3_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q3_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q3_query_info.root_node.get(), executor);
   // q3 has more than three nodes, so its size is beyond the limit of the DAG cache (48)
   // so we cannot keep it to our DAG cache
   EXPECT_EQ(DAG_CACHE.getCurrentNodeMapSize(), 0u);
@@ -571,41 +481,29 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
   // test: increase the cache size that is enough to hold both q1 and q2
   DAG_CACHE.setNodeMapMaxSize(80);
   auto new_q1_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q1_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q1_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(), executor);
   EXPECT_TRUE(new_q1_plan_dag.extracted_dag.compare("0|1|2|") == 0);
   auto new_q2_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q2_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q2_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(), executor);
   EXPECT_TRUE(new_q2_plan_dag.extracted_dag.compare("3|2|") == 0);
   EXPECT_GE(DAG_CACHE.getCurrentNodeMapSize(), 48u);
 }
 
 TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
-  const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
-  const auto enable_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many;
-
+  ScopeGuard reset_overlaps_state =
+      [orig_overlaps_hashjoin_state = g_enable_overlaps_hashjoin,
+       orig_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many,
+       orig_trivial_loop_join_threshold = g_trivial_loop_join_threshold] {
+        g_enable_overlaps_hashjoin = orig_overlaps_hashjoin_state;
+        g_enable_overlaps_hashjoin = orig_hashjoin_many_to_many_state;
+        g_trivial_loop_join_threshold = orig_trivial_loop_join_threshold;
+      };
   g_enable_overlaps_hashjoin = true;
   g_enable_hashjoin_many_to_many = true;
   g_trivial_loop_join_threshold = 1;
+
   std::set<QueryPlanHash> visited_hashtable_key;
 
-  ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state,
-                                     &enable_hashjoin_many_to_many_state] {
-    g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
-    g_enable_overlaps_hashjoin = enable_hashjoin_many_to_many_state;
-    g_trivial_loop_join_threshold = 1000;
-  };
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   auto clearCaches = [&executor, &visited_hashtable_key] {
     executor->clearMemory(MemoryLevel::CPU_LEVEL);
@@ -890,20 +788,19 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
 }
 
 TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
-  const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
-  const auto enable_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many;
-
+  ScopeGuard reset_overlaps_state =
+      [orig_overlaps_hashjoin_state = g_enable_overlaps_hashjoin,
+       orig_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many,
+       orig_trivial_loop_join_threshold = g_trivial_loop_join_threshold] {
+        g_enable_overlaps_hashjoin = orig_overlaps_hashjoin_state;
+        g_enable_overlaps_hashjoin = orig_hashjoin_many_to_many_state;
+        g_trivial_loop_join_threshold = orig_trivial_loop_join_threshold;
+      };
   g_enable_overlaps_hashjoin = true;
   g_enable_hashjoin_many_to_many = true;
   g_trivial_loop_join_threshold = 1;
   std::set<QueryPlanHash> visited_hashtable_key;
 
-  ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state,
-                                     &enable_hashjoin_many_to_many_state] {
-    g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
-    g_enable_overlaps_hashjoin = enable_hashjoin_many_to_many_state;
-    g_trivial_loop_join_threshold = 1000;
-  };
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   auto clearCaches = [&executor, &visited_hashtable_key] {
     executor->clearMemory(MemoryLevel::CPU_LEVEL);
@@ -953,10 +850,8 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       auto q1_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_ht_metainfo = q1_ht_and_metainfo.cached_ht_metainfo;
-      if (!q1_ht_metainfo.has_value() &&
-          !q1_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q1_ht_metainfo.has_value());
+      EXPECT_TRUE(q1_ht_metainfo->overlaps_meta_info.has_value());
       auto q1_tuning_param = q1_ht_and_metainfo.cached_tuning_info;
       EXPECT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
       EXPECT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
@@ -973,10 +868,8 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       auto q1_v2_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_v2_ht_metainfo = q1_v2_ht_and_metainfo.cached_ht_metainfo;
-      if (!q1_v2_ht_metainfo.has_value() &&
-          !q1_v2_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q1_v2_ht_metainfo.has_value());
+      EXPECT_TRUE(q1_v2_ht_metainfo->overlaps_meta_info.has_value());
       auto q1_v2_tuning_param = q1_v2_ht_and_metainfo.cached_tuning_info;
       // we do not cache the tuning param if we give a related sql hint
       EXPECT_TRUE(!q1_v2_tuning_param.has_value());
@@ -996,10 +889,8 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       auto q1_v3_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_v3_ht_metainfo = q1_v3_ht_and_metainfo.cached_ht_metainfo;
-      if (!q1_v3_ht_metainfo.has_value() &&
-          !q1_v3_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q1_v3_ht_metainfo.has_value());
+      EXPECT_TRUE(q1_v3_ht_metainfo->overlaps_meta_info.has_value());
       auto q1_v3_tuning_param = q1_v3_ht_and_metainfo.cached_tuning_info;
       // we do not cache the tuning param if we give a related sql hint
       EXPECT_TRUE(!q1_v3_tuning_param.has_value());
@@ -1021,10 +912,8 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       auto q1_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_ht_metainfo = q1_ht_and_metainfo.cached_ht_metainfo;
-      if (!q1_ht_metainfo.has_value() &&
-          !q1_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q1_ht_metainfo.has_value());
+      EXPECT_TRUE(q1_ht_metainfo->overlaps_meta_info.has_value());
       auto q1_tuning_param = q1_ht_and_metainfo.cached_tuning_info;
       EXPECT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
       EXPECT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
@@ -1038,10 +927,8 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       auto q2_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q2_ht_metainfo = q2_ht_and_metainfo.cached_ht_metainfo;
-      if (!q2_ht_metainfo.has_value() &&
-          !q2_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q2_ht_metainfo.has_value());
+      EXPECT_TRUE(q2_ht_metainfo->overlaps_meta_info.has_value());
       auto q2_tuning_param = q2_ht_and_metainfo.cached_tuning_info;
       EXPECT_TRUE(q2_tuning_param.has_value());
 
@@ -1054,10 +941,8 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       auto q2_v2_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q2_v2_ht_metainfo = q2_v2_ht_and_metainfo.cached_ht_metainfo;
-      if (!q2_v2_ht_metainfo.has_value() &&
-          !q2_v2_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q2_v2_ht_metainfo.has_value());
+      EXPECT_TRUE(q2_v2_ht_metainfo->overlaps_meta_info.has_value());
       auto q2_v2_tuning_param = q2_v2_ht_and_metainfo.cached_tuning_info;
       // we compute hashtable param when we give max_hashtable size hint
       EXPECT_TRUE(q2_v2_tuning_param.has_value());
@@ -1086,13 +971,13 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       auto q1_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_ht_metainfo = q1_ht_and_metainfo.cached_ht_metainfo;
-      if (!q1_ht_metainfo.has_value() &&
-          !q1_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q1_ht_metainfo.has_value());
+      EXPECT_TRUE(q1_ht_metainfo->overlaps_meta_info.has_value());
       auto q1_tuning_param = q1_ht_and_metainfo.cached_tuning_info;
       EXPECT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
       EXPECT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
+      const auto q1_hash_table_cache_key = *visited_hashtable_key.begin();
+      CHECK_NE(q1_hash_table_cache_key, EMPTY_HASHED_PLAN_DAG_KEY);
 
       auto q2 =
           R"(SELECT count(*) from overlaps_t2 as b JOIN overlaps_t2 as a ON ST_Intersects(a.poly, b.pt);)";
@@ -1105,17 +990,7 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
                                                  CacheItemType::OVERLAPS_HT));
       auto q2_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
-      EXPECT_EQ(static_cast<size_t>(1), q2_ht_and_metainfo.cached_metric->getRefCount());
-      EXPECT_EQ(static_cast<size_t>(416), q2_ht_and_metainfo.cached_metric->getMemSize());
-      auto q2_ht_metainfo = q2_ht_and_metainfo.cached_ht_metainfo;
-      if (!q2_ht_metainfo.has_value() &&
-          !q2_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
-      auto q2_tuning_param = q2_ht_and_metainfo.cached_tuning_info;
-      if (!q2_tuning_param.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      CHECK(!q2_ht_and_metainfo.cached_ht);
     }
 
     // test4. run q1 and then run q2 but make cache ignore
@@ -1140,10 +1015,8 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       auto q1_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_ht_metainfo = q1_ht_and_metainfo.cached_ht_metainfo;
-      if (!q1_ht_metainfo.has_value() &&
-          !q1_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q1_ht_metainfo.has_value());
+      EXPECT_TRUE(q1_ht_metainfo->overlaps_meta_info.has_value());
       auto q1_tuning_param = q1_ht_and_metainfo.cached_tuning_info;
       EXPECT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
       EXPECT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
@@ -1166,14 +1039,10 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       EXPECT_EQ(static_cast<size_t>(208),
                 q1_ht_and_metainfo_v2.cached_metric->getMemSize());
       auto q1_ht_metainfo_v2 = q1_ht_and_metainfo_v2.cached_ht_metainfo;
-      if (!q1_ht_metainfo_v2.has_value() &&
-          !q1_ht_metainfo_v2->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q1_ht_metainfo_v2.has_value());
+      EXPECT_TRUE(q1_ht_metainfo_v2->overlaps_meta_info.has_value());
       auto q1_tuning_param_v2 = q1_ht_and_metainfo_v2.cached_tuning_info;
-      if (!q1_tuning_param_v2.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      EXPECT_TRUE(q1_tuning_param_v2.has_value());
       EXPECT_TRUE(compareOverlapsHTParams(
           q1_ht_and_metainfo.cached_ht_metainfo->overlaps_meta_info,
           q1_ht_and_metainfo_v2.cached_ht_metainfo->overlaps_meta_info));
@@ -1441,6 +1310,40 @@ TEST(DataRecycler, Perfect_Hashtable_Cache_Maintanence) {
       if (!q1_perfect_ht_metrics || !q1_perfect_ht_metrics || q3_perfect_ht_metrics) {
         EXPECT_TRUE(false);
       }
+    }
+
+    {
+      // test 7. a join query using synthetically generated table
+      clearCaches();
+      auto q1 =
+          "with cte as (select s from table(generate_series(0, 10, 2)) as t(s)) select "
+          "count(1) from table(generate_series(0, 10, 1)) as ft(s), cte where ft.s = "
+          "cte.s;";
+      EXPECT_EQ(static_cast<int64_t>(6), v<int64_t>(run_simple_query(q1, dt)));
+      auto q2 =
+          "with cte as (select s from table(generate_series(0, 10, 3)) as t(s)) select "
+          "count(1) from table(generate_series(0, 10, 1)) as ft(s), cte where ft.s = "
+          "cte.s;";
+      EXPECT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                                 CacheItemType::PERFECT_HT));
+
+      // check whether hash tables generated from q1 and q2 are invalidated
+      auto q3 = "SELECT count(*) from t3 a, t3 b where a.x = b.x;";
+      EXPECT_EQ(static_cast<int64_t>(5), v<int64_t>(run_simple_query(q3, dt)));
+      EXPECT_EQ(static_cast<size_t>(3),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                                 CacheItemType::PERFECT_HT));
+
+      // there is no rows in t3 matching the filter condition
+      QR::get()->runSQL("update t3 set x = 1 where x > 999999999999;", dt);
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                                 CacheItemType::PERFECT_HT));
     }
   }
 }
@@ -2494,275 +2397,73 @@ TEST(DataRecycler, Lazy_Cache_Invalidation) {
   drop_tables_for_string_joins();
 }
 
-TEST(DataRecycler, HashTable_Property_Cache_Per_Hash_Join_QueryHint) {
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
-  std::set<QueryPlanHash> visited_hashtable_key;
-  auto clearCache = [&executor, &visited_hashtable_key] {
-    executor->clearMemory(MemoryLevel::CPU_LEVEL);
-    executor->getQueryPlanDagCache().clearQueryPlanCache();
-    visited_hashtable_key.clear();
+TEST(DataRecycler, MetricTrackerTest) {
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto& resultset_recycler_holder = executor->getRecultSetRecyclerHolder();
+  auto resultset_recycler = resultset_recycler_holder.getResultSetRecycler();
+  CHECK(resultset_recycler);
+  auto& metric_tracker = resultset_recycler->getResultSetRecyclerMetricTracker();
+
+  ScopeGuard reset_status = [orig_max_size = g_max_cacheable_query_resultset_size_bytes,
+                             orig_total_size = g_query_resultset_cache_total_bytes,
+                             &metric_tracker] {
+    metric_tracker.setMaxCacheItemSize(orig_max_size);
+    metric_tracker.setTotalCacheSize(orig_total_size);
   };
 
-  auto drop_tables = [] {
-    run_ddl_statement("DROP TABLE IF EXISTS tb1;");
-    run_ddl_statement("DROP TABLE IF EXISTS tb2;");
-  };
+  metric_tracker.setTotalCacheSize(20);
+  metric_tracker.setMaxCacheItemSize(15);
 
-  auto prepare_tables = [] {
-    run_ddl_statement("CREATE TABLE tb1 (v1 int, v2 int, v3 int, v4 int);");
-    run_ddl_statement("CREATE TABLE tb2 (v1 int, v2 int, v3 int, v4 int);");
-    std::vector<int> val1, val2, val3;
-    for (int i = 0; i < 20; ++i) {
-      val1.push_back(i);
-      val2.push_back((i / 20) + 1);
-      val3.push_back(i % 5);
-    }
-    for (int i = 0; i < 10; ++i) {
-      auto insert_stmt = "(" + ::toString(val1[i]) + "," + ::toString(val2[i]) + "," +
-                         ::toString(val3[i]) + "," + ::toString(val3[i]) + ");";
-      QR::get()->runSQL("INSERT INTO tb1 VALUES " + insert_stmt, ExecutorDeviceType::CPU);
-      QR::get()->runSQL("INSERT INTO tb2 VALUES " + insert_stmt, ExecutorDeviceType::CPU);
-    }
-    for (int i = 10; i < 20; ++i) {
-      auto insert_stmt = "INSERT INTO tb2 VALUES (" + ::toString(val1[i]) + "," +
-                         ::toString(val2[i]) + "," + ::toString(val3[i]) + "," +
-                         ::toString(val3[i]) + ");";
-      QR::get()->runSQL(insert_stmt, ExecutorDeviceType::CPU);
-    }
-  };
+  QueryPlanHash dummy_key{1};
+  DeviceIdentifier dummy_id{DataRecyclerUtil::CPU_DEVICE_IDENTIFIER};
 
-  auto gen_query = [](const std::string& join_qual, const std::string& query_hint = "") {
-    auto last_part = " count(1) FROM tb1, tb2 WHERE " + join_qual + ";";
-    return "SELECT " + query_hint + last_part;
-  };
-
-  auto check_num_cached_hashtable =
-      [&](QueryRunner::CacheItemStatus status, CacheItemType ht_type, size_t expected) {
-        EXPECT_EQ(expected, QR::get()->getNumberOfCachedItem(status, ht_type));
+  auto add_dummy_item_to_cache =
+      [&dummy_key, &dummy_id, &metric_tracker](size_t dummy_size) {
+        metric_tracker.putNewCacheItemMetric(dummy_key++, dummy_id, dummy_size, 0);
       };
 
-  auto get_cache_key = [&visited_hashtable_key](CacheItemType ht_type) -> QueryPlanHash {
-    auto ht_metrics = ::getCachedHashTableMetric(visited_hashtable_key, ht_type);
-    CHECK(ht_metrics);
-    return ht_metrics->getQueryPlanHash();
-  };
+  // case 1. add new item to an empty cache
+  {
+    add_dummy_item_to_cache(1);
+    EXPECT_EQ(*metric_tracker.getCurrentCacheSize(dummy_id), 1UL);
 
-  auto get_cached_ht_prop = [](QueryPlanHash cache_key, const std::string& query) {
-    auto prop = HashJoin::getHashTablePropertyCache()->getItemFromCache(
-        cache_key,
-        CacheItemType::HT_PROPERTY,
-        DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-        std::nullopt);
-    CHECK(prop) << query;
-    return prop;
-  };
+    add_dummy_item_to_cache(2);
+    EXPECT_EQ(*metric_tracker.getCurrentCacheSize(dummy_id), 3UL);
 
-  auto check_cached_ht_invalidation = [check_num_cached_hashtable]() {
-    check_num_cached_hashtable(
-        QueryRunner::CacheItemStatus::CLEAN_ONLY, CacheItemType::PERFECT_HT, 0);
-    check_num_cached_hashtable(
-        QueryRunner::CacheItemStatus::CLEAN_ONLY, CacheItemType::BASELINE_HT, 0);
-  };
+    metric_tracker.clearCacheMetricTracker();
+  }
 
-  auto check_prop = [get_cached_ht_prop](HashTableHashingType hashing_type,
-                                         HashTableLayoutType layout_type,
-                                         QueryPlanHash cache_key,
-                                         const std::string query) {
-    auto cached_prop = get_cached_ht_prop(cache_key, query);
-    CHECK(cached_prop);
-    EXPECT_EQ(*cached_prop->hashing, hashing_type);
-    EXPECT_EQ(*cached_prop->layout, layout_type);
-  };
+  // case 2. try to add item when its size is larger than size limitation
+  // a) larger than per-item maximum limit
+  {
+    CacheAvailability ca1 = metric_tracker.canAddItem(dummy_id, 16);
+    // b) larger than total cache size
+    CacheAvailability ca2 = metric_tracker.canAddItem(dummy_id, 21);
+    EXPECT_EQ(ca1, CacheAvailability::UNAVAILABLE);
+    EXPECT_EQ(ca2, CacheAvailability::UNAVAILABLE);
 
-  auto check_query_res = [](const std::string& query_with_hint,
-                            const std::string& query_without_hint,
-                            ExecutorDeviceType dt,
-                            size_t expected_num_res_row,
-                            CacheItemType ht_type) {
-    EXPECT_EQ(static_cast<int64_t>(expected_num_res_row),
-              v<int64_t>(run_simple_query(query_with_hint, dt)));
-    EXPECT_EQ(static_cast<int64_t>(expected_num_res_row),
-              v<int64_t>(run_simple_query(query_without_hint, dt)));
-  };
+    metric_tracker.clearCacheMetricTracker();
+  }
 
-  // we currently only cache CPU hash table
-  for (auto dt : {ExecutorDeviceType::CPU}) {
-    drop_tables();
-
-    // test 1. original query: perfect hashing scheme + OneToOne layout
-    clearCache();
-    prepare_tables();
-    std::string q1_qual{"tb1.v1 = tb2.v1"};
-    auto q1_no_hint = gen_query(q1_qual);
-    check_query_res(q1_no_hint, q1_no_hint, dt, 10, CacheItemType::PERFECT_HT);
-    auto q1_cache_key = get_cache_key(CacheItemType::PERFECT_HT);
-    check_prop(HashTableHashingType::PERFECT,
-               HashTableLayoutType::ONE,
-               q1_cache_key,
-               q1_no_hint);
-
-    auto q1_hint1 = gen_query(q1_qual, "/*+ hash_join(layout=\'OneToMany\') */");
-    check_query_res(q1_hint1, q1_no_hint, dt, 10, CacheItemType::PERFECT_HT);
-    check_prop(
-        HashTableHashingType::PERFECT, HashTableLayoutType::MANY, q1_cache_key, q1_hint1);
-
-    auto q1_hint2 = gen_query(q1_qual, "/*+ hash_join(hashing=\'baseline\') */");
-    check_query_res(q1_hint2, q1_no_hint, dt, 10, CacheItemType::BASELINE_HT);
-    check_prop(HashTableHashingType::BASELINE,
-               HashTableLayoutType::MANY,
-               q1_cache_key,
-               q1_hint2);
-
-    auto q1_hint3 = gen_query(
-        q1_qual, "/*+ hash_join(hashing=\'baseline\', layout =\'OneToMany\') */");
-    check_query_res(q1_hint3, q1_no_hint, dt, 10, CacheItemType::BASELINE_HT);
-    check_prop(HashTableHashingType::BASELINE,
-               HashTableLayoutType::MANY,
-               q1_cache_key,
-               q1_hint3);
-
-    auto q1_hint4 = gen_query(q1_qual, "/*+ hash_join(hashing=\'perfect\') */");
-    check_query_res(q1_hint4, q1_no_hint, dt, 10, CacheItemType::PERFECT_HT);
-    check_prop(
-        HashTableHashingType::PERFECT, HashTableLayoutType::MANY, q1_cache_key, q1_hint4);
-    drop_tables();
-    // check per-table hash table invalidation works correctly
-    check_cached_ht_invalidation();
-    clearCache();
-
-    // test 2. original query: perfect hashing scheme + OneToMany layout
-    prepare_tables();
-    std::string q2_qual{"tb1.v3 = tb2.v3"};
-    auto q2_no_hint = gen_query(q2_qual);
-    check_query_res(q2_no_hint, q2_no_hint, dt, 40, CacheItemType::PERFECT_HT);
-    auto q2_cache_key = get_cache_key(CacheItemType::PERFECT_HT);
-    check_prop(HashTableHashingType::PERFECT,
-               HashTableLayoutType::MANY,
-               q2_cache_key,
-               q2_no_hint);
-
-    auto q2_hint1 = gen_query(q2_qual, "/*+ hash_join(layout=\'OneToOne\') */");
-    check_query_res(q2_hint1, q2_no_hint, dt, 40, CacheItemType::PERFECT_HT);
-    check_prop(
-        HashTableHashingType::PERFECT, HashTableLayoutType::MANY, q2_cache_key, q2_hint1);
-
-    auto q2_hint2 = gen_query(q2_qual, "/*+ hash_join(hashing=\'Baseline\') */");
-    // since the previous cached ht prop for this qual is {hashing='Perfect' /
-    // layout='OneToMany'}, we reuse the cached layout even though we changed the hashing
-    // scheme from `Perfect` to `Baseline`
-    check_query_res(q2_hint2, q2_no_hint, dt, 40, CacheItemType::BASELINE_HT);
-    check_prop(HashTableHashingType::BASELINE,
-               HashTableLayoutType::MANY,
-               q2_cache_key,
-               q2_hint2);
-
-    auto q2_hint3 =
-        gen_query(q2_qual, "/*+ hash_join(hashing=\'Baseline\', layout=\'OneToOne\') */");
-    // we have a cached ht prop for this qual as: {hashing='Baseline' /
-    // layout='OneToMany'}, and we'd like to change its layout to 'Perfect' but we can't
-    // since q2_qual has more than one join column pairs in this case, we invalidate the
-    // delivered query hint and try to reuse the cached prop
-    check_query_res(q2_hint3, q2_no_hint, dt, 40, CacheItemType::BASELINE_HT);
-    check_prop(HashTableHashingType::BASELINE,
-               HashTableLayoutType::MANY,
-               q2_cache_key,
-               q2_hint3);
-
-    auto q2_hint4 = gen_query(q2_qual, "/*+ hash_join(hashing=\'Perfect\') */");
-    // now we try to back to 'Perfect' join hash table, and it is valid
-    // also we reuse a cached layout 'OneToMany' from the cached prop for this qual
-    check_query_res(q2_hint4, q2_no_hint, dt, 40, CacheItemType::PERFECT_HT);
-    check_prop(
-        HashTableHashingType::PERFECT, HashTableLayoutType::MANY, q2_cache_key, q2_hint4);
-    drop_tables();
-    // check per-table hash table invalidation works correctly
-    check_cached_ht_invalidation();
-    clearCache();
-
-    // test 3. original query: baseline hashing scheme + OneToOne layout
-    prepare_tables();
-    std::string q3_qual{"tb1.v1 = tb2.v1 and tb1.v2 = tb2.v2"};
-    auto q3_no_hint = gen_query(q3_qual);
-    check_query_res(q3_no_hint, q3_no_hint, dt, 10, CacheItemType::BASELINE_HT);
-    auto q3_cache_key = get_cache_key(CacheItemType::BASELINE_HT);
-    check_prop(HashTableHashingType::BASELINE,
-               HashTableLayoutType::ONE,
-               q3_cache_key,
-               q3_no_hint);
-
-    auto q3_hint1 = gen_query(q3_qual, "/*+ hash_join(layout=\'OneToMany\') */");
-    check_query_res(q3_hint1, q3_no_hint, dt, 10, CacheItemType::BASELINE_HT);
-    check_prop(HashTableHashingType::BASELINE,
-               HashTableLayoutType::MANY,
-               q3_cache_key,
-               q3_hint1);
-
-    auto q3_hint2 = gen_query(q3_qual, "/*+ hash_join(hashing=\'Perfect\') */");
-    check_query_res(q3_hint2, q3_no_hint, dt, 10, CacheItemType::BASELINE_HT);
-    check_prop(HashTableHashingType::BASELINE,
-               HashTableLayoutType::MANY,
-               q3_cache_key,
-               q3_hint2);
-
-    auto q3_hint3 =
-        gen_query(q3_qual, "/*+ hash_join(hashing=\'Perfect\', layout=\'OneToOne\') */");
-    check_query_res(q3_hint3, q3_no_hint, dt, 10, CacheItemType::BASELINE_HT);
-    check_prop(
-        HashTableHashingType::BASELINE, HashTableLayoutType::ONE, q3_cache_key, q3_hint3);
-
-    auto q3_hint4 = gen_query(q3_qual, "/*+ hash_join(hashing=\'Baseline\') */");
-    check_query_res(q3_hint4, q3_no_hint, dt, 10, CacheItemType::BASELINE_HT);
-    check_prop(
-        HashTableHashingType::BASELINE, HashTableLayoutType::ONE, q3_cache_key, q3_hint4);
-    drop_tables();
-    // check per-table hash table invalidation works correctly
-    check_cached_ht_invalidation();
-    clearCache();
-
-    // test 4. original query: baseline hashing scheme + OneToMany layout
-    prepare_tables();
-    std::string q4_qual{"tb1.v3 = tb2.v3 and tb1.v4 = tb2.v4"};
-    auto q4_no_hint = gen_query(q4_qual);
-    check_query_res(q4_no_hint, q4_no_hint, dt, 40, CacheItemType::BASELINE_HT);
-    auto q4_cache_key = get_cache_key(CacheItemType::BASELINE_HT);
-    check_prop(HashTableHashingType::BASELINE,
-               HashTableLayoutType::MANY,
-               q4_cache_key,
-               q4_no_hint);
-
-    auto q4_hint1 = gen_query(q4_qual, "/*+ hash_join(layout=\'OneToOne\') */");
-    check_query_res(q4_hint1, q4_no_hint, dt, 40, CacheItemType::BASELINE_HT);
-    check_prop(HashTableHashingType::BASELINE,
-               HashTableLayoutType::MANY,
-               q4_cache_key,
-               q4_hint1);
-
-    auto q4_hint2 = gen_query(q4_qual, "/*+ hash_join(hashing=\'Perfect\') */");
-    check_query_res(q4_hint2, q4_no_hint, dt, 40, CacheItemType::BASELINE_HT);
-    check_prop(HashTableHashingType::BASELINE,
-               HashTableLayoutType::MANY,
-               q4_cache_key,
-               q4_hint2);
-
-    auto q4_hint3 =
-        gen_query(q4_qual, "/*+ hash_join(hashing=\'Perfect\', layout=\'OneToOne\') */");
-    check_query_res(q4_hint3, q4_no_hint, dt, 40, CacheItemType::BASELINE_HT);
-    check_prop(HashTableHashingType::BASELINE,
-               HashTableLayoutType::MANY,
-               q4_cache_key,
-               q4_hint3);
-
-    auto q4_hint4 = gen_query(q4_qual, "/*+ hash_join(hashing=\'Baseline\') */");
-    check_query_res(q4_hint4, q4_no_hint, dt, 40, CacheItemType::BASELINE_HT);
-    check_prop(HashTableHashingType::BASELINE,
-               HashTableLayoutType::MANY,
-               q4_cache_key,
-               q4_hint4);
-
-    drop_tables();
-    // check per-table hash table invalidation works correctly
-    check_cached_ht_invalidation();
-    clearCache();
+  // case 3. complicated cases
+  {
+    // fill caches, current cache size = 15 (=1+2+3+4+5)
+    for (size_t sz = 1; sz <= 5; sz++) {
+      add_dummy_item_to_cache(sz);
+    }
+    EXPECT_EQ(metric_tracker.getCurrentCacheSize(dummy_id), 15UL);
+    // a) total cache size will be 11
+    CacheAvailability ca1 = metric_tracker.canAddItem(dummy_id, 1);
+    EXPECT_EQ(ca1, CacheAvailability::AVAILABLE);
+    // b) total cache size will be 20
+    CacheAvailability ca2 = metric_tracker.canAddItem(dummy_id, 5);
+    EXPECT_EQ(ca2, CacheAvailability::AVAILABLE);
+    // c) need to cleanup few items to add the item of size 10
+    CacheAvailability ca3 = metric_tracker.canAddItem(dummy_id, 10);
+    EXPECT_EQ(ca3, CacheAvailability::AVAILABLE_AFTER_CLEANUP);
+    // d) impossible since it is larger than per-max table cached item limit
+    CacheAvailability ca4 = metric_tracker.canAddItem(dummy_id, 16);
+    EXPECT_EQ(ca4, CacheAvailability::UNAVAILABLE);
   }
 }
 
@@ -2770,13 +2471,22 @@ int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   TestHelpers::init_logger_stderr_only(argc, argv);
 
-  g_is_test_env = true;
+  ScopeGuard reset_flag_state = [orig_table_function = g_enable_table_functions,
+                                 orig_dev_table_function = g_enable_dev_table_functions,
+                                 orig_test_env = g_is_test_env] {
+    g_enable_table_functions = orig_table_function;
+    g_enable_dev_table_functions = orig_dev_table_function;
+    g_is_test_env = orig_test_env;
+  };
   g_enable_table_functions = true;
   g_enable_dev_table_functions = true;
+  g_is_test_env = true;
+
   QR::init(BASE_PATH);
 
   int err{0};
   try {
+    err = drop_table();
     err = create_and_populate_table();
     err = RUN_ALL_TESTS();
     err = drop_table();

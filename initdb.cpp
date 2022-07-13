@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,8 @@
 
 #include "Catalog/Catalog.h"
 #include "Logger/Logger.h"
-#include "OSDependent/omnisci_path.h"
+#include "OSDependent/heavyai_path.h"
+#include "Shared/SysDefinitions.h"
 #include "ThriftHandler/DBHandler.h"
 
 #define CALCITEPORT 3279
@@ -63,7 +64,6 @@ static void loadGeo(std::string base_path) {
   const bool read_only{false};
   const bool allow_loop_joins{false};
   const bool enable_rendering{false};
-  const bool renderer_use_vulkan_driver{false};
   const bool renderer_use_ppll_polys{false};
   const bool renderer_prefer_igpu{false};
   const unsigned renderer_vulkan_timeout_ms{300000};
@@ -77,7 +77,8 @@ static void loadGeo(std::string base_path) {
   const bool legacy_syntax{true};
   const int idle_session_duration{60};
   const int max_session_duration{43200};
-  const bool enable_runtime_udf_registration{false};
+  system_parameters.runtime_udf_registration_policy =
+      SystemParameters::RuntimeUdfRegistrationPolicy::DISALLOWED;
   system_parameters.omnisci_server_port = -1;
   system_parameters.calcite_port = 3280;
 
@@ -99,7 +100,6 @@ static void loadGeo(std::string base_path) {
                                                 read_only,
                                                 allow_loop_joins,
                                                 enable_rendering,
-                                                renderer_use_vulkan_driver,
                                                 renderer_use_ppll_polys,
                                                 renderer_prefer_igpu,
                                                 renderer_vulkan_timeout_ms,
@@ -115,7 +115,6 @@ static void loadGeo(std::string base_path) {
                                                 legacy_syntax,
                                                 idle_session_duration,
                                                 max_session_duration,
-                                                enable_runtime_udf_registration,
                                                 udf_filename,
                                                 udf_compiler_path,
                                                 udf_compiler_options,
@@ -124,7 +123,7 @@ static void loadGeo(std::string base_path) {
 #endif
                                                 disk_cache_config,
                                                 false);
-  db_handler->internal_connect(session_id, OMNISCI_ROOT_USER, OMNISCI_DEFAULT_DB);
+  db_handler->internal_connect(session_id, shared::kRootUsername, shared::kDefaultDbName);
 
   // Execute on CPU by default
   db_handler->set_execution_mode(session_id, TExecuteMode::CPU);
@@ -135,7 +134,7 @@ static void loadGeo(std::string base_path) {
     const std::string table_name = SampleGeoTableNames[i];
     const std::string file_name = SampleGeoFileNames[i];
 
-    auto file_path = boost::filesystem::path(omnisci::get_root_abs_path()) /
+    auto file_path = boost::filesystem::path(heavyai::get_root_abs_path()) /
                      "ThirdParty" / "geo_samples" / file_name;
 
     if (!boost::filesystem::exists(file_path)) {
@@ -164,8 +163,8 @@ int main(int argc, char* argv[]) {
   desc.add_options()("help,h", "Print help messages ")(
       "data",
       po::value<std::string>(&base_path)->required(),
-      "Directory path to OmniSci catalogs")("force,f",
-                                            "Force overwriting of existing OmniSci "
+      "Directory path to HeavyDB catalogs")("force,f",
+                                            "Force overwriting of existing HeavyDB "
                                             "instance")("skip-geo",
                                                         "Skip inserting sample geo data");
 
@@ -213,53 +212,99 @@ int main(int argc, char* argv[]) {
     std::cerr << "Catalog basepath " + base_path + " does not exist.\n";
     return 1;
   }
-  std::string catalogs_path = base_path + "/mapd_catalogs";
+  std::string catalogs_path = base_path + "/" + shared::kCatalogDirectoryName;
   if (boost::filesystem::exists(catalogs_path)) {
     if (force) {
       boost::filesystem::remove_all(catalogs_path);
     } else {
-      std::cerr << "OmniSci catalogs already initialized at " + base_path +
+      std::cerr << "HeavyDB catalogs directory already exists at " + catalogs_path +
                        ". Use -f to force reinitialization.\n";
       return 1;
     }
   }
-  std::string data_path = base_path + "/mapd_data";
+  std::string data_path = base_path + "/" + shared::kDataDirectoryName;
   if (boost::filesystem::exists(data_path)) {
     if (force) {
       boost::filesystem::remove_all(data_path);
     } else {
-      std::cerr << "OmniSci data directory already exists at " + base_path +
+      std::cerr << "HeavyDB data directory already exists at " + data_path +
                        ". Use -f to force reinitialization.\n";
       return 1;
     }
   }
-  std::string export_path = base_path + "/mapd_export";
+  std::string lockfiles_path = base_path + "/" + shared::kLockfilesDirectoryName;
+  if (boost::filesystem::exists(lockfiles_path)) {
+    if (force) {
+      boost::filesystem::remove_all(lockfiles_path);
+    } else {
+      std::cerr << "HeavyDB lockfiles directory already exists at " + lockfiles_path +
+                       ". Use -f to force reinitialization.\n";
+      return 1;
+    }
+  }
+  std::string lockfiles_path2 = lockfiles_path + "/" + shared::kCatalogDirectoryName;
+  if (boost::filesystem::exists(lockfiles_path2)) {
+    if (force) {
+      boost::filesystem::remove_all(lockfiles_path2);
+    } else {
+      std::cerr << "HeavyDB lockfiles catalogs directory already exists at " +
+                       lockfiles_path2 + ". Use -f to force reinitialization.\n";
+      return 1;
+    }
+  }
+  std::string lockfiles_path3 = lockfiles_path + "/" + shared::kDataDirectoryName;
+  if (boost::filesystem::exists(lockfiles_path3)) {
+    if (force) {
+      boost::filesystem::remove_all(lockfiles_path3);
+    } else {
+      std::cerr << "HeavyDB lockfiles data directory already exists at " +
+                       lockfiles_path3 + ". Use -f to force reinitialization.\n";
+      return 1;
+    }
+  }
+  std::string export_path = base_path + "/" + shared::kDefaultExportDirName;
   if (boost::filesystem::exists(export_path)) {
     if (force) {
       boost::filesystem::remove_all(export_path);
     } else {
-      std::cerr << "OmniSci export directory already exists at " + base_path +
+      std::cerr << "HeavyDB export directory already exists at " + export_path +
                        ". Use -f to force reinitialization.\n";
       return 1;
     }
   }
-  std::string disk_cache_path = base_path + "/omnisci_disk_cache";
+  std::string disk_cache_path = base_path + "/" + shared::kDefaultDiskCacheDirName;
   if (boost::filesystem::exists(disk_cache_path)) {
     if (force) {
       boost::filesystem::remove_all(disk_cache_path);
     } else {
-      std::cerr << "OmniSci disk cache already exists at " + disk_cache_path +
+      std::cerr << "HeavyDB disk cache already exists at " + disk_cache_path +
                        ". Use -f to force reinitialization.\n";
       return 1;
     }
   }
+
   if (!boost::filesystem::create_directory(catalogs_path)) {
-    std::cerr << "Cannot create mapd_catalogs subdirectory under " << base_path
-              << std::endl;
+    std::cerr << "Cannot create " + shared::kCatalogDirectoryName + " subdirectory under "
+              << base_path << std::endl;
+  }
+  if (!boost::filesystem::create_directory(lockfiles_path)) {
+    std::cerr << "Cannot create " + shared::kLockfilesDirectoryName +
+                     " subdirectory under "
+              << base_path << std::endl;
+  }
+  if (!boost::filesystem::create_directory(lockfiles_path2)) {
+    std::cerr << "Cannot create " + shared::kLockfilesDirectoryName + "/" +
+                     shared::kCatalogDirectoryName + " subdirectory under "
+              << base_path << std::endl;
+  }
+  if (!boost::filesystem::create_directory(lockfiles_path3)) {
+    std::cerr << "Cannot create " + shared::kLockfilesDirectoryName + "/" +
+                     shared::kDataDirectoryName + " subdirectory under "
+              << base_path << std::endl;
   }
   if (!boost::filesystem::create_directory(export_path)) {
-    std::cerr << "Cannot create mapd_export subdirectory under " << base_path
-              << std::endl;
+    std::cerr << "Cannot create " + shared::kDefaultExportDirName + " subdirectory under "
+              << base_path << std::endl;
   }
 
   log_options.set_base_path(base_path);
@@ -279,9 +324,10 @@ int main(int argc, char* argv[]) {
     std::cerr << "Exception: " << e.what() << "\n";
   }
 
-  Catalog_Namespace::SysCatalog::destroy();
   if (!skip_geo) {
     loadGeo(base_path);
+  } else {
+    Catalog_Namespace::SysCatalog::destroy();
   }
 
   return 0;

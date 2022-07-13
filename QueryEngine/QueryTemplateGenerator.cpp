@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -913,22 +913,22 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
 }
 
 std::tuple<llvm::Function*, llvm::CallInst*> query_template(
-    llvm::Module* module,
+    llvm::Module* mod,
     const size_t aggr_col_count,
     const bool hoist_literals,
     const bool is_estimate_query,
     const GpuSharedMemoryContext& gpu_smem_context) {
   return query_template_impl<llvm::AttributeList>(
-      module, aggr_col_count, hoist_literals, is_estimate_query, gpu_smem_context);
+      mod, aggr_col_count, hoist_literals, is_estimate_query, gpu_smem_context);
 }
 std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template(
-    llvm::Module* module,
+    llvm::Module* mod,
     const bool hoist_literals,
     const QueryMemoryDescriptor& query_mem_desc,
     const ExecutorDeviceType device_type,
     const bool check_scan_limit,
     const GpuSharedMemoryContext& gpu_smem_context) {
-  return query_group_by_template_impl<llvm::AttributeList>(module,
+  return query_group_by_template_impl<llvm::AttributeList>(mod,
                                                            hoist_literals,
                                                            query_mem_desc,
                                                            device_type,

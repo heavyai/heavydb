@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,8 @@
 
 /**
  * @file    QueryMemoryDescriptor.h
- * @author  Alex Suhan <alex@mapd.com>
  * @brief   Descriptor for the result set buffer layout.
  *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  */
 
 #ifndef QUERYENGINE_QUERYMEMORYDESCRIPTOR_H
@@ -222,6 +220,12 @@ class QueryMemoryDescriptor {
   int8_t updateActualMinByteWidth(const int8_t actual_min_byte_width) const;
 
   void addColSlotInfo(const std::vector<std::tuple<int8_t, int8_t>>& slots_for_col);
+
+  // FlatBuffer support:
+  void addColSlotInfoFlatBuffer(const int64_t flatbuffer_size);
+  int64_t getFlatBufferSize(const size_t slot_idx) const {
+    return col_slot_context_.getFlatBufferSize(slot_idx);
+  }
 
   void clearSlotInfo();
 

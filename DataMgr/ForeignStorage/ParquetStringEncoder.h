@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,9 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
       , current_batch_offset_(0)
       , invalid_indices_(nullptr) {}
 
+  // TODO: this member largely mirrors `appendDataTrackErrors` but is only used
+  // by the parquet-secific import FSI cut-over, and will be removed in the
+  // future
   void validateAndAppendData(const int16_t* def_levels,
                              const int16_t* rep_levels,
                              const int64_t values_read,
@@ -50,7 +53,7 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
     auto parquet_data_ptr = reinterpret_cast<const parquet::ByteArray*>(values);
     for (int64_t i = 0, j = 0; i < levels_read; ++i) {
       if (def_levels[i]) {
-        CHECK(j < values_read);
+        CHECK_LT(j, values_read);
         auto& byte_array = parquet_data_ptr[j++];
         if (byte_array.len > StringDictionary::MAX_STRLEN) {
           invalid_indices.insert(current_batch_offset_ + i);
@@ -58,7 +61,31 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
       }
     }
     current_batch_offset_ += levels_read;
-    encodeAndCopyContiguous(values, encode_buffer_.data(), values_read);
+    appendData(def_levels, rep_levels, values_read, levels_read, values);
+  }
+
+  void appendDataTrackErrors(const int16_t* def_levels,
+                             const int16_t* rep_levels,
+                             const int64_t values_read,
+                             const int64_t levels_read,
+                             int8_t* values) override {
+    CHECK(ParquetEncoder::is_error_tracking_enabled_);
+    auto parquet_data_ptr = reinterpret_cast<const parquet::ByteArray*>(values);
+    for (int64_t i = 0, j = 0; i < levels_read; ++i) {
+      if (def_levels[i]) {
+        CHECK_LT(j, values_read);
+        auto& byte_array = parquet_data_ptr[j++];
+        if (byte_array.len > StringDictionary::MAX_STRLEN) {
+          ParquetEncoder::invalid_indices_.insert(ParquetEncoder::current_chunk_offset_ +
+                                                  i);
+        }
+      } else if (ParquetEncoder::column_type_
+                     .get_notnull()) {  // item is null for NOT NULL column
+        ParquetEncoder::invalid_indices_.insert(ParquetEncoder::current_chunk_offset_ +
+                                                i);
+      }
+    }
+    ParquetEncoder::current_chunk_offset_ += levels_read;
     appendData(def_levels, rep_levels, values_read, levels_read, values);
   }
 
@@ -70,6 +97,8 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
     encodeAndCopyContiguous(values, encode_buffer_.data(), values_read);
     TypedParquetInPlaceEncoder<V, V>::appendData(
         def_levels, rep_levels, values_read, levels_read, encode_buffer_.data());
+    chunk_metadata_->chunkStats.has_nulls =
+        chunk_metadata_->chunkStats.has_nulls || (values_read < levels_read);
   }
 
   void encodeAndCopyContiguous(const int8_t* parquet_data_bytes,
@@ -108,6 +137,9 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
     auto column_metadata = group_metadata->ColumnChunk(parquet_column_index);
     metadata->numBytes = ParquetInPlaceEncoder::omnisci_data_type_byte_size_ *
                          column_metadata->num_values();
+
+    // Placeholder metadata is defined with has_nulls = false.
+    metadata->chunkStats.has_nulls = false;
     return metadata;
   }
 

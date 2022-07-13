@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
  */
 
 #include "FsiChunkUtils.h"
-
 #include "Catalog/Catalog.h"
 
 namespace foreign_storage {
@@ -66,33 +65,72 @@ void init_chunk_for_column(
   CHECK(chunk_metadata_map.find(data_chunk_key) != chunk_metadata_map.end());
   data_buffer->reserve(chunk_metadata_map.at(data_chunk_key)->numBytes);
 
+  chunk.setPinnable(false);
   chunk.setColumnDesc(column);
   chunk.setBuffer(data_buffer);
   chunk.setIndexBuffer(index_buffer);
   chunk.initEncoder();
 }
 
-std::shared_ptr<ChunkMetadata> get_placeholder_metadata(const ColumnDescriptor* column,
+std::shared_ptr<ChunkMetadata> get_placeholder_metadata(const SQLTypeInfo& type,
                                                         size_t num_elements) {
   ForeignStorageBuffer empty_buffer;
   // Use default encoder metadata as in parquet wrapper
-  empty_buffer.initEncoder(column->columnType);
-  auto chunk_metadata = empty_buffer.getEncoder()->getMetadata(column->columnType);
+  empty_buffer.initEncoder(type);
+
+  auto chunk_metadata = empty_buffer.getEncoder()->getMetadata(type);
   chunk_metadata->numElements = num_elements;
 
-  if (!column->columnType.is_varlen_indeed()) {
-    chunk_metadata->numBytes = column->columnType.get_size() * num_elements;
+  if (!type.is_varlen_indeed()) {
+    chunk_metadata->numBytes = type.get_size() * num_elements;
   }
   // min/max not set by default for arrays, so get from elem type encoder
-  if (column->columnType.is_array()) {
+  if (type.is_array()) {
     ForeignStorageBuffer scalar_buffer;
-    scalar_buffer.initEncoder(column->columnType.get_elem_type());
-    auto scalar_metadata =
-        scalar_buffer.getEncoder()->getMetadata(column->columnType.get_elem_type());
+    scalar_buffer.initEncoder(type.get_elem_type());
+    auto scalar_metadata = scalar_buffer.getEncoder()->getMetadata(type.get_elem_type());
     chunk_metadata->chunkStats.min = scalar_metadata->chunkStats.min;
     chunk_metadata->chunkStats.max = scalar_metadata->chunkStats.max;
   }
-  chunk_metadata->chunkStats.has_nulls = true;
+
   return chunk_metadata;
+}
+
+const foreign_storage::ForeignTable& get_foreign_table_for_key(const ChunkKey& key) {
+  auto [db_id, tb_id] = get_table_prefix(key);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+  CHECK(catalog);
+  auto table = catalog->getForeignTable(tb_id);
+  CHECK(table);
+  return *table;
+}
+
+bool is_system_table_chunk_key(const ChunkKey& chunk_key) {
+  return get_foreign_table_for_key(chunk_key).is_system_table;
+}
+
+bool is_replicated_table_chunk_key(const ChunkKey& chunk_key) {
+  return table_is_replicated(&get_foreign_table_for_key(chunk_key));
+}
+
+bool is_append_table_chunk_key(const ChunkKey& chunk_key) {
+  return get_foreign_table_for_key(chunk_key).isAppendMode();
+}
+
+bool is_shardable_key(const ChunkKey& key) {
+  return (dist::is_distributed() && !dist::is_aggregator() &&
+          !is_replicated_table_chunk_key(key) && !is_system_table_chunk_key(key));
+}
+
+// If we want to change the way we shard foreign tables we can do it in this function.
+bool fragment_maps_to_leaf(const ChunkKey& key) {
+  CHECK(dist::is_distributed());
+  CHECK(g_distributed_num_leaves > 0);
+  CHECK(!dist::is_aggregator());
+  return (get_fragment(key) % g_distributed_num_leaves == g_distributed_leaf_idx);
+}
+
+bool key_does_not_shard_to_leaf(const ChunkKey& key) {
+  return (is_shardable_key(key) && !fragment_maps_to_leaf(key));
 }
 }  // namespace foreign_storage

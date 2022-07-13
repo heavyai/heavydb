@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-/*
+/**
  * @file    DecodersImpl.h
- * @author  Alex Suhan <alex@mapd.com>
+ * @brief
  *
- * Copyright (c) 2015 MapD Technologies, Inc.  All rights reserved.
  */
 
 #ifndef QUERYENGINE_DECODERSIMPL_H
@@ -26,6 +25,7 @@
 
 #include <cstdint>
 #include "../Shared/funcannotations.h"
+#include "ExtractFromTime.h"
 
 extern "C" DEVICE ALWAYS_INLINE int64_t
 SUFFIX(fixed_width_int_decode)(const int8_t* byte_stream,
@@ -142,7 +142,7 @@ SUFFIX(fixed_width_small_date_decode)(const int8_t* byte_stream,
                                       const int64_t ret_null_val,
                                       const int64_t pos) {
   auto val = SUFFIX(fixed_width_int_decode)(byte_stream, byte_width, pos);
-  return val == null_val ? ret_null_val : val * 86400;
+  return val == null_val ? ret_null_val : val * kSecsPerDay;
 }
 
 extern "C" DEVICE NEVER_INLINE int64_t
@@ -153,6 +153,20 @@ SUFFIX(fixed_width_small_date_decode_noinline)(const int8_t* byte_stream,
                                                const int64_t pos) {
   return SUFFIX(fixed_width_small_date_decode)(
       byte_stream, byte_width, null_val, ret_null_val, pos);
+}
+
+extern "C" DEVICE ALWAYS_INLINE int64_t
+SUFFIX(fixed_width_date_encode)(const int64_t cur_col_val,
+                                const int32_t ret_null_val,
+                                const int64_t null_val) {
+  return cur_col_val == null_val ? ret_null_val : cur_col_val / kSecsPerDay;
+}
+
+extern "C" DEVICE NEVER_INLINE int64_t
+SUFFIX(fixed_width_date_encode_noinline)(const int64_t cur_col_val,
+                                         const int32_t ret_null_val,
+                                         const int64_t null_val) {
+  return SUFFIX(fixed_width_date_encode)(cur_col_val, ret_null_val, null_val);
 }
 
 #undef SUFFIX

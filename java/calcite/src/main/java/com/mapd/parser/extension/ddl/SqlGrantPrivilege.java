@@ -5,25 +5,20 @@ import static java.util.Objects.requireNonNull;
 import com.google.gson.annotations.Expose;
 
 import org.apache.calcite.sql.SqlDdl;
-import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlSpecialOperator;
-import org.apache.calcite.sql.parser.Span;
 import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.util.EscapedStringJsonBuilder;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 public class SqlGrantPrivilege extends SqlDdl {
   private static final SqlOperator OPERATOR =
           new SqlSpecialOperator("GRANT_PRIVILEGE", SqlKind.OTHER_DDL);
-  @Expose
-  private String command;
   @Expose
   private SqlNodeList privileges;
   @Expose
@@ -40,7 +35,6 @@ public class SqlGrantPrivilege extends SqlDdl {
           SqlNodeList grantees) {
     super(OPERATOR, pos);
     requireNonNull(privileges);
-    this.command = OPERATOR.getName();
     this.privileges = privileges;
     this.type = type;
     this.target = target;

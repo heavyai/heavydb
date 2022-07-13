@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,9 @@
 
 /**
  * @file		SysCatalog.cpp
- * @author	Todd Mostak <todd@map-d.com>, Wei Hong <wei@map-d.com>
  * @brief		Functions for System Catalog
  *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
 
 #include "SysCatalog.h"
 #include <algorithm>
@@ -47,6 +45,7 @@
 #include "RWLocks.h"
 #include "Shared/File.h"
 #include "Shared/StringTransform.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
 #include "include/bcrypt.h"
@@ -62,7 +61,7 @@ using namespace std::string_literals;
 
 std::string g_base_path;
 bool g_enable_idp_temporary_users{true};
-bool g_enable_system_tables{false};
+bool g_enable_system_tables{true};
 
 extern bool g_enable_fsi;
 extern bool g_read_only;
@@ -80,13 +79,13 @@ std::string hash_with_bcrypt(const std::string& pwd) {
 std::filesystem::path copy_catalog_if_read_only(std::filesystem::path base_data_path) {
   std::filesystem::path catalog_base_data_path;
 
-  // For a read-only server, make a temporary copy of mapd_catalogs.
+  // For a read-only server, make a temporary copy of the catalog directory.
   // This catalog copy must take place before any other catalog accesses.
   if (!g_read_only) {
-    // Catalog directory mapd_catalogs will be in the normal location.
+    // Catalog directory will be in the normal location.
     catalog_base_data_path = base_data_path;
   } else {
-    // Catalog directory mapd_catalogs will be in a temporary location.
+    // Catalog directory will be in a temporary location.
     catalog_base_data_path = base_data_path / "temporary";
 
     // Delete the temporary directory if it exists.
@@ -99,8 +98,9 @@ std::filesystem::path copy_catalog_if_read_only(std::filesystem::path base_data_
     std::filesystem::create_directories(catalog_base_data_path);
 
     // Make the temporary copy of the catalog.
-    const auto normal_catalog_path = base_data_path / "mapd_catalogs";
-    const auto temporary_catalog_path = catalog_base_data_path / "mapd_catalogs";
+    const auto normal_catalog_path = base_data_path / shared::kCatalogDirectoryName;
+    const auto temporary_catalog_path =
+        catalog_base_data_path / shared::kCatalogDirectoryName;
     LOG(INFO) << "copying catalog from " << normal_catalog_path << " to "
               << temporary_catalog_path << " for read-only server";
     std::filesystem::copy(normal_catalog_path,
@@ -116,6 +116,7 @@ std::filesystem::path copy_catalog_if_read_only(std::filesystem::path base_data_
 namespace Catalog_Namespace {
 
 thread_local bool SysCatalog::thread_holds_read_lock = false;
+std::mutex SysCatalog::instance_mutex_;
 std::unique_ptr<SysCatalog> SysCatalog::instance_;
 
 using sys_read_lock = read_lock<SysCatalog>;
@@ -129,7 +130,7 @@ std::string UserMetadata::userLoggable() const {
 }
 
 auto CommonFileOperations::assembleCatalogName(std::string const& name) {
-  return base_path_ + "/mapd_catalogs/" + name;
+  return base_path_ + "/" + shared::kCatalogDirectoryName + "/" + name;
 };
 
 void CommonFileOperations::removeCatalogByFullPath(std::string const& full_path) {
@@ -164,33 +165,96 @@ void SysCatalog::init(const std::string& basePath,
                       bool is_new_db,
                       bool aggregator,
                       const std::vector<LeafHostInfo>& string_dict_hosts) {
-  {
-    sys_write_lock write_lock(this);
-    sys_sqlite_lock sqlite_lock(this);
-
-    basePath_ = copy_catalog_if_read_only(basePath).string();
-    dataMgr_ = dataMgr;
-    authMetadata_ = &authMetadata;
-    pki_server_.reset(new PkiServer(*authMetadata_));
-    calciteMgr_ = calcite;
-    string_dict_hosts_ = string_dict_hosts;
-    aggregator_ = aggregator;
+  basePath_ = !g_multi_instance ? copy_catalog_if_read_only(basePath).string() : basePath;
+  sqliteConnector_.reset(new SqliteConnector(
+      shared::kSystemCatalogName, basePath_ + "/" + shared::kCatalogDirectoryName + "/"));
+  dcatalogMutex_ = std::make_unique<heavyai::DistributedSharedMutex>(
+      std::filesystem::path(basePath_) / shared::kLockfilesDirectoryName /
+          shared::kCatalogDirectoryName / (shared::kSystemCatalogName + ".lockfile"),
+      [this](size_t) {
+        heavyai::unique_lock<heavyai::DistributedSharedMutex> dsqlite_lock(
+            *dsqliteMutex_);
+        buildMapsUnlocked();
+      });
+  dsqliteMutex_ = std::make_unique<heavyai::DistributedSharedMutex>(
+      std::filesystem::path(basePath_) / shared::kLockfilesDirectoryName /
+      shared::kCatalogDirectoryName / (shared::kSystemCatalogName + ".sqlite.lockfile"));
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  dataMgr_ = dataMgr;
+  authMetadata_ = &authMetadata;
+  pki_server_.reset(new PkiServer(*authMetadata_));
+  calciteMgr_ = calcite;
+  string_dict_hosts_ = string_dict_hosts;
+  aggregator_ = aggregator;
+  migrations::MigrationMgr::takeMigrationLock(basePath_);
+  if (is_new_db) {
+    initDB();
+  } else {
     bool db_exists =
-        boost::filesystem::exists(basePath_ + "/mapd_catalogs/" + OMNISCI_SYSTEM_CATALOG);
-    sqliteConnector_.reset(
-        new SqliteConnector(OMNISCI_SYSTEM_CATALOG, basePath_ + "/mapd_catalogs/"));
-    if (is_new_db) {
-      initDB();
-    } else {
-      if (!db_exists) {
-        importDataFromOldMapdDB();
-      }
-      checkAndExecuteMigrations();
+        boost::filesystem::exists(basePath_ + "/" + shared::kCatalogDirectoryName + "/" +
+                                  shared::kSystemCatalogName);
+    if (!db_exists) {
+      importDataFromOldMapdDB();
     }
-    buildRoleMap();
-    buildUserRoleMap();
-    buildObjectDescriptorMap();
+    if (migrations::MigrationMgr::migrationEnabled()) {
+      checkAndExecuteMigrations();
+      migrations::MigrationMgr::relaxMigrationLock();
+    }
+  }
+  buildMaps(is_new_db);
+}
+
+void SysCatalog::buildMaps(bool is_new_db) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+
+  buildMapsUnlocked(is_new_db);
+}
+
+void SysCatalog::buildMapsUnlocked(bool is_new_db) {
+  VLOG(2) << "reloading catalog caches for: " << shared::kSystemCatalogName;
+
+  // Store permissions for temporary users.
+  std::map<std::string, std::vector<std::string>> tu_map;
+  for (auto& pair : temporary_users_by_name_) {
+    CHECK(pair.second);
+    UserMetadata& user = *pair.second;
+    auto it = granteeMap_.find(to_upper(user.userName));
+    CHECK(it != granteeMap_.end()) << to_upper(user.userName) << " not found";
+
+    auto user_rl = dynamic_cast<User*>(it->second.get());
+    CHECK(user_rl);
+    std::vector<std::string> current_roles = user_rl->getRoles();
+    auto result = tu_map.emplace(user.userName, std::move(current_roles));
+    CHECK(result.second);
+  }
+
+  // Forget permissions and reload them from file storage.
+  buildRoleMapUnlocked();
+  buildUserRoleMapUnlocked();
+  buildObjectDescriptorMapUnlocked();
+  if (!is_new_db) {
+    // We don't want to create the information schema db during database initialization
+    // because we don't have the appropriate context to intialize the tables.  For
+    // instance if the server is intended to run in distributed mode, initializing the
+    // table as part of initdb will be missing information such as the location of the
+    // string dictionary server.
     initializeInformationSchemaDb();
+  }
+
+  // Restore permissions for temporary users that were stored above.
+  for (auto& pair : temporary_users_by_name_) {
+    CHECK(pair.second);
+    UserMetadata& user = *pair.second;
+
+    createRole_unsafe(user.userName, /*user_private_role*/ true, /*is_temporary*/ true);
+
+    auto it = tu_map.find(user.userName);
+    CHECK(it != tu_map.end()) << user.userName << " not found";
+    for (const auto& r : it->second) {
+      grantRole_unsafe(r, user.userName, /*is_temporary*/ true);
+    }
   }
 }
 
@@ -200,17 +264,22 @@ SysCatalog::SysCatalog()
     , sqliteMutex_{}
     , sharedMutex_{}
     , thread_holding_sqlite_lock{std::thread::id()}
-    , thread_holding_write_lock{std::thread::id()}
-    , dummyCatalog_{std::make_shared<Catalog>()} {}
+    , thread_holding_write_lock{std::thread::id()} {}
 
 SysCatalog::~SysCatalog() {
-  sys_write_lock write_lock(this);
+  // TODO(sy): Need to lock here to wait for other threads to complete before pulling out
+  // the rug from under them. Unfortunately this lock was seen to deadlock because the
+  // HeavyDB shutdown sequence needs cleanup. Do we even need these clear()'s anymore?
+  // sys_write_lock write_lock(this);
   granteeMap_.clear();
   objectDescriptorMap_.clear();
   cat_map_.clear();
 }
 
 void SysCatalog::initDB() {
+  if (g_read_only) {
+    throw std::runtime_error("can't init a new database in read-only mode");
+  }
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
@@ -220,9 +289,9 @@ void SysCatalog::initDB() {
         "mapd_databases, can_login boolean)");
     sqliteConnector_->query_with_text_params(
         "INSERT INTO mapd_users VALUES (?, ?, ?, 1, NULL, 1)",
-        std::vector<std::string>{OMNISCI_ROOT_USER_ID_STR,
-                                 OMNISCI_ROOT_USER,
-                                 hash_with_bcrypt(OMNISCI_ROOT_PASSWD_DEFAULT)});
+        std::vector<std::string>{shared::kRootUserIdStr,
+                                 shared::kRootUsername,
+                                 hash_with_bcrypt(shared::kDefaultRootPasswd)});
     sqliteConnector_->query(
         "CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner "
         "integer references mapd_users)");
@@ -245,8 +314,9 @@ void SysCatalog::initDB() {
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
-  createDatabase(OMNISCI_DEFAULT_DB, OMNISCI_ROOT_USER_ID);
-  createRole_unsafe(OMNISCI_ROOT_USER, /*userPrivateRole=*/true, /*is_temporary=*/false);
+  createDatabase(shared::kDefaultDbName, shared::kRootUserId);
+  createRole_unsafe(
+      shared::kRootUsername, /*userPrivateRole=*/true, /*is_temporary=*/false);
 }
 
 void SysCatalog::checkAndExecuteMigrations() {
@@ -288,7 +358,7 @@ void SysCatalog::updateUserSchema() {
 
 void SysCatalog::importDataFromOldMapdDB() {
   sys_sqlite_lock sqlite_lock(this);
-  std::string mapd_db_path = basePath_ + "/mapd_catalogs/mapd";
+  std::string mapd_db_path = basePath_ + "/" + shared::kCatalogDirectoryName + "/mapd";
   sqliteConnector_->query("ATTACH DATABASE `" + mapd_db_path + "` as old_cat");
   sqliteConnector_->query("BEGIN TRANSACTION");
   LOG(INFO) << "Moving global metadata into a separate catalog";
@@ -323,10 +393,10 @@ void SysCatalog::importDataFromOldMapdDB() {
   }
   sqliteConnector_->query("END TRANSACTION");
   const std::string sys_catalog_path =
-      basePath_ + "/mapd_catalogs/" + OMNISCI_SYSTEM_CATALOG;
+      basePath_ + "/" + shared::kCatalogDirectoryName + "/" + shared::kSystemCatalogName;
   LOG(INFO) << "Global metadata has been successfully moved into a separate catalog: "
             << sys_catalog_path
-            << ". Using this database with an older version of omnisci_server "
+            << ". Using this database with an older version of heavydb "
                "is now impossible.";
   try {
     sqliteConnector_->query("DETACH DATABASE old_cat");
@@ -500,7 +570,7 @@ void SysCatalog::migratePrivileges() {
         auto type = DBObjectType::TableDBObjectType;
         DBObjectKey key{type, grantee.second};
         DBObject object(
-            dbName, type, key, AccessPrivileges::ALL_TABLE_MIGRATE, OMNISCI_ROOT_USER_ID);
+            dbName, type, key, AccessPrivileges::ALL_TABLE_MIGRATE, shared::kRootUserId);
         insertOrUpdateObjectPrivileges(
             sqliteConnector_, users_by_id[grantee.first], true, object);
       }
@@ -513,7 +583,7 @@ void SysCatalog::migratePrivileges() {
                         type,
                         key,
                         AccessPrivileges::ALL_DASHBOARD_MIGRATE,
-                        OMNISCI_ROOT_USER_ID);
+                        shared::kRootUserId);
         insertOrUpdateObjectPrivileges(
             sqliteConnector_, users_by_id[grantee.first], true, object);
       }
@@ -523,19 +593,18 @@ void SysCatalog::migratePrivileges() {
         auto type = DBObjectType::ViewDBObjectType;
         DBObjectKey key{type, grantee.second};
         DBObject object(
-            dbName, type, key, AccessPrivileges::ALL_VIEW_MIGRATE, OMNISCI_ROOT_USER_ID);
+            dbName, type, key, AccessPrivileges::ALL_VIEW_MIGRATE, shared::kRootUserId);
         insertOrUpdateObjectPrivileges(
             sqliteConnector_, users_by_id[grantee.first], true, object);
       }
     }
     for (auto user : user_has_privs) {
       auto dbName = dbs_by_id[0];
-      if (user.second == false && user.first != OMNISCI_ROOT_USER_ID) {
+      if (user.second == false && user.first != shared::kRootUserId) {
         {
           auto type = DBObjectType::DatabaseDBObjectType;
           DBObjectKey key{type, 0};
-          DBObject object(
-              dbName, type, key, AccessPrivileges::NONE, OMNISCI_ROOT_USER_ID);
+          DBObject object(dbName, type, key, AccessPrivileges::NONE, shared::kRootUserId);
           insertOrUpdateObjectPrivileges(
               sqliteConnector_, users_by_id[user.first], true, object);
         }
@@ -554,7 +623,7 @@ void SysCatalog::addAdminUserRole() {
   try {
     sqliteConnector_->query(
         "SELECT roleName FROM mapd_object_permissions WHERE roleName = \'" +
-        OMNISCI_ROOT_USER + "\'");
+        shared::kRootUsername + "\'");
     if (sqliteConnector_->getNumRows() != 0) {
       // already done
       sqliteConnector_->query("END TRANSACTION");
@@ -562,7 +631,7 @@ void SysCatalog::addAdminUserRole() {
     }
 
     createRole_unsafe(
-        OMNISCI_ROOT_USER, /*userPrivateRole=*/true, /*is_temporary=*/false);
+        shared::kRootUsername, /*userPrivateRole=*/true, /*is_temporary=*/false);
   } catch (const std::exception&) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
@@ -743,7 +812,7 @@ void SysCatalog::migrateDBAccessPrivileges() {
     for (auto db_ : databases) {
       CHECK(getMetadataForDB(db_.second, dbmeta));
       for (auto user : users) {
-        if (user.first != OMNISCI_ROOT_USER_ID) {
+        if (user.first != shared::kRootUserId) {
           {
             DBObjectKey key;
             key.permissionType = DBObjectType::DatabaseDBObjectType;
@@ -855,29 +924,39 @@ void SysCatalog::check_for_session_encryption(const std::string& pki_cert,
   pki_server_->encrypt_session(pki_cert, session);
 }
 
-void SysCatalog::createUser(const string& name,
-                            const string& passwd,
-                            bool is_super,
-                            const std::string& dbname,
-                            bool can_login,
-                            bool is_temporary) {
+UserMetadata SysCatalog::createUser(const string& name,
+                                    UserAlterations alts,
+                                    bool is_temporary) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
+
+  if (!alts.passwd) {
+    alts.passwd = "";
+  }
+  if (!alts.is_super) {
+    alts.is_super = false;
+  }
+  if (!alts.default_db) {
+    alts.default_db = "";
+  }
+  if (!alts.can_login) {
+    alts.can_login = true;
+  }
 
   UserMetadata user;
   if (getMetadataForUser(name, user)) {
     throw runtime_error("User " + user.userLoggable() + " already exists.");
   }
-  std::string const loggable = g_log_user_id ? std::string("") : name + ' ';
   if (getGrantee(name)) {
+    std::string const loggable = g_log_user_id ? std::string("") : name + ' ';
     throw runtime_error(
         "User " + loggable +
         "is same as one of existing grantees. User and role names should be unique.");
   }
   DBMetadata db;
-  if (!dbname.empty()) {
-    if (!getMetadataForDB(dbname, db)) {
-      throw runtime_error("DEFAULT_DB " + dbname + " not found.");
+  if (!alts.default_db->empty()) {
+    if (!getMetadataForDB(*alts.default_db, db)) {
+      throw runtime_error("DEFAULT_DB " + *alts.default_db + " not found.");
     }
   }
 
@@ -890,37 +969,37 @@ void SysCatalog::createUser(const string& name,
     }
     auto user2 = std::make_shared<UserMetadata>(next_temporary_user_id_++,
                                                 name,
-                                                hash_with_bcrypt(passwd),
-                                                is_super,
-                                                !dbname.empty() ? db.dbId : -1,
-                                                can_login,
+                                                hash_with_bcrypt(*alts.passwd),
+                                                *alts.is_super,
+                                                !alts.default_db->empty() ? db.dbId : -1,
+                                                *alts.can_login,
                                                 true);
     temporary_users_by_name_[name] = user2;
     temporary_users_by_id_[user2->userId] = user2;
     createRole_unsafe(name, /*userPrivateRole=*/true, /*is_temporary=*/true);
-    VLOG(1) << "Created temporary user: " << loggable;
-    return;
+    VLOG(1) << "Created temporary user: " << user2->userLoggable();
+    return *user2;
   }
 
   // Normal user.
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     std::vector<std::string> vals;
-    if (!dbname.empty()) {
+    if (!alts.default_db->empty()) {
       vals = {name,
-              hash_with_bcrypt(passwd),
-              std::to_string(is_super),
+              hash_with_bcrypt(*alts.passwd),
+              std::to_string(*alts.is_super),
               std::to_string(db.dbId),
-              std::to_string(can_login)};
+              std::to_string(*alts.can_login)};
       sqliteConnector_->query_with_text_params(
           "INSERT INTO mapd_users (name, passwd_hash, issuper, default_db, can_login) "
           "VALUES (?, ?, ?, ?, ?)",
           vals);
     } else {
       vals = {name,
-              hash_with_bcrypt(passwd),
-              std::to_string(is_super),
-              std::to_string(can_login)};
+              hash_with_bcrypt(*alts.passwd),
+              std::to_string(*alts.is_super),
+              std::to_string(*alts.can_login)};
       sqliteConnector_->query_with_text_params(
           "INSERT INTO mapd_users (name, passwd_hash, issuper, can_login) "
           "VALUES (?, ?, ?, ?)",
@@ -932,18 +1011,16 @@ void SysCatalog::createUser(const string& name,
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
-  VLOG(1) << "Created user: " << loggable;
+  auto u = getUser(name);
+  CHECK(u);
+  VLOG(1) << "Created user: " << u->userLoggable();
+  return *u;
 }
 
-void SysCatalog::dropUser(const string& name) {
+// Can be invoked directly to drop users without sanitization for testing.
+void SysCatalog::dropUserUnchecked(const std::string& name, const UserMetadata& user) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
-
-  UserMetadata user;
-  if (!getMetadataForUser(name, user)) {
-    std::string const loggable = g_log_user_id ? std::string("") : name + ' ';
-    throw runtime_error("Cannot drop user. User " + loggable + "does not exist.");
-  }
 
   // Temporary user.
   if (user.is_temporary) {
@@ -959,6 +1036,7 @@ void SysCatalog::dropUser(const string& name) {
   }
 
   // Normal user.
+
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     dropRole_unsafe(name, /*is_temporary=*/false);
@@ -975,6 +1053,28 @@ void SysCatalog::dropUser(const string& name) {
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
+}
+
+void SysCatalog::dropUser(const string& name) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+
+  std::string const loggable = g_log_user_id ? std::string("") : name + ' ';
+
+  UserMetadata user;
+  if (!getMetadataForUser(name, user)) {
+    throw runtime_error("Cannot drop user. User " + loggable + "does not exist.");
+  }
+
+  auto dbs = getAllDBMetadata();
+  for (const auto& db : dbs) {
+    if (db.dbOwner == user.userId) {
+      throw runtime_error("Cannot drop user. User " + loggable + "owns database " +
+                          db.dbName);
+    }
+  }
+
+  dropUserUnchecked(name, user);
 }
 
 std::vector<Catalog*> SysCatalog::getCatalogsForAllDbs() {
@@ -997,11 +1097,64 @@ auto append_with_commas = [](string& s, const string& t) {
 
 }  // anonymous namespace
 
-void SysCatalog::alterUser(const string& name,
-                           const string* passwd,
-                           bool* is_super,
-                           const string* dbname,
-                           bool* can_login) {
+bool UserAlterations::wouldChange(UserMetadata const& user) const {
+  if (passwd && hash_with_bcrypt(*passwd) != user.passwd_hash) {
+    return true;
+  }
+  if (is_super && *is_super != user.isSuper) {
+    return true;
+  }
+  if (default_db) {
+    DBMetadata db;
+    if (!default_db->empty()) {
+      if (!SysCatalog::instance().getMetadataForDB(*default_db, db)) {
+        throw std::runtime_error(string("DEFAULT_DB ") + *default_db + " not found.");
+      }
+    } else {
+      db.dbId = -1;
+    }
+    if (db.dbId != user.defaultDbId) {
+      return true;
+    }
+  }
+  if (can_login && *can_login != user.can_login) {
+    return true;
+  }
+  return false;
+}
+
+std::string UserAlterations::toString(bool hide_password) const {
+  std::stringstream ss;
+  if (passwd) {
+    if (hide_password) {
+      ss << "PASSWORD='XXXXXXXX'";
+    } else {
+      ss << "PASSWORD='" << *passwd << "'";
+    }
+  }
+  if (is_super) {
+    if (!ss.str().empty()) {
+      ss << ", ";
+    }
+    ss << "IS_SUPER='" << (*is_super ? "TRUE" : "FALSE") << "'";
+  }
+  if (default_db) {
+    if (!ss.str().empty()) {
+      ss << ", ";
+    }
+    ss << "DEFAULT_DB='" << *default_db << "'";
+  }
+  if (can_login) {
+    if (!ss.str().empty()) {
+      ss << ", ";
+    }
+    ss << "CAN_LOGIN='" << *can_login << "'";
+  }
+  return ss.str();
+}
+
+UserMetadata SysCatalog::alterUser(string const& name, UserAlterations alts) {
+  sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
 
   UserMetadata user;
@@ -1009,31 +1162,34 @@ void SysCatalog::alterUser(const string& name,
     std::string const loggable = g_log_user_id ? std::string("") : name + ' ';
     throw runtime_error("Cannot alter user. User " + loggable + "does not exist.");
   }
+  if (!alts.wouldChange(user)) {
+    return user;
+  }
 
   // Temporary user.
   if (user.is_temporary) {
-    if (passwd) {
-      user.passwd_hash = hash_with_bcrypt(*passwd);
+    if (alts.passwd) {
+      user.passwd_hash = hash_with_bcrypt(*alts.passwd);
     }
-    if (is_super) {
-      user.isSuper = *is_super;
+    if (alts.is_super) {
+      user.isSuper = *alts.is_super;
     }
-    if (dbname) {
-      if (!dbname->empty()) {
+    if (alts.default_db) {
+      if (!alts.default_db->empty()) {
         DBMetadata db;
-        if (!getMetadataForDB(*dbname, db)) {
-          throw runtime_error(string("DEFAULT_DB ") + *dbname + " not found.");
+        if (!getMetadataForDB(*alts.default_db, db)) {
+          throw runtime_error(string("DEFAULT_DB ") + *alts.default_db + " not found.");
         }
         user.defaultDbId = db.dbId;
       } else {
         user.defaultDbId = -1;
       }
     }
-    if (can_login) {
-      user.can_login = *can_login;
+    if (alts.can_login) {
+      user.can_login = *alts.can_login;
     }
     *temporary_users_by_name_[name] = user;
-    return;
+    return user;
   }
 
   // Normal user.
@@ -1041,29 +1197,29 @@ void SysCatalog::alterUser(const string& name,
   try {
     string sql;
     std::vector<std::string> values;
-    if (passwd) {
+    if (alts.passwd) {
       append_with_commas(sql, "passwd_hash = ?");
-      values.push_back(hash_with_bcrypt(*passwd));
+      values.push_back(hash_with_bcrypt(*alts.passwd));
     }
-    if (is_super) {
+    if (alts.is_super) {
       append_with_commas(sql, "issuper = ?");
-      values.push_back(std::to_string(*is_super));
+      values.push_back(std::to_string(*alts.is_super));
     }
-    if (dbname) {
-      if (!dbname->empty()) {
+    if (alts.default_db) {
+      if (!alts.default_db->empty()) {
         append_with_commas(sql, "default_db = ?");
         DBMetadata db;
-        if (!getMetadataForDB(*dbname, db)) {
-          throw runtime_error(string("DEFAULT_DB ") + *dbname + " not found.");
+        if (!getMetadataForDB(*alts.default_db, db)) {
+          throw runtime_error(string("DEFAULT_DB ") + *alts.default_db + " not found.");
         }
         values.push_back(std::to_string(db.dbId));
       } else {
         append_with_commas(sql, "default_db = NULL");
       }
     }
-    if (can_login) {
+    if (alts.can_login) {
       append_with_commas(sql, "can_login = ?");
-      values.push_back(std::to_string(*can_login));
+      values.push_back(std::to_string(*alts.can_login));
     }
 
     sql = "UPDATE mapd_users SET " + sql + " WHERE userid = ?";
@@ -1075,6 +1231,10 @@ void SysCatalog::alterUser(const string& name,
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
+  auto u = getUser(name);
+  CHECK(u);
+  VLOG(1) << "Altered user: " << u->userLoggable();
+  return *u;
 }
 
 auto SysCatalog::yieldTransactionStreamer() {
@@ -1168,6 +1328,37 @@ void SysCatalog::renameUser(std::string const& old_name, std::string const& new_
   transaction_streamer(sqliteConnector_, success_handler, failure_handler, q1, q2, q3);
 }
 
+void SysCatalog::changeDatabaseOwner(std::string const& dbname,
+                                     const std::string& new_owner) {
+  using namespace std::string_literals;
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+
+  DBMetadata db;
+  if (!getMetadataForDB(dbname, db)) {
+    throw std::runtime_error("Database " + dbname + " does not exists.");
+  }
+
+  Catalog_Namespace::UserMetadata user, original_owner;
+  if (!getMetadataForUser(new_owner, user)) {
+    throw std::runtime_error("User with username \"" + new_owner + "\" does not exist. " +
+                             "Database with name \"" + dbname +
+                             "\" can not have owner changed.");
+  }
+
+  bool original_owner_exists = getMetadataForUserById(db.dbOwner, original_owner);
+  auto cat = getCatalog(db, true);
+  DBObject db_object(dbname, DBObjectType::DatabaseDBObjectType);
+  runUpdateQueriesAndChangeOwnership(
+      user,
+      original_owner,
+      db_object,
+      *cat,
+      UpdateQueries{{"UPDATE mapd_databases SET owner=?1 WHERE name=?2;",
+                     {std::to_string(user.userId), dbname}}},
+      original_owner_exists);
+}
+
 void SysCatalog::renameDatabase(std::string const& old_name,
                                 std::string const& new_name) {
   using namespace std::string_literals;
@@ -1178,7 +1369,7 @@ void SysCatalog::renameDatabase(std::string const& old_name,
   if (getMetadataForDB(new_name, new_db)) {
     throw std::runtime_error("Database " + new_name + " already exists.");
   }
-  if (to_upper(new_name) == to_upper(OMNISCI_SYSTEM_CATALOG)) {
+  if (to_upper(new_name) == to_upper(shared::kSystemCatalogName)) {
     throw std::runtime_error("Database name " + new_name + "is reserved.");
   }
 
@@ -1220,12 +1411,12 @@ void SysCatalog::createDatabase(const string& name, int owner) {
   if (getMetadataForDB(name, db)) {
     throw runtime_error("Database " + name + " already exists.");
   }
-  if (to_upper(name) == to_upper(OMNISCI_SYSTEM_CATALOG)) {
+  if (to_upper(name) == to_upper(shared::kSystemCatalogName)) {
     throw runtime_error("Database name " + name + " is reserved.");
   }
 
   std::unique_ptr<SqliteConnector> dbConn(
-      new SqliteConnector(name, basePath_ + "/mapd_catalogs/"));
+      new SqliteConnector(name, basePath_ + "/" + shared::kCatalogDirectoryName + "/"));
   // NOTE(max): it's okay to run this in a separate transaction. If we fail later
   // we delete the database anyways.
   // If we run it in the same transaction as SysCatalog functions, then Catalog
@@ -1285,7 +1476,8 @@ void SysCatalog::createDatabase(const string& name, int owner) {
     dbConn->query(Catalog::getCustomExpressionsSchema());
   } catch (const std::exception&) {
     dbConn->query("ROLLBACK TRANSACTION");
-    boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);
+    boost::filesystem::remove(basePath_ + "/" + shared::kCatalogDirectoryName + "/" +
+                              name);
     throw;
   }
   dbConn->query("END TRANSACTION");
@@ -1302,7 +1494,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
 
     cat = getCatalog(db, true);
 
-    if (owner != OMNISCI_ROOT_USER_ID) {
+    if (owner != shared::kRootUserId) {
       DBObject object(name, DBObjectType::DatabaseDBObjectType);
       object.loadKey(*cat);
       UserMetadata user;
@@ -1311,7 +1503,8 @@ void SysCatalog::createDatabase(const string& name, int owner) {
     }
   } catch (const std::exception&) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
-    boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);
+    boost::filesystem::remove(basePath_ + "/" + shared::kCatalogDirectoryName + "/" +
+                              name);
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
@@ -1324,7 +1517,8 @@ void SysCatalog::createDatabase(const string& name, int owner) {
     try {
       cat->createDefaultServersIfNotExists();
     } catch (...) {
-      boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);
+      boost::filesystem::remove(basePath_ + "/" + shared::kCatalogDirectoryName + "/" +
+                                name);
       throw;
     }
   }
@@ -1554,11 +1748,11 @@ void SysCatalog::getMetadataWithDefaultDB(std::string& dbname,
       dbname = db_meta.dbName;
       // loaded the user's default database
     } else {
-      if (!getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta)) {
-        throw std::runtime_error(std::string("Database ") + OMNISCI_DEFAULT_DB +
+      if (!getMetadataForDB(shared::kDefaultDbName, db_meta)) {
+        throw std::runtime_error(std::string("Database ") + shared::kDefaultDbName +
                                  " does not exist.");
       }
-      dbname = OMNISCI_DEFAULT_DB;
+      dbname = shared::kDefaultDbName;
       // loaded the mapd database by default
     }
   }
@@ -1600,6 +1794,11 @@ DBSummaryList SysCatalog::getDatabaseListForUser(const UserMetadata& user) {
   std::list<Catalog_Namespace::DBMetadata> db_list = getAllDBMetadata();
   std::list<Catalog_Namespace::UserMetadata> user_list = getAllUserMetadata();
 
+  std::map<int32_t, std::string> user_id_to_name_map;
+  for (const auto& user : user_list) {
+    user_id_to_name_map.emplace(user.userId, user.userName);
+  }
+
   for (auto d : db_list) {
     DBObject dbObject(d.dbName, DatabaseDBObjectType);
     dbObject.loadKey();
@@ -1607,11 +1806,11 @@ DBSummaryList SysCatalog::getDatabaseListForUser(const UserMetadata& user) {
     if (!checkPrivileges(user, std::vector<DBObject>{dbObject})) {
       continue;
     }
-    for (auto u : user_list) {
-      if (d.dbOwner == u.userId) {
-        ret.emplace_back(DBSummary{d.dbName, u.userName});
-        break;
-      }
+
+    if (auto it = user_id_to_name_map.find(d.dbOwner); it != user_id_to_name_map.end()) {
+      ret.emplace_back(DBSummary{d.dbName, it->second});
+    } else {
+      ret.emplace_back(DBSummary{d.dbName, "<DELETED>"});
     }
   }
 
@@ -1889,11 +2088,13 @@ bool SysCatalog::verifyDBObjectOwnership(const UserMetadata& user,
   return false;
 }
 
-void SysCatalog::changeDBObjectOwnership(const UserMetadata& new_owner,
-                                         const UserMetadata& previous_owner,
-                                         DBObject object,
-                                         const Catalog_Namespace::Catalog& catalog,
-                                         bool revoke_privileges) {
+void SysCatalog::runUpdateQueriesAndChangeOwnership(
+    const UserMetadata& new_owner,
+    const UserMetadata& previous_owner,
+    DBObject object,
+    const Catalog_Namespace::Catalog& catalog,
+    const SysCatalog::UpdateQueries& update_queries,
+    bool revoke_privileges) {
   sys_write_lock write_lock(this);
   if (new_owner.is_temporary || previous_owner.is_temporary) {
     throw std::runtime_error("ownership change not allowed for temporary user(s)");
@@ -1928,6 +2129,13 @@ void SysCatalog::changeDBObjectOwnership(const UserMetadata& new_owner,
     if (!previous_owner.isSuper && revoke_privileges) {  // no need to revoke from suser
       revokeDBObjectPrivileges_unsafe(previous_owner.userName, object, catalog);
     }
+
+    // run update queries if specified
+    for (const auto& update_query : update_queries) {
+      sqliteConnector_->query_with_text_params(update_query.query,
+                                               update_query.text_params);
+    }
+
     auto object_key = object.getObjectKey();
     sqliteConnector_->query_with_text_params(
         "UPDATE mapd_object_permissions SET objectOwnerId = ? WHERE dbId = ? AND "
@@ -1950,10 +2158,19 @@ void SysCatalog::changeDBObjectOwnership(const UserMetadata& new_owner,
     }
   } catch (std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
-    rebuildObjectMaps();
+    rebuildObjectMapsUnlocked();
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
+}
+
+void SysCatalog::changeDBObjectOwnership(const UserMetadata& new_owner,
+                                         const UserMetadata& previous_owner,
+                                         DBObject object,
+                                         const Catalog_Namespace::Catalog& catalog,
+                                         bool revoke_privileges) {
+  runUpdateQueriesAndChangeOwnership(
+      new_owner, previous_owner, object, catalog, {}, revoke_privileges);
 }
 
 void SysCatalog::getDBObjectPrivileges(const std::string& granteeName,
@@ -1999,7 +2216,7 @@ void SysCatalog::createRole_unsafe(const std::string& roleName,
 
   // NOTE (max): Why create an empty privileges record for a role?
   /* grant none privileges to this role and add it to sqlite DB */
-  DBObject dbObject(OMNISCI_DEFAULT_DB, DatabaseDBObjectType);
+  DBObject dbObject(shared::kDefaultDbName, DatabaseDBObjectType);
   DBObjectKey objKey;
   // 0 is an id that does not exist
   objKey.dbId = 0;
@@ -2404,9 +2621,8 @@ std::set<std::string> SysCatalog::getCreatedRoles() const {
   return roles;
 }
 
-void SysCatalog::buildRoleMap() {
-  sys_write_lock write_lock(this);
-  sys_sqlite_lock sqlite_lock(this);
+void SysCatalog::buildRoleMapUnlocked() {
+  granteeMap_.clear();
   string roleQuery(
       "SELECT roleName, roleType, objectPermissionsType, dbId, objectId, "
       "objectPermissions, objectOwnerId, objectName "
@@ -2476,9 +2692,7 @@ void SysCatalog::populateRoleDbObjects(const std::vector<DBObject>& objects) {
   sqliteConnector_->query("END TRANSACTION");
 }
 
-void SysCatalog::buildUserRoleMap() {
-  sys_write_lock write_lock(this);
-  sys_sqlite_lock sqlite_lock(this);
+void SysCatalog::buildUserRoleMapUnlocked() {
   std::vector<std::pair<std::string, std::string>> granteeRoles;
   string userRoleQuery("SELECT roleName, userName from mapd_roles");
   sqliteConnector_->query(userRoleQuery);
@@ -2488,7 +2702,7 @@ void SysCatalog::buildUserRoleMap() {
     std::string userName = sqliteConnector_->getData<string>(r, 1);
     // required for declared nomenclature before v4.0.0
     if ((boost::equals(roleName, "mapd_default_suser_role") &&
-         boost::equals(userName, OMNISCI_ROOT_USER)) ||
+         boost::equals(userName, shared::kRootUsername)) ||
         (boost::equals(roleName, "mapd_default_user_role") &&
          !boost::equals(userName, "mapd_default_user_role"))) {
       // grouprole already exists with roleName==userName in mapd_roles table
@@ -2522,9 +2736,8 @@ void SysCatalog::buildUserRoleMap() {
   }
 }
 
-void SysCatalog::buildObjectDescriptorMap() {
-  sys_write_lock write_lock(this);
-  sys_sqlite_lock sqlite_lock(this);
+void SysCatalog::buildObjectDescriptorMapUnlocked() {
+  objectDescriptorMap_.clear();
   string objectQuery(
       "SELECT roleName, roleType, objectPermissionsType, dbId, objectId, "
       "objectPermissions, objectOwnerId, objectName "
@@ -2636,29 +2849,24 @@ void SysCatalog::revokeDBObjectPrivilegesFromAllBatch(vector<DBObject>& objects,
 
 void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
                                             std::vector<std::string> idp_roles,
-                                            bool* is_super,
-                                            const std::string& default_db) {
-  UserMetadata user_meta;
-  bool is_super_user = is_super ? *is_super : false;
+                                            UserAlterations alts) {
   // need to escalate to a write lock
   // need to unlock the read lock
   sys_read_lock read_lock(this);
   read_lock.unlock();
   sys_write_lock write_lock(this);
   bool enable_idp_temporary_users{g_enable_idp_temporary_users && g_read_only};
-  if (!getMetadataForUser(user_name, user_meta)) {
-    createUser(user_name,
-               generate_random_string(72),
-               is_super_user,
-               default_db,
-               /*can_login=*/true,
-               /*is_temporary=*/enable_idp_temporary_users);
-    LOG(INFO) << "User " << user_name << " has been created by remote identity provider"
-              << " with IS_SUPER = " << (is_super_user ? "'TRUE'" : "'FALSE'");
-  } else if (is_super && is_super_user != user_meta.isSuper) {
-    alterUser(user_meta.userName, nullptr, is_super, nullptr, nullptr);
-    LOG(INFO) << "IS_SUPER for user " << user_name << " has been changed to "
-              << (is_super_user ? "TRUE" : "FALSE") << " by remote identity provider";
+  if (auto user = getUser(user_name); !user) {
+    if (!alts.passwd) {
+      alts.passwd = generate_random_string(72);
+    }
+    user = createUser(user_name, alts, /*is_temporary=*/enable_idp_temporary_users);
+    LOG(INFO) << "Remote identity provider created user [" << user->userLoggable()
+              << "] with (" << alts.toString() << ")";
+  } else if (alts.wouldChange(*user)) {
+    user = alterUser(user->userName, alts);
+    LOG(INFO) << "Remote identity provider altered user [" << user->userLoggable()
+              << "] with (" << alts.toString() << ")";
   }
   std::vector<std::string> current_roles = {};
   auto* user_rl = getUserGrantee(user_name);
@@ -2844,26 +3052,26 @@ void SysCatalog::reassignObjectOwners(
     }
   } catch (std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
-    rebuildObjectMaps();
+    rebuildObjectMapsUnlocked();
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
 }
 
 void SysCatalog::initializeInformationSchemaDb() {
-  if (g_enable_system_tables && !hasExecutedMigration(INFORMATION_SCHEMA_MIGRATION)) {
+  if (g_enable_system_tables && !hasExecutedMigration(shared::kInfoSchemaMigrationName)) {
     sys_write_lock write_lock(this);
     DBMetadata db_metadata;
-    if (getMetadataForDB(INFORMATION_SCHEMA_DB, db_metadata)) {
-      LOG(WARNING) << "A database with name \"" << INFORMATION_SCHEMA_DB
+    if (getMetadataForDB(shared::kInfoSchemaDbName, db_metadata)) {
+      LOG(WARNING) << "A database with name \"" << shared::kInfoSchemaDbName
                    << "\" already exists. System table creation will be skipped. Rename "
                       "this database in order to use system tables.";
     } else {
-      createDatabase(INFORMATION_SCHEMA_DB, OMNISCI_ROOT_USER_ID);
+      createDatabase(shared::kInfoSchemaDbName, shared::kRootUserId);
       try {
-        recordExecutedMigration(INFORMATION_SCHEMA_MIGRATION);
+        recordExecutedMigration(shared::kInfoSchemaMigrationName);
       } catch (...) {
-        getMetadataForDB(INFORMATION_SCHEMA_DB, db_metadata);
+        getMetadataForDB(shared::kInfoSchemaDbName, db_metadata);
         dropDatabase(db_metadata);
         throw;
       }
@@ -2907,12 +3115,12 @@ void SysCatalog::createVersionHistoryTable() const {
       "unique)");
 }
 
-void SysCatalog::rebuildObjectMaps() {
+void SysCatalog::rebuildObjectMapsUnlocked() {
   // Rebuild updated maps from storage
   granteeMap_.clear();
-  buildRoleMap();
+  buildRoleMapUnlocked();
   objectDescriptorMap_.clear();
-  buildObjectDescriptorMap();
+  buildObjectDescriptorMapUnlocked();
 }
 
 }  // namespace Catalog_Namespace

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,8 @@
 
 /**
  * @file    TargetInfo.h
- * @author  Alex Suhan <alex@mapd.com>
+ * @brief
+ *
  */
 
 #ifndef QUERYENGINE_TARGETINFO_H
@@ -88,66 +89,19 @@ inline bool is_agg_domain_range_equivalent(const SQLAgg& agg_kind) {
   return false;
 }
 
-template <class PointerType>
-inline TargetInfo get_target_info(const PointerType target_expr,
+namespace target_info {
+TargetInfo get_target_info_impl(const Analyzer::Expr* target_expr,
+                                const bool bigint_count);
+}
+
+inline TargetInfo get_target_info(const Analyzer::Expr* target_expr,
                                   const bool bigint_count) {
-  const auto agg_expr = cast_to_agg_expr(target_expr);
-  bool notnull = target_expr->get_type_info().get_notnull();
-  if (!agg_expr) {
-    const bool is_varlen_projection = target_expr_has_varlen_projection(target_expr);
-    auto target_ti = target_expr ? get_logical_type_info(target_expr->get_type_info())
-                                 : SQLTypeInfo(kBIGINT, notnull);
-    return {false,
-            kMIN,
-            target_ti,
-            SQLTypeInfo(kNULLT, false),
-            false,
-            false,
-            is_varlen_projection};
-  }
-  const auto agg_type = agg_expr->get_aggtype();
-  const auto agg_arg = agg_expr->get_arg();
-  if (!agg_arg) {
-    CHECK_EQ(kCOUNT, agg_type);
-    CHECK(!agg_expr->get_is_distinct());
-    return {true,
-            kCOUNT,
-            SQLTypeInfo(bigint_count ? kBIGINT : kINT, notnull),
-            SQLTypeInfo(kNULLT, false),
-            false,
-            false,
-            false};
-  }
+  return target_info::get_target_info_impl(target_expr, bigint_count);
+}
 
-  const auto& agg_arg_ti = agg_arg->get_type_info();
-  bool is_distinct{false};
-  if (agg_expr->get_aggtype() == kCOUNT) {
-    is_distinct = agg_expr->get_is_distinct();
-  }
-
-  if (agg_type == kAVG) {
-    // Upcast the target type for AVG, so that the integer argument does not overflow the
-    // sum
-    return {true,
-            agg_expr->get_aggtype(),
-            agg_arg_ti.is_integer() ? SQLTypeInfo(kBIGINT, agg_arg_ti.get_notnull())
-                                    : agg_arg_ti,
-            agg_arg_ti,
-            !agg_arg_ti.get_notnull(),
-            is_distinct,
-            false};
-  }
-
-  return {
-      true,
-      agg_expr->get_aggtype(),
-      agg_type == kCOUNT
-          ? SQLTypeInfo((is_distinct || bigint_count) ? kBIGINT : kINT, notnull)
-          : agg_expr->get_type_info(),
-      agg_arg_ti,
-      agg_type == kCOUNT && agg_arg_ti.is_varlen() ? false : !agg_arg_ti.get_notnull(),
-      is_distinct,
-      false};
+inline TargetInfo get_target_info(const std::shared_ptr<Analyzer::Expr> target_expr,
+                                  const bool bigint_count) {
+  return target_info::get_target_info_impl(target_expr.get(), bigint_count);
 }
 
 inline bool is_distinct_target(const TargetInfo& target_info) {

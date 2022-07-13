@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@
 #include "../Shared/funcannotations.h"
 #include "../Shared/sqldefs.h"
 #include "Parser/ParserNode.h"
+#include "QueryEngine/ExpressionRewrite.h"
+#include "StringOps/StringOps.h"
 
 #include <boost/locale/conversion.hpp>
 
@@ -51,17 +53,59 @@ extern "C" RUNTIME_EXPORT int32_t string_compress(const int64_t ptr_and_len,
                                                   const int64_t string_dict_handle) {
   std::string raw_str(reinterpret_cast<char*>(extract_str_ptr_noinline(ptr_and_len)),
                       extract_str_len_noinline(ptr_and_len));
-  auto string_dict_proxy =
-      reinterpret_cast<const StringDictionaryProxy*>(string_dict_handle);
-  return string_dict_proxy->getIdOfString(raw_str);
+  if (raw_str.empty()) {
+    return inline_int_null_value<int32_t>();
+  }
+  auto string_dict_proxy = reinterpret_cast<StringDictionaryProxy*>(string_dict_handle);
+  return string_dict_proxy->getOrAddTransient(raw_str);
 }
 
-extern "C" RUNTIME_EXPORT int32_t lower_encoded(int32_t string_id,
-                                                int64_t string_dict_proxy_address) {
-  StringDictionaryProxy* string_dict_proxy =
-      reinterpret_cast<StringDictionaryProxy*>(string_dict_proxy_address);
-  auto str = string_dict_proxy->getString(string_id);
-  return string_dict_proxy->getOrAddTransient(boost::locale::to_lower(str));
+extern "C" RUNTIME_EXPORT int32_t
+apply_string_ops_and_encode(const char* str_ptr,
+                            const int32_t str_len,
+                            const int64_t string_ops_handle,
+                            const int64_t string_dict_handle) {
+  std::string raw_str(str_ptr, str_len);
+  auto string_ops =
+      reinterpret_cast<const StringOps_Namespace::StringOps*>(string_ops_handle);
+  auto string_dict_proxy = reinterpret_cast<StringDictionaryProxy*>(string_dict_handle);
+  const auto result_str = string_ops->operator()(raw_str);
+  if (result_str.empty()) {
+    return inline_int_null_value<int32_t>();
+  }
+  return string_dict_proxy->getOrAddTransient(result_str);
+}
+
+extern "C" RUNTIME_EXPORT int32_t
+intersect_translate_string_id_to_other_dict(const int32_t string_id,
+                                            const int64_t source_string_dict_handle,
+                                            const int64_t dest_string_dict_handle) {
+  const auto source_string_dict_proxy =
+      reinterpret_cast<StringDictionaryProxy*>(source_string_dict_handle);
+  auto dest_string_dict_proxy =
+      reinterpret_cast<StringDictionaryProxy*>(dest_string_dict_handle);
+  // Can we have StringDictionaryProxy::getString return a reference?
+  const auto source_str = source_string_dict_proxy->getString(string_id);
+  if (source_str.empty()) {
+    return inline_int_null_value<int32_t>();
+  }
+  return dest_string_dict_proxy->getIdOfString(source_str);
+}
+
+extern "C" RUNTIME_EXPORT int32_t
+union_translate_string_id_to_other_dict(const int32_t string_id,
+                                        const int64_t source_string_dict_handle,
+                                        const int64_t dest_string_dict_handle) {
+  const auto source_string_dict_proxy =
+      reinterpret_cast<StringDictionaryProxy*>(source_string_dict_handle);
+  auto dest_string_dict_proxy =
+      reinterpret_cast<StringDictionaryProxy*>(dest_string_dict_handle);
+  // Can we have StringDictionaryProxy::getString return a reference?
+  const auto source_str = source_string_dict_proxy->getString(string_id);
+  if (source_str.empty()) {
+    return inline_int_null_value<int32_t>();
+  }
+  return dest_string_dict_proxy->getOrAddTransient(source_str);
 }
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::CharLengthExpr* expr,
@@ -70,10 +114,6 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::CharLengthExpr* expr,
   auto str_lv = codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
-    if (g_enable_watchdog) {
-      throw WatchdogException(
-          "LENGTH / CHAR_LENGTH on dictionary-encoded strings would be slow");
-    }
     str_lv.push_back(cgen_state_->emitCall("extract_str_ptr", {str_lv.front()}));
     str_lv.push_back(cgen_state_->emitCall("extract_str_len", {str_lv.front()}));
     if (co.device_type == ExecutorDeviceType::GPU) {
@@ -104,26 +144,145 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::KeyForStringExpr* expr,
   return cgen_state_->emitCall("key_for_string_encoded", str_lv);
 }
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::LowerExpr* expr,
-                                    const CompilationOptions& co) {
+std::vector<StringOps_Namespace::StringOpInfo> getStringOpInfos(
+    const Analyzer::StringOper* expr) {
+  std::vector<StringOps_Namespace::StringOpInfo> string_op_infos;
+  auto chained_string_op_exprs = expr->getChainedStringOpExprs();
+  if (chained_string_op_exprs.empty()) {
+    // Likely will change the below to a CHECK but until we have more confidence
+    // that all potential query patterns have nodes that might contain string ops folded,
+    // leaving as an error for now
+    throw std::runtime_error(
+        "Expected folded string operator but found operator unfolded.");
+  }
+  // Consider encapsulating below in an Analyzer::StringOper method to dedup
+  for (const auto& chained_string_op_expr : chained_string_op_exprs) {
+    auto chained_string_op =
+        dynamic_cast<const Analyzer::StringOper*>(chained_string_op_expr.get());
+    CHECK(chained_string_op);
+    StringOps_Namespace::StringOpInfo string_op_info(chained_string_op->get_kind(),
+                                                     chained_string_op->getLiteralArgs());
+    string_op_infos.emplace_back(string_op_info);
+  }
+  return string_op_infos;
+}
+
+llvm::Value* CodeGenerator::codegenPerRowStringOper(const Analyzer::StringOper* expr,
+                                                    const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
+  CHECK_GE(expr->getArity(), 1UL);
+
+  const auto& expr_ti = expr->get_type_info();
+  // Should probably CHECK we have a UOper cast to dict encoded to be consistent
+  const auto primary_arg = remove_cast(expr->getArg(0));
+  CHECK(primary_arg->get_type_info().is_none_encoded_string());
+
+  if (g_cluster) {
+    throw std::runtime_error(
+        "Cast from none-encoded string to dictionary-encoded not supported for "
+        "distributed queries");
+  }
   if (co.device_type == ExecutorDeviceType::GPU) {
     throw QueryMustRunOnCpu();
   }
+  auto primary_str_lv = codegen(primary_arg, true, co);
+  CHECK_EQ(size_t(3), primary_str_lv.size());
+  const auto string_op_infos = getStringOpInfos(expr);
+  CHECK(string_op_infos.size());
 
-  auto str_id_lv = codegen(expr->get_arg(), true, co);
+  const auto string_ops =
+      executor()->getRowSetMemoryOwner()->getStringOps(string_op_infos);
+  const int64_t string_ops_handle = reinterpret_cast<int64_t>(string_ops);
+  auto string_ops_handle_lv = cgen_state_->llInt(string_ops_handle);
+
+  const int64_t dest_string_proxy_handle =
+      reinterpret_cast<int64_t>(executor()->getStringDictionaryProxy(
+          expr_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
+  auto dest_string_proxy_handle_lv = cgen_state_->llInt(dest_string_proxy_handle);
+  std::vector<llvm::Value*> string_oper_lvs{primary_str_lv[1],
+                                            primary_str_lv[2],
+                                            string_ops_handle_lv,
+                                            dest_string_proxy_handle_lv};
+
+  return cgen_state_->emitExternalCall("apply_string_ops_and_encode",
+                                       get_int_type(32, cgen_state_->context_),
+                                       string_oper_lvs);
+}
+
+std::unique_ptr<StringDictionaryTranslationMgr> translate_dict_strings(
+    const Analyzer::StringOper* expr,
+    const ExecutorDeviceType device_type,
+    Executor* executor) {
+  const auto& expr_ti = expr->get_type_info();
+  const auto dict_id = expr_ti.get_comp_param();
+  const auto string_op_infos = getStringOpInfos(expr);
+  CHECK(string_op_infos.size());
+
+  auto string_dictionary_translation_mgr =
+      std::make_unique<StringDictionaryTranslationMgr>(
+          dict_id,
+          dict_id,
+          false,  // translate_intersection_only
+          string_op_infos,
+          device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
+                                                 : Data_Namespace::CPU_LEVEL,
+          executor->deviceCount(device_type),
+          executor,
+          &executor->getCatalog()->getDataMgr(),
+          false /* delay_translation */);
+  return string_dictionary_translation_mgr;
+}
+
+llvm::Value* CodeGenerator::codegen(const Analyzer::StringOper* expr,
+                                    const CompilationOptions& co) {
+  CHECK_GE(expr->getArity(), 1UL);
+  if (expr->hasNoneEncodedTextArg()) {
+    return codegenPerRowStringOper(expr, co);
+  }
+  AUTOMATIC_IR_METADATA(cgen_state_);
+
+  const auto& expr_ti = expr->get_type_info();
+  auto string_dictionary_translation_mgr =
+      translate_dict_strings(expr, co.device_type, executor());
+
+  auto str_id_lv = codegen(expr->getArg(0), true, co);
   CHECK_EQ(size_t(1), str_id_lv.size());
 
-  const auto string_dictionary_proxy = executor()->getStringDictionaryProxy(
-      expr->get_type_info().get_comp_param(), executor()->getRowSetMemoryOwner(), true);
-  CHECK(string_dictionary_proxy);
+  return cgen_state_
+      ->moveStringDictionaryTranslationMgr(std::move(string_dictionary_translation_mgr))
+      ->codegen(str_id_lv[0], expr_ti, true /* add_nullcheck */, co);
+}
 
-  std::vector<llvm::Value*> args{
-      str_id_lv[0],
-      cgen_state_->llInt(reinterpret_cast<int64_t>(string_dictionary_proxy))};
+// Method below is for join probes, as we cast the StringOper nodes to ColumnVars early to
+// not special case that codepath (but retain the StringOpInfos, which we use here to
+// execute the same string ops as we would on a native StringOper node)
+llvm::Value* CodeGenerator::codegenPseudoStringOper(
+    const Analyzer::ColumnVar* expr,
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+    const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
+  const auto& expr_ti = expr->get_type_info();
+  const auto dict_id = expr_ti.get_comp_param();
 
-  return cgen_state_->emitExternalCall(
-      "lower_encoded", get_int_type(32, cgen_state_->context_), args);
+  auto string_dictionary_translation_mgr =
+      std::make_unique<StringDictionaryTranslationMgr>(
+          dict_id,
+          dict_id,
+          false,  // translate_intersection_only
+          string_op_infos,
+          co.device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
+                                                    : Data_Namespace::CPU_LEVEL,
+          executor()->deviceCount(co.device_type),
+          executor(),
+          &executor()->getCatalog()->getDataMgr(),
+          false /* delay_translation */);
+
+  auto str_id_lv = codegen(expr, true /* fetch_column */, co);
+  CHECK_EQ(size_t(1), str_id_lv.size());
+
+  return cgen_state_
+      ->moveStringDictionaryTranslationMgr(std::move(string_dictionary_translation_mgr))
+      ->codegen(str_id_lv[0], expr_ti, true /* add_nullcheck */, co);
 }
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::LikeExpr* expr,
@@ -186,6 +345,27 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::LikeExpr* expr,
   return cgen_state_->emitCall(fn_name, str_like_args);
 }
 
+void pre_translate_string_ops(const Analyzer::StringOper* string_oper,
+                              Executor* executor) {
+  // If here we are operating on top of one or more string functions, i.e. LOWER(str),
+  // and before running the dictionary LIKE/ILIKE or REGEXP_LIKE,
+  // we need to translate the strings first.
+
+  // This approach is a temporary solution until we can implement the next stage
+  // of the string translation project, which will broaden the StringOper class to include
+  // operations that operate on strings but do not neccessarily return strings like
+  // LIKE/ILIKE/REGEXP_LIKE/CHAR_LENGTH At this point these aforementioned operators,
+  // including LIKE/ILIKE, will just become part of a StringOps chain (which will also
+  // avoid the overhead of serializing the transformed raw strings from previous string
+  // opers to the dictionary to only read back out and perform LIKE/ILIKE.)
+  CHECK_GT(string_oper->getArity(), 0UL);
+  const auto& string_oper_primary_arg_ti = string_oper->getArg(0)->get_type_info();
+  CHECK(string_oper_primary_arg_ti.is_dict_encoded_string());
+  CHECK_NE(string_oper_primary_arg_ti.get_comp_param(), TRANSIENT_DICT_ID);
+  // Note the actual translation below will be cached by RowSetMemOwner
+  translate_dict_strings(string_oper, ExecutorDeviceType::CPU, executor);
+}
+
 llvm::Value* CodeGenerator::codegenDictLike(
     const std::shared_ptr<Analyzer::Expr> like_arg,
     const Analyzer::Constant* pattern,
@@ -212,6 +392,21 @@ llvm::Value* CodeGenerator::codegenDictLike(
       dict_like_arg_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true);
   if (sdp->storageEntryCount() > 200000000) {
     return nullptr;
+  }
+  if (sdp->getDictId() == TRANSIENT_DICT_ID) {
+    // If we have a literal dictionary it was a product
+    // of string ops applied to none-encoded strings, and
+    // will not be populated at codegen-time, so we
+    // cannot use the fast path
+
+    // Todo(todd): Once string ops support non-string producting
+    // operators (like like/ilike), like/ilike can be chained and
+    // we can avoid the string translation
+    return nullptr;
+  }
+  const auto string_oper = dynamic_cast<const Analyzer::StringOper*>(dict_like_arg.get());
+  if (string_oper) {
+    pre_translate_string_ops(string_oper, executor());
   }
   const auto& pattern_ti = pattern->get_type_info();
   CHECK(pattern_ti.is_string());
@@ -420,6 +615,22 @@ llvm::Value* CodeGenerator::codegenDictRegexp(
       comp_param, executor()->getRowSetMemoryOwner(), true);
   if (sdp->storageEntryCount() > 15000000) {
     return nullptr;
+  }
+  if (sdp->getDictId() == TRANSIENT_DICT_ID) {
+    // If we have a literal dictionary it was a product
+    // of string ops applied to none-encoded strings, and
+    // will not be populated at codegen-time, so we
+    // cannot use the fast path
+
+    // Todo(todd): Once string ops support non-string producting
+    // operators (like regexp_like), these operators can be chained
+    // and we can avoid the string translation
+    return nullptr;
+  }
+  const auto string_oper =
+      dynamic_cast<const Analyzer::StringOper*>(dict_regexp_arg.get());
+  if (string_oper) {
+    pre_translate_string_ops(string_oper, executor());
   }
   const auto& pattern_ti = pattern->get_type_info();
   CHECK(pattern_ti.is_string());

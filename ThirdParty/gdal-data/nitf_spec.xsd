@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!--
 /******************************************************************************
- * $Id: nitf_spec.xsd 220fb188536106a9992284cd5629363c064f624e 2020-10-13 17:23:11 -0400 matthew-baran $
+ * $Id: nitf_spec.xsd 3cff1e81746abaf4f030b46c64242f0e6818e631 2021-08-19 10:20:33 +0200 Even Rouault $
  *
  * Project:  NITF Library
  * Purpose:  Schema of description of NITF TREs
@@ -30,10 +30,23 @@
  ****************************************************************************/
 -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
-    <xs:element name="tres">
+    <xs:element name="root">
         <xs:complexType>
             <xs:sequence>
-                <xs:element name="tre" type="treType" minOccurs="0" maxOccurs="unbounded"/>
+                <xs:element name="tres" minOccurs="0">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="tre" type="treType" minOccurs="0" maxOccurs="unbounded"/>
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
+                <xs:element name="des_list" minOccurs="0">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="des" type="desType" minOccurs="0" maxOccurs="unbounded"/>
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
             </xs:sequence>
         </xs:complexType>
     </xs:element>
@@ -46,6 +59,22 @@
         <xs:attribute name="minlength" type="xs:integer" use="optional"/>
         <xs:attribute name="maxlength" type="xs:integer" use="optional"/>
         <xs:attribute name="location" type="xs:string" use="optional"/>
+    </xs:complexType>
+
+    <xs:complexType name="desType">
+        <xs:sequence>
+            <!-- definition of user-defined subheader fields of DES -->
+            <xs:element name="subheader_fields" minOccurs="0">
+                <xs:complexType>
+                    <xs:group ref="itemType"/>
+                    <xs:attribute name="name" type="xs:string"/>
+                    <xs:attribute name="length" type="positiveInteger" use="optional"/>
+                    <xs:attribute name="minlength" type="xs:integer" use="optional"/>
+                    <xs:attribute name="maxlength" type="xs:integer" use="optional"/>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+        <xs:attribute name="name" type="xs:string"/>
     </xs:complexType>
 
     <xs:group name="itemType">
@@ -132,6 +161,7 @@
                     <xs:enumeration value="real"/>
                     <xs:enumeration value="IEEE754_Float32_BigEndian"/>
                     <xs:enumeration value="UnsignedInt_BigEndian"/>
+                    <xs:enumeration value="ISO8859-1"/>
                     <xs:enumeration value="bitmask"/>
                 </xs:restriction>
             </xs:simpleType>

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,6 +66,7 @@ class CpuCompilationContext : public CompilationContext {
   void setFunctionPointer(llvm::Function* function) {
     func_ = execution_engine_->getPointerToFunction(function);
     CHECK(func_);
+    execution_engine_->removeModule(function->getParent());
   }
 
   void* func() const { return func_; }
@@ -73,7 +74,9 @@ class CpuCompilationContext : public CompilationContext {
   using TableFunctionEntryPointPtr = int32_t (*)(const int8_t* mgr_ptr,
                                                  const int8_t** input_cols,
                                                  const int64_t* input_row_count,
+                                                 const int8_t** input_str_dict_proxy_ptrs,
                                                  int64_t** out,
+                                                 int8_t** output_str_dict_proxy_ptrs,
                                                  int64_t* output_row_count);
   TableFunctionEntryPointPtr table_function_entry_point() const {
     return (TableFunctionEntryPointPtr)func_;

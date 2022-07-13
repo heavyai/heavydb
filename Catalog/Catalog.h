@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 /**
  * @file    Catalog.h
- * @author  Todd Mostak <todd@map-d.com>, Wei Hong <wei@map-d.com>
  * @brief   This file contains the class specification and related data structures for
  * Catalog.
  *
@@ -54,13 +53,21 @@
 #include "Catalog/TableMetadata.h"
 #include "Catalog/Types.h"
 #include "DataMgr/DataMgr.h"
+#include "OSDependent/heavyai_locks.h"
 #include "QueryEngine/CompilationOptions.h"
-#include "Shared/mapd_shared_mutex.h"
+#include "Shared/heavyai_shared_mutex.h"
 #include "SqliteConnector/SqliteConnector.h"
 
 #include "LeafHostInfo.h"
 
 enum GetTablesType { GET_PHYSICAL_TABLES_AND_VIEWS, GET_PHYSICAL_TABLES, GET_VIEWS };
+
+namespace lockmgr {
+
+template <class T>
+class TableLockMgrImpl;
+
+}  // namespace lockmgr
 
 namespace Parser {
 
@@ -104,6 +111,17 @@ static constexpr const char* ROLE_ASSIGNMENTS_SYS_TABLE_NAME{"role_assignments"}
 static constexpr const char* MEMORY_SUMMARY_SYS_TABLE_NAME{"memory_summary"};
 static constexpr const char* MEMORY_DETAILS_SYS_TABLE_NAME{"memory_details"};
 static constexpr const char* STORAGE_DETAILS_SYS_TABLE_NAME{"storage_details"};
+static constexpr const char* SERVER_LOGS_SYS_TABLE_NAME{"server_logs"};
+static constexpr const char* REQUEST_LOGS_SYS_TABLE_NAME{"request_logs"};
+static constexpr const char* WS_SERVER_LOGS_SYS_TABLE_NAME{"web_server_logs"};
+static constexpr const char* WS_SERVER_ACCESS_LOGS_SYS_TABLE_NAME{
+    "web_server_access_logs"};
+
+static const std::array<std::string, 4> kAggregatorOnlySystemTables{
+    DASHBOARDS_SYS_TABLE_NAME,
+    REQUEST_LOGS_SYS_TABLE_NAME,
+    WS_SERVER_LOGS_SYS_TABLE_NAME,
+    WS_SERVER_ACCESS_LOGS_SYS_TABLE_NAME};
 
 /**
  * @type Catalog
@@ -127,11 +145,6 @@ class Catalog final {
           const std::vector<LeafHostInfo>& string_dict_hosts,
           std::shared_ptr<Calcite> calcite,
           bool is_new_db);
-  /**
-   * @brief Constructor builds a hollow catalog
-   * used during constructor of other catalogs
-   */
-  Catalog();
 
   /**
    * @brief Destructor - deletes all
@@ -151,8 +164,7 @@ class Catalog final {
       TableDescriptor& td,
       const std::list<ColumnDescriptor>& columns,
       const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs);
-  int32_t createDashboard(DashboardDescriptor& vd,
-                          bool skip_system_role_creation = false);
+  int32_t createDashboard(DashboardDescriptor& vd);
   void replaceDashboard(DashboardDescriptor& vd);
   std::string createLink(LinkDescriptor& ld, size_t min_length);
   void dropTable(const TableDescriptor* td);
@@ -164,6 +176,7 @@ class Catalog final {
                     const std::string& newColumnName);
   void addColumn(const TableDescriptor& td, ColumnDescriptor& cd);
   void dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd);
+  void invalidateCachesForTable(const int table_id);
   void removeFragmenterForTable(const int table_id) const;
 
   const std::map<int, const ColumnDescriptor*> getDictionaryToColumnMapping();
@@ -181,9 +194,13 @@ class Catalog final {
   const TableDescriptor* getMetadataForTable(int tableId,
                                              bool populateFragmenter = true) const;
 
+  std::optional<std::string> getTableName(int32_t table_id) const;
+  std::optional<int32_t> getTableId(const std::string& table_name) const;
+
   const ColumnDescriptor* getMetadataForColumn(int tableId,
                                                const std::string& colName) const;
   const ColumnDescriptor* getMetadataForColumn(int tableId, int columnId) const;
+  const std::optional<std::string> getColumnName(int table_id, int column_id) const;
 
   const int getColumnIdBySpi(const int tableId, const size_t spi) const;
   const ColumnDescriptor* getMetadataForColumnBySpi(const int tableId,
@@ -310,6 +327,11 @@ class Catalog final {
   std::string dumpCreateTable(const TableDescriptor* td,
                               bool multiline_formatting = true,
                               bool dump_defaults = false) const;
+  std::optional<std::string> dumpCreateTable(int32_t table_id,
+                                             bool multiline_formatting = true,
+                                             bool dump_defaults = false) const;
+  std::string dumpCreateServer(const std::string& name,
+                               bool multiline_formatting = true) const;
 
   /**
    * Gets the DDL statement used to create a foreign table schema.
@@ -413,6 +435,16 @@ class Catalog final {
    * @param server_name - Name of foreign server that will be deleted
    */
   void dropForeignServer(const std::string& server_name);
+
+  /**
+   * @brief Get all of the foreign tables for associated with a foreign server id
+   *
+   * @param foreign_server_id - id of foreign server
+   * @return std::vector<const ForeignTable*> a vector containing foreign tables which
+   * use the foreign server
+   */
+  std::vector<const foreign_storage::ForeignTable*> getAllForeignTablesForForeignServer(
+      const int32_t foreign_server_id);
 
   /**
    * Performs a query on all foreign servers accessible to user with optional filter,
@@ -561,6 +593,8 @@ class Catalog final {
   void reassignOwners(const std::set<std::string>& old_owners,
                       const std::string& new_owner);
 
+  bool isInfoSchemaDb() const;
+
  protected:
   void CheckAndExecuteMigrations();
   void CheckAndExecuteMigrationsPostBuildMaps();
@@ -580,6 +614,7 @@ class Catalog final {
   void updateFrontendViewsToDashboards();
   void updateCustomExpressionsSchema();
   void updateFsiSchemas();
+  void renameLegacyDataWrappers();
   void recordOwnershipOfObjectsInObjectPermissions();
   void checkDateInDaysColumnMigration();
   void createDashboardSystemRoles();
@@ -599,7 +634,8 @@ class Catalog final {
   void setColumnDictionary(ColumnDescriptor& cd,
                            std::list<DictDescriptor>& dds,
                            const TableDescriptor& td,
-                           const bool isLogicalTable);
+                           bool is_logical_table,
+                           bool use_temp_dictionary = false);
   void addFrontendViewToMap(DashboardDescriptor& vd);
   void addFrontendViewToMapNoLock(DashboardDescriptor& vd);
   void addLinkToMap(LinkDescriptor& ld);
@@ -645,6 +681,7 @@ class Catalog final {
   ForeignServerMap foreignServerMap_;
   ForeignServerMapById foreignServerMapById_;
   CustomExpressionMapById custom_expr_map_by_id_;
+  TableDictColumnsMap dict_columns_by_table_id_;
 
   SqliteConnector sqliteConnector_;
   const DBMetadata currentDB_;
@@ -668,6 +705,23 @@ class Catalog final {
   ColumnDescriptorsForRoll columnDescriptorsForRoll;
 
  private:
+  void buildDictionaryMapUnlocked();
+  void reloadTableMetadata(int table_id);
+  template <class T>
+  friend class lockmgr::TableLockMgrImpl;  // for reloadTableMetadataUnlocked()
+  void reloadTableMetadataUnlocked(int table_id);
+  void reloadCatalogMetadata(const std::map<int32_t, std::string>& user_name_by_user_id);
+  void reloadCatalogMetadataUnlocked(
+      const std::map<int32_t, std::string>& user_name_by_user_id);
+  void buildTablesMapUnlocked();
+  void buildColumnsMapUnlocked();
+  void updateViewsInMapUnlocked();
+  void buildDashboardsMapUnlocked(
+      const std::map<int32_t, std::string>& user_name_by_user_id);
+  void buildLinksMapUnlocked();
+  void buildLogicalToPhysicalMapUnlocked();
+  void updateForeignTablesInMapUnlocked();
+
   void gatherAdditionalInfo(std::vector<std::string>& additional_info,
                             std::set<std::string>& shared_dict_column_names,
                             const TableDescriptor* td) const;
@@ -679,8 +733,7 @@ class Catalog final {
   void renameTableDirectories(const std::string& temp_data_dir,
                               const std::vector<std::string>& target_paths,
                               const std::string& name_prefix) const;
-  void buildForeignServerMap();
-  void addForeignTableDetails();
+  void buildForeignServerMapUnlocked();
 
   void setForeignServerProperty(const std::string& server_name,
                                 const std::string& property,
@@ -701,6 +754,8 @@ class Catalog final {
                                 const GetTablesType get_tables_type) const;
 
   TableDescriptor* getMutableMetadataForTableUnlocked(int table_id) const;
+  TableDescriptor* getMutableMetadataForTableUnlocked(
+      const std::string& table_name) const;
 
   /**
    * Same as createForeignServer() but without acquiring locks. This should only be called
@@ -713,41 +768,78 @@ class Catalog final {
   foreign_storage::ForeignTable* getForeignTableUnlocked(
       const std::string& tableName) const;
 
-  const Catalog* getObjForLock();
   void removeChunks(const int table_id) const;
 
-  void buildCustomExpressionsMap();
+  void buildCustomExpressionsMapUnlocked();
   std::unique_ptr<CustomExpression> getCustomExpressionFromConnector(size_t row);
 
   void restoreOldOwners(
+      const std::map<int32_t, std::string>& old_owners_user_name_by_id,
       const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
       int32_t new_owner_id);
   void restoreOldOwnersInMemory(
+      const std::map<int32_t, std::string>& old_owners_user_name_by_id,
       const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
       int32_t new_owner_id);
 
   void conditionallyInitializeSystemObjects();
   void initializeSystemServers();
   void initializeSystemTables();
+  void initializeUsersSystemTable();
+  void initializeDatabasesSystemTable();
+  void initializePermissionsSystemTable();
+  void initializeRolesSystemTable();
+  void initializeTablesSystemTable();
+  void initializeDashboardsSystemTable();
+  void initializeRoleAssignmentsSystemTable();
+  void initializeMemorySummarySystemTable();
+  void initializeMemoryDetailsSystemTable();
+  void initializeStorageDetailsSystemTable();
+  void initializeServerLogsSystemTables();
+  void initializeRequestLogsSystemTables();
+  void initializeWebServerLogsSystemTables();
+  void initializeWebServerAccessLogsSystemTables();
+
   void createSystemTableServer(const std::string& server_name,
-                               const std::string& data_wrapper_type);
-  void createSystemTable(
+                               const std::string& data_wrapper_type,
+                               const foreign_storage::OptionsMap& options = {});
+  std::pair<foreign_storage::ForeignTable, std::list<ColumnDescriptor>>
+  getSystemTableSchema(
       const std::string& table_name,
       const std::string& server_name,
-      const std::vector<std::pair<std::string, SQLTypeInfo>>& column_type_by_name);
+      const std::vector<std::pair<std::string, SQLTypeInfo>>& column_type_by_name,
+      bool is_in_memory_system_table);
+
+  bool recreateSystemTableIfUpdated(foreign_storage::ForeignTable& foreign_table,
+                                    const std::list<ColumnDescriptor>& columns);
 
   void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
 
-  static constexpr const char* CATALOG_SERVER_NAME{"omnisci_catalog_server"};
-  static constexpr const char* MEMORY_STATS_SERVER_NAME{"omnisci_memory_stats_server"};
-  static constexpr const char* STORAGE_STATS_SERVER_NAME{"omnisci_storage_stats_server"};
-  static constexpr std::array<const char*, 3> INTERNAL_SERVERS{CATALOG_SERVER_NAME,
+  void addToColumnMap(ColumnDescriptor* cd);
+  void removeFromColumnMap(ColumnDescriptor* cd);
+
+  void deleteTableCatalogMetadata(
+      const TableDescriptor* logical_table,
+      const std::vector<const TableDescriptor*>& physical_tables);
+
+  std::string dumpCreateTableUnlocked(const TableDescriptor* td,
+                                      bool multiline_formatting,
+                                      bool dump_defaults) const;
+
+  static constexpr const char* CATALOG_SERVER_NAME{"system_catalog_server"};
+  static constexpr const char* MEMORY_STATS_SERVER_NAME{"system_memory_stats_server"};
+  static constexpr const char* STORAGE_STATS_SERVER_NAME{"system_storage_stats_server"};
+  static constexpr const char* LOGS_SERVER_NAME{"system_logs_server"};
+  static constexpr std::array<const char*, 4> INTERNAL_SERVERS{CATALOG_SERVER_NAME,
                                                                MEMORY_STATS_SERVER_NAME,
-                                                               STORAGE_STATS_SERVER_NAME};
+                                                               STORAGE_STATS_SERVER_NAME,
+                                                               LOGS_SERVER_NAME};
 
  public:
+  mutable std::unique_ptr<heavyai::DistributedSharedMutex> dcatalogMutex_;
+  mutable std::unique_ptr<heavyai::DistributedSharedMutex> dsqliteMutex_;
   mutable std::mutex sqliteMutex_;
-  mutable mapd_shared_mutex sharedMutex_;
+  mutable heavyai::shared_mutex sharedMutex_;
   mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;
   mutable std::atomic<std::thread::id> thread_holding_write_lock;
   // assuming that you never call into a catalog from another catalog via the same thread

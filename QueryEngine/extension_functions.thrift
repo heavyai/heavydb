@@ -1,5 +1,5 @@
-namespace java com.omnisci.thrift.calciteserver
-namespace py omnisci.extension_functions
+namespace java ai.heavy.thrift.calciteserver
+namespace py heavydb.extension_functions
 
 /* See QueryEngine/ExtensionFunctionsWhitelist.h for required values */
 enum TExtArgumentType {
@@ -48,6 +48,23 @@ enum TExtArgumentType {
   ColumnListBool,
   ColumnTextEncodingDict,
   ColumnListTextEncodingDict,
+  ColumnTimestamp,
+  Timestamp,
+  ColumnArrayInt8,
+  ColumnArrayInt16,
+  ColumnArrayInt32,
+  ColumnArrayInt64,
+  ColumnArrayFloat,
+  ColumnArrayDouble,
+  ColumnArrayBool,
+  ColumnListArrayInt8,
+  ColumnListArrayInt16,
+  ColumnListArrayInt32,
+  ColumnListArrayInt64,
+  ColumnListArrayFloat,
+  ColumnListArrayDouble,
+  ColumnListArrayBool,
+  GeoMultiLineString,
 }
 
 /* See QueryEngine/TableFunctions/TableFunctionsFactory.h for required values */

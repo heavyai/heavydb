@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #ifndef QUERYENGINE_RELALGVISITOR_H
 #define QUERYENGINE_RELALGVISITOR_H
 
-#include "RelAlgDagBuilder.h"
+#include "RelAlgDag.h"
 
 template <class T>
 class RelAlgVisitor {
@@ -75,7 +75,8 @@ class RelAlgVisitor {
     if (logical_union) {
       return aggregateResult(result, visitLogicalUnion(logical_union));
     }
-    LOG(FATAL) << "Unhandled rel_alg type: " << rel_alg->toString();
+    LOG(FATAL) << "Unhandled rel_alg type: "
+               << rel_alg->toString(RelRexToStringConfig::defaults());
     return {};
   }
 

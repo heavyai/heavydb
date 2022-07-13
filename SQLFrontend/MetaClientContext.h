@@ -1,15 +1,13 @@
 #ifndef METACLIENTCONTEXT_H
 #define METACLIENTCONTEXT_H
 
-#include "gen-cpp/omnisci_types.h"
+#include "gen-cpp/heavy_types.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 
 static std::string const INVALID_SESSION_ID("");
-static std::string const OMNISCI_ROOT_USER("admin");
-static std::string const OMNISCI_DEFAULT_ROOT_USER_ROLE("omnisci_default_suser_role");
 
 template <typename CLIENT_TYPE, typename TRANSPORT_TYPE>
 struct MetaClientContext {

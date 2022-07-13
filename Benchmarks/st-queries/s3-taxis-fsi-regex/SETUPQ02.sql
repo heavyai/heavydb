@@ -1,1 +1,1 @@
-CREATE SERVER benchmark_s3_regex_parser FOREIGN DATA WRAPPER omnisci_regex_parser WITH (storage_type='AWS_S3', s3_bucket='benchmark-fsi-dataset', aws_region='us-west-1')
+CREATE SERVER benchmark_s3_regex_parser FOREIGN DATA WRAPPER regex_parsed_file WITH (storage_type='AWS_S3', s3_bucket='benchmark-fsi-dataset', aws_region='us-west-1')

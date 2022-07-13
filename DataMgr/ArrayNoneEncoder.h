@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,10 @@
 
 /**
  * @file		ArrayNoneEncoder.h
- * @author	Wei Hong <wei@mapd.com>
  * @brief		unencoded array encoder
  *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
+
 #ifndef ARRAY_NONE_ENCODER_H
 #define ARRAY_NONE_ENCODER_H
 
@@ -38,6 +37,7 @@
 
 using Data_Namespace::AbstractBuffer;
 
+// TODO(Misiu): All of these functions should be moved to a .cpp file.
 class ArrayNoneEncoder : public Encoder {
  public:
   ArrayNoneEncoder(AbstractBuffer* buffer)
@@ -65,24 +65,20 @@ class ArrayNoneEncoder : public Encoder {
     return n - start_idx;
   }
 
-  size_t getNumElemsForBytesEncodedData(const int8_t* index_data,
-                                        const int start_idx,
-                                        const size_t num_elements,
-                                        const size_t byte_limit) override {
+  size_t getNumElemsForBytesEncodedDataAtIndices(const int8_t* index_data,
+                                                 const std::vector<size_t>& selected_idx,
+                                                 const size_t byte_limit) override {
+    size_t num_elements = 0;
     size_t data_size = 0;
-    auto array_offsets = reinterpret_cast<const ArrayOffsetT*>(index_data);
-    size_t count;
-    for (count = 1; count <= num_elements; ++count) {
-      auto current_index = start_idx + count;
-      auto offset = array_offsets[current_index];
-      int64_t last_offset = array_offsets[current_index - 1];
-      size_t array_byte_size = std::abs(offset) - std::abs(last_offset);
-      if (data_size + array_byte_size > byte_limit) {
+    for (const auto& offset_index : selected_idx) {
+      auto element_size = getArrayDatumSizeAtIndex(index_data, offset_index);
+      if (data_size + element_size > byte_limit) {
         break;
       }
-      data_size += array_byte_size;
+      data_size += element_size;
+      num_elements++;
     }
-    return count - 1;
+    return num_elements;
   }
 
   std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
@@ -100,8 +96,8 @@ class ArrayNoneEncoder : public Encoder {
       const std::vector<size_t>& selected_idx) override {
     std::vector<ArrayDatum> data_subset;
     data_subset.reserve(selected_idx.size());
-    for (const auto& array_index : selected_idx) {
-      data_subset.emplace_back(getArrayDatumAtIndex(index_data, data, array_index));
+    for (const auto& offset_index : selected_idx) {
+      data_subset.emplace_back(getArrayDatumAtIndex(index_data, data, offset_index));
     }
     return appendData(&data_subset, 0, selected_idx.size(), false);
   }
@@ -124,11 +120,11 @@ class ArrayNoneEncoder : public Encoder {
                                             const size_t numAppendElems,
                                             const bool replicating) {
     CHECK(index_buf != nullptr);  // index_buf must be set before this.
-    size_t index_size = numAppendElems * sizeof(ArrayOffsetT);
+    size_t append_index_size = numAppendElems * sizeof(ArrayOffsetT);
     if (num_elems_ == 0) {
-      index_size += sizeof(ArrayOffsetT);  // plus one for the initial offset
+      append_index_size += sizeof(ArrayOffsetT);  // plus one for the initial offset
     }
-    index_buf->reserve(index_size);
+    index_buf->reserve(index_buf->size() + append_index_size);
 
     bool first_elem_padded = false;
     ArrayOffsetT initial_offset = 0;
@@ -162,18 +158,18 @@ class ArrayNoneEncoder : public Encoder {
       }
     }
     // Need to start data from 8 byte offset if first array encoded is a NULL array
-    size_t data_size = (first_elem_padded) ? DEFAULT_NULL_PADDING_SIZE : 0;
+    size_t append_data_size = (first_elem_padded) ? DEFAULT_NULL_PADDING_SIZE : 0;
     for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {
       // NULL arrays don't take any space so don't add to the data size
       if ((*srcData)[replicating ? 0 : n].is_null) {
         continue;
       }
-      data_size += (*srcData)[replicating ? 0 : n].length;
+      append_data_size += (*srcData)[replicating ? 0 : n].length;
     }
-    buffer_->reserve(data_size);
+    buffer_->reserve(buffer_->size() + append_data_size);
 
-    size_t inbuf_size =
-        std::min(std::max(index_size, data_size), (size_t)MAX_INPUT_BUF_SIZE);
+    size_t inbuf_size = std::min(std::max(append_index_size, append_data_size),
+                                 (size_t)MAX_INPUT_BUF_SIZE);
     auto gc_inbuf = std::make_unique<int8_t[]>(inbuf_size);
     auto inbuf = gc_inbuf.get();
     for (size_t num_appended = 0; num_appended < numAppendElems;) {
@@ -567,11 +563,23 @@ class ArrayNoneEncoder : public Encoder {
   };
 
  private:
-  ArrayDatum getArrayDatumAtIndex(const int8_t* index_data, int8_t* data, size_t index) {
+  std::pair<ArrayOffsetT, ArrayOffsetT> getArrayOffsetsAtIndex(const int8_t* index_data,
+                                                               size_t index) {
     auto array_offsets = reinterpret_cast<const ArrayOffsetT*>(index_data);
     auto current_index = index + 1;
     auto offset = array_offsets[current_index];
     int64_t last_offset = array_offsets[current_index - 1];
+    return {offset, last_offset};
+  }
+
+  size_t getArrayDatumSizeAtIndex(const int8_t* index_data, size_t index) {
+    auto [offset, last_offset] = getArrayOffsetsAtIndex(index_data, index);
+    size_t array_byte_size = std::abs(offset) - std::abs(last_offset);
+    return array_byte_size;
+  }
+
+  ArrayDatum getArrayDatumAtIndex(const int8_t* index_data, int8_t* data, size_t index) {
+    auto [offset, last_offset] = getArrayOffsetsAtIndex(index_data, index);
     size_t array_byte_size = std::abs(offset) - std::abs(last_offset);
     bool is_null = offset < 0;
     auto current_data = data + std::abs(last_offset);

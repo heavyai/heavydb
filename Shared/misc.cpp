@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@
 #include "misc.h"
 
 #include <cstdio>
+
+#include "sqltypes.h"
 
 namespace shared {
 
@@ -43,7 +45,8 @@ size_t formatDate(char* buf, size_t const max, int64_t const unixtime) {
 size_t formatDateTime(char* buf,
                       size_t const max,
                       int64_t const timestamp,
-                      int const dimension) {
+                      int const dimension,
+                      bool use_iso_format) {
   constexpr int pow10[10]{
       1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
   DivUMod const div_hip = divUMod(timestamp, pow10[dimension]);
@@ -61,12 +64,25 @@ size_t formatDateTime(char* buf,
   unsigned const ss = div_day.rem % 60;
   unsigned const hh = minutes / 60;
   unsigned const mm = minutes % 60;
-  int const len =
-      snprintf(buf, max, "%04lld-%02u-%02u %02u:%02u:%02u", y, m, d, hh, mm, ss);
+  const char* date_time_format;
+  if (use_iso_format) {
+    if (dimension) {
+      date_time_format = "%04lld-%02u-%02uT%02u:%02u:%02u";
+    } else {
+      date_time_format = "%04lld-%02u-%02uT%02u:%02u:%02uZ";
+    }
+  } else {
+    date_time_format = "%04lld-%02u-%02u %02u:%02u:%02u";
+  }
+  int const len = snprintf(buf, max, date_time_format, y, m, d, hh, mm, ss);
   if (0 <= len && static_cast<size_t>(len) < max) {
     if (dimension) {
-      int const len_frac = snprintf(
-          buf + len, max - len, ".%0*d", dimension, static_cast<int>(div_hip.rem));
+      auto precision_format = use_iso_format ? ".%0*dZ" : ".%0*d";
+      int const len_frac = snprintf(buf + len,
+                                    max - len,
+                                    precision_format,
+                                    dimension,
+                                    static_cast<int>(div_hip.rem));
       if (0 <= len_frac && static_cast<size_t>(len + len_frac) < max) {
         return static_cast<size_t>(len + len_frac);
       }
@@ -88,6 +104,38 @@ size_t formatHMS(char* buf, size_t const max, int64_t const unixtime) {
     return static_cast<size_t>(len);
   }
   return 0;
+}
+
+std::string convert_temporal_to_iso_format(const SQLTypeInfo& type_info,
+                                           int64_t unix_time) {
+  std::string iso_str;
+  if (type_info.get_type() == kTIME) {
+    // Set a buffer size that can contain HH:MM:SS
+    iso_str.resize(8);
+    const auto len = shared::formatHMS(iso_str.data(), iso_str.length() + 1, unix_time);
+    CHECK_EQ(len, iso_str.length());
+  } else if (type_info.get_type() == kDATE) {
+    // Set a buffer size that can contain YYYYYYYYYYYY-mm-dd (int64_t can represent up to
+    // 12 digit years)
+    iso_str.resize(18);
+    const size_t len =
+        shared::formatDate(iso_str.data(), iso_str.length() + 1, unix_time);
+    CHECK_GT(len, static_cast<size_t>(0));
+    iso_str.resize(len);
+  } else if (type_info.get_type() == kTIMESTAMP) {
+    auto precision = type_info.get_precision();
+    // Set a buffer size that can contain the specified timestamp precision
+    // YYYYYYYYYYYY-mm-dd(18) T(1) HH:MM:SS(8) .(precision?) nnnnnnnnn(precision) Z(1)
+    // (int64_t can represent up to 12 digit years with seconds precision)
+    iso_str.resize(18 + 1 + 8 + bool(precision) + precision + 1);
+    const size_t len = shared::formatDateTime(
+        iso_str.data(), iso_str.length() + 1, unix_time, precision, true);
+    CHECK_GT(len, static_cast<size_t>(0));
+    iso_str.resize(len);
+  } else {
+    UNREACHABLE() << "Unexpected column type: " << type_info.toString();
+  }
+  return iso_str;
 }
 
 }  // namespace shared

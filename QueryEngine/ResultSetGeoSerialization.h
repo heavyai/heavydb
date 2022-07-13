@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 /**
  * @file    ResultSetGeoSerialization.h
- * @author  Alex Baden <alex.baden@mapd.com>
  * @brief   Serialization routines for geospatial types.
  *
  */
@@ -153,6 +152,54 @@ struct GeoTargetValuePtrSerializer<kLINESTRING> {
       // return GeoTargetValuePtr();
     }
     return GeoLineStringTargetValuePtr({std::move(vals[0])});
+  }
+};
+
+// MultiLineString
+template <>
+struct GeoTargetValueSerializer<kMULTILINESTRING> {
+  static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
+                                      std::array<VarlenDatumPtr, 2>& vals) {
+    if (!geo_ti.get_notnull() && (vals[0]->is_null || vals[1]->is_null)) {
+      return GeoTargetValue(boost::optional<GeoMultiLineStringTargetValue>{});
+    }
+    std::vector<int32_t> linestring_sizes_vec;
+    unpack_geo_vector(linestring_sizes_vec, vals[1]->pointer, vals[1]->length);
+    auto gtv =
+        GeoMultiLineStringTargetValue(*decompress_coords<double, SQLTypeInfo>(
+                                          geo_ti, vals[0]->pointer, vals[0]->length),
+                                      linestring_sizes_vec);
+    return GeoTargetValue(gtv);
+  }
+};
+
+template <>
+struct GeoWktSerializer<kMULTILINESTRING> {
+  static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
+                                      std::array<VarlenDatumPtr, 2>& vals) {
+    if (!geo_ti.get_notnull() && (vals[0]->is_null || vals[1]->is_null)) {
+      // May need to generate "MULTILINESTRING EMPTY" instead of NULL
+      return NullableString("NULL");
+    }
+    std::vector<int32_t> linestring_sizes_vec;
+    unpack_geo_vector(linestring_sizes_vec, vals[1]->pointer, vals[1]->length);
+    Geospatial::GeoMultiLineString mls(*decompress_coords<double, SQLTypeInfo>(
+                                           geo_ti, vals[0]->pointer, vals[0]->length),
+                                       linestring_sizes_vec);
+    return NullableString(mls.getWktString());
+  };
+};
+
+template <>
+struct GeoTargetValuePtrSerializer<kMULTILINESTRING> {
+  static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
+                                      std::array<VarlenDatumPtr, 2>& vals) {
+    if (!geo_ti.get_notnull() && (vals[0]->is_null || vals[1]->is_null)) {
+      // NULL geo
+      // Pass along null datum, instead of an empty/null GeoTargetValuePtr
+      // return GeoTargetValuePtr();
+    }
+    return GeoMultiLineStringTargetValuePtr({std::move(vals[0]), std::move(vals[1])});
   }
 };
 

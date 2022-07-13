@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 #include "NvidiaKernel.h"
 
 #include "Logger/Logger.h"
-#include "OSDependent/omnisci_path.h"
+#include "OSDependent/heavyai_path.h"
 
 #include <boost/filesystem/operations.hpp>
 
@@ -50,22 +50,22 @@ void fill_options(std::vector<CUjit_option>& option_keys,
 }
 
 boost::filesystem::path get_gpu_rt_path() {
-  boost::filesystem::path gpu_rt_path{omnisci::get_root_abs_path()};
+  boost::filesystem::path gpu_rt_path{heavyai::get_root_abs_path()};
   gpu_rt_path /= "QueryEngine";
   gpu_rt_path /= "cuda_mapd_rt.fatbin";
   if (!boost::filesystem::exists(gpu_rt_path)) {
-    throw std::runtime_error("OmniSci GPU runtime library not found at " +
+    throw std::runtime_error("HeavyDB GPU runtime library not found at " +
                              gpu_rt_path.string());
   }
   return gpu_rt_path;
 }
 
 boost::filesystem::path get_cuda_table_functions_path() {
-  boost::filesystem::path cuda_table_functions_path{omnisci::get_root_abs_path()};
+  boost::filesystem::path cuda_table_functions_path{heavyai::get_root_abs_path()};
   cuda_table_functions_path /= "QueryEngine";
   cuda_table_functions_path /= "CudaTableFunctions.a";
   if (!boost::filesystem::exists(cuda_table_functions_path)) {
-    throw std::runtime_error("OmniSci GPU table functions module not found at " +
+    throw std::runtime_error("HeavyDB GPU table functions module not found at " +
                              cuda_table_functions_path.string());
   }
 
@@ -85,7 +85,7 @@ void nvidia_jit_warmup() {
   CUlinkState link_state;
   checkCudaErrors(
       cuLinkCreate(num_options, &option_keys[0], &option_values[0], &link_state))
-      << std::string(error_log);
+      << ": " << std::string(error_log);
   VLOG(1) << "CUDA JIT time to create link: "
           << *reinterpret_cast<float*>(&option_values[2]);
   boost::filesystem::path gpu_rt_path = get_gpu_rt_path();
@@ -94,7 +94,7 @@ void nvidia_jit_warmup() {
   CHECK(!cuda_table_functions_path.empty());
   checkCudaErrors(cuLinkAddFile(
       link_state, CU_JIT_INPUT_FATBINARY, gpu_rt_path.c_str(), 0, nullptr, nullptr))
-      << std::string(error_log);
+      << ": " << std::string(error_log);
   VLOG(1) << "CUDA JIT time to add RT fatbinary: "
           << *reinterpret_cast<float*>(&option_values[2]);
   checkCudaErrors(cuLinkAddFile(link_state,
@@ -103,10 +103,10 @@ void nvidia_jit_warmup() {
                                 0,
                                 nullptr,
                                 nullptr))
-      << std::string(error_log);
+      << ": " << std::string(error_log);
   VLOG(1) << "CUDA JIT time to add GPU table functions library: "
           << *reinterpret_cast<float*>(&option_values[2]);
-  checkCudaErrors(cuLinkDestroy(link_state)) << std::string(error_log);
+  checkCudaErrors(cuLinkDestroy(link_state)) << ": " << std::string(error_log);
 }
 
 std::string add_line_numbers(const std::string& text) {
@@ -139,7 +139,7 @@ CubinResult ptx_to_cubin(const std::string& ptx,
   CUlinkState link_state;
   checkCudaErrors(
       cuLinkCreate(num_options, &option_keys[0], &option_values[0], &link_state))
-      << std::string(error_log);
+      << ": " << std::string(error_log);
   VLOG(1) << "CUDA JIT time to create link: "
           << *reinterpret_cast<float*>(&option_values[2]);
 
@@ -153,7 +153,7 @@ CubinResult ptx_to_cubin(const std::string& ptx,
   // [library_name.a]
   checkCudaErrors(cuLinkAddFile(
       link_state, CU_JIT_INPUT_FATBINARY, gpu_rt_path.c_str(), 0, nullptr, nullptr))
-      << std::string(error_log);
+      << ": " << std::string(error_log);
   VLOG(1) << "CUDA JIT time to add RT fatbinary: "
           << *reinterpret_cast<float*>(&option_values[2]);
   checkCudaErrors(cuLinkAddFile(link_state,
@@ -162,7 +162,7 @@ CubinResult ptx_to_cubin(const std::string& ptx,
                                 0,
                                 nullptr,
                                 nullptr))
-      << std::string(error_log);
+      << ": " << std::string(error_log);
   VLOG(1) << "CUDA JIT time to add GPU table functions library: "
           << *reinterpret_cast<float*>(&option_values[2]);
   checkCudaErrors(cuLinkAddData(link_state,
@@ -173,14 +173,14 @@ CubinResult ptx_to_cubin(const std::string& ptx,
                                 0,
                                 nullptr,
                                 nullptr))
-      << std::string(error_log) << "\nPTX:\n"
+      << ": " << std::string(error_log) << "\nPTX:\n"
       << add_line_numbers(ptx) << "\nEOF PTX";
   VLOG(1) << "CUDA JIT time to add generated code: "
           << *reinterpret_cast<float*>(&option_values[2]);
   void* cubin{nullptr};
   size_t cubinSize{0};
   checkCudaErrors(cuLinkComplete(link_state, &cubin, &cubinSize))
-      << std::string(error_log);
+      << ": " << std::string(error_log);
   VLOG(1) << "CUDA Linker completed: " << info_log;
   CHECK(cubin);
   CHECK_GT(cubinSize, size_t(0));

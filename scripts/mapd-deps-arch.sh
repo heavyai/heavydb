@@ -25,7 +25,6 @@ yay -S \
     gdal \
     geos \
     git \
-    glbinding \
     go \
     google-glog \
     intel-tbb \

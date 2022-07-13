@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-/*
+/**
  * @file    TopKRuntime.cpp
- * @author  Minggang Yu <miyu@mapd.com>
  * @brief   Structures and runtime functions of streaming top-k heap
  *
- * Copyright (c) 2017 MapD Technologies, Inc.  All rights reserved.
  */
+
 #include "../Shared/funcannotations.h"
 
 enum class HeapOrdering { MIN, MAX };

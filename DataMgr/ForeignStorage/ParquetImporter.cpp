@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include "ParquetImporter.h"
 
 #include <queue>
@@ -289,7 +290,8 @@ void ParquetImporter::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_
 }
 
 void ParquetImporter::populateChunkBuffers(const ChunkToBufferMap& required_buffers,
-                                           const ChunkToBufferMap& optional_buffers) {
+                                           const ChunkToBufferMap& optional_buffers,
+                                           AbstractBuffer* delete_buffer) {
   UNREACHABLE();
 }
 
@@ -327,7 +329,9 @@ std::unique_ptr<import_export::ImportBatchResult> ParquetImporter::getNextImport
     }
   }
 
-  LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get());
+  // this code path is deprecated and does not need a RenderGroupAnalyzerMap
+  LazyParquetChunkLoader chunk_loader(
+      file_system_, file_reader_cache_.get(), nullptr, foreign_table_->tableName);
 
   std::optional<RowGroupInterval> next_row_group;
   {

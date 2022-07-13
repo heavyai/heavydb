@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/JoinFilterPushDown.h"
 #include "QueryEngine/QueryRewrite.h"
-#include "QueryEngine/RelAlgDagBuilder.h"
+#include "QueryEngine/RelAlgDag.h"
 #include "QueryEngine/SpeculativeTopN.h"
 #include "QueryEngine/StreamingTopN.h"
 #include "Shared/scope.h"
@@ -45,35 +45,43 @@ struct QueryStepExecutionResult {
   bool is_outermost_query;
 };
 
+namespace Fragmenter_Namespace {
+class InsertDataLoader;
+}
+
 class RelAlgExecutor : private StorageIOFacility {
  public:
   using TargetInfoList = std::vector<TargetInfo>;
 
   RelAlgExecutor(Executor* executor,
-                 const Catalog_Namespace::Catalog& cat,
+                 Catalog_Namespace::Catalog& cat,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
       : StorageIOFacility(executor, cat)
       , executor_(executor)
       , cat_(cat)
       , query_state_(std::move(query_state))
       , now_(0)
-      , queue_time_ms_(0) {}
+      , queue_time_ms_(0) {
+    initializeParallelismHints();
+  }
 
   RelAlgExecutor(Executor* executor,
-                 const Catalog_Namespace::Catalog& cat,
+                 Catalog_Namespace::Catalog& cat,
                  const std::string& query_ra,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
       : StorageIOFacility(executor, cat)
       , executor_(executor)
       , cat_(cat)
-      , query_dag_(std::make_unique<RelAlgDagBuilder>(query_ra, cat_, nullptr))
+      , query_dag_(RelAlgDagBuilder::buildDag(query_ra, cat, true))
       , query_state_(std::move(query_state))
       , now_(0)
-      , queue_time_ms_(0) {}
+      , queue_time_ms_(0) {
+    initializeParallelismHints();
+  }
 
   RelAlgExecutor(Executor* executor,
-                 const Catalog_Namespace::Catalog& cat,
-                 std::unique_ptr<RelAlgDagBuilder> query_dag,
+                 Catalog_Namespace::Catalog& cat,
+                 std::unique_ptr<RelAlgDag> query_dag,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
       : StorageIOFacility(executor, cat)
       , executor_(executor)
@@ -81,7 +89,9 @@ class RelAlgExecutor : private StorageIOFacility {
       , query_dag_(std::move(query_dag))
       , query_state_(std::move(query_state))
       , now_(0)
-      , queue_time_ms_(0) {}
+      , queue_time_ms_(0) {
+    initializeParallelismHints();
+  }
 
   size_t getOuterFragmentCount(const CompilationOptions& co, const ExecutionOptions& eo);
 
@@ -131,6 +141,8 @@ class RelAlgExecutor : private StorageIOFacility {
     return query_dag_->getRootNode();
   }
 
+  void prepareForeignTables();
+
   std::shared_ptr<const RelAlgNode> getRootRelAlgNodeShPtr() const {
     CHECK(query_dag_);
     return query_dag_->getRootNodeShPtr();
@@ -160,7 +172,9 @@ class RelAlgExecutor : private StorageIOFacility {
     return query_dag_ ? std::make_optional(query_dag_->getGlobalHints()) : std::nullopt;
   }
 
-  ExecutionResult executeSimpleInsert(const Analyzer::Query& insert_query);
+  ExecutionResult executeSimpleInsert(const Analyzer::Query& insert_query,
+                                      Fragmenter_Namespace::InsertDataLoader& inserter,
+                                      const Catalog_Namespace::SessionInfo& session);
 
   AggregatedColRange computeColRangesCache();
   StringDictionaryGenerations computeStringDictionaryGenerations();
@@ -174,7 +188,23 @@ class RelAlgExecutor : private StorageIOFacility {
 
   void executePostExecutionCallback();
 
+  // used for testing
+  RaExecutionSequence getRaExecutionSequence(const RelAlgNode* root_node,
+                                             Executor* executor) {
+    CHECK(executor);
+    CHECK(root_node);
+    return RaExecutionSequence(root_node, executor);
+  }
+
+  void prepareForeignTable();
+
+  std::unordered_set<int> getPhysicalTableIds() const;
+
+  void prepareForSystemTableExecution(const CompilationOptions& co) const;
+
  private:
+  void initializeParallelismHints();
+
   ExecutionResult executeRelAlgQueryNoRetry(const CompilationOptions& co,
                                             const ExecutionOptions& eo,
                                             const bool just_explain_plan,
@@ -221,23 +251,6 @@ class RelAlgExecutor : private StorageIOFacility {
                                        const ExecutionOptions&,
                                        const int64_t queue_time_ms);
 
-  // Computes the window function results to be used by the query.
-  void computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
-                     const CompilationOptions& co,
-                     const ExecutionOptions& eo,
-                     ColumnCacheMap& column_cache_map,
-                     const int64_t queue_time_ms);
-
-  // Creates the window context for the given window function.
-  std::unique_ptr<WindowFunctionContext> createWindowFunctionContext(
-      const Analyzer::WindowFunction* window_func,
-      const std::shared_ptr<Analyzer::BinOper>& partition_key_cond,
-      const RelAlgExecutionUnit& ra_exe_unit,
-      const std::vector<InputTableInfo>& query_infos,
-      const CompilationOptions& co,
-      ColumnCacheMap& column_cache_map,
-      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
-
   ExecutionResult executeFilter(const RelFilter*,
                                 const CompilationOptions&,
                                 const ExecutionOptions&,
@@ -277,7 +290,9 @@ class RelAlgExecutor : private StorageIOFacility {
     const RelAlgNode* body;
   };
 
-  WorkUnit createSortInputWorkUnit(const RelSort*, const ExecutionOptions& eo);
+  WorkUnit createSortInputWorkUnit(const RelSort*,
+                                   std::list<Analyzer::OrderEntry>& order_entries,
+                                   const ExecutionOptions& eo);
 
   ExecutionResult executeWorkUnit(
       const WorkUnit& work_unit,
@@ -288,6 +303,25 @@ class RelAlgExecutor : private StorageIOFacility {
       RenderInfo*,
       const int64_t queue_time_ms,
       const std::optional<size_t> previous_count = std::nullopt);
+
+  // Computes the window function results to be used by the query.
+  void computeWindow(const WorkUnit& work_unit,
+                     const CompilationOptions& co,
+                     const ExecutionOptions& eo,
+                     ColumnCacheMap& column_cache_map,
+                     const int64_t queue_time_ms);
+
+  // Creates the window context for the given window function.
+  std::unique_ptr<WindowFunctionContext> createWindowFunctionContext(
+      const Analyzer::WindowFunction* window_func,
+      const std::shared_ptr<Analyzer::BinOper>& partition_key_cond,
+      std::unordered_map<QueryPlanHash, std::shared_ptr<HashJoin>>& partition_cache,
+      std::unordered_map<QueryPlanHash, size_t>& sorted_partition_key_ref_count_map,
+      const WorkUnit& work_unit,
+      const std::vector<InputTableInfo>& query_infos,
+      const CompilationOptions& co,
+      ColumnCacheMap& column_cache_map,
+      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
   size_t getNDVEstimation(const WorkUnit& work_unit,
                           const int64_t range,
@@ -356,7 +390,7 @@ class RelAlgExecutor : private StorageIOFacility {
   void addTemporaryTable(const int table_id, const ResultSetPtr& result) {
     CHECK_LT(size_t(0), result->colCount());
     CHECK_LT(table_id, 0);
-    const auto it_ok = temporary_tables_.emplace(table_id, result);
+    auto it_ok = temporary_tables_.emplace(table_id, result);
     CHECK(it_ok.second);
   }
 
@@ -382,9 +416,17 @@ class RelAlgExecutor : private StorageIOFacility {
       const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
       const bool just_explain) const;
 
+  void setHasStepForUnion(bool flag) { has_step_for_union_ = flag; }
+
+  bool hasStepForUnion() const { return has_step_for_union_; }
+
+  bool canUseResultsetCache(const ExecutionOptions& eo, RenderInfo* render_info) const;
+
+  void setupCaching(const RelAlgNode* ra);
+
   Executor* executor_;
-  const Catalog_Namespace::Catalog& cat_;
-  std::unique_ptr<RelAlgDagBuilder> query_dag_;
+  Catalog_Namespace::Catalog& cat_;
+  std::unique_ptr<RelAlgDag> query_dag_;
   std::shared_ptr<const query_state::QueryState> query_state_;
   TemporaryTables temporary_tables_;
   time_t now_;
@@ -392,6 +434,7 @@ class RelAlgExecutor : private StorageIOFacility {
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove
   std::unordered_map<unsigned, AggregatedResult> leaf_results_;
   int64_t queue_time_ms_;
+  bool has_step_for_union_;
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;
 
   std::unique_ptr<TransactionParameters> dml_transaction_parameters_;

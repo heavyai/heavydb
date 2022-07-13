@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@
 
 #include "Catalog/AuthMetadata.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
+#include "OSDependent/heavyai_locks.h"
 #include "QueryEngine/ExtractFromTime.h"
 #include "QueryEngine/HyperLogLog.h"
 #include "Shared/SystemParameters.h"
@@ -39,11 +40,12 @@ class LeafHostInfo;
 class CommandLineOptions {
  public:
   CommandLineOptions(char const* argv0, bool dist_v5_ = false)
-      : log_options_(argv0), dist_v5_(dist_v5_) {
+      : log_options_(argv0), exe_name(argv0), dist_v5_(dist_v5_) {
     fillOptions();
     fillAdvancedOptions();
   }
   int http_port = 6278;
+  int http_binary_port = 6276;
   size_t reserved_gpu_mem = 384 * 1024 * 1024;
   std::string base_path;
   File_Namespace::DiskCacheConfig disk_cache_config;
@@ -68,15 +70,12 @@ class CommandLineOptions {
   size_t render_mem_bytes = 1000000000;
   size_t max_concurrent_render_sessions = 500;
   bool render_compositor_use_last_gpu = true;
-  bool renderer_use_vulkan_driver = false;
   bool renderer_use_ppll_polys = false;
   bool renderer_prefer_igpu = false;
   unsigned renderer_vulkan_timeout_ms = 60000;  // in milliseconds
-
-  bool enable_runtime_udf = false;
-
   bool enable_watchdog = true;
   bool enable_dynamic_watchdog = false;
+  size_t watchdog_none_encoded_string_translation_limit = 1000000;
   bool enable_runtime_query_interrupt = true;
   bool enable_non_kernel_time_query_interrupt = true;
   bool use_estimator_result_cache = true;
@@ -130,6 +129,7 @@ class CommandLineOptions {
   po::options_description help_desc;
   po::options_description developer_desc;
   logger::LogOptions log_options_;
+  std::string exe_name;
   po::positional_options_description positional_options;
 
  public:
@@ -149,12 +149,21 @@ class CommandLineOptions {
   void validate_base_path();
   void init_logging();
   const bool dist_v5_;
+
+ private:
+  bool enable_runtime_udfs = true;
+  // To store deprecated --enable-runtime-udf flag, replaced by --enable-runtime-udfs
+  // If the --enable-runtime-udf flag is specified, the contents of enable_runtime_udf
+  // are transferred to enable_runtime_udfs
+  bool enable_runtime_udf = true;
+  bool enable_udf_registration_for_all_users = false;
 };
 
 extern bool g_enable_watchdog;
 extern bool g_enable_dynamic_watchdog;
 extern unsigned g_dynamic_watchdog_time_limit;
 extern unsigned g_trivial_loop_join_threshold;
+extern size_t g_watchdog_none_encoded_string_translation_limit;
 extern bool g_from_table_reordering;
 extern bool g_enable_filter_push_down;
 extern bool g_allow_cpu_retry;
@@ -178,8 +187,11 @@ extern size_t g_big_group_threshold;
 extern bool g_enable_window_functions;
 extern bool g_enable_parallel_window_partition_compute;
 extern bool g_enable_parallel_window_partition_sort;
+extern size_t g_window_function_aggregation_tree_fanout;
 extern bool g_enable_table_functions;
 extern bool g_enable_dev_table_functions;
+extern bool g_enable_geo_ops_on_uncompressed_coords;
+
 extern size_t g_max_memory_allocation_size;
 extern double g_bump_allocator_step_reduction;
 extern bool g_enable_direct_columnarization;
@@ -200,13 +212,15 @@ extern bool g_skip_intermediate_count;
 extern bool g_enable_bump_allocator;
 extern size_t g_max_memory_allocation_size;
 extern size_t g_min_memory_allocation_size;
-extern bool g_enable_experimental_string_functions;
+extern bool g_enable_string_functions;
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
+extern bool g_enable_legacy_delimited_import;
 #ifdef ENABLE_IMPORT_PARQUET
-extern bool g_enable_parquet_import_fsi;
+extern bool g_enable_legacy_parquet_import;
 #endif
-extern bool g_enable_general_import_fsi;
+extern bool g_enable_fsi_regex_import;
+extern bool g_enable_add_metadata_columns;
 extern bool g_enable_interop;
 extern bool g_enable_union;
 extern bool g_enable_cpu_sub_tasks;
@@ -229,3 +243,14 @@ extern bool g_enable_data_recycler;
 extern bool g_use_hashtable_cache;
 extern size_t g_hashtable_cache_total_bytes;
 extern size_t g_max_cacheable_hashtable_size_bytes;
+extern bool g_use_query_resultset_cache;
+extern size_t g_query_resultset_cache_total_bytes;
+extern size_t g_max_cacheable_query_resultset_size_bytes;
+extern bool g_use_chunk_metadata_cache;
+extern bool g_allow_auto_resultset_caching;
+extern size_t g_auto_resultset_caching_threshold;
+extern bool g_allow_query_step_skipping;
+extern bool g_query_engine_cuda_streams;
+extern bool g_multi_instance;
+extern size_t g_lockfile_lock_extension_milliseconds;
+extern bool g_allow_invalid_literal_buffer_reads;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 /**
  * @file    geo_compression_runtime.h
- * @author  Alex Baden <alex.baden@omnisci.com>
  * @brief   Compression / decompression routines for geospatial coordinates. Suitable for
  * inclusion by the LLVM codegen runtime.
  *

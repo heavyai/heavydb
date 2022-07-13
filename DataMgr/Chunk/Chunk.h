@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 /**
  * @file Chunk.h
- * @author Wei Hong <wei@mapd.com>
+ * @brief
  *
  */
 
@@ -40,15 +40,27 @@ namespace Chunk_NS {
 
 class Chunk {
  public:
-  Chunk() : buffer_(nullptr), index_buf_(nullptr), column_desc_(nullptr) {}
+  Chunk(bool pinnable = true)
+      : buffer_(nullptr)
+      , index_buf_(nullptr)
+      , column_desc_(nullptr)
+      , pinnable_(pinnable) {}
 
   explicit Chunk(const ColumnDescriptor* td)
-      : buffer_(nullptr), index_buf_(nullptr), column_desc_(td) {}
+      : buffer_(nullptr), index_buf_(nullptr), column_desc_(td), pinnable_(true) {}
 
-  Chunk(AbstractBuffer* b, AbstractBuffer* ib, const ColumnDescriptor* td)
-      : buffer_(b), index_buf_(ib), column_desc_(td){};
+  Chunk(const ColumnDescriptor* td, bool pinnable)
+      : buffer_(nullptr), index_buf_(nullptr), column_desc_(td), pinnable_(pinnable) {}
+
+  Chunk(AbstractBuffer* b,
+        AbstractBuffer* ib,
+        const ColumnDescriptor* td,
+        bool pinnable = true)
+      : buffer_(b), index_buf_(ib), column_desc_(td), pinnable_(pinnable) {}
 
   ~Chunk() { unpinBuffer(); }
+
+  void setPinnable(bool pinnable) { pinnable_ = pinnable; }
 
   const ColumnDescriptor* getColumnDesc() const { return column_desc_; }
 
@@ -62,10 +74,9 @@ class Chunk {
                            int start_idx = 0,
                            int skip = 1) const;
 
-  size_t getNumElemsForBytesEncodedData(const int8_t* index_data,
-                                        const size_t num_elems,
-                                        const size_t start_idx,
-                                        const size_t byte_limit);
+  size_t getNumElemsForBytesEncodedDataAtIndices(const int8_t* index_data,
+                                                 const std::vector<size_t>& selected_idx,
+                                                 const size_t byte_limit);
 
   size_t getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
                                        const size_t num_elems,
@@ -105,7 +116,8 @@ class Chunk {
                                          const MemoryLevel mem_level,
                                          const int deviceId,
                                          const size_t num_bytes,
-                                         const size_t num_elems);
+                                         const size_t num_elems,
+                                         const bool pinnable = true);
 
   /**
    * @brief Compose a chunk from components and return it
@@ -113,6 +125,7 @@ class Chunk {
    * @param cd - the column descriptor for the chunk
    * @param data_buffer - the data buffer for the chunk
    * @param index_buffer - the (optional) index buffer for the chunk
+   * @param pinnable - sets the chunk as pinnable (or not)
    *
    * @return a chunk composed of supplied components
    *
@@ -122,7 +135,8 @@ class Chunk {
    */
   static std::shared_ptr<Chunk> getChunk(const ColumnDescriptor* cd,
                                          AbstractBuffer* data_buffer,
-                                         AbstractBuffer* index_buffer);
+                                         AbstractBuffer* index_buffer,
+                                         const bool pinnable = true);
 
   bool isChunkOnDevice(DataMgr* data_mgr,
                        const ChunkKey& key,
@@ -149,6 +163,9 @@ class Chunk {
   AbstractBuffer* buffer_;
   AbstractBuffer* index_buf_;
   const ColumnDescriptor* column_desc_;
+  // When using Chunk as a buffer wrapper, disable pinnable_ to avoid assymetric pin/unPin
+  // of the buffers
+  bool pinnable_;
 
   void unpinBuffer();
 };

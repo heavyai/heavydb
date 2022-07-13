@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +45,7 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
   static constexpr const char* REFRESH_INTERVAL_KEY = "REFRESH_INTERVAL";
   static constexpr const char* REFRESH_UPDATE_TYPE_KEY = "REFRESH_UPDATE_TYPE";
   static constexpr const char* BUFFER_SIZE_KEY = "BUFFER_SIZE";
+  static constexpr const char* PARTITIONS_KEY = "PARTITIONS";
   // Option values
   static constexpr const char* ALL_REFRESH_UPDATE_TYPE = "ALL";
   static constexpr const char* APPEND_REFRESH_UPDATE_TYPE = "APPEND";
@@ -60,7 +61,8 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
                                                               REFRESH_TIMING_TYPE_KEY,
                                                               REFRESH_START_DATE_TIME_KEY,
                                                               REFRESH_INTERVAL_KEY,
-                                                              REFRESH_UPDATE_TYPE_KEY};
+                                                              REFRESH_UPDATE_TYPE_KEY,
+                                                              PARTITIONS_KEY};
 
   inline static const std::set<const char*> upper_case_options{
       REFRESH_TIMING_TYPE_KEY,
@@ -117,7 +119,7 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
     @brief Verifies that the given options map only contains options that can be legally
     altered.
    */
-  static void validateAlterOptions(const OptionsMap& options_map);
+  void validateAlterOptions(const OptionsMap& options_map) const;
 
   /**
     @brief Verifies the schema is supported by this foreign table

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,11 +77,15 @@ class ParquetTimestampEncoder : public TypedParquetInPlaceEncoder<V, T, NullType
     }
   }
 
- private:
+ protected:
   T convert(const T& value) const {
     T quotient = value / conversion_denominator;
     return value < 0 && (value % conversion_denominator != 0) ? quotient - 1 : quotient;
   }
 };
+
+template <typename V, typename T, T conversion_denominator, typename NullType = V>
+using ParquetDateInSecondsFromTimestampEncoder =
+    ParquetTimestampEncoder<V, T, conversion_denominator, NullType>;
 
 }  // namespace foreign_storage

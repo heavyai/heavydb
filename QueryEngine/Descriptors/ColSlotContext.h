@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 /**
  * @file    ColSlotContext.h
- * @author  Alex Baden <alex.baden@omnisci.com>
  * @brief   Provides column info and slot info for the output buffer and some metadata
  * helpers
  *
@@ -99,6 +98,9 @@ class ColSlotContext {
 
   void addColumn(const std::vector<std::tuple<int8_t, int8_t>>& slots_for_col);
 
+  void addColumnFlatBuffer(const int64_t flatbuffer_size);
+  int64_t getFlatBufferSize(const size_t slot_idx) const;
+
   bool operator==(const ColSlotContext& that) const {
     return std::equal(
                slot_sizes_.cbegin(), slot_sizes_.cend(), that.slot_sizes_.cbegin()) &&
@@ -131,6 +133,8 @@ class ColSlotContext {
       str += "\t" + std::to_string(i) + " | " + std::to_string(slot_size.padded_size) +
              " , " + std::to_string(slot_size.logical_size) + "\n";
     }
+    str += "\tcol_to_slot_map=" + ::toString(col_to_slot_map_) + "\n";
+    str += "\tvarlen_output_slot_map=" + ::toString(varlen_output_slot_map_) + "\n";
     return str;
   }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,12 +46,11 @@ class DdlCommand {
    *
    * @param _return result of DDL command execution (if applicable)
    */
-  virtual ExecutionResult execute() = 0;
+  virtual ExecutionResult execute(bool read_only_mode) = 0;
 
  protected:
   const DdlCommandData& ddl_data_;
   std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr_;
-  bool isDefaultServer(const std::string& server_name);
 };
 
 class CreateForeignServerCommand : public DdlCommand {
@@ -60,7 +59,7 @@ class CreateForeignServerCommand : public DdlCommand {
       const DdlCommandData& ddl_data,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
 };
 
 class AlterForeignServerCommand : public DdlCommand {
@@ -69,7 +68,7 @@ class AlterForeignServerCommand : public DdlCommand {
       const DdlCommandData& ddl_data,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
 
  private:
   void changeForeignServerOwner();
@@ -85,7 +84,7 @@ class DropForeignServerCommand : public DdlCommand {
       const DdlCommandData& ddl_data,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
 };
 
 class CreateForeignTableCommand : public DdlCommand {
@@ -94,7 +93,7 @@ class CreateForeignTableCommand : public DdlCommand {
       const DdlCommandData& ddl_data,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
 
  private:
   void setTableDetails(const std::string& table_name,
@@ -108,7 +107,7 @@ class DropForeignTableCommand : public DdlCommand {
   DropForeignTableCommand(
       const DdlCommandData& ddl_data,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
 };
 
 class AlterForeignTableCommand : public DdlCommand {
@@ -116,10 +115,10 @@ class AlterForeignTableCommand : public DdlCommand {
   AlterForeignTableCommand(
       const DdlCommandData& ddl_data,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
 
  private:
-  void alterOptions(const foreign_storage::ForeignTable* foreign_table);
+  void alterOptions(const foreign_storage::ForeignTable& foreign_table);
   void renameTable(const foreign_storage::ForeignTable* foreign_table);
   void renameColumn(const foreign_storage::ForeignTable* foreign_table);
 };
@@ -130,7 +129,19 @@ class ShowForeignServersCommand : public DdlCommand {
       const DdlCommandData& ddl_data,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
+};
+
+class ShowCreateServerCommand : public DdlCommand {
+ public:
+  ShowCreateServerCommand(
+      const DdlCommandData& ddl_data,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+
+ private:
+  std::string server_;
 };
 
 class ShowTablesCommand : public DdlCommand {
@@ -138,7 +149,7 @@ class ShowTablesCommand : public DdlCommand {
   ShowTablesCommand(const DdlCommandData& ddl_data,
                     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
 };
 
 class ShowTableDetailsCommand : public DdlCommand {
@@ -147,10 +158,19 @@ class ShowTableDetailsCommand : public DdlCommand {
       const DdlCommandData& ddl_data,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
 
  private:
   std::vector<std::string> getFilteredTableNames();
+};
+
+class ShowCreateTableCommand : public DdlCommand {
+ public:
+  ShowCreateTableCommand(
+      const DdlCommandData& ddl_data,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
 };
 
 class ShowDatabasesCommand : public DdlCommand {
@@ -158,7 +178,42 @@ class ShowDatabasesCommand : public DdlCommand {
   ShowDatabasesCommand(const DdlCommandData& ddl_data,
                        std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
+};
+
+class ShowFunctionsCommand : public DdlCommand {
+ public:
+  ShowFunctionsCommand(const DdlCommandData& ddl_data,
+                       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+};
+
+class ShowRuntimeFunctionsCommand : public DdlCommand {
+ public:
+  ShowRuntimeFunctionsCommand(
+      const DdlCommandData& ddl_data,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+};
+
+class ShowTableFunctionsCommand : public DdlCommand {
+ public:
+  ShowTableFunctionsCommand(
+      const DdlCommandData& ddl_data,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+};
+
+class ShowRuntimeTableFunctionsCommand : public DdlCommand {
+ public:
+  ShowRuntimeTableFunctionsCommand(
+      const DdlCommandData& ddl_data,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
 };
 
 class ShowDiskCacheUsageCommand : public DdlCommand {
@@ -167,7 +222,7 @@ class ShowDiskCacheUsageCommand : public DdlCommand {
       const DdlCommandData& ddl_data,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
 
  private:
   std::vector<std::string> getFilteredTableNames();
@@ -179,7 +234,7 @@ class ShowUserDetailsCommand : public DdlCommand {
       const DdlCommandData& ddl_data,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
 };
 
 class ShowRolesCommand : public DdlCommand {
@@ -187,7 +242,7 @@ class ShowRolesCommand : public DdlCommand {
   ShowRolesCommand(const DdlCommandData& ddl_data,
                    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
 };
 
 class RefreshForeignTablesCommand : public DdlCommand {
@@ -196,7 +251,7 @@ class RefreshForeignTablesCommand : public DdlCommand {
       const DdlCommandData& ddl_data,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
 };
 
 class CreatePolicyCommand : public DdlCommand {
@@ -204,7 +259,7 @@ class CreatePolicyCommand : public DdlCommand {
   CreatePolicyCommand(const DdlCommandData& ddl_data,
                       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
 };
 
 class ShowPoliciesCommand : public DdlCommand {
@@ -212,7 +267,7 @@ class ShowPoliciesCommand : public DdlCommand {
   ShowPoliciesCommand(const DdlCommandData& ddl_data,
                       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
 };
 
 class DropPolicyCommand : public DdlCommand {
@@ -220,7 +275,19 @@ class DropPolicyCommand : public DdlCommand {
   DropPolicyCommand(const DdlCommandData& ddl_data,
                     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
+};
+
+class AlterDatabaseCommand : public DdlCommand {
+ public:
+  AlterDatabaseCommand(const DdlCommandData& ddl_data,
+                       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+
+ private:
+  void changeOwner();
+  void rename();
 };
 
 class ReassignOwnedCommand : public DdlCommand {
@@ -228,7 +295,7 @@ class ReassignOwnedCommand : public DdlCommand {
   ReassignOwnedCommand(const DdlCommandData& ddl_data,
                        std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  ExecutionResult execute() override;
+  ExecutionResult execute(bool read_only_mode) override;
 
  private:
   std::string new_owner_;
@@ -254,56 +321,59 @@ class DdlCommandExecutor {
    *
    * @param return ExecutionResult of DDL command execution (if applicable)
    */
-  ExecutionResult execute();
+  ExecutionResult execute(bool read_only_mode);
 
   /**
    * Returns true if this command is SHOW USER SESSIONS
    */
-  bool isShowUserSessions();
+  bool isShowUserSessions() const;
 
   /**
    * Returns true if this command is SHOW QUERIES
    */
-  bool isShowQueries();
-
-  /**
-   * Returns true if this command is SHOW CREATE TABLE
-   */
-  bool isShowCreateTable();
+  bool isShowQueries() const;
 
   /**
    * Returns true if this command is KILL QUERY
    */
-  bool isKillQuery();
+  bool isKillQuery() const;
 
   /**
    * Returns true if this command is ALTER SYSTEM CLEAR
    */
-  bool isAlterSystemClear();
+  bool isAlterSystemClear() const;
 
   /**
-   * Returns which kind of caches if to clear
-   * ALTER SYSTEM CLEAR
+   * Returns true if this command is ALTER SESSION SET
    */
+  bool isAlterSessionSet() const;
 
-  std::string returnCacheType();
+  /**
+   * Returns which kind of caches to clear if ALTER SYSTEM CLEAR
+   */
+  std::string returnCacheType() const;
 
   /**
    * Returns target query session if this command is KILL QUERY
    */
-  const std::string getTargetQuerySessionToKill();
+  const std::string getTargetQuerySessionToKill() const;
 
   /**
    * Returns an object indicating where command execution should
    * take place and how results should be aggregated for
    * distributed setups.
    */
-  DistributedExecutionDetails getDistributedExecutionDetails();
+  DistributedExecutionDetails getDistributedExecutionDetails() const;
 
   /**
    * Returns command string, can be useful for logging, conversion
    */
-  const std::string commandStr();
+  const std::string commandStr() const;
+
+  /**
+   * Returns name and value of a Session parameter
+   */
+  std::pair<std::string, std::string> getSessionParameter() const;
 
  private:
   std::string ddl_statement_;                 // incoming ddl_statement

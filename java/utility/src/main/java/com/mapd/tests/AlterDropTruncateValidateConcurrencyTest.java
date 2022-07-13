@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,8 +66,8 @@ public class AlterDropTruncateValidateConcurrencyTest {
     final CyclicBarrier barrier = new CyclicBarrier(num_threads, new Runnable() {
       public void run() {
         try {
-          MapdTestClient dba =
-                  MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
+          HeavyDBTestClient dba = HeavyDBTestClient.getClient(
+                  "localhost", 6274, db, dbaUser, dbaPassword);
           dba.runSql("CREATE TABLE " + tableName
                   + "(x BIGINT, y INTEGER, z SMALLINT, a TINYINT, f FLOAT, d DOUBLE, deci DECIMAL(18,6), str TEXT ENCODING NONE) WITH (FRAGMENT_SIZE = "
                   + fragment_size + ")");
@@ -114,8 +114,8 @@ public class AlterDropTruncateValidateConcurrencyTest {
           try {
             barrier.await();
 
-            MapdTestClient user =
-                    MapdTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
+            HeavyDBTestClient user = HeavyDBTestClient.getClient(
+                    "localhost", 6274, db, dbUser, dbPassword);
 
             Random rand = new Random(tid);
 
@@ -169,8 +169,8 @@ public class AlterDropTruncateValidateConcurrencyTest {
       t.join();
     }
 
-    MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
+    HeavyDBTestClient dba =
+            HeavyDBTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
     dba.runSql("DROP TABLE " + tableName + ";");
 
     for (Exception e : exceptions) {
@@ -184,8 +184,8 @@ public class AlterDropTruncateValidateConcurrencyTest {
   public void testConcurrency() throws Exception {
     logger.info("AlterDropTruncateValidateConcurrencyTest()");
 
-    MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
+            "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     try {
       su.runSql("DROP USER dba");
     } catch (Exception e) {
@@ -199,7 +199,7 @@ public class AlterDropTruncateValidateConcurrencyTest {
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");
 
-    su.runSql("GRANT CREATE on DATABASE omnisci TO bob;");
+    su.runSql("GRANT CREATE on DATABASE heavyai TO bob;");
 
     su.runSql("CREATE DATABASE db1;");
     su.runSql("GRANT CREATE on DATABASE db1 TO bob;");

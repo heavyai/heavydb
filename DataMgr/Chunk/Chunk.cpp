@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-/*
+/**
  * @file Chunk.cpp
- * @author Wei Hong <wei@mapd.com>
+ * @brief
+ *
  */
 
 #include "DataMgr/Chunk/Chunk.h"
@@ -33,16 +34,18 @@ std::shared_ptr<Chunk> Chunk::getChunk(const ColumnDescriptor* cd,
                                        const MemoryLevel memoryLevel,
                                        const int deviceId,
                                        const size_t numBytes,
-                                       const size_t numElems) {
-  std::shared_ptr<Chunk> chunkp = std::make_shared<Chunk>(Chunk(cd));
+                                       const size_t numElems,
+                                       const bool pinnable) {
+  std::shared_ptr<Chunk> chunkp = std::make_shared<Chunk>(Chunk(cd, pinnable));
   chunkp->getChunkBuffer(data_mgr, key, memoryLevel, deviceId, numBytes, numElems);
   return chunkp;
 }
 
 std::shared_ptr<Chunk> Chunk::getChunk(const ColumnDescriptor* cd,
                                        AbstractBuffer* data_buffer,
-                                       AbstractBuffer* index_buffer) {
-  std::shared_ptr<Chunk> chunkp = std::make_shared<Chunk>(Chunk(cd));
+                                       AbstractBuffer* index_buffer,
+                                       const bool pinnable) {
+  std::shared_ptr<Chunk> chunkp = std::make_shared<Chunk>(Chunk(cd, pinnable));
   chunkp->setChunkBuffer(data_buffer, index_buffer);
   return chunkp;
 }
@@ -89,6 +92,7 @@ void Chunk::setChunkBuffer(AbstractBuffer* buffer, AbstractBuffer* index_buffer)
       }
       case kPOINT:
       case kLINESTRING:
+      case kMULTILINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON: {
         auto str_encoder = dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
@@ -145,14 +149,14 @@ void Chunk::createChunkBuffer(DataMgr* data_mgr,
   }
 }
 
-size_t Chunk::getNumElemsForBytesEncodedData(const int8_t* index_data,
-                                             const size_t num_elems,
-                                             const size_t start_idx,
-                                             const size_t byte_limit) {
+size_t Chunk::getNumElemsForBytesEncodedDataAtIndices(
+    const int8_t* index_data,
+    const std::vector<size_t>& selected_idx,
+    const size_t byte_limit) {
   CHECK(column_desc_->columnType.is_varlen());
   CHECK(buffer_->getEncoder());
-  return buffer_->getEncoder()->getNumElemsForBytesEncodedData(
-      index_data, start_idx, num_elems, byte_limit);
+  return buffer_->getEncoder()->getNumElemsForBytesEncodedDataAtIndices(
+      index_data, selected_idx, byte_limit);
 }
 
 size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
@@ -185,6 +189,7 @@ size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
     }
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON: {
       StringNoneEncoder* str_encoder =
@@ -252,6 +257,7 @@ std::shared_ptr<ChunkMetadata> Chunk::appendData(DataBlockPtr& src_data,
       }
       case kPOINT:
       case kLINESTRING:
+      case kMULTILINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON: {
         StringNoneEncoder* str_encoder =
@@ -268,11 +274,13 @@ std::shared_ptr<ChunkMetadata> Chunk::appendData(DataBlockPtr& src_data,
 }
 
 void Chunk::unpinBuffer() {
-  if (buffer_) {
-    buffer_->unPin();
-  }
-  if (index_buf_) {
-    index_buf_->unPin();
+  if (pinnable_) {
+    if (buffer_) {
+      buffer_->unPin();
+    }
+    if (index_buf_) {
+      index_buf_->unPin();
+    }
   }
 }
 
@@ -298,6 +306,7 @@ void Chunk::initEncoder() {
       }
       case kPOINT:
       case kLINESTRING:
+      case kMULTILINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON: {
         StringNoneEncoder* str_encoder =

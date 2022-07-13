@@ -11,17 +11,14 @@
 namespace foreign_storage {
 std::vector<Aws::S3::Model::Object> s3_objects_filter_sort_files(
     const std::vector<Aws::S3::Model::Object>& file_paths,
-    const std::optional<std::string>& filter_regex,
-    const std::optional<std::string>& sort_by,
-    const std::optional<std::string>& sort_regex);
+    const shared::FilePathOptions& options);
 
 using S3ObjectComparator =
     std::function<bool(const Aws::S3::Model::Object&, const Aws::S3::Model::Object&)>;
 class FileOrderS3 : public shared::FileOrderBase<S3ObjectComparator> {
  public:
-  FileOrderS3(const std::optional<std::string>& sort_regex,
-              const std::optional<std::string>& sort_by)
-      : FileOrderBase<S3ObjectComparator>(sort_regex, sort_by) {}
+  FileOrderS3(const shared::FilePathOptions& options)
+      : FileOrderBase<S3ObjectComparator>(options) {}
 
   inline S3ObjectComparator getFileComparator() override {
     auto comparator_pair = comparator_map_.find(getSortBy());

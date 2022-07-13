@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "DBHandlerTestHelpers.h"
+#include "Shared/SysDefinitions.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -31,7 +32,7 @@ class EpochConsistencyTest : public DBHandlerTestFixture {
     createDBHandler();
     dropUser();
     sql("create user non_super_user (password = 'HyperInteractive');");
-    sql("grant all on database omnisci to non_super_user;");
+    sql("grant all on database " + shared::kDefaultDbName + " to non_super_user;");
   }
 
   static void TearDownTestSuite() { dropUser(); }
@@ -340,6 +341,7 @@ class EpochRollbackTest : public EpochConsistencyTest,
   }
 
   CheckpointFailureMock* checkpoint_failure_mock_;
+  CheckpointFailureMock* checkpoint_failure_no_to_mock_;
 };
 
 TEST_P(EpochRollbackTest, Import) {
@@ -674,16 +676,31 @@ class SetTableEpochsTest : public EpochConsistencyTest {
 
   static void TearDownTestSuite() { EpochConsistencyTest::TearDownTestSuite(); }
 
+  void SetUp() override {
+    EpochConsistencyTest::SetUp();
+    sql("drop table if exists test_table;");
+    sql("drop table if exists test_table_2;");
+  }
+
+  void TearDown() override {
+    sql("drop table if exists test_table;");
+    sql("drop table if exists test_table_2;");
+    EpochConsistencyTest::TearDown();
+  }
+
   std::pair<int32_t, std::vector<TTableEpochInfo>> getDbIdAndTableEpochs() {
     const auto& catalog = getCatalog();
-    auto table_id = catalog.getMetadataForTable("test_table", false)->tableId;
+    auto td = catalog.getMetadataForTable("test_table", false);
+    auto tables = catalog.getPhysicalTablesDescriptors(td, false);
     std::vector<TTableEpochInfo> table_epoch_info_vector;
-    for (size_t i = 0; i < 2; i++) {
-      TTableEpochInfo table_epoch_info;
-      table_epoch_info.table_epoch = 1;
-      table_epoch_info.table_id = table_id;
-      table_epoch_info.leaf_index = i;
-      table_epoch_info_vector.emplace_back(table_epoch_info);
+    for (auto table : tables) {
+      for (size_t i = 0; i < 2; i++) {
+        TTableEpochInfo table_epoch_info;
+        table_epoch_info.table_epoch = 1;
+        table_epoch_info.table_id = table->tableId;
+        table_epoch_info.leaf_index = i;
+        table_epoch_info_vector.emplace_back(table_epoch_info);
+      }
     }
     return {catalog.getDatabaseId(), table_epoch_info_vector};
   }
@@ -734,6 +751,32 @@ TEST_F(SetTableEpochsTest, NonSuperUser) {
         db_handler->set_table_epochs(session_id, db_id, epoch_vector);
       },
       "Only super users can set table epochs");
+}
+
+TEST_F(SetTableEpochsTest, ShardedTable) {
+  loginAdmin();
+  sql("create table test_table (a int, shard key(a)) with (shard_count = 4);");
+
+  auto [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto [db_id, epoch_vector] = getDbIdAndTableEpochs();
+  db_handler->set_table_epochs(session_id, db_id, epoch_vector);
+}
+
+TEST_F(SetTableEpochsTest, EpochWithDifferentLogicalTable) {
+  loginAdmin();
+  sql("create table test_table (a int, shard key(a)) with (shard_count = 4);");
+  sql("create table test_table_2 (a int);");
+
+  executeLambdaAndAssertException(
+      [this] {
+        auto [db_handler, session_id] = getDbHandlerAndSessionId();
+        auto [db_id, epoch_vector] = getDbIdAndTableEpochs();
+        ASSERT_GT(epoch_vector.size(), static_cast<size_t>(1));
+        epoch_vector[0].table_id =
+            getCatalog().getMetadataForTable("test_table_2")->tableId;
+        db_handler->set_table_epochs(session_id, db_id, epoch_vector);
+      },
+      "Table epochs do not reference the same logical table");
 }
 
 TEST_F(SetTableEpochsTest, Capped) {
@@ -897,7 +940,6 @@ TEST_F(SetTableEpochsTest, DropColumn) {
 class EpochValidationTest : public EpochConsistencyTest {
  protected:
   static void SetUpTestSuite() {
-    g_enable_fsi = true;
     DBHandlerTestFixture::SetUpTestSuite();
     switchToAdmin();
     sql("DROP DATABASE IF EXISTS test_db;");
@@ -1037,7 +1079,7 @@ TEST_F(EpochValidationTest, DifferentTableTypes) {
       boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "';");
   sql("create view test_view as select * from test_table;");
   if (!isDistributedMode()) {
-    sql("create foreign table test_foreign_table(a int) server omnisci_local_csv "
+    sql("create foreign table test_foreign_table(a int) server default_local_delimited "
         "with (file_path = '" +
         boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
   }
@@ -1099,6 +1141,7 @@ TEST_F(EmptyChunkRolloffTest, ShardedTable) {
 }
 
 int main(int argc, char** argv) {
+  g_enable_fsi = true;
   testing::InitGoogleTest(&argc, argv);
 
   po::options_description desc("Options");
@@ -1124,6 +1167,7 @@ int main(int argc, char** argv) {
 
   int err{0};
   try {
+    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();

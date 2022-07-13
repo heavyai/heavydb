@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,9 @@
 
 /**
  * @file		Buffer.h
- * @author		Steven Stewart <steve@map-d.com>
- * @author		Todd Mostak <todd@map-d.com>
+ * @brief
  */
+
 #pragma once
 
 #include <iostream>
@@ -130,6 +130,7 @@ class Buffer : public AbstractBuffer {
 
   inline int unPin() override {
     std::lock_guard<std::mutex> pin_lock(pin_mutex_);
+    CHECK(pin_count_ > 0);
     return (--pin_count_);
   }
   inline int getPinCount() override {

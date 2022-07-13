@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 import numpy as np
-import pandas.util.testing as tm
+import pandas.testing as tm
 
 pytest.importorskip('rbc')
 
@@ -13,8 +13,8 @@ def catch_udf_support_disabled(mth):
         except Exception as msg:
             if type(
                 msg
-            ).__name__ == 'TOmniSciException' and msg.error_msg.startswith(
-                'Runtime UDF registration is disabled'
+            ).__name__ == 'TDBException' and msg.error_msg.startswith(
+                'Runtime UDF and UDTF function registration is disabled'
             ):
                 print('Ignoring `%s` failure' % (msg.error_msg))
                 return
@@ -24,7 +24,7 @@ def catch_udf_support_disabled(mth):
     return new_mth
 
 
-@pytest.mark.usefixtures("omnisci_server")
+@pytest.mark.usefixtures("heavydb_server")
 class TestRuntimeUDF:
     def load_test_udf_incr(self, con):
         con.execute('drop table if exists test_udf_incr')

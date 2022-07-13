@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -999,7 +999,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
     df_td = df_td_owned.get();
   }
 
-#ifdef ENABLE_ARROW_4
+#if defined(ENABLE_ARROW_4) || defined(_WIN32)
   auto io_context = arrow::io::default_io_context();
 #else
   auto io_context = arrow::default_memory_pool();

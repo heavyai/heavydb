@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,7 @@
 
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
-#include <tbb/task_group.h>
-#include "Shared/TableFunctionsCommon.h"
+#include "Shared/TableFunctionsCommon.hpp"
 #include "Shared/math_consts.h"
 
 const size_t max_inputs_per_thread = 1000000L;
@@ -251,37 +250,31 @@ void GeoRaster<T, Z>::computeParallel(const Column<T2>& input_x,
                     });
 
   tbb::task_arena limited_arena(num_threads);
-  tbb::task_group tg;
   limited_arena.execute([&] {
-    tg.run([&] {
-      tbb::parallel_for(
-          tbb::blocked_range<int64_t>(0, input_size),
-          [&](const tbb::blocked_range<int64_t>& r) {
-            const int64_t start_idx = r.begin();
-            const int64_t end_idx = r.end();
-            size_t thread_idx = tbb::this_task_arena::current_thread_index();
-            std::vector<Z>& this_thread_z_output = per_thread_z_outputs[thread_idx];
+    tbb::parallel_for(
+        tbb::blocked_range<int64_t>(0, input_size),
+        [&](const tbb::blocked_range<int64_t>& r) {
+          const int64_t start_idx = r.begin();
+          const int64_t end_idx = r.end();
+          size_t thread_idx = tbb::this_task_arena::current_thread_index();
+          std::vector<Z>& this_thread_z_output = per_thread_z_outputs[thread_idx];
 
-            for (int64_t sparse_idx = start_idx; sparse_idx != end_idx; ++sparse_idx) {
-              const int64_t x_bin = get_x_bin(input_x[sparse_idx]);
-              const int64_t y_bin = get_y_bin(input_y[sparse_idx]);
-              if (x_bin < 0 || x_bin >= num_x_bins_ || y_bin < 0 ||
-                  y_bin >= num_y_bins_) {
-                continue;
-              }
-              // Take the max height for this version, but may want to allow different
-              // metrics like average as well
-              const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
-              if (!(input_z.isNull(sparse_idx)) &&
-                  input_z[sparse_idx] > this_thread_z_output[bin_idx]) {
-                this_thread_z_output[bin_idx] = input_z[sparse_idx];
-              }
+          for (int64_t sparse_idx = start_idx; sparse_idx != end_idx; ++sparse_idx) {
+            const int64_t x_bin = get_x_bin(input_x[sparse_idx]);
+            const int64_t y_bin = get_y_bin(input_y[sparse_idx]);
+            if (x_bin < 0 || x_bin >= num_x_bins_ || y_bin < 0 || y_bin >= num_y_bins_) {
+              continue;
             }
-          });
-    });
+            // Take the max height for this version, but may want to allow different
+            // metrics like average as well
+            const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
+            if (!(input_z.isNull(sparse_idx)) &&
+                input_z[sparse_idx] > this_thread_z_output[bin_idx]) {
+              this_thread_z_output[bin_idx] = input_z[sparse_idx];
+            }
+          }
+        });
   });
-
-  limited_arena.execute([&] { tg.wait(); });
 
   z_.resize(num_bins_, null_sentinel_);
 

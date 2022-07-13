@@ -1,0 +1,55 @@
+{
+  "payload": {
+    "command": "INSERT_VALUES_INTO_TABLE",
+    "name": "t",
+    "columns": [
+      "a",
+      "b",
+      "d",
+      "n",
+      "ar"
+    ],
+    "values": [
+      [
+        {
+          "literal": "123786239487123",
+          "type": "DECIMAL",
+          "scale": 0,
+          "precision": 15
+        },
+        {
+          "literal": "false",
+          "type": "BOOLEAN"
+        },
+        {
+          "literal": "102938.503924850192312354312345312",
+          "type": "DECIMAL",
+          "scale": 27,
+          "precision": 33
+        },
+        {
+          "literal": "43.12",
+          "type": "DECIMAL",
+          "scale": 2,
+          "precision": 4
+        },
+        {
+          "array": [
+            {
+              "literal": "foo",
+              "type": "CHAR"
+            },
+            {
+              "literal": null,
+              "type": "NULL"
+            },
+            {
+              "literal": "bar",
+              "type": "CHAR"
+            }
+          ]
+        }
+      ]
+    ]
+  }
+}

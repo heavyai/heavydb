@@ -261,7 +261,7 @@ required arguments:
   -l LABEL, --label LABEL
                         Benchmark run label
   -f IMPORT_FILE, --import-file IMPORT_FILE
-                        Absolute path to file on omnisci_server machine with
+                        Absolute path to file on heavydb machine with
                         data for import test
   -c TABLE_SCHEMA_FILE, --table-schema-file TABLE_SCHEMA_FILE
                         Path to local file with CREATE TABLE sql statement for
@@ -330,7 +330,7 @@ optional arguments:
 The goal of this benchmark is mainly to enable developers to measure performance variations in certain controlled scenarios. Secondary, by increasing the query coverage, it can be used to track down unintentional performance regressions.
 
 #### How to use
-To use it, the user should run an `omnisci_server`. Then, the benchmark process can be started by using the `run_synthetic_benchmark.py` script. Since this code uses the same code structure provided by `run_benchmark.py`, then it needs the same set of python libraries installed and used as well (e.g., `pip install requirements.txt`).
+To use it, the user should run an `heavydb`. Then, the benchmark process can be started by using the `run_synthetic_benchmark.py` script. Since this code uses the same code structure provided by `run_benchmark.py`, then it needs the same set of python libraries installed and used as well (e.g., `pip install requirements.txt`).
 ```
 cd Benchmarks
 

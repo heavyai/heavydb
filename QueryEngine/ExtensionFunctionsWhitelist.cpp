@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get(
   }
   return &it->second;
 }
+
 std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get_udf(
     const std::string& name) {
   const auto it = udf_functions_.find(to_upper(name));
@@ -40,6 +41,38 @@ std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get_udf(
     return nullptr;
   }
   return &it->second;
+}
+
+// Get the list of all udfs
+std::unordered_set<std::string> ExtensionFunctionsWhitelist::get_udfs_name(
+    const bool is_runtime) {
+  std::unordered_set<std::string> names;
+  const auto collections = {&functions_, &udf_functions_, &rt_udf_functions_};
+  for (auto funcs : collections) {
+    for (auto& pair : *funcs) {
+      ExtensionFunction udf = pair.second.at(0);
+      if (udf.isRuntime() == is_runtime) {
+        names.insert(udf.getName(/* keep_suffix */ false));
+      }
+    }
+  }
+  return names;
+}
+
+std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
+    const std::string& name) {
+  std::vector<ExtensionFunction> ext_funcs = {};
+  const auto collections = {&functions_, &udf_functions_, &rt_udf_functions_};
+  const auto uname = to_upper(name);
+  for (auto funcs : collections) {
+    const auto it = funcs->find(uname);
+    if (it == funcs->end()) {
+      continue;
+    }
+    auto ext_func_sigs = it->second;
+    std::copy(ext_func_sigs.begin(), ext_func_sigs.end(), std::back_inserter(ext_funcs));
+  }
+  return ext_funcs;
 }
 
 std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
@@ -77,7 +110,7 @@ std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
     std::copy_if(ext_func_sigs.begin(),
                  ext_func_sigs.end(),
                  std::back_inserter(ext_funcs),
-                 [arity](auto sig) { return arity == sig.getArgs().size(); });
+                 [arity](auto sig) { return arity == sig.getInputArgs().size(); });
   }
   return ext_funcs;
 }
@@ -105,7 +138,7 @@ std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
                    // with multiple arguments, for instance, array
                    // argument is translated to data pointer and array
                    // size arguments.
-                   if (arity > sig.getArgs().size()) {
+                   if (arity > sig.getInputArgs().size()) {
                      return false;
                    }
                    auto rt = rtype.get_type();
@@ -154,23 +187,25 @@ std::string serialize_type(const ExtArgumentType type,
     case ExtArgumentType::PBool:
       return "i1*";
     case ExtArgumentType::ArrayInt8:
-      return "{i8*, i64, i8}*";
+      return (declare ? "{i8*, i64, i8}*" : "Array<i8>");
     case ExtArgumentType::ArrayInt16:
-      return "{i16*, i64, i8}*";
+      return (declare ? "{i16*, i64, i8}*" : "Array<i16>");
     case ExtArgumentType::ArrayInt32:
-      return "{i32*, i64, i8}*";
+      return (declare ? "{i32*, i64, i8}*" : "Array<i32>");
     case ExtArgumentType::ArrayInt64:
-      return "{i64*, i64, i8}*";
+      return (declare ? "{i64*, i64, i8}*" : "Array<i64>");
     case ExtArgumentType::ArrayFloat:
-      return "{float*, i64, i8}*";
+      return (declare ? "{float*, i64, i8}*" : "Array<float>");
     case ExtArgumentType::ArrayDouble:
-      return "{double*, i64, i8}*";
+      return (declare ? "{double*, i64, i8}*" : "Array<double>");
     case ExtArgumentType::ArrayBool:
-      return "{i1*, i64, i8}*";
+      return (declare ? "{i1*, i64, i8}*" : "Array<i1>");
     case ExtArgumentType::GeoPoint:
       return "geo_point";
     case ExtArgumentType::GeoLineString:
       return "geo_linestring";
+    case ExtArgumentType::GeoMultiLineString:
+      return "geo_multi_linestring";
     case ExtArgumentType::GeoPolygon:
       return "geo_polygon";
     case ExtArgumentType::GeoMultiPolygon:
@@ -178,41 +213,73 @@ std::string serialize_type(const ExtArgumentType type,
     case ExtArgumentType::Cursor:
       return "cursor";
     case ExtArgumentType::ColumnInt8:
-      return (declare ? (byval ? "{i8*, i64}" : "i8*") : "column_int8");
+      return (declare ? (byval ? "{i8*, i64}" : "i8*") : "Column<i8>");
     case ExtArgumentType::ColumnInt16:
-      return (declare ? (byval ? "{i16*, i64}" : "i8*") : "column_int16");
+      return (declare ? (byval ? "{i16*, i64}" : "i8*") : "Column<i16>");
     case ExtArgumentType::ColumnInt32:
-      return (declare ? (byval ? "{i32*, i64}" : "i8*") : "column_int32");
+      return (declare ? (byval ? "{i32*, i64}" : "i8*") : "Column<i32>");
     case ExtArgumentType::ColumnInt64:
-      return (declare ? (byval ? "{i64*, i64}" : "i8*") : "column_int64");
+      return (declare ? (byval ? "{i64*, i64}" : "i8*") : "Column<i64>");
     case ExtArgumentType::ColumnFloat:
-      return (declare ? (byval ? "{float*, i64}" : "i8*") : "column_float");
+      return (declare ? (byval ? "{float*, i64}" : "i8*") : "Column<float>");
     case ExtArgumentType::ColumnDouble:
-      return (declare ? (byval ? "{double*, i64}" : "i8*") : "column_double");
+      return (declare ? (byval ? "{double*, i64}" : "i8*") : "Column<double>");
     case ExtArgumentType::ColumnBool:
-      return (declare ? (byval ? "{i8*, i64}" : "i8*") : "column_bool");
+      return (declare ? (byval ? "{i8*, i64}" : "i8*") : "Column<bool>");
     case ExtArgumentType::ColumnTextEncodingDict:
-      return (declare ? (byval ? "{i32*, i64}" : "i8*") : "column_text_encoding_dict");
+      return (declare ? (byval ? "{i32*, i64}" : "i8*") : "Column<TextEncodingDict>");
+    case ExtArgumentType::ColumnTimestamp:
+      return (declare ? (byval ? "{i64*, i64}" : "i8*") : "Column<timestamp>");
     case ExtArgumentType::TextEncodingNone:
-      return (declare ? (byval ? "{i8*, i64}*" : "i8*") : "text_encoding_none");
+      return (declare ? (byval ? "{i8*, i64}" : "i8*") : "TextEncodingNone");
     case ExtArgumentType::TextEncodingDict:
-      return (declare ? "{i8*, i32}*" : "text_encoding_dict");
+      return (declare ? "{i8*, i32}*" : "TextEncodingDict");
+    case ExtArgumentType::Timestamp:
+      return (declare ? "{ i64 }" : "timestamp");
     case ExtArgumentType::ColumnListInt8:
-      return (declare ? "{i8**, i64, i64}*" : "column_list_int8");
+      return (declare ? "{i8**, i64, i64}*" : "ColumnList<i8>");
     case ExtArgumentType::ColumnListInt16:
-      return (declare ? "{i8**, i64, i64}*" : "column_list_int16");
+      return (declare ? "{i8**, i64, i64}*" : "ColumnList<i16>");
     case ExtArgumentType::ColumnListInt32:
-      return (declare ? "{i8**, i64, i64}*" : "column_list_int32");
+      return (declare ? "{i8**, i64, i64}*" : "ColumnList<i32>");
     case ExtArgumentType::ColumnListInt64:
-      return (declare ? "{i8**, i64, i64}*" : "column_list_int64");
+      return (declare ? "{i8**, i64, i64}*" : "ColumnList<i64>");
     case ExtArgumentType::ColumnListFloat:
-      return (declare ? "{i8**, i64, i64}*" : "column_list_float");
+      return (declare ? "{i8**, i64, i64}*" : "ColumnList<float>");
     case ExtArgumentType::ColumnListDouble:
-      return (declare ? "{i8**, i64, i64}*" : "column_list_double");
+      return (declare ? "{i8**, i64, i64}*" : "ColumnList<double>");
     case ExtArgumentType::ColumnListBool:
-      return (declare ? "{i8**, i64, i64}*" : "column_list_bool");
+      return (declare ? "{i8**, i64, i64}*" : "ColumnList<bool>");
     case ExtArgumentType::ColumnListTextEncodingDict:
-      return (declare ? "{i8**, i64, i64}*" : "column_list_text_encoding_dict");
+      return (declare ? "{i8**, i64, i64}*" : "ColumnList<TextEncodingDict>");
+    case ExtArgumentType::ColumnArrayInt8:
+      return (declare ? "{i8*, i64}*" : "Column<Array<i8>>");
+    case ExtArgumentType::ColumnArrayInt16:
+      return (declare ? "{i8*, i64}*" : "Column<Array<i16>>");
+    case ExtArgumentType::ColumnArrayInt32:
+      return (declare ? "{i8*, i64}*" : "Column<Array<i32>>");
+    case ExtArgumentType::ColumnArrayInt64:
+      return (declare ? "{i8*, i64}*" : "Column<Array<i64>>");
+    case ExtArgumentType::ColumnArrayFloat:
+      return (declare ? "{i8*, i64}*" : "Column<Array<float>>");
+    case ExtArgumentType::ColumnArrayDouble:
+      return (declare ? "{i8*, i64}*" : "Column<Array<double>>");
+    case ExtArgumentType::ColumnArrayBool:
+      return (declare ? "{i8*, i64}*" : "Column<Array<bool>>");
+    case ExtArgumentType::ColumnListArrayInt8:
+      return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<i8>");
+    case ExtArgumentType::ColumnListArrayInt16:
+      return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<i16>");
+    case ExtArgumentType::ColumnListArrayInt32:
+      return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<i32>");
+    case ExtArgumentType::ColumnListArrayInt64:
+      return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<i64>");
+    case ExtArgumentType::ColumnListArrayFloat:
+      return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<float>");
+    case ExtArgumentType::ColumnListArrayDouble:
+      return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<double>");
+    case ExtArgumentType::ColumnListArrayBool:
+      return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<bool>");
     default:
       CHECK(false);
   }
@@ -285,6 +352,10 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
       return SQLTypeInfo(kTEXT, false, kENCODING_NONE);
     case ExtArgumentType::TextEncodingDict:
       return SQLTypeInfo(kTEXT, false, kENCODING_DICT);
+    case ExtArgumentType::Timestamp:
+      return SQLTypeInfo(kTIMESTAMP, 9, 0, false);
+    case ExtArgumentType::ColumnTimestamp:
+      return generate_column_type(kTIMESTAMP);
     case ExtArgumentType::ColumnListInt8:
       return generate_column_type(kTINYINT);
     case ExtArgumentType::ColumnListInt16:
@@ -301,6 +372,34 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
       return generate_column_type(kBOOLEAN);
     case ExtArgumentType::ColumnListTextEncodingDict:
       return generate_column_type(kTEXT, kENCODING_DICT, 0 /* comp_param */);
+    case ExtArgumentType::ColumnArrayInt8:
+      return generate_column_array_type(kTINYINT);
+    case ExtArgumentType::ColumnArrayInt16:
+      return generate_column_array_type(kSMALLINT);
+    case ExtArgumentType::ColumnArrayInt32:
+      return generate_column_array_type(kINT);
+    case ExtArgumentType::ColumnArrayInt64:
+      return generate_column_array_type(kBIGINT);
+    case ExtArgumentType::ColumnArrayFloat:
+      return generate_column_array_type(kFLOAT);
+    case ExtArgumentType::ColumnArrayDouble:
+      return generate_column_array_type(kDOUBLE);
+    case ExtArgumentType::ColumnArrayBool:
+      return generate_column_array_type(kBOOLEAN);
+    case ExtArgumentType::ColumnListArrayInt8:
+      return generate_column_list_array_type(kTINYINT);
+    case ExtArgumentType::ColumnListArrayInt16:
+      return generate_column_list_array_type(kSMALLINT);
+    case ExtArgumentType::ColumnListArrayInt32:
+      return generate_column_list_array_type(kINT);
+    case ExtArgumentType::ColumnListArrayInt64:
+      return generate_column_list_array_type(kBIGINT);
+    case ExtArgumentType::ColumnListArrayFloat:
+      return generate_column_list_array_type(kFLOAT);
+    case ExtArgumentType::ColumnListArrayDouble:
+      return generate_column_list_array_type(kDOUBLE);
+    case ExtArgumentType::ColumnListArrayBool:
+      return generate_column_list_array_type(kBOOLEAN);
     default:
       LOG(FATAL) << "ExtArgumentType `" << serialize_type(ext_arg_type)
                  << "` cannot be converted to SQLTypeInfo.";
@@ -335,7 +434,7 @@ std::string ExtensionFunctionsWhitelist::toString(
     const std::vector<ExtArgumentType>& sig_types) {
   std::string r = "";
   for (auto t = sig_types.begin(); t != sig_types.end();) {
-    r += serialize_type(*t);
+    r += serialize_type(*t, /* byval */ false, /* declare */ false);
     t++;
     if (t != sig_types.end()) {
       r += ", ";
@@ -358,7 +457,7 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(
 }
 
 std::string ExtensionFunctionsWhitelist::toString(const ExtArgumentType& sig_type) {
-  return serialize_type(sig_type);
+  return serialize_type(sig_type, /* byval */ false, /* declare */ false);
 }
 
 std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_type) {
@@ -421,12 +520,16 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "COLUMN<BOOLEAN>";
     case ExtArgumentType::ColumnTextEncodingDict:
       return "COLUMN<TEXT ENCODING DICT>";
+    case ExtArgumentType::ColumnTimestamp:
+      return "COLUMN<TIMESTAMP(9)>";
     case ExtArgumentType::Cursor:
       return "CURSOR";
     case ExtArgumentType::GeoPoint:
       return "POINT";
     case ExtArgumentType::GeoLineString:
       return "LINESTRING";
+    case ExtArgumentType::GeoMultiLineString:
+      return "MULTILINESTRING";
     case ExtArgumentType::GeoPolygon:
       return "POLYGON";
     case ExtArgumentType::GeoMultiPolygon:
@@ -437,6 +540,8 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "TEXT ENCODING NONE";
     case ExtArgumentType::TextEncodingDict:
       return "TEXT ENCODING DICT";
+    case ExtArgumentType::Timestamp:
+      return "TIMESTAMP(9)";
     case ExtArgumentType::ColumnListInt8:
       return "COLUMNLIST<TINYINT>";
     case ExtArgumentType::ColumnListInt16:
@@ -453,6 +558,34 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "COLUMNLIST<BOOLEAN>";
     case ExtArgumentType::ColumnListTextEncodingDict:
       return "COLUMNLIST<TEXT ENCODING DICT>";
+    case ExtArgumentType::ColumnArrayInt8:
+      return "COLUMN<ARRAY<TINYINT>>";
+    case ExtArgumentType::ColumnArrayInt16:
+      return "COLUMN<ARRAY<SMALLINT>>";
+    case ExtArgumentType::ColumnArrayInt32:
+      return "COLUMN<ARRAY<INT>>";
+    case ExtArgumentType::ColumnArrayInt64:
+      return "COLUMN<ARRAY<BIGINT>>";
+    case ExtArgumentType::ColumnArrayFloat:
+      return "COLUMN<ARRAY<FLOAT>>";
+    case ExtArgumentType::ColumnArrayDouble:
+      return "COLUMN<ARRAY<DOUBLE>>";
+    case ExtArgumentType::ColumnArrayBool:
+      return "COLUMN<ARRAY<BOOLEAN>>";
+    case ExtArgumentType::ColumnListArrayInt8:
+      return "COLUMNLIST<ARRAY<TINYINT>>";
+    case ExtArgumentType::ColumnListArrayInt16:
+      return "COLUMNLIST<ARRAY<SMALLINT>>";
+    case ExtArgumentType::ColumnListArrayInt32:
+      return "COLUMNLIST<ARRAY<INT>>";
+    case ExtArgumentType::ColumnListArrayInt64:
+      return "COLUMNLIST<ARRAY<BIGINT>>";
+    case ExtArgumentType::ColumnListArrayFloat:
+      return "COLUMNLIST<ARRAY<FLOAT>>";
+    case ExtArgumentType::ColumnListArrayDouble:
+      return "COLUMNLIST<ARRAY<DOUBLE>>";
+    case ExtArgumentType::ColumnListArrayBool:
+      return "COLUMNLIST<ARRAY<BOOLEAN>>";
     default:
       UNREACHABLE();
   }
@@ -465,13 +598,18 @@ const std::string ExtensionFunction::getName(bool keep_suffix) const {
 
 std::string ExtensionFunction::toString() const {
   return getName() + "(" + ExtensionFunctionsWhitelist::toString(args_) + ") -> " +
-         serialize_type(ret_);
+         ExtensionFunctionsWhitelist::toString({ret_});
 }
 
 std::string ExtensionFunction::toStringSQL() const {
   return getName(/* keep_suffix = */ false) + "(" +
          ExtensionFunctionsWhitelist::toStringSQL(args_) + ") -> " +
          ExtensionFunctionsWhitelist::toStringSQL(ret_);
+}
+
+std::string ExtensionFunction::toSignature() const {
+  return "(" + ExtensionFunctionsWhitelist::toString(args_) + ") -> " +
+         ExtensionFunctionsWhitelist::toString(ret_);
 }
 
 // Converts the extension function signatures to their LLVM representation.
@@ -494,13 +632,16 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
 
       if (is_ext_arg_type_array(signature.getRet())) {
         decl_prefix = "declare void @" + signature.getName();
-        arg_strs.emplace_back(serialize_type(signature.getRet()));
+        arg_strs.emplace_back(
+            serialize_type(signature.getRet(), /* byval */ true, /* declare */ true));
       } else {
         decl_prefix =
-            "declare " + serialize_type(signature.getRet()) + " @" + signature.getName();
+            "declare " +
+            serialize_type(signature.getRet(), /* byval */ true, /* declare */ true) +
+            " @" + signature.getName();
       }
-      for (const auto arg : signature.getArgs()) {
-        arg_strs.push_back(serialize_type(arg));
+      for (const auto arg : signature.getInputArgs()) {
+        arg_strs.push_back(serialize_type(arg, /* byval */ false, /* declare */ true));
       }
       declarations.push_back(decl_prefix + "(" + boost::algorithm::join(arg_strs, ", ") +
                              ");");
@@ -516,8 +657,10 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
     if (!((is_gpu && kv.second.isGPU()) || (!is_gpu && kv.second.isCPU()))) {
       continue;
     }
-    std::string decl_prefix{"declare " + serialize_type(ExtArgumentType::Int32) + " @" +
-                            kv.first};
+    std::string decl_prefix{
+        "declare " +
+        serialize_type(ExtArgumentType::Int32, /* byval */ true, /* declare */ true) +
+        " @" + kv.first};
     std::vector<std::string> arg_strs;
     for (const auto arg : kv.second.getArgs(/* ensure_column = */ true)) {
       arg_strs.push_back(
@@ -577,25 +720,25 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   if (type_name == "i1*" || type_name == "bool*") {
     return ExtArgumentType::PBool;
   }
-  if (type_name == "{i8*, i64, i8}*") {
+  if (type_name == "Array<i8>") {
     return ExtArgumentType::ArrayInt8;
   }
-  if (type_name == "{i16*, i64, i8}*") {
+  if (type_name == "Array<i16>") {
     return ExtArgumentType::ArrayInt16;
   }
-  if (type_name == "{i32*, i64, i8}*") {
+  if (type_name == "Array<i32>") {
     return ExtArgumentType::ArrayInt32;
   }
-  if (type_name == "{i64*, i64, i8}*") {
+  if (type_name == "Array<i64>") {
     return ExtArgumentType::ArrayInt64;
   }
-  if (type_name == "{float*, i64, i8}*") {
+  if (type_name == "Array<float>") {
     return ExtArgumentType::ArrayFloat;
   }
-  if (type_name == "{double*, i64, i8}*") {
+  if (type_name == "Array<double>") {
     return ExtArgumentType::ArrayDouble;
   }
-  if (type_name == "{i1*, i64, i8}*" || type_name == "{bool*, i64, i8}*") {
+  if (type_name == "Array<bool>" || type_name == "Array<i1>") {
     return ExtArgumentType::ArrayBool;
   }
   if (type_name == "geo_point") {
@@ -603,6 +746,9 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "geo_linestring") {
     return ExtArgumentType::GeoLineString;
+  }
+  if (type_name == "geo_multi_linestring") {
+    return ExtArgumentType::GeoMultiLineString;
   }
   if (type_name == "geo_polygon") {
     return ExtArgumentType::GeoPolygon;
@@ -613,59 +759,107 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   if (type_name == "cursor") {
     return ExtArgumentType::Cursor;
   }
-  if (type_name == "column_int8") {
+  if (type_name == "Column<i8>") {
     return ExtArgumentType::ColumnInt8;
   }
-  if (type_name == "column_int16") {
+  if (type_name == "Column<i16>") {
     return ExtArgumentType::ColumnInt16;
   }
-  if (type_name == "column_int32") {
+  if (type_name == "Column<i32>") {
     return ExtArgumentType::ColumnInt32;
   }
-  if (type_name == "column_int64") {
+  if (type_name == "Column<i64>") {
     return ExtArgumentType::ColumnInt64;
   }
-  if (type_name == "column_float") {
+  if (type_name == "Column<float>") {
     return ExtArgumentType::ColumnFloat;
   }
-  if (type_name == "column_double") {
+  if (type_name == "Column<double>") {
     return ExtArgumentType::ColumnDouble;
   }
-  if (type_name == "column_bool") {
+  if (type_name == "Column<bool>") {
     return ExtArgumentType::ColumnBool;
   }
-  if (type_name == "column_text_encoding_dict") {
+  if (type_name == "Column<TextEncodingDict>") {
     return ExtArgumentType::ColumnTextEncodingDict;
   }
-  if (type_name == "text_encoding_none") {
+  if (type_name == "Column<timestamp>") {
+    return ExtArgumentType::ColumnTimestamp;
+  }
+  if (type_name == "TextEncodingNone") {
     return ExtArgumentType::TextEncodingNone;
   }
-  if (type_name == "text_encoding_dict") {
+  if (type_name == "TextEncodingDict") {
     return ExtArgumentType::TextEncodingDict;
   }
-  if (type_name == "column_list_int8") {
+  if (type_name == "timestamp") {
+    return ExtArgumentType::Timestamp;
+  }
+  if (type_name == "ColumnList<i8>") {
     return ExtArgumentType::ColumnListInt8;
   }
-  if (type_name == "column_list_int16") {
+  if (type_name == "ColumnList<i16>") {
     return ExtArgumentType::ColumnListInt16;
   }
-  if (type_name == "column_list_int32") {
+  if (type_name == "ColumnList<i32>") {
     return ExtArgumentType::ColumnListInt32;
   }
-  if (type_name == "column_list_int64") {
+  if (type_name == "ColumnList<i64>") {
     return ExtArgumentType::ColumnListInt64;
   }
-  if (type_name == "column_list_float") {
+  if (type_name == "ColumnList<float>") {
     return ExtArgumentType::ColumnListFloat;
   }
-  if (type_name == "column_list_double") {
+  if (type_name == "ColumnList<double>") {
     return ExtArgumentType::ColumnListDouble;
   }
-  if (type_name == "column_list_bool") {
+  if (type_name == "ColumnList<bool>") {
     return ExtArgumentType::ColumnListBool;
   }
-  if (type_name == "column_list_text_encoding_dict") {
+  if (type_name == "ColumnList<TextEncodingDict>") {
     return ExtArgumentType::ColumnListTextEncodingDict;
+  }
+  if (type_name == "Column<Array<i8>>") {
+    return ExtArgumentType::ColumnArrayInt8;
+  }
+  if (type_name == "Column<Array<i16>>") {
+    return ExtArgumentType::ColumnArrayInt16;
+  }
+  if (type_name == "Column<Array<i32>>") {
+    return ExtArgumentType::ColumnArrayInt32;
+  }
+  if (type_name == "Column<Array<i64>>") {
+    return ExtArgumentType::ColumnArrayInt64;
+  }
+  if (type_name == "Column<Array<float>>") {
+    return ExtArgumentType::ColumnArrayFloat;
+  }
+  if (type_name == "Column<Array<double>>") {
+    return ExtArgumentType::ColumnArrayDouble;
+  }
+  if (type_name == "Column<Array<bool>>") {
+    return ExtArgumentType::ColumnArrayBool;
+  }
+  if (type_name == "ColumnList<Array<i8>>") {
+    return ExtArgumentType::ColumnListArrayInt8;
+  }
+  if (type_name == "ColumnList<Array<i16>>") {
+    return ExtArgumentType::ColumnListArrayInt16;
+  }
+  if (type_name == "ColumnList<Array<i32>>") {
+    return ExtArgumentType::ColumnListArrayInt32;
+  }
+  if (type_name == "ColumnList<Array<i64>>") {
+    return ExtArgumentType::ColumnListArrayInt64;
+  }
+  if (type_name == "ColumnList<Array<float>>") {
+    return ExtArgumentType::ColumnListArrayFloat;
+  }
+  if (type_name == "ColumnList<Array<double>>") {
+    return ExtArgumentType::ColumnListArrayDouble;
+  }
+  if (type_name == "ColumnList<Array<bool>>") {
+    return ExtArgumentType::ColumnListArrayBool;
   }
   CHECK(false);
   return ExtArgumentType::Int16;
@@ -676,7 +870,8 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
 using SignatureMap = std::unordered_map<std::string, std::vector<ExtensionFunction>>;
 
 void ExtensionFunctionsWhitelist::addCommon(SignatureMap& signatures,
-                                            const std::string& json_func_sigs) {
+                                            const std::string& json_func_sigs,
+                                            const bool is_runtime) {
   rapidjson::Document func_sigs;
   func_sigs.Parse(json_func_sigs.c_str());
   CHECK(func_sigs.IsArray());
@@ -693,7 +888,7 @@ void ExtensionFunctionsWhitelist::addCommon(SignatureMap& signatures,
          ++args_serialized_it) {
       args.push_back(deserialize_type(json_str(*args_serialized_it)));
     }
-    signatures[to_upper(drop_suffix(name))].emplace_back(name, args, ret);
+    signatures[to_upper(drop_suffix(name))].emplace_back(name, args, ret, is_runtime);
   }
 }
 
@@ -714,12 +909,12 @@ void ExtensionFunctionsWhitelist::add(const std::string& json_func_sigs) {
   //    }
   // ]
 
-  addCommon(functions_, json_func_sigs);
+  addCommon(functions_, json_func_sigs, /* is_runtime */ false);
 }
 
 void ExtensionFunctionsWhitelist::addUdfs(const std::string& json_func_sigs) {
   if (!json_func_sigs.empty()) {
-    addCommon(udf_functions_, json_func_sigs);
+    addCommon(udf_functions_, json_func_sigs, /* is_runtime */ false);
   }
 }
 
@@ -729,7 +924,7 @@ void ExtensionFunctionsWhitelist::clearRTUdfs() {
 
 void ExtensionFunctionsWhitelist::addRTUdfs(const std::string& json_func_sigs) {
   if (!json_func_sigs.empty()) {
-    addCommon(rt_udf_functions_, json_func_sigs);
+    addCommon(rt_udf_functions_, json_func_sigs, /* is_runtime */ true);
   }
 }
 

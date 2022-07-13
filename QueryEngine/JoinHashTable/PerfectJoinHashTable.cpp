@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,14 +31,17 @@
 #include "QueryEngine/RuntimeFunctions.h"
 
 // let's only consider CPU hahstable recycler at this moment
-std::unique_ptr<HashTableRecycler> PerfectJoinHashTable::hash_table_cache_ =
-    std::make_unique<HashTableRecycler>(CacheItemType::PERFECT_HT, 0);
+std::unique_ptr<HashtableRecycler> PerfectJoinHashTable::hash_table_cache_ =
+    std::make_unique<HashtableRecycler>(CacheItemType::PERFECT_HT,
+                                        DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+std::unique_ptr<HashingSchemeRecycler> PerfectJoinHashTable::hash_table_layout_cache_ =
+    std::make_unique<HashingSchemeRecycler>();
 
 namespace {
-
-InnerOuter get_cols(const Analyzer::BinOper* qual_bin_oper,
-                    const Catalog_Namespace::Catalog& cat,
-                    const TemporaryTables* temporary_tables) {
+std::pair<InnerOuter, InnerOuterStringOpInfos> get_cols(
+    const Analyzer::BinOper* qual_bin_oper,
+    const Catalog_Namespace::Catalog& cat,
+    const TemporaryTables* temporary_tables) {
   const auto lhs = qual_bin_oper->get_left_operand();
   const auto rhs = qual_bin_oper->get_right_operand();
   return HashJoin::normalizeColumnPair(lhs, rhs, cat, temporary_tables);
@@ -151,17 +154,12 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     ColumnCacheMap& column_cache,
     Executor* executor,
     const HashTableBuildDagMap& hashtable_build_dag_map,
-    const TableIdToNodeMap& table_id_to_node_map,
-    const RegisteredQueryHint& query_hint) {
-  decltype(std::chrono::steady_clock::now()) ts1, ts2;
-  if (VLOGGING(1)) {
-    VLOG(1) << "Building perfect hash table " << getHashTypeString(preferred_hash_type)
-            << " for qual: " << qual_bin_oper->toString();
-    ts1 = std::chrono::steady_clock::now();
-  }
+    const TableIdToNodeMap& table_id_to_node_map) {
   CHECK(IS_EQUIVALENCE(qual_bin_oper->get_optype()));
-  const auto cols =
+  const auto cols_and_string_op_infos =
       get_cols(qual_bin_oper.get(), *executor->getCatalog(), executor->temporary_tables_);
+  const auto& cols = cols_and_string_op_infos.first;
+  const auto& inner_outer_string_op_infos = cols_and_string_op_infos.second;
   const auto inner_col = cols.first;
   CHECK(inner_col);
   const auto& ti = inner_col->get_type_info();
@@ -171,26 +169,28 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     throw HashJoinFail(
         "Could not compute range for the expressions involved in the equijoin");
   }
+  const auto rhs_source_col_range =
+      ti.is_string() ? getExpressionRange(inner_col, query_infos, executor) : col_range;
   if (ti.is_string()) {
     // The nullable info must be the same as the source column.
-    const auto source_col_range = getExpressionRange(inner_col, query_infos, executor);
-    if (source_col_range.getType() == ExpressionRangeType::Invalid) {
+    if (rhs_source_col_range.getType() == ExpressionRangeType::Invalid) {
       throw HashJoinFail(
           "Could not compute range for the expressions involved in the equijoin");
     }
-    if (source_col_range.getIntMin() > source_col_range.getIntMax()) {
+    if (rhs_source_col_range.getIntMin() > rhs_source_col_range.getIntMax()) {
       // If the inner column expression range is empty, use the inner col range
-      CHECK_EQ(source_col_range.getIntMin(), int64_t(0));
-      CHECK_EQ(source_col_range.getIntMax(), int64_t(-1));
-      col_range = source_col_range;
+      CHECK_EQ(rhs_source_col_range.getIntMin(), int64_t(0));
+      CHECK_EQ(rhs_source_col_range.getIntMax(), int64_t(-1));
+      col_range = rhs_source_col_range;
     } else {
       col_range = ExpressionRange::makeIntRange(
-          std::min(source_col_range.getIntMin(), col_range.getIntMin()),
-          std::max(source_col_range.getIntMax(), col_range.getIntMax()),
+          std::min(rhs_source_col_range.getIntMin(), col_range.getIntMin()),
+          std::max(rhs_source_col_range.getIntMax(), col_range.getIntMax()),
           0,
-          source_col_range.hasNulls());
+          rhs_source_col_range.hasNulls());
     }
   }
+
   // We can't allocate more than 2GB contiguous memory on GPU and each entry is 4 bytes.
   const auto max_hash_entry_count =
       memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
@@ -209,14 +209,11 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
       col_range.getIntMax() >= std::numeric_limits<int64_t>::max()) {
     throw HashJoinFail("Cannot translate null value for kBW_EQ");
   }
-  std::vector<InnerOuter> inner_outer_pairs;
-  inner_outer_pairs.emplace_back(inner_col, cols.second);
-  auto hashtable_access_path_info =
-      HashTableRecycler::getHashtableAccessPathInfo(inner_outer_pairs,
-                                                    qual_bin_oper->get_optype(),
-                                                    join_type,
-                                                    hashtable_build_dag_map,
-                                                    executor);
+  decltype(std::chrono::steady_clock::now()) ts1, ts2;
+  if (VLOGGING(1)) {
+    ts1 = std::chrono::steady_clock::now();
+  }
+
   auto join_hash_table = std::shared_ptr<PerfectJoinHashTable>(
       new PerfectJoinHashTable(qual_bin_oper,
                                inner_col,
@@ -225,15 +222,13 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
                                join_type,
                                preferred_hash_type,
                                col_range,
+                               rhs_source_col_range,
                                column_cache,
                                executor,
                                device_count,
-                               hashtable_access_path_info,
-                               table_id_to_node_map));
-
-  if (query_hint.isAnyQueryHintDelivered()) {
-    join_hash_table->registerQueryHint(query_hint);
-  }
+                               hashtable_build_dag_map,
+                               table_id_to_node_map,
+                               inner_outer_string_op_infos));
   try {
     join_hash_table->reify();
   } catch (const TableMustBeReplicated& e) {
@@ -254,8 +249,6 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     throw HashJoinFail(
         std::string("Ran out of memory while building hash tables for equijoin | ") +
         e.what());
-  } catch (const HashingTypeHintDetected& e) {
-    throw e;
   } catch (const std::exception& e) {
     throw std::runtime_error(
         std::string("Fatal error while attempting to build hash tables for join: ") +
@@ -263,16 +256,24 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
   }
   if (VLOGGING(1)) {
     ts2 = std::chrono::steady_clock::now();
-    VLOG(1) << "Built perfect hash table in "
+    VLOG(1) << "Built perfect hash table "
+            << getHashTypeString(join_hash_table->getHashType()) << " in "
             << std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count()
             << " ms";
   }
   return join_hash_table;
 }
 
-bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
-                                  const Analyzer::Expr* outer_col_expr,
-                                  const Executor* executor) {
+bool needs_dictionary_translation(
+    const InnerOuter& inner_outer_col_pair,
+    const InnerOuterStringOpInfos& inner_outer_string_op_infos,
+    const Executor* executor) {
+  if (inner_outer_string_op_infos.first.size() ||
+      inner_outer_string_op_infos.second.size()) {
+    return true;
+  }
+  auto inner_col = inner_outer_col_pair.first;
+  auto outer_col_expr = inner_outer_col_pair.second;
   const auto catalog = executor->getCatalog();
   CHECK(catalog);
   const auto inner_cd = get_column_descriptor_maybe(
@@ -326,12 +327,35 @@ std::vector<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
   return shards_for_device;
 }
 
+bool PerfectJoinHashTable::isOneToOneHashPossible(
+    const std::vector<ColumnsForDevice>& columns_per_device) const {
+  CHECK(!inner_outer_pairs_.empty());
+  const auto& rhs_col_ti = inner_outer_pairs_.front().first->get_type_info();
+  const auto max_unique_hash_input_entries =
+      get_bucketized_hash_entry_info(
+          rhs_col_ti, rhs_source_col_range_, qual_bin_oper_->get_optype() == kBW_EQ)
+          .getNormalizedHashEntryCount() +
+      rhs_source_col_range_.hasNulls();
+  for (const auto& device_columns : columns_per_device) {
+    CHECK(!device_columns.join_columns.empty());
+    const auto rhs_join_col_num_entries = device_columns.join_columns.front().num_elems;
+    if (rhs_join_col_num_entries > max_unique_hash_input_entries) {
+      VLOG(1) << "Skipping attempt to build perfect hash one-to-one table as number of "
+                 "rhs column entries ("
+              << rhs_join_col_num_entries << ") exceeds range for rhs join column ("
+              << max_unique_hash_input_entries << ").";
+      return false;
+    }
+  }
+  return true;
+}
+
 void PerfectJoinHashTable::reify() {
   auto timer = DEBUG_TIMER(__func__);
   CHECK_LT(0, device_count_);
   auto catalog = const_cast<Catalog_Namespace::Catalog*>(executor_->getCatalog());
   const auto cols =
-      get_cols(qual_bin_oper_.get(), *catalog, executor_->temporary_tables_);
+      get_cols(qual_bin_oper_.get(), *catalog, executor_->temporary_tables_).first;
   const auto inner_col = cols.first;
   HashJoin::checkHashJoinReplicationConstraint(
       inner_col->get_table_id(),
@@ -350,58 +374,214 @@ void PerfectJoinHashTable::reify() {
 
   inner_outer_pairs_.push_back(cols);
   CHECK_EQ(inner_outer_pairs_.size(), size_t(1));
+  // Todo(todd): Clean up the fact that we store the inner outer column pairs as a vector,
+  // even though only one is ever valid for perfect hash layout. Either move to 1 or keep
+  // the vector but move it to the HashTable parent class
+  needs_dict_translation_ = needs_dictionary_translation(
+      inner_outer_pairs_.front(), inner_outer_string_op_infos_, executor_);
 
+  std::vector<std::vector<Fragmenter_Namespace::FragmentInfo>> fragments_per_device;
   std::vector<ColumnsForDevice> columns_per_device;
   std::vector<std::unique_ptr<CudaAllocator>> dev_buff_owners;
-  try {
-    auto data_mgr = executor_->getDataMgr();
+
+  auto data_mgr = executor_->getDataMgr();
+  // check the existence of cached hash table here before fetching columns
+  // if available, skip the rest of logic and copy it to GPU if necessary
+  // there are few considerable things:
+  // 1. if table is sharded? --> deploy per-device logic
+  // here, each device may load different set of fragments, so their cache keys are
+  // different accordingly
+  // 2. otherwise, each device has the same hash table built from "all" fragments
+  // and their cache keys are the same (but we stick to per-device cache key vector)
+  // here, for CPU, we consider its # device to be one
+  // for GPU, each device builds its own hash table, or we build a single hash table on
+  // CPU and then copy it to each device
+  // 3. if cache key is not available? --> use alternative cache key
+
+  // retrieve fragment lists and chunk key per device
+  std::vector<ChunkKey> chunk_key_per_device;
+  auto outer_col =
+      dynamic_cast<const Analyzer::ColumnVar*>(inner_outer_pairs_.front().second);
+  for (int device_id = 0; device_id < device_count_; ++device_id) {
+    fragments_per_device.emplace_back(
+        shard_count
+            ? only_shards_for_device(query_info.fragments, device_id, device_count_)
+            : query_info.fragments);
     if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
-      for (int device_id = 0; device_id < device_count_; ++device_id) {
-        dev_buff_owners.emplace_back(
-            std::make_unique<CudaAllocator>(data_mgr, device_id));
+      dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(
+          data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id)));
+    }
+    const auto chunk_key =
+        genChunkKey(fragments_per_device[device_id], outer_col, inner_col);
+    chunk_key_per_device.emplace_back(std::move(chunk_key));
+  }
+
+  // try to extract cache key for hash table and its relevant info
+  auto hashtable_access_path_info =
+      HashtableRecycler::getHashtableAccessPathInfo(inner_outer_pairs_,
+                                                    {inner_outer_string_op_infos_},
+                                                    qual_bin_oper_->get_optype(),
+                                                    join_type_,
+                                                    hashtable_build_dag_map_,
+                                                    device_count_,
+                                                    shard_count,
+                                                    fragments_per_device,
+                                                    executor_);
+  hashtable_cache_key_ = hashtable_access_path_info.hashed_query_plan_dag;
+  hashtable_cache_meta_info_ = hashtable_access_path_info.meta_info;
+  table_keys_ = hashtable_access_path_info.table_keys;
+
+  if (table_keys_.empty()) {
+    // the actual chunks fetched per device can be different but they constitute the same
+    // table in the same db, so we can exploit this to create an alternative table key
+    table_keys_ = DataRecyclerUtil::getAlternativeTableKeys(
+        chunk_key_per_device,
+        executor_->getCatalog()->getDatabaseId(),
+        getInnerTableId());
+  }
+  CHECK(!table_keys_.empty());
+
+  if (HashtableRecycler::isInvalidHashTableCacheKey(hashtable_cache_key_) &&
+      getInnerTableId() > 0) {
+    // sometimes we cannot retrieve query plan dag, so try to recycler cache
+    // with the old-fashioned cache key if we deal with hashtable of non-temporary table
+    for (int device_id = 0; device_id < device_count_; ++device_id) {
+      const auto num_tuples = std::accumulate(
+          fragments_per_device[device_id].begin(),
+          fragments_per_device[device_id].end(),
+          size_t(0),
+          [](size_t sum, const auto& fragment) { return sum + fragment.getNumTuples(); });
+      AlternativeCacheKeyForPerfectHashJoin cache_key{col_range_,
+                                                      inner_col,
+                                                      outer_col ? outer_col : inner_col,
+                                                      inner_outer_string_op_infos_,
+                                                      chunk_key_per_device[device_id],
+                                                      num_tuples,
+                                                      qual_bin_oper_->get_optype(),
+                                                      join_type_};
+      hashtable_cache_key_[device_id] = getAlternativeCacheKey(cache_key);
+    }
+  }
+
+  // register a mapping between cache key and its input table info for per-table cache
+  // invalidation if we have valid cache key for "all" devices (otherwise, we skip to use
+  // cached hash table for safety)
+  const bool invalid_cache_key =
+      HashtableRecycler::isInvalidHashTableCacheKey(hashtable_cache_key_);
+  if (!invalid_cache_key) {
+    if (!shard_count) {
+      hash_table_cache_->addQueryPlanDagForTableKeys(hashtable_cache_key_.front(),
+                                                     table_keys_);
+    } else {
+      std::for_each(hashtable_cache_key_.cbegin(),
+                    hashtable_cache_key_.cend(),
+                    [this](QueryPlanHash key) {
+                      hash_table_cache_->addQueryPlanDagForTableKeys(key, table_keys_);
+                    });
+    }
+  }
+
+  const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
+
+  // Assume we will need one-to-many if we have a string operation, as these tend
+  // to be cardinality-reducting operations, i.e. |S(t)| < |t|
+  // Todo(todd): Ostensibly only string ops on the rhs/inner expression cause rhs dups and
+  // so we may be too conservative here, but validate
+
+  const bool has_string_ops = inner_outer_string_op_infos_.first.size() ||
+                              inner_outer_string_op_infos_.second.size();
+
+  // Also check if on the number of entries per column exceeds the rhs join hash table
+  // range, and skip trying to build a One-to-One hash table if so. There is a slight edge
+  // case where this can be overly pessimistic, and that is if the non-null values are all
+  // unique, but there are multiple null values, but we currently don't have the metadata
+  // to track null counts (only column nullability from the ddl and null existence from
+  // the encoded data), and this is probably too much of an edge case to worry about for
+  // now given the general performance benfits of skipping 1:1 if we are fairly confident
+  // it is doomed up front
+
+  // Now check if on the number of entries per column exceeds the rhs join hash table
+  // range, and skip trying to build a One-to-One hash table if so
+  if (hash_type_ == HashType::OneToOne &&
+      (has_string_ops || !isOneToOneHashPossible(columns_per_device))) {
+    hash_type_ = HashType::OneToMany;
+  }
+
+  // todo (yoonmin) : support dictionary proxy cache for join including string op(s)
+  if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
+    // construct string dictionary proxies if necessary
+    std::unique_lock<std::mutex> str_proxy_translation_lock(str_proxy_translation_mutex_);
+    if (needs_dict_translation_ && !str_proxy_translation_map_) {
+      CHECK_GE(inner_outer_pairs_.size(), 1UL);
+      str_proxy_translation_map_ =
+          HashJoin::translateInnerToOuterStrDictProxies(inner_outer_pairs_.front(),
+                                                        inner_outer_string_op_infos_,
+                                                        col_range_,
+                                                        executor_);
+    }
+  }
+
+  auto allow_hashtable_recycling =
+      HashtableRecycler::isSafeToCacheHashtable(table_id_to_node_map_,
+                                                needs_dict_translation_,
+                                                {inner_outer_string_op_infos_},
+                                                inner_col->get_table_id());
+  bool has_invalid_cached_hash_table = false;
+  if (effective_memory_level == Data_Namespace::CPU_LEVEL &&
+      HashJoin::canAccessHashTable(
+          allow_hashtable_recycling, invalid_cache_key, join_type_)) {
+    // build a hash table on CPU, and we have a chance to recycle the cached one if
+    // available
+    for (int device_id = 0; device_id < device_count_; ++device_id) {
+      auto hash_table =
+          initHashTableOnCpuFromCache(hashtable_cache_key_[device_id],
+                                      CacheItemType::PERFECT_HT,
+                                      DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+      if (hash_table) {
+        hash_tables_for_device_[device_id] = hash_table;
+        hash_type_ = hash_table->getLayout();
+      } else {
+        has_invalid_cached_hash_table = true;
+        break;
       }
     }
-    for (int device_id = 0; device_id < device_count_; ++device_id) {
-      const auto fragments =
-          shard_count
-              ? only_shards_for_device(query_info.fragments, device_id, device_count_)
-              : query_info.fragments;
-      const auto columns_for_device =
-          fetchColumnsForDevice(fragments,
-                                device_id,
-                                memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
-                                    ? dev_buff_owners[device_id].get()
-                                    : nullptr,
-                                *catalog);
-      columns_per_device.push_back(columns_for_device);
-      const auto chunk_key = genChunkKey(
-          fragments, inner_outer_pairs_.front().second, inner_outer_pairs_.front().first);
-      auto table_keys = table_keys_;
-      if (device_id == 0 && hashtable_cache_key_ == EMPTY_HASHED_PLAN_DAG_KEY &&
-          getInnerTableId() > 0) {
-        // sometimes we cannot retrieve query plan dag, so try to recycler cache
-        // with the old-passioned cache key if we deal with hashtable of non-temporary
-        // table
-        auto outer_col =
-            dynamic_cast<const Analyzer::ColumnVar*>(inner_outer_pairs_.front().second);
-        AlternativeCacheKeyForPerfectHashJoin cache_key{
-            col_range_,
-            inner_col,
-            outer_col ? outer_col : inner_col,
-            chunk_key,
-            columns_per_device[device_id].join_columns.front().num_elems,
-            qual_bin_oper_->get_optype(),
-            join_type_};
-        hashtable_cache_key_ = getAlternativeCacheKey(cache_key);
-        std::vector<int> alternative_table_key{chunk_key[0], chunk_key[1]};
-        CHECK(!alternative_table_key.empty());
-        table_keys = std::unordered_set<size_t>{boost::hash_value(alternative_table_key)};
-        VLOG(2) << "Use alternative hash table cache key";
-      }
-      hash_table_cache_->addQueryPlanDagForTableKeys(hashtable_cache_key_, table_keys);
-      getHashtablePropertyCache()->addQueryPlanDagForTableKeys(hashtable_cache_key_,
-                                                               table_keys);
 
+    if (has_invalid_cached_hash_table) {
+      hash_tables_for_device_.clear();
+      hash_tables_for_device_.resize(device_count_);
+    } else {
+      if (memory_level_ == Data_Namespace::GPU_LEVEL) {
+#ifdef HAVE_CUDA
+        for (int device_id = 0; device_id < device_count_; ++device_id) {
+          auto cpu_hash_table = std::dynamic_pointer_cast<PerfectHashTable>(
+              hash_tables_for_device_[device_id]);
+          copyCpuHashTableToGpu(cpu_hash_table, device_id, data_mgr);
+        }
+#else
+        UNREACHABLE();
+#endif
+      }
+      return;
+    }
+  }
+
+  // we have no cached hash table for this qual
+  // so, start building the hash table by fetching columns for devices
+  for (int device_id = 0; device_id < device_count_; ++device_id) {
+    columns_per_device.emplace_back(
+        fetchColumnsForDevice(fragments_per_device[device_id],
+                              device_id,
+                              memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
+                                  ? dev_buff_owners[device_id].get()
+                                  : nullptr,
+                              *catalog));
+  }
+
+  try {
+    for (int device_id = 0; device_id < device_count_; ++device_id) {
+      const auto chunk_key = genChunkKey(fragments_per_device[device_id],
+                                         inner_outer_pairs_.front().second,
+                                         inner_outer_pairs_.front().first);
       init_threads.push_back(std::async(std::launch::async,
                                         &PerfectJoinHashTable::reifyForDevice,
                                         this,
@@ -418,8 +598,10 @@ void PerfectJoinHashTable::reify() {
       init_thread.get();
     }
   } catch (const NeedsOneToManyHash& e) {
+    VLOG(1) << "RHS/Inner hash join values detected to not be unique, falling back to "
+               "One-to-Many hash layout.";
+    CHECK(hash_type_ == HashType::OneToOne);
     hash_type_ = HashType::OneToMany;
-    query_hint_ = RegisteredQueryHint::defaults();
     freeHashBufferMemory();
     init_threads.clear();
     if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
@@ -427,12 +609,9 @@ void PerfectJoinHashTable::reify() {
     }
     CHECK_EQ(columns_per_device.size(), size_t(device_count_));
     for (int device_id = 0; device_id < device_count_; ++device_id) {
-      const auto fragments =
-          shard_count
-              ? only_shards_for_device(query_info.fragments, device_id, device_count_)
-              : query_info.fragments;
-      const auto chunk_key = genChunkKey(
-          fragments, inner_outer_pairs_.front().second, inner_outer_pairs_.front().first);
+      const auto chunk_key = genChunkKey(fragments_per_device[device_id],
+                                         inner_outer_pairs_.front().second,
+                                         inner_outer_pairs_.front().first);
       init_threads.push_back(std::async(std::launch::async,
                                         &PerfectJoinHashTable::reifyForDevice,
                                         this,
@@ -453,12 +632,10 @@ void PerfectJoinHashTable::reify() {
 
 Data_Namespace::MemoryLevel PerfectJoinHashTable::getEffectiveMemoryLevel(
     const std::vector<InnerOuter>& inner_outer_pairs) const {
-  for (const auto& inner_outer_pair : inner_outer_pairs) {
-    if (needs_dictionary_translation(
-            inner_outer_pair.first, inner_outer_pair.second, executor_)) {
-      needs_dict_translation_ = true;
-      return Data_Namespace::CPU_LEVEL;
-    }
+  if (needs_dictionary_translation(
+          inner_outer_pairs.front(), inner_outer_string_op_infos_, executor_)) {
+    needs_dict_translation_ = true;
+    return Data_Namespace::CPU_LEVEL;
   }
   return memory_level_;
 }
@@ -468,12 +645,13 @@ ColumnsForDevice PerfectJoinHashTable::fetchColumnsForDevice(
     const int device_id,
     DeviceAllocator* dev_buff_owner,
     const Catalog_Namespace::Catalog& catalog) {
-  const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
   std::vector<JoinColumn> join_columns;
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::vector<JoinColumnTypeInfo> join_column_types;
   std::vector<JoinBucketInfo> join_bucket_info;
   std::vector<std::shared_ptr<void>> malloc_owner;
+  const auto effective_memory_level =
+      get_effective_memory_level(memory_level_, needs_dict_translation_);
   for (const auto& inner_outer_pair : inner_outer_pairs_) {
     const auto inner_col = inner_outer_pair.first;
     const auto inner_cd = get_column_descriptor_maybe(
@@ -508,7 +686,8 @@ void PerfectJoinHashTable::reifyForDevice(const ChunkKey& chunk_key,
                                           const int device_id,
                                           const logger::ThreadId parent_thread_id) {
   DEBUG_TIMER_NEW_THREAD(parent_thread_id);
-  const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
+  const auto effective_memory_level =
+      get_effective_memory_level(memory_level_, needs_dict_translation_);
 
   CHECK_EQ(columns_for_device.join_columns.size(), size_t(1));
   CHECK_EQ(inner_outer_pairs_.size(), size_t(1));
@@ -518,18 +697,17 @@ void PerfectJoinHashTable::reifyForDevice(const ChunkKey& chunk_key,
                                             join_column,
                                             inner_outer_pairs_.front(),
                                             layout,
+
                                             effective_memory_level,
                                             device_id);
     if (err) {
-      VLOG(1) << "Switching to OneToMany layout after trying to build Perfect join hash "
-                 "table with OneToOne layout";
       throw NeedsOneToManyHash();
     }
   } else {
     const auto err = initHashTableForDevice(chunk_key,
                                             join_column,
                                             inner_outer_pairs_.front(),
-                                            layout,
+                                            HashType::OneToMany,
                                             effective_memory_level,
                                             device_id);
     if (err) {
@@ -562,179 +740,89 @@ int PerfectJoinHashTable::initHashTableForDevice(
 #endif
   int err{0};
   const int32_t hash_join_invalid_val{-1};
-  // hash table proper cache is located as a global static variable within HashJoin class
-  // to maintain a unique property per hash table access path (cache key)
-  // regardless of hash table hashing types (perfect and baseline)
-  auto hash_table_property_cache = getHashtablePropertyCache();
-  auto query_hint_delivered =
-      query_hint_.isHintRegistered(QueryHint::kHashJoin) && query_hint_.hash_join;
-  bool layout_hint_delivered = query_hint_delivered && query_hint_.hash_join->layout;
-  bool need_update_cached_layout_prop = layout_hint_delivered;
-  hash_type_ = layout_hint_delivered ? hash_table_property_cache->translateLayoutType(
-                                           query_hint_.hash_join->layout.value())
-                                     : layout;
-  if (layout_hint_delivered) {
-    VLOG(1) << "A user tries to set hash table layout as "
-            << getHashTypeString(hash_type_);
-  }
-
-  auto allow_hashtable_recycling = HashTableRecycler::isSafeToCacheHashtable(
-      table_id_to_node_map_, needs_dict_translation_, inner_col->get_table_id());
-  auto allow_put_hashtable_to_cache =
-      !query_hint_delivered || (query_hint_delivered && query_hint_.hash_join->caching);
-  // Unlike hashing scheme hint, a layout hint is handled per each hash table type
-  // if a layout hint is delivered, we ignore a cached property and update it
-  // based on the given query hint after building a hash table
-  if (allow_hashtable_recycling && !layout_hint_delivered) {
-    auto cached_hashtable_property = hash_table_property_cache->getItemFromCache(
-        hashtable_cache_key_,
-        CacheItemType::HT_PROPERTY,
+  auto hashtable_layout = layout;
+  auto allow_hashtable_recycling =
+      HashtableRecycler::isSafeToCacheHashtable(table_id_to_node_map_,
+                                                needs_dict_translation_,
+                                                {inner_outer_string_op_infos_},
+                                                inner_col->get_table_id());
+  if (allow_hashtable_recycling) {
+    auto cached_hashtable_layout_type = hash_table_layout_cache_->getItemFromCache(
+        hashtable_cache_key_[device_id],
+        CacheItemType::HT_HASHING_SCHEME,
         DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-        std::nullopt);
-    if (cached_hashtable_property) {
-      if (cached_hashtable_property->hashing &&
-          *cached_hashtable_property->hashing == HashTableHashingType::BASELINE) {
-        // we have a cached hash table property (provided in the previous query) and it
-        // indicates hashing scheme as baseline
-        if (query_hint_delivered && query_hint_.hash_join->hashing &&
-            (*query_hint_.hash_join->hashing == HashTableHashingType::PERFECT)) {
-          // but now we have a hashing scheme hint which explicitly invokes perfect hash,
-          // need to update the cached hash table prop
-          need_update_cached_layout_prop = true;
-        } else {
-          throw HashingTypeHintDetected(HashTableHashingType::BASELINE);
-        }
-      }
-      if (cached_hashtable_property->layout) {
-        auto cached_layout_type = hash_table_property_cache->translateLayoutType(
-            *cached_hashtable_property->layout);
-        if (cached_layout_type == HashType::OneToOne &&
-            hash_type_ == HashType::OneToMany) {
-          // if we try to build OneToMany layout hash table even though we give OneToOne
-          // layout hint, it means OneToOne hash table building is failed and we retry to
-          // build a hash table with OneToMany layout we actually clear delivered query
-          // hint when rebuilding the hash table due to layout issue, but since we
-          // explicitly control it by query hint, we add this logic for the correctness
-          VLOG(1) << "Skipping hash table layout hint: cannot apply OneToOne layout hint "
-                     "when building OneToMany hash table";
-        } else {
-          hash_type_ = cached_layout_type;
-        }
-      }
+        {});
+    if (cached_hashtable_layout_type) {
+      hash_type_ = *cached_hashtable_layout_type;
+      hashtable_layout = hash_type_;
     }
   }
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
     CHECK(!chunk_key.empty());
     std::shared_ptr<PerfectHashTable> hash_table{nullptr};
-    if (allow_hashtable_recycling) {
-      hash_table = initHashTableOnCpuFromCache(hashtable_cache_key_,
-                                               CacheItemType::PERFECT_HT,
-                                               DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-                                               hash_type_);
-    }
     decltype(std::chrono::steady_clock::now()) ts1, ts2;
     ts1 = std::chrono::steady_clock::now();
     {
       std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
-      if (!hash_table) {
-        PerfectJoinHashTableBuilder builder;
-        if (hash_type_ == HashType::OneToOne) {
-          builder.initOneToOneHashTableOnCpu(join_column,
-                                             col_range_,
-                                             isBitwiseEq(),
-                                             cols,
-                                             join_type_,
-                                             hash_type_,
-                                             hash_entry_info,
-                                             hash_join_invalid_val,
-                                             executor_);
-          hash_table = builder.getHashTable();
-        } else {
-          builder.initOneToManyHashTableOnCpu(join_column,
-                                              col_range_,
-                                              isBitwiseEq(),
-                                              cols,
-                                              hash_entry_info,
-                                              hash_join_invalid_val,
-                                              executor_);
-          hash_table = builder.getHashTable();
-        }
-        ts2 = std::chrono::steady_clock::now();
-        auto build_time =
-            std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
-        if (!err && allow_hashtable_recycling && hash_table) {
-          // add ht-related items to cache iff we have a valid hashtable
-          HashTableProperty prop{HashTablePropertyRecycler::translateHashType(hash_type_),
-                                 HashTableHashingType::PERFECT};
-          if (layout_hint_delivered || need_update_cached_layout_prop) {
-            // this cases require us to update the cached prop if necessary
-            hash_table_property_cache->updateItemInCacheIfNecessary(
-                hashtable_cache_key_,
-                prop,
-                CacheItemType::HT_PROPERTY,
-                DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-          } else {
-            // otherwise, we try to cache the prop
-            hash_table_property_cache->putItemToCache(
-                hashtable_cache_key_,
-                prop,
-                CacheItemType::HT_PROPERTY,
-                DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-                0,
-                0,
-                std::nullopt);
-          }
-          if (allow_put_hashtable_to_cache) {
-            putHashTableOnCpuToCache(hashtable_cache_key_,
-                                     CacheItemType::PERFECT_HT,
-                                     hash_table,
-                                     DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-                                     build_time);
-          }
-        }
+      PerfectJoinHashTableBuilder builder;
+      if (hashtable_layout == HashType::OneToOne) {
+        builder.initOneToOneHashTableOnCpu(join_column,
+                                           col_range_,
+                                           isBitwiseEq(),
+                                           cols,
+                                           str_proxy_translation_map_,
+                                           join_type_,
+                                           hashtable_layout,
+                                           hash_entry_info,
+                                           hash_join_invalid_val,
+                                           executor_);
+        hash_table = builder.getHashTable();
+      } else {
+        builder.initOneToManyHashTableOnCpu(join_column,
+                                            col_range_,
+                                            isBitwiseEq(),
+                                            cols,
+                                            str_proxy_translation_map_,
+                                            hash_entry_info,
+                                            hash_join_invalid_val,
+                                            executor_);
+        hash_table = builder.getHashTable();
+      }
+      ts2 = std::chrono::steady_clock::now();
+      auto build_time =
+          std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
+      hash_table->setHashEntryInfo(hash_entry_info);
+      hash_table->setColumnNumElems(join_column.num_elems);
+      if (allow_hashtable_recycling && hash_table) {
+        // add ht-related items to cache iff we have a valid hashtable
+        hash_table_layout_cache_->putItemToCache(hashtable_cache_key_[device_id],
+                                                 hashtable_layout,
+                                                 CacheItemType::HT_HASHING_SCHEME,
+                                                 DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+                                                 0,
+                                                 0,
+                                                 {});
+        putHashTableOnCpuToCache(hashtable_cache_key_[device_id],
+                                 CacheItemType::PERFECT_HT,
+                                 hash_table,
+                                 DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+                                 build_time);
       }
     }
     // Transfer the hash table on the GPU if we've only built it on CPU
     // but the query runs on GPU (join on dictionary encoded columns).
     if (memory_level_ == Data_Namespace::GPU_LEVEL) {
 #ifdef HAVE_CUDA
-      auto timer = DEBUG_TIMER("Copy CPU hash table to GPU");
       const auto& ti = inner_col->get_type_info();
       CHECK(ti.is_string());
       auto data_mgr = executor_->getDataMgr();
-      std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
-
-      PerfectJoinHashTableBuilder gpu_builder;
-      gpu_builder.allocateDeviceMemory(join_column,
-                                       hash_table->getLayout(),
-                                       hash_entry_info,
-                                       shardCount(),
-                                       device_id,
-                                       device_count_,
-                                       executor_);
-      std::shared_ptr<PerfectHashTable> gpu_hash_table = gpu_builder.getHashTable();
-      CHECK(gpu_hash_table);
-      auto gpu_buffer_ptr = gpu_hash_table->getGpuBuffer();
-      CHECK(gpu_buffer_ptr);
-
-      CHECK(hash_table);
-      // GPU size returns reserved size
-      CHECK_LE(hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
-               gpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::GPU));
-
-      auto device_allocator = data_mgr->createGpuAllocator(device_id);
-      device_allocator->copyToDevice(
-          gpu_buffer_ptr,
-          hash_table->getCpuBuffer(),
-          hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU));
-      CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
-      hash_tables_for_device_[device_id] = std::move(gpu_hash_table);
+      copyCpuHashTableToGpu(hash_table, device_id, data_mgr);
 #else
       UNREACHABLE();
 #endif
     } else {
       CHECK(hash_table);
-      CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
+      CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
       hash_tables_for_device_[device_id] = hash_table;
     }
   } else {
@@ -742,7 +830,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
     PerfectJoinHashTableBuilder builder;
     CHECK_EQ(Data_Namespace::GPU_LEVEL, effective_memory_level);
     builder.allocateDeviceMemory(join_column,
-                                 hash_type_,
+                                 hashtable_layout,
                                  hash_entry_info,
                                  shardCount(),
                                  device_id,
@@ -754,34 +842,25 @@ int PerfectJoinHashTable::initHashTableForDevice(
                                isBitwiseEq(),
                                cols,
                                join_type_,
-                               hash_type_,
+                               hashtable_layout,
                                hash_entry_info,
                                shardCount(),
                                hash_join_invalid_val,
                                device_id,
                                device_count_,
                                executor_);
-    CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
+    CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
     hash_tables_for_device_[device_id] = builder.getHashTable();
     if (!err && allow_hashtable_recycling && hash_tables_for_device_[device_id]) {
       // add layout to cache iff we have a valid hashtable
-      HashTableProperty prop{HashTablePropertyRecycler::translateHashType(hash_type_),
-                             HashTableHashingType::PERFECT};
-      if (layout_hint_delivered || need_update_cached_layout_prop) {
-        hash_table_property_cache->updateItemInCacheIfNecessary(
-            hashtable_cache_key_,
-            prop,
-            CacheItemType::HT_PROPERTY,
-            DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-      } else {
-        hash_table_property_cache->putItemToCache(hashtable_cache_key_,
-                                                  prop,
-                                                  CacheItemType::HT_PROPERTY,
-                                                  DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-                                                  0,
-                                                  0,
-                                                  std::nullopt);
-      }
+      hash_table_layout_cache_->putItemToCache(
+          hashtable_cache_key_[device_id],
+          hash_tables_for_device_[device_id]->getLayout(),
+          CacheItemType::HT_HASHING_SCHEME,
+          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+          0,
+          0,
+          {});
     }
 #else
     UNREACHABLE();
@@ -798,49 +877,40 @@ ChunkKey PerfectJoinHashTable::genChunkKey(
                      inner_col->get_table_id(),
                      inner_col->get_column_id()};
   const auto& ti = inner_col->get_type_info();
+  std::for_each(fragments.cbegin(), fragments.cend(), [&chunk_key](const auto& fragment) {
+    // collect all frag ids to correctly generated cache key for a cached hash table
+    chunk_key.push_back(fragment.fragmentId);
+  });
   if (ti.is_string()) {
     CHECK_EQ(kENCODING_DICT, ti.get_compression());
-    size_t outer_elem_count = 0;
     const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(outer_col_expr);
     CHECK(outer_col);
     const auto& outer_query_info = getInnerQueryInfo(outer_col).info;
-    for (auto& frag : outer_query_info.fragments) {
-      outer_elem_count = frag.getNumTuples();
-    }
+    size_t outer_elem_count =
+        std::accumulate(outer_query_info.fragments.begin(),
+                        outer_query_info.fragments.end(),
+                        size_t(0),
+                        [&chunk_key](size_t sum, const auto& fragment) {
+                          chunk_key.push_back(fragment.fragmentId);
+                          return sum + fragment.getNumTuples();
+                        });
     chunk_key.push_back(outer_elem_count);
   }
-  if (fragments.size() < 2) {
-    chunk_key.push_back(fragments.front().fragmentId);
-  }
+
   return chunk_key;
 }
 
 std::shared_ptr<PerfectHashTable> PerfectJoinHashTable::initHashTableOnCpuFromCache(
     QueryPlanHash key,
     CacheItemType item_type,
-    DeviceIdentifier device_identifier,
-    HashType expected_layout) {
+    DeviceIdentifier device_identifier) {
   CHECK(hash_table_cache_);
   auto timer = DEBUG_TIMER(__func__);
   VLOG(1) << "Checking CPU hash table cache.";
-  HashtableCacheMetaInfo meta_info;
-  meta_info.registered_query_hint = query_hint_;
-  if (auto cached_hash_table = hash_table_cache_->getItemFromCache(
-          key, item_type, device_identifier, meta_info)) {
-    if (expected_layout != cached_hash_table->getLayout()) {
-      auto translated_expected_layout =
-          HashTablePropertyRecycler::translateHashType(expected_layout);
-      auto translated_cached_layout =
-          HashTablePropertyRecycler::translateHashType(cached_hash_table->getLayout());
-      VLOG(1) << "Skipping hash table recycling: candidate cached hash table does not "
-                 "have an expected layout (expected: "
-              << HashTablePropertyRecycler::getLayoutString(translated_expected_layout)
-              << ", actual: "
-              << HashTablePropertyRecycler::getLayoutString(translated_cached_layout)
-              << ")";
-      return nullptr;
-    }
-    return std::dynamic_pointer_cast<PerfectHashTable>(cached_hash_table);
+  auto hashtable_ptr =
+      hash_table_cache_->getItemFromCache(key, item_type, device_identifier);
+  if (hashtable_ptr) {
+    return std::dynamic_pointer_cast<PerfectHashTable>(hashtable_ptr);
   }
   return nullptr;
 }
@@ -853,16 +923,13 @@ void PerfectJoinHashTable::putHashTableOnCpuToCache(
     size_t hashtable_building_time) {
   CHECK(hash_table_cache_);
   CHECK(hashtable_ptr && !hashtable_ptr->getGpuBuffer());
-  HashtableCacheMetaInfo meta_info;
-  meta_info.registered_query_hint = query_hint_;
   hash_table_cache_->putItemToCache(
       key,
       hashtable_ptr,
       item_type,
       device_identifier,
       hashtable_ptr->getHashTableBufferSize(ExecutorDeviceType::CPU),
-      hashtable_building_time,
-      meta_info);
+      hashtable_building_time);
 }
 
 llvm::Value* PerfectJoinHashTable::codegenHashTableLoad(const size_t table_idx) {
@@ -879,20 +946,24 @@ llvm::Value* PerfectJoinHashTable::codegenHashTableLoad(const size_t table_idx) 
 
 std::vector<llvm::Value*> PerfectJoinHashTable::getHashJoinArgs(
     llvm::Value* hash_ptr,
+    llvm::Value* key_lv,
     const Analyzer::Expr* key_col,
     const int shard_count,
     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   CodeGenerator code_generator(executor_);
-  const auto key_lvs = code_generator.codegen(key_col, true, co);
-  CHECK_EQ(size_t(1), key_lvs.size());
+  CHECK(key_lv);
+  // Todo(todd): Fix below, it's gross (but didn't want to redo the plumbing yet)
+  // const auto key_lv = key_lvs.size() && key_lvs[0]
+  //                        ? key_lvs[0]
+  //                        : code_generator.codegen(key_col, true, co)[0];
   auto const& key_col_ti = key_col->get_type_info();
   auto hash_entry_info =
       get_bucketized_hash_entry_info(key_col_ti, col_range_, isBitwiseEq());
 
   std::vector<llvm::Value*> hash_join_idx_args{
       hash_ptr,
-      executor_->cgen_state_->castToTypeIn(key_lvs.front(), 64),
+      executor_->cgen_state_->castToTypeIn(key_lv, 64),
       executor_->cgen_state_->llInt(col_range_.getIntMin()),
       executor_->cgen_state_->llInt(col_range_.getIntMax())};
   if (shard_count) {
@@ -932,8 +1003,10 @@ std::vector<llvm::Value*> PerfectJoinHashTable::getHashJoinArgs(
 HashJoinMatchingSet PerfectJoinHashTable::codegenMatchingSet(const CompilationOptions& co,
                                                              const size_t index) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
-  const auto cols = get_cols(
-      qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_);
+  const auto cols =
+      get_cols(
+          qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_)
+          .first;
   auto key_col = cols.second;
   CHECK(key_col);
   auto val_col = cols.first;
@@ -956,7 +1029,12 @@ HashJoinMatchingSet PerfectJoinHashTable::codegenMatchingSet(const CompilationOp
         "rewriting table order in "
         "FROM clause.");
   }
-  auto hash_join_idx_args = getHashJoinArgs(pos_ptr, key_col, shard_count, co);
+  CodeGenerator code_generator(executor_);
+
+  auto key_lv = HashJoin::codegenColOrStringOper(
+      key_col, inner_outer_string_op_infos_.second, code_generator, co);
+
+  auto hash_join_idx_args = getHashJoinArgs(pos_ptr, key_lv, key_col, shard_count, co);
   const int64_t sub_buff_size = getComponentBufferSize();
   const auto& key_col_ti = key_col->get_type_info();
 
@@ -999,6 +1077,42 @@ HashTable* PerfectJoinHashTable::getHashTableForDevice(const size_t device_id) c
   return hash_tables_for_device_[device_id].get();
 }
 
+void PerfectJoinHashTable::copyCpuHashTableToGpu(
+    std::shared_ptr<PerfectHashTable>& cpu_hash_table,
+    const int device_id,
+    Data_Namespace::DataMgr* data_mgr) {
+  CHECK_EQ(memory_level_, Data_Namespace::MemoryLevel::GPU_LEVEL);
+  CHECK(data_mgr);
+  CHECK(cpu_hash_table);
+
+  std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
+  PerfectJoinHashTableBuilder gpu_builder;
+  gpu_builder.allocateDeviceMemory(cpu_hash_table->getColumnNumElems(),
+                                   cpu_hash_table->getLayout(),
+                                   cpu_hash_table->getHashEntryInfo(),
+                                   shardCount(),
+                                   device_id,
+                                   device_count_,
+                                   executor_);
+
+  std::shared_ptr<PerfectHashTable> gpu_hash_table = gpu_builder.getHashTable();
+  CHECK(gpu_hash_table);
+  auto gpu_buffer_ptr = gpu_hash_table->getGpuBuffer();
+  CHECK(gpu_buffer_ptr);
+
+  CHECK_LE(cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
+           gpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::GPU));
+
+  auto device_allocator = std::make_unique<CudaAllocator>(
+      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
+  device_allocator->copyToDevice(
+      gpu_buffer_ptr,
+      cpu_hash_table->getCpuBuffer(),
+      cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU));
+  CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
+  hash_tables_for_device_[device_id] = std::move(gpu_hash_table);
+}
+
 std::string PerfectJoinHashTable::toString(const ExecutorDeviceType device_type,
                                            const int device_id,
                                            bool raw) const {
@@ -1011,7 +1125,8 @@ std::string PerfectJoinHashTable::toString(const ExecutorDeviceType device_type,
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
 
     auto data_mgr = executor_->getDataMgr();
-    auto device_allocator = data_mgr->createGpuAllocator(device_id);
+    auto device_allocator = std::make_unique<CudaAllocator>(
+        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
     device_allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
@@ -1022,8 +1137,7 @@ std::string PerfectJoinHashTable::toString(const ExecutorDeviceType device_type,
   auto ptr3 = ptr1 + countBufferOff();
   auto ptr4 = ptr1 + payloadBufferOff();
   return HashTable::toString("perfect",
-                             hash_table ? getHashTypeString(hash_table->getLayout())
-                                        : getHashTypeString(hash_type_),
+                             getHashTypeString(hash_type_),
                              0,
                              0,
                              hash_table ? hash_table->getEntryCount() : 0,
@@ -1047,7 +1161,8 @@ std::set<DecodedJoinHashBufferEntry> PerfectJoinHashTable::toSet(
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
 
     auto data_mgr = executor_->getDataMgr();
-    auto device_allocator = data_mgr->createGpuAllocator(device_id);
+    auto device_allocator = std::make_unique<CudaAllocator>(
+        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
     device_allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
@@ -1073,8 +1188,10 @@ llvm::Value* PerfectJoinHashTable::codegenSlot(const CompilationOptions& co,
   using namespace std::string_literals;
 
   CHECK(getHashType() == HashType::OneToOne);
-  const auto cols = get_cols(
+  const auto cols_and_string_op_infos = get_cols(
       qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_);
+  const auto& cols = cols_and_string_op_infos.first;
+  const auto& inner_outer_string_op_infos = cols_and_string_op_infos.second;
   auto key_col = cols.second;
   CHECK(key_col);
   auto val_col = cols.first;
@@ -1088,19 +1205,21 @@ llvm::Value* PerfectJoinHashTable::codegenSlot(const CompilationOptions& co,
           val_col_var,
           get_max_rte_scan_table(executor_->cgen_state_->scan_idx_to_hash_pos_))) {
     throw std::runtime_error(
-        "Query execution fails because the query contains not supported self-join "
+        "Query execution failed because the query contains not supported self-join "
         "pattern. We suspect the query requires multiple left-deep join tree due to "
-        "the "
-        "join condition of the self-join and is not supported for now. Please consider "
-        "rewriting table order in "
-        "FROM clause.");
+        "the join condition of the self-join and is not supported for now. Please "
+        "consider chaning the table order in the FROM clause.");
   }
-  const auto key_lvs = code_generator.codegen(key_col, true, co);
-  CHECK_EQ(size_t(1), key_lvs.size());
+
+  auto key_lv = HashJoin::codegenColOrStringOper(
+      key_col, inner_outer_string_op_infos.second, code_generator, co);
+
+  // CHECK_EQ(size_t(1), key_lvs.size());
   auto hash_ptr = codegenHashTableLoad(index);
   CHECK(hash_ptr);
   const int shard_count = shardCount();
-  const auto hash_join_idx_args = getHashJoinArgs(hash_ptr, key_col, shard_count, co);
+  const auto hash_join_idx_args =
+      getHashJoinArgs(hash_ptr, key_lv, key_col, shard_count, co);
 
   const auto& key_col_ti = key_col->get_type_info();
   std::string fname((key_col_ti.get_type() == kDATE) ? "bucketized_hash_join_idx"s

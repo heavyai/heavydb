@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,14 @@
 
 /*
  * @file Importer.cpp
- * @author Wei Hong <wei@mapd.com>
  * @brief Functions for Importer class
+ *
  */
 
 #include "ImportExport/Importer.h"
 
 #include <arrow/api.h>
+#include <arrow/filesystem/localfs.h>
 #include <arrow/io/api.h>
 #include <gdal.h>
 #include <ogrsf_frmts.h>
@@ -53,11 +54,25 @@
 #include "Archive/PosixFileArchive.h"
 #include "Archive/S3Archive.h"
 #include "ArrowImporter.h"
+#include "Catalog/os/UserMapping.h"
+#ifdef ENABLE_IMPORT_PARQUET
+#include "DataMgr/ForeignStorage/ParquetDataWrapper.h"
+#endif
+#if defined(ENABLE_IMPORT_PARQUET)
+#include "Catalog/ForeignTable.h"
+#include "DataMgr/ForeignStorage/ForeignDataWrapperFactory.h"
+#endif
+#ifdef ENABLE_IMPORT_PARQUET
+#include "DataMgr/ForeignStorage/ParquetS3DetectFileSystem.h"
+#endif
 #include "Geospatial/Compression.h"
 #include "Geospatial/GDAL.h"
 #include "Geospatial/Transforms.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
+#include "ImportExport/ForeignDataImporter.h"
+#include "ImportExport/MetadataColumn.h"
+#include "ImportExport/RasterImporter.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
@@ -65,6 +80,7 @@
 #include "RenderGroupAnalyzer.h"
 #include "Shared/DateTimeParser.h"
 #include "Shared/SqlTypesLayout.h"
+#include "Shared/enable_assign_render_groups.h"
 #include "Shared/file_path_util.h"
 #include "Shared/import_helpers.h"
 #include "Shared/likely.h"
@@ -75,9 +91,7 @@
 #include "Shared/thread_count.h"
 #include "Utils/ChunkAccessorTable.h"
 
-#include "ImportExport/RasterImporter.h"
-
-#include "gen-cpp/OmniSci.h"
+#include "gen-cpp/Heavy.h"
 
 #ifdef _WIN32
 #include <fcntl.h>
@@ -91,9 +105,11 @@
 
 size_t g_max_import_threads =
     32;  // Max number of default import threads to use (num hardware threads will be used
-         // if lower, and can also be explicitly overriden in copy statement with threads
-         // option)
+// if lower, and can also be explicitly overriden in copy statement with threads
+// option)
 size_t g_archive_read_buf_size = 1 << 20;
+
+std::optional<size_t> g_detect_test_sample_size = std::nullopt;
 
 static constexpr int kMaxRasterScanlinesPerThread = 32;
 
@@ -108,20 +124,12 @@ namespace {
 
 bool check_session_interrupted(const QuerySessionId& query_session, Executor* executor) {
   if (g_enable_non_kernel_time_query_interrupt && !query_session.empty()) {
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+    heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+        executor->getSessionLock());
     return executor->checkIsQuerySessionInterrupted(query_session, session_read_lock);
   }
   return false;
 }
-
-const size_t num_import_threads(const int copy_params_threads) {
-  if (copy_params_threads > 0) {
-    return static_cast<size_t>(copy_params_threads);
-  }
-  return std::min(static_cast<size_t>(std::thread::hardware_concurrency()),
-                  g_max_import_threads);
-}
-
 }  // namespace
 
 // For logging std::vector<std::string> row.
@@ -154,7 +162,7 @@ using FeaturePtrVector = std::vector<Geospatial::GDAL::FeatureUqPtr>;
 
 static constexpr bool PROMOTE_POLYGON_TO_MULTIPOLYGON = true;
 
-static mapd_shared_mutex status_mutex;
+static heavyai::shared_mutex status_mutex;
 static std::map<std::string, ImportStatus> import_status_map;
 
 Importer::Importer(Catalog_Namespace::Catalog& c,
@@ -217,12 +225,12 @@ Importer::~Importer() {
 }
 
 ImportStatus Importer::get_import_status(const std::string& import_id) {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(status_mutex);
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(status_mutex);
   return import_status_map.at(import_id);
 }
 
 void Importer::set_import_status(const std::string& import_id, ImportStatus is) {
-  mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
+  heavyai::lock_guard<heavyai::shared_mutex> write_lock(status_mutex);
   is.end = std::chrono::steady_clock::now();
   is.elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(is.end - is.start);
   import_status_map[import_id] = is;
@@ -286,6 +294,7 @@ Datum NullDatum(SQLTypeInfo& ti) {
       break;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       throw std::runtime_error("Internal error: geometry type in NullDatum.");
@@ -327,6 +336,7 @@ Datum NullArrayDatum(SQLTypeInfo& ti) {
       break;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       throw std::runtime_error("Internal error: geometry type in NullArrayDatum.");
@@ -366,8 +376,9 @@ ArrayDatum StringToArray(const std::string& s,
   }
   if (!elem_ti.is_string()) {
     size_t len = elem_strs.size() * elem_ti.get_size();
-    int8_t* buf = (int8_t*)checked_malloc(len);
-    int8_t* p = buf;
+    std::unique_ptr<int8_t, FreeDeleter> buf(
+        reinterpret_cast<int8_t*>(checked_malloc(len)));
+    int8_t* p = buf.get();
     for (auto& es : elem_strs) {
       auto e = trim_space(es.c_str(), es.length());
       bool is_null = (e == copy_params.null_str) || e == "NULL";
@@ -383,7 +394,7 @@ ArrayDatum StringToArray(const std::string& s,
       p = append_datum(p, d, elem_ti);
       CHECK(p);
     }
-    return ArrayDatum(len, buf, false);
+    return ArrayDatum(len, buf.release(), false);
   }
   // must not be called for array of strings
   CHECK(false);
@@ -477,6 +488,7 @@ Datum TDatumToDatum(const TDatum& datum, SQLTypeInfo& ti) {
       break;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       throw std::runtime_error("Internal error: geometry type in TDatumToDatum.");
@@ -549,12 +561,13 @@ void TypedImportBuffer::addDictEncodedString(const std::vector<std::string>& str
 void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
                                   const std::string_view val,
                                   const bool is_null,
-                                  const CopyParams& copy_params) {
+                                  const CopyParams& copy_params,
+                                  const bool check_not_null) {
   const auto type = cd->columnType.get_type();
   switch (type) {
     case kBOOLEAN: {
       if (is_null) {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addBoolean(inline_fixed_encoding_null_val(cd->columnType));
@@ -571,7 +584,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         Datum d = StringToDatum(val, ti);
         addTinyint(d.tinyintval);
       } else {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addTinyint(inline_fixed_encoding_null_val(cd->columnType));
@@ -584,7 +597,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         Datum d = StringToDatum(val, ti);
         addSmallint(d.smallintval);
       } else {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addSmallint(inline_fixed_encoding_null_val(cd->columnType));
@@ -597,7 +610,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         Datum d = StringToDatum(val, ti);
         addInt(d.intval);
       } else {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addInt(inline_fixed_encoding_null_val(cd->columnType));
@@ -610,7 +623,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         Datum d = StringToDatum(val, ti);
         addBigint(d.bigintval);
       } else {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addBigint(inline_fixed_encoding_null_val(cd->columnType));
@@ -626,7 +639,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         validator.validate(d.bigintval);
         addBigint(d.bigintval);
       } else {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addBigint(inline_fixed_encoding_null_val(cd->columnType));
@@ -637,7 +650,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       if (!is_null && (val[0] == '.' || isdigit(val[0]) || val[0] == '-')) {
         addFloat(static_cast<float>(std::atof(std::string(val).c_str())));
       } else {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addFloat(NULL_FLOAT);
@@ -647,7 +660,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       if (!is_null && (val[0] == '.' || isdigit(val[0]) || val[0] == '-')) {
         addDouble(std::atof(std::string(val).c_str()));
       } else {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addDouble(NULL_DOUBLE);
@@ -658,7 +671,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     case kCHAR: {
       // @TODO(wei) for now, use empty string for nulls
       if (is_null) {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addString(std::string());
@@ -680,14 +693,14 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         Datum d = StringToDatum(val, ti);
         addBigint(d.bigintval);
       } else {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addBigint(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
     case kARRAY: {
-      if (is_null && cd->columnType.get_notnull()) {
+      if (check_not_null && is_null && cd->columnType.get_notnull()) {
         throw std::runtime_error("NULL for column " + cd->columnName);
       }
       SQLTypeInfo ti = cd->columnType;
@@ -732,6 +745,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     }
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       addGeoString(val);
@@ -786,6 +800,7 @@ void TypedImportBuffer::pop_value() {
       break;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       geo_string_buffer_->pop_back();
@@ -973,6 +988,7 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
           cd, col, *bigint_buffer_, slice_range, bad_rows_tracker);
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       arrow_throw_if(col.type_id() != Type::BINARY && col.type_id() != Type::STRING,
@@ -1114,6 +1130,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
     }
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON: {
       dataSize = col.data.str_col.size();
@@ -1437,6 +1454,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       break;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       if (is_null) {
@@ -1602,6 +1620,7 @@ void TypedImportBuffer::addDefaultValues(const ColumnDescriptor* cd, size_t num_
     }
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       geo_string_buffer_->resize(num_rows, val);
@@ -1641,7 +1660,8 @@ void Importer::set_geo_physical_import_buffer(
     std::vector<double>& bounds,
     std::vector<int>& ring_sizes,
     std::vector<int>& poly_rings,
-    int render_group) {
+    int render_group,
+    const bool force_null) {
   const auto col_ti = cd->columnType;
   const auto col_type = col_ti.get_type();
   auto columnId = cd->columnId;
@@ -1663,6 +1683,9 @@ void Importer::set_geo_physical_import_buffer(
       is_null_geo = false;
     }
   }
+  if (force_null) {
+    is_null_geo = true;
+  }
   TDatum tdd_coords;
   // Get the raw data representing [optionally compressed] non-NULL geo's coords.
   // One exception - NULL POINT geo: coords need to be processed to encode nullness
@@ -1678,8 +1701,8 @@ void Importer::set_geo_physical_import_buffer(
   tdd_coords.is_null = is_null_geo;
   import_buffers[col_idx++]->add_value(cd_coords, tdd_coords, false);
 
-  if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-    // Create ring_sizes array value and add it to the physical column
+  if (col_type == kMULTILINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+    // Create [linest]ring_sizes array value and add it to the physical column
     auto cd_ring_sizes = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     TDatum tdd_ring_sizes;
     tdd_ring_sizes.val.arr_val.reserve(ring_sizes.size());
@@ -1708,7 +1731,8 @@ void Importer::set_geo_physical_import_buffer(
     import_buffers[col_idx++]->add_value(cd_poly_rings, tdd_poly_rings, false);
   }
 
-  if (col_type == kLINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+  if (col_type == kLINESTRING || col_type == kMULTILINESTRING || col_type == kPOLYGON ||
+      col_type == kMULTIPOLYGON) {
     auto cd_bounds = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     TDatum tdd_bounds;
     tdd_bounds.val.arr_val.reserve(bounds.size());
@@ -1783,11 +1807,11 @@ void Importer::set_geo_physical_import_buffer_columnar(
   }
   col_idx++;
 
-  if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+  if (col_type == kMULTILINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
     if (ring_sizes_column.size() != coords_row_count) {
       CHECK(false) << "Geometry import columnar: ring sizes column size mismatch";
     }
-    // Create ring_sizes array value and add it to the physical column
+    // Create [linest[ring_sizes array value and add it to the physical column
     auto cd_ring_sizes = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     for (auto const& ring_sizes : ring_sizes_column) {
       bool is_null_geo = false;
@@ -1835,7 +1859,8 @@ void Importer::set_geo_physical_import_buffer_columnar(
     col_idx++;
   }
 
-  if (col_type == kLINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+  if (col_type == kLINESTRING || col_type == kMULTILINESTRING || col_type == kPOLYGON ||
+      col_type == kMULTIPOLYGON) {
     if (bounds_column.size() != coords_row_count) {
       CHECK(false) << "Geometry import columnar: bounds column size mismatch";
     }
@@ -2113,6 +2138,10 @@ static ImportStatus import_thread_delimited(
             if (!cd->columnType.is_string() && row[import_idx].empty()) {
               is_null = true;
             }
+            if (!cd->columnType.is_string() && !copy_params.trim_spaces) {
+              // everything but strings should be always trimmed
+              row[import_idx] = sv_strip(row[import_idx]);
+            }
 
             if (col_ti.get_physical_cols() == 0) {
               // not geo
@@ -2376,7 +2405,7 @@ class ColumnNotGeoError : public std::runtime_error {
 static ImportStatus import_thread_shapefile(
     int thread_id,
     Importer* importer,
-    OGRSpatialReference* poGeographicSR,
+    OGRCoordinateTransformation* coordinate_transformation,
     const FeaturePtrVector& features,
     size_t firstFeature,
     size_t numFeatures,
@@ -2384,7 +2413,8 @@ static ImportStatus import_thread_shapefile(
     const ColumnNameToSourceNameMapType& columnNameToSourceNameMap,
     const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap,
     const Catalog_Namespace::SessionInfo* session_info,
-    Executor* executor) {
+    Executor* executor,
+    const MetadataColumnInfos& metadata_column_infos) {
   ImportStatus thread_import_status;
   const CopyParams& copy_params = importer->get_copy_params();
   const std::list<const ColumnDescriptor*>& col_descs = importer->get_column_descs();
@@ -2397,10 +2427,6 @@ static ImportStatus import_thread_shapefile(
 
   auto convert_timer = timer_start();
 
-  // we create this on the fly based on the first feature's SR
-  std::unique_ptr<OGRCoordinateTransformation> coordinate_transformation;
-  bool checked_transformation{false};
-
   // for all the features in this chunk...
   for (size_t iFeature = 0; iFeature < numFeatures; iFeature++) {
     // ignore null features
@@ -2412,43 +2438,8 @@ static ImportStatus import_thread_shapefile(
     // for geodatabase, we need to consider features with no geometry
     // as we still want to create a table, even if it has no geo column
     OGRGeometry* pGeometry = features[iFeature]->GetGeometryRef();
-    if (pGeometry) {
-      // check if we need to make a CoordinateTransformation
-      // we assume that all features in this chunk will have
-      // the same source SR, so the CT will be valid for all
-      // transforming to a reusable CT is faster than to an SR
-      if (!checked_transformation) {
-        // get the SR of the incoming geo
-        auto geometry_sr = pGeometry->getSpatialReference();
-        // if the SR is non-null and non-empty and different from what we want
-        // we need to make a reusable CoordinateTransformation
-        if (geometry_sr &&
-#if GDAL_VERSION_MAJOR >= 3
-            !geometry_sr->IsEmpty() &&
-#endif
-            !geometry_sr->IsSame(poGeographicSR)) {
-          // validate the SR before trying to use it
-          if (geometry_sr->Validate() != OGRERR_NONE) {
-            throw std::runtime_error("Incoming geo has invalid Spatial Reference");
-          }
-          // create the OGRCoordinateTransformation that will be used for
-          // all the features in this chunk
-          if (coordinate_transformation == nullptr) {
-            coordinate_transformation.reset(
-                OGRCreateCoordinateTransformation(geometry_sr, poGeographicSR));
-            if (coordinate_transformation == nullptr) {
-              throw std::runtime_error(
-                  "Failed to create a GDAL CoordinateTransformation for incoming geo");
-            }
-          }
-        }
-        checked_transformation = true;
-      }
-
-      // if we have a transformation, use it
-      if (coordinate_transformation) {
-        pGeometry->transform(coordinate_transformation.get());
-      }
+    if (pGeometry && coordinate_transformation) {
+      pGeometry->transform(coordinate_transformation);
     }
 
     //
@@ -2464,6 +2455,10 @@ static ImportStatus import_thread_shapefile(
           thread_import_status.load_msg = "Table load was cancelled via Query Interrupt";
           throw QueryExecutionError(Executor::ERR_INTERRUPTED);
         }
+
+        uint32_t field_column_count{0u};
+        uint32_t metadata_column_count{0u};
+
         for (auto cd_it = col_descs.begin(); cd_it != col_descs.end(); cd_it++) {
           auto cd = *cd_it;
 
@@ -2529,15 +2524,18 @@ static ImportStatus import_thread_shapefile(
               }
             }
 
-            if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-              if (ring_sizes.size()) {
-                // get a suitable render group for these poly coords
-                auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
-                CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
-                render_group = (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
-              } else {
-                // empty poly
-                render_group = -1;
+            if (columnIdToRenderGroupAnalyzerMap.size()) {
+              if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+                if (ring_sizes.size()) {
+                  // get a suitable render group for these poly coords
+                  auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
+                  CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
+                  render_group =
+                      (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
+                } else {
+                  // empty poly
+                  render_group = -1;
+                }
               }
             }
 
@@ -2560,8 +2558,9 @@ static ImportStatus import_thread_shapefile(
             import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false);
             ++col_idx;
 
-            if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-              // Create ring_sizes array value and add it to the physical column
+            if (col_type == kMULTILINESTRING || col_type == kPOLYGON ||
+                col_type == kMULTIPOLYGON) {
+              // Create [linest]ring_sizes array value and add it to the physical column
               ++cd_it;
               auto cd_ring_sizes = *cd_it;
               std::vector<TDatum> td_ring_sizes;
@@ -2598,8 +2597,8 @@ static ImportStatus import_thread_shapefile(
               ++col_idx;
             }
 
-            if (col_type == kLINESTRING || col_type == kPOLYGON ||
-                col_type == kMULTIPOLYGON) {
+            if (col_type == kLINESTRING || col_type == kMULTILINESTRING ||
+                col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
               // Create bounds array value and add it to the physical column
               ++cd_it;
               auto cd_bounds = *cd_it;
@@ -2628,9 +2627,10 @@ static ImportStatus import_thread_shapefile(
               import_buffers[col_idx]->add_value(cd_render_group, td_render_group, false);
               ++col_idx;
             }
-          } else {
-            // regular column
-            // pull from GDAL metadata
+          } else if (field_column_count < fieldNameToIndexMap.size()) {
+            //
+            // field column
+            //
             auto const cit = columnNameToSourceNameMap.find(cd->columnName);
             CHECK(cit != columnNameToSourceNameMap.end());
             auto const& field_name = cit->second;
@@ -2707,10 +2707,22 @@ static ImportStatus import_thread_shapefile(
                                          ")");
             }
 
-            static CopyParams default_copy_params;
-            import_buffers[col_idx]->add_value(
-                cd, value_string, false, default_copy_params);
+            import_buffers[col_idx]->add_value(cd, value_string, false, copy_params);
             ++col_idx;
+            field_column_count++;
+          } else if (metadata_column_count < metadata_column_infos.size()) {
+            //
+            // metadata column
+            //
+            auto const& mci = metadata_column_infos[metadata_column_count];
+            if (mci.column_descriptor.columnName != cd->columnName) {
+              throw std::runtime_error("Metadata column name mismatch");
+            }
+            import_buffers[col_idx]->add_value(cd, mci.value, false, copy_params);
+            ++col_idx;
+            metadata_column_count++;
+          } else {
+            throw std::runtime_error("Column count mismatch");
           }
         }
         thread_import_status.rows_completed++;
@@ -2886,6 +2898,7 @@ void Loader::fillShardRow(const size_t row_index,
         break;
       case kPOINT:
       case kLINESTRING:
+      case kMULTILINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON: {
         CHECK_LT(row_index, input_buffer->getGeoStringBuffer()->size());
@@ -3228,7 +3241,7 @@ ImportStatus Detector::importDelimited(
   } catch (std::exception& e) {
   }
 
-  mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+  heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
   import_status_.load_failed = true;
 
   fclose(p_file);
@@ -3331,6 +3344,8 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
       type = kPOINT;
     } else if (str_upper_case.find("LINESTRING") == 0) {
       type = kLINESTRING;
+    } else if (str_upper_case.find("MULTILINESTRING") == 0) {
+      type = kMULTILINESTRING;
     } else if (str_upper_case.find("POLYGON") == 0) {
       if (PROMOTE_POLYGON_TO_MULTIPOLYGON) {
         type = kMULTIPOLYGON;
@@ -3353,6 +3368,8 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
           type = kPOINT;
         } else if (first_five_bytes == "0000000002" || first_five_bytes == "0102000000") {
           type = kLINESTRING;
+        } else if (first_five_bytes == "0000000005" || first_five_bytes == "0105000000") {
+          type = kMULTILINESTRING;
         } else if (first_five_bytes == "0000000003" || first_five_bytes == "0103000000") {
           type = kPOLYGON;
         } else if (first_five_bytes == "0000000006" || first_five_bytes == "0106000000") {
@@ -3405,6 +3422,7 @@ bool Detector::more_restrictive_sqltype(const SQLTypes a, const SQLTypes b) {
   typeorder[kDATE] = 10;
   typeorder[kPOINT] = 11;
   typeorder[kLINESTRING] = 11;
+  typeorder[kMULTILINESTRING] = 11;
   typeorder[kPOLYGON] = 11;
   typeorder[kMULTIPOLYGON] = 11;
   typeorder[kTEXT] = 12;
@@ -3541,30 +3559,60 @@ bool Detector::detect_headers(const std::vector<SQLTypes>& head_types,
 }
 
 std::vector<std::vector<std::string>> Detector::get_sample_rows(size_t n) {
-  n = std::min(n, raw_rows.size());
-  size_t offset = (has_headers && raw_rows.size() > 1) ? 1 : 0;
-  std::vector<std::vector<std::string>> sample_rows(raw_rows.begin() + offset,
-                                                    raw_rows.begin() + n);
-  return sample_rows;
+#if defined(ENABLE_IMPORT_PARQUET)
+  if (data_preview_.has_value()) {
+    return data_preview_.value().sample_rows;
+  } else
+#endif
+  {
+    n = std::min(n, raw_rows.size());
+    size_t offset = (has_headers && raw_rows.size() > 1) ? 1 : 0;
+    std::vector<std::vector<std::string>> sample_rows(raw_rows.begin() + offset,
+                                                      raw_rows.begin() + n);
+    return sample_rows;
+  }
 }
 
 std::vector<std::string> Detector::get_headers() {
-  std::vector<std::string> headers(best_sqltypes.size());
-  for (size_t i = 0; i < best_sqltypes.size(); i++) {
-    if (has_headers && i < raw_rows[0].size()) {
-      headers[i] = raw_rows[0][i];
-    } else {
-      headers[i] = "column_" + std::to_string(i + 1);
+#if defined(ENABLE_IMPORT_PARQUET)
+  if (data_preview_.has_value()) {
+    return data_preview_.value().column_names;
+  } else
+#endif
+  {
+    std::vector<std::string> headers(best_sqltypes.size());
+    for (size_t i = 0; i < best_sqltypes.size(); i++) {
+      if (has_headers && i < raw_rows[0].size()) {
+        headers[i] = raw_rows[0][i];
+      } else {
+        headers[i] = "column_" + std::to_string(i + 1);
+      }
     }
+    return headers;
   }
-  return headers;
+}
+
+std::vector<SQLTypeInfo> Detector::getBestColumnTypes() const {
+#if defined(ENABLE_IMPORT_PARQUET)
+  if (data_preview_.has_value()) {
+    return data_preview_.value().column_types;
+  } else
+#endif
+  {
+    std::vector<SQLTypeInfo> types;
+    CHECK_EQ(best_sqltypes.size(), best_encodings.size());
+    for (size_t i = 0; i < best_sqltypes.size(); i++) {
+      types.emplace_back(best_sqltypes[i], false, best_encodings[i]);
+    }
+    return types;
+  }
 }
 
 void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
                     size_t row_count,
                     const Catalog_Namespace::SessionInfo* session_info) {
   if (!loader->loadNoCheckpoint(import_buffers, row_count, session_info)) {
-    mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+    heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
     import_status_.load_failed = true;
     import_status_.load_msg = loader->getErrorMessage();
   }
@@ -3573,7 +3621,7 @@ void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& impor
 void Importer::checkpoint(
     const std::vector<Catalog_Namespace::TableEpochInfo>& table_epochs) {
   if (loader->getTableDesc()->storageType != StorageType::FOREIGN_TABLE) {
-    mapd_lock_guard<mapd_shared_mutex> read_lock(import_mutex_);
+    heavyai::lock_guard<heavyai::shared_mutex> read_lock(import_mutex_);
     if (import_status_.load_failed) {
       // rollback to starting epoch - undo all the added records
       loader->setTableEpochs(table_epochs);
@@ -3586,7 +3634,7 @@ void Importer::checkpoint(
       Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident
                                                   // tables
     auto ms = measure<>::execution([&]() {
-      mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+      heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
       if (!import_status_.load_failed) {
         for (auto& p : import_buffers_vec[0]) {
           if (!p->stringDictCheckpoint()) {
@@ -3614,12 +3662,11 @@ ImportStatus DataStreamSink::archivePlumber(
 
   std::vector<std::string> file_paths;
   try {
-    shared::validate_sort_options(copy_params.file_sort_order_by,
-                                  copy_params.file_sort_regex);
-    file_paths = shared::local_glob_filter_sort_files(file_path,
-                                                      copy_params.regex_path_filter,
-                                                      copy_params.file_sort_order_by,
-                                                      copy_params.file_sort_regex);
+    const shared::FilePathOptions options{copy_params.regex_path_filter,
+                                          copy_params.file_sort_order_by,
+                                          copy_params.file_sort_regex};
+    shared::validate_sort_options(options);
+    file_paths = shared::local_glob_filter_sort_files(file_path, options);
   } catch (const shared::FileNotFoundException& e) {
     // After finding no matching files locally, file_path may still be an s3 url
     file_paths.push_back(file_path);
@@ -3655,6 +3702,82 @@ ImportStatus DataStreamSink::archivePlumber(
   return import_status_;
 }
 
+namespace {
+#ifdef ENABLE_IMPORT_PARQUET
+
+#ifdef HAVE_AWS_S3
+foreign_storage::ParquetS3DetectFileSystem::ParquetS3DetectFileSystemConfiguration
+create_parquet_s3_detect_filesystem_config(const foreign_storage::ForeignServer* server,
+                                           const CopyParams& copy_params) {
+  foreign_storage::ParquetS3DetectFileSystem::ParquetS3DetectFileSystemConfiguration
+      config;
+
+  if (!copy_params.s3_access_key.empty()) {
+    config.s3_access_key = copy_params.s3_access_key;
+  }
+  if (!copy_params.s3_secret_key.empty()) {
+    config.s3_secret_key = copy_params.s3_secret_key;
+  }
+  if (!copy_params.s3_session_token.empty()) {
+    config.s3_session_token = copy_params.s3_session_token;
+  }
+
+  return config;
+}
+#endif
+
+foreign_storage::DataPreview get_parquet_data_preview(const std::string& file_name,
+                                                      const CopyParams& copy_params) {
+  TableDescriptor td;
+  td.tableName = "parquet-detect-table";
+  td.tableId = -1;
+  td.maxFragRows = Detector::kDefaultSampleRowsCount;
+  auto [foreign_server, user_mapping, foreign_table] =
+      foreign_storage::create_proxy_fsi_objects(file_name, copy_params, &td);
+
+  std::shared_ptr<arrow::fs::FileSystem> file_system;
+  auto& server_options = foreign_server->options;
+  if (server_options
+          .find(foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY)
+          ->second ==
+      foreign_storage::AbstractFileStorageDataWrapper::LOCAL_FILE_STORAGE_TYPE) {
+    file_system = std::make_shared<arrow::fs::LocalFileSystem>();
+#ifdef HAVE_AWS_S3
+  } else if (server_options
+                 .find(foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY)
+                 ->second ==
+             foreign_storage::AbstractFileStorageDataWrapper::S3_STORAGE_TYPE) {
+    file_system = foreign_storage::ParquetS3DetectFileSystem::create(
+        create_parquet_s3_detect_filesystem_config(foreign_server.get(), copy_params));
+#endif
+  } else {
+    UNREACHABLE();
+  }
+
+  auto parquet_data_wrapper = std::make_unique<foreign_storage::ParquetDataWrapper>(
+      foreign_table.get(), file_system);
+  return parquet_data_wrapper->getDataPreview(g_detect_test_sample_size.has_value()
+                                                  ? g_detect_test_sample_size.value()
+                                                  : Detector::kDefaultSampleRowsCount);
+}
+#endif
+
+}  // namespace
+
+Detector::Detector(const boost::filesystem::path& fp, CopyParams& cp)
+    : DataStreamSink(cp, fp.string()), file_path(fp) {
+#ifdef ENABLE_IMPORT_PARQUET
+  if (cp.source_type == import_export::SourceType::kParquetFile && g_enable_fsi &&
+      !g_enable_legacy_parquet_import) {
+    data_preview_ = get_parquet_data_preview(fp.string(), cp);
+  } else
+#endif
+  {
+    read_file();
+    init();
+  }
+}
+
 #ifdef ENABLE_IMPORT_PARQUET
 inline auto open_parquet_table(const std::string& file_path,
                                std::shared_ptr<arrow::io::ReadableFile>& infile,
@@ -3673,7 +3796,7 @@ inline auto open_parquet_table(const std::string& file_path,
   LOG(INFO) << "File " << file_path << " has " << num_rows << " rows and " << num_columns
             << " columns in " << num_row_groups << " groups.";
   return std::make_tuple(num_row_groups, num_columns, num_rows);
-}
+}  // namespace import_export
 
 void Detector::import_local_parquet(const std::string& file_path,
                                     const Catalog_Namespace::SessionInfo* session_info) {
@@ -3732,7 +3855,7 @@ void Detector::import_local_parquet(const std::string& file_path,
         }
       }
       raw_data += copy_params.line_delim;
-      mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+      heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
       if (++import_status_.rows_completed >= 10000) {
         // as if load truncated
         import_status_.load_failed = true;
@@ -3784,6 +3907,7 @@ auto TypedImportBuffer::del_values(const SQLTypes type,
       return del_values(*string_buffer_, bad_rows_tracker);
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       return del_values(*geo_string_buffer_, bad_rows_tracker);
@@ -3839,7 +3963,7 @@ void Importer::import_local_parquet(const std::string& file_path,
   auto ms_load_a_file = measure<>::execution([&]() {
     for (int row_group = 0; row_group < num_row_groups; ++row_group) {
       {
-        mapd_shared_lock<mapd_shared_mutex> read_lock(import_mutex_);
+        heavyai::shared_lock<heavyai::shared_mutex> read_lock(import_mutex_);
         if (import_status_.load_failed) {
           break;
         }
@@ -3847,7 +3971,7 @@ void Importer::import_local_parquet(const std::string& file_path,
       // a sliced row group will be handled like a (logic) parquet file, with
       // a entirely clean set of bad_rows_tracker, import_buffers_vec, ... etc
       if (UNLIKELY(check_session_interrupted(query_session, executor))) {
-        mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+        heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
         import_status_.load_failed = true;
         import_status_.load_msg = "Table load was cancelled via Query Interrupt";
       }
@@ -3887,7 +4011,7 @@ void Importer::import_local_parquet(const std::string& file_path,
         ThreadController_NS::SimpleThreadController<void> thread_controller(num_slices);
         for (int slice = 0; slice < num_slices; ++slice) {
           if (UNLIKELY(check_session_interrupted(query_session, executor))) {
-            mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+            heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
             import_status_.load_failed = true;
             import_status_.load_msg = "Table load was cancelled via Query Interrupt";
           }
@@ -3938,7 +4062,7 @@ void Importer::import_local_parquet(const std::string& file_path,
       LOG(INFO) << "row group " << row_group << ": add " << nrow_imported
                 << " rows, drop " << nrow_dropped << " rows.";
       {
-        mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+        heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
         import_status_.rows_completed += nrow_imported;
         import_status_.rows_rejected += nrow_dropped;
         if (import_status_.rows_rejected > copy_params.max_reject) {
@@ -4028,7 +4152,7 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths,
           }
           throw;
         }
-        mapd_shared_lock<mapd_shared_mutex> read_lock(import_mutex_);
+        heavyai::shared_lock<heavyai::shared_mutex> read_lock(import_mutex_);
         if (import_status_.load_failed) {
           break;
         }
@@ -4039,12 +4163,12 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths,
       std::rethrow_exception(teptr);
     }
   } catch (const shared::NoRegexFilterMatchException& e) {
-    mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+    heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
     import_status_.load_failed = true;
     import_status_.load_msg = e.what();
     throw e;
   } catch (const std::exception& e) {
-    mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+    heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
     import_status_.load_failed = true;
     import_status_.load_msg = e.what();
   }
@@ -4248,7 +4372,7 @@ void DataStreamSink::import_compressed(
                 nremaining -= nwritten;
                 buf2 += nwritten;
                 // no exception when too many rejected
-                mapd_shared_lock<mapd_shared_mutex> read_lock(import_mutex_);
+                heavyai::shared_lock<heavyai::shared_mutex> read_lock(import_mutex_);
                 if (import_status_.load_failed) {
                   stop = true;
                   break;
@@ -4292,7 +4416,7 @@ void DataStreamSink::import_compressed(
         // when import is aborted because too many data errors or because end of a
         // detection, any exception thrown by s3 sdk or libarchive is okay and should be
         // suppressed.
-        mapd_shared_lock<mapd_shared_mutex> read_lock(import_mutex_);
+        heavyai::shared_lock<heavyai::shared_mutex> read_lock(import_mutex_);
         if (import_status_.load_failed) {
           break;
         }
@@ -4372,7 +4496,7 @@ ImportStatus Importer::importDelimited(
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-  if (copy_params.geo_assign_render_groups) {
+  if (g_enable_assign_render_groups && copy_params.geo_assign_render_groups) {
     auto& cat = loader->getCatalog();
     auto* td = loader->getTableDesc();
     CHECK(td);
@@ -4459,7 +4583,7 @@ ImportStatus Importer::importDelimited(
           if (p.wait_for(span) == std::future_status::ready) {
             auto ret_import_status = p.get();
             {
-              mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+              heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
               import_status_ += ret_import_status;
               if (ret_import_status.load_failed) {
                 set_import_status(import_id, import_status_);
@@ -4508,12 +4632,12 @@ ImportStatus Importer::importDelimited(
         if (threads.size() < max_threads) {
           break;
         }
-        mapd_shared_lock<mapd_shared_mutex> read_lock(import_mutex_);
+        heavyai::shared_lock<heavyai::shared_mutex> read_lock(import_mutex_);
         if (import_status_.load_failed) {
           break;
         }
       }
-      mapd_unique_lock<mapd_shared_mutex> write_lock(import_mutex_);
+      heavyai::unique_lock<heavyai::shared_mutex> write_lock(import_mutex_);
       if (import_status_.rows_rejected > copy_params.max_reject) {
         import_status_.load_failed = true;
         // todo use better message
@@ -4604,79 +4728,100 @@ OGRLayer& getLayerWithSpecifiedName(const std::string& geo_layer_name,
 void Importer::readMetadataSampleGDAL(
     const std::string& file_name,
     const std::string& geo_column_name,
-    std::map<std::string, std::vector<std::string>>& metadata,
-    int rowLimit,
+    std::map<std::string, std::vector<std::string>>& sample_data,
+    int row_limit,
     const CopyParams& copy_params) {
-  Geospatial::GDAL::DataSourceUqPtr poDS(openGDALDataSource(file_name, copy_params));
-  if (poDS == nullptr) {
+  Geospatial::GDAL::DataSourceUqPtr datasource(
+      openGDALDataSource(file_name, copy_params));
+  if (datasource == nullptr) {
     throw std::runtime_error("openGDALDataSource Error: Unable to open geo file " +
                              file_name);
   }
 
   OGRLayer& layer =
-      getLayerWithSpecifiedName(copy_params.geo_layer_name, poDS, file_name);
+      getLayerWithSpecifiedName(copy_params.geo_layer_name, datasource, file_name);
 
-  OGRFeatureDefn* poFDefn = layer.GetLayerDefn();
-  CHECK(poFDefn);
+  auto const* feature_defn = layer.GetLayerDefn();
+  CHECK(feature_defn);
 
+  // metadata columns?
+  auto const metadata_column_infos =
+      parse_add_metadata_columns(copy_params.add_metadata_columns, file_name);
+
+  // get limited feature count
   // typeof GetFeatureCount() is different between GDAL 1.x (int32_t) and 2.x (int64_t)
-  auto nFeats = layer.GetFeatureCount();
-  size_t numFeatures =
-      std::max(static_cast<decltype(nFeats)>(0),
-               std::min(static_cast<decltype(nFeats)>(rowLimit), nFeats));
-  for (auto iField = 0; iField < poFDefn->GetFieldCount(); iField++) {
-    OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
-    // FIXME(andrewseidl): change this to the faster one used by readVerticesFromGDAL
-    metadata.emplace(poFieldDefn->GetNameRef(), std::vector<std::string>(numFeatures));
+  auto const feature_count = static_cast<uint64_t>(layer.GetFeatureCount());
+  auto const num_features = std::min(static_cast<uint64_t>(row_limit), feature_count);
+
+  // prepare sample data map
+  for (int field_index = 0; field_index < feature_defn->GetFieldCount(); field_index++) {
+    auto const* column_name = feature_defn->GetFieldDefn(field_index)->GetNameRef();
+    CHECK(column_name);
+    sample_data[column_name] = {};
   }
-  metadata.emplace(geo_column_name, std::vector<std::string>(numFeatures));
+  sample_data[geo_column_name] = {};
+  for (auto const& mci : metadata_column_infos) {
+    sample_data[mci.column_descriptor.columnName] = {};
+  }
+
+  // prepare to read
   layer.ResetReading();
-  size_t iFeature = 0;
-  while (iFeature < numFeatures) {
-    Geospatial::GDAL::FeatureUqPtr poFeature(layer.GetNextFeature());
-    if (!poFeature) {
+
+  // read features (up to limited count)
+  uint64_t feature_index{0u};
+  while (feature_index < num_features) {
+    // get (and take ownership of) feature
+    Geospatial::GDAL::FeatureUqPtr feature(layer.GetNextFeature());
+    if (!feature) {
       break;
     }
 
-    OGRGeometry* poGeometry = poFeature->GetGeometryRef();
-    if (poGeometry != nullptr) {
-      // validate geom type (again?)
-      switch (wkbFlatten(poGeometry->getGeometryType())) {
-        case wkbPoint:
-        case wkbLineString:
-        case wkbPolygon:
-        case wkbMultiPolygon:
-          break;
-        case wkbMultiPoint:
-        case wkbMultiLineString:
-          // supported if geo_explode_collections is specified
-          if (!copy_params.geo_explode_collections) {
-            throw std::runtime_error("Unsupported geometry type: " +
-                                     std::string(poGeometry->getGeometryName()));
-          }
-          break;
-        default:
-          throw std::runtime_error("Unsupported geometry type: " +
-                                   std::string(poGeometry->getGeometryName()));
-      }
-
-      // populate metadata for regular fields
-      for (auto i : metadata) {
-        auto iField = poFeature->GetFieldIndex(i.first.c_str());
-        if (iField >= 0) {  // geom is -1
-          metadata[i.first].at(iFeature) =
-              std::string(poFeature->GetFieldAsString(iField));
-        }
-      }
-
-      // populate metadata for geo column with WKT string
-      char* wkts = nullptr;
-      poGeometry->exportToWkt(&wkts);
-      CHECK(wkts);
-      metadata[geo_column_name].at(iFeature) = wkts;
-      CPLFree(wkts);
+    // get feature geometry
+    auto const* geometry = feature->GetGeometryRef();
+    if (geometry == nullptr) {
+      break;
     }
-    iFeature++;
+
+    // validate geom type (again?)
+    switch (wkbFlatten(geometry->getGeometryType())) {
+      case wkbPoint:
+      case wkbLineString:
+      case wkbMultiLineString:
+      case wkbPolygon:
+      case wkbMultiPolygon:
+        break;
+      case wkbMultiPoint:
+        // supported if geo_explode_collections is specified
+        if (!copy_params.geo_explode_collections) {
+          throw std::runtime_error("Unsupported geometry type: " +
+                                   std::string(geometry->getGeometryName()));
+        }
+        break;
+      default:
+        throw std::runtime_error("Unsupported geometry type: " +
+                                 std::string(geometry->getGeometryName()));
+    }
+
+    // populate sample data for regular field columns
+    for (int field_index = 0; field_index < feature->GetFieldCount(); field_index++) {
+      auto const* column_name = feature_defn->GetFieldDefn(field_index)->GetNameRef();
+      sample_data[column_name].push_back(feature->GetFieldAsString(field_index));
+    }
+
+    // populate sample data for metadata columns?
+    for (auto const& mci : metadata_column_infos) {
+      sample_data[mci.column_descriptor.columnName].push_back(mci.value);
+    }
+
+    // populate sample data for geo column with WKT string
+    char* wkts = nullptr;
+    geometry->exportToWkt(&wkts);
+    CHECK(wkts);
+    sample_data[geo_column_name].push_back(wkts);
+    CPLFree(wkts);
+
+    // next feature
+    feature_index++;
   }
 }
 
@@ -4726,6 +4871,8 @@ SQLTypes ogr_to_type(const OGRwkbGeometryType& ogr_type) {
       return kPOINT;
     case wkbLineString:
       return kLINESTRING;
+    case wkbMultiLineString:
+      return kMULTILINESTRING;
     case wkbPolygon:
       return kPOLYGON;
     case wkbMultiPolygon:
@@ -4801,6 +4948,10 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsRaster(
                                            copy_params.s3_secret_key,
                                            copy_params.s3_session_token);
 
+  // prepare for metadata column
+  auto metadata_column_infos =
+      parse_add_metadata_columns(copy_params.add_metadata_columns, file_name);
+
   // create a raster importer and do the detect
   RasterImporter raster_importer;
   raster_importer.detect(
@@ -4810,7 +4961,8 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsRaster(
       convert_raster_point_type(copy_params.raster_point_type),
       convert_raster_point_transform(copy_params.raster_point_transform),
       copy_params.raster_point_compute_angle,
-      false);
+      false,
+      metadata_column_infos);
 
   // prepare to capture column descriptors
   std::list<ColumnDescriptor> cds;
@@ -4844,6 +4996,11 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsRaster(
     cd.columnType.set_type(sql_type);
     cd.columnType.set_fixed_size();
     cds.push_back(cd);
+  }
+
+  // metadata columns?
+  for (auto& mci : metadata_column_infos) {
+    cds.push_back(std::move(mci.column_descriptor));
   }
 
   // return the results
@@ -4941,6 +5098,13 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsGeo(
     cd.columnType = ti;
 
     cds.push_back(cd);
+  }
+
+  // metadata columns?
+  auto metadata_column_infos =
+      parse_add_metadata_columns(copy_params.add_metadata_columns, file_name);
+  for (auto& mci : metadata_column_infos) {
+    cds.push_back(std::move(mci.column_descriptor));
   }
 
   return cds;
@@ -5127,13 +5291,13 @@ std::vector<Importer::GeoFileLayerInfo> Importer::gdalGetLayersInGeoFile(
         switch (wkbFlatten(geometry_type)) {
           case wkbPoint:
           case wkbLineString:
+          case wkbMultiLineString:
           case wkbPolygon:
           case wkbMultiPolygon:
             // layer has supported geo
             contents = GeoFileLayerContents::GEO;
             break;
           case wkbMultiPoint:
-          case wkbMultiLineString:
             // supported if geo_explode_collections is specified
             contents = copy_params.geo_explode_collections
                            ? GeoFileLayerContents::GEO
@@ -5212,6 +5376,10 @@ ImportStatus Importer::importGDALGeo(
 #endif
   VLOG(1) << "GDAL import # threads: " << max_threads;
 
+  // metadata columns?
+  auto const metadata_column_infos =
+      parse_add_metadata_columns(copy_params.add_metadata_columns, file_path);
+
   // import geo table is specifically handled in both DBHandler and QueryRunner
   // that is separate path against a normal SQL execution
   // so we here explicitly enroll the import session to allow interruption
@@ -5221,7 +5389,8 @@ ImportStatus Importer::importGDALGeo(
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   auto is_session_already_registered = false;
   {
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+    heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+        executor->getSessionLock());
     is_session_already_registered =
         executor->checkIsQuerySessionEnrolled(query_session, session_read_lock);
   }
@@ -5252,7 +5421,7 @@ ImportStatus Importer::importGDALGeo(
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-  if (copy_params.geo_assign_render_groups) {
+  if (g_enable_assign_render_groups && copy_params.geo_assign_render_groups) {
     auto& cat = loader->getCatalog();
     auto* td = loader->getTableDesc();
     CHECK(td);
@@ -5290,6 +5459,10 @@ ImportStatus Importer::importGDALGeo(
   // make a features buffer for each thread
   std::vector<FeaturePtrVector> features(max_threads);
 
+  // make one of these for each thread, based on the first feature's SR
+  std::vector<std::unique_ptr<OGRCoordinateTransformation>> coordinate_transformations(
+      max_threads);
+
   // for each feature...
   size_t firstFeatureThisChunk = 0;
   while (firstFeatureThisChunk < numFeatures) {
@@ -5311,19 +5484,54 @@ ImportStatus Importer::importGDALGeo(
       features[thread_id].emplace_back(layer.GetNextFeature());
     }
 
+    // construct a coordinate transformation for each thread, if needed
+    // some features may not have geometry, so look for the first one that does
+    if (coordinate_transformations[thread_id] == nullptr) {
+      for (auto const& feature : features[thread_id]) {
+        auto const* geometry = feature->GetGeometryRef();
+        if (geometry) {
+          auto const* geometry_sr = geometry->getSpatialReference();
+          // if the SR is non-null and non-empty and different from what we want
+          // we need to make a reusable CoordinateTransformation
+          if (geometry_sr &&
+#if GDAL_VERSION_MAJOR >= 3
+              !geometry_sr->IsEmpty() &&
+#endif
+              !geometry_sr->IsSame(poGeographicSR.get())) {
+            // validate the SR before trying to use it
+            if (geometry_sr->Validate() != OGRERR_NONE) {
+              throw std::runtime_error("Incoming geo has invalid Spatial Reference");
+            }
+            // create the OGRCoordinateTransformation that will be used for
+            // all the features in this chunk
+            coordinate_transformations[thread_id].reset(
+                OGRCreateCoordinateTransformation(geometry_sr, poGeographicSR.get()));
+            if (coordinate_transformations[thread_id] == nullptr) {
+              throw std::runtime_error(
+                  "Failed to create a GDAL CoordinateTransformation for incoming geo");
+            }
+          }
+          // once we find at least one geometry with an SR, we're done
+          break;
+        }
+      }
+    }
+
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
     // call worker function directly
-    auto ret_import_status = import_thread_shapefile(0,
-                                                     this,
-                                                     poGeographicSR.get(),
-                                                     std::move(features[thread_id]),
-                                                     firstFeatureThisChunk,
-                                                     numFeaturesThisChunk,
-                                                     fieldNameToIndexMap,
-                                                     columnNameToSourceNameMap,
-                                                     columnIdToRenderGroupAnalyzerMap,
-                                                     session_info,
-                                                     executor.get());
+    auto ret_import_status =
+        import_thread_shapefile(0,
+                                this,
+                                coordinate_transformations[thread_id].get(),
+                                std::move(features[thread_id]),
+                                firstFeatureThisChunk,
+                                numFeaturesThisChunk,
+                                fieldNameToIndexMap,
+                                columnNameToSourceNameMap,
+                                columnIdToRenderGroupAnalyzerMap,
+                                session_info,
+                                executor.get(),
+                                metadata_column_infos);
     import_status += ret_import_status;
     import_status.rows_estimated = ((float)firstFeatureThisChunk / (float)numFeatures) *
                                    import_status.rows_completed;
@@ -5334,7 +5542,7 @@ ImportStatus Importer::importGDALGeo(
                                  import_thread_shapefile,
                                  thread_id,
                                  this,
-                                 poGeographicSR.get(),
+                                 coordinate_transformations[thread_id].get(),
                                  std::move(features[thread_id]),
                                  firstFeatureThisChunk,
                                  numFeaturesThisChunk,
@@ -5342,7 +5550,8 @@ ImportStatus Importer::importGDALGeo(
                                  columnNameToSourceNameMap,
                                  columnIdToRenderGroupAnalyzerMap,
                                  session_info,
-                                 executor.get()));
+                                 executor.get(),
+                                 metadata_column_infos));
 
     // let the threads run
     while (threads.size() > 0) {
@@ -5355,7 +5564,7 @@ ImportStatus Importer::importGDALGeo(
         if (p.wait_for(span) == std::future_status::ready) {
           auto ret_import_status = p.get();
           {
-            mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+            heavyai::lock_guard<heavyai::shared_mutex> write_lock(import_mutex_);
             import_status_ += ret_import_status;
             import_status_.rows_estimated =
                 ((float)firstFeatureThisChunk / (float)numFeatures) *
@@ -5389,7 +5598,7 @@ ImportStatus Importer::importGDALGeo(
 
     // out of rows?
 
-    mapd_unique_lock<mapd_shared_mutex> write_lock(import_mutex_);
+    heavyai::unique_lock<heavyai::shared_mutex> write_lock(import_mutex_);
     if (import_status_.rows_rejected > copy_params.max_reject) {
       import_status_.load_failed = true;
       // todo use better message
@@ -5431,6 +5640,10 @@ ImportStatus Importer::importGDALRaster(
   // initial status
   set_import_status(import_id, import_status_);
 
+  // metadata columns?
+  auto const metadata_column_infos =
+      parse_add_metadata_columns(copy_params.add_metadata_columns, file_path);
+
   // create a raster importer and do the detect
   RasterImporter raster_importer;
   raster_importer.detect(
@@ -5440,17 +5653,40 @@ ImportStatus Importer::importGDALRaster(
       convert_raster_point_type(copy_params.raster_point_type),
       convert_raster_point_transform(copy_params.raster_point_transform),
       copy_params.raster_point_compute_angle,
-      true);
+      true,
+      metadata_column_infos);
 
-  // get the table columns
+  // get the table columns and count actual columns
   auto const& column_descs = loader->get_column_descs();
+  uint32_t num_table_cols{0u};
+  for (auto const* cd : column_descs) {
+    if (!cd->isGeoPhyCol) {
+      num_table_cols++;
+    }
+  }
+
+  // how many bands do we have?
+  auto num_bands = raster_importer.getNumBands();
+
+  // get point columns info
+  auto const point_names_and_sql_types = raster_importer.getPointNamesAndSQLTypes();
+
+  // validate that the table column count matches
+  auto num_expected_cols = num_bands;
+  num_expected_cols += point_names_and_sql_types.size();
+  num_expected_cols += metadata_column_infos.size();
+  if (num_expected_cols != num_table_cols) {
+    throw std::runtime_error(
+        "Raster Import aborted. Band/Column count mismatch (file requires " +
+        std::to_string(num_expected_cols) + ", table has " +
+        std::to_string(num_table_cols) + ")");
+  }
 
   // validate the point column names and types
   // if we're importing the coords as a POINT, then the first column
   // must be a POINT (two physical columns, POINT and TINYINT[])
   // if we're not, the first two columns must be the matching type
   // optionally followed by an angle column
-  auto const point_names_and_sql_types = raster_importer.getPointNamesAndSQLTypes();
   auto cd_itr = column_descs.begin();
   for (auto const& [col_name, sql_type] : point_names_and_sql_types) {
     if (sql_type == kPOINT) {
@@ -5459,7 +5695,8 @@ ImportStatus Importer::importGDALRaster(
         auto const* cd = *cd_itr++;
         if (cd->columnName != col_name) {
           throw std::runtime_error("Column '" + cd->columnName +
-                                   "' name invalid (must be '" + col_name + "')");
+                                   "' overridden name invalid (must be '" + col_name +
+                                   "')");
         }
         auto const cd_type = cd->columnType.get_type();
         if (cd_type != kPOINT) {
@@ -5483,7 +5720,8 @@ ImportStatus Importer::importGDALRaster(
       auto const* cd = *cd_itr++;
       if (cd->columnName != col_name) {
         throw std::runtime_error("Column '" + cd->columnName +
-                                 "' name invalid (must be '" + col_name + "')");
+                                 "' overridden name invalid (must be '" + col_name +
+                                 "')");
       }
       auto const cd_type = cd->columnType.get_type();
       if (cd_type != sql_type) {
@@ -5495,28 +5733,37 @@ ImportStatus Importer::importGDALRaster(
   }
 
   // validate the band column types
-  // other columns must be of a limited set of types that
-  // are compatible with the supported GDAL band data types
-  // detection should only generate these types
-  // any Immerse overriding to other types must be rejected
-  while (cd_itr != column_descs.end()) {
+  // any Immerse overriding to other types will currently be rejected
+  auto const band_names_and_types = raster_importer.getBandNamesAndSQLTypes();
+  if (band_names_and_types.size() != num_bands) {
+    throw std::runtime_error("Column/Band count mismatch when validating types");
+  }
+  for (uint32_t i = 0; i < num_bands; i++) {
     auto const* cd = *cd_itr++;
     auto const cd_type = cd->columnType.get_type();
-    if (cd_type != kSMALLINT && cd_type != kINT && cd_type != kBIGINT &&
-        cd_type != kFLOAT && cd_type != kDOUBLE) {
-      throw std::runtime_error("Column '" + cd->columnName +
-                               "' overridden type invalid (must be SMALLINT, INT, "
-                               "BIGINT, FLOAT, or DOUBLE)");
+    auto const sql_type = band_names_and_types[i].second;
+    if (cd_type != sql_type) {
+      throw std::runtime_error("Band Column '" + cd->columnName +
+                               "' overridden type invalid (must be " +
+                               to_string(sql_type) + ")");
     }
   }
 
-  // validate that the table column count matches
-  auto const num_point_cols = (copy_params.raster_point_type != RasterPointType::kNone)
-                                  ? (copy_params.raster_point_compute_angle ? 3u : 2u)
-                                  : 0u;
-  auto const num_bands = raster_importer.getNumBands();
-  if (num_bands + num_point_cols != column_descs.size()) {
-    throw std::runtime_error("Raster Import aborted. Band/Column count mismatch.");
+  // validate metadata column
+  for (auto const& mci : metadata_column_infos) {
+    auto const* cd = *cd_itr++;
+    if (mci.column_descriptor.columnName != cd->columnName) {
+      throw std::runtime_error("Metadata Column '" + cd->columnName +
+                               "' overridden name invalid (must be '" +
+                               mci.column_descriptor.columnName + "')");
+    }
+    auto const cd_type = cd->columnType.get_type();
+    auto const md_type = mci.column_descriptor.columnType.get_type();
+    if (cd_type != md_type) {
+      throw std::runtime_error("Metadata Column '" + cd->columnName +
+                               "' overridden type invalid (must be " +
+                               to_string(md_type) + ")");
+    }
   }
 
   // import geo table is specifically handled in both DBHandler and QueryRunner
@@ -5528,7 +5775,8 @@ ImportStatus Importer::importGDALRaster(
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   auto is_session_already_registered = false;
   {
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+    heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+        executor->getSessionLock());
     is_session_already_registered =
         executor->checkIsQuerySessionEnrolled(query_session, session_read_lock);
   }
@@ -5802,6 +6050,16 @@ ImportStatus Importer::importGDALRaster(
       col_itr++;
     }
 
+    // metadata columns?
+    for (auto const& mci : metadata_column_infos) {
+      auto const* cd_band = *col_itr++;
+      CHECK(cd_band);
+      for (int i = 0; i < num_elems; i++) {
+        import_buffers[col_idx]->add_value(cd_band, mci.value, false, copy_params);
+      }
+      col_idx++;
+    }
+
     // build status
     ImportStatus thread_import_status;
     thread_import_status.rows_estimated = num_elems;
@@ -5915,9 +6173,12 @@ ImportStatus Importer::importGDALRaster(
   auto const total_wall_s = TIMER_STOP(wall_timer);
 
   // report
-  auto const total_scanlines_per_second = band_size_y / total_wall_s;
-  auto const total_rows_per_second = (band_size_x * band_size_y) / total_wall_s;
-  LOG(INFO) << "Raster Importer: Imported " << band_size_x * band_size_y << " rows";
+  auto const total_scanlines_per_second = float(band_size_y) / total_wall_s;
+  auto const total_rows_per_second =
+      float(band_size_x) * float(band_size_y) / total_wall_s;
+  LOG(INFO) << "Raster Importer: Imported "
+            << static_cast<uint64_t>(band_size_x) * static_cast<uint64_t>(band_size_y)
+            << " rows";
   LOG(INFO) << "Raster Importer: Total Import Time " << total_wall_s << "s at "
             << total_scanlines_per_second << " scanlines/s and " << total_rows_per_second
             << " rows/s";
@@ -6025,6 +6286,42 @@ std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
     insert_data.is_default.push_back(true);
   }
   return defaults_buffers;
+}
+
+std::unique_ptr<AbstractImporter> create_importer(
+    Catalog_Namespace::Catalog& catalog,
+    const TableDescriptor* td,
+    const std::string& copy_from_source,
+    const import_export::CopyParams& copy_params) {
+  if (copy_params.source_type == import_export::SourceType::kParquetFile) {
+#ifdef ENABLE_IMPORT_PARQUET
+    if (!g_enable_legacy_parquet_import) {
+      return std::make_unique<import_export::ForeignDataImporter>(
+          copy_from_source, copy_params, td);
+    }
+#else
+    throw std::runtime_error("Parquet not supported!");
+#endif
+  }
+
+  if (copy_params.source_type == import_export::SourceType::kDelimitedFile &&
+      !g_enable_legacy_delimited_import) {
+    return std::make_unique<import_export::ForeignDataImporter>(
+        copy_from_source, copy_params, td);
+  }
+
+  if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
+    if (g_enable_fsi_regex_import) {
+      return std::make_unique<import_export::ForeignDataImporter>(
+          copy_from_source, copy_params, td);
+    } else {
+      throw std::runtime_error(
+          "Regex parsed import only supported using 'fsi-regex-import' flag");
+    }
+  }
+
+  return std::make_unique<import_export::Importer>(
+      catalog, td, copy_from_source, copy_params);
 }
 
 }  // namespace import_export

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-/*
- * File:   Calcite.h
- * Author: michael
+/**
+ * @file   Calcite.h
+ * @brief
  *
- * Created on November 23, 2015, 9:33 AM
  */
 
 #pragma once
@@ -26,7 +25,9 @@
 #include "gen-cpp/calciteserver_types.h"
 #include "gen-cpp/extension_functions_types.h"
 
-#include <thrift/transport/TTransport.h>
+// gen-cpp/calciteserver_types.h > thrift/Thrift.h >
+// thrift/transport/PlatformSocket.h > winsock2.h > windows.h
+#include "Shared/cleanup_global_namespace.h"
 
 #include <mutex>
 #include <string>
@@ -100,7 +101,8 @@ class Calcite final {
   TOptimizationOption getCalciteOptimizationOption(
       bool is_view_optimize,
       bool enable_watchdog,
-      const std::vector<TFilterPushDownInfo>& filter_push_down_info);
+      const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+      bool distributed_mode);
 
  private:
   void init(const int db_port,

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,12 +38,13 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
   AbstractTextFileDataWrapper(const int db_id,
                               const ForeignTable* foreign_table,
                               const UserMapping* user_mapping,
-                              const bool disable_cache = true);
+                              const bool disable_cache);
 
   void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override;
 
   void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
-                            const ChunkToBufferMap& optional_buffers) override;
+                            const ChunkToBufferMap& optional_buffers,
+                            AbstractBuffer* delete_buffer) override;
 
   std::string getSerializedDataWrapper() const override;
 
@@ -57,8 +58,11 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
     return INTRA_FRAGMENT;
   }
 
+  void createRenderGroupAnalyzers() override;
+
  protected:
   virtual const TextFileBufferParser& getFileBufferParser() const = 0;
+  virtual std::optional<size_t> getMaxFileCount() const;
 
  private:
   AbstractTextFileDataWrapper(const ForeignTable* foreign_table);
@@ -69,9 +73,11 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
    *
    * @param column_id_to_chunk_map - map of column id to chunks to be populated
    * @param fragment_id - fragment id of given chunks
+   * @param delete_buffer - optional buffer to store deleted row indices
    */
   void populateChunks(std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
-                      int fragment_id);
+                      int fragment_id,
+                      AbstractBuffer* delete_buffer);
 
   void populateChunkMapForColumns(const std::set<const ColumnDescriptor*>& columns,
                                   const int fragment_id,
@@ -80,6 +86,10 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
 
   void updateMetadata(std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
                       int fragment_id);
+
+  void updateRolledOffChunks(
+      const std::set<std::string>& rolled_off_files,
+      const std::map<int32_t, const ColumnDescriptor*>& column_by_id);
 
   std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;
   std::map<int, FileRegions> fragment_id_to_file_regions_map_;
@@ -98,13 +108,14 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
   // Is this datawrapper restored from disk
   bool is_restored_;
 
-  // Optionally stored user mapping
-  std::optional<const UserMapping*> user_mapping_;
+  const UserMapping* user_mapping_;
 
   // Force cache to be disabled
   const bool disable_cache_;
 
-  // If true, update metadata in fragmenter
-  const bool update_fragmenter_metadata_;
+  // declared in three derived classes to avoid
+  // polluting ForeignDataWrapper virtual base
+  // @TODO refactor to lower class if needed
+  RenderGroupAnalyzerMap render_group_analyzer_map_;
 };
 }  // namespace foreign_storage

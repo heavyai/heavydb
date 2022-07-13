@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,6 +130,15 @@ std::string write_to_string(const rapidjson::Document& document) {
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
   document.Accept(writer);
   return buffer.GetString();
+}
+
+std::optional<std::string> get_optional_string_value_from_object(
+    const rapidjson::Value& object,
+    const std::string& key) {
+  if (object.IsObject() && object.HasMember(key) && object[key].IsString()) {
+    return object[key].GetString();
+  }
+  return {};
 }
 }  // namespace json_utils
 }  // namespace foreign_storage

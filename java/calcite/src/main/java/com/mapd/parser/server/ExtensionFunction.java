@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.mapd.parser.server;
 
 import org.apache.calcite.sql.type.SqlTypeFamily;
@@ -27,12 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- *
- * @author alex
- */
 public class ExtensionFunction {
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(ExtensionFunction.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(ExtensionFunction.class);
 
   public enum ExtArgumentType {
     Int8,
@@ -64,6 +61,7 @@ public class ExtensionFunction {
     ColumnFloat,
     ColumnDouble,
     ColumnBool,
+    ColumnTimestamp,
     GeoPoint,
     GeoLineString,
     Cursor,
@@ -71,6 +69,7 @@ public class ExtensionFunction {
     GeoMultiPolygon,
     TextEncodingNone,
     TextEncodingDict,
+    Timestamp,
     ColumnListInt8,
     ColumnListInt16,
     ColumnListInt32,
@@ -80,6 +79,21 @@ public class ExtensionFunction {
     ColumnListBool,
     ColumnTextEncodingDict,
     ColumnListTextEncodingDict,
+    ColumnArrayInt8,
+    ColumnArrayInt16,
+    ColumnArrayInt32,
+    ColumnArrayInt64,
+    ColumnArrayFloat,
+    ColumnArrayDouble,
+    ColumnArrayBool,
+    ColumnListArrayInt8,
+    ColumnListArrayInt16,
+    ColumnListArrayInt32,
+    ColumnListArrayInt64,
+    ColumnListArrayFloat,
+    ColumnListArrayDouble,
+    ColumnListArrayBool,
+    GeoMultiLineString,
   }
   ;
 
@@ -115,6 +129,19 @@ public class ExtensionFunction {
   public List<String> getArgNames() {
     if (this.names != null) {
       return this.names.subList(0, this.args.size());
+    }
+    return null;
+  }
+
+  public List<String> getPrettyArgNames() {
+    if (this.names != null) {
+      List<String> pretty_names = new ArrayList<String>();
+      for (int arg_idx = 0; arg_idx < this.args.size(); ++arg_idx) {
+        // Split on first array opening bracket and take everything preceding
+        // For names without array brackets this will just be the name
+        pretty_names.add(this.names.get(arg_idx).split("\\[", 2)[0]);
+      }
+      return pretty_names;
     }
     return null;
   }
@@ -160,7 +187,7 @@ public class ExtensionFunction {
   }
 
   public String toJson(final String name) {
-    MAPDLOGGER.debug("Extensionfunction::toJson: " + name);
+    HEAVYDBLOGGER.debug("Extensionfunction::toJson: " + name);
     StringBuilder json_cons = new StringBuilder();
     json_cons.append("{");
     json_cons.append("\"name\":").append(dq(name)).append(",");
@@ -221,67 +248,101 @@ public class ExtensionFunction {
       case PBool:
         return "i1*";
       case ArrayInt8:
-        return "{i8*, i64, i8}*";
+        return "Array<i8>";
       case ArrayInt16:
-        return "{i16*, i64, i8}*";
+        return "Array<i16>";
       case ArrayInt32:
-        return "{i32*, i64, i8}*";
+        return "Array<i32>";
       case ArrayInt64:
-        return "{i64*, i64, i8}*";
+        return "Array<i64>";
       case ArrayFloat:
-        return "{float*, i64, i8}*";
+        return "Array<float>";
       case ArrayDouble:
-        return "{double*, i64, i8}*";
+        return "Array<double>";
       case ArrayBool:
-        return "{i1*, i64, i8}*";
+        return "Array<bool>";
       case ColumnInt8:
-        return "column_int8";
+        return "Column<i8>";
       case ColumnInt16:
-        return "column_int16";
+        return "Column<i16>";
       case ColumnInt32:
-        return "column_int32";
+        return "Column<i32>";
       case ColumnInt64:
-        return "column_int64";
+        return "Column<i64>";
       case ColumnFloat:
-        return "column_float";
+        return "Column<float>";
       case ColumnDouble:
-        return "column_double";
+        return "Column<double>";
       case ColumnBool:
-        return "column_bool";
+        return "Column<bool>";
       case ColumnTextEncodingDict:
-        return "column_text_encoding_dict";
+        return "Column<TextEncodingDict>";
+      case ColumnTimestamp:
+        return "Column<timestamp>";
       case GeoPoint:
         return "geo_point";
       case Cursor:
         return "cursor";
       case GeoLineString:
         return "geo_linestring";
+      case GeoMultiLineString:
+        return "geo_multi_linestring";
       case GeoPolygon:
         return "geo_polygon";
       case GeoMultiPolygon:
         return "geo_multi_polygon";
+      case Timestamp:
+        return "timestamp";
       case TextEncodingNone:
-        return "text_encoding_none";
+        return "TextEncodingNone";
       case TextEncodingDict:
-        return "text_encoding_dict";
+        return "TextEncodingDict";
       case ColumnListInt8:
-        return "column_list_int8";
+        return "ColumnList<i8>";
       case ColumnListInt16:
-        return "column_list_int16";
+        return "ColumnList<i16>";
       case ColumnListInt32:
-        return "column_list_int32";
+        return "ColumnList<i32>";
       case ColumnListInt64:
-        return "column_list_int64";
+        return "ColumnList<i64>";
       case ColumnListFloat:
-        return "column_list_float";
+        return "ColumnList<float>";
       case ColumnListDouble:
-        return "column_list_double";
+        return "ColumnList<double>";
       case ColumnListBool:
-        return "column_list_bool";
+        return "ColumnList<bool>";
       case ColumnListTextEncodingDict:
-        return "column_list_text_encoding_dict";
+        return "ColumnList<TextEncodingDict>";
+      case ColumnArrayInt8:
+        return "Column<Array<i8>>";
+      case ColumnArrayInt16:
+        return "Column<Array<i16>>";
+      case ColumnArrayInt32:
+        return "Column<Array<i32>>";
+      case ColumnArrayInt64:
+        return "Column<Array<i64>>";
+      case ColumnArrayFloat:
+        return "Column<Array<float>>";
+      case ColumnArrayDouble:
+        return "Column<Array<double>>";
+      case ColumnArrayBool:
+        return "Column<Array<bool>>";
+      case ColumnListArrayInt8:
+        return "ColumnList<Array<i8>>";
+      case ColumnListArrayInt16:
+        return "ColumnList<Array<i16>>";
+      case ColumnListArrayInt32:
+        return "ColumnList<Array<i32>>";
+      case ColumnListArrayInt64:
+        return "ColumnList<Array<i64>>";
+      case ColumnListArrayFloat:
+        return "ColumnList<Array<float>>";
+      case ColumnListArrayDouble:
+        return "ColumnList<Array<double>>";
+      case ColumnListArrayBool:
+        return "ColumnList<Array<bool>>";
     }
-    MAPDLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
+    HEAVYDBLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
     assert false;
     return null;
   }
@@ -321,12 +382,33 @@ public class ExtensionFunction {
             || type == ExtArgumentType.PBool;
   }
 
+  private static boolean isColumnArrayType(final ExtArgumentType type) {
+    return type == ExtArgumentType.ColumnArrayInt8
+            || type == ExtArgumentType.ColumnArrayInt16
+            || type == ExtArgumentType.ColumnArrayInt32
+            || type == ExtArgumentType.ColumnArrayInt64
+            || type == ExtArgumentType.ColumnArrayFloat
+            || type == ExtArgumentType.ColumnArrayDouble
+            || type == ExtArgumentType.ColumnArrayBool;
+  }
+
+  private static boolean isColumnListArrayType(final ExtArgumentType type) {
+    return type == ExtArgumentType.ColumnListArrayInt8
+            || type == ExtArgumentType.ColumnListArrayInt16
+            || type == ExtArgumentType.ColumnListArrayInt32
+            || type == ExtArgumentType.ColumnListArrayInt64
+            || type == ExtArgumentType.ColumnListArrayFloat
+            || type == ExtArgumentType.ColumnListArrayDouble
+            || type == ExtArgumentType.ColumnListArrayBool;
+  }
+
   private static boolean isColumnType(final ExtArgumentType type) {
     return type == ExtArgumentType.ColumnInt8 || type == ExtArgumentType.ColumnInt16
             || type == ExtArgumentType.ColumnInt32 || type == ExtArgumentType.ColumnInt64
             || type == ExtArgumentType.ColumnFloat || type == ExtArgumentType.ColumnDouble
             || type == ExtArgumentType.ColumnBool
-            || type == ExtArgumentType.ColumnTextEncodingDict;
+            || type == ExtArgumentType.ColumnTextEncodingDict
+            || type == ExtArgumentType.ColumnTimestamp || isColumnArrayType(type);
   }
 
   private static boolean isColumnListType(final ExtArgumentType type) {
@@ -337,7 +419,8 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ColumnListFloat
             || type == ExtArgumentType.ColumnListDouble
             || type == ExtArgumentType.ColumnListBool
-            || type == ExtArgumentType.ColumnListTextEncodingDict;
+            || type == ExtArgumentType.ColumnListTextEncodingDict
+            || isColumnListArrayType(type);
   }
 
   private static ExtArgumentType getValueType(final ExtArgumentType type) {
@@ -381,8 +464,31 @@ public class ExtensionFunction {
       case ColumnTextEncodingDict:
       case ColumnListTextEncodingDict:
         return ExtArgumentType.TextEncodingDict;
+      case ColumnTimestamp:
+        return ExtArgumentType.Timestamp;
+      case ColumnArrayInt8:
+      case ColumnListArrayInt8:
+        return ExtArgumentType.Int8;
+      case ColumnArrayInt16:
+      case ColumnListArrayInt16:
+        return ExtArgumentType.Int16;
+      case ColumnArrayInt32:
+      case ColumnListArrayInt32:
+        return ExtArgumentType.Int32;
+      case ColumnArrayInt64:
+      case ColumnListArrayInt64:
+        return ExtArgumentType.Int64;
+      case ColumnArrayFloat:
+      case ColumnListArrayFloat:
+        return ExtArgumentType.Float;
+      case ColumnArrayDouble:
+      case ColumnListArrayDouble:
+        return ExtArgumentType.Double;
+      case ColumnArrayBool:
+      case ColumnListArrayBool:
+        return ExtArgumentType.Bool;
     }
-    MAPDLOGGER.error("getValueType: no value for type " + type);
+    HEAVYDBLOGGER.error("getValueType: no value for type " + type);
     assert false;
     return null;
   }
@@ -420,6 +526,7 @@ public class ExtensionFunction {
         return SqlTypeName.ARRAY;
       case GeoPoint:
       case GeoLineString:
+      case GeoMultiLineString:
       case GeoPolygon:
       case GeoMultiPolygon:
         return SqlTypeName.GEOMETRY;
@@ -428,6 +535,8 @@ public class ExtensionFunction {
       case TextEncodingNone:
       case TextEncodingDict:
         return SqlTypeName.VARCHAR;
+      case Timestamp:
+        return SqlTypeName.TIMESTAMP;
       case ColumnListInt8:
       case ColumnListInt16:
       case ColumnListInt32:
@@ -439,11 +548,11 @@ public class ExtensionFunction {
         return SqlTypeName.COLUMN_LIST;
       case Void:
         // some extension functions return void. these functions should be defined in
-        // MapDSqlOperatorTable and never have their definition set from the AST file
+        // HeavyDBSqlOperatorTable and never have their definition set from the AST file
         return null;
     }
     Set<SqlTypeName> allSqlTypeNames = EnumSet.allOf(SqlTypeName.class);
-    MAPDLOGGER.error("toSqlTypeName: unknown type " + type + " to be mapped to {"
+    HEAVYDBLOGGER.error("toSqlTypeName: unknown type " + type + " to be mapped to {"
             + allSqlTypeNames + "}");
     assert false;
     return null;

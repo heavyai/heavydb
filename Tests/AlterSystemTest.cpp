@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,13 @@
 
 /**
  * @file AlterSystemTest.cpp
- * @brief Test suite for ALTER SYSTEM DDL commands
+ * @brief Test suite for ALTER SYSTEM and ALTER SESSION DDL commands
  */
 
 #include <gtest/gtest.h>
 
 #include "DBHandlerTestHelpers.h"
+#include "Shared/SysDefinitions.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -34,15 +35,20 @@ class AlterSystemTest : public DBHandlerTestFixture {
 
   static void SetUpTestSuite() {
     createDBHandler();
-    users_ = {"user1"};
+    users_ = {"user1", "user2"};
     superusers_ = {"super1"};
-    dbs_ = {"db1"};
+    dbs_ = {"db1", "db2"};
     createDBs();
     createUsers();
     createSuperUsers();
+    sql("GRANT ALL ON DATABASE db1 TO user1;");
+    sql("GRANT ALL ON DATABASE db2 TO user1;");
+    sql("GRANT ALL ON DATABASE db1 TO user2;");
+    sql("REVOKE ACCESS ON DATABASE db2 FROM user2;");
   }
 
   static void TearDownTestSuite() {
+    switchToAdmin();
     dropUsers();
     dropSuperUsers();
     dropDBs();
@@ -86,6 +92,7 @@ class AlterSystemTest : public DBHandlerTestFixture {
     if (em == TExecuteMode::GPU && setExecuteMode(em) == false) {
       // we haven't a GPU or the database is set in
       // cpu_only mode
+      sql(result, "DROP TABLE IF EXISTS clear_memory_table;", session);
       return;
     }
     setExecuteMode(em);
@@ -109,8 +116,10 @@ class AlterSystemTest : public DBHandlerTestFixture {
     for (const auto& user : users_) {
       std::stringstream create;
       create << "CREATE USER " << user
-             << " (password = 'HyperInteractive', is_super = 'false', "
-                "default_db='omnisci');";
+             << " (password = '" + shared::kDefaultRootPasswd +
+                    "', is_super = 'false', "
+                    "default_db='" +
+                    shared::kDefaultDbName + "');";
       sql(create.str());
       for (const auto& db : dbs_) {
         std::stringstream grant;
@@ -123,9 +132,9 @@ class AlterSystemTest : public DBHandlerTestFixture {
   static void createSuperUsers() {
     for (const auto& user : superusers_) {
       std::stringstream create;
-      create
-          << "CREATE USER " << user
-          << " (password = 'HyperInteractive', is_super = 'true', default_db='omnisci');";
+      create << "CREATE USER " << user
+             << " (password = '" + shared::kDefaultRootPasswd +
+                    "', is_super = 'true', default_db='" + shared::kDefaultDbName + "');";
       sql(create.str());
     }
   }
@@ -176,7 +185,7 @@ TEST_F(AlterSystemTest, CLEAR_MEMORY_CPU_SUPER) {
   TSessionId new_session;
   TQueryResult result;
 
-  login("admin", "HyperInteractive", "db1", new_session);
+  login("admin", shared::kDefaultRootPasswd, "db1", new_session);
   testClearMemory(new_session, TExecuteMode::CPU);
 
   logout(new_session);
@@ -186,7 +195,7 @@ TEST_F(AlterSystemTest, CLEAR_MEMORY_GPU_SUPER) {
   TSessionId super_session;
   TQueryResult result;
 
-  login("super1", "HyperInteractive", "db1", super_session);
+  login("super1", shared::kDefaultRootPasswd, "db1", super_session);
   testClearMemory(super_session, TExecuteMode::GPU);
 
   logout(super_session);
@@ -195,13 +204,13 @@ TEST_F(AlterSystemTest, CLEAR_MEMORY_GPU_SUPER) {
 TEST_F(AlterSystemTest, CLEAR_MEMORY_NOSUPER) {
   TSessionId user_session;
   TQueryResult result;
-  login("user1", "HyperInteractive", "db1", user_session);
+  login("user1", shared::kDefaultRootPasswd, "db1", user_session);
   try {
     sql(result, "ALTER SYSTEM CLEAR CPU MEMORY", user_session);
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TOmniSciException& e) {
+  } catch (const TDBException& e) {
     ASSERT_EQ(
-        "TException - service has thrown: TOmniSciException(error_msg=Superuser "
+        "TException - service has thrown: TDBException(error_msg=Superuser "
         "privilege is required to run clear_cpu_memory)",
         e.error_msg);
   }
@@ -209,23 +218,102 @@ TEST_F(AlterSystemTest, CLEAR_MEMORY_NOSUPER) {
   try {
     sql(result, "ALTER SYSTEM CLEAR GPU MEMORY", user_session);
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TOmniSciException& e) {
+  } catch (const TDBException& e) {
     ASSERT_EQ(
-        "TException - service has thrown: TOmniSciException(error_msg=Superuser "
+        "TException - service has thrown: TDBException(error_msg=Superuser "
         "privilege is required to run clear_gpu_memory)",
         e.error_msg);
   }
   try {
     sql(result, "ALTER SYSTEM CLEAR RENDER MEMORY", user_session);
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TOmniSciException& e) {
+  } catch (const TDBException& e) {
     ASSERT_EQ(
-        "TException - service has thrown: TOmniSciException(error_msg=Superuser "
+        "TException - service has thrown: TDBException(error_msg=Superuser "
         "privilege is required to run clear_render_memory)",
         e.error_msg);
   }
 
   logout(user_session);
+}
+
+TEST_F(AlterSystemTest, SET_EXECUTOR_CPU) {
+  TSessionId user_session;
+  TQueryResult result;
+  login("user1", "HyperInteractive", "db1", user_session);
+  auto* handler = getDbHandlerAndSessionId().first;
+  if (handler->cpu_mode_only_ == false) {
+    sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='GPU'", user_session);
+    ASSERT_EQ(TExecuteMode::GPU, handler->getExecutionMode(user_session));
+  }
+  sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='CPU'", user_session);
+  ASSERT_EQ(TExecuteMode::CPU, handler->getExecutionMode(user_session));
+}
+
+TEST_F(AlterSystemTest, SET_EXECUTOR_GPU) {
+  TSessionId user_session;
+  TQueryResult result;
+  auto* handler = getDbHandlerAndSessionId().first;
+  if (handler->cpu_mode_only_ == false) {
+    login("user1", "HyperInteractive", "db1", user_session);
+    sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='CPU'", user_session);
+    ASSERT_EQ(TExecuteMode::CPU, handler->getExecutionMode(user_session));
+    sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='GPU'", user_session);
+    ASSERT_EQ(TExecuteMode::GPU, handler->getExecutionMode(user_session));
+  }
+}
+
+TEST_F(AlterSystemTest, SET_EXECUTOR_GPU_CPUONLY) {
+  TSessionId user_session;
+  TQueryResult result;
+  login("user1", "HyperInteractive", "db1", user_session);
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto actual_cpu_mode = handler->cpu_mode_only_;
+  handler->cpu_mode_only_ = true;
+  queryAndAssertException(
+      "ALTER SESSION SET EXECUTOR_DEVICE='GPU'",
+      "TException - service has thrown: TDBException(error_msg=Cannot switch to "
+      "GPU mode in a server started in CPU-only mode.)");
+  handler->cpu_mode_only_ = actual_cpu_mode;
+}
+
+TEST_F(AlterSystemTest, SET_EXECUTOR_CASE_INSENSITIVE) {
+  TSessionId user_session;
+  TQueryResult result;
+  login("user1", "HyperInteractive", "db1", user_session);
+  try {
+    sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='cpu'", user_session);
+  } catch (const TDBException& e) {
+    if (e.error_msg ==
+        "Cannot set the EXECUTOR_DEVICE to cpu. Valid options are CPU and GPU") {
+      FAIL() << "The parameter EXECUTOR_DEVICE should be case insesitive";
+    }
+  }
+}
+
+TEST_F(AlterSystemTest, SET_CURRENT_DATABASE_SWITCH) {
+  TQueryResult result;
+  login("user1", "HyperInteractive", "db2");
+  sql("CREATE TABLE test_admin_db2 (id INTEGER)");
+  sql("ALTER SESSION SET CURRENT_DATABASE='db1'");
+  sql("CREATE TABLE test_admin_db1 (id INTEGER)");
+  sql("ALTER SESSION SET CURRENT_DATABASE='db2'");
+  sql(result, "SHOW TABLES");
+  assertResultSetEqual({{"test_admin_db2"}}, result);
+  sql("DROP TABLE test_admin_db2");
+  sql("ALTER SESSION SET CURRENT_DATABASE='db1'");
+  sql("DROP TABLE test_admin_db1");
+}
+
+TEST_F(AlterSystemTest, SET_CURRENT_DATABASE_PERMISSION) {
+  TQueryResult result;
+  login("user1", "HyperInteractive", "db1");
+  sql("ALTER SESSION SET CURRENT_DATABASE='db2'");
+  login("user2", "HyperInteractive", "db1");
+  queryAndAssertException(
+      "ALTER SESSION SET CURRENT_DATABASE='db2'",
+      "TException - service has thrown: TDBException(error_msg=Unauthorized Access: user "
+      "user2 is not allowed to access database db2.)");
 }
 
 int main(int argc, char** argv) {
@@ -236,6 +324,7 @@ int main(int argc, char** argv) {
 
   int err{0};
   try {
+    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();

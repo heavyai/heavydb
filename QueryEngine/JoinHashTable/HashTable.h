@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #pragma once
 
-enum class HashType : int { OneToOne, OneToMany, ManyToMany, Invalid };
+enum class HashType : int { OneToOne, OneToMany, ManyToMany };
 
 struct DecodedJoinHashBufferEntry {
   std::vector<int64_t> key;
@@ -42,7 +42,6 @@ class HashTable {
   virtual int8_t* getCpuBuffer() = 0;
   virtual int8_t* getGpuBuffer() const = 0;
   virtual HashType getLayout() const = 0;
-  virtual void setLayout(HashType layout) = 0;
 
   virtual size_t getEntryCount() const = 0;
   virtual size_t getEmittedKeysCount() const = 0;

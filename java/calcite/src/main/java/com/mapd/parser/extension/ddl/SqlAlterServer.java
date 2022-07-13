@@ -2,20 +2,17 @@ package com.mapd.parser.extension.ddl;
 
 import com.google.gson.annotations.Expose;
 
-import org.apache.calcite.sql.SqlDdl;
 import org.apache.calcite.sql.SqlKind;
-import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlSpecialOperator;
 import org.apache.calcite.sql.parser.SqlParserPos;
 
-import java.util.List;
 import java.util.Map;
 
 /**
  * Class that encapsulates all information associated with a ALTER SERVER DDL command.
  */
-public class SqlAlterServer extends SqlDdl implements JsonSerializableDdl {
+public class SqlAlterServer extends SqlCustomDdl {
   private static final SqlOperator OPERATOR =
           new SqlSpecialOperator("ALTER_SERVER", SqlKind.OTHER_DDL);
 
@@ -87,8 +84,6 @@ public class SqlAlterServer extends SqlDdl implements JsonSerializableDdl {
   @Expose
   private String dataWrapper;
   @Expose
-  private String command;
-  @Expose
   private Map<String, String> options;
 
   public SqlAlterServer(final SqlParserPos pos,
@@ -105,16 +100,5 @@ public class SqlAlterServer extends SqlDdl implements JsonSerializableDdl {
     this.serverName = serverName;
     this.dataWrapper = dataWrapper;
     this.options = options;
-    this.command = OPERATOR.getName();
-  }
-
-  @Override
-  public List<SqlNode> getOperandList() {
-    return null;
-  }
-
-  @Override
-  public String toString() {
-    return toJsonString();
   }
 }

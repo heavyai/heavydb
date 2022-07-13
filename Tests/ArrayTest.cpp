@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,7 +87,8 @@ const char* array_ext_ops_schema = R"(
         arrd DOUBLE[],
         arrf FLOAT[],
         arri1 BOOLEAN[],
-        arrstr TEXT[]
+        arrstr TEXT[],
+        farri64 BIGINT[2]
     );
 )";
 
@@ -113,7 +114,8 @@ class ArrayExtOpsEnv : public ::testing::Test {
                          "{1, 2}",
                          "{1, 2}",
                          "{'true', 'false'}",
-                         "{'a', 'b'}"),
+                         "{'a', 'b'}",
+                         "{1, 2}"),
                      ExecutorDeviceType::CPU);
     run_multiple_agg(gen(1,
                          1,
@@ -130,7 +132,8 @@ class ArrayExtOpsEnv : public ::testing::Test {
                          "{}",
                          "{}",
                          "{}",
-                         "{}"),
+                         "{}",
+                         "{1, 2}"),
                      ExecutorDeviceType::CPU);
     run_multiple_agg(gen(0,
                          0,
@@ -147,7 +150,8 @@ class ArrayExtOpsEnv : public ::testing::Test {
                          "{-1}",
                          "{-1}",
                          "{'true'}",
-                         "{'z'}"),
+                         "{'z'}",
+                         "{1, 2}"),
                      ExecutorDeviceType::CPU);
     run_multiple_agg(gen(0,
                          0,
@@ -157,6 +161,7 @@ class ArrayExtOpsEnv : public ::testing::Test {
                          0,
                          "'false'",
                          "'a'",
+                         "NULL",
                          "NULL",
                          "NULL",
                          "NULL",
@@ -181,9 +186,11 @@ class ArrayExtOpsEnv : public ::testing::Test {
                          "{4, 5}",
                          "{4, 5}",
                          "{'false', 'true'}",
-                         "{'d', 'e'}"),
+                         "{'d', 'e'}",
+                         "{4, 5}"),
                      ExecutorDeviceType::CPU);
     run_multiple_agg(gen("NULL",
+                         "NULL",
                          "NULL",
                          "NULL",
                          "NULL",
@@ -361,6 +368,116 @@ TEST_F(ArrayExtOpsEnv, ArrayAppendDowncast) {
     {
       EXPECT_ANY_THROW(run_multiple_agg(
           "SELECT array_append(arri32, i64) FROM array_ext_ops_test;", dt));
+    }
+  }
+}
+
+TEST_F(ArrayExtOpsEnv, ArrayValidateRawInputScalarSameType) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT raw_array_as_scalar_same_type(arri64) FROM array_ext_ops_test WHERE "
+          "rowid=0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(true, true);
+      auto val = v<int64_t>(crt_row[0]);
+      // arri64 on row 0 is {1, 2} so result should be 1 + 2 + 2 = 5
+      ASSERT_EQ(val, static_cast<int64_t>(5));
+    }
+  }
+}
+
+TEST_F(ArrayExtOpsEnv, ArrayValidateRawInputScalarDiffType) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT raw_array_as_scalar_diff_type(arri64) FROM array_ext_ops_test WHERE "
+          "rowid=0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(true, true);
+      auto val = v<int64_t>(crt_row[0]);
+      // arri64 on row 0 is {1, 2} so result should be 1 + 2 + 2 = 5
+      ASSERT_EQ(val, static_cast<int32_t>(5));
+    }
+  }
+}
+
+TEST_F(ArrayExtOpsEnv, ArrayValidateRawInputArraySameType) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {  // varlen array
+      const auto rows = run_multiple_agg(
+          "SELECT raw_array_as_array_same_type(arri64) FROM array_ext_ops_test WHERE "
+          "rowid=0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(true, true);
+      // arri64 on row 0 is {1, 2} so result should be {1, 2, 2}
+      auto result = std::vector<int64_t>{1, 2, 2};
+      compare_array(crt_row[0], result);
+    }
+    {  // fixlen array
+      const auto rows = run_multiple_agg(
+          "SELECT raw_array_as_array_same_type(farri64) FROM array_ext_ops_test WHERE "
+          "rowid=0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(true, true);
+      // farri64 on row 0 is {1, 2} so result should be {1, 2, 2}
+      auto result = std::vector<int64_t>{1, 2, 2};
+      compare_array(crt_row[0], result);
+    }
+    {  // varlen array literal
+      const auto rows = run_multiple_agg(
+          "SELECT raw_array_as_array_same_type({CAST(1 AS BIGINT), CAST(2 AS BIGINT)});",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(true, true);
+      // arri64 on row 0 is {1, 2} so result should be {1, 2, 2}
+      auto result = std::vector<int64_t>{1, 2, 2};
+      compare_array(crt_row[0], result);
+    }
+  }
+}
+
+TEST_F(ArrayExtOpsEnv, ArrayValidateRawInputArrayDiffType) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT raw_array_as_array_diff_type(arri64) FROM array_ext_ops_test WHERE "
+          "rowid=0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(true, true);
+      // arri64 on row 0 is {1, 2} so result should be {1, 2, 2}
+      std::vector<int32_t> result = std::vector<int32_t>{1, 2, 2};
+      compare_array<int32_t>(crt_row[0], result);
+    }
+    {  // fixlen array
+      const auto rows = run_multiple_agg(
+          "SELECT raw_array_as_array_diff_type(farri64) FROM array_ext_ops_test WHERE "
+          "rowid=0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(true, true);
+      // farri64 on row 0 is {1, 2} so result should be {1, 2, 2}
+      auto result = std::vector<int64_t>{1, 2, 2};
+      compare_array(crt_row[0], result);
+    }
+    {  // varlen array literal
+      const auto rows = run_multiple_agg(
+          "SELECT raw_array_as_array_diff_type({CAST(1 AS BIGINT), CAST(2 AS BIGINT)});",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(true, true);
+      // arri64 on row 0 is {1, 2} so result should be {1, 2, 2}
+      auto result = std::vector<int64_t>{1, 2, 2};
+      compare_array(crt_row[0], result);
     }
   }
 }

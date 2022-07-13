@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,10 @@ class ParquetFixedLengthArrayEncoder : public ParquetArrayEncoder {
   }
 
  protected:
-  void processLastArray() override { appendNullArrayOrCheckArraySize(); }
+  void processLastArray() override {
+    ParquetArrayEncoder::processLastArray();
+    appendNullArrayOrCheckArraySize();
+  }
 
  private:
   void appendNullFixedLengthArray() {
@@ -136,7 +139,7 @@ class ParquetFixedLengthArrayEncoder : public ParquetArrayEncoder {
     throw ForeignStorageException(
         "Detected an empty array"
         " being loaded into"
-        " OmniSci column '" +
+        " HeavyDB column '" +
         omnisci_column_name +
         "' which has a fixed length array type,"
         " expecting " +
@@ -149,7 +152,7 @@ class ParquetFixedLengthArrayEncoder : public ParquetArrayEncoder {
     throw ForeignStorageException("Detected a row with " +
                                   std::to_string(size_of_last_array) +
                                   " elements being loaded into"
-                                  " OmniSci column '" +
+                                  " HeavyDB column '" +
                                   omnisci_column_name +
                                   "' which has a fixed length array type,"
                                   " expecting " +

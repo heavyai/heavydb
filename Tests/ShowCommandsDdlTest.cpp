@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +17,20 @@
 /**
  * @file ShowCommandsDdlTest.cpp
  * @brief Test suite for SHOW DDL commands
+ *
  */
 
 #include <gtest/gtest.h>
 #include "boost/filesystem.hpp"
 
+#include "Catalog/RefreshTimeCalculator.h"
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
 #include "DataMgr/BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
+#include "Geospatial/ColumnNames.h"
 #include "Shared/File.h"
+#include "Shared/SysDefinitions.h"
+#include "Shared/misc.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -33,7 +38,19 @@
 #endif
 
 extern bool g_enable_fsi;
+extern bool g_enable_s3_fsi;
 extern bool g_enable_system_tables;
+extern bool g_enable_logs_system_tables;
+extern bool g_enable_table_functions;
+extern bool g_enable_dev_table_functions;
+extern size_t g_logs_system_tables_max_files_count;
+
+std::string test_binary_file_path;
+std::string test_source_path;
+bool g_run_odbc{false};
+
+namespace bf = boost::filesystem;
+namespace po = boost::program_options;
 
 class ShowUserSessionsTest : public DBHandlerTestFixture {
  public:
@@ -46,8 +63,8 @@ class ShowUserSessionsTest : public DBHandlerTestFixture {
     sql(result, "SHOW USER SESSIONS;");
     assertExpectedFormat(result);
     assertNumSessions(result, 1);
-    assertSessionResultFound(result, "admin", "omnisci", 1);
-    getID(result, "admin", "omnisci", admin_id);
+    assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
+    getID(result, shared::kRootUsername, shared::kDefaultDbName, admin_id);
   }
 
   static void SetUpTestSuite() {
@@ -72,7 +89,8 @@ class ShowUserSessionsTest : public DBHandlerTestFixture {
     sql(result, "SHOW USER SESSIONS;");
     assertExpectedFormat(result);
     assertNumSessions(result, 1);
-    assertSessionResultFound(result, "admin", "omnisci", admin_id);
+    assertSessionResultFound(
+        result, shared::kRootUsername, shared::kDefaultDbName, admin_id);
     DBHandlerTestFixture::TearDown();
   }
 
@@ -80,8 +98,10 @@ class ShowUserSessionsTest : public DBHandlerTestFixture {
     for (const auto& user : users_) {
       std::stringstream create;
       create << "CREATE USER " << user
-             << " (password = 'HyperInteractive', is_super = 'false', "
-                "default_db='omnisci');";
+             << " (password = '" + shared::kDefaultRootPasswd +
+                    "', is_super = 'false', "
+                    "default_db='" +
+                    shared::kDefaultDbName + "');";
       sql(create.str());
       for (const auto& db : dbs_) {
         std::stringstream grant;
@@ -94,9 +114,9 @@ class ShowUserSessionsTest : public DBHandlerTestFixture {
   static void createSuperUsers() {
     for (const auto& user : superusers_) {
       std::stringstream create;
-      create
-          << "CREATE USER " << user
-          << " (password = 'HyperInteractive', is_super = 'true', default_db='omnisci');";
+      create << "CREATE USER " << user
+             << " (password = '" + shared::kDefaultRootPasswd +
+                    "', is_super = 'true', default_db='" + shared::kDefaultDbName + "');";
       sql(create.str());
       for (const auto& db : dbs_) {
         std::stringstream grant;
@@ -125,7 +145,7 @@ class ShowUserSessionsTest : public DBHandlerTestFixture {
   static void createDBs() {
     for (const auto& db : dbs_) {
       std::stringstream create;
-      create << "CREATE DATABASE " << db << " (owner = 'admin');";
+      create << "CREATE DATABASE " << db << " (owner = '" + shared::kRootUsername + "');";
       sql(create.str());
     }
   }
@@ -229,44 +249,47 @@ TEST_F(ShowUserSessionsTest, SHOW) {
   sql(result, "SHOW USER SESSIONS;");
   assertExpectedFormat(result);
   assertNumSessions(result, 1);
-  assertSessionResultFound(result, "admin", "omnisci", 1);
+  assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
 }
 
 TEST_F(ShowUserSessionsTest, SHOW_ADMIN_MULTIDB) {
   TSessionId new_session;
-  login("admin", "HyperInteractive", "db1", new_session);
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "db1", new_session);
   TQueryResult result;
   sql(result, "SHOW USER SESSIONS;");
   assertExpectedFormat(result);
   assertNumSessions(result, 2);
-  assertSessionResultFound(result, "admin", "db1", 1);
-  assertSessionResultFound(result, "admin", "omnisci", 1);
+  assertSessionResultFound(result, shared::kRootUsername, "db1", 1);
+  assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
   logout(new_session);
 }
 
 TEST_F(ShowUserSessionsTest, SHOW_ADMIN_MULTISESSION_SINGLEDB) {
   TSessionId new_session;
-  login("admin", "HyperInteractive", "omnisci", new_session);
+  login(shared::kRootUsername,
+        shared::kDefaultRootPasswd,
+        shared::kDefaultDbName,
+        new_session);
   TQueryResult result;
   std::string query{"SHOW USER SESSIONS;"};
   sql(result, query);
   assertExpectedFormat(result);
   assertNumSessions(result, 2);
-  assertSessionResultFound(result, "admin", "omnisci", 2);
+  assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 2);
   logout(new_session);
 }
 
 TEST_F(ShowUserSessionsTest, SHOW_USERS_MULTISESSION) {
   TSessionId session1;
-  login("user1", "HyperInteractive", "db1", session1);
+  login("user1", shared::kDefaultRootPasswd, "db1", session1);
   TSessionId session2;
-  login("user2", "HyperInteractive", "db1", session2);
+  login("user2", shared::kDefaultRootPasswd, "db1", session2);
   TQueryResult result;
   std::string query{"SHOW USER SESSIONS;"};
   sql(result, query);
   assertExpectedFormat(result);
   assertNumSessions(result, 3);
-  assertSessionResultFound(result, "admin", "omnisci", 1);
+  assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
   assertSessionResultFound(result, "user1", "db1", 1);
   assertSessionResultFound(result, "user2", "db1", 1);
   logout(session1);
@@ -275,15 +298,15 @@ TEST_F(ShowUserSessionsTest, SHOW_USERS_MULTISESSION) {
 
 TEST_F(ShowUserSessionsTest, SHOW_USERS_MULTIDBS) {
   TSessionId session1;
-  login("user1", "HyperInteractive", "db1", session1);
+  login("user1", shared::kDefaultRootPasswd, "db1", session1);
   TSessionId session2;
-  login("user2", "HyperInteractive", "db2", session2);
+  login("user2", shared::kDefaultRootPasswd, "db2", session2);
   TQueryResult result;
   std::string query{"SHOW USER SESSIONS;"};
   sql(result, query);
   assertExpectedFormat(result);
   assertNumSessions(result, 3);
-  assertSessionResultFound(result, "admin", "omnisci", 1);
+  assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
   assertSessionResultFound(result, "user1", "db1", 1);
   assertSessionResultFound(result, "user2", "db2", 1);
   logout(session1);
@@ -296,7 +319,7 @@ TEST_F(ShowUserSessionsTest, SHOW_USERS_ALL) {
     for (auto const& user : get_users()) {
       for (auto const& db : get_dbs()) {
         TSessionId session;
-        login(user, "HyperInteractive", db, session);
+        login(user, shared::kDefaultRootPasswd, db, session);
         session_ids.push_back(session);
       }
     }
@@ -319,16 +342,16 @@ TEST_F(ShowUserSessionsTest, SHOW_USERS_ALL) {
 
 TEST_F(ShowUserSessionsTest, SHOW_USERS_MULTIDB_LOGOUT) {
   TSessionId session1;
-  login("user1", "HyperInteractive", "db1", session1);
+  login("user1", shared::kDefaultRootPasswd, "db1", session1);
   TSessionId session2;
-  login("user2", "HyperInteractive", "db2", session2);
+  login("user2", shared::kDefaultRootPasswd, "db2", session2);
   std::string session2_id;
   {
     TQueryResult result;
     sql(result, "SHOW USER SESSIONS;");
     assertExpectedFormat(result);
     assertNumSessions(result, 3);
-    assertSessionResultFound(result, "admin", "omnisci", 1);
+    assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
     assertSessionResultFound(result, "user1", "db1", 1);
     assertSessionResultFound(result, "user2", "db2", 1);
     getID(result, "user2", "db2", session2_id);
@@ -340,7 +363,7 @@ TEST_F(ShowUserSessionsTest, SHOW_USERS_MULTIDB_LOGOUT) {
     sql(result, "SHOW USER SESSIONS;");
     assertExpectedFormat(result);
     assertNumSessions(result, 2);
-    assertSessionResultFound(result, "admin", "omnisci", 1);
+    assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
     assertSessionResultFound(result, "user2", "db2", session2_id);
   }
 
@@ -350,20 +373,20 @@ TEST_F(ShowUserSessionsTest, SHOW_USERS_MULTIDB_LOGOUT) {
     sql(result, "SHOW USER SESSIONS;");
     assertExpectedFormat(result);
     assertNumSessions(result, 1);
-    assertSessionResultFound(result, "admin", "omnisci", 1);
+    assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
   }
 }
 
 TEST_F(ShowUserSessionsTest, PRIVILEGES_SUPERUSER) {
   TSessionId supersession;
-  login("super1", "HyperInteractive", "db2", supersession);
+  login("super1", shared::kDefaultRootPasswd, "db2", supersession);
   {
     TQueryResult result;
     std::string query{"SHOW USER SESSIONS;"};
     sql(result, query, supersession);
     assertExpectedFormat(result);
     assertNumSessions(result, 2);
-    assertSessionResultFound(result, "admin", "omnisci", 1);
+    assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
     assertSessionResultFound(result, "super1", "db2", 1);
   }
   logout(supersession);
@@ -371,14 +394,14 @@ TEST_F(ShowUserSessionsTest, PRIVILEGES_SUPERUSER) {
 
 TEST_F(ShowUserSessionsTest, PRIVILEGES_NONSUPERUSER) {
   TSessionId usersession;
-  login("user1", "HyperInteractive", "db1", usersession);
+  login("user1", shared::kDefaultRootPasswd, "db1", usersession);
 
   try {
     TQueryResult result;
     std::string query{"SHOW USER SESSIONS;"};
     sql(result, query, usersession);
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TOmniSciException& e) {
+  } catch (const TDBException& e) {
     ASSERT_EQ(
         "SHOW USER SESSIONS failed, because it can only be executed by super "
         "user.",
@@ -394,87 +417,115 @@ class ShowUserDetailsTest : public DBHandlerTestFixture {
 
   static void SetUpTestSuite() {
     createDBHandler();
-    users_ = {"user1", "user2"};
-    superusers_ = {"super1", "super2"};
-    dbs_ = {"omnisci"};
-    createUsers();
-    createSuperUsers();
+    createDatabase("db1");
+    createDatabase("db2");
+    createUser("user1", /*is_super=*/false, "db1");
+    createUser("user2", /*is_super=*/false, "db1");
+    createUser("user3", /*is_super=*/false, "db1", /*can_login=*/false);
+    createUser("super1", /*is_super=*/true, "db1");
+    createUser("user4", /*is_super=*/false, "db2");
+    createUser("user5", /*is_super=*/false, "db2");
+    createUser("user6", /*is_super=*/false, "db2", /*can_login=*/false);
+    createUser("super2", /*is_super=*/true, "db2");
   }
 
   static void TearDownTestSuite() {
     dropUsers();
-    dropSuperUsers();
+    dropDatabases();
   }
 
   void TearDown() override { DBHandlerTestFixture::TearDown(); }
 
-  static void createUsers() {
-    for (const auto& user : users_) {
-      std::stringstream create;
-      create << "CREATE USER " << user
-             << " (password = 'HyperInteractive', is_super = 'false', "
-                "default_db='omnisci');";
-      sql(create.str());
-      for (const auto& db : dbs_) {
-        std::stringstream grant;
-        grant << "GRANT ALL ON DATABASE  " << db << " to " << user << ";";
-        sql(grant.str());
-      }
+  static void createDatabase(std::string const& database) {
+    databases_.push_back(database);
+    std::stringstream create;
+    create << "CREATE DATABASE " << database << ";";
+    sql(create.str());
+  }
+
+  static void createUser(std::string const& user,
+                         bool is_super,
+                         std::string const& database,
+                         bool can_login = true) {
+    users_.push_back(user);
+    std::stringstream create;
+    create << "CREATE USER " << user
+           << " (password = '" + shared::kDefaultRootPasswd + "', is_super = '"
+           << (is_super ? "true" : "false") << "', can_login = '"
+           << (can_login ? "true" : "false") << "'";
+    if (!database.empty()) {
+      create << ", default_db='" << database << "'";
+    }
+    create << ");";
+    sql(create.str());
+    if (!is_super) {
+      std::stringstream grant;
+      grant << "GRANT ALL ON DATABASE  " << database << " to " << user << ";";
+      sql(grant.str());
     }
   }
 
-  static void createSuperUsers() {
-    for (const auto& user : superusers_) {
-      std::stringstream create;
-      create
-          << "CREATE USER " << user
-          << " (password = 'HyperInteractive', is_super = 'true', default_db='omnisci');";
-      sql(create.str());
-      for (const auto& db : dbs_) {
-        std::stringstream grant;
-        grant << "GRANT ALL ON DATABASE  " << db << " to " << user << ";";
-        sql(grant.str());
-      }
+  static void dropDatabases() {
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, shared::kDefaultDbName);
+    for (const auto& database : databases_) {
+      std::stringstream drop;
+      drop << "DROP DATABASE IF EXISTS " << database << ";";
+      sql(drop.str());
     }
   }
 
   static void dropUsers() {
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, shared::kDefaultDbName);
     for (const auto& user : users_) {
       std::stringstream drop;
-      drop << "DROP USER " << user << ";";
+      drop << "DROP USER IF EXISTS " << user << ";";
       sql(drop.str());
     }
   }
 
-  static void dropSuperUsers() {
-    for (const auto& user : superusers_) {
-      std::stringstream drop;
-      drop << "DROP USER " << user << ";";
-      sql(drop.str());
-    }
-  }
-
-  enum ColumnIndex { NAME, ID, IS_SUPER, DEFAULT_DB, CAN_LOGIN };
-
-  void assertExpectedFormat(const TQueryResult& result) {
+  void assertExpectedFormatForSuperUserWithAll(const TQueryResult& result) {
     ASSERT_EQ(result.row_set.is_columnar, true);
     ASSERT_EQ(result.row_set.columns.size(), size_t(5));
-    ASSERT_EQ(result.row_set.row_desc[NAME].col_type.type, TDatumType::STR);
-    ASSERT_EQ(result.row_set.row_desc[NAME].col_name, "NAME");
-    ASSERT_EQ(result.row_set.row_desc[ID].col_type.type, TDatumType::BIGINT);
-    ASSERT_EQ(result.row_set.row_desc[ID].col_name, "ID");
-    ASSERT_EQ(result.row_set.row_desc[IS_SUPER].col_type.type, TDatumType::BOOL);
-    ASSERT_EQ(result.row_set.row_desc[IS_SUPER].col_name, "IS_SUPER");
-    ASSERT_EQ(result.row_set.row_desc[DEFAULT_DB].col_type.type, TDatumType::STR);
-    ASSERT_EQ(result.row_set.row_desc[DEFAULT_DB].col_name, "DEFAULT_DB");
-    ASSERT_EQ(result.row_set.row_desc[CAN_LOGIN].col_type.type, TDatumType::BOOL);
-    ASSERT_EQ(result.row_set.row_desc[CAN_LOGIN].col_name, "CAN_LOGIN");
+    ASSERT_EQ(result.row_set.row_desc[0].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[0].col_name, "NAME");
+    ASSERT_EQ(result.row_set.row_desc[1].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[1].col_name, "ID");
+    ASSERT_EQ(result.row_set.row_desc[2].col_type.type, TDatumType::BOOL);
+    ASSERT_EQ(result.row_set.row_desc[2].col_name, "IS_SUPER");
+    ASSERT_EQ(result.row_set.row_desc[3].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[3].col_name, "DEFAULT_DB");
+    ASSERT_EQ(result.row_set.row_desc[4].col_type.type, TDatumType::BOOL);
+    ASSERT_EQ(result.row_set.row_desc[4].col_name, "CAN_LOGIN");
+  }
+
+  void assertExpectedFormatForSuperUser(const TQueryResult& result) {
+    ASSERT_EQ(result.row_set.is_columnar, true);
+    ASSERT_EQ(result.row_set.columns.size(), size_t(4));
+    ASSERT_EQ(result.row_set.row_desc[0].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[0].col_name, "NAME");
+    ASSERT_EQ(result.row_set.row_desc[1].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[1].col_name, "ID");
+    ASSERT_EQ(result.row_set.row_desc[2].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[2].col_name, "DEFAULT_DB");
+    ASSERT_EQ(result.row_set.row_desc[3].col_type.type, TDatumType::BOOL);
+    ASSERT_EQ(result.row_set.row_desc[3].col_name, "CAN_LOGIN");
+  }
+
+  void assertExpectedFormatForUser(const TQueryResult& result) {
+    ASSERT_EQ(result.row_set.is_columnar, true);
+    ASSERT_EQ(result.row_set.columns.size(), size_t(3));
+    ASSERT_EQ(result.row_set.row_desc[0].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[0].col_name, "NAME");
+    ASSERT_EQ(result.row_set.row_desc[1].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[1].col_name, "ID");
+    ASSERT_EQ(result.row_set.row_desc[2].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[2].col_name, "DEFAULT_DB");
   }
 
   void assertUserResultFound(const TQueryResult& result, const std::string& username) {
     int num_matches = 0;
-    for (size_t i = 0; i < result.row_set.columns[NAME].data.str_col.size(); ++i) {
-      if (result.row_set.columns[NAME].data.str_col[i] == username) {
+    for (size_t i = 0; i < result.row_set.columns[0].data.str_col.size(); ++i) {
+      if (result.row_set.columns[0].data.str_col[i] == username) {
         num_matches++;
       }
     }
@@ -482,16 +533,17 @@ class ShowUserDetailsTest : public DBHandlerTestFixture {
   }
 
   template <typename T>
-  void assertUserResultFound(const TQueryResult& result,
+  void assertUserColumnFound(const TQueryResult& result,
                              const std::string& username,
-                             ColumnIndex col,
+                             size_t col,
                              T val) {
     using CLEANT = std::remove_reference_t<std::remove_cv_t<T>>;
     static_assert(std::is_integral_v<CLEANT> || std::is_floating_point_v<CLEANT> ||
                   std::is_same_v<std::string, CLEANT>);
+    ASSERT_LT(col, result.row_set.columns.size());
     int num_matches = 0;
-    for (size_t i = 0; i < result.row_set.columns[NAME].data.str_col.size(); ++i) {
-      if (result.row_set.columns[NAME].data.str_col[i] == username) {
+    for (size_t i = 0; i < result.row_set.columns[0].data.str_col.size(); ++i) {
+      if (result.row_set.columns[0].data.str_col[i] == username) {
         num_matches++;
         // integral
         if constexpr (std::is_integral_v<CLEANT>) {  // NOLINT
@@ -509,54 +561,188 @@ class ShowUserDetailsTest : public DBHandlerTestFixture {
   }
 
   void assertNumUsers(const TQueryResult& result, size_t num_users) {
-    ASSERT_EQ(num_users, result.row_set.columns[NAME].data.str_col.size());
+    ASSERT_EQ(num_users, result.row_set.columns[0].data.str_col.size());
   }
-  std::vector<std::string> get_users() { return users_; }
-  std::vector<std::string> get_superusers() { return superusers_; }
+
+  void assertNumColumns(const TQueryResult& result, size_t num_columns) {
+    ASSERT_EQ(num_columns, result.row_set.columns.size());
+  }
 
  private:
   static inline std::vector<std::string> users_;
-  static inline std::vector<std::string> superusers_;
-  static inline std::vector<std::string> dbs_;
+  static inline std::vector<std::string> databases_;
 
   std::string admin_id;
 };
 
-TEST_F(ShowUserDetailsTest, AllUsers) {
+TEST_F(ShowUserDetailsTest, AsNonSuper) {
+  login("user1", shared::kDefaultRootPasswd, "db1");
+
+  {
+    TQueryResult result;
+    sql(result, "SHOW USER DETAILS;");
+    assertExpectedFormatForUser(result);
+    assertNumUsers(result, 2);
+    assertUserResultFound(result, "user1");
+    assertUserResultFound(result, "user2");
+  }
+
+  {
+    TQueryResult result;
+    sql(result, "SHOW USER DETAILS user2;");
+    assertExpectedFormatForUser(result);
+    assertNumUsers(result, 1);
+    assertUserResultFound(result, "user2");
+  }
+
+  {
+    TQueryResult result;
+    sql(result, "SHOW USER DETAILS user1, user2;");
+    assertExpectedFormatForUser(result);
+    assertNumUsers(result, 2);
+    assertUserResultFound(result, "user1");
+    assertUserResultFound(result, "user2");
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, user3;"), TDBException);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, notauser;"), TDBException);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, super1;"), TDBException);
+  }
+}
+
+TEST_F(ShowUserDetailsTest, AsSuper) {
+  login("super1", shared::kDefaultRootPasswd, "db1");
+
+  {
+    TQueryResult result;
+    sql(result, "SHOW USER DETAILS;");
+    assertExpectedFormatForSuperUser(result);
+    assertNumUsers(result, 3);
+    assertUserResultFound(result, "user1");
+    assertUserResultFound(result, "user2");
+    assertUserResultFound(result, "user3");
+  }
+
+  {
+    TQueryResult result;
+    sql(result, "SHOW USER DETAILS user2;");
+    assertExpectedFormatForSuperUser(result);
+    assertNumUsers(result, 1);
+    assertUserResultFound(result, "user2");
+  }
+
+  {
+    TQueryResult result;
+    sql(result, "SHOW USER DETAILS user1, user3;");
+    assertExpectedFormatForSuperUser(result);
+    assertNumUsers(result, 2);
+    assertUserResultFound(result, "user1");
+    assertUserResultFound(result, "user3");
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, user4;"), TDBException);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, notauser;"), TDBException);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, super2;"), TDBException);
+  }
+}
+
+TEST_F(ShowUserDetailsTest, AllAsNonSuper) {
+  login("user1", shared::kDefaultRootPasswd, "db1");
   TQueryResult result;
-  sql(result, "SHOW USER DETAILS;");
-  assertExpectedFormat(result);
-  assertNumUsers(result, 5);
-  assertUserResultFound(result, "admin");
+  EXPECT_THROW(sql(result, "SHOW ALL USER DETAILS;"), TDBException);
+  EXPECT_THROW(sql(result, "SHOW ALL USER DETAILS user1;"), TDBException);
+  EXPECT_THROW(sql(result, "SHOW ALL USER DETAILS user1, super1;"), TDBException);
+  EXPECT_THROW(sql(result, "SHOW ALL USER DETAILS user1, super1, notauser;"),
+               TDBException);
+}
+
+TEST_F(ShowUserDetailsTest, AllAsSuper) {
+  TQueryResult result;
+  login("super1", shared::kDefaultRootPasswd, "db1");
+  sql(result, "SHOW ALL USER DETAILS;");
+  assertExpectedFormatForSuperUserWithAll(result);
+  assertNumUsers(result, 9);
+  assertUserResultFound(result, shared::kRootUsername);
   assertUserResultFound(result, "user1");
   assertUserResultFound(result, "user2");
+  assertUserResultFound(result, "user3");
   assertUserResultFound(result, "super1");
+  assertUserResultFound(result, "user4");
+  assertUserResultFound(result, "user5");
+  assertUserResultFound(result, "user6");
   assertUserResultFound(result, "super2");
 }
 
-TEST_F(ShowUserDetailsTest, OneUser) {
-  TQueryResult result;
-  sql(result, "SHOW USER DETAILS user1;");
-  assertNumUsers(result, 1);
-  assertUserResultFound(result, "user1");
-}
-
-TEST_F(ShowUserDetailsTest, MultipleUsers) {
-  TQueryResult result;
-  sql(result, "SHOW USER DETAILS user1,super1;");
-  assertNumUsers(result, 2);
-  assertUserResultFound(result, "user1");
-  assertUserResultFound(result, "super1");
-}
-
-TEST_F(ShowUserDetailsTest, Columns) {
+TEST_F(ShowUserDetailsTest, ColumnsAsNonSuper) {
   using namespace std::string_literals;
+  login("user1", shared::kDefaultRootPasswd, "db1");
   TQueryResult result;
   sql(result, "SHOW USER DETAILS user1;");
+  assertNumColumns(result, 3);
   assertNumUsers(result, 1);
-  assertUserResultFound(result, "user1", IS_SUPER, false);
-  assertUserResultFound(result, "user1", DEFAULT_DB, "omnisci(1)"s);
-  assertUserResultFound(result, "user1", CAN_LOGIN, true);
+  assertUserColumnFound(result, "user1", 2, "db1"s);
+}
+
+TEST_F(ShowUserDetailsTest, ColumnsAsSuper) {
+  using namespace std::string_literals;
+  auto& syscat = Catalog_Namespace::SysCatalog::instance();
+  auto cat = syscat.getCatalog("db1");
+  std::string db1id = cat ? std::to_string(cat->getDatabaseId()) : "";
+  login("super1", shared::kDefaultRootPasswd, "db1");
+
+  {
+    TQueryResult result;
+    sql(result, "SHOW USER DETAILS user1;");
+    assertNumColumns(result, 4);
+    assertNumUsers(result, 1);
+    assertUserColumnFound(result, "user1", 2, "db1("s + db1id + ")"s);
+    assertUserColumnFound(result, "user1", 3, true);
+  }
+
+  {
+    TQueryResult result;
+    sql(result, "SHOW USER DETAILS user3;");
+    assertNumColumns(result, 4);
+    assertNumUsers(result, 1);
+    assertUserColumnFound(result, "user3", 2, "db1("s + db1id + ")"s);
+    assertUserColumnFound(result, "user3", 3, false);
+  }
+}
+
+TEST_F(ShowUserDetailsTest, ColumnsAllAsSuper) {
+  using namespace std::string_literals;
+  auto& syscat = Catalog_Namespace::SysCatalog::instance();
+  auto cat = syscat.getCatalog("db1");
+  std::string db1id = cat ? std::to_string(cat->getDatabaseId()) : "";
+  login("super1", shared::kDefaultRootPasswd, "db1");
+
+  TQueryResult result;
+  sql(result, "SHOW ALL USER DETAILS user1;");
+  assertNumColumns(result, 5);
+  assertNumUsers(result, 1);
+  assertUserColumnFound(result, "user1", 2, false);
+  assertUserColumnFound(result, "user1", 3, "db1("s + db1id + ")"s);
+  assertUserColumnFound(result, "user1", 4, true);
 }
 
 class ShowTableDdlTest : public DBHandlerTestFixture {
@@ -582,7 +768,7 @@ class ShowTableDdlTest : public DBHandlerTestFixture {
 
   static void createTestUser() {
     sql("CREATE USER test_user (password = 'test_pass');");
-    sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   }
 
   static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
@@ -688,7 +874,7 @@ TEST_F(ShowTableDdlTest, TestUserSeesTestTableAfterGrantDrop) {
 }
 
 TEST_F(ShowTableDdlTest, SuperUserSeesTestTableAfterTestUserCreates) {
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   createTestTable();
   switchToAdmin();
@@ -734,7 +920,7 @@ class ShowRolesTest : public DBHandlerTestFixture {
                              const bool is_super_user = false) {
     sql("CREATE USER " + user_name + " (password = '" + pass + "', is_super = '" +
         (is_super_user ? "true" : "false") + "');");
-    sql("GRANT ALL ON DATABASE omnisci TO " + user_name + ";");
+    sql("GRANT ALL ON DATABASE " + shared::kDefaultDbName + " TO " + user_name + ";");
   }
 
   static void dropTestUser(const std::string& user_name) {
@@ -963,6 +1149,7 @@ class ShowDatabasesTest : public DBHandlerTestFixture {
 
   static void SetUpTestSuite() {
     createDBHandler();
+    TearDownTestSuite();
     createTestUser("test_user_1", "test_pass_1");
     createTestUser("test_user_2", "test_pass_2");
     createTestUser("test_super_user", "test_pass", true);
@@ -1017,18 +1204,10 @@ class ShowDatabasesTest : public DBHandlerTestFixture {
 TEST_F(ShowDatabasesTest, DefaultDatabase) {
   TQueryResult result;
   sql(result, "SHOW DATABASES;");
-  // clang-format off
-  if (isDistributedMode()) {
-    assertExpectedResult({"Database", "Owner"},
-                         {{"omnisci", "admin"}},
-                         result);
-  } else {
-    assertExpectedResult({"Database", "Owner"},
-                         {{"omnisci", "admin"},
-                          {"information_schema", "admin"}},
-                     result);
-  }
-  // clang-format on
+  assertExpectedResult({"Database", "Owner"},
+                       {{shared::kDefaultDbName, shared::kRootUsername},
+                        {"information_schema", shared::kRootUsername}},
+                       result);
 }
 
 TEST_F(ShowDatabasesTest, UserCreatedDatabase) {
@@ -1080,24 +1259,12 @@ TEST_F(ShowDatabasesTest, AdminLoginAndOtherUserDatabases) {
 
   TQueryResult result;
   sql(result, "SHOW DATABASES;");
-  // clang-format off
-  if (isDistributedMode()) {
-    assertExpectedResult(
-        {"Database", "Owner"},
-        {{"omnisci", "admin"},
-         {"test_db_1", "test_user_1"},
-         {"test_db_2", "test_user_2"}},
-        result);
-  } else {
-    assertExpectedResult(
-        {"Database", "Owner"},
-        {{"omnisci", "admin"},
-         {"information_schema", "admin"},
-         {"test_db_1", "test_user_1"},
-         {"test_db_2", "test_user_2"}},
-        result);
-  }
-  // clang-format on
+  assertExpectedResult({"Database", "Owner"},
+                       {{shared::kDefaultDbName, shared::kRootUsername},
+                        {"information_schema", shared::kRootUsername},
+                        {"test_db_1", "test_user_1"},
+                        {"test_db_2", "test_user_2"}},
+                       result);
 }
 
 TEST_F(ShowDatabasesTest, SuperUserLoginAndOtherUserDatabases) {
@@ -1107,51 +1274,34 @@ TEST_F(ShowDatabasesTest, SuperUserLoginAndOtherUserDatabases) {
 
   TQueryResult result;
   sql(result, "SHOW DATABASES;");
-  // clang-format off
-  if (isDistributedMode()) {
-    assertExpectedResult(
-        {"Database", "Owner"},
-        {{"omnisci", "admin"},
-         {"test_db_1", "test_user_1"},
-         {"test_db_2", "test_user_2"}},
-        result);
-  } else {
-    assertExpectedResult(
-        {"Database", "Owner"},
-        {{"omnisci", "admin"},
-         {"information_schema", "admin"},
-         {"test_db_1", "test_user_1"},
-         {"test_db_2", "test_user_2"}},
-        result);
-  }
-  // clang-format on
+  assertExpectedResult({"Database", "Owner"},
+                       {{shared::kDefaultDbName, shared::kRootUsername},
+                        {"information_schema", shared::kRootUsername},
+                        {"test_db_1", "test_user_1"},
+                        {"test_db_2", "test_user_2"}},
+                       result);
 }
 
 class ShowCreateTableTest : public DBHandlerTestFixture {
  public:
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
-    switchToAdmin();
-    sql("DROP TABLE IF EXISTS showcreatetabletest;");
-    sql("DROP TABLE IF EXISTS showcreatetabletest1;");
-    sql("DROP TABLE IF EXISTS showcreatetabletest2;");
-    sql("DROP VIEW IF EXISTS showcreateviewtest;");
-    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
+    dropTables();
   }
 
   void TearDown() override {
+    dropTables();
+    DBHandlerTestFixture::TearDown();
+  }
+
+ private:
+  void dropTables() {
     switchToAdmin();
     sql("DROP TABLE IF EXISTS showcreatetabletest;");
     sql("DROP TABLE IF EXISTS showcreatetabletest1;");
     sql("DROP TABLE IF EXISTS showcreatetabletest2;");
     sql("DROP VIEW IF EXISTS showcreateviewtest;");
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
-    DBHandlerTestFixture::TearDown();
-  }
-
-  std::string getTestFilePath() {
-    return boost::filesystem::canonical("../../Tests/FsiDataFiles/example_1.csv")
-        .string();
   }
 };
 
@@ -1168,7 +1318,7 @@ TEST_F(ShowCreateTableTest, Identity) {
     "CREATE TABLE showcreatetabletest (\n  i INTEGER,\n  SHARD KEY (i))\nWITH (SHARD_COUNT=4);",
     "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (SORT_COLUMN='i');",
     "CREATE TABLE showcreatetabletest (\n  i1 INTEGER,\n  i2 INTEGER)\nWITH (MAX_ROWS=123, VACUUM='IMMEDIATE');",
-    "CREATE TABLE showcreatetabletest (\n  id TEXT ENCODING DICT(32),\n  abbr TEXT ENCODING DICT(32),\n  name TEXT ENCODING DICT(32),\n  omnisci_geo GEOMETRY(MULTIPOLYGON, 4326) NOT NULL ENCODING COMPRESSED(32));",
+    "CREATE TABLE showcreatetabletest (\n  id TEXT ENCODING DICT(32),\n  abbr TEXT ENCODING DICT(32),\n  name TEXT ENCODING DICT(32),\n  " + Geospatial::kGeoColumnName + " GEOMETRY(MULTIPOLYGON, 4326) NOT NULL ENCODING COMPRESSED(32));",
     "CREATE TABLE showcreatetabletest (\n  flight_year SMALLINT,\n  flight_month SMALLINT,\n  flight_dayofmonth SMALLINT,\n  flight_dayofweek SMALLINT,\n  deptime SMALLINT,\n  crsdeptime SMALLINT,\n  arrtime SMALLINT,\n  crsarrtime SMALLINT,\n  uniquecarrier TEXT ENCODING DICT(32),\n  flightnum SMALLINT,\n  tailnum TEXT ENCODING DICT(32),\n  actualelapsedtime SMALLINT,\n  crselapsedtime SMALLINT,\n  airtime SMALLINT,\n  arrdelay SMALLINT,\n  depdelay SMALLINT,\n  origin TEXT ENCODING DICT(32),\n  dest TEXT ENCODING DICT(32),\n  distance SMALLINT,\n  taxiin SMALLINT,\n  taxiout SMALLINT,\n  cancelled SMALLINT,\n  cancellationcode TEXT ENCODING DICT(32),\n  diverted SMALLINT,\n  carrierdelay SMALLINT,\n  weatherdelay SMALLINT,\n  nasdelay SMALLINT,\n  securitydelay SMALLINT,\n  lateaircraftdelay SMALLINT,\n  dep_timestamp TIMESTAMP(0),\n  arr_timestamp TIMESTAMP(0),\n  carrier_name TEXT ENCODING DICT(32),\n  plane_type TEXT ENCODING DICT(32),\n  plane_manufacturer TEXT ENCODING DICT(32),\n  plane_issue_date DATE ENCODING DAYS(32),\n  plane_model TEXT ENCODING DICT(32),\n  plane_status TEXT ENCODING DICT(32),\n  plane_aircraft_type TEXT ENCODING DICT(32),\n  plane_engine_type TEXT ENCODING DICT(32),\n  plane_year SMALLINT,\n  origin_name TEXT ENCODING DICT(32),\n  origin_city TEXT ENCODING DICT(32),\n  origin_state TEXT ENCODING DICT(32),\n  origin_country TEXT ENCODING DICT(32),\n  origin_lat FLOAT,\n  origin_lon FLOAT,\n  dest_name TEXT ENCODING DICT(32),\n  dest_city TEXT ENCODING DICT(32),\n  dest_state TEXT ENCODING DICT(32),\n  dest_country TEXT ENCODING DICT(32),\n  dest_lat FLOAT,\n  dest_lon FLOAT,\n  origin_merc_x FLOAT,\n  origin_merc_y FLOAT,\n  dest_merc_x FLOAT,\n  dest_merc_y FLOAT)\nWITH (FRAGMENT_SIZE=2000000);",
     "CREATE TEMPORARY TABLE showcreatetabletest (\n  i INTEGER);"
   };
@@ -1324,9 +1474,9 @@ TEST_F(ShowCreateTableTest, ForeignTable_Defaults) {
       "tstamp "
       "TIMESTAMP, dt DATE, i_array INTEGER[], t_array TEXT[5], p POINT, l LINESTRING, "
       "poly POLYGON, mpoly MULTIPOLYGON) "
-      "SERVER omnisci_local_csv "
+      "SERVER default_local_delimited "
       "WITH (file_path = '" +
-      getTestFilePath() + "');");
+      test_source_path + "/example_1.csv" + "');");
   sqlAndCompareResult(
       "SHOW CREATE TABLE test_foreign_table;",
       {{"CREATE FOREIGN TABLE test_foreign_table (\n  b BOOLEAN,\n  bint BIGINT,\n  i "
@@ -1336,9 +1486,9 @@ TEST_F(ShowCreateTableTest, ForeignTable_Defaults) {
         "t_array TEXT[5] ENCODING DICT(32),\n  p GEOMETRY(POINT) ENCODING NONE,\n  l "
         "GEOMETRY(LINESTRING) ENCODING NONE,\n  poly GEOMETRY(POLYGON) ENCODING "
         "NONE,\n  mpoly GEOMETRY(MULTIPOLYGON) ENCODING NONE)"
-        "\nSERVER omnisci_local_csv"
+        "\nSERVER default_local_delimited"
         "\nWITH (FILE_PATH='" +
-        getTestFilePath() +
+        test_source_path + "/example_1.csv" +
         "', REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE='ALL');"}});
 }
 
@@ -1353,9 +1503,9 @@ TEST_F(ShowCreateTableTest, ForeignTable_WithEncodings) {
       "l GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32), "
       "poly GEOMETRY(POLYGON, 4326) ENCODING NONE, "
       "mpoly GEOMETRY(MULTIPOLYGON, 900913)) "
-      "SERVER omnisci_local_csv "
+      "SERVER default_local_delimited "
       "WITH (file_path = '" +
-      getTestFilePath() + "');");
+      test_source_path + "/example_1.csv" + "');");
   sqlAndCompareResult(
       "SHOW CREATE TABLE test_foreign_table;",
       {{"CREATE FOREIGN TABLE test_foreign_table (\n  bint BIGINT ENCODING "
@@ -1367,9 +1517,9 @@ TEST_F(ShowCreateTableTest, ForeignTable_WithEncodings) {
         "ENCODING DAYS(16),\n  p GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32),\n  l "
         "GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32),\n  poly GEOMETRY(POLYGON, "
         "4326) ENCODING NONE,\n  mpoly GEOMETRY(MULTIPOLYGON, 900913) ENCODING NONE)"
-        "\nSERVER omnisci_local_csv"
+        "\nSERVER default_local_delimited"
         "\nWITH (FILE_PATH='" +
-        getTestFilePath() +
+        test_source_path + "/example_1.csv" +
         "', REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE='ALL');"}});
 }
 
@@ -1382,9 +1532,9 @@ TEST_F(ShowCreateTableTest, ForeignTable_AllOptions) {
   std::string start_date_time = buffer;
 
   sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) "
-      "SERVER omnisci_local_csv "
+      "SERVER default_local_delimited "
       "WITH (file_path = '" +
-      getTestFilePath() +
+      test_source_path + "/example_1.csv" +
       "', fragment_size = 50, refresh_update_type = 'append', refresh_timing_type = "
       "'scheduled', refresh_start_date_time = '" +
       start_date_time +
@@ -1394,11 +1544,11 @@ TEST_F(ShowCreateTableTest, ForeignTable_AllOptions) {
       "quote = '`', quoted = 'false');");
   sqlAndCompareResult("SHOW CREATE TABLE test_foreign_table;",
                       {{"CREATE FOREIGN TABLE test_foreign_table (\n  i INTEGER)"
-                        "\nSERVER omnisci_local_csv"
+                        "\nSERVER default_local_delimited"
                         "\nWITH (ARRAY_DELIMITER='_', ARRAY_MARKER='[]', "
                         "BUFFER_SIZE='100', DELIMITER='|', ESCAPE='\\', "
                         "FILE_PATH='" +
-                        getTestFilePath() +
+                        test_source_path + "/example_1.csv" +
                         "', FRAGMENT_SIZE='50', HEADER='false', LINE_DELIMITER='.', "
                         "LONLAT='false', NULLS='NIL', QUOTE='`', QUOTED='false', "
                         "REFRESH_INTERVAL='5H', "
@@ -1455,10 +1605,7 @@ TEST_F(ShowCreateTableTest, DefaultColumnValues) {
 class SystemTablesShowCreateTableTest : public ShowCreateTableTest {
  protected:
   void SetUp() override {
-    if (isDistributedMode()) {
-      GTEST_SKIP() << "Test is not supported in distributed mode.";
-    }
-    login("admin", "HyperInteractive", "information_schema");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "information_schema");
   }
 };
 
@@ -1466,42 +1613,47 @@ TEST_F(SystemTablesShowCreateTableTest, Users) {
   sqlAndCompareResult(
       "SHOW CREATE TABLE users;",
       {{"CREATE TABLE users (\n  user_id INTEGER,\n  user_name TEXT ENCODING DICT(32),\n "
-        " "
-        "is_super_user BOOLEAN,\n  default_db_id INTEGER,\n  can_login BOOLEAN);"}});
+        " is_super_user BOOLEAN,\n  default_db_id INTEGER,\n  default_db_name TEXT "
+        "ENCODING DICT(32),\n  can_login BOOLEAN);"}});
 }
 
 TEST_F(SystemTablesShowCreateTableTest, Tables) {
   sqlAndCompareResult(
       "SHOW CREATE TABLE tables;",
-      {{"CREATE TABLE tables (\n  database_id INTEGER,\n  table_id INTEGER,\n  "
-        "table_name TEXT ENCODING DICT(32),\n  owner_id INTEGER,\n  column_count "
-        "INTEGER,\n  is_view BOOLEAN,\n  view_sql TEXT ENCODING DICT(32),\n  "
-        "max_fragment_size INTEGER,\n  max_chunk_size BIGINT,\n  fragment_page_size "
-        "INTEGER,\n  max_rows BIGINT,\n  max_rollback_epochs INTEGER,\n  shard_count "
-        "INTEGER);"}});
+      {{"CREATE TABLE tables (\n  database_id INTEGER,\n  database_name TEXT ENCODING "
+        "DICT(32),\n  table_id INTEGER,\n  table_name TEXT ENCODING DICT(32),\n  "
+        "owner_id INTEGER,\n  owner_user_name TEXT ENCODING DICT(32),\n  column_count "
+        "INTEGER,\n  table_type TEXT ENCODING DICT(32),\n  view_sql TEXT ENCODING "
+        "DICT(32),\n  max_fragment_size INTEGER,\n  max_chunk_size BIGINT,\n  "
+        "fragment_page_size INTEGER,\n  max_rows BIGINT,\n  max_rollback_epochs "
+        "INTEGER,\n  shard_count INTEGER,\n  ddl_statement TEXT ENCODING DICT(32));"}});
 }
 
 TEST_F(SystemTablesShowCreateTableTest, Dashboards) {
   sqlAndCompareResult(
       "SHOW CREATE TABLE dashboards;",
-      {{"CREATE TABLE dashboards (\n  database_id INTEGER,\n  dashboard_id INTEGER,\n  "
-        "dashboard_name TEXT ENCODING DICT(32),\n  owner_id INTEGER,\n  last_updated_at "
-        "TIMESTAMP(0));"}});
+      {{"CREATE TABLE dashboards (\n  database_id INTEGER,\n  database_name TEXT "
+        "ENCODING DICT(32),\n  dashboard_id INTEGER,\n  dashboard_name TEXT ENCODING "
+        "DICT(32),\n  owner_id INTEGER,\n  owner_user_name TEXT ENCODING DICT(32),\n  "
+        "last_updated_at TIMESTAMP(0),\n  data_sources TEXT[] ENCODING DICT(32));"}});
 }
 
 TEST_F(SystemTablesShowCreateTableTest, Databases) {
-  sqlAndCompareResult("SHOW CREATE TABLE databases;",
-                      {{"CREATE TABLE databases (\n  database_id INTEGER,\n  "
-                        "database_name TEXT ENCODING DICT(32),\n  owner_id INTEGER);"}});
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE databases;",
+      {{"CREATE TABLE databases (\n  database_id INTEGER,\n  database_name TEXT ENCODING "
+        "DICT(32),\n  owner_id INTEGER,\n  owner_user_name TEXT ENCODING DICT(32));"}});
 }
 
 TEST_F(SystemTablesShowCreateTableTest, Permissions) {
   sqlAndCompareResult(
       "SHOW CREATE TABLE permissions;",
       {{"CREATE TABLE permissions (\n  role_name TEXT ENCODING DICT(32),\n  is_user_role "
-        "BOOLEAN,\n  database_id INTEGER,\n  object_name TEXT ENCODING DICT(32),\n  "
-        "object_id INTEGER,\n  object_owner_id INTEGER,\n  object_permission_type TEXT "
-        "ENCODING DICT(32),\n  object_permissions TEXT[] ENCODING DICT(32));"}});
+        "BOOLEAN,\n  database_id INTEGER,\n  database_name TEXT ENCODING DICT(32),\n  "
+        "object_name TEXT ENCODING DICT(32),\n  object_id INTEGER,\n  object_owner_id "
+        "INTEGER,\n  object_owner_user_name TEXT ENCODING DICT(32),\n  "
+        "object_permission_type TEXT ENCODING DICT(32),\n  object_permissions TEXT[] "
+        "ENCODING DICT(32));"}});
 }
 
 TEST_F(SystemTablesShowCreateTableTest, RoleAssignments) {
@@ -1528,10 +1680,92 @@ TEST_F(SystemTablesShowCreateTableTest, MemoryDetails) {
   sqlAndCompareResult(
       "SHOW CREATE TABLE memory_details;",
       {{"CREATE TABLE memory_details (\n  node TEXT ENCODING DICT(32),\n  database_id "
-        "INTEGER,\n  table_id INTEGER,\n  column_id INTEGER,\n  chunk_key INTEGER[],\n  "
-        "device_id INTEGER,\n  device_type TEXT ENCODING DICT(32),\n  memory_status TEXT "
-        "ENCODING DICT(32),\n  page_count BIGINT,\n  page_size BIGINT,\n  slab_id "
-        "INTEGER,\n  start_page BIGINT,\n  last_touch_epoch BIGINT);"}});
+        "INTEGER,\n  database_name TEXT ENCODING DICT(32),\n  table_id INTEGER,\n  "
+        "table_name TEXT ENCODING DICT(32),\n  column_id INTEGER,\n  column_name TEXT "
+        "ENCODING DICT(32),\n  chunk_key INTEGER[],\n  device_id INTEGER,\n  device_type "
+        "TEXT ENCODING DICT(32),\n  memory_status TEXT ENCODING DICT(32),\n  page_count "
+        "BIGINT,\n  page_size BIGINT,\n  slab_id INTEGER,\n  start_page BIGINT,\n  "
+        "last_touch_epoch BIGINT);"}});
+}
+
+TEST_F(SystemTablesShowCreateTableTest, StorageDetails) {
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE storage_details;",
+      {{"CREATE TABLE storage_details (\n  node TEXT ENCODING DICT(32),\n  database_id "
+        "INTEGER,\n  database_name TEXT ENCODING DICT(32),\n  table_id INTEGER,\n  "
+        "table_name TEXT ENCODING DICT(32),\n  epoch INTEGER,\n  epoch_floor INTEGER,\n  "
+        "fragment_count INTEGER,\n  shard_id INTEGER,\n  data_file_count INTEGER,\n  "
+        "metadata_file_count INTEGER,\n  total_data_file_size BIGINT,\n  "
+        "total_data_page_count BIGINT,\n  total_free_data_page_count BIGINT,\n  "
+        "total_metadata_file_size BIGINT,\n  total_metadata_page_count BIGINT,\n  "
+        "total_free_metadata_page_count BIGINT,\n  total_dictionary_data_file_size "
+        "BIGINT);"}});
+}
+
+TEST_F(SystemTablesShowCreateTableTest, ServerLogs) {
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE server_logs;",
+      {{"CREATE TABLE server_logs (\n  node TEXT ENCODING DICT(32),\n  log_timestamp "
+        "TIMESTAMP(0),\n  severity TEXT ENCODING DICT(32),\n  process_id INTEGER,\n  "
+        "query_id INTEGER,\n  thread_id INTEGER,\n  file_location TEXT ENCODING "
+        "DICT(32),\n  message TEXT ENCODING DICT(32));"}});
+}
+
+TEST_F(SystemTablesShowCreateTableTest, RequestLogs) {
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE request_logs;",
+      {{"CREATE TABLE request_logs (\n  log_timestamp TIMESTAMP(0),\n  severity TEXT "
+        "ENCODING DICT(32),\n  process_id INTEGER,\n  query_id INTEGER,\n  thread_id "
+        "INTEGER,\n  file_location TEXT ENCODING DICT(32),\n  api_name TEXT ENCODING "
+        "DICT(32),\n  request_duration_ms BIGINT,\n  database_name TEXT ENCODING "
+        "DICT(32),\n  user_name TEXT ENCODING DICT(32),\n  public_session_id TEXT "
+        "ENCODING DICT(32),\n  query_string TEXT ENCODING DICT(32),\n  client TEXT "
+        "ENCODING DICT(32),\n  dashboard_id INTEGER,\n  dashboard_name TEXT ENCODING "
+        "DICT(32),\n  chart_id INTEGER,\n  execution_time_ms BIGINT,\n  total_time_ms "
+        "BIGINT);"}});
+}
+
+class ShowCreateServerTest : public DBHandlerTestFixture {
+ public:
+  void SetUp() override {
+    g_enable_fsi = true;
+    g_enable_s3_fsi = true;
+    DBHandlerTestFixture::SetUp();
+    dropServers();
+  }
+
+  void TearDown() override {
+    dropServers();
+    DBHandlerTestFixture::TearDown();
+  }
+
+ private:
+  void dropServers() {
+    switchToAdmin();
+    sql("DROP SERVER IF EXISTS show_create_test_server;");
+  }
+};
+
+TEST_F(ShowCreateServerTest, Identity) {
+  // clang-format off
+  std::vector<std::string> creates = {
+    "CREATE SERVER show_create_test_server FOREIGN DATA WRAPPER DELIMITED_FILE\nWITH (STORAGE_TYPE='LOCAL_FILE');",
+    "CREATE SERVER show_create_test_server FOREIGN DATA WRAPPER DELIMITED_FILE\nWITH (BASE_PATH='/test_path/', STORAGE_TYPE='LOCAL_FILE');"
+  };
+  // clang-format on
+
+  for (size_t i = 0; i < creates.size(); ++i) {
+    TQueryResult result;
+    sql(creates[i]);
+    sqlAndCompareResult("SHOW CREATE SERVER show_create_test_server;", {{creates[i]}});
+    sql("DROP SERVER IF EXISTS show_create_test_server;");
+  }
+}
+
+TEST_F(ShowCreateServerTest, ServerDoesNotExist) {
+  sql("DROP SERVER IF EXISTS show_create_test_server;");
+  queryAndAssertException("SHOW CREATE SERVER show_create_test_server",
+                          "Foreign server show_create_test_server does not exist.");
 }
 
 namespace {
@@ -1549,7 +1783,8 @@ class ShowDiskCacheUsageTest : public DBHandlerTestFixture {
   static inline constexpr int64_t empty_mgr_size{0};
   static inline constexpr int64_t chunk_size{DEFAULT_PAGE_SIZE + METADATA_PAGE_SIZE};
   // TODO(Misiu): These can be made constexpr once c++20 is supported.
-  static inline std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache";
+  static inline std::string cache_path_ =
+      to_string(BASE_PATH) + "/" + shared::kDefaultDiskCacheDirName;
   static inline std::string foreign_table1{"foreign_table1"};
   static inline std::string foreign_table2{"foreign_table2"};
   static inline std::string foreign_table3{"foreign_table3"};
@@ -1560,7 +1795,7 @@ class ShowDiskCacheUsageTest : public DBHandlerTestFixture {
     loginAdmin();
     sql("DROP DATABASE IF EXISTS test_db;");
     sql("CREATE DATABASE test_db;");
-    login("admin", "HyperInteractive", "test_db");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db");
     getCatalog().getDataMgr().getPersistentStorageMgr()->getDiskCache()->clear();
   }
 
@@ -1571,11 +1806,8 @@ class ShowDiskCacheUsageTest : public DBHandlerTestFixture {
   }
 
   void SetUp() override {
-    if (isDistributedMode()) {
-      GTEST_SKIP() << "Test not supported in distributed mode.";
-    }
     DBHandlerTestFixture::SetUp();
-    login("admin", "HyperInteractive", "test_db");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db");
     sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table1 + ";");
     sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table2 + ";");
     sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table3 + ";");
@@ -1592,10 +1824,9 @@ class ShowDiskCacheUsageTest : public DBHandlerTestFixture {
 
   void sqlCreateBasicForeignTable(std::string& table_name) {
     sql("CREATE FOREIGN TABLE " + table_name +
-        " (i INTEGER) SERVER omnisci_local_parquet WITH "
+        " (i INTEGER) SERVER default_local_parquet WITH "
         "(file_path = '" +
-        boost::filesystem::canonical("../../Tests/FsiDataFiles/0.parquet").string() +
-        "');");
+        test_source_path + "/0.parquet" + "');");
   }
 
   uint64_t getWrapperSizeForTable(const std::string& table_name) {
@@ -1624,10 +1855,20 @@ class ShowDiskCacheUsageTest : public DBHandlerTestFixture {
 TEST_F(ShowDiskCacheUsageTest, SingleTable) {
   sqlCreateBasicForeignTable(foreign_table1);
 
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, empty_mgr_size}});
+  if (isDistributedMode()) {
+    sqlAndCompareResult(
+        "SHOW DISK CACHE USAGE;",
+        {{i(0), foreign_table1, empty_mgr_size}, {i(1), foreign_table1, empty_mgr_size}});
+  } else {
+    sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, empty_mgr_size}});
+  }
 }
 
 TEST_F(ShowDiskCacheUsageTest, SingleTableInUse) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
+  }
+
   sqlCreateBasicForeignTable(foreign_table1);
 
   sql("SELECT * FROM " + foreign_table1 + ";");
@@ -1636,6 +1877,10 @@ TEST_F(ShowDiskCacheUsageTest, SingleTableInUse) {
 }
 
 TEST_F(ShowDiskCacheUsageTest, MultipleTables) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
+  }
+
   sqlCreateBasicForeignTable(foreign_table1);
   sqlCreateBasicForeignTable(foreign_table2);
   sqlCreateBasicForeignTable(foreign_table3);
@@ -1660,6 +1905,10 @@ TEST_F(ShowDiskCacheUsageTest, NoTablesFiltered) {
 }
 
 TEST_F(ShowDiskCacheUsageTest, MultipleTablesFiltered) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
+  }
+
   sqlCreateBasicForeignTable(foreign_table1);
   sqlCreateBasicForeignTable(foreign_table2);
   sqlCreateBasicForeignTable(foreign_table3);
@@ -1688,10 +1937,20 @@ TEST_F(ShowDiskCacheUsageTest, SingleTableEvicted) {
   sql("SELECT * FROM " + foreign_table1 + ";");
   sql("REFRESH FOREIGN TABLES " + foreign_table1 + " WITH (evict=true);");
 
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, empty_mgr_size}});
+  if (isDistributedMode()) {
+    sqlAndCompareResult(
+        "SHOW DISK CACHE USAGE;",
+        {{i(0), foreign_table1, empty_mgr_size}, {i(1), foreign_table1, empty_mgr_size}});
+  } else {
+    sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, empty_mgr_size}});
+  }
 }
 
 TEST_F(ShowDiskCacheUsageTest, SingleTableRefreshed) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
+  }
+
   sqlCreateBasicForeignTable(foreign_table1);
 
   sql("SELECT * FROM " + foreign_table1 + ";");
@@ -1702,6 +1961,10 @@ TEST_F(ShowDiskCacheUsageTest, SingleTableRefreshed) {
 }
 
 TEST_F(ShowDiskCacheUsageTest, SingleTableMetadataOnly) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
+  }
+
   sqlCreateBasicForeignTable(foreign_table1);
 
   sql("SELECT COUNT(*) FROM " + foreign_table1 + ";");
@@ -1712,6 +1975,10 @@ TEST_F(ShowDiskCacheUsageTest, SingleTableMetadataOnly) {
 }
 
 TEST_F(ShowDiskCacheUsageTest, ForeignAndNormalTable) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
+  }
+
   sqlCreateBasicForeignTable(foreign_table1);
   sql("CREATE TABLE " + table1 + " (s TEXT);");
 
@@ -1724,12 +1991,14 @@ TEST_F(ShowDiskCacheUsageTest, ForeignAndNormalTable) {
 }
 
 TEST_F(ShowDiskCacheUsageTest, MultipleChunks) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
+  }
+
   sql("CREATE FOREIGN TABLE " + foreign_table1 +
-      " (t TEXT, i INTEGER[]) SERVER omnisci_local_parquet WITH "
+      " (t TEXT, i INTEGER[]) SERVER default_local_parquet WITH "
       "(file_path = '" +
-      boost::filesystem::canonical("../../Tests/FsiDataFiles/example_1.parquet")
-          .string() +
-      "');");
+      test_source_path + "/example_1.parquet" + "');");
   sql("SELECT * FROM " + foreign_table1 + ";");
   sqlAndCompareResult("SHOW DISK CACHE USAGE;",
                       {{foreign_table1,
@@ -1739,6 +2008,13 @@ TEST_F(ShowDiskCacheUsageTest, MultipleChunks) {
 
 class ShowDiskCacheUsageForNormalTableTest : public ShowDiskCacheUsageTest {
  public:
+  void SetUp() override {
+    if (isDistributedMode()) {
+      GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
+    }
+    ShowDiskCacheUsageTest::SetUp();
+  }
+
   static void SetUpTestSuite() {
     ShowDiskCacheUsageTest::SetUpTestSuite();
     resetPersistentStorageMgr(File_Namespace::DiskCacheLevel::all);
@@ -1801,12 +2077,12 @@ class ShowTableDetailsTest : public DBHandlerTestFixture,
  protected:
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
-    login("admin", "HyperInteractive", "test_db");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db");
     dropTestTables();
   }
 
   void TearDown() override {
-    login("admin", "HyperInteractive", "test_db");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db");
     dropTestTables();
     DBHandlerTestFixture::TearDown();
   }
@@ -2280,15 +2556,15 @@ TEST_F(ShowTableDetailsTest, NonExistentTable) {
 TEST_F(ShowTableDetailsTest, UnsupportedTableTypes) {
   sql("create table test_table_1 (c1 int, c2 text);");
   sql("create temporary table test_temp_table (c1 int, c2 text);");
-  sql("create dataframe test_arrow_table (c1 int) from 'CSV:" +
-      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "';");
+  sql("create dataframe test_arrow_table (c1 int) from 'CSV:" + test_source_path +
+      "/0.csv';");
   sql("create view test_view as select * from test_table_1;");
 
   if (!isDistributedMode()) {
-    sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER omnisci_local_csv "
-        "WITH "
-        "(file_path = '" +
-        boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
+    sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER "
+        "default_local_delimited "
+        "WITH (file_path = '" +
+        test_source_path + "/0.csv');");
   }
 
   TQueryResult result;
@@ -2317,14 +2593,10 @@ TEST_F(ShowTableDetailsTest, UnsupportedTableTypes) {
 }
 
 TEST_F(ShowTableDetailsTest, FsiTableSpecified) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Foreign tables are currently not supported in distributed mode";
-  }
-
-  sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER omnisci_local_csv "
+  sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER default_local_delimited "
       "WITH "
       "(file_path = '" +
-      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
+      test_source_path + "/0.csv');");
 
   queryAndAssertException("show table details test_foreign_table;",
                           "SHOW TABLE DETAILS is not supported for foreign "
@@ -2340,8 +2612,8 @@ TEST_F(ShowTableDetailsTest, TemporaryTableSpecified) {
 }
 
 TEST_F(ShowTableDetailsTest, ArrowFsiTableSpecified) {
-  sql("create dataframe test_arrow_table (c1 int) from 'CSV:" +
-      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "';");
+  sql("create dataframe test_arrow_table (c1 int) from 'CSV:" + test_source_path +
+      "/0.csv';");
 
   queryAndAssertException("show table details test_arrow_table;",
                           "SHOW TABLE DETAILS is not supported for temporary "
@@ -2355,6 +2627,86 @@ TEST_F(ShowTableDetailsTest, ViewSpecified) {
   queryAndAssertException("show table details test_view;",
                           "Unable to show table details for table: "
                           "test_view. Table does not exist.");
+}
+
+class ShowTableFunctionsTest : public DBHandlerTestFixture {
+  void SetUp() override { DBHandlerTestFixture::SetUp(); }
+
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+};
+
+TEST_F(ShowTableFunctionsTest, TableFunctionNames) {
+  TQueryResult result;
+  sql(result, "SHOW TABLE FUNCTIONS;");
+  ASSERT_GT(getRowCount(result), size_t(0));
+}
+
+TEST_F(ShowTableFunctionsTest, TableFunctionDetails) {
+  TQueryResult result;
+  sql(result, "SHOW TABLE FUNCTIONS DETAILS row_copier;");
+  ASSERT_GT(getRowCount(result), size_t(0));
+}
+
+TEST_F(ShowTableFunctionsTest, NonExistentTableFunction) {
+  TQueryResult result;
+  sql(result, "SHOW TABLE FUNCTIONS DETAILS non_existent_udtf_;");
+  ASSERT_EQ(getRowCount(result), size_t(0));
+}
+
+class ShowRuntimeTableFunctionsTest : public DBHandlerTestFixture {
+  void SetUp() override { DBHandlerTestFixture::SetUp(); }
+
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+};
+
+TEST_F(ShowRuntimeTableFunctionsTest, RuntimeTableFunctionNames) {
+  TQueryResult result;
+  sql(result, "SHOW RUNTIME TABLE FUNCTIONS;");
+  ASSERT_EQ(getRowCount(result), size_t(0));
+}
+
+class ShowFunctionsFunctionsTest : public DBHandlerTestFixture {
+  void SetUp() override { DBHandlerTestFixture::SetUp(); }
+
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+};
+
+TEST_F(ShowFunctionsFunctionsTest, FunctionNames) {
+  TQueryResult result;
+  sql(result, "SHOW FUNCTIONS;");
+  ASSERT_GT(getRowCount(result), size_t(0));
+}
+
+TEST_F(ShowFunctionsFunctionsTest, FunctionDetails) {
+  {
+    TQueryResult result;
+    sql(result, "SHOW FUNCTIONS DETAILS Asin;");
+    ASSERT_GT(getRowCount(result), size_t(0));
+  }
+  // Test UDF defined directly on calcite
+  // {
+  //   TQueryResult result;
+  //   sql(result, "SHOW FUNCTIONS DETAILS sample_ratio;");
+  //   ASSERT_GT(getRowCount(result), size_t(0));
+  // }
+}
+
+TEST_F(ShowFunctionsFunctionsTest, NonExistentFunction) {
+  TQueryResult result;
+  sql(result, "SHOW FUNCTIONS DETAILS non_existent_udf_;");
+  ASSERT_EQ(getRowCount(result), size_t(0));
+}
+
+class ShowRuntimeFunctionsFunctionsTest : public DBHandlerTestFixture {
+  void SetUp() override { DBHandlerTestFixture::SetUp(); }
+
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+};
+
+TEST_F(ShowRuntimeFunctionsFunctionsTest, RuntimeFunctionNames) {
+  TQueryResult result;
+  sql(result, "SHOW RUNTIME FUNCTIONS;");
+  ASSERT_EQ(getRowCount(result), size_t(0));
 }
 
 class ShowQueriesTest : public DBHandlerTestFixture {
@@ -2379,9 +2731,9 @@ class ShowQueriesTest : public DBHandlerTestFixture {
     sql("DROP USER IF EXISTS u1;");
     sql("DROP USER IF EXISTS u2;");
     sql("CREATE USER u1 (password = 'u1');");
-    sql("GRANT ALL ON DATABASE omnisci TO u1;");
+    sql("GRANT ALL ON DATABASE " + shared::kDefaultDbName + " TO u1;");
     sql("CREATE USER u2 (password = 'u2');");
-    sql("GRANT ALL ON DATABASE omnisci TO u2;");
+    sql("GRANT ALL ON DATABASE " + shared::kDefaultDbName + " TO u2;");
   }
 
   static void dropTestUser() {
@@ -2395,14 +2747,14 @@ TEST_F(ShowQueriesTest, NonAdminUser) {
   TSessionId query_session;
   TSessionId show_queries_cmd_session;
 
-  login("u1", "u1", "omnisci", query_session);
+  login("u1", "u1", shared::kDefaultDbName, query_session);
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   // mock the running query by just enrolling the meaningless query
   executor->enrollQuerySession(
       query_session, "MOCK_QUERY", "0", 0, QuerySessionStatus::RUNNING_QUERY_KERNEL);
 
   auto show_queries_thread1 = std::async(std::launch::deferred, [&] {
-    login("u2", "u2", "omnisci", show_queries_cmd_session);
+    login("u2", "u2", shared::kDefaultDbName, show_queries_cmd_session);
     sql(non_admin_res, "SHOW QUERIES;", show_queries_cmd_session);
   });
 
@@ -2426,7 +2778,8 @@ TEST_F(ShowQueriesTest, NonAdminUser) {
   EXPECT_TRUE(!admin_res.row_set.columns[0].data.str_col.empty());
   EXPECT_TRUE(!own_res.row_set.columns[0].data.str_col.empty());
   {
-    mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor->getSessionLock());
+    heavyai::unique_lock<heavyai::shared_mutex> session_write_lock(
+        executor->getSessionLock());
     executor->removeFromQuerySessionList(query_session, "0", session_write_lock);
   }
 }
@@ -2434,40 +2787,36 @@ TEST_F(ShowQueriesTest, NonAdminUser) {
 class SystemTablesTest : public DBHandlerTestFixture {
  protected:
   static void SetUpTestSuite() {
-    if (!isDistributedMode()) {
-      DBHandlerTestFixture::SetUpTestSuite();
-      switchToAdmin();
-      createUser("test_user_1");
-      createUser("test_user_2");
-    }
+    DBHandlerTestFixture::SetUpTestSuite();
+    switchToAdmin();
+    dropUser("test_user_1");
+    dropUser("test_user_2");
+    dropUser("test_user_3");
+    createUser("test_user_1");
+    createUser("test_user_2");
   }
 
   static void TearDownTestSuite() {
-    if (!isDistributedMode()) {
-      switchToAdmin();
-      dropUser("test_user_1");
-      dropUser("test_user_2");
-      DBHandlerTestFixture::TearDownTestSuite();
-    }
+    switchToAdmin();
+    dropUser("test_user_1");
+    dropUser("test_user_2");
+    dropUser("test_user_3");
+    DBHandlerTestFixture::TearDownTestSuite();
   }
 
   void SetUp() override {
-    if (isDistributedMode()) {
-      GTEST_SKIP() << "Test is not supported in distributed mode.";
-    }
     resetDbObjectsAndPermissions();
     loginInformationSchema();
     g_enable_system_tables = true;
   }
 
   void TearDown() override {
-    if (isDistributedMode()) {
-      GTEST_SKIP() << "Test is not supported in distributed mode.";
-    }
     switchToAdmin();
+    sql("DROP TABLE IF EXISTS test_table;");
     sql("DROP TABLE IF EXISTS test_table_1;");
-    dropUser("test_user_3");
+    sql("DROP TABLE IF EXISTS test_table_2;");
     resetDbObjectsAndPermissions();
+    dropUser("test_user_3");
   }
 
   void resetDbObjectsAndPermissions() {
@@ -2479,13 +2828,24 @@ class SystemTablesTest : public DBHandlerTestFixture {
 
   static void createUser(const std::string& user_name) {
     sql("CREATE USER " + user_name +
-        " (password = 'test_pass', is_super = 'false', default_db = 'omnisci');");
+        " (password = 'test_pass', is_super = 'false', default_db = '" +
+        shared::kDefaultDbName + "');");
     sql("GRANT ACCESS ON DATABASE information_schema TO " + user_name + ";");
   }
 
   static void dropUser(const std::string& user_name) {
     switchToAdmin();
     sql("DROP USER IF EXISTS " + user_name + ";");
+  }
+
+  // Drops a user while skipping the normal checks (like if the user owns a db).  Used to
+  // create db states that are no longer valid used for legacy testsing.
+  static void dropUserUnchecked(const std::string& user_name) {
+    CHECK(!isDistributedMode()) << "Can't manipulate syscat directly in distributed mode";
+    auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
+    Catalog_Namespace::UserMetadata user;
+    CHECK(sys_cat.getMetadataForUser(user_name, user));
+    sys_cat.dropUserUnchecked(user_name, user);
   }
 
   int64_t getUserId(const std::string& user_name) {
@@ -2501,10 +2861,12 @@ class SystemTablesTest : public DBHandlerTestFixture {
     return td->tableId;
   }
 
-  void createDashboard(const std::string& dashboard_name) {
+  void createDashboard(const std::string& dashboard_name,
+                       const std::string& metadata_json =
+                           "{\"table\":\"test_table, ${test_custom_source}\"}") {
     const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
     auto id = db_handler->create_dashboard(
-        session_id, dashboard_name, "state", "image", "\"table\":\"test_table\"");
+        session_id, dashboard_name, "state", "image", metadata_json);
     dashboard_id_by_name_[dashboard_name] = id;
   }
 
@@ -2517,7 +2879,7 @@ class SystemTablesTest : public DBHandlerTestFixture {
     db_handler->replace_dashboard(session_id,
                                   id,
                                   new_name,
-                                  "admin",
+                                  shared::kRootUsername,
                                   dashboard->dashboardState,
                                   dashboard->imageHash,
                                   dashboard->dashboardMetadata);
@@ -2539,7 +2901,7 @@ class SystemTablesTest : public DBHandlerTestFixture {
     sql("DROP DATABASE IF EXISTS test_db_2;");
   }
 
-  int64_t getDbId(const std::string& db_name) {
+  int64_t getDbId(const std::string& db_name) const {
     auto& system_catalog = Catalog_Namespace::SysCatalog::instance();
     Catalog_Namespace::DBMetadata db_metadata;
     CHECK(system_catalog.getMetadataForDB(db_name, db_metadata));
@@ -2552,13 +2914,14 @@ class SystemTablesTest : public DBHandlerTestFixture {
   }
 
   void resetPermissions() {
-    sql("REVOKE ALL ON DATABASE omnisci FROM test_user_1, test_user_2;");
+    sql("REVOKE ALL ON DATABASE " + shared::kDefaultDbName +
+        " FROM test_user_1, test_user_2;");
     sql("REVOKE ALL ON DATABASE information_schema FROM test_user_1, test_user_2;");
     sql("GRANT ACCESS ON DATABASE information_schema TO test_user_1, test_user_2;");
   }
 
   void loginInformationSchema() {
-    login("admin", "HyperInteractive", "information_schema");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "information_schema");
   }
 
   void initTestTableAndClearMemory() {
@@ -2710,115 +3073,211 @@ TEST_F(SystemTablesTest, SystemTableDisabled) {
 }
 
 TEST_F(SystemTablesTest, UsersSystemTable) {
-  sqlAndCompareResult("SELECT * FROM users ORDER BY user_name;",
-                      {{getUserId("admin"), "admin", True, i(-1), True},
-                       {getUserId("test_user_1"), "test_user_1", False, i(1), True},
-                       {getUserId("test_user_2"), "test_user_2", False, i(1), True}});
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM users ORDER BY user_name;",
+      {{getUserId(shared::kRootUsername), shared::kRootUsername, True, i(-1), Null, True},
+       {getUserId("test_user_1"), "test_user_1", False, i(1), shared::kDefaultDbName,
+        True},
+       {getUserId("test_user_2"), "test_user_2", False, i(1), shared::kDefaultDbName,
+        True}});
+  // clang-format on
 
   switchToAdmin();
   createUser("test_user_3");
 
   loginInformationSchema();
-  sqlAndCompareResult("SELECT * FROM users ORDER BY user_name;",
-                      {{getUserId("admin"), "admin", True, i(-1), True},
-                       {getUserId("test_user_1"), "test_user_1", False, i(1), True},
-                       {getUserId("test_user_2"), "test_user_2", False, i(1), True},
-                       {getUserId("test_user_3"), "test_user_3", False, i(1), True}});
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM users ORDER BY user_name;",
+      {{getUserId(shared::kRootUsername), shared::kRootUsername, True, i(-1), Null, True},
+       {getUserId("test_user_1"), "test_user_1", False, i(1), shared::kDefaultDbName,
+        True},
+       {getUserId("test_user_2"), "test_user_2", False, i(1), shared::kDefaultDbName,
+        True},
+       {getUserId("test_user_3"), "test_user_3", False, i(1), shared::kDefaultDbName,
+        True}});
+  // clang-format on
 
   switchToAdmin();
   sql("ALTER USER test_user_3 (is_super = 'true');");
 
   loginInformationSchema();
-  sqlAndCompareResult("SELECT * FROM users ORDER BY user_name;",
-                      {{getUserId("admin"), "admin", True, i(-1), True},
-                       {getUserId("test_user_1"), "test_user_1", False, i(1), True},
-                       {getUserId("test_user_2"), "test_user_2", False, i(1), True},
-                       {getUserId("test_user_3"), "test_user_3", True, i(1), True}});
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM users ORDER BY user_name;",
+      {{getUserId(shared::kRootUsername), shared::kRootUsername, True, i(-1), Null, True},
+       {getUserId("test_user_1"), "test_user_1", False, i(1), shared::kDefaultDbName,
+        True},
+       {getUserId("test_user_2"), "test_user_2", False, i(1), shared::kDefaultDbName,
+        True},
+       {getUserId("test_user_3"), "test_user_3", True, i(1), shared::kDefaultDbName,
+        True}});
+  // clang-format on
 
   switchToAdmin();
   dropUser("test_user_3");
 
   loginInformationSchema();
-  sqlAndCompareResult("SELECT * FROM users ORDER BY user_name;",
-                      {{getUserId("admin"), "admin", True, i(-1), True},
-                       {getUserId("test_user_1"), "test_user_1", False, i(1), True},
-                       {getUserId("test_user_2"), "test_user_2", False, i(1), True}});
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM users ORDER BY user_name;",
+      {{getUserId(shared::kRootUsername), shared::kRootUsername, True, i(-1), Null, True},
+       {getUserId("test_user_1"), "test_user_1", False, i(1), shared::kDefaultDbName,
+        True},
+       {getUserId("test_user_2"), "test_user_2", False, i(1), shared::kDefaultDbName,
+        True}});
+  // clang-format on
+}
+
+TEST_F(SystemTablesTest, UsersSystemTableDeletedDatabase) {
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM users ORDER BY user_name;",
+      {{getUserId(shared::kRootUsername), shared::kRootUsername, True, i(-1), Null, True},
+       {getUserId("test_user_1"), "test_user_1", False, i(1), shared::kDefaultDbName,
+        True},
+       {getUserId("test_user_2"), "test_user_2", False, i(1), shared::kDefaultDbName,
+        True}});
+  // clang-format on
+
+  switchToAdmin();
+  const std::string db_name{"test_db_1"};
+  sql("CREATE DATABASE " + db_name + ";");
+  sql("CREATE USER test_user_3 (password = 'test_pass', default_db = '" + db_name +
+      "');");
+  sql("DROP DATABASE " + db_name + ";");
+
+  loginInformationSchema();
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM users ORDER BY user_name;",
+      {{getUserId(shared::kRootUsername), shared::kRootUsername, True, i(-1), Null, True},
+       {getUserId("test_user_1"), "test_user_1", False, getDbId(shared::kDefaultDbName),
+        shared::kDefaultDbName, True},
+       {getUserId("test_user_2"), "test_user_2", False, getDbId(shared::kDefaultDbName),
+        shared::kDefaultDbName, True},
+       {getUserId("test_user_3"), "test_user_3", False, i(-1), Null, True}});
+  // clang-format on
 }
 
 TEST_F(SystemTablesTest, TablesSystemTable) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Test does not play well with tables left behind by ExecuteTest.";
+  }
+
   switchToAdmin();
   sql("CREATE DATABASE test_db_1;");
 
-  login("admin", "HyperInteractive", "test_db_1");
-  sql("CREATE TABLE test_table_1 (i INTEGER);");
-  sql("CREATE VIEW test_view_1 AS SELECT * FROM test_table_1;");
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  std::string create_table_sql{"CREATE TABLE test_table_1 (\n  i INTEGER);"};
+  sql(create_table_sql);
+  std::string create_view_sql{"CREATE VIEW test_view_1 AS SELECT * FROM test_table_1;"};
+  sql(create_view_sql);
+  auto table_1_id = getTableId("test_table_1");
+  auto view_1_id = getTableId("test_view_1");
 
   loginInformationSchema();
-  // Skip the "omnisci" database, since it can contain default created tables
-  // and tables created by other test suites.
+  // Skip the shared::kDefaultDbName database, since it can contain default
+  // created tables and tables created by other test suites.
   // clang-format off
   sqlAndCompareResult("SELECT * FROM tables WHERE database_id <> " +
-                      std::to_string(getDbId("omnisci")) + " ORDER BY table_name;",
-                      {{i(3), i(1), "test_table_1", getUserId("admin"), i(3), False, Null,
-                        i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
-                        i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0)},
-                       {i(3), i(2), "test_view_1", getUserId("admin"), i(2), True,
-                        "SELECT * FROM test_table_1;", i(DEFAULT_FRAGMENT_ROWS),
-                        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
-                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0)}});
+                      std::to_string(getDbId(shared::kDefaultDbName)) + " ORDER BY table_name;",
+                      {{i(3), "test_db_1", table_1_id, "test_table_1", getUserId(shared::kRootUsername),
+                        shared::kRootUsername, i(3), "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
+                        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
+                        i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0),
+                        create_table_sql},
+                       {i(3), "test_db_1", view_1_id, "test_view_1", getUserId(shared::kRootUsername),
+                        shared::kRootUsername, i(2), "VIEW", "SELECT * FROM test_table_1;",
+                        i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+                        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_view_sql}});
   // clang-format on
 
-  login("admin", "HyperInteractive", "test_db_1");
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
   sql("ALTER TABLE test_table_1 RENAME TO test_table_2;");
-  sql("CREATE VIEW test_view_2 AS SELECT * FROM test_table_2;");
+  create_table_sql = "CREATE TABLE test_table_2 (\n  i INTEGER);";
+  std::string create_view_sql_2{"CREATE VIEW test_view_2 AS SELECT * FROM test_table_2;"};
+  sql(create_view_sql_2);
+  std::string create_temp_table_sql{
+      "CREATE TEMPORARY TABLE test_temp_table (\n  t TEXT ENCODING DICT(32));"};
+  sql(create_temp_table_sql);
+  std::string create_foreign_table_sql{
+      "CREATE FOREIGN TABLE test_foreign_table (\n  "
+      "i INTEGER)\nSERVER default_local_delimited\nWITH (FILE_PATH='" +
+      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() +
+      "', "
+      "REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE='ALL');"};
+  sql(create_foreign_table_sql);
+
+  auto view_2_id = getTableId("test_view_2");
+  auto foreign_table_id = getTableId("test_foreign_table");
+  auto temp_table_id = getTableId("test_temp_table");
 
   loginInformationSchema();
   // clang-format off
   sqlAndCompareResult("SELECT * FROM tables WHERE database_id <> " +
-                      std::to_string(getDbId("omnisci")) + " ORDER BY table_name;",
-                      {{i(3), i(1), "test_table_2", getUserId("admin"), i(3), False, Null,
-                        i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
-                        i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0)},
-                       {i(3), i(2), "test_view_1", getUserId("admin"), i(2), True,
-                        "SELECT * FROM test_table_1;", i(DEFAULT_FRAGMENT_ROWS),
-                        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
-                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0)},
-                       {i(3), i(3), "test_view_2", getUserId("admin"), i(2), True,
-                        "SELECT * FROM test_table_2;", i(DEFAULT_FRAGMENT_ROWS),
-                        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
-                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0)}});
+                      std::to_string(getDbId(shared::kDefaultDbName)) + " ORDER BY table_name;",
+                      {{i(3), "test_db_1", foreign_table_id, "test_foreign_table",
+                        getUserId(shared::kRootUsername), shared::kRootUsername, i(2), "FOREIGN", Null,
+                        i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+                        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_foreign_table_sql},
+                       {i(3), "test_db_1", table_1_id, "test_table_2", getUserId(shared::kRootUsername),
+                        shared::kRootUsername, i(3), "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
+                        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
+                        i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0),
+                        create_table_sql},
+                       {i(3), "test_db_1", temp_table_id, "test_temp_table",
+                        getUserId(shared::kRootUsername), shared::kRootUsername, i(3), "TEMPORARY", Null,
+                        i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+                        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_temp_table_sql},
+                       {i(3), "test_db_1", view_1_id, "test_view_1", getUserId(shared::kRootUsername),
+                        shared::kRootUsername, i(2), "VIEW", "SELECT * FROM test_table_1;",
+                        i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+                        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_view_sql},
+                       {i(3), "test_db_1", view_2_id, "test_view_2", getUserId(shared::kRootUsername),
+                        shared::kRootUsername, i(2), "VIEW", "SELECT * FROM test_table_2;",
+                        i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+                        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_view_sql_2}});
   // clang-format on
 }
 
-TEST_F(SystemTablesTest, DashboardsSystemTable) {
+TEST_F(SystemTablesTest, TablesSystemTableDeletedOwner) {
   switchToAdmin();
-  sql("CREATE DATABASE test_db_1;");
+  const std::string db_name{"test_db_1"};
+  sql("CREATE DATABASE " + db_name + ";");
+  const std::string user_name{"test_user_3"};
+  createUser(user_name);
+  sql("GRANT ALL ON DATABASE " + db_name + " TO " + user_name + ";");
 
-  login("admin", "HyperInteractive", "test_db_1");
-  createDashboard("test_dashboard_1");
-  auto last_updated_1 = getLastUpdatedTime("test_dashboard_1");
+  login(user_name, "test_pass", db_name);
+  const std::string table_name{"test_table_1"};
+  std::string create_table_sql{"CREATE TABLE " + table_name + " (\n  i INTEGER);"};
+  sql(create_table_sql);
+  auto table_id = getTableId(table_name);
+  auto user_id = getUserId(user_name);
 
-  loginInformationSchema();
-  // Skip the "omnisci" database, since it can contain dashboards created by other test
-  // suites.
-  // clang-format off
-  sqlAndCompareResult("SELECT * FROM dashboards WHERE database_id <> " +
-                      std::to_string(getDbId("omnisci")) + " ORDER BY dashboard_name;",
-                      {{i(3), i(1), "test_dashboard_1", getUserId("admin"), last_updated_1}});
-  // clang-format on
-
-  login("admin", "HyperInteractive", "test_db_1");
-  createDashboard("test_dashboard_2");
-  updateDashboardName("test_dashboard_1", "test_dashboard_3");
-  auto last_updated_2 = getLastUpdatedTime("test_dashboard_2");
-  auto last_updated_3 = getLastUpdatedTime("test_dashboard_3");
+  switchToAdmin();
+  dropUser(user_name);
 
   loginInformationSchema();
+  // Skip the shared::kDefaultDbName database, since it can contain default
+  // created tables and tables created by other test suites.
   // clang-format off
-  sqlAndCompareResult("SELECT * FROM dashboards WHERE database_id <> " +
-                      std::to_string(getDbId("omnisci")) + " ORDER BY dashboard_name;",
-                      {{i(3), i(2), "test_dashboard_2", getUserId("admin"), last_updated_2},
-                       {i(3), i(1), "test_dashboard_3", getUserId("admin"), last_updated_3}});
+  sqlAndCompareResult("SELECT * FROM tables WHERE database_id <> " +
+                      std::to_string(getDbId(shared::kDefaultDbName)) +
+                      " ORDER BY table_name;",
+                      {{getDbId(db_name), db_name, table_id, table_name,
+                        user_id, "<DELETED>",
+                        i(3), "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
+                        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
+                        i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0),
+                        create_table_sql}});
   // clang-format on
 }
 
@@ -2827,55 +3286,141 @@ TEST_F(SystemTablesTest, DatabasesSystemTable) {
   sql("CREATE DATABASE test_db_1;");
 
   loginInformationSchema();
-  sqlAndCompareResult(
-      "SELECT * FROM databases ORDER BY database_name;",
-      {{getDbId("information_schema"), "information_schema", getUserId("admin")},
-       {getDbId("omnisci"), "omnisci", getUserId("admin")},
-       {getDbId("test_db_1"), "test_db_1", getUserId("admin")}});
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM databases ORDER BY database_name;",
+                      {{getDbId(shared::kDefaultDbName), shared::kDefaultDbName,
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId(shared::kInfoSchemaDbName), shared::kInfoSchemaDbName,
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId("test_db_1"), "test_db_1",
+                        getUserId(shared::kRootUsername), shared::kRootUsername}});
+  // clang-format on
 
   switchToAdmin();
   sql("CREATE DATABASE test_db_2;");
 
   loginInformationSchema();
-  sqlAndCompareResult(
-      "SELECT * FROM databases ORDER BY database_name;",
-      {{getDbId("information_schema"), "information_schema", getUserId("admin")},
-       {getDbId("omnisci"), "omnisci", getUserId("admin")},
-       {getDbId("test_db_1"), "test_db_1", getUserId("admin")},
-       {getDbId("test_db_2"), "test_db_2", getUserId("admin")}});
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM databases ORDER BY database_name;",
+                      {{getDbId(shared::kDefaultDbName), shared::kDefaultDbName,
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId(shared::kInfoSchemaDbName), shared::kInfoSchemaDbName,
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId("test_db_1"), "test_db_1",
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId("test_db_2"), "test_db_2",
+                        getUserId(shared::kRootUsername), shared::kRootUsername}});
+  // clang-format on
 
   switchToAdmin();
   sql("DROP DATABASE test_db_1;");
 
   loginInformationSchema();
-  sqlAndCompareResult(
-      "SELECT * FROM databases ORDER BY database_name;",
-      {{getDbId("information_schema"), "information_schema", getUserId("admin")},
-       {getDbId("omnisci"), "omnisci", getUserId("admin")},
-       {getDbId("test_db_2"), "test_db_2", getUserId("admin")}});
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM databases ORDER BY database_name;",
+                      {{getDbId(shared::kDefaultDbName), shared::kDefaultDbName,
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId(shared::kInfoSchemaDbName), shared::kInfoSchemaDbName,
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId("test_db_2"), "test_db_2",
+                        getUserId(shared::kRootUsername), shared::kRootUsername}});
+  // clang-format on
+}
+
+TEST_F(SystemTablesTest, DatabasesSystemTableDeletedOwner) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "SysCat can not be directly manipulated in distributed mode";
+  }
+  switchToAdmin();
+  const std::string user_name{"test_user_3"};
+  createUser(user_name);
+  const std::string db_name{"test_db_1"};
+  sql("CREATE DATABASE " + db_name + " (owner = '" + user_name + "');");
+  auto user_id = getUserId(user_name);
+
+  dropUserUnchecked(user_name);
+
+  loginInformationSchema();
+  // Need to make sure we reset the syscat user_ids before we drop dbs.
+
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM databases ORDER BY database_name;",
+                      {{getDbId(shared::kDefaultDbName), shared::kDefaultDbName,
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId(shared::kInfoSchemaDbName), shared::kInfoSchemaDbName,
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId(db_name), db_name, user_id, "<DELETED>"}});
+  // clang-format on
 }
 
 TEST_F(SystemTablesTest, PermissionsSystemTable) {
   // clang-format off
   sqlAndCompareResult("SELECT * FROM permissions ORDER BY role_name;",
-                      {{"test_user_1", True, i(2), "information_schema", i(-1),
-                        getUserId("admin"), "database", array({"access"})},
-                       {"test_user_2", True, i(2), "information_schema", i(-1),
-                        getUserId("admin"), "database", array({"access"})}});
+                      {{"test_user_1", True, i(2), shared::kInfoSchemaDbName,
+                        shared::kInfoSchemaDbName, i(-1), getUserId(shared::kRootUsername),
+                        shared::kRootUsername, "database", array({"access"})},
+                       {"test_user_2", True, i(2), shared::kInfoSchemaDbName,
+                        shared::kInfoSchemaDbName, i(-1), getUserId(shared::kRootUsername),
+                        shared::kRootUsername, "database", array({"access"})}});
   // clang-format on
 
   switchToAdmin();
-  sql("GRANT CREATE, SELECT ON DATABASE omnisci to test_user_1;");
+  sql("GRANT CREATE, SELECT ON DATABASE " + shared::kDefaultDbName + " to test_user_1;");
 
   loginInformationSchema();
   // clang-format off
   sqlAndCompareResult("SELECT * FROM permissions ORDER BY role_name, object_name;",
-                      {{"test_user_1", True, i(2), "information_schema", i(-1),
-                        getUserId("admin"), "database", array({"access"})},
-                       {"test_user_1", True, i(1), "omnisci", i(-1), getUserId("admin"),
-                        "table", array({"select table", "create table"})},
-                       {"test_user_2", True, i(2), "information_schema", i(-1),
-                        getUserId("admin"), "database", array({"access"})}});
+                      {{"test_user_1", True, i(1), shared::kDefaultDbName,
+                        shared::kDefaultDbName, i(-1), getUserId(shared::kRootUsername),
+                        shared::kRootUsername, "table",
+                        array({"select table", "create table"})},
+                        {"test_user_1", True, i(2), shared::kInfoSchemaDbName,
+                        shared::kInfoSchemaDbName, i(-1), getUserId(shared::kRootUsername),
+                        shared::kRootUsername, "database", array({"access"})},
+                       {"test_user_2", True, i(2), shared::kInfoSchemaDbName,
+                        shared::kInfoSchemaDbName, i(-1), getUserId(shared::kRootUsername),
+                        shared::kRootUsername, "database", array({"access"})}});
+  // clang-format on
+}
+
+TEST_F(SystemTablesTest, PermissionsSystemTableDeletedOwner) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "SysCat can not be directly manipulated in distributed mode";
+  }
+
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM permissions ORDER BY role_name;",
+                      {{"test_user_1", True, i(2), shared::kInfoSchemaDbName,
+                        shared::kInfoSchemaDbName, i(-1), getUserId(shared::kRootUsername),
+                        shared::kRootUsername, "database", array({"access"})},
+                       {"test_user_2", True, i(2), shared::kInfoSchemaDbName,
+                        shared::kInfoSchemaDbName, i(-1), getUserId(shared::kRootUsername),
+                        shared::kRootUsername, "database", array({"access"})}});
+  // clang-format on
+
+  switchToAdmin();
+  const std::string user_name{"test_user_3"};
+  createUser(user_name);
+  const std::string db_name{"test_db_1"};
+  sql("CREATE DATABASE " + db_name + " (owner = '" + user_name + "');");
+  sql("GRANT ACCESS ON DATABASE " + db_name + " to test_user_1;");
+  auto user_id = getUserId(user_name);
+
+  dropUserUnchecked(user_name);
+
+  loginInformationSchema();
+
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM permissions ORDER BY role_name, object_name;",
+                      {{"test_user_1", True, getDbId(shared::kInfoSchemaDbName),
+                        shared::kInfoSchemaDbName, shared::kInfoSchemaDbName, i(-1),
+                        getUserId(shared::kRootUsername), shared::kRootUsername,
+                        "database", array({"access"})},
+                       {"test_user_1", True, getDbId(db_name), db_name, db_name, i(-1),
+                        user_id, "<DELETED>", "database", array({"access"})},
+                       {"test_user_2", True, i(2), shared::kInfoSchemaDbName,
+                        shared::kInfoSchemaDbName, i(-1), getUserId(shared::kRootUsername),
+                        shared::kRootUsername, "database", array({"access"})}});
   // clang-format on
 }
 
@@ -2886,7 +3431,7 @@ TEST_F(SystemTablesTest, RoleAssignmentsSystemTable) {
 
   loginInformationSchema();
   sqlAndCompareResult("SELECT * FROM role_assignments ORDER BY user_name;",
-                      {{"test_role_1", "admin"},
+                      {{"test_role_1", shared::kRootUsername},
                        {"test_role_1", "test_user_1"},
                        {"test_role_1", "test_user_2"}});
 
@@ -2894,8 +3439,9 @@ TEST_F(SystemTablesTest, RoleAssignmentsSystemTable) {
   sql("REVOKE test_role_1 FROM test_user_1;");
 
   loginInformationSchema();
-  sqlAndCompareResult("SELECT * FROM role_assignments ORDER BY role_name, user_name;",
-                      {{"test_role_1", "admin"}, {"test_role_1", "test_user_2"}});
+  sqlAndCompareResult(
+      "SELECT * FROM role_assignments ORDER BY role_name, user_name;",
+      {{"test_role_1", shared::kRootUsername}, {"test_role_1", "test_user_2"}});
 }
 
 TEST_F(SystemTablesTest, RolesSystemTable) {
@@ -2920,24 +3466,49 @@ TEST_F(SystemTablesTest, RolesSystemTable) {
 }
 
 TEST_F(SystemTablesTest, MemorySummarySystemTableCpu) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Pinned buffers make these results unpredictable in distributed";
+  }
+
   initTestTableAndClearMemory();
 
   loginInformationSchema();
   // clang-format off
-  sqlAndCompareResult("SELECT * FROM memory_summary WHERE device_type = 'CPU';",
+  if (isDistributedMode()) {
+    sqlAndCompareResult("SELECT * FROM memory_summary WHERE device_type = 'CPU';",
+                      {{"Leaf 0", i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(),
+                        i(0), i(0), i(0)},
+                       {"Leaf 1", i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(),
+                        i(0), i(0), i(0)}});
+  } else {
+    sqlAndCompareResult("SELECT * FROM memory_summary WHERE device_type = 'CPU';",
                       {{"Server", i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(),
                         i(0), i(0), i(0)}});
+  }
   // clang-format on
-
   switchToAdmin();
   sql("ALTER SYSTEM CLEAR CPU MEMORY;");
   sql("SELECT * FROM test_table_1;");
 
   loginInformationSchema();
   // clang-format off
-  sqlAndCompareResult("SELECT * FROM memory_summary WHERE device_type = 'CPU';",
-                      {{"Server", i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(),
-                        getAllocatedCpuPageCount(), i(1), getAllocatedCpuPageCount() - 1}});
+  if (isDistributedMode()) {
+    // Since we can't actually check what the query allocated, we have to assume one slab.
+    int64_t slab_pages = getCpuBufferMgr()->getMaxSlabSize() / getCpuBufferMgr()->getPageSize();
+    // Since we don't actually know which node had query data, we can just omit the "node"
+    // column and sort the results by free_page_count.
+    sqlAndCompareResult(
+        "SELECT device_id, device_type, max_page_count, page_size, allocated_page_count, "
+        "used_page_count, free_page_count FROM memory_summary WHERE device_type = 'CPU' "
+        "ORDER BY free_page_count",
+        {{i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(), i(0), i(0), i(0)},
+         {i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(), slab_pages , i(1), slab_pages - 1}});
+  } else {
+    sqlAndCompareResult("SELECT * FROM memory_summary WHERE device_type = 'CPU';",
+                        {{"Server", i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(),
+                          getAllocatedCpuPageCount(), i(1), getAllocatedCpuPageCount() - 1}});
+
+  }
   // clang-format on
 }
 
@@ -2945,6 +3516,13 @@ TEST_F(SystemTablesTest, MemorySummarySystemTableGpu) {
   if (!setExecuteMode(TExecuteMode::GPU)) {
     GTEST_SKIP() << "GPU is not enabled.";
   }
+  if (isDistributedMode()) {
+    // We currenntly have no way of predicting or measuring which gpu on which node will
+    // be used for the query in distributed mode; therefore we can't accurately predict
+    // what the results should be.  Despite this, the testcase is valid.
+    GTEST_SKIP() << "Test results cannot be accurately predicted in distributed mode";
+  }
+
   initTestTableAndClearMemory();
 
   sql("ALTER SYSTEM CLEAR GPU MEMORY;");
@@ -2963,9 +3541,13 @@ TEST_F(SystemTablesTest, MemorySummarySystemTableGpu) {
 }
 
 TEST_F(SystemTablesTest, MemoryDetailsSystemTableCpu) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Pinned buffers make these results unpredictable in distributed";
+  }
+
   initTestTableAndClearMemory();
 
-  auto db_id = getDbId("omnisci");
+  auto db_id = getDbId(shared::kDefaultDbName);
   auto table_id = getTableId("test_table_1");
 
   loginInformationSchema();
@@ -2976,12 +3558,27 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableCpu) {
   sql("SELECT * FROM test_table_1;");
 
   loginInformationSchema();
+
   // clang-format off
-  sqlAndCompareResult("SELECT * FROM memory_details WHERE device_type = 'CPU';",
-                      {{"Server", db_id, table_id, i(1), array({db_id, table_id, i(1), i(0)}),
-                        i(0), "CPU", "USED", i(1), getCpuPageSize(), i(0), i(0), i(1)},
-                       {"Server", Null, Null, Null, Null,
-                        i(0), "CPU", "FREE", getAllocatedCpuPageCount() - 1, getCpuPageSize(), i(0), i(1), i(0)}});
+  if (isDistributedMode()) {
+    int64_t slab_pages = getCpuBufferMgr()->getMaxSlabSize() / getCpuBufferMgr()->getPageSize();
+    sqlAndCompareResult(
+        "SELECT database_id, table_id, column_id, chunk_key, device_id, device_type, "
+        "memory_status, page_count, page_size, slab_id, start_page "
+        "FROM memory_details WHERE device_type = 'CPU' ORDER BY page_count;",
+        {{db_id, table_id, i(1), array({db_id, table_id, i(1), i(0)}),
+          i(0), "CPU", "USED", i(1), getCpuPageSize(), i(0), i(0)},
+         {Null, Null, Null, Null,
+          i(0), "CPU", "FREE", slab_pages - 1, getCpuPageSize(), i(0), i(1)}});
+  } else {
+    sqlAndCompareResult("SELECT * FROM memory_details WHERE device_type = 'CPU' ORDER BY page_count;",
+                        {{"Server", db_id, shared::kDefaultDbName, table_id, "test_table_1",
+                          i(1), "i", array({db_id, table_id, i(1), i(0)}),
+                          i(0), "CPU", "USED", i(1), getCpuPageSize(), i(0), i(0), i(1)},
+                          {"Server", Null, Null, Null, Null, Null, Null, Null,
+                          i(0), "CPU", "FREE", getAllocatedCpuPageCount() - 1,
+                          getCpuPageSize(), i(0), i(1), i(0)}});
+  }
   // clang-format on
 }
 
@@ -2989,9 +3586,15 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableGpu) {
   if (!setExecuteMode(TExecuteMode::GPU)) {
     GTEST_SKIP() << "GPU is not enabled.";
   }
+  if (isDistributedMode()) {
+    // We currenntly have no way of predicting or measuring which gpu on which node will
+    // be used for the query in distributed mode; therefore we can't accurately predict
+    // what the results should be.  Despite this, the testcase is valid.
+    GTEST_SKIP() << "Test results cannot be accurately predicted in distributed mode";
+  }
   initTestTableAndClearMemory();
 
-  auto db_id = getDbId("omnisci");
+  auto db_id = getDbId(shared::kDefaultDbName);
   auto table_id = getTableId("test_table_1");
 
   sql("ALTER SYSTEM CLEAR GPU MEMORY;");
@@ -3002,33 +3605,41 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableGpu) {
   // clang-format off
   sqlAndCompareResult("SELECT * FROM memory_details WHERE device_type = 'GPU' AND "
                       "device_id = " + std::to_string(device_id) + ";",
-                      {{"Server", db_id, table_id, i(1), array({db_id, table_id, i(1), i(0)}),
-                        i(device_id), "GPU", "USED", i(1), getGpuPageSize(device_id), i(0), i(0), i(0)},
-                       {"Server", Null, Null, Null, Null,
-                        i(device_id), "GPU", "FREE", getAllocatedGpuPageCount(device_id) - 1,
+                      {{"Server", db_id, shared::kDefaultDbName, table_id, "test_table_1", i(1), "i",
+                        array({db_id, table_id, i(1), i(0)}), i(device_id), "GPU", "USED",
+                        i(1), getGpuPageSize(device_id), i(0), i(0), i(0)},
+                       {"Server", Null, Null, Null, Null, Null, Null, Null, i(device_id),
+                        "GPU", "FREE", getAllocatedGpuPageCount(device_id) - 1,
                         getGpuPageSize(device_id), i(0), i(1), i(14)}});
   // clang-format on
 }
 
 TEST_F(SystemTablesTest, SystemTablesJoin) {
+  if (isDistributedMode()) {
+    // Right now distributed joins must be performed on replicated tables, or tables that
+    // are sharded on the join key.  System tables fit into neither case at this time.
+    GTEST_SKIP() << "Join not supported on distributed system tables.";
+  }
   // clang-format off
   sqlAndCompareResult("SELECT databases.database_name, permissions.* "
                       "FROM permissions, databases "
                       "WHERE permissions.database_id = databases.database_id "
                       "ORDER BY role_name;",
                       {{"information_schema", "test_user_1", True, i(2),
-                        "information_schema", i(-1), getUserId("admin"),
-                        "database", array({"access"})},
+                        "information_schema", "information_schema", i(-1),
+                        getUserId(shared::kRootUsername), shared::kRootUsername, "database", array({"access"})},
                        {"information_schema", "test_user_2", True, i(2),
-                        "information_schema", i(-1), getUserId("admin"),
-                        "database", array({"access"})}});
+                        "information_schema", "information_schema", i(-1),
+                        getUserId(shared::kRootUsername), shared::kRootUsername, "database", array({"access"})}});
   // clang-format on
 }
 
 struct StorageDetailsResult {
   std::string node{"Server"};
   int64_t database_id{0};
+  std::string database_name;
   int64_t table_id{0};
+  std::string table_name;
   int64_t epoch{1};
   int64_t epoch_floor{0};
   int64_t fragment_count{1};
@@ -3042,16 +3653,50 @@ struct StorageDetailsResult {
   int64_t total_metadata_page_count{PAGES_PER_METADATA_FILE};
   int64_t total_free_metadata_page_count{PAGES_PER_METADATA_FILE};
   int64_t total_dictionary_data_file_size{0};
+
+  std::vector<NullableTargetValue> asTargetValuesSkipNode() const {
+    return std::vector<NullableTargetValue>{database_id,
+                                            database_name,
+                                            table_id,
+                                            table_name,
+                                            epoch,
+                                            epoch_floor,
+                                            fragment_count,
+                                            shard_id,
+                                            data_file_count,
+                                            metadata_file_count,
+                                            total_data_file_size,
+                                            total_data_page_count,
+                                            total_free_data_page_count,
+                                            total_metadata_file_size,
+                                            total_metadata_page_count,
+                                            total_free_metadata_page_count,
+                                            total_dictionary_data_file_size};
+  }
 };
 
 class StorageDetailsSystemTableTest : public SystemTablesTest,
                                       public testing::WithParamInterface<int32_t> {
  protected:
+  // Can't use select * in distribued because we need to skip the node column (don't know
+  // which node will contain data and which will be empty).
+  std::string getDistributedSelect(
+      const std::string& order_by_col = "total_data_file_size") const {
+    return "SELECT database_id, database_name, table_id, table_name, epoch, epoch_floor, "
+           "fragment_count, shard_id, "
+           "data_file_count, metadata_file_count, total_data_file_size, "
+           "total_data_page_count, total_free_data_page_count, total_metadata_file_size, "
+           "total_metadata_page_count, total_free_metadata_page_count, "
+           "total_dictionary_data_file_size FROM storage_details WHERE database_id <> " +
+           std::to_string(getDbId(shared::kDefaultDbName)) + " ORDER BY table_id, " +
+           order_by_col + ";";
+  }
+
   void SetUp() override {
     SystemTablesTest::SetUp();
     switchToAdmin();
     sql("CREATE DATABASE test_db;");
-    login("admin", "HyperInteractive", "test_db");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db");
   }
 
   void TearDown() override {
@@ -3066,7 +3711,9 @@ class StorageDetailsSystemTableTest : public SystemTablesTest,
       target_values.emplace_back(
           std::vector<NullableTargetValue>{result.node,
                                            result.database_id,
+                                           result.database_name,
                                            result.table_id,
+                                           result.table_name,
                                            result.epoch,
                                            result.epoch_floor,
                                            result.fragment_count,
@@ -3082,10 +3729,11 @@ class StorageDetailsSystemTableTest : public SystemTablesTest,
                                            result.total_dictionary_data_file_size});
     }
     loginInformationSchema();
-    // Skip the "omnisci" database, since it can contain default created tables
-    // and tables created by other test suites.
+    // Skip the shared::kDefaultDbName database, since it can contain default
+    // created tables and tables created by other test suites.
     std::string query{"SELECT * FROM storage_details WHERE database_id <> " +
-                      std::to_string(getDbId("omnisci")) + " ORDER BY table_id;"};
+                      std::to_string(getDbId(shared::kDefaultDbName)) +
+                      " ORDER BY table_id, node;"};
     SystemTablesTest::sqlAndCompareResult(query, target_values);
   }
 
@@ -3116,20 +3764,26 @@ TEST_F(StorageDetailsSystemTableTest, ShardedTable) {
       "(shard_count = 2);");
   sql("INSERT INTO test_table VALUES (20, 'efgh', 1.23);");
 
-  auto db_id = getDbId("test_db");
-  auto table_id = getTableId("test_table");
+  std::string db_name{"test_db"};
+  auto db_id = getDbId(db_name);
+  std::string table_name{"test_table"};
+  auto table_id = getTableId(table_name);
   StorageDetailsResult shard_1_result;
   shard_1_result.database_id = db_id;
+  shard_1_result.database_name = db_name;
   shard_1_result.table_id = table_id;
+  shard_1_result.table_name = table_name;
   shard_1_result.shard_id = 0;
   // One page for each of the 3 defined columns + the $deleted$ column
   shard_1_result.total_free_metadata_page_count -= 4;
   shard_1_result.total_free_data_page_count -= 4;
-  shard_1_result.total_dictionary_data_file_size = getDictionarySize("test_table", "c2");
+  shard_1_result.total_dictionary_data_file_size = getDictionarySize(table_name, "c2");
 
   StorageDetailsResult shard_2_result;
   shard_2_result.database_id = db_id;
+  shard_2_result.database_name = db_name;
   shard_2_result.table_id = table_id;
+  shard_2_result.table_name = table_name;
   // Only the first shard should contain table data/metadata
   shard_2_result.fragment_count = 0;
   shard_2_result.data_file_count = 0;
@@ -3141,28 +3795,47 @@ TEST_F(StorageDetailsSystemTableTest, ShardedTable) {
   shard_2_result.total_free_metadata_page_count = 0;
   shard_2_result.total_data_page_count = 0;
   shard_2_result.total_free_data_page_count = 0;
-  shard_2_result.total_dictionary_data_file_size = getDictionarySize("test_table", "c2");
-  sqlAndCompareResult({shard_1_result, shard_2_result});
+  shard_2_result.total_dictionary_data_file_size = 0;
+
+  if (isDistributedMode()) {
+    ExpectedResult expected_result;
+    // Distributed shards don't know they are shards.
+    shard_2_result.shard_id = 0;
+    expected_result.emplace_back(shard_2_result.asTargetValuesSkipNode());
+    expected_result.emplace_back(shard_1_result.asTargetValuesSkipNode());
+    loginInformationSchema();
+    SystemTablesTest::sqlAndCompareResult(getDistributedSelect(), expected_result);
+  } else {
+    sqlAndCompareResult({shard_1_result, shard_2_result});
+  }
 }
 
 TEST_F(StorageDetailsSystemTableTest, MultipleFragments) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "The distribution of fragments between leaves is non-deterministic";
+  }
   sql("CREATE TABLE test_table (c1 INTEGER) WITH (fragment_size = 1);");
   const size_t row_count{5};
   for (size_t i = 0; i < row_count; i++) {
     sql("INSERT INTO test_table VALUES (" + std::to_string(i) + ");");
   }
 
+  std::string db_name{"test_db"};
   auto db_id = getDbId("test_db");
+  std::string table_name{"test_table"};
   auto table_id = getTableId("test_table");
   StorageDetailsResult result;
   result.database_id = db_id;
+  result.database_name = db_name;
   result.table_id = table_id;
+  result.table_name = table_name;
   // One page for each defined integer column chunk + the $deleted$ column chunks
   result.total_free_metadata_page_count -= row_count * 2;
   result.total_free_data_page_count -= row_count * 2;
   result.epoch = row_count;
   result.epoch_floor = row_count - DEFAULT_MAX_ROLLBACK_EPOCHS;
   result.fragment_count = row_count;
+
   sqlAndCompareResult({result});
 }
 
@@ -3170,11 +3843,54 @@ TEST_F(StorageDetailsSystemTableTest, NonLocalTables) {
   sql("CREATE TEMPORARY TABLE test_table (c1 INTEGER);");
   sql("INSERT INTO test_table VALUES (10);");
 
-  sql("CREATE FOREIGN TABLE test_foreign_table (i INTEGER) SERVER omnisci_local_csv WITH "
+  sql("CREATE FOREIGN TABLE test_foreign_table (i INTEGER) SERVER "
+      "default_local_delimited WITH "
       "(file_path = '" +
-      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
+      test_source_path + "/0.csv');");
   sql("CREATE VIEW test_view AS SELECT * FROM test_foreign_table;");
   sqlAndCompareResult({});
+}
+
+TEST_F(StorageDetailsSystemTableTest, SharedDictionary) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "The distribution of fragments between leaves is non-deterministic";
+  }
+  std::string table_1{"test_table_1"}, table_2{"test_table_2"};
+  sql("CREATE TABLE " + table_1 + " (i INTEGER, t TEXT);");
+  sql("INSERT INTO " + table_1 + " VALUES (1, 'abc');");
+  sql("CREATE TABLE " + table_2 +
+      " (t TEXT, SHARED DICTIONARY (t) REFERENCES test_table_1(t));");
+  sql("INSERT INTO " + table_2 + " VALUES ('efg');");
+
+  std::string db_name{"test_db"};
+  auto db_id = getDbId(db_name);
+  std::vector<StorageDetailsResult> expected_result;
+  for (const auto& table_name : {table_1, table_2}) {
+    auto table_id = getTableId(table_name);
+    StorageDetailsResult result;
+    result.database_id = db_id;
+    result.database_name = db_name;
+    result.table_id = table_id;
+    result.table_name = table_name;
+    if (table_name == table_1) {
+      // One page for integer column chunk, text column chunk, and the $deleted$ column
+      // chunk.
+      result.total_free_metadata_page_count -= 3;
+      result.total_free_data_page_count -= 3;
+      result.total_dictionary_data_file_size = getDictionarySize(table_1, "t");
+    } else if (table_name == table_2) {
+      // One page for text column chunk and the $deleted$ column chunk.
+      result.total_free_metadata_page_count -= 2;
+      result.total_free_data_page_count -= 2;
+      // Table referencing the shared dictionary should not record additional storage for
+      // the dictionary.
+      result.total_dictionary_data_file_size = 0;
+    } else {
+      FAIL() << "Unexpected table name: " << table_name;
+    }
+    expected_result.emplace_back(result);
+  }
+  sqlAndCompareResult(expected_result);
 }
 
 TEST_P(StorageDetailsSystemTableTest, DifferentPageSizes) {
@@ -3183,11 +3899,15 @@ TEST_P(StorageDetailsSystemTableTest, DifferentPageSizes) {
       std::to_string(page_size) + ");");
   sql("INSERT INTO test_table VALUES (10);");
 
-  auto db_id = getDbId("test_db");
-  auto table_id = getTableId("test_table");
+  std::string db_name{"test_db"};
+  auto db_id = getDbId(db_name);
+  std::string table_name{"test_table"};
+  auto table_id = getTableId(table_name);
   StorageDetailsResult result;
   result.database_id = db_id;
+  result.database_name = db_name;
   result.table_id = table_id;
+  result.table_name = table_name;
   result.total_data_file_size = page_size * PAGES_PER_DATA_FILE;
   if (page_size == METADATA_PAGE_SIZE) {
     // In the case where the data page size is the same as the metadata page size, the
@@ -3203,7 +3923,23 @@ TEST_P(StorageDetailsSystemTableTest, DifferentPageSizes) {
     result.total_free_metadata_page_count -= 2;
     result.total_free_data_page_count -= 2;
   }
-  sqlAndCompareResult({result});
+  if (isDistributedMode()) {
+    // If we are in distributed mode, then only one leaf will have data and the other will
+    // be empty.  The order does not matter as the node column is not included in the
+    // query.
+    result.node = "";
+    // clang-format off
+    StorageDetailsResult leaf1_storage{
+        "", db_id, db_name, table_id, table_name, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    // clang-format on
+    ExpectedResult expected_result;
+    expected_result.emplace_back(leaf1_storage.asTargetValuesSkipNode());
+    expected_result.emplace_back(result.asTargetValuesSkipNode());
+    loginInformationSchema();
+    SystemTablesTest::sqlAndCompareResult(getDistributedSelect(), expected_result);
+  } else {
+    sqlAndCompareResult({result});
+  }
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -3216,15 +3952,489 @@ INSTANTIATE_TEST_SUITE_P(
       return "Page_Size_" + std::to_string(param_info.param);
     });
 
+class LogsSystemTableTest : public SystemTablesTest,
+                            public testing::WithParamInterface<std::string> {
+ protected:
+  static void SetUpTestSuite() {
+    log_dir_path_ = logger::get_log_dir_path();
+    CHECK(boost::filesystem::exists(log_dir_path_));
+    backup_log_dir_path_ = boost::filesystem::path(test_binary_file_path) / "log_backup";
+    if (!boost::filesystem::is_empty(log_dir_path_)) {
+      // Backup existing logs file, since the test will be overriding files in the log
+      // directory.
+      boost::filesystem::rename(log_dir_path_, backup_log_dir_path_);
+      boost::filesystem::create_directory(log_dir_path_);
+    }
+  }
+
+  static void TearDownTestSuite() {
+    if (boost::filesystem::exists(backup_log_dir_path_)) {
+      boost::filesystem::remove_all(log_dir_path_);
+      boost::filesystem::rename(backup_log_dir_path_, log_dir_path_);
+    }
+  }
+
+  void SetUp() {
+    default_max_files_count_ = g_logs_system_tables_max_files_count;
+    table_name_ = GetParam();
+    if (isDistributedMode() && table_name_ == "server_logs") {
+      GTEST_SKIP() << "Leaf log content is non-deterministic";
+    }
+    loginInformationSchema();
+    sql("REFRESH FOREIGN TABLES " + table_name_ + " WITH (evict = 'true');");
+    deleteFilesInLogDir();
+  }
+
+  void TearDown() {
+    deleteFilesInLogDir();
+    g_logs_system_tables_max_files_count = default_max_files_count_;
+  }
+
+  void deleteFilesInLogDir() {
+    for (boost::filesystem::directory_iterator it(log_dir_path_), end_it; it != end_it;
+         it++) {
+      boost::filesystem::remove_all(it->path());
+    }
+  }
+
+  void copyToLogDir(const std::string& dir_name) {
+    auto copy_from_dir = test_source_path + "/logs/" + getTestDirName() + "/" + dir_name;
+    for (boost::filesystem::directory_iterator it(copy_from_dir), end_it; it != end_it;
+         it++) {
+      boost::filesystem::copy_file(it->path(),
+                                   log_dir_path_ / it->path().filename(),
+                                   boost::filesystem::copy_option::overwrite_if_exists);
+    }
+  }
+
+  void rollOffFirstLogFile() {
+    auto test_dir_path = test_source_path + "/logs/" + getTestDirName() + "/first/";
+    for (boost::filesystem::directory_iterator it(test_dir_path), end_it; it != end_it;
+         it++) {
+      boost::filesystem::remove(log_dir_path_ / it->path().filename());
+    }
+  }
+
+  size_t getLogDirSize() {
+    size_t dir_size{0};
+    for (boost::filesystem::directory_iterator it(log_dir_path_), end_it; it != end_it;
+         it++) {
+      dir_size += boost::filesystem::file_size(it->path());
+    }
+    return dir_size;
+  }
+
+  std::string getTestDirName() {
+    std::string dir_name;
+    if (table_name_ == "server_logs" || table_name_ == "request_logs") {
+      dir_name = "db";
+    } else if (table_name_ == "web_server_logs") {
+      dir_name = "web_server";
+    } else if (table_name_ == "web_server_access_logs") {
+      dir_name = "web_server_access";
+    } else {
+      UNREACHABLE() << "Unexpected table name: " << table_name_;
+    }
+    return dir_name;
+  }
+
+  std::vector<std::vector<NullableTargetValue>> getFirstLogFileResultSet() {
+    std::vector<std::vector<NullableTargetValue>> result_set;
+    // clang-format off
+    if (table_name_ == "server_logs") {
+      result_set = {{"Server", "2022-05-18T21:01:18", "I", i(300000), i(0), i(3),
+                     "DBHandler.cpp:2874", "stdlog get_tables 22 0 information_schema "
+                     "admin 100-abcd {\"client\"} {\"http:127.0.0.1\"}"},
+                    {"Server", "2022-05-18T21:01:29", "I", i(300000), i(0), i(3),
+                     "DBHandler.cpp:1555", "stdlog_begin sql_execute 23 0 "
+                     "information_schema admin 100-abcd {\"query_str\"} "
+                     "{\"select * from web_server_logs LIMIT 1000;\"}"},
+                    {"Server", "2022-05-18T21:01:30", "I", i(305000), i(0), i(3),
+                     "Calcite.cpp:546", "User calcite catalog information_schema sql "
+                     "'select * from web_server_logs LIMIT 1000;'"}};
+    } else if (table_name_ == "request_logs") {
+      result_set = {{"2022-05-18T21:01:18", "I", i(300000), i(0), i(3),
+                     "DBHandler.cpp:2874", "get_tables", i(0), "information_schema",
+                     "admin", "100-abcd", Null, "http:127.0.0.1", Null, Null, Null,
+                     Null,Null},};
+    } else if (table_name_ == "web_server_access_logs") {
+      result_set = {{"127.0.0.1", "2022-05-18T21:01:08-08:00", "POST", "/", i(200),
+                     i(773)}, {"127.0.0.1", "2022-05-18T21:01:09-08:00", "POST",
+                     "/session/create", i(201), i(78)},
+                    {"127.0.0.1", "2022-05-18T21:01:10-08:00", "GET",
+                     "/configuration/db", i(400), i(2)}};
+    } else if (table_name_ == "web_server_logs") {
+      result_set = {{"2022-05-18T21:01:03-08:00", "info", "Test info message"},
+                    {"2022-05-18T21:01:04-08:00", "error", "Test error message"}};
+    } else {
+      UNREACHABLE() << "Unexpected table name: " << table_name_;
+    }
+    // clang-format on
+    return result_set;
+  }
+
+  std::vector<std::vector<NullableTargetValue>> getAppendedFirstLogFileResultSet() {
+    auto result_set = getFirstLogFileResultSet();
+    // clang-format off
+    if (table_name_ == "server_logs") {
+      result_set.emplace_back(std::vector<NullableTargetValue>{
+          "Server", "2022-05-18T21:01:31", "I", i(300000), i(0), i(3),
+          "DBHandler.cpp:1555", "stdlog sql_execute 23 1000 information_schema admin "
+          "100-abcd {\"query_str\",\"client\",\"nonce\",\"execution_time_ms\","
+          "\"total_time_ms\"} {\"select * from web_server_logs LIMIT 1000;\","
+          "\"http:127.0.0.1\",\"100/2\",\"1354\",\"1443\"}"});
+    } else if (table_name_ == "request_logs") {
+      result_set.emplace_back(std::vector<NullableTargetValue>{
+          "2022-05-18T21:01:31", "I", i(300000), i(0), i(3), "DBHandler.cpp:1555",
+          "sql_execute", i(1000), "information_schema", "admin", "100-abcd",
+          "select * from web_server_logs LIMIT 1000;", "http:127.0.0.1", i(100),
+          "<DELETED>", i(2), i(1354), i(1443)});
+    } else if (table_name_ == "web_server_logs") {
+      result_set.emplace_back(std::vector<NullableTargetValue>{
+          "2022-05-18T21:01:05-08:00", "info", "Test info message 2"});
+    } else if (table_name_ == "web_server_access_logs") {
+      result_set.emplace_back(std::vector<NullableTargetValue>{
+          "127.0.0.1", "2022-05-18T21:01:17-08:00", "GET", "/", i(200), i(558)});
+    } else {
+      UNREACHABLE() << "Unexpected table name: " << table_name_;
+    }
+    // clang-format on
+    return result_set;
+  }
+
+  std::vector<std::vector<NullableTargetValue>> getSecondLogFileResultSet() {
+    std::vector<std::vector<NullableTargetValue>> result_set;
+    // clang-format off
+    if (table_name_ == "server_logs") {
+      result_set = {
+          {"Server", "2022-05-18T21:06:46", "I", i(305000), i(0), i(0),
+           "HeavyDB.cpp:431", "HeavyDB starting\n  up"},
+          {"Server", "2022-05-18T21:07:04", "I", i(305000), i(0), i(3),
+           "DBHandler.cpp:4840", "stdlog get_dashboards 21 0 information_schema admin "
+           "456-efgh {\"client\"} {\"http:127.0.0.1\"}"},
+          {"Server", "2022-05-18T21:07:14", "I", i(305000), i(0), i(3),
+           "DBHandler.cpp:1555", "stdlog_begin sql_execute 23 0 information_schema "
+           "admin 456-efgh {\"query_str\"} {\"select * from web_server_access_logs "
+           "LIMIT 1000;\"}"},
+          {"Server", "2022-05-18T21:07:15", "I", i(306000), i(0), i(3),
+           "Calcite.cpp:546", "User calcite catalog information_schema sql "
+           "'select * from web_server_access_logs LIMIT 1000;'"},
+          {"Server", "2022-05-18T21:07:16", "F", i(306000), i(0), i(3),
+           "DBHandler.cpp:1555", "stdlog sql_execute 23 1426 information_schema "
+           "admin 456-efgh {\"query_str\",\"client\",\"nonce\",\"execution_time_ms\","
+           "\"total_time_ms\"} {\"select * from web_server_access_logs LIMIT 1000;\","
+           "\"http:127.0.0.1\",\"100/1-0\",\"1323\",\"1426\"}"},
+          {"Server", "2022-05-22T14:36:07", "I", i(50000), i(0), i(3),
+           "DBHandler.cpp:1555", "stdlog sql_execute 20 25000 heavyai "
+           "admin 507-aBcD {\"query_str\",\"client\",\"nonce\",\"execution_time_ms\","
+           "\"total_time_ms\"} {\"SELECT COUNT(*) FROM heavyai_us_states\","
+           "\"http:127.0.0.1\",\"null/1\",\"21312\",\"21400\"}"},
+          {"Server", "2022-05-22T14:36:08", "I", i(50000), i(0), i(3),
+           "DBHandler.cpp:1555", "stdlog sql_execute 20 25000 heavyai "
+           "admin 507-aBcD {\"query_str\",\"client\",\"nonce\",\"execution_time_ms\","
+           "\"total_time_ms\"} {\"SELECT COUNT(*) FROM heavyai_us_states\","
+           "\"http:127.0.0.1\",\"1\",\"30000\",\"40000\"}"}};
+    } else if (table_name_ == "request_logs") {
+      result_set = {
+          {"2022-05-18T21:07:04", "I", i(305000), i(0), i(3), "DBHandler.cpp:4840",
+           "get_dashboards", i(0), "information_schema", "admin", "456-efgh",
+           Null, "http:127.0.0.1", Null, Null, Null, Null, Null},
+          {"2022-05-18T21:07:16", "F", i(306000), i(0), i(3), "DBHandler.cpp:1555",
+           "sql_execute", i(1426), "information_schema", "admin", "456-efgh",
+           "select * from web_server_access_logs LIMIT 1000;", "http:127.0.0.1",
+           i(100), "<DELETED>", i(1), i(1323), i(1426)},
+          {"2022-05-22T14:36:07", "I", i(50000), i(0), i(3), "DBHandler.cpp:1555",
+           "sql_execute", i(25000), "heavyai", "admin", "507-aBcD",
+           "SELECT COUNT(*) FROM heavyai_us_states", "http:127.0.0.1",
+           Null, Null, Null, i(21312), i(21400)},
+          {"2022-05-22T14:36:08", "I", i(50000), i(0), i(3), "DBHandler.cpp:1555",
+           "sql_execute", i(25000), "heavyai", "admin", "507-aBcD",
+           "SELECT COUNT(*) FROM heavyai_us_states", "http:127.0.0.1",
+           Null, Null, Null, i(30000), i(40000)}};
+    } else if (table_name_ == "web_server_logs") {
+      result_set = {{"2022-05-18T21:06:46-08:00", "info", "Test info message file 2"},
+                    {"2022-05-18T21:06:47-08:00", "error", "Test error message file 2"},
+                    {"2022-05-18T21:06:48-08:00", "info", "Test info message file 2 2"}};
+    } else if (table_name_ == "web_server_access_logs") {
+      result_set = {
+          {"127.0.0.1", "2022-05-18T21:06:51-08:00", "GET", "/", i(200), i(2558)},
+          {"127.0.0.1", "2022-05-18T21:06:52-08:00", "GET", "/session/validate",
+           i(401), i(42)},
+          {"127.0.0.1", "2022-05-18T21:06:53-08:00", "GET", "/session/durations",
+           i(200), i(64)},
+          {"127.0.0.1", "2022-05-18T21:07:04-08:00", "POST", "/", i(200), i(558)}};
+    } else {
+      UNREACHABLE() << "Unexpected table name: " << table_name_;
+    }
+    // clang-format on
+    return result_set;
+  }
+
+  std::vector<std::vector<NullableTargetValue>> getMultiLogFileResultSet() {
+    auto result_set = getFirstLogFileResultSet();
+    auto result_set_2 = getSecondLogFileResultSet();
+    result_set.insert(result_set.end(), result_set_2.begin(), result_set_2.end());
+    return result_set;
+  }
+
+  std::string table_name_;
+  inline static boost::filesystem::path log_dir_path_;
+  inline static boost::filesystem::path backup_log_dir_path_;
+  inline static size_t default_max_files_count_;
+};
+
+TEST_P(LogsSystemTableTest, SingleLogFile) {
+  copyToLogDir("first");
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getFirstLogFileResultSet());
+
+  copyToLogDir("first_append");
+  sql("REFRESH FOREIGN TABLES " + table_name_);
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getAppendedFirstLogFileResultSet());
+}
+
+TEST_P(LogsSystemTableTest, MultiLogFile) {
+  copyToLogDir("first");
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getFirstLogFileResultSet());
+
+  copyToLogDir("second");
+  sql("REFRESH FOREIGN TABLES " + table_name_);
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getMultiLogFileResultSet());
+
+  rollOffFirstLogFile();
+  sql("REFRESH FOREIGN TABLES " + table_name_);
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getSecondLogFileResultSet());
+}
+
+TEST_P(LogsSystemTableTest, MultiLogFileWithEmptyFiles) {
+  copyToLogDir("first");
+  copyToLogDir("empty");
+
+  // Update foreign table thread count and buffer size options to values that would
+  // previously result in a hang when processing log files.
+  auto foreign_table = const_cast<foreign_storage::ForeignTable*>(
+      getCatalog().getForeignTable(table_name_));
+  foreign_table->options["THREADS"] = "1";
+  foreign_table->options["BUFFER_SIZE"] = std::to_string(getLogDirSize() + 1);
+
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getFirstLogFileResultSet());
+}
+
+TEST_P(LogsSystemTableTest, MaxLogFiles) {
+  copyToLogDir("first");
+  copyToLogDir("second");
+  g_logs_system_tables_max_files_count = 1;
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getSecondLogFileResultSet());
+
+  g_logs_system_tables_max_files_count = 2;
+  sql("REFRESH FOREIGN TABLES " + table_name_ + " WITH (evict = 'true');");
+  sqlAndCompareResult("SELECT * FROM " + table_name_ + " ORDER BY log_timestamp;",
+                      getMultiLogFileResultSet());
+}
+
+INSTANTIATE_TEST_SUITE_P(AllLogsSystemTables,
+                         LogsSystemTableTest,
+                         testing::Values("request_logs",
+                                         "server_logs"),
+                         [](const auto& param_info) { return param_info.param; });
+
+class GetTableDetailsTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    dropTestTables();
+    createTestTables();
+    // Set current time to a fixed value for the tests
+    foreign_storage::RefreshTimeCalculator::setMockCurrentTime(getFixedCurrentTime());
+  }
+
+  void TearDown() override {
+    foreign_storage::RefreshTimeCalculator::resetMockCurrentTime();
+    dropTestTables();
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void createTestTables() {
+    sql("CREATE TABLE test_table_1 (i INTEGER);");
+    sql("CREATE TEMPORARY TABLE test_table_2 (i INTEGER);");
+    sql("CREATE FOREIGN TABLE test_table_3 (i INTEGER) SERVER default_local_delimited "
+        "WITH "
+        "(file_path = '" +
+        test_source_path + "/1.csv');");
+    sql("CREATE VIEW test_view_1 AS SELECT * FROM test_table_1;");
+  }
+
+  void dropTestTables() {
+    sql("DROP TABLE IF EXISTS test_table_1;");
+    sql("DROP TABLE IF EXISTS test_table_2;");
+    sql("DROP FOREIGN TABLE IF EXISTS test_table_3;");
+    sql("DROP FOREIGN TABLE IF EXISTS test_table_4;");
+    sql("DROP VIEW IF EXISTS test_view_1;");
+  }
+
+  void assertExpectedTableDetails(const std::string& table_name,
+                                  TTableType::type table_type,
+                                  const TTableRefreshInfo* refresh_info = nullptr) {
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    TTableDetails table_details;
+    db_handler->get_table_details(table_details, session_id, table_name);
+    ASSERT_EQ(static_cast<int64_t>(DEFAULT_FRAGMENT_ROWS), table_details.fragment_size);
+    ASSERT_EQ(static_cast<int64_t>(DEFAULT_MAX_ROWS), table_details.max_rows);
+    ASSERT_EQ(static_cast<int64_t>(DEFAULT_PAGE_SIZE), table_details.page_size);
+    ASSERT_EQ(static_cast<size_t>(1), table_details.row_desc.size());
+    ASSERT_EQ("i", table_details.row_desc[0].col_name);
+    ASSERT_EQ(TDatumType::INT, table_details.row_desc[0].col_type.type);
+    ASSERT_EQ(table_type, table_details.table_type);
+    if (table_details.table_type == TTableType::TEMPORARY) {
+      ASSERT_TRUE(table_details.is_temporary);
+    } else if (table_details.table_type == TTableType::VIEW) {
+      ASSERT_EQ("SELECT * FROM test_table_1;", table_details.view_sql);
+    }
+    if (refresh_info) {
+      ASSERT_EQ(*refresh_info, table_details.refresh_info);
+    }
+  }
+
+  std::string getHourFromNow() {
+    auto epoch = getFixedCurrentTime() + (60 * 60);
+    return convertToString(epoch);
+  }
+
+  int64_t getFixedCurrentTime() {
+    return foreign_storage::RefreshTimeCalculator::getCurrentTime();
+  }
+
+  std::string getFixedCurrentTimeAsString() {
+    return convertToString(getFixedCurrentTime());
+  }
+
+  std::string convertToString(int64_t epoch) {
+    return shared::convert_temporal_to_iso_format({kTIMESTAMP}, epoch);
+  }
+};
+
+TEST_F(GetTableDetailsTest, DifferentTableTypes) {
+  assertExpectedTableDetails("test_table_1", TTableType::DEFAULT);
+  assertExpectedTableDetails("test_table_2", TTableType::TEMPORARY);
+  assertExpectedTableDetails("test_table_3", TTableType::FOREIGN);
+  assertExpectedTableDetails("test_view_1", TTableType::VIEW);
+}
+
+TEST_F(GetTableDetailsTest, DefaultRefreshOptions) {
+  TTableRefreshInfo refresh_info;
+  refresh_info.update_type = TTableRefreshUpdateType::ALL;
+  refresh_info.timing_type = TTableRefreshTimingType::MANUAL;
+  refresh_info.start_date_time = "";
+  refresh_info.interval_type = TTableRefreshIntervalType::NONE;
+  refresh_info.interval_count = -1;
+  refresh_info.last_refresh_time = "";
+  refresh_info.next_refresh_time = "";
+  assertExpectedTableDetails("test_table_3", TTableType::FOREIGN, &refresh_info);
+}
+
+TEST_F(GetTableDetailsTest, ScheduledAppendRefresh) {
+  auto start_date_time = getHourFromNow();
+  sql("CREATE FOREIGN TABLE test_table_4 (i INTEGER) SERVER default_local_delimited WITH "
+      "(file_path = '" +
+      test_source_path +
+      "/1.csv', refresh_update_type = 'append', "
+      "refresh_timing_type = 'scheduled', refresh_start_date_time = '" +
+      start_date_time + "', refresh_interval = '5H');");
+
+  TTableRefreshInfo refresh_info;
+  refresh_info.update_type = TTableRefreshUpdateType::APPEND;
+  refresh_info.timing_type = TTableRefreshTimingType::SCHEDULED;
+  refresh_info.start_date_time = start_date_time;
+  refresh_info.interval_type = TTableRefreshIntervalType::HOUR;
+  refresh_info.interval_count = 5;
+  refresh_info.last_refresh_time = "";
+  refresh_info.next_refresh_time = start_date_time;
+  assertExpectedTableDetails("test_table_4", TTableType::FOREIGN, &refresh_info);
+
+  sql("REFRESH FOREIGN TABLES test_table_4;");
+  refresh_info.last_refresh_time = getFixedCurrentTimeAsString();
+  assertExpectedTableDetails("test_table_4", TTableType::FOREIGN, &refresh_info);
+}
+
+TEST_F(GetTableDetailsTest, ManualRefresh) {
+  sql("REFRESH FOREIGN TABLES test_table_3;");
+
+  TTableRefreshInfo refresh_info;
+  refresh_info.update_type = TTableRefreshUpdateType::ALL;
+  refresh_info.timing_type = TTableRefreshTimingType::MANUAL;
+  refresh_info.start_date_time = "";
+  refresh_info.interval_type = TTableRefreshIntervalType::NONE;
+  refresh_info.interval_count = -1;
+  refresh_info.last_refresh_time = getFixedCurrentTimeAsString();
+  refresh_info.next_refresh_time = "";
+  assertExpectedTableDetails("test_table_3", TTableType::FOREIGN, &refresh_info);
+}
+
+TEST_F(GetTableDetailsTest, StartDateTimeWithLargeYear) {
+  std::string start_date_time{"999999-12-31T11:59:59Z"};
+  sql("CREATE FOREIGN TABLE test_table_4 (i INTEGER) SERVER default_local_delimited "
+      "WITH (file_path = '" +
+      test_source_path +
+      "/1.csv', refresh_timing_type = 'scheduled', refresh_start_date_time = '" +
+      start_date_time + "', refresh_interval = '1H');");
+
+  TTableRefreshInfo refresh_info;
+  refresh_info.timing_type = TTableRefreshTimingType::SCHEDULED;
+  refresh_info.start_date_time = start_date_time;
+  refresh_info.interval_type = TTableRefreshIntervalType::HOUR;
+  refresh_info.interval_count = 1;
+  refresh_info.last_refresh_time = "";
+  refresh_info.next_refresh_time = start_date_time;
+  assertExpectedTableDetails("test_table_4", TTableType::FOREIGN, &refresh_info);
+}
+
+TEST_F(GetTableDetailsTest, NonIsoInputStartDateTime) {
+  std::string non_iso_start_date_time{"9999-12-31 11:59:59"};
+  std::string iso_start_date_time{"9999-12-31T11:59:59Z"};
+  sql("CREATE FOREIGN TABLE test_table_4 (i INTEGER) SERVER default_local_delimited "
+      "WITH (file_path = '" +
+      test_source_path +
+      "/1.csv', refresh_timing_type = 'scheduled', refresh_start_date_time = '" +
+      non_iso_start_date_time + "', refresh_interval = '1H');");
+
+  // get_table_details should always return ISO date time strings
+  TTableRefreshInfo refresh_info;
+  refresh_info.timing_type = TTableRefreshTimingType::SCHEDULED;
+  refresh_info.start_date_time = iso_start_date_time;
+  refresh_info.interval_type = TTableRefreshIntervalType::HOUR;
+  refresh_info.interval_count = 1;
+  refresh_info.last_refresh_time = "";
+  refresh_info.next_refresh_time = iso_start_date_time;
+  assertExpectedTableDetails("test_table_4", TTableType::FOREIGN, &refresh_info);
+}
+
 int main(int argc, char** argv) {
+  g_enable_table_functions = true;
+  g_enable_dev_table_functions = true;
   g_enable_fsi = true;
   g_enable_system_tables = true;
+  g_enable_logs_system_tables = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-  DBHandlerTestFixture::initTestArgs(argc, argv);
+
+  test_binary_file_path = bf::canonical(argv[0]).parent_path().string();
+  test_source_path =
+      bf::canonical(test_binary_file_path + "/../../Tests/FsiDataFiles").string();
+
+  po::options_description desc("Options");
+  desc.add_options()("run-odbc-tests", "Run ODBC related tests.");
+  po::variables_map vm = DBHandlerTestFixture::initTestArgs(argc, argv, desc);
+  g_run_odbc = (vm.count("run-odbc-tests"));
 
   int err{0};
   try {
+    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();

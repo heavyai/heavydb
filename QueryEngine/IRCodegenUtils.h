@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -154,8 +154,6 @@ inline llvm::ConstantInt* ll_bool(const bool v, llvm::LLVMContext& context) {
   return static_cast<llvm::ConstantInt*>(
       llvm::ConstantInt::get(get_int_type(1, context), v));
 }
-
-llvm::Module* read_template_module(llvm::LLVMContext& context);
 
 template <class T>
 std::string serialize_llvm_object(const T* llvm_obj) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,21 @@
 
 /**
  * @file    DataMgr.h
- * @author Todd Mostak <todd@map-d.com>
+ * @brief
+ *
  */
+
 #ifndef DATAMGR_H
 #define DATAMGR_H
 
 #include "../Shared/SystemParameters.h"
-#include "../Shared/mapd_shared_mutex.h"
+#include "../Shared/heavyai_shared_mutex.h"
 #include "AbstractBuffer.h"
 #include "AbstractBufferMgr.h"
 #include "BufferMgr/Buffer.h"
 #include "BufferMgr/BufferMgr.h"
 #include "MemoryLevel.h"
-#include "OSDependent/omnisci_fs.h"
+#include "OSDependent/heavyai_fs.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
 
 #include <fstream>
@@ -148,7 +150,7 @@ class ProcBuddyinfoParser {
     const long page_size =
         sysconf(_SC_PAGE_SIZE);  // in case x86-64 is configured to use 2MB pages
 #else
-    const long page_size = omnisci::get_page_size();
+    const long page_size = heavyai::get_page_size();
 #endif
     size_t scaled = 0;
     size_t total = 0;
@@ -226,7 +228,8 @@ class DataMgr {
   // database_id, table_id, column_id, fragment_id
   std::vector<int> levelSizes_;
 
-  std::unique_ptr<DeviceAllocator> createGpuAllocator(int device_id);
+  // std::unique_ptr<DeviceAllocator> createGpuAllocator(int device_id);
+  // NOTE(sy): Revisit how DataMgr should handle Cuda streams if Intel ever needs this.
 
   struct SystemMemoryUsage {
     size_t free;      // available CPU RAM memory in bytes

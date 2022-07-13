@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.calcite.prepare;
 
 import com.google.common.collect.ImmutableList;
@@ -51,7 +52,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * used in a query.
  */
 public class SqlIdentifierCapturer {
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(SqlIdentifierCapturer.class);
+  final static Logger HEAVYDBLOGGER =
+          LoggerFactory.getLogger(SqlIdentifierCapturer.class);
 
   private static final Map<Class<?>, Set<Method>> GETTERS_CACHE =
           new ConcurrentHashMap<>();
@@ -98,7 +100,25 @@ public class SqlIdentifierCapturer {
 
     if (root instanceof SqlBasicCall) {
       SqlBasicCall call = (SqlBasicCall) root;
-      if (call.getOperator().getKind() == SqlKind.AS) {
+      if (call.getOperator().getKind() == SqlKind.ARGUMENT_ASSIGNMENT) {
+        // We have a => named parameter operator
+        // We need to ignore it as otherwise we will pick up literal args
+        // as tables, EXCEPT if it points to a CURSOR operator, as there
+        // will be at least one table inside of the CURSOR.
+        if (call.operandCount() == 0) {
+          return;
+        }
+        if (call.getOperands()[0].getKind() == SqlKind.CURSOR) {
+          SqlBasicCall cursor_call = (SqlBasicCall) call.getOperands()[0];
+          if (cursor_call.operandCount() == 0) {
+            return;
+          }
+          scan(cursor_call.getOperands()[0]);
+          return;
+        } else {
+          return;
+        }
+      } else if (call.getOperator().getKind() == SqlKind.AS) {
         // only really interested in the first operand
         scan(call.getOperands()[0]);
         return;

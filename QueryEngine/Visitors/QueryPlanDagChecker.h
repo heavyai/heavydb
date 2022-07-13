@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "QueryEngine/RelAlgDagBuilder.h"
+#include "QueryEngine/RelAlgDag.h"
 #include "QueryEngine/RelAlgTranslator.h"
 #include "RelRexDagVisitor.h"
 
@@ -24,16 +24,16 @@
 
 class QueryPlanDagChecker final : public RelRexDagVisitor {
  public:
-  QueryPlanDagChecker(const RelAlgTranslator& rel_alg_translator)
+  QueryPlanDagChecker()
       : detect_non_supported_node_(false)
       , non_supported_node_tag_("")
-      , rel_alg_translator_(rel_alg_translator)
-      , non_supported_functions_(getNonSupportedFunctionsList()) {
-    non_supported_function_tag_ = boost::join(non_supported_functions_, "/");
-  }
+      , non_supported_functions_(getNonSupportedFunctionsList()) {}
   static std::unordered_set<std::string> getNonSupportedFunctionsList() {
     std::unordered_set<std::string> non_supported_functions;
     non_supported_functions.emplace("CURRENT_USER");
+    non_supported_functions.emplace("CURRENT_TIME");
+    non_supported_functions.emplace("CURRENT_DATE");
+    non_supported_functions.emplace("CURRENT_TIMESTAMP");
     non_supported_functions.emplace("CARDINALITY");
     non_supported_functions.emplace("ARRAY_LENGTH");
     non_supported_functions.emplace("ITEM");
@@ -45,8 +45,7 @@ class QueryPlanDagChecker final : public RelRexDagVisitor {
   }
 
   static std::pair<bool, std::string> hasNonSupportedNodeInDag(
-      const RelAlgNode* rel_alg_node,
-      const RelAlgTranslator& rel_alg_translator);
+      const RelAlgNode* rel_alg_node);
   void check(const RelAlgNode*);
   void detectNonSupportedNode(const std::string& node_tag);
   void reset();
@@ -66,7 +65,5 @@ class QueryPlanDagChecker final : public RelRexDagVisitor {
 
   bool detect_non_supported_node_;
   std::string non_supported_node_tag_;
-  std::string non_supported_function_tag_;
-  const RelAlgTranslator& rel_alg_translator_;
   const std::unordered_set<std::string> non_supported_functions_;
 };

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ class RangeJoinHashTable final : public OverlapsJoinHashTable {
                      Executor* executor,
                      const std::vector<InnerOuter>& inner_outer_pairs,
                      const int device_count,
-                     HashtableAccessPathInfo hashtable_access_path_info,
+                     const HashTableBuildDagMap& hashtable_build_dag_map,
                      const TableIdToNodeMap& table_id_to_node_map)
       : OverlapsJoinHashTable(condition,
                               join_type,
@@ -40,7 +40,7 @@ class RangeJoinHashTable final : public OverlapsJoinHashTable {
                               executor,
                               inner_outer_pairs,
                               device_count,
-                              hashtable_access_path_info,
+                              hashtable_build_dag_map,
                               table_id_to_node_map)
       , range_expr_(range_expr)
       , inner_col_expr_(std::move(inner_col_expr)) {}
@@ -124,6 +124,7 @@ class RangeJoinHashTable final : public OverlapsJoinHashTable {
 
   const Analyzer::RangeOper* range_expr_;
   std::shared_ptr<Analyzer::ColumnVar> inner_col_expr_;
+  Data_Namespace::MemoryLevel effective_memory_level_;
   const double bucket_threshold_{std::numeric_limits<double>::max()};
   const size_t max_hashtable_size_{std::numeric_limits<size_t>::max()};
 };

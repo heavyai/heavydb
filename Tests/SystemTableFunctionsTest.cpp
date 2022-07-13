@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
 
 }  // namespace
 
-bool skip_tests(const ExecutorDeviceType device_type) {
+bool skip_tests_no_gpu(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
   return device_type == ExecutorDeviceType::GPU && !(QR::get()->gpusPresent());
 #else
@@ -58,11 +58,25 @@ bool skip_tests(const ExecutorDeviceType device_type) {
 #endif
 }
 
+bool skip_tests_no_tbb() {
+#ifdef HAVE_TBB
+  return false;
+#else
+  return true;
+#endif
+}
+
 #define SKIP_NO_GPU()                                        \
-  if (skip_tests(dt)) {                                      \
+  if (skip_tests_no_gpu(dt)) {                               \
     CHECK(dt == ExecutorDeviceType::GPU);                    \
     LOG(WARNING) << "GPU not available, skipping GPU tests"; \
     continue;                                                \
+  }
+
+#define SKIP_NO_TBB()                                    \
+  if (skip_tests_no_tbb()) {                             \
+    LOG(WARNING) << "TBB not available, skipping tests"; \
+    continue;                                            \
   }
 
 class SystemTFs : public ::testing::Test {
@@ -72,6 +86,7 @@ class SystemTFs : public ::testing::Test {
 TEST_F(SystemTFs, GenerateSeries) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    SKIP_NO_TBB();
     {
       // Step of 0 is not permitted
       EXPECT_THROW(
@@ -79,17 +94,44 @@ TEST_F(SystemTFs, GenerateSeries) {
           UserTableFunctionError);
     }
 
-    // Test step of 2
+    // Default 2-arg (default step version)
+    // Test non-named and named arg versions
     {
-      const auto rows = run_multiple_agg(
+      const std::string non_named_arg_query =
+          "SELECT generate_series FROM TABLE(generate_series(3, 7)) ORDER BY "
+          "generate_series ASC;";
+      const std::string named_arg_query =
+          "SELECT generate_series FROM TABLE(generate_series(series_start=>3, "
+          "series_stop=>7)) "
+          "ORDER BY generate_series ASC;";
+      for (auto query : {non_named_arg_query, named_arg_query}) {
+        const auto rows = run_multiple_agg(query, dt);
+        EXPECT_EQ(rows->rowCount(), size_t(5));
+        EXPECT_EQ(rows->colCount(), size_t(1));
+        for (int64_t val = 3; val <= 7; val += 1) {
+          auto crt_row = rows->getNextRow(false, false);
+          EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), val);
+        }
+      }
+    }
+
+    // 3-arg version - test step of 2
+    // Test non-namned and named arg versions
+    {
+      const std::string non_named_arg_query =
           "SELECT generate_series FROM TABLE(generate_series(1, 10, 2)) ORDER BY "
-          "generate_series ASC;",
-          dt);
-      EXPECT_EQ(rows->rowCount(), size_t(5));
-      EXPECT_EQ(rows->colCount(), size_t(1));
-      for (int64_t val = 1; val <= 10; val += 2) {
-        auto crt_row = rows->getNextRow(false, false);
-        EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), val);
+          "generate_series ASC;";
+      const std::string named_arg_query =
+          "SELECT generate_series FROM TABLE(generate_series(series_start=>1, "
+          "series_stop=>10, series_step=>2)) ORDER BY generate_series ASC;";
+      for (auto query : {non_named_arg_query, named_arg_query}) {
+        const auto rows = run_multiple_agg(query, dt);
+        EXPECT_EQ(rows->rowCount(), size_t(5));
+        EXPECT_EQ(rows->colCount(), size_t(1));
+        for (int64_t val = 1; val <= 10; val += 2) {
+          auto crt_row = rows->getNextRow(false, false);
+          EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), val);
+        }
       }
     }
 
@@ -195,52 +237,115 @@ TEST_F(SystemTFs, GenerateSeries) {
   }
 }
 
+TEST_F(SystemTFs, GenerateRandomStrings) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    SKIP_NO_TBB();
+    {
+      // num_strings must be >= 0
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(generate_random_strings(-3, 10));", dt),
+          UserTableFunctionError);
+    }
+
+    {
+      // string_length must be > 0 (to protect against our aliasing of empty strings to
+      // null strings)
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(generate_random_strings(3, 0));", dt),
+          UserTableFunctionError);
+    }
+
+    {
+      // string_length must be <= StringDictionary::MAX_STRLEN (to protect against our
+      // aliasing of empty strings to null strings)
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(generate_random_strings(3, 40000));", dt),
+          UserTableFunctionError);
+    }
+
+    for (size_t idx = 0; idx < 10; ++idx) {
+      const size_t num_strings = idx;
+      const size_t str_len = 10UL - idx;
+
+      const std::string non_named_arg_query =
+          "SELECT id, rand_str FROM TABLE(generate_random_strings(" +
+          std::to_string(num_strings) + ", " + std::to_string(str_len) +
+          ")) ORDER BY id ASC;";
+      const std::string named_arg_query =
+          "SELECT id, rand_str FROM TABLE(generate_random_strings(num_strings => " +
+          std::to_string(num_strings) + ", string_length => " + std::to_string(str_len) +
+          ")) ORDER BY id ASC;";
+      for (auto query : {non_named_arg_query, named_arg_query}) {
+        const auto rows = run_multiple_agg(query, dt);
+        const size_t num_rows = rows->rowCount();
+        const size_t num_cols = rows->colCount();
+        ASSERT_EQ(num_rows, num_strings);
+        ASSERT_EQ(num_cols, 2UL);
+
+        for (size_t row_idx = 0; row_idx < num_rows; ++row_idx) {
+          auto row = rows->getNextRow(true, false);
+          ASSERT_EQ(TestHelpers::v<int64_t>(row[0]), static_cast<int64_t>(row_idx));
+          auto str = boost::get<std::string>(TestHelpers::v<NullableString>(row[1]));
+          ASSERT_EQ(str.size(), str_len);
+        }
+      }
+    }
+  }
+}
+
 TEST_F(SystemTFs, Mandelbrot) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    if (dt == ExecutorDeviceType::CPU) {
+      SKIP_NO_TBB();
+    }
+    // We won't make the default on GPU for function `tf_mandelbrot` use CUDA
+    // until code cacheing is introduced for table functions
+    const std::string tf_name =
+        dt == ExecutorDeviceType::CPU ? "tf_mandelbrot" : "tf_mandelbrot_cuda";
     {
       // Mandelbrot table function requires max_iterations to be >= 1
-      EXPECT_THROW(
-          run_multiple_agg("SELECT * FROM TABLE(tf_mandelbrot(128 /* width */ , 128 /* "
+      EXPECT_THROW(run_multiple_agg(
+                       "SELECT * FROM TABLE(" + tf_name +
+                           "(128 /* width */ , 128 /* "
                            "height */, -2.5 /* min_x */, 1.0 /* max_x */, -1.0 /* min_y "
                            "*/, 1.0 /* max_y */, 0 /* max_iterations */));",
-                           dt),
-          UserTableFunctionError);
+                       dt),
+                   UserTableFunctionError);
     }
     {
-      const auto rows = run_multiple_agg(
+      // Should throw when using named argument syntax if argument is missing
+      EXPECT_THROW(run_multiple_agg(
+                       "SELECT * FROM TABLE(" + tf_name +
+                           "(width=>128, height=>128, "
+                           "min_x=>-2.5, max_x=>1.0, max_y=>1.0, max_iterations=>0));",
+                       dt),
+                   std::exception);
+    }
+    {
+      const std::string non_named_arg_query =
           "SELECT MIN(num_iterations) AS min_iterations, MAX(num_iterations) AS "
-          "max_iterations, COUNT(*) AS n FROM TABLE(tf_mandelbrot(128 /* width */ , 128 "
+          "max_iterations, COUNT(*) AS n FROM TABLE(" +
+          tf_name +
+          "(128 /* width */ , 128 "
           "/* height */, -2.5 /* min_x */, 1.0 /* max_x */, -1.0 /* min_y */, 1.0 /* "
-          "max_y */, 256 /* max_iterations */));",
-          dt);
-      ASSERT_EQ(rows->rowCount(), size_t(1));
-      ASSERT_EQ(rows->colCount(), size_t(3));
-      auto crt_row = rows->getNextRow(false, false);
-      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]),
-                static_cast<int64_t>(1));  // min_iterations
-      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]),
-                static_cast<int64_t>(256));  // max_iterations
-      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[2]),
-                static_cast<int64_t>(16384));  // num pixels - width X height
-    }
-    {
-      // skip CPU for GPU tests
-      if (dt == ExecutorDeviceType::GPU) {
-        const auto rows = run_multiple_agg(
-            "SELECT MIN(num_iterations) AS min_iterations, MAX(num_iterations) AS "
-            "max_iterations, COUNT(*) AS n FROM TABLE(tf_mandelbrot_cuda(128 /* width */ "
-            ", "
-            "128 "
-            "/* height */, -2.5 /* min_x */, 1.0 /* max_x */, -1.0 /* min_y */, 1.0 /* "
-            "max_y */, 256 /* max_iterations */));",
-            dt);
+          "max_y */, 256 /* max_iterations */));";
+      // Varying spacing in query below is deliberate to verify parser robustness
+      const std::string named_arg_query =
+          "SELECT MIN(num_iterations) AS min_iterations, MAX(num_iterations) AS "
+          "max_iterations, COUNT(*) AS n FROM TABLE(" +
+          tf_name +
+          "(x_pixels=>128, "
+          "y_pixels => 128, y_max=>1.0,x_min =>-2.5, x_max => 1.0, y_min=>-1.0, "
+          "max_iterations=>256));";
+      for (auto query : {non_named_arg_query, named_arg_query}) {
+        const auto rows = run_multiple_agg(query, dt);
         ASSERT_EQ(rows->rowCount(), size_t(1));
         ASSERT_EQ(rows->colCount(), size_t(3));
         auto crt_row = rows->getNextRow(false, false);
-        // TODO: The CUDA function seems to return -1 for some reason
-        // ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0])
-        //          static_cast<int64_t>(1));  // min_iterations
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]),
+                  static_cast<int64_t>(1));  // min_iterations
         ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]),
                   static_cast<int64_t>(256));  // max_iterations
         ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[2]),
@@ -257,6 +362,7 @@ TEST_F(SystemTFs, GeoRasterize) {
       "15.0), (-0.4, 0.8, 40.0)) AS t(x, y, z))";
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    SKIP_NO_TBB();
     // tf_geo_rasterize requires bin_dim_meters to be > 0
     {
       EXPECT_THROW(
@@ -265,7 +371,7 @@ TEST_F(SystemTFs, GeoRasterize) {
                   ", 0.0 /* bin_dim_meters */, false /* geographic_coords "
                   "*/, 0 /* neighborhood_fill_radius */, false /* fill_only_nulls */));",
               dt),
-          UserTableFunctionError);
+          TableFunctionError);
     }
 
     // tf_geo_rasterize requires neighborhood_fill_radius to be >= 0
@@ -276,7 +382,7 @@ TEST_F(SystemTFs, GeoRasterize) {
                   ", 1.0 /* bin_dim_meters */, false /* geographic_coords "
                   "*/, -1 /* neighborhood_fill_radius */, false /* fill_only_nulls */));",
               dt),
-          UserTableFunctionError);
+          TableFunctionError);
     }
 
     // tf_geo_rasterize requires x_min to be < x_max
@@ -288,54 +394,81 @@ TEST_F(SystemTFs, GeoRasterize) {
                            "0.0 /* x_min */, 0.0 /* "
                            "x_max */, -1.0 /* y_min */, 1.0 /* y_max */));",
                        dt),
-                   UserTableFunctionError);
+                   TableFunctionError);
+    }
+
+    // tf_geo_rasterize requires all arguments to be specified
+    {
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(tf_geo_rasterize(raster => " +
+                               raster_values_sql +
+                               ", bin_dim_meters => 1.0, geographic_coords => false  "
+                               ", fill_only_nulls => false));",
+                           dt),
+          std::exception);
     }
     // Test case without null fill radius or bounds definition
     {
-      const auto rows = run_multiple_agg(
+      const auto non_named_arg_query =
           "SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
-              ", 1.0 /* bin_dim_meters */, false /* geographic_coords */, 0 /* "
-              "neighborhood_fill_radius */, false /* fill_only_nulls */)) ORDER BY x, y;",
-          dt);
-      const size_t num_rows = rows->rowCount();
-      ASSERT_EQ(num_rows, size_t(6));
-      ASSERT_EQ(rows->colCount(), size_t(3));
-      const int64_t null_val = inline_fp_null_val(SQLTypeInfo(kFLOAT, false));
-      const std::vector<int64_t> expected_z_values = {
-          40, null_val, 10, null_val, null_val, 20};
-      for (size_t r = 0; r < num_rows; ++r) {
-        auto crt_row = rows->getNextRow(false, false);
-        ASSERT_EQ(static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[0]))),
-                  static_cast<int64_t>(r) / 2 - 1);
-        ASSERT_EQ(static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[1]))),
-                  static_cast<int64_t>(r) % 2);
-        ASSERT_EQ(static_cast<int64_t>(TestHelpers::v<float>(crt_row[2])),
-                  expected_z_values[r]);
+          ", 1.0 /* bin_dim_meters */, false /* geographic_coords */, 0 /* "
+          "neighborhood_fill_radius */, false /* fill_only_nulls */)) ORDER BY x, y;";
+      const auto named_arg_query =
+          "SELECT * FROM TABLE(tf_geo_rasterize(raster => " + raster_values_sql +
+          ", bin_dim_meters => 1.0, neighborhood_fill_radius => 0"
+          ", geographic_coords=>false, fill_only_nulls => false)) ORDER BY x, y;";
+
+      for (auto query : {non_named_arg_query, named_arg_query}) {
+        const auto rows = run_multiple_agg(query, dt);
+        const size_t num_rows = rows->rowCount();
+        ASSERT_EQ(num_rows, size_t(6));
+        ASSERT_EQ(rows->colCount(), size_t(3));
+        const int64_t null_val = inline_fp_null_val(SQLTypeInfo(kFLOAT, false));
+        const std::vector<int64_t> expected_z_values = {
+            40, null_val, 10, null_val, null_val, 20};
+        for (size_t r = 0; r < num_rows; ++r) {
+          auto crt_row = rows->getNextRow(false, false);
+          ASSERT_EQ(static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[0]))),
+                    static_cast<int64_t>(r) / 2 - 1);
+          ASSERT_EQ(static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[1]))),
+                    static_cast<int64_t>(r) % 2);
+          ASSERT_EQ(static_cast<int64_t>(TestHelpers::v<float>(crt_row[2])),
+                    expected_z_values[r]);
+        }
       }
     }
     // Test explicit raster bounds definition
     {
-      const auto rows = run_multiple_agg(
+      const auto non_named_arg_query =
           "SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
-              ", 1.0 /* bin_dim_meters */, false /* geographic_coords */, 0 /* "
-              "neighborhood_fill_radius */, false /* fill_only_nulls */, 1.0 /* x_min "
-              "*/, 2.0 /* x_max */, 1.0 "
-              "/* y_min */, 2.0 /* y_max */ )) ORDER BY x, y;",
-          dt);
-      const size_t num_rows = rows->rowCount();
-      ASSERT_EQ(num_rows, size_t(1));
-      ASSERT_EQ(rows->colCount(), size_t(3));
-      const std::vector<int64_t> expected_z_values = {20};
-      for (size_t r = 0; r < num_rows; ++r) {
-        auto crt_row = rows->getNextRow(false, false);
-        ASSERT_EQ(static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[0]))),
-                  static_cast<int64_t>(1));
-        ASSERT_EQ(static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[1]))),
-                  static_cast<int64_t>(1));
-        ASSERT_EQ(static_cast<int64_t>(TestHelpers::v<float>(crt_row[2])),
-                  expected_z_values[r]);
+          ", 1.0 /* bin_dim_meters */, false /* geographic_coords */, 0 /* "
+          "neighborhood_fill_radius */, false /* fill_only_nulls */, 1.0 /* x_min "
+          "*/, 2.0 /* x_max */, 1.0 "
+          "/* y_min */, 2.0 /* y_max */ )) ORDER BY x, y;";
+      const auto named_arg_query =
+          "SELECT * FROM TABLE(tf_geo_rasterize(raster => " + raster_values_sql +
+          ", bin_dim_meters => 1.0, x_max => 2.0, y_max => 2.0, fill_only_nulls=> false, "
+          "x_min => 1.0, geographic_coords => false, neighborhood_fill_radius => 0, "
+          "y_min => 1.0 )) ORDER BY x, y;";
+
+      for (auto query : {non_named_arg_query, named_arg_query}) {
+        const auto rows = run_multiple_agg(query, dt);
+        const size_t num_rows = rows->rowCount();
+        ASSERT_EQ(num_rows, size_t(1));
+        ASSERT_EQ(rows->colCount(), size_t(3));
+        const std::vector<int64_t> expected_z_values = {20};
+        for (size_t r = 0; r < num_rows; ++r) {
+          auto crt_row = rows->getNextRow(false, false);
+          ASSERT_EQ(static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[0]))),
+                    static_cast<int64_t>(1));
+          ASSERT_EQ(static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[1]))),
+                    static_cast<int64_t>(1));
+          ASSERT_EQ(static_cast<int64_t>(TestHelpers::v<float>(crt_row[2])),
+                    expected_z_values[r]);
+        }
       }
     }
+
     // Test null neighborhood fill radius
     {
       const auto rows = run_multiple_agg(
@@ -361,9 +494,8 @@ TEST_F(SystemTFs, GeoRasterize) {
     // Test slope and aspect computation
     {
       std::string slope_aspect_raster_values_sql =
-          "CURSOR(SELECT CAST(x AS DOUBLE) AS x, CAST(y AS DOUBLE) AS y, CAST(z AS "
-          "DOUBLE) as "
-          "z FROM (VALUES ";
+          "CURSOR(SELECT CAST(x AS DOUBLE) AS x, CAST(y AS DOUBLE) AS y, "
+          "CAST(z AS DOUBLE) AS z FROM (VALUES ";
       for (int32_t y_bin = 0; y_bin < 5; ++y_bin) {
         for (int32_t x_bin = 0; x_bin < 5; ++x_bin) {
           const std::string x_val_str = std::to_string(x_bin * 2) + ".1";
@@ -379,40 +511,53 @@ TEST_F(SystemTFs, GeoRasterize) {
       }
       slope_aspect_raster_values_sql += ") AS t(x, y, z))";
 
-      const auto rows = run_multiple_agg(
+      const std::string non_named_arg_query =
           "SELECT * FROM TABLE(tf_geo_rasterize_slope(" + slope_aspect_raster_values_sql +
-              ", 2.0 /* bin_dim_meters */, false /* geographic_coords */, 0 /* "
-              "neighborhood_fill_radius */, true /* fill_only_nulls */, true /* "
-              "compute_slope_in_degrees */)) ORDER BY x, y;",
-          dt);
-
-      const size_t num_rows = rows->rowCount();
-      ASSERT_EQ(num_rows, size_t(25));
-      ASSERT_EQ(rows->colCount(), size_t(5));
-      const double null_value = inline_fp_null_val(SQLTypeInfo(kDOUBLE, false));
-      constexpr double SLOPE_EPS = 1.0e-7;
-      for (int32_t x_bin = 0; x_bin < 5; ++x_bin) {
-        for (int32_t y_bin = 0; y_bin < 5; ++y_bin) {
-          auto crt_row = rows->getNextRow(false, false);
-          ASSERT_EQ(static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[0]))),
-                    static_cast<int64_t>(x_bin * 2 + 1));
-          ASSERT_EQ(static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[1]))),
-                    static_cast<int64_t>(y_bin * 2 + 1));
-          ASSERT_EQ(static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[2]))),
-                    static_cast<int64_t>(3 - abs(x_bin - 2)));
-          if (x_bin == 0 || x_bin == 4 || y_bin == 0 || y_bin == 4) {
-            ASSERT_EQ(TestHelpers::v<double>(crt_row[3]), null_value);
-            ASSERT_EQ(TestHelpers::v<double>(crt_row[4]), null_value);
-          } else {
-            const double expected_slope =
-                (x_bin == 1 || x_bin == 3) ? atan(0.5) * 180.0 / math_consts::m_pi : 0;
-            ASSERT_NEAR(TestHelpers::v<double>(crt_row[3]), expected_slope, SLOPE_EPS);
-            if (x_bin == 2) {
-              // No aspect at crest
+          ", 2.0 /* bin_dim_meters */, false /* geographic_coords */, 0 /* "
+          "neighborhood_fill_radius */, true /* fill_only_nulls */, true /* "
+          "compute_slope_in_degrees */)) ORDER BY x, y;";
+      const std::string named_arg_query =
+          "SELECT * FROM TABLE(tf_geo_rasterize_slope("
+          "raster => " +
+          slope_aspect_raster_values_sql +
+          ", "
+          "bin_dim_meters => 2.0, geographic_coords => false, "
+          "neighborhood_fill_radius => 0, fill_only_nulls => true, "
+          "compute_slope_in_degrees => true)) ORDER BY x, y;";
+      for (auto query : {non_named_arg_query, named_arg_query}) {
+        const auto rows = run_multiple_agg(query, dt);
+        const size_t num_rows = rows->rowCount();
+        ASSERT_EQ(num_rows, size_t(25));
+        ASSERT_EQ(rows->colCount(), size_t(5));
+        const double null_value = inline_fp_null_val(SQLTypeInfo(kDOUBLE, false));
+        constexpr double SLOPE_EPS = 1.0e-7;
+        for (int32_t x_bin = 0; x_bin < 5; ++x_bin) {
+          for (int32_t y_bin = 0; y_bin < 5; ++y_bin) {
+            auto crt_row = rows->getNextRow(false, false);
+            ASSERT_EQ(
+                static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[0]))),
+                static_cast<int64_t>(x_bin * 2 + 1));
+            ASSERT_EQ(
+                static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[1]))),
+                static_cast<int64_t>(y_bin * 2 + 1));
+            ASSERT_EQ(
+                static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[2]))),
+                static_cast<int64_t>(3 - abs(x_bin - 2)));
+            if (x_bin == 0 || x_bin == 4 || y_bin == 0 || y_bin == 4) {
+              ASSERT_EQ(TestHelpers::v<double>(crt_row[3]), null_value);
               ASSERT_EQ(TestHelpers::v<double>(crt_row[4]), null_value);
             } else {
-              const double expected_aspect = x_bin == 1 ? 270.0 : 90.0;
-              ASSERT_NEAR(TestHelpers::v<double>(crt_row[4]), expected_aspect, SLOPE_EPS);
+              const double expected_slope =
+                  (x_bin == 1 || x_bin == 3) ? atan(0.5) * 180.0 / math_consts::m_pi : 0;
+              ASSERT_NEAR(TestHelpers::v<double>(crt_row[3]), expected_slope, SLOPE_EPS);
+              if (x_bin == 2) {
+                // No aspect at crest
+                ASSERT_EQ(TestHelpers::v<double>(crt_row[4]), null_value);
+              } else {
+                const double expected_aspect = x_bin == 1 ? 270.0 : 90.0;
+                ASSERT_NEAR(
+                    TestHelpers::v<double>(crt_row[4]), expected_aspect, SLOPE_EPS);
+              }
             }
           }
         }
@@ -420,6 +565,125 @@ TEST_F(SystemTFs, GeoRasterize) {
     }
 
     // TODO(todd): Add tests for geographic coords
+  }
+}
+
+TEST_F(SystemTFs, FeatureSimilarity) {
+  const std::string primary_features_sql =
+      "CURSOR(SELECT CAST(k AS INT), cast(f AS INT), CAST(cnt AS INT) "
+      "FROM(VALUES (1, 100, 2), (1, 101, 3), (1, 102, 2), "
+      "(2, 100, 2), (2, 104, 3))  AS t(k, f, cnt))";
+  const std::string comparison_features_sql =
+      "CURSOR(SELECT cast(f AS INT), CAST(cnt AS INT) "
+      "FROM(VALUES (100, 2), (101, 3), (102, 2)) "
+      "AS t(f, cnt))";
+  constexpr double max_epsilon = 0.01;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    SKIP_NO_TBB();
+    // idf normalization off
+    {
+      const std::string tf_similarity_query =
+          "SELECT * FROM TABLE(tf_feature_similarity(primary_features => " +
+          primary_features_sql + ", comparison_features => " + comparison_features_sql +
+          ", use_tf_idf => false)) "
+          "ORDER BY class ASC;";
+      const auto rows = run_multiple_agg(tf_similarity_query, dt);
+      ASSERT_EQ(rows->rowCount(), 2UL);
+      ASSERT_EQ(rows->colCount(), 2UL);
+      const std::vector<int64_t> expected_classes = {1, 2};
+
+      // Second similarity score is (2^2) /
+      // ((sqrt(2^2 + 3^2) * sqrt(2^2 + 3^2 + 2^2)) ~= 0.26907
+      const std::vector<double> expected_similarity_scores = {1.0, 0.2690691176};
+      for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(expected_classes[row_idx], TestHelpers::v<int64_t>(crt_row[0]));
+        EXPECT_GE(TestHelpers::v<float>(crt_row[1]),
+                  expected_similarity_scores[row_idx] - max_epsilon);
+        EXPECT_LE(TestHelpers::v<float>(crt_row[1]),
+                  expected_similarity_scores[row_idx] + max_epsilon);
+      }
+    }
+    // idf normalization on
+    {
+      const std::string tf_similarity_query =
+          "SELECT * FROM TABLE(tf_feature_similarity(primary_features => " +
+          primary_features_sql + ", comparison_features => " + comparison_features_sql +
+          ", use_tf_idf => true)) "
+          "ORDER BY class ASC;";
+      const auto rows = run_multiple_agg(tf_similarity_query, dt);
+      ASSERT_EQ(rows->rowCount(), 2UL);
+      ASSERT_EQ(rows->colCount(), 2UL);
+      const std::vector<int64_t> expected_classes = {1, 2};
+      const std::vector<double> expected_similarity_scores = {1.0, 0.141971051693};
+      for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(expected_classes[row_idx], TestHelpers::v<int64_t>(crt_row[0]));
+        EXPECT_GE(TestHelpers::v<float>(crt_row[1]),
+                  expected_similarity_scores[row_idx] - max_epsilon);
+        EXPECT_LE(TestHelpers::v<float>(crt_row[1]),
+                  expected_similarity_scores[row_idx] + max_epsilon);
+      }
+    }
+  }
+}
+
+TEST_F(SystemTFs, FeatureSelfSimilarity) {
+  const std::string primary_features_sql =
+      "CURSOR(SELECT CAST(k AS INT), cast(f AS INT), CAST(cnt AS INT) "
+      "FROM(VALUES (1, 100, 2), (1, 101, 3), (1, 102, 2), "
+      "(2, 100, 2), (2, 104, 3))  AS t(k, f, cnt))";
+  constexpr double max_epsilon = 0.01;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    SKIP_NO_TBB();
+    // idf normalization off
+    {
+      const std::string tf_similarity_query =
+          "SELECT * FROM TABLE(tf_feature_self_similarity(primary_features => " +
+          primary_features_sql +
+          ", use_tf_idf => false)) "
+          "ORDER BY class1 ASC, class2 ASC;";
+      const auto rows = run_multiple_agg(tf_similarity_query, dt);
+      ASSERT_EQ(rows->rowCount(), 3UL);
+      ASSERT_EQ(rows->colCount(), 3UL);
+      const std::vector<int64_t> expected_class_1 = {1, 1, 2};
+      const std::vector<int64_t> expected_class_2 = {1, 2, 2};
+      const std::vector<double> expected_similarity_scores = {1.0, 0.26906913519, 1.0};
+      for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(expected_class_1[row_idx], TestHelpers::v<int64_t>(crt_row[0]));
+        EXPECT_EQ(expected_class_2[row_idx], TestHelpers::v<int64_t>(crt_row[1]));
+        EXPECT_GE(TestHelpers::v<float>(crt_row[2]),
+                  expected_similarity_scores[row_idx] - max_epsilon);
+        EXPECT_LE(TestHelpers::v<float>(crt_row[2]),
+                  expected_similarity_scores[row_idx] + max_epsilon);
+      }
+    }
+    // idf normalization on
+    {
+      const std::string tf_similarity_query =
+          "SELECT * FROM TABLE(tf_feature_self_similarity(primary_features => " +
+          primary_features_sql +
+          ", use_tf_idf => true)) "
+          "ORDER BY class1 ASC, class2 ASC;";
+      const auto rows = run_multiple_agg(tf_similarity_query, dt);
+      ASSERT_EQ(rows->rowCount(), 3UL);
+      ASSERT_EQ(rows->colCount(), 3UL);
+      const std::vector<int64_t> expected_class_1 = {1, 1, 2};
+      const std::vector<int64_t> expected_class_2 = {1, 2, 2};
+      const std::vector<double> expected_similarity_scores = {1.0, 0.14197105169, 1.0};
+      for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(expected_class_1[row_idx], TestHelpers::v<int64_t>(crt_row[0]));
+        EXPECT_EQ(expected_class_2[row_idx], TestHelpers::v<int64_t>(crt_row[1]));
+        EXPECT_GE(TestHelpers::v<float>(crt_row[2]),
+                  expected_similarity_scores[row_idx] - max_epsilon);
+        EXPECT_LE(TestHelpers::v<float>(crt_row[2]),
+                  expected_similarity_scores[row_idx] + max_epsilon);
+      }
+    }
   }
 }
 

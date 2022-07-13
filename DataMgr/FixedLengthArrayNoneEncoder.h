@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,10 @@
 
 /**
  * @file		FixedLengthArrayNoneEncoder.h
- * @author		Dmitri Shtilman <d@mapd.com>
  * @brief		unencoded fixed length array encoder
  *
- * Copyright (c) 2018 MapD Technologies, Inc.  All rights reserved.
- **/
+ */
+
 #ifndef FIXED_LENGTH_ARRAY_NONE_ENCODER_H
 #define FIXED_LENGTH_ARRAY_NONE_ENCODER_H
 
@@ -43,11 +42,10 @@ class FixedLengthArrayNoneEncoder : public Encoder {
   FixedLengthArrayNoneEncoder(AbstractBuffer* buffer, size_t as)
       : Encoder(buffer), has_nulls(false), initialized(false), array_size(as) {}
 
-  size_t getNumElemsForBytesEncodedData(const int8_t* index_data,
-                                        const int start_idx,
-                                        const size_t num_elements,
-                                        const size_t byte_limit) override {
-    size_t data_size = num_elements * array_size;
+  size_t getNumElemsForBytesEncodedDataAtIndices(const int8_t* index_data,
+                                                 const std::vector<size_t>& selected_idx,
+                                                 const size_t byte_limit) override {
+    size_t data_size = selected_idx.size() * array_size;
     if (data_size > byte_limit) {
       data_size = byte_limit;
     }
@@ -74,8 +72,10 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     data_subset.reserve(selected_idx.size());
     for (const auto& index : selected_idx) {
       auto current_data = data + array_size * (index);
-      data_subset.emplace_back(
-          ArrayDatum(array_size, current_data, false, DoNothingDeleter{}));
+      data_subset.emplace_back(ArrayDatum(array_size,
+                                          current_data,
+                                          is_null_ignore_not_null(current_data),
+                                          DoNothingDeleter{}));
     }
     return appendData(&data_subset, 0, selected_idx.size(), false);
   }
@@ -107,16 +107,6 @@ class FixedLengthArrayNoneEncoder : public Encoder {
                                             const int start_idx,
                                             const size_t numAppendElems,
                                             const bool replicating = false) {
-    // Todo: The reserve call was changed to take into account the existing data size,
-    // but in other encoders (like ArrayNoneEncoder) we only reserve the append size,
-    // which will be a no-op likely after the first append on a chunk. This probably
-    // won't matter for disk writes as we just have static (default 2MB) page sizes, but
-    // could be an issue for temporary in-memory tables, as buffers for multi-column
-    // imports will likely need to be repeatedly migrated to grow them if they are
-    // "landlocked" amidst other buffers. We should follow-up with work to call reserve
-    // properly, accounting for both the new append size and existing size, for that
-    // reason and just for overall semantic correctness.
-
     const size_t existing_data_size = num_elems_ * array_size;
     const size_t append_data_size = array_size * numAppendElems;
     buffer_->reserve(existing_data_size + append_data_size);
@@ -238,10 +228,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     update_elem_stats(ArrayDatum(array_size, array, is_null(array), DoNothingDeleter()));
   }
 
-  static bool is_null(const SQLTypeInfo& type, int8_t* array) {
-    if (type.get_notnull()) {
-      return false;
-    }
+  static bool is_null_ignore_not_null(const SQLTypeInfo& type, int8_t* array) {
     switch (type.get_subtype()) {
       case kBOOLEAN: {
         return (array[0] == NULL_ARRAY_BOOLEAN);
@@ -291,6 +278,13 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     return false;
   }
 
+  static bool is_null(const SQLTypeInfo& type, int8_t* array) {
+    if (type.get_notnull()) {
+      return false;
+    }
+    return is_null_ignore_not_null(type, array);
+  }
+
   bool resetChunkStats(const ChunkStats& stats) override {
     auto elem_type = buffer_->getSqlType().get_elem_type();
     if (initialized && DatumEqual(elem_min, stats.min, elem_type) &&
@@ -319,6 +313,10 @@ class FixedLengthArrayNoneEncoder : public Encoder {
   size_t array_size;
 
   bool is_null(int8_t* array) { return is_null(buffer_->getSqlType(), array); }
+
+  bool is_null_ignore_not_null(int8_t* array) {
+    return is_null_ignore_not_null(buffer_->getSqlType(), array);
+  }
 
   void update_elem_stats(const ArrayDatum& array) {
     if (array.is_null) {

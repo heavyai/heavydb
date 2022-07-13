@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 /**
  * @file	ForeignStorageCache.h
- * @author	Misiu Godfrey <misiu.godfrey@omnisci.com>
+ * @brief
  *
  * This file includes the class specification for the cache used by the Foreign Storage
  * Interface (FSI).  This cache is used by FSI to cache data and metadata locally on disc
@@ -25,7 +25,7 @@
 
 #pragma once
 
-#include "../Shared/mapd_shared_mutex.h"
+#include "../Shared/heavyai_shared_mutex.h"
 #include "DataMgr/AbstractBufferMgr.h"
 #include "DataMgr/FileMgr/CachingFileMgr.h"
 #include "ForeignDataWrapper.h"
@@ -89,14 +89,13 @@ class ForeignStorageCache {
            File_Namespace::CachingFileMgr::WRAPPER_FILE_NAME;
   }
 
-  void cacheMetadataWithFragIdGreaterOrEqualTo(const ChunkMetadataVector& metadata_vec,
-                                               const int frag_id);
-
   inline uint64_t getSpaceReservedByTable(int db_id, int tb_id) const {
     return caching_file_mgr_->getSpaceReservedByTable(db_id, tb_id);
   }
 
   void storeDataWrapper(const std::string& doc, int32_t db_id, int32_t tb_id);
+
+  bool hasStoredDataWrapperMetadata(int32_t db_id, int32_t table_id) const;
 
   // Used for unit testing
   inline void setDataSizeLimit(size_t max) const {

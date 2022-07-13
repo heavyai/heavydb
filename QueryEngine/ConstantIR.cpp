@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -116,11 +116,35 @@ llvm::ConstantInt* CodeGenerator::codegenIntConst(const Analyzer::Constant* cons
   return nullptr;
 }
 
+namespace {
+
+SQLTypes get_phys_int_type(const size_t byte_sz) {
+  switch (byte_sz) {
+    case 1:
+      return kTINYINT;
+    case 2:
+      return kSMALLINT;
+    case 4:
+      return kINT;
+    case 8:
+      return kBIGINT;
+    default:
+      CHECK(false);
+  }
+  return kNULLT;
+}
+
+}  // namespace
+
+// Below, the val_bits_in used to always equal the val_bits_out so we're being cautious.
+bool g_allow_invalid_literal_buffer_reads{false};
+
 std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
     const SQLTypeInfo& type_info,
     const EncodingType enc_type,
     const int dict_id,
-    const int16_t lit_off) {
+    const int16_t lit_off,
+    const size_t lit_bytes) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   std::string literal_name = "literal_" + std::to_string(lit_off);
   auto lit_buff_query_func_lv = get_arg_by_name(cgen_state_->query_func_, "literals");
@@ -192,13 +216,30 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
     return {var_start_address, var_length};
   }
 
+  // Load a literal from the literal buffer. See also getOrAddLiteral().
   llvm::Type* val_ptr_type{nullptr};
-  const auto val_bits = get_bit_width(type_info);
-  CHECK_EQ(size_t(0), val_bits % 8);
+  // NOTE(sy): If val_bits_in is ever different from val_bits_out, that means we need to
+  // generate casting below for the type that has this happen. Currently only the decimal
+  // type is known to ever have this happen.
+  const size_t lit_bits = lit_bytes * 8;
+  const size_t val_bits_out = get_bit_width(type_info);
+  const size_t val_bits_in = type_info.is_decimal() ? lit_bits : val_bits_out;
+  if (val_bits_in != lit_bits && !g_allow_invalid_literal_buffer_reads) {
+    // Refuse to read the wrong number of bytes from the literal buffer.
+    std::stringstream ss;
+    ss << "Invalid literal buffer read size " << val_bits_in << " (expected " << lit_bits
+       << ") for type " << toString(type_info.get_type())
+       << ". See also: --allow-invalid-literal-buffer-reads";
+    LOG(ERROR) << "ERROR: " << ss.str();
+    LOG(ERROR) << type_info.to_string();
+    throw std::runtime_error(ss.str());
+  }
+  CHECK_EQ(size_t(0), val_bits_in % 8);
+  CHECK_EQ(size_t(0), val_bits_out % 8);
   if (type_info.is_integer() || type_info.is_decimal() || type_info.is_time() ||
       type_info.is_timeinterval() || type_info.is_string() || type_info.is_boolean()) {
     val_ptr_type = llvm::PointerType::get(
-        llvm::IntegerType::get(cgen_state_->context_, val_bits), 0);
+        llvm::IntegerType::get(cgen_state_->context_, val_bits_in), 0);
   } else {
     CHECK(type_info.get_type() == kFLOAT || type_info.get_type() == kDOUBLE);
     val_ptr_type = (type_info.get_type() == kFLOAT)
@@ -207,8 +248,31 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
   }
   auto* bit_cast = cgen_state_->query_func_entry_ir_builder_.CreateBitCast(lit_buf_start,
                                                                            val_ptr_type);
-  auto lit_lv = cgen_state_->query_func_entry_ir_builder_.CreateLoad(
+  llvm::Value* lit_lv = cgen_state_->query_func_entry_ir_builder_.CreateLoad(
       bit_cast->getType()->getPointerElementType(), bit_cast);
+  if (type_info.is_decimal() && val_bits_in != val_bits_out) {
+    // Generate casting.
+    SQLTypeInfo type_info_in(get_phys_int_type(val_bits_in / 8),
+                             type_info.get_dimension(),
+                             type_info.get_scale(),
+                             false,
+                             kENCODING_NONE,
+                             0,
+                             type_info.get_subtype());
+    SQLTypeInfo type_info_out(get_phys_int_type(val_bits_out / 8),
+                              type_info.get_dimension(),
+                              type_info.get_scale(),
+                              false,
+                              kENCODING_NONE,
+                              0,
+                              type_info.get_subtype());
+    lit_lv = cgen_state_->emitEntryCall("cast_int" + std::to_string(val_bits_in) +
+                                            "_t_to_int" + std::to_string(val_bits_out) +
+                                            "_t_nullable",
+                                        {lit_lv,
+                                         cgen_state_->inlineIntNull(type_info_in),
+                                         cgen_state_->inlineIntNull(type_info_out)});
+  }
   lit_lv->setName(literal_name);
   return {lit_lv};
 }
@@ -314,18 +378,22 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstants(
   CHECK(!constants.empty());
   const auto& type_info = constants.front()->get_type_info();
   checked_int16_t checked_lit_off{0};
+  size_t next_lit_bytes{0};
   int16_t lit_off{-1};
+  size_t lit_bytes;
   try {
     for (size_t device_id = 0; device_id < constants.size(); ++device_id) {
       const auto constant = constants[device_id];
       const auto& crt_type_info = constant->get_type_info();
       CHECK(type_info == crt_type_info);
-      checked_lit_off =
+      std::tie(checked_lit_off, next_lit_bytes) =
           cgen_state_->getOrAddLiteral(constant, enc_type, dict_id, device_id);
       if (device_id) {
         CHECK_EQ(lit_off, checked_lit_off);
+        CHECK_EQ(lit_bytes, next_lit_bytes);
       } else {
-        lit_off = (int16_t)checked_lit_off;
+        lit_off = static_cast<int16_t>(checked_lit_off);
+        lit_bytes = next_lit_bytes;
       }
     }
   } catch (const std::range_error& e) {
@@ -334,12 +402,13 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstants(
     // to checked_type variable
     throw TooManyLiterals();
   }
+  CHECK_GE(lit_off, 0);
   std::vector<llvm::Value*> hoisted_literal_loads;
   auto entry = cgen_state_->query_func_literal_loads_.find(lit_off);
 
   if (entry == cgen_state_->query_func_literal_loads_.end()) {
     hoisted_literal_loads =
-        codegenHoistedConstantsLoads(type_info, enc_type, dict_id, lit_off);
+        codegenHoistedConstantsLoads(type_info, enc_type, dict_id, lit_off, lit_bytes);
     cgen_state_->query_func_literal_loads_[lit_off] = hoisted_literal_loads;
   } else {
     hoisted_literal_loads = entry->second;

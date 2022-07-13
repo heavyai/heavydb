@@ -1,5 +1,5 @@
 /*
- * Copyright 2021, OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,9 @@
 #include <gtest/gtest.h>
 #include <ctime>
 #include <iostream>
+
 #include "DBHandlerTestHelpers.h"
+#include "LockMgr/LockMgr.h"
 #include "QueryEngine/ErrorHandling.h"
 #include "TestHelpers.h"
 
@@ -2230,18 +2232,6 @@ TEST_P(Update, UpdateFirstColumnByLiteral) {
   }
 }
 
-TEST_P(Update, UnsupportedWindowFunctions) {
-  sql("DROP TABLE IF EXISTS update_window_func;");
-  sql("CREATE TABLE update_window_func (a INT, b INT);");
-  sql("INSERT INTO update_window_func VALUES(1, 10);");
-  sql("INSERT INTO update_window_func VALUES(2, 1);");
-  sql("INSERT INTO update_window_func VALUES(1, 20);");
-  sql("INSERT INTO update_window_func VALUES(2, 4);");
-  sql("ALTER TABLE update_window_func ADD COLUMN c INT;");
-  ASSERT_ANY_THROW(
-      sql("UPDATE update_window_func SET c = MAX(b) OVER (PARTITION BY a);"));
-}
-
 const std::shared_ptr<TestColumnDescriptor> STRING_NONE_BASE =
     std::make_shared<StringColumnDescriptor>("TEXT ENCODING NONE",
                                              kTEXT,
@@ -2958,7 +2948,8 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_ITAS) {
       try {
         auto query = "INSERT INTO t_ITAS SELECT x FROM t_very_large";
         ExecutionResult result;
-        db_handler->sql_execute(result, session_id, query, false, -1, -1);
+        lockmgr::LockedTableDescriptors locks;
+        db_handler->sql_execute(result, session_id, query, false, -1, -1, locks);
       } catch (const QueryExecutionError& e) {
         if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
           catchInterruption.store(true);
@@ -2984,7 +2975,8 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_ITAS) {
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
     while (!startITAS && !detect_time_out) {
       {
-        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+            executor->getSessionLock());
         query_status = executor->getQuerySessionInfo(session_id, session_read_lock);
       }
       if (query_status.size() == 1) {
@@ -3067,7 +3059,8 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_CTAS) {
       try {
         auto query = "CREATE TABLE t_CTAS AS SELECT * FROM t_very_large WHERE x < 3;";
         ExecutionResult result;
-        db_handler->sql_execute(result, session_id, query, false, -1, -1);
+        lockmgr::LockedTableDescriptors locks;
+        db_handler->sql_execute(result, session_id, query, false, -1, -1, locks);
       } catch (const QueryExecutionError& e) {
         if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
           catchInterruption.store(true);
@@ -3092,7 +3085,8 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_CTAS) {
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
     while (!startCTAS && !detect_time_out) {
       {
-        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+            executor->getSessionLock());
         query_status = executor->getQuerySessionInfo(session_id, session_read_lock);
       }
       if (query_status.size() == 1) {
@@ -3202,10 +3196,7 @@ TEST_F(ItasStringTest, InsertIntoSelectLowercase_SameTable) {
       "where first_name = 'Sue';";
 
   // globals for "lower()"
-  //  Use system locale setting by default (as done in the server).
-  g_enable_experimental_string_functions = true;
-  boost::locale::generator generator;
-  std::locale::global(generator.generate(""));
+  g_enable_string_functions = true;
 
   TQueryResult select_result;
   sql(insert_sql);
@@ -3216,7 +3207,7 @@ TEST_F(ItasStringTest, InsertIntoSelectLowercase_SameTable) {
                        {{"Sue", "Smith", "CA"}, {"Sue", "Smith", "ca"}},
                        select_result);
 
-  g_enable_experimental_string_functions = false;
+  g_enable_string_functions = false;
 }
 
 TEST_F(ItasStringTest, InsertIntoSelectLowercase_DifferentTables) {
@@ -3238,10 +3229,7 @@ TEST_F(ItasStringTest, InsertIntoSelectLowercase_DifferentTables) {
       {"united states", "Washington", "US"}};
 
   // globals for "lower()"
-  //  Use system locale setting by default (as done in the server).
-  g_enable_experimental_string_functions = true;
-  boost::locale::generator generator;
-  std::locale::global(generator.generate(""));
+  g_enable_string_functions = true;
 
   TQueryResult select_result;
   sql(insert_sql);
@@ -3252,7 +3240,7 @@ TEST_F(ItasStringTest, InsertIntoSelectLowercase_DifferentTables) {
                        {{"united states", "Washington", "US"}},
                        select_result);
 
-  g_enable_experimental_string_functions = false;
+  g_enable_string_functions = false;
 }
 
 const char* create_table_mini_sort = R"(
@@ -3720,6 +3708,7 @@ int main(int argc, char* argv[]) {
 
   int err{0};
   try {
+    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();

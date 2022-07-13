@@ -7,17 +7,17 @@ Start and Load Sample Data
 Starting the Server
 ===================
 
-The `startomnisci` wrapper script may be used to start OmniSciDB in a testing environment. This script performs the following tasks:
+The `startheavy` wrapper script may be used to start OmniSciDB in a testing environment. This script performs the following tasks:
 
-* initializes the server `data` directory via ``initdb``, if required
-* starts the OmniSciDB server, ``omnisci_server``
+* initializes the server `data` directory via ``initheavy``, if required
+* starts the OmniSciDB server, ``heavydb``
 * offers to download and import a sample dataset using the `insert_sample_data` script if flag ``--sample-data`` is provided
 
-Assuming you are in the `build` directory, and it is a subdirectory of the `omniscidb` repository, `startomnisci` may be run by:
+Assuming you are in the `build` directory, and it is a subdirectory of the `omniscidb` repository, `startheavy` may be run by:
 
 .. code-block::shell
 
-    ../startomnisci
+    ../startheavy
 
 Starting Manually
 -----------------
@@ -28,19 +28,19 @@ Initialize the `data` storage directory. This command only needs to be run once.
 
 .. code-block:: shell
 
-    mkdir data && ./bin/initdb data
+    mkdir data && ./bin/initheavy data
 
 Start the OmniSciDB server:
 
 .. code-block:: shell
 
-    ./bin/omnisci_server
+    ./bin/heavydb
 
-You can now start using the database. The `omnisql` utility may be used to interact with the database from the command line:
+You can now start using the database. The `heavysql` utility may be used to interact with the database from the command line:
 
 .. code-block::shell
 
-    ./bin/omnisql -p HyperInteractive
+    ./bin/heavysql -p HyperInteractive
 
 where `HyperInteractive` is the default password. The default user `admin` is assumed if not provided.
 

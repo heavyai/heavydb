@@ -1,5 +1,5 @@
 <#--
- Copyright 2020 OmniSci, Inc.
+ Copyright 2022 HEAVY.AI, Inc.
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
  You may obtain a copy of the License at
@@ -25,40 +25,5 @@ SqlDdl SqlKillQuery(Span s) :
     querySession = StringLiteral()
     {
         return new SqlKillQuery(s.end(this), querySession.toString());
-    }
-}
-
-/*
- * Clear CPU or GPU memory
- *
- * ALTER SYSTEM CLEAR CPU|GPU|RENDER MEMORY
- */
-SqlDdl SqlAlterSystemClear(Span s) :
-{
-    String cacheType;
-}
-{
-    <ALTER>
-    <SYSTEM>
-    <CLEAR>
-    (
-        <CPU>
-        {
-            cacheType = "CPU";
-        }
-    |
-        <GPU>
-        {
-            cacheType = "GPU";
-        }
-    |
-        <RENDER>
-        {
-            cacheType = "RENDER";
-        }
-    )
-    <MEMORY>
-    {
-        return new SqlAlterSystemClear(s.end(this), cacheType);
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
   //  they can make join cols to be null rejected
 
   public static Set<String> visitedJoinMemo = new HashSet<>();
-  final static Logger MAPDLOGGER =
+  final static Logger HEAVYDBLOGGER =
           LoggerFactory.getLogger(OuterJoinOptViaNullRejectionRule.class);
 
   public OuterJoinOptViaNullRejectionRule(RelBuilderFactory relBuilderFactory) {

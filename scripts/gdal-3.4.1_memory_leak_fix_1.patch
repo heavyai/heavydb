@@ -1,0 +1,6 @@
+5063c5063
+<     CSLConstList papszPrefix = VSIFileManager::GetPrefixes();
+---
+>     char** papszPrefix = VSIFileManager::GetPrefixes();
+5072a5073
+>     CSLDestroy(papszPrefix);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,10 @@
  * limitations under the License.
  */
 
-/*
+/**
  * @file    ExtensionFunctionsWhitelist.h
- * @author  Alex Suhan <alex@mapd.com>
  * @brief   Supported runtime functions management and retrieval.
  *
- * Copyright (c) 2016 MapD Technologies, Inc.  All rights reserved.
  */
 
 #ifndef QUERYENGINE_EXTENSIONFUNCTIONSWHITELIST_H
@@ -33,6 +31,9 @@
 #include "Shared/sqltypes.h"
 #include "Shared/toString.h"
 
+// NOTE: To maintain backwards compatibility:
+// New types should always be appended to the end of the type list
+// Existing types should never be removed!
 enum class ExtArgumentType {
   Int8,
   Int16,
@@ -79,6 +80,23 @@ enum class ExtArgumentType {
   ColumnListBool,
   ColumnTextEncodingDict,
   ColumnListTextEncodingDict,
+  ColumnTimestamp,
+  Timestamp,
+  ColumnArrayInt8,
+  ColumnArrayInt16,
+  ColumnArrayInt32,
+  ColumnArrayInt64,
+  ColumnArrayFloat,
+  ColumnArrayDouble,
+  ColumnArrayBool,
+  ColumnListArrayInt8,
+  ColumnListArrayInt16,
+  ColumnListArrayInt32,
+  ColumnListArrayInt64,
+  ColumnListArrayFloat,
+  ColumnListArrayDouble,
+  ColumnListArrayBool,
+  GeoMultiLineString
 };
 
 SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type);
@@ -87,29 +105,34 @@ class ExtensionFunction {
  public:
   ExtensionFunction(const std::string& name,
                     const std::vector<ExtArgumentType>& args,
-                    const ExtArgumentType ret)
-      : name_(name), args_(args), ret_(ret) {}
+                    const ExtArgumentType ret,
+                    const bool is_runtime)
+      : name_(name), args_(args), ret_(ret), is_runtime_(is_runtime) {}
 
   const std::string getName(bool keep_suffix = true) const;
 
-  const std::vector<ExtArgumentType>& getArgs() const { return args_; }
   const std::vector<ExtArgumentType>& getInputArgs() const { return args_; }
-
   const ExtArgumentType getRet() const { return ret_; }
+
   std::string toString() const;
   std::string toStringSQL() const;
+  std::string toSignature() const;
 
   inline bool isGPU() const {
     return (name_.find("_cpu_", name_.find("__")) == std::string::npos);
   }
+
   inline bool isCPU() const {
     return (name_.find("_gpu_", name_.find("__")) == std::string::npos);
   }
+
+  inline bool isRuntime() const { return is_runtime_; }
 
  private:
   const std::string name_;
   const std::vector<ExtArgumentType> args_;
   const ExtArgumentType ret_;
+  const bool is_runtime_;
 };
 
 class ExtensionFunctionsWhitelist {
@@ -124,6 +147,10 @@ class ExtensionFunctionsWhitelist {
   static std::vector<ExtensionFunction>* get(const std::string& name);
 
   static std::vector<ExtensionFunction>* get_udf(const std::string& name);
+
+  static std::unordered_set<std::string> get_udfs_name(const bool is_runtime);
+
+  static std::vector<ExtensionFunction> get_ext_funcs(const std::string& name);
 
   static std::vector<ExtensionFunction> get_ext_funcs(const std::string& name,
                                                       const bool is_gpu);
@@ -150,7 +177,8 @@ class ExtensionFunctionsWhitelist {
  private:
   static void addCommon(
       std::unordered_map<std::string, std::vector<ExtensionFunction>>& sigs,
-      const std::string& json_func_sigs);
+      const std::string& json_func_sigs,
+      const bool is_runtime);
 
  private:
   // Compiletime UDFs defined in ExtensionFunctions.hpp

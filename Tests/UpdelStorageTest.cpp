@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "ImportExport/Importer.h"
-#include "Parser/parser.h"
+#include "Parser/ParserNode.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/TableOptimizer.h"
@@ -366,7 +366,7 @@ void import_table_file(const std::string& table, const std::string& file) {
                           "../../Tests/Import/datafiles/" + file +
                           "' WITH (header='true');";
 
-  auto stmt = QR::get()->createDDLStatement(query_str);
+  auto stmt = QR::get()->createStatement(query_str);
 
   auto copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(stmt.get());
   if (!copy_stmt) {

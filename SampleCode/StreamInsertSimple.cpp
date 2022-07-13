@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@
 
 /**
  * @file    StreamInsert.cpp
- * @author  Wei Hong <wei@mapd.com>
  * @brief   Sample MapD Client code for inserting a stream of rows from stdin
  * to a MapD table.
- **/
+ *
+ */
 
 #ifdef HAVE_THRIFT_MESSAGE_LIMIT
 #include "Shared/ThriftConfig.h"
@@ -34,7 +34,7 @@
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/TSocket.h>
-#include "gen-cpp/OmniSci.h"
+#include "gen-cpp/Heavy.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -46,7 +46,7 @@ const size_t INSERT_BATCH_SIZE = 10000;
 
 // reads tab-delimited rows from std::cin and load them to
 // table_name in batches of size INSERT_BATCH_SIZE until done
-void stream_insert(OmniSciClient& client,
+void stream_insert(HeavyClient& client,
                    const TSessionId session,
                    const std::string& table_name,
                    const TRowDescriptor& row_desc,
@@ -73,7 +73,7 @@ void stream_insert(OmniSciClient& client,
     if (input_rows.size() >= INSERT_BATCH_SIZE) {
       try {
         client.load_table(session, table_name, input_rows, {});
-      } catch (TOmniSciException& e) {
+      } catch (TDBException& e) {
         std::cerr << e.error_msg << std::endl;
       }
       input_rows.clear();
@@ -120,17 +120,17 @@ int main(int argc, char** argv) {
   std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
 #endif
   std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  OmniSciClient client(protocol);
+  HeavyClient client(protocol);
   TSessionId session;
   try {
     transport->open();                                    // open transport
-    client.connect(session, user_name, passwd, db_name);  // connect to omnisci_server
+    client.connect(session, user_name, passwd, db_name);  // connect to heavydb
     TTableDetails table_details;
     client.get_table_details(table_details, session, table_name);
     stream_insert(client, session, table_name, table_details.row_desc, delimiter);
-    client.disconnect(session);  // disconnect from omnisci_server
+    client.disconnect(session);  // disconnect from heavydb
     transport->close();          // close transport
-  } catch (TOmniSciException& e) {
+  } catch (TDBException& e) {
     std::cerr << e.error_msg << std::endl;
     return 1;
   } catch (TException& te) {

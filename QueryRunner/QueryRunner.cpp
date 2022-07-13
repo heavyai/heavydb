@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,13 +20,13 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/DdlCommandExecutor.h"
 #include "DistributedLoader.h"
-#include "Geospatial/Transforms.h"
+#include "Geospatial/ColumnNames.h"
 #include "ImportExport/CopyParams.h"
 #include "Logger/Logger.h"
+#include "Parser/ParserNode.h"
 #include "Parser/ParserWrapper.h"
-#include "Parser/parser.h"
 #include "QueryEngine/CalciteAdapter.h"
-#include "QueryEngine/DataRecycler/HashTableRecycler.h"
+#include "QueryEngine/DataRecycler/HashtableRecycler.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryEngine/QueryPlanDagExtractor.h"
@@ -34,6 +34,7 @@
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/ThriftSerializers.h"
 #include "Shared/StringTransform.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/import_helpers.h"
 #include "TestProcessSignalHandler.h"
@@ -85,9 +86,9 @@ QueryRunner* QueryRunner::init(const char* db_path,
                                const size_t max_gpu_mem,
                                const int reserved_gpu_mem) {
   return QueryRunner::init(db_path,
-                           std::string{OMNISCI_ROOT_USER},
+                           shared::kRootUsername,
                            "HyperInteractive",
-                           std::string{OMNISCI_DEFAULT_DB},
+                           shared::kDefaultDbName,
                            {},
                            {},
                            udf_filename,
@@ -101,9 +102,9 @@ QueryRunner* QueryRunner::init(const File_Namespace::DiskCacheConfig* disk_cache
                                const std::vector<LeafHostInfo>& string_servers,
                                const std::vector<LeafHostInfo>& leaf_servers) {
   return QueryRunner::init(db_path,
-                           std::string{OMNISCI_ROOT_USER},
+                           shared::kRootUsername,
                            "HyperInteractive",
-                           std::string{OMNISCI_DEFAULT_DB},
+                           shared::kDefaultDbName,
                            string_servers,
                            leaf_servers,
                            "",
@@ -166,11 +167,13 @@ QueryRunner::QueryRunner(const char* db_path,
   g_serialize_temp_tables = true;
   boost::filesystem::path base_path{db_path};
   CHECK(boost::filesystem::exists(base_path));
-  auto system_db_file = base_path / "mapd_catalogs" / OMNISCI_DEFAULT_DB;
+  auto system_db_file =
+      base_path / shared::kCatalogDirectoryName / shared::kDefaultDbName;
   CHECK(boost::filesystem::exists(system_db_file));
-  auto data_dir = base_path / "mapd_data";
+  auto data_dir = base_path / shared::kDataDirectoryName;
   File_Namespace::DiskCacheConfig disk_cache_config{
-      (base_path / "omnisci_disk_cache").string(), File_Namespace::DiskCacheLevel::fsi};
+      (base_path / shared::kDefaultDiskCacheDirName).string(),
+      File_Namespace::DiskCacheLevel::fsi};
   if (cache_config) {
     disk_cache_config = *cache_config;
   }
@@ -222,9 +225,15 @@ QueryRunner::QueryRunner(const char* db_path,
                mapd_params.aggregator,
                string_servers);
 
+  query_engine_ = QueryEngine::createInstance(data_mgr_->getCudaMgr(), !uses_gpus);
+
   if (create_user) {
     if (!sys_cat.getMetadataForUser(user_name, user)) {
-      sys_cat.createUser(user_name, passwd, false, "", true, g_read_only);
+      sys_cat.createUser(
+          user_name,
+          UserAlterations{
+              passwd, /*is_super=*/false, /*default_db=*/"", /*can_login=*/true},
+          g_read_only);
     }
   }
   CHECK(sys_cat.getMetadataForUser(user_name, user));
@@ -332,14 +341,14 @@ RegisteredQueryHint QueryRunner::getParsedQueryHint(const std::string& query_str
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
-  const auto& cat = session_info_->getCatalog();
+  auto& cat = session_info_->getCatalog();
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
 
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
   const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {}, false);
   const auto query_ra = calcite_mgr
                             ->process(query_state->createQueryStateProxy(),
                                       pg_shim(query_str),
@@ -357,14 +366,14 @@ std::shared_ptr<const RelAlgNode> QueryRunner::getRootNodeFromParsedQuery(
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
-  const auto& cat = session_info_->getCatalog();
+  auto& cat = session_info_->getCatalog();
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
 
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
   const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {}, false);
   const auto query_ra = calcite_mgr
                             ->process(query_state->createQueryStateProxy(),
                                       pg_shim(query_str),
@@ -381,13 +390,13 @@ QueryRunner::getParsedQueryHints(const std::string& query_str) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
-  const auto& cat = session_info_->getCatalog();
+  auto& cat = session_info_->getCatalog();
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
   const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {}, false);
   const auto query_ra = calcite_mgr
                             ->process(query_state->createQueryStateProxy(),
                                       pg_shim(query_str),
@@ -403,13 +412,13 @@ std::optional<RegisteredQueryHint> QueryRunner::getParsedGlobalQueryHints(
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
-  const auto& cat = session_info_->getCatalog();
+  auto& cat = session_info_->getCatalog();
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
   const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {}, false);
   const auto query_ra = calcite_mgr
                             ->process(query_state->createQueryStateProxy(),
                                       pg_shim(query_str),
@@ -418,6 +427,28 @@ std::optional<RegisteredQueryHint> QueryRunner::getParsedGlobalQueryHints(
                             .plan_result;
   auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra, query_state);
   return ra_executor.getGlobalQueryHint();
+}
+
+RaExecutionSequence QueryRunner::getRaExecutionSequence(const std::string& query_str) {
+  CHECK(session_info_);
+  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
+  auto query_state = create_query_state(session_info_, query_str);
+  auto& cat = session_info_->getCatalog();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto calcite_mgr = cat.getCalciteMgr();
+  const auto calciteQueryParsingOption =
+      calcite_mgr->getCalciteQueryParsingOption(true, false, true);
+  const auto calciteOptimizationOption =
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {}, false);
+  const auto query_ra = calcite_mgr
+                            ->process(query_state->createQueryStateProxy(),
+                                      pg_shim(query_str),
+                                      calciteQueryParsingOption,
+                                      calciteOptimizationOption)
+                            .plan_result;
+  auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra, query_state);
+  return ra_executor.getRaExecutionSequence(ra_executor.getRootRelAlgNodeShPtr().get(),
+                                            executor.get());
 }
 
 // used to validate calcite ddl statements
@@ -433,12 +464,12 @@ void QueryRunner::validateDDLStatement(const std::string& stmt_str_in) {
   auto query_state = create_query_state(session_info_, stmt_str);
   auto stdlog = STDLOG(query_state);
 
-  const auto& cat = session_info_->getCatalog();
+  auto& cat = session_info_->getCatalog();
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
   const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {}, false);
   calcite_mgr->process(query_state->createQueryStateProxy(),
                        pg_shim(stmt_str),
                        calciteQueryParsingOption,
@@ -451,12 +482,12 @@ std::shared_ptr<RelAlgTranslator> QueryRunner::getRelAlgTranslator(
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
-  const auto& cat = session_info_->getCatalog();
+  auto& cat = session_info_->getCatalog();
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
   const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {}, false);
   const auto query_ra = calcite_mgr
                             ->process(query_state->createQueryStateProxy(),
                                       pg_shim(query_str),
@@ -474,13 +505,13 @@ QueryPlanDagInfo QueryRunner::getQueryInfoForDataRecyclerTest(
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
-  const auto& cat = session_info_->getCatalog();
+  auto& cat = session_info_->getCatalog();
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
   const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {}, false);
   const auto query_ra = calcite_mgr
                             ->process(query_state->createQueryStateProxy(),
                                       pg_shim(query_str),
@@ -498,7 +529,7 @@ QueryPlanDagInfo QueryRunner::getQueryInfoForDataRecyclerTest(
   return {root_node_shared_ptr, join_info.first, join_info.second, relAlgTranslator};
 }
 
-std::unique_ptr<Parser::DDLStmt> QueryRunner::createDDLStatement(
+std::unique_ptr<Parser::Stmt> QueryRunner::createStatement(
     const std::string& stmt_str_in) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
@@ -514,21 +545,20 @@ std::unique_ptr<Parser::DDLStmt> QueryRunner::createDDLStatement(
   auto query_state = create_query_state(session_info_, stmt_str);
   auto stdlog = STDLOG(query_state);
 
-  if (pw.isCalciteDdl()) {
+  if (pw.is_ddl) {
     const auto& cat = session_info_->getCatalog();
     auto calcite_mgr = cat.getCalciteMgr();
     const auto calciteQueryParsingOption =
         calcite_mgr->getCalciteQueryParsingOption(true, false, true);
     const auto calciteOptimizationOption =
-        calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+        calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {}, false);
     const auto query_json = calcite_mgr
                                 ->process(query_state->createQueryStateProxy(),
                                           pg_shim(stmt_str),
                                           calciteQueryParsingOption,
                                           calciteOptimizationOption)
                                 .plan_result;
-    std::unique_ptr<Parser::DDLStmt> ptr = create_ddl_from_calcite(query_json);
-    return ptr;
+    return Parser::create_stmt_for_json(query_json);
   }
 
   // simply fail here as non-Calcite parsing is about to be removed
@@ -551,33 +581,32 @@ void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
   auto query_state = create_query_state(session_info_, stmt_str);
   auto stdlog = STDLOG(query_state);
 
-  if (pw.isCalciteDdl()) {
-    const auto& cat = session_info_->getCatalog();
+  if (pw.is_ddl || pw.getDMLType() == ParserWrapper::DMLType::Insert) {
+    auto& cat = session_info_->getCatalog();
     auto calcite_mgr = cat.getCalciteMgr();
     const auto calciteQueryParsingOption =
         calcite_mgr->getCalciteQueryParsingOption(true, false, true);
     const auto calciteOptimizationOption =
-        calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+        calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {}, false);
     const auto query_ra = calcite_mgr
                               ->process(query_state->createQueryStateProxy(),
                                         pg_shim(stmt_str),
                                         calciteQueryParsingOption,
                                         calciteOptimizationOption)
                               .plan_result;
+    if (pw.getDMLType() == ParserWrapper::DMLType::Insert) {
+      rapidjson::Document ddl_query;
+      ddl_query.Parse(query_ra);
+      CHECK(ddl_query.HasMember("payload"));
+      CHECK(ddl_query["payload"].IsObject());
+      auto stmt = Parser::InsertValuesStmt(ddl_query["payload"].GetObject());
+      stmt.execute(*session_info_, false /* read only */);
+      return;
+    }
     DdlCommandExecutor executor = DdlCommandExecutor(query_ra, session_info_);
-    executor.execute();
+    executor.execute(false /* read only */);
     return;
   }
-
-  SQLParser parser;
-  std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
-  std::string last_parsed;
-  CHECK_EQ(parser.parse(stmt_str, parse_trees, last_parsed), 0) << stmt_str_in;
-  CHECK_EQ(parse_trees.size(), size_t(1));
-  auto stmt = parse_trees.front().get();
-  auto ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
-  CHECK(ddl);
-  ddl->execute(*session_info_);
 }
 
 std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
@@ -587,38 +616,13 @@ std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
 
   ParserWrapper pw{query_str};
-  if (pw.isCalcitePathPermissable()) {
-    const auto execution_result = runSelectQuery(query_str, std::move(co), std::move(eo));
-    VLOG(1) << session_info_->getCatalog().getDataMgr().getSystemMemoryUsage();
-    return execution_result->getRows();
-  }
-
-  auto query_state = create_query_state(session_info_, query_str);
-  auto stdlog = STDLOG(query_state);
-
-  SQLParser parser;
-  std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
-  std::string last_parsed;
-  CHECK_EQ(parser.parse(query_str, parse_trees, last_parsed), 0) << query_str;
-  CHECK_EQ(parse_trees.size(), size_t(1));
-  auto stmt = parse_trees.front().get();
-  auto insert_values_stmt = dynamic_cast<Parser::InsertValuesStmt*>(stmt);
-  if (insert_values_stmt) {
-    insert_values_stmt->execute(*session_info_);
+  if (pw.getDMLType() == ParserWrapper::DMLType::Insert) {
+    runDDLStatement(query_str);
     return nullptr;
   }
-  auto ctas_stmt = dynamic_cast<Parser::CreateTableAsSelectStmt*>(stmt);
-  if (ctas_stmt) {
-    ctas_stmt->execute(*session_info_);
-    return nullptr;
-  }
-  auto itas_stmt = dynamic_cast<Parser::InsertIntoTableAsSelectStmt*>(stmt);
-  if (itas_stmt) {
-    itas_stmt->execute(*session_info_);
-    return nullptr;
-  }
-  UNREACHABLE();
-  return nullptr;
+  const auto execution_result = runSelectQuery(query_str, std::move(co), std::move(eo));
+  VLOG(1) << session_info_->getCatalog().getDataMgr().getSystemMemoryUsage();
+  return execution_result->getRows();
 }
 
 std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
@@ -634,6 +638,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
 ExecutionOptions QueryRunner::defaultExecutionOptionsForRunSQL(bool allow_loop_joins,
                                                                bool just_explain) {
   return {g_enable_columnar_output,
+          false,
           true,
           just_explain,
           allow_loop_joins,
@@ -671,7 +676,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
       session_info_->get_catalog_ptr(), current_user, device_type, session_id);
   auto query_state = create_query_state(session_info, query_str);
   auto stdlog = STDLOG(query_state);
-  const auto& cat = query_state->getConstSessionInfo()->getCatalog();
+  auto& cat = query_state->getConstSessionInfo()->getCatalog();
   std::string query_ra{""};
 
   std::shared_ptr<ExecutionResult> result;
@@ -687,6 +692,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
         CompilationOptions co = CompilationOptions::defaults(device_type);
 
         ExecutionOptions eo = {g_enable_columnar_output,
+                               false,
                                true,
                                false,
                                true,
@@ -711,7 +717,8 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
           const auto calciteQueryParsingOption =
               calcite_mgr->getCalciteQueryParsingOption(true, false, true);
           const auto calciteOptimizationOption =
-              calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+              calcite_mgr->getCalciteOptimizationOption(
+                  false, g_enable_watchdog, {}, false);
           query_ra = calcite_mgr
                          ->process(query_state->createQueryStateProxy(),
                                    pg_shim(query_state->getQueryStr()),
@@ -750,27 +757,12 @@ std::vector<std::shared_ptr<ResultSet>> QueryRunner::runMultipleStatements(
     }
 
     ParserWrapper pw{text};
-    if (pw.isCalciteDdl()) {
+    if (pw.is_ddl || pw.getDMLType() == ParserWrapper::DMLType::Insert) {
       runDDLStatement(text);
       results.push_back(nullptr);
     } else {
-      // TODO: Maybe remove this redundant parsing after enhancing Parser::Stmt?
-      SQLParser parser;
-      std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
-      std::string last_parsed;
-      CHECK_EQ(parser.parse(text, parse_trees, last_parsed), 0);
-      CHECK_EQ(parse_trees.size(), size_t(1));
-      auto stmt = parse_trees.front().get();
-      Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
-      Parser::DMLStmt* dml = dynamic_cast<Parser::DMLStmt*>(stmt);
-      if (ddl != nullptr && dml == nullptr) {
-        runDDLStatement(text);
-        results.push_back(nullptr);
-      } else if (ddl == nullptr && dml != nullptr) {
-        results.push_back(runSQL(text, dt, true, true));
-      } else {
-        throw std::runtime_error("Unexpected SQL statement type: " + text);
-      }
+      // is not DDL, then assume it's DML and try to execute
+      results.push_back(runSQL(text, dt, true, true));
     }
   }
   return results;
@@ -778,7 +770,7 @@ std::vector<std::shared_ptr<ResultSet>> QueryRunner::runMultipleStatements(
 
 void QueryRunner::runImport(Parser::CopyTableStmt* import_stmt) {
   CHECK(import_stmt);
-  import_stmt->execute(*session_info_);
+  import_stmt->execute(*session_info_, false /* read only */);
 }
 
 std::unique_ptr<import_export::Loader> QueryRunner::getLoader(
@@ -798,7 +790,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
     const ExecutorExplainType explain_type,
     const bool with_filter_push_down) {
   auto const& query_state = query_state_proxy.getQueryState();
-  const auto& cat = query_state.getConstSessionInfo()->getCatalog();
+  auto& cat = query_state.getConstSessionInfo()->getCatalog();
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CompilationOptions co = CompilationOptions::defaults(device_type);
   co.explain_type = explain_type;
@@ -814,7 +806,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
   const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {}, false);
   const auto query_ra = calcite_mgr
                             ->process(query_state_proxy,
                                       pg_shim(query_state.getQueryStr()),
@@ -837,7 +829,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
     const auto calciteQueryParsingOption =
         calcite_mgr->getCalciteQueryParsingOption(true, false, true);
     const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
-        false, g_enable_watchdog, filter_push_down_info);
+        false, g_enable_watchdog, filter_push_down_info, false);
     const auto new_query_ra = calcite_mgr
                                   ->process(query_state_proxy,
                                             pg_shim(query_state.getQueryStr()),
@@ -845,6 +837,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
                                             calciteOptimizationOption)
                                   .plan_result;
     const ExecutionOptions eo_modified{eo.output_columnar_hint,
+                                       eo.keep_result,
                                        eo.allow_multifrag,
                                        eo.just_explain,
                                        eo.allow_loop_joins,
@@ -869,6 +862,42 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
 
 }  // namespace
 
+std::shared_ptr<ResultSet> QueryRunner::getCalcitePlan(const std::string& query_str,
+                                                       bool enable_watchdog,
+                                                       bool as_json_str) const {
+  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
+  CHECK(session_info_);
+  const auto& cat = session_info_->getCatalog();
+  auto query_state = create_query_state(session_info_, query_str);
+  auto stdlog = STDLOG(query_state);
+
+  std::shared_ptr<ResultSet> result;
+  auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
+      [&cat, &query_str, &enable_watchdog, &as_json_str, &query_state, &result](
+          const size_t worker_id) {
+        auto executor = Executor::getExecutor(worker_id);
+        auto calcite_mgr = cat.getCalciteMgr();
+        const auto calciteQueryParsingOption =
+            calcite_mgr->getCalciteQueryParsingOption(true, as_json_str, false);
+        const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+            g_enable_calcite_view_optimize, enable_watchdog, {}, false);
+        const auto query_ra = calcite_mgr
+                                  ->process(query_state->createQueryStateProxy(),
+                                            pg_shim(query_str),
+                                            calciteQueryParsingOption,
+                                            calciteOptimizationOption)
+                                  .plan_result;
+        result = std::make_shared<ResultSet>(query_ra);
+        return result;
+      });
+  CHECK(dispatch_queue_);
+  dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);
+  auto result_future = query_launch_task->get_future();
+  result_future.get();
+  CHECK(result);
+  return result;
+}
+
 std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& query_str,
                                                              CompilationOptions co,
                                                              ExecutionOptions eo) {
@@ -886,7 +915,7 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
                                                   g_enable_filter_push_down);
   }
 
-  const auto& cat = session_info_->getCatalog();
+  auto& cat = session_info_->getCatalog();
 
   std::shared_ptr<ExecutionResult> result;
   auto query_launch_task =
@@ -907,7 +936,7 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
         const auto calciteQueryParsingOption =
             calcite_mgr->getCalciteQueryParsingOption(true, false, true);
         const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
-            g_enable_calcite_view_optimize, g_enable_watchdog, {});
+            g_enable_calcite_view_optimize, g_enable_watchdog, {}, false);
         const auto query_ra = calcite_mgr
                                   ->process(query_state->createQueryStateProxy(),
                                             pg_shim(query_str),
@@ -939,17 +968,11 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(
                         defaultExecutionOptionsForRunSQL(allow_loop_joins, just_explain));
 }
 
-ExtractedPlanDag QueryRunner::extractQueryPlanDag(const std::string& query_str) {
+ExtractedQueryPlanDag QueryRunner::extractQueryPlanDag(const std::string& query_str) {
   auto query_dag_info = getQueryInfoForDataRecyclerTest(query_str);
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
-  auto extracted_dag_info =
-      QueryPlanDagExtractor::extractQueryPlanDag(query_dag_info.root_node.get(),
-                                                 *getCatalog(),
-                                                 std::nullopt,
-                                                 query_dag_info.left_deep_trees_info,
-                                                 *executor->getTemporaryTables(),
-                                                 executor,
-                                                 *query_dag_info.rel_alg_translator);
+  auto extracted_dag_info = QueryPlanDagExtractor::extractQueryPlanDag(
+      query_dag_info.root_node.get(), executor);
   return extracted_dag_info;
 }
 
@@ -969,7 +992,7 @@ std::tuple<QueryPlanHash,
 QueryRunner::getCachedHashtableWithoutCacheKey(std::set<size_t>& visited,
                                                CacheItemType hash_table_type,
                                                DeviceIdentifier device_identifier) {
-  HashTableRecycler* hash_table_cache{nullptr};
+  HashtableRecycler* hash_table_cache{nullptr};
   switch (hash_table_type) {
     case CacheItemType::PERFECT_HT: {
       hash_table_cache = PerfectJoinHashTable::getHashTableCache();
@@ -997,7 +1020,7 @@ std::shared_ptr<CacheItemMetric> QueryRunner::getCacheItemMetric(
     QueryPlanHash cache_key,
     CacheItemType hash_table_type,
     DeviceIdentifier device_identifier) {
-  HashTableRecycler* hash_table_cache{nullptr};
+  HashtableRecycler* hash_table_cache{nullptr};
   switch (hash_table_type) {
     case CacheItemType::PERFECT_HT: {
       hash_table_cache = PerfectJoinHashTable::getHashTableCache();
@@ -1054,7 +1077,7 @@ size_t QueryRunner::getNumberOfCachedItem(CacheItemStatus item_status,
       [&item_status,
        &hash_table_type,
        &with_overlaps_tuning_param,
-       &get_num_cached_auto_tuner_param](HashTableRecycler* hash_table_cache) {
+       &get_num_cached_auto_tuner_param](HashtableRecycler* hash_table_cache) {
         switch (item_status) {
           case CacheItemStatus::ALL: {
             if (with_overlaps_tuning_param) {
@@ -1123,6 +1146,7 @@ size_t QueryRunner::getNumberOfCachedItem(CacheItemStatus item_status,
 }
 
 void QueryRunner::reset() {
+  qr_instance_->query_engine_.reset();
   qr_instance_.reset(nullptr);
   calcite_shutdown_handler();
 }
@@ -1144,7 +1168,6 @@ void ImportDriver::importGeoTable(const std::string& file_path,
   static constexpr bool kIsGeoRaster{false};
 
   CHECK(session_info_);
-  const std::string geo_column_name(OMNISCI_GEO_PREFIX);
 
   CopyParams copy_params;
   copy_params.source_type = import_export::SourceType::kGeoFile;
@@ -1161,7 +1184,7 @@ void ImportDriver::importGeoTable(const std::string& file_path,
   std::map<std::string, std::string> colname_to_src;
   auto& cat = session_info_->getCatalog();
   auto cds = Importer::gdalToColumnDescriptors(
-      file_path, kIsGeoRaster, geo_column_name, copy_params);
+      file_path, kIsGeoRaster, Geospatial::kGeoColumnName, copy_params);
 
   for (auto& cd : cds) {
     const auto col_name_sanitized = ImportHelpers::sanitize_name(cd.columnName);
@@ -1174,9 +1197,10 @@ void ImportDriver::importGeoTable(const std::string& file_path,
   if (create_table) {
     const auto td = cat.getMetadataForTable(table_name);
     if (td != nullptr) {
-      throw std::runtime_error("Error: Table " + table_name +
-                               " already exists. Possible failure to correctly re-create "
-                               "mapd_data directory.");
+      throw std::runtime_error(
+          "Error: Table " + table_name +
+          " already exists. Possible failure to correctly re-create " +
+          shared::kDataDirectoryName + " directory.");
     }
     if (table_name != ImportHelpers::sanitize_name(table_name)) {
       throw std::runtime_error("Invalid characters in table name: " + table_name);
