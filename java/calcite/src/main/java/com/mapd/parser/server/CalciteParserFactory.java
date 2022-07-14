@@ -69,7 +69,7 @@ class CalciteParserFactory implements PoolableObjectFactory {
   public void updateOperatorTable() {
     HeavyDBSqlOperatorTable tableOperator =
             new HeavyDBSqlOperatorTable(SqlStdOperatorTable.instance());
-    HeavyDBSqlOperatorTable.addUDF(tableOperator, extSigs);
+    tableOperator.addUDF(extSigs);
     this.tableOperator = tableOperator;
   }
 

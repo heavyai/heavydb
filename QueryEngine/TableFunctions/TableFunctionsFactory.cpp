@@ -484,12 +484,15 @@ void TableFunctionsFactory::add(
     auto sql_sizer_pos = tf.getSqlOutputRowSizeParameter();
     sql_args2.erase(sql_args2.begin() + sql_sizer_pos);
 
+    auto annotations2 = annotations;
+    annotations2.erase(annotations2.begin() + sql_sizer_pos);
+
     auto tf2 = TableFunction(name + DEFAULT_ROW_MULTIPLIER_SUFFIX,
                              sizer,
                              input_args2,
                              output_args,
                              sql_args2,
-                             annotations,
+                             annotations2,
                              is_runtime,
                              uses_manager);
     auto sig = tf2.getSignature(/* include_name */ true, /* include_output */ false);

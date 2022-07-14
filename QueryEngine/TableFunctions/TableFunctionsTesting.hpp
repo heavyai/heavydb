@@ -2227,6 +2227,107 @@ NEVER_INLINE HOST int32_t tf_metadata_getter_bad__cpu_template(TableFunctionMana
   return 1;
 }
 
+// clang-format off
+/*
+  UDTF: ct_overload_scalar_test__cpu_template(T scalar) -> Column<T>, T=[Timestamp, int64_t]
+  UDTF: ct_overload_column_test__cpu_template(Column<T>) -> Column<T>, T=[Timestamp, TextEncodingDict, int64_t]
+  UDTF: ct_overload_column_list_test__cpu_template(Cursor<Column<K> first_col, ColumnList<T> col_list, Column<K> last_col>) -> Column<K>, K=[int64_t], T=[int64_t, double]
+  UDTF: ct_overload_column_list_test2__cpu_template(Cursor<Column<K> first_col, ColumnList<K> col_list1, ColumnList<T> col_list2, Column<T> last_col>) -> Column<K>, K=[int64_t], T=[int64_t, double]
+*/
+// clang-format on
+
+// Test table functions overloaded on scalar types
+// Calcite should pick the proper overloaded operator for each templated table function
+template <typename T>
+NEVER_INLINE HOST int32_t ct_overload_scalar_test__cpu_template(const T scalar,
+                                                                Column<T>& out) {
+  set_output_row_size(1);
+  if constexpr (std::is_same<T, int64_t>::value) {
+    out[0] = scalar;
+  } else if constexpr (std::is_same<T, Timestamp>::value) {
+    out[0] = scalar.time;
+  }
+  return 1;
+}
+
+// Test table functions overloaded on column types
+// Calcite should pick the proper overloaded operator for each templated table function
+template <typename T>
+NEVER_INLINE HOST int32_t ct_overload_column_test__cpu_template(const Column<T>& input,
+                                                                Column<T>& out) {
+  int64_t size = input.size();
+  set_output_row_size(size);
+  for (int64_t i = 0; i < size; ++i) {
+    if (input.isNull(i)) {
+      out.setNull(i);
+    } else {
+      out[i] = input[i];
+    }
+  }
+  return size;
+}
+
+// Test Calcite overload resolution for table functions with ColumnList arguments
+// Calcite should pick the proper overloaded operator for each templated table function
+template <typename T, typename K>
+NEVER_INLINE HOST int32_t
+ct_overload_column_list_test__cpu_template(const Column<K>& first_col,
+                                           const ColumnList<T>& col_list,
+                                           const Column<K>& last_col,
+                                           Column<K>& out) {
+  set_output_row_size(1);
+  int64_t num_cols = col_list.numCols();
+  T sum = 0;
+  for (int64_t i = 0; i < num_cols; ++i) {
+    const Column<T>& col = col_list[i];
+    for (int64_t j = 0; j < col.size(); ++j) {
+      sum += col[j];
+    }
+  }
+  if (sum > 0) {
+    out[0] = first_col[0];
+  } else {
+    out[0] = last_col[0];
+  }
+  return 1;
+}
+
+// Test Calcite overload resolution for table functions with multiple ColumnList arguments
+// Calcite should pick the proper overloaded operator for each templated table function
+template <typename T, typename K>
+NEVER_INLINE HOST int32_t
+ct_overload_column_list_test2__cpu_template(const Column<K>& first_col,
+                                            const ColumnList<K>& col_list1,
+                                            const ColumnList<T>& col_list2,
+                                            const Column<T>& last_col,
+                                            Column<K>& out) {
+  set_output_row_size(1);
+  int64_t num_cols = col_list1.numCols();
+  K sum = 0;
+  for (int64_t i = 0; i < num_cols; ++i) {
+    const Column<K>& col = col_list1[i];
+    for (int64_t j = 0; j < col.size(); ++j) {
+      sum += col[j];
+    }
+  }
+
+  int64_t num_cols2 = col_list2.numCols();
+  T sum2 = 0;
+  for (int64_t i = 0; i < num_cols2; ++i) {
+    const Column<T>& col = col_list2[i];
+    for (int64_t j = 0; j < col.size(); ++j) {
+      sum2 += col[j];
+    }
+  }
+
+  if (sum + sum2 > 0) {
+    out[0] = first_col[0];
+  } else {
+    out[0] = last_col[0];
+  }
+  return 1;
+}
+
 #endif  // ifndef __CUDACC__
 
 // clang-format off

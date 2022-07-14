@@ -104,18 +104,26 @@ public class ExtensionFunction {
     this.names = null;
     this.isRowUdf = true;
     this.options = null;
+    this.cursor_field_types = null;
   }
 
   ExtensionFunction(final List<ExtArgumentType> args,
           final List<ExtArgumentType> outs,
           final List<String> names,
-          final Map<String, String> options) {
+          final Map<String, String> options,
+          final Map<String, List<ExtArgumentType>> cursor_field_types) {
     this.args = args;
     this.ret = null;
     this.outs = outs;
     this.names = names;
     this.isRowUdf = false;
     this.options = options;
+    this.cursor_field_types = cursor_field_types;
+  }
+
+  public Map<String, List<ExtArgumentType>> getCursorFieldTypes() {
+    assert (this.isTableUdf());
+    return this.cursor_field_types;
   }
 
   public List<ExtArgumentType> getArgs() {
@@ -357,6 +365,8 @@ public class ExtensionFunction {
   private final ExtArgumentType ret; // only used by UDFs
   private final boolean isRowUdf;
   private final Map<String, String> options;
+  private final Map<String, List<ExtArgumentType>>
+          cursor_field_types; // only used by UDTFs
 
   public final java.util.List<SqlTypeFamily> toSqlSignature() {
     java.util.List<SqlTypeFamily> sql_sig = new java.util.ArrayList<SqlTypeFamily>();
@@ -375,14 +385,14 @@ public class ExtensionFunction {
     return sql_sig;
   }
 
-  private static boolean isPointerType(final ExtArgumentType type) {
+  public static boolean isPointerType(final ExtArgumentType type) {
     return type == ExtArgumentType.PInt8 || type == ExtArgumentType.PInt16
             || type == ExtArgumentType.PInt32 || type == ExtArgumentType.PInt64
             || type == ExtArgumentType.PFloat || type == ExtArgumentType.PDouble
             || type == ExtArgumentType.PBool;
   }
 
-  private static boolean isColumnArrayType(final ExtArgumentType type) {
+  public static boolean isColumnArrayType(final ExtArgumentType type) {
     return type == ExtArgumentType.ColumnArrayInt8
             || type == ExtArgumentType.ColumnArrayInt16
             || type == ExtArgumentType.ColumnArrayInt32
@@ -392,7 +402,7 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ColumnArrayBool;
   }
 
-  private static boolean isColumnListArrayType(final ExtArgumentType type) {
+  public static boolean isColumnListArrayType(final ExtArgumentType type) {
     return type == ExtArgumentType.ColumnListArrayInt8
             || type == ExtArgumentType.ColumnListArrayInt16
             || type == ExtArgumentType.ColumnListArrayInt32
@@ -402,7 +412,7 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ColumnListArrayBool;
   }
 
-  private static boolean isColumnType(final ExtArgumentType type) {
+  public static boolean isColumnType(final ExtArgumentType type) {
     return type == ExtArgumentType.ColumnInt8 || type == ExtArgumentType.ColumnInt16
             || type == ExtArgumentType.ColumnInt32 || type == ExtArgumentType.ColumnInt64
             || type == ExtArgumentType.ColumnFloat || type == ExtArgumentType.ColumnDouble
@@ -411,7 +421,7 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ColumnTimestamp || isColumnArrayType(type);
   }
 
-  private static boolean isColumnListType(final ExtArgumentType type) {
+  public static boolean isColumnListType(final ExtArgumentType type) {
     return type == ExtArgumentType.ColumnListInt8
             || type == ExtArgumentType.ColumnListInt16
             || type == ExtArgumentType.ColumnListInt32
@@ -423,38 +433,45 @@ public class ExtensionFunction {
             || isColumnListArrayType(type);
   }
 
-  private static ExtArgumentType getValueType(final ExtArgumentType type) {
+  public static ExtArgumentType getValueType(final ExtArgumentType type) {
     switch (type) {
       case PInt8:
+      case ArrayInt8:
       case ColumnInt8:
       case ColumnListInt8:
       case Int8:
         return ExtArgumentType.Int8;
+      case ArrayInt16:
       case PInt16:
       case ColumnInt16:
       case ColumnListInt16:
       case Int16:
         return ExtArgumentType.Int16;
+      case ArrayInt32:
       case PInt32:
       case ColumnInt32:
       case ColumnListInt32:
       case Int32:
         return ExtArgumentType.Int32;
+      case ArrayInt64:
       case PInt64:
       case ColumnInt64:
       case ColumnListInt64:
       case Int64:
         return ExtArgumentType.Int64;
+      case ArrayFloat:
       case PFloat:
       case ColumnFloat:
       case ColumnListFloat:
       case Float:
         return ExtArgumentType.Float;
+      case ArrayDouble:
       case PDouble:
       case ColumnDouble:
       case ColumnListDouble:
       case Double:
         return ExtArgumentType.Double;
+      case ArrayBool:
       case PBool:
       case ColumnBool:
       case ColumnListBool:
@@ -467,47 +484,66 @@ public class ExtensionFunction {
       case ColumnTimestamp:
         return ExtArgumentType.Timestamp;
       case ColumnArrayInt8:
-      case ColumnListArrayInt8:
         return ExtArgumentType.Int8;
       case ColumnArrayInt16:
-      case ColumnListArrayInt16:
         return ExtArgumentType.Int16;
       case ColumnArrayInt32:
-      case ColumnListArrayInt32:
         return ExtArgumentType.Int32;
       case ColumnArrayInt64:
-      case ColumnListArrayInt64:
         return ExtArgumentType.Int64;
       case ColumnArrayFloat:
-      case ColumnListArrayFloat:
         return ExtArgumentType.Float;
       case ColumnArrayDouble:
-      case ColumnListArrayDouble:
         return ExtArgumentType.Double;
       case ColumnArrayBool:
-      case ColumnListArrayBool:
         return ExtArgumentType.Bool;
+      case ColumnListArrayInt8:
+        return ExtArgumentType.ArrayInt8;
+      case ColumnListArrayInt16:
+        return ExtArgumentType.ArrayInt16;
+      case ColumnListArrayInt32:
+        return ExtArgumentType.ArrayInt32;
+      case ColumnListArrayInt64:
+        return ExtArgumentType.ArrayInt64;
+      case ColumnListArrayFloat:
+        return ExtArgumentType.ArrayFloat;
+      case ColumnListArrayDouble:
+        return ExtArgumentType.ArrayDouble;
+      case ColumnListArrayBool:
+        return ExtArgumentType.ArrayBool;
     }
     HEAVYDBLOGGER.error("getValueType: no value for type " + type);
     assert false;
     return null;
   }
 
-  private static SqlTypeName toSqlTypeName(final ExtArgumentType type) {
+  public static ExtArgumentType toSqlTypeName(final String type) {
+    return ExtArgumentType.valueOf(type);
+  }
+
+  public static SqlTypeName toSqlTypeName(final ExtArgumentType type) {
     switch (type) {
+      // Column types are mapped to their underlying type for CURSOR typechecking
       case Bool:
+      case ColumnBool:
         return SqlTypeName.BOOLEAN;
+      case ColumnInt8:
       case Int8:
         return SqlTypeName.TINYINT;
+      case ColumnInt16:
       case Int16:
         return SqlTypeName.SMALLINT;
       case Int32:
+      case ColumnInt32:
         return SqlTypeName.INTEGER;
       case Int64:
+      case ColumnInt64:
         return SqlTypeName.BIGINT;
       case Float:
+      case ColumnFloat:
         return SqlTypeName.FLOAT;
       case Double:
+      case ColumnDouble:
         return SqlTypeName.DOUBLE;
       case PInt8:
       case PInt16:
@@ -523,6 +559,13 @@ public class ExtensionFunction {
       case ArrayFloat:
       case ArrayDouble:
       case ArrayBool:
+      case ColumnArrayInt8:
+      case ColumnArrayInt16:
+      case ColumnArrayInt32:
+      case ColumnArrayInt64:
+      case ColumnArrayFloat:
+      case ColumnArrayDouble:
+      case ColumnArrayBool:
         return SqlTypeName.ARRAY;
       case GeoPoint:
       case GeoLineString:
@@ -534,8 +577,10 @@ public class ExtensionFunction {
         return SqlTypeName.CURSOR;
       case TextEncodingNone:
       case TextEncodingDict:
+      case ColumnTextEncodingDict:
         return SqlTypeName.VARCHAR;
       case Timestamp:
+      case ColumnTimestamp:
         return SqlTypeName.TIMESTAMP;
       case ColumnListInt8:
       case ColumnListInt16:
@@ -544,6 +589,13 @@ public class ExtensionFunction {
       case ColumnListFloat:
       case ColumnListDouble:
       case ColumnListBool:
+      case ColumnListArrayInt8:
+      case ColumnListArrayInt16:
+      case ColumnListArrayInt32:
+      case ColumnListArrayInt64:
+      case ColumnListArrayFloat:
+      case ColumnListArrayDouble:
+      case ColumnListArrayBool:
       case ColumnListTextEncodingDict:
         return SqlTypeName.COLUMN_LIST;
       case Void:

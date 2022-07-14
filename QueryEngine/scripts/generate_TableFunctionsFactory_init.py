@@ -713,6 +713,10 @@ class AstPrinter(AstVisitor):
 
     def visit_composed_node(self, composed_node):
         T = composed_node.inner[0].accept(self)
+        if composed_node.is_array():
+            # Array<T>
+            assert len(composed_node.inner) == 1
+            return "Array" + T
         if composed_node.is_column():
             # Column<T>
             assert len(composed_node.inner) == 1
@@ -863,7 +867,7 @@ class FieldAnnotationTransformer(AstTransformer):
         """
         udtf_node = super(type(self), self).visit_udtf_node(udtf_node)
 
-        for _, t in enumerate(udtf_node.inputs):
+        for t in udtf_node.inputs:
 
             if not isinstance(t.type, ComposedNode):
                 continue
@@ -873,14 +877,13 @@ class FieldAnnotationTransformer(AstTransformer):
                 t.annotations.append(AnnotationNode('fields', fields))
 
         return udtf_node
-
-
+        
 class SupportedAnnotationsTransformer(AstTransformer):
     """
     * Checks for supported annotations in a UDTF
     """
     def visit_udtf_node(self, udtf_node):
-        for idx, t in enumerate(udtf_node.inputs):
+        for t in udtf_node.inputs:
             for a in t.annotations:
                 if a.key not in SupportedAnnotations:
                     raise TransformerException('unknown input annotation: `%s`' % (a.key))
@@ -915,7 +918,7 @@ class RangeAnnotationTransformer(AstTransformer):
                     value = '"{lo} <= {name} && {name} <= {hi}"'.format(lo=lo, hi=hi, name=name)
                 else:
                     raise TransformerException('"range" requires an interval. Got {l}'.format(l=l))
-                arg_node.add_annotation(AnnotationNode('require', value))
+                arg_node.set_annotation('require', value)
         return arg_node
 
 
@@ -1102,12 +1105,24 @@ class ArgNode(Node, IterableNode):
                 return a.value
         return default
 
-    def add_annotation(self, annotation):
-        assert isinstance(annotation, AnnotationNode)
-        self.annotations.append(annotation)
+    def set_annotation(self, key, value):
+        found = False
+        for i, a in enumerate(self.annotations):
+            if a.key == key:
+                assert not found, (i, a)  # annotations with the same key not supported
+                self.annotations[i] = AnnotationNode(key, value)
+                found = True
+        if not found:
+            self.annotations.append(AnnotationNode(key, value))
 
 
 class TypeNode(Node):
+    def is_array(self):
+        return self.type == "Array"
+
+    def is_column_any(self):
+        return self.is_column() or self.is_column_list()
+
     def is_column(self):
         return self.type == "Column"
 
@@ -1654,7 +1669,6 @@ def find_signatures(input_file):
 
         if expected_result is not None:
             # Template transformer expands templates into multiple lines
-            skip_signature = False
             try:
                 result = Pipeline(TemplateTransformer,
                                   FieldAnnotationTransformer,
@@ -1666,19 +1680,17 @@ def find_signatures(input_file):
                                   AstPrinter)(ast)
             except TransformerException as msg:
                 result = ['%s: %s' % (type(msg).__name__, msg)]
-                skip_signature = True
             assert len(result) == len(expected_result), "\n\tresult:   %s \n!= \n\texpected: %s" % (
                 '\n\t\t  '.join(result),
                 '\n\t\t  '.join(expected_result)
             )
             assert set(result) == set(expected_result), "\n\tresult:   %s != \n\texpected: %s" % (
-                result,
-                expected_result,
+                '\n\t\t  '.join(result),
+                '\n\t\t  '.join(expected_result),
             )
-            if skip_signature:
-                continue
-
-        signature = Pipeline(TemplateTransformer,
+            
+        else:
+            signature = Pipeline(TemplateTransformer,
                              FieldAnnotationTransformer,
                              TextEncodingDictTransformer,
                              SupportedAnnotationsTransformer,
@@ -1687,7 +1699,7 @@ def find_signatures(input_file):
                              RenameNodesTransformer,
                              DeclBracketTransformer)(ast)
 
-        signatures.extend(signature)
+            signatures.extend(signature)
 
     return signatures
 

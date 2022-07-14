@@ -29,6 +29,7 @@ import org.apache.calcite.rel.rules.Restriction;
 import org.apache.calcite.runtime.CalciteContextException;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.parser.SqlParseException;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlMoniker;
 import org.apache.calcite.sql.validate.SqlMonikerType;
 import org.apache.calcite.tools.RelConversionException;
@@ -43,9 +44,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import ai.heavy.thrift.calciteserver.CalciteServer;
 import ai.heavy.thrift.calciteserver.InvalidParseRequest;
@@ -396,11 +399,11 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       }
 
       for (TUserDefinedFunction udf : udfs) {
-        udfRTSigs.put(udf.name, toExtensionFunction(udf));
+        udfRTSigs.put(udf.name, toExtensionFunction(udf, isruntime));
       }
 
       for (TUserDefinedTableFunction udtf : udtfs) {
-        udfRTSigs.put(udtf.name, toExtensionFunction(udtf));
+        udfRTSigs.put(udtf.name, toExtensionFunction(udtf, isruntime));
       }
 
       // Avoid overwritting compiled and Loadtime UDFs:
@@ -422,7 +425,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       }
 
       for (TUserDefinedTableFunction udtf : udtfs) {
-        udtfSigs.put(udtf.name, toExtensionFunction(udtf));
+        udtfSigs.put(udtf.name, toExtensionFunction(udtf, isruntime));
       }
 
       extSigs.putAll(udtfSigs);
@@ -431,7 +434,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     calciteParserFactory.updateOperatorTable();
   }
 
-  private static ExtensionFunction toExtensionFunction(TUserDefinedFunction udf) {
+  private static ExtensionFunction toExtensionFunction(
+          TUserDefinedFunction udf, boolean isruntime) {
     List<ExtensionFunction.ExtArgumentType> args =
             new ArrayList<ExtensionFunction.ExtArgumentType>();
     for (TExtArgumentType atype : udf.argTypes) {
@@ -443,33 +447,58 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     return new ExtensionFunction(args, toExtArgumentType(udf.retType));
   }
 
-  private static ExtensionFunction toExtensionFunction(TUserDefinedTableFunction udtf) {
-    int index = 0;
-    int out_index = 0;
+  private static ExtensionFunction toExtensionFunction(
+          TUserDefinedTableFunction udtf, boolean isruntime) {
+    int sqlInputArgIdx = 0;
+    int inputArgIdx = 0;
+    int outputArgIdx = 0;
     List<String> names = new ArrayList<String>();
-    List<ExtensionFunction.ExtArgumentType> args =
-            new ArrayList<ExtensionFunction.ExtArgumentType>();
+    List<ExtensionFunction.ExtArgumentType> args = new ArrayList<>();
+    Map<String, List<ExtensionFunction.ExtArgumentType>> cursor_field_types =
+            new HashMap<>();
     for (TExtArgumentType atype : udtf.sqlArgTypes) {
       args.add(toExtArgumentType(atype));
-      Map<String, String> annot = udtf.annotations.get(index);
-      String name = annot.getOrDefault("name", "inp" + index);
-      if (atype == TExtArgumentType.Cursor && annot.containsKey("fields")) {
-        name = name + annot.get("fields");
+      Map<String, String> annot = udtf.annotations.get(sqlInputArgIdx);
+      String name = annot.getOrDefault("name", "inp" + sqlInputArgIdx);
+      if (atype == TExtArgumentType.Cursor) {
+        String field_names_annot = annot.getOrDefault("fields", "");
+        List<ExtensionFunction.ExtArgumentType> field_types = new ArrayList<>();
+        if (field_names_annot.length() > 0) {
+          String[] field_names =
+                  field_names_annot.substring(1, field_names_annot.length() - 1)
+                          .split(",");
+          for (int i = 0; i < field_names.length; i++) {
+            field_types.add(
+                    toExtArgumentType(udtf.getInputArgTypes().get(inputArgIdx++)));
+          }
+        } else {
+          if (!isruntime) {
+            field_types.add(
+                    toExtArgumentType(udtf.getInputArgTypes().get(inputArgIdx++)));
+          }
+        }
+        name = name + field_names_annot;
+        cursor_field_types.put(name, field_types);
+      } else {
+        inputArgIdx++;
       }
       names.add(name);
-      index++;
+      sqlInputArgIdx++;
     }
-    List<ExtensionFunction.ExtArgumentType> outs =
-            new ArrayList<ExtensionFunction.ExtArgumentType>();
+
+    List<ExtensionFunction.ExtArgumentType> outs = new ArrayList<>();
     for (TExtArgumentType otype : udtf.outputArgTypes) {
       outs.add(toExtArgumentType(otype));
-      Map<String, String> annot = udtf.annotations.get(index);
-      names.add(annot.getOrDefault("name", "out" + out_index));
-      index++;
-      out_index++;
+      Map<String, String> annot = udtf.annotations.get(sqlInputArgIdx);
+      names.add(annot.getOrDefault("name", "out" + outputArgIdx));
+      sqlInputArgIdx++;
+      outputArgIdx++;
     }
-    return new ExtensionFunction(
-            args, outs, names, udtf.annotations.get(udtf.annotations.size() - 1));
+    return new ExtensionFunction(args,
+            outs,
+            names,
+            udtf.annotations.get(udtf.annotations.size() - 1),
+            cursor_field_types);
   }
 
   private static ExtensionFunction.ExtArgumentType toExtArgumentType(

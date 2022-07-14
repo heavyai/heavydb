@@ -439,7 +439,7 @@ static int match_arguments(const SQLTypeInfo& arg_type,
           UNREACHABLE();
       }
     case kTIMESTAMP:
-      if (arg_type.is_timestamp()) {
+      if (sig_type == ExtArgumentType::Timestamp) {
         if (arg_type.get_precision() != 9) {
           return -1;
         }

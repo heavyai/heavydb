@@ -66,8 +66,10 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 class CaseInsensitiveListSqlOperatorTable extends ListSqlOperatorTable {
   @Override
@@ -171,122 +173,125 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     listOpTab.add(op);
   }
 
-  public static void addUDF(
-          HeavyDBSqlOperatorTable opTab, final Map<String, ExtensionFunction> extSigs) {
+  public void addUDF(final Map<String, ExtensionFunction> extSigs) {
     // Don't use anonymous inner classes. They can't be instantiated
     // using reflection when we are deserializing from JSON.
-    // opTab.addOperator(new RampFunction());
-    // opTab.addOperator(new DedupFunction());
-    opTab.addOperator(new MyUDFFunction());
-    opTab.addOperator(new PgUnnest());
-    opTab.addOperator(new Any());
-    opTab.addOperator(new All());
-    opTab.addOperator(new Now());
-    opTab.addOperator(new Datetime());
-    opTab.addOperator(new PgExtract());
-    opTab.addOperator(new Dateadd());
-    opTab.addOperator(new Datediff());
-    opTab.addOperator(new Datepart());
-    opTab.addOperator(new PgDateTrunc());
-    opTab.addOperator(new Length());
-    opTab.addOperator(new CharLength());
-    opTab.addOperator(new KeyForString());
-    opTab.addOperator(new SampleRatio());
-    opTab.addOperator(new WidthBucket());
-    opTab.addOperator(new ArrayLength());
-    opTab.addOperator(new PgILike());
-    opTab.addOperator(new LTrim());
-    opTab.addOperator(new RTrim());
-    opTab.addOperator(new LPad());
-    opTab.addOperator(new RPad());
-    opTab.addOperator(new Replace());
-    opTab.addOperator(new Reverse());
-    opTab.addOperator(new Repeat());
-    opTab.addOperator(new SplitPart());
-    opTab.addOperator(new RegexpLike());
-    opTab.addOperator(new RegexpReplace());
-    opTab.addOperator(new RegexpSubstr());
-    opTab.addOperator(new RegexpMatch());
-    opTab.addOperator(new Base64Encode());
-    opTab.addOperator(new Base64Decode());
-    opTab.addOperator(new Likely());
-    opTab.addOperator(new Unlikely());
-    opTab.addOperator(new Sign());
-    opTab.addOperator(new Truncate());
-    opTab.addOperator(new ST_IsEmpty());
-    opTab.addOperator(new ST_IsValid());
-    opTab.addOperator(new ST_Contains());
-    opTab.addOperator(new ST_Equals());
-    opTab.addOperator(new ST_Intersects());
-    opTab.addOperator(new ST_Overlaps());
-    opTab.addOperator(new ST_Approx_Overlaps());
-    opTab.addOperator(new ST_Disjoint());
-    opTab.addOperator(new ST_Within());
-    opTab.addOperator(new ST_DWithin());
-    opTab.addOperator(new ST_DFullyWithin());
-    opTab.addOperator(new ST_Distance());
-    opTab.addOperator(new ST_MaxDistance());
-    opTab.addOperator(new ST_GeogFromText());
-    opTab.addOperator(new ST_GeomFromText());
-    opTab.addOperator(new ST_Transform());
-    opTab.addOperator(new ST_X());
-    opTab.addOperator(new ST_Y());
-    opTab.addOperator(new ST_XMin());
-    opTab.addOperator(new ST_XMax());
-    opTab.addOperator(new ST_YMin());
-    opTab.addOperator(new ST_YMax());
-    opTab.addOperator(new ST_PointN());
-    opTab.addOperator(new ST_StartPoint());
-    opTab.addOperator(new ST_EndPoint());
-    opTab.addOperator(new ST_Length());
-    opTab.addOperator(new ST_Perimeter());
-    opTab.addOperator(new ST_Area());
-    opTab.addOperator(new ST_NPoints());
-    opTab.addOperator(new ST_NRings());
-    opTab.addOperator(new ST_SRID());
-    opTab.addOperator(new ST_SetSRID());
-    opTab.addOperator(new ST_Point());
-    opTab.addOperator(new ST_Centroid());
-    opTab.addOperator(new ST_Buffer());
-    opTab.addOperator(new ST_ConcaveHull());
-    opTab.addOperator(new ST_ConvexHull());
-    opTab.addOperator(new ST_Intersection());
-    opTab.addOperator(new ST_Union());
-    opTab.addOperator(new ST_Difference());
-    opTab.addOperator(new CastToGeography());
-    opTab.addOperator(new EncodeText());
-    opTab.addOperator(new OffsetInFragment());
-    opTab.addOperator(new ApproxCountDistinct());
-    opTab.addOperator(new ApproxMedian());
-    opTab.addOperator(new ApproxPercentile());
-    opTab.addOperator(new ApproxQuantile());
-    opTab.addOperator(new MapDAvg());
-    opTab.addOperator(new Sample());
-    opTab.addOperator(new LastSample());
-    opTab.addOperator(new HeavyDB_Geo_PolyBoundsPtr());
-    opTab.addOperator(new HeavyDB_Geo_PolyRenderGroup());
-    opTab.addOperator(new convert_meters_to_pixel_width());
-    opTab.addOperator(new convert_meters_to_pixel_height());
-    opTab.addOperator(new is_point_in_view());
-    opTab.addOperator(new is_point_size_in_view());
-    opTab.addOperator(new usTimestamp());
-    opTab.addOperator(new nsTimestamp());
+    // addOperator(new RampFunction());
+    // addOperator(new DedupFunction());
+    addOperator(new MyUDFFunction());
+    addOperator(new PgUnnest());
+    addOperator(new Any());
+    addOperator(new All());
+    addOperator(new Now());
+    addOperator(new Datetime());
+    addOperator(new PgExtract());
+    addOperator(new Dateadd());
+    addOperator(new Datediff());
+    addOperator(new Datepart());
+    addOperator(new PgDateTrunc());
+    addOperator(new Length());
+    addOperator(new CharLength());
+    addOperator(new KeyForString());
+    addOperator(new SampleRatio());
+    addOperator(new WidthBucket());
+    addOperator(new ArrayLength());
+    addOperator(new PgILike());
+    addOperator(new LTrim());
+    addOperator(new RTrim());
+    addOperator(new LPad());
+    addOperator(new RPad());
+    addOperator(new Replace());
+    addOperator(new Reverse());
+    addOperator(new Repeat());
+    addOperator(new SplitPart());
+    addOperator(new RegexpLike());
+    addOperator(new RegexpReplace());
+    addOperator(new RegexpSubstr());
+    addOperator(new RegexpMatch());
+    addOperator(new Base64Encode());
+    addOperator(new Base64Decode());
+    addOperator(new Likely());
+    addOperator(new Unlikely());
+    addOperator(new Sign());
+    addOperator(new Truncate());
+    addOperator(new ST_IsEmpty());
+    addOperator(new ST_IsValid());
+    addOperator(new ST_Contains());
+    addOperator(new ST_Equals());
+    addOperator(new ST_Intersects());
+    addOperator(new ST_Overlaps());
+    addOperator(new ST_Approx_Overlaps());
+    addOperator(new ST_Disjoint());
+    addOperator(new ST_Within());
+    addOperator(new ST_DWithin());
+    addOperator(new ST_DFullyWithin());
+    addOperator(new ST_Distance());
+    addOperator(new ST_MaxDistance());
+    addOperator(new ST_GeogFromText());
+    addOperator(new ST_GeomFromText());
+    addOperator(new ST_Transform());
+    addOperator(new ST_X());
+    addOperator(new ST_Y());
+    addOperator(new ST_XMin());
+    addOperator(new ST_XMax());
+    addOperator(new ST_YMin());
+    addOperator(new ST_YMax());
+    addOperator(new ST_PointN());
+    addOperator(new ST_StartPoint());
+    addOperator(new ST_EndPoint());
+    addOperator(new ST_Length());
+    addOperator(new ST_Perimeter());
+    addOperator(new ST_Area());
+    addOperator(new ST_NPoints());
+    addOperator(new ST_NRings());
+    addOperator(new ST_SRID());
+    addOperator(new ST_SetSRID());
+    addOperator(new ST_Point());
+    addOperator(new ST_Centroid());
+    addOperator(new ST_Buffer());
+    addOperator(new ST_ConcaveHull());
+    addOperator(new ST_ConvexHull());
+    addOperator(new ST_Intersection());
+    addOperator(new ST_Union());
+    addOperator(new ST_Difference());
+    addOperator(new CastToGeography());
+    addOperator(new EncodeText());
+    addOperator(new OffsetInFragment());
+    addOperator(new ApproxCountDistinct());
+    addOperator(new ApproxMedian());
+    addOperator(new ApproxPercentile());
+    addOperator(new ApproxQuantile());
+    addOperator(new MapDAvg());
+    addOperator(new Sample());
+    addOperator(new LastSample());
+    addOperator(new HeavyDB_Geo_PolyBoundsPtr());
+    addOperator(new HeavyDB_Geo_PolyRenderGroup());
+    addOperator(new convert_meters_to_pixel_width());
+    addOperator(new convert_meters_to_pixel_height());
+    addOperator(new is_point_in_view());
+    addOperator(new is_point_size_in_view());
+    addOperator(new usTimestamp());
+    addOperator(new nsTimestamp());
     if (extSigs == null) {
       return;
     }
     HashSet<String> demangledNames = new HashSet<String>();
     for (Map.Entry<String, ExtensionFunction> extSig : extSigs.entrySet()) {
       final String demangledName = dropSuffix(extSig.getKey());
-      final String demangledNameArity =
-              String.format("%s-%d", demangledName, extSig.getValue().getArgs().size());
+      final String demangledNameArity = extSig.getValue().isTableUdf()
+              ? String.format("%s-%s-%s",
+                      demangledName,
+                      extSig.getValue().getArgs(),
+                      extSig.getValue().getCursorFieldTypes())
+              : String.format("%s-%d", demangledName, extSig.getValue().getArgs().size());
       if (demangledNames.contains(demangledNameArity)) {
         continue;
       }
       demangledNames.add(demangledNameArity);
       if (extSig.getValue().isRowUdf()) {
-        opTab.addOperator(new ExtFunction(demangledName, extSig.getValue()));
+        addOperator(new ExtFunction(demangledName, extSig.getValue()));
       } else {
-        opTab.addOperator(new ExtTableFunction(demangledName, extSig.getValue()));
+        addOperator(new ExtTableFunction(demangledName, extSig.getValue()));
       }
     }
   }
@@ -2480,13 +2485,13 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     private final List<String> arg_names;
   }
 
-  public static class ExtTableFunction extends SqlFunction implements SqlTableFunction {
+  public class ExtTableFunction extends SqlFunction implements SqlTableFunction {
     ExtTableFunction(final String name, final ExtensionFunction sig) {
       super(name,
               SqlKind.OTHER_FUNCTION,
               ReturnTypes.CURSOR,
               null,
-              OperandTypes.family(sig.toSqlSignature()),
+              new ExtTableFunctionTypeChecker(HeavyDBSqlOperatorTable.this),
               SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
       arg_types = sig.toSqlSignature();
       outs = sig.getSqlOuts();
@@ -2497,6 +2502,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       // my_cursor_input[x, y, z] => my_cursor_input
       pretty_arg_names = sig.getPrettyArgNames();
       options = sig.getOptions();
+      cursor_field_types = sig.getCursorFieldTypes();
     }
 
     // The following method allows for parameter annotation
@@ -2605,12 +2611,149 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       return s;
     }
 
+    // Returns the table function's signature, with extended operand
+    // type information, including CURSOR field types and operand
+    // names.
+
+    // E.g. for the following UDTF:
+    // my_udtf(Column<int64_t> input_col) -> Column<int64_t>
+    // it'll build the signature:
+    // 'my_udtf(input_col => <CURSOR>[BIGINT])'
+
+    public String getExtendedSignature() {
+      StringBuilder ret = new StringBuilder();
+      ret.append("'");
+      ret.append(this.getName());
+      ret.append("(");
+
+      for (int i = 0; i < this.arg_types.size(); i++) {
+        if (i > 0) {
+          ret.append(", ");
+        }
+
+        SqlTypeFamily type = arg_types.get(i);
+        String paramName = arg_names.get(i);
+        ret.append(paramName).append(" => ");
+
+        final String t = type.toString().toUpperCase(Locale.ROOT);
+        ret.append("<").append(t).append(">");
+        if (type == SqlTypeFamily.CURSOR) {
+          List<ExtensionFunction.ExtArgumentType> field_types =
+                  cursor_field_types.get(paramName);
+          ret.append("[");
+          for (int j = 0; j < field_types.size(); j++) {
+            if (j > 0) {
+              ret.append(",");
+            }
+            ExtensionFunction.ExtArgumentType field_type = field_types.get(j);
+            ret.append(ExtensionFunction.toSqlTypeName(field_type));
+            if (ExtensionFunction.isColumnListType(field_type)) {
+              ExtensionFunction.ExtArgumentType subtype =
+                      ExtensionFunction.getValueType(field_type);
+              ret.append("[");
+              ret.append(ExtensionFunction.toSqlTypeName(subtype));
+              ret.append("]");
+            } else if (ExtensionFunction.isColumnArrayType(field_type)) {
+            }
+          }
+          ret.append("]");
+        }
+      }
+      ret.append(")'");
+
+      return ret.toString();
+    }
+
+    // This returns the original arg names, with CURSOR field names included.
+    // Is used to map arguments to their input annotations.
+    public List<String> getExtendedParamNames() {
+      return this.arg_names;
+    }
+
+    // Required to store ExtTableFunctions in Collections
+    @Override
+    public int hashCode() {
+      return this.getExtendedSignature().hashCode();
+    }
+
+    // Required to store ExtTableFunctions in Collections
+    // We disambiguate ExtTableFunctions by their names and input arg
+    // types, including CURSOR field types.
+    @Override
+    public boolean equals(final Object obj) {
+      if (obj == null) {
+        return false;
+      }
+
+      if (getClass() != obj.getClass()) {
+        return false;
+      }
+
+      if (this == obj) {
+        return true;
+      }
+
+      final ExtTableFunction other = (ExtTableFunction) obj;
+      if (!this.getName().equals(other.getName())) {
+        return false;
+      }
+      if (arg_types.size() != other.arg_types.size()) {
+        return false;
+      }
+
+      for (int i = 0; i < arg_types.size(); i++) {
+        if (arg_types.get(i) != other.arg_types.get(i)) {
+          return false;
+        }
+        if (arg_types.get(i) == SqlTypeFamily.CURSOR) {
+          String paramName = this.arg_names.get(i);
+          String otherParamName = other.getExtendedParamNames().get(i);
+          if (!paramName.equals(otherParamName)) {
+            return false;
+          }
+
+          List<ExtensionFunction.ExtArgumentType> field_types =
+                  this.getCursorFieldTypes().get(paramName);
+          List<ExtensionFunction.ExtArgumentType> other_field_types =
+                  other.getCursorFieldTypes().get(paramName);
+          if (field_types.size() != other_field_types.size()) {
+            return false;
+          }
+          for (int j = 0; j < field_types.size(); j++) {
+            if (field_types.get(j) != other_field_types.get(j)) {
+              return false;
+            }
+          }
+        }
+      }
+      return true;
+    }
+
+    @Override
+    public String toString() {
+      return new String(getName() + "("
+              + String.join(",",
+                      this.arg_types.stream()
+                              .map(s -> s.toString())
+                              .collect(Collectors.toList()))
+              + ")");
+    }
+
+    Map<String, List<ExtensionFunction.ExtArgumentType>> getCursorFieldTypes() {
+      return cursor_field_types;
+    }
+
+    List<SqlTypeFamily> getArgTypes() {
+      return arg_types;
+    }
+
     private final List<SqlTypeFamily> arg_types;
     private final List<SqlTypeName> outs;
     private final List<String> arg_names;
     private final List<String> pretty_arg_names;
     private final List<String> out_names;
     private final Map<String, String> options;
+    private final Map<String, List<ExtensionFunction.ExtArgumentType>> cursor_field_types;
   }
 
   //

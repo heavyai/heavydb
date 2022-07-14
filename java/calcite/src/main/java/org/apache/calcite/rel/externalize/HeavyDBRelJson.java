@@ -529,7 +529,7 @@ public class HeavyDBRelJson {
     // TODO: look up based on SqlKind
     HeavyDBSqlOperatorTable operatorTable =
             new HeavyDBSqlOperatorTable(SqlStdOperatorTable.instance());
-    HeavyDBSqlOperatorTable.addUDF(operatorTable, null);
+    operatorTable.addUDF(null);
     final List<SqlOperator> operatorList = operatorTable.getOperatorList();
     for (SqlOperator operator : operatorList) {
       if (operator.getName().equals(op)) {
@@ -559,7 +559,7 @@ public class HeavyDBRelJson {
     SqlSyntax sqlSyntax = SqlSyntax.valueOf(syntax);
     HeavyDBSqlOperatorTable operatorTable =
             new HeavyDBSqlOperatorTable(SqlStdOperatorTable.instance());
-    HeavyDBSqlOperatorTable.addUDF(operatorTable, null);
+    operatorTable.addUDF(null);
     final List<SqlOperator> operators = operatorTable.getOperatorList();
     List<String> names = new ArrayList<>();
     for (SqlOperator operator : operators) {

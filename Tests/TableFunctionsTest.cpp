@@ -1174,10 +1174,10 @@ TEST_F(TableFunctions, Unsupported) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    EXPECT_THROW(run_multiple_agg("select * from table(row_copier(cursor(SELECT d, "
-                                  "cast(x as double) FROM tf_test), 2));",
-                                  dt),
-                 std::runtime_error);
+    EXPECT_ANY_THROW(
+        run_multiple_agg("select * from table(row_copier(cursor(SELECT d, "
+                         "cast(x as double) FROM tf_test), 2));",
+                         dt));
   }
 }
 
@@ -2661,6 +2661,162 @@ void assert_equal(const ResultSetPtr rows1, const ResultSetPtr rows2) {
       const TargetValue item1 = row1[c];
       const TargetValue item2 = row2[c];
       assert_equal<T>(item1, item2, ti);
+    }
+  }
+}
+
+TEST_F(TableFunctions, CalciteOverloading) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // Calcite should pick up the correct overload based on the input scalar's type,
+    // and then build the WHERE clause filter correctly. If Calcite does not choose the
+    // overload properly, then the query fails to parse due to a type mismatch between the
+    // output type of the table function vs the WHERE clause's operand
+    {
+      const auto result = run_multiple_agg(
+          "SELECT out0 from table(ct_overload_scalar_test(10)) WHERE out0 = 10;", dt);
+      ASSERT_EQ(result->rowCount(), size_t(1));
+      auto result_row = result->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(result_row[0]), static_cast<int64_t>(10));
+    }
+    {
+      const auto result = run_multiple_agg(
+          "SELECT out0 from table(ct_overload_scalar_test(CAST('1970-01-01 "
+          "00:00:00.000000000' AS TIMESTAMP(9)))) WHERE out0 = '1970-01-01 "
+          "00:00:00.000000000';",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(1));
+      auto result_row = result->getNextRow(false, false);
+      int64_t as_int64 = dateTimeParse<kTIMESTAMP>("1970-01-01 00:00:00", 9);
+      ASSERT_EQ(TestHelpers::v<int64_t>(result_row[0]), as_int64);
+    }
+    // Calcite should pick up the correct overload based on the input column's subtype,
+    // and then build the WHERE clause filter correctly. If Calcite does not choose the
+    // overload properly, then the query fails to parse due to a type mismatch between the
+    // output type of the table function vs the WHERE clause's operand
+    {
+      const auto result = run_multiple_agg(
+          "SELECT out0 from table(ct_overload_column_test(CURSOR(SELECT y from "
+          "err_test))) WHERE out0 = 0;",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(0));
+    }
+    {
+      const auto result = run_multiple_agg(
+          "SELECT out0 from table(ct_overload_column_test(CURSOR(SELECT t1 from "
+          "sd_test))) WHERE out0 = 'California';",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(1));
+      auto result_row = result->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(result_row[0]), static_cast<int64_t>(0));
+    }
+    {
+      const auto result = run_multiple_agg(
+          "SELECT out0 from table(ct_overload_column_test(CURSOR(SELECT t1 from "
+          "time_test))) WHERE out0 = '1971-01-01 01:01:01.001001001';",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(0));
+    }
+    // Query should succeed, two BIGINT columns with a COLUMN_LIST of one single DOUBLE
+    // column in between.
+    {
+      const auto result = run_multiple_agg(
+          "SELECT out0 from table(ct_overload_column_list_test(CURSOR("
+          "SELECT y, d, y FROM err_test)));",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(1));
+    }
+    // Query should succeed. Three BIGINT columns should match as one preceding column,
+    // one column list of a single BIGINT column, then one last BIGINT column.
+    {
+      const auto result = run_multiple_agg(
+          "SELECT out0 from table(ct_overload_column_list_test(CURSOR("
+          "SELECT y, y, y FROM err_test)));",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(1));
+    }
+    // Query should succeed, two BIGINT columns with a COLUMN_LIST of three DOUBLE
+    // columns in between.
+    {
+      const auto result = run_multiple_agg(
+          "SELECT out0 from table(ct_overload_column_list_test(CURSOR("
+          "SELECT y, d, d, d, y FROM err_test)));",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(1));
+    }
+    // Query should fail, first column is BIGINT. Next three columns are of
+    // non-consecutive types, meaning they can't be aggregated in a column list
+    {
+      EXPECT_ANY_THROW(
+          run_multiple_agg("SELECT out0 from table(ct_overload_column_list_test(CURSOR("
+                           "SELECT y, y, d, y FROM err_test)));",
+                           dt));
+    }
+    // Query should fail, first column is BIGINT. Two leftover BIGINT columns whereas
+    // signature only takes one column after the column list of DOUBLEs.
+    {
+      EXPECT_ANY_THROW(
+          run_multiple_agg("SELECT out0 from table(ct_overload_column_list_test(CURSOR("
+                           "SELECT y, d, d, d, y, y FROM err_test)));",
+                           dt));
+    }
+    // Query should fail, unsupported type INT for the first column (even though the rest
+    // match)
+    {
+      EXPECT_ANY_THROW(
+          run_multiple_agg("SELECT out0 from table(ct_overload_column_list_test(CURSOR("
+                           "SELECT x, d, d, y FROM err_test)));",
+                           dt));
+    }
+    // Query should fail, unsupported type INT for the last column (even though the rest
+    // match)
+    {
+      EXPECT_ANY_THROW(
+          run_multiple_agg("SELECT out0 from table(ct_overload_column_list_test(CURSOR("
+                           "SELECT y, d, d, x FROM err_test)));",
+                           dt));
+    }
+    // Query should fail, although the first and last BIGINT scalars type match, the
+    // COLUMN_LIST subtype FLOAT does not match neither DOUBLE nor BIGINT
+    {
+      EXPECT_ANY_THROW(
+          run_multiple_agg("SELECT out0 from table(ct_overload_column_list_test(CURSOR("
+                           "SELECT x, f, f, x FROM err_test)));",
+                           dt));
+    }
+    // Query should fail, missing a last BIGINT input column after the column list of
+    // DOUBLEs
+    {
+      EXPECT_ANY_THROW(
+          run_multiple_agg("SELECT out0 from table(ct_overload_column_list_test(CURSOR("
+                           "SELECT y, d, d FROM err_test)));",
+                           dt));
+    }
+    // Query should succeed, two BIGINT columns followed by two DOUBLE columns means
+    // the two middle columns are each a column list of a single column
+    {
+      const auto result = run_multiple_agg(
+          "SELECT out0 from table(ct_overload_column_list_test2(CURSOR("
+          "SELECT y, y, d, d FROM err_test)));",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(1));
+    }
+    // Query should succeed, two column lists of three elements each in between single
+    // columns of BIGINT and DOUBLE types
+    {
+      const auto result = run_multiple_agg(
+          "SELECT out0 from table(ct_overload_column_list_test2(CURSOR("
+          "SELECT y, y, y, y, d, d, d, d FROM err_test)));",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(1));
+    }
+    // Query should fail, first column and column list arguments should be BIGINT
+    // columns not DOUBLE
+    {
+      EXPECT_ANY_THROW(
+          run_multiple_agg("SELECT out0 from table(ct_overload_column_list_test2(CURSOR("
+                           "SELECT d, d, d, d FROM err_test)));",
+                           dt));
     }
   }
 }
