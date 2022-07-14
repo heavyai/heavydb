@@ -528,29 +528,25 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
 
   LOG(IR) << "Table Function Entry Point IR\n"
           << serialize_llvm_object(entry_point_func_);
-  std::shared_ptr<CompilationContext> code;
+  CodeGenerator::GPUTarget target{};
   if (is_gpu) {
     LOG(IR) << "Table Function Kernel IR\n" << serialize_llvm_object(kernel_func_);
-
     CHECK(executor_);
-
-    CodeGenerator::GPUTarget gpu_target{
-        nullptr, executor_->cudaMgr(), executor_->blockSize(), cgen_state, false};
-    auto backend = compiler::getBackend(
-        co.device_type, executor_, /*is_gpu_smem_used=*/false, gpu_target);
-    code = backend->generateNativeCode(
-        entry_point_func_, kernel_func_, {entry_point_func_, kernel_func_}, co);
-
-  } else {
-    CodeGenerator::GPUTarget target{};
-    auto backend = compiler::getBackend(co.device_type, executor_, false, target);
-    std::shared_ptr<CpuCompilationContext> cpu_ctx =
-        std::dynamic_pointer_cast<CpuCompilationContext>(backend->generateNativeCode(
-            entry_point_func_, nullptr, {entry_point_func_}, co));
-    cpu_ctx->setFunctionPointer(entry_point_func_);
-    code = cpu_ctx;
+    target = {nullptr, executor_->cudaMgr(), executor_->blockSize(), cgen_state, false};
   }
+
+  auto backend =
+      compiler::getBackend(co.device_type, executor_, /*is_gpu_smem_used=*/false, target);
+  auto ctx = backend->generateNativeCode(
+      entry_point_func_, kernel_func_, {entry_point_func_, kernel_func_}, co);
+
+  if (!is_gpu) {
+    std::shared_ptr<CpuCompilationContext> cpu_ctx =
+        std::dynamic_pointer_cast<CpuCompilationContext>(ctx);
+    cpu_ctx->setFunctionPointer(entry_point_func_);
+  }
+
   LOG(IR) << "End of IR";
 
-  return code;
+  return ctx;
 }
