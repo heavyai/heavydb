@@ -1360,14 +1360,8 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
     }
   }
 
-  // todo: move to backend
-  initializeNVPTXBackend();
-
-  CodeGenerator::GPUTarget gpu_target{nvptx_target_machine_.get(),
-                                      cuda_mgr,
-                                      blockSize(),
-                                      cgen_state_.get(),
-                                      row_func_not_inlined};
+  CodeGenerator::GPUTarget gpu_target{
+      nullptr, cuda_mgr, blockSize(), cgen_state_.get(), row_func_not_inlined};
   auto backend = compiler::getBackend(co.device_type, this, is_gpu_smem_used, gpu_target);
   std::shared_ptr<GpuCompilationContext> compilation_context;
 
@@ -1458,19 +1452,6 @@ std::unique_ptr<llvm::TargetMachine> CodeGenerator::initializeNVPTXBackend(
                                   "",
                                   llvm::TargetOptions(),
                                   llvm::Reloc::Static));
-}
-
-std::string Executor::generatePTX(const std::string& cuda_llir) const {
-  return CodeGenerator::generatePTX(
-      cuda_llir, nvptx_target_machine_.get(), cgen_state_->context_);
-}
-
-void Executor::initializeNVPTXBackend() const {
-  if (nvptx_target_machine_) {
-    return;
-  }
-  const auto arch = cudaMgr()->getDeviceArch();
-  nvptx_target_machine_ = CodeGenerator::initializeNVPTXBackend(arch);
 }
 
 // A small number of runtime functions don't get through CgenState::emitCall. List them

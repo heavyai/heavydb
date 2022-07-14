@@ -12,6 +12,15 @@ std::shared_ptr<CompilationContext> CPUBackend::generateNativeCode(
       CodeGenerator::generateNativeCPUCode(func, live_funcs, co));
 }
 
+CUDABackend::CUDABackend(Executor* executor,
+                         bool is_gpu_smem_used,
+                         CodeGenerator::GPUTarget& gpu_target)
+    : executor_(executor), is_gpu_smem_used_(is_gpu_smem_used), gpu_target_(gpu_target) {
+  const auto arch = gpu_target_.cuda_mgr->getDeviceArch();
+  nvptx_target_machine_ = CodeGenerator::initializeNVPTXBackend(arch);
+  gpu_target_.nvptx_target_machine = nvptx_target_machine_.get();
+}
+
 std::shared_ptr<CompilationContext> CUDABackend::generateNativeCode(
     llvm::Function* func,
     llvm::Function* wrapper_func,

@@ -33,10 +33,7 @@ class CUDABackend : public Backend {
  public:
   CUDABackend(Executor* executor,
               bool is_gpu_smem_used,
-              CodeGenerator::GPUTarget& gpu_target)
-      : executor_(executor)
-      , is_gpu_smem_used_(is_gpu_smem_used)
-      , gpu_target_(gpu_target) {}
+              CodeGenerator::GPUTarget& gpu_target);
 
   std::shared_ptr<CompilationContext> generateNativeCode(
       llvm::Function* func,
@@ -48,6 +45,8 @@ class CUDABackend : public Backend {
   Executor* executor_;
   bool is_gpu_smem_used_;
   CodeGenerator::GPUTarget& gpu_target_;
+
+  mutable std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 };
 
 std::shared_ptr<Backend> getBackend(ExecutorDeviceType dt,

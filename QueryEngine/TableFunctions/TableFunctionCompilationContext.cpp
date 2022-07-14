@@ -22,6 +22,7 @@
 #include <boost/algorithm/string.hpp>
 
 #include "QueryEngine/CodeGenerator.h"
+#include "QueryEngine/Compiler/Backend.h"
 
 namespace {
 
@@ -532,25 +533,22 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
     LOG(IR) << "Table Function Kernel IR\n" << serialize_llvm_object(kernel_func_);
 
     CHECK(executor_);
-    executor_->initializeNVPTXBackend();
 
-    CodeGenerator::GPUTarget gpu_target{executor_->nvptx_target_machine_.get(),
-                                        executor_->cudaMgr(),
-                                        executor_->blockSize(),
-                                        cgen_state,
-                                        false};
-    code = CodeGenerator::generateNativeGPUCode(executor_,
-                                                entry_point_func_,
-                                                kernel_func_,
-                                                {entry_point_func_, kernel_func_},
-                                                /*is_gpu_smem_used=*/false,
-                                                co,
-                                                gpu_target);
+    CodeGenerator::GPUTarget gpu_target{
+        nullptr, executor_->cudaMgr(), executor_->blockSize(), cgen_state, false};
+    auto backend = compiler::getBackend(
+        co.device_type, executor_, /*is_gpu_smem_used=*/false, gpu_target);
+    code = backend->generateNativeCode(
+        entry_point_func_, kernel_func_, {entry_point_func_, kernel_func_}, co);
+
   } else {
-    auto cpu_code =
-        CodeGenerator::generateNativeCPUCode(entry_point_func_, {entry_point_func_}, co);
-    cpu_code->setFunctionPointer(entry_point_func_);
-    code = cpu_code;
+    CodeGenerator::GPUTarget target{};
+    auto backend = compiler::getBackend(co.device_type, executor_, false, target);
+    std::shared_ptr<CpuCompilationContext> cpu_ctx =
+        std::dynamic_pointer_cast<CpuCompilationContext>(backend->generateNativeCode(
+            entry_point_func_, nullptr, {entry_point_func_}, co));
+    cpu_ctx->setFunctionPointer(entry_point_func_);
+    code = cpu_ctx;
   }
   LOG(IR) << "End of IR";
 

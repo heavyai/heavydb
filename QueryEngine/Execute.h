@@ -965,8 +965,6 @@ class Executor {
       const CudaMgr_Namespace::CudaMgr* cuda_mgr,
       const bool is_gpu_smem_used,
       const CompilationOptions&);
-  std::string generatePTX(const std::string&) const;
-  void initializeNVPTXBackend() const;
 
   int64_t deviceCycles(int milliseconds) const;
 
@@ -1193,8 +1191,6 @@ class Executor {
   std::atomic<bool> interrupted_;
 
   mutable std::mutex str_dict_mutex_;
-
-  mutable std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 
  public:
   static std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> s_stubs_accessor;
