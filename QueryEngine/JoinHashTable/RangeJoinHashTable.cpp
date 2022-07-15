@@ -737,26 +737,50 @@ llvm::Value* RangeJoinHashTable::codegenKey(const CompilationOptions& co,
     CHECK_EQ(outer_col_ti.get_type(), kPOINT);
     CHECK_EQ(inverse_bucket_sizes_for_dimension_.size(), static_cast<size_t>(2));
 
-    const auto col_lvs = code_generator.codegen(outer_col, true, co);
-    CHECK_EQ(col_lvs.size(), size_t(1));
+    llvm::Value* arr_ptr{nullptr};
+    // prepare point column (arr) ptr to generate code for hash table key
+    if (auto outer_col_var = dynamic_cast<const Analyzer::ColumnVar*>(outer_col)) {
+      const auto col_lvs = code_generator.codegen(outer_col, true, co);
+      CHECK_EQ(col_lvs.size(), size_t(1));
+      const auto coords_cd = executor_->getCatalog()->getMetadataForColumn(
+          outer_col_var->get_table_id(), outer_col_var->get_column_id() + 1);
+      CHECK(coords_cd);
+      const auto coords_ti = coords_cd->columnType;
 
-    const auto outer_col_var = dynamic_cast<const Analyzer::ColumnVar*>(outer_col);
-    CHECK(outer_col_var);
-
-    const auto coords_cd = executor_->getCatalog()->getMetadataForColumn(
-        outer_col_var->get_table_id(), outer_col_var->get_column_id() + 1);
-    CHECK(coords_cd);
-
-    const auto array_ptr = executor_->cgen_state_->emitExternalCall(
-        "array_buff",
-        llvm::Type::getInt8PtrTy(executor_->cgen_state_->context_),
-        {col_lvs.front(), code_generator.posArg(outer_col)});
-    CHECK(coords_cd->columnType.get_elem_type().get_type() == kTINYINT)
-        << "Only TINYINT coordinates columns are supported in geo overlaps "
-           "hash join.";
-
-    const auto arr_ptr =
-        code_generator.castArrayPointer(array_ptr, coords_cd->columnType.get_elem_type());
+      const auto array_buff_ptr = executor_->cgen_state_->emitExternalCall(
+          "array_buff",
+          llvm::Type::getInt8PtrTy(executor_->cgen_state_->context_),
+          {col_lvs.front(), code_generator.posArg(outer_col)});
+      CHECK(array_buff_ptr);
+      CHECK(coords_ti.get_elem_type().get_type() == kTINYINT)
+          << "Only TINYINT coordinates columns are supported in geo overlaps "
+             "hash join.";
+      arr_ptr =
+          code_generator.castArrayPointer(array_buff_ptr, coords_ti.get_elem_type());
+    } else if (auto geo_expr_outer_col =
+                   dynamic_cast<const Analyzer::GeoOperator*>(outer_col)) {
+      const auto geo_expr_name = geo_expr_outer_col->getName();
+      if (func_resolve(geo_expr_name, "ST_Point"sv, "ST_Transform"sv)) {
+        // todo (yoonmin) : support "ST_Centroid" (and "ST_SetSRID" when necessary)
+        // note that ST_SetSRID changes type info of the column, and is handled by
+        // translation phase, so when we use ST_SETSRID(ST_POINT(x, y), 4326)
+        // as a join column expression, we recognize it as ST_POINT (with SRID as 4326)
+        const auto col_lvs = code_generator.codegen(outer_col, true, co);
+        // listed functions keep point coordinates in the local variable (let say S)
+        // which is corresponding to the pointer that col_lvs[0] holds
+        // thus, all we need is to retrieve necessary coordinate from the S by varying
+        // its offset (i.e., i == 0 means x coordinate)
+        arr_ptr = col_lvs[0];
+      } else {
+        throw std::runtime_error(
+            "RHS key of the range join operator has a geospatial function which is not "
+            "supported yet: " +
+            geo_expr_name);
+      }
+    } else {
+      throw std::runtime_error("Range join operator has an invalid rhs key: " +
+                               outer_col->toString());
+    }
 
     // load and unpack offsets
     const auto offset =

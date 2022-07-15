@@ -1699,6 +1699,9 @@ const auto setup_stmts = {
     "CREATE TABLE t2_comp32_small ( p1 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32) );",
     "CREATE TABLE t1 ( p1 GEOMETRY(POINT, 4326) ENCODING NONE );",
     "CREATE TABLE t2 ( p1 GEOMETRY(POINT, 4326) ENCODING NONE );",
+    "CREATE TABLE t1_coord (x FLOAT, y FLOAT)",
+    "GEOMETRY(POINT) ENCODING NONE, pt4326 GEOMETRY(POINT, 4326) ENCODING NONE, pt900913 "
+    "GEOMETRY(POINT, 900913), x float, y float);",
 };
 
 const auto insert_data_stmts = {
@@ -1711,6 +1714,11 @@ const auto insert_data_stmts = {
     "INSERT INTO t1 VALUES ( 'point(1.123 0.123)' );",
     "INSERT INTO t1 VALUES ( 'point(2.123 2.123)' );",
     "INSERT INTO t1 VALUES ( 'point(3.123 30.123)' );",
+
+    "INSERT INTO t1_coord VALUES (0.123, 0.123);",
+    "INSERT INTO t1_coord VALUES (1.123, 0.123);",
+    "INSERT INTO t1_coord VALUES (2.123, 2.123);",
+    "INSERT INTO t1_coord VALUES (3.123, 30.123);",
 
     "INSERT INTO t2_comp32 VALUES ( 'point(0.1 0.1)' );",
     "INSERT INTO t2_comp32 VALUES ( 'point(10.123 40.123)' );",
@@ -1732,6 +1740,7 @@ const auto cleanup_stmts = {
     "DROP TABLE IF EXISTS t2_comp32_small",
     "DROP TABLE IF EXISTS t1;",
     "DROP TABLE IF EXISTS t2;",
+    "DROP TABLE IF EXISTS t1_coord;",
 };
 
 }  // namespace range_join
@@ -1874,6 +1883,46 @@ TEST_F(RangeJoinTest, DistanceLessThanEqUnCompressedCols) {
           "SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
           tableA,
           tableB,
+          tableA,
+          tableB,
+          b.upper_bound);
+
+      ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
+          << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+
+      if (ctx.hash_join_enabled) {
+        ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                   CacheItemType::OVERLAPS_HT),
+                  expected_hash_tables)
+            << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+        expected_hash_tables++;
+      }
+    }
+  });
+}
+
+TEST_F(RangeJoinTest, DistanceLessThanEqUnCompressedColsBySTPoint) {
+  const auto tableA = "t1_coord";
+  const auto tableB = "t2";
+
+  executeAllScenarios([&](const ExecutionContext ctx) -> void {
+    size_t expected_hash_tables = 0;
+
+    if (ctx.hash_join_enabled) {
+      ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT),
+                expected_hash_tables)
+          << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+      expected_hash_tables++;
+    }
+
+    for (const auto& b : testBounds()) {
+      auto sql = fmt::format(
+          "SELECT count(*) FROM {}, {} where ST_Distance(ST_Point({}.x, {}.y), {}.p1) <= "
+          "{};",
+          tableA,
+          tableB,
+          tableA,
           tableA,
           tableB,
           b.upper_bound);
@@ -2231,6 +2280,86 @@ TEST_F(RangeJoinTest, HashTableRecycling) {
     CHECK(ht_metrics);
     EXPECT_LT(ht_ref_cnts[idx], ht_metrics->getRefCount());
     ++idx;
+  }
+}
+
+namespace OverlapsJoinRewriter {
+
+const auto setup_stmts = {
+    "CREATE TABLE TEST_GEOPT (ptc4326 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32), pt "
+    "GEOMETRY(POINT) ENCODING NONE, pt4326 GEOMETRY(POINT, 4326) ENCODING NONE, pt900913 "
+    "GEOMETRY(POINT, 900913), x float, y float);",
+};
+
+const auto insert_data_stmts = {
+    "INSERT INTO TEST_GEOPT VALUES ('point(0.123 0.123)', 'point(0.123 0.123)', "
+    "'point(0.123 0.123)', 'point(0.123 0.123)', 0.123, 0.123 );",
+    "INSERT INTO TEST_GEOPT VALUES ('point(1.123 0.123)', 'point(1.123 0.123)', "
+    "'point(1.123 0.123)', 'point(1.123 0.123)', 1.123, 0.123 );",
+    "INSERT INTO TEST_GEOPT VALUES ('point(2.123 0.123)', 'point(2.123 0.123)', "
+    "'point(2.123 0.123)', 'point(2.123 0.123)', 2.123, 0.123 );",
+    "INSERT INTO TEST_GEOPT VALUES ('point(3.123 0.123)', 'point(3.123 0.123)', "
+    "'point(3.123 0.123)', 'point(3.123 0.123)', 3.123, 0.123 );",
+};
+
+const auto cleanup_stmts = {
+    "DROP TABLE IF EXISTS TEST_GEOPT",
+};
+}  // namespace OverlapsJoinRewriter
+
+class OverlapsJoinRewriteTest : public ::testing::Test {
+ protected:
+  static void SetUpTestSuite() {
+    for (const auto& stmt : OverlapsJoinRewriter::cleanup_stmts) {
+      QR::get()->runDDLStatement(stmt);
+    }
+
+    for (const auto& stmt : OverlapsJoinRewriter::setup_stmts) {
+      QR::get()->runDDLStatement(stmt);
+    }
+
+    for (const auto& stmt : OverlapsJoinRewriter::insert_data_stmts) {
+      QR::get()->runSQL(stmt, ExecutorDeviceType::CPU);
+    }
+  }
+
+  static void TearDownTestSuite() {
+    for (const auto& stmt : range_join::cleanup_stmts) {
+      QR::get()->runDDLStatement(stmt);
+    }
+  }
+};
+
+TEST(OverlapsJoinRewriteTest, VariousHashKeyExpressionsForP2PSTDistanceJoin) {
+  std::vector<int64_t> answer_sheet;
+  std::array<std::string, 4> queries{
+      "SELECT COUNT(1) FROM TEST_GEOPT a, TEST_GEOPT b WHERE ST_DISTANCE(a.pt4326, "
+      "b.pt4326) < 1;",
+      "SELECT COUNT(1) FROM TEST_GEOPT a, TEST_GEOPT b WHERE "
+      "ST_DISTANCE(ST_TRANSFORM(a.pt900913, 4326), b.pt4326) < 1;",
+      "SELECT COUNT(1) FROM TEST_GEOPT a, TEST_GEOPT b WHERE "
+      "ST_DISTANCE(ST_SETSRID(ST_POINT(a.x, a.y), 4326), b.pt4326) < 1;",
+      "SELECT COUNT(1) FROM TEST_GEOPT a, TEST_GEOPT b WHERE "
+      "ST_DISTANCE(ST_TRANSFORM(ST_SETSRID(ST_POINT(a.x, a.y), 900913), 4326), b.pt4326) "
+      "< 1;"};
+  ScopeGuard flag_reset = [orig = g_enable_overlaps_hashjoin] {
+    g_enable_overlaps_hashjoin = orig;
+  };
+  g_enable_overlaps_hashjoin = false;
+  for (size_t i = 0; i < answer_sheet.size(); i++) {
+    answer_sheet.push_back(v<int64_t>(execSQL(queries[i], ExecutorDeviceType::CPU)));
+  }
+  g_enable_overlaps_hashjoin = true;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    QR::get()->clearCpuMemory();
+    for (size_t i = 0; i < answer_sheet.size(); i++) {
+      EXPECT_EQ(v<int64_t>(execSQL(queries[i], dt)), answer_sheet[i]);
+      ASSERT_GT(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT),
+                size_t(0))
+          << "Query does not exploit overlaps hash join: " << queries[i];
+    }
   }
 }
 
