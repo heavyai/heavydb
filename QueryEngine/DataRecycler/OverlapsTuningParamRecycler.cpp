@@ -109,10 +109,12 @@ void OverlapsTuningParamRecycler::clearCache() {
   std::lock_guard<std::mutex> lock(getCacheLock());
   auto param_cache = getCachedItemContainer(CacheItemType::OVERLAPS_AUTO_TUNER_PARAM,
                                             PARAM_CACHE_DEVICE_IDENTIFIER);
-  VLOG(1) << "[" << CacheItemType::OVERLAPS_AUTO_TUNER_PARAM << ", "
-          << DataRecyclerUtil::getDeviceIdentifierString(PARAM_CACHE_DEVICE_IDENTIFIER)
-          << "] clear cache (# items: " << param_cache->size() << ")";
-  param_cache->clear();
+  if (!param_cache->empty()) {
+    VLOG(1) << "[" << CacheItemType::OVERLAPS_AUTO_TUNER_PARAM << ", "
+            << DataRecyclerUtil::getDeviceIdentifierString(PARAM_CACHE_DEVICE_IDENTIFIER)
+            << "] clear cache (# items: " << param_cache->size() << ")";
+    param_cache->clear();
+  }
 }
 
 void OverlapsTuningParamRecycler::markCachedItemAsDirty(

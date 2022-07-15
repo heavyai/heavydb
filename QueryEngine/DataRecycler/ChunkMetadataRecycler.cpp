@@ -122,11 +122,14 @@ void ChunkMetadataRecycler::clearCache() {
   std::lock_guard<std::mutex> lock(getCacheLock());
   auto metadata_cache_container = getCachedItemContainer(
       CacheItemType::CHUNK_METADATA, CHUNK_METADATA_CACHE_DEVICE_IDENTIFIER);
-  VLOG(1) << "[" << CacheItemType::CHUNK_METADATA << ", "
-          << DataRecyclerUtil::getDeviceIdentifierString(
-                 CHUNK_METADATA_CACHE_DEVICE_IDENTIFIER)
-          << "] clear cache (# items: " << metadata_cache_container->size() << ")";
-  metadata_cache_container->clear();
+
+  if (!metadata_cache_container->empty()) {
+    VLOG(1) << "[" << CacheItemType::CHUNK_METADATA << ", "
+            << DataRecyclerUtil::getDeviceIdentifierString(
+                   CHUNK_METADATA_CACHE_DEVICE_IDENTIFIER)
+            << "] clear cache (# items: " << metadata_cache_container->size() << ")";
+    metadata_cache_container->clear();
+  }
 }
 
 void ChunkMetadataRecycler::markCachedItemAsDirty(

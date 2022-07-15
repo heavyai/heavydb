@@ -91,10 +91,12 @@ void HashingSchemeRecycler::clearCache() {
   std::lock_guard<std::mutex> lock(getCacheLock());
   auto layout_cache_container = getCachedItemContainer(CacheItemType::HT_HASHING_SCHEME,
                                                        LAYOUT_CACHE_DEVICE_IDENTIFIER);
-  VLOG(1) << "[" << CacheItemType::HT_HASHING_SCHEME << ", "
-          << DataRecyclerUtil::getDeviceIdentifierString(LAYOUT_CACHE_DEVICE_IDENTIFIER)
-          << "] clear cache (# items: " << layout_cache_container->size() << ")";
-  layout_cache_container->clear();
+  if (!layout_cache_container->empty()) {
+    VLOG(1) << "[" << CacheItemType::HT_HASHING_SCHEME << ", "
+            << DataRecyclerUtil::getDeviceIdentifierString(LAYOUT_CACHE_DEVICE_IDENTIFIER)
+            << "] clear cache (# items: " << layout_cache_container->size() << ")";
+    layout_cache_container->clear();
+  }
 }
 
 void HashingSchemeRecycler::markCachedItemAsDirty(

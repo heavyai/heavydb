@@ -246,11 +246,13 @@ void HashtableRecycler::clearCache() {
     getMetricTracker(item_type).clearCacheMetricTracker();
     auto item_cache = getItemCache().find(item_type)->second;
     for (auto& kv : *item_cache) {
-      VLOG(1) << "[" << item_type << ", "
-              << DataRecyclerUtil::getDeviceIdentifierString(
-                     DataRecyclerUtil::CPU_DEVICE_IDENTIFIER)
-              << "] clear cache (# items: " << kv.second->size() << ")";
-      kv.second->clear();
+      if (!kv.second->empty()) {
+        VLOG(1) << "[" << item_type << ", "
+                << DataRecyclerUtil::getDeviceIdentifierString(
+                       DataRecyclerUtil::CPU_DEVICE_IDENTIFIER)
+                << "] clear cache (# items: " << kv.second->size() << ")";
+        kv.second->clear();
+      }
     }
   }
   table_key_to_query_plan_dag_map_.clear();

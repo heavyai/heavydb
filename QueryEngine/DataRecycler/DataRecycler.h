@@ -319,9 +319,11 @@ class CacheMetricTracker {
   void clearCacheMetricTracker() {
     for (auto& kv : current_cache_size_in_bytes_) {
       auto cache_item_metrics = getCacheItemMetrics(kv.first);
-      VLOG(1) << "Clear cache of " << item_type_ << " from device [" << kv.first
-              << "] (# cached items: " << cache_item_metrics.size() << ", " << kv.second
-              << " bytes)";
+      if (kv.first > 0) {
+        VLOG(1) << "[" << item_type_ << "]"
+                << "] clear cache metrics (# items: " << kv.first << ", " << kv.second
+                << " bytes)";
+      }
       updateCurrentCacheSize(kv.first, CacheUpdateAction::REMOVE, kv.second);
       CHECK_EQ(getCurrentCacheSize(kv.first).value(), 0u);
     }
