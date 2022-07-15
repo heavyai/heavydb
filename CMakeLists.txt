@@ -518,6 +518,13 @@ if(MSVC)
     list(APPEND LLVM_COMPONENTS Passes)
 endif(MSVC)
 
+# SPIRV-Translator
+if(ENABLE_L0)
+  find_package(PkgConfig REQUIRED)
+  pkg_search_module(LLVMSPIRVLib REQUIRED IMPORTED_TARGET LLVMSPIRVLib)
+  message(STATUS "Found LLVMSPIRVLib of version ${LLVMSPIRVLib_VERSION}")
+endif()
+
 # Boost
 find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale iostreams REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})

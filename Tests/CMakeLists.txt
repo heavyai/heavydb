@@ -66,19 +66,13 @@ add_executable(StringDictionaryBenchmark StringDictionaryBenchmark.cpp)
 set(EXECUTE_TEST_LIBS gtest fmt::fmt ArrowQueryRunner ArrowStorage ${MAPD_LIBRARIES} ${Arrow_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 
 if(ENABLE_L0)
-  #add_executable(L0MgrExecuteTest L0MgrExecuteTest.cpp)
-  #target_include_directories(L0MgrExecuteTest PRIVATE ${LevelZero_INCLUDE_DIRS})
-  #target_link_libraries(L0MgrExecuteTest ${LevelZero_LIBRARIES} ${EXECUTE_TEST_LIBS})
-  #target_link_libraries(L0MgrExecuteTest L0Mgr)
-
-  #find_package(LLVMSPIRVLib REQUIRED COMPONENTS ${LLVMSPIRVLib_COMPONENTS})
-  #target_include_directories(L0MgrExecuteTest PRIVATE ${LLVMSPIRVLib_INCLUDE_DIRS})
-  #target_link_libraries(L0MgrExecuteTest ${LLVMSPIRVLib_LIBRARIES} ${EXECUTE_TEST_LIBS})
-
-  #add_test(L0MgrExecuteTest L0MgrExecuteTest ${TEST_ARGS})
-
+  add_executable(L0MgrExecuteTest L0MgrExecuteTest.cpp)
   add_executable(DataMgrWithL0Test DataMgrWithL0Test.cpp)
+
+  target_link_libraries(L0MgrExecuteTest L0Mgr PkgConfig::LLVMSPIRVLib ${EXECUTE_TEST_LIBS})
   target_link_libraries(DataMgrWithL0Test DataMgr ${EXECUTE_TEST_LIBS})
+
+  add_test(L0MgrExecuteTest L0MgrExecuteTest ${TEST_ARGS})
   add_test(DataMgrWithL0Test DataMgrWithL0Test ${TEST_ARGS})
 endif()
 
@@ -91,7 +85,7 @@ target_link_libraries(StringTransformTest Logger Shared gtest ${Boost_LIBRARIES}
 target_link_libraries(StringFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrowBasedExecuteTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(SpirvBuildTest LLVMSPIRVLib ${EXECUTE_TEST_LIBS})
+target_link_libraries(SpirvBuildTest PkgConfig::LLVMSPIRVLib gtest ${llvm_libs})
 target_link_libraries(TableFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrayTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(GroupByTest ${EXECUTE_TEST_LIBS})

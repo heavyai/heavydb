@@ -6,9 +6,6 @@
 
 #include <LLVMSPIRVLib/LLVMSPIRVLib.h>
 
-#include "TestHelpers.h"
-
-
 TEST(SPIRVBuildTest, TranslateSimple) {
   using namespace llvm;
   // See source at https://github.com/kurapov-peter/L0Snippets
@@ -69,7 +66,6 @@ TEST(SPIRVBuildTest, TranslateSimple) {
 }
 
 int main(int argc, char** argv) {
-  TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   int err = RUN_ALL_TESTS();
   return err;
