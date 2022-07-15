@@ -20,6 +20,8 @@
 #include "Execute.h"
 #include "RelAlgDag.h"
 
+#include "ThirdParty/robin_hood/robin_hood.h"
+
 #include <ctime>
 #include <memory>
 #include <unordered_map>
@@ -62,7 +64,8 @@ class RelAlgTranslator {
       , generated_geos_ops_(false)
       , just_explain_(just_explain) {}
 
-  std::shared_ptr<Analyzer::Expr> translateScalarRex(const RexScalar* rex) const;
+  // Clear cache_ after calling translateScalarRex(rex).
+  std::shared_ptr<Analyzer::Expr> translate(const RexScalar* rex) const;
 
   static std::shared_ptr<Analyzer::Expr> translateAggregateRex(
       const RexAgg* rex,
@@ -72,7 +75,14 @@ class RelAlgTranslator {
 
   bool generated_geos_ops() { return generated_geos_ops_; }
 
+  template <typename T>
+  std::shared_ptr<Analyzer::Expr> translateRexScalar(RexScalar const*) const {
+    throw std::runtime_error("Specialization of translateRexScalar() required.");
+  }
+
  private:
+  std::shared_ptr<Analyzer::Expr> translateScalarRex(const RexScalar* rex) const;
+
   std::shared_ptr<Analyzer::Expr> translateScalarSubquery(const RexSubQuery*) const;
 
   std::shared_ptr<Analyzer::Expr> translateInput(const RexInput*) const;
@@ -217,6 +227,9 @@ class RelAlgTranslator {
                                                                    SQLTypeInfo&,
                                                                    bool) const;
 
+  std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier> getQuantifiedRhs(
+      const RexScalar*) const;
+
   const Catalog_Namespace::Catalog& cat_;
   std::shared_ptr<const query_state::QueryState> query_state_;
   const Executor* executor_;
@@ -225,6 +238,10 @@ class RelAlgTranslator {
   time_t now_;
   mutable bool generated_geos_ops_;
   const bool just_explain_;
+
+  // Cache results from translateScalarRex() to avoid exponential recursion.
+  mutable robin_hood::unordered_map<RexScalar const*, std::shared_ptr<Analyzer::Expr>>
+      cache_;
 };
 
 struct QualsConjunctiveForm {

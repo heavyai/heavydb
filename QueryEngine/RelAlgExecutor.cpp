@@ -1730,7 +1730,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
     }
 
     const auto scalar_expr =
-        rewrite_array_elements(translator.translateScalarRex(scalar_rex).get());
+        rewrite_array_elements(translator.translate(scalar_rex).get());
     const auto rewritten_expr = rewrite_expr(scalar_expr.get());
     if (executor_type == ExecutorType::Native) {
       set_transient_dict_maybe(scalar_sources, rewritten_expr);
@@ -1763,12 +1763,12 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources_for_update
 
     std::shared_ptr<Analyzer::Expr> translated_expr;
     if (i >= starting_projection_column_idx && i < get_scalar_sources_size(ra_node) - 1) {
-      translated_expr = cast_to_column_type(translator.translateScalarRex(scalar_rex),
+      translated_expr = cast_to_column_type(translator.translate(scalar_rex),
                                             tableId,
                                             cat,
                                             colNames[i - starting_projection_column_idx]);
     } else {
-      translated_expr = translator.translateScalarRex(scalar_rex);
+      translated_expr = translator.translate(scalar_rex);
     }
     const auto scalar_expr = rewrite_array_elements(translated_expr.get());
     const auto rewritten_expr = rewrite_expr(scalar_expr.get());
@@ -1804,8 +1804,7 @@ std::list<std::shared_ptr<Analyzer::Expr>> translate_groupby_exprs(
 QualsConjunctiveForm translate_quals(const RelCompound* compound,
                                      const RelAlgTranslator& translator) {
   const auto filter_rex = compound->getFilterExpr();
-  const auto filter_expr =
-      filter_rex ? translator.translateScalarRex(filter_rex) : nullptr;
+  const auto filter_expr = filter_rex ? translator.translate(filter_rex) : nullptr;
   return filter_expr ? qual_to_conjunctive_form(fold_expr(filter_expr.get()))
                      : QualsConjunctiveForm{};
 }
@@ -1860,7 +1859,7 @@ std::vector<Analyzer::Expr*> translate_targets(
         const auto groupby_expr = *std::next(groupby_exprs.begin(), ref_idx - 1);
         target_expr = var_ref(groupby_expr.get(), Analyzer::Var::kGROUPBY, ref_idx);
       } else {
-        target_expr = translator.translateScalarRex(target_rex_scalar);
+        target_expr = translator.translate(target_rex_scalar);
         auto rewritten_expr = rewrite_expr(target_expr.get());
         target_expr = fold_expr(rewritten_expr.get());
         if (executor_type == ExecutorType::Native) {
@@ -4564,9 +4563,8 @@ std::list<std::shared_ptr<Analyzer::Expr>> RelAlgExecutor::makeJoinQuals(
   std::list<std::shared_ptr<Analyzer::Expr>> join_condition_quals;
   for (const auto rex_condition_component : rex_condition_cf) {
     const auto bw_equals = get_bitwise_equals_conjunction(rex_condition_component);
-    const auto join_condition =
-        reverse_logical_distribution(translator.translateScalarRex(
-            bw_equals ? bw_equals.get() : rex_condition_component));
+    const auto join_condition = reverse_logical_distribution(
+        translator.translate(bw_equals ? bw_equals.get() : rex_condition_component));
     auto join_condition_cf = qual_to_conjunctive_form(join_condition);
 
     auto append_folded_cf_quals = [&join_condition_quals](const auto& cf_quals) {
@@ -4877,9 +4875,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
             << pair.second << ')';
   }
 
-  RelAlgTranslator translator(
-      cat_, query_state_, executor_, input_to_nest_level, {}, now_, eo.just_explain);
-
   // For UNION queries, we need to keep the target_exprs from both subqueries since they
   // may differ on StringDictionaries.
   std::vector<Analyzer::Expr*> target_exprs_pair[2];
@@ -5156,7 +5151,7 @@ get_inputs_meta(const RelFilter* filter,
       CHECK(source->getOutputMetainfo().empty());
       std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources_owned;
       for (size_t i = 0; i < scan_source->size(); ++i, ++input_it) {
-        scalar_sources_owned.push_back(translator.translateScalarRex(input_it->get()));
+        scalar_sources_owned.push_back(translator.translate(input_it->get()));
       }
       const auto source_metadata =
           get_targets_meta(scan_source, get_raw_pointers(scalar_sources_owned));
@@ -5203,7 +5198,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
                               just_explain);
   std::tie(in_metainfo, target_exprs_owned) =
       get_inputs_meta(filter, translator, used_inputs_owned, input_to_nest_level);
-  const auto filter_expr = translator.translateScalarRex(filter->getCondition());
+  const auto filter_expr = translator.translate(filter->getCondition());
   const auto query_infos = get_table_infos(input_descs, executor_);
 
   const auto qual = fold_expr(filter_expr.get());

@@ -15,8 +15,7 @@
  */
 
 #include "RelAlgTranslator.h"
-#include "Shared/SqlTypesLayout.h"
-
+#include "Analyzer/Analyzer.h"
 #include "CalciteDeserializerUtils.h"
 #include "DateTimePlusRewrite.h"
 #include "DateTimeTranslator.h"
@@ -24,17 +23,17 @@
 #include "ExpressionRewrite.h"
 #include "ExtensionFunctionsBinding.h"
 #include "ExtensionFunctionsWhitelist.h"
+#include "Parser/ParserNode.h"
 #include "RelAlgDag.h"
 #include "ScalarExprVisitor.h"
+#include "Shared/SqlTypesLayout.h"
+#include "Shared/likely.h"
+#include "Shared/scope.h"
+#include "Shared/thread_count.h"
 #include "WindowContext.h"
 
 #include <future>
 #include <sstream>
-
-#include "Analyzer/Analyzer.h"
-#include "Parser/ParserNode.h"
-#include "Shared/likely.h"
-#include "Shared/thread_count.h"
 
 extern bool g_enable_watchdog;
 
@@ -53,9 +52,10 @@ SQLTypeInfo build_type_info(const SQLTypes sql_type,
   return ti;
 }
 
-std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier> get_quantified_rhs(
-    const RexScalar* rex_scalar,
-    const RelAlgTranslator& translator) {
+}  // namespace
+
+std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier>
+RelAlgTranslator::getQuantifiedRhs(const RexScalar* rex_scalar) const {
   std::shared_ptr<Analyzer::Expr> rhs;
   SQLQualifier sql_qual{kONE};
   const auto rex_operator = dynamic_cast<const RexOperator*>(rex_scalar);
@@ -66,15 +66,17 @@ std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier> get_quantified_rhs(
   const auto qual_str = rex_function ? rex_function->getName() : "";
   if (qual_str == "PG_ANY"sv || qual_str == "PG_ALL"sv) {
     CHECK_EQ(size_t(1), rex_function->size());
-    rhs = translator.translateScalarRex(rex_function->getOperand(0));
+    rhs = translateScalarRex(rex_function->getOperand(0));
     sql_qual = (qual_str == "PG_ANY"sv) ? kANY : kALL;
   }
   if (!rhs && rex_operator->getOperator() == kCAST) {
     CHECK_EQ(size_t(1), rex_operator->size());
-    std::tie(rhs, sql_qual) = get_quantified_rhs(rex_operator->getOperand(0), translator);
+    std::tie(rhs, sql_qual) = getQuantifiedRhs(rex_operator->getOperand(0));
   }
   return std::make_pair(rhs, sql_qual);
 }
+
+namespace {
 
 std::pair<Datum, bool> datum_from_scalar_tv(const ScalarTargetValue* scalar_tv,
                                             const SQLTypeInfo& ti) noexcept {
@@ -175,40 +177,88 @@ std::pair<Datum, bool> datum_from_scalar_tv(const ScalarTargetValue* scalar_tv,
   return {d, is_null_const};
 }
 
+using Handler =
+    std::shared_ptr<Analyzer::Expr> (RelAlgTranslator::*)(RexScalar const*) const;
+using IndexedHandler = std::pair<std::type_index, Handler>;
+
+template <typename... Ts>
+std::array<IndexedHandler, sizeof...(Ts)> makeHandlers() {
+  return {IndexedHandler{std::type_index(typeid(Ts)),
+                         &RelAlgTranslator::translateRexScalar<Ts>}...};
+}
+
+struct ByTypeIndex {
+  std::type_index const type_index_;
+  ByTypeIndex(std::type_info const& type_info)
+      : type_index_(std::type_index(type_info)) {}
+  bool operator()(IndexedHandler const& pair) const { return pair.first == type_index_; }
+};
+
 }  // namespace
 
+template <>
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRexScalar<RexInput>(
+    RexScalar const* rex) const {
+  return translateInput(static_cast<RexInput const*>(rex));
+}
+template <>
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRexScalar<RexLiteral>(
+    RexScalar const* rex) const {
+  return translateLiteral(static_cast<RexLiteral const*>(rex));
+}
+template <>
+std::shared_ptr<Analyzer::Expr>
+RelAlgTranslator::translateRexScalar<RexWindowFunctionOperator>(
+    RexScalar const* rex) const {
+  return translateWindowFunction(static_cast<RexWindowFunctionOperator const*>(rex));
+}
+template <>
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRexScalar<RexFunctionOperator>(
+    RexScalar const* rex) const {
+  return translateFunction(static_cast<RexFunctionOperator const*>(rex));
+}
+template <>
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRexScalar<RexOperator>(
+    RexScalar const* rex) const {
+  return translateOper(static_cast<RexOperator const*>(rex));
+}
+template <>
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRexScalar<RexCase>(
+    RexScalar const* rex) const {
+  return translateCase(static_cast<RexCase const*>(rex));
+}
+template <>
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRexScalar<RexSubQuery>(
+    RexScalar const* rex) const {
+  return translateScalarSubquery(static_cast<RexSubQuery const*>(rex));
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarRex(
-    const RexScalar* rex) const {
-  const auto rex_input = dynamic_cast<const RexInput*>(rex);
-  if (rex_input) {
-    return translateInput(rex_input);
+    RexScalar const* rex) const {
+  auto cache_itr = cache_.find(rex);
+  if (cache_itr == cache_.end()) {
+    // Order types from most likely to least as they are compared seriatim.
+    static auto const handlers = makeHandlers<RexInput,
+                                              RexLiteral,
+                                              RexOperator,
+                                              RexCase,
+                                              RexFunctionOperator,
+                                              RexWindowFunctionOperator,
+                                              RexSubQuery>();
+    static_assert(std::is_trivially_destructible_v<decltype(handlers)>);
+    auto it = std::find_if(handlers.cbegin(), handlers.cend(), ByTypeIndex{typeid(*rex)});
+    CHECK(it != handlers.cend()) << "Unhandled type: " << typeid(*rex).name();
+    // Call handler based on typeid(*rex) and cache the std::shared_ptr<Analyzer::Expr>.
+    auto cached = cache_.emplace(rex, (this->*it->second)(rex));
+    CHECK(cached.second) << "Failed to emplace rex of type " << typeid(*rex).name();
+    cache_itr = cached.first;
   }
-  const auto rex_literal = dynamic_cast<const RexLiteral*>(rex);
-  if (rex_literal) {
-    return translateLiteral(rex_literal);
-  }
-  const auto rex_window_function = dynamic_cast<const RexWindowFunctionOperator*>(rex);
-  if (rex_window_function) {
-    return translateWindowFunction(rex_window_function);
-  }
-  const auto rex_function = dynamic_cast<const RexFunctionOperator*>(rex);
-  if (rex_function) {
-    return translateFunction(rex_function);
-  }
-  const auto rex_operator = dynamic_cast<const RexOperator*>(rex);
-  if (rex_operator) {
-    return translateOper(rex_operator);
-  }
-  const auto rex_case = dynamic_cast<const RexCase*>(rex);
-  if (rex_case) {
-    return translateCase(rex_case);
-  }
-  const auto rex_subquery = dynamic_cast<const RexSubQuery*>(rex);
-  if (rex_subquery) {
-    return translateScalarSubquery(rex_subquery);
-  }
-  CHECK(false);
-  return nullptr;
+  return cache_itr->second;
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translate(RexScalar const* rex) const {
+  ScopeGuard clear_cache{[this] { cache_.clear(); }};
+  return translateScalarRex(rex);
 }
 
 namespace {
@@ -944,7 +994,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
     std::shared_ptr<Analyzer::Expr> rhs;
     SQLQualifier sql_qual{kONE};
     const auto rhs_op = rex_operator->getOperand(i);
-    std::tie(rhs, sql_qual) = get_quantified_rhs(rhs_op, *this);
+    std::tie(rhs, sql_qual) = getQuantifiedRhs(rhs_op);
     if (!rhs) {
       rhs = translateScalarRex(rhs_op);
     }
