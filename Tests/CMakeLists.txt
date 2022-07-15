@@ -8,7 +8,6 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/Udf/udf_sample.cpp DESTINATION ${CMAKE_BIN
 
 add_executable(CodeGeneratorTest CodeGeneratorTest.cpp)
 add_executable(ArrowBasedExecuteTest ArrowBasedExecuteTest.cpp)
-add_executable(SpirvBuildTest SpirvBuildTest.cpp)
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 add_executable(StringTransformTest StringTransformTest.cpp)
 add_executable(StringFunctionsTest StringFunctionsTest.cpp)
@@ -67,12 +66,15 @@ set(EXECUTE_TEST_LIBS gtest fmt::fmt ArrowQueryRunner ArrowStorage ${MAPD_LIBRAR
 
 if(ENABLE_L0)
   add_executable(L0MgrExecuteTest L0MgrExecuteTest.cpp)
+  add_executable(SpirvBuildTest SpirvBuildTest.cpp)
   add_executable(DataMgrWithL0Test DataMgrWithL0Test.cpp)
 
   target_link_libraries(L0MgrExecuteTest L0Mgr PkgConfig::LLVMSPIRVLib ${EXECUTE_TEST_LIBS})
+  target_link_libraries(SpirvBuildTest PkgConfig::LLVMSPIRVLib gtest ${llvm_libs})
   target_link_libraries(DataMgrWithL0Test DataMgr ${EXECUTE_TEST_LIBS})
 
   add_test(L0MgrExecuteTest L0MgrExecuteTest ${TEST_ARGS})
+  add_test(SpirvBuildTest SpirvBuildTest ${TEST_ARGS})
   add_test(DataMgrWithL0Test DataMgrWithL0Test ${TEST_ARGS})
 endif()
 
@@ -85,7 +87,6 @@ target_link_libraries(StringTransformTest Logger Shared gtest ${Boost_LIBRARIES}
 target_link_libraries(StringFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrowBasedExecuteTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(SpirvBuildTest PkgConfig::LLVMSPIRVLib gtest ${llvm_libs})
 target_link_libraries(TableFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrayTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(GroupByTest ${EXECUTE_TEST_LIBS})
@@ -137,7 +138,6 @@ add_test(ArrowBasedExecuteTest ArrowBasedExecuteTest ${TEST_ARGS})
 add_test(NAME ArrowBasedExecuteTestColumnarOutput COMMAND ArrowBasedExecuteTest ${TEST_ARGS} "--enable-columnar-output")
 add_test(NAME ArrowBasedExecuteTestSizeAgnostic COMMAND ArrowBasedExecuteTest ${TEST_ARGS} "--use-groupby-buffer-desc")
 add_test(CodeGeneratorTest CodeGeneratorTest ${TEST_ARGS})
-add_test(SpirvBuildTest SpirvBuildTest ${TEST_ARGS})
 add_test(ResultSetTest ResultSetTest ${TEST_ARGS})
 add_test(ColumnarResultsTest ColumnarResultsTest ${TEST_ARGS})
 add_test(FromTableReorderingTest FromTableReorderingTest ${TEST_ARGS})
