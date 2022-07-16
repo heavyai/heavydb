@@ -121,6 +121,8 @@ struct GeoRaster {
   T x_scale_bin_to_input_{0};
   T y_scale_bin_to_input_{0};
 
+  constexpr static int64_t BIN_OUT_OF_BOUNDS{-1};
+
   template <typename T2, typename Z2>
   GeoRaster(const Column<T2>& input_x,
             const Column<T2>& input_y,
@@ -153,10 +155,32 @@ struct GeoRaster {
 
   inline bool is_null(const Z value) const { return value == null_sentinel_; }
 
-  inline bool is_bin_out_of_bounds(const int64_t source_x_bin,
-                                   const int64_t source_y_bin) const {
-    return (source_x_bin < 0 || source_x_bin >= num_x_bins_ || source_y_bin < 0 ||
-            source_y_bin >= num_y_bins_);
+  inline bool is_bin_out_of_bounds(const int64_t x_bin, const int64_t y_bin) const {
+    return (x_bin < 0 || x_bin >= num_x_bins_ || y_bin < 0 || y_bin >= num_y_bins_);
+  }
+
+  inline std::pair<int64_t, Z> get_bin_idx_and_z_val_for_xy_bin(
+      const int64_t x_bin,
+      const int64_t y_bin) const {
+    if (is_bin_out_of_bounds(x_bin, y_bin)) {
+      return std::make_pair(BIN_OUT_OF_BOUNDS, null_sentinel_);
+    }
+    const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
+    return std::make_pair(bin_idx, z_[bin_idx]);
+  }
+
+  inline int64_t get_bin_idx_for_xy_coords(const T x, const T y) const {
+    if (x < x_min_ || x > x_max_ || y < y_min_ || y > y_max_) {
+      return BIN_OUT_OF_BOUNDS;
+    }
+    return x_y_bin_to_bin_index(get_x_bin(x), get_y_bin(y), num_x_bins_);
+  }
+
+  inline std::pair<T, T> get_xy_coords_for_bin_idx(const int64_t bin_idx) const {
+    const auto [x_bin, y_bin] = bin_to_x_y_bin_indexes(bin_idx, num_x_bins_);
+    const T x = x_min_ + (x_bin + 0.5) * x_scale_bin_to_input_;
+    const T y = y_min_ + (y_bin + 0.5) * y_scale_bin_to_input_;
+    return std::make_pair(x, y);
   }
 
   inline Z offset_source_z_from_raster_z(const int64_t source_x_bin,

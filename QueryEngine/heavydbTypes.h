@@ -733,6 +733,10 @@ struct Column<TextEncodingDict> {
 #ifndef __CUDACC__
 #ifndef UDF_COMPILED
   StringDictionaryProxy* string_dict_proxy_;
+  DEVICE Column(const Column& other)
+      : ptr_(other.ptr_)
+      , num_rows_(other.num_rows_)
+      , string_dict_proxy_(other.string_dict_proxy_) {}
   DEVICE Column(TextEncodingDict* ptr,
                 const int64_t num_rows,
                 StringDictionaryProxy* string_dict_proxy)

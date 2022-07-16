@@ -700,6 +700,155 @@ TEST_F(SystemTFs, FeatureSelfSimilarity) {
   }
 }
 
+TEST_F(SystemTFs, GraphShortestPath) {
+  constexpr double max_epsilon = 0.01;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    SKIP_NO_TBB();
+    {
+      const std::string graph_values_sql =
+          "CURSOR(SELECT CAST(node1 AS INT) AS node1, CAST(node2 AS INT) AS node2, "
+          "CAST(distance AS FLOAT) as distance FROM (VALUES (1, 2, 1.0), (1, 3, 2.0), "
+          "(2, 4, 3.0), (3, 4, 1.0)) AS t(node1, node2, distance))";
+      const std::string origin_node{"1"};
+      const std::string dest_node{"4"};
+      const std::string query =
+          "SELECT * FROM TABLE(tf_graph_shortest_path("
+          "edge_list => " +
+          graph_values_sql + ", origin_node => " + origin_node +
+          ", destination_node => " + dest_node + ")) ORDER BY path_step ASC;";
+      const auto rows = run_multiple_agg(query, dt);
+      const std::vector<int32_t> expected_path_steps = {1, 2, 3};
+      const std::vector<int32_t> expected_nodes = {1, 3, 4};
+      const std::vector<float> expected_cume_dists = {0.0, 2.0, 3.0};
+      ASSERT_EQ(rows->rowCount(), 3UL);
+      ASSERT_EQ(rows->colCount(), 3UL);
+      for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(expected_path_steps[row_idx], TestHelpers::v<int64_t>(crt_row[0]));
+        EXPECT_EQ(expected_nodes[row_idx], TestHelpers::v<int64_t>(crt_row[1]));
+        EXPECT_GE(TestHelpers::v<float>(crt_row[2]),
+                  expected_cume_dists[row_idx] - max_epsilon);
+        EXPECT_LE(TestHelpers::v<float>(crt_row[2]),
+                  expected_cume_dists[row_idx] + max_epsilon);
+      }
+    }
+  }
+}
+
+TEST_F(SystemTFs, GraphShortestPathsDistances) {
+  constexpr double max_epsilon = 0.01;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    SKIP_NO_TBB();
+    {
+      const std::string graph_values_sql =
+          "CURSOR(SELECT CAST(node1 AS INT) AS node1, CAST(node2 AS INT) AS node2, "
+          "CAST(distance AS FLOAT) as distance FROM (VALUES (1, 2, 1.0), (1, 3, 2.0), "
+          "(2, 4, 3.0), (3, 4, 1.0)) AS t(node1, node2, distance))";
+      const std::string origin_node{"1"};
+      const std::string dest_node{"4"};
+      const std::string query =
+          "SELECT * FROM TABLE(tf_graph_shortest_paths_distances("
+          "edge_list => " +
+          graph_values_sql + ", origin_node => " + origin_node +
+          ")) ORDER BY origin_node, "
+          "destination_node ASC;";
+      const auto rows = run_multiple_agg(query, dt);
+      const std::vector<int32_t> expected_origin_nodes = {1, 1, 1, 1};
+      const std::vector<int32_t> expected_destination_nodes = {1, 2, 3, 4};
+      const std::vector<float> expected_distances = {0.0, 1.0, 2.0, 3.0};
+      const std::vector<int32_t> expected_num_edges_traversed = {0, 1, 1, 2};
+      ASSERT_EQ(rows->rowCount(), 4UL);
+      ASSERT_EQ(rows->colCount(), 4UL);
+      for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(expected_origin_nodes[row_idx], TestHelpers::v<int64_t>(crt_row[0]));
+        EXPECT_EQ(expected_destination_nodes[row_idx],
+                  TestHelpers::v<int64_t>(crt_row[1]));
+        EXPECT_GE(TestHelpers::v<float>(crt_row[2]),
+                  expected_distances[row_idx] - max_epsilon);
+        EXPECT_LE(TestHelpers::v<float>(crt_row[2]),
+                  expected_distances[row_idx] + max_epsilon);
+        EXPECT_EQ(expected_num_edges_traversed[row_idx],
+                  TestHelpers::v<int64_t>(crt_row[3]));
+      }
+    }
+  }
+}
+
+TEST_F(SystemTFs, RasterGraphShortestPathsDistances) {
+  constexpr double max_epsilon = 0.01;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    SKIP_NO_TBB();
+    {
+      const std::string raster_graph_values_sql =
+          "CURSOR(SELECT CAST(a.x AS FLOAT) AS x, "
+          "CAST(b.y AS FLOAT) AS y, "
+          "CEIL(CAST(b.y AS FLOAT) / 2) * 5.0 + a.x * "
+          "CASE WHEN MOD(b.y, 2) = 0 THEN 1.0 ELSE 0.5 END AS z "
+          "FROM TABLE(generate_series(0, 9)) AS a(x), "
+          "TABLE(generate_series(0, 9)) AS b(y))";
+
+      const float origin_x{0.5};
+      const float origin_y{0.5};
+      const float destination_x{9.5};
+      const float destination_y{9.5};
+
+      const std::string query =
+          "SELECT * FROM TABLE(tf_raster_graph_shortest_slope_weighted_path("
+          "raster => " +
+          raster_graph_values_sql +
+          ", agg_type => 'AVG', "
+          "bin_dim => 1.0, geographic_coords => FALSE, neighborhood_fill_radius => "
+          "0, "
+          "fill_only_nulls => TRUE, "
+          "origin_x => " +
+          std::to_string(origin_x) +
+          ", "
+          "origin_y => " +
+          std::to_string(origin_y) +
+          ", "
+          "destination_x => " +
+          std::to_string(destination_x) +
+          ", "
+          "destination_y => " +
+          std::to_string(destination_y) +
+          ", "
+          "slope_weight_exponent => 3.0, slope_pct_max => 100.0)) ORDER BY "
+          "path_step ASC";
+      const auto rows = run_multiple_agg(query, dt);
+      ASSERT_LE(rows->rowCount(), 100UL);
+      ASSERT_EQ(rows->colCount(), 3UL);
+      std::vector<float> x_positions;
+      std::vector<float> y_positions;
+      for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(row_idx + 1));
+        EXPECT_GE(TestHelpers::v<float>(crt_row[1]), 0.0);
+        EXPECT_LE(TestHelpers::v<float>(crt_row[1]), 10.0);
+        EXPECT_GE(TestHelpers::v<float>(crt_row[2]), 0.0);
+        EXPECT_LE(TestHelpers::v<float>(crt_row[2]), 100.0);
+        x_positions.emplace_back(TestHelpers::v<float>(crt_row[1]));
+        y_positions.emplace_back(TestHelpers::v<float>(crt_row[2]));
+      }
+      EXPECT_GE(x_positions[0], origin_x - max_epsilon);
+      EXPECT_LE(x_positions[0], origin_x + max_epsilon);
+      EXPECT_GE(y_positions[0], origin_y - max_epsilon);
+      EXPECT_LE(y_positions[0], origin_y + max_epsilon);
+
+      const auto num_positions = x_positions.size();
+      ASSERT_EQ(num_positions, rows->rowCount());
+
+      EXPECT_GE(x_positions[num_positions - 1], destination_x - max_epsilon);
+      EXPECT_LE(x_positions[num_positions - 1], destination_x + max_epsilon);
+      EXPECT_GE(y_positions[num_positions - 1], destination_y - max_epsilon);
+      EXPECT_LE(y_positions[num_positions - 1], destination_y + max_epsilon);
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
