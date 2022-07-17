@@ -237,6 +237,8 @@ HeavyDBGeo HeavyDBGeoType() :
     (
         <POINT> { geoType = HeavyDBGeo.POINT; }
     |   
+        <MULTIPOINT> { geoType = HeavyDBGeo.MULTIPOINT; }
+    |   
         <LINESTRING> { geoType = HeavyDBGeo.LINESTRING; }
     | 
         <MULTILINESTRING> { geoType = HeavyDBGeo.MULTILINESTRING; }

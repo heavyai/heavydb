@@ -100,6 +100,7 @@ class HeavyAIType {
       case BOOL:
         return java.sql.Types.BOOLEAN;
       case POINT:
+      case MULTIPOINT:
       case POLYGON:
       case MULTIPOLYGON:
       case LINESTRING:

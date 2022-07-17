@@ -95,6 +95,7 @@ public class MetaConnect {
   private static final int KMULTIPOLYGON = 21;
   private static final int KTINYINT = 22;
   private static final int KMULTILINESTRING = 30;
+  private static final int KMULTIPOINT = 31;
 
   private static final String CATALOG_DIR_NAME = "catalogs";
   private static volatile Map<String, Set<String>> DATABASE_TO_TABLES =
@@ -370,6 +371,7 @@ public class MetaConnect {
     switch (type) {
       case KPOINT:
         return 1; // coords
+      case KMULTIPOINT:
       case KLINESTRING:
         return 2; // coords, bounds
       case KMULTILINESTRING:
@@ -386,7 +388,7 @@ public class MetaConnect {
 
   public static final boolean is_geometry(int type) {
     return type == KPOINT || type == KLINESTRING || type == KMULTILINESTRING
-            || type == KPOLYGON || type == KMULTIPOLYGON;
+            || type == KPOLYGON || type == KMULTIPOLYGON || type == KMULTIPOINT;
   }
 
   private TTableDetails get_table_detail_SQL(String tableName) {
@@ -788,6 +790,8 @@ public class MetaConnect {
         return TDatumType.INTERVAL_YEAR_MONTH;
       case KPOINT:
         return TDatumType.POINT;
+      case KMULTIPOINT:
+        return TDatumType.MULTIPOINT;
       case KLINESTRING:
         return TDatumType.LINESTRING;
       case KMULTILINESTRING:

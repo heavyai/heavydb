@@ -161,6 +161,7 @@ class HeavyAIResultSet implements java.sql.ResultSet {
       case BOOL:
         return getBoolean(columnIndex) ? "1" : "0";
       case POINT:
+      case MULTIPOINT:
       case LINESTRING:
       case MULTILINESTRING:
       case POLYGON:
@@ -569,6 +570,7 @@ class HeavyAIResultSet implements java.sql.ResultSet {
           return this.rowSet.columns.get(columnIndex - 1).data.real_col.get(offset);
         case STR:
         case POINT:
+        case MULTIPOINT:
         case LINESTRING:
         case MULTILINESTRING:
         case POLYGON:
@@ -1343,6 +1345,7 @@ class HeavyAIResultSet implements java.sql.ResultSet {
           break;
         case STR:
         case POINT:
+        case MULTIPOINT:
         case LINESTRING:
         case MULTILINESTRING:
         case POLYGON:

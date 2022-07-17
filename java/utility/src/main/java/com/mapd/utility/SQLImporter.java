@@ -641,7 +641,8 @@ public class SQLImporter {
           match = (dstType == TDatumType.STR || dstType == TDatumType.POINT
                   || dstType == TDatumType.POLYGON || dstType == TDatumType.MULTIPOLYGON
                   || dstType == TDatumType.LINESTRING
-                  || dstType == TDatumType.MULTILINESTRING);
+                  || dstType == TDatumType.MULTILINESTRING
+                  || dstType == TDatumType.MULTIPOINT);
           break;
         case java.sql.Types.OTHER:
           // NOTE: I ignore subtypes (geography vs geopetry vs none) here just because
@@ -655,6 +656,9 @@ public class SQLImporter {
           switch (dstType) {
             case POINT:
               match = gisType.type.equalsIgnoreCase("POINT");
+              break;
+            case MULTIPOINT:
+              match = gisType.type.equalsIgnoreCase("MULTIPOINT");
               break;
             case LINESTRING:
               match = gisType.type.equalsIgnoreCase("LINESTRING");

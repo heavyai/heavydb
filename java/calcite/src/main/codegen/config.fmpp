@@ -104,6 +104,7 @@ data: {
         "POLYGON"
         "LINESTRING"
         "MULTILINESTRING"
+        "MULTIPOINT"
         "MULTIPOLYGON"
         "TEXT"
         "REFRESH"

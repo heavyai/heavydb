@@ -141,6 +141,9 @@ public class HeavyDBTable implements Table {
       case POINT:
         return typeFactory.createSqlType(SqlTypeName.ANY);
       // return new PointSqlType();
+      case MULTIPOINT:
+        return typeFactory.createSqlType(SqlTypeName.ANY);
+      // return new MultipointSqlType();
       case LINESTRING:
         return typeFactory.createSqlType(SqlTypeName.ANY);
       // return new LinestringSqlType();

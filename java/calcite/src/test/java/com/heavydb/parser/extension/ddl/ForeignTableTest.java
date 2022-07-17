@@ -245,6 +245,16 @@ public class ForeignTableTest extends DDLTest {
   }
 
   @Test
+  public void createForeignTableMultiPoint() throws Exception {
+    final JsonObject expectedJsonObject = getJsonFromFile("cft_MultiPoint.json");
+    final TPlanResult result = processDdlCommand(
+            "CREATE FOREIGN TABLE test_table (test_column_1 MULTIPOINT) SERVER test_server;");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
+
+  @Test
   public void createForeignTableLinestring() throws Exception {
     final JsonObject expectedJsonObject = getJsonFromFile("cft_Linestring.json");
     final TPlanResult result = processDdlCommand(

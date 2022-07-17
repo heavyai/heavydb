@@ -163,6 +163,8 @@ String HeavyDBGeoDataTypeName() :
     (
         type = <POINT>
     |
+        type = <MULTIPOINT>
+    |
         type = <LINESTRING>
     |
         type = <MULTILINESTRING>

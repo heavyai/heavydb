@@ -58,6 +58,7 @@ public class HeavyAIArray implements java.sql.Array {
         break;
       case STR:
       case POINT:
+      case MULTIPOINT:
       case LINESTRING:
       case MULTILINESTRING:
       case POLYGON:
@@ -174,6 +175,7 @@ public class HeavyAIArray implements java.sql.Array {
             break;
           case STR:
           case POINT:
+          case MULTIPOINT:
           case LINESTRING:
           case MULTILINESTRING:
           case POLYGON:
@@ -215,6 +217,7 @@ public class HeavyAIArray implements java.sql.Array {
       switch (type) {
         case STR:
         case POINT:
+        case MULTIPOINT:
         case LINESTRING:
         case MULTILINESTRING:
         case POLYGON:
