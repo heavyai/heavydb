@@ -296,6 +296,7 @@ Datum NullDatum(SQLTypeInfo& ti) {
       d.bigintval = inline_fixed_encoding_null_val(ti);
       break;
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:
@@ -338,6 +339,7 @@ Datum NullArrayDatum(SQLTypeInfo& ti) {
       d.bigintval = inline_fixed_encoding_null_array_val(ti);
       break;
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:
@@ -490,6 +492,7 @@ Datum TDatumToDatum(const TDatum& datum, SQLTypeInfo& ti) {
           datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
       break;
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:
@@ -747,6 +750,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       break;
     }
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:
@@ -802,6 +806,7 @@ void TypedImportBuffer::pop_value() {
       }
       break;
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:
@@ -990,6 +995,7 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
       return convert_arrow_val_to_import_buffer(
           cd, col, *bigint_buffer_, slice_range, bad_rows_tracker);
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:
@@ -1132,6 +1138,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
       break;
     }
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:
@@ -1456,6 +1463,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       }
       break;
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:
@@ -1622,6 +1630,7 @@ void TypedImportBuffer::addDefaultValues(const ColumnDescriptor* cd, size_t num_
       break;
     }
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:
@@ -1735,7 +1744,7 @@ void Importer::set_geo_physical_import_buffer(
   }
 
   if (col_type == kLINESTRING || col_type == kMULTILINESTRING || col_type == kPOLYGON ||
-      col_type == kMULTIPOLYGON) {
+      col_type == kMULTIPOLYGON || col_type == kMULTIPOINT) {
     auto cd_bounds = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     TDatum tdd_bounds;
     tdd_bounds.val.arr_val.reserve(bounds.size());
@@ -1863,7 +1872,7 @@ void Importer::set_geo_physical_import_buffer_columnar(
   }
 
   if (col_type == kLINESTRING || col_type == kMULTILINESTRING || col_type == kPOLYGON ||
-      col_type == kMULTIPOLYGON) {
+      col_type == kMULTIPOLYGON || col_type == kMULTIPOINT) {
     if (bounds_column.size() != coords_row_count) {
       CHECK(false) << "Geometry import columnar: bounds column size mismatch";
     }
@@ -2601,7 +2610,8 @@ static ImportStatus import_thread_shapefile(
             }
 
             if (col_type == kLINESTRING || col_type == kMULTILINESTRING ||
-                col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+                col_type == kPOLYGON || col_type == kMULTIPOLYGON ||
+                col_type == kMULTIPOINT) {
               // Create bounds array value and add it to the physical column
               ++cd_it;
               auto cd_bounds = *cd_it;
@@ -2900,6 +2910,7 @@ void Loader::fillShardRow(const size_t row_index,
         }
         break;
       case kPOINT:
+      case kMULTIPOINT:
       case kLINESTRING:
       case kMULTILINESTRING:
       case kPOLYGON:
@@ -3346,6 +3357,8 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
     // then test for leading words
     if (str_upper_case.find("POINT") == 0) {
       type = kPOINT;
+    } else if (str_upper_case.find("MULTIPOINT") == 0) {
+      type = kMULTIPOINT;
     } else if (str_upper_case.find("LINESTRING") == 0) {
       type = kLINESTRING;
     } else if (str_upper_case.find("MULTILINESTRING") == 0) {
@@ -3370,6 +3383,8 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
         auto first_five_bytes = str_upper_case.substr(0, 10);
         if (first_five_bytes == "0000000001" || first_five_bytes == "0101000000") {
           type = kPOINT;
+        } else if (first_five_bytes == "0000000004" || first_five_bytes == "0104000000") {
+          type = kMULTIPOINT;
         } else if (first_five_bytes == "0000000002" || first_five_bytes == "0102000000") {
           type = kLINESTRING;
         } else if (first_five_bytes == "0000000005" || first_five_bytes == "0105000000") {
@@ -3425,6 +3440,7 @@ bool Detector::more_restrictive_sqltype(const SQLTypes a, const SQLTypes b) {
   typeorder[kTIME] = 9;
   typeorder[kDATE] = 10;
   typeorder[kPOINT] = 11;
+  typeorder[kMULTIPOINT] = 11;
   typeorder[kLINESTRING] = 11;
   typeorder[kMULTILINESTRING] = 11;
   typeorder[kPOLYGON] = 11;
@@ -3910,6 +3926,7 @@ auto TypedImportBuffer::del_values(const SQLTypes type,
     case kCHAR:
       return del_values(*string_buffer_, bad_rows_tracker);
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:
@@ -4883,6 +4900,8 @@ SQLTypes ogr_to_type(const OGRwkbGeometryType& ogr_type) {
   switch (ogr_type) {
     case wkbPoint:
       return kPOINT;
+    case wkbMultiPoint:
+      return kMULTIPOINT;
     case wkbLineString:
       return kLINESTRING;
     case wkbMultiLineString:

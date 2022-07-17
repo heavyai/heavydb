@@ -191,6 +191,9 @@ void QueryExporterGDAL::beginExport(const std::string& file_path,
           case kPOINT:
             ogr_geometry_type = wkbPoint;
             break;
+          case kMULTIPOINT:
+            ogr_geometry_type = wkbMultiPoint;
+            break;
           case kLINESTRING:
             ogr_geometry_type = wkbLineString;
             break;
@@ -337,6 +340,13 @@ void insert_geo_column(const GeoTargetValue* geo_tv,
       CHECK(coords);
       Geospatial::GeoPoint point(*coords);
       ogr_feature->SetGeometry(point.getOGRGeometry());
+    } break;
+    case kMULTIPOINT: {
+      auto const multipoint_tv = boost::get<GeoMultiPointTargetValue>(geo_tv->get());
+      auto* coords = multipoint_tv.coords.get();
+      CHECK(coords);
+      Geospatial::GeoMultiPoint multipoint(*coords);
+      ogr_feature->SetGeometry(multipoint.getOGRGeometry());
     } break;
     case kLINESTRING: {
       auto const linestring_tv = boost::get<GeoLineStringTargetValue>(geo_tv->get());
