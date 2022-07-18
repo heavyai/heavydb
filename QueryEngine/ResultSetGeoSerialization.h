@@ -114,6 +114,47 @@ struct GeoTargetValuePtrSerializer<kPOINT> {
   }
 };
 
+// MultiPoint
+template <>
+struct GeoTargetValueSerializer<kMULTIPOINT> {
+  static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
+                                      std::array<VarlenDatumPtr, 1>& vals) {
+    if (!geo_ti.get_notnull() && vals[0]->is_null) {
+      return GeoTargetValue(boost::optional<GeoMultiPointTargetValue>{});
+    }
+    return GeoTargetValue(
+        boost::optional<GeoMultiPointTargetValue>{*decompress_coords<double, SQLTypeInfo>(
+            geo_ti, vals[0]->pointer, vals[0]->length)});
+  }
+};
+
+template <>
+struct GeoWktSerializer<kMULTIPOINT> {
+  static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
+                                      std::array<VarlenDatumPtr, 1>& vals) {
+    if (!geo_ti.get_notnull() && vals[0]->is_null) {
+      // May need to generate "MULTIPOINT EMPTY" instead of NULL
+      return NullableString("NULL");
+    }
+    Geospatial::GeoMultiPoint multipoint(*decompress_coords<double, SQLTypeInfo>(
+        geo_ti, vals[0]->pointer, vals[0]->length));
+    return NullableString(multipoint.getWktString());
+  }
+};
+
+template <>
+struct GeoTargetValuePtrSerializer<kMULTIPOINT> {
+  static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
+                                      std::array<VarlenDatumPtr, 1>& vals) {
+    if (!geo_ti.get_notnull() && vals[0]->is_null) {
+      // NULL geo
+      // Pass along null datum, instead of an empty/null GeoTargetValuePtr
+      // return GeoTargetValuePtr();
+    }
+    return GeoMultiPointTargetValuePtr({std::move(vals[0])});
+  }
+};
+
 // LineString
 template <>
 struct GeoTargetValueSerializer<kLINESTRING> {

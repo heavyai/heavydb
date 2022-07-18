@@ -101,6 +101,13 @@ struct GeoPointTargetValue {
       : coords(std::make_shared<std::vector<double>>(coords)) {}
 };
 
+struct GeoMultiPointTargetValue {
+  std::shared_ptr<std::vector<double>> coords;
+
+  GeoMultiPointTargetValue(const std::vector<double>& coords)
+      : coords(std::make_shared<std::vector<double>>(coords)) {}
+};
+
 struct GeoLineStringTargetValue {
   std::shared_ptr<std::vector<double>> coords;
 
@@ -145,6 +152,10 @@ struct GeoPointTargetValuePtr {
   std::shared_ptr<VarlenDatum> coords_data;
 };
 
+struct GeoMultiPointTargetValuePtr {
+  std::shared_ptr<VarlenDatum> coords_data;
+};
+
 struct GeoLineStringTargetValuePtr {
   std::shared_ptr<VarlenDatum> coords_data;
 };
@@ -169,11 +180,13 @@ using NullableString = boost::variant<std::string, void*>;
 using ScalarTargetValue = boost::variant<int64_t, double, float, NullableString>;
 using ArrayTargetValue = boost::optional<std::vector<ScalarTargetValue>>;
 using GeoTargetValue = boost::optional<boost::variant<GeoPointTargetValue,
+                                                      GeoMultiPointTargetValue,
                                                       GeoLineStringTargetValue,
                                                       GeoMultiLineStringTargetValue,
                                                       GeoPolyTargetValue,
                                                       GeoMultiPolyTargetValue>>;
 using GeoTargetValuePtr = boost::variant<GeoPointTargetValuePtr,
+                                         GeoMultiPointTargetValuePtr,
                                          GeoLineStringTargetValuePtr,
                                          GeoMultiLineStringTargetValuePtr,
                                          GeoPolyTargetValuePtr,

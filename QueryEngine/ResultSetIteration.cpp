@@ -1609,6 +1609,40 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
       }
       break;
     }
+    case kMULTIPOINT: {
+      if (separate_varlen_storage_valid_ && !target_info.is_agg) {
+        const auto& varlen_buffer = getSeparateVarlenStorage();
+        CHECK_LT(static_cast<size_t>(getCoordsDataPtr(geo_target_ptr)),
+                 varlen_buffer.size());
+
+        return GeoTargetValueBuilder<kMULTIPOINT, GeoQueryOutputFetchHandler>::build(
+            target_info.sql_type,
+            geo_return_type_,
+            nullptr,
+            false,
+            device_id_,
+            reinterpret_cast<int64_t>(
+                varlen_buffer[getCoordsDataPtr(geo_target_ptr)].data()),
+            static_cast<int64_t>(varlen_buffer[getCoordsDataPtr(geo_target_ptr)].size()));
+      } else if (col_lazy_fetch && col_lazy_fetch->is_lazily_fetched) {
+        const auto& frag_col_buffers = getFragColBuffers();
+        return GeoTargetValueBuilder<kMULTIPOINT, GeoLazyFetchHandler>::build(
+            target_info.sql_type,
+            geo_return_type_,
+            frag_col_buffers[col_lazy_fetch->local_col_id],
+            getCoordsDataPtr(geo_target_ptr));
+      } else {
+        return GeoTargetValueBuilder<kMULTIPOINT, GeoQueryOutputFetchHandler>::build(
+            target_info.sql_type,
+            geo_return_type_,
+            is_gpu_fetch ? getDataMgr() : nullptr,
+            is_gpu_fetch,
+            device_id_,
+            getCoordsDataPtr(geo_target_ptr),
+            getCoordsLength(geo_target_ptr));
+      }
+      break;
+    }
     case kLINESTRING: {
       if (separate_varlen_storage_valid_ && !target_info.is_agg) {
         const auto& varlen_buffer = getSeparateVarlenStorage();
