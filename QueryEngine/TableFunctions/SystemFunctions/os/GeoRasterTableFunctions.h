@@ -90,21 +90,21 @@ struct GeoRaster {
   const Z null_sentinel_;
   std::vector<Z> z_;
   std::vector<Z> counts_;
-  T x_min_;
-  T x_max_;
-  T y_min_;
-  T y_max_;
-  T x_range_;
-  T y_range_;
-  T x_meters_per_degree_;
-  T y_meters_per_degree_;
-  int64_t num_x_bins_;
-  int64_t num_y_bins_;
-  int64_t num_bins_;
-  T x_scale_input_to_bin_;
-  T y_scale_input_to_bin_;
-  T x_scale_bin_to_input_;
-  T y_scale_bin_to_input_;
+  T x_min_{0};
+  T x_max_{0};
+  T y_min_{0};
+  T y_max_{0};
+  T x_range_{0};
+  T y_range_{0};
+  T x_meters_per_degree_{0};
+  T y_meters_per_degree_{0};
+  int64_t num_x_bins_{0};
+  int64_t num_y_bins_{0};
+  int64_t num_bins_{0};
+  T x_scale_input_to_bin_{0};
+  T y_scale_input_to_bin_{0};
+  T x_scale_bin_to_input_{0};
+  T y_scale_bin_to_input_{0};
 
   template <typename T2, typename Z2>
   GeoRaster(const Column<T2>& input_x,
@@ -189,6 +189,8 @@ struct GeoRaster {
                              Column<Z>& output_z,
                              const int64_t neighborhood_null_fill_radius) const;
 
+  void setMetadata(TableFunctionManager& mgr) const;
+
  private:
   template <RasterAggType AggType, typename T2, typename Z2>
   void computeSerialImpl(const Column<T2>& input_x,
@@ -248,6 +250,8 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
                              geographic_coords,
                              true);
 
+  geo_raster.setMetadata(mgr);
+
   if (neighborhood_fill_radius > 0) {
     geo_raster.fill_bins_from_neighbors(neighborhood_fill_radius, fill_only_nulls);
   }
@@ -303,6 +307,8 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
                              y_min,
                              y_max);
 
+  geo_raster.setMetadata(mgr);
+
   if (neighborhood_fill_radius > 0) {
     geo_raster.fill_bins_from_neighbors(neighborhood_fill_radius, fill_only_nulls);
   }
@@ -351,6 +357,7 @@ tf_geo_rasterize_slope__cpu_template(TableFunctionManager& mgr,
                              bin_dim_meters,
                              geographic_coords,
                              true);
+  geo_raster.setMetadata(mgr);
 
   if (neighborhood_fill_radius > 0) {
     geo_raster.fill_bins_from_neighbors(neighborhood_fill_radius, fill_only_nulls);

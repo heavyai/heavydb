@@ -563,4 +563,16 @@ int64_t GeoRaster<T, Z>::outputDenseColumns(TableFunctionManager& mgr,
   return num_bins_;
 }
 
+template <typename T, typename Z>
+void GeoRaster<T, Z>::setMetadata(TableFunctionManager& mgr) const {
+  mgr.set_metadata("geo_raster_num_x_bins", num_x_bins_);
+  mgr.set_metadata("geo_raster_num_y_bins", num_y_bins_);
+  mgr.set_metadata("geo_raster_x_min", static_cast<double>(x_min_));
+  mgr.set_metadata("geo_raster_y_min", static_cast<double>(y_min_));
+  mgr.set_metadata("geo_raster_x_scale_input_to_bin",
+                   static_cast<double>(x_scale_input_to_bin_));
+  mgr.set_metadata("geo_raster_y_scale_input_to_bin",
+                   static_cast<double>(y_scale_input_to_bin_));
+}
+
 #endif  // __CUDACC__
