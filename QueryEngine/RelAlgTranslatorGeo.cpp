@@ -220,6 +220,9 @@ std::string suffix(SQLTypes type) {
   if (type == kPOINT) {
     return std::string("_Point");
   }
+  if (type == kMULTIPOINT) {
+    return std::string("_MultiPoint");
+  }
   if (type == kLINESTRING) {
     return std::string("_LineString");
   }
@@ -240,6 +243,9 @@ SQLTypes get_ti_from_geo(const Geospatial::GeoBase* geo) {
   switch (geo->getType()) {
     case Geospatial::GeoBase::GeoType::kPOINT: {
       return kPOINT;
+    }
+    case Geospatial::GeoBase::GeoType::kMULTIPOINT: {
+      return kMULTIPOINT;
     }
     case Geospatial::GeoBase::GeoType::kLINESTRING: {
       return kLINESTRING;

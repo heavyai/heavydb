@@ -1860,6 +1860,62 @@ double ST_Distance_LineString_Point_Geodesic(int8_t* l,
       p, psize, l, lsize, ic2, isr2, ic1, isr1, osr);
 }
 
+EXTENSION_NOINLINE
+double ST_Distance_Point_MultiPoint(int8_t* p,
+                                    int64_t psize,
+                                    int8_t* mp,
+                                    int64_t mpsize,
+                                    int32_t ic1,
+                                    int32_t isr1,
+                                    int32_t ic2,
+                                    int32_t isr2,
+                                    int32_t osr,
+                                    double threshold) {
+  Point2D pt = get_point(p, 0, ic1, isr1, osr);
+  auto mp_num_coords = mpsize / compression_unit_size(ic2);
+  Point2D mpp = get_point(mp, 0, ic2, isr2, osr);
+  double dist = distance_point_point(pt.x, pt.y, mpp.x, mpp.y);
+  for (int32_t i = 2; i < mp_num_coords; i += 2) {
+    mpp = get_point(mp, i, ic2, isr2, osr);
+    double ldist = distance_point_point(pt.x, pt.y, mpp.x, mpp.y);
+    if (dist > ldist) {
+      dist = ldist;
+    }
+    if (dist <= threshold) {
+      return dist;
+    }
+  }
+  return dist;
+}
+
+EXTENSION_NOINLINE
+double ST_Distance_Point_MultiPoint_Squared(int8_t* p,
+                                            int64_t psize,
+                                            int8_t* mp,
+                                            int64_t mpsize,
+                                            int32_t ic1,
+                                            int32_t isr1,
+                                            int32_t ic2,
+                                            int32_t isr2,
+                                            int32_t osr,
+                                            double threshold) {
+  Point2D pt = get_point(p, 0, ic1, isr1, osr);
+  auto mp_num_coords = mpsize / compression_unit_size(ic2);
+  Point2D mpp = get_point(mp, 0, ic2, isr2, osr);
+  double dist = distance_point_point_squared(pt.x, pt.y, mpp.x, mpp.y);
+  for (int32_t i = 2; i < mp_num_coords; i += 2) {
+    mpp = get_point(mp, i, ic2, isr2, osr);
+    double ldist = distance_point_point_squared(pt.x, pt.y, mpp.x, mpp.y);
+    if (dist > ldist) {
+      dist = ldist;
+    }
+    if (dist <= threshold) {
+      return dist;
+    }
+  }
+  return dist;
+}
+
 DEVICE ALWAYS_INLINE double distance_point_linestring(int8_t* p,
                                                       int64_t psize,
                                                       int8_t* l,
@@ -2096,6 +2152,96 @@ double ST_Distance_Point_MultiPolygon(int8_t* p,
   }
 
   return min_distance;
+}
+
+EXTENSION_INLINE
+double ST_Distance_MultiPoint_Point(int8_t* mp,
+                                    int64_t mpsize,
+                                    int8_t* p,
+                                    int64_t psize,
+                                    int32_t ic1,
+                                    int32_t isr1,
+                                    int32_t ic2,
+                                    int32_t isr2,
+                                    int32_t osr,
+                                    double threshold) {
+  return ST_Distance_Point_MultiPoint(
+      p, psize, mp, mpsize, ic2, isr2, ic1, isr1, osr, threshold);
+}
+
+EXTENSION_INLINE
+double ST_Distance_MultiPoint_Point_Squared(int8_t* mp,
+                                            int64_t mpsize,
+                                            int8_t* p,
+                                            int64_t psize,
+                                            int32_t ic1,
+                                            int32_t isr1,
+                                            int32_t ic2,
+                                            int32_t isr2,
+                                            int32_t osr,
+                                            double threshold) {
+  return ST_Distance_Point_MultiPoint_Squared(
+      p, psize, mp, mpsize, ic2, isr2, ic1, isr1, osr, threshold);
+}
+
+EXTENSION_NOINLINE
+double ST_Distance_MultiPoint_MultiPoint(int8_t* mp1,
+                                         int64_t mp1size,
+                                         int8_t* mp2,
+                                         int64_t mp2size,
+                                         int32_t ic1,
+                                         int32_t isr1,
+                                         int32_t ic2,
+                                         int32_t isr2,
+                                         int32_t osr,
+                                         double threshold) {
+  auto mp1_num_coords = mp1size / compression_unit_size(ic1);
+  auto mp2_num_coords = mp2size / compression_unit_size(ic2);
+  double dist = -1.0;
+  for (int32_t i = 0; i < mp1_num_coords; i += 2) {
+    Point2D mp1p = get_point(mp1, 0, ic1, isr1, osr);
+    for (int32_t j = 0; j < mp2_num_coords; j += 2) {
+      Point2D mp2p = get_point(mp2, 0, ic2, isr2, osr);
+      double ldist = distance_point_point(mp1p.x, mp1p.y, mp2p.x, mp2p.y);
+      if (dist > ldist || dist < 0.0) {
+        dist = ldist;
+      }
+      if (dist <= threshold) {
+        return dist;
+      }
+    }
+  }
+  return dist;
+}
+
+EXTENSION_NOINLINE
+double ST_Distance_MultiPoint_MultiPoint_Squared(int8_t* mp1,
+                                                 int64_t mp1size,
+                                                 int8_t* mp2,
+                                                 int64_t mp2size,
+                                                 int32_t ic1,
+                                                 int32_t isr1,
+                                                 int32_t ic2,
+                                                 int32_t isr2,
+                                                 int32_t osr,
+                                                 double threshold) {
+  auto mp1_num_coords = mp1size / compression_unit_size(ic1);
+  auto mp2_num_coords = mp2size / compression_unit_size(ic2);
+  double dist = -1.0;
+  for (int32_t i = 0; i < mp1_num_coords; i += 2) {
+    Point2D mp1p = get_point(mp1, 0, ic1, isr1, osr);
+    for (int32_t j = 0; j < mp2_num_coords; j += 2) {
+      Point2D mp2p = get_point(mp2, 0, ic2, isr2, osr);
+      double ldist = distance_point_point_squared(mp1p.x, mp1p.y, mp2p.x, mp2p.y);
+      if (dist > ldist || dist < 0.0) {
+        dist = ldist;
+      }
+      if (dist <= threshold) {
+        return dist;
+      }
+    }
+  }
+  return dist;
 }
 
 EXTENSION_INLINE

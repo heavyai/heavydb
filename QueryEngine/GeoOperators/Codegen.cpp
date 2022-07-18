@@ -69,6 +69,9 @@ std::string suffix(SQLTypes type) {
   if (type == kPOINT) {
     return std::string("_Point");
   }
+  if (type == kMULTIPOINT) {
+    return std::string("_MultiPoint");
+  }
   if (type == kLINESTRING) {
     return std::string("_LineString");
   }
