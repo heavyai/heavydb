@@ -387,8 +387,9 @@ void Catalog::updateGeoColumns() {
     // Upating all geo columns
     string queryString(
         "UPDATE mapd_columns SET is_notnull=1 WHERE coltype=" + std::to_string(kPOINT) +
-        " OR coltype=" + std::to_string(kLINESTRING) + " OR coltype=" +
-        std::to_string(kMULTILINESTRING) + " OR coltype=" + std::to_string(kPOLYGON) +
+        " OR coltype=" + std::to_string(kMULTIPOINT) + " OR coltype=" +
+        std::to_string(kLINESTRING) + " OR coltype=" + std::to_string(kMULTILINESTRING) +
+        " OR coltype=" + std::to_string(kPOLYGON) +
         " OR coltype=" + std::to_string(kMULTIPOLYGON) + ";");
     sqliteConnector_.query(queryString);
   } catch (std::exception& e) {
@@ -2553,6 +2554,7 @@ void Catalog::expandGeoColumn(const ColumnDescriptor& cd,
 
         break;
       }
+      case kMULTIPOINT:
       case kLINESTRING: {
         ColumnDescriptor physical_cd_coords(true);
         physical_cd_coords.columnName = cd.columnName + "_coords";

@@ -1188,6 +1188,7 @@ inline bool is_null_value(const SQLTypeInfo& ti, const Datum& constval) {
     case kTEXT:
       return constval.stringval == nullptr;
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:
@@ -1321,6 +1322,7 @@ void Constant::set_null_value() {
       constval.stringval = nullptr;
       break;
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:
@@ -2217,6 +2219,7 @@ bool Datum_equal(const SQLTypeInfo& ti, Datum val1, Datum val2) {
     case kINTERVAL_YEAR_MONTH:
       return val1.bigintval == val2.bigintval;
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:
@@ -3710,6 +3713,9 @@ SQLTypes get_ti_from_geo(const Geospatial::GeoBase* geo) {
   switch (geo->getType()) {
     case Geospatial::GeoBase::GeoType::kPOINT: {
       return kPOINT;
+    }
+    case Geospatial::GeoBase::GeoType::kMULTIPOINT: {
+      return kMULTIPOINT;
     }
     case Geospatial::GeoBase::GeoType::kLINESTRING: {
       return kLINESTRING;

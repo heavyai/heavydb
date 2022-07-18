@@ -69,7 +69,8 @@ std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
                                                      "CURSOR",
                                                      "COLUMN",
                                                      "COLUMN_LIST",
-                                                     "MULTILINESTRING"};
+                                                     "MULTILINESTRING",
+                                                     "MULTIPOINT"};
 std::string SQLTypeInfo::comp_name[kENCODING_LAST] =
     {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED", "DAYS"};
 
@@ -323,6 +324,7 @@ Datum StringToDatum(std::string_view s, SQLTypeInfo& ti) {
         d.bigintval = dateTimeParse<kDATE>(s, ti.get_dimension());
         break;
       case kPOINT:
+      case kMULTIPOINT:
       case kLINESTRING:
       case kMULTILINESTRING:
       case kPOLYGON:
@@ -369,6 +371,7 @@ bool DatumEqual(const Datum a, const Datum b, const SQLTypeInfo& ti) {
     case kVARCHAR:
     case kCHAR:
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:

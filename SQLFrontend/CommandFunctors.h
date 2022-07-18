@@ -560,6 +560,7 @@ StandardCommand(GetOptimizedSchema, {
                                   context, table_name, p.col_name, p.col_type.type)) +
                               ")");
       } else if (p.col_type.type == TDatumType::POINT ||
+                 p.col_type.type == TDatumType::MULTIPOINT ||
                  p.col_type.type == TDatumType::LINESTRING ||
                  p.col_type.type == TDatumType::MULTILINESTRING ||
                  p.col_type.type == TDatumType::POLYGON ||

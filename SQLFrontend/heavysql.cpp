@@ -489,7 +489,8 @@ std::string datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
     }
     return "{" + boost::algorithm::join(elem_strs, ", ") + "}";
   }
-  if (type_info.type == TDatumType::POINT || type_info.type == TDatumType::LINESTRING ||
+  if (type_info.type == TDatumType::POINT || type_info.type == TDatumType::MULTIPOINT ||
+      type_info.type == TDatumType::LINESTRING ||
       type_info.type == TDatumType::MULTILINESTRING ||
       type_info.type == TDatumType::POLYGON ||
       type_info.type == TDatumType::MULTIPOLYGON) {
@@ -539,6 +540,7 @@ TDatum columnar_val_to_datum(const TColumn& col,
       break;
     }
     case TDatumType::POINT:
+    case TDatumType::MULTIPOINT:
     case TDatumType::LINESTRING:
     case TDatumType::MULTILINESTRING:
     case TDatumType::POLYGON:

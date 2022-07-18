@@ -2626,7 +2626,8 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
           }
         }
 
-        if (cd->columnType.get_type() == kLINESTRING ||
+        if (cd->columnType.get_type() == kMULTIPOINT ||
+            cd->columnType.get_type() == kLINESTRING ||
             cd->columnType.get_type() == kMULTILINESTRING ||
             cd->columnType.get_type() == kPOLYGON ||
             cd->columnType.get_type() == kMULTIPOLYGON) {

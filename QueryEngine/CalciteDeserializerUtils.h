@@ -193,6 +193,9 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("POINT")) {
     return kPOINT;
   }
+  if (type_name == std::string("MULTIPOINT")) {
+    return kMULTIPOINT;
+  }
   if (type_name == std::string("LINESTRING")) {
     return kLINESTRING;
   }

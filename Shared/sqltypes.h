@@ -68,7 +68,8 @@ enum SQLTypes {
   kCOLUMN = 28,
   kCOLUMN_LIST = 29,
   kMULTILINESTRING = 30,
-  kSQLTYPE_LAST = 31
+  kMULTIPOINT = 31,
+  kSQLTYPE_LAST = 32
 };
 
 #if !(defined(__CUDACC__) || defined(NO_BOOST))
@@ -113,6 +114,8 @@ inline std::string toString(const SQLTypes& type) {
       return "YEAR MONTH INTERVAL";
     case kPOINT:
       return "POINT";
+    case kMULTIPOINT:
+      return "MULTIPOINT";
     case kLINESTRING:
       return "LINESTRING";
     case kMULTILINESTRING:
@@ -306,12 +309,12 @@ inline std::string toString(const EncodingType& type) {
 #define IS_STRING(T) (((T) == kTEXT) || ((T) == kVARCHAR) || ((T) == kCHAR))
 #define IS_GEO(T)                                                          \
   (((T) == kPOINT) || ((T) == kLINESTRING) || ((T) == kMULTILINESTRING) || \
-   ((T) == kPOLYGON) || ((T) == kMULTIPOLYGON))
+   ((T) == kMULTIPOINT) || ((T) == kPOLYGON) || ((T) == kMULTIPOLYGON))
 #define IS_INTERVAL(T) ((T) == kINTERVAL_DAY_TIME || (T) == kINTERVAL_YEAR_MONTH)
 #define IS_DECIMAL(T) ((T) == kNUMERIC || (T) == kDECIMAL)
 #define IS_GEO_POLY(T) (((T) == kPOLYGON) || ((T) == kMULTIPOLYGON))
 #define IS_GEO_LINE(T) (((T) == kLINESTRING) || ((T) == kMULTILINESTRING))
-#define IS_GEO_MULTI(T) (((T) == kMULTIPOLYGON) || ((T) == kMULTILINESTRING))
+#define IS_GEO_MULTI(T) (((T) == kMULTIPOLYGON) || ((T) == kMULTILINESTRING)) || ((T) == kMULTIPOINT))
 
 #include "InlineNullValues.h"
 
@@ -399,7 +402,7 @@ class SQLTypeInfo {
 
   inline int is_logical_geo_type() const {
     if (type == kPOINT || type == kLINESTRING || type == kMULTILINESTRING ||
-        type == kPOLYGON || type == kMULTIPOLYGON) {
+        type == kMULTIPOINT || type == kPOLYGON || type == kMULTIPOLYGON) {
       return true;
     }
     return false;
@@ -420,6 +423,8 @@ class SQLTypeInfo {
     switch (type) {
       case kPOINT:
         return 1;  // coords
+      case kMULTIPOINT:
+        return 2;  // coords, bounds
       case kLINESTRING:
         return 2;  // coords, bounds
       case kMULTILINESTRING:
@@ -455,6 +460,8 @@ class SQLTypeInfo {
     switch (type) {
       case kPOINT:
         return 1;
+      case kMULTIPOINT:
+        return 1;  // omit bounds
       case kLINESTRING:
         return 1;  // omit bounds
       case kMULTILINESTRING:
@@ -470,6 +477,7 @@ class SQLTypeInfo {
   }
   inline bool has_bounds() const {
     switch (type) {
+      case kMULTIPOINT:
       case kLINESTRING:
       case kMULTILINESTRING:
       case kPOLYGON:
@@ -1136,6 +1144,7 @@ class SQLTypeInfo {
         // TODO: return size for fixlen arrays?
         break;
       case kPOINT:
+      case kMULTIPOINT:
       case kLINESTRING:
       case kMULTILINESTRING:
       case kPOLYGON:

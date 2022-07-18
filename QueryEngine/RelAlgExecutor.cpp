@@ -3104,6 +3104,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(
             break;
           }
           case kPOINT:
+          case kMULTIPOINT:
           case kLINESTRING:
           case kMULTILINESTRING:
           case kPOLYGON:

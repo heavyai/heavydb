@@ -5040,6 +5040,7 @@ void DBHandler::create_table(const TSessionId& session,
       // non DICT encoded strings
       col_stmt.append(" ENCODING NONE");
     } else if (col.col_type.type == TDatumType::POINT ||
+               col.col_type.type == TDatumType::MULTIPOINT ||
                col.col_type.type == TDatumType::LINESTRING ||
                col.col_type.type == TDatumType::MULTILINESTRING ||
                col.col_type.type == TDatumType::POLYGON ||
@@ -5158,7 +5159,7 @@ namespace {
 bool TTypeInfo_IsGeo(const TDatumType::type& t) {
   return (t == TDatumType::POLYGON || t == TDatumType::MULTIPOLYGON ||
           t == TDatumType::LINESTRING || t == TDatumType::MULTILINESTRING ||
-          t == TDatumType::POINT);
+          t == TDatumType::POINT || t == TDatumType::MULTIPOINT);
 }
 
 std::string TTypeInfo_TypeToString(const TDatumType::type& t) {

@@ -91,6 +91,7 @@ void Chunk::setChunkBuffer(AbstractBuffer* buffer, AbstractBuffer* index_buffer)
         break;
       }
       case kPOINT:
+      case kMULTIPOINT:
       case kLINESTRING:
       case kMULTILINESTRING:
       case kPOLYGON:
@@ -188,6 +189,7 @@ size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
           src_data.stringsPtr, start_idx, num_elems, byte_limit, replicating);
     }
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:
@@ -256,6 +258,7 @@ std::shared_ptr<ChunkMetadata> Chunk::appendData(DataBlockPtr& src_data,
             src_data.stringsPtr, start_idx, num_elems, replicating);
       }
       case kPOINT:
+      case kMULTIPOINT:
       case kLINESTRING:
       case kMULTILINESTRING:
       case kPOLYGON:
@@ -305,6 +308,7 @@ void Chunk::initEncoder() {
         break;
       }
       case kPOINT:
+      case kMULTIPOINT:
       case kLINESTRING:
       case kMULTILINESTRING:
       case kPOLYGON:

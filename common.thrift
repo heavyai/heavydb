@@ -27,7 +27,8 @@ enum TDatumType {
   TINYINT,
   GEOMETRY,
   GEOGRAPHY,
-  MULTILINESTRING
+  MULTILINESTRING,
+  MULTIPOINT
 }
 
 enum TEncodingType {

@@ -73,6 +73,7 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
         case kDATE:
           return new NoneEncoder<int64_t>(buffer);
         case kPOINT:
+        case kMULTIPOINT:
         case kLINESTRING:
         case kMULTILINESTRING:
         case kPOLYGON:
@@ -201,6 +202,7 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
     case kENCODING_GEOINT: {
       switch (sqlType.get_type()) {
         case kPOINT:
+        case kMULTIPOINT:
         case kLINESTRING:
         case kMULTILINESTRING:
         case kPOLYGON:

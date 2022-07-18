@@ -582,6 +582,65 @@ void GeoPoint::getColumns(std::vector<double>& coords) const {
   coords.push_back(point_geom->getY());
 }
 
+std::unique_ptr<GeoBase> GeoMultiPoint::clone() const {
+  CHECK(geom_);
+  return std::unique_ptr<GeoBase>(new GeoMultiPoint(geom_->clone(), true));
+}
+
+GeoMultiPoint::GeoMultiPoint(const std::vector<double>& coords) {
+  geom_ = OGRGeometryFactory::createGeometry(OGRwkbGeometryType::wkbMultiPoint);
+  OGRMultiPoint* multipoint = dynamic_cast<OGRMultiPoint*>(geom_);
+  CHECK(multipoint);
+  for (size_t i = 0; i < coords.size(); i += 2) {
+    OGRPoint pt(coords[i], coords[i + 1]);
+    multipoint->addGeometry(&pt);
+  }
+}
+
+GeoMultiPoint::GeoMultiPoint(const std::string& wkt) {
+  const auto err = GeoBase::createFromWktString(wkt, &geom_);
+  if (err != OGRERR_NONE) {
+    throw GeoTypesError("MultiPoint", err);
+  }
+  CHECK(geom_);
+  if (wkbFlatten(geom_->getGeometryType()) != OGRwkbGeometryType::wkbMultiPoint) {
+    throw GeoTypesError("MultiPoint",
+                        "Unexpected geometry type from WKT string: " +
+                            std::string(OGRGeometryTypeToName(geom_->getGeometryType())));
+  }
+}
+
+void GeoMultiPoint::getColumns(std::vector<double>& coords,
+                               std::vector<double>& bounds) const {
+  auto multipoint_geom = dynamic_cast<OGRMultiPoint*>(geom_);
+  CHECK(multipoint_geom);
+
+  if (multipoint_geom->IsEmpty()) {
+    // until the run-time can handle empties
+    throw GeoTypesError("MultiPoint", "'EMPTY' not supported");
+    // return null bounds
+    bounds.push_back(NULL_DOUBLE);
+    bounds.push_back(NULL_DOUBLE);
+    bounds.push_back(NULL_DOUBLE);
+    bounds.push_back(NULL_DOUBLE);
+    return;
+  }
+
+  BoundingBox bbox;
+  for (auto i = 0; i < multipoint_geom->getNumGeometries(); i++) {
+    OGRPoint* point = multipoint_geom->getGeometryRef(i);
+    double x = point->getX();
+    double y = point->getY();
+    coords.push_back(x);
+    coords.push_back(y);
+    bbox.update(x, y);
+  }
+  bounds.push_back(bbox.min.x);
+  bounds.push_back(bbox.min.y);
+  bounds.push_back(bbox.max.x);
+  bounds.push_back(bbox.max.y);
+}
+
 std::unique_ptr<GeoBase> GeoLineString::clone() const {
   CHECK(geom_);
   return std::unique_ptr<GeoBase>(new GeoLineString(geom_->clone(), true));
@@ -1158,6 +1217,8 @@ std::unique_ptr<GeoBase> GeoTypesFactory::createGeoTypeImpl(OGRGeometry* geom,
   switch (wkbFlatten(geom->getGeometryType())) {
     case wkbPoint:
       return std::unique_ptr<GeoPoint>(new GeoPoint(geom, owns_geom_obj));
+    case wkbMultiPoint:
+      return std::unique_ptr<GeoMultiPoint>(new GeoMultiPoint(geom, owns_geom_obj));
     case wkbLineString:
       return std::unique_ptr<GeoLineString>(new GeoLineString(geom, owns_geom_obj));
     case wkbMultiLineString:
@@ -1190,6 +1251,14 @@ void GeoTypesFactory::getGeoColumnsImpl(const std::unique_ptr<GeoBase>& geospati
       CHECK(geospatial_point);
       geospatial_point->getColumns(coords);
       ti.set_type(kPOINT);
+      break;
+    }
+    case GeoBase::GeoType::kMULTIPOINT: {
+      const auto geospatial_multipoint =
+          dynamic_cast<GeoMultiPoint*>(geospatial_base.get());
+      CHECK(geospatial_multipoint);
+      geospatial_multipoint->getColumns(coords, bounds);
+      ti.set_type(kMULTIPOINT);
       break;
     }
     case GeoBase::GeoType::kLINESTRING: {
@@ -1248,6 +1317,7 @@ void GeoTypesFactory::getNullGeoColumns(SQLTypeInfo& ti,
       coords.push_back(NULL_ARRAY_DOUBLE);
       coords.push_back(NULL_DOUBLE);
     } break;
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:

@@ -49,6 +49,7 @@ static std::set<std::string> reserved_keywords{
     "LENGTH",
     "LINESTRING",       // geo type
     "MULTILINESTRING",  // geo type
+    "MULTIPOINT",       // geo type
     "MULTIPOLYGON",     // geo type
     "NOW",
     "NULLX",

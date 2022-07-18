@@ -56,7 +56,8 @@ class GeoBase {
     kMULTIPOLYGON,
     kGEOMETRY,
     kGEOMETRYCOLLECTION,
-    kMULTILINESTRING
+    kMULTILINESTRING,
+    kMULTIPOINT
   };
   enum class GeoOp {
     kPROJECTION = 0,
@@ -114,6 +115,23 @@ class GeoPoint : public GeoBase {
 
  protected:
   GeoPoint(OGRGeometry* geom, const bool owns_geom_obj) : GeoBase(geom, owns_geom_obj) {}
+
+  friend class GeoTypesFactory;
+};
+
+class GeoMultiPoint : public GeoBase {
+ public:
+  GeoMultiPoint(const std::vector<double>& coords);
+  GeoMultiPoint(const std::string& wkt);
+
+  void getColumns(std::vector<double>& coords, std::vector<double>& bounds) const;
+  GeoType getType() const final { return GeoType::kMULTIPOINT; }
+
+  std::unique_ptr<GeoBase> clone() const final;
+
+ protected:
+  GeoMultiPoint(OGRGeometry* geom, const bool owns_geom_obj)
+      : GeoBase(geom, owns_geom_obj) {}
 
   friend class GeoTypesFactory;
 };
