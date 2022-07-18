@@ -35,12 +35,14 @@ template <typename T2, typename Z2>
 GeoRaster<T, Z>::GeoRaster(const Column<T2>& input_x,
                            const Column<T2>& input_y,
                            const Column<Z2>& input_z,
+                           const RasterAggType raster_agg_type,
                            const double bin_dim_meters,
                            const bool geographic_coords,
                            const bool align_bins_to_zero_based_grid)
-    : bin_dim_meters_(bin_dim_meters)
+    : raster_agg_type_(raster_agg_type)
+    , bin_dim_meters_(bin_dim_meters)
     , geographic_coords_(geographic_coords)
-    , null_sentinel_(std::numeric_limits<Z>::lowest()) {
+    , null_sentinel_(inline_null_value<Z>()) {
   auto timer = DEBUG_TIMER(__func__);
   const int64_t input_size{input_z.size()};
   if (input_size <= 0) {
@@ -67,7 +69,7 @@ GeoRaster<T, Z>::GeoRaster(const Column<T2>& input_x,
   }
 
   calculate_bins_and_scales();
-  computeParallel(input_x, input_y, input_z, max_inputs_per_thread);
+  compute(input_x, input_y, input_z, max_inputs_per_thread);
 }
 
 // Allow input types to GeoRaster that are different than class types/output Z type
@@ -78,6 +80,7 @@ template <typename T2, typename Z2>
 GeoRaster<T, Z>::GeoRaster(const Column<T2>& input_x,
                            const Column<T2>& input_y,
                            const Column<Z2>& input_z,
+                           const RasterAggType raster_agg_type,
                            const double bin_dim_meters,
                            const bool geographic_coords,
                            const bool align_bins_to_zero_based_grid,
@@ -85,9 +88,10 @@ GeoRaster<T, Z>::GeoRaster(const Column<T2>& input_x,
                            const T x_max,
                            const T y_min,
                            const T y_max)
-    : bin_dim_meters_(bin_dim_meters)
+    : raster_agg_type_(raster_agg_type)
+    , bin_dim_meters_(bin_dim_meters)
     , geographic_coords_(geographic_coords)
-    , null_sentinel_(std::numeric_limits<Z>::lowest())
+    , null_sentinel_(inline_null_value<Z>())
     , x_min_(x_min)
     , x_max_(x_max)
     , y_min_(y_min)
@@ -103,7 +107,7 @@ GeoRaster<T, Z>::GeoRaster(const Column<T2>& input_x,
     align_bins_max_exclusive();
   }
   calculate_bins_and_scales();
-  computeParallel(input_x, input_y, input_z, max_inputs_per_thread);
+  compute(input_x, input_y, input_z, max_inputs_per_thread);
 }
 
 template <typename T, typename Z>
@@ -197,34 +201,74 @@ void GeoRaster<T, Z>::calculate_bins_and_scales() {
 }
 
 template <typename T, typename Z>
-template <typename T2, typename Z2>
-void GeoRaster<T, Z>::compute(const Column<T2>& input_x,
-                              const Column<T2>& input_y,
-                              const Column<Z2>& input_z) {
+template <RasterAggType AggType, typename T2, typename Z2>
+void GeoRaster<T, Z>::computeSerialImpl(const Column<T2>& input_x,
+                                        const Column<T2>& input_y,
+                                        const Column<Z2>& input_z,
+                                        std::vector<Z>& output_z) {
   auto timer = DEBUG_TIMER(__func__);
   const int64_t input_size{input_z.size()};
-  z_.resize(num_bins_, null_sentinel_);
+  const Z agg_sentinel = raster_agg_type_ == RasterAggType::MIN
+                             ? std::numeric_limits<Z>::max()
+                             : std::numeric_limits<Z>::lowest();
+  output_z.resize(num_bins_, agg_sentinel);
+  ComputeAgg<AggType> compute_agg;
   for (int64_t sparse_idx = 0; sparse_idx != input_size; ++sparse_idx) {
     const int64_t x_bin = get_x_bin(input_x[sparse_idx]);
     const int64_t y_bin = get_y_bin(input_y[sparse_idx]);
     if (x_bin < 0 || x_bin >= num_x_bins_ || y_bin < 0 || y_bin >= num_y_bins_) {
       continue;
     }
-    // Take the max height for this version, but may want to allow different metrics
-    // like average as well
     const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
-    if (!(input_z.isNull(sparse_idx)) && input_z[sparse_idx] > z_[bin_idx]) {
-      z_[bin_idx] = input_z[sparse_idx];
+    compute_agg(input_z[sparse_idx], output_z[bin_idx], inline_null_value<Z2>());
+  }
+  for (int64_t bin_idx = 0; bin_idx != num_bins_; ++bin_idx) {
+    if (output_z[bin_idx] == agg_sentinel) {
+      output_z[bin_idx] = null_sentinel_;
     }
   }
 }
 
 template <typename T, typename Z>
-template <typename T2, typename Z2>
-void GeoRaster<T, Z>::computeParallel(const Column<T2>& input_x,
-                                      const Column<T2>& input_y,
-                                      const Column<Z2>& input_z,
-                                      const size_t max_inputs_per_thread) {
+template <RasterAggType AggType>
+void GeoRaster<T, Z>::computeParallelReductionAggImpl(
+    const std::vector<std::vector<Z>>& z_inputs,
+    std::vector<Z>& output_z,
+    const Z agg_sentinel) {
+  const size_t num_inputs = z_inputs.size();
+  output_z.resize(num_bins_, agg_sentinel);
+
+  ComputeAgg<AggType> reduction_agg;
+  tbb::parallel_for(
+      tbb::blocked_range<size_t>(0, num_bins_), [&](const tbb::blocked_range<size_t>& r) {
+        const size_t start_idx = r.begin();
+        const size_t end_idx = r.end();
+        for (size_t bin_idx = start_idx; bin_idx != end_idx; ++bin_idx) {
+          for (size_t input_idx = 0; input_idx < num_inputs; ++input_idx) {
+            reduction_agg(z_inputs[input_idx][bin_idx], output_z[bin_idx], agg_sentinel);
+          }
+        }
+      });
+
+  tbb::parallel_for(tbb::blocked_range<size_t>(0, num_bins_),
+                    [&](const tbb::blocked_range<size_t>& r) {
+                      const size_t start_idx = r.begin();
+                      const size_t end_idx = r.end();
+                      for (size_t bin_idx = start_idx; bin_idx != end_idx; ++bin_idx) {
+                        if (output_z[bin_idx] == agg_sentinel) {
+                          output_z[bin_idx] = null_sentinel_;
+                        }
+                      }
+                    });
+}
+
+template <typename T, typename Z>
+template <RasterAggType AggType, typename T2, typename Z2>
+void GeoRaster<T, Z>::computeParallelImpl(const Column<T2>& input_x,
+                                          const Column<T2>& input_y,
+                                          const Column<Z2>& input_z,
+                                          std::vector<Z>& output_z,
+                                          const size_t max_inputs_per_thread) {
   const size_t input_size = input_z.size();
   const size_t max_thread_count = std::thread::hardware_concurrency();
   const size_t num_threads_by_input_elements =
@@ -235,20 +279,25 @@ void GeoRaster<T, Z>::computeParallel(const Column<T2>& input_x,
   const size_t num_threads =
       std::min(num_threads_by_input_elements, num_threads_by_output_size);
   if (num_threads <= 1) {
-    compute(input_x, input_y, input_z);
+    computeSerialImpl<AggType, T2, Z2>(input_x, input_y, input_z, output_z);
     return;
   }
   auto timer = DEBUG_TIMER(__func__);
 
   std::vector<std::vector<Z>> per_thread_z_outputs(num_threads);
+  // Fix
+  const Z agg_sentinel = raster_agg_type_ == RasterAggType::MIN
+                             ? std::numeric_limits<Z>::max()
+                             : std::numeric_limits<Z>::lowest();
 
   tbb::parallel_for(tbb::blocked_range<size_t>(0, num_threads),
                     [&](const tbb::blocked_range<size_t>& r) {
                       for (size_t t = r.begin(); t != r.end(); ++t) {
-                        per_thread_z_outputs[t].resize(num_bins_, null_sentinel_);
+                        per_thread_z_outputs[t].resize(num_bins_, agg_sentinel);
                       }
                     });
 
+  ComputeAgg<AggType> compute_agg;
   tbb::task_arena limited_arena(num_threads);
   limited_arena.execute([&] {
     tbb::parallel_for(
@@ -265,33 +314,76 @@ void GeoRaster<T, Z>::computeParallel(const Column<T2>& input_x,
             if (x_bin < 0 || x_bin >= num_x_bins_ || y_bin < 0 || y_bin >= num_y_bins_) {
               continue;
             }
-            // Take the max height for this version, but may want to allow different
-            // metrics like average as well
             const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
-            if (!(input_z.isNull(sparse_idx)) &&
-                input_z[sparse_idx] > this_thread_z_output[bin_idx]) {
-              this_thread_z_output[bin_idx] = input_z[sparse_idx];
-            }
+            compute_agg(input_z[sparse_idx],
+                        this_thread_z_output[bin_idx],
+                        inline_null_value<Z2>());
           }
         });
   });
 
-  z_.resize(num_bins_, null_sentinel_);
+  // Reduce
+  if constexpr (AggType == RasterAggType::COUNT) {
+    // Counts can't be counted, they must be summed
+    computeParallelReductionAggImpl<RasterAggType::SUM>(
+        per_thread_z_outputs, output_z, agg_sentinel);
+  } else {
+    computeParallelReductionAggImpl<AggType>(
+        per_thread_z_outputs, output_z, agg_sentinel);
+  }
+}
 
-  tbb::parallel_for(
-      tbb::blocked_range<size_t>(0, num_bins_), [&](const tbb::blocked_range<size_t>& r) {
-        const size_t start_idx = r.begin();
-        const size_t end_idx = r.end();
-        for (size_t bin_idx = start_idx; bin_idx != end_idx; ++bin_idx) {
-          for (size_t thread_idx = 0; thread_idx < num_threads; ++thread_idx) {
-            const T thread_bin_z_output = per_thread_z_outputs[thread_idx][bin_idx];
-            if (thread_bin_z_output != null_sentinel_ &&
-                thread_bin_z_output > z_[bin_idx]) {
-              z_[bin_idx] = thread_bin_z_output;
-            }
-          }
-        }
-      });
+template <typename T, typename Z>
+template <typename T2, typename Z2>
+void GeoRaster<T, Z>::compute(const Column<T2>& input_x,
+                              const Column<T2>& input_y,
+                              const Column<Z2>& input_z,
+                              const size_t max_inputs_per_thread) {
+  switch (raster_agg_type_) {
+    case RasterAggType::COUNT: {
+      computeParallelImpl<RasterAggType::COUNT, T2, Z2>(
+          input_x, input_y, input_z, z_, max_inputs_per_thread);
+      break;
+    }
+    case RasterAggType::MIN: {
+      computeParallelImpl<RasterAggType::MIN, T2, Z2>(
+          input_x, input_y, input_z, z_, max_inputs_per_thread);
+      break;
+    }
+    case RasterAggType::MAX: {
+      computeParallelImpl<RasterAggType::MAX, T2, Z2>(
+          input_x, input_y, input_z, z_, max_inputs_per_thread);
+      break;
+    }
+    case RasterAggType::SUM: {
+      computeParallelImpl<RasterAggType::SUM, T2, Z2>(
+          input_x, input_y, input_z, z_, max_inputs_per_thread);
+      break;
+    }
+    case RasterAggType::AVG: {
+      computeParallelImpl<RasterAggType::SUM, T2, Z2>(
+          input_x, input_y, input_z, z_, max_inputs_per_thread);
+      computeParallelImpl<RasterAggType::COUNT, T2, Z2>(
+          input_x, input_y, input_z, counts_, max_inputs_per_thread);
+      tbb::parallel_for(tbb::blocked_range<size_t>(0, num_bins_),
+                        [&](const tbb::blocked_range<size_t>& r) {
+                          const size_t start_idx = r.begin();
+                          const size_t end_idx = r.end();
+                          for (size_t bin_idx = start_idx; bin_idx != end_idx;
+                               ++bin_idx) {
+                            // counts[bin_idx] > 1 will avoid division for nulls and 1
+                            // counts
+                            if (counts_[bin_idx] > 1) {
+                              z_[bin_idx] /= counts_[bin_idx];
+                            }
+                          }
+                        });
+      break;
+    }
+    default: {
+      CHECK(false);
+    }
+  }
 }
 
 template <typename T, typename Z>
