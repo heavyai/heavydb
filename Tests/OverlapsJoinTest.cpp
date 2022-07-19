@@ -2332,9 +2332,11 @@ class OverlapsJoinRewriteTest : public ::testing::Test {
 
 TEST(OverlapsJoinRewriteTest, VariousHashKeyExpressionsForP2PSTDistanceJoin) {
   std::vector<int64_t> answer_sheet;
-  std::array<std::string, 4> queries{
+  std::array<std::string, 5> queries{
       "SELECT COUNT(1) FROM TEST_GEOPT a, TEST_GEOPT b WHERE ST_DISTANCE(a.pt4326, "
       "b.pt4326) < 1;",
+      "SELECT COUNT(1) FROM TEST_GEOPT R, TEST_GEOPT S where ST_DISTANCE(ST_POINT(R.x, "
+      "R.y), S.pt900913) < 0.00005;",
       "SELECT COUNT(1) FROM TEST_GEOPT a, TEST_GEOPT b WHERE "
       "ST_DISTANCE(ST_TRANSFORM(a.pt900913, 4326), b.pt4326) < 1;",
       "SELECT COUNT(1) FROM TEST_GEOPT a, TEST_GEOPT b WHERE "

@@ -770,7 +770,8 @@ llvm::Value* RangeJoinHashTable::codegenKey(const CompilationOptions& co,
         // which is corresponding to the pointer that col_lvs[0] holds
         // thus, all we need is to retrieve necessary coordinate from the S by varying
         // its offset (i.e., i == 0 means x coordinate)
-        arr_ptr = col_lvs[0];
+        arr_ptr = LL_BUILDER.CreatePointerCast(
+            col_lvs[0], llvm::Type::getInt8PtrTy(executor_->cgen_state_->context_));
       } else {
         throw std::runtime_error(
             "RHS key of the range join operator has a geospatial function which is not "
