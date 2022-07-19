@@ -362,11 +362,11 @@ void GeoRaster<T, Z>::compute(const Column<T2>& input_x,
 }
 
 template <typename T, typename Z>
-inline Z GeoRaster<T, Z>::fill_bin_from_neighborhood_avg(
+inline Z GeoRaster<T, Z>::fill_bin_from_avg_box_neighborhood(
     const int64_t x_centroid_bin,
     const int64_t y_centroid_bin,
     const int64_t bins_radius) const {
-  T val = 0.0;
+  Z val = 0.0;
   int32_t count = 0;
   for (int64_t y_bin = y_centroid_bin - bins_radius;
        y_bin <= y_centroid_bin + bins_radius;
@@ -387,9 +387,119 @@ inline Z GeoRaster<T, Z>::fill_bin_from_neighborhood_avg(
   return (count == 0) ? null_sentinel_ : val / count;
 }
 
+std::vector<double> generate_1d_gaussian_kernel(const int64_t fill_radius, double sigma) {
+  const int64_t kernel_size = fill_radius * 2 + 1;
+  std::vector<double> gaussian_kernel(kernel_size);
+  const double expr = 1.0 / (sigma * sqrt(2.0 * M_PI));
+  for (int64_t kernel_idx = -fill_radius; kernel_idx <= fill_radius; ++kernel_idx) {
+    gaussian_kernel[kernel_idx + fill_radius] =
+        expr * exp((kernel_idx * kernel_idx) / (-2.0 * (sigma * sigma)));
+  }
+  return gaussian_kernel;
+}
+
+template <typename T, typename Z>
+void GeoRaster<T, Z>::fill_bins_from_gaussian_neighborhood(
+    const int64_t neighborhood_fill_radius,
+    const bool fill_only_nulls) {
+  const double sigma = neighborhood_fill_radius * 2.0 / 6.0;
+  const auto gaussian_kernel =
+      generate_1d_gaussian_kernel(neighborhood_fill_radius, sigma);
+  std::vector<Z> only_nulls_source_z;
+  if (fill_only_nulls) {
+    // Copy z_
+    only_nulls_source_z.resize(z_.size());
+    tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_bins_),
+                      [&](const tbb::blocked_range<int64_t>& r) {
+                        const int64_t end_bin_idx = r.end();
+                        for (int64_t bin_idx = r.begin(); bin_idx < end_bin_idx;
+                             ++bin_idx) {
+                          only_nulls_source_z[bin_idx] = z_[bin_idx];
+                        }
+                      });
+  }
+  auto& source_z = fill_only_nulls ? only_nulls_source_z : z_;
+
+  std::vector<Z> new_z(num_bins_);
+  tbb::parallel_for(
+      tbb::blocked_range<int64_t>(0, num_y_bins_),
+      [&](const tbb::blocked_range<int64_t>& r) {
+        const int64_t end_y_bin = r.end();
+        for (int64_t y_start_bin = r.begin(); y_start_bin != end_y_bin; ++y_start_bin) {
+          for (int64_t x_bin = 0; x_bin < num_x_bins_; ++x_bin) {
+            Z val = 0.0;
+            Z sum_weights = 0.0;
+            for (int64_t y_offset = -neighborhood_fill_radius;
+                 y_offset <= neighborhood_fill_radius;
+                 ++y_offset) {
+              const auto y_bin = y_start_bin + y_offset;
+              if (y_bin >= 0 && y_bin < num_y_bins_) {
+                const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
+                const Z bin_val = source_z[bin_idx];
+                if (bin_val != null_sentinel_) {
+                  const auto gaussian_weight =
+                      gaussian_kernel[y_offset + neighborhood_fill_radius];
+                  val += bin_val * gaussian_weight;
+                  sum_weights += gaussian_weight;
+                }
+              }
+            }
+            const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_start_bin, num_x_bins_);
+            new_z[bin_idx] = sum_weights > 0.0 ? (val / sum_weights) : null_sentinel_;
+          }
+        }
+      });
+  source_z.swap(new_z);
+  tbb::parallel_for(
+      tbb::blocked_range<int64_t>(0, num_x_bins_),
+      [&](const tbb::blocked_range<int64_t>& r) {
+        const int64_t end_x_bin = r.end();
+        for (int64_t x_start_bin = r.begin(); x_start_bin != end_x_bin; ++x_start_bin) {
+          for (int64_t y_bin = 0; y_bin < num_y_bins_; ++y_bin) {
+            Z val = 0.0;
+            Z sum_weights = 0.0;
+            for (int64_t x_offset = -neighborhood_fill_radius;
+                 x_offset <= neighborhood_fill_radius;
+                 ++x_offset) {
+              const auto x_bin = x_start_bin + x_offset;
+              if (x_bin >= 0 && x_bin < num_x_bins_) {
+                const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
+                const Z bin_val = source_z[bin_idx];
+                if (bin_val != null_sentinel_) {
+                  const auto gaussian_weight =
+                      gaussian_kernel[x_offset + neighborhood_fill_radius];
+                  val += bin_val * gaussian_weight;
+                  sum_weights += gaussian_weight;
+                }
+              }
+            }
+            const int64_t bin_idx = x_y_bin_to_bin_index(x_start_bin, y_bin, num_x_bins_);
+            new_z[bin_idx] = sum_weights > 0.0 ? (val / sum_weights) : null_sentinel_;
+          }
+        }
+      });
+  if (fill_only_nulls) {
+    // Only copy convolved results in new_z back to z_ for
+    // values in z_ that are null
+    tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_bins_),
+                      [&](const tbb::blocked_range<int64_t>& r) {
+                        const int64_t end_bin_idx = r.end();
+                        for (int64_t bin_idx = r.begin(); bin_idx < end_bin_idx;
+                             ++bin_idx) {
+                          if (z_[bin_idx] == null_sentinel_) {
+                            z_[bin_idx] = new_z[bin_idx];
+                          }
+                          only_nulls_source_z[bin_idx] = z_[bin_idx];
+                        }
+                      });
+  } else {
+    source_z.swap(new_z);
+  }
+}
+
 template <typename T, typename Z>
 template <RasterAggType AggType>
-inline Z GeoRaster<T, Z>::fill_bin_from_neighborhood(
+inline Z GeoRaster<T, Z>::fill_bin_from_box_neighborhood(
     const int64_t x_centroid_bin,
     const int64_t y_centroid_bin,
     const int64_t bins_radius,
@@ -414,27 +524,28 @@ inline Z GeoRaster<T, Z>::fill_bin_from_neighborhood(
 
 template <typename T, typename Z>
 template <RasterAggType AggType>
-void GeoRaster<T, Z>::fill_bins_from_neighbors_impl(
+void GeoRaster<T, Z>::fill_bins_from_box_neighborhood(
     const int64_t neighborhood_fill_radius,
     const bool fill_only_nulls) {
-  // Todo(todd): Box/Gaussian blur is separable, so separate this out into
-  // two passes (x/y) for efficiency (trickiness could be in handling nulls
-  // and conditional blurring based on null status)
+  CHECK(AggType != RasterAggType::GAUSS_AVG);  // Should have gone down Gaussian path
+  CHECK(AggType != RasterAggType::AVG);        // Should be BOX_AVG for fill pass
+  CHECK(AggType != RasterAggType::INVALID);
   std::vector<Z> new_z(num_bins_);
   ComputeAgg<AggType> compute_agg;
   tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_y_bins_),
                     [&](const tbb::blocked_range<int64_t>& r) {
-                      for (int64_t y_bin = r.begin(); y_bin != r.end(); ++y_bin) {
+                      const int64_t end_y_bin = r.end();
+                      for (int64_t y_bin = r.begin(); y_bin != end_y_bin; ++y_bin) {
                         for (int64_t x_bin = 0; x_bin < num_x_bins_; ++x_bin) {
                           const int64_t bin_idx =
                               x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
                           const Z z_val = z_[bin_idx];
                           if (!fill_only_nulls || z_val == null_sentinel_) {
-                            if constexpr (AggType == RasterAggType::AVG) {
-                              new_z[bin_idx] = fill_bin_from_neighborhood_avg(
+                            if constexpr (AggType == RasterAggType::BOX_AVG) {
+                              new_z[bin_idx] = fill_bin_from_avg_box_neighborhood(
                                   x_bin, y_bin, neighborhood_fill_radius);
                             } else {
-                              new_z[bin_idx] = fill_bin_from_neighborhood(
+                              new_z[bin_idx] = fill_bin_from_box_neighborhood(
                                   x_bin, y_bin, neighborhood_fill_radius, compute_agg);
                             }
                           } else {
@@ -451,30 +562,40 @@ void GeoRaster<T, Z>::fill_bins_from_neighbors(const int64_t neighborhood_fill_r
                                                const bool fill_only_nulls,
                                                const RasterAggType raster_fill_agg_type) {
   auto timer = DEBUG_TIMER(__func__);
+  // Note: only GAUSSIAN_AVG supports Gaussian 2-pass technique currently,
+  // as only an AVG aggregate makes sense for Gaussian blur. However we
+  // should be able to implement 2-pass box convolution for the other aggregates
+  // when time allows for better performance with wide kernel sizes
+  // Todo (Todd): Implement 2-pass box blur
+
   switch (raster_fill_agg_type) {
     case RasterAggType::COUNT: {
-      fill_bins_from_neighbors_impl<RasterAggType::COUNT>(neighborhood_fill_radius,
-                                                          fill_only_nulls);
+      fill_bins_from_box_neighborhood<RasterAggType::COUNT>(neighborhood_fill_radius,
+                                                            fill_only_nulls);
       break;
     }
     case RasterAggType::MIN: {
-      fill_bins_from_neighbors_impl<RasterAggType::MIN>(neighborhood_fill_radius,
-                                                        fill_only_nulls);
+      fill_bins_from_box_neighborhood<RasterAggType::MIN>(neighborhood_fill_radius,
+                                                          fill_only_nulls);
       break;
     }
     case RasterAggType::MAX: {
-      fill_bins_from_neighbors_impl<RasterAggType::MAX>(neighborhood_fill_radius,
-                                                        fill_only_nulls);
+      fill_bins_from_box_neighborhood<RasterAggType::MAX>(neighborhood_fill_radius,
+                                                          fill_only_nulls);
       break;
     }
     case RasterAggType::SUM: {
-      fill_bins_from_neighbors_impl<RasterAggType::SUM>(neighborhood_fill_radius,
-                                                        fill_only_nulls);
+      fill_bins_from_box_neighborhood<RasterAggType::SUM>(neighborhood_fill_radius,
+                                                          fill_only_nulls);
       break;
     }
-    case RasterAggType::AVG: {
-      fill_bins_from_neighbors_impl<RasterAggType::AVG>(neighborhood_fill_radius,
-                                                        fill_only_nulls);
+    case RasterAggType::BOX_AVG: {
+      fill_bins_from_box_neighborhood<RasterAggType::BOX_AVG>(neighborhood_fill_radius,
+                                                              fill_only_nulls);
+      break;
+    }
+    case RasterAggType::GAUSS_AVG: {
+      fill_bins_from_gaussian_neighborhood(neighborhood_fill_radius, fill_only_nulls);
       break;
     }
     default: {
@@ -594,7 +715,7 @@ int64_t GeoRaster<T, Z>::outputDenseColumns(
             if (z_val == null_sentinel_) {
               output_z.setNull(bin_idx);
               if (neighborhood_null_fill_radius) {
-                const Z avg_neighbor_value = fill_bin_from_neighborhood_avg(
+                const Z avg_neighbor_value = fill_bin_from_avg_box_neighborhood(
                     x_bin, y_bin, neighborhood_null_fill_radius);
                 if (avg_neighbor_value != null_sentinel_) {
                   output_z[bin_idx] = avg_neighbor_value;

@@ -21,18 +21,29 @@
 #include <vector>
 #include "QueryEngine/heavydbTypes.h"
 
-enum class RasterAggType { COUNT, MIN, MAX, SUM, AVG, INVALID };
+// Note that GAUSS_AVG and AVG only valid in context of fill pass
+enum class RasterAggType { COUNT, MIN, MAX, SUM, AVG, GAUSS_AVG, BOX_AVG, INVALID };
 
-RasterAggType get_raster_agg_type(const std::string& agg_type_str) {
+RasterAggType get_raster_agg_type(const std::string& agg_type_str,
+                                  const bool is_fill_agg) {
   const auto upper_agg_type_str = to_upper(agg_type_str);
   const static std::map<std::string, RasterAggType> agg_type_map = {
       {"COUNT", RasterAggType::COUNT},
       {"MIN", RasterAggType::MIN},
       {"MAX", RasterAggType::MAX},
       {"SUM", RasterAggType::SUM},
-      {"AVG", RasterAggType::AVG}};
+      {"AVG", RasterAggType::AVG},
+      {"GAUSS_AVG", RasterAggType::GAUSS_AVG},
+      {"BOX_AVG", RasterAggType::BOX_AVG}};
   const auto itr = agg_type_map.find(upper_agg_type_str);
   if (itr == agg_type_map.end()) {
+    return RasterAggType::INVALID;
+  }
+  if (is_fill_agg && itr->second == RasterAggType::AVG) {
+    return RasterAggType::GAUSS_AVG;
+  } else if (!is_fill_agg && (itr->second == RasterAggType::BOX_AVG ||
+                              itr->second == RasterAggType::GAUSS_AVG)) {
+    // GAUSS_AVG and BOX_AVG are fill-only aggregates
     return RasterAggType::INVALID;
   }
   return itr->second;
@@ -84,7 +95,7 @@ struct ComputeAgg<RasterAggType::SUM> {
 
 // Just instansiating so don't have to work conditionally around AVG
 template <>
-struct ComputeAgg<RasterAggType::AVG> {};
+struct ComputeAgg<RasterAggType::BOX_AVG> {};
 
 template <typename T, typename Z>
 struct GeoRaster {
@@ -163,9 +174,10 @@ struct GeoRaster {
                const Column<Z2>& input_z,
                const size_t max_inputs_per_thread);
 
-  void fill_bins_from_neighbors(const int64_t neighborhood_fill_radius,
-                                const bool fill_only_nulls,
-                                const RasterAggType raster_agg_type = RasterAggType::AVG);
+  void fill_bins_from_neighbors(
+      const int64_t neighborhood_fill_radius,
+      const bool fill_only_nulls,
+      const RasterAggType raster_agg_type = RasterAggType::GAUSS_AVG);
 
   bool get_nxn_neighbors_if_not_null(const int64_t x_bin,
                                      const int64_t y_bin,
@@ -210,19 +222,21 @@ struct GeoRaster {
                            std::vector<Z>& output_z,
                            const size_t max_inputs_per_thread);
 
-  inline Z fill_bin_from_neighborhood_avg(const int64_t x_centroid_bin,
+  inline Z fill_bin_from_avg_box_neighborhood(const int64_t x_centroid_bin,
+                                              const int64_t y_centroid_bin,
+                                              const int64_t bins_radius) const;
+
+  template <RasterAggType AggType>
+  inline Z fill_bin_from_box_neighborhood(const int64_t x_centroid_bin,
                                           const int64_t y_centroid_bin,
-                                          const int64_t bins_radius) const;
+                                          const int64_t bins_radius,
+                                          const ComputeAgg<AggType>& compute_agg) const;
 
   template <RasterAggType AggType>
-  inline Z fill_bin_from_neighborhood(const int64_t x_centroid_bin,
-                                      const int64_t y_centroid_bin,
-                                      const int64_t bins_radius,
-                                      const ComputeAgg<AggType>& compute_agg) const;
-
-  template <RasterAggType AggType>
-  void fill_bins_from_neighbors_impl(const int64_t neighborhood_fill_radius,
-                                     const bool fill_only_nulls);
+  void fill_bins_from_box_neighborhood(const int64_t neighborhood_fill_radius,
+                                       const bool fill_only_nulls);
+  void fill_bins_from_gaussian_neighborhood(const int64_t neighborhood_fill_radius,
+                                            const bool fill_only_nulls);
 };
 
 template <typename T, typename Z>
@@ -282,10 +296,10 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
                                Column<T>& output_x,
                                Column<T>& output_y,
                                Column<Z>& output_z) {
-  const auto raster_agg_type = get_raster_agg_type(agg_type_str);
+  const auto raster_agg_type = get_raster_agg_type(agg_type_str, false);
   if (raster_agg_type == RasterAggType::INVALID) {
     const std::string error_msg =
-        "Invalid Raster Aggregate Type: " + std::string(agg_type_str);
+        "Invalid Raster Aggregate Type: " + agg_type_str.getString();
     return mgr.ERROR_MESSAGE(error_msg);
   }
   return geo_rasterize_impl(mgr,
@@ -293,7 +307,7 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
                             input_y,
                             input_z,
                             raster_agg_type,
-                            RasterAggType::AVG,
+                            RasterAggType::GAUSS_AVG,
                             bin_dim_meters,
                             geographic_coords,
                             neighborhood_fill_radius,
@@ -329,16 +343,16 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
                                Column<T>& output_x,
                                Column<T>& output_y,
                                Column<Z>& output_z) {
-  const auto raster_agg_type = get_raster_agg_type(agg_type_str);
+  const auto raster_agg_type = get_raster_agg_type(agg_type_str, false);
   if (raster_agg_type == RasterAggType::INVALID) {
     const std::string error_msg =
-        "Invalid Raster Aggregate Type: " + std::string(agg_type_str);
+        "Invalid Raster Aggregate Type: " + agg_type_str.getString();
     return mgr.ERROR_MESSAGE(error_msg);
   }
-  const auto raster_fill_agg_type = get_raster_agg_type(fill_agg_type_str);
+  const auto raster_fill_agg_type = get_raster_agg_type(fill_agg_type_str, true);
   if (raster_fill_agg_type == RasterAggType::INVALID) {
     const std::string error_msg =
-        "Invalid Raster Fill Aggregate Type: " + std::string(fill_agg_type_str);
+        "Invalid Raster Fill Aggregate Type: " + fill_agg_type_str.getString();
     return mgr.ERROR_MESSAGE(error_msg);
   }
   return geo_rasterize_impl(mgr,
@@ -360,7 +374,8 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
 /*
   UDTF: tf_geo_rasterize__cpu_template(TableFunctionManager,
   Cursor<Column<T> x, Column<T> y, Column<Z> z> raster,
-  TextEncodingNone agg_type, T bin_dim_meters | require="bin_dim_meters > 0",
+  TextEncodingNone agg_type, TextEncodingNone fill_agg_type, 
+  T bin_dim_meters | require="bin_dim_meters > 0",
   bool geographic_coords, int64_t neighborhood_fill_radius | require="neighborhood_fill_radius >= 0", bool fill_only_nulls,
   T x_min, T x_max | require="x_max > x_min", T y_min, T y_max | require="y_max > y_min") ->
   Column<T> x, Column<T> y, Column<Z> z, T=[float, double], Z=[float, double]
@@ -374,6 +389,7 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
                                const Column<T>& input_y,
                                const Column<Z>& input_z,
                                const TextEncodingNone& agg_type_str,
+                               const TextEncodingNone& fill_agg_type_str,
                                const T bin_dim_meters,
                                const bool geographic_coords,
                                const int64_t neighborhood_fill_radius,
@@ -385,10 +401,16 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
                                Column<T>& output_x,
                                Column<T>& output_y,
                                Column<Z>& output_z) {
-  const auto raster_agg_type = get_raster_agg_type(agg_type_str);
+  const auto raster_agg_type = get_raster_agg_type(agg_type_str, false);
   if (raster_agg_type == RasterAggType::INVALID) {
     const std::string error_msg =
-        "Invalid Raster Aggregate Type: " + std::string(agg_type_str);
+        "Invalid Raster Aggregate Type: " + agg_type_str.getString();
+    return mgr.ERROR_MESSAGE(error_msg);
+  }
+  const auto raster_fill_agg_type = get_raster_agg_type(fill_agg_type_str, true);
+  if (raster_fill_agg_type == RasterAggType::INVALID) {
+    const std::string error_msg =
+        "Invalid Raster Fill Aggregate Type: " + fill_agg_type_str.getString();
     return mgr.ERROR_MESSAGE(error_msg);
   }
 
@@ -407,7 +429,8 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
   geo_raster.setMetadata(mgr);
 
   if (neighborhood_fill_radius > 0) {
-    geo_raster.fill_bins_from_neighbors(neighborhood_fill_radius, fill_only_nulls);
+    geo_raster.fill_bins_from_neighbors(
+        neighborhood_fill_radius, fill_only_nulls, raster_fill_agg_type);
   }
 
   return geo_raster.outputDenseColumns(mgr, output_x, output_y, output_z);
@@ -440,10 +463,10 @@ tf_geo_rasterize_slope__cpu_template(TableFunctionManager& mgr,
                                      Column<Z>& output_z,
                                      Column<Z>& output_slope,
                                      Column<Z>& output_aspect) {
-  const auto raster_agg_type = get_raster_agg_type(agg_type_str);
+  const auto raster_agg_type = get_raster_agg_type(agg_type_str, false);
   if (raster_agg_type == RasterAggType::INVALID) {
     const std::string error_msg =
-        "Invalid Raster Aggregate Type: " + std::string(agg_type_str);
+        "Invalid Raster Aggregate Type: " + agg_type_str.getString();
     return mgr.ERROR_MESSAGE(error_msg);
   }
 
@@ -457,7 +480,8 @@ tf_geo_rasterize_slope__cpu_template(TableFunctionManager& mgr,
   geo_raster.setMetadata(mgr);
 
   if (neighborhood_fill_radius > 0) {
-    geo_raster.fill_bins_from_neighbors(neighborhood_fill_radius, fill_only_nulls);
+    geo_raster.fill_bins_from_neighbors(
+        neighborhood_fill_radius, fill_only_nulls, RasterAggType::GAUSS_AVG);
   }
 
   const size_t output_rows =
