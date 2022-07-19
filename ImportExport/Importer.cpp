@@ -4816,17 +4816,11 @@ void Importer::readMetadataSampleGDAL(
     // validate geom type (again?)
     switch (wkbFlatten(geometry->getGeometryType())) {
       case wkbPoint:
+      case wkbMultiPoint:
       case wkbLineString:
       case wkbMultiLineString:
       case wkbPolygon:
       case wkbMultiPolygon:
-        break;
-      case wkbMultiPoint:
-        // supported if geo_explode_collections is specified
-        if (!copy_params.geo_explode_collections) {
-          throw std::runtime_error("Unsupported geometry type: " +
-                                   std::string(geometry->getGeometryName()));
-        }
         break;
       default:
         throw std::runtime_error("Unsupported geometry type: " +
