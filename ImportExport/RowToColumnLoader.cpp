@@ -63,6 +63,8 @@ SQLTypes get_sql_types(const TColumnType& ct) {
       return SQLTypes::kTINYINT;
     case TDatumType::POINT:
       return SQLTypes::kPOINT;
+    case TDatumType::MULTIPOINT:
+      return SQLTypes::kMULTIPOINT;
     case TDatumType::LINESTRING:
       return SQLTypes::kLINESTRING;
     case TDatumType::MULTILINESTRING:
@@ -165,6 +167,7 @@ void remove_partial_row(size_t failed_column,
         input_col_vec[idx].data.real_col.pop_back();
         break;
       case SQLTypes::kPOINT:
+      case SQLTypes::kMULTIPOINT:
       case SQLTypes::kLINESTRING:
       case SQLTypes::kMULTILINESTRING:
       case SQLTypes::kPOLYGON:
@@ -191,6 +194,7 @@ void populate_TColumn(TStringValue ts,
     case SQLTypes::kCHAR:
     case SQLTypes::kVARCHAR:
     case SQLTypes::kPOINT:
+    case SQLTypes::kMULTIPOINT:
     case SQLTypes::kLINESTRING:
     case SQLTypes::kMULTILINESTRING:
     case SQLTypes::kPOLYGON:
@@ -209,6 +213,7 @@ void populate_TColumn(TStringValue ts,
             break;
           case SQLTypes::kTEXT:
           case SQLTypes::kPOINT:
+          case SQLTypes::kMULTIPOINT:
           case SQLTypes::kLINESTRING:
           case SQLTypes::kMULTILINESTRING:
           case SQLTypes::kPOLYGON:

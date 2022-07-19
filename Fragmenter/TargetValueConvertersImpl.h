@@ -734,6 +734,71 @@ inline ArrayDatum to_array_datum(const std::shared_ptr<std::vector<ELEM_TYPE>>& 
   return to_array_datum(*vector.get());
 }
 
+struct GeoMultiPointValueConverter : public GeoPointValueConverter {
+  const ColumnDescriptor* bounds_column_descriptor_;
+
+  std::unique_ptr<std::vector<ArrayDatum>> bounds_data_;
+
+  GeoMultiPointValueConverter(const Catalog_Namespace::Catalog& cat,
+                              size_t num_rows,
+                              const ColumnDescriptor* logicalColumnDescriptor)
+      : GeoPointValueConverter(cat, num_rows, logicalColumnDescriptor) {
+    bounds_column_descriptor_ = cat.getMetadataForColumn(
+        column_descriptor_->tableId, column_descriptor_->columnId + 2);
+    CHECK(bounds_column_descriptor_);
+
+    if (num_rows) {
+      allocateColumnarData(num_rows);
+    }
+  }
+
+  ~GeoMultiPointValueConverter() override {}
+
+  void allocateColumnarData(size_t num_rows) override {
+    CHECK(num_rows > 0);
+    GeoPointValueConverter::allocateColumnarData(num_rows);
+    bounds_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
+  }
+
+  boost_variant_accessor<GeoMultiPointTargetValue> GEO_MULTIPOINT_VALUE_ACCESSOR;
+
+  void convertToColumnarFormat(size_t row, const TargetValue* value) override {
+    const auto geoValue =
+        checked_get<GeoTargetValue>(row, value, GEO_TARGET_VALUE_ACCESSOR);
+    CHECK(geoValue);
+    if (geoValue->is_initialized()) {
+      const auto geo = geoValue->get();
+      const auto geoMultiPoint =
+          checked_get<GeoMultiPointTargetValue>(row, &geo, GEO_MULTIPOINT_VALUE_ACCESSOR);
+
+      (*column_data_)[row] = "";
+      (*signed_compressed_coords_data_)[row] = toCompressedCoords(geoMultiPoint->coords);
+      auto bounds = compute_bounds_of_coords(geoMultiPoint->coords);
+      (*bounds_data_)[row] = to_array_datum(bounds);
+    } else {
+      // NULL MultiPoint
+      (*column_data_)[row] = "";
+      (*signed_compressed_coords_data_)[row] = ArrayDatum(0, nullptr, true);
+      std::vector<double> bounds = {
+          NULL_ARRAY_DOUBLE, NULL_DOUBLE, NULL_DOUBLE, NULL_DOUBLE};
+      auto bounds_datum = to_array_datum(bounds);
+      bounds_datum.is_null = true;
+      (*bounds_data_)[row] = bounds_datum;
+    }
+  }
+
+  void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
+    GeoPointValueConverter::addDataBlocksToInsertData(insertData);
+
+    DataBlockPtr bounds;
+
+    bounds.arraysPtr = bounds_data_.get();
+
+    insertData.data.emplace_back(bounds);
+    insertData.columnIds.emplace_back(bounds_column_descriptor_->columnId);
+  }
+};
+
 struct GeoLinestringValueConverter : public GeoPointValueConverter {
   const ColumnDescriptor* bounds_column_descriptor_;
 

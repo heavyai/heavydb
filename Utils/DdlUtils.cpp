@@ -188,6 +188,7 @@ void SqlType::check_type() {
       }
       break;
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:
@@ -583,6 +584,7 @@ void validate_literal(const std::string& val,
       break;
     }
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
     case kMULTILINESTRING:
     case kPOLYGON:
@@ -603,6 +605,8 @@ void validate_literal(const std::string& val,
           auto sql_type = column_type.get_type();
           auto geo_type = geo->getType();
           if ((geo_type == Geospatial::GeoBase::GeoType::kPOINT && sql_type != kPOINT) ||
+              (geo_type == Geospatial::GeoBase::GeoType::kMULTIPOINT &&
+               sql_type != kMULTIPOINT) ||
               (geo_type == Geospatial::GeoBase::GeoType::kLINESTRING &&
                sql_type != kLINESTRING) ||
               (geo_type == Geospatial::GeoBase::GeoType::kMULTILINESTRING &&

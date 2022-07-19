@@ -355,7 +355,7 @@ void InsertOrderFragmenter::updateColumns(
             indexOfChunk += 3;
             break;
           case kLINESTRING:
-            // TODO: case kMULTIPOINT:
+          case kMULTIPOINT:
             indexOfChunk += 2;
             break;
           case kPOINT:

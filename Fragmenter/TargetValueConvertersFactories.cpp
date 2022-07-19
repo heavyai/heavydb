@@ -280,6 +280,7 @@ std::unique_ptr<TargetValueConverter> TargetValueConverterFactory::create(
           {kVARCHAR, TextConverterFactory()},
           {kARRAY, ArraysConverterFactory()},
           {kPOINT, GeoConverterFactory<GeoPointValueConverter>()},
+          {kMULTIPOINT, GeoConverterFactory<GeoMultiPointValueConverter>()},
           {kLINESTRING, GeoConverterFactory<GeoLinestringValueConverter>()},
           {kMULTILINESTRING, GeoConverterFactory<GeoMultiLinestringValueConverter>()},
           {kPOLYGON, GeoConverterFactory<GeoPolygonValueConverter>()},

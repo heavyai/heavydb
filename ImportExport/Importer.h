@@ -154,6 +154,7 @@ class TypedImportBuffer : boost::noncopyable {
         }
         break;
       case kPOINT:
+      case kMULTIPOINT:
       case kLINESTRING:
       case kMULTILINESTRING:
       case kPOLYGON:
@@ -222,6 +223,7 @@ class TypedImportBuffer : boost::noncopyable {
         }
         break;
       case kPOINT:
+      case kMULTIPOINT:
       case kLINESTRING:
       case kMULTILINESTRING:
       case kPOLYGON:
@@ -474,6 +476,7 @@ class TypedImportBuffer : boost::noncopyable {
         break;
       }
       case kPOINT:
+      case kMULTIPOINT:
       case kLINESTRING:
       case kMULTILINESTRING:
       case kPOLYGON:

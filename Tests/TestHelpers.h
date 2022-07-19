@@ -103,6 +103,11 @@ struct GeoTargetComparator {
                       const double tol = -1.) {
     compare_array(*a.coords, *b.coords, tol);
   }
+  static void compare(const GeoMultiPointTargetValue& a,
+                      const GeoMultiPointTargetValue& b,
+                      const double tol = -1.) {
+    compare_array(*a.coords, *b.coords, tol);
+  }
   static void compare(const GeoLineStringTargetValue& a,
                       const GeoLineStringTargetValue& b,
                       const double tol = -1.) {

@@ -124,7 +124,7 @@ void import_geospatial_test(const bool use_temporary_tables) {
   const std::string geospatial_test("DROP TABLE IF EXISTS geospatial_test;");
   run_ddl_statement(geospatial_test);
   const auto create_ddl = build_create_table_statement(
-      R"(id INT, p POINT, l LINESTRING, ml MULTILINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gp GEOMETRY(POINT), gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), gp4326none GEOMETRY(POINT,4326) ENCODING NONE, gp900913 GEOMETRY(POINT,900913), gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, gml4326 GEOMETRY(MULTILINESTRING,4326), gpoly4326 GEOMETRY(POLYGON,4326), gpoly900913 GEOMETRY(POLYGON,900913))",
+      R"(id INT, p POINT, mp MULTIPOINT, l LINESTRING, ml MULTILINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gp GEOMETRY(POINT), gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), gp4326none GEOMETRY(POINT,4326) ENCODING NONE, gp900913 GEOMETRY(POINT,900913), gmp4326 GEOMETRY(MULTIPOINT,4326), gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, gml4326 GEOMETRY(MULTILINESTRING,4326), gpoly4326 GEOMETRY(POLYGON,4326), gpoly900913 GEOMETRY(POLYGON,900913))",
       "geospatial_test",
       {"", 0},
       {},
@@ -137,6 +137,12 @@ void import_geospatial_test(const bool use_temporary_tables) {
   for (size_t i = 0; i < g_num_rows; ++i) {
     const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) +
                             ")'"};
+    const std::string multipoint{
+        "'MULTIPOINT(" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " +
+        std::to_string(2 * i) +
+        ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1))
+                 : "") +
+        ")'"};
     const std::string linestring{
         "'LINESTRING(" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " +
         std::to_string(2 * i) +
@@ -155,6 +161,7 @@ void import_geospatial_test(const bool use_temporary_tables) {
                             std::to_string(i + 1) + ", 0 0)))'"};
     run_multiple_agg(gen(i,
                          point,
+                         multipoint,
                          linestring,
                          multilinestring,
                          poly,
@@ -163,6 +170,7 @@ void import_geospatial_test(const bool use_temporary_tables) {
                          point,
                          point,
                          point,
+                         multipoint,
                          linestring,
                          multilinestring,
                          poly,
@@ -213,10 +221,12 @@ void import_geospatial_null_test(const bool use_temporary_tables) {
   const std::string geospatial_null_test("DROP TABLE IF EXISTS geospatial_null_test;");
   run_ddl_statement(geospatial_null_test);
   const auto create_ddl = build_create_table_statement(
-      "id INT, p POINT, l LINESTRING, ml MULTILINESTRING, poly POLYGON, mpoly "
-      "MULTIPOLYGON, gpnotnull GEOMETRY(POINT) NOT NULL, gp4326 GEOMETRY(POINT,4326) "
-      "ENCODING COMPRESSED(32), gp4326none GEOMETRY(POINT,4326) ENCODING NONE, gp900913 "
-      "GEOMETRY(POINT,900913), gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, "
+      "id INT, p POINT, mp MULTIPOINT, l LINESTRING, ml MULTILINESTRING, "
+      "poly POLYGON, mpoly MULTIPOLYGON, gpnotnull GEOMETRY(POINT) NOT NULL, "
+      "gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), "
+      "gp4326none GEOMETRY(POINT,4326) ENCODING NONE, "
+      "gp900913 GEOMETRY(POINT,900913), gmp4326 GEOMETRY(MULTIPOINT,4326), "
+      "gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, "
       "gml4326 GEOMETRY(MULTILINESTRING,4326), gpoly4326 GEOMETRY(POLYGON,4326)",
       "geospatial_null_test",
       {"", 0},
@@ -230,6 +240,12 @@ void import_geospatial_null_test(const bool use_temporary_tables) {
   for (size_t i = 0; i < g_num_rows; ++i) {
     const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) +
                             ")'"};
+    const std::string multipoint{
+        "'MULTIPOINT(" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " +
+        std::to_string(2 * i) +
+        ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1))
+                 : "") +
+        ")'"};
     const std::string linestring{
         "'LINESTRING(" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " +
         std::to_string(2 * i) +
@@ -248,6 +264,7 @@ void import_geospatial_null_test(const bool use_temporary_tables) {
                             std::to_string(i + 1) + ", 0 0)))'"};
     run_multiple_agg(gen(i,
                          (i % 2 == 0) ? "NULL" : point,
+                         (i % 2 == 0) ? "NULL" : multipoint,
                          (i == 1) ? "NULL" : linestring,
                          (i == 7) ? "NULL" : multilinestring,
                          (i == 2) ? "'NULL'" : poly,
@@ -256,6 +273,7 @@ void import_geospatial_null_test(const bool use_temporary_tables) {
                          (i == 4) ? "NULL" : point,
                          (i == 5) ? "NULL" : point,
                          (i == 6) ? "NULL" : point,
+                         (i == 6) ? "NULL" : multipoint,
                          (i == 7) ? "NULL" : linestring,
                          (i == 1) ? "NULL" : multilinestring,
                          (i == 8) ? "NULL" : poly),
@@ -317,6 +335,8 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT count(p) FROM geospatial_test;", dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT count(mp) FROM geospatial_test;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT count(l) FROM geospatial_test;", dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT count(ml) FROM geospatial_test;", dt)));
@@ -333,6 +353,25 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
         static_cast<int64_t>(7),
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
                                   "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 9;",
+                                  dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(3),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(mp,p) <= 2.0;", dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(4),
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
+                                  "WHERE ST_Distance('MULTIPOINT(-1 0, 0 1)', p) < 3.8;",
+                                  dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(2),
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
+                                  "WHERE ST_Distance('MULTIPOINT(-1 0, 0 1)', p) < 1.1;",
+                                  dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(3),
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
+                                  "WHERE ST_Distance(p, 'MULTIPOINT(-1 0, 0 1)') < 2.5;",
                                   dt)));
     ASSERT_EQ(
         static_cast<int64_t>(5),
@@ -431,12 +470,14 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
       const auto rows =
           run_multiple_agg("SELECT * FROM geospatial_test WHERE id = 1", dt);
       const auto row = rows->getNextRow(false, false);
-      ASSERT_EQ(row.size(), size_t(14));
+      ASSERT_EQ(row.size(), size_t(16));
     }
 
     // Projection (return GeoTargetValue)
     compare_geo_target(run_simple_agg("SELECT p FROM geospatial_test WHERE id = 1;", dt),
                        GeoPointTargetValue({1., 1.}));
+    compare_geo_target(run_simple_agg("SELECT mp FROM geospatial_test WHERE id = 1;", dt),
+                       GeoMultiPointTargetValue({1., 0., 2., 2., 3., 3.}));
     compare_geo_target(run_simple_agg("SELECT l FROM geospatial_test WHERE id = 1;", dt),
                        GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.}));
     compare_geo_target(run_simple_agg("SELECT ml FROM geospatial_test WHERE id = 1;", dt),
@@ -452,6 +493,9 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
     THROW_ON_AGGREGATOR(compare_geo_target(
         run_simple_agg("SELECT SAMPLE(p) FROM geospatial_test WHERE id = 1;", dt),
         GeoPointTargetValue({1., 1.})));
+    THROW_ON_AGGREGATOR(compare_geo_target(
+        run_simple_agg("SELECT SAMPLE(mp) FROM geospatial_test WHERE id = 1;", dt),
+        GeoMultiPointTargetValue({1., 0., 2., 2., 3., 3.})));
     THROW_ON_AGGREGATOR(compare_geo_target(
         run_simple_agg("SELECT SAMPLE(l) FROM geospatial_test WHERE id = 1;", dt),
         GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.})));
@@ -470,6 +514,10 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
         run_simple_agg("SELECT SAMPLE(p) FROM geospatial_test WHERE id = 1 GROUP BY id;",
                        dt),
         GeoPointTargetValue({1., 1.}));
+    compare_geo_target(
+        run_simple_agg("SELECT SAMPLE(mp) FROM geospatial_test WHERE id = 1 GROUP BY id;",
+                       dt),
+        GeoMultiPointTargetValue({1., 0., 2., 2., 3., 3.}));
     compare_geo_target(
         run_simple_agg("SELECT SAMPLE(l) FROM geospatial_test WHERE id = 1 GROUP BY id;",
                        dt),
@@ -597,6 +645,9 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
     ASSERT_EQ("POINT (1 1)",
               boost::get<std::string>(v<NullableString>(run_simple_agg(
                   "SELECT p FROM geospatial_test WHERE id = 1;", dt, false))));
+    ASSERT_EQ("MULTIPOINT (1 0,2 2,3 3)",
+              boost::get<std::string>(v<NullableString>(run_simple_agg(
+                  "SELECT mp FROM geospatial_test WHERE id = 1;", dt, false))));
     ASSERT_EQ("LINESTRING (1 0,2 2,3 3)",
               boost::get<std::string>(v<NullableString>(run_simple_agg(
                   "SELECT l FROM geospatial_test WHERE id = 1;", dt, false))));
@@ -1403,6 +1454,11 @@ TEST_P(GeoSpatialNullTablesFixture, GeoWithNulls) {
     ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM geospatial_null_test WHERE ST_Distance(p,mp) < 2.0;",
+            dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM geospatial_null_test WHERE ST_Distance(p,l) < 2.0;",
             dt)));
     ASSERT_EQ(
@@ -1418,6 +1474,11 @@ TEST_P(GeoSpatialNullTablesFixture, GeoWithNulls) {
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_null_test WHERE "
                                         "ST_Distance(gp4326,gp4326none) IS NULL;",
                                         dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(2),
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_null_test "
+                                  "WHERE ST_Distance('MULTIPOINT(-1 0, 0 1)', p) < 6.0;",
+                                  dt)));
     ASSERT_EQ(
         static_cast<int64_t>(2),
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_null_test "
