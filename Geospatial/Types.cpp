@@ -628,7 +628,8 @@ void GeoMultiPoint::getColumns(std::vector<double>& coords,
 
   BoundingBox bbox;
   for (auto i = 0; i < multipoint_geom->getNumGeometries(); i++) {
-    OGRPoint* point = multipoint_geom->getGeometryRef(i);
+    OGRPoint* point = dynamic_cast<OGRPoint*>(multipoint_geom->getGeometryRef(i));
+    CHECK(point);
     double x = point->getX();
     double y = point->getY();
     coords.push_back(x);

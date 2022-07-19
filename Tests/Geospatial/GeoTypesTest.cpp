@@ -90,6 +90,69 @@ TEST(GeoPoint, BadWktType) {
   }
 }
 
+struct SampleMultiPointData {
+  const std::vector<double> coords{1.0, 2.0, 3.0, 4.0, 5.1, 5.2};
+  const std::vector<double> bounds{1.0, 2.0, 5.1, 5.2};
+  const std::string wkt{"MULTIPOINT (1 2,3 4,5.1 5.2)"};
+};
+
+TEST(GeoMultiPoint, EmptyWKT) {
+  const auto gdal_wkt_mpt = GeoMultiPoint("MULTIPOINT EMPTY");
+  const auto wkt_str = gdal_wkt_mpt.getWktString();
+  ASSERT_EQ(wkt_str, "MULTIPOINT EMPTY");
+}
+
+TEST(GeoMultiPoint, EmptyCoords) {
+  const auto gdal_mpt = GeoMultiPoint(std::vector<double>());
+  const auto wkt_str = gdal_mpt.getWktString();
+  ASSERT_EQ(wkt_str, "MULTIPOINT EMPTY");
+}
+
+TEST(GeoMultiPoint, ImportWKT) {
+  const auto sample_mpt = SampleMultiPointData();
+  const auto gdal_mpt = GeoMultiPoint(sample_mpt.wkt);
+  const auto wkt_str = gdal_mpt.getWktString();
+  ASSERT_EQ(wkt_str, sample_mpt.wkt);
+}
+
+TEST(GeoMultiPoint, ExportWKT) {
+  const auto sample_mpt = SampleMultiPointData();
+  const auto gdal_mpt = GeoMultiPoint(sample_mpt.coords);
+  const auto wkt_str = gdal_mpt.getWktString();
+  ASSERT_EQ(wkt_str, sample_mpt.wkt);
+}
+
+TEST(GeoMultiPoint, ExportColumns) {
+  const auto sample_mpt = SampleMultiPointData();
+  const auto gdal_mpt = GeoMultiPoint(sample_mpt.wkt);
+  std::vector<double> coords;
+  std::vector<double> bounds;
+  gdal_mpt.getColumns(coords, bounds);
+  compare_arrays(coords, sample_mpt.coords);
+  compare_arrays(bounds, sample_mpt.bounds);
+}
+
+TEST(GeoMultiPoint, EqualsOperator) {
+  const auto sample_mpt = SampleMultiPointData();
+  ASSERT_TRUE(GeoMultiPoint(sample_mpt.coords) == GeoMultiPoint(sample_mpt.wkt));
+}
+
+TEST(GeoMultiPoint, OGRError) {
+  EXPECT_THROW(GeoMultiPoint("MULTIPOINT (0)"), GeoTypesError);
+}
+
+TEST(GeoMultiPoint, BadWktType) {
+  try {
+    auto pt = GeoMultiPoint("LINESTRING (1 1)");
+  } catch (const GeoTypesError& e) {
+    ASSERT_STREQ(
+        "GeoMultiPoint Error: Unexpected geometry type from WKT string: Line String",
+        e.what());
+  } catch (...) {
+    FAIL();
+  }
+}
+
 struct SampleLineStringData {
   const std::vector<double> coords{1.0, 2.0, 3.0, 4.0, 5.1, 5.2};
   const std::vector<double> bounds{1.0, 2.0, 5.1, 5.2};
