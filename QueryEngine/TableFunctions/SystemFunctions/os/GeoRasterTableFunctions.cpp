@@ -125,31 +125,6 @@ inline Z GeoRaster<T, Z>::offset_source_z_from_raster_z(const int64_t source_x_b
 }
 
 template <typename T, typename Z>
-inline Z GeoRaster<T, Z>::fill_bin_from_avg_neighbors(const int64_t x_centroid_bin,
-                                                      const int64_t y_centroid_bin,
-                                                      const int64_t bins_radius) const {
-  T val = 0.0;
-  int32_t count = 0;
-  for (int64_t y_bin = y_centroid_bin - bins_radius;
-       y_bin <= y_centroid_bin + bins_radius;
-       y_bin++) {
-    for (int64_t x_bin = x_centroid_bin - bins_radius;
-         x_bin <= x_centroid_bin + bins_radius;
-         x_bin++) {
-      if (x_bin >= 0 && x_bin < num_x_bins_ && y_bin >= 0 && y_bin < num_y_bins_) {
-        const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
-        const Z bin_val = z_[bin_idx];
-        if (bin_val != null_sentinel_) {
-          count++;
-          val += bin_val;
-        }
-      }
-    }
-  }
-  return (count == 0) ? null_sentinel_ : val / count;
-}
-
-template <typename T, typename Z>
 void GeoRaster<T, Z>::align_bins_max_inclusive() {
   x_min_ = std::floor(x_min_ / bin_dim_meters_) * bin_dim_meters_;
   x_max_ = std::floor(x_max_ / bin_dim_meters_) * bin_dim_meters_ +
@@ -387,10 +362,66 @@ void GeoRaster<T, Z>::compute(const Column<T2>& input_x,
 }
 
 template <typename T, typename Z>
-void GeoRaster<T, Z>::fill_bins_from_neighbors(const int64_t neighborhood_fill_radius,
-                                               const bool fill_only_nulls) {
-  auto timer = DEBUG_TIMER(__func__);
+inline Z GeoRaster<T, Z>::fill_bin_from_neighborhood_avg(
+    const int64_t x_centroid_bin,
+    const int64_t y_centroid_bin,
+    const int64_t bins_radius) const {
+  T val = 0.0;
+  int32_t count = 0;
+  for (int64_t y_bin = y_centroid_bin - bins_radius;
+       y_bin <= y_centroid_bin + bins_radius;
+       y_bin++) {
+    for (int64_t x_bin = x_centroid_bin - bins_radius;
+         x_bin <= x_centroid_bin + bins_radius;
+         x_bin++) {
+      if (x_bin >= 0 && x_bin < num_x_bins_ && y_bin >= 0 && y_bin < num_y_bins_) {
+        const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
+        const Z bin_val = z_[bin_idx];
+        if (bin_val != null_sentinel_) {
+          count++;
+          val += bin_val;
+        }
+      }
+    }
+  }
+  return (count == 0) ? null_sentinel_ : val / count;
+}
+
+template <typename T, typename Z>
+template <RasterAggType AggType>
+inline Z GeoRaster<T, Z>::fill_bin_from_neighborhood(
+    const int64_t x_centroid_bin,
+    const int64_t y_centroid_bin,
+    const int64_t bins_radius,
+    const ComputeAgg<AggType>& compute_agg) const {
+  const Z agg_sentinel = AggType == RasterAggType::MIN ? std::numeric_limits<Z>::max()
+                                                       : std::numeric_limits<Z>::lowest();
+  Z val{agg_sentinel};
+  for (int64_t y_bin = y_centroid_bin - bins_radius;
+       y_bin <= y_centroid_bin + bins_radius;
+       y_bin++) {
+    for (int64_t x_bin = x_centroid_bin - bins_radius;
+         x_bin <= x_centroid_bin + bins_radius;
+         x_bin++) {
+      if (x_bin >= 0 && x_bin < num_x_bins_ && y_bin >= 0 && y_bin < num_y_bins_) {
+        const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
+        compute_agg(z_[bin_idx], val, null_sentinel_);
+      }
+    }
+  }
+  return val == agg_sentinel ? null_sentinel_ : val;
+}
+
+template <typename T, typename Z>
+template <RasterAggType AggType>
+void GeoRaster<T, Z>::fill_bins_from_neighbors_impl(
+    const int64_t neighborhood_fill_radius,
+    const bool fill_only_nulls) {
+  // Todo(todd): Box/Gaussian blur is separable, so separate this out into
+  // two passes (x/y) for efficiency (trickiness could be in handling nulls
+  // and conditional blurring based on null status)
   std::vector<Z> new_z(num_bins_);
+  ComputeAgg<AggType> compute_agg;
   tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_y_bins_),
                     [&](const tbb::blocked_range<int64_t>& r) {
                       for (int64_t y_bin = r.begin(); y_bin != r.end(); ++y_bin) {
@@ -399,8 +430,13 @@ void GeoRaster<T, Z>::fill_bins_from_neighbors(const int64_t neighborhood_fill_r
                               x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
                           const Z z_val = z_[bin_idx];
                           if (!fill_only_nulls || z_val == null_sentinel_) {
-                            new_z[bin_idx] = fill_bin_from_avg_neighbors(
-                                x_bin, y_bin, neighborhood_fill_radius);
+                            if constexpr (AggType == RasterAggType::AVG) {
+                              new_z[bin_idx] = fill_bin_from_neighborhood_avg(
+                                  x_bin, y_bin, neighborhood_fill_radius);
+                            } else {
+                              new_z[bin_idx] = fill_bin_from_neighborhood(
+                                  x_bin, y_bin, neighborhood_fill_radius, compute_agg);
+                            }
                           } else {
                             new_z[bin_idx] = z_val;
                           }
@@ -408,6 +444,43 @@ void GeoRaster<T, Z>::fill_bins_from_neighbors(const int64_t neighborhood_fill_r
                       }
                     });
   z_.swap(new_z);
+}
+
+template <typename T, typename Z>
+void GeoRaster<T, Z>::fill_bins_from_neighbors(const int64_t neighborhood_fill_radius,
+                                               const bool fill_only_nulls,
+                                               const RasterAggType raster_fill_agg_type) {
+  auto timer = DEBUG_TIMER(__func__);
+  switch (raster_fill_agg_type) {
+    case RasterAggType::COUNT: {
+      fill_bins_from_neighbors_impl<RasterAggType::COUNT>(neighborhood_fill_radius,
+                                                          fill_only_nulls);
+      break;
+    }
+    case RasterAggType::MIN: {
+      fill_bins_from_neighbors_impl<RasterAggType::MIN>(neighborhood_fill_radius,
+                                                        fill_only_nulls);
+      break;
+    }
+    case RasterAggType::MAX: {
+      fill_bins_from_neighbors_impl<RasterAggType::MAX>(neighborhood_fill_radius,
+                                                        fill_only_nulls);
+      break;
+    }
+    case RasterAggType::SUM: {
+      fill_bins_from_neighbors_impl<RasterAggType::SUM>(neighborhood_fill_radius,
+                                                        fill_only_nulls);
+      break;
+    }
+    case RasterAggType::AVG: {
+      fill_bins_from_neighbors_impl<RasterAggType::AVG>(neighborhood_fill_radius,
+                                                        fill_only_nulls);
+      break;
+    }
+    default: {
+      UNREACHABLE();
+    }
+  }
 }
 
 template <typename T, typename Z>
@@ -521,7 +594,7 @@ int64_t GeoRaster<T, Z>::outputDenseColumns(
             if (z_val == null_sentinel_) {
               output_z.setNull(bin_idx);
               if (neighborhood_null_fill_radius) {
-                const Z avg_neighbor_value = fill_bin_from_avg_neighbors(
+                const Z avg_neighbor_value = fill_bin_from_neighborhood_avg(
                     x_bin, y_bin, neighborhood_null_fill_radius);
                 if (avg_neighbor_value != null_sentinel_) {
                   output_z[bin_idx] = avg_neighbor_value;
