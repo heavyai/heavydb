@@ -580,6 +580,15 @@ TPlanResult Calcite::processImpl(query_state::QueryStateProxy query_state_proxy,
                 << " (ms)";
     } catch (InvalidParseRequest& e) {
       throw std::invalid_argument(e.whyUp);
+    } catch (const TTransportException& ex) {
+      if (ex.getType() == TTransportException::TIMED_OUT) {
+        LOG(WARNING) << "Calcite request timed out: " << ex.what();
+      } else {
+        LOG(FATAL) << "Error occurred trying to communicate with Calcite server, the "
+                      "error was: '"
+                   << ex.what() << "', heavydb restart will be required";
+      }
+      throw;
     } catch (const std::exception& ex) {
       LOG(FATAL)
           << "Error occurred trying to communicate with Calcite server, the error was: '"
