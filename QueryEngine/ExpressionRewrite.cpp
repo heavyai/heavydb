@@ -791,9 +791,6 @@ static const std::unordered_set<std::string> overlaps_supported_functions = {
     "ST_cContains_MultiPolygon_Point",  // compressed coords version
     "ST_cContains_Polygon_Point",
     "ST_Contains_Polygon_Polygon",
-    "ST_Contains_Polygon_MultiPolygon",
-    "ST_Contains_MultiPolygon_MultiPolygon",
-    "ST_Contains_MultiPolygon_Polygon",
     "ST_Intersects_Polygon_Point",
     "ST_cIntersects_Polygon_Point",
     "ST_Intersects_Polygon_Polygon",
@@ -807,9 +804,6 @@ static const std::unordered_set<std::string> overlaps_supported_functions = {
 
 static const std::unordered_set<std::string> requires_many_to_many = {
     "ST_Contains_Polygon_Polygon",
-    "ST_Contains_Polygon_MultiPolygon",
-    "ST_Contains_MultiPolygon_MultiPolygon",
-    "ST_Contains_MultiPolygon_Polygon",
     "ST_Intersects_Polygon_Polygon",
     "ST_Intersects_Polygon_MultiPolygon",
     "ST_Intersects_MultiPolygon_MultiPolygon",
