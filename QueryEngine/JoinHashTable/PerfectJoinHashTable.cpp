@@ -37,7 +37,7 @@ std::once_flag PerfectJoinHashTable::init_caches_flag_;
 
 namespace {
 
-InnerOuter get_cols(const Analyzer::BinOper* qual_bin_oper,
+InnerOuter get_cols(const hdk::ir::BinOper* qual_bin_oper,
                     SchemaProviderPtr schema_provider,
                     const TemporaryTables* temporary_tables) {
   const auto lhs = qual_bin_oper->get_left_operand();
@@ -84,7 +84,7 @@ HashEntryInfo get_bucketized_hash_entry_info(SQLTypeInfo const& context_ti,
 
 //! Make hash table from an in-flight SQL query's parse tree etc.
 std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
-    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+    const std::shared_ptr<hdk::ir::BinOper> qual_bin_oper,
     const std::vector<InputTableInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level,
     const JoinType join_type,
@@ -233,8 +233,8 @@ void PerfectJoinHashTable::initCaches(ConfigPtr config) {
   });
 }
 
-bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
-                                  const Analyzer::Expr* outer_col_expr,
+bool needs_dictionary_translation(const hdk::ir::ColumnVar* inner_col,
+                                  const hdk::ir::Expr* outer_col_expr,
                                   const Executor* executor) {
   auto schema_provider = executor->getSchemaProvider();
   CHECK(schema_provider);
@@ -248,7 +248,7 @@ bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
   if (!inner_ti.is_string()) {
     return false;
   }
-  const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(outer_col_expr);
+  const auto outer_col = dynamic_cast<const hdk::ir::ColumnVar*>(outer_col_expr);
   CHECK(outer_col);
   const auto outer_col_info =
       schema_provider->getColumnInfo(*outer_col->get_column_info());
@@ -354,7 +354,7 @@ void PerfectJoinHashTable::reify() {
         // with the old-fashioned cache key if we deal with hashtable of non-temporary
         // table
         auto outer_col =
-            dynamic_cast<const Analyzer::ColumnVar*>(inner_outer_pairs_.front().second);
+            dynamic_cast<const hdk::ir::ColumnVar*>(inner_outer_pairs_.front().second);
         AlternativeCacheKeyForPerfectHashJoin cache_key{
             col_range_,
             inner_col,
@@ -702,15 +702,15 @@ int PerfectJoinHashTable::initHashTableForDevice(
 }
 
 ChunkKey PerfectJoinHashTable::genChunkKey(const std::vector<FragmentInfo>& fragments,
-                                           const Analyzer::Expr* outer_col_expr,
-                                           const Analyzer::ColumnVar* inner_col) const {
+                                           const hdk::ir::Expr* outer_col_expr,
+                                           const hdk::ir::ColumnVar* inner_col) const {
   ChunkKey chunk_key{
       inner_col->get_db_id(), inner_col->get_table_id(), inner_col->get_column_id()};
   const auto& ti = inner_col->get_type_info();
   if (ti.is_string()) {
     CHECK_EQ(kENCODING_DICT, ti.get_compression());
     size_t outer_elem_count = 0;
-    const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(outer_col_expr);
+    const auto outer_col = dynamic_cast<const hdk::ir::ColumnVar*>(outer_col_expr);
     CHECK(outer_col);
     const auto& outer_query_info = getInnerQueryInfo(outer_col).info;
     for (auto& frag : outer_query_info.fragments) {
@@ -769,7 +769,7 @@ llvm::Value* PerfectJoinHashTable::codegenHashTableLoad(const size_t table_idx) 
 
 std::vector<llvm::Value*> PerfectJoinHashTable::getHashJoinArgs(
     llvm::Value* hash_ptr,
-    const Analyzer::Expr* key_col,
+    const hdk::ir::Expr* key_col,
     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   CodeGenerator code_generator(executor_);
@@ -819,8 +819,8 @@ HashJoinMatchingSet PerfectJoinHashTable::codegenMatchingSet(const CompilationOp
   CHECK(val_col);
   auto pos_ptr = codegenHashTableLoad(index);
   CHECK(pos_ptr);
-  const auto key_col_var = dynamic_cast<const Analyzer::ColumnVar*>(key_col);
-  const auto val_col_var = dynamic_cast<const Analyzer::ColumnVar*>(val_col);
+  const auto key_col_var = dynamic_cast<const hdk::ir::ColumnVar*>(key_col);
+  const auto val_col_var = dynamic_cast<const hdk::ir::ColumnVar*>(val_col);
   if (key_col_var && val_col_var &&
       self_join_not_covered_by_left_deep_tree(
           key_col_var,
@@ -960,8 +960,8 @@ llvm::Value* PerfectJoinHashTable::codegenSlot(const CompilationOptions& co,
   auto val_col = cols.first;
   CHECK(val_col);
   CodeGenerator code_generator(executor_);
-  const auto key_col_var = dynamic_cast<const Analyzer::ColumnVar*>(key_col);
-  const auto val_col_var = dynamic_cast<const Analyzer::ColumnVar*>(val_col);
+  const auto key_col_var = dynamic_cast<const hdk::ir::ColumnVar*>(key_col);
+  const auto val_col_var = dynamic_cast<const hdk::ir::ColumnVar*>(val_col);
   if (key_col_var && val_col_var &&
       self_join_not_covered_by_left_deep_tree(
           key_col_var,
@@ -996,7 +996,7 @@ llvm::Value* PerfectJoinHashTable::codegenSlot(const CompilationOptions& co,
 }
 
 const InputTableInfo& PerfectJoinHashTable::getInnerQueryInfo(
-    const Analyzer::ColumnVar* inner_col) const {
+    const hdk::ir::ColumnVar* inner_col) const {
   return get_inner_query_info(inner_col->get_table_id(), query_infos_);
 }
 

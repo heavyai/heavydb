@@ -145,7 +145,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
     if (!ti.is_column_list()) {
       CHECK_EQ(col_index, -1);
     }
-    if (auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr)) {
+    if (auto col_var = dynamic_cast<hdk::ir::ColumnVar*>(input_expr)) {
       auto table_id = col_var->get_table_id();
       auto table_info_it = std::find_if(
           table_infos.begin(), table_infos.end(), [&table_id](const auto& table_info) {
@@ -188,7 +188,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
         col_buf_ptrs.push_back(col_buf);
       }
       col_sizes.push_back(buf_elem_count);
-    } else if (const auto& constant_val = dynamic_cast<Analyzer::Constant*>(input_expr)) {
+    } else if (const auto& constant_val = dynamic_cast<hdk::ir::Constant*>(input_expr)) {
       // TODO(adb): Unify literal handling with rest of system, either in Codegen or as a
       // separate serialization component
       col_sizes.push_back(0);

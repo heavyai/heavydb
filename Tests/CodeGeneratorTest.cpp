@@ -23,7 +23,7 @@
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
-#include "Analyzer/Analyzer.h"
+#include "IR/Expr.h"
 #include "QueryEngine/CodeGenerator.h"
 #include "QueryEngine/Compiler/HelperFunctions.h"
 #include "QueryEngine/Execute.h"
@@ -57,7 +57,7 @@ TEST(CodeGeneratorTest, IntegerConstant) {
 
   Datum d;
   d.intval = 42;
-  auto constant = makeExpr<Analyzer::Constant>(kINT, false, d);
+  auto constant = hdk::ir::makeExpr<hdk::ir::Constant>(kINT, false, d);
   const auto compiled_expr = code_generator.compile(constant.get(), true, co);
   compiler::verify_function_ir(compiled_expr.func);
   ASSERT_TRUE(compiled_expr.inputs.empty());
@@ -82,9 +82,9 @@ TEST(CodeGeneratorTest, IntegerAdd) {
 
   Datum d;
   d.intval = 42;
-  auto lhs = makeExpr<Analyzer::Constant>(kINT, false, d);
-  auto rhs = makeExpr<Analyzer::Constant>(kINT, false, d);
-  auto plus = makeExpr<Analyzer::BinOper>(kINT, kPLUS, kONE, lhs, rhs);
+  auto lhs = hdk::ir::makeExpr<hdk::ir::Constant>(kINT, false, d);
+  auto rhs = hdk::ir::makeExpr<hdk::ir::Constant>(kINT, false, d);
+  auto plus = hdk::ir::makeExpr<hdk::ir::BinOper>(kINT, kPLUS, kONE, lhs, rhs);
   const auto compiled_expr = code_generator.compile(plus.get(), true, co);
   compiler::verify_function_ir(compiled_expr.func);
   ASSERT_TRUE(compiled_expr.inputs.empty());
@@ -111,7 +111,7 @@ TEST(CodeGeneratorTest, IntegerColumn) {
   int table_id = 1;
   int column_id = 5;
   int rte_idx = 0;
-  auto col = makeExpr<Analyzer::ColumnVar>(ti, table_id, column_id, rte_idx);
+  auto col = hdk::ir::makeExpr<hdk::ir::ColumnVar>(ti, table_id, column_id, rte_idx);
   const auto compiled_expr = code_generator.compile(col.get(), true, co);
   compiler::verify_function_ir(compiled_expr.func);
   ASSERT_EQ(compiled_expr.inputs.size(), size_t(1));
@@ -139,11 +139,11 @@ TEST(CodeGeneratorTest, IntegerExpr) {
   int table_id = 1;
   int column_id = 5;
   int rte_idx = 0;
-  auto lhs = makeExpr<Analyzer::ColumnVar>(ti, table_id, column_id, rte_idx);
+  auto lhs = hdk::ir::makeExpr<hdk::ir::ColumnVar>(ti, table_id, column_id, rte_idx);
   Datum d;
   d.intval = 42;
-  auto rhs = makeExpr<Analyzer::Constant>(kINT, false, d);
-  auto plus = makeExpr<Analyzer::BinOper>(kINT, kPLUS, kONE, lhs, rhs);
+  auto rhs = hdk::ir::makeExpr<hdk::ir::Constant>(kINT, false, d);
+  auto plus = hdk::ir::makeExpr<hdk::ir::BinOper>(kINT, kPLUS, kONE, lhs, rhs);
   const auto compiled_expr = code_generator.compile(plus.get(), true, co);
   compiler::verify_function_ir(compiled_expr.func);
   ASSERT_EQ(compiled_expr.inputs.size(), size_t(1));
@@ -178,7 +178,7 @@ TEST(CodeGeneratorTest, IntegerConstantGPU) {
 
   Datum d;
   d.intval = 42;
-  auto constant = makeExpr<Analyzer::Constant>(kINT, false, d);
+  auto constant = hdk::ir::makeExpr<hdk::ir::Constant>(kINT, false, d);
   const auto compiled_expr = code_generator.compile(constant.get(), true, co);
   compiler::verify_function_ir(compiled_expr.func);
   ASSERT_TRUE(compiled_expr.inputs.empty());
@@ -225,9 +225,9 @@ TEST(CodeGeneratorTest, IntegerAddGPU) {
 
   Datum d;
   d.intval = 42;
-  auto lhs = makeExpr<Analyzer::Constant>(kINT, false, d);
-  auto rhs = makeExpr<Analyzer::Constant>(kINT, false, d);
-  auto plus = makeExpr<Analyzer::BinOper>(kINT, kPLUS, kONE, lhs, rhs);
+  auto lhs = hdk::ir::makeExpr<hdk::ir::Constant>(kINT, false, d);
+  auto rhs = hdk::ir::makeExpr<hdk::ir::Constant>(kINT, false, d);
+  auto plus = hdk::ir::makeExpr<hdk::ir::BinOper>(kINT, kPLUS, kONE, lhs, rhs);
   const auto compiled_expr = code_generator.compile(plus.get(), true, co);
   compiler::verify_function_ir(compiled_expr.func);
   ASSERT_TRUE(compiled_expr.inputs.empty());
@@ -276,7 +276,7 @@ TEST(CodeGeneratorTest, IntegerColumnGPU) {
   int table_id = 1;
   int column_id = 5;
   int rte_idx = 0;
-  auto col = makeExpr<Analyzer::ColumnVar>(ti, table_id, column_id, rte_idx);
+  auto col = hdk::ir::makeExpr<hdk::ir::ColumnVar>(ti, table_id, column_id, rte_idx);
   const auto compiled_expr = code_generator.compile(col.get(), true, co);
   compiler::verify_function_ir(compiled_expr.func);
   ASSERT_EQ(compiled_expr.inputs.size(), size_t(1));
@@ -335,11 +335,11 @@ TEST(CodeGeneratorTest, IntegerExprGPU) {
   int table_id = 1;
   int column_id = 5;
   int rte_idx = 0;
-  auto lhs = makeExpr<Analyzer::ColumnVar>(ti, table_id, column_id, rte_idx);
+  auto lhs = hdk::ir::makeExpr<hdk::ir::ColumnVar>(ti, table_id, column_id, rte_idx);
   Datum d;
   d.intval = 42;
-  auto rhs = makeExpr<Analyzer::Constant>(kINT, false, d);
-  auto plus = makeExpr<Analyzer::BinOper>(kINT, kPLUS, kONE, lhs, rhs);
+  auto rhs = hdk::ir::makeExpr<hdk::ir::Constant>(kINT, false, d);
+  auto plus = hdk::ir::makeExpr<hdk::ir::BinOper>(kINT, kPLUS, kONE, lhs, rhs);
   const auto compiled_expr = code_generator.compile(plus.get(), true, co);
   compiler::verify_function_ir(compiled_expr.func);
   ASSERT_EQ(compiled_expr.inputs.size(), size_t(1));

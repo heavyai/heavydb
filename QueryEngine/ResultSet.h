@@ -82,13 +82,13 @@
 
 struct ReductionCode;
 
-namespace Analyzer {
+namespace hdk::ir {
 
 class Expr;
 class Estimator;
 struct OrderEntry;
 
-}  // namespace Analyzer
+}  // namespace hdk::ir
 
 class Executor;
 class StringDictionaryProxy;
@@ -266,7 +266,7 @@ class ResultSet {
 
   bool isRowAtEmpty(const size_t index) const;
 
-  void sort(const std::list<Analyzer::OrderEntry>& order_entries,
+  void sort(const std::list<hdk::ir::OrderEntry>& order_entries,
             size_t top_n,
             const Executor* executor);
 
@@ -569,9 +569,9 @@ class ResultSet {
   size_t advanceCursorToNextEntry() const;
 
   void radixSortOnGpu(const Config& config,
-                      const std::list<Analyzer::OrderEntry>& order_entries) const;
+                      const std::list<hdk::ir::OrderEntry>& order_entries) const;
 
-  void radixSortOnCpu(const std::list<Analyzer::OrderEntry>& order_entries) const;
+  void radixSortOnCpu(const std::list<hdk::ir::OrderEntry>& order_entries) const;
 
   static bool isNull(const SQLTypeInfo& ti,
                      const InternalTargetValue& val,
@@ -716,7 +716,7 @@ class ResultSet {
   struct ResultSetComparator {
     using BufferIteratorType = BUFFER_ITERATOR_TYPE;
 
-    ResultSetComparator(const std::list<Analyzer::OrderEntry>& order_entries,
+    ResultSetComparator(const std::list<hdk::ir::OrderEntry>& order_entries,
                         const ResultSet* result_set,
                         const PermutationView permutation,
                         const Executor* executor,
@@ -735,13 +735,13 @@ class ResultSet {
     ApproxQuantileBuffers materializeApproxQuantileColumns() const;
 
     std::vector<int64_t> materializeCountDistinctColumn(
-        const Analyzer::OrderEntry& order_entry) const;
+        const hdk::ir::OrderEntry& order_entry) const;
     ApproxQuantileBuffers::value_type materializeApproxQuantileColumn(
-        const Analyzer::OrderEntry& order_entry) const;
+        const hdk::ir::OrderEntry& order_entry) const;
 
     bool operator()(const PermutationIdx lhs, const PermutationIdx rhs) const;
 
-    const std::list<Analyzer::OrderEntry>& order_entries_;
+    const std::list<hdk::ir::OrderEntry>& order_entries_;
     const ResultSet* result_set_;
     const PermutationView permutation_;
     const BufferIteratorType buffer_itr_;
@@ -751,7 +751,7 @@ class ResultSet {
     const ApproxQuantileBuffers approx_quantile_materialized_buffers_;
   };
 
-  Comparator createComparator(const std::list<Analyzer::OrderEntry>& order_entries,
+  Comparator createComparator(const std::list<hdk::ir::OrderEntry>& order_entries,
                               const PermutationView permutation,
                               const Executor* executor,
                               const bool single_threaded) {
@@ -780,20 +780,20 @@ class ResultSet {
                                         PermutationIdx const begin,
                                         PermutationIdx const end) const;
 
-  void parallelTop(const std::list<Analyzer::OrderEntry>& order_entries,
+  void parallelTop(const std::list<hdk::ir::OrderEntry>& order_entries,
                    const size_t top_n,
                    const Executor* executor);
 
-  void baselineSort(const std::list<Analyzer::OrderEntry>& order_entries,
+  void baselineSort(const std::list<hdk::ir::OrderEntry>& order_entries,
                     const size_t top_n,
                     const Executor* executor);
 
   void doBaselineSort(const ExecutorDeviceType device_type,
-                      const std::list<Analyzer::OrderEntry>& order_entries,
+                      const std::list<hdk::ir::OrderEntry>& order_entries,
                       const size_t top_n,
                       const Executor* executor);
 
-  bool canUseFastBaselineSort(const std::list<Analyzer::OrderEntry>& order_entries,
+  bool canUseFastBaselineSort(const std::list<hdk::ir::OrderEntry>& order_entries,
                               const size_t top_n);
 
   size_t rowCountImpl(const bool force_parallel) const;

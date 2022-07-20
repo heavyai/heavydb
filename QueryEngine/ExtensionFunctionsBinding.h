@@ -28,15 +28,11 @@
 #include "ExtensionFunctionsWhitelist.h"
 #include "TableFunctions/TableFunctionsFactory.h"
 
-#include "../Analyzer/Analyzer.h"
-#include "../Shared/sqltypes.h"
+#include "IR/Expr.h"
+#include "Shared/sqltypes.h"
 
 #include <tuple>
 #include <vector>
-
-namespace Analyzer {
-class FunctionOper;
-}  // namespace Analyzer
 
 class ExtensionFunctionBindingError : public std::runtime_error {
  public:
@@ -45,18 +41,17 @@ class ExtensionFunctionBindingError : public std::runtime_error {
 };
 
 ExtensionFunction bind_function(std::string name,
-                                Analyzer::ExpressionPtrVector func_args,
+                                hdk::ir::ExprPtrVector func_args,
                                 const bool is_gpu);
 
-ExtensionFunction bind_function(std::string name,
-                                Analyzer::ExpressionPtrVector func_args);
+ExtensionFunction bind_function(std::string name, hdk::ir::ExprPtrVector func_args);
 
-ExtensionFunction bind_function(const Analyzer::FunctionOper* function_oper,
+ExtensionFunction bind_function(const hdk::ir::FunctionOper* function_oper,
                                 const bool is_gpu);
 
 const std::tuple<table_functions::TableFunction, std::vector<SQLTypeInfo>>
 bind_table_function(std::string name,
-                    Analyzer::ExpressionPtrVector input_args,
+                    hdk::ir::ExprPtrVector input_args,
                     const bool is_gpu);
 
 #endif  // QUERYENGINE_EXTENSIONFUNCTIONSBINDING_H

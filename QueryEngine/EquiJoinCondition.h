@@ -19,17 +19,17 @@
 #include <list>
 #include <memory>
 
-namespace Analyzer {
+namespace hdk::ir {
 class BinOper;
 class Expr;
-}  // namespace Analyzer
+}  // namespace hdk::ir
 
 // Go through the qualifiers and group consecutive equality operators to create
 // a list of composite join conditions.
-std::list<std::shared_ptr<Analyzer::Expr>> combine_equi_join_conditions(
-    const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals);
+std::list<hdk::ir::ExprPtr> combine_equi_join_conditions(
+    const std::list<hdk::ir::ExprPtr>& join_quals);
 
-std::list<std::shared_ptr<Analyzer::Expr>> coalesce_singleton_equi_join(
-    const std::shared_ptr<Analyzer::BinOper>& join_qual);
+std::list<hdk::ir::ExprPtr> coalesce_singleton_equi_join(
+    const std::shared_ptr<hdk::ir::BinOper>& join_qual);
 
 #endif  // QUERYENGINE_EQUIJOINCONDITION_H

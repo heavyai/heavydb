@@ -17,13 +17,13 @@
 #include "CodeGenerator.h"
 #include "Execute.h"
 
-std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Constant* constant,
+std::vector<llvm::Value*> CodeGenerator::codegen(const hdk::ir::Constant* constant,
                                                  const EncodingType enc_type,
                                                  const int dict_id,
                                                  const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   if (co.hoist_literals) {
-    std::vector<const Analyzer::Constant*> constants(
+    std::vector<const hdk::ir::Constant*> constants(
         executor()->deviceCount(co.device_type), constant);
     return codegenHoistedConstants(constants, enc_type, dict_id);
   }
@@ -82,7 +82,7 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Constant* const
   abort();
 }
 
-llvm::ConstantInt* CodeGenerator::codegenIntConst(const Analyzer::Constant* constant,
+llvm::ConstantInt* CodeGenerator::codegenIntConst(const hdk::ir::Constant* constant,
                                                   CgenState* cgen_state) {
   const auto& type_info = constant->get_type_info();
   if (constant->get_is_null()) {
@@ -292,7 +292,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsPlaceholders(
 }
 
 std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstants(
-    const std::vector<const Analyzer::Constant*>& constants,
+    const std::vector<const hdk::ir::Constant*>& constants,
     const EncodingType enc_type,
     const int dict_id) {
   AUTOMATIC_IR_METADATA(cgen_state_);

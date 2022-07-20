@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include <Analyzer/Analyzer.h>
+#include <IR/Expr.h>
 #include <Shared/TargetInfo.h>
 
 #include "Descriptors/QueryMemoryDescriptor.h"
@@ -31,7 +31,7 @@
 #include <vector>
 
 struct TargetExprCodegen {
-  TargetExprCodegen(const Analyzer::Expr* target_expr,
+  TargetExprCodegen(const hdk::ir::Expr* target_expr,
                     TargetInfo& target_info,
                     const int32_t base_slot_index,
                     const size_t target_idx,
@@ -67,7 +67,7 @@ struct TargetExprCodegen {
                         llvm::Value* varlen_output_buffer,
                         int32_t slot_index) const;
 
-  const Analyzer::Expr* target_expr;
+  const hdk::ir::Expr* target_expr;
   TargetInfo target_info;
 
   int32_t base_slot_index;
@@ -79,7 +79,7 @@ struct TargetExprCodegenBuilder {
   TargetExprCodegenBuilder(const RelAlgExecutionUnit& ra_exe_unit, const bool is_group_by)
       : ra_exe_unit(ra_exe_unit), is_group_by(is_group_by) {}
 
-  void operator()(const Analyzer::Expr* target_expr,
+  void operator()(const hdk::ir::Expr* target_expr,
                   const Executor* executor,
                   QueryMemoryDescriptor& query_mem_desc,
                   const CompilationOptions& co);

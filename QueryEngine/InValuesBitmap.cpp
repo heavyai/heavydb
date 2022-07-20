@@ -123,11 +123,11 @@ InValuesBitmap::~InValuesBitmap() {
 
 llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) const {
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
-  std::vector<std::shared_ptr<const Analyzer::Constant>> constants_owned;
-  std::vector<const Analyzer::Constant*> constants;
+  std::vector<std::shared_ptr<const hdk::ir::Constant>> constants_owned;
+  std::vector<const hdk::ir::Constant*> constants;
   for (const auto bitset : bitsets_) {
     const int64_t bitset_handle = reinterpret_cast<int64_t>(bitset);
-    const auto bitset_handle_literal = std::dynamic_pointer_cast<Analyzer::Constant>(
+    const auto bitset_handle_literal = std::dynamic_pointer_cast<hdk::ir::Constant>(
         Analyzer::analyzeIntValue(bitset_handle));
     CHECK(bitset_handle_literal);
     CHECK_EQ(kENCODING_NONE, bitset_handle_literal->get_type_info().get_compression());

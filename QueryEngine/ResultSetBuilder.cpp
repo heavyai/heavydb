@@ -105,7 +105,7 @@ ResultSet* ResultSetLogicalValuesBuilder::build() {
     auto buff = storage->getUnderlyingBuffer();
 
     for (size_t i = 0; i < logical_values->getNumRows(); i++) {
-      std::vector<std::shared_ptr<Analyzer::Expr>> row_literals;
+      std::vector<hdk::ir::ExprPtr> row_literals;
       int8_t* ptr = buff + i * query_mem_desc.getRowSize();
 
       for (size_t j = 0; j < logical_values->getRowsSize(); j++) {
@@ -113,7 +113,7 @@ ResultSet* ResultSetLogicalValuesBuilder::build() {
             dynamic_cast<const RexLiteral*>(logical_values->getValueAt(i, j));
         CHECK(rex_literal);
         const auto expr = RelAlgTranslator::translateLiteral(rex_literal);
-        const auto constant = std::dynamic_pointer_cast<Analyzer::Constant>(expr);
+        const auto constant = std::dynamic_pointer_cast<hdk::ir::Constant>(expr);
         CHECK(constant);
 
         if (constant->get_is_null()) {

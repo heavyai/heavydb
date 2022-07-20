@@ -100,8 +100,8 @@ RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_
           {},
           {},
           use_large_estimator
-              ? makeExpr<Analyzer::LargeNDVEstimator>(ra_exe_unit.groupby_exprs)
-              : makeExpr<Analyzer::NDVEstimator>(ra_exe_unit.groupby_exprs),
+              ? hdk::ir::makeExpr<Analyzer::LargeNDVEstimator>(ra_exe_unit.groupby_exprs)
+              : hdk::ir::makeExpr<Analyzer::NDVEstimator>(ra_exe_unit.groupby_exprs),
           SortInfo{{}, SortAlgorithm::Default, 0, 0},
           0,
           ra_exe_unit.query_hint,
@@ -114,7 +114,7 @@ RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_
 
 RelAlgExecutionUnit create_count_all_execution_unit(
     const RelAlgExecutionUnit& ra_exe_unit,
-    std::shared_ptr<Analyzer::Expr> replacement_target,
+    hdk::ir::ExprPtr replacement_target,
     bool strip_join_covered_quals) {
   return {ra_exe_unit.input_descs,
           ra_exe_unit.input_col_descs,

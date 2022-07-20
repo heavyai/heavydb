@@ -22,9 +22,9 @@
 
 #pragma once
 
-#include "Analyzer/Analyzer.h"
 #include "DataMgr/Allocators/ThrustAllocator.h"
 #include "DataMgr/Chunk/Chunk.h"
+#include "IR/Expr.h"
 #include "QueryEngine/ColumnarResults.h"
 #include "QueryEngine/DataRecycler/HashingSchemeRecycler.h"
 #include "QueryEngine/DataRecycler/HashtableRecycler.h"
@@ -51,7 +51,7 @@ class PerfectJoinHashTable : public HashJoin {
  public:
   //! Make hash table from an in-flight SQL query's parse tree etc.
   static std::shared_ptr<PerfectJoinHashTable> getInstance(
-      const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+      const std::shared_ptr<hdk::ir::BinOper> qual_bin_oper,
       const std::vector<InputTableInfo>& query_infos,
       const Data_Namespace::MemoryLevel memory_level,
       const JoinType join_type,
@@ -151,8 +151,8 @@ class PerfectJoinHashTable : public HashJoin {
 
   std::vector<InnerOuter> inner_outer_pairs_;
 
-  PerfectJoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
-                       const Analyzer::ColumnVar* col_var,
+  PerfectJoinHashTable(const std::shared_ptr<hdk::ir::BinOper> qual_bin_oper,
+                       const hdk::ir::ColumnVar* col_var,
                        const std::vector<InputTableInfo>& query_infos,
                        const Data_Namespace::MemoryLevel memory_level,
                        const JoinType join_type,
@@ -169,7 +169,7 @@ class PerfectJoinHashTable : public HashJoin {
       : HashJoin(data_provider)
       , qual_bin_oper_(qual_bin_oper)
       , join_type_(join_type)
-      , col_var_(std::dynamic_pointer_cast<Analyzer::ColumnVar>(col_var->deep_copy()))
+      , col_var_(std::dynamic_pointer_cast<hdk::ir::ColumnVar>(col_var->deep_copy()))
       , query_infos_(query_infos)
       , memory_level_(memory_level)
       , hash_type_(preferred_hash_type)
@@ -188,8 +188,8 @@ class PerfectJoinHashTable : public HashJoin {
   }
 
   ChunkKey genChunkKey(const std::vector<FragmentInfo>& fragments,
-                       const Analyzer::Expr* outer_col,
-                       const Analyzer::ColumnVar* inner_col) const;
+                       const hdk::ir::Expr* outer_col,
+                       const hdk::ir::ColumnVar* inner_col) const;
 
   void reify();
   std::shared_ptr<PerfectHashTable> initHashTableOnCpuFromCache(
@@ -202,12 +202,12 @@ class PerfectJoinHashTable : public HashJoin {
                                 DeviceIdentifier device_identifier,
                                 size_t hashtable_building_time);
 
-  const InputTableInfo& getInnerQueryInfo(const Analyzer::ColumnVar* inner_col) const;
+  const InputTableInfo& getInnerQueryInfo(const hdk::ir::ColumnVar* inner_col) const;
 
   llvm::Value* codegenHashTableLoad(const size_t table_idx);
 
   std::vector<llvm::Value*> getHashJoinArgs(llvm::Value* hash_ptr,
-                                            const Analyzer::Expr* key_col,
+                                            const hdk::ir::Expr* key_col,
                                             const CompilationOptions& co);
 
   bool isBitwiseEq() const override;
@@ -218,8 +218,8 @@ class PerfectJoinHashTable : public HashJoin {
 
   struct AlternativeCacheKeyForPerfectHashJoin {
     const ExpressionRange col_range;
-    const Analyzer::ColumnVar* inner_col;
-    const Analyzer::ColumnVar* outer_col;
+    const hdk::ir::ColumnVar* inner_col;
+    const hdk::ir::ColumnVar* outer_col;
     const ChunkKey chunk_key;
     const size_t num_elements;
     const SQLOps optype;
@@ -240,9 +240,9 @@ class PerfectJoinHashTable : public HashJoin {
     return hash;
   }
 
-  std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
+  std::shared_ptr<hdk::ir::BinOper> qual_bin_oper_;
   const JoinType join_type_;
-  std::shared_ptr<Analyzer::ColumnVar> col_var_;
+  std::shared_ptr<hdk::ir::ColumnVar> col_var_;
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
   HashType hash_type_;
@@ -264,8 +264,8 @@ class PerfectJoinHashTable : public HashJoin {
   static std::once_flag init_caches_flag_;
 };
 
-bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
-                                  const Analyzer::Expr* outer_col,
+bool needs_dictionary_translation(const hdk::ir::ColumnVar* inner_col,
+                                  const hdk::ir::Expr* outer_col,
                                   const Executor* executor);
 
 const InputTableInfo& get_inner_query_info(

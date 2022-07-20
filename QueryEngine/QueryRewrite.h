@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include "../Analyzer/Analyzer.h"
-#include "../QueryEngine/Execute.h"
+#include "QueryEngine/Execute.h"
+
+#include "IR/Expr.h"
 
 class QueryRewriter {
  public:
@@ -32,19 +33,19 @@ class QueryRewriter {
 
   RelAlgExecutionUnit rewriteConstrainedByInImpl(
       const RelAlgExecutionUnit& ra_exe_unit_in,
-      const std::shared_ptr<Analyzer::CaseExpr>,
-      const Analyzer::InValues*) const;
+      const std::shared_ptr<hdk::ir::CaseExpr>,
+      const hdk::ir::InValues*) const;
 
-  static std::shared_ptr<Analyzer::CaseExpr> generateCaseForDomainValues(
-      const Analyzer::InValues*);
+  static std::shared_ptr<hdk::ir::CaseExpr> generateCaseForDomainValues(
+      const hdk::ir::InValues*);
 
   std::pair<bool, std::set<size_t>> is_all_groupby_exprs_are_col_var(
-      const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs) const;
+      const std::list<hdk::ir::ExprPtr>& groupby_exprs) const;
 
-  std::shared_ptr<Analyzer::CaseExpr> generateCaseExprForCountDistinctOnGroupByCol(
-      std::shared_ptr<Analyzer::Expr> expr) const;
+  std::shared_ptr<hdk::ir::CaseExpr> generateCaseExprForCountDistinctOnGroupByCol(
+      hdk::ir::ExprPtr expr) const;
 
   const std::vector<InputTableInfo>& query_infos_;
   Executor* executor_;
-  mutable std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;
+  mutable std::vector<hdk::ir::ExprPtr> target_exprs_owned_;
 };

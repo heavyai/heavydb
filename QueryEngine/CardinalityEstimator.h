@@ -28,6 +28,7 @@
 #include "RelAlgExecutionUnit.h"
 
 #include "../Analyzer/Analyzer.h"
+#include "IR/Expr.h"
 #include "Logger/Logger.h"
 
 class CardinalityEstimationRequired : public std::runtime_error {
@@ -48,12 +49,12 @@ namespace Analyzer {
  * @brief Infrastructure to define estimators which take an expression tuple, are called
  * for every row and need a buffer to track state.
  */
-class Estimator : public Analyzer::Expr {
+class Estimator : public hdk::ir::Expr {
  public:
   Estimator() : Expr(SQLTypeInfo(kINT, true)){};
 
   // The tuple argument received by the estimator for every row.
-  virtual const std::list<std::shared_ptr<Analyzer::Expr>>& getArgument() const = 0;
+  virtual const hdk::ir::ExprPtrList& getArgument() const = 0;
 
   // The size of the working buffer used by the estimator.
   virtual size_t getBufferSize() const = 0;
@@ -66,7 +67,7 @@ class Estimator : public Analyzer::Expr {
   //   uint32_t the size of the argument tuple, in bytes
   virtual std::string getRuntimeFunctionName() const = 0;
 
-  std::shared_ptr<Analyzer::Expr> deep_copy() const override {
+  hdk::ir::ExprPtr deep_copy() const override {
     CHECK(false);
     return nullptr;
   }
@@ -90,10 +91,10 @@ class Estimator : public Analyzer::Expr {
  */
 class NDVEstimator : public Analyzer::Estimator {
  public:
-  NDVEstimator(const std::list<std::shared_ptr<Analyzer::Expr>>& expr_tuple)
+  NDVEstimator(const hdk::ir::ExprPtrList& expr_tuple)
       : expr_tuple_(expr_tuple) {}
 
-  const std::list<std::shared_ptr<Analyzer::Expr>>& getArgument() const override {
+  const hdk::ir::ExprPtrList& getArgument() const override {
     return expr_tuple_;
   }
 
@@ -104,12 +105,12 @@ class NDVEstimator : public Analyzer::Estimator {
   }
 
  private:
-  const std::list<std::shared_ptr<Analyzer::Expr>> expr_tuple_;
+  const hdk::ir::ExprPtrList expr_tuple_;
 };
 
 class LargeNDVEstimator : public NDVEstimator {
  public:
-  LargeNDVEstimator(const std::list<std::shared_ptr<Analyzer::Expr>>& expr_tuple)
+  LargeNDVEstimator(const hdk::ir::ExprPtrList& expr_tuple)
       : NDVEstimator(expr_tuple) {}
 
   size_t getBufferSize() const final;
@@ -122,7 +123,7 @@ RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_
 
 RelAlgExecutionUnit create_count_all_execution_unit(
     const RelAlgExecutionUnit& ra_exe_unit,
-    std::shared_ptr<Analyzer::Expr> replacement_target,
+    hdk::ir::ExprPtr replacement_target,
     bool strip_join_covered_quals);
 
 ResultSetPtr reduce_estimator_results(

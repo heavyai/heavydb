@@ -17,7 +17,7 @@
 #include "InPlaceSort.h"
 #include "InPlaceSortImpl.h"
 
-#include <Analyzer/Analyzer.h>
+#include <IR/Expr.h>
 #include "DataMgr/Allocators/ThrustAllocator.h"
 #include "Descriptors/QueryMemoryDescriptor.h"
 #include "Logger/Logger.h"
@@ -105,7 +105,7 @@ void apply_permutation_gpu(int64_t* val_buff,
 
 }  // namespace
 
-void inplace_sort_gpu(const std::list<Analyzer::OrderEntry>& order_entries,
+void inplace_sort_gpu(const std::list<hdk::ir::OrderEntry>& order_entries,
                       const QueryMemoryDescriptor& query_mem_desc,
                       const GpuGroupByBuffers& group_by_buffers,
                       BufferProvider* buffer_provider,

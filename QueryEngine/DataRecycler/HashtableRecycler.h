@@ -76,8 +76,8 @@ class HashtableRecycler
       Executor* executor);
 
   static std::string getJoinColumnInfoString(
-      std::vector<const Analyzer::ColumnVar*>& inner_cols,
-      std::vector<const Analyzer::ColumnVar*>& outer_cols,
+      std::vector<const hdk::ir::ColumnVar*>& inner_cols,
+      std::vector<const hdk::ir::ColumnVar*>& outer_cols,
       Executor* executor);
 
   static bool isSafeToCacheHashtable(const TableIdToNodeMap& table_id_to_node_map,

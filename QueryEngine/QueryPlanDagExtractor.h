@@ -48,7 +48,7 @@ struct ExtractedPlanDag {
 
 // set the bool flag be true when the InnerOuter qual is for loop join
 struct InnerOuterOrLoopQual {
-  std::pair<const Analyzer::Expr*, const Analyzer::Expr*> inner_outer;
+  std::pair<const hdk::ir::Expr*, const hdk::ir::Expr*> inner_outer;
   bool loop_join_qual{false};
 };
 
@@ -103,7 +103,7 @@ class QueryPlanDagExtractor {
   std::string getExtractedQueryPlanDagStr();
 
   std::vector<InnerOuterOrLoopQual> normalizeColumnsPair(
-      const Analyzer::BinOper* condition);
+      const hdk::ir::BinOper* condition);
 
   bool isEmptyQueryPlanDag(const std::string& dag) { return dag.compare("N/A") == 0; }
 
@@ -124,7 +124,7 @@ class QueryPlanDagExtractor {
 
  private:
   void visit(const RelAlgNode*, const RelAlgNode*);
-  Analyzer::ColumnVar const* getColVar(const Analyzer::Expr* col_info);
+  hdk::ir::ColumnVar const* getColVar(const hdk::ir::Expr* col_info);
   void handleLeftDeepJoinTree(const RelAlgNode*, const RelLeftDeepInnerJoin*);
   void handleTranslatedJoin(const RelAlgNode*, const RelTranslatedJoin*);
   bool validateNodeId(const RelAlgNode* node, std::optional<RelNodeId> retrieved_node_id);

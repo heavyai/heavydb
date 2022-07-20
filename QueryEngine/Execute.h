@@ -68,6 +68,7 @@
 #include "QueryEngine/WindowContext.h"
 
 #include "DataMgr/Chunk/Chunk.h"
+#include "IR/Expr.h"
 #include "Logger/Logger.h"
 #include "SchemaMgr/SchemaProvider.h"
 #include "Shared/Config.h"
@@ -191,8 +192,8 @@ inline uint32_t log2_bytes(const uint32_t bytes) {
   }
 }
 
-inline const Analyzer::Expr* extract_cast_arg(const Analyzer::Expr* expr) {
-  const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr);
+inline const hdk::ir::Expr* extract_cast_arg(const hdk::ir::Expr* expr) {
+  const auto cast_expr = dynamic_cast<const hdk::ir::UOper*>(expr);
   if (!cast_expr || cast_expr->get_optype() != kCAST) {
     return expr;
   }
@@ -233,9 +234,9 @@ inline const SQLTypeInfo get_column_type(const int col_id,
 }
 
 // TODO(alex): Adjust interfaces downstream and make this not needed.
-inline std::vector<Analyzer::Expr*> get_exprs_not_owned(
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& exprs) {
-  std::vector<Analyzer::Expr*> exprs_not_owned;
+inline std::vector<hdk::ir::Expr*> get_exprs_not_owned(
+    const std::vector<hdk::ir::ExprPtr>& exprs) {
+  std::vector<hdk::ir::Expr*> exprs_not_owned;
   for (const auto& expr : exprs) {
     exprs_not_owned.push_back(expr.get());
   }
@@ -484,9 +485,9 @@ class Executor {
 
   size_t getNumBytesForFetchedRow(const std::set<int>& table_ids_to_fetch) const;
 
-  bool hasLazyFetchColumns(const std::vector<Analyzer::Expr*>& target_exprs) const;
+  bool hasLazyFetchColumns(const std::vector<hdk::ir::Expr*>& target_exprs) const;
   std::vector<ColumnLazyFetchInfo> getColLazyFetchInfo(
-      const std::vector<Analyzer::Expr*>& target_exprs) const;
+      const std::vector<hdk::ir::Expr*>& target_exprs) const;
 
   void registerActiveModule(void* module, const int device_id) const;
   void unregisterActiveModule(void* module, const int device_id) const;
@@ -621,7 +622,7 @@ class Executor {
       const ExecutorDeviceType device_type,
       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
-  std::unordered_map<int, const Analyzer::BinOper*> getInnerTabIdToJoinCond() const;
+  std::unordered_map<int, const hdk::ir::BinOper*> getInnerTabIdToJoinCond() const;
 
   /**
    * Determines execution dispatch mode and required fragments for a given query step,
@@ -676,13 +677,13 @@ class Executor {
       const size_t table_idx,
       const size_t outer_frag_idx,
       std::map<int, const TableFragments*>& selected_tables_fragments,
-      const std::unordered_map<int, const Analyzer::BinOper*>&
+      const std::unordered_map<int, const hdk::ir::BinOper*>&
           inner_table_id_to_join_condition);
 
   bool skipFragmentPair(const FragmentInfo& outer_fragment_info,
                         const FragmentInfo& inner_fragment_info,
                         const int inner_table_id,
-                        const std::unordered_map<int, const Analyzer::BinOper*>&
+                        const std::unordered_map<int, const hdk::ir::BinOper*>&
                             inner_table_id_to_join_condition,
                         const RelAlgExecutionUnit& ra_exe_unit,
                         const ExecutorDeviceType device_type);
@@ -904,7 +905,7 @@ class Executor {
   };
 
   JoinHashTableOrError buildHashTableForQualifier(
-      const std::shared_ptr<Analyzer::BinOper>& qual_bin_oper,
+      const std::shared_ptr<hdk::ir::BinOper>& qual_bin_oper,
       const std::vector<InputTableInfo>& query_infos,
       const MemoryLevel memory_level,
       const JoinType join_type,
@@ -938,7 +939,7 @@ class Executor {
     llvm::Value* original_value;
   };
 
-  GroupColLLVMValue groupByColumnCodegen(Analyzer::Expr* group_by_col,
+  GroupColLLVMValue groupByColumnCodegen(hdk::ir::Expr* group_by_col,
                                          const size_t col_width,
                                          const CompilationOptions&,
                                          const bool translate_null_val,
@@ -952,17 +953,16 @@ class Executor {
                         SQLTypeInfo const& to_ti);
   llvm::Value* castToIntPtrTyIn(llvm::Value* val, const size_t bit_width);
 
-  FragmentSkipStatus canSkipFragmentForFpQual(const Analyzer::BinOper* comp_expr,
-                                              const Analyzer::ColumnVar* lhs_col,
+  FragmentSkipStatus canSkipFragmentForFpQual(const hdk::ir::BinOper* comp_expr,
+                                              const hdk::ir::ColumnVar* lhs_col,
                                               const FragmentInfo& fragment,
-                                              const Analyzer::Constant* rhs_const) const;
+                                              const hdk::ir::Constant* rhs_const) const;
 
-  std::pair<bool, int64_t> skipFragment(
-      const InputDescriptor& table_desc,
-      const FragmentInfo& frag_info,
-      const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
-      const std::vector<uint64_t>& frag_offsets,
-      const size_t frag_idx);
+  std::pair<bool, int64_t> skipFragment(const InputDescriptor& table_desc,
+                                        const FragmentInfo& frag_info,
+                                        const std::list<hdk::ir::ExprPtr>& simple_quals,
+                                        const std::vector<uint64_t>& frag_offsets,
+                                        const size_t frag_idx);
 
   std::pair<bool, int64_t> skipFragmentInnerJoins(
       const InputDescriptor& table_desc,
@@ -1058,7 +1058,7 @@ class Executor {
 
   mapd_shared_mutex& getDataRecyclerLock();
   QueryPlanDagCache& getQueryPlanDagCache();
-  JoinColumnsInfo getJoinColumnsInfo(const Analyzer::Expr* join_expr,
+  JoinColumnsInfo getJoinColumnsInfo(const hdk::ir::Expr* join_expr,
                                      JoinColumnSide target_side,
                                      bool extract_only_col_id);
 
@@ -1308,15 +1308,15 @@ inline std::string get_null_check_suffix(const SQLTypeInfo& lhs_ti,
   return null_check_suffix;
 }
 
-inline bool is_unnest(const Analyzer::Expr* expr) {
-  return dynamic_cast<const Analyzer::UOper*>(expr) &&
-         static_cast<const Analyzer::UOper*>(expr)->get_optype() == kUNNEST;
+inline bool is_unnest(const hdk::ir::Expr* expr) {
+  return dynamic_cast<const hdk::ir::UOper*>(expr) &&
+         static_cast<const hdk::ir::UOper*>(expr)->get_optype() == kUNNEST;
 }
 
-inline bool is_constructed_point(const Analyzer::Expr* expr) {
-  auto uoper = dynamic_cast<const Analyzer::UOper*>(expr);
+inline bool is_constructed_point(const hdk::ir::Expr* expr) {
+  auto uoper = dynamic_cast<const hdk::ir::UOper*>(expr);
   auto oper = (uoper && uoper->get_optype() == kCAST) ? uoper->get_operand() : expr;
-  auto arr = dynamic_cast<const Analyzer::ArrayExpr*>(oper);
+  auto arr = dynamic_cast<const hdk::ir::ArrayExpr*>(oper);
   return (arr && arr->isLocalAlloc() && arr->get_type_info().is_fixlen_array());
 }
 
@@ -1333,7 +1333,7 @@ size_t get_context_count(const ExecutorDeviceType device_type,
 extern "C" RUNTIME_EXPORT void register_buffer_with_executor_rsm(int64_t exec,
                                                                  int8_t* buffer);
 
-const Analyzer::Expr* remove_cast_to_int(const Analyzer::Expr* expr);
+const hdk::ir::Expr* remove_cast_to_int(const hdk::ir::Expr* expr);
 
 inline std::string toString(const ExtModuleKinds& kind) {
   switch (kind) {

@@ -20,7 +20,7 @@
 #include <future>
 #include <memory>
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
+llvm::Value* CodeGenerator::codegen(const hdk::ir::InValues* expr,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto in_arg = expr->get_arg();
@@ -69,7 +69,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
   return result;
 }
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::InIntegerSet* in_integer_set,
+llvm::Value* CodeGenerator::codegen(const hdk::ir::InIntegerSet* in_integer_set,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto in_arg = in_integer_set->get_arg();
@@ -109,7 +109,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InIntegerSet* in_integer_set
 }
 
 std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
-    const Analyzer::InValues* in_values,
+    const hdk::ir::InValues* in_values,
     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto& value_list = in_values->get_value_list();
@@ -143,7 +143,7 @@ std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
         for (auto val_it = start; val_it != end; ++val_it) {
           const auto& in_val = *val_it;
           const auto in_val_const =
-              dynamic_cast<const Analyzer::Constant*>(extract_cast_arg(in_val.get()));
+              dynamic_cast<const hdk::ir::Constant*>(extract_cast_arg(in_val.get()));
           if (!in_val_const) {
             return false;
           }

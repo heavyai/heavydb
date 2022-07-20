@@ -1294,9 +1294,9 @@ class RelTranslatedJoin : public RelAlgNode {
  public:
   RelTranslatedJoin(const RelAlgNode* lhs,
                     const RelAlgNode* rhs,
-                    const std::vector<const Analyzer::ColumnVar*> lhs_join_cols,
-                    const std::vector<const Analyzer::ColumnVar*> rhs_join_cols,
-                    const std::vector<std::shared_ptr<const Analyzer::Expr>> filter_ops,
+                    const std::vector<const hdk::ir::ColumnVar*> lhs_join_cols,
+                    const std::vector<const hdk::ir::ColumnVar*> rhs_join_cols,
+                    const std::vector<hdk::ir::ExprPtr> filter_ops,
                     const RexScalar* outer_join_cond,
                     const bool nested_loop,
                     const JoinType join_type,
@@ -1360,9 +1360,7 @@ class RelTranslatedJoin : public RelAlgNode {
   const RelAlgNode* getLHS() const { return lhs_; }
   const RelAlgNode* getRHS() const { return rhs_; }
   size_t getFilterCondSize() const { return filter_ops_.size(); }
-  const std::vector<std::shared_ptr<const Analyzer::Expr>> getFilterCond() const {
-    return filter_ops_;
-  }
+  const std::vector<hdk::ir::ExprPtr> getFilterCond() const { return filter_ops_; }
   const RexScalar* getOuterJoinCond() const { return outer_join_cond_; }
   std::string getOpType() const { return op_type_; }
   std::string getQualifier() const { return qualifier_; }
@@ -1387,7 +1385,7 @@ class RelTranslatedJoin : public RelAlgNode {
     return nullptr;
   }
   std::string getFieldName(const size_t i) const;
-  std::vector<const Analyzer::ColumnVar*> getJoinCols(bool lhs) const {
+  std::vector<const hdk::ir::ColumnVar*> getJoinCols(bool lhs) const {
     if (lhs) {
       return lhs_join_cols_;
     }
@@ -1398,9 +1396,9 @@ class RelTranslatedJoin : public RelAlgNode {
  private:
   const RelAlgNode* lhs_;
   const RelAlgNode* rhs_;
-  const std::vector<const Analyzer::ColumnVar*> lhs_join_cols_;
-  const std::vector<const Analyzer::ColumnVar*> rhs_join_cols_;
-  const std::vector<std::shared_ptr<const Analyzer::Expr>> filter_ops_;
+  const std::vector<const hdk::ir::ColumnVar*> lhs_join_cols_;
+  const std::vector<const hdk::ir::ColumnVar*> rhs_join_cols_;
+  const std::vector<hdk::ir::ExprPtr> filter_ops_;
   const RexScalar* outer_join_cond_;
   const bool nested_loop_;
   const JoinType join_type_;
@@ -2013,6 +2011,6 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node);
 
 std::string tree_string(const RelAlgNode*, const size_t depth = 0);
 
-inline InputColDescriptor column_var_to_descriptor(const Analyzer::ColumnVar* var) {
+inline InputColDescriptor column_var_to_descriptor(const hdk::ir::ColumnVar* var) {
   return InputColDescriptor(var->get_column_info(), var->get_rte_idx());
 }

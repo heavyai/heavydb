@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "Analyzer/Analyzer.h"
+#include "IR/Expr.h"
 #include "QueryEngine/ExtractFromTime.h"
 
 #include "DateTimeUtils.h"
@@ -71,56 +71,48 @@ class DateTimeTranslator {
   }
 
  protected:
-  static inline std::shared_ptr<Analyzer::Constant> getNumericConstant(
+  static inline std::shared_ptr<hdk::ir::Constant> getNumericConstant(
       const int64_t scale) {
     Datum d{0};
     d.bigintval = scale;
-    return makeExpr<Analyzer::Constant>(SQLTypeInfo(kBIGINT, false), false, d);
+    return hdk::ir::makeExpr<hdk::ir::Constant>(SQLTypeInfo(kBIGINT, false), false, d);
   }
 };
 
 class ExtractExpr : protected DateTimeTranslator {
  public:
-  ExtractExpr(const std::shared_ptr<Analyzer::Expr> expr, const ExtractField& field)
+  ExtractExpr(const hdk::ir::ExprPtr expr, const ExtractField& field)
       : from_expr_(expr), field_(field) {}
-  ExtractExpr(const std::shared_ptr<Analyzer::Expr> expr, const std::string& field)
+  ExtractExpr(const hdk::ir::ExprPtr expr, const std::string& field)
       : from_expr_(expr), field_(to_extract_field(field)) {}
 
-  static std::shared_ptr<Analyzer::Expr> generate(const std::shared_ptr<Analyzer::Expr>,
-                                                  const std::string&);
-  static std::shared_ptr<Analyzer::Expr> generate(const std::shared_ptr<Analyzer::Expr>,
-                                                  const ExtractField&);
+  static hdk::ir::ExprPtr generate(const hdk::ir::ExprPtr, const std::string&);
+  static hdk::ir::ExprPtr generate(const hdk::ir::ExprPtr, const ExtractField&);
 
-  const std::shared_ptr<Analyzer::Expr> generate() const {
-    return generate(from_expr_, field_);
-  }
+  const hdk::ir::ExprPtr generate() const { return generate(from_expr_, field_); }
 
  private:
   static ExtractField to_extract_field(const std::string& field);
 
-  std::shared_ptr<Analyzer::Expr> from_expr_;
+  hdk::ir::ExprPtr from_expr_;
   ExtractField field_;
 };
 
 class DateTruncExpr : protected DateTimeTranslator {
  public:
-  DateTruncExpr(const std::shared_ptr<Analyzer::Expr> expr, const DatetruncField& field)
+  DateTruncExpr(const hdk::ir::ExprPtr expr, const DatetruncField& field)
       : from_expr_(expr), field_(field) {}
-  DateTruncExpr(const std::shared_ptr<Analyzer::Expr> expr, const std::string& field)
+  DateTruncExpr(const hdk::ir::ExprPtr expr, const std::string& field)
       : from_expr_(expr), field_(to_datetrunc_field(field)) {}
 
-  static std::shared_ptr<Analyzer::Expr> generate(const std::shared_ptr<Analyzer::Expr>,
-                                                  const std::string&);
-  static std::shared_ptr<Analyzer::Expr> generate(const std::shared_ptr<Analyzer::Expr>,
-                                                  const DatetruncField&);
+  static hdk::ir::ExprPtr generate(const hdk::ir::ExprPtr, const std::string&);
+  static hdk::ir::ExprPtr generate(const hdk::ir::ExprPtr, const DatetruncField&);
 
-  const std::shared_ptr<Analyzer::Expr> generate() const {
-    return generate(from_expr_, field_);
-  }
+  const hdk::ir::ExprPtr generate() const { return generate(from_expr_, field_); }
 
  private:
   static DatetruncField to_datetrunc_field(const std::string& field);
 
-  std::shared_ptr<Analyzer::Expr> from_expr_;
+  hdk::ir::ExprPtr from_expr_;
   DatetruncField field_;
 };

@@ -24,6 +24,7 @@
 #include <llvm/IR/Value.h>
 #include <boost/algorithm/string/join.hpp>
 
+#include "IR/Expr.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/BufferCompaction.h"
 #include "QueryEngine/ColumnarResults.h"
@@ -101,7 +102,7 @@ class RowFuncBuilder {
                        const GpuSharedMemoryContext& gpu_smem_context,
                        DiamondCodegen& diamond_codegen);
 
-  llvm::Value* codegenWindowRowPointer(const Analyzer::WindowFunction* window_func,
+  llvm::Value* codegenWindowRowPointer(const hdk::ir::WindowFunction* window_func,
                                        const QueryMemoryDescriptor& query_mem_desc,
                                        const CompilationOptions& co,
                                        DiamondCodegen& diamond_codegen);
@@ -121,20 +122,20 @@ class RowFuncBuilder {
                         const CompilationOptions&);
 
   void codegenCountDistinct(const size_t target_idx,
-                            const Analyzer::Expr* target_expr,
+                            const hdk::ir::Expr* target_expr,
                             std::vector<llvm::Value*>& agg_args,
                             const QueryMemoryDescriptor&,
                             const ExecutorDeviceType);
 
   void codegenApproxQuantile(const size_t target_idx,
-                             const Analyzer::Expr* target_expr,
+                             const hdk::ir::Expr* target_expr,
                              std::vector<llvm::Value*>& agg_args,
                              const QueryMemoryDescriptor& query_mem_desc,
                              const ExecutorDeviceType device_type);
 
   llvm::Value* getAdditionalLiteral(const int32_t off);
 
-  std::vector<llvm::Value*> codegenAggArg(const Analyzer::Expr* target_expr,
+  std::vector<llvm::Value*> codegenAggArg(const hdk::ir::Expr* target_expr,
                                           const CompilationOptions& co);
 
   llvm::Value* emitCall(const std::string& fname, const std::vector<llvm::Value*>& args);

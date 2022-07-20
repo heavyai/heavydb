@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include "Analyzer/Analyzer.h"
 #include "DataMgr/Chunk/Chunk.h"
+#include "IR/Expr.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 #include "Shared/Config.h"
 
@@ -67,14 +67,14 @@ class Executor;
 class WindowFunctionContext {
  public:
   // non-partitioned version
-  WindowFunctionContext(const Analyzer::WindowFunction* window_func,
+  WindowFunctionContext(const hdk::ir::WindowFunction* window_func,
                         const Config& config,
                         const size_t elem_count,
                         const ExecutorDeviceType device_type,
                         std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
   // partitioned version
-  WindowFunctionContext(const Analyzer::WindowFunction* window_func,
+  WindowFunctionContext(const hdk::ir::WindowFunction* window_func,
                         const Config& config,
                         const std::shared_ptr<HashJoin>& partitions,
                         const size_t elem_count,
@@ -89,14 +89,14 @@ class WindowFunctionContext {
 
   // Adds the order column buffer to the context and keeps ownership of it.
   void addOrderColumn(const int8_t* column,
-                      const Analyzer::ColumnVar* col_var,
+                      const hdk::ir::ColumnVar* col_var,
                       const std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner);
 
   // Computes the window function result to be used during the actual projection query.
   void compute();
 
   // Returns a pointer to the window function associated with this context.
-  const Analyzer::WindowFunction* getWindowFunction() const;
+  const hdk::ir::WindowFunction* getWindowFunction() const;
 
   // Returns a pointer to the output buffer of the window function result.
   const int8_t* output() const;
@@ -134,7 +134,7 @@ class WindowFunctionContext {
     llvm::Value* row_number = nullptr;
   };
 
-  static Comparator makeComparator(const Analyzer::ColumnVar* col_var,
+  static Comparator makeComparator(const hdk::ir::ColumnVar* col_var,
                                    const int8_t* partition_values,
                                    const int32_t* partition_indices,
                                    const bool nulls_first);
@@ -145,7 +145,7 @@ class WindowFunctionContext {
       int64_t* output_for_partition_buff,
       const size_t partition_size,
       const size_t off,
-      const Analyzer::WindowFunction* window_func,
+      const hdk::ir::WindowFunction* window_func,
       const std::function<bool(const int64_t lhs, const int64_t rhs)>& comparator);
 
   void fillPartitionStart();
@@ -160,7 +160,7 @@ class WindowFunctionContext {
 
   size_t partitionCount() const;
 
-  const Analyzer::WindowFunction* window_func_;
+  const hdk::ir::WindowFunction* window_func_;
   const Config& config_;
   // Keeps ownership of order column.
   std::vector<std::vector<std::shared_ptr<Chunk_NS::Chunk>>> order_columns_owner_;
@@ -232,4 +232,4 @@ class WindowProjectNodeContext {
 
 bool window_function_is_aggregate(const SqlWindowFunctionKind kind);
 
-bool window_function_requires_peer_handling(const Analyzer::WindowFunction* window_func);
+bool window_function_requires_peer_handling(const hdk::ir::WindowFunction* window_func);

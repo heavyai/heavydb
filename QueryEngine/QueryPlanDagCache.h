@@ -38,17 +38,17 @@ using RelNodeMap = std::unordered_map<RelNodeExplainedHash, RelNodeId>;
 using QueryPlanDag = boost::labeled_graph<AdjacentList, RelNodeId, boost::hash_mapS>;
 
 class ColumnVarsVisitor
-    : public ScalarExprVisitor<std::vector<const Analyzer::ColumnVar*>> {
+    : public ScalarExprVisitor<std::vector<const hdk::ir::ColumnVar*>> {
  protected:
-  std::vector<const Analyzer::ColumnVar*> visitColumnVar(
-      const Analyzer::ColumnVar* column) const override {
+  std::vector<const hdk::ir::ColumnVar*> visitColumnVar(
+      const hdk::ir::ColumnVar* column) const override {
     return {column};
   }
 
-  std::vector<const Analyzer::ColumnVar*> visitColumnVarTuple(
-      const Analyzer::ExpressionTuple* expr_tuple) const override {
+  std::vector<const hdk::ir::ColumnVar*> visitColumnVarTuple(
+      const hdk::ir::ExpressionTuple* expr_tuple) const override {
     ColumnVarsVisitor visitor;
-    std::vector<const Analyzer::ColumnVar*> result;
+    std::vector<const hdk::ir::ColumnVar*> result;
     for (size_t i = 0; i < expr_tuple->getTuple().size(); ++i) {
       const auto col_vars = visitor.visit(expr_tuple->getTuple()[i].get());
       for (const auto col_var : col_vars) {
@@ -58,9 +58,9 @@ class ColumnVarsVisitor
     return result;
   }
 
-  std::vector<const Analyzer::ColumnVar*> aggregateResult(
-      const std::vector<const Analyzer::ColumnVar*>& aggregate,
-      const std::vector<const Analyzer::ColumnVar*>& next_result) const override {
+  std::vector<const hdk::ir::ColumnVar*> aggregateResult(
+      const std::vector<const hdk::ir::ColumnVar*>& aggregate,
+      const std::vector<const hdk::ir::ColumnVar*>& next_result) const override {
     auto result = aggregate;
     for (const auto col_var : next_result) {
       result.push_back(col_var);
@@ -94,7 +94,7 @@ class QueryPlanDagCache {
 
   void connectNodes(const RelNodeId parent_id, const RelNodeId child_id);
 
-  std::vector<const Analyzer::ColumnVar*> collectColVars(const Analyzer::Expr* target);
+  std::vector<const hdk::ir::ColumnVar*> collectColVars(const hdk::ir::Expr* target);
 
   size_t getCurrentNodeMapSize() const;
 
@@ -102,12 +102,12 @@ class QueryPlanDagCache {
 
   size_t getCurrentNodeMapCardinality() const;
 
-  JoinColumnsInfo getJoinColumnsInfoString(const Analyzer::Expr* join_expr,
+  JoinColumnsInfo getJoinColumnsInfoString(const hdk::ir::Expr* join_expr,
                                            JoinColumnSide target_side,
                                            bool extract_only_col_id);
 
   JoinColumnsInfo translateColVarsToInfoString(
-      std::vector<const Analyzer::ColumnVar*>& col_vars,
+      std::vector<const hdk::ir::ColumnVar*>& col_vars,
       bool col_id_only) const;
 
   void clearQueryPlanCache();

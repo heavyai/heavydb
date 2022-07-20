@@ -15,6 +15,7 @@
  */
 
 #include "RelAlgOptimizer.h"
+#include "DeepCopyVisitor.h"
 #include "Logger/Logger.h"
 #include "RexVisitor.h"
 #include "Visitors/RexSubQueryIdCollector.h"
@@ -222,7 +223,6 @@ void propagate_rex_input_renumber(
     auto modified_node = const_cast<RelAlgNode*>(node);
     if (auto filter = dynamic_cast<RelFilter*>(modified_node)) {
       auto new_condition = renumber.visit(filter->getCondition());
-      filter->setCondition(new_condition);
       auto usrs_it = du_web.find(filter);
       CHECK(usrs_it != du_web.end() && usrs_it->second.size() == 1);
       work_set.push_back(*usrs_it->second.begin());

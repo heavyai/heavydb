@@ -30,7 +30,7 @@ std::string numeric_or_time_interval_type_name(const SQLTypeInfo& ti1,
 
 }  // namespace
 
-llvm::Value* CodeGenerator::codegenArith(const Analyzer::BinOper* bin_oper,
+llvm::Value* CodeGenerator::codegenArith(const hdk::ir::BinOper* bin_oper,
                                          const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto optype = bin_oper->get_optype();
@@ -69,7 +69,7 @@ llvm::Value* CodeGenerator::codegenArith(const Analyzer::BinOper* bin_oper,
 }
 
 // Handle integer or integer-like (decimal, time, date) operand types.
-llvm::Value* CodeGenerator::codegenIntArith(const Analyzer::BinOper* bin_oper,
+llvm::Value* CodeGenerator::codegenIntArith(const hdk::ir::BinOper* bin_oper,
                                             llvm::Value* lhs_lv,
                                             llvm::Value* rhs_lv,
                                             const CompilationOptions& co) {
@@ -126,7 +126,7 @@ llvm::Value* CodeGenerator::codegenIntArith(const Analyzer::BinOper* bin_oper,
 }
 
 // Handle floating point operand types.
-llvm::Value* CodeGenerator::codegenFpArith(const Analyzer::BinOper* bin_oper,
+llvm::Value* CodeGenerator::codegenFpArith(const hdk::ir::BinOper* bin_oper,
                                            llvm::Value* lhs_lv,
                                            llvm::Value* rhs_lv) {
   AUTOMATIC_IR_METADATA(cgen_state_);
@@ -170,8 +170,8 @@ llvm::Value* CodeGenerator::codegenFpArith(const Analyzer::BinOper* bin_oper,
 
 namespace {
 
-bool is_temporary_column(const Analyzer::Expr* expr) {
-  const auto col_expr = dynamic_cast<const Analyzer::ColumnVar*>(expr);
+bool is_temporary_column(const hdk::ir::Expr* expr) {
+  const auto col_expr = dynamic_cast<const hdk::ir::ColumnVar*>(expr);
   if (!col_expr) {
     return false;
   }
@@ -181,7 +181,7 @@ bool is_temporary_column(const Analyzer::Expr* expr) {
 }  // namespace
 
 // Returns true iff runtime overflow checks aren't needed thanks to range information.
-bool CodeGenerator::checkExpressionRanges(const Analyzer::BinOper* bin_oper,
+bool CodeGenerator::checkExpressionRanges(const hdk::ir::BinOper* bin_oper,
                                           int64_t min,
                                           int64_t max) {
   if (is_temporary_column(bin_oper->get_left_operand()) ||
@@ -211,7 +211,7 @@ bool CodeGenerator::checkExpressionRanges(const Analyzer::BinOper* bin_oper,
   return false;
 }
 
-llvm::Value* CodeGenerator::codegenAdd(const Analyzer::BinOper* bin_oper,
+llvm::Value* CodeGenerator::codegenAdd(const hdk::ir::BinOper* bin_oper,
                                        llvm::Value* lhs_lv,
                                        llvm::Value* rhs_lv,
                                        const std::string& null_typename,
@@ -273,7 +273,7 @@ llvm::Value* CodeGenerator::codegenAdd(const Analyzer::BinOper* bin_oper,
   return ret;
 }
 
-llvm::Value* CodeGenerator::codegenSub(const Analyzer::BinOper* bin_oper,
+llvm::Value* CodeGenerator::codegenSub(const hdk::ir::BinOper* bin_oper,
                                        llvm::Value* lhs_lv,
                                        llvm::Value* rhs_lv,
                                        const std::string& null_typename,
@@ -353,7 +353,7 @@ void CodeGenerator::codegenSkipOverflowCheckForNull(llvm::Value* lhs_lv,
   cgen_state_->ir_builder_.SetInsertPoint(operands_not_null);
 }
 
-llvm::Value* CodeGenerator::codegenMul(const Analyzer::BinOper* bin_oper,
+llvm::Value* CodeGenerator::codegenMul(const hdk::ir::BinOper* bin_oper,
                                        llvm::Value* lhs_lv,
                                        llvm::Value* rhs_lv,
                                        const std::string& null_typename,
@@ -546,7 +546,7 @@ llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
 // For said patterns, we can simply divide the decimal operand by the non-scaled
 // integer value instead of using the scaled value preceded by a multiplication.
 // It is both more efficient and avoids the overflow for a lot of practical cases.
-llvm::Value* CodeGenerator::codegenDeciDiv(const Analyzer::BinOper* bin_oper,
+llvm::Value* CodeGenerator::codegenDeciDiv(const hdk::ir::BinOper* bin_oper,
                                            const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   auto lhs = bin_oper->get_left_operand();
@@ -556,8 +556,8 @@ llvm::Value* CodeGenerator::codegenDeciDiv(const Analyzer::BinOper* bin_oper,
   CHECK(lhs_type.is_decimal() && rhs_type.is_decimal() &&
         lhs_type.get_scale() == rhs_type.get_scale());
 
-  auto rhs_constant = dynamic_cast<const Analyzer::Constant*>(rhs);
-  auto rhs_cast = dynamic_cast<const Analyzer::UOper*>(rhs);
+  auto rhs_constant = dynamic_cast<const hdk::ir::Constant*>(rhs);
+  auto rhs_cast = dynamic_cast<const hdk::ir::UOper*>(rhs);
   if (rhs_constant && !rhs_constant->get_is_null() &&
       rhs_constant->get_constval().bigintval != 0LL &&
       (rhs_constant->get_constval().bigintval % exp_to_scale(rhs_type.get_scale())) ==
@@ -576,7 +576,7 @@ llvm::Value* CodeGenerator::codegenDeciDiv(const Analyzer::BinOper* bin_oper,
     const auto rhs_lit = Analyzer::analyzeIntValue(
         rhs_constant->get_constval().bigintval / exp_to_scale(rhs_type.get_scale()));
     auto rhs_lit_lv = CodeGenerator::codegenIntConst(
-        dynamic_cast<const Analyzer::Constant*>(rhs_lit.get()), cgen_state_);
+        dynamic_cast<const hdk::ir::Constant*>(rhs_lit.get()), cgen_state_);
     rhs_lv = codegenCastBetweenIntTypes(
         rhs_lit_lv, rhs_lit->get_type_info(), lhs_type, /*upscale*/ false);
   } else if (rhs_cast) {
@@ -630,7 +630,7 @@ llvm::Value* CodeGenerator::codegenMod(llvm::Value* lhs_lv,
 }
 
 // Returns true iff runtime overflow checks aren't needed thanks to range information.
-bool CodeGenerator::checkExpressionRanges(const Analyzer::UOper* uoper,
+bool CodeGenerator::checkExpressionRanges(const hdk::ir::UOper* uoper,
                                           int64_t min,
                                           int64_t max) {
   if (uoper->get_type_info().is_decimal()) {
@@ -654,7 +654,7 @@ bool CodeGenerator::checkExpressionRanges(const Analyzer::UOper* uoper,
   return false;
 }
 
-llvm::Value* CodeGenerator::codegenUMinus(const Analyzer::UOper* uoper,
+llvm::Value* CodeGenerator::codegenUMinus(const hdk::ir::UOper* uoper,
                                           const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK_EQ(uoper->get_optype(), kUMINUS);
@@ -708,7 +708,7 @@ llvm::Value* CodeGenerator::codegenUMinus(const Analyzer::UOper* uoper,
 }
 
 llvm::Function* CodeGenerator::getArithWithOverflowIntrinsic(
-    const Analyzer::BinOper* bin_oper,
+    const hdk::ir::BinOper* bin_oper,
     llvm::Type* type) {
   llvm::Intrinsic::ID fn_id{llvm::Intrinsic::not_intrinsic};
   switch (bin_oper->get_optype()) {
@@ -729,7 +729,7 @@ llvm::Function* CodeGenerator::getArithWithOverflowIntrinsic(
 }
 
 llvm::Value* CodeGenerator::codegenBinOpWithOverflowForCPU(
-    const Analyzer::BinOper* bin_oper,
+    const hdk::ir::BinOper* bin_oper,
     llvm::Value* lhs_lv,
     llvm::Value* rhs_lv,
     const std::string& null_check_suffix,

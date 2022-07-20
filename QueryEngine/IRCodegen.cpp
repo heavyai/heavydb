@@ -22,26 +22,26 @@
 
 // Driver methods for the IR generation.
 
-std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
+std::vector<llvm::Value*> CodeGenerator::codegen(const hdk::ir::Expr* expr,
                                                  const bool fetch_columns,
                                                  const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   if (!expr) {
     return {posArg(expr)};
   }
-  auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
+  auto bin_oper = dynamic_cast<const hdk::ir::BinOper*>(expr);
   if (bin_oper) {
     return {codegen(bin_oper, co)};
   }
-  auto u_oper = dynamic_cast<const Analyzer::UOper*>(expr);
+  auto u_oper = dynamic_cast<const hdk::ir::UOper*>(expr);
   if (u_oper) {
     return {codegen(u_oper, co)};
   }
-  auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr);
+  auto col_var = dynamic_cast<const hdk::ir::ColumnVar*>(expr);
   if (col_var) {
     return codegenColumn(col_var, fetch_columns, co);
   }
-  auto constant = dynamic_cast<const Analyzer::Constant*>(expr);
+  auto constant = dynamic_cast<const hdk::ir::Constant*>(expr);
   if (constant) {
     const auto& ti = constant->get_type_info();
     if (ti.get_type() == kNULLT) {
@@ -61,94 +61,94 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
     }
     return {codegen(constant, ti.get_compression(), 0, co)};
   }
-  auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);
+  auto case_expr = dynamic_cast<const hdk::ir::CaseExpr*>(expr);
   if (case_expr) {
     return {codegen(case_expr, co)};
   }
-  auto extract_expr = dynamic_cast<const Analyzer::ExtractExpr*>(expr);
+  auto extract_expr = dynamic_cast<const hdk::ir::ExtractExpr*>(expr);
   if (extract_expr) {
     return {codegen(extract_expr, co)};
   }
-  auto dateadd_expr = dynamic_cast<const Analyzer::DateaddExpr*>(expr);
+  auto dateadd_expr = dynamic_cast<const hdk::ir::DateaddExpr*>(expr);
   if (dateadd_expr) {
     return {codegen(dateadd_expr, co)};
   }
-  auto datediff_expr = dynamic_cast<const Analyzer::DatediffExpr*>(expr);
+  auto datediff_expr = dynamic_cast<const hdk::ir::DatediffExpr*>(expr);
   if (datediff_expr) {
     return {codegen(datediff_expr, co)};
   }
-  auto datetrunc_expr = dynamic_cast<const Analyzer::DatetruncExpr*>(expr);
+  auto datetrunc_expr = dynamic_cast<const hdk::ir::DatetruncExpr*>(expr);
   if (datetrunc_expr) {
     return {codegen(datetrunc_expr, co)};
   }
-  auto charlength_expr = dynamic_cast<const Analyzer::CharLengthExpr*>(expr);
+  auto charlength_expr = dynamic_cast<const hdk::ir::CharLengthExpr*>(expr);
   if (charlength_expr) {
     return {codegen(charlength_expr, co)};
   }
-  auto keyforstring_expr = dynamic_cast<const Analyzer::KeyForStringExpr*>(expr);
+  auto keyforstring_expr = dynamic_cast<const hdk::ir::KeyForStringExpr*>(expr);
   if (keyforstring_expr) {
     return {codegen(keyforstring_expr, co)};
   }
-  auto sample_ratio_expr = dynamic_cast<const Analyzer::SampleRatioExpr*>(expr);
+  auto sample_ratio_expr = dynamic_cast<const hdk::ir::SampleRatioExpr*>(expr);
   if (sample_ratio_expr) {
     return {codegen(sample_ratio_expr, co)};
   }
-  auto lower_expr = dynamic_cast<const Analyzer::LowerExpr*>(expr);
+  auto lower_expr = dynamic_cast<const hdk::ir::LowerExpr*>(expr);
   if (lower_expr) {
     return {codegen(lower_expr, co)};
   }
-  auto cardinality_expr = dynamic_cast<const Analyzer::CardinalityExpr*>(expr);
+  auto cardinality_expr = dynamic_cast<const hdk::ir::CardinalityExpr*>(expr);
   if (cardinality_expr) {
     return {codegen(cardinality_expr, co)};
   }
-  auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
+  auto like_expr = dynamic_cast<const hdk::ir::LikeExpr*>(expr);
   if (like_expr) {
     return {codegen(like_expr, co)};
   }
-  auto regexp_expr = dynamic_cast<const Analyzer::RegexpExpr*>(expr);
+  auto regexp_expr = dynamic_cast<const hdk::ir::RegexpExpr*>(expr);
   if (regexp_expr) {
     return {codegen(regexp_expr, co)};
   }
-  auto width_bucket_expr = dynamic_cast<const Analyzer::WidthBucketExpr*>(expr);
+  auto width_bucket_expr = dynamic_cast<const hdk::ir::WidthBucketExpr*>(expr);
   if (width_bucket_expr) {
     return {codegen(width_bucket_expr, co)};
   }
-  auto likelihood_expr = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
+  auto likelihood_expr = dynamic_cast<const hdk::ir::LikelihoodExpr*>(expr);
   if (likelihood_expr) {
     return {codegen(likelihood_expr->get_arg(), fetch_columns, co)};
   }
-  auto in_expr = dynamic_cast<const Analyzer::InValues*>(expr);
+  auto in_expr = dynamic_cast<const hdk::ir::InValues*>(expr);
   if (in_expr) {
     return {codegen(in_expr, co)};
   }
-  auto in_integer_set_expr = dynamic_cast<const Analyzer::InIntegerSet*>(expr);
+  auto in_integer_set_expr = dynamic_cast<const hdk::ir::InIntegerSet*>(expr);
   if (in_integer_set_expr) {
     return {codegen(in_integer_set_expr, co)};
   }
   auto function_oper_with_custom_type_handling_expr =
-      dynamic_cast<const Analyzer::FunctionOperWithCustomTypeHandling*>(expr);
+      dynamic_cast<const hdk::ir::FunctionOperWithCustomTypeHandling*>(expr);
   if (function_oper_with_custom_type_handling_expr) {
     return {codegenFunctionOperWithCustomTypeHandling(
         function_oper_with_custom_type_handling_expr, co)};
   }
-  auto array_oper_expr = dynamic_cast<const Analyzer::ArrayExpr*>(expr);
+  auto array_oper_expr = dynamic_cast<const hdk::ir::ArrayExpr*>(expr);
   if (array_oper_expr) {
     return {codegenArrayExpr(array_oper_expr, co)};
   }
-  auto function_oper_expr = dynamic_cast<const Analyzer::FunctionOper*>(expr);
+  auto function_oper_expr = dynamic_cast<const hdk::ir::FunctionOper*>(expr);
   if (function_oper_expr) {
     return {codegenFunctionOper(function_oper_expr, co)};
   }
-  if (dynamic_cast<const Analyzer::OffsetInFragment*>(expr)) {
+  if (dynamic_cast<const hdk::ir::OffsetInFragment*>(expr)) {
     return {posArg(nullptr)};
   }
-  if (dynamic_cast<const Analyzer::WindowFunction*>(expr)) {
+  if (dynamic_cast<const hdk::ir::WindowFunction*>(expr)) {
     throw NativeExecutionError("Window expression not supported in this context");
   }
   abort();
 }
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::BinOper* bin_oper,
+llvm::Value* CodeGenerator::codegen(const hdk::ir::BinOper* bin_oper,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto optype = bin_oper->get_optype();
@@ -167,7 +167,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::BinOper* bin_oper,
   abort();
 }
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::UOper* u_oper,
+llvm::Value* CodeGenerator::codegen(const hdk::ir::UOper* u_oper,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto optype = u_oper->get_optype();
@@ -192,7 +192,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::UOper* u_oper,
   return nullptr;
 }
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::SampleRatioExpr* expr,
+llvm::Value* CodeGenerator::codegen(const hdk::ir::SampleRatioExpr* expr,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   auto input_expr = expr->get_arg();
@@ -219,7 +219,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::SampleRatioExpr* expr,
   return ret;
 }
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::WidthBucketExpr* expr,
+llvm::Value* CodeGenerator::codegen(const hdk::ir::WidthBucketExpr* expr,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   auto target_value_expr = expr->get_target_value();
@@ -232,9 +232,9 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::WidthBucketExpr* expr,
   CHECK(partition_count_expr);
 
   llvm::Value* computed_bucket_lv{nullptr};
-  auto is_constant_expr = [](const Analyzer::Expr* expr) {
+  auto is_constant_expr = [](const hdk::ir::Expr* expr) {
     auto target_expr = expr;
-    if (auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr)) {
+    if (auto cast_expr = dynamic_cast<const hdk::ir::UOper*>(expr)) {
       if (cast_expr->get_optype() == SQLOps::kCAST) {
         target_expr = cast_expr->get_operand();
       }
@@ -242,7 +242,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::WidthBucketExpr* expr,
     // there are more complex constant expr like 1+2, 1/2*3, and so on
     // but when considering a typical usage of width_bucket function
     // it is sufficient to consider a singleton constant expr
-    auto constant_expr = dynamic_cast<const Analyzer::Constant*>(target_expr);
+    auto constant_expr = dynamic_cast<const hdk::ir::Constant*>(target_expr);
     if (constant_expr) {
       return true;
     }
@@ -293,7 +293,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::WidthBucketExpr* expr,
 }
 
 llvm::Value* CodeGenerator::codegenConstantWidthBucketExpr(
-    const Analyzer::WidthBucketExpr* expr,
+    const hdk::ir::WidthBucketExpr* expr,
     const CompilationOptions& co) {
   auto target_value_expr = expr->get_target_value();
   auto lower_bound_expr = expr->get_lower_bound();
@@ -335,7 +335,7 @@ llvm::Value* CodeGenerator::codegenConstantWidthBucketExpr(
     Datum d;
     d.doubleval = const_val;
     auto double_const_expr =
-        makeExpr<Analyzer::Constant>(SQLTypeInfo(kDOUBLE, false), false, d);
+        hdk::ir::makeExpr<hdk::ir::Constant>(SQLTypeInfo(kDOUBLE, false), false, d);
     return codegen(double_const_expr.get(), false, co);
   };
 
@@ -373,7 +373,7 @@ llvm::Value* CodeGenerator::codegenConstantWidthBucketExpr(
   return cgen_state_->emitCall(func_name, width_bucket_args);
 }
 
-llvm::Value* CodeGenerator::codegenWidthBucketExpr(const Analyzer::WidthBucketExpr* expr,
+llvm::Value* CodeGenerator::codegenWidthBucketExpr(const hdk::ir::WidthBucketExpr* expr,
                                                    const CompilationOptions& co) {
   auto target_value_expr = expr->get_target_value();
   auto lower_bound_expr = expr->get_lower_bound();
@@ -472,7 +472,7 @@ llvm::Value* CodeGenerator::codegenWidthBucketExpr(const Analyzer::WidthBucketEx
 namespace {
 
 void add_qualifier_to_execution_unit(RelAlgExecutionUnit& ra_exe_unit,
-                                     const std::shared_ptr<Analyzer::Expr>& qual) {
+                                     const hdk::ir::ExprPtr& qual) {
   const auto qual_cf = qual_to_conjunctive_form(qual);
   ra_exe_unit.simple_quals.insert(ra_exe_unit.simple_quals.end(),
                                   qual_cf.simple_quals.begin(),
@@ -502,11 +502,11 @@ void check_if_loop_join_is_allowed(RelAlgExecutionUnit& ra_exe_unit,
   }
 }
 
-void check_valid_join_qual(std::shared_ptr<Analyzer::BinOper>& bin_oper) {
+void check_valid_join_qual(std::shared_ptr<hdk::ir::BinOper>& bin_oper) {
   // check whether a join qual is valid before entering the hashtable build and codegen
 
-  auto lhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_left_operand());
-  auto rhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_right_operand());
+  auto lhs_cv = dynamic_cast<const hdk::ir::ColumnVar*>(bin_oper->get_left_operand());
+  auto rhs_cv = dynamic_cast<const hdk::ir::ColumnVar*>(bin_oper->get_right_operand());
   if (lhs_cv && rhs_cv) {
     auto lhs_type = lhs_cv->get_type_info().get_type();
     auto rhs_type = rhs_cv->get_type_info().get_type();
@@ -698,11 +698,11 @@ namespace {
 
 class ExprTableIdVisitor : public ScalarExprVisitor<std::set<int>> {
  protected:
-  std::set<int> visitColumnVar(const Analyzer::ColumnVar* col_expr) const final {
+  std::set<int> visitColumnVar(const hdk::ir::ColumnVar* col_expr) const final {
     return {col_expr->get_table_id()};
   }
 
-  std::set<int> visitFunctionOper(const Analyzer::FunctionOper* func_expr) const final {
+  std::set<int> visitFunctionOper(const hdk::ir::FunctionOper* func_expr) const final {
     std::set<int> ret;
     for (size_t i = 0; i < func_expr->getArity(); i++) {
       ret = aggregateResult(ret, visit(func_expr->getArg(i)));
@@ -710,13 +710,13 @@ class ExprTableIdVisitor : public ScalarExprVisitor<std::set<int>> {
     return ret;
   }
 
-  std::set<int> visitBinOper(const Analyzer::BinOper* bin_oper) const final {
+  std::set<int> visitBinOper(const hdk::ir::BinOper* bin_oper) const final {
     std::set<int> ret;
     ret = aggregateResult(ret, visit(bin_oper->get_left_operand()));
     return aggregateResult(ret, visit(bin_oper->get_right_operand()));
   }
 
-  std::set<int> visitUOper(const Analyzer::UOper* u_oper) const final {
+  std::set<int> visitUOper(const hdk::ir::UOper* u_oper) const final {
     return visit(u_oper->get_operand());
   }
 
@@ -744,14 +744,14 @@ JoinLoop::HoistedFiltersCallback Executor::buildHoistLeftHandSideFiltersCb(
   const auto& current_level_join_conditions = ra_exe_unit.join_quals[level_idx];
   if (level_idx == 0 && current_level_join_conditions.type == JoinType::LEFT) {
     const auto& condition = current_level_join_conditions.quals.front();
-    const auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(condition.get());
+    const auto bin_oper = dynamic_cast<const hdk::ir::BinOper*>(condition.get());
     CHECK(bin_oper) << condition->toString();
     const auto rhs =
-        dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_right_operand());
+        dynamic_cast<const hdk::ir::ColumnVar*>(bin_oper->get_right_operand());
     const auto lhs =
-        dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_left_operand());
+        dynamic_cast<const hdk::ir::ColumnVar*>(bin_oper->get_left_operand());
     if (lhs && rhs && lhs->get_table_id() != rhs->get_table_id()) {
-      const Analyzer::ColumnVar* selected_lhs{nullptr};
+      const hdk::ir::ColumnVar* selected_lhs{nullptr};
       // grab the left hand side column -- this is somewhat similar to normalize column
       // pair, and a better solution may be to hoist that function out of the join
       // framework and normalize columns at the top of build join loops
@@ -761,7 +761,7 @@ JoinLoop::HoistedFiltersCallback Executor::buildHoistLeftHandSideFiltersCb(
         selected_lhs = lhs;
       }
       if (selected_lhs) {
-        std::list<std::shared_ptr<Analyzer::Expr>> hoisted_quals;
+        std::list<hdk::ir::ExprPtr> hoisted_quals;
         // get all LHS-only filters
         auto should_hoist_qual = [&hoisted_quals](const auto& qual, const int table_id) {
           CHECK(qual);
@@ -850,9 +850,8 @@ std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
     std::vector<std::string>& fail_reasons) {
   AUTOMATIC_IR_METADATA(cgen_state_.get());
   std::shared_ptr<HashJoin> current_level_hash_table;
-  auto handleNonHashtableQual = [&ra_exe_unit, &level_idx, this](
-                                    JoinType join_type,
-                                    std::shared_ptr<Analyzer::Expr> qual) {
+  auto handleNonHashtableQual = [&ra_exe_unit, &level_idx, this](JoinType join_type,
+                                                                 hdk::ir::ExprPtr qual) {
     if (join_type == JoinType::LEFT) {
       plan_state_->addNonHashtableQualForLeftJoin(level_idx, qual);
     } else {
@@ -860,7 +859,7 @@ std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
     }
   };
   for (const auto& join_qual : current_level_join_conditions.quals) {
-    auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(join_qual);
+    auto qual_bin_oper = std::dynamic_pointer_cast<hdk::ir::BinOper>(join_qual);
     if (current_level_hash_table || !qual_bin_oper ||
         !IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
       handleNonHashtableQual(current_level_join_conditions.type, join_qual);
@@ -1196,7 +1195,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
 }
 
 Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
-    Analyzer::Expr* group_by_col,
+    hdk::ir::Expr* group_by_col,
     const size_t col_width,
     const CompilationOptions& co,
     const bool translate_null_val,
@@ -1209,8 +1208,8 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
   CodeGenerator code_generator(this);
   auto group_key = code_generator.codegen(group_by_col, true, co).front();
   auto key_to_cache = group_key;
-  if (dynamic_cast<Analyzer::UOper*>(group_by_col) &&
-      static_cast<Analyzer::UOper*>(group_by_col)->get_optype() == kUNNEST) {
+  if (dynamic_cast<hdk::ir::UOper*>(group_by_col) &&
+      static_cast<hdk::ir::UOper*>(group_by_col)->get_optype() == kUNNEST) {
     auto preheader = cgen_state_->ir_builder_.GetInsertBlock();
     auto array_loop_head = llvm::BasicBlock::Create(cgen_state_->context_,
                                                     "array_loop_head",
@@ -1221,7 +1220,7 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
     auto array_idx_ptr = cgen_state_->ir_builder_.CreateAlloca(ret_ty);
     CHECK(array_idx_ptr);
     cgen_state_->ir_builder_.CreateStore(cgen_state_->llInt(int32_t(0)), array_idx_ptr);
-    const auto arr_expr = static_cast<Analyzer::UOper*>(group_by_col)->get_operand();
+    const auto arr_expr = static_cast<hdk::ir::UOper*>(group_by_col)->get_operand();
     const auto& array_ti = arr_expr->get_type_info();
     CHECK(array_ti.is_array());
     const auto& elem_ti = array_ti.get_elem_type();

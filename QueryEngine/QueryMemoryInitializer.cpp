@@ -99,11 +99,11 @@ inline std::vector<int64_t> get_consistent_frags_sizes(
 }
 
 inline std::vector<int64_t> get_consistent_frags_sizes(
-    const std::vector<Analyzer::Expr*>& target_exprs,
+    const std::vector<hdk::ir::Expr*>& target_exprs,
     const std::vector<int64_t>& table_frag_sizes) {
   std::vector<int64_t> col_frag_sizes;
   for (auto expr : target_exprs) {
-    if (const auto col_var = dynamic_cast<Analyzer::ColumnVar*>(expr)) {
+    if (const auto col_var = dynamic_cast<hdk::ir::ColumnVar*>(expr)) {
       if (col_var->get_rte_idx() < 0) {
         CHECK_EQ(-1, col_var->get_rte_idx());
         col_frag_sizes.push_back(int64_t(-1));
@@ -118,13 +118,13 @@ inline std::vector<int64_t> get_consistent_frags_sizes(
 }
 
 inline std::vector<std::vector<int64_t>> get_col_frag_offsets(
-    const std::vector<Analyzer::Expr*>& target_exprs,
+    const std::vector<hdk::ir::Expr*>& target_exprs,
     const std::vector<std::vector<uint64_t>>& table_frag_offsets) {
   std::vector<std::vector<int64_t>> col_frag_offsets;
   for (auto& table_offsets : table_frag_offsets) {
     std::vector<int64_t> col_offsets;
     for (auto expr : target_exprs) {
-      if (const auto col_var = dynamic_cast<Analyzer::ColumnVar*>(expr)) {
+      if (const auto col_var = dynamic_cast<hdk::ir::ColumnVar*>(expr)) {
         if (col_var->get_rte_idx() < 0) {
           CHECK_EQ(-1, col_var->get_rte_idx());
           col_offsets.push_back(int64_t(-1));
@@ -866,7 +866,7 @@ QueryMemoryInitializer::allocateTDigests(const QueryMemoryDescriptor& query_mem_
 
   for (size_t target_idx = 0; target_idx < ntargets; ++target_idx) {
     auto const target_expr = executor->plan_state_->target_exprs_[target_idx];
-    if (auto const agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
+    if (auto const agg_expr = dynamic_cast<const hdk::ir::AggExpr*>(target_expr)) {
       if (agg_expr->get_aggtype() == kAPPROX_QUANTILE) {
         size_t const agg_col_idx =
             query_mem_desc.getSlotIndexForSingleSlotCol(target_idx);

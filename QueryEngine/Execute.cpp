@@ -566,7 +566,7 @@ size_t Executor::getNumBytesForFetchedRow(const std::set<int>& table_ids_to_fetc
 }
 
 bool Executor::hasLazyFetchColumns(
-    const std::vector<Analyzer::Expr*>& target_exprs) const {
+    const std::vector<hdk::ir::Expr*>& target_exprs) const {
   CHECK(plan_state_);
   for (const auto target_expr : target_exprs) {
     if (plan_state_->isLazyFetchColumn(target_expr)) {
@@ -577,7 +577,7 @@ bool Executor::hasLazyFetchColumns(
 }
 
 std::vector<ColumnLazyFetchInfo> Executor::getColLazyFetchInfo(
-    const std::vector<Analyzer::Expr*>& target_exprs) const {
+    const std::vector<hdk::ir::Expr*>& target_exprs) const {
   CHECK(plan_state_);
   std::vector<ColumnLazyFetchInfo> col_lazy_fetch_info;
   for (const auto target_expr : target_exprs) {
@@ -585,7 +585,7 @@ std::vector<ColumnLazyFetchInfo> Executor::getColLazyFetchInfo(
       col_lazy_fetch_info.emplace_back(
           ColumnLazyFetchInfo{false, -1, SQLTypeInfo(kNULLT, false)});
     } else {
-      const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
+      const auto col_var = dynamic_cast<const hdk::ir::ColumnVar*>(target_expr);
       CHECK(col_var);
       auto local_col_id = plan_state_->getLocalColumnId(col_var, false);
       const auto& col_ti = col_var->get_type_info();
@@ -1412,7 +1412,7 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
                            const ExecutorDeviceType device_type,
                            const int device_count) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
-    if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
+    if (dynamic_cast<const hdk::ir::AggExpr*>(target_expr)) {
       return;
     }
   }
@@ -1491,7 +1491,7 @@ std::vector<std::string> expr_container_to_string(const T& expr_container) {
 
 template <>
 std::vector<std::string> expr_container_to_string(
-    const std::list<Analyzer::OrderEntry>& expr_container) {
+    const std::list<hdk::ir::OrderEntry>& expr_container) {
   std::vector<std::string> expr_strs;
   for (const auto& expr : expr_container) {
     expr_strs.emplace_back(expr.toString());
@@ -2165,7 +2165,7 @@ void Executor::addTransientStringLiterals(
   TransientDictIdVisitor dict_id_visitor;
 
   auto visit_expr =
-      [this, &dict_id_visitor, &row_set_mem_owner](const Analyzer::Expr* expr) {
+      [this, &dict_id_visitor, &row_set_mem_owner](const hdk::ir::Expr* expr) {
         if (!expr) {
           return;
         }
@@ -2195,7 +2195,7 @@ void Executor::addTransientStringLiterals(
     if (target_type.is_string() && target_type.get_compression() != kENCODING_DICT) {
       continue;
     }
-    const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
+    const auto agg_expr = dynamic_cast<const hdk::ir::AggExpr*>(target_expr);
     if (agg_expr) {
       if (agg_expr->get_aggtype() == kSINGLE_VALUE ||
           agg_expr->get_aggtype() == kSAMPLE) {
@@ -2220,7 +2220,7 @@ ExecutorDeviceType Executor::getDeviceTypeForTargets(
         return ExecutorDeviceType::CPU;
       }
     }
-    if (dynamic_cast<const Analyzer::RegexpExpr*>(target_expr)) {
+    if (dynamic_cast<const hdk::ir::RegexpExpr*>(target_expr)) {
       return ExecutorDeviceType::CPU;
     }
   }
@@ -2246,7 +2246,7 @@ int64_t inline_null_val(const SQLTypeInfo& ti, const bool float_argument_input) 
 
 void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
                                   std::vector<int64_t>& entry,
-                                  const std::vector<Analyzer::Expr*>& target_exprs,
+                                  const std::vector<hdk::ir::Expr*>& target_exprs,
                                   const QueryMemoryDescriptor& query_mem_desc,
                                   bool bigint_count) {
   for (size_t target_idx = 0; target_idx < target_exprs.size(); ++target_idx) {
@@ -2273,15 +2273,14 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
   }
 }
 
-ResultSetPtr build_row_for_empty_input(
-    const std::vector<Analyzer::Expr*>& target_exprs_in,
-    const QueryMemoryDescriptor& query_mem_desc,
-    const ExecutorDeviceType device_type) {
-  std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_copies;
-  std::vector<Analyzer::Expr*> target_exprs;
+ResultSetPtr build_row_for_empty_input(const std::vector<hdk::ir::Expr*>& target_exprs_in,
+                                       const QueryMemoryDescriptor& query_mem_desc,
+                                       const ExecutorDeviceType device_type) {
+  std::vector<hdk::ir::ExprPtr> target_exprs_owned_copies;
+  std::vector<hdk::ir::Expr*> target_exprs;
   for (const auto target_expr : target_exprs_in) {
     const auto target_expr_copy =
-        std::dynamic_pointer_cast<Analyzer::AggExpr>(target_expr->deep_copy());
+        std::dynamic_pointer_cast<hdk::ir::AggExpr>(target_expr->deep_copy());
     CHECK(target_expr_copy);
     auto ti = target_expr->get_type_info();
     ti.set_notnull(false);
@@ -2345,9 +2344,9 @@ ResultSetPtr Executor::collectAllDeviceResults(
       ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
 }
 
-std::unordered_map<int, const Analyzer::BinOper*> Executor::getInnerTabIdToJoinCond()
+std::unordered_map<int, const hdk::ir::BinOper*> Executor::getInnerTabIdToJoinCond()
     const {
-  std::unordered_map<int, const Analyzer::BinOper*> id_to_cond;
+  std::unordered_map<int, const hdk::ir::BinOper*> id_to_cond;
   const auto& join_info = plan_state_->join_info_;
   CHECK_EQ(join_info.equi_join_tautologies_.size(), join_info.join_hash_tables_.size());
   for (size_t i = 0; i < join_info.join_hash_tables_.size(); ++i) {
@@ -2652,7 +2651,7 @@ std::vector<size_t> Executor::getTableFragmentIndices(
     const size_t table_idx,
     const size_t outer_frag_idx,
     std::map<int, const TableFragments*>& selected_tables_fragments,
-    const std::unordered_map<int, const Analyzer::BinOper*>&
+    const std::unordered_map<int, const hdk::ir::BinOper*>&
         inner_table_id_to_join_condition) {
   const int table_id = ra_exe_unit.input_descs[table_idx].getTableId();
   auto table_frags_it = selected_tables_fragments.find(table_id);
@@ -2691,7 +2690,7 @@ std::vector<size_t> Executor::getTableFragmentIndices(
 bool Executor::skipFragmentPair(const FragmentInfo& outer_fragment_info,
                                 const FragmentInfo& inner_fragment_info,
                                 const int table_idx,
-                                const std::unordered_map<int, const Analyzer::BinOper*>&
+                                const std::unordered_map<int, const hdk::ir::BinOper*>&
                                     inner_table_id_to_join_condition,
                                 const RelAlgExecutionUnit& ra_exe_unit,
                                 const ExecutorDeviceType device_type) {
@@ -3344,7 +3343,7 @@ int32_t Executor::executePlan(const RelAlgExecutionUnit& ra_exe_unit,
       for (const auto target_expr : ra_exe_unit.target_exprs) {
         const auto agg_info =
             get_target_info(target_expr, getConfig().exec.group_by.bigint_count);
-        CHECK(agg_info.is_agg || dynamic_cast<Analyzer::Constant*>(target_expr))
+        CHECK(agg_info.is_agg || dynamic_cast<hdk::ir::Constant*>(target_expr))
             << target_expr->toString();
 
         int64_t val1;
@@ -3563,7 +3562,7 @@ void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_desc
 }
 
 Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
-    const std::shared_ptr<Analyzer::BinOper>& qual_bin_oper,
+    const std::shared_ptr<hdk::ir::BinOper>& qual_bin_oper,
     const std::vector<InputTableInfo>& query_infos,
     const MemoryLevel memory_level,
     const JoinType join_type,
@@ -3737,10 +3736,10 @@ std::tuple<bool, int64_t, int64_t> get_hpt_overflow_underflow_safe_scaled_values
 }  // namespace
 
 FragmentSkipStatus Executor::canSkipFragmentForFpQual(
-    const Analyzer::BinOper* comp_expr,
-    const Analyzer::ColumnVar* lhs_col,
+    const hdk::ir::BinOper* comp_expr,
+    const hdk::ir::ColumnVar* lhs_col,
     const FragmentInfo& fragment,
-    const Analyzer::Constant* rhs_const) const {
+    const hdk::ir::Constant* rhs_const) const {
   const int col_id = lhs_col->get_column_id();
   auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
   if (chunk_meta_it == fragment.getChunkMetadataMap().end()) {
@@ -3799,27 +3798,26 @@ FragmentSkipStatus Executor::canSkipFragmentForFpQual(
 std::pair<bool, int64_t> Executor::skipFragment(
     const InputDescriptor& table_desc,
     const FragmentInfo& fragment,
-    const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
+    const std::list<hdk::ir::ExprPtr>& simple_quals,
     const std::vector<uint64_t>& frag_offsets,
     const size_t frag_idx) {
   const int table_id = table_desc.getTableId();
 
   for (const auto& simple_qual : simple_quals) {
-    const auto comp_expr =
-        std::dynamic_pointer_cast<const Analyzer::BinOper>(simple_qual);
+    const auto comp_expr = std::dynamic_pointer_cast<const hdk::ir::BinOper>(simple_qual);
     if (!comp_expr) {
       // is this possible?
       return {false, -1};
     }
     const auto lhs = comp_expr->get_left_operand();
-    auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
+    auto lhs_col = dynamic_cast<const hdk::ir::ColumnVar*>(lhs);
     if (!lhs_col || !lhs_col->get_table_id() || lhs_col->get_rte_idx()) {
       // See if lhs is a simple cast that was allowed through normalize_simple_predicate
-      auto lhs_uexpr = dynamic_cast<const Analyzer::UOper*>(lhs);
+      auto lhs_uexpr = dynamic_cast<const hdk::ir::UOper*>(lhs);
       if (lhs_uexpr) {
         CHECK(lhs_uexpr->get_optype() ==
               kCAST);  // We should have only been passed a cast expression
-        lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(lhs_uexpr->get_operand());
+        lhs_col = dynamic_cast<const hdk::ir::ColumnVar*>(lhs_uexpr->get_operand());
         if (!lhs_col || !lhs_col->get_table_id() || lhs_col->get_rte_idx()) {
           continue;
         }
@@ -3828,7 +3826,7 @@ std::pair<bool, int64_t> Executor::skipFragment(
       }
     }
     const auto rhs = comp_expr->get_right_operand();
-    const auto rhs_const = dynamic_cast<const Analyzer::Constant*>(rhs);
+    const auto rhs_const = dynamic_cast<const hdk::ir::Constant*>(rhs);
     if (!rhs_const) {
       // is this possible?
       return {false, -1};
@@ -3998,7 +3996,7 @@ std::pair<bool, int64_t> Executor::skipFragmentInnerJoins(
 
     // extracting all the conjunctive simple_quals from the quals stored for the inner
     // join
-    std::list<std::shared_ptr<Analyzer::Expr>> inner_join_simple_quals;
+    std::list<hdk::ir::ExprPtr> inner_join_simple_quals;
     for (auto& qual : inner_join.quals) {
       auto temp_qual = qual_to_conjunctive_form(qual);
       inner_join_simple_quals.insert(inner_join_simple_quals.begin(),
@@ -4031,8 +4029,7 @@ AggregatedColRange Executor::computeColRangesCache(
   }
   for (const auto& col_desc : col_descs) {
     if (ExpressionRange::typeSupportsRange(col_desc.getType())) {
-      const auto col_var =
-          std::make_unique<Analyzer::ColumnVar>(col_desc.getColInfo(), 0);
+      const auto col_var = std::make_unique<hdk::ir::ColumnVar>(col_desc.getColInfo(), 0);
       const auto col_range = getLeafColumnRange(col_var.get(), query_infos, this, false);
       agg_col_range_cache.setColRange({col_desc.getColId(), col_desc.getTableId()},
                                       col_range);
@@ -4091,7 +4088,7 @@ QueryPlanDagCache& Executor::getQueryPlanDagCache() {
   return *query_plan_dag_cache_;
 }
 
-JoinColumnsInfo Executor::getJoinColumnsInfo(const Analyzer::Expr* join_expr,
+JoinColumnsInfo Executor::getJoinColumnsInfo(const hdk::ir::Expr* join_expr,
                                              JoinColumnSide target_side,
                                              bool extract_only_col_id) {
   return query_plan_dag_cache_->getJoinColumnsInfoString(

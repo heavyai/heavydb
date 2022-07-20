@@ -212,8 +212,8 @@ std::string HashtableRecycler::toString() const {
 }
 
 std::string HashtableRecycler::getJoinColumnInfoString(
-    std::vector<const Analyzer::ColumnVar*>& inner_cols,
-    std::vector<const Analyzer::ColumnVar*>& outer_cols,
+    std::vector<const hdk::ir::ColumnVar*>& inner_cols,
+    std::vector<const hdk::ir::ColumnVar*>& outer_cols,
     Executor* executor) {
   std::vector<std::string> join_cols_info;
   join_cols_info.push_back(
@@ -271,7 +271,7 @@ std::pair<QueryPlan, HashtableCacheMetaInfo> HashtableRecycler::getHashtableKeyS
     const JoinType join_type,
     const HashTableBuildDagMap& hashtable_build_dag_map,
     Executor* executor) {
-  std::vector<const Analyzer::ColumnVar*> inner_cols_vec, outer_cols_vec;
+  std::vector<const hdk::ir::ColumnVar*> inner_cols_vec, outer_cols_vec;
   std::vector<std::string> join_qual_info;
   for (auto& join_col_pair : inner_outer_pairs) {
     inner_cols_vec.push_back(join_col_pair.first);
@@ -283,7 +283,7 @@ std::pair<QueryPlan, HashtableCacheMetaInfo> HashtableRecycler::getHashtableKeyS
         join_col_pair.first, JoinColumnSide::kDirect, true));
     join_qual_info.push_back(::toString(op_type));
     join_qual_info.push_back(::toString(join_type));
-    auto outer_col_var = dynamic_cast<const Analyzer::ColumnVar*>(join_col_pair.second);
+    auto outer_col_var = dynamic_cast<const hdk::ir::ColumnVar*>(join_col_pair.second);
     join_qual_info.push_back(join_col_pair.first->get_type_info().toString());
     if (outer_col_var) {
       outer_cols_vec.push_back(outer_col_var);

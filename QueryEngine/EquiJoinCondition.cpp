@@ -22,9 +22,9 @@
 namespace {
 
 // Returns true iff crt and prev are both equi-join conditions on the same pair of tables.
-bool can_combine_with(const Analyzer::Expr* crt, const Analyzer::Expr* prev) {
-  const auto crt_bin = dynamic_cast<const Analyzer::BinOper*>(crt);
-  const auto prev_bin = dynamic_cast<const Analyzer::BinOper*>(prev);
+bool can_combine_with(const hdk::ir::Expr* crt, const hdk::ir::Expr* prev) {
+  const auto crt_bin = dynamic_cast<const hdk::ir::BinOper*>(crt);
+  const auto prev_bin = dynamic_cast<const hdk::ir::BinOper*>(prev);
   if (!crt_bin || !prev_bin) {
     return false;
   }
@@ -34,9 +34,9 @@ bool can_combine_with(const Analyzer::Expr* crt, const Analyzer::Expr* prev) {
       crt_bin->get_optype() != prev_bin->get_optype()) {
     return false;
   }
-  const auto crt_inner = std::dynamic_pointer_cast<Analyzer::ColumnVar>(
+  const auto crt_inner = std::dynamic_pointer_cast<hdk::ir::ColumnVar>(
       remove_cast(crt_bin->get_own_right_operand()));
-  const auto prev_inner = std::dynamic_pointer_cast<Analyzer::ColumnVar>(
+  const auto prev_inner = std::dynamic_pointer_cast<hdk::ir::ColumnVar>(
       remove_cast(prev_bin->get_own_right_operand()));
   AllRangeTableIndexVisitor visitor;
   const auto crt_outer_rte_set = visitor.visit(crt_bin->get_left_operand());
@@ -54,14 +54,14 @@ bool can_combine_with(const Analyzer::Expr* crt, const Analyzer::Expr* prev) {
   return true;
 }
 
-std::list<std::shared_ptr<Analyzer::Expr>> make_composite_equals_impl(
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& crt_coalesced_quals) {
-  std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
-  std::vector<std::shared_ptr<Analyzer::Expr>> lhs_tuple;
-  std::vector<std::shared_ptr<Analyzer::Expr>> rhs_tuple;
+std::list<hdk::ir::ExprPtr> make_composite_equals_impl(
+    const std::vector<hdk::ir::ExprPtr>& crt_coalesced_quals) {
+  std::list<hdk::ir::ExprPtr> join_quals;
+  std::vector<hdk::ir::ExprPtr> lhs_tuple;
+  std::vector<hdk::ir::ExprPtr> rhs_tuple;
   bool not_null{true};
   for (const auto& qual : crt_coalesced_quals) {
-    const auto qual_binary = std::dynamic_pointer_cast<Analyzer::BinOper>(qual);
+    const auto qual_binary = std::dynamic_pointer_cast<hdk::ir::BinOper>(qual);
     CHECK(qual_binary);
     not_null = not_null && qual_binary->get_type_info().get_notnull();
     const auto lhs_col = remove_cast(qual_binary->get_own_left_operand());
@@ -80,18 +80,18 @@ std::list<std::shared_ptr<Analyzer::Expr>> make_composite_equals_impl(
   }
   CHECK(!crt_coalesced_quals.empty());
   const auto first_qual =
-      std::dynamic_pointer_cast<Analyzer::BinOper>(crt_coalesced_quals.front());
+      std::dynamic_pointer_cast<hdk::ir::BinOper>(crt_coalesced_quals.front());
   CHECK(first_qual);
   CHECK_EQ(lhs_tuple.size(), rhs_tuple.size());
   if (lhs_tuple.size() > 0) {
-    join_quals.push_front(std::make_shared<Analyzer::BinOper>(
+    join_quals.push_front(std::make_shared<hdk::ir::BinOper>(
         SQLTypeInfo(kBOOLEAN, not_null),
         false,
         first_qual->get_optype(),
         kONE,
-        lhs_tuple.size() > 1 ? std::make_shared<Analyzer::ExpressionTuple>(lhs_tuple)
+        lhs_tuple.size() > 1 ? std::make_shared<hdk::ir::ExpressionTuple>(lhs_tuple)
                              : lhs_tuple.front(),
-        rhs_tuple.size() > 1 ? std::make_shared<Analyzer::ExpressionTuple>(rhs_tuple)
+        rhs_tuple.size() > 1 ? std::make_shared<hdk::ir::ExpressionTuple>(rhs_tuple)
                              : rhs_tuple.front()));
   }
   return join_quals;
@@ -99,8 +99,8 @@ std::list<std::shared_ptr<Analyzer::Expr>> make_composite_equals_impl(
 
 // Create an equals expression with column tuple operands out of regular equals
 // expressions.
-std::list<std::shared_ptr<Analyzer::Expr>> make_composite_equals(
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& crt_coalesced_quals) {
+std::list<hdk::ir::ExprPtr> make_composite_equals(
+    const std::vector<hdk::ir::ExprPtr>& crt_coalesced_quals) {
   if (crt_coalesced_quals.size() == 1) {
     return {crt_coalesced_quals.front()};
   }
@@ -109,13 +109,13 @@ std::list<std::shared_ptr<Analyzer::Expr>> make_composite_equals(
 
 }  // namespace
 
-std::list<std::shared_ptr<Analyzer::Expr>> combine_equi_join_conditions(
-    const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals) {
+std::list<hdk::ir::ExprPtr> combine_equi_join_conditions(
+    const std::list<hdk::ir::ExprPtr>& join_quals) {
   if (join_quals.empty()) {
     return {};
   }
-  std::list<std::shared_ptr<Analyzer::Expr>> coalesced_quals;
-  std::vector<std::shared_ptr<Analyzer::Expr>> crt_coalesced_quals;
+  std::list<hdk::ir::ExprPtr> coalesced_quals;
+  std::vector<hdk::ir::ExprPtr> crt_coalesced_quals;
   for (const auto& simple_join_qual : join_quals) {
     if (crt_coalesced_quals.empty()) {
       crt_coalesced_quals.push_back(simple_join_qual);
@@ -136,9 +136,9 @@ std::list<std::shared_ptr<Analyzer::Expr>> combine_equi_join_conditions(
   return coalesced_quals;
 }
 
-std::list<std::shared_ptr<Analyzer::Expr>> coalesce_singleton_equi_join(
-    const std::shared_ptr<Analyzer::BinOper>& join_qual) {
-  std::vector<std::shared_ptr<Analyzer::Expr>> singleton_qual_list;
+std::list<hdk::ir::ExprPtr> coalesce_singleton_equi_join(
+    const std::shared_ptr<hdk::ir::BinOper>& join_qual) {
+  std::vector<hdk::ir::ExprPtr> singleton_qual_list;
   singleton_qual_list.push_back(join_qual);
   return make_composite_equals_impl(singleton_qual_list);
 }

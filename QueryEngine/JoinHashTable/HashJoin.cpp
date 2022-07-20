@@ -30,7 +30,7 @@
 //! effective_memory_level parameter. The dev_buff_owner parameter will
 //! manage the GPU memory.
 JoinColumn HashJoin::fetchJoinColumn(
-    const Analyzer::ColumnVar* hash_col,
+    const hdk::ir::ColumnVar* hash_col,
     const std::vector<FragmentInfo>& fragment_info,
     const Data_Namespace::MemoryLevel effective_memory_level,
     const int device_id,
@@ -216,7 +216,7 @@ llvm::Value* HashJoin::codegenHashTableLoad(const size_t table_idx, Executor* ex
 
 //! Make hash table from an in-flight SQL query's parse tree etc.
 std::shared_ptr<HashJoin> HashJoin::getInstance(
-    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+    const std::shared_ptr<hdk::ir::BinOper> qual_bin_oper,
     const std::vector<InputTableInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level,
     const JoinType join_type,
@@ -231,7 +231,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
   auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<HashJoin> join_hash_table;
   CHECK_GT(device_count, 0);
-  if (dynamic_cast<const Analyzer::ExpressionTuple*>(qual_bin_oper->get_left_operand())) {
+  if (dynamic_cast<const hdk::ir::ExpressionTuple*>(qual_bin_oper->get_left_operand())) {
     VLOG(1) << "Trying to build keyed hash table:";
     join_hash_table = BaselineJoinHashTable::getInstance(qual_bin_oper,
                                                          query_infos,
@@ -262,7 +262,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
       const auto join_quals = coalesce_singleton_equi_join(qual_bin_oper);
       CHECK_EQ(join_quals.size(), size_t(1));
       const auto join_qual =
-          std::dynamic_pointer_cast<Analyzer::BinOper>(join_quals.front());
+          std::dynamic_pointer_cast<hdk::ir::BinOper>(join_quals.front());
       VLOG(1) << "Trying to build keyed hash table after perfect hash table:";
       join_hash_table = BaselineJoinHashTable::getInstance(join_qual,
                                                            query_infos,
@@ -303,7 +303,7 @@ HashJoin::getStrDictProxies(const InnerOuter& cols, const Executor* executor) {
   const auto inner_col = cols.first;
   CHECK(inner_col);
   const auto inner_ti = inner_col->get_type_info();
-  const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
+  const auto outer_col = dynamic_cast<const hdk::ir::ColumnVar*>(cols.second);
   std::pair<const StringDictionaryProxy*, const StringDictionaryProxy*>
       inner_outer_str_dict_proxies{nullptr, nullptr};
   if (inner_ti.is_string() && outer_col) {
@@ -409,33 +409,33 @@ HashJoin::translateCompositeStrDictProxies(const CompositeKeyInfo& composite_key
   return proxy_translation_maps;
 }
 
-std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(int db_id,
-                                                           std::string_view table,
-                                                           std::string_view column,
-                                                           int rte_idx,
-                                                           Executor* executor) {
+std::shared_ptr<hdk::ir::ColumnVar> getSyntheticColumnVar(int db_id,
+                                                          std::string_view table,
+                                                          std::string_view column,
+                                                          int rte_idx,
+                                                          Executor* executor) {
   auto schema_provider = executor->getSchemaProvider();
   auto table_info = schema_provider->getTableInfo(db_id, std::string(table));
   CHECK(table_info);
   auto col_info = schema_provider->getColumnInfo(*table_info, std::string(column));
   CHECK(col_info);
 
-  auto cv = std::make_shared<Analyzer::ColumnVar>(col_info, rte_idx);
+  auto cv = std::make_shared<hdk::ir::ColumnVar>(col_info, rte_idx);
   return cv;
 }
 
 class AllColumnVarsVisitor
-    : public ScalarExprVisitor<std::set<const Analyzer::ColumnVar*>> {
+    : public ScalarExprVisitor<std::set<const hdk::ir::ColumnVar*>> {
  protected:
-  std::set<const Analyzer::ColumnVar*> visitColumnVar(
-      const Analyzer::ColumnVar* column) const override {
+  std::set<const hdk::ir::ColumnVar*> visitColumnVar(
+      const hdk::ir::ColumnVar* column) const override {
     return {column};
   }
 
-  std::set<const Analyzer::ColumnVar*> visitColumnVarTuple(
-      const Analyzer::ExpressionTuple* expr_tuple) const override {
+  std::set<const hdk::ir::ColumnVar*> visitColumnVarTuple(
+      const hdk::ir::ExpressionTuple* expr_tuple) const override {
     AllColumnVarsVisitor visitor;
-    std::set<const Analyzer::ColumnVar*> result;
+    std::set<const hdk::ir::ColumnVar*> result;
     for (const auto& expr_component : expr_tuple->getTuple()) {
       const auto component_rte_set = visitor.visit(expr_component.get());
       result.insert(component_rte_set.begin(), component_rte_set.end());
@@ -443,9 +443,9 @@ class AllColumnVarsVisitor
     return result;
   }
 
-  std::set<const Analyzer::ColumnVar*> aggregateResult(
-      const std::set<const Analyzer::ColumnVar*>& aggregate,
-      const std::set<const Analyzer::ColumnVar*>& next_result) const override {
+  std::set<const hdk::ir::ColumnVar*> aggregateResult(
+      const std::set<const hdk::ir::ColumnVar*>& aggregate,
+      const std::set<const hdk::ir::ColumnVar*>& next_result) const override {
     auto result = aggregate;
     result.insert(next_result.begin(), next_result.end());
     return result;
@@ -453,7 +453,7 @@ class AllColumnVarsVisitor
 };
 
 void setupSyntheticCaching(DataProvider* data_provider,
-                           std::set<const Analyzer::ColumnVar*> cvs,
+                           std::set<const hdk::ir::ColumnVar*> cvs,
                            Executor* executor) {
   std::unordered_set<std::pair<int, int>> phys_table_ids;
   for (auto cv : cvs) {
@@ -469,7 +469,7 @@ void setupSyntheticCaching(DataProvider* data_provider,
 }
 
 std::vector<InputTableInfo> getSyntheticInputTableInfo(
-    std::set<const Analyzer::ColumnVar*> cvs,
+    std::set<const hdk::ir::ColumnVar*> cvs,
     Executor* executor) {
   std::unordered_set<std::pair<int, int>> phys_table_ids;
   for (auto cv : cvs) {
@@ -506,9 +506,9 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
   auto a1 = getSyntheticColumnVar(db_id, table1, column1, 0, executor);
   auto a2 = getSyntheticColumnVar(db_id, table2, column2, 1, executor);
 
-  auto qual_bin_oper = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, a1, a2);
+  auto qual_bin_oper = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, a1, a2);
 
-  std::set<const Analyzer::ColumnVar*> cvs =
+  std::set<const hdk::ir::ColumnVar*> cvs =
       AllColumnVarsVisitor().visit(qual_bin_oper.get());
   auto query_infos = getSyntheticInputTableInfo(cvs, executor);
   setupSyntheticCaching(data_provider, cvs, executor);
@@ -531,14 +531,14 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
 
 //! Make hash table from named tables and columns (such as for testing).
 std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
-    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+    const std::shared_ptr<hdk::ir::BinOper> qual_bin_oper,
     const Data_Namespace::MemoryLevel memory_level,
     const HashType preferred_hash_type,
     const int device_count,
     DataProvider* data_provider,
     ColumnCacheMap& column_cache,
     Executor* executor) {
-  std::set<const Analyzer::ColumnVar*> cvs =
+  std::set<const hdk::ir::ColumnVar*> cvs =
       AllColumnVarsVisitor().visit(qual_bin_oper.get());
   auto query_infos = getSyntheticInputTableInfo(cvs, executor);
   setupSyntheticCaching(data_provider, cvs, executor);
@@ -560,14 +560,14 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
 }
 
 std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance(
-    std::vector<std::shared_ptr<Analyzer::BinOper>> qual_bin_opers,
+    std::vector<std::shared_ptr<hdk::ir::BinOper>> qual_bin_opers,
     const Data_Namespace::MemoryLevel memory_level,
     const HashType preferred_hash_type,
     const int device_count,
     DataProvider* data_provider,
     ColumnCacheMap& column_cache,
     Executor* executor) {
-  std::set<const Analyzer::ColumnVar*> cvs;
+  std::set<const hdk::ir::ColumnVar*> cvs;
   for (auto& qual : qual_bin_opers) {
     auto cv = AllColumnVarsVisitor().visit(qual.get());
     cvs.insert(cv.begin(), cv.end());
@@ -602,8 +602,8 @@ std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance
   return std::make_pair(error_msg, hash_table);
 }
 
-InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
-                                         const Analyzer::Expr* rhs,
+InnerOuter HashJoin::normalizeColumnPair(const hdk::ir::Expr* lhs,
+                                         const hdk::ir::Expr* rhs,
                                          SchemaProviderPtr schema_provider,
                                          const TemporaryTables* temporary_tables) {
   const auto& lhs_ti = lhs->get_type_info();
@@ -623,8 +623,8 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
     throw HashJoinFail("Equijoin with different decimal types");
   }
 
-  const auto lhs_cast = dynamic_cast<const Analyzer::UOper*>(lhs);
-  const auto rhs_cast = dynamic_cast<const Analyzer::UOper*>(rhs);
+  const auto lhs_cast = dynamic_cast<const hdk::ir::UOper*>(lhs);
+  const auto rhs_cast = dynamic_cast<const hdk::ir::UOper*>(rhs);
   if (lhs_ti.is_string() && (static_cast<bool>(lhs_cast) != static_cast<bool>(rhs_cast) ||
                              (lhs_cast && lhs_cast->get_optype() != kCAST) ||
                              (rhs_cast && rhs_cast->get_optype() != kCAST))) {
@@ -635,19 +635,19 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
     throw HashJoinFail("Cannot use hash join for given expression");
   }
   const auto lhs_col =
-      lhs_cast ? dynamic_cast<const Analyzer::ColumnVar*>(lhs_cast->get_operand())
-               : dynamic_cast<const Analyzer::ColumnVar*>(lhs);
+      lhs_cast ? dynamic_cast<const hdk::ir::ColumnVar*>(lhs_cast->get_operand())
+               : dynamic_cast<const hdk::ir::ColumnVar*>(lhs);
   const auto rhs_col =
-      rhs_cast ? dynamic_cast<const Analyzer::ColumnVar*>(rhs_cast->get_operand())
-               : dynamic_cast<const Analyzer::ColumnVar*>(rhs);
+      rhs_cast ? dynamic_cast<const hdk::ir::ColumnVar*>(rhs_cast->get_operand())
+               : dynamic_cast<const hdk::ir::ColumnVar*>(rhs);
   if (!lhs_col && !rhs_col) {
     throw HashJoinFail("Cannot use hash join for given expression");
   }
-  const Analyzer::ColumnVar* inner_col{nullptr};
-  const Analyzer::ColumnVar* outer_col{nullptr};
+  const hdk::ir::ColumnVar* inner_col{nullptr};
+  const hdk::ir::ColumnVar* outer_col{nullptr};
   auto outer_ti = lhs_ti;
   auto inner_ti = rhs_ti;
-  const Analyzer::Expr* outer_expr{lhs};
+  const hdk::ir::Expr* outer_expr{lhs};
   if (!lhs_col || (rhs_col && lhs_col->get_rte_idx() < rhs_col->get_rte_idx())) {
     inner_col = rhs_col;
     outer_col = lhs_col;
@@ -665,7 +665,7 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
   }
   if (!outer_col) {
     // check whether outer_col is a constant, i.e., inner_col = K;
-    const auto outer_constant_col = dynamic_cast<const Analyzer::Constant*>(outer_expr);
+    const auto outer_constant_col = dynamic_cast<const hdk::ir::Constant*>(outer_expr);
     if (outer_constant_col) {
       throw HashJoinFail(
           "Cannot use hash join for given expression: try to join with a constant "
@@ -688,7 +688,7 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
                                                  inner_col_info,
                                                  temporary_tables);
   const auto& outer_col_ti =
-      !(dynamic_cast<const Analyzer::FunctionOper*>(lhs)) && outer_col
+      !(dynamic_cast<const hdk::ir::FunctionOper*>(lhs)) && outer_col
           ? outer_col->get_type_info()
           : outer_ti;
   // Casts from decimal are not supported.
@@ -722,14 +722,14 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
 }
 
 std::vector<InnerOuter> HashJoin::normalizeColumnPairs(
-    const Analyzer::BinOper* condition,
+    const hdk::ir::BinOper* condition,
     SchemaProviderPtr schema_provider,
     const TemporaryTables* temporary_tables) {
   std::vector<InnerOuter> result;
   const auto lhs_tuple_expr =
-      dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_left_operand());
+      dynamic_cast<const hdk::ir::ExpressionTuple*>(condition->get_left_operand());
   const auto rhs_tuple_expr =
-      dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_right_operand());
+      dynamic_cast<const hdk::ir::ExpressionTuple*>(condition->get_right_operand());
 
   CHECK_EQ(static_cast<bool>(lhs_tuple_expr), static_cast<bool>(rhs_tuple_expr));
   if (lhs_tuple_expr) {

@@ -15,8 +15,8 @@
  */
 
 #include "FromTableReordering.h"
-#include "../Analyzer/Analyzer.h"
 #include "Execute.h"
+#include "IR/Expr.h"
 #include "RangeTableIndexVisitor.h"
 
 #include <numeric>
@@ -29,13 +29,13 @@ using cost_t = unsigned;
 using node_t = size_t;
 
 // Returns a lhs/rhs cost for the given qualifier. Must be strictly greater than 0.
-std::pair<cost_t, cost_t> get_join_qual_cost(const Analyzer::Expr* qual,
+std::pair<cost_t, cost_t> get_join_qual_cost(const hdk::ir::Expr* qual,
                                              const Executor* executor) {
-  const auto func_oper = dynamic_cast<const Analyzer::FunctionOper*>(qual);
+  const auto func_oper = dynamic_cast<const hdk::ir::FunctionOper*>(qual);
   if (func_oper) {
     return {200, 200};
   }
-  const auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(qual);
+  const auto bin_oper = dynamic_cast<const hdk::ir::BinOper*>(qual);
   if (!bin_oper || !IS_EQUIVALENCE(bin_oper->get_optype())) {
     return {200, 200};
   }

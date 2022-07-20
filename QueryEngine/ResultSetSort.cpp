@@ -48,7 +48,7 @@ void set_cuda_context(Data_Namespace::DataMgr* data_mgr, const int device_id) {
 }  // namespace
 
 void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
-                               const std::list<Analyzer::OrderEntry>& order_entries,
+                               const std::list<hdk::ir::OrderEntry>& order_entries,
                                const size_t top_n,
                                const Executor* executor) {
   CHECK_EQ(size_t(1), order_entries.size());
@@ -170,7 +170,7 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
 }
 
 bool ResultSet::canUseFastBaselineSort(
-    const std::list<Analyzer::OrderEntry>& order_entries,
+    const std::list<hdk::ir::OrderEntry>& order_entries,
     const size_t top_n) {
   if (order_entries.size() != 1 || query_mem_desc_.hasKeylessHash() ||
       query_mem_desc_.sortOnGpu() || query_mem_desc_.didOutputColumnar()) {

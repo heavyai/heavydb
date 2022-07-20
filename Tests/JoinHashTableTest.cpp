@@ -98,7 +98,7 @@ std::shared_ptr<HashJoin> buildPerfect(std::string_view table1,
                                         executor.get());
 }
 
-std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<Analyzer::BinOper> op) {
+std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<hdk::ir::BinOper> op) {
   auto executor =
       Executor::getExecutor(TEST_DB_ID, getDataMgr(), getDataMgr()->getBufferProvider());
   CHECK(executor);
@@ -123,7 +123,7 @@ std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<Analyzer::BinOper> op) {
 }
 
 std::pair<std::string, std::shared_ptr<HashJoin>> checkProperQualDetection(
-    std::vector<std::shared_ptr<Analyzer::BinOper>> quals) {
+    std::vector<std::shared_ptr<hdk::ir::BinOper>> quals) {
   auto executor =
       Executor::getExecutor(TEST_DB_ID, getDataMgr(), getDataMgr()->getBufferProvider());
   CHECK(executor);
@@ -307,7 +307,7 @@ TEST(Build, detectProperJoinQual) {
     Datum d;
     d.intval = 1;
     SQLTypeInfo ti(kINT, 0, 0, false);
-    auto c = std::make_shared<Analyzer::Constant>(ti, false, d);
+    auto c = std::make_shared<hdk::ir::Constant>(ti, false, d);
 
     // case 1: t12 = 1 AND t11 = t21
     // case 2: 1 = t12 AND t11 = t21
@@ -315,29 +315,29 @@ TEST(Build, detectProperJoinQual) {
     // case 4: 1 = t22 AND t11 = t21
     auto t11 = getSyntheticColumnVar(TEST_DB_ID, "table1", "t11", 0, executor);
     auto t21 = getSyntheticColumnVar(TEST_DB_ID, "table2", "t21", 1, executor);
-    auto qual2 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, t11, t21);
+    auto qual2 = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, t11, t21);
     auto create_join_qual = [&c, &executor](int case_num) {
-      std::shared_ptr<Analyzer::ColumnVar> q1_lhs;
-      std::shared_ptr<Analyzer::BinOper> qual1;
+      std::shared_ptr<hdk::ir::ColumnVar> q1_lhs;
+      std::shared_ptr<hdk::ir::BinOper> qual1;
       switch (case_num) {
         case 1: {
           q1_lhs = getSyntheticColumnVar(TEST_DB_ID, "table1", "t12", 0, executor);
-          qual1 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, c, q1_lhs);
+          qual1 = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, c, q1_lhs);
           break;
         }
         case 2: {
           q1_lhs = getSyntheticColumnVar(TEST_DB_ID, "table1", "t12", 0, executor);
-          qual1 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, q1_lhs, c);
+          qual1 = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, q1_lhs, c);
           break;
         }
         case 3: {
           q1_lhs = getSyntheticColumnVar(TEST_DB_ID, "table2", "t22", 1, executor);
-          qual1 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, c, q1_lhs);
+          qual1 = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, c, q1_lhs);
           break;
         }
         case 4: {
           q1_lhs = getSyntheticColumnVar(TEST_DB_ID, "table2", "t22", 1, executor);
-          qual1 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, q1_lhs, c);
+          qual1 = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, q1_lhs, c);
           break;
         }
         default:
@@ -348,7 +348,7 @@ TEST(Build, detectProperJoinQual) {
 
     for (int i = 1; i <= 4; ++i) {
       auto qual1 = create_join_qual(i);
-      std::vector<std::shared_ptr<Analyzer::BinOper>> quals;
+      std::vector<std::shared_ptr<hdk::ir::BinOper>> quals;
       quals.push_back(qual1);
       quals.push_back(qual2);
       auto res = checkProperQualDetection(quals);
@@ -390,12 +390,12 @@ TEST(Build, KeyedOneToOne) {
     auto a2 = getSyntheticColumnVar(TEST_DB_ID, "table1", "a2", 0, executor.get());
     auto b = getSyntheticColumnVar(TEST_DB_ID, "table2", "b", 1, executor.get());
 
-    using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
-    auto et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
-    auto et2 = std::make_shared<Analyzer::ExpressionTuple>(VE{b, b});
+    using VE = std::vector<hdk::ir::ExprPtr>;
+    auto et1 = std::make_shared<hdk::ir::ExpressionTuple>(VE{a1, a2});
+    auto et2 = std::make_shared<hdk::ir::ExpressionTuple>(VE{b, b});
 
     // a1 = b and a2 = b
-    auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
+    auto op = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
     auto hash_table = buildKeyed(op);
 
     EXPECT_EQ(hash_table->getHashType(), HashType::OneToOne);
@@ -436,12 +436,12 @@ TEST(Build, KeyedOneToMany) {
     auto a2 = getSyntheticColumnVar(TEST_DB_ID, "table1", "a2", 0, executor.get());
     auto b = getSyntheticColumnVar(TEST_DB_ID, "table2", "b", 1, executor.get());
 
-    using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
-    auto et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
-    auto et2 = std::make_shared<Analyzer::ExpressionTuple>(VE{b, b});
+    using VE = std::vector<hdk::ir::ExprPtr>;
+    auto et1 = std::make_shared<hdk::ir::ExpressionTuple>(VE{a1, a2});
+    auto et2 = std::make_shared<hdk::ir::ExpressionTuple>(VE{b, b});
 
     // a1 = b and a2 = b
-    auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
+    auto op = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
     auto hash_table = buildKeyed(op);
 
     EXPECT_EQ(hash_table->getHashType(), HashType::OneToMany);
@@ -553,12 +553,12 @@ TEST(MultiFragment, KeyedOneToOne) {
     auto a2 = getSyntheticColumnVar(TEST_DB_ID, "table1", "a2", 0, executor.get());
     auto b = getSyntheticColumnVar(TEST_DB_ID, "table2", "b", 1, executor.get());
 
-    using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
-    auto et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
-    auto et2 = std::make_shared<Analyzer::ExpressionTuple>(VE{b, b});
+    using VE = std::vector<hdk::ir::ExprPtr>;
+    auto et1 = std::make_shared<hdk::ir::ExpressionTuple>(VE{a1, a2});
+    auto et2 = std::make_shared<hdk::ir::ExpressionTuple>(VE{b, b});
 
     // a1 = b and a2 = b
-    auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
+    auto op = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
     auto hash_table1 = buildKeyed(op);
     auto baseline = std::dynamic_pointer_cast<BaselineJoinHashTable>(hash_table1);
     CHECK(baseline);
@@ -574,11 +574,11 @@ TEST(MultiFragment, KeyedOneToOne) {
     a2 = getSyntheticColumnVar(TEST_DB_ID, "table3", "a2", 0, executor.get());
     b = getSyntheticColumnVar(TEST_DB_ID, "table4", "b", 1, executor.get());
 
-    et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
-    et2 = std::make_shared<Analyzer::ExpressionTuple>(VE{b, b});
+    et1 = std::make_shared<hdk::ir::ExpressionTuple>(VE{a1, a2});
+    et2 = std::make_shared<hdk::ir::ExpressionTuple>(VE{b, b});
 
     // a1 = b and a2 = b
-    op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
+    op = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
     auto hash_table2 = buildKeyed(op);
     EXPECT_EQ(hash_table2->getHashType(), HashType::OneToOne);
 
@@ -618,12 +618,12 @@ TEST(MultiFragment, KeyedOneToMany) {
     auto a2 = getSyntheticColumnVar(TEST_DB_ID, "table1", "a2", 0, executor.get());
     auto b = getSyntheticColumnVar(TEST_DB_ID, "table2", "b", 1, executor.get());
 
-    using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
-    auto et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
-    auto et2 = std::make_shared<Analyzer::ExpressionTuple>(VE{b, b});
+    using VE = std::vector<hdk::ir::ExprPtr>;
+    auto et1 = std::make_shared<hdk::ir::ExpressionTuple>(VE{a1, a2});
+    auto et2 = std::make_shared<hdk::ir::ExpressionTuple>(VE{b, b});
 
     // a1 = b and a2 = b
-    auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
+    auto op = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
     auto hash_table1 = buildKeyed(op);
     EXPECT_EQ(hash_table1->getHashType(), HashType::OneToMany);
 
@@ -637,12 +637,12 @@ TEST(MultiFragment, KeyedOneToMany) {
     a2 = getSyntheticColumnVar(TEST_DB_ID, "table3", "a2", 0, executor.get());
     b = getSyntheticColumnVar(TEST_DB_ID, "table4", "b", 1, executor.get());
 
-    using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
-    et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
-    et2 = std::make_shared<Analyzer::ExpressionTuple>(VE{b, b});
+    using VE = std::vector<hdk::ir::ExprPtr>;
+    et1 = std::make_shared<hdk::ir::ExpressionTuple>(VE{a1, a2});
+    et2 = std::make_shared<hdk::ir::ExpressionTuple>(VE{b, b});
 
     // a1 = b and a2 = b
-    op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
+    op = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
     auto hash_table2 = buildKeyed(op);
     EXPECT_EQ(hash_table2->getHashType(), HashType::OneToMany);
 

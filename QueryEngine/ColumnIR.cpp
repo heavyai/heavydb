@@ -25,7 +25,7 @@ namespace {
 
 // Return the right decoder for a given column expression. Doesn't handle
 // variable length data. The decoder encapsulates the code generation logic.
-std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
+std::shared_ptr<Decoder> get_col_decoder(const hdk::ir::ColumnVar* col_var) {
   const auto enc_type = col_var->get_compression();
   const auto& ti = col_var->get_type_info();
   switch (enc_type) {
@@ -78,18 +78,18 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   }
 }
 
-size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
+size_t get_col_bit_width(const hdk::ir::ColumnVar* col_var) {
   const auto& type_info = col_var->get_type_info();
   return get_bit_width(type_info);
 }
 
-int adjusted_range_table_index(const Analyzer::ColumnVar* col_var) {
+int adjusted_range_table_index(const hdk::ir::ColumnVar* col_var) {
   return col_var->get_rte_idx() == -1 ? 0 : col_var->get_rte_idx();
 }
 
 }  // namespace
 
-std::vector<llvm::Value*> CodeGenerator::codegenColumn(const Analyzer::ColumnVar* col_var,
+std::vector<llvm::Value*> CodeGenerator::codegenColumn(const hdk::ir::ColumnVar* col_var,
                                                        const bool fetch_column,
                                                        const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
@@ -101,7 +101,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColumn(const Analyzer::ColumnVar
   return codegenOuterJoinNullPlaceholder(col_var, fetch_column, co);
 }
 
-std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar* col_var,
+std::vector<llvm::Value*> CodeGenerator::codegenColVar(const hdk::ir::ColumnVar* col_var,
                                                        const bool fetch_column,
                                                        const bool update_query_plan,
                                                        const CompilationOptions& co) {
@@ -200,7 +200,7 @@ llvm::Value* CodeGenerator::codegenWindowPosition(
 
 // Generate code for fixed length column types (number, timestamp or date,
 // dictionary-encoded string)
-llvm::Value* CodeGenerator::codegenFixedLengthColVar(const Analyzer::ColumnVar* col_var,
+llvm::Value* CodeGenerator::codegenFixedLengthColVar(const hdk::ir::ColumnVar* col_var,
                                                      llvm::Value* col_byte_stream,
                                                      llvm::Value* pos_arg) {
   AUTOMATIC_IR_METADATA(cgen_state_);
@@ -238,7 +238,7 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVar(const Analyzer::ColumnVar* 
 }
 
 llvm::Value* CodeGenerator::codegenFixedLengthColVarInWindow(
-    const Analyzer::ColumnVar* col_var,
+    const hdk::ir::ColumnVar* col_var,
     llvm::Value* col_byte_stream,
     llvm::Value* pos_arg) {
   AUTOMATIC_IR_METADATA(cgen_state_);
@@ -281,7 +281,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenVariableLengthStringColVar(
   return {ptr_and_len, str_lv, len_lv};
 }
 
-llvm::Value* CodeGenerator::codegenRowId(const Analyzer::ColumnVar* col_var,
+llvm::Value* CodeGenerator::codegenRowId(const hdk::ir::ColumnVar* col_var,
                                          const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto offset_lv = cgen_state_->frag_offsets_[adjusted_range_table_index(col_var)];
@@ -292,7 +292,7 @@ llvm::Value* CodeGenerator::codegenRowId(const Analyzer::ColumnVar* col_var,
     // to offset the local rowid and generate a cluster-wide unique rowid.
     Datum d;
     d.bigintval = table_generation.start_rowid;
-    const auto start_rowid = makeExpr<Analyzer::Constant>(kBIGINT, false, d);
+    const auto start_rowid = hdk::ir::makeExpr<hdk::ir::Constant>(kBIGINT, false, d);
     const auto start_rowid_lvs = codegen(start_rowid.get(), kENCODING_NONE, -1, co);
     CHECK_EQ(size_t(1), start_rowid_lvs.size());
     start_rowid_lv = start_rowid_lvs.front();
@@ -387,7 +387,7 @@ llvm::Value* CodeGenerator::foundOuterJoinMatch(const size_t nesting_level) cons
 }
 
 std::vector<llvm::Value*> CodeGenerator::codegenOuterJoinNullPlaceholder(
-    const Analyzer::ColumnVar* col_var,
+    const hdk::ir::ColumnVar* col_var,
     const bool fetch_column,
     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
@@ -418,7 +418,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenOuterJoinNullPlaceholder(
     throw std::runtime_error("Projection type " + null_ti.get_type_name() +
                              " not supported for outer joins yet");
   }
-  const auto null_constant = makeExpr<Analyzer::Constant>(null_ti, true, Datum{0});
+  const auto null_constant =
+      hdk::ir::makeExpr<hdk::ir::Constant>(null_ti, true, Datum{0});
   const auto null_target_lvs =
       codegen(null_constant.get(),
               false,
@@ -442,17 +443,17 @@ std::vector<llvm::Value*> CodeGenerator::codegenOuterJoinNullPlaceholder(
 }
 
 llvm::Value* CodeGenerator::resolveGroupedColumnReference(
-    const Analyzer::ColumnVar* col_var) {
+    const hdk::ir::ColumnVar* col_var) {
   auto col_id = col_var->get_column_id();
   if (col_var->get_rte_idx() >= 0) {
     return nullptr;
   }
   CHECK((col_id == 0) || (col_var->get_rte_idx() >= 0 && col_var->get_table_id() > 0));
-  const auto var = dynamic_cast<const Analyzer::Var*>(col_var);
+  const auto var = dynamic_cast<const hdk::ir::Var*>(col_var);
   CHECK(var);
   col_id = var->get_varno();
   CHECK_GE(col_id, 1);
-  if (var->get_which_row() == Analyzer::Var::kGROUPBY) {
+  if (var->get_which_row() == hdk::ir::Var::kGROUPBY) {
     CHECK_LE(static_cast<size_t>(col_id), cgen_state_->group_by_expr_cache_.size());
     return cgen_state_->group_by_expr_cache_[col_id - 1];
   }
@@ -460,7 +461,7 @@ llvm::Value* CodeGenerator::resolveGroupedColumnReference(
 }
 
 // returns the byte stream argument and the position for the given column
-llvm::Value* CodeGenerator::colByteStream(const Analyzer::ColumnVar* col_var,
+llvm::Value* CodeGenerator::colByteStream(const hdk::ir::ColumnVar* col_var,
                                           const bool fetch_column,
                                           const bool hoist_literals) {
   CHECK_GE(cgen_state_->row_func_->arg_size(), size_t(3));
@@ -476,9 +477,9 @@ llvm::Value* CodeGenerator::colByteStream(const Analyzer::ColumnVar* col_var,
   return nullptr;
 }
 
-llvm::Value* CodeGenerator::posArg(const Analyzer::Expr* expr) const {
+llvm::Value* CodeGenerator::posArg(const hdk::ir::Expr* expr) const {
   AUTOMATIC_IR_METADATA(cgen_state_);
-  const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr);
+  const auto col_var = dynamic_cast<const hdk::ir::ColumnVar*>(expr);
   if (col_var && col_var->get_rte_idx() > 0) {
     const auto hash_pos_it =
         cgen_state_->scan_idx_to_hash_pos_.find(col_var->get_rte_idx());
@@ -502,8 +503,8 @@ llvm::Value* CodeGenerator::posArg(const Analyzer::Expr* expr) const {
   abort();
 }
 
-const Analyzer::Expr* remove_cast_to_int(const Analyzer::Expr* expr) {
-  const auto uoper = dynamic_cast<const Analyzer::UOper*>(expr);
+const hdk::ir::Expr* remove_cast_to_int(const hdk::ir::Expr* expr) {
+  const auto uoper = dynamic_cast<const hdk::ir::UOper*>(expr);
   if (!uoper || uoper->get_optype() != kCAST) {
     return nullptr;
   }
@@ -514,11 +515,10 @@ const Analyzer::Expr* remove_cast_to_int(const Analyzer::Expr* expr) {
   return uoper->get_operand();
 }
 
-std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
-    const Analyzer::ColumnVar* rhs) const {
+hdk::ir::ExprPtr CodeGenerator::hashJoinLhs(const hdk::ir::ColumnVar* rhs) const {
   for (const auto& tautological_eq : plan_state_->join_info_.equi_join_tautologies_) {
     CHECK(IS_EQUIVALENCE(tautological_eq->get_optype()));
-    if (dynamic_cast<const Analyzer::ExpressionTuple*>(
+    if (dynamic_cast<const hdk::ir::ExpressionTuple*>(
             tautological_eq->get_left_operand())) {
       auto lhs_col = hashJoinLhsTuple(rhs, tautological_eq.get());
       if (lhs_col) {
@@ -544,7 +544,7 @@ std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
           // skip cast for a constructed point lhs
           return nullptr;
         }
-        const auto eq_left_op_col = dynamic_cast<const Analyzer::ColumnVar*>(eq_left_op);
+        const auto eq_left_op_col = dynamic_cast<const hdk::ir::ColumnVar*>(eq_left_op);
         CHECK(eq_left_op_col);
         if (eq_left_op_col->get_rte_idx() != 0) {
           return nullptr;
@@ -559,7 +559,7 @@ std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
           // this fails at a later stage in codegen.
           return nullptr;
         }
-        return makeExpr<Analyzer::UOper>(
+        return hdk::ir::makeExpr<hdk::ir::UOper>(
             rhs->get_type_info(), false, kCAST, eq_left_op->deep_copy());
       }
     }
@@ -567,21 +567,20 @@ std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
   return nullptr;
 }
 
-std::shared_ptr<const Analyzer::ColumnVar> CodeGenerator::hashJoinLhsTuple(
-    const Analyzer::ColumnVar* rhs,
-    const Analyzer::BinOper* tautological_eq) const {
+std::shared_ptr<hdk::ir::ColumnVar> CodeGenerator::hashJoinLhsTuple(
+    const hdk::ir::ColumnVar* rhs,
+    const hdk::ir::BinOper* tautological_eq) const {
   const auto lhs_tuple_expr =
-      dynamic_cast<const Analyzer::ExpressionTuple*>(tautological_eq->get_left_operand());
-  const auto rhs_tuple_expr = dynamic_cast<const Analyzer::ExpressionTuple*>(
-      tautological_eq->get_right_operand());
+      dynamic_cast<const hdk::ir::ExpressionTuple*>(tautological_eq->get_left_operand());
+  const auto rhs_tuple_expr =
+      dynamic_cast<const hdk::ir::ExpressionTuple*>(tautological_eq->get_right_operand());
   CHECK(lhs_tuple_expr && rhs_tuple_expr);
   const auto& lhs_tuple = lhs_tuple_expr->getTuple();
   const auto& rhs_tuple = rhs_tuple_expr->getTuple();
   CHECK_EQ(lhs_tuple.size(), rhs_tuple.size());
   for (size_t i = 0; i < lhs_tuple.size(); ++i) {
     if (*rhs_tuple[i] == *rhs) {
-      const auto lhs_col =
-          std::static_pointer_cast<const Analyzer::ColumnVar>(lhs_tuple[i]);
+      const auto lhs_col = std::static_pointer_cast<hdk::ir::ColumnVar>(lhs_tuple[i]);
       return lhs_col->get_rte_idx() == 0 ? lhs_col : nullptr;
     }
   }

@@ -983,7 +983,7 @@ std::vector<TargetInfo> generate_random_groups_nullable_target_infos() {
 }
 
 std::vector<OneRow> get_rows_sorted_by_col(ResultSet& rs, const size_t col_idx) {
-  std::list<Analyzer::OrderEntry> order_entries;
+  std::list<hdk::ir::OrderEntry> order_entries;
   order_entries.emplace_back(1, false, false);
   rs.sort(order_entries, 0, nullptr);
   std::vector<OneRow> result;
@@ -1074,7 +1074,7 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
       rs_manager.reduce(storage_set, Executor::UNITARY_EXECUTOR_ID, config());
 
   if (sort) {
-    std::list<Analyzer::OrderEntry> order_entries;
+    std::list<hdk::ir::OrderEntry> order_entries;
     order_entries.emplace_back(1, false, false);
     result_rs->sort(order_entries, 0, nullptr);
   }

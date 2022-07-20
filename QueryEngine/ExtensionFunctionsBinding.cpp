@@ -380,8 +380,8 @@ bool is_valid_identifier(std::string str) {
 template <typename T>
 std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
     std::string name,
-    Analyzer::ExpressionPtrVector func_args,  // function args from sql query
-    const std::vector<T>& ext_funcs,          // list of functions registered
+    hdk::ir::ExprPtrVector func_args,  // function args from sql query
+    const std::vector<T>& ext_funcs,   // list of functions registered
     const std::string processor) {
   /* worker function
 
@@ -427,7 +427,7 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
   std::vector<bool> args_are_constants;
   for (auto atype : func_args) {
     if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
-      if (dynamic_cast<const Analyzer::ColumnVar*>(atype.get())) {
+      if (dynamic_cast<const hdk::ir::ColumnVar*>(atype.get())) {
         SQLTypeInfo type_info = atype->get_type_info();
         if (atype->get_type_info().get_type() == kTEXT) {
           auto ti = generate_column_type(type_info.get_type(),         // subtype
@@ -444,7 +444,7 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
       }
     }
     type_infos_input.push_back(atype->get_type_info());
-    if (dynamic_cast<const Analyzer::Constant*>(atype.get())) {
+    if (dynamic_cast<const hdk::ir::Constant*>(atype.get())) {
       args_are_constants.push_back(true);
     } else {
       args_are_constants.push_back(false);
@@ -646,7 +646,7 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
 
 const std::tuple<table_functions::TableFunction, std::vector<SQLTypeInfo>>
 bind_table_function(std::string name,
-                    Analyzer::ExpressionPtrVector input_args,
+                    hdk::ir::ExprPtrVector input_args,
                     const std::vector<table_functions::TableFunction>& table_funcs,
                     const bool is_gpu) {
   std::string processor = (is_gpu ? "GPU" : "CPU");
@@ -654,8 +654,7 @@ bind_table_function(std::string name,
       name, input_args, table_funcs, processor);
 }
 
-ExtensionFunction bind_function(std::string name,
-                                Analyzer::ExpressionPtrVector func_args) {
+ExtensionFunction bind_function(std::string name, hdk::ir::ExprPtrVector func_args) {
   // used in RelAlgTranslator.cpp, first try GPU UDFs, then fall back
   // to CPU UDFs.
   bool is_gpu = true;
@@ -683,7 +682,7 @@ ExtensionFunction bind_function(std::string name,
 }
 
 ExtensionFunction bind_function(std::string name,
-                                Analyzer::ExpressionPtrVector func_args,
+                                hdk::ir::ExprPtrVector func_args,
                                 const bool is_gpu) {
   // used below
   std::vector<ExtensionFunction> ext_funcs =
@@ -693,11 +692,11 @@ ExtensionFunction bind_function(std::string name,
       bind_function<ExtensionFunction>(name, func_args, ext_funcs, processor));
 }
 
-ExtensionFunction bind_function(const Analyzer::FunctionOper* function_oper,
+ExtensionFunction bind_function(const hdk::ir::FunctionOper* function_oper,
                                 const bool is_gpu) {
   // used in ExtensionsIR.cpp
   auto name = function_oper->getName();
-  Analyzer::ExpressionPtrVector func_args = {};
+  hdk::ir::ExprPtrVector func_args = {};
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     func_args.push_back(function_oper->getOwnArg(i));
   }
@@ -706,7 +705,7 @@ ExtensionFunction bind_function(const Analyzer::FunctionOper* function_oper,
 
 const std::tuple<table_functions::TableFunction, std::vector<SQLTypeInfo>>
 bind_table_function(std::string name,
-                    Analyzer::ExpressionPtrVector input_args,
+                    hdk::ir::ExprPtrVector input_args,
                     const bool is_gpu) {
   // used in RelAlgExecutor.cpp
   std::vector<table_functions::TableFunction> table_funcs =

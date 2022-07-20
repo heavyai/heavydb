@@ -17,7 +17,7 @@
 #include "CodeGenerator.h"
 #include "Execute.h"
 
-std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::CaseExpr* case_expr,
+std::vector<llvm::Value*> CodeGenerator::codegen(const hdk::ir::CaseExpr* case_expr,
                                                  const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto case_ti = case_expr->get_type_info();
@@ -52,7 +52,7 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::CaseExpr* case_
   return ret_vals;
 }
 
-llvm::Value* CodeGenerator::codegenCase(const Analyzer::CaseExpr* case_expr,
+llvm::Value* CodeGenerator::codegenCase(const hdk::ir::CaseExpr* case_expr,
                                         llvm::Type* case_llvm_type,
                                         const bool is_real_str,
                                         const CompilationOptions& co) {

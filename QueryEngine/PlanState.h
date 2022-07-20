@@ -18,19 +18,19 @@
 
 #include <unordered_set>
 
-#include "Analyzer/Analyzer.h"
+#include "IR/Expr.h"
 #include "QueryEngine/Descriptors/InputDescriptors.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 
 class Executor;
 
 struct JoinInfo {
-  JoinInfo(const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies,
+  JoinInfo(const std::vector<std::shared_ptr<hdk::ir::BinOper>>& equi_join_tautologies,
            const std::vector<std::shared_ptr<HashJoin>>& join_hash_tables)
       : equi_join_tautologies_(equi_join_tautologies)
       , join_hash_tables_(join_hash_tables) {}
 
-  std::vector<std::shared_ptr<Analyzer::BinOper>>
+  std::vector<std::shared_ptr<hdk::ir::BinOper>>
       equi_join_tautologies_;  // expressions we equi-join on are true by
                                // definition when using a hash join; we'll
                                // fold them to true during code generation
@@ -41,7 +41,7 @@ struct JoinInfo {
 struct PlanState {
   using TableId = int;
   using ColumnId = int;
-  using HoistedFiltersSet = std::unordered_set<std::shared_ptr<Analyzer::Expr>>;
+  using HoistedFiltersSet = std::unordered_set<hdk::ir::ExprPtr>;
 
   struct CompareInputColDescId {
     bool operator()(const InputColDescriptor& lhs, const InputColDescriptor& rhs) const {
@@ -56,43 +56,41 @@ struct PlanState {
             const std::vector<InputTableInfo>& query_infos,
             const Executor* executor)
       : allow_lazy_fetch_(allow_lazy_fetch)
-      , join_info_({std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}})
+      , join_info_({std::vector<std::shared_ptr<hdk::ir::BinOper>>{}, {}})
       , query_infos_(query_infos)
       , executor_(executor) {}
 
   std::vector<int64_t> init_agg_vals_;
-  std::vector<Analyzer::Expr*> target_exprs_;
+  std::vector<hdk::ir::Expr*> target_exprs_;
   HoistedFiltersSet hoisted_filters_;
   std::unordered_map<InputColDescriptor, size_t> global_to_local_col_ids_;
   InputColDescriptorSet columns_to_fetch_;
   InputColDescriptorSet columns_to_not_fetch_;
-  std::unordered_map<size_t, std::vector<std::shared_ptr<Analyzer::Expr>>>
+  std::unordered_map<size_t, std::vector<hdk::ir::ExprPtr>>
       left_join_non_hashtable_quals_;
   bool allow_lazy_fetch_;
   JoinInfo join_info_;
   const std::vector<InputTableInfo>& query_infos_;
-  std::list<std::shared_ptr<Analyzer::Expr>> simple_quals_;
+  std::list<hdk::ir::ExprPtr> simple_quals_;
   const Executor* executor_;
 
   void allocateLocalColumnIds(
       const std::list<std::shared_ptr<const InputColDescriptor>>& global_col_ids);
 
-  int getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fetch_column);
+  int getLocalColumnId(const hdk::ir::ColumnVar* col_var, const bool fetch_column);
 
-  bool isLazyFetchColumn(const Analyzer::Expr* target_expr) const;
+  bool isLazyFetchColumn(const hdk::ir::Expr* target_expr) const;
 
   bool isLazyFetchColumn(const InputColDescriptor& col_desc) {
-    Analyzer::ColumnVar column(col_desc.getColInfo(), col_desc.getNestLevel());
+    hdk::ir::ColumnVar column(col_desc.getColInfo(), col_desc.getNestLevel());
     return isLazyFetchColumn(&column);
   }
 
-  void addSimpleQual(std::shared_ptr<Analyzer::Expr> simple_qual) {
+  void addSimpleQual(hdk::ir::ExprPtr simple_qual) {
     simple_quals_.push_back(simple_qual);
   }
 
-  std::list<std::shared_ptr<Analyzer::Expr>> getSimpleQuals() const {
-    return simple_quals_;
-  }
+  std::list<hdk::ir::ExprPtr> getSimpleQuals() const { return simple_quals_; }
 
-  void addNonHashtableQualForLeftJoin(size_t idx, std::shared_ptr<Analyzer::Expr> expr);
+  void addNonHashtableQualForLeftJoin(size_t idx, hdk::ir::ExprPtr expr);
 };

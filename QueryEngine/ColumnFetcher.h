@@ -18,6 +18,7 @@
 
 #include "DataMgr/Allocators/DeviceAllocator.h"
 #include "DataProvider/DataProvider.h"
+#include "IR/Expr.h"
 #include "QueryEngine/ColumnarResults.h"
 #include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
@@ -40,7 +41,7 @@ class ColumnFetcher {
   //! Gets one chunk's pointer and element count on either CPU or GPU.
   static std::pair<const int8_t*, size_t> getOneColumnFragment(
       Executor* executor,
-      const Analyzer::ColumnVar& hash_col,
+      const hdk::ir::ColumnVar& hash_col,
       const FragmentInfo& fragment,
       const Data_Namespace::MemoryLevel effective_mem_lvl,
       const int device_id,
@@ -53,7 +54,7 @@ class ColumnFetcher {
   //! Creates a JoinColumn struct containing an array of JoinChunk structs.
   static JoinColumn makeJoinColumn(
       Executor* executor,
-      const Analyzer::ColumnVar& hash_col,
+      const hdk::ir::ColumnVar& hash_col,
       const std::vector<FragmentInfo>& fragments,
       const Data_Namespace::MemoryLevel effective_mem_lvl,
       const int device_id,

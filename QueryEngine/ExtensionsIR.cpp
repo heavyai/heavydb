@@ -200,7 +200,7 @@ inline llvm::Type* get_llvm_type_from_sql_array_type(const SQLTypeInfo ti,
   return nullptr;
 }
 
-bool ext_func_call_requires_nullcheck(const Analyzer::FunctionOper* function_oper) {
+bool ext_func_call_requires_nullcheck(const hdk::ir::FunctionOper* function_oper) {
   const auto& func_ti = function_oper->get_type_info();
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
@@ -232,7 +232,7 @@ extern "C" RUNTIME_EXPORT void register_buffer_with_executor_rsm(int64_t exec,
 }
 
 llvm::Value* CodeGenerator::codegenFunctionOper(
-    const Analyzer::FunctionOper* function_oper,
+    const hdk::ir::FunctionOper* function_oper,
     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   ExtensionFunction ext_func_sig = [=]() {
@@ -282,10 +282,10 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     orig_arg_lvs_index.push_back(orig_arg_lvs.size());
     const auto arg = function_oper->getArg(i);
-    const auto arg_cast = dynamic_cast<const Analyzer::UOper*>(arg);
+    const auto arg_cast = dynamic_cast<const hdk::ir::UOper*>(arg);
     const auto arg0 =
         (arg_cast && arg_cast->get_optype() == kCAST) ? arg_cast->get_operand() : arg;
-    const auto array_expr_arg = dynamic_cast<const Analyzer::ArrayExpr*>(arg0);
+    const auto array_expr_arg = dynamic_cast<const hdk::ir::ArrayExpr*>(arg0);
     auto is_local_alloc =
         ret_ti.is_buffer() || (array_expr_arg && array_expr_arg->isLocalAlloc());
     const auto& arg_ti = arg->get_type_info();
@@ -372,7 +372,7 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
 
 // Start the control flow needed for a call site check of NULL arguments.
 std::tuple<CodeGenerator::ArgNullcheckBBs, llvm::Value*>
-CodeGenerator::beginArgsNullcheck(const Analyzer::FunctionOper* function_oper,
+CodeGenerator::beginArgsNullcheck(const hdk::ir::FunctionOper* function_oper,
                                   const std::vector<llvm::Value*>& orig_arg_lvs) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   llvm::BasicBlock* args_null_bb{nullptr};
@@ -406,11 +406,10 @@ CodeGenerator::beginArgsNullcheck(const Analyzer::FunctionOper* function_oper,
 }
 
 // Wrap up the control flow needed for NULL argument handling.
-llvm::Value* CodeGenerator::endArgsNullcheck(
-    const ArgNullcheckBBs& bbs,
-    llvm::Value* fn_ret_lv,
-    llvm::Value* null_array_ptr,
-    const Analyzer::FunctionOper* function_oper) {
+llvm::Value* CodeGenerator::endArgsNullcheck(const ArgNullcheckBBs& bbs,
+                                             llvm::Value* fn_ret_lv,
+                                             llvm::Value* null_array_ptr,
+                                             const hdk::ir::FunctionOper* function_oper) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   if (bbs.args_null_bb) {
     CHECK(bbs.args_notnull_bb);
@@ -468,7 +467,7 @@ llvm::Value* CodeGenerator::endArgsNullcheck(
 
 namespace {
 
-bool call_requires_custom_type_handling(const Analyzer::FunctionOper* function_oper) {
+bool call_requires_custom_type_handling(const hdk::ir::FunctionOper* function_oper) {
   const auto& ret_ti = function_oper->get_type_info();
   if (!ret_ti.is_integer() && !ret_ti.is_fp()) {
     return true;
@@ -486,7 +485,7 @@ bool call_requires_custom_type_handling(const Analyzer::FunctionOper* function_o
 }  // namespace
 
 llvm::Value* CodeGenerator::codegenFunctionOperWithCustomTypeHandling(
-    const Analyzer::FunctionOperWithCustomTypeHandling* function_oper,
+    const hdk::ir::FunctionOperWithCustomTypeHandling* function_oper,
     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   if (call_requires_custom_type_handling(function_oper)) {
@@ -554,7 +553,7 @@ llvm::Value* CodeGenerator::codegenFunctionOperWithCustomTypeHandling(
 
 // Generates code which returns true iff at least one of the arguments is NULL.
 llvm::Value* CodeGenerator::codegenFunctionOperNullArg(
-    const Analyzer::FunctionOper* function_oper,
+    const hdk::ir::FunctionOper* function_oper,
     const std::vector<llvm::Value*>& orig_arg_lvs) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   llvm::Value* one_arg_null =
@@ -646,7 +645,7 @@ void CodeGenerator::codegenBufferArgs(const std::string& ext_func_name,
 // Generate CAST operations for arguments in `orig_arg_lvs` to the types required by
 // `ext_func_sig`.
 std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
-    const Analyzer::FunctionOper* function_oper,
+    const hdk::ir::FunctionOper* function_oper,
     const ExtensionFunction* ext_func_sig,
     const std::vector<llvm::Value*>& orig_arg_lvs,
     const std::vector<size_t>& orig_arg_lvs_index,

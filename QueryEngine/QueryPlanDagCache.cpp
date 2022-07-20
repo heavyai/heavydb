@@ -57,13 +57,13 @@ void QueryPlanDagCache::setNodeMapMaxSize(const size_t map_size) {
 }
 
 JoinColumnsInfo QueryPlanDagCache::translateColVarsToInfoString(
-    std::vector<const Analyzer::ColumnVar*>& col_vars,
+    std::vector<const hdk::ir::ColumnVar*>& col_vars,
     bool col_id_only) const {
   // we need to sort col ids to prevent missing data reuse case in multi column qual
   // scenarios like a) A.a = B.b and A.c = B.c and b) A.c = B.c and A.a = B.a
   std::sort(col_vars.begin(),
             col_vars.end(),
-            [](const Analyzer::ColumnVar* lhs, const Analyzer::ColumnVar* rhs) {
+            [](const hdk::ir::ColumnVar* lhs, const hdk::ir::ColumnVar* rhs) {
               return lhs->get_column_id() < rhs->get_column_id();
             });
   if (col_id_only) {
@@ -78,7 +78,7 @@ JoinColumnsInfo QueryPlanDagCache::translateColVarsToInfoString(
 }
 
 JoinColumnsInfo QueryPlanDagCache::getJoinColumnsInfoString(
-    const Analyzer::Expr* join_expr,
+    const hdk::ir::Expr* join_expr,
     JoinColumnSide target_side,
     bool extract_only_col_id) {
   // this function returns qual_bin_oper's info depending on the requested context
@@ -91,7 +91,7 @@ JoinColumnsInfo QueryPlanDagCache::getJoinColumnsInfoString(
   if (!join_expr) {
     return "";
   }
-  auto get_sorted_col_info = [&](const Analyzer::Expr* join_cols) -> JoinColumnsInfo {
+  auto get_sorted_col_info = [&](const hdk::ir::Expr* join_cols) -> JoinColumnsInfo {
     auto join_col_vars = collectColVars(join_cols);
     if (join_col_vars.empty()) {
       return "";
@@ -100,17 +100,17 @@ JoinColumnsInfo QueryPlanDagCache::getJoinColumnsInfoString(
   };
 
   if (target_side == JoinColumnSide::kQual) {
-    auto qual_bin_oper = reinterpret_cast<const Analyzer::BinOper*>(join_expr);
+    auto qual_bin_oper = reinterpret_cast<const hdk::ir::BinOper*>(join_expr);
     CHECK(qual_bin_oper);
     auto inner_join_col_info = get_sorted_col_info(qual_bin_oper->get_left_operand());
     auto outer_join_col_info = get_sorted_col_info(qual_bin_oper->get_right_operand());
     return outer_join_col_info + "|" + inner_join_col_info;
   } else if (target_side == JoinColumnSide::kInner) {
-    auto qual_bin_oper = reinterpret_cast<const Analyzer::BinOper*>(join_expr);
+    auto qual_bin_oper = reinterpret_cast<const hdk::ir::BinOper*>(join_expr);
     CHECK(qual_bin_oper);
     return get_sorted_col_info(qual_bin_oper->get_left_operand());
   } else if (target_side == JoinColumnSide::kOuter) {
-    auto qual_bin_oper = reinterpret_cast<const Analyzer::BinOper*>(join_expr);
+    auto qual_bin_oper = reinterpret_cast<const hdk::ir::BinOper*>(join_expr);
     CHECK(qual_bin_oper);
     return get_sorted_col_info(qual_bin_oper->get_right_operand());
   } else {
@@ -144,8 +144,8 @@ void QueryPlanDagCache::clearQueryPlanCache() {
   cached_query_plan_dag_.graph().clear();
 }
 
-std::vector<const Analyzer::ColumnVar*> QueryPlanDagCache::collectColVars(
-    const Analyzer::Expr* target) {
+std::vector<const hdk::ir::ColumnVar*> QueryPlanDagCache::collectColVars(
+    const hdk::ir::Expr* target) {
   if (target) {
     return col_var_visitor_.visit(target);
   }

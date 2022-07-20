@@ -684,7 +684,7 @@ void bind_query(llvm::Function* query_func,
   }
 }
 
-std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& target_exprs,
+std::vector<std::string> get_agg_fnames(const std::vector<hdk::ir::Expr*>& target_exprs,
                                         const bool is_group_by) {
   std::vector<std::string> result;
   for (size_t target_idx = 0, agg_col_idx = 0; target_idx < target_exprs.size();
@@ -692,7 +692,7 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
     const auto target_expr = target_exprs[target_idx];
     CHECK(target_expr);
     const auto target_type_info = target_expr->get_type_info();
-    const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
+    const auto agg_expr = dynamic_cast<hdk::ir::AggExpr*>(target_expr);
     const bool is_varlen =
         (target_type_info.is_string() &&
          target_type_info.get_compression() == kENCODING_NONE) ||
@@ -1885,8 +1885,8 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
   }
 
   // generate the code for the filter
-  std::vector<Analyzer::Expr*> primary_quals;
-  std::vector<Analyzer::Expr*> deferred_quals;
+  std::vector<hdk::ir::Expr*> primary_quals;
+  std::vector<hdk::ir::Expr*> deferred_quals;
   bool short_circuited = CodeGenerator::prioritizeQuals(
       ra_exe_unit, primary_quals, deferred_quals, plan_state_->hoisted_filters_);
   if (short_circuited) {

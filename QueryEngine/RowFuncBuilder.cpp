@@ -67,11 +67,11 @@ RowFuncBuilder::RowFuncBuilder(const RelAlgExecutionUnit& ra_exe_unit,
 
 namespace {
 
-int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {
+int32_t get_agg_count(const std::vector<hdk::ir::Expr*>& target_exprs) {
   int32_t agg_count{0};
   for (auto target_expr : target_exprs) {
     CHECK(target_expr);
-    const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
+    const auto agg_expr = dynamic_cast<hdk::ir::AggExpr*>(target_expr);
     if (!agg_expr || agg_expr->get_aggtype() == kSAMPLE) {
       const auto& ti = target_expr->get_type_info();
       if (ti.is_buffer()) {
@@ -703,7 +703,7 @@ llvm::Value* RowFuncBuilder::convertNullIfAny(const SQLTypeInfo& arg_type,
 }
 
 llvm::Value* RowFuncBuilder::codegenWindowRowPointer(
-    const Analyzer::WindowFunction* window_func,
+    const hdk::ir::WindowFunction* window_func,
     const QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co,
     DiamondCodegen& diamond_codegen) {
@@ -944,14 +944,14 @@ extern "C" RUNTIME_EXPORT void agg_approx_quantile(int64_t* agg, const double va
 }
 
 void RowFuncBuilder::codegenCountDistinct(const size_t target_idx,
-                                          const Analyzer::Expr* target_expr,
+                                          const hdk::ir::Expr* target_expr,
                                           std::vector<llvm::Value*>& agg_args,
                                           const QueryMemoryDescriptor& query_mem_desc,
                                           const ExecutorDeviceType device_type) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   const auto agg_info = get_target_info(target_expr, config_.exec.group_by.bigint_count);
   const auto& arg_ti =
-      static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info();
+      static_cast<const hdk::ir::AggExpr*>(target_expr)->get_arg()->get_type_info();
   if (arg_ti.is_fp()) {
     agg_args.back() = executor_->cgen_state_->ir_builder_.CreateBitCast(
         agg_args.back(), get_int_type(64, executor_->cgen_state_->context_));
@@ -1012,7 +1012,7 @@ void RowFuncBuilder::codegenCountDistinct(const size_t target_idx,
 }
 
 void RowFuncBuilder::codegenApproxQuantile(const size_t target_idx,
-                                           const Analyzer::Expr* target_expr,
+                                           const hdk::ir::Expr* target_expr,
                                            std::vector<llvm::Value*>& agg_args,
                                            const QueryMemoryDescriptor& query_mem_desc,
                                            const ExecutorDeviceType device_type) {
@@ -1022,7 +1022,7 @@ void RowFuncBuilder::codegenApproxQuantile(const size_t target_idx,
   llvm::BasicBlock *calc, *skip;
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   auto const arg_ti =
-      static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info();
+      static_cast<const hdk::ir::AggExpr*>(target_expr)->get_arg()->get_type_info();
   bool const nullable = !arg_ti.get_notnull();
 
   auto* cs = executor_->cgen_state_.get();
@@ -1064,12 +1064,12 @@ llvm::Value* RowFuncBuilder::getAdditionalLiteral(const int32_t off) {
   return LL_BUILDER.CreateLoad(gep->getType()->getPointerElementType(), gep);
 }
 
-std::vector<llvm::Value*> RowFuncBuilder::codegenAggArg(const Analyzer::Expr* target_expr,
+std::vector<llvm::Value*> RowFuncBuilder::codegenAggArg(const hdk::ir::Expr* target_expr,
                                                         const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
-  const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
-  const auto func_expr = dynamic_cast<const Analyzer::FunctionOper*>(target_expr);
-  const auto arr_expr = dynamic_cast<const Analyzer::ArrayExpr*>(target_expr);
+  const auto agg_expr = dynamic_cast<const hdk::ir::AggExpr*>(target_expr);
+  const auto func_expr = dynamic_cast<const hdk::ir::FunctionOper*>(target_expr);
+  const auto arr_expr = dynamic_cast<const hdk::ir::ArrayExpr*>(target_expr);
 
   // TODO(alex): handle arrays uniformly?
   CodeGenerator code_generator(executor_);
@@ -1113,7 +1113,7 @@ std::vector<llvm::Value*> RowFuncBuilder::codegenAggArg(const Analyzer::Expr* ta
               "supported");
         }
         CHECK(func_expr || arr_expr);
-        if (dynamic_cast<const Analyzer::FunctionOper*>(target_expr)) {
+        if (dynamic_cast<const hdk::ir::FunctionOper*>(target_expr)) {
           CHECK_EQ(size_t(1), target_lvs.size());
           const auto prefix = target_ti.get_buffer_name();
           CHECK(target_ti.is_array() || target_ti.is_bytes());

@@ -31,22 +31,22 @@
 
 namespace {
 
-class OrToInVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::InValues>> {
+class OrToInVisitor : public ScalarExprVisitor<std::shared_ptr<hdk::ir::InValues>> {
  protected:
-  std::shared_ptr<Analyzer::InValues> visitBinOper(
-      const Analyzer::BinOper* bin_oper) const override {
+  std::shared_ptr<hdk::ir::InValues> visitBinOper(
+      const hdk::ir::BinOper* bin_oper) const override {
     switch (bin_oper->get_optype()) {
       case kEQ: {
         const auto rhs_owned = bin_oper->get_own_right_operand();
         auto rhs_no_cast = extract_cast_arg(rhs_owned.get());
-        if (!dynamic_cast<const Analyzer::Constant*>(rhs_no_cast)) {
+        if (!dynamic_cast<const hdk::ir::Constant*>(rhs_no_cast)) {
           return nullptr;
         }
         const auto arg = bin_oper->get_own_left_operand();
         const auto& arg_ti = arg->get_type_info();
         auto rhs = rhs_no_cast->deep_copy()->add_cast(arg_ti);
-        return makeExpr<Analyzer::InValues>(
-            arg, std::list<std::shared_ptr<Analyzer::Expr>>{rhs});
+        return hdk::ir::makeExpr<hdk::ir::InValues>(arg,
+                                                    std::list<hdk::ir::ExprPtr>{rhs});
       }
       case kOR: {
         return aggregateResult(visit(bin_oper->get_left_operand()),
@@ -58,89 +58,89 @@ class OrToInVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::InValue
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::InValues> visitUOper(
-      const Analyzer::UOper* uoper) const override {
+  std::shared_ptr<hdk::ir::InValues> visitUOper(
+      const hdk::ir::UOper* uoper) const override {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::InValues> visitInValues(
-      const Analyzer::InValues*) const override {
+  std::shared_ptr<hdk::ir::InValues> visitInValues(
+      const hdk::ir::InValues*) const override {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::InValues> visitInIntegerSet(
-      const Analyzer::InIntegerSet*) const override {
+  std::shared_ptr<hdk::ir::InValues> visitInIntegerSet(
+      const hdk::ir::InIntegerSet*) const override {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::InValues> visitCharLength(
-      const Analyzer::CharLengthExpr*) const override {
+  std::shared_ptr<hdk::ir::InValues> visitCharLength(
+      const hdk::ir::CharLengthExpr*) const override {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::InValues> visitKeyForString(
-      const Analyzer::KeyForStringExpr*) const override {
+  std::shared_ptr<hdk::ir::InValues> visitKeyForString(
+      const hdk::ir::KeyForStringExpr*) const override {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::InValues> visitSampleRatio(
-      const Analyzer::SampleRatioExpr*) const override {
+  std::shared_ptr<hdk::ir::InValues> visitSampleRatio(
+      const hdk::ir::SampleRatioExpr*) const override {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::InValues> visitCardinality(
-      const Analyzer::CardinalityExpr*) const override {
+  std::shared_ptr<hdk::ir::InValues> visitCardinality(
+      const hdk::ir::CardinalityExpr*) const override {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::InValues> visitLikeExpr(
-      const Analyzer::LikeExpr*) const override {
+  std::shared_ptr<hdk::ir::InValues> visitLikeExpr(
+      const hdk::ir::LikeExpr*) const override {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::InValues> visitRegexpExpr(
-      const Analyzer::RegexpExpr*) const override {
+  std::shared_ptr<hdk::ir::InValues> visitRegexpExpr(
+      const hdk::ir::RegexpExpr*) const override {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::InValues> visitCaseExpr(
-      const Analyzer::CaseExpr*) const override {
+  std::shared_ptr<hdk::ir::InValues> visitCaseExpr(
+      const hdk::ir::CaseExpr*) const override {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::InValues> visitDatetruncExpr(
-      const Analyzer::DatetruncExpr*) const override {
+  std::shared_ptr<hdk::ir::InValues> visitDatetruncExpr(
+      const hdk::ir::DatetruncExpr*) const override {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::InValues> visitDatediffExpr(
-      const Analyzer::DatediffExpr*) const override {
+  std::shared_ptr<hdk::ir::InValues> visitDatediffExpr(
+      const hdk::ir::DatediffExpr*) const override {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::InValues> visitDateaddExpr(
-      const Analyzer::DateaddExpr*) const override {
+  std::shared_ptr<hdk::ir::InValues> visitDateaddExpr(
+      const hdk::ir::DateaddExpr*) const override {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::InValues> visitExtractExpr(
-      const Analyzer::ExtractExpr*) const override {
+  std::shared_ptr<hdk::ir::InValues> visitExtractExpr(
+      const hdk::ir::ExtractExpr*) const override {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::InValues> visitLikelihood(
-      const Analyzer::LikelihoodExpr*) const override {
+  std::shared_ptr<hdk::ir::InValues> visitLikelihood(
+      const hdk::ir::LikelihoodExpr*) const override {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::InValues> visitAggExpr(
-      const Analyzer::AggExpr*) const override {
+  std::shared_ptr<hdk::ir::InValues> visitAggExpr(
+      const hdk::ir::AggExpr*) const override {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::InValues> aggregateResult(
-      const std::shared_ptr<Analyzer::InValues>& lhs,
-      const std::shared_ptr<Analyzer::InValues>& rhs) const override {
+  std::shared_ptr<hdk::ir::InValues> aggregateResult(
+      const std::shared_ptr<hdk::ir::InValues>& lhs,
+      const std::shared_ptr<hdk::ir::InValues>& rhs) const override {
     if (!lhs || !rhs) {
       return nullptr;
     }
@@ -150,7 +150,7 @@ class OrToInVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::InValue
       auto union_values = lhs->get_value_list();
       const auto& rhs_values = rhs->get_value_list();
       union_values.insert(union_values.end(), rhs_values.begin(), rhs_values.end());
-      return makeExpr<Analyzer::InValues>(lhs->get_own_arg(), union_values);
+      return hdk::ir::makeExpr<hdk::ir::InValues>(lhs->get_own_arg(), union_values);
     }
     return nullptr;
   }
@@ -158,8 +158,7 @@ class OrToInVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::InValue
 
 class RecursiveOrToInVisitor : public DeepCopyVisitor {
  protected:
-  std::shared_ptr<Analyzer::Expr> visitBinOper(
-      const Analyzer::BinOper* bin_oper) const override {
+  hdk::ir::ExprPtr visitBinOper(const hdk::ir::BinOper* bin_oper) const override {
     OrToInVisitor simple_visitor;
     if (bin_oper->get_optype() == kOR) {
       auto rewritten = simple_visitor.visit(bin_oper);
@@ -171,12 +170,12 @@ class RecursiveOrToInVisitor : public DeepCopyVisitor {
     auto rhs = bin_oper->get_own_right_operand();
     auto rewritten_lhs = visit(lhs.get());
     auto rewritten_rhs = visit(rhs.get());
-    return makeExpr<Analyzer::BinOper>(bin_oper->get_type_info(),
-                                       bin_oper->get_contains_agg(),
-                                       bin_oper->get_optype(),
-                                       bin_oper->get_qualifier(),
-                                       rewritten_lhs ? rewritten_lhs : lhs,
-                                       rewritten_rhs ? rewritten_rhs : rhs);
+    return hdk::ir::makeExpr<hdk::ir::BinOper>(bin_oper->get_type_info(),
+                                               bin_oper->get_contains_agg(),
+                                               bin_oper->get_optype(),
+                                               bin_oper->get_qualifier(),
+                                               rewritten_lhs ? rewritten_lhs : lhs,
+                                               rewritten_rhs ? rewritten_rhs : rhs);
   }
 };
 
@@ -184,8 +183,8 @@ class ArrayElementStringLiteralEncodingVisitor : public DeepCopyVisitor {
  protected:
   using RetType = DeepCopyVisitor::RetType;
 
-  RetType visitArrayOper(const Analyzer::ArrayExpr* array_expr) const override {
-    std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
+  RetType visitArrayOper(const hdk::ir::ArrayExpr* array_expr) const override {
+    std::vector<hdk::ir::ExprPtr> args_copy;
     for (size_t i = 0; i < array_expr->getElementCount(); ++i) {
       auto const element_expr_ptr = visit(array_expr->getElement(i));
       auto const& element_expr_type_info = element_expr_ptr->get_type_info();
@@ -204,7 +203,7 @@ class ArrayElementStringLiteralEncodingVisitor : public DeepCopyVisitor {
     }
 
     const auto& type_info = array_expr->get_type_info();
-    return makeExpr<Analyzer::ArrayExpr>(
+    return hdk::ir::makeExpr<hdk::ir::ArrayExpr>(
         type_info, args_copy, array_expr->isNull(), array_expr->isLocalAlloc());
   }
 };
@@ -425,8 +424,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     return false;
   }
 
-  std::shared_ptr<Analyzer::Expr> visitUOper(
-      const Analyzer::UOper* uoper) const override {
+  hdk::ir::ExprPtr visitUOper(const hdk::ir::UOper* uoper) const override {
     const auto unvisited_operand = uoper->get_operand();
     const auto optype = uoper->get_optype();
     const auto& ti = uoper->get_type_info();
@@ -440,7 +438,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     const auto operand_type =
         operand_ti.is_decimal() ? decimal_to_int_type(operand_ti) : operand_ti.get_type();
     const auto const_operand =
-        std::dynamic_pointer_cast<const Analyzer::Constant>(operand);
+        std::dynamic_pointer_cast<const hdk::ir::Constant>(operand);
 
     if (const_operand) {
       const auto operand_datum = const_operand->get_constval();
@@ -456,7 +454,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
                        result_datum,
                        result_type)) {
             CHECK_EQ(result_type, kBOOLEAN);
-            return makeExpr<Analyzer::Constant>(result_type, false, result_datum);
+            return hdk::ir::makeExpr<hdk::ir::Constant>(result_type, false, result_datum);
           }
           break;
         }
@@ -468,9 +466,10 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
                        result_datum,
                        result_type)) {
             if (!operand_ti.is_decimal()) {
-              return makeExpr<Analyzer::Constant>(result_type, false, result_datum);
+              return hdk::ir::makeExpr<hdk::ir::Constant>(
+                  result_type, false, result_datum);
             }
-            return makeExpr<Analyzer::Constant>(ti, false, result_datum);
+            return hdk::ir::makeExpr<hdk::ir::Constant>(ti, false, result_datum);
           }
           break;
         }
@@ -490,10 +489,10 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
           auto operand_copy = const_operand->deep_copy();
           auto cast_operand = operand_copy->add_cast(ti);
           auto const_cast_operand =
-              std::dynamic_pointer_cast<const Analyzer::Constant>(cast_operand);
+              std::dynamic_pointer_cast<const hdk::ir::Constant>(cast_operand);
           if (const_cast_operand) {
             auto const_cast_datum = const_cast_operand->get_constval();
-            return makeExpr<Analyzer::Constant>(ti, false, const_cast_datum);
+            return hdk::ir::makeExpr<hdk::ir::Constant>(ti, false, const_cast_datum);
           }
         }
         default:
@@ -501,12 +500,11 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
       }
     }
 
-    return makeExpr<Analyzer::UOper>(
+    return hdk::ir::makeExpr<hdk::ir::UOper>(
         uoper->get_type_info(), uoper->get_contains_agg(), optype, operand);
   }
 
-  std::shared_ptr<Analyzer::Expr> visitBinOper(
-      const Analyzer::BinOper* bin_oper) const override {
+  hdk::ir::ExprPtr visitBinOper(const hdk::ir::BinOper* bin_oper) const override {
     const auto optype = bin_oper->get_optype();
     auto ti = bin_oper->get_type_info();
     auto left_operand = bin_oper->get_own_left_operand();
@@ -531,8 +529,8 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     const auto lhs = visit(left_operand.get());
     const auto rhs = visit(right_operand.get());
 
-    auto const_lhs = std::dynamic_pointer_cast<Analyzer::Constant>(lhs);
-    auto const_rhs = std::dynamic_pointer_cast<Analyzer::Constant>(rhs);
+    auto const_lhs = std::dynamic_pointer_cast<hdk::ir::Constant>(lhs);
+    auto const_rhs = std::dynamic_pointer_cast<hdk::ir::Constant>(rhs);
     const auto& lhs_ti = lhs->get_type_info();
     const auto& rhs_ti = rhs->get_type_info();
     auto lhs_type = lhs_ti.is_decimal() ? decimal_to_int_type(lhs_ti) : lhs_ti.get_type();
@@ -546,12 +544,12 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
       if (foldOper(optype, lhs_type, lhs_datum, rhs_datum, result_datum, result_type)) {
         // Fold all ops that don't take in decimal operands, and also decimal comparisons
         if (!lhs_ti.is_decimal() || IS_COMPARISON(optype)) {
-          return makeExpr<Analyzer::Constant>(result_type, false, result_datum);
+          return hdk::ir::makeExpr<hdk::ir::Constant>(result_type, false, result_datum);
         }
         // Decimal arithmetic has been done as kBIGINT. Selectively fold some decimal ops,
         // using result_datum and BinOper expr typeinfo which was adjusted for these ops.
         if (optype == kMINUS || optype == kPLUS || optype == kMULTIPLY) {
-          return makeExpr<Analyzer::Constant>(ti, false, result_datum);
+          return hdk::ir::makeExpr<hdk::ir::Constant>(ti, false, result_datum);
         }
       }
     }
@@ -563,7 +561,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
           Datum d;
           d.boolval = false;
           // lhs && false --> false
-          return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+          return hdk::ir::makeExpr<hdk::ir::Constant>(kBOOLEAN, false, d);
         }
         // lhs && true --> lhs
         return lhs;
@@ -574,7 +572,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
           Datum d;
           d.boolval = false;
           // false && rhs --> false
-          return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+          return hdk::ir::makeExpr<hdk::ir::Constant>(kBOOLEAN, false, d);
         }
         // true && rhs --> rhs
         return rhs;
@@ -587,7 +585,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
           Datum d;
           d.boolval = true;
           // lhs || true --> true
-          return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+          return hdk::ir::makeExpr<hdk::ir::Constant>(kBOOLEAN, false, d);
         }
         // lhs || false --> lhs
         return lhs;
@@ -598,7 +596,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
           Datum d;
           d.boolval = true;
           // true || rhs --> true
-          return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+          return hdk::ir::makeExpr<hdk::ir::Constant>(kBOOLEAN, false, d);
         }
         // false || rhs --> rhs
         return rhs;
@@ -609,24 +607,24 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
       if (optype == kEQ || optype == kLE || optype == kGE) {
         Datum d;
         d.boolval = true;
-        return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+        return hdk::ir::makeExpr<hdk::ir::Constant>(kBOOLEAN, false, d);
       }
       // Contradictions: v!=v; v<v; v>v
       if (optype == kNE || optype == kLT || optype == kGT) {
         Datum d;
         d.boolval = false;
-        return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+        return hdk::ir::makeExpr<hdk::ir::Constant>(kBOOLEAN, false, d);
       }
       // v-v
       if (optype == kMINUS) {
         Datum d = {};
-        return makeExpr<Analyzer::Constant>(lhs_type, false, d);
+        return hdk::ir::makeExpr<hdk::ir::Constant>(lhs_type, false, d);
       }
     }
     // Convert fp division by a constant to multiplication by 1/constant
     if (optype == kDIVIDE && const_rhs && rhs_ti.is_fp()) {
       auto rhs_datum = const_rhs->get_constval();
-      std::shared_ptr<Analyzer::Expr> recip_rhs = nullptr;
+      hdk::ir::ExprPtr recip_rhs = nullptr;
       if (rhs_ti.get_type() == kFLOAT) {
         if (rhs_datum.floatval == 1.0) {
           return lhs;
@@ -634,7 +632,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
         auto f = std::fabs(rhs_datum.floatval);
         if (f > 1.0 || (f != 0.0 && 1.0 < f * std::numeric_limits<float>::max())) {
           rhs_datum.floatval = 1.0 / rhs_datum.floatval;
-          recip_rhs = makeExpr<Analyzer::Constant>(rhs_type, false, rhs_datum);
+          recip_rhs = hdk::ir::makeExpr<hdk::ir::Constant>(rhs_type, false, rhs_datum);
         }
       } else if (rhs_ti.get_type() == kDOUBLE) {
         if (rhs_datum.doubleval == 1.0) {
@@ -643,40 +641,39 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
         auto d = std::fabs(rhs_datum.doubleval);
         if (d > 1.0 || (d != 0.0 && 1.0 < d * std::numeric_limits<double>::max())) {
           rhs_datum.doubleval = 1.0 / rhs_datum.doubleval;
-          recip_rhs = makeExpr<Analyzer::Constant>(rhs_type, false, rhs_datum);
+          recip_rhs = hdk::ir::makeExpr<hdk::ir::Constant>(rhs_type, false, rhs_datum);
         }
       }
       if (recip_rhs) {
-        return makeExpr<Analyzer::BinOper>(ti,
-                                           bin_oper->get_contains_agg(),
-                                           kMULTIPLY,
-                                           bin_oper->get_qualifier(),
-                                           lhs,
-                                           recip_rhs);
+        return hdk::ir::makeExpr<hdk::ir::BinOper>(ti,
+                                                   bin_oper->get_contains_agg(),
+                                                   kMULTIPLY,
+                                                   bin_oper->get_qualifier(),
+                                                   lhs,
+                                                   recip_rhs);
       }
     }
 
-    return makeExpr<Analyzer::BinOper>(ti,
-                                       bin_oper->get_contains_agg(),
-                                       bin_oper->get_optype(),
-                                       bin_oper->get_qualifier(),
-                                       lhs,
-                                       rhs);
+    return hdk::ir::makeExpr<hdk::ir::BinOper>(ti,
+                                               bin_oper->get_contains_agg(),
+                                               bin_oper->get_optype(),
+                                               bin_oper->get_qualifier(),
+                                               lhs,
+                                               rhs);
   }
 
-  std::shared_ptr<Analyzer::Expr> visitLower(
-      const Analyzer::LowerExpr* lower_expr) const override {
+  hdk::ir::ExprPtr visitLower(const hdk::ir::LowerExpr* lower_expr) const override {
     const auto constant_arg_expr =
-        dynamic_cast<const Analyzer::Constant*>(lower_expr->get_arg());
+        dynamic_cast<const hdk::ir::Constant*>(lower_expr->get_arg());
     if (constant_arg_expr) {
       return Analyzer::analyzeStringValue(
           boost::locale::to_lower(*constant_arg_expr->get_constval().stringval));
     }
-    return makeExpr<Analyzer::LowerExpr>(lower_expr->get_own_arg());
+    return hdk::ir::makeExpr<hdk::ir::LowerExpr>(lower_expr->get_own_arg());
   }
 
  protected:
-  mutable std::unordered_map<const Analyzer::Expr*, const SQLTypeInfo> casts_;
+  mutable std::unordered_map<const hdk::ir::Expr*, const SQLTypeInfo> casts_;
   mutable int32_t num_overflows_;
 
  public:
@@ -685,8 +682,8 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
   void reset_num_overflows() { num_overflows_ = 0; }
 };
 
-const Analyzer::Expr* strip_likelihood(const Analyzer::Expr* expr) {
-  const auto with_likelihood = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
+const hdk::ir::Expr* strip_likelihood(const hdk::ir::Expr* expr) {
+  const auto with_likelihood = dynamic_cast<const hdk::ir::LikelihoodExpr*>(expr);
   if (!with_likelihood) {
     return expr;
   }
@@ -695,11 +692,11 @@ const Analyzer::Expr* strip_likelihood(const Analyzer::Expr* expr) {
 
 }  // namespace
 
-Analyzer::ExpressionPtr rewrite_array_elements(Analyzer::Expr const* expr) {
+hdk::ir::ExprPtr rewrite_array_elements(hdk::ir::Expr const* expr) {
   return ArrayElementStringLiteralEncodingVisitor().visit(expr);
 }
 
-Analyzer::ExpressionPtr rewrite_expr(const Analyzer::Expr* expr) {
+hdk::ir::ExprPtr rewrite_expr(const hdk::ir::Expr* expr) {
   const auto sum_window = rewrite_sum_window(expr);
   if (sum_window) {
     return sum_window;
@@ -715,10 +712,10 @@ Analyzer::ExpressionPtr rewrite_expr(const Analyzer::Expr* expr) {
   RecursiveOrToInVisitor visitor;
   auto rewritten_expr = visitor.visit(expr_no_likelihood);
   const auto expr_with_likelihood =
-      std::dynamic_pointer_cast<const Analyzer::LikelihoodExpr>(rewritten_expr);
+      std::dynamic_pointer_cast<const hdk::ir::LikelihoodExpr>(rewritten_expr);
   if (expr_with_likelihood) {
     // Add back likelihood
-    return std::make_shared<Analyzer::LikelihoodExpr>(
+    return std::make_shared<hdk::ir::LikelihoodExpr>(
         rewritten_expr, expr_with_likelihood->get_likelihood());
   }
   return rewritten_expr;
@@ -769,7 +766,7 @@ class JoinCoveredQualVisitor : public ScalarExprVisitor<bool> {
   JoinCoveredQualVisitor(const JoinQualsPerNestingLevel& join_quals) {
     for (const auto& join_condition : join_quals) {
       for (const auto& qual : join_condition.quals) {
-        auto qual_bin_oper = dynamic_cast<Analyzer::BinOper*>(qual.get());
+        auto qual_bin_oper = dynamic_cast<hdk::ir::BinOper*>(qual.get());
         if (qual_bin_oper) {
           join_qual_pairs.emplace_back(qual_bin_oper->get_left_operand(),
                                        qual_bin_oper->get_right_operand());
@@ -778,7 +775,7 @@ class JoinCoveredQualVisitor : public ScalarExprVisitor<bool> {
     }
   }
 
-  bool visitFunctionOper(const Analyzer::FunctionOper* func_oper) const override {
+  bool visitFunctionOper(const hdk::ir::FunctionOper* func_oper) const override {
     if (overlaps_supported_functions.find(func_oper->getName()) !=
         overlaps_supported_functions.end()) {
       const auto lhs = func_oper->getArg(2);
@@ -795,17 +792,17 @@ class JoinCoveredQualVisitor : public ScalarExprVisitor<bool> {
   bool defaultResult() const override { return false; }
 
  private:
-  std::vector<std::pair<const Analyzer::Expr*, const Analyzer::Expr*>> join_qual_pairs;
+  std::vector<std::pair<const hdk::ir::Expr*, const hdk::ir::Expr*>> join_qual_pairs;
 };
 
-std::list<std::shared_ptr<Analyzer::Expr>> strip_join_covered_filter_quals(
-    const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
+std::list<hdk::ir::ExprPtr> strip_join_covered_filter_quals(
+    const std::list<hdk::ir::ExprPtr>& quals,
     const JoinQualsPerNestingLevel& join_quals) {
   if (join_quals.empty()) {
     return quals;
   }
 
-  std::list<std::shared_ptr<Analyzer::Expr>> quals_to_return;
+  std::list<hdk::ir::ExprPtr> quals_to_return;
 
   JoinCoveredQualVisitor visitor(join_quals);
   for (const auto& qual : quals) {
@@ -818,7 +815,7 @@ std::list<std::shared_ptr<Analyzer::Expr>> strip_join_covered_filter_quals(
   return quals_to_return;
 }
 
-std::shared_ptr<Analyzer::Expr> fold_expr(const Analyzer::Expr* expr) {
+hdk::ir::ExprPtr fold_expr(const hdk::ir::Expr* expr) {
   if (!expr) {
     return nullptr;
   }
@@ -828,7 +825,7 @@ std::shared_ptr<Analyzer::Expr> fold_expr(const Analyzer::Expr* expr) {
   if (visitor.get_num_overflows() > 0 && rewritten_expr->get_type_info().is_integer() &&
       rewritten_expr->get_type_info().get_type() != kBIGINT) {
     auto rewritten_expr_const =
-        std::dynamic_pointer_cast<const Analyzer::Constant>(rewritten_expr);
+        std::dynamic_pointer_cast<const hdk::ir::Constant>(rewritten_expr);
     if (!rewritten_expr_const) {
       // Integer expression didn't fold completely the first time due to
       // overflows in smaller type subexpressions, trying again with a cast
@@ -836,24 +833,24 @@ std::shared_ptr<Analyzer::Expr> fold_expr(const Analyzer::Expr* expr) {
       auto bigint_expr_no_likelihood = expr_no_likelihood->deep_copy()->add_cast(ti);
       auto rewritten_expr_take2 = visitor.visit(bigint_expr_no_likelihood.get());
       auto rewritten_expr_take2_const =
-          std::dynamic_pointer_cast<Analyzer::Constant>(rewritten_expr_take2);
+          std::dynamic_pointer_cast<hdk::ir::Constant>(rewritten_expr_take2);
       if (rewritten_expr_take2_const) {
         // Managed to fold, switch to the new constant
         rewritten_expr = rewritten_expr_take2_const;
       }
     }
   }
-  const auto expr_with_likelihood = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
+  const auto expr_with_likelihood = dynamic_cast<const hdk::ir::LikelihoodExpr*>(expr);
   if (expr_with_likelihood) {
     // Add back likelihood
-    return std::make_shared<Analyzer::LikelihoodExpr>(
+    return std::make_shared<hdk::ir::LikelihoodExpr>(
         rewritten_expr, expr_with_likelihood->get_likelihood());
   }
   return rewritten_expr;
 }
 
-bool self_join_not_covered_by_left_deep_tree(const Analyzer::ColumnVar* key_side,
-                                             const Analyzer::ColumnVar* val_side,
+bool self_join_not_covered_by_left_deep_tree(const hdk::ir::ColumnVar* key_side,
+                                             const hdk::ir::ColumnVar* val_side,
                                              const int max_rte_covered) {
   if (key_side->get_table_id() == val_side->get_table_id() &&
       key_side->get_rte_idx() == val_side->get_rte_idx() &&

@@ -23,11 +23,11 @@
 SpeculativeTopNMap::SpeculativeTopNMap() : unknown_(0) {}
 
 SpeculativeTopNMap::SpeculativeTopNMap(const ResultSet& rows,
-                                       const std::vector<Analyzer::Expr*>& target_exprs,
+                                       const std::vector<hdk::ir::Expr*>& target_exprs,
                                        const size_t truncate_n)
     : unknown_(0) {
   CHECK_EQ(rows.colCount(), target_exprs.size());
-  const bool count_first = dynamic_cast<const Analyzer::AggExpr*>(target_exprs[0]);
+  const bool count_first = dynamic_cast<const hdk::ir::AggExpr*>(target_exprs[0]);
   for (size_t i = 0; i < truncate_n + 1; ++i) {
     const auto crt_row = rows.getNextRow(false, false);
     if (crt_row.empty()) {
@@ -140,7 +140,7 @@ std::shared_ptr<ResultSet> SpeculativeTopNMap::asRows(
   auto rs_storage = rs->allocateStorage();
   auto rs_buff = reinterpret_cast<int64_t*>(rs_storage->getUnderlyingBuffer());
   const bool count_first =
-      dynamic_cast<const Analyzer::AggExpr*>(ra_exe_unit.target_exprs[0]);
+      dynamic_cast<const hdk::ir::AggExpr*>(ra_exe_unit.target_exprs[0]);
 
   // going throug the TopN results, and properly storing them into the GroupByBaselineHash
   // layout (including the group column (key) and two agg columns (key and value)) to
@@ -159,8 +159,7 @@ std::shared_ptr<ResultSet> SpeculativeTopNMap::asRows(
   return rs;
 }
 
-void SpeculativeTopNBlacklist::add(const std::shared_ptr<Analyzer::Expr> expr,
-                                   const bool desc) {
+void SpeculativeTopNBlacklist::add(const hdk::ir::ExprPtr expr, const bool desc) {
   std::lock_guard<std::mutex> lock(mutex_);
   for (const auto& e : blacklist_) {
     CHECK(!(*e.first == *expr) || e.second != desc);
@@ -168,7 +167,7 @@ void SpeculativeTopNBlacklist::add(const std::shared_ptr<Analyzer::Expr> expr,
   blacklist_.emplace_back(expr, desc);
 }
 
-bool SpeculativeTopNBlacklist::contains(const std::shared_ptr<Analyzer::Expr> expr,
+bool SpeculativeTopNBlacklist::contains(const hdk::ir::ExprPtr expr,
                                         const bool desc) const {
   std::lock_guard<std::mutex> lock(mutex_);
   for (const auto& e : blacklist_) {
@@ -195,7 +194,7 @@ bool use_speculative_top_n(const RelAlgExecutionUnit& ra_exe_unit,
     return false;
   }
   for (const auto target_expr : ra_exe_unit.target_exprs) {
-    const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
+    const auto agg_expr = dynamic_cast<const hdk::ir::AggExpr*>(target_expr);
     if (agg_expr && agg_expr->get_aggtype() != kCOUNT) {
       return false;
     }

@@ -26,7 +26,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "Analyzer/Analyzer.h"
+#include "IR/Expr.h"
 #include "DataMgr/MemoryLevel.h"
 #include "QueryEngine/ColumnarResults.h"
 #include "QueryEngine/DataRecycler/HashingSchemeRecycler.h"
@@ -50,7 +50,7 @@ class BaselineJoinHashTable : public HashJoin {
  public:
   //! Make hash table from an in-flight SQL query's parse tree etc.
   static std::shared_ptr<BaselineJoinHashTable> getInstance(
-      const std::shared_ptr<Analyzer::BinOper> condition,
+      const std::shared_ptr<hdk::ir::BinOper> condition,
       const std::vector<InputTableInfo>& query_infos,
       const Data_Namespace::MemoryLevel memory_level,
       const JoinType join_type,
@@ -120,7 +120,7 @@ class BaselineJoinHashTable : public HashJoin {
   virtual ~BaselineJoinHashTable() {}
 
  protected:
-  BaselineJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
+  BaselineJoinHashTable(const std::shared_ptr<hdk::ir::BinOper> condition,
                         const JoinType join_type,
                         const std::vector<InputTableInfo>& query_infos,
                         const Data_Namespace::MemoryLevel memory_level,
@@ -211,7 +211,7 @@ class BaselineJoinHashTable : public HashJoin {
     auto hash = boost::hash_value(::toString(info.optype));
     for (InnerOuter inner_outer : info.inner_outer_pairs) {
       auto inner_col = inner_outer.first;
-      auto rhs_col_var = dynamic_cast<const Analyzer::ColumnVar*>(inner_outer.second);
+      auto rhs_col_var = dynamic_cast<const hdk::ir::ColumnVar*>(inner_outer.second);
       auto outer_col = rhs_col_var ? rhs_col_var : inner_col;
       boost::hash_combine(hash, inner_col->toString());
       if (inner_col->get_type_info().is_string()) {
@@ -223,7 +223,7 @@ class BaselineJoinHashTable : public HashJoin {
     return hash;
   }
 
-  const std::shared_ptr<Analyzer::BinOper> condition_;
+  const std::shared_ptr<hdk::ir::BinOper> condition_;
   const JoinType join_type_;
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;

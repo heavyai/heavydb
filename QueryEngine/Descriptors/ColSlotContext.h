@@ -40,7 +40,7 @@ inline bool operator==(const SlotSize& lhs, const SlotSize& rhs) {
   return lhs.padded_size == rhs.padded_size && lhs.logical_size == rhs.logical_size;
 }
 
-namespace Analyzer {
+namespace hdk::ir {
 class Expr;
 }
 
@@ -48,7 +48,7 @@ class ColSlotContext {
  public:
   ColSlotContext() {}
 
-  ColSlotContext(const std::vector<Analyzer::Expr*>& col_expr_list,
+  ColSlotContext(const std::vector<hdk::ir::Expr*>& col_expr_list,
                  const std::vector<int64_t>& col_exprs_to_not_project,
                  bool bigint_count);
 

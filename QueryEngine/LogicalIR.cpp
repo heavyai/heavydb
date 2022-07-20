@@ -22,12 +22,12 @@
 
 namespace {
 
-bool contains_unsafe_division(const Analyzer::Expr* expr) {
-  auto is_div = [](const Analyzer::Expr* e) -> bool {
-    auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(e);
+bool contains_unsafe_division(const hdk::ir::Expr* expr) {
+  auto is_div = [](const hdk::ir::Expr* e) -> bool {
+    auto bin_oper = dynamic_cast<const hdk::ir::BinOper*>(e);
     if (bin_oper && bin_oper->get_optype() == kDIVIDE) {
       auto rhs = bin_oper->get_right_operand();
-      auto rhs_constant = dynamic_cast<const Analyzer::Constant*>(rhs);
+      auto rhs_constant = dynamic_cast<const hdk::ir::Constant*>(rhs);
       if (!rhs_constant || rhs_constant->get_is_null()) {
         return true;
       }
@@ -46,25 +46,25 @@ bool contains_unsafe_division(const Analyzer::Expr* expr) {
     }
     return false;
   };
-  std::list<const Analyzer::Expr*> binoper_list;
+  std::list<const hdk::ir::Expr*> binoper_list;
   expr->find_expr(is_div, binoper_list);
   return !binoper_list.empty();
 }
 
-bool should_defer_eval(const std::shared_ptr<Analyzer::Expr> expr) {
-  if (std::dynamic_pointer_cast<Analyzer::LikeExpr>(expr)) {
+bool should_defer_eval(const hdk::ir::ExprPtr expr) {
+  if (std::dynamic_pointer_cast<hdk::ir::LikeExpr>(expr)) {
     return true;
   }
-  if (std::dynamic_pointer_cast<Analyzer::RegexpExpr>(expr)) {
+  if (std::dynamic_pointer_cast<hdk::ir::RegexpExpr>(expr)) {
     return true;
   }
-  if (std::dynamic_pointer_cast<Analyzer::FunctionOper>(expr)) {
+  if (std::dynamic_pointer_cast<hdk::ir::FunctionOper>(expr)) {
     return true;
   }
-  if (!std::dynamic_pointer_cast<Analyzer::BinOper>(expr)) {
+  if (!std::dynamic_pointer_cast<hdk::ir::BinOper>(expr)) {
     return false;
   }
-  const auto bin_expr = std::static_pointer_cast<Analyzer::BinOper>(expr);
+  const auto bin_expr = std::static_pointer_cast<hdk::ir::BinOper>(expr);
   if (contains_unsafe_division(bin_expr.get())) {
     return true;
   }
@@ -72,13 +72,13 @@ bool should_defer_eval(const std::shared_ptr<Analyzer::Expr> expr) {
   return rhs->get_type_info().is_array();
 }
 
-Likelihood get_likelihood(const Analyzer::Expr* expr) {
+Likelihood get_likelihood(const hdk::ir::Expr* expr) {
   Likelihood truth{1.0};
-  auto likelihood_expr = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
+  auto likelihood_expr = dynamic_cast<const hdk::ir::LikelihoodExpr*>(expr);
   if (likelihood_expr) {
     return Likelihood(likelihood_expr->get_likelihood());
   }
-  auto u_oper = dynamic_cast<const Analyzer::UOper*>(expr);
+  auto u_oper = dynamic_cast<const hdk::ir::UOper*>(expr);
   if (u_oper) {
     Likelihood oper_likelihood = get_likelihood(u_oper->get_operand());
     if (oper_likelihood.isInvalid()) {
@@ -89,7 +89,7 @@ Likelihood get_likelihood(const Analyzer::Expr* expr) {
     }
     return oper_likelihood;
   }
-  auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
+  auto bin_oper = dynamic_cast<const hdk::ir::BinOper*>(expr);
   if (bin_oper) {
     auto lhs = bin_oper->get_left_operand();
     auto rhs = bin_oper->get_right_operand();
@@ -112,23 +112,23 @@ Likelihood get_likelihood(const Analyzer::Expr* expr) {
   return Likelihood();
 }
 
-Weight get_weight(const Analyzer::Expr* expr, int depth = 0) {
-  auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
+Weight get_weight(const hdk::ir::Expr* expr, int depth = 0) {
+  auto like_expr = dynamic_cast<const hdk::ir::LikeExpr*>(expr);
   if (like_expr) {
     // heavy weight expr, start valid weight propagation
     return Weight((like_expr->get_is_simple()) ? 200 : 1000);
   }
-  auto regexp_expr = dynamic_cast<const Analyzer::RegexpExpr*>(expr);
+  auto regexp_expr = dynamic_cast<const hdk::ir::RegexpExpr*>(expr);
   if (regexp_expr) {
     // heavy weight expr, start valid weight propagation
     return Weight(2000);
   }
-  auto u_oper = dynamic_cast<const Analyzer::UOper*>(expr);
+  auto u_oper = dynamic_cast<const hdk::ir::UOper*>(expr);
   if (u_oper) {
     auto weight = get_weight(u_oper->get_operand(), depth + 1);
     return weight + 1;
   }
-  auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
+  auto bin_oper = dynamic_cast<const hdk::ir::BinOper*>(expr);
   if (bin_oper) {
     auto lhs = bin_oper->get_left_operand();
     auto rhs = bin_oper->get_right_operand();
@@ -152,8 +152,8 @@ Weight get_weight(const Analyzer::Expr* expr, int depth = 0) {
 }  // namespace
 
 bool CodeGenerator::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
-                                    std::vector<Analyzer::Expr*>& primary_quals,
-                                    std::vector<Analyzer::Expr*>& deferred_quals,
+                                    std::vector<hdk::ir::Expr*>& primary_quals,
+                                    std::vector<hdk::ir::Expr*>& deferred_quals,
                                     const PlanState::HoistedFiltersSet& hoisted_quals) {
   for (auto expr : ra_exe_unit.simple_quals) {
     if (hoisted_quals.find(expr) != hoisted_quals.end()) {
@@ -190,7 +190,7 @@ bool CodeGenerator::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
   return short_circuit;
 }
 
-llvm::Value* CodeGenerator::codegenLogicalShortCircuit(const Analyzer::BinOper* bin_oper,
+llvm::Value* CodeGenerator::codegenLogicalShortCircuit(const hdk::ir::BinOper* bin_oper,
                                                        const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto optype = bin_oper->get_optype();
@@ -292,7 +292,7 @@ llvm::Value* CodeGenerator::codegenLogicalShortCircuit(const Analyzer::BinOper* 
   return result_phi;
 }
 
-llvm::Value* CodeGenerator::codegenLogical(const Analyzer::BinOper* bin_oper,
+llvm::Value* CodeGenerator::codegenLogical(const hdk::ir::BinOper* bin_oper,
                                            const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto optype = bin_oper->get_optype();
@@ -349,14 +349,14 @@ llvm::Value* CodeGenerator::toBool(llvm::Value* lv) {
 
 namespace {
 
-bool is_qualified_bin_oper(const Analyzer::Expr* expr) {
-  const auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
+bool is_qualified_bin_oper(const hdk::ir::Expr* expr) {
+  const auto bin_oper = dynamic_cast<const hdk::ir::BinOper*>(expr);
   return bin_oper && bin_oper->get_qualifier() != kONE;
 }
 
 }  // namespace
 
-llvm::Value* CodeGenerator::codegenLogical(const Analyzer::UOper* uoper,
+llvm::Value* CodeGenerator::codegenLogical(const hdk::ir::UOper* uoper,
                                            const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto optype = uoper->get_optype();
@@ -374,12 +374,12 @@ llvm::Value* CodeGenerator::codegenLogical(const Analyzer::UOper* uoper,
                    "logical_not", {operand_lv, cgen_state_->inlineIntNull(operand_ti)});
 }
 
-llvm::Value* CodeGenerator::codegenIsNull(const Analyzer::UOper* uoper,
+llvm::Value* CodeGenerator::codegenIsNull(const hdk::ir::UOper* uoper,
                                           const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto operand = uoper->get_operand();
-  if (dynamic_cast<const Analyzer::Constant*>(operand) &&
-      dynamic_cast<const Analyzer::Constant*>(operand)->get_is_null()) {
+  if (dynamic_cast<const hdk::ir::Constant*>(operand) &&
+      dynamic_cast<const hdk::ir::Constant*>(operand)->get_is_null()) {
     // for null constants, short-circuit to true
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 1);
   }

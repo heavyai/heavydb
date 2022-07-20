@@ -23,7 +23,7 @@
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/RelAlgExecutionUnit.h"
 
-namespace Analyzer {
+namespace hdk::ir {
 class Expr;
 }
 class Executor;
@@ -41,5 +41,5 @@ struct ColRangeInfo {
 
 ColRangeInfo get_expr_range_info(const RelAlgExecutionUnit& ra_exe_unit,
                                  const std::vector<InputTableInfo>& query_infos,
-                                 const Analyzer::Expr* expr,
+                                 const hdk::ir::Expr* expr,
                                  Executor* executor);

@@ -37,7 +37,7 @@
 
 namespace {
 
-inline bool is_varlen_projection(const Analyzer::Expr* target_expr,
+inline bool is_varlen_projection(const hdk::ir::Expr* target_expr,
                                  const SQLTypeInfo& ti) {
   return false;
 }
@@ -115,7 +115,7 @@ void TargetExprCodegen::codegen(
 
   const bool varlen_projection = is_varlen_projection(target_expr, target_info.sql_type);
   const auto agg_fn_names = agg_fn_base_names(target_info, varlen_projection);
-  const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
+  const auto window_func = dynamic_cast<const hdk::ir::WindowFunction*>(target_expr);
   WindowProjectNodeContext::resetWindowFunctionContext(executor);
   auto target_lvs =
       window_func
@@ -367,7 +367,7 @@ void TargetExprCodegen::codegenAggregate(
       } else if (is_fp_arg) {
         target_lv = executor->castToFP(target_lv, arg_type, target_info.sql_type);
       }
-      if (!dynamic_cast<const Analyzer::AggExpr*>(target_expr) || arg_expr) {
+      if (!dynamic_cast<const hdk::ir::AggExpr*>(target_expr) || arg_expr) {
         target_lv =
             executor->cgen_state_->castToTypeIn(target_lv, (agg_chosen_bytes << 3));
       }
@@ -459,7 +459,7 @@ void TargetExprCodegen::codegenAggregate(
         }
       }
     }
-    const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
+    const auto window_func = dynamic_cast<const hdk::ir::WindowFunction*>(target_expr);
     if (window_func && window_function_requires_peer_handling(window_func)) {
       const auto window_func_context =
           WindowProjectNodeContext::getActiveWindowFunctionContext(executor);
@@ -508,19 +508,19 @@ void TargetExprCodegen::codegenAggregate(
   }
 }
 
-void TargetExprCodegenBuilder::operator()(const Analyzer::Expr* target_expr,
+void TargetExprCodegenBuilder::operator()(const hdk::ir::Expr* target_expr,
                                           const Executor* executor,
                                           QueryMemoryDescriptor& query_mem_desc,
                                           const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
   if (query_mem_desc.getPaddedSlotWidthBytes(slot_index_counter) == 0) {
-    CHECK(!dynamic_cast<const Analyzer::AggExpr*>(target_expr));
+    CHECK(!dynamic_cast<const hdk::ir::AggExpr*>(target_expr));
     ++slot_index_counter;
     ++target_index_counter;
     return;
   }
-  if (dynamic_cast<const Analyzer::UOper*>(target_expr) &&
-      static_cast<const Analyzer::UOper*>(target_expr)->get_optype() == kUNNEST) {
+  if (dynamic_cast<const hdk::ir::UOper*>(target_expr) &&
+      static_cast<const hdk::ir::UOper*>(target_expr)->get_optype() == kUNNEST) {
     throw std::runtime_error("UNNEST not supported in the projection list yet.");
   }
   if ((executor->plan_state_->isLazyFetchColumn(target_expr) || !is_group_by) &&

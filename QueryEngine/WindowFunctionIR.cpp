@@ -111,7 +111,7 @@ std::string get_window_agg_name(const SqlWindowFunctionKind kind,
   return agg_name;
 }
 
-SQLTypeInfo get_adjusted_window_type_info(const Analyzer::WindowFunction* window_func) {
+SQLTypeInfo get_adjusted_window_type_info(const hdk::ir::WindowFunction* window_func) {
   const auto& args = window_func->getArgs();
   return ((window_func->getKind() == SqlWindowFunctionKind::COUNT && !args.empty()) ||
           window_func->getKind() == SqlWindowFunctionKind::AVG)
@@ -331,7 +331,7 @@ llvm::Value* Executor::codegenAggregateWindowState() {
       llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
   const auto window_func_context =
       WindowProjectNodeContext::getActiveWindowFunctionContext(this);
-  const Analyzer::WindowFunction* window_func = window_func_context->getWindowFunction();
+  const hdk::ir::WindowFunction* window_func = window_func_context->getWindowFunction();
   const auto window_func_ti = get_adjusted_window_type_info(window_func);
   const auto aggregate_state_type =
       window_func_ti.get_type() == kFLOAT ? pi32_type : pi64_type;

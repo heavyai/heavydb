@@ -43,7 +43,7 @@ std::vector<int8_t> get_rows_copy_from_heaps(const int64_t* heaps,
 
 }  // namespace streaming_top_n
 
-size_t get_heap_key_slot_index(const std::vector<Analyzer::Expr*>& target_exprs,
+size_t get_heap_key_slot_index(const std::vector<hdk::ir::Expr*>& target_exprs,
                                const size_t target_idx,
                                bool bigint_count) {
   size_t slot_idx = 0;

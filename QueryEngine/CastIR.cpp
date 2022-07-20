@@ -18,13 +18,13 @@
 #include "Execute.h"
 #include "StringDictionaryTranslationMgr.h"
 
-llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
+llvm::Value* CodeGenerator::codegenCast(const hdk::ir::UOper* uoper,
                                         const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK_EQ(uoper->get_optype(), kCAST);
   const auto& ti = uoper->get_type_info();
   const auto operand = uoper->get_operand();
-  const auto operand_as_const = dynamic_cast<const Analyzer::Constant*>(operand);
+  const auto operand_as_const = dynamic_cast<const hdk::ir::Constant*>(operand);
   // For dictionary encoded constants, the cast holds the dictionary id
   // information as the compression parameter; handle this case separately.
   llvm::Value* operand_lv{nullptr};

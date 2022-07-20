@@ -26,7 +26,7 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
     CHECK(sdp);
   }
 
-  void* visitConstant(const Analyzer::Constant* constant) const override {
+  void* visitConstant(const hdk::ir::Constant* constant) const override {
     if (constant->get_type_info().is_string() && !constant->get_is_null()) {
       CHECK(constant->get_constval().stringval);
       sdp_->getOrAddTransient(*constant->get_constval().stringval);
@@ -45,7 +45,7 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
   // translations/literals on the remote dictionary server instead
   // so the translation happens once and only once
 
-  void* visitUOper(const Analyzer::UOper* uoper) const override {
+  void* visitUOper(const hdk::ir::UOper* uoper) const override {
     visit(uoper->get_operand());
     const auto& uoper_ti = uoper->get_type_info();
     const auto& operand_ti = uoper->get_operand()->get_type_info();
@@ -87,7 +87,7 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
 
 class TransientDictIdVisitor : public ScalarExprVisitor<int> {
  public:
-  int visitUOper(const Analyzer::UOper* uoper) const override {
+  int visitUOper(const hdk::ir::UOper* uoper) const override {
     const auto& expr_ti = uoper->get_type_info();
     if (uoper->get_optype() == kCAST && expr_ti.is_string() &&
         expr_ti.get_compression() == kENCODING_DICT) {
@@ -96,7 +96,7 @@ class TransientDictIdVisitor : public ScalarExprVisitor<int> {
     return defaultResult();
   }
 
-  int visitCaseExpr(const Analyzer::CaseExpr* case_expr) const override {
+  int visitCaseExpr(const hdk::ir::CaseExpr* case_expr) const override {
     const auto& expr_ti = case_expr->get_type_info();
     if (expr_ti.is_string() && expr_ti.get_compression() == kENCODING_DICT) {
       return expr_ti.get_comp_param();

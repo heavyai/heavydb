@@ -70,7 +70,7 @@ ColumnFetcher::ColumnFetcher(Executor* executor,
 //! the GPU if needed. Returns a buffer pointer and an element count.
 std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
     Executor* executor,
-    const Analyzer::ColumnVar& hash_col,
+    const hdk::ir::ColumnVar& hash_col,
     const FragmentInfo& fragment,
     const Data_Namespace::MemoryLevel effective_mem_lvl,
     const int device_id,
@@ -157,7 +157,7 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
 //! chunks_owner parameter will be appended with the chunks.
 JoinColumn ColumnFetcher::makeJoinColumn(
     Executor* executor,
-    const Analyzer::ColumnVar& hash_col,
+    const hdk::ir::ColumnVar& hash_col,
     const std::vector<FragmentInfo>& fragments,
     const Data_Namespace::MemoryLevel effective_mem_lvl,
     const int device_id,

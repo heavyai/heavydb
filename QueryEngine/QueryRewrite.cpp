@@ -48,20 +48,20 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(
     return ra_exe_unit_in;
   }
   auto in_vals =
-      std::dynamic_pointer_cast<Analyzer::InValues>(ra_exe_unit_in.quals.front());
+      std::dynamic_pointer_cast<hdk::ir::InValues>(ra_exe_unit_in.quals.front());
   if (!in_vals) {
-    in_vals = std::dynamic_pointer_cast<Analyzer::InValues>(
+    in_vals = std::dynamic_pointer_cast<hdk::ir::InValues>(
         rewrite_expr(ra_exe_unit_in.quals.front().get()));
   }
   if (!in_vals || in_vals->get_value_list().empty()) {
     return ra_exe_unit_in;
   }
   for (const auto& in_val : in_vals->get_value_list()) {
-    if (!std::dynamic_pointer_cast<Analyzer::Constant>(in_val)) {
+    if (!std::dynamic_pointer_cast<hdk::ir::Constant>(in_val)) {
       break;
     }
   }
-  if (dynamic_cast<const Analyzer::CaseExpr*>(in_vals->get_arg())) {
+  if (dynamic_cast<const hdk::ir::CaseExpr*>(in_vals->get_arg())) {
     return ra_exe_unit_in;
   }
   auto case_expr = generateCaseForDomainValues(in_vals.get());
@@ -70,10 +70,10 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(
 
 RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByInImpl(
     const RelAlgExecutionUnit& ra_exe_unit_in,
-    const std::shared_ptr<Analyzer::CaseExpr> case_expr,
-    const Analyzer::InValues* in_vals) const {
-  std::list<std::shared_ptr<Analyzer::Expr>> new_groupby_list;
-  std::vector<Analyzer::Expr*> new_target_exprs;
+    const std::shared_ptr<hdk::ir::CaseExpr> case_expr,
+    const hdk::ir::InValues* in_vals) const {
+  std::list<hdk::ir::ExprPtr> new_groupby_list;
+  std::vector<hdk::ir::Expr*> new_target_exprs;
   bool rewrite{false};
   size_t groupby_idx{0};
   auto it = ra_exe_unit_in.groupby_exprs.begin();
@@ -96,8 +96,8 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByInImpl(
       for (size_t i = 0; i < ra_exe_unit_in.target_exprs.size(); ++i) {
         const auto target = ra_exe_unit_in.target_exprs[i];
         if (*target == *in_vals->get_arg()) {
-          auto var_case_expr = makeExpr<Analyzer::Var>(
-              case_expr->get_type_info(), Analyzer::Var::kGROUPBY, groupby_idx);
+          auto var_case_expr = hdk::ir::makeExpr<hdk::ir::Var>(
+              case_expr->get_type_info(), hdk::ir::Var::kGROUPBY, groupby_idx);
           target_exprs_owned_.push_back(var_case_expr);
           new_target_exprs.push_back(var_case_expr.get());
         } else {
@@ -129,13 +129,12 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByInImpl(
           ra_exe_unit_in.table_id_to_node_map};
 }
 
-std::shared_ptr<Analyzer::CaseExpr> QueryRewriter::generateCaseForDomainValues(
-    const Analyzer::InValues* in_vals) {
-  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
-      case_expr_list;
+std::shared_ptr<hdk::ir::CaseExpr> QueryRewriter::generateCaseForDomainValues(
+    const hdk::ir::InValues* in_vals) {
+  std::list<std::pair<hdk::ir::ExprPtr, hdk::ir::ExprPtr>> case_expr_list;
   auto in_val_arg = in_vals->get_arg()->deep_copy();
   for (const auto& in_val : in_vals->get_value_list()) {
-    auto case_cond = makeExpr<Analyzer::BinOper>(
+    auto case_cond = hdk::ir::makeExpr<hdk::ir::BinOper>(
         SQLTypeInfo(kBOOLEAN, true), false, kEQ, kONE, in_val_arg, in_val);
     auto in_val_copy = in_val->deep_copy();
     auto ti = in_val_copy->get_type_info();
@@ -148,34 +147,32 @@ std::shared_ptr<Analyzer::CaseExpr> QueryRewriter::generateCaseForDomainValues(
   // TODO(alex): refine the expression range for case with empty else expression;
   //             for now, add a dummy else which should never be taken
   auto else_expr = case_expr_list.front().second;
-  return makeExpr<Analyzer::CaseExpr>(
+  return hdk::ir::makeExpr<hdk::ir::CaseExpr>(
       case_expr_list.front().second->get_type_info(), false, case_expr_list, else_expr);
 }
 
-std::shared_ptr<Analyzer::CaseExpr>
-QueryRewriter::generateCaseExprForCountDistinctOnGroupByCol(
-    std::shared_ptr<Analyzer::Expr> expr) const {
-  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
-      case_expr_list;
-  auto is_null = std::make_shared<Analyzer::UOper>(kBOOLEAN, kISNULL, expr);
-  auto is_not_null = std::make_shared<Analyzer::UOper>(kBOOLEAN, kNOT, is_null);
+std::shared_ptr<hdk::ir::CaseExpr>
+QueryRewriter::generateCaseExprForCountDistinctOnGroupByCol(hdk::ir::ExprPtr expr) const {
+  std::list<std::pair<hdk::ir::ExprPtr, hdk::ir::ExprPtr>> case_expr_list;
+  auto is_null = std::make_shared<hdk::ir::UOper>(kBOOLEAN, kISNULL, expr);
+  auto is_not_null = std::make_shared<hdk::ir::UOper>(kBOOLEAN, kNOT, is_null);
   Datum then_d;
   then_d.bigintval = 1;
-  const auto then_constant = makeExpr<Analyzer::Constant>(kBIGINT, false, then_d);
+  const auto then_constant = hdk::ir::makeExpr<hdk::ir::Constant>(kBIGINT, false, then_d);
   case_expr_list.emplace_back(is_not_null, then_constant);
   Datum else_d;
   else_d.bigintval = 0;
-  const auto else_constant = makeExpr<Analyzer::Constant>(kBIGINT, false, else_d);
-  auto case_expr = makeExpr<Analyzer::CaseExpr>(
+  const auto else_constant = hdk::ir::makeExpr<hdk::ir::Constant>(kBIGINT, false, else_d);
+  auto case_expr = hdk::ir::makeExpr<hdk::ir::CaseExpr>(
       then_constant->get_type_info(), false, case_expr_list, else_constant);
   return case_expr;
 }
 
 std::pair<bool, std::set<size_t>> QueryRewriter::is_all_groupby_exprs_are_col_var(
-    const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs) const {
+    const std::list<hdk::ir::ExprPtr>& groupby_exprs) const {
   std::set<size_t> gby_col_exprs_hash;
   for (auto gby_expr : groupby_exprs) {
-    if (auto gby_col_var = std::dynamic_pointer_cast<Analyzer::ColumnVar>(gby_expr)) {
+    if (auto gby_col_var = std::dynamic_pointer_cast<hdk::ir::ColumnVar>(gby_expr)) {
       gby_col_exprs_hash.insert(boost::hash_value(gby_col_var->toString()));
     } else {
       return {false, {}};
@@ -187,7 +184,7 @@ std::pair<bool, std::set<size_t>> QueryRewriter::is_all_groupby_exprs_are_col_va
 RelAlgExecutionUnit QueryRewriter::rewriteAggregateOnGroupByColumn(
     const RelAlgExecutionUnit& ra_exe_unit_in) const {
   auto check_precond = is_all_groupby_exprs_are_col_var(ra_exe_unit_in.groupby_exprs);
-  auto is_expr_on_gby_col = [&check_precond](const Analyzer::AggExpr* agg_expr) {
+  auto is_expr_on_gby_col = [&check_precond](const hdk::ir::AggExpr* agg_expr) {
     CHECK(agg_expr);
     if (agg_expr->get_arg()) {
       // some expr does not have its own arg, i.e., count(*)
@@ -207,10 +204,10 @@ RelAlgExecutionUnit QueryRewriter::rewriteAggregateOnGroupByColumn(
     return ra_exe_unit_in;
   }
 
-  std::vector<Analyzer::Expr*> new_target_exprs;
+  std::vector<hdk::ir::Expr*> new_target_exprs;
   for (auto expr : ra_exe_unit_in.target_exprs) {
     bool rewritten = false;
-    if (auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(expr)) {
+    if (auto agg_expr = dynamic_cast<hdk::ir::AggExpr*>(expr)) {
       if (is_expr_on_gby_col(agg_expr)) {
         auto target_expr = agg_expr->get_arg();
         // we have some issues when this rewriting is applied to float_type groupby column

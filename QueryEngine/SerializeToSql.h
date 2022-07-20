@@ -25,28 +25,28 @@ class ScalarExprToSql : public ScalarExprVisitor<std::string> {
   ScalarExprToSql(const RelAlgExecutionUnit* ra_exe_unit,
                   SchemaProviderPtr schema_provider);
 
-  std::string visitVar(const Analyzer::Var*) const override;
+  std::string visitVar(const hdk::ir::Var*) const override;
 
-  std::string visitColumnVar(const Analyzer::ColumnVar* col_var) const override;
+  std::string visitColumnVar(const hdk::ir::ColumnVar* col_var) const override;
 
-  std::string visitConstant(const Analyzer::Constant* constant) const override;
+  std::string visitConstant(const hdk::ir::Constant* constant) const override;
 
-  std::string visitUOper(const Analyzer::UOper* uoper) const override;
+  std::string visitUOper(const hdk::ir::UOper* uoper) const override;
 
-  std::string visitBinOper(const Analyzer::BinOper* bin_oper) const override;
+  std::string visitBinOper(const hdk::ir::BinOper* bin_oper) const override;
 
-  std::string visitInValues(const Analyzer::InValues* in_values) const override;
+  std::string visitInValues(const hdk::ir::InValues* in_values) const override;
 
-  std::string visitLikeExpr(const Analyzer::LikeExpr* like) const override;
+  std::string visitLikeExpr(const hdk::ir::LikeExpr* like) const override;
 
-  std::string visitCaseExpr(const Analyzer::CaseExpr* case_) const override;
+  std::string visitCaseExpr(const hdk::ir::CaseExpr* case_) const override;
 
-  std::string visitFunctionOper(const Analyzer::FunctionOper* func_oper) const override;
+  std::string visitFunctionOper(const hdk::ir::FunctionOper* func_oper) const override;
 
   std::string visitWindowFunction(
-      const Analyzer::WindowFunction* window_func) const override;
+      const hdk::ir::WindowFunction* window_func) const override;
 
-  std::string visitAggExpr(const Analyzer::AggExpr* agg) const override;
+  std::string visitAggExpr(const hdk::ir::AggExpr* agg) const override;
 
   template <typename List>
   std::vector<std::string> visitList(const List& expressions) const;

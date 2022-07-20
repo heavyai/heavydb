@@ -29,9 +29,9 @@
 #include <utility>
 #include <vector>
 
-namespace Analyzer {
+namespace hdk::ir {
 class Expr;
-}  // namespace Analyzer
+}  // namespace hdk::ir
 
 class QueryMemoryDescriptor;
 
@@ -44,19 +44,18 @@ int64_t get_agg_initial_val(const SQLAgg agg,
                             const bool enable_compaction,
                             const unsigned min_byte_width_to_compact);
 
-std::vector<int64_t> init_agg_val_vec(
-    const std::vector<Analyzer::Expr*>& targets,
-    const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
-    const QueryMemoryDescriptor& query_mem_desc,
-    bool bigint_count);
+std::vector<int64_t> init_agg_val_vec(const std::vector<hdk::ir::Expr*>& targets,
+                                      const std::list<hdk::ir::ExprPtr>& quals,
+                                      const QueryMemoryDescriptor& query_mem_desc,
+                                      bool bigint_count);
 
 std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targets,
                                       const QueryMemoryDescriptor& query_mem_desc);
 
-const Analyzer::Expr* agg_arg(const Analyzer::Expr* expr);
+const hdk::ir::Expr* agg_arg(const hdk::ir::Expr* expr);
 
-bool constrained_not_null(const Analyzer::Expr* expr,
-                          const std::list<std::shared_ptr<Analyzer::Expr>>& quals);
+bool constrained_not_null(const hdk::ir::Expr* expr,
+                          const std::list<hdk::ir::ExprPtr>& quals);
 
 void set_notnull(TargetInfo& target, const bool not_null);
 

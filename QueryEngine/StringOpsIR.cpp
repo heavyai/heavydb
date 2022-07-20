@@ -63,7 +63,7 @@ extern "C" RUNTIME_EXPORT int32_t lower_encoded(int32_t string_id,
   return string_dict_proxy->getOrAddTransient(boost::locale::to_lower(str));
 }
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::CharLengthExpr* expr,
+llvm::Value* CodeGenerator::codegen(const hdk::ir::CharLengthExpr* expr,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   auto str_lv = codegen(expr->get_arg(), true, co);
@@ -95,7 +95,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::CharLengthExpr* expr,
              : cgen_state_->emitCall(fn_name, charlength_args);
 }
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::KeyForStringExpr* expr,
+llvm::Value* CodeGenerator::codegen(const hdk::ir::KeyForStringExpr* expr,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   auto str_lv = codegen(expr->get_arg(), true, co);
@@ -103,7 +103,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::KeyForStringExpr* expr,
   return cgen_state_->emitCall("key_for_string_encoded", str_lv);
 }
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::LowerExpr* expr,
+llvm::Value* CodeGenerator::codegen(const hdk::ir::LowerExpr* expr,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   if (co.device_type == ExecutorDeviceType::GPU) {
@@ -125,7 +125,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::LowerExpr* expr,
       "lower_encoded", get_int_type(32, cgen_state_->context_), args);
 }
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::LikeExpr* expr,
+llvm::Value* CodeGenerator::codegen(const hdk::ir::LikeExpr* expr,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   if (is_unnest(extract_cast_arg(expr->get_arg()))) {
@@ -134,13 +134,13 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::LikeExpr* expr,
   char escape_char{'\\'};
   if (expr->get_escape_expr()) {
     auto escape_char_expr =
-        dynamic_cast<const Analyzer::Constant*>(expr->get_escape_expr());
+        dynamic_cast<const hdk::ir::Constant*>(expr->get_escape_expr());
     CHECK(escape_char_expr);
     CHECK(escape_char_expr->get_type_info().is_string());
     CHECK_EQ(size_t(1), escape_char_expr->get_constval().stringval->size());
     escape_char = (*escape_char_expr->get_constval().stringval)[0];
   }
-  auto pattern = dynamic_cast<const Analyzer::Constant*>(expr->get_like_expr());
+  auto pattern = dynamic_cast<const hdk::ir::Constant*>(expr->get_like_expr());
   CHECK(pattern);
   auto fast_dict_like_lv = codegenDictLike(expr->get_own_arg(),
                                            pattern,
@@ -185,15 +185,14 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::LikeExpr* expr,
   return cgen_state_->emitCall(fn_name, str_like_args);
 }
 
-llvm::Value* CodeGenerator::codegenDictLike(
-    const std::shared_ptr<Analyzer::Expr> like_arg,
-    const Analyzer::Constant* pattern,
-    const bool ilike,
-    const bool is_simple,
-    const char escape_char,
-    const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenDictLike(const hdk::ir::ExprPtr like_arg,
+                                            const hdk::ir::Constant* pattern,
+                                            const bool ilike,
+                                            const bool is_simple,
+                                            const char escape_char,
+                                            const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
-  const auto cast_oper = std::dynamic_pointer_cast<Analyzer::UOper>(like_arg);
+  const auto cast_oper = std::dynamic_pointer_cast<hdk::ir::UOper>(like_arg);
   if (!cast_oper) {
     return nullptr;
   }
@@ -221,7 +220,7 @@ llvm::Value* CodeGenerator::codegenDictLike(
   // InIntegerSet requires 64-bit values
   std::vector<int64_t> matching_ids_64(matching_ids.size());
   std::copy(matching_ids.begin(), matching_ids.end(), matching_ids_64.begin());
-  const auto in_values = std::make_shared<Analyzer::InIntegerSet>(
+  const auto in_values = std::make_shared<hdk::ir::InIntegerSet>(
       dict_like_arg, matching_ids_64, dict_like_arg_ti.get_notnull());
   return codegen(in_values.get(), co);
 }
@@ -259,17 +258,17 @@ std::vector<int32_t> get_compared_ids(const StringDictionaryProxy* dict,
 }
 }  // namespace
 
-llvm::Value* CodeGenerator::codegenDictStrCmp(const std::shared_ptr<Analyzer::Expr> lhs,
-                                              const std::shared_ptr<Analyzer::Expr> rhs,
+llvm::Value* CodeGenerator::codegenDictStrCmp(const hdk::ir::ExprPtr lhs,
+                                              const hdk::ir::ExprPtr rhs,
                                               const SQLOps compare_operator,
                                               const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
-  auto rhs_cast_oper = std::dynamic_pointer_cast<const Analyzer::UOper>(rhs);
-  auto lhs_cast_oper = std::dynamic_pointer_cast<const Analyzer::UOper>(lhs);
-  auto rhs_col_var = std::dynamic_pointer_cast<const Analyzer::ColumnVar>(rhs);
-  auto lhs_col_var = std::dynamic_pointer_cast<const Analyzer::ColumnVar>(lhs);
-  std::shared_ptr<const Analyzer::UOper> cast_oper;
-  std::shared_ptr<const Analyzer::ColumnVar> col_var;
+  auto rhs_cast_oper = std::dynamic_pointer_cast<const hdk::ir::UOper>(rhs);
+  auto lhs_cast_oper = std::dynamic_pointer_cast<const hdk::ir::UOper>(lhs);
+  auto rhs_col_var = std::dynamic_pointer_cast<const hdk::ir::ColumnVar>(rhs);
+  auto lhs_col_var = std::dynamic_pointer_cast<const hdk::ir::ColumnVar>(lhs);
+  std::shared_ptr<const hdk::ir::UOper> cast_oper;
+  std::shared_ptr<const hdk::ir::ColumnVar> col_var;
   auto compare_opr = compare_operator;
   if (lhs_col_var && rhs_col_var) {
     if (lhs_col_var->get_type_info().get_comp_param() ==
@@ -311,7 +310,7 @@ llvm::Value* CodeGenerator::codegenDictStrCmp(const std::shared_ptr<Analyzer::Ex
   CHECK_EQ(kCAST, cast_oper->get_optype());
 
   const auto const_expr =
-      dynamic_cast<Analyzer::Constant*>(cast_oper->get_own_operand().get());
+      dynamic_cast<hdk::ir::Constant*>(cast_oper->get_own_operand().get());
   if (!const_expr) {
     // Analyzer casts dictionary encoded columns to none encoded if there is a comparison
     // between two encoded columns. Which we currently do not handle.
@@ -337,12 +336,12 @@ llvm::Value* CodeGenerator::codegenDictStrCmp(const std::shared_ptr<Analyzer::Ex
   std::vector<int64_t> matching_ids_64(matching_ids.size());
   std::copy(matching_ids.begin(), matching_ids.end(), matching_ids_64.begin());
 
-  const auto in_values = std::make_shared<Analyzer::InIntegerSet>(
+  const auto in_values = std::make_shared<hdk::ir::InIntegerSet>(
       col_var, matching_ids_64, col_ti.get_notnull());
   return codegen(in_values.get(), co);
 }
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::RegexpExpr* expr,
+llvm::Value* CodeGenerator::codegen(const hdk::ir::RegexpExpr* expr,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   if (is_unnest(extract_cast_arg(expr->get_arg()))) {
@@ -351,13 +350,13 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::RegexpExpr* expr,
   char escape_char{'\\'};
   if (expr->get_escape_expr()) {
     auto escape_char_expr =
-        dynamic_cast<const Analyzer::Constant*>(expr->get_escape_expr());
+        dynamic_cast<const hdk::ir::Constant*>(expr->get_escape_expr());
     CHECK(escape_char_expr);
     CHECK(escape_char_expr->get_type_info().is_string());
     CHECK_EQ(size_t(1), escape_char_expr->get_constval().stringval->size());
     escape_char = (*escape_char_expr->get_constval().stringval)[0];
   }
-  auto pattern = dynamic_cast<const Analyzer::Constant*>(expr->get_pattern_expr());
+  auto pattern = dynamic_cast<const hdk::ir::Constant*>(expr->get_pattern_expr());
   CHECK(pattern);
   auto fast_dict_pattern_lv =
       codegenDictRegexp(expr->get_own_arg(), pattern, escape_char, co);
@@ -398,13 +397,12 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::RegexpExpr* expr,
       fn_name, get_int_type(1, cgen_state_->context_), regexp_args);
 }
 
-llvm::Value* CodeGenerator::codegenDictRegexp(
-    const std::shared_ptr<Analyzer::Expr> pattern_arg,
-    const Analyzer::Constant* pattern,
-    const char escape_char,
-    const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenDictRegexp(const hdk::ir::ExprPtr pattern_arg,
+                                              const hdk::ir::Constant* pattern,
+                                              const char escape_char,
+                                              const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
-  const auto cast_oper = std::dynamic_pointer_cast<Analyzer::UOper>(pattern_arg);
+  const auto cast_oper = std::dynamic_pointer_cast<hdk::ir::UOper>(pattern_arg);
   if (!cast_oper) {
     return nullptr;
   }
@@ -429,7 +427,7 @@ llvm::Value* CodeGenerator::codegenDictRegexp(
   // InIntegerSet requires 64-bit values
   std::vector<int64_t> matching_ids_64(matching_ids.size());
   std::copy(matching_ids.begin(), matching_ids.end(), matching_ids_64.begin());
-  const auto in_values = std::make_shared<Analyzer::InIntegerSet>(
+  const auto in_values = std::make_shared<hdk::ir::InIntegerSet>(
       dict_regexp_arg, matching_ids_64, dict_regexp_arg_ti.get_notnull());
   return codegen(in_values.get(), co);
 }

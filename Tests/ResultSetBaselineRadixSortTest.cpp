@@ -238,7 +238,7 @@ void SortBaselineIntegersTestImpl(const bool desc) {
                                            query_mem_desc,
                                            upper_bound,
                                            empty_key_val<K>());
-  std::list<Analyzer::OrderEntry> order_entries;
+  std::list<hdk::ir::OrderEntry> order_entries;
   order_entries.emplace_back(3, desc, false);
   const size_t top_n = 5;
   rs->sort(order_entries, top_n, nullptr);
@@ -281,7 +281,7 @@ TEST(SortBaseline, Floats) {
                                            query_mem_desc,
                                            upper_bound,
                                            true);
-      std::list<Analyzer::OrderEntry> order_entries;
+      std::list<hdk::ir::OrderEntry> order_entries;
       order_entries.emplace_back(tle_no, desc, false);
       const size_t top_n = 5;
       rs->sort(order_entries, top_n, nullptr);
@@ -312,7 +312,7 @@ TEST(SortBaseline, FloatsNotNull) {
                                            query_mem_desc,
                                            upper_bound,
                                            false);
-      std::list<Analyzer::OrderEntry> order_entries;
+      std::list<hdk::ir::OrderEntry> order_entries;
       order_entries.emplace_back(tle_no, desc, false);
       const size_t top_n = 5;
       rs->sort(order_entries, top_n, nullptr);

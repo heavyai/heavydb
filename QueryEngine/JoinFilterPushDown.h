@@ -32,7 +32,7 @@
  * to be able to uniquely identify fitlers in multi-step queries and/or subqueries.
  */
 struct PushedDownFilterInfo {
-  std::vector<std::shared_ptr<Analyzer::Expr>> filter_expressions;
+  std::vector<hdk::ir::ExprPtr> filter_expressions;
   size_t input_prev;
   size_t input_start;
   size_t input_next;

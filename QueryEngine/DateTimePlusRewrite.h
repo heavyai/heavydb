@@ -19,14 +19,14 @@
 
 #include <memory>
 
-namespace Analyzer {
+namespace hdk::ir {
 
 class Expr;
 
 class FunctionOper;
 
-}  // namespace Analyzer
+}  // namespace hdk::ir
 
-std::shared_ptr<Analyzer::Expr> rewrite_to_date_trunc(const Analyzer::FunctionOper*);
+hdk::ir::ExprPtr rewrite_to_date_trunc(const hdk::ir::FunctionOper*);
 
 #endif  // QUERYENGINE_DATETIMEPLUSREWRITE_H

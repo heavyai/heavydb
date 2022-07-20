@@ -22,7 +22,7 @@
 #include <boost/algorithm/string.hpp>
 
 SQLTypeInfo get_agg_type(const SQLAgg agg_kind,
-                         const Analyzer::Expr* arg_expr,
+                         const hdk::ir::Expr* arg_expr,
                          bool bigint_count) {
   switch (agg_kind) {
     case kCOUNT:
@@ -207,8 +207,8 @@ DatetruncField to_datediff_field(const std::string& field) {
   return fieldno;
 }
 
-std::shared_ptr<Analyzer::Constant> make_fp_constant(const int64_t val,
-                                                     const SQLTypeInfo& ti) {
+std::shared_ptr<hdk::ir::Constant> make_fp_constant(const int64_t val,
+                                                    const SQLTypeInfo& ti) {
   Datum d;
   switch (ti.get_type()) {
     case kFLOAT:
@@ -220,5 +220,5 @@ std::shared_ptr<Analyzer::Constant> make_fp_constant(const int64_t val,
     default:
       CHECK(false);
   }
-  return makeExpr<Analyzer::Constant>(ti, false, d);
+  return hdk::ir::makeExpr<hdk::ir::Constant>(ti, false, d);
 }

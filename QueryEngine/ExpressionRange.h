@@ -16,7 +16,7 @@
 #ifndef QUERYENGINE_EXPRESSIONRANGE_H
 #define QUERYENGINE_EXPRESSIONRANGE_H
 
-#include "../Analyzer/Analyzer.h"
+#include "IR/Expr.h"
 
 #include <boost/multiprecision/cpp_int.hpp>  //#include <boost/none.hpp>
 #include <boost/optional.hpp>
@@ -337,22 +337,22 @@ void apply_hpt_qual(const Datum const_datum,
                     ExpressionRange& qual_range);
 
 ExpressionRange apply_simple_quals(
-    const Analyzer::ColumnVar*,
+    const hdk::ir::ColumnVar*,
     const ExpressionRange&,
-    const boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> = boost::none);
+    const boost::optional<std::list<hdk::ir::ExprPtr>> = boost::none);
 
 class Executor;
 struct InputTableInfo;
 
-ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar*,
+ExpressionRange getLeafColumnRange(const hdk::ir::ColumnVar*,
                                    const std::vector<InputTableInfo>&,
                                    const Executor*,
                                    const bool is_outer_join_proj);
 
 ExpressionRange getExpressionRange(
-    const Analyzer::Expr*,
+    const hdk::ir::Expr*,
     const std::vector<InputTableInfo>&,
     const Executor*,
-    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> = boost::none);
+    boost::optional<std::list<hdk::ir::ExprPtr>> = boost::none);
 
 #endif  // QUERYENGINE_EXPRESSIONRANGE_H

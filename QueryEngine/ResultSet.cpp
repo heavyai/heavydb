@@ -649,7 +649,7 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
 template <typename T>
 void sort_on_cpu(T* val_buff,
                  PermutationView pv,
-                 const Analyzer::OrderEntry& order_entry) {
+                 const hdk::ir::OrderEntry& order_entry) {
   int64_t begin = 0;
   int64_t end = pv.size() - 1;
 
@@ -700,7 +700,7 @@ void sort_onecol_cpu(int8_t* val_buff,
                      PermutationView pv,
                      const SQLTypeInfo& type_info,
                      const size_t slot_width,
-                     const Analyzer::OrderEntry& order_entry) {
+                     const hdk::ir::OrderEntry& order_entry) {
   if (type_info.is_integer() || type_info.is_decimal()) {
     switch (slot_width) {
       case 1:
@@ -734,7 +734,7 @@ void sort_onecol_cpu(int8_t* val_buff,
   }
 }
 
-void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
+void ResultSet::sort(const std::list<hdk::ir::OrderEntry>& order_entries,
                      size_t top_n,
                      const Executor* executor) {
   auto timer = DEBUG_TIMER(__func__);
@@ -830,7 +830,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
 }
 
 #ifdef HAVE_CUDA
-void ResultSet::baselineSort(const std::list<Analyzer::OrderEntry>& order_entries,
+void ResultSet::baselineSort(const std::list<hdk::ir::OrderEntry>& order_entries,
                              const size_t top_n,
                              const Executor* executor) {
   auto timer = DEBUG_TIMER(__func__);
@@ -868,7 +868,7 @@ const Permutation& ResultSet::getPermutationBuffer() const {
   return permutation_;
 }
 
-void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries,
+void ResultSet::parallelTop(const std::list<hdk::ir::OrderEntry>& order_entries,
                             const size_t top_n,
                             const Executor* executor) {
   auto timer = DEBUG_TIMER(__func__);
@@ -975,7 +975,7 @@ ResultSet::ApproxQuantileBuffers ResultSet::ResultSetComparator<
 template <typename BUFFER_ITERATOR_TYPE>
 std::vector<int64_t>
 ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeCountDistinctColumn(
-    const Analyzer::OrderEntry& order_entry) const {
+    const hdk::ir::OrderEntry& order_entry) const {
   const size_t num_storage_entries = result_set_->query_mem_desc_.getEntryCount();
   std::vector<int64_t> count_distinct_materialized_buffer(num_storage_entries);
   const CountDistinctDescriptor count_distinct_descriptor =
@@ -1021,7 +1021,7 @@ double ResultSet::calculateQuantile(quantile::TDigest* const t_digest) {
 template <typename BUFFER_ITERATOR_TYPE>
 ResultSet::ApproxQuantileBuffers::value_type
 ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeApproxQuantileColumn(
-    const Analyzer::OrderEntry& order_entry) const {
+    const hdk::ir::OrderEntry& order_entry) const {
   ResultSet::ApproxQuantileBuffers::value_type materialized_buffer(
       result_set_->query_mem_desc_.getEntryCount());
   const size_t size = permutation_.size();
@@ -1225,7 +1225,7 @@ PermutationView ResultSet::topPermutation(PermutationView permutation,
 
 void ResultSet::radixSortOnGpu(
     const Config& config,
-    const std::list<Analyzer::OrderEntry>& order_entries) const {
+    const std::list<hdk::ir::OrderEntry>& order_entries) const {
   auto timer = DEBUG_TIMER(__func__);
   const int device_id{0};
   GpuAllocator cuda_allocator(buffer_provider_, device_id);
@@ -1264,7 +1264,7 @@ void ResultSet::radixSortOnGpu(
 }
 
 void ResultSet::radixSortOnCpu(
-    const std::list<Analyzer::OrderEntry>& order_entries) const {
+    const std::list<hdk::ir::OrderEntry>& order_entries) const {
   auto timer = DEBUG_TIMER(__func__);
   CHECK(!query_mem_desc_.hasKeylessHash());
   std::vector<int64_t> tmp_buff(query_mem_desc_.getEntryCount());

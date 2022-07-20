@@ -125,8 +125,6 @@ class RelAlgExecutor {
     return query_dag_ ? std::make_optional(query_dag_->getQueryHints()) : std::nullopt;
   }
 
-  ExecutionResult executeSimpleInsert(const Analyzer::Query& insert_query);
-
   AggregatedColRange computeColRangesCache();
   StringDictionaryGenerations computeStringDictionaryGenerations();
   TableGenerations computeTableGenerations();
@@ -180,8 +178,8 @@ class RelAlgExecutor {
 
   // Creates the window context for the given window function.
   std::unique_ptr<WindowFunctionContext> createWindowFunctionContext(
-      const Analyzer::WindowFunction* window_func,
-      const std::shared_ptr<Analyzer::BinOper>& partition_key_cond,
+      const hdk::ir::WindowFunction* window_func,
+      const std::shared_ptr<hdk::ir::BinOper>& partition_key_cond,
       const RelAlgExecutionUnit& ra_exe_unit,
       const std::vector<InputTableInfo>& query_infos,
       const CompilationOptions& co,
@@ -254,7 +252,7 @@ class RelAlgExecutor {
                                             const ExecutionOptions& eo);
 
   FilterSelectivity getFilterSelectivity(
-      const std::vector<std::shared_ptr<Analyzer::Expr>>& filter_expressions,
+      const std::vector<hdk::ir::ExprPtr>& filter_expressions,
       const CompilationOptions& co,
       const ExecutionOptions& eo);
 
@@ -334,7 +332,7 @@ class RelAlgExecutor {
 
   // Transform the provided `join_condition` to conjunctive form, find composite
   // key opportunities and finally translate it to an Analyzer expression.
-  std::list<std::shared_ptr<Analyzer::Expr>> makeJoinQuals(
+  std::list<hdk::ir::ExprPtr> makeJoinQuals(
       const RexScalar* join_condition,
       const std::vector<JoinType>& join_types,
       const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
@@ -348,7 +346,7 @@ class RelAlgExecutor {
   TemporaryTables temporary_tables_;
   time_t now_;
   std::unordered_map<unsigned, JoinQualsPerNestingLevel> left_deep_join_info_;
-  std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove
+  std::vector<hdk::ir::ExprPtr> target_exprs_owned_;  // TODO(alex): remove
   int64_t queue_time_ms_;
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;
 

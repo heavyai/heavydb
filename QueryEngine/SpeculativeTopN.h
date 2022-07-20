@@ -52,16 +52,16 @@ class QueryMemoryDescriptor;
 class ResultSet;
 struct RelAlgExecutionUnit;
 class RowSetMemoryOwner;
-namespace Analyzer {
+namespace hdk::ir {
 class Expr;
-}  // namespace Analyzer
+}  // namespace hdk::ir
 
 class SpeculativeTopNMap {
  public:
   SpeculativeTopNMap();
 
   SpeculativeTopNMap(const ResultSet& rows,
-                     const std::vector<Analyzer::Expr*>& target_exprs,
+                     const std::vector<hdk::ir::Expr*>& target_exprs,
                      const size_t truncate_n);
 
   void reduce(SpeculativeTopNMap& that);
@@ -95,12 +95,12 @@ class SpeculativeTopNFailed : public std::runtime_error {
 
 class SpeculativeTopNBlacklist {
  public:
-  void add(const std::shared_ptr<Analyzer::Expr> expr, const bool desc);
-  bool contains(const std::shared_ptr<Analyzer::Expr> expr, const bool desc) const;
+  void add(const hdk::ir::ExprPtr expr, const bool desc);
+  bool contains(const hdk::ir::ExprPtr expr, const bool desc) const;
 
  private:
   mutable std::mutex mutex_;
-  std::vector<std::pair<std::shared_ptr<Analyzer::Expr>, bool>> blacklist_;
+  std::vector<std::pair<hdk::ir::ExprPtr, bool>> blacklist_;
 };
 
 bool use_speculative_top_n(const RelAlgExecutionUnit&, const QueryMemoryDescriptor&);

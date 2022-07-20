@@ -27,7 +27,7 @@ int64_t ColRangeInfo::getBucketedCardinality() const {
 
 ColRangeInfo get_expr_range_info(const RelAlgExecutionUnit& ra_exe_unit,
                                  const std::vector<InputTableInfo>& query_infos,
-                                 const Analyzer::Expr* expr,
+                                 const hdk::ir::Expr* expr,
                                  Executor* executor) {
   if (!expr) {
     return {QueryDescriptionType::Projection, 0, 0, 0, false};

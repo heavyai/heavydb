@@ -22,8 +22,8 @@
 
 namespace {
 struct IsEquivBinOp {
-  bool operator()(std::shared_ptr<Analyzer::Expr> const& qual) {
-    if (auto oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual)) {
+  bool operator()(hdk::ir::ExprPtr const& qual) {
+    if (auto oper = std::dynamic_pointer_cast<const hdk::ir::BinOper>(qual)) {
       return IS_EQUIVALENCE(oper->get_optype());
     }
     return false;
@@ -32,17 +32,17 @@ struct IsEquivBinOp {
 }  // namespace
 
 std::vector<InnerOuterOrLoopQual> QueryPlanDagExtractor::normalizeColumnsPair(
-    const Analyzer::BinOper* condition) {
+    const hdk::ir::BinOper* condition) {
   std::vector<InnerOuterOrLoopQual> result;
   const auto lhs_tuple_expr =
-      dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_left_operand());
+      dynamic_cast<const hdk::ir::ExpressionTuple*>(condition->get_left_operand());
   const auto rhs_tuple_expr =
-      dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_right_operand());
+      dynamic_cast<const hdk::ir::ExpressionTuple*>(condition->get_right_operand());
 
   CHECK_EQ(static_cast<bool>(lhs_tuple_expr), static_cast<bool>(rhs_tuple_expr));
   auto do_normalize_inner_outer_pair = [this, &result](
-                                           const Analyzer::Expr* lhs,
-                                           const Analyzer::Expr* rhs,
+                                           const hdk::ir::Expr* lhs,
+                                           const hdk::ir::Expr* rhs,
                                            const TemporaryTables* temporary_table) {
     try {
       auto inner_outer_pair =
@@ -351,13 +351,13 @@ int get_input_idx(const RelLeftDeepInnerJoin* rel_left_deep_join, int const tbl_
 }
 }  // namespace
 
-Analyzer::ColumnVar const* QueryPlanDagExtractor::getColVar(
-    Analyzer::Expr const* col_info) {
-  auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(col_info);
+hdk::ir::ColumnVar const* QueryPlanDagExtractor::getColVar(
+    hdk::ir::Expr const* col_info) {
+  auto col_var = dynamic_cast<const hdk::ir::ColumnVar*>(col_info);
   if (!col_var) {
     auto visited_cols = global_dag_.collectColVars(col_info);
     if (visited_cols.size() == 1) {
-      col_var = dynamic_cast<const Analyzer::ColumnVar*>(visited_cols[0]);
+      col_var = dynamic_cast<const hdk::ir::ColumnVar*>(visited_cols[0]);
     }
   }
   return col_var;
@@ -399,9 +399,9 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
   // qual #3 so we clearly retrieve DAG only corresponding to #2's
   for (size_t level_idx = 0; level_idx < left_deep_join_info->size(); ++level_idx) {
     const auto& current_level_join_conditions = left_deep_join_info->at(level_idx);
-    std::vector<const Analyzer::ColumnVar*> inner_join_cols;
-    std::vector<const Analyzer::ColumnVar*> outer_join_cols;
-    std::vector<std::shared_ptr<const Analyzer::Expr>> filter_ops;
+    std::vector<const hdk::ir::ColumnVar*> inner_join_cols;
+    std::vector<const hdk::ir::ColumnVar*> outer_join_cols;
+    std::vector<hdk::ir::ExprPtr> filter_ops;
     int inner_input_idx{-1};
     int outer_input_idx{-1};
     OpInfo op_info{"UNDEFINED", "UNDEFINED", "UNDEFINED"};
@@ -423,7 +423,7 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
     // when we have more than one quals, i.e., current_level_join_conditions.quals.size()
     // > 1, we consider the first qual is used as hashtable building
     for (const auto& join_qual : current_level_join_conditions.quals) {
-      auto qual_bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(join_qual);
+      auto qual_bin_oper = std::dynamic_pointer_cast<const hdk::ir::BinOper>(join_qual);
       auto join_qual_str = ::toString(join_qual);
       if (qual_bin_oper) {
         if (join_qual == current_level_join_conditions.quals.front()) {

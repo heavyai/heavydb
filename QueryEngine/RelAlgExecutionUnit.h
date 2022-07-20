@@ -98,31 +98,34 @@ enum JoinColumnSide {
   kInner,
   kOuter,
   kQual,   // INNER + OUTER
-  kDirect  // set target directly (i.e., put Analyzer::Expr* instead of
-           // Analyzer::BinOper*)
+  kDirect  // set target directly (i.e., put hdk::ir::Expr* instead of
+           // hdk::ir::BinOper*)
 };
 constexpr char const* EMPTY_QUERY_PLAN = "";
 constexpr QueryPlanHash EMPTY_HASHED_PLAN_DAG_KEY = 0;
 
 enum class SortAlgorithm { Default, SpeculativeTopN, StreamingTopN };
 
-namespace Analyzer {
+namespace hdk::ir {
 class Expr;
 class ColumnVar;
-class Estimator;
 struct OrderEntry;
 
-}  // namespace Analyzer
+}  // namespace hdk::ir
+
+namespace Analyzer {
+class Estimator;
+}
 
 struct SortInfo {
-  const std::list<Analyzer::OrderEntry> order_entries;
+  const std::list<hdk::ir::OrderEntry> order_entries;
   const SortAlgorithm algorithm;
   const size_t limit;
   const size_t offset;
 };
 
 struct JoinCondition {
-  std::list<std::shared_ptr<Analyzer::Expr>> quals;
+  std::list<hdk::ir::ExprPtr> quals;
   JoinType type;
 };
 
@@ -131,11 +134,11 @@ using JoinQualsPerNestingLevel = std::vector<JoinCondition>;
 struct RelAlgExecutionUnit {
   std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
-  std::list<std::shared_ptr<Analyzer::Expr>> quals;
+  std::list<hdk::ir::ExprPtr> simple_quals;
+  std::list<hdk::ir::ExprPtr> quals;
   const JoinQualsPerNestingLevel join_quals;
-  const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
-  std::vector<Analyzer::Expr*> target_exprs;
+  const std::list<hdk::ir::ExprPtr> groupby_exprs;
+  std::vector<hdk::ir::Expr*> target_exprs;
   const std::shared_ptr<Analyzer::Estimator> estimator;
   const SortInfo sort_info;
   size_t scan_limit;
@@ -154,9 +157,9 @@ std::string ra_exec_unit_desc_for_caching(const RelAlgExecutionUnit& ra_exe_unit
 struct TableFunctionExecutionUnit {
   const std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  std::vector<Analyzer::Expr*> input_exprs;
-  std::vector<Analyzer::ColumnVar*> table_func_inputs;
-  std::vector<Analyzer::Expr*> target_exprs;
+  std::vector<hdk::ir::Expr*> input_exprs;
+  std::vector<hdk::ir::ColumnVar*> table_func_inputs;
+  std::vector<hdk::ir::Expr*> target_exprs;
   const size_t output_buffer_size_param;
   const table_functions::TableFunction table_func;
 

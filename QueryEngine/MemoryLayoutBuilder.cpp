@@ -76,8 +76,8 @@ bool cardinality_estimate_less_than_column_range(const int64_t cardinality_estim
   }
 }
 
-bool expr_is_rowid(const Analyzer::Expr* expr) {
-  const auto col = dynamic_cast<const Analyzer::ColumnVar*>(expr);
+bool expr_is_rowid(const hdk::ir::Expr* expr) {
+  const auto col = dynamic_cast<const hdk::ir::ColumnVar*>(expr);
   if (!col) {
     return false;
   }
@@ -235,7 +235,7 @@ KeylessInfo get_keyless_info(const RelAlgExecutionUnit& ra_exe_unit,
       num_agg_expr++;
     }
     if (!found && agg_info.is_agg && !is_distinct_target(agg_info)) {
-      auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
+      auto agg_expr = dynamic_cast<const hdk::ir::AggExpr*>(target_expr);
       CHECK(agg_expr);
       const auto arg_expr = agg_arg(target_expr);
       const bool float_argument_input = takes_float_argument(agg_info);
@@ -396,7 +396,7 @@ CountDistinctDescriptors init_count_distinct_descriptors(
     if (is_distinct_target(agg_info)) {
       CHECK(agg_info.is_agg);
       CHECK(agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT);
-      const auto agg_expr = static_cast<const Analyzer::AggExpr*>(target_expr);
+      const auto agg_expr = static_cast<const hdk::ir::AggExpr*>(target_expr);
       const auto& arg_ti = agg_expr->get_arg()->get_type_info();
       if (arg_ti.is_bytes()) {
         throw std::runtime_error(
@@ -561,7 +561,7 @@ std::unique_ptr<QueryMemoryDescriptor> build_query_memory_descriptor(
 
 bool gpu_can_handle_order_entries(const RelAlgExecutionUnit& ra_exe_unit,
                                   const std::vector<InputTableInfo>& query_infos,
-                                  const std::list<Analyzer::OrderEntry>& order_entries,
+                                  const std::list<hdk::ir::OrderEntry>& order_entries,
                                   Executor* executor) {
   if (order_entries.size() > 1) {  // TODO(alex): lift this restriction
     return false;
@@ -570,11 +570,11 @@ bool gpu_can_handle_order_entries(const RelAlgExecutionUnit& ra_exe_unit,
     CHECK_GE(order_entry.tle_no, 1);
     CHECK_LE(static_cast<size_t>(order_entry.tle_no), ra_exe_unit.target_exprs.size());
     const auto target_expr = ra_exe_unit.target_exprs[order_entry.tle_no - 1];
-    if (!dynamic_cast<Analyzer::AggExpr*>(target_expr)) {
+    if (!dynamic_cast<hdk::ir::AggExpr*>(target_expr)) {
       return false;
     }
     // TODO(alex): relax the restrictions
-    auto agg_expr = static_cast<Analyzer::AggExpr*>(target_expr);
+    auto agg_expr = static_cast<hdk::ir::AggExpr*>(target_expr);
     if (agg_expr->get_is_distinct() || agg_expr->get_aggtype() == kAVG ||
         agg_expr->get_aggtype() == kMIN || agg_expr->get_aggtype() == kMAX ||
         agg_expr->get_aggtype() == kAPPROX_COUNT_DISTINCT) {

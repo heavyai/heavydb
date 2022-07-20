@@ -110,13 +110,13 @@ llvm::Value* StringDictionaryTranslationMgr::codegenCast(llvm::Value* input_str_
                                                          const bool add_nullcheck) const {
   auto cgen_state_ptr = executor_->getCgenStatePtr();
   AUTOMATIC_IR_METADATA(cgen_state_ptr);
-  std::vector<std::shared_ptr<const Analyzer::Constant>> constants_owned;
-  std::vector<const Analyzer::Constant*> constants;
+  std::vector<std::shared_ptr<const hdk::ir::Constant>> constants_owned;
+  std::vector<const hdk::ir::Constant*> constants;
   for (const auto kernel_translation_map : kernel_translation_maps_) {
     const int64_t translation_map_handle =
         reinterpret_cast<int64_t>(kernel_translation_map);
     const auto translation_map_handle_literal =
-        std::dynamic_pointer_cast<Analyzer::Constant>(
+        std::dynamic_pointer_cast<hdk::ir::Constant>(
             Analyzer::analyzeIntValue(translation_map_handle));
     CHECK(translation_map_handle_literal);
     CHECK_EQ(kENCODING_NONE,

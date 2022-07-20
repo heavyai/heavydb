@@ -29,7 +29,7 @@
 #include <cstdint>
 #include <list>
 
-namespace Analyzer {
+namespace hdk::ir {
 struct OrderEntry;
 }
 class QueryMemoryDescriptor;
@@ -37,7 +37,7 @@ namespace Data_Namespace {
 class DataMgr;
 }
 
-void inplace_sort_gpu(const std::list<Analyzer::OrderEntry>&,
+void inplace_sort_gpu(const std::list<hdk::ir::OrderEntry>&,
                       const QueryMemoryDescriptor&,
                       const GpuGroupByBuffers&,
                       BufferProvider*,

@@ -51,7 +51,7 @@ bool need_to_hold_chunk(const Chunk_NS::Chunk* chunk,
       (chunk_ti.is_array() ||
        (chunk_ti.is_string() && chunk_ti.get_compression() == kENCODING_NONE))) {
     for (const auto target_expr : ra_exe_unit.target_exprs) {
-      const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
+      const auto col_var = dynamic_cast<const hdk::ir::ColumnVar*>(target_expr);
       if (col_var && col_var->get_column_id() == chunk->getColumnId() &&
           col_var->get_table_id() == chunk->getTableId()) {
         return true;
@@ -65,7 +65,7 @@ bool need_to_hold_chunk(const Chunk_NS::Chunk* chunk,
   for (size_t i = 0; i < ra_exe_unit.target_exprs.size(); i++) {
     const auto target_expr = ra_exe_unit.target_exprs[i];
     const auto& col_lazy_fetch = lazy_fetch_info[i];
-    const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
+    const auto col_var = dynamic_cast<const hdk::ir::ColumnVar*>(target_expr);
     if (col_var && col_var->get_column_id() == chunk->getColumnId() &&
         col_var->get_table_id() == chunk->getTableId()) {
       if (col_lazy_fetch.is_lazily_fetched) {

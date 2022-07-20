@@ -23,11 +23,11 @@ namespace {
 class UsedColumnExpressions : public ScalarExprVisitor<ScalarCodeGenerator::ColumnMap> {
  protected:
   ScalarCodeGenerator::ColumnMap visitColumnVar(
-      const Analyzer::ColumnVar* column) const override {
+      const hdk::ir::ColumnVar* column) const override {
     ScalarCodeGenerator::ColumnMap m;
     InputColDescriptor input_desc(column->get_column_info(), column->get_rte_idx());
     m.emplace(input_desc,
-              std::static_pointer_cast<Analyzer::ColumnVar>(column->deep_copy()));
+              std::static_pointer_cast<hdk::ir::ColumnVar>(column->deep_copy()));
     return m;
   }
 
@@ -56,7 +56,7 @@ llvm::Type* llvm_type_from_sql(const SQLTypeInfo& ti, llvm::LLVMContext& ctx) {
 
 }  // namespace
 
-ScalarCodeGenerator::ColumnMap ScalarCodeGenerator::prepare(const Analyzer::Expr* expr) {
+ScalarCodeGenerator::ColumnMap ScalarCodeGenerator::prepare(const hdk::ir::Expr* expr) {
   UsedColumnExpressions visitor;
   const auto used_columns = visitor.visit(expr);
   std::list<std::shared_ptr<const InputColDescriptor>> global_col_ids;
@@ -68,7 +68,7 @@ ScalarCodeGenerator::ColumnMap ScalarCodeGenerator::prepare(const Analyzer::Expr
 }
 
 ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
-    const Analyzer::Expr* expr,
+    const hdk::ir::Expr* expr,
     const bool fetch_columns,
     const CompilationOptions& co) {
   own_plan_state_ =
@@ -76,7 +76,7 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
   plan_state_ = own_plan_state_.get();
   const auto used_columns = prepare(expr);
   std::vector<llvm::Type*> arg_types(plan_state_->global_to_local_col_ids_.size() + 1);
-  std::vector<std::shared_ptr<Analyzer::ColumnVar>> inputs(arg_types.size() - 1);
+  std::vector<std::shared_ptr<hdk::ir::ColumnVar>> inputs(arg_types.size() - 1);
   auto& ctx = module_->getContext();
   for (const auto& kv : plan_state_->global_to_local_col_ids_) {
     size_t arg_idx = kv.second;
@@ -160,7 +160,7 @@ std::vector<void*> ScalarCodeGenerator::generateNativeCode(
 }
 
 std::vector<llvm::Value*> ScalarCodeGenerator::codegenColumn(
-    const Analyzer::ColumnVar* column,
+    const hdk::ir::ColumnVar* column,
     const bool fetch_column,
     const CompilationOptions& co) {
   int arg_idx = plan_state_->getLocalColumnId(column, fetch_column);

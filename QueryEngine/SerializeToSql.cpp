@@ -21,13 +21,13 @@ ScalarExprToSql::ScalarExprToSql(const RelAlgExecutionUnit* ra_exe_unit,
                                  SchemaProviderPtr schema_provider)
     : ra_exe_unit_(ra_exe_unit), schema_provider_(schema_provider) {}
 
-std::string ScalarExprToSql::visitVar(const Analyzer::Var* var) const {
+std::string ScalarExprToSql::visitVar(const hdk::ir::Var* var) const {
   auto it = ra_exe_unit_->groupby_exprs.begin();
   std::advance(it, var->get_varno() - 1);
   return visit(it->get());
 }
 
-std::string ScalarExprToSql::visitColumnVar(const Analyzer::ColumnVar* col_var) const {
+std::string ScalarExprToSql::visitColumnVar(const hdk::ir::ColumnVar* col_var) const {
   return serialize_table_ref(
              col_var->get_db_id(), col_var->get_table_id(), schema_provider_) +
          "." +
@@ -37,7 +37,7 @@ std::string ScalarExprToSql::visitColumnVar(const Analyzer::ColumnVar* col_var) 
                               schema_provider_);
 }
 
-std::string ScalarExprToSql::visitConstant(const Analyzer::Constant* constant) const {
+std::string ScalarExprToSql::visitConstant(const hdk::ir::Constant* constant) const {
   if (constant->get_is_null()) {
     return "NULL";
   }
@@ -50,7 +50,7 @@ std::string ScalarExprToSql::visitConstant(const Analyzer::Constant* constant) c
   }
 }
 
-std::string ScalarExprToSql::visitUOper(const Analyzer::UOper* uoper) const {
+std::string ScalarExprToSql::visitUOper(const hdk::ir::UOper* uoper) const {
   const auto operand = uoper->get_operand();
   const auto operand_str = visit(operand);
   const auto optype = uoper->get_optype();
@@ -84,19 +84,19 @@ std::string ScalarExprToSql::visitUOper(const Analyzer::UOper* uoper) const {
   }
 }
 
-std::string ScalarExprToSql::visitBinOper(const Analyzer::BinOper* bin_oper) const {
+std::string ScalarExprToSql::visitBinOper(const hdk::ir::BinOper* bin_oper) const {
   return visit(bin_oper->get_left_operand()) + " " +
          binOpTypeToString(bin_oper->get_optype()) + " " +
          visit(bin_oper->get_right_operand());
 }
 
-std::string ScalarExprToSql::visitInValues(const Analyzer::InValues* in_values) const {
+std::string ScalarExprToSql::visitInValues(const hdk::ir::InValues* in_values) const {
   const auto needle = visit(in_values->get_arg());
   const auto haystack = visitList(in_values->get_value_list());
   return needle + " IN (" + boost::algorithm::join(haystack, ", ") + ")";
 }
 
-std::string ScalarExprToSql::visitLikeExpr(const Analyzer::LikeExpr* like) const {
+std::string ScalarExprToSql::visitLikeExpr(const hdk::ir::LikeExpr* like) const {
   const auto str = visit(like->get_arg());
   const auto pattern = visit(like->get_like_expr());
   const auto result = str + " LIKE " + pattern;
@@ -107,7 +107,7 @@ std::string ScalarExprToSql::visitLikeExpr(const Analyzer::LikeExpr* like) const
   return result;
 }
 
-std::string ScalarExprToSql::visitCaseExpr(const Analyzer::CaseExpr* case_) const {
+std::string ScalarExprToSql::visitCaseExpr(const hdk::ir::CaseExpr* case_) const {
   std::string case_str = "CASE ";
   const auto& expr_pair_list = case_->get_expr_pair_list();
   for (const auto& expr_pair : expr_pair_list) {
@@ -120,7 +120,7 @@ std::string ScalarExprToSql::visitCaseExpr(const Analyzer::CaseExpr* case_) cons
 
 namespace {
 
-std::string agg_to_string(const Analyzer::AggExpr* agg_expr,
+std::string agg_to_string(const hdk::ir::AggExpr* agg_expr,
                           const RelAlgExecutionUnit* ra_exe_unit,
                           SchemaProviderPtr schema_provider) {
   ScalarExprToSql scalar_expr_to_sql(ra_exe_unit, schema_provider);
@@ -134,7 +134,7 @@ std::string agg_to_string(const Analyzer::AggExpr* agg_expr,
 }  // namespace
 
 std::string ScalarExprToSql::visitFunctionOper(
-    const Analyzer::FunctionOper* func_oper) const {
+    const hdk::ir::FunctionOper* func_oper) const {
   std::string result = func_oper->getName();
   if (result == "||") {
     CHECK_EQ(func_oper->getArity(), size_t(2));
@@ -151,7 +151,7 @@ std::string ScalarExprToSql::visitFunctionOper(
 }
 
 std::string ScalarExprToSql::visitWindowFunction(
-    const Analyzer::WindowFunction* window_func) const {
+    const hdk::ir::WindowFunction* window_func) const {
   std::string result = ::toString(window_func->getKind());
   {
     const auto arg_strs = visitList(window_func->getArgs());
@@ -183,7 +183,7 @@ std::string ScalarExprToSql::visitWindowFunction(
   return result;
 }
 
-std::string ScalarExprToSql::visitAggExpr(const Analyzer::AggExpr* agg) const {
+std::string ScalarExprToSql::visitAggExpr(const hdk::ir::AggExpr* agg) const {
   return agg_to_string(agg, ra_exe_unit_, schema_provider_);
 }
 

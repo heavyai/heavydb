@@ -23,43 +23,43 @@
 #include <memory>
 #include <vector>
 
-#include "Analyzer/Analyzer.h"
+#include "IR/Expr.h"
 #include "RelAlgExecutionUnit.h"
 
-namespace Analyzer {
+namespace hdk::ir {
 
 class Expr;
 
 class InValues;
 
-}  // namespace Analyzer
+}  // namespace hdk::ir
 
 class InputColDescriptor;
 
 // Rewrites an OR tree where leaves are equality compare against literals.
-Analyzer::ExpressionPtr rewrite_expr(const Analyzer::Expr*);
+hdk::ir::ExprPtr rewrite_expr(const hdk::ir::Expr*);
 
 // Rewrites array elements that are strings to be dict encoded transient literals
-Analyzer::ExpressionPtr rewrite_array_elements(const Analyzer::Expr*);
+hdk::ir::ExprPtr rewrite_array_elements(const hdk::ir::Expr*);
 
 // Rewrite a FunctionOper to an AND between a BinOper and the FunctionOper if the
 // FunctionOper is supported for overlaps joins
 struct OverlapsJoinConjunction {
-  std::list<std::shared_ptr<Analyzer::Expr>> quals;
-  std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
+  std::list<hdk::ir::ExprPtr> quals;
+  std::list<hdk::ir::ExprPtr> join_quals;
 };
 
 boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
-    const std::shared_ptr<Analyzer::Expr> expr);
+    const hdk::ir::ExprPtr expr);
 
-std::list<std::shared_ptr<Analyzer::Expr>> strip_join_covered_filter_quals(
-    const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
+std::list<hdk::ir::ExprPtr> strip_join_covered_filter_quals(
+    const std::list<hdk::ir::ExprPtr>& quals,
     const JoinQualsPerNestingLevel& join_quals);
 
-std::shared_ptr<Analyzer::Expr> fold_expr(const Analyzer::Expr*);
+hdk::ir::ExprPtr fold_expr(const hdk::ir::Expr*);
 
-bool self_join_not_covered_by_left_deep_tree(const Analyzer::ColumnVar* lhs,
-                                             const Analyzer::ColumnVar* rhs,
+bool self_join_not_covered_by_left_deep_tree(const hdk::ir::ColumnVar* lhs,
+                                             const hdk::ir::ColumnVar* rhs,
                                              const int max_rte_covered);
 
 const int get_max_rte_scan_table(

@@ -25,15 +25,14 @@
 #include "sqldefs.h"
 #include "sqltypes.h"
 
-#include "../Analyzer/Analyzer.h"
+#include "IR/Expr.h"
 
-inline const Analyzer::AggExpr* cast_to_agg_expr(const Analyzer::Expr* target_expr) {
-  return dynamic_cast<const Analyzer::AggExpr*>(target_expr);
+inline const hdk::ir::AggExpr* cast_to_agg_expr(const hdk::ir::Expr* target_expr) {
+  return dynamic_cast<const hdk::ir::AggExpr*>(target_expr);
 }
 
-inline const Analyzer::AggExpr* cast_to_agg_expr(
-    const std::shared_ptr<Analyzer::Expr> target_expr) {
-  return dynamic_cast<const Analyzer::AggExpr*>(target_expr.get());
+inline const hdk::ir::AggExpr* cast_to_agg_expr(const hdk::ir::ExprPtr target_expr) {
+  return dynamic_cast<const hdk::ir::AggExpr*>(target_expr.get());
 }
 
 struct TargetInfo {

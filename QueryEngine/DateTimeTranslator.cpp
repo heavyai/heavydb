@@ -157,16 +157,14 @@ ExtractField ExtractExpr::to_extract_field(const std::string& field) {
   return fieldno;
 }
 
-std::shared_ptr<Analyzer::Expr> ExtractExpr::generate(
-    const std::shared_ptr<Analyzer::Expr> from_expr,
-    const std::string& field_name) {
+hdk::ir::ExprPtr ExtractExpr::generate(const hdk::ir::ExprPtr from_expr,
+                                       const std::string& field_name) {
   const auto field = to_extract_field(field_name);
   return ExtractExpr::generate(from_expr, field);
 }
 
-std::shared_ptr<Analyzer::Expr> ExtractExpr::generate(
-    const std::shared_ptr<Analyzer::Expr> from_expr,
-    const ExtractField& field) {
+hdk::ir::ExprPtr ExtractExpr::generate(const hdk::ir::ExprPtr from_expr,
+                                       const ExtractField& field) {
   const auto expr_ti = from_expr->get_type_info();
   if (!expr_ti.is_time()) {
     throw std::runtime_error(
@@ -178,7 +176,7 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::generate(
                              " from TIME.");
   }
   const SQLTypeInfo ti(kBIGINT, 0, 0, expr_ti.get_notnull());
-  auto constant = std::dynamic_pointer_cast<Analyzer::Constant>(from_expr);
+  auto constant = std::dynamic_pointer_cast<hdk::ir::Constant>(from_expr);
   if (constant != nullptr) {
     Datum d;
     d.bigintval = field == kEPOCH
@@ -190,7 +188,7 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::generate(
     constant->set_type_info(ti);
     return constant;
   }
-  return makeExpr<Analyzer::ExtractExpr>(
+  return hdk::ir::makeExpr<hdk::ir::ExtractExpr>(
       ti, from_expr->get_contains_agg(), field, from_expr->decompress());
 }
 
@@ -236,16 +234,14 @@ DatetruncField DateTruncExpr::to_datetrunc_field(const std::string& field) {
   return fieldno;
 }
 
-std::shared_ptr<Analyzer::Expr> DateTruncExpr::generate(
-    const std::shared_ptr<Analyzer::Expr> from_expr,
-    const std::string& field_name) {
+hdk::ir::ExprPtr DateTruncExpr::generate(const hdk::ir::ExprPtr from_expr,
+                                         const std::string& field_name) {
   const auto field = to_datetrunc_field(field_name);
   return DateTruncExpr::generate(from_expr, field);
 }
 
-std::shared_ptr<Analyzer::Expr> DateTruncExpr::generate(
-    const std::shared_ptr<Analyzer::Expr> from_expr,
-    const DatetruncField& field) {
+hdk::ir::ExprPtr DateTruncExpr::generate(const hdk::ir::ExprPtr from_expr,
+                                         const DatetruncField& field) {
   const auto& expr_ti = from_expr->get_type_info();
   if (!expr_ti.is_time()) {
     throw std::runtime_error(
@@ -257,7 +253,7 @@ std::shared_ptr<Analyzer::Expr> DateTruncExpr::generate(
                              " from TIME.");
   }
   SQLTypeInfo ti(kTIMESTAMP, expr_ti.get_dimension(), 0, expr_ti.get_notnull());
-  auto constant = std::dynamic_pointer_cast<Analyzer::Constant>(from_expr);
+  auto constant = std::dynamic_pointer_cast<hdk::ir::Constant>(from_expr);
   if (constant) {
     Datum d{0};
     d.bigintval =
@@ -266,6 +262,6 @@ std::shared_ptr<Analyzer::Expr> DateTruncExpr::generate(
     constant->set_type_info(ti);
     return constant;
   }
-  return makeExpr<Analyzer::DatetruncExpr>(
+  return hdk::ir::makeExpr<hdk::ir::DatetruncExpr>(
       ti, from_expr->get_contains_agg(), field, from_expr->decompress());
 }

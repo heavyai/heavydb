@@ -25,11 +25,11 @@
 #include <unordered_map>
 #include <vector>
 
-namespace Analyzer {
+namespace hdk::ir {
 
 class Expr;
 
-}  // namespace Analyzer
+}  // namespace hdk::ir
 
 namespace Catalog_Namespace {
 
@@ -51,92 +51,90 @@ class RelAlgTranslator {
       , now_(now)
       , just_explain_(just_explain) {}
 
-  std::shared_ptr<Analyzer::Expr> translateScalarRex(const RexScalar* rex) const;
+  hdk::ir::ExprPtr translateScalarRex(const RexScalar* rex) const;
 
-  static std::shared_ptr<Analyzer::Expr> translateAggregateRex(
+  static hdk::ir::ExprPtr translateAggregateRex(
       const RexAgg* rex,
-      const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
+      const std::vector<hdk::ir::ExprPtr>& scalar_sources,
       bool bigint_count);
 
-  static std::shared_ptr<Analyzer::Expr> translateLiteral(const RexLiteral*);
+  static hdk::ir::ExprPtr translateLiteral(const RexLiteral*);
 
  private:
-  std::shared_ptr<Analyzer::Expr> translateScalarSubquery(const RexSubQuery*) const;
+  hdk::ir::ExprPtr translateScalarSubquery(const RexSubQuery*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateInput(const RexInput*) const;
+  hdk::ir::ExprPtr translateInput(const RexInput*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateUoper(const RexOperator*) const;
+  hdk::ir::ExprPtr translateUoper(const RexOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateInOper(const RexOperator*) const;
+  hdk::ir::ExprPtr translateInOper(const RexOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> getInIntegerSetExpr(std::shared_ptr<Analyzer::Expr> arg,
-                                                      const ResultSet& val_set) const;
+  hdk::ir::ExprPtr getInIntegerSetExpr(hdk::ir::ExprPtr arg,
+                                       const ResultSet& val_set) const;
 
-  std::shared_ptr<Analyzer::Expr> translateOper(const RexOperator*) const;
+  hdk::ir::ExprPtr translateOper(const RexOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateOverlapsOper(const RexOperator*) const;
+  hdk::ir::ExprPtr translateOverlapsOper(const RexOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateCase(const RexCase*) const;
+  hdk::ir::ExprPtr translateCase(const RexCase*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateWidthBucket(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateWidthBucket(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateLike(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateLike(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateRegexp(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateRegexp(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateLikely(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateLikely(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateUnlikely(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateUnlikely(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateExtract(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateExtract(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateDateadd(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateDateadd(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateDatePlusMinus(const RexOperator*) const;
+  hdk::ir::ExprPtr translateDatePlusMinus(const RexOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateDatediff(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateDatediff(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateDatepart(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateDatepart(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateLength(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateLength(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateKeyForString(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateKeyForString(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateSampleRatio(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateSampleRatio(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateCurrentUser(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateCurrentUser(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateLower(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateLower(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateCardinality(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateCardinality(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateItem(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateItem(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateCurrentDate() const;
+  hdk::ir::ExprPtr translateCurrentDate() const;
 
-  std::shared_ptr<Analyzer::Expr> translateCurrentTime() const;
+  hdk::ir::ExprPtr translateCurrentTime() const;
 
-  std::shared_ptr<Analyzer::Expr> translateCurrentTimestamp() const;
+  hdk::ir::ExprPtr translateCurrentTimestamp() const;
 
-  std::shared_ptr<Analyzer::Expr> translateDatetime(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateDatetime(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateHPTLiteral(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateHPTLiteral(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateAbs(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateAbs(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateSign(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateSign(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateOffsetInFragment() const;
+  hdk::ir::ExprPtr translateOffsetInFragment() const;
 
-  std::shared_ptr<Analyzer::Expr> translateArrayFunction(
-      const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateArrayFunction(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateFunction(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtr translateFunction(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateWindowFunction(
-      const RexWindowFunctionOperator*) const;
+  hdk::ir::ExprPtr translateWindowFunction(const RexWindowFunctionOperator*) const;
 
-  Analyzer::ExpressionPtrVector translateFunctionArgs(const RexFunctionOperator*) const;
+  hdk::ir::ExprPtrVector translateFunctionArgs(const RexFunctionOperator*) const;
 
   const Executor* executor_;
   const std::unordered_map<const RelAlgNode*, int> input_to_nest_level_;
@@ -146,15 +144,13 @@ class RelAlgTranslator {
 };
 
 struct QualsConjunctiveForm {
-  const std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
-  const std::list<std::shared_ptr<Analyzer::Expr>> quals;
+  const std::list<hdk::ir::ExprPtr> simple_quals;
+  const std::list<hdk::ir::ExprPtr> quals;
 };
 
-QualsConjunctiveForm qual_to_conjunctive_form(
-    const std::shared_ptr<Analyzer::Expr> qual_expr);
+QualsConjunctiveForm qual_to_conjunctive_form(const hdk::ir::ExprPtr qual_expr);
 
-std::vector<std::shared_ptr<Analyzer::Expr>> qual_to_disjunctive_form(
-    const std::shared_ptr<Analyzer::Expr>& qual_expr);
+std::vector<hdk::ir::ExprPtr> qual_to_disjunctive_form(const hdk::ir::ExprPtr& qual_expr);
 
 inline auto func_resolve = [](auto funcname, auto&&... strlist) {
   return ((funcname == strlist) || ...);

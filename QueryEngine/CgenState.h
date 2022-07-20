@@ -24,6 +24,7 @@
 
 #include "../Analyzer/Analyzer.h"
 #include "../Shared/InsertionOrderedMap.h"
+#include "IR/Expr.h"
 
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/IRBuilder.h>
@@ -43,7 +44,7 @@ struct CgenState {
   CgenState(const size_t num_query_infos, const bool contains_left_deep_outer_join);
   CgenState(const Config& config, llvm::LLVMContext& context);
 
-  size_t getOrAddLiteral(const Analyzer::Constant* constant,
+  size_t getOrAddLiteral(const hdk::ir::Constant* constant,
                          const EncodingType enc_type,
                          const int dict_id,
                          const int device_id) {
@@ -114,7 +115,7 @@ struct CgenState {
           if (ti.get_subtype() == kDOUBLE) {
             std::vector<double> double_array_literal;
             for (const auto& value : constant->get_value_list()) {
-              const auto c = dynamic_cast<const Analyzer::Constant*>(value.get());
+              const auto c = dynamic_cast<const hdk::ir::Constant*>(value.get());
               CHECK(c);
               double d = c->get_constval().doubleval;
               double_array_literal.push_back(d);
@@ -124,7 +125,7 @@ struct CgenState {
           if (ti.get_subtype() == kINT) {
             std::vector<int32_t> int32_array_literal;
             for (const auto& value : constant->get_value_list()) {
-              const auto c = dynamic_cast<const Analyzer::Constant*>(value.get());
+              const auto c = dynamic_cast<const hdk::ir::Constant*>(value.get());
               CHECK(c);
               int32_t i = c->get_constval().intval;
               int32_array_literal.push_back(i);
@@ -134,7 +135,7 @@ struct CgenState {
           if (ti.get_subtype() == kTINYINT) {
             std::vector<int8_t> int8_array_literal;
             for (const auto& value : constant->get_value_list()) {
-              const auto c = dynamic_cast<const Analyzer::Constant*>(value.get());
+              const auto c = dynamic_cast<const hdk::ir::Constant*>(value.get());
               CHECK(c);
               int8_t i = c->get_constval().tinyintval;
               int8_array_literal.push_back(i);
@@ -346,7 +347,7 @@ struct CgenState {
   llvm::IRBuilder<> ir_builder_;
   std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;
   struct FunctionOperValue {
-    const Analyzer::FunctionOper* foper;
+    const hdk::ir::FunctionOper* foper;
     llvm::Value* lv;
   };
   std::vector<FunctionOperValue> ext_call_cache_;

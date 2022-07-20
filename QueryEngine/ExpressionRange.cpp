@@ -141,29 +141,29 @@ void apply_hpt_qual(const Datum const_datum,
 }
 
 ExpressionRange apply_simple_quals(
-    const Analyzer::ColumnVar* col_expr,
+    const hdk::ir::ColumnVar* col_expr,
     const ExpressionRange& col_range,
-    const boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
+    const boost::optional<std::list<hdk::ir::ExprPtr>> simple_quals) {
   if (!simple_quals) {
     return col_range;
   }
   ExpressionRange qual_range(col_range);
   for (auto const& itr : simple_quals.get()) {
-    auto qual_bin_oper = dynamic_cast<Analyzer::BinOper*>(itr.get());
+    auto qual_bin_oper = dynamic_cast<hdk::ir::BinOper*>(itr.get());
     if (!qual_bin_oper) {
       continue;
     }
-    const Analyzer::Expr* left_operand = qual_bin_oper->get_left_operand();
-    auto qual_col = dynamic_cast<const Analyzer::ColumnVar*>(left_operand);
+    const hdk::ir::Expr* left_operand = qual_bin_oper->get_left_operand();
+    auto qual_col = dynamic_cast<const hdk::ir::ColumnVar*>(left_operand);
     if (!qual_col) {
       // Check for possibility that column is wrapped in a cast
       // Presumes that only simple casts (i.e. timestamp to timestamp or int to int) have
       // been passed through by BinOper::normalize_simple_predicate
-      auto u_expr = dynamic_cast<const Analyzer::UOper*>(left_operand);
+      auto u_expr = dynamic_cast<const hdk::ir::UOper*>(left_operand);
       if (!u_expr) {
         continue;
       }
-      qual_col = dynamic_cast<const Analyzer::ColumnVar*>(u_expr->get_operand());
+      qual_col = dynamic_cast<const hdk::ir::ColumnVar*>(u_expr->get_operand());
       if (!qual_col) {
         continue;
       }
@@ -172,8 +172,8 @@ ExpressionRange apply_simple_quals(
         qual_col->get_column_id() != col_expr->get_column_id()) {
       continue;
     }
-    const Analyzer::Expr* right_operand = qual_bin_oper->get_right_operand();
-    auto qual_const = dynamic_cast<const Analyzer::Constant*>(right_operand);
+    const hdk::ir::Expr* right_operand = qual_bin_oper->get_right_operand();
+    auto qual_const = dynamic_cast<const hdk::ir::Constant*>(right_operand);
     if (!qual_const) {
       continue;
     }
@@ -286,91 +286,91 @@ bool ExpressionRange::typeSupportsRange(const SQLTypeInfo& ti) {
 }
 
 ExpressionRange getExpressionRange(
-    const Analyzer::BinOper* expr,
+    const hdk::ir::BinOper* expr,
     const std::vector<InputTableInfo>& query_infos,
     const Executor*,
-    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals);
+    boost::optional<std::list<hdk::ir::ExprPtr>> simple_quals);
 
-ExpressionRange getExpressionRange(const Analyzer::Constant* expr);
+ExpressionRange getExpressionRange(const hdk::ir::Constant* expr);
 
 ExpressionRange getExpressionRange(
-    const Analyzer::ColumnVar* col_expr,
+    const hdk::ir::ColumnVar* col_expr,
     const std::vector<InputTableInfo>& query_infos,
     const Executor* executor,
-    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals);
+    boost::optional<std::list<hdk::ir::ExprPtr>> simple_quals);
 
-ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr);
+ExpressionRange getExpressionRange(const hdk::ir::LikeExpr* like_expr);
 
-ExpressionRange getExpressionRange(const Analyzer::CaseExpr* case_expr,
+ExpressionRange getExpressionRange(const hdk::ir::CaseExpr* case_expr,
                                    const std::vector<InputTableInfo>& query_infos,
                                    const Executor*);
 
 ExpressionRange getExpressionRange(
-    const Analyzer::UOper* u_expr,
+    const hdk::ir::UOper* u_expr,
     const std::vector<InputTableInfo>& query_infos,
     const Executor*,
-    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals);
+    boost::optional<std::list<hdk::ir::ExprPtr>> simple_quals);
 
 ExpressionRange getExpressionRange(
-    const Analyzer::ExtractExpr* extract_expr,
+    const hdk::ir::ExtractExpr* extract_expr,
     const std::vector<InputTableInfo>& query_infos,
     const Executor*,
-    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals);
+    boost::optional<std::list<hdk::ir::ExprPtr>> simple_quals);
 
 ExpressionRange getExpressionRange(
-    const Analyzer::DatetruncExpr* datetrunc_expr,
+    const hdk::ir::DatetruncExpr* datetrunc_expr,
     const std::vector<InputTableInfo>& query_infos,
     const Executor* executor,
-    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals);
+    boost::optional<std::list<hdk::ir::ExprPtr>> simple_quals);
 
 ExpressionRange getExpressionRange(
-    const Analyzer::WidthBucketExpr* width_bucket_expr,
+    const hdk::ir::WidthBucketExpr* width_bucket_expr,
     const std::vector<InputTableInfo>& query_infos,
     const Executor* executor,
-    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals);
+    boost::optional<std::list<hdk::ir::ExprPtr>> simple_quals);
 
 ExpressionRange getExpressionRange(
-    const Analyzer::Expr* expr,
+    const hdk::ir::Expr* expr,
     const std::vector<InputTableInfo>& query_infos,
     const Executor* executor,
-    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
+    boost::optional<std::list<hdk::ir::ExprPtr>> simple_quals) {
   const auto& expr_ti = expr->get_type_info();
   if (!ExpressionRange::typeSupportsRange(expr_ti)) {
     return ExpressionRange::makeInvalidRange();
   }
-  auto bin_oper_expr = dynamic_cast<const Analyzer::BinOper*>(expr);
+  auto bin_oper_expr = dynamic_cast<const hdk::ir::BinOper*>(expr);
   if (bin_oper_expr) {
     return getExpressionRange(bin_oper_expr, query_infos, executor, simple_quals);
   }
-  auto constant_expr = dynamic_cast<const Analyzer::Constant*>(expr);
+  auto constant_expr = dynamic_cast<const hdk::ir::Constant*>(expr);
   if (constant_expr) {
     return getExpressionRange(constant_expr);
   }
-  auto column_var_expr = dynamic_cast<const Analyzer::ColumnVar*>(expr);
+  auto column_var_expr = dynamic_cast<const hdk::ir::ColumnVar*>(expr);
   if (column_var_expr) {
     return getExpressionRange(column_var_expr, query_infos, executor, simple_quals);
   }
-  auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
+  auto like_expr = dynamic_cast<const hdk::ir::LikeExpr*>(expr);
   if (like_expr) {
     return getExpressionRange(like_expr);
   }
-  auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);
+  auto case_expr = dynamic_cast<const hdk::ir::CaseExpr*>(expr);
   if (case_expr) {
     return getExpressionRange(case_expr, query_infos, executor);
   }
-  auto u_expr = dynamic_cast<const Analyzer::UOper*>(expr);
+  auto u_expr = dynamic_cast<const hdk::ir::UOper*>(expr);
   if (u_expr) {
     return getExpressionRange(u_expr, query_infos, executor, simple_quals);
   }
-  auto extract_expr = dynamic_cast<const Analyzer::ExtractExpr*>(expr);
+  auto extract_expr = dynamic_cast<const hdk::ir::ExtractExpr*>(expr);
   if (extract_expr) {
     return getExpressionRange(extract_expr, query_infos, executor, simple_quals);
   }
-  auto datetrunc_expr = dynamic_cast<const Analyzer::DatetruncExpr*>(expr);
+  auto datetrunc_expr = dynamic_cast<const hdk::ir::DatetruncExpr*>(expr);
   if (datetrunc_expr) {
     return getExpressionRange(datetrunc_expr, query_infos, executor, simple_quals);
   }
-  auto width_bucket_expr = dynamic_cast<const Analyzer::WidthBucketExpr*>(expr);
+  auto width_bucket_expr = dynamic_cast<const hdk::ir::WidthBucketExpr*>(expr);
   if (width_bucket_expr) {
     return getExpressionRange(width_bucket_expr, query_infos, executor, simple_quals);
   }
@@ -386,10 +386,10 @@ int64_t scale_up_interval_endpoint(const int64_t endpoint, const SQLTypeInfo& ti
 }  // namespace
 
 ExpressionRange getExpressionRange(
-    const Analyzer::BinOper* expr,
+    const hdk::ir::BinOper* expr,
     const std::vector<InputTableInfo>& query_infos,
     const Executor* executor,
-    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
+    boost::optional<std::list<hdk::ir::ExprPtr>> simple_quals) {
   const auto& lhs =
       getExpressionRange(expr->get_left_operand(), query_infos, executor, simple_quals);
   const auto& rhs =
@@ -421,7 +421,7 @@ ExpressionRange getExpressionRange(
   return ExpressionRange::makeInvalidRange();
 }
 
-ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
+ExpressionRange getExpressionRange(const hdk::ir::Constant* constant_expr) {
   if (constant_expr->get_is_null()) {
     return ExpressionRange::makeInvalidRange();
   }
@@ -534,7 +534,7 @@ int64_t get_conservative_datetrunc_bucket(const DatetruncField datetrunc_field) 
 
 }  // namespace
 
-ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
+ExpressionRange getLeafColumnRange(const hdk::ir::ColumnVar* col_expr,
                                    const std::vector<InputTableInfo>& query_infos,
                                    const Executor* executor,
                                    const bool is_outer_join_proj) {
@@ -639,10 +639,10 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
 #undef FIND_STAT_FRAG
 
 ExpressionRange getExpressionRange(
-    const Analyzer::ColumnVar* col_expr,
+    const hdk::ir::ColumnVar* col_expr,
     const std::vector<InputTableInfo>& query_infos,
     const Executor* executor,
-    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
+    boost::optional<std::list<hdk::ir::ExprPtr>> simple_quals) {
   const int rte_idx = col_expr->get_rte_idx();
   CHECK_GE(rte_idx, 0);
   CHECK_LT(static_cast<size_t>(rte_idx), query_infos.size());
@@ -658,7 +658,7 @@ ExpressionRange getExpressionRange(
   return getLeafColumnRange(col_expr, query_infos, executor, is_outer_join_proj);
 }
 
-ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr) {
+ExpressionRange getExpressionRange(const hdk::ir::LikeExpr* like_expr) {
   const auto& ti = like_expr->get_type_info();
   CHECK(ti.is_boolean());
   const auto& arg_ti = like_expr->get_arg()->get_type_info();
@@ -666,7 +666,7 @@ ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr) {
       arg_ti.get_notnull() ? 0 : inline_int_null_val(ti), 1, 0, false);
 }
 
-ExpressionRange getExpressionRange(const Analyzer::CaseExpr* case_expr,
+ExpressionRange getExpressionRange(const hdk::ir::CaseExpr* case_expr,
                                    const std::vector<InputTableInfo>& query_infos,
                                    const Executor* executor) {
   const auto& expr_pair_list = case_expr->get_expr_pair_list();
@@ -692,7 +692,7 @@ ExpressionRange getExpressionRange(const Analyzer::CaseExpr* case_expr,
   }
   const auto else_expr = case_expr->get_else_expr();
   CHECK(else_expr);
-  const auto else_null_expr = dynamic_cast<const Analyzer::Constant*>(else_expr);
+  const auto else_null_expr = dynamic_cast<const hdk::ir::Constant*>(else_expr);
   if (else_null_expr && else_null_expr->get_is_null()) {
     expr_range.setHasNulls();
     return expr_range;
@@ -766,10 +766,10 @@ ExpressionRange getDateTimePrecisionCastRange(const ExpressionRange& arg_range,
 }  // namespace
 
 ExpressionRange getExpressionRange(
-    const Analyzer::UOper* u_expr,
+    const hdk::ir::UOper* u_expr,
     const std::vector<InputTableInfo>& query_infos,
     const Executor* executor,
-    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
+    boost::optional<std::list<hdk::ir::ExprPtr>> simple_quals) {
   if (u_expr->get_optype() == kUNNEST) {
     return getExpressionRange(u_expr->get_operand(), query_infos, executor, simple_quals);
   }
@@ -782,7 +782,7 @@ ExpressionRange getExpressionRange(
         ti.get_comp_param(), executor->getRowSetMemoryOwner(), true);
     CHECK(sdp);
     const auto const_operand =
-        dynamic_cast<const Analyzer::Constant*>(u_expr->get_operand());
+        dynamic_cast<const hdk::ir::Constant*>(u_expr->get_operand());
     if (!const_operand) {
       // casted subquery result. return invalid for now, but we could attempt to pull the
       // range from the subquery result in the future
@@ -869,10 +869,10 @@ ExpressionRange getExpressionRange(
 }
 
 ExpressionRange getExpressionRange(
-    const Analyzer::ExtractExpr* extract_expr,
+    const hdk::ir::ExtractExpr* extract_expr,
     const std::vector<InputTableInfo>& query_infos,
     const Executor* executor,
-    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
+    boost::optional<std::list<hdk::ir::ExprPtr>> simple_quals) {
   const int32_t extract_field{extract_expr->get_field()};
   const auto arg_range = getExpressionRange(
       extract_expr->get_from_expr(), query_infos, executor, simple_quals);
@@ -941,10 +941,10 @@ ExpressionRange getExpressionRange(
 }
 
 ExpressionRange getExpressionRange(
-    const Analyzer::DatetruncExpr* datetrunc_expr,
+    const hdk::ir::DatetruncExpr* datetrunc_expr,
     const std::vector<InputTableInfo>& query_infos,
     const Executor* executor,
-    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
+    boost::optional<std::list<hdk::ir::ExprPtr>> simple_quals) {
   const auto arg_range = getExpressionRange(
       datetrunc_expr->get_from_expr(), query_infos, executor, simple_quals);
   if (arg_range.getType() == ExpressionRangeType::Invalid) {
@@ -966,16 +966,16 @@ ExpressionRange getExpressionRange(
 }
 
 ExpressionRange getExpressionRange(
-    const Analyzer::WidthBucketExpr* width_bucket_expr,
+    const hdk::ir::WidthBucketExpr* width_bucket_expr,
     const std::vector<InputTableInfo>& query_infos,
     const Executor* executor,
-    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
+    boost::optional<std::list<hdk::ir::ExprPtr>> simple_quals) {
   auto target_value_expr = width_bucket_expr->get_target_value();
   auto target_value_range = getExpressionRange(target_value_expr, query_infos, executor);
   auto target_ti = target_value_expr->get_type_info();
   if (width_bucket_expr->is_constant_expr() &&
       target_value_range.getType() != ExpressionRangeType::Invalid) {
-    auto const_target_value = dynamic_cast<const Analyzer::Constant*>(target_value_expr);
+    auto const_target_value = dynamic_cast<const hdk::ir::Constant*>(target_value_expr);
     if (const_target_value) {
       if (const_target_value->get_is_null()) {
         // null constant, return default width_bucket range

@@ -17,127 +17,133 @@
 #ifndef QUERYENGINE_SCALAREXPRVISITOR_H
 #define QUERYENGINE_SCALAREXPRVISITOR_H
 
-#include "../Analyzer/Analyzer.h"
+#include "IR/Expr.h"
 
 template <class T>
 class ScalarExprVisitor {
  public:
-  T visit(const Analyzer::Expr* expr) const {
+  virtual ~ScalarExprVisitor() {}
+
+  virtual T visit(const hdk::ir::Expr* expr) const {
     CHECK(expr);
-    const auto var = dynamic_cast<const Analyzer::Var*>(expr);
+    const auto var = dynamic_cast<const hdk::ir::Var*>(expr);
     if (var) {
       return visitVar(var);
     }
-    const auto column_var = dynamic_cast<const Analyzer::ColumnVar*>(expr);
+    const auto column_var = dynamic_cast<const hdk::ir::ColumnVar*>(expr);
     if (column_var) {
       return visitColumnVar(column_var);
     }
-    const auto column_var_tuple = dynamic_cast<const Analyzer::ExpressionTuple*>(expr);
+    const auto column_ref = dynamic_cast<const hdk::ir::ColumnRef*>(expr);
+    if (column_ref) {
+      return visitColumnRef(column_ref);
+    }
+    const auto column_var_tuple = dynamic_cast<const hdk::ir::ExpressionTuple*>(expr);
     if (column_var_tuple) {
       return visitColumnVarTuple(column_var_tuple);
     }
-    const auto constant = dynamic_cast<const Analyzer::Constant*>(expr);
+    const auto constant = dynamic_cast<const hdk::ir::Constant*>(expr);
     if (constant) {
       return visitConstant(constant);
     }
-    const auto uoper = dynamic_cast<const Analyzer::UOper*>(expr);
+    const auto uoper = dynamic_cast<const hdk::ir::UOper*>(expr);
     if (uoper) {
       return visitUOper(uoper);
     }
-    const auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
+    const auto bin_oper = dynamic_cast<const hdk::ir::BinOper*>(expr);
     if (bin_oper) {
       return visitBinOper(bin_oper);
     }
-    const auto in_values = dynamic_cast<const Analyzer::InValues*>(expr);
+    const auto in_values = dynamic_cast<const hdk::ir::InValues*>(expr);
     if (in_values) {
       return visitInValues(in_values);
     }
-    const auto in_integer_set = dynamic_cast<const Analyzer::InIntegerSet*>(expr);
+    const auto in_integer_set = dynamic_cast<const hdk::ir::InIntegerSet*>(expr);
     if (in_integer_set) {
       return visitInIntegerSet(in_integer_set);
     }
-    const auto char_length = dynamic_cast<const Analyzer::CharLengthExpr*>(expr);
+    const auto char_length = dynamic_cast<const hdk::ir::CharLengthExpr*>(expr);
     if (char_length) {
       return visitCharLength(char_length);
     }
-    const auto key_for_string = dynamic_cast<const Analyzer::KeyForStringExpr*>(expr);
+    const auto key_for_string = dynamic_cast<const hdk::ir::KeyForStringExpr*>(expr);
     if (key_for_string) {
       return visitKeyForString(key_for_string);
     }
-    const auto sample_ratio = dynamic_cast<const Analyzer::SampleRatioExpr*>(expr);
+    const auto sample_ratio = dynamic_cast<const hdk::ir::SampleRatioExpr*>(expr);
     if (sample_ratio) {
       return visitSampleRatio(sample_ratio);
     }
-    const auto width_bucket = dynamic_cast<const Analyzer::WidthBucketExpr*>(expr);
+    const auto width_bucket = dynamic_cast<const hdk::ir::WidthBucketExpr*>(expr);
     if (width_bucket) {
       return visitWidthBucket(width_bucket);
     }
-    const auto lower = dynamic_cast<const Analyzer::LowerExpr*>(expr);
+    const auto lower = dynamic_cast<const hdk::ir::LowerExpr*>(expr);
     if (lower) {
       return visitLower(lower);
     }
-    const auto cardinality = dynamic_cast<const Analyzer::CardinalityExpr*>(expr);
+    const auto cardinality = dynamic_cast<const hdk::ir::CardinalityExpr*>(expr);
     if (cardinality) {
       return visitCardinality(cardinality);
     }
-    const auto width_bucket_expr = dynamic_cast<const Analyzer::WidthBucketExpr*>(expr);
+    const auto width_bucket_expr = dynamic_cast<const hdk::ir::WidthBucketExpr*>(expr);
     if (width_bucket_expr) {
       return visitWidthBucket(width_bucket_expr);
     }
-    const auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
+    const auto like_expr = dynamic_cast<const hdk::ir::LikeExpr*>(expr);
     if (like_expr) {
       return visitLikeExpr(like_expr);
     }
-    const auto regexp_expr = dynamic_cast<const Analyzer::RegexpExpr*>(expr);
+    const auto regexp_expr = dynamic_cast<const hdk::ir::RegexpExpr*>(expr);
     if (regexp_expr) {
       return visitRegexpExpr(regexp_expr);
     }
-    const auto case_ = dynamic_cast<const Analyzer::CaseExpr*>(expr);
+    const auto case_ = dynamic_cast<const hdk::ir::CaseExpr*>(expr);
     if (case_) {
       return visitCaseExpr(case_);
     }
-    const auto datetrunc = dynamic_cast<const Analyzer::DatetruncExpr*>(expr);
+    const auto datetrunc = dynamic_cast<const hdk::ir::DatetruncExpr*>(expr);
     if (datetrunc) {
       return visitDatetruncExpr(datetrunc);
     }
-    const auto extract = dynamic_cast<const Analyzer::ExtractExpr*>(expr);
+    const auto extract = dynamic_cast<const hdk::ir::ExtractExpr*>(expr);
     if (extract) {
       return visitExtractExpr(extract);
     }
-    const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(expr);
+    const auto window_func = dynamic_cast<const hdk::ir::WindowFunction*>(expr);
     if (window_func) {
       return visitWindowFunction(window_func);
     }
     const auto func_with_custom_type_handling =
-        dynamic_cast<const Analyzer::FunctionOperWithCustomTypeHandling*>(expr);
+        dynamic_cast<const hdk::ir::FunctionOperWithCustomTypeHandling*>(expr);
     if (func_with_custom_type_handling) {
       return visitFunctionOperWithCustomTypeHandling(func_with_custom_type_handling);
     }
-    const auto func = dynamic_cast<const Analyzer::FunctionOper*>(expr);
+    const auto func = dynamic_cast<const hdk::ir::FunctionOper*>(expr);
     if (func) {
       return visitFunctionOper(func);
     }
-    const auto array = dynamic_cast<const Analyzer::ArrayExpr*>(expr);
+    const auto array = dynamic_cast<const hdk::ir::ArrayExpr*>(expr);
     if (array) {
       return visitArrayOper(array);
     }
-    const auto datediff = dynamic_cast<const Analyzer::DatediffExpr*>(expr);
+    const auto datediff = dynamic_cast<const hdk::ir::DatediffExpr*>(expr);
     if (datediff) {
       return visitDatediffExpr(datediff);
     }
-    const auto dateadd = dynamic_cast<const Analyzer::DateaddExpr*>(expr);
+    const auto dateadd = dynamic_cast<const hdk::ir::DateaddExpr*>(expr);
     if (dateadd) {
       return visitDateaddExpr(dateadd);
     }
-    const auto likelihood = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
+    const auto likelihood = dynamic_cast<const hdk::ir::LikelihoodExpr*>(expr);
     if (likelihood) {
       return visitLikelihood(likelihood);
     }
-    const auto offset_in_fragment = dynamic_cast<const Analyzer::OffsetInFragment*>(expr);
+    const auto offset_in_fragment = dynamic_cast<const hdk::ir::OffsetInFragment*>(expr);
     if (offset_in_fragment) {
       return visitOffsetInFragment(offset_in_fragment);
     }
-    const auto agg = dynamic_cast<const Analyzer::AggExpr*>(expr);
+    const auto agg = dynamic_cast<const hdk::ir::AggExpr*>(expr);
     if (agg) {
       return visitAggExpr(agg);
     }
@@ -145,30 +151,32 @@ class ScalarExprVisitor {
   }
 
  protected:
-  virtual T visitVar(const Analyzer::Var*) const { return defaultResult(); }
+  virtual T visitVar(const hdk::ir::Var*) const { return defaultResult(); }
 
-  virtual T visitColumnVar(const Analyzer::ColumnVar*) const { return defaultResult(); }
+  virtual T visitColumnVar(const hdk::ir::ColumnVar*) const { return defaultResult(); }
 
-  virtual T visitColumnVarTuple(const Analyzer::ExpressionTuple*) const {
+  virtual T visitColumnRef(const hdk::ir::ColumnRef*) const { return defaultResult(); }
+
+  virtual T visitColumnVarTuple(const hdk::ir::ExpressionTuple*) const {
     return defaultResult();
   }
 
-  virtual T visitConstant(const Analyzer::Constant*) const { return defaultResult(); }
+  virtual T visitConstant(const hdk::ir::Constant*) const { return defaultResult(); }
 
-  virtual T visitUOper(const Analyzer::UOper* uoper) const {
+  virtual T visitUOper(const hdk::ir::UOper* uoper) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(uoper->get_operand()));
     return result;
   }
 
-  virtual T visitBinOper(const Analyzer::BinOper* bin_oper) const {
+  virtual T visitBinOper(const hdk::ir::BinOper* bin_oper) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(bin_oper->get_left_operand()));
     result = aggregateResult(result, visit(bin_oper->get_right_operand()));
     return result;
   }
 
-  virtual T visitInValues(const Analyzer::InValues* in_values) const {
+  virtual T visitInValues(const hdk::ir::InValues* in_values) const {
     T result = visit(in_values->get_arg());
     const auto& value_list = in_values->get_value_list();
     for (const auto& in_value : value_list) {
@@ -177,39 +185,39 @@ class ScalarExprVisitor {
     return result;
   }
 
-  virtual T visitInIntegerSet(const Analyzer::InIntegerSet* in_integer_set) const {
+  virtual T visitInIntegerSet(const hdk::ir::InIntegerSet* in_integer_set) const {
     return visit(in_integer_set->get_arg());
   }
 
-  virtual T visitCharLength(const Analyzer::CharLengthExpr* char_length) const {
+  virtual T visitCharLength(const hdk::ir::CharLengthExpr* char_length) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(char_length->get_arg()));
     return result;
   }
 
-  virtual T visitKeyForString(const Analyzer::KeyForStringExpr* key_for_string) const {
+  virtual T visitKeyForString(const hdk::ir::KeyForStringExpr* key_for_string) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(key_for_string->get_arg()));
     return result;
   }
 
-  virtual T visitSampleRatio(const Analyzer::SampleRatioExpr* sample_ratio) const {
+  virtual T visitSampleRatio(const hdk::ir::SampleRatioExpr* sample_ratio) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(sample_ratio->get_arg()));
     return result;
   }
 
-  virtual T visitLower(const Analyzer::LowerExpr* lower_expr) const {
+  virtual T visitLower(const hdk::ir::LowerExpr* lower_expr) const {
     return visit(lower_expr->get_arg());
   }
 
-  virtual T visitCardinality(const Analyzer::CardinalityExpr* cardinality) const {
+  virtual T visitCardinality(const hdk::ir::CardinalityExpr* cardinality) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(cardinality->get_arg()));
     return result;
   }
 
-  virtual T visitLikeExpr(const Analyzer::LikeExpr* like) const {
+  virtual T visitLikeExpr(const hdk::ir::LikeExpr* like) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(like->get_arg()));
     result = aggregateResult(result, visit(like->get_like_expr()));
@@ -219,7 +227,7 @@ class ScalarExprVisitor {
     return result;
   }
 
-  virtual T visitRegexpExpr(const Analyzer::RegexpExpr* regexp) const {
+  virtual T visitRegexpExpr(const hdk::ir::RegexpExpr* regexp) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(regexp->get_arg()));
     result = aggregateResult(result, visit(regexp->get_pattern_expr()));
@@ -229,7 +237,7 @@ class ScalarExprVisitor {
     return result;
   }
 
-  virtual T visitWidthBucket(const Analyzer::WidthBucketExpr* width_bucket_expr) const {
+  virtual T visitWidthBucket(const hdk::ir::WidthBucketExpr* width_bucket_expr) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(width_bucket_expr->get_target_value()));
     result = aggregateResult(result, visit(width_bucket_expr->get_lower_bound()));
@@ -238,7 +246,7 @@ class ScalarExprVisitor {
     return result;
   }
 
-  virtual T visitCaseExpr(const Analyzer::CaseExpr* case_) const {
+  virtual T visitCaseExpr(const hdk::ir::CaseExpr* case_) const {
     T result = defaultResult();
     const auto& expr_pair_list = case_->get_expr_pair_list();
     for (const auto& expr_pair : expr_pair_list) {
@@ -249,24 +257,24 @@ class ScalarExprVisitor {
     return result;
   }
 
-  virtual T visitDatetruncExpr(const Analyzer::DatetruncExpr* datetrunc) const {
+  virtual T visitDatetruncExpr(const hdk::ir::DatetruncExpr* datetrunc) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(datetrunc->get_from_expr()));
     return result;
   }
 
-  virtual T visitExtractExpr(const Analyzer::ExtractExpr* extract) const {
+  virtual T visitExtractExpr(const hdk::ir::ExtractExpr* extract) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(extract->get_from_expr()));
     return result;
   }
 
   virtual T visitFunctionOperWithCustomTypeHandling(
-      const Analyzer::FunctionOperWithCustomTypeHandling* func_oper) const {
+      const hdk::ir::FunctionOperWithCustomTypeHandling* func_oper) const {
     return visitFunctionOper(func_oper);
   }
 
-  virtual T visitArrayOper(Analyzer::ArrayExpr const* array_expr) const {
+  virtual T visitArrayOper(hdk::ir::ArrayExpr const* array_expr) const {
     T result = defaultResult();
     for (size_t i = 0; i < array_expr->getElementCount(); ++i) {
       result = aggregateResult(result, visit(array_expr->getElement(i)));
@@ -274,7 +282,7 @@ class ScalarExprVisitor {
     return result;
   }
 
-  virtual T visitFunctionOper(const Analyzer::FunctionOper* func_oper) const {
+  virtual T visitFunctionOper(const hdk::ir::FunctionOper* func_oper) const {
     T result = defaultResult();
     for (size_t i = 0; i < func_oper->getArity(); ++i) {
       result = aggregateResult(result, visit(func_oper->getArg(i)));
@@ -282,7 +290,7 @@ class ScalarExprVisitor {
     return result;
   }
 
-  virtual T visitWindowFunction(const Analyzer::WindowFunction* window_func) const {
+  virtual T visitWindowFunction(const hdk::ir::WindowFunction* window_func) const {
     T result = defaultResult();
     for (const auto& arg : window_func->getArgs()) {
       result = aggregateResult(result, visit(arg.get()));
@@ -296,29 +304,29 @@ class ScalarExprVisitor {
     return result;
   }
 
-  virtual T visitDatediffExpr(const Analyzer::DatediffExpr* datediff) const {
+  virtual T visitDatediffExpr(const hdk::ir::DatediffExpr* datediff) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(datediff->get_start_expr()));
     result = aggregateResult(result, visit(datediff->get_end_expr()));
     return result;
   }
 
-  virtual T visitDateaddExpr(const Analyzer::DateaddExpr* dateadd) const {
+  virtual T visitDateaddExpr(const hdk::ir::DateaddExpr* dateadd) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(dateadd->get_number_expr()));
     result = aggregateResult(result, visit(dateadd->get_datetime_expr()));
     return result;
   }
 
-  virtual T visitLikelihood(const Analyzer::LikelihoodExpr* likelihood) const {
+  virtual T visitLikelihood(const hdk::ir::LikelihoodExpr* likelihood) const {
     return visit(likelihood->get_arg());
   }
 
-  virtual T visitOffsetInFragment(const Analyzer::OffsetInFragment*) const {
+  virtual T visitOffsetInFragment(const hdk::ir::OffsetInFragment*) const {
     return defaultResult();
   }
 
-  virtual T visitAggExpr(const Analyzer::AggExpr* agg) const {
+  virtual T visitAggExpr(const hdk::ir::AggExpr* agg) const {
     T result = defaultResult();
     return aggregateResult(result, visit(agg->get_arg()));
   }

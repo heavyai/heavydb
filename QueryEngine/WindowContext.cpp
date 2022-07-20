@@ -38,7 +38,7 @@
 
 // Non-partitioned version (no join table provided)
 WindowFunctionContext::WindowFunctionContext(
-    const Analyzer::WindowFunction* window_func,
+    const hdk::ir::WindowFunction* window_func,
     const Config& config,
     const size_t elem_count,
     const ExecutorDeviceType device_type,
@@ -65,7 +65,7 @@ WindowFunctionContext::WindowFunctionContext(
 
 // Partitioned version
 WindowFunctionContext::WindowFunctionContext(
-    const Analyzer::WindowFunction* window_func,
+    const hdk::ir::WindowFunction* window_func,
     const Config& config,
     const std::shared_ptr<HashJoin>& partitions,
     const size_t elem_count,
@@ -96,7 +96,7 @@ WindowFunctionContext::~WindowFunctionContext() {
 
 void WindowFunctionContext::addOrderColumn(
     const int8_t* column,
-    const Analyzer::ColumnVar* col_var,
+    const hdk::ir::ColumnVar* col_var,
     const std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner) {
   order_columns_owner_.push_back(chunks_owner);
   order_columns_.push_back(column);
@@ -217,8 +217,8 @@ size_t window_function_buffer_element_size(const SqlWindowFunctionKind /*kind*/)
 }
 
 // Extracts the integer constant from a constant expression.
-size_t get_int_constant_from_expr(const Analyzer::Expr* expr) {
-  const auto lag_constant = dynamic_cast<const Analyzer::Constant*>(expr);
+size_t get_int_constant_from_expr(const hdk::ir::Expr* expr) {
+  const auto lag_constant = dynamic_cast<const hdk::ir::Constant*>(expr);
   if (!lag_constant) {
     throw std::runtime_error("LAG with non-constant lag argument not supported yet");
   }
@@ -241,7 +241,7 @@ size_t get_int_constant_from_expr(const Analyzer::Expr* expr) {
 }
 
 // Gets the lag or lead argument canonicalized as lag (lag = -lead).
-int64_t get_lag_or_lead_argument(const Analyzer::WindowFunction* window_func) {
+int64_t get_lag_or_lead_argument(const hdk::ir::WindowFunction* window_func) {
   CHECK(window_func->getKind() == SqlWindowFunctionKind::LAG ||
         window_func->getKind() == SqlWindowFunctionKind::LEAD);
   const auto& args = window_func->getArgs();
@@ -433,7 +433,7 @@ extern "C" RUNTIME_EXPORT void add_window_pending_output(void* pending_output,
 
 // Returns true iff the aggregate window function requires special multiplicity handling
 // to ensure that peer rows have the same value for the window function.
-bool window_function_requires_peer_handling(const Analyzer::WindowFunction* window_func) {
+bool window_function_requires_peer_handling(const hdk::ir::WindowFunction* window_func) {
   if (!window_function_is_aggregate(window_func->getKind())) {
     return false;
   }
@@ -468,7 +468,7 @@ void WindowFunctionContext::computePartition(const size_t partition_idx,
        ++order_column_idx) {
     auto order_column_buffer = order_columns_[order_column_idx];
     const auto order_col =
-        dynamic_cast<const Analyzer::ColumnVar*>(order_keys[order_column_idx].get());
+        dynamic_cast<const hdk::ir::ColumnVar*>(order_keys[order_column_idx].get());
     CHECK(order_col);
     const auto& order_col_collation = collation[order_column_idx];
     const auto asc_comparator = makeComparator(order_col,
@@ -602,7 +602,7 @@ void WindowFunctionContext::compute() {
   }
 }
 
-const Analyzer::WindowFunction* WindowFunctionContext::getWindowFunction() const {
+const hdk::ir::WindowFunction* WindowFunctionContext::getWindowFunction() const {
   return window_func_;
 }
 
@@ -710,7 +710,7 @@ WindowFunctionContext::WindowComparatorResult fp_comparator(
 }  // namespace
 
 WindowFunctionContext::Comparator WindowFunctionContext::makeComparator(
-    const Analyzer::ColumnVar* col_var,
+    const hdk::ir::ColumnVar* col_var,
     const int8_t* order_column_buffer,
     const int32_t* partition_indices,
     const bool nulls_first) {
@@ -778,7 +778,7 @@ void WindowFunctionContext::computePartitionBuffer(
     int64_t* output_for_partition_buff,
     const size_t partition_size,
     const size_t off,
-    const Analyzer::WindowFunction* window_func,
+    const hdk::ir::WindowFunction* window_func,
     const std::function<bool(const int64_t lhs, const int64_t rhs)>& comparator) {
   switch (window_func->getKind()) {
     case SqlWindowFunctionKind::ROW_NUMBER: {

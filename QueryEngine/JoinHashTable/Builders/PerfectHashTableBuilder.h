@@ -250,7 +250,7 @@ class PerfectJoinHashTableBuilder {
       const JoinColumn& join_column,
       const ExpressionRange& col_range,
       const bool is_bitwise_eq,
-      const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
+      const std::pair<const hdk::ir::ColumnVar*, const hdk::ir::Expr*>& cols,
       const StringDictionaryProxy::IdMap* str_proxy_translation_map,
       const HashEntryInfo hash_entry_info,
       const int32_t hash_join_invalid_val,

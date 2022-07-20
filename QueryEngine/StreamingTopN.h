@@ -44,13 +44,13 @@ std::vector<int8_t> get_rows_copy_from_heaps(const int64_t* heaps,
 
 struct RelAlgExecutionUnit;
 
-namespace Analyzer {
+namespace hdk::ir {
 class Expr;
-}  // namespace Analyzer
+}  // namespace hdk::ir
 
 // Compute the slot index where the target given by target_idx is stored, where
 // target_exprs is the list all projected expressions.
-size_t get_heap_key_slot_index(const std::vector<Analyzer::Expr*>& target_exprs,
+size_t get_heap_key_slot_index(const std::vector<hdk::ir::Expr*>& target_exprs,
                                const size_t target_idx,
                                bool bigint_count);
 

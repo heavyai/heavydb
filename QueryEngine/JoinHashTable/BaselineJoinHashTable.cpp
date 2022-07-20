@@ -37,7 +37,7 @@ std::once_flag BaselineJoinHashTable::init_caches_flag_;
 
 //! Make hash table from an in-flight SQL query's parse tree etc.
 std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
-    const std::shared_ptr<Analyzer::BinOper> condition,
+    const std::shared_ptr<hdk::ir::BinOper> condition,
     const std::vector<InputTableInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level,
     const JoinType join_type,
@@ -122,7 +122,7 @@ void BaselineJoinHashTable::initCaches(ConfigPtr config) {
 }
 
 BaselineJoinHashTable::BaselineJoinHashTable(
-    const std::shared_ptr<Analyzer::BinOper> condition,
+    const std::shared_ptr<hdk::ir::BinOper> condition,
     const JoinType join_type,
     const std::vector<InputTableInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level,
@@ -875,9 +875,9 @@ llvm::Value* BaselineJoinHashTable::codegenKey(const CompilationOptions& co) {
         LL_INT(i));
     const auto& inner_outer_pair = inner_outer_pairs_[i];
     const auto outer_col = inner_outer_pair.second;
-    const auto key_col_var = dynamic_cast<const Analyzer::ColumnVar*>(outer_col);
+    const auto key_col_var = dynamic_cast<const hdk::ir::ColumnVar*>(outer_col);
     const auto val_col_var =
-        dynamic_cast<const Analyzer::ColumnVar*>(inner_outer_pair.first);
+        dynamic_cast<const hdk::ir::ColumnVar*>(inner_outer_pair.first);
     if (key_col_var && val_col_var &&
         self_join_not_covered_by_left_deep_tree(
             key_col_var,

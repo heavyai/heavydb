@@ -190,15 +190,15 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
   throw std::runtime_error("Unsupported type: " + type_name);
 }
 
-namespace Analyzer {
+namespace hdk::ir {
 
 class Constant;
 class Expr;
 
-}  // namespace Analyzer
+}  // namespace hdk::ir
 
 SQLTypeInfo get_agg_type(const SQLAgg agg_kind,
-                         const Analyzer::Expr* arg_expr,
+                         const hdk::ir::Expr* arg_expr,
                          bool bigint_count);
 
 ExtractField to_datepart_field(const std::string&);
@@ -207,7 +207,7 @@ DateaddField to_dateadd_field(const std::string&);
 
 DatetruncField to_datediff_field(const std::string&);
 
-std::shared_ptr<Analyzer::Constant> make_fp_constant(const int64_t val,
-                                                     const SQLTypeInfo& ti);
+std::shared_ptr<hdk::ir::Constant> make_fp_constant(const int64_t val,
+                                                    const SQLTypeInfo& ti);
 
 #endif  // QUERYENGINE_CALCITEDESERIALIZERUTILS_H

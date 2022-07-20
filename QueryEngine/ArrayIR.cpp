@@ -17,13 +17,13 @@
 #include "CodeGenerator.h"
 #include "Execute.h"
 
-llvm::Value* CodeGenerator::codegenUnnest(const Analyzer::UOper* uoper,
+llvm::Value* CodeGenerator::codegenUnnest(const hdk::ir::UOper* uoper,
                                           const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   return codegen(uoper->get_operand(), true, co).front();
 }
 
-llvm::Value* CodeGenerator::codegenArrayAt(const Analyzer::BinOper* array_at,
+llvm::Value* CodeGenerator::codegenArrayAt(const hdk::ir::BinOper* array_at,
                                            const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto arr_expr = array_at->get_left_operand();
@@ -65,7 +65,7 @@ llvm::Value* CodeGenerator::codegenArrayAt(const Analyzer::BinOper* array_at,
                        : static_cast<llvm::Value*>(cgen_state_->inlineIntNull(elem_ti))});
 }
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::CardinalityExpr* expr,
+llvm::Value* CodeGenerator::codegen(const hdk::ir::CardinalityExpr* expr,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto arr_expr = expr->get_arg();
@@ -89,7 +89,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::CardinalityExpr* expr,
 }
 
 std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
-    Analyzer::ArrayExpr const* array_expr,
+    hdk::ir::ArrayExpr const* array_expr,
     CompilationOptions const& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   using ValueVector = std::vector<llvm::Value*>;

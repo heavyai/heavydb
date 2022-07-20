@@ -21,7 +21,7 @@
 #include <set>
 #include <string>
 
-#include "Analyzer/Analyzer.h"
+#include "IR/Expr.h"
 #include "DataMgr/Allocators/ThrustAllocator.h"
 #include "DataProvider/DataProvider.h"
 #include "QueryEngine/ColumnarResults.h"
@@ -79,7 +79,7 @@ class OverlapsHashTableTooBig : public HashJoinFail {
             std::to_string(overlaps_hash_table_max_bytes) + " bytes") {}
 };
 
-using InnerOuter = std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>;
+using InnerOuter = std::pair<const hdk::ir::ColumnVar*, const hdk::ir::Expr*>;
 
 struct ColumnsForDevice {
   const std::vector<JoinColumn> join_columns;
@@ -161,7 +161,7 @@ class HashJoin {
 
   virtual bool isBitwiseEq() const = 0;
 
-  JoinColumn fetchJoinColumn(const Analyzer::ColumnVar* hash_col,
+  JoinColumn fetchJoinColumn(const hdk::ir::ColumnVar* hash_col,
                              const std::vector<FragmentInfo>& fragment_info,
                              const Data_Namespace::MemoryLevel effective_memory_level,
                              const int device_id,
@@ -173,7 +173,7 @@ class HashJoin {
 
   //! Make hash table from an in-flight SQL query's parse tree etc.
   static std::shared_ptr<HashJoin> getInstance(
-      const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+      const std::shared_ptr<hdk::ir::BinOper> qual_bin_oper,
       const std::vector<InputTableInfo>& query_infos,
       const Data_Namespace::MemoryLevel memory_level,
       const JoinType join_type,
@@ -202,7 +202,7 @@ class HashJoin {
 
   //! Make hash table from named tables and columns (such as for testing).
   static std::shared_ptr<HashJoin> getSyntheticInstance(
-      const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+      const std::shared_ptr<hdk::ir::BinOper> qual_bin_oper,
       const Data_Namespace::MemoryLevel memory_level,
       const HashType preferred_hash_type,
       const int device_count,
@@ -211,7 +211,7 @@ class HashJoin {
       Executor* executor);
 
   static std::pair<std::string, std::shared_ptr<HashJoin>> getSyntheticInstance(
-      std::vector<std::shared_ptr<Analyzer::BinOper>>,
+      std::vector<std::shared_ptr<hdk::ir::BinOper>>,
       const Data_Namespace::MemoryLevel memory_level,
       const HashType preferred_hash_type,
       const int device_count,
@@ -226,14 +226,14 @@ class HashJoin {
   }
 
   // Swap the columns if needed and make the inner column the first component.
-  static InnerOuter normalizeColumnPair(const Analyzer::Expr* lhs,
-                                        const Analyzer::Expr* rhs,
+  static InnerOuter normalizeColumnPair(const hdk::ir::Expr* lhs,
+                                        const hdk::ir::Expr* rhs,
                                         SchemaProviderPtr schema_provider,
                                         const TemporaryTables* temporary_tables);
 
   // Normalize each expression tuple
   static std::vector<InnerOuter> normalizeColumnPairs(
-      const Analyzer::BinOper* condition,
+      const hdk::ir::BinOper* condition,
       SchemaProviderPtr schema_provider,
       const TemporaryTables* temporary_tables);
 
@@ -313,7 +313,7 @@ std::ostream& operator<<(std::ostream& os, const DecodedJoinHashBufferEntry& e);
 
 std::ostream& operator<<(std::ostream& os, const DecodedJoinHashBufferSet& s);
 
-std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(int db_id,
+std::shared_ptr<hdk::ir::ColumnVar> getSyntheticColumnVar(int db_id,
                                                            std::string_view table,
                                                            std::string_view column,
                                                            int rte_idx,

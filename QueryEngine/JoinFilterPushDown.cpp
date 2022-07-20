@@ -21,16 +21,15 @@
 namespace {
 
 class BindFilterToOutermostVisitor : public DeepCopyVisitor {
-  std::shared_ptr<Analyzer::Expr> visitColumnVar(
-      const Analyzer::ColumnVar* col_var) const override {
-    return makeExpr<Analyzer::ColumnVar>(col_var->get_column_info(), 0);
+  hdk::ir::ExprPtr visitColumnVar(const hdk::ir::ColumnVar* col_var) const override {
+    return hdk::ir::makeExpr<hdk::ir::ColumnVar>(col_var->get_column_info(), 0);
   }
 };
 
 class CollectInputColumnsVisitor
     : public ScalarExprVisitor<std::unordered_set<InputColDescriptor>> {
   std::unordered_set<InputColDescriptor> visitColumnVar(
-      const Analyzer::ColumnVar* col_var) const override {
+      const hdk::ir::ColumnVar* col_var) const override {
     return {InputColDescriptor(col_var->get_column_info(), 0)};
   }
 
@@ -54,11 +53,11 @@ class CollectInputColumnsVisitor
  * a filter should be pushed down or not.
  */
 FilterSelectivity RelAlgExecutor::getFilterSelectivity(
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& filter_expressions,
+    const std::vector<hdk::ir::ExprPtr>& filter_expressions,
     const CompilationOptions& co,
     const ExecutionOptions& eo) {
   CollectInputColumnsVisitor input_columns_visitor;
-  std::list<std::shared_ptr<Analyzer::Expr>> quals;
+  std::list<hdk::ir::ExprPtr> quals;
   std::unordered_set<InputColDescriptor> input_column_descriptors;
   BindFilterToOutermostVisitor bind_filter_to_outermost;
   for (const auto& filter_expr : filter_expressions) {
@@ -76,7 +75,7 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
     }
     input_col_descs.push_back(std::make_shared<const InputColDescriptor>(input_col_desc));
   }
-  const auto count_expr = makeExpr<Analyzer::AggExpr>(
+  const auto count_expr = hdk::ir::makeExpr<hdk::ir::AggExpr>(
       SQLTypeInfo(config_.exec.group_by.bigint_count ? kBIGINT : kINT, false),
       kCOUNT,
       nullptr,
@@ -246,8 +245,7 @@ std::vector<PushedDownFilterInfo> find_push_down_filters(
   } else {
     std::iota(to_original_rte_idx.begin(), to_original_rte_idx.end(), 0);
   }
-  std::unordered_map<int, std::vector<std::shared_ptr<Analyzer::Expr>>>
-      filters_per_nesting_level;
+  std::unordered_map<int, std::vector<hdk::ir::ExprPtr>> filters_per_nesting_level;
   for (const auto& level_conditions : ra_exe_unit.join_quals) {
     AllRangeTableIndexVisitor visitor;
     for (const auto& cond : level_conditions.quals) {

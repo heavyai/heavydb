@@ -1235,8 +1235,7 @@ const RexScalar* scalar_at(const size_t i, const RelTableFunction* table_func) {
   return table_func->getTableFuncInputAt(i);
 }
 
-std::shared_ptr<Analyzer::Expr> set_transient_dict(
-    const std::shared_ptr<Analyzer::Expr> expr) {
+hdk::ir::ExprPtr set_transient_dict(const hdk::ir::ExprPtr expr) {
   const auto& ti = expr->get_type_info();
   if (!ti.is_string() || ti.get_compression() != kENCODING_NONE) {
     return expr;
@@ -1248,9 +1247,8 @@ std::shared_ptr<Analyzer::Expr> set_transient_dict(
   return expr->add_cast(transient_dict_ti);
 }
 
-void set_transient_dict_maybe(
-    std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
-    const std::shared_ptr<Analyzer::Expr>& expr) {
+void set_transient_dict_maybe(std::vector<hdk::ir::ExprPtr>& scalar_sources,
+                              const hdk::ir::ExprPtr& expr) {
   try {
     scalar_sources.push_back(set_transient_dict(fold_expr(expr.get())));
   } catch (...) {
@@ -1258,8 +1256,7 @@ void set_transient_dict_maybe(
   }
 }
 
-std::shared_ptr<Analyzer::Expr> cast_dict_to_none(
-    const std::shared_ptr<Analyzer::Expr>& input) {
+hdk::ir::ExprPtr cast_dict_to_none(const hdk::ir::ExprPtr& input) {
   const auto& input_ti = input->get_type_info();
   if (input_ti.is_string() && input_ti.get_compression() == kENCODING_DICT) {
     return input->add_cast(SQLTypeInfo(kTEXT, input_ti.get_notnull()));
@@ -1268,11 +1265,11 @@ std::shared_ptr<Analyzer::Expr> cast_dict_to_none(
 }
 
 template <class RA>
-std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
+std::vector<hdk::ir::ExprPtr> translate_scalar_sources(
     const RA* ra_node,
     const RelAlgTranslator& translator,
     const ::ExecutorType executor_type) {
-  std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
+  std::vector<hdk::ir::ExprPtr> scalar_sources;
   const size_t scalar_sources_size = get_scalar_sources_size(ra_node);
   VLOG(3) << "get_scalar_sources_size(" << ra_node->toString()
           << ") = " << scalar_sources_size;
@@ -1299,23 +1296,23 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
   return scalar_sources;
 }
 
-std::list<std::shared_ptr<Analyzer::Expr>> translate_groupby_exprs(
+std::list<hdk::ir::ExprPtr> translate_groupby_exprs(
     const RelCompound* compound,
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources) {
+    const std::vector<hdk::ir::ExprPtr>& scalar_sources) {
   if (!compound->isAggregate()) {
     return {nullptr};
   }
-  std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
+  std::list<hdk::ir::ExprPtr> groupby_exprs;
   for (size_t group_idx = 0; group_idx < compound->getGroupByCount(); ++group_idx) {
     groupby_exprs.push_back(set_transient_dict(scalar_sources[group_idx]));
   }
   return groupby_exprs;
 }
 
-std::list<std::shared_ptr<Analyzer::Expr>> translate_groupby_exprs(
+std::list<hdk::ir::ExprPtr> translate_groupby_exprs(
     const RelAggregate* aggregate,
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources) {
-  std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
+    const std::vector<hdk::ir::ExprPtr>& scalar_sources) {
+  std::list<hdk::ir::ExprPtr> groupby_exprs;
   for (size_t group_idx = 0; group_idx < aggregate->getGroupByCount(); ++group_idx) {
     groupby_exprs.push_back(set_transient_dict(scalar_sources[group_idx]));
   }
@@ -1331,19 +1328,19 @@ QualsConjunctiveForm translate_quals(const RelCompound* compound,
                      : QualsConjunctiveForm{};
 }
 
-std::vector<Analyzer::Expr*> translate_targets(
-    std::vector<std::shared_ptr<Analyzer::Expr>>& target_exprs_owned,
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
-    const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
+std::vector<hdk::ir::Expr*> translate_targets(
+    std::vector<hdk::ir::ExprPtr>& target_exprs_owned,
+    const std::vector<hdk::ir::ExprPtr>& scalar_sources,
+    const std::list<hdk::ir::ExprPtr>& groupby_exprs,
     const RelCompound* compound,
     const RelAlgTranslator& translator,
     const ExecutorType executor_type,
     bool bigint_count) {
-  std::vector<Analyzer::Expr*> target_exprs;
+  std::vector<hdk::ir::Expr*> target_exprs;
   for (size_t i = 0; i < compound->size(); ++i) {
     const auto target_rex = compound->getTargetExpr(i);
     const auto target_rex_agg = dynamic_cast<const RexAgg*>(target_rex);
-    std::shared_ptr<Analyzer::Expr> target_expr;
+    hdk::ir::ExprPtr target_expr;
     if (target_rex_agg) {
       target_expr = RelAlgTranslator::translateAggregateRex(
           target_rex_agg, scalar_sources, bigint_count);
@@ -1355,7 +1352,7 @@ std::vector<Analyzer::Expr*> translate_targets(
         CHECK_GE(ref_idx, size_t(1));
         CHECK_LE(ref_idx, groupby_exprs.size());
         const auto groupby_expr = *std::next(groupby_exprs.begin(), ref_idx - 1);
-        target_expr = var_ref(groupby_expr.get(), Analyzer::Var::kGROUPBY, ref_idx);
+        target_expr = var_ref(groupby_expr.get(), hdk::ir::Var::kGROUPBY, ref_idx);
       } else {
         target_expr = translator.translateScalarRex(target_rex_scalar);
         auto rewritten_expr = rewrite_expr(target_expr.get());
@@ -1378,18 +1375,18 @@ std::vector<Analyzer::Expr*> translate_targets(
   return target_exprs;
 }
 
-std::vector<Analyzer::Expr*> translate_targets(
-    std::vector<std::shared_ptr<Analyzer::Expr>>& target_exprs_owned,
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
-    const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
+std::vector<hdk::ir::Expr*> translate_targets(
+    std::vector<hdk::ir::ExprPtr>& target_exprs_owned,
+    const std::vector<hdk::ir::ExprPtr>& scalar_sources,
+    const std::list<hdk::ir::ExprPtr>& groupby_exprs,
     const RelAggregate* aggregate,
     const RelAlgTranslator& translator,
     bool bigint_count) {
-  std::vector<Analyzer::Expr*> target_exprs;
+  std::vector<hdk::ir::Expr*> target_exprs;
   size_t group_key_idx = 1;
   for (const auto& groupby_expr : groupby_exprs) {
     auto target_expr =
-        var_ref(groupby_expr.get(), Analyzer::Var::kGROUPBY, group_key_idx++);
+        var_ref(groupby_expr.get(), hdk::ir::Var::kGROUPBY, group_key_idx++);
     target_exprs_owned.push_back(target_expr);
     target_exprs.push_back(target_expr.get());
   }
@@ -1405,13 +1402,13 @@ std::vector<Analyzer::Expr*> translate_targets(
   return target_exprs;
 }
 
-bool is_count_distinct(const Analyzer::Expr* expr) {
-  const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(expr);
+bool is_count_distinct(const hdk::ir::Expr* expr) {
+  const auto agg_expr = dynamic_cast<const hdk::ir::AggExpr*>(expr);
   return agg_expr && agg_expr->get_is_distinct();
 }
 
-bool is_agg(const Analyzer::Expr* expr) {
-  const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(expr);
+bool is_agg(const hdk::ir::Expr* expr) {
+  const auto agg_expr = dynamic_cast<const hdk::ir::AggExpr*>(expr);
   if (agg_expr && agg_expr->get_contains_agg()) {
     auto agg_type = agg_expr->get_aggtype();
     if (agg_type == SQLAgg::kMIN || agg_type == SQLAgg::kMAX ||
@@ -1422,7 +1419,7 @@ bool is_agg(const Analyzer::Expr* expr) {
   return false;
 }
 
-inline SQLTypeInfo get_logical_type_for_expr(const Analyzer::Expr& expr) {
+inline SQLTypeInfo get_logical_type_for_expr(const hdk::ir::Expr& expr) {
   if (is_count_distinct(&expr)) {
     return SQLTypeInfo(kBIGINT, false);
   } else if (is_agg(&expr)) {
@@ -1434,7 +1431,7 @@ inline SQLTypeInfo get_logical_type_for_expr(const Analyzer::Expr& expr) {
 template <class RA>
 std::vector<TargetMetaInfo> get_targets_meta(
     const RA* ra_node,
-    const std::vector<Analyzer::Expr*>& target_exprs) {
+    const std::vector<hdk::ir::Expr*>& target_exprs) {
   std::vector<TargetMetaInfo> targets_meta;
   CHECK_EQ(ra_node->size(), target_exprs.size());
   for (size_t i = 0; i < ra_node->size(); ++i) {
@@ -1450,7 +1447,7 @@ std::vector<TargetMetaInfo> get_targets_meta(
 template <>
 std::vector<TargetMetaInfo> get_targets_meta(
     const RelFilter* filter,
-    const std::vector<Analyzer::Expr*>& target_exprs) {
+    const std::vector<hdk::ir::Expr*>& target_exprs) {
   RelAlgNode const* input0 = filter->getInput(0);
   if (auto const* input = dynamic_cast<RelCompound const*>(input0)) {
     return get_targets_meta(input, target_exprs);
@@ -1502,8 +1499,8 @@ namespace {
 bool is_window_execution_unit(const RelAlgExecutionUnit& ra_exe_unit) {
   return std::any_of(ra_exe_unit.target_exprs.begin(),
                      ra_exe_unit.target_exprs.end(),
-                     [](const Analyzer::Expr* expr) {
-                       return dynamic_cast<const Analyzer::WindowFunction*>(expr);
+                     [](const hdk::ir::Expr* expr) {
+                       return dynamic_cast<const hdk::ir::WindowFunction*>(expr);
                      });
 }
 
@@ -1589,20 +1586,20 @@ namespace {
 // to reuse the hash join construction helpers to generate a hash table for the window
 // function partition: create an equals expression with left and right sides identical
 // except for the range table index.
-std::shared_ptr<Analyzer::Expr> transform_to_inner(const Analyzer::Expr* expr) {
-  const auto tuple = dynamic_cast<const Analyzer::ExpressionTuple*>(expr);
+hdk::ir::ExprPtr transform_to_inner(const hdk::ir::Expr* expr) {
+  const auto tuple = dynamic_cast<const hdk::ir::ExpressionTuple*>(expr);
   if (tuple) {
-    std::vector<std::shared_ptr<Analyzer::Expr>> transformed_tuple;
+    std::vector<hdk::ir::ExprPtr> transformed_tuple;
     for (const auto& element : tuple->getTuple()) {
       transformed_tuple.push_back(transform_to_inner(element.get()));
     }
-    return makeExpr<Analyzer::ExpressionTuple>(transformed_tuple);
+    return hdk::ir::makeExpr<hdk::ir::ExpressionTuple>(transformed_tuple);
   }
-  const auto col = dynamic_cast<const Analyzer::ColumnVar*>(expr);
+  const auto col = dynamic_cast<const hdk::ir::ColumnVar*>(expr);
   if (!col) {
     throw std::runtime_error("Only columns supported in the window partition for now");
   }
-  return makeExpr<Analyzer::ColumnVar>(col->get_column_info(), 1);
+  return hdk::ir::makeExpr<hdk::ir::ColumnVar>(col->get_column_info(), 1);
 }
 
 }  // namespace
@@ -1626,28 +1623,28 @@ void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
   for (size_t target_index = 0; target_index < ra_exe_unit.target_exprs.size();
        ++target_index) {
     const auto& target_expr = ra_exe_unit.target_exprs[target_index];
-    const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
+    const auto window_func = dynamic_cast<const hdk::ir::WindowFunction*>(target_expr);
     if (!window_func) {
       continue;
     }
     // Always use baseline layout hash tables for now, make the expression a tuple.
     const auto& partition_keys = window_func->getPartitionKeys();
-    std::shared_ptr<Analyzer::BinOper> partition_key_cond;
+    std::shared_ptr<hdk::ir::BinOper> partition_key_cond;
     if (partition_keys.size() >= 1) {
-      std::shared_ptr<Analyzer::Expr> partition_key_tuple;
+      hdk::ir::ExprPtr partition_key_tuple;
       if (partition_keys.size() > 1) {
-        partition_key_tuple = makeExpr<Analyzer::ExpressionTuple>(partition_keys);
+        partition_key_tuple = hdk::ir::makeExpr<hdk::ir::ExpressionTuple>(partition_keys);
       } else {
         CHECK_EQ(partition_keys.size(), size_t(1));
         partition_key_tuple = partition_keys.front();
       }
       // Creates a tautology equality with the partition expression on both sides.
-      partition_key_cond =
-          makeExpr<Analyzer::BinOper>(kBOOLEAN,
-                                      kBW_EQ,
-                                      kONE,
-                                      partition_key_tuple,
-                                      transform_to_inner(partition_key_tuple.get()));
+      partition_key_cond = hdk::ir::makeExpr<hdk::ir::BinOper>(
+          kBOOLEAN,
+          kBW_EQ,
+          kONE,
+          partition_key_tuple,
+          transform_to_inner(partition_key_tuple.get()));
     }
     auto context =
         createWindowFunctionContext(window_func,
@@ -1664,8 +1661,8 @@ void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
 }
 
 std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionContext(
-    const Analyzer::WindowFunction* window_func,
-    const std::shared_ptr<Analyzer::BinOper>& partition_key_cond,
+    const hdk::ir::WindowFunction* window_func,
+    const std::shared_ptr<hdk::ir::BinOper>& partition_key_cond,
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos,
     const CompilationOptions& co,
@@ -1705,8 +1702,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
   const auto& order_keys = window_func->getOrderKeys();
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   for (const auto& order_key : order_keys) {
-    const auto order_col =
-        std::dynamic_pointer_cast<const Analyzer::ColumnVar>(order_key);
+    const auto order_col = std::dynamic_pointer_cast<const hdk::ir::ColumnVar>(order_key);
     if (!order_col) {
       throw std::runtime_error("Only order by columns supported for now");
     }
@@ -1832,18 +1828,12 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
   return {rs, tuple_type};
 }
 
-ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query) {
-  UNREACHABLE();
-  ExecutionResult result;
-  return result;
-}
-
 namespace {
 
 // TODO(alex): Once we're fully migrated to the relational algebra model, change
 // the executor interface to use the collation directly and remove this conversion.
-std::list<Analyzer::OrderEntry> get_order_entries(const RelSort* sort) {
-  std::list<Analyzer::OrderEntry> result;
+std::list<hdk::ir::OrderEntry> get_order_entries(const RelSort* sort) {
+  std::list<hdk::ir::OrderEntry> result;
   for (size_t i = 0; i < sort->collationCount(); ++i) {
     const auto sort_field = sort->getCollation(i);
     result.emplace_back(sort_field.getField() + 1,
@@ -1862,7 +1852,7 @@ size_t get_scan_limit(const RelAlgNode* ra, const size_t limit) {
   return (compound && compound->isAggregate()) ? 0 : limit;
 }
 
-bool first_oe_is_desc(const std::list<Analyzer::OrderEntry>& order_entries) {
+bool first_oe_is_desc(const std::list<hdk::ir::OrderEntry>& order_entries) {
   return !order_entries.empty() && order_entries.front().is_desc;
 }
 
@@ -1876,7 +1866,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   check_sort_node_source_constraint(sort);
   const auto source = sort->getInput(0);
   const bool is_aggregate = node_is_aggregate(source);
-  std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
+  std::list<hdk::ir::ExprPtr> groupby_exprs;
   bool is_desc{false};
 
   auto execute_sort_query = [this,
@@ -2045,7 +2035,7 @@ size_t groups_approx_upper_bound(const std::vector<InputTableInfo>& table_infos)
  */
 bool compute_output_buffer_size(const RelAlgExecutionUnit& ra_exe_unit) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
-    if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
+    if (dynamic_cast<const hdk::ir::AggExpr*>(target_expr)) {
       return false;
     }
   }
@@ -2066,7 +2056,7 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
     const std::vector<InputTableInfo>& table_infos,
     const Executor* executor,
     const ExecutorDeviceType device_type_in,
-    std::vector<std::shared_ptr<Analyzer::Expr>>& target_exprs_owned) {
+    std::vector<hdk::ir::ExprPtr>& target_exprs_owned) {
   RelAlgExecutionUnit ra_exe_unit = ra_exe_unit_in;
   for (size_t i = 0; i < ra_exe_unit.target_exprs.size(); ++i) {
     const auto target_expr = ra_exe_unit.target_exprs[i];
@@ -2075,8 +2065,8 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
     if (agg_info.agg_kind != kAPPROX_COUNT_DISTINCT) {
       continue;
     }
-    CHECK(dynamic_cast<const Analyzer::AggExpr*>(target_expr));
-    const auto arg = static_cast<Analyzer::AggExpr*>(target_expr)->get_own_arg();
+    CHECK(dynamic_cast<const hdk::ir::AggExpr*>(target_expr));
+    const auto arg = static_cast<hdk::ir::AggExpr*>(target_expr)->get_own_arg();
     CHECK(arg);
     const auto& arg_ti = arg->get_type_info();
     // Avoid calling getExpressionRange for variable length types (string and array),
@@ -2100,7 +2090,7 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
     const auto sub_bitmap_count =
         get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit, device_type);
     int64_t approx_bitmap_sz_bits{0};
-    const auto error_rate = static_cast<Analyzer::AggExpr*>(target_expr)->get_arg1();
+    const auto error_rate = static_cast<hdk::ir::AggExpr*>(target_expr)->get_arg1();
     if (error_rate) {
       CHECK(error_rate->get_type_info().get_type() == kINT);
       CHECK_GE(error_rate->get_constval().intval, 1);
@@ -2122,7 +2112,7 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
                                                         sub_bitmap_count};
     if (approx_count_distinct_desc.bitmapPaddedSizeBytes() >=
         precise_count_distinct_desc.bitmapPaddedSizeBytes()) {
-      auto precise_count_distinct = makeExpr<Analyzer::AggExpr>(
+      auto precise_count_distinct = hdk::ir::makeExpr<hdk::ir::AggExpr>(
           get_agg_type(
               kCOUNT, arg.get(), executor->getConfig().exec.group_by.bigint_count),
           kCOUNT,
@@ -2313,7 +2303,7 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_u
                                                           const bool is_agg,
                                                           const CompilationOptions& co,
                                                           const ExecutionOptions& eo) {
-  const auto count = makeExpr<Analyzer::AggExpr>(
+  const auto count = hdk::ir::makeExpr<hdk::ir::AggExpr>(
       SQLTypeInfo(config_.exec.group_by.bigint_count ? kBIGINT : kINT, false),
       kCOUNT,
       nullptr,
@@ -2365,18 +2355,17 @@ bool RelAlgExecutor::isRowidLookup(const WorkUnit& work_unit) {
     return false;
   }
   for (const auto& simple_qual : ra_exe_unit.simple_quals) {
-    const auto comp_expr =
-        std::dynamic_pointer_cast<const Analyzer::BinOper>(simple_qual);
+    const auto comp_expr = std::dynamic_pointer_cast<const hdk::ir::BinOper>(simple_qual);
     if (!comp_expr || comp_expr->get_optype() != kEQ) {
       return false;
     }
     const auto lhs = comp_expr->get_left_operand();
-    const auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
+    const auto lhs_col = dynamic_cast<const hdk::ir::ColumnVar*>(lhs);
     if (!lhs_col || !lhs_col->get_table_id() || lhs_col->get_rte_idx()) {
       return false;
     }
     const auto rhs = comp_expr->get_right_operand();
-    const auto rhs_const = dynamic_cast<const Analyzer::Constant*>(rhs);
+    const auto rhs_const = dynamic_cast<const hdk::ir::Constant*>(rhs);
     if (!rhs_const) {
       return false;
     }
@@ -2754,9 +2743,8 @@ std::vector<size_t> get_left_deep_join_input_sizes(
   return input_sizes;
 }
 
-std::list<std::shared_ptr<Analyzer::Expr>> rewrite_quals(
-    const std::list<std::shared_ptr<Analyzer::Expr>>& quals) {
-  std::list<std::shared_ptr<Analyzer::Expr>> rewritten_quals;
+std::list<hdk::ir::ExprPtr> rewrite_quals(const std::list<hdk::ir::ExprPtr>& quals) {
+  std::list<hdk::ir::ExprPtr> rewritten_quals;
   for (const auto& qual : quals) {
     const auto rewritten_qual = rewrite_expr(qual.get());
     rewritten_quals.push_back(rewritten_qual ? rewritten_qual : qual);
@@ -2902,20 +2890,18 @@ std::vector<const RexScalar*> rex_to_conjunctive_form(const RexScalar* qual_expr
   return lhs_cf;
 }
 
-std::shared_ptr<Analyzer::Expr> build_logical_expression(
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& factors,
-    const SQLOps sql_op) {
+hdk::ir::ExprPtr build_logical_expression(const std::vector<hdk::ir::ExprPtr>& factors,
+                                          const SQLOps sql_op) {
   CHECK(!factors.empty());
   auto acc = factors.front();
   for (size_t i = 1; i < factors.size(); ++i) {
-    acc = normalizeOperExpr(sql_op, kONE, acc, factors[i]);
+    acc = Analyzer::normalizeOperExpr(sql_op, kONE, acc, factors[i]);
   }
   return acc;
 }
 
 template <class QualsList>
-bool list_contains_expression(const QualsList& haystack,
-                              const std::shared_ptr<Analyzer::Expr>& needle) {
+bool list_contains_expression(const QualsList& haystack, const hdk::ir::ExprPtr& needle) {
   for (const auto& qual : haystack) {
     if (*qual == *needle) {
       return true;
@@ -2927,13 +2913,12 @@ bool list_contains_expression(const QualsList& haystack,
 // Transform `(p AND q) OR (p AND r)` to `p AND (q OR r)`. Avoids redundant
 // evaluations of `p` and allows use of the original form in joins if `p`
 // can be used for hash joins.
-std::shared_ptr<Analyzer::Expr> reverse_logical_distribution(
-    const std::shared_ptr<Analyzer::Expr>& expr) {
+hdk::ir::ExprPtr reverse_logical_distribution(const hdk::ir::ExprPtr& expr) {
   const auto expr_terms = qual_to_disjunctive_form(expr);
   CHECK_GE(expr_terms.size(), size_t(1));
   const auto& first_term = expr_terms.front();
   const auto first_term_factors = qual_to_conjunctive_form(first_term);
-  std::vector<std::shared_ptr<Analyzer::Expr>> common_factors;
+  std::vector<hdk::ir::ExprPtr> common_factors;
   // First, collect the conjunctive components common to all the disjunctive
   // components. Don't do it for simple qualifiers, we only care about expensive or
   // join qualifiers.
@@ -2955,11 +2940,11 @@ std::shared_ptr<Analyzer::Expr> reverse_logical_distribution(
     return expr;
   }
   // Now that the common expressions are known, collect the remaining expressions.
-  std::vector<std::shared_ptr<Analyzer::Expr>> remaining_terms;
+  std::vector<hdk::ir::ExprPtr> remaining_terms;
   for (const auto& term : expr_terms) {
     const auto term_cf = qual_to_conjunctive_form(term);
-    std::vector<std::shared_ptr<Analyzer::Expr>> remaining_quals(
-        term_cf.simple_quals.begin(), term_cf.simple_quals.end());
+    std::vector<hdk::ir::ExprPtr> remaining_quals(term_cf.simple_quals.begin(),
+                                                  term_cf.simple_quals.end());
     for (const auto& qual : term_cf.quals) {
       if (!list_contains_expression(common_factors, qual)) {
         remaining_quals.push_back(qual);
@@ -2975,12 +2960,12 @@ std::shared_ptr<Analyzer::Expr> reverse_logical_distribution(
     return common_expr;
   }
   const auto remaining_expr = build_logical_expression(remaining_terms, kOR);
-  return normalizeOperExpr(kAND, kONE, common_expr, remaining_expr);
+  return Analyzer::normalizeOperExpr(kAND, kONE, common_expr, remaining_expr);
 }
 
 }  // namespace
 
-std::list<std::shared_ptr<Analyzer::Expr>> RelAlgExecutor::makeJoinQuals(
+std::list<hdk::ir::ExprPtr> RelAlgExecutor::makeJoinQuals(
     const RexScalar* join_condition,
     const std::vector<JoinType>& join_types,
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
@@ -2988,7 +2973,7 @@ std::list<std::shared_ptr<Analyzer::Expr>> RelAlgExecutor::makeJoinQuals(
   RelAlgTranslator translator(
       executor_, input_to_nest_level, join_types, now_, just_explain);
   const auto rex_condition_cf = rex_to_conjunctive_form(join_condition);
-  std::list<std::shared_ptr<Analyzer::Expr>> join_condition_quals;
+  std::list<hdk::ir::ExprPtr> join_condition_quals;
   for (const auto rex_condition_component : rex_condition_cf) {
     const auto bw_equals = get_bitwise_equals_conjunction(rex_condition_component);
     const auto join_condition =
@@ -3018,7 +3003,7 @@ JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
       join->getInnerCondition(), join_types, input_to_nest_level, just_explain);
   MaxRangeTableIndexVisitor rte_idx_visitor;
   JoinQualsPerNestingLevel result(input_descs.size() - 1);
-  std::unordered_set<std::shared_ptr<Analyzer::Expr>> visited_quals;
+  std::unordered_set<hdk::ir::ExprPtr> visited_quals;
   for (size_t rte_idx = 1; rte_idx < input_descs.size(); ++rte_idx) {
     const auto outer_condition = join->getOuterCondition(rte_idx);
     if (outer_condition) {
@@ -3051,7 +3036,7 @@ JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
 
 namespace {
 
-std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
+std::vector<hdk::ir::ExprPtr> synthesize_inputs(
     const RelAlgNode* ra_node,
     const size_t nest_level,
     const std::vector<TargetMetaInfo>& in_metainfo,
@@ -3063,11 +3048,11 @@ std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
   CHECK(it_rte_idx != input_to_nest_level.end());
   const int rte_idx = it_rte_idx->second;
   const int table_id = table_id_from_ra(input);
-  std::vector<std::shared_ptr<Analyzer::Expr>> inputs;
+  std::vector<hdk::ir::ExprPtr> inputs;
   const auto scan_ra = dynamic_cast<const RelScan*>(input);
   int input_idx = 0;
   for (const auto& input_meta : in_metainfo) {
-    inputs.push_back(std::make_shared<Analyzer::ColumnVar>(
+    inputs.push_back(std::make_shared<hdk::ir::ColumnVar>(
         input_meta.get_type_info(),
         table_id,
         scan_ra ? input_idx + 1 : input_idx,
@@ -3245,15 +3230,14 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
 
 namespace {
 
-std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_for_union(
-    RelAlgNode const* input_node) {
+std::vector<hdk::ir::ExprPtr> target_exprs_for_union(RelAlgNode const* input_node) {
   std::vector<TargetMetaInfo> const& tmis = input_node->getOutputMetainfo();
   VLOG(3) << "input_node->getOutputMetainfo()=" << shared::printContainer(tmis);
   const int negative_node_id = -input_node->getId();
-  std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs;
+  std::vector<hdk::ir::ExprPtr> target_exprs;
   target_exprs.reserve(tmis.size());
   for (size_t i = 0; i < tmis.size(); ++i) {
-    target_exprs.push_back(std::make_shared<Analyzer::ColumnVar>(
+    target_exprs.push_back(std::make_shared<hdk::ir::ColumnVar>(
         tmis[i].get_type_info(), negative_node_id, i, 0));
   }
   return target_exprs;
@@ -3426,7 +3410,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       output_row_sizing_param = 1;  // default value for RowMultiplier
       static Datum d = {DEFAULT_ROW_MULTIPLIER_VALUE};
       static auto DEFAULT_ROW_MULTIPLIER_EXPR =
-          makeExpr<Analyzer::Constant>(kINT, false, d);
+          hdk::ir::makeExpr<hdk::ir::Constant>(kINT, false, d);
       // Push the constant 1 to input_exprs
       input_exprs.insert(input_exprs.begin() + parameter_index - 1,
                          DEFAULT_ROW_MULTIPLIER_EXPR.get());
@@ -3437,7 +3421,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
     UNREACHABLE();
   }
 
-  std::vector<Analyzer::ColumnVar*> input_col_exprs;
+  std::vector<hdk::ir::ColumnVar*> input_col_exprs;
   size_t input_index = 0;
   size_t arg_index = 0;
   const auto table_func_args = table_function_impl.getInputArgs();
@@ -3446,7 +3430,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
     if (ti.is_column_list()) {
       for (int i = 0; i < ti.get_dimension(); i++) {
         auto& input_expr = input_exprs[input_index];
-        auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr);
+        auto col_var = dynamic_cast<hdk::ir::ColumnVar*>(input_expr);
         CHECK(col_var);
 
         // avoid setting type info to ti here since ti doesn't have all the
@@ -3462,7 +3446,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       }
     } else if (ti.is_column()) {
       auto& input_expr = input_exprs[input_index];
-      auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr);
+      auto col_var = dynamic_cast<hdk::ir::ColumnVar*>(input_expr);
       CHECK(col_var);
 
       // same here! avoid setting type info to ti since it doesn't have all the
@@ -3485,7 +3469,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
     arg_index++;
   }
   CHECK_EQ(input_col_exprs.size(), rel_table_func->getColInputsSize());
-  std::vector<Analyzer::Expr*> table_func_outputs;
+  std::vector<hdk::ir::Expr*> table_func_outputs;
   for (size_t i = 0; i < table_function_impl.getOutputsSize(); i++) {
     auto ti = table_function_impl.getOutputSQLType(i);
     if (ti.is_dict_encoded_string()) {
@@ -3505,7 +3489,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       int32_t comp_param = input_exprs_owned[input_pos]->get_type_info().get_comp_param();
       ti.set_comp_param(comp_param);
     }
-    target_exprs_owned_.push_back(std::make_shared<Analyzer::ColumnVar>(ti, 0, i, -1));
+    target_exprs_owned_.push_back(std::make_shared<hdk::ir::ColumnVar>(ti, 0, i, -1));
     table_func_outputs.push_back(target_exprs_owned_.back().get());
   }
   const TableFunctionExecutionUnit exe_unit = {
@@ -3523,13 +3507,13 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
 
 namespace {
 
-std::pair<std::vector<TargetMetaInfo>, std::vector<std::shared_ptr<Analyzer::Expr>>>
-get_inputs_meta(const RelFilter* filter,
-                const RelAlgTranslator& translator,
-                const std::vector<std::shared_ptr<RexInput>>& inputs_owned,
-                const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
+std::pair<std::vector<TargetMetaInfo>, std::vector<hdk::ir::ExprPtr>> get_inputs_meta(
+    const RelFilter* filter,
+    const RelAlgTranslator& translator,
+    const std::vector<std::shared_ptr<RexInput>>& inputs_owned,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
   std::vector<TargetMetaInfo> in_metainfo;
-  std::vector<std::shared_ptr<Analyzer::Expr>> exprs_owned;
+  std::vector<hdk::ir::ExprPtr> exprs_owned;
   const auto data_sink_node = get_data_sink(filter);
   auto input_it = inputs_owned.begin();
   for (size_t nest_level = 0; nest_level < data_sink_node->inputCount(); ++nest_level) {
@@ -3537,7 +3521,7 @@ get_inputs_meta(const RelFilter* filter,
     const auto scan_source = dynamic_cast<const RelScan*>(source);
     if (scan_source) {
       CHECK(source->getOutputMetainfo().empty());
-      std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources_owned;
+      std::vector<hdk::ir::ExprPtr> scalar_sources_owned;
       for (size_t i = 0; i < scan_source->size(); ++i, ++input_it) {
         scalar_sources_owned.push_back(translator.translateScalarRex(input_it->get()));
       }
@@ -3571,7 +3555,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   std::vector<TargetMetaInfo> in_metainfo;
   std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
-  std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned;
+  std::vector<hdk::ir::ExprPtr> target_exprs_owned;
 
   const auto input_to_nest_level = get_input_nest_levels(filter, {});
   std::tie(input_descs, input_col_descs, used_inputs_owned) =

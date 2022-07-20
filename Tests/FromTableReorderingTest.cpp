@@ -28,9 +28,9 @@
 TEST(Ordering, Basic) {
   // Basic test of inner join ordering. Equal table sizes.
   {
-    auto a1 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
-    auto a2 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
-    auto op = std::make_shared<Analyzer::BinOper>(kINT, kGT, kONE, a1, a2);
+    auto a1 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
+    auto a2 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
+    auto op = std::make_shared<hdk::ir::BinOper>(kINT, kGT, kONE, a1, a2);
 
     JoinCondition jc{{op}, JoinType::INNER};
     JoinQualsPerNestingLevel nesting_levels;
@@ -46,9 +46,9 @@ TEST(Ordering, Basic) {
 
   // Basic test of inner join ordering. Descending table sizes.
   {
-    auto a1 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
-    auto a2 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
-    auto op = std::make_shared<Analyzer::BinOper>(kINT, kGT, kONE, a1, a2);
+    auto a1 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
+    auto a2 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
+    auto op = std::make_shared<hdk::ir::BinOper>(kINT, kGT, kONE, a1, a2);
 
     JoinCondition jc{{op}, JoinType::INNER};
     JoinQualsPerNestingLevel nesting_levels;
@@ -66,9 +66,9 @@ TEST(Ordering, Basic) {
 
   // Basic test of inner join ordering. Ascending table sizes.
   {
-    auto a1 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
-    auto a2 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
-    auto op = std::make_shared<Analyzer::BinOper>(kINT, kGT, kONE, a1, a2);
+    auto a1 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
+    auto a2 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
+    auto op = std::make_shared<hdk::ir::BinOper>(kINT, kGT, kONE, a1, a2);
 
     JoinCondition jc{{op}, JoinType::INNER};
     JoinQualsPerNestingLevel nesting_levels;
@@ -86,9 +86,9 @@ TEST(Ordering, Basic) {
 
   // Basic test of left join ordering. Equal table sizes.
   {
-    auto a1 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
-    auto a2 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
-    auto op = std::make_shared<Analyzer::BinOper>(kINT, kGT, kONE, a1, a2);
+    auto a1 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
+    auto a2 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
+    auto op = std::make_shared<hdk::ir::BinOper>(kINT, kGT, kONE, a1, a2);
 
     JoinCondition jc{{op}, JoinType::LEFT};
     JoinQualsPerNestingLevel nesting_levels;
@@ -104,9 +104,9 @@ TEST(Ordering, Basic) {
 
   // Basic test of left join ordering. Descending table sizes.
   {
-    auto a1 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
-    auto a2 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
-    auto op = std::make_shared<Analyzer::BinOper>(kINT, kGT, kONE, a1, a2);
+    auto a1 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
+    auto a2 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
+    auto op = std::make_shared<hdk::ir::BinOper>(kINT, kGT, kONE, a1, a2);
 
     JoinCondition jc{{op}, JoinType::LEFT};
     JoinQualsPerNestingLevel nesting_levels;
@@ -124,9 +124,9 @@ TEST(Ordering, Basic) {
 
   // Basic test of left join ordering. Ascending table sizes.
   {
-    auto a1 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
-    auto a2 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
-    auto op = std::make_shared<Analyzer::BinOper>(kINT, kGT, kONE, a1, a2);
+    auto a1 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
+    auto a2 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
+    auto op = std::make_shared<hdk::ir::BinOper>(kINT, kGT, kONE, a1, a2);
 
     JoinCondition jc{{op}, JoinType::LEFT};
     JoinQualsPerNestingLevel nesting_levels;
@@ -146,11 +146,11 @@ TEST(Ordering, Basic) {
 TEST(Ordering, Triple) {
   // Triple test of inner join ordering. Equal table sizes.
   {
-    auto a1 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
-    auto a2 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
-    auto a3 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 2, 2, 2);
-    auto op1 = std::make_shared<Analyzer::BinOper>(kINT, kEQ, kONE, a1, a2);
-    auto op2 = std::make_shared<Analyzer::BinOper>(kINT, kEQ, kONE, a2, a3);
+    auto a1 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
+    auto a2 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
+    auto a3 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 2, 2, 2);
+    auto op1 = std::make_shared<hdk::ir::BinOper>(kINT, kEQ, kONE, a1, a2);
+    auto op2 = std::make_shared<hdk::ir::BinOper>(kINT, kEQ, kONE, a2, a3);
 
     JoinCondition jc1{{op1}, JoinType::INNER};
     JoinCondition jc2{{op2}, JoinType::INNER};
@@ -168,11 +168,11 @@ TEST(Ordering, Triple) {
 
   // Triple test of inner join ordering. Descending table sizes.
   {
-    auto a1 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
-    auto a2 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
-    auto a3 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 2, 2, 2);
-    auto op1 = std::make_shared<Analyzer::BinOper>(kINT, kEQ, kONE, a1, a2);
-    auto op2 = std::make_shared<Analyzer::BinOper>(kINT, kEQ, kONE, a2, a3);
+    auto a1 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
+    auto a2 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
+    auto a3 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 2, 2, 2);
+    auto op1 = std::make_shared<hdk::ir::BinOper>(kINT, kEQ, kONE, a1, a2);
+    auto op2 = std::make_shared<hdk::ir::BinOper>(kINT, kEQ, kONE, a2, a3);
 
     JoinCondition jc1{{op1}, JoinType::INNER};
     JoinCondition jc2{{op2}, JoinType::INNER};
@@ -193,11 +193,11 @@ TEST(Ordering, Triple) {
 
   // Triple test of inner join ordering. Ascending table sizes.
   {
-    auto a1 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
-    auto a2 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
-    auto a3 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 2, 2, 2);
-    auto op1 = std::make_shared<Analyzer::BinOper>(kINT, kEQ, kONE, a1, a2);
-    auto op2 = std::make_shared<Analyzer::BinOper>(kINT, kEQ, kONE, a2, a3);
+    auto a1 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
+    auto a2 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
+    auto a3 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 2, 2, 2);
+    auto op1 = std::make_shared<hdk::ir::BinOper>(kINT, kEQ, kONE, a1, a2);
+    auto op2 = std::make_shared<hdk::ir::BinOper>(kINT, kEQ, kONE, a2, a3);
 
     JoinCondition jc1{{op1}, JoinType::INNER};
     JoinCondition jc2{{op2}, JoinType::INNER};
@@ -218,11 +218,11 @@ TEST(Ordering, Triple) {
 
   // Triple test of left join ordering. Equal table sizes.
   {
-    auto a1 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
-    auto a2 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
-    auto a3 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 2, 2, 2);
-    auto op1 = std::make_shared<Analyzer::BinOper>(kINT, kEQ, kONE, a1, a2);
-    auto op2 = std::make_shared<Analyzer::BinOper>(kINT, kEQ, kONE, a2, a3);
+    auto a1 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
+    auto a2 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
+    auto a3 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 2, 2, 2);
+    auto op1 = std::make_shared<hdk::ir::BinOper>(kINT, kEQ, kONE, a1, a2);
+    auto op2 = std::make_shared<hdk::ir::BinOper>(kINT, kEQ, kONE, a2, a3);
 
     JoinCondition jc1{{op1}, JoinType::LEFT};
     JoinCondition jc2{{op2}, JoinType::LEFT};
@@ -240,11 +240,11 @@ TEST(Ordering, Triple) {
 
   // Triple test of left join ordering. Descending table sizes.
   {
-    auto a1 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
-    auto a2 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
-    auto a3 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 2, 2, 2);
-    auto op1 = std::make_shared<Analyzer::BinOper>(kINT, kEQ, kONE, a1, a2);
-    auto op2 = std::make_shared<Analyzer::BinOper>(kINT, kEQ, kONE, a2, a3);
+    auto a1 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
+    auto a2 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
+    auto a3 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 2, 2, 2);
+    auto op1 = std::make_shared<hdk::ir::BinOper>(kINT, kEQ, kONE, a1, a2);
+    auto op2 = std::make_shared<hdk::ir::BinOper>(kINT, kEQ, kONE, a2, a3);
 
     JoinCondition jc1{{op1}, JoinType::LEFT};
     JoinCondition jc2{{op2}, JoinType::LEFT};
@@ -265,11 +265,11 @@ TEST(Ordering, Triple) {
 
   // Triple test of left join ordering. Ascending table sizes.
   {
-    auto a1 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
-    auto a2 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
-    auto a3 = std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo{kINT, true}, 2, 2, 2);
-    auto op1 = std::make_shared<Analyzer::BinOper>(kINT, kEQ, kONE, a1, a2);
-    auto op2 = std::make_shared<Analyzer::BinOper>(kINT, kEQ, kONE, a2, a3);
+    auto a1 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 0, 0, 0);
+    auto a2 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 1, 1, 1);
+    auto a3 = std::make_shared<hdk::ir::ColumnVar>(SQLTypeInfo{kINT, true}, 2, 2, 2);
+    auto op1 = std::make_shared<hdk::ir::BinOper>(kINT, kEQ, kONE, a1, a2);
+    auto op2 = std::make_shared<hdk::ir::BinOper>(kINT, kEQ, kONE, a2, a3);
 
     JoinCondition jc1{{op1}, JoinType::LEFT};
     JoinCondition jc2{{op2}, JoinType::LEFT};

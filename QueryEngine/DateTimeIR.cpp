@@ -70,7 +70,7 @@ const char* get_extract_function_name(ExtractField field) {
 
 }  // namespace
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::ExtractExpr* extract_expr,
+llvm::Value* CodeGenerator::codegen(const hdk::ir::ExtractExpr* extract_expr,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   auto from_expr = codegen(extract_expr->get_from_expr(), true, co).front();
@@ -157,7 +157,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::ExtractExpr* extract_expr,
   }
 }
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::DateaddExpr* dateadd_expr,
+llvm::Value* CodeGenerator::codegen(const hdk::ir::DateaddExpr* dateadd_expr,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto& dateadd_expr_ti = dateadd_expr->get_type_info();
@@ -190,7 +190,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::DateaddExpr* dateadd_expr,
                                         llvm::Attribute::Speculatable});
 }
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::DatediffExpr* datediff_expr,
+llvm::Value* CodeGenerator::codegen(const hdk::ir::DatediffExpr* datediff_expr,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   auto start = codegen(datediff_expr->get_start_expr(), true, co).front();
@@ -218,7 +218,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::DatediffExpr* datediff_expr,
       datediff_fname, get_int_type(64, cgen_state_->context_), datediff_args);
 }
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::DatetruncExpr* datetrunc_expr,
+llvm::Value* CodeGenerator::codegen(const hdk::ir::DatetruncExpr* datetrunc_expr,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   auto from_expr = codegen(datetrunc_expr->get_from_expr(), true, co).front();

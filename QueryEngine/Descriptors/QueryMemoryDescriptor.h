@@ -389,7 +389,7 @@ inline void set_notnull(TargetInfo& target, const bool not_null) {
   set_compact_type(target, new_type);
 }
 
-std::vector<TargetInfo> target_exprs_to_infos(const std::vector<Analyzer::Expr*>& targets,
+std::vector<TargetInfo> target_exprs_to_infos(const std::vector<hdk::ir::Expr*>& targets,
                                               const QueryMemoryDescriptor& query_mem_desc,
                                               bool bigint_count);
 

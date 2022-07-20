@@ -17,12 +17,12 @@
 #include "PlanState.h"
 #include "Execute.h"
 
-bool PlanState::isLazyFetchColumn(const Analyzer::Expr* target_expr) const {
+bool PlanState::isLazyFetchColumn(const hdk::ir::Expr* target_expr) const {
   if (!allow_lazy_fetch_) {
     return false;
   }
-  const auto do_not_fetch_column = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
-  if (!do_not_fetch_column || dynamic_cast<const Analyzer::Var*>(do_not_fetch_column)) {
+  const auto do_not_fetch_column = dynamic_cast<const hdk::ir::ColumnVar*>(target_expr);
+  if (!do_not_fetch_column || dynamic_cast<const hdk::ir::Var*>(do_not_fetch_column)) {
     return false;
   }
   if (do_not_fetch_column->get_table_id() > 0) {
@@ -61,7 +61,7 @@ void PlanState::allocateLocalColumnIds(
   }
 }
 
-int PlanState::getLocalColumnId(const Analyzer::ColumnVar* col_var,
+int PlanState::getLocalColumnId(const hdk::ir::ColumnVar* col_var,
                                 const bool fetch_column) {
   CHECK(col_var);
   InputColDescriptor scan_col_desc(col_var->get_column_info(), col_var->get_rte_idx());
@@ -73,11 +73,10 @@ int PlanState::getLocalColumnId(const Analyzer::ColumnVar* col_var,
   return it->second;
 }
 
-void PlanState::addNonHashtableQualForLeftJoin(size_t idx,
-                                               std::shared_ptr<Analyzer::Expr> expr) {
+void PlanState::addNonHashtableQualForLeftJoin(size_t idx, hdk::ir::ExprPtr expr) {
   auto it = left_join_non_hashtable_quals_.find(idx);
   if (it == left_join_non_hashtable_quals_.end()) {
-    std::vector<std::shared_ptr<Analyzer::Expr>> expr_vec{expr};
+    std::vector<hdk::ir::ExprPtr> expr_vec{expr};
     left_join_non_hashtable_quals_.emplace(idx, std::move(expr_vec));
   } else {
     it->second.emplace_back(expr);

@@ -46,10 +46,10 @@ SQLTypeInfo build_type_info(const SQLTypes sql_type,
   return ti;
 }
 
-std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier> get_quantified_rhs(
+std::pair<hdk::ir::ExprPtr, SQLQualifier> get_quantified_rhs(
     const RexScalar* rex_scalar,
     const RelAlgTranslator& translator) {
-  std::shared_ptr<Analyzer::Expr> rhs;
+  hdk::ir::ExprPtr rhs;
   SQLQualifier sql_qual{kONE};
   const auto rex_operator = dynamic_cast<const RexOperator*>(rex_scalar);
   if (!rex_operator) {
@@ -170,8 +170,7 @@ std::pair<Datum, bool> datum_from_scalar_tv(const ScalarTargetValue* scalar_tv,
 
 }  // namespace
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarRex(
-    const RexScalar* rex) const {
+hdk::ir::ExprPtr RelAlgTranslator::translateScalarRex(const RexScalar* rex) const {
   const auto rex_input = dynamic_cast<const RexInput*>(rex);
   if (rex_input) {
     return translateInput(rex_input);
@@ -217,22 +216,22 @@ bool is_agg_supported_for_type(const SQLAgg& agg_kind, const SQLTypeInfo& arg_ti
 
 }  // namespace
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
+hdk::ir::ExprPtr RelAlgTranslator::translateAggregateRex(
     const RexAgg* rex,
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
+    const std::vector<hdk::ir::ExprPtr>& scalar_sources,
     bool bigint_count) {
   SQLAgg agg_kind = rex->getKind();
   const bool is_distinct = rex->isDistinct();
   const bool takes_arg{rex->size() > 0};
-  std::shared_ptr<Analyzer::Expr> arg_expr;
-  std::shared_ptr<Analyzer::Constant> arg1;  // 2nd aggregate parameter
+  hdk::ir::ExprPtr arg_expr;
+  std::shared_ptr<hdk::ir::Constant> arg1;  // 2nd aggregate parameter
   if (takes_arg) {
     const auto operand = rex->getOperand(0);
     CHECK_LT(operand, scalar_sources.size());
     CHECK_LE(rex->size(), 2u);
     arg_expr = scalar_sources[operand];
     if (agg_kind == kAPPROX_COUNT_DISTINCT && rex->size() == 2) {
-      arg1 = std::dynamic_pointer_cast<Analyzer::Constant>(
+      arg1 = std::dynamic_pointer_cast<hdk::ir::Constant>(
           scalar_sources[rex->getOperand(1)]);
       if (!arg1 || arg1->get_type_info().get_type() != kINT ||
           arg1->get_constval().intval < 1 || arg1->get_constval().intval > 100) {
@@ -243,8 +242,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
     } else if (agg_kind == kAPPROX_QUANTILE) {
       // If second parameter is not given then APPROX_MEDIAN is assumed.
       if (rex->size() == 2) {
-        arg1 = std::dynamic_pointer_cast<Analyzer::Constant>(
-            std::dynamic_pointer_cast<Analyzer::Constant>(
+        arg1 = std::dynamic_pointer_cast<hdk::ir::Constant>(
+            std::dynamic_pointer_cast<hdk::ir::Constant>(
                 scalar_sources[rex->getOperand(1)])
                 ->add_cast(SQLTypeInfo(kDOUBLE)));
       } else {
@@ -254,7 +253,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
 #else
         constexpr Datum median{.doubleval = 0.5};
 #endif
-        arg1 = std::make_shared<Analyzer::Constant>(kDOUBLE, false, median);
+        arg1 = std::make_shared<hdk::ir::Constant>(kDOUBLE, false, median);
       }
     }
     const auto& arg_ti = arg_expr->get_type_info();
@@ -264,11 +263,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
     }
   }
   const auto agg_ti = get_agg_type(agg_kind, arg_expr.get(), bigint_count);
-  return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct, arg1);
+  return hdk::ir::makeExpr<hdk::ir::AggExpr>(
+      agg_ti, agg_kind, arg_expr, is_distinct, arg1);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
-    const RexLiteral* rex_literal) {
+hdk::ir::ExprPtr RelAlgTranslator::translateLiteral(const RexLiteral* rex_literal) {
   auto lit_ti = build_type_info(
       rex_literal->getType(), rex_literal->getScale(), rex_literal->getPrecision());
   auto target_ti = build_type_info(rex_literal->getTargetType(),
@@ -279,7 +278,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
     case kBIGINT: {
       Datum d;
       d.bigintval = rex_literal->getVal<int64_t>();
-      return makeExpr<Analyzer::Constant>(rex_literal->getType(), false, d);
+      return hdk::ir::makeExpr<hdk::ir::Constant>(rex_literal->getType(), false, d);
     }
     case kDECIMAL: {
       const auto val = rex_literal->getVal<int64_t>();
@@ -298,19 +297,19 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
     case kBOOLEAN: {
       Datum d;
       d.boolval = rex_literal->getVal<bool>();
-      return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+      return hdk::ir::makeExpr<hdk::ir::Constant>(kBOOLEAN, false, d);
     }
     case kDOUBLE: {
       Datum d;
       d.doubleval = rex_literal->getVal<double>();
-      auto lit_expr = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
+      auto lit_expr = hdk::ir::makeExpr<hdk::ir::Constant>(kDOUBLE, false, d);
       return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
     }
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH: {
       Datum d;
       d.bigintval = rex_literal->getVal<int64_t>();
-      return makeExpr<Analyzer::Constant>(rex_literal->getType(), false, d);
+      return hdk::ir::makeExpr<hdk::ir::Constant>(rex_literal->getType(), false, d);
     }
     case kTIME:
     case kTIMESTAMP: {
@@ -319,7 +318,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
           rex_literal->getType() == kTIMESTAMP && rex_literal->getPrecision() > 0
               ? rex_literal->getVal<int64_t>()
               : rex_literal->getVal<int64_t>() / 1000;
-      return makeExpr<Analyzer::Constant>(
+      return hdk::ir::makeExpr<hdk::ir::Constant>(
           SQLTypeInfo(rex_literal->getType(), rex_literal->getPrecision(), 0, false),
           false,
           d);
@@ -327,16 +326,17 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
     case kDATE: {
       Datum d;
       d.bigintval = rex_literal->getVal<int64_t>() * 24 * 3600;
-      return makeExpr<Analyzer::Constant>(rex_literal->getType(), false, d);
+      return hdk::ir::makeExpr<hdk::ir::Constant>(rex_literal->getType(), false, d);
     }
     case kNULLT: {
       if (target_ti.is_array()) {
-        Analyzer::ExpressionPtrVector args;
+        hdk::ir::ExprPtrVector args;
         // defaulting to valid sub-type for convenience
         target_ti.set_subtype(kBOOLEAN);
-        return makeExpr<Analyzer::ArrayExpr>(target_ti, args, true);
+        return hdk::ir::makeExpr<hdk::ir::ArrayExpr>(target_ti, args, true);
       }
-      return makeExpr<Analyzer::Constant>(rex_literal->getTargetType(), true, Datum{0});
+      return hdk::ir::makeExpr<hdk::ir::Constant>(
+          rex_literal->getTargetType(), true, Datum{0});
     }
     default: {
       LOG(FATAL) << "Unexpected literal type " << lit_ti.get_type_name();
@@ -345,7 +345,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
   return nullptr;
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(
+hdk::ir::ExprPtr RelAlgTranslator::translateScalarSubquery(
     const RexSubQuery* rex_subquery) const {
   if (just_explain_) {
     throw std::runtime_error("EXPLAIN is not supported with sub-queries");
@@ -360,7 +360,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(
   if (row_count == size_t(0)) {
     if (row_set->isValidationOnlyRes()) {
       Datum d{0};
-      return makeExpr<Analyzer::Constant>(rex_subquery->getType(), false, d);
+      return hdk::ir::makeExpr<hdk::ir::Constant>(rex_subquery->getType(), false, d);
     }
     throw std::runtime_error("Scalar sub-query returned no results");
   }
@@ -376,11 +376,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(
   Datum d{0};
   bool is_null_const{false};
   std::tie(d, is_null_const) = datum_from_scalar_tv(scalar_tv, ti);
-  return makeExpr<Analyzer::Constant>(ti, is_null_const, d);
+  return hdk::ir::makeExpr<hdk::ir::Constant>(ti, is_null_const, d);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
-    const RexInput* rex_input) const {
+hdk::ir::ExprPtr RelAlgTranslator::translateInput(const RexInput* rex_input) const {
   const auto source = rex_input->getSourceNode();
   const auto it_rte_idx = input_to_nest_level_.find(source);
   CHECK(it_rte_idx != input_to_nest_level_.end())
@@ -406,7 +405,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
     if (rte_idx > 0 && join_types_[rte_idx - 1] == JoinType::LEFT) {
       col_ti.set_notnull(false);
     }
-    return std::make_shared<Analyzer::ColumnVar>(col_info, rte_idx);
+    return std::make_shared<hdk::ir::ColumnVar>(col_info, rte_idx);
   }
   CHECK(!in_metainfo.empty()) << "for " << source->toString();
   CHECK_GE(rte_idx, 0);
@@ -421,11 +420,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
     }
   }
 
-  return std::make_shared<Analyzer::ColumnVar>(col_ti, -source->getId(), col_id, rte_idx);
+  return std::make_shared<hdk::ir::ColumnVar>(col_ti, -source->getId(), col_id, rte_idx);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
-    const RexOperator* rex_operator) const {
+hdk::ir::ExprPtr RelAlgTranslator::translateUoper(const RexOperator* rex_operator) const {
   CHECK_EQ(size_t(1), rex_operator->size());
   const auto operand_expr = translateScalarRex(rex_operator->getOperand(0));
   const auto sql_op = rex_operator->getOperator();
@@ -449,24 +447,25 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
         return operand_expr->add_cast(target_ti);
       }
 
-      return std::make_shared<Analyzer::UOper>(target_ti, false, sql_op, operand_expr);
+      return std::make_shared<hdk::ir::UOper>(target_ti, false, sql_op, operand_expr);
     }
     case kNOT:
     case kISNULL: {
-      return std::make_shared<Analyzer::UOper>(kBOOLEAN, sql_op, operand_expr);
+      return std::make_shared<hdk::ir::UOper>(kBOOLEAN, sql_op, operand_expr);
     }
     case kISNOTNULL: {
-      auto is_null = std::make_shared<Analyzer::UOper>(kBOOLEAN, kISNULL, operand_expr);
-      return std::make_shared<Analyzer::UOper>(kBOOLEAN, kNOT, is_null);
+      auto is_null = std::make_shared<hdk::ir::UOper>(kBOOLEAN, kISNULL, operand_expr);
+      return std::make_shared<hdk::ir::UOper>(kBOOLEAN, kNOT, is_null);
     }
     case kMINUS: {
       const auto& ti = operand_expr->get_type_info();
-      return std::make_shared<Analyzer::UOper>(ti, false, kUMINUS, operand_expr);
+      return std::make_shared<hdk::ir::UOper>(ti, false, kUMINUS, operand_expr);
     }
     case kUNNEST: {
       const auto& ti = operand_expr->get_type_info();
       CHECK(ti.is_array());
-      return makeExpr<Analyzer::UOper>(ti.get_elem_type(), false, kUNNEST, operand_expr);
+      return hdk::ir::makeExpr<hdk::ir::UOper>(
+          ti.get_elem_type(), false, kUNNEST, operand_expr);
     }
     default:
       CHECK(false);
@@ -476,9 +475,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
 
 namespace {
 
-std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Expr> arg,
-                                                   const ResultSet& val_set,
-                                                   bool enable_watchdog) {
+hdk::ir::ExprPtr get_in_values_expr(hdk::ir::ExprPtr arg,
+                                    const ResultSet& val_set,
+                                    bool enable_watchdog) {
   if (!result_set::can_use_parallel_algorithms(val_set)) {
     return nullptr;
   }
@@ -486,10 +485,10 @@ std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Exp
     throw std::runtime_error(
         "Unable to handle 'expr IN (subquery)', subquery returned 5M+ rows.");
   }
-  std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
+  std::list<hdk::ir::ExprPtr> value_exprs;
   const size_t fetcher_count = cpu_threads();
-  std::vector<std::list<std::shared_ptr<Analyzer::Expr>>> expr_set(
-      fetcher_count, std::list<std::shared_ptr<Analyzer::Expr>>());
+  std::vector<std::list<hdk::ir::ExprPtr>> expr_set(fetcher_count,
+                                                    std::list<hdk::ir::ExprPtr>());
   std::vector<std::future<void>> fetcher_threads;
   const auto& ti = arg->get_type_info();
   const auto entry_count = val_set.entryCount();
@@ -501,9 +500,7 @@ std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Exp
     const auto end_entry = std::min(start_entry + stride, entry_count);
     fetcher_threads.push_back(std::async(
         std::launch::async,
-        [&](std::list<std::shared_ptr<Analyzer::Expr>>& in_vals,
-            const size_t start,
-            const size_t end) {
+        [&](std::list<hdk::ir::ExprPtr>& in_vals, const size_t start, const size_t end) {
           for (auto index = start; index < end; ++index) {
             auto row = val_set.getRowAt(index);
             if (row.empty()) {
@@ -517,12 +514,13 @@ std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Exp
               auto ti_none_encoded = ti;
               ti_none_encoded.set_compression(kENCODING_NONE);
               auto none_encoded_string =
-                  makeExpr<Analyzer::Constant>(ti, is_null_const, d);
-              auto dict_encoded_string = std::make_shared<Analyzer::UOper>(
-                  ti, false, kCAST, none_encoded_string);
+                  hdk::ir::makeExpr<hdk::ir::Constant>(ti, is_null_const, d);
+              auto dict_encoded_string =
+                  std::make_shared<hdk::ir::UOper>(ti, false, kCAST, none_encoded_string);
               in_vals.push_back(dict_encoded_string);
             } else {
-              in_vals.push_back(makeExpr<Analyzer::Constant>(ti, is_null_const, d));
+              in_vals.push_back(
+                  hdk::ir::makeExpr<hdk::ir::Constant>(ti, is_null_const, d));
             }
           }
         },
@@ -538,7 +536,7 @@ std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Exp
   for (auto& exprs : expr_set) {
     value_exprs.splice(value_exprs.end(), exprs);
   }
-  return makeExpr<Analyzer::InValues>(arg, value_exprs);
+  return hdk::ir::makeExpr<hdk::ir::InValues>(arg, value_exprs);
 }
 
 }  // namespace
@@ -548,7 +546,7 @@ std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Exp
 // subquery's result set is parallelized whenever possible. In addition, take advantage
 // of additional information that elements in the right hand side are constants; see
 // getInIntegerSetExpr().
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(
+hdk::ir::ExprPtr RelAlgTranslator::translateInOper(
     const RexOperator* rex_operator) const {
   if (just_explain_) {
     throw std::runtime_error("EXPLAIN is not supported with sub-queries");
@@ -571,14 +569,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(
   }
   row_set->moveToBegin();
   if (row_set->entryCount() > 10000) {
-    std::shared_ptr<Analyzer::Expr> expr;
+    hdk::ir::ExprPtr expr;
     if ((ti.is_integer() || (ti.is_string() && ti.get_compression() == kENCODING_DICT)) &&
         !row_set->getQueryMemDesc().didOutputColumnar()) {
       expr = getInIntegerSetExpr(lhs, *row_set);
       // Handle the highly unlikely case when the InIntegerSet ended up being tiny.
       // Just let it fall through the usual InValues path at the end of this method,
       // its codegen knows to use inline comparisons for few values.
-      if (expr && std::static_pointer_cast<Analyzer::InIntegerSet>(expr)
+      if (expr && std::static_pointer_cast<hdk::ir::InIntegerSet>(expr)
                           ->get_value_list()
                           .size() <= 100) {
         expr = nullptr;
@@ -591,7 +589,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(
       return expr;
     }
   }
-  std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
+  std::list<hdk::ir::ExprPtr> value_exprs;
   while (true) {
     auto row = row_set->getNextRow(true, false);
     if (row.empty()) {
@@ -608,15 +606,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(
     if (ti.is_string() && ti.get_compression() != kENCODING_NONE) {
       auto ti_none_encoded = ti;
       ti_none_encoded.set_compression(kENCODING_NONE);
-      auto none_encoded_string = makeExpr<Analyzer::Constant>(ti, is_null_const, d);
+      auto none_encoded_string =
+          hdk::ir::makeExpr<hdk::ir::Constant>(ti, is_null_const, d);
       auto dict_encoded_string =
-          std::make_shared<Analyzer::UOper>(ti, false, kCAST, none_encoded_string);
+          std::make_shared<hdk::ir::UOper>(ti, false, kCAST, none_encoded_string);
       value_exprs.push_back(dict_encoded_string);
     } else {
-      value_exprs.push_back(makeExpr<Analyzer::Constant>(ti, is_null_const, d));
+      value_exprs.push_back(hdk::ir::makeExpr<hdk::ir::Constant>(ti, is_null_const, d));
     }
   }
-  return makeExpr<Analyzer::InValues>(lhs, value_exprs);
+  return hdk::ir::makeExpr<hdk::ir::InValues>(lhs, value_exprs);
 }
 
 namespace {
@@ -682,14 +681,13 @@ void fill_integer_in_vals(std::vector<int64_t>& in_vals,
 }  // namespace
 
 // The typical IN subquery involves either dictionary-encoded strings or integers.
-// Analyzer::InValues is a very heavy representation of the right hand side of such
-// a query since we already know the right hand would be a list of Analyzer::Constant
-// shared pointers. We can avoid the big overhead of each Analyzer::Constant and the
+// hdk::ir::InValues is a very heavy representation of the right hand side of such
+// a query since we already know the right hand would be a list of hdk::ir::Constant
+// shared pointers. We can avoid the big overhead of each hdk::ir::Constant and the
 // refcounting associated with shared pointers by creating an abbreviated InIntegerSet
 // representation of the IN expression which takes advantage of the this information.
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
-    std::shared_ptr<Analyzer::Expr> arg,
-    const ResultSet& val_set) const {
+hdk::ir::ExprPtr RelAlgTranslator::getInIntegerSetExpr(hdk::ir::ExprPtr arg,
+                                                       const ResultSet& val_set) const {
   if (!result_set::can_use_parallel_algorithms(val_set)) {
     return nullptr;
   }
@@ -761,12 +759,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
   for (auto& exprs : expr_set) {
     value_exprs.insert(value_exprs.end(), exprs.begin(), exprs.end());
   }
-  return makeExpr<Analyzer::InIntegerSet>(
+  return hdk::ir::makeExpr<hdk::ir::InIntegerSet>(
       arg, value_exprs, arg_type.get_notnull() && col_type.get_notnull());
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
-    const RexOperator* rex_operator) const {
+hdk::ir::ExprPtr RelAlgTranslator::translateOper(const RexOperator* rex_operator) const {
   CHECK_GT(rex_operator->size(), size_t(0));
   if (rex_operator->size() == 1) {
     return translateUoper(rex_operator);
@@ -783,7 +780,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
   }
   auto lhs = translateScalarRex(rex_operator->getOperand(0));
   for (size_t i = 1; i < rex_operator->size(); ++i) {
-    std::shared_ptr<Analyzer::Expr> rhs;
+    hdk::ir::ExprPtr rhs;
     SQLQualifier sql_qual{kONE};
     const auto rhs_op = rex_operator->getOperand(i);
     std::tie(rhs, sql_qual) = get_quantified_rhs(rhs_op, *this);
@@ -793,16 +790,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
     CHECK(rhs);
     // Pass in executor to get string proxy info if cast needed between
     // string columns
-    lhs = normalizeOperExpr(sql_op, sql_qual, lhs, rhs, executor_);
+    lhs = Analyzer::normalizeOperExpr(sql_op, sql_qual, lhs, rhs, executor_);
   }
   return lhs;
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCase(
-    const RexCase* rex_case) const {
-  std::shared_ptr<Analyzer::Expr> else_expr;
-  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
-      expr_list;
+hdk::ir::ExprPtr RelAlgTranslator::translateCase(const RexCase* rex_case) const {
+  hdk::ir::ExprPtr else_expr;
+  std::list<std::pair<hdk::ir::ExprPtr, hdk::ir::ExprPtr>> expr_list;
   for (size_t i = 0; i < rex_case->branchCount(); ++i) {
     const auto when_expr = translateScalarRex(rex_case->getWhen(i));
     const auto then_expr = translateScalarRex(rex_case->getThen(i));
@@ -811,10 +806,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCase(
   if (rex_case->getElse()) {
     else_expr = translateScalarRex(rex_case->getElse());
   }
-  return normalizeCaseExpr(expr_list, else_expr, executor_);
+  return Analyzer::normalizeCaseExpr(expr_list, else_expr, executor_);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWidthBucket(
+hdk::ir::ExprPtr RelAlgTranslator::translateWidthBucket(
     const RexFunctionOperator* rex_function) const {
   CHECK(rex_function->size() == 4);
   auto target_value = translateScalarRex(rex_function->getOperand(0));
@@ -826,7 +821,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWidthBucket(
         "PARTITION_COUNT expression of width_bucket function expects an integer type.");
   }
   auto check_numeric_type =
-      [](const std::string& col_name, const Analyzer::Expr* expr, bool allow_null_type) {
+      [](const std::string& col_name, const hdk::ir::Expr* expr, bool allow_null_type) {
         if (expr->get_type_info().get_type() == kNULLT) {
           if (!allow_null_type) {
             throw std::runtime_error(
@@ -844,7 +839,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWidthBucket(
   check_numeric_type("LOWER_BOUND", lower_bound.get(), false);
   check_numeric_type("UPPER_BOUND", upper_bound.get(), false);
 
-  auto cast_to_double_if_necessary = [](std::shared_ptr<Analyzer::Expr> arg) {
+  auto cast_to_double_if_necessary = [](hdk::ir::ExprPtr arg) {
     const auto& arg_ti = arg->get_type_info();
     if (arg_ti.get_type() != kDOUBLE) {
       const auto& double_ti = SQLTypeInfo(kDOUBLE, arg_ti.get_notnull());
@@ -855,16 +850,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWidthBucket(
   target_value = cast_to_double_if_necessary(target_value);
   lower_bound = cast_to_double_if_necessary(lower_bound);
   upper_bound = cast_to_double_if_necessary(upper_bound);
-  return makeExpr<Analyzer::WidthBucketExpr>(
+  return hdk::ir::makeExpr<hdk::ir::WidthBucketExpr>(
       target_value, lower_bound, upper_bound, partition_count);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLike(
+hdk::ir::ExprPtr RelAlgTranslator::translateLike(
     const RexFunctionOperator* rex_function) const {
   CHECK(rex_function->size() == 2 || rex_function->size() == 3);
   const auto arg = translateScalarRex(rex_function->getOperand(0));
   const auto like = translateScalarRex(rex_function->getOperand(1));
-  if (!std::dynamic_pointer_cast<const Analyzer::Constant>(like)) {
+  if (!std::dynamic_pointer_cast<const hdk::ir::Constant>(like)) {
     throw std::runtime_error("The matching pattern must be a literal.");
   }
   const auto escape = (rex_function->size() == 3)
@@ -874,12 +869,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLike(
   return Analyzer::getLikeExpr(arg, like, escape, is_ilike, false);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRegexp(
+hdk::ir::ExprPtr RelAlgTranslator::translateRegexp(
     const RexFunctionOperator* rex_function) const {
   CHECK(rex_function->size() == 2 || rex_function->size() == 3);
   const auto arg = translateScalarRex(rex_function->getOperand(0));
   const auto pattern = translateScalarRex(rex_function->getOperand(1));
-  if (!std::dynamic_pointer_cast<const Analyzer::Constant>(pattern)) {
+  if (!std::dynamic_pointer_cast<const hdk::ir::Constant>(pattern)) {
     throw std::runtime_error("The matching pattern must be a literal.");
   }
   const auto escape = (rex_function->size() == 3)
@@ -888,24 +883,24 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRegexp(
   return Analyzer::getRegexpExpr(arg, pattern, escape, false);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLikely(
+hdk::ir::ExprPtr RelAlgTranslator::translateLikely(
     const RexFunctionOperator* rex_function) const {
   CHECK(rex_function->size() == 1);
   const auto arg = translateScalarRex(rex_function->getOperand(0));
-  return makeExpr<Analyzer::LikelihoodExpr>(arg, 0.9375);
+  return hdk::ir::makeExpr<hdk::ir::LikelihoodExpr>(arg, 0.9375);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnlikely(
+hdk::ir::ExprPtr RelAlgTranslator::translateUnlikely(
     const RexFunctionOperator* rex_function) const {
   CHECK(rex_function->size() == 1);
   const auto arg = translateScalarRex(rex_function->getOperand(0));
-  return makeExpr<Analyzer::LikelihoodExpr>(arg, 0.0625);
+  return hdk::ir::makeExpr<hdk::ir::LikelihoodExpr>(arg, 0.0625);
 }
 
 namespace {
 
 inline void validate_datetime_datepart_argument(
-    const std::shared_ptr<Analyzer::Constant> literal_expr) {
+    const std::shared_ptr<hdk::ir::Constant> literal_expr) {
   if (!literal_expr || literal_expr->get_is_null()) {
     throw std::runtime_error("The 'DatePart' argument must be a not 'null' literal.");
   }
@@ -913,11 +908,11 @@ inline void validate_datetime_datepart_argument(
 
 }  // namespace
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(
+hdk::ir::ExprPtr RelAlgTranslator::translateExtract(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(2), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
-  const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
+  const auto timeunit_lit = std::dynamic_pointer_cast<hdk::ir::Constant>(timeunit);
   validate_datetime_datepart_argument(timeunit_lit);
   const auto from_expr = translateScalarRex(rex_function->getOperand(1));
   const bool is_date_trunc = rex_function->getName() == "PG_DATE_TRUNC"sv;
@@ -930,8 +925,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(
 
 namespace {
 
-std::shared_ptr<Analyzer::Constant> makeNumericConstant(const SQLTypeInfo& ti,
-                                                        const long val) {
+std::shared_ptr<hdk::ir::Constant> makeNumericConstant(const SQLTypeInfo& ti,
+                                                       const long val) {
   CHECK(ti.is_number());
   Datum datum{0};
   switch (ti.get_type()) {
@@ -967,20 +962,20 @@ std::shared_ptr<Analyzer::Constant> makeNumericConstant(const SQLTypeInfo& ti,
     default:
       CHECK(false);
   }
-  return makeExpr<Analyzer::Constant>(ti, false, datum);
+  return hdk::ir::makeExpr<hdk::ir::Constant>(ti, false, datum);
 }
 
 }  // namespace
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
+hdk::ir::ExprPtr RelAlgTranslator::translateDateadd(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(3), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
-  const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
+  const auto timeunit_lit = std::dynamic_pointer_cast<hdk::ir::Constant>(timeunit);
   validate_datetime_datepart_argument(timeunit_lit);
   const auto number_units = translateScalarRex(rex_function->getOperand(1));
   const auto number_units_const =
-      std::dynamic_pointer_cast<Analyzer::Constant>(number_units);
+      std::dynamic_pointer_cast<hdk::ir::Constant>(number_units);
   if (number_units_const && number_units_const->get_is_null()) {
     throw std::runtime_error("The 'Interval' argument literal must not be 'null'.");
   }
@@ -992,7 +987,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
   }
   const auto& field = to_dateadd_field(*timeunit_lit->get_constval().stringval);
   const int dim = datetime_ti.get_dimension();
-  return makeExpr<Analyzer::DateaddExpr>(
+  return hdk::ir::makeExpr<hdk::ir::DateaddExpr>(
       SQLTypeInfo(kTIMESTAMP, dim, 0, false), field, cast_number_units, datetime);
 }
 
@@ -1005,7 +1000,7 @@ std::string get_datetimeplus_rewrite_funcname(const SQLOps& op) {
 
 }  // namespace
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatePlusMinus(
+hdk::ir::ExprPtr RelAlgTranslator::translateDatePlusMinus(
     const RexOperator* rex_operator) const {
   if (rex_operator->size() != 2) {
     return nullptr;
@@ -1032,23 +1027,23 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatePlusMinus(
     const auto& rex_operator_ti = rex_operator->getType();
     const auto datediff_field =
         (rex_operator_ti.get_type() == kINTERVAL_DAY_TIME) ? dtSECOND : dtMONTH;
-    auto result =
-        makeExpr<Analyzer::DatediffExpr>(bigint_ti, datediff_field, rhs, datetime);
+    auto result = hdk::ir::makeExpr<hdk::ir::DatediffExpr>(
+        bigint_ti, datediff_field, rhs, datetime);
     // multiply 1000 to result since expected result should be in millisecond precision.
     if (rex_operator_ti.get_type() == kINTERVAL_DAY_TIME) {
-      return makeExpr<Analyzer::BinOper>(bigint_ti.get_type(),
-                                         kMULTIPLY,
-                                         kONE,
-                                         result,
-                                         makeNumericConstant(bigint_ti, 1000));
+      return hdk::ir::makeExpr<hdk::ir::BinOper>(bigint_ti.get_type(),
+                                                 kMULTIPLY,
+                                                 kONE,
+                                                 result,
+                                                 makeNumericConstant(bigint_ti, 1000));
     } else {
       return result;
     }
   }
   const auto op = rex_operator->getOperator();
   if (op == kPLUS) {
-    std::vector<std::shared_ptr<Analyzer::Expr>> args = {datetime, rhs};
-    auto dt_plus = makeExpr<Analyzer::FunctionOper>(
+    std::vector<hdk::ir::ExprPtr> args = {datetime, rhs};
+    auto dt_plus = hdk::ir::makeExpr<hdk::ir::FunctionOper>(
         datetime_ti, get_datetimeplus_rewrite_funcname(op), args);
     const auto date_trunc = rewrite_to_date_trunc(dt_plus.get());
     if (date_trunc) {
@@ -1058,9 +1053,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatePlusMinus(
   const auto interval = fold_expr(rhs.get());
   auto interval_ti = interval->get_type_info();
   auto bigint_ti = SQLTypeInfo(kBIGINT, false);
-  const auto interval_lit = std::dynamic_pointer_cast<Analyzer::Constant>(interval);
+  const auto interval_lit = std::dynamic_pointer_cast<hdk::ir::Constant>(interval);
   if (interval_ti.get_type() == kINTERVAL_DAY_TIME) {
-    std::shared_ptr<Analyzer::Expr> interval_sec;
+    hdk::ir::ExprPtr interval_sec;
     if (interval_lit) {
       interval_sec =
           makeNumericConstant(bigint_ti,
@@ -1068,70 +1063,74 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatePlusMinus(
                                             : interval_lit->get_constval().bigintval) /
                                   1000);
     } else {
-      interval_sec = makeExpr<Analyzer::BinOper>(bigint_ti.get_type(),
-                                                 kDIVIDE,
-                                                 kONE,
-                                                 interval,
-                                                 makeNumericConstant(bigint_ti, 1000));
+      interval_sec =
+          hdk::ir::makeExpr<hdk::ir::BinOper>(bigint_ti.get_type(),
+                                              kDIVIDE,
+                                              kONE,
+                                              interval,
+                                              makeNumericConstant(bigint_ti, 1000));
       if (op == kMINUS) {
         interval_sec =
-            std::make_shared<Analyzer::UOper>(bigint_ti, false, kUMINUS, interval_sec);
+            std::make_shared<hdk::ir::UOper>(bigint_ti, false, kUMINUS, interval_sec);
       }
     }
-    return makeExpr<Analyzer::DateaddExpr>(datetime_ti, daSECOND, interval_sec, datetime);
+    return hdk::ir::makeExpr<hdk::ir::DateaddExpr>(
+        datetime_ti, daSECOND, interval_sec, datetime);
   }
   CHECK(interval_ti.get_type() == kINTERVAL_YEAR_MONTH);
-  const auto interval_months = op == kMINUS ? std::make_shared<Analyzer::UOper>(
-                                                  bigint_ti, false, kUMINUS, interval)
-                                            : interval;
-  return makeExpr<Analyzer::DateaddExpr>(datetime_ti, daMONTH, interval_months, datetime);
+  const auto interval_months =
+      op == kMINUS ? std::make_shared<hdk::ir::UOper>(bigint_ti, false, kUMINUS, interval)
+                   : interval;
+  return hdk::ir::makeExpr<hdk::ir::DateaddExpr>(
+      datetime_ti, daMONTH, interval_months, datetime);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatediff(
+hdk::ir::ExprPtr RelAlgTranslator::translateDatediff(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(3), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
-  const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
+  const auto timeunit_lit = std::dynamic_pointer_cast<hdk::ir::Constant>(timeunit);
   validate_datetime_datepart_argument(timeunit_lit);
   const auto start = translateScalarRex(rex_function->getOperand(1));
   const auto end = translateScalarRex(rex_function->getOperand(2));
   const auto field = to_datediff_field(*timeunit_lit->get_constval().stringval);
-  return makeExpr<Analyzer::DatediffExpr>(SQLTypeInfo(kBIGINT, false), field, start, end);
+  return hdk::ir::makeExpr<hdk::ir::DatediffExpr>(
+      SQLTypeInfo(kBIGINT, false), field, start, end);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatepart(
+hdk::ir::ExprPtr RelAlgTranslator::translateDatepart(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(2), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
-  const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
+  const auto timeunit_lit = std::dynamic_pointer_cast<hdk::ir::Constant>(timeunit);
   validate_datetime_datepart_argument(timeunit_lit);
   const auto from_expr = translateScalarRex(rex_function->getOperand(1));
   return ExtractExpr::generate(
       from_expr, to_datepart_field(*timeunit_lit->get_constval().stringval));
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLength(
+hdk::ir::ExprPtr RelAlgTranslator::translateLength(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(1), rex_function->size());
   const auto str_arg = translateScalarRex(rex_function->getOperand(0));
-  return makeExpr<Analyzer::CharLengthExpr>(str_arg->decompress(),
-                                            rex_function->getName() == "CHAR_LENGTH"sv);
+  return hdk::ir::makeExpr<hdk::ir::CharLengthExpr>(
+      str_arg->decompress(), rex_function->getName() == "CHAR_LENGTH"sv);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateKeyForString(
+hdk::ir::ExprPtr RelAlgTranslator::translateKeyForString(
     const RexFunctionOperator* rex_function) const {
   const auto& args = translateFunctionArgs(rex_function);
   CHECK_EQ(size_t(1), args.size());
-  const auto expr = dynamic_cast<Analyzer::Expr*>(args[0].get());
+  const auto expr = dynamic_cast<hdk::ir::Expr*>(args[0].get());
   if (nullptr == expr || !expr->get_type_info().is_string() ||
       expr->get_type_info().is_varlen()) {
     throw std::runtime_error(rex_function->getName() +
                              " expects a dictionary encoded text column.");
   }
-  return makeExpr<Analyzer::KeyForStringExpr>(args[0]);
+  return hdk::ir::makeExpr<hdk::ir::KeyForStringExpr>(args[0]);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSampleRatio(
+hdk::ir::ExprPtr RelAlgTranslator::translateSampleRatio(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(1), rex_function->size());
   auto arg = translateScalarRex(rex_function->getOperand(0));
@@ -1140,31 +1139,31 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSampleRatio(
     const auto& double_ti = SQLTypeInfo(kDOUBLE, arg_ti.get_notnull());
     arg = arg->add_cast(double_ti);
   }
-  return makeExpr<Analyzer::SampleRatioExpr>(arg);
+  return hdk::ir::makeExpr<hdk::ir::SampleRatioExpr>(arg);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentUser(
+hdk::ir::ExprPtr RelAlgTranslator::translateCurrentUser(
     const RexFunctionOperator* rex_function) const {
   std::string user{"SESSIONLESS_USER"};
   return Analyzer::getUserLiteral(user);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLower(
+hdk::ir::ExprPtr RelAlgTranslator::translateLower(
     const RexFunctionOperator* rex_function) const {
   const auto& args = translateFunctionArgs(rex_function);
   CHECK_EQ(size_t(1), args.size());
   CHECK(args[0]);
 
   if (args[0]->get_type_info().is_dict_encoded_string() ||
-      dynamic_cast<Analyzer::Constant*>(args[0].get())) {
-    return makeExpr<Analyzer::LowerExpr>(args[0]);
+      dynamic_cast<hdk::ir::Constant*>(args[0].get())) {
+    return hdk::ir::makeExpr<hdk::ir::LowerExpr>(args[0]);
   }
 
   throw std::runtime_error(rex_function->getName() +
                            " expects a dictionary encoded text column or a literal.");
 }
 
-Analyzer::ExpressionPtr RelAlgTranslator::translateCardinality(
+hdk::ir::ExprPtr RelAlgTranslator::translateCardinality(
     const RexFunctionOperator* rex_function) const {
   const auto ret_ti = rex_function->getType();
   const auto arg = translateScalarRex(rex_function->getOperand(0));
@@ -1188,41 +1187,41 @@ Analyzer::ExpressionPtr RelAlgTranslator::translateCardinality(
     return makeNumericConstant(ret_ti, array_size / array_elem_size);
   }
   // Variable length array cardinality will be calculated at runtime
-  return makeExpr<Analyzer::CardinalityExpr>(arg);
+  return hdk::ir::makeExpr<hdk::ir::CardinalityExpr>(arg);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateItem(
+hdk::ir::ExprPtr RelAlgTranslator::translateItem(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(2), rex_function->size());
   const auto base = translateScalarRex(rex_function->getOperand(0));
   const auto index = translateScalarRex(rex_function->getOperand(1));
-  return makeExpr<Analyzer::BinOper>(
+  return hdk::ir::makeExpr<hdk::ir::BinOper>(
       base->get_type_info().get_elem_type(), false, kARRAY_AT, kONE, base, index);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentDate() const {
+hdk::ir::ExprPtr RelAlgTranslator::translateCurrentDate() const {
   constexpr bool is_null = false;
   Datum datum;
   datum.bigintval = now_ - now_ % (24 * 60 * 60);  // Assumes 0 < now_.
-  return makeExpr<Analyzer::Constant>(kDATE, is_null, datum);
+  return hdk::ir::makeExpr<hdk::ir::Constant>(kDATE, is_null, datum);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentTime() const {
+hdk::ir::ExprPtr RelAlgTranslator::translateCurrentTime() const {
   constexpr bool is_null = false;
   Datum datum;
   datum.bigintval = now_ % (24 * 60 * 60);  // Assumes 0 < now_.
-  return makeExpr<Analyzer::Constant>(kTIME, is_null, datum);
+  return hdk::ir::makeExpr<hdk::ir::Constant>(kTIME, is_null, datum);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentTimestamp() const {
+hdk::ir::ExprPtr RelAlgTranslator::translateCurrentTimestamp() const {
   return Analyzer::getTimestampLiteral(now_);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatetime(
+hdk::ir::ExprPtr RelAlgTranslator::translateDatetime(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(1), rex_function->size());
   const auto arg = translateScalarRex(rex_function->getOperand(0));
-  const auto arg_lit = std::dynamic_pointer_cast<Analyzer::Constant>(arg);
+  const auto arg_lit = std::dynamic_pointer_cast<hdk::ir::Constant>(arg);
   const std::string datetime_err{R"(Only DATETIME('NOW') supported for now.)"};
   if (!arg_lit || arg_lit->get_is_null()) {
     throw std::runtime_error(datetime_err);
@@ -1234,49 +1233,51 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatetime(
   return translateCurrentTimestamp();
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAbs(
+hdk::ir::ExprPtr RelAlgTranslator::translateAbs(
     const RexFunctionOperator* rex_function) const {
-  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
-      expr_list;
+  std::list<std::pair<hdk::ir::ExprPtr, hdk::ir::ExprPtr>> expr_list;
   CHECK_EQ(size_t(1), rex_function->size());
   const auto operand = translateScalarRex(rex_function->getOperand(0));
   const auto& operand_ti = operand->get_type_info();
   CHECK(operand_ti.is_number());
   const auto zero = makeNumericConstant(operand_ti, 0);
-  const auto lt_zero = makeExpr<Analyzer::BinOper>(kBOOLEAN, kLT, kONE, operand, zero);
+  const auto lt_zero =
+      hdk::ir::makeExpr<hdk::ir::BinOper>(kBOOLEAN, kLT, kONE, operand, zero);
   const auto uminus_operand =
-      makeExpr<Analyzer::UOper>(operand_ti.get_type(), kUMINUS, operand);
+      hdk::ir::makeExpr<hdk::ir::UOper>(operand_ti.get_type(), kUMINUS, operand);
   expr_list.emplace_back(lt_zero, uminus_operand);
-  return makeExpr<Analyzer::CaseExpr>(operand_ti, false, expr_list, operand);
+  return hdk::ir::makeExpr<hdk::ir::CaseExpr>(operand_ti, false, expr_list, operand);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSign(
+hdk::ir::ExprPtr RelAlgTranslator::translateSign(
     const RexFunctionOperator* rex_function) const {
-  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
-      expr_list;
+  std::list<std::pair<hdk::ir::ExprPtr, hdk::ir::ExprPtr>> expr_list;
   CHECK_EQ(size_t(1), rex_function->size());
   const auto operand = translateScalarRex(rex_function->getOperand(0));
   const auto& operand_ti = operand->get_type_info();
   CHECK(operand_ti.is_number());
   const auto zero = makeNumericConstant(operand_ti, 0);
-  const auto lt_zero = makeExpr<Analyzer::BinOper>(kBOOLEAN, kLT, kONE, operand, zero);
+  const auto lt_zero =
+      hdk::ir::makeExpr<hdk::ir::BinOper>(kBOOLEAN, kLT, kONE, operand, zero);
   expr_list.emplace_back(lt_zero, makeNumericConstant(operand_ti, -1));
-  const auto eq_zero = makeExpr<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, operand, zero);
+  const auto eq_zero =
+      hdk::ir::makeExpr<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, operand, zero);
   expr_list.emplace_back(eq_zero, makeNumericConstant(operand_ti, 0));
-  const auto gt_zero = makeExpr<Analyzer::BinOper>(kBOOLEAN, kGT, kONE, operand, zero);
+  const auto gt_zero =
+      hdk::ir::makeExpr<hdk::ir::BinOper>(kBOOLEAN, kGT, kONE, operand, zero);
   expr_list.emplace_back(gt_zero, makeNumericConstant(operand_ti, 1));
-  return makeExpr<Analyzer::CaseExpr>(
+  return hdk::ir::makeExpr<hdk::ir::CaseExpr>(
       operand_ti,
       false,
       expr_list,
-      makeExpr<Analyzer::Constant>(operand_ti, true, Datum{0}));
+      hdk::ir::makeExpr<hdk::ir::Constant>(operand_ti, true, Datum{0}));
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOffsetInFragment() const {
-  return makeExpr<Analyzer::OffsetInFragment>();
+hdk::ir::ExprPtr RelAlgTranslator::translateOffsetInFragment() const {
+  return hdk::ir::makeExpr<hdk::ir::OffsetInFragment>();
 }
 
-Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
+hdk::ir::ExprPtr RelAlgTranslator::translateArrayFunction(
     const RexFunctionOperator* rex_function) const {
   if (rex_function->getType().get_subtype() == kNULLT) {
     auto sql_type = rex_function->getType();
@@ -1319,19 +1320,19 @@ Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
         sql_type.set_precision(first_element_logical_type.get_precision());
       }
 
-      return makeExpr<Analyzer::ArrayExpr>(sql_type, translated_function_args);
+      return hdk::ir::makeExpr<hdk::ir::ArrayExpr>(sql_type, translated_function_args);
     } else {
       // defaulting to valid sub-type for convenience
       sql_type.set_subtype(kBOOLEAN);
-      return makeExpr<Analyzer::ArrayExpr>(sql_type, translated_function_args);
+      return hdk::ir::makeExpr<hdk::ir::ArrayExpr>(sql_type, translated_function_args);
     }
   } else {
-    return makeExpr<Analyzer::ArrayExpr>(rex_function->getType(),
-                                         translateFunctionArgs(rex_function));
+    return hdk::ir::makeExpr<hdk::ir::ArrayExpr>(rex_function->getType(),
+                                                 translateFunctionArgs(rex_function));
   }
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
+hdk::ir::ExprPtr RelAlgTranslator::translateFunction(
     const RexFunctionOperator* rex_function) const {
   if (func_resolve(rex_function->getName(), "LIKE"sv, "PG_ILIKE"sv)) {
     return translateLike(rex_function);
@@ -1407,13 +1408,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     return translateSign(rex_function);
   }
   if (func_resolve(rex_function->getName(), "CEIL"sv, "FLOOR"sv)) {
-    return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(
+    return hdk::ir::makeExpr<hdk::ir::FunctionOperWithCustomTypeHandling>(
         rex_function->getType(),
         rex_function->getName(),
         translateFunctionArgs(rex_function));
   } else if (rex_function->getName() == "ROUND"sv) {
-    std::vector<std::shared_ptr<Analyzer::Expr>> args =
-        translateFunctionArgs(rex_function);
+    std::vector<hdk::ir::ExprPtr> args = translateFunctionArgs(rex_function);
 
     if (rex_function->size() == 1) {
       // push a 0 constant if 2nd operand is missing.
@@ -1423,7 +1423,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
       SQLTypes t = kSMALLINT;
       Datum d;
       d.smallintval = 0;
-      args.push_back(makeExpr<Analyzer::Constant>(t, false, d));
+      args.push_back(hdk::ir::makeExpr<hdk::ir::Constant>(t, false, d));
     }
 
     // make sure we have only 2 operands
@@ -1446,13 +1446,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                                    ? args[0]->get_type_info()
                                    : rex_function->getType();
 
-    return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(
+    return hdk::ir::makeExpr<hdk::ir::FunctionOperWithCustomTypeHandling>(
         ret_ti, rex_function->getName(), args);
   }
   if (rex_function->getName() == "DATETIME_PLUS"sv) {
-    auto dt_plus = makeExpr<Analyzer::FunctionOper>(rex_function->getType(),
-                                                    rex_function->getName(),
-                                                    translateFunctionArgs(rex_function));
+    auto dt_plus =
+        hdk::ir::makeExpr<hdk::ir::FunctionOper>(rex_function->getType(),
+                                                 rex_function->getName(),
+                                                 translateFunctionArgs(rex_function));
     const auto date_trunc = rewrite_to_date_trunc(dt_plus.get());
     if (date_trunc) {
       return date_trunc;
@@ -1461,10 +1462,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   }
   if (rex_function->getName() == "/INT"sv) {
     CHECK_EQ(size_t(2), rex_function->size());
-    std::shared_ptr<Analyzer::Expr> lhs = translateScalarRex(rex_function->getOperand(0));
-    std::shared_ptr<Analyzer::Expr> rhs = translateScalarRex(rex_function->getOperand(1));
-    const auto rhs_lit = std::dynamic_pointer_cast<Analyzer::Constant>(rhs);
-    return normalizeOperExpr(kDIVIDE, kONE, lhs, rhs);
+    hdk::ir::ExprPtr lhs = translateScalarRex(rex_function->getOperand(0));
+    hdk::ir::ExprPtr rhs = translateScalarRex(rex_function->getOperand(1));
+    const auto rhs_lit = std::dynamic_pointer_cast<hdk::ir::Constant>(rhs);
+    return Analyzer::normalizeOperExpr(kDIVIDE, kONE, lhs, rhs);
   }
   if (rex_function->getName() == "Reinterpret"sv) {
     CHECK_EQ(size_t(1), rex_function->size());
@@ -1483,7 +1484,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   if (rex_function->getName() == std::string("||") ||
       rex_function->getName() == std::string("SUBSTRING")) {
     SQLTypeInfo ret_ti(kTEXT, false);
-    return makeExpr<Analyzer::FunctionOper>(
+    return hdk::ir::makeExpr<hdk::ir::FunctionOper>(
         ret_ti, rex_function->getName(), arg_expr_list);
   }
   // Reset possibly wrong return type of rex_function to the return
@@ -1500,7 +1501,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     for (size_t i = 0; i < arg_expr_list.size(); i++) {
       // fold casts on constants
       if (auto constant =
-              std::dynamic_pointer_cast<Analyzer::Constant>(arg_expr_list[i])) {
+              std::dynamic_pointer_cast<hdk::ir::Constant>(arg_expr_list[i])) {
         auto ext_func_arg_ti = ext_arg_type_to_type_info(ext_func_args[i]);
         if (ext_func_arg_ti != arg_expr_list[i]->get_type_info()) {
           arg_expr_list[i] = constant->add_cast(ext_func_arg_ti);
@@ -1525,14 +1526,15 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   }
   ret_ti.set_notnull(arguments_not_null);
 
-  return makeExpr<Analyzer::FunctionOper>(ret_ti, rex_function->getName(), arg_expr_list);
+  return hdk::ir::makeExpr<hdk::ir::FunctionOper>(
+      ret_ti, rex_function->getName(), arg_expr_list);
 }
 
 namespace {
 
-std::vector<Analyzer::OrderEntry> translate_collation(
+std::vector<hdk::ir::OrderEntry> translate_collation(
     const std::vector<SortField>& sort_fields) {
-  std::vector<Analyzer::OrderEntry> collation;
+  std::vector<hdk::ir::OrderEntry> collation;
   for (size_t i = 0; i < sort_fields.size(); ++i) {
     const auto& sort_field = sort_fields[i];
     collation.emplace_back(i,
@@ -1573,7 +1575,7 @@ bool supported_upper_bound(const RexWindowFunctionOperator* rex_window_function)
 
 }  // namespace
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
+hdk::ir::ExprPtr RelAlgTranslator::translateWindowFunction(
     const RexWindowFunctionOperator* rex_window_function) const {
   if (!supported_lower_bound(rex_window_function->getLowerBound()) ||
       !supported_upper_bound(rex_window_function) ||
@@ -1581,15 +1583,15 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
        rex_window_function->isRows())) {
     throw std::runtime_error("Frame specification not supported");
   }
-  std::vector<std::shared_ptr<Analyzer::Expr>> args;
+  std::vector<hdk::ir::ExprPtr> args;
   for (size_t i = 0; i < rex_window_function->size(); ++i) {
     args.push_back(translateScalarRex(rex_window_function->getOperand(i)));
   }
-  std::vector<std::shared_ptr<Analyzer::Expr>> partition_keys;
+  std::vector<hdk::ir::ExprPtr> partition_keys;
   for (const auto& partition_key : rex_window_function->getPartitionKeys()) {
     partition_keys.push_back(translateScalarRex(partition_key.get()));
   }
-  std::vector<std::shared_ptr<Analyzer::Expr>> order_keys;
+  std::vector<hdk::ir::ExprPtr> order_keys;
   for (const auto& order_key : rex_window_function->getOrderKeys()) {
     order_keys.push_back(translateScalarRex(order_key.get()));
   }
@@ -1598,7 +1600,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
     CHECK_GE(args.size(), 1u);
     ti = args.front()->get_type_info();
   }
-  return makeExpr<Analyzer::WindowFunction>(
+  return hdk::ir::makeExpr<hdk::ir::WindowFunction>(
       ti,
       rex_window_function->getKind(),
       args,
@@ -1607,19 +1609,18 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
       translate_collation(rex_window_function->getCollation()));
 }
 
-Analyzer::ExpressionPtrVector RelAlgTranslator::translateFunctionArgs(
+hdk::ir::ExprPtrVector RelAlgTranslator::translateFunctionArgs(
     const RexFunctionOperator* rex_function) const {
-  std::vector<std::shared_ptr<Analyzer::Expr>> args;
+  std::vector<hdk::ir::ExprPtr> args;
   for (size_t i = 0; i < rex_function->size(); ++i) {
     args.push_back(translateScalarRex(rex_function->getOperand(i)));
   }
   return args;
 }
 
-QualsConjunctiveForm qual_to_conjunctive_form(
-    const std::shared_ptr<Analyzer::Expr> qual_expr) {
+QualsConjunctiveForm qual_to_conjunctive_form(const hdk::ir::ExprPtr qual_expr) {
   CHECK(qual_expr);
-  auto bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual_expr);
+  auto bin_oper = std::dynamic_pointer_cast<const hdk::ir::BinOper>(qual_expr);
   if (!bin_oper) {
     const auto rewritten_qual_expr = rewrite_expr(qual_expr.get());
     return {{}, {rewritten_qual_expr ? rewritten_qual_expr : qual_expr}};
@@ -1641,10 +1642,10 @@ QualsConjunctiveForm qual_to_conjunctive_form(
                      : QualsConjunctiveForm{{}, {qual_expr}};
 }
 
-std::vector<std::shared_ptr<Analyzer::Expr>> qual_to_disjunctive_form(
-    const std::shared_ptr<Analyzer::Expr>& qual_expr) {
+std::vector<hdk::ir::ExprPtr> qual_to_disjunctive_form(
+    const hdk::ir::ExprPtr& qual_expr) {
   CHECK(qual_expr);
-  const auto bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual_expr);
+  const auto bin_oper = std::dynamic_pointer_cast<const hdk::ir::BinOper>(qual_expr);
   if (!bin_oper) {
     const auto rewritten_qual_expr = rewrite_expr(qual_expr.get());
     return {rewritten_qual_expr ? rewritten_qual_expr : qual_expr};
@@ -1659,7 +1660,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> qual_to_disjunctive_form(
   return {qual_expr};
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateHPTLiteral(
+hdk::ir::ExprPtr RelAlgTranslator::translateHPTLiteral(
     const RexFunctionOperator* rex_function) const {
   /* since calcite uses Avatica package called DateTimeUtils to parse timestamp strings.
      Therefore any string having fractional seconds more 3 places after the decimal

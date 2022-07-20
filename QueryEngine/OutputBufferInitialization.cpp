@@ -249,11 +249,10 @@ int64_t get_agg_initial_val(const SQLAgg agg,
   }
 }
 
-std::vector<int64_t> init_agg_val_vec(
-    const std::vector<Analyzer::Expr*>& targets,
-    const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
-    const QueryMemoryDescriptor& query_mem_desc,
-    bool bigint_count) {
+std::vector<int64_t> init_agg_val_vec(const std::vector<hdk::ir::Expr*>& targets,
+                                      const std::list<hdk::ir::ExprPtr>& quals,
+                                      const QueryMemoryDescriptor& query_mem_desc,
+                                      bool bigint_count) {
   std::vector<TargetInfo> target_infos;
   target_infos.reserve(targets.size());
   const auto agg_col_count = query_mem_desc.getSlotCount();
@@ -280,21 +279,21 @@ std::vector<int64_t> init_agg_val_vec(
   return init_agg_val_vec(target_infos, query_mem_desc);
 }
 
-const Analyzer::Expr* agg_arg(const Analyzer::Expr* expr) {
-  const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(expr);
+const hdk::ir::Expr* agg_arg(const hdk::ir::Expr* expr) {
+  const auto agg_expr = dynamic_cast<const hdk::ir::AggExpr*>(expr);
   return agg_expr ? agg_expr->get_arg() : nullptr;
 }
 
-bool constrained_not_null(const Analyzer::Expr* expr,
-                          const std::list<std::shared_ptr<Analyzer::Expr>>& quals) {
+bool constrained_not_null(const hdk::ir::Expr* expr,
+                          const std::list<hdk::ir::ExprPtr>& quals) {
   for (const auto& qual : quals) {
-    auto uoper = std::dynamic_pointer_cast<Analyzer::UOper>(qual);
+    auto uoper = std::dynamic_pointer_cast<hdk::ir::UOper>(qual);
     if (!uoper) {
       continue;
     }
     bool is_negated{false};
     if (uoper->get_optype() == kNOT) {
-      uoper = std::dynamic_pointer_cast<Analyzer::UOper>(uoper->get_own_operand());
+      uoper = std::dynamic_pointer_cast<hdk::ir::UOper>(uoper->get_own_operand());
       is_negated = true;
     }
     if (uoper && (uoper->get_optype() == kISNOTNULL ||

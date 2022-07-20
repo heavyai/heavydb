@@ -16,6 +16,7 @@
 
 #include "RelAlgDagBuilder.h"
 #include "CalciteDeserializerUtils.h"
+#include "DeepCopyVisitor.h"
 #include "Descriptors/RelAlgExecutionDescriptor.h"
 #include "JsonAccessors.h"
 #include "RelAlgOptimizer.h"
@@ -1396,7 +1397,7 @@ void create_compound(
           // TODO(adb): This is essentially a more general case of simple project, we
           // could likely merge the two
           std::vector<const Rex*> result;
-          RexInputReplacementVisitor visitor(last_node, scalar_sources);
+          RexInputReplacementVisitor rex_visitor(last_node, scalar_sources);
           for (size_t i = 0; i < ra_project->size(); ++i) {
             const auto rex = ra_project->getProjectAt(i);
             if (auto rex_input = dynamic_cast<const RexInput*>(rex)) {
@@ -1404,7 +1405,7 @@ void create_compound(
               CHECK_LT(index, target_exprs.size());
               result.push_back(target_exprs[index]);
             } else {
-              scalar_sources.push_back(visitor.visit(rex));
+              scalar_sources.push_back(rex_visitor.visit(rex));
               result.push_back(scalar_sources.back().get());
             }
           }
