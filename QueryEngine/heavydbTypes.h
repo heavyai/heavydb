@@ -531,6 +531,14 @@ struct Column {
 
   DEVICE Column(T* ptr, const int64_t num_rows) : ptr_(ptr), num_rows_(num_rows) {}
 
+#ifndef __CUDACC__
+#ifndef UDF_COMPILED
+  DEVICE Column(const Column& other) : ptr_(other.ptr_), num_rows_(other.num_rows_) {}
+  DEVICE Column(std::vector<T>& input_vec)
+      : ptr_(input_vec.data()), num_rows_(static_cast<int64_t>(input_vec.size())) {}
+#endif
+#endif
+
   DEVICE T& operator[](const unsigned int index) const {
     if (index >= num_rows_) {
 #ifndef __CUDACC__
