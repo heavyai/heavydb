@@ -27,6 +27,7 @@
 #include <Shlobj.h>
 #include "Shared/clean_windows.h"
 #endif
+#include <folly/portability/Unistd.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -1133,6 +1134,8 @@ int main(int argc, char** argv) {
   bool http = false;
   bool https = false;
   bool skip_host_verify = false;
+  bool echo_input = false;
+  bool is_script = !isatty(fileno(stdin));
   TQueryResult _return;
   std::string db_name;
   std::string user_name{"admin"};
@@ -1181,6 +1184,10 @@ int main(int argc, char** argv) {
                          ->default_value(skip_host_verify)
                          ->implicit_value(true),
                      "Don't verify SSL certificate validity");
+  desc.add_options()(
+      "echo-all,a",
+      po::bool_switch(&echo_input)->default_value(echo_input)->implicit_value(true),
+      "Echo all input if executed from a script");
   desc.add_options()("quiet,q", "Do not print result headers or connection strings ");
 
   po::variables_map vm;
@@ -1313,6 +1320,12 @@ int main(int argc, char** argv) {
       swap(_return, empty);
     }
 
+    // Echo commands from input script when executed with --echo-all option.
+    // Queries are handled separately
+    if (line[0] != '\0' && line[0] == '\\' && is_script && echo_input) {
+      std::cout << line << std::endl;
+    }
+
     /* Do something with the string. */
     if (line[0] != '\0' && line[0] != '\\') {
       // printf("echo: '%s'\n", line);
@@ -1345,6 +1358,9 @@ int main(int argc, char** argv) {
         linenoiseHistorySave(cmd_file);
         current_line.clear();
         prompt.assign("heavysql> ");
+        if (is_script && echo_input) {
+          std::cout << query << std::endl;
+        }
         (void)backchannel(TURN_ON, nullptr);
         if (thrift_with_retry(kSQL, context, query.c_str())) {
           (void)backchannel(TURN_OFF, nullptr);
