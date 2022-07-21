@@ -166,6 +166,15 @@ TableFunctionManager_getNewDictId(int8_t* mgr_ptr) {
   return mgr->getNewDictId();
 }
 
+extern "C" DEVICE RUNTIME_EXPORT int8_t* TableFunctionManager_getStringDictionaryProxy(
+    int8_t* mgr_ptr,
+    int32_t db_id,
+    int32_t dict_id) {
+  auto mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
+  CHECK(mgr);
+  return mgr->getStringDictionaryProxy(db_id, dict_id);
+}
+
 DEVICE RUNTIME_EXPORT std::string TableFunctionManager_getString(int8_t* mgr_ptr,
                                                                  int32_t db_id,
                                                                  int32_t dict_id,

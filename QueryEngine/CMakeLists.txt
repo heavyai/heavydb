@@ -234,6 +234,8 @@ if(ENABLE_SYSTEM_TFS)
   if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
     if(ENABLE_RF_PROP_TFS)
       list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/RFPropTableFunctions.h)
+      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/RFUtilityTableFunctions.hpp)
+      list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/AntennaPattern.cpp)
     endif()
 
     if(ENABLE_POINT_CLOUD_TFS)
