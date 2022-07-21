@@ -1800,57 +1800,37 @@ class RangeJoinTest : public ::testing::Test {
     };
 #endif
   };
-};
 
-TargetValue execSQL(const std::string& stmt,
-                    const ExecutionContext ctx,
-                    const bool geo_return_geo_tv = true) {
-  auto rows = QR::get()->runSQL(stmt, ctx.device_type, true, false);
-  if (geo_return_geo_tv) {
-    rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
-  }
-  auto crt_row = rows->getNextRow(true, true);
-  CHECK_EQ(size_t(1), crt_row.size()) << stmt;
-  return crt_row[0];
-}
-
-TargetValue execSQLWithAllowLoopJoin(const std::string& stmt,
-                                     const ExecutionContext ctx,
-                                     const bool geo_return_geo_tv = true) {
-  auto rows = QR::get()->runSQL(stmt, ctx.device_type, true, true);
-  if (geo_return_geo_tv) {
-    rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
-  }
-  auto crt_row = rows->getNextRow(true, true);
-  CHECK_EQ(size_t(1), crt_row.size()) << stmt;
-  return crt_row[0];
-}
-
-TEST_F(RangeJoinTest, DistanceLessThanEqCompressedCols) {
-  executeAllScenarios([this](const ExecutionContext ctx) -> void {
-    size_t expected_hash_tables = 0;
-
-    if (ctx.hash_join_enabled) {
-      ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT),
-                expected_hash_tables)
-          << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
-      expected_hash_tables++;
+  TargetValue execSQL(const std::string& stmt,
+                      const ExecutionContext ctx,
+                      const bool geo_return_geo_tv = true) {
+    auto rows = QR::get()->runSQL(stmt, ctx.device_type, true, false);
+    if (geo_return_geo_tv) {
+      rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
     }
-    const auto tableA = "t1_comp32";
-    const auto tableB = "t2_comp32";
+    auto crt_row = rows->getNextRow(true, true);
+    CHECK_EQ(size_t(1), crt_row.size()) << stmt;
+    return crt_row[0];
+  }
 
-    for (const auto& b : testBounds()) {
-      auto sql = fmt::format(
-          "SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
-          tableA,
-          tableB,
-          tableA,
-          tableB,
-          b.upper_bound);
+  TargetValue execSQLWithAllowLoopJoin(const std::string& stmt,
+                                       const ExecutionContext ctx,
+                                       const bool geo_return_geo_tv = true) {
+    auto rows = QR::get()->runSQL(stmt, ctx.device_type, true, true);
+    if (geo_return_geo_tv) {
+      rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+    }
+    auto crt_row = rows->getNextRow(true, true);
+    CHECK_EQ(size_t(1), crt_row.size()) << stmt;
+    return crt_row[0];
+  }
 
-      ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
-          << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+  void performTest(std::string_view tableA,
+                   std::string_view tableB,
+                   std::string_view query) {
+    executeAllScenarios([tableA, tableB, query, this](
+                            const ExecutionContext ctx) -> void {
+      size_t expected_hash_tables = 0;
 
       if (ctx.hash_join_enabled) {
         ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
@@ -1859,167 +1839,84 @@ TEST_F(RangeJoinTest, DistanceLessThanEqCompressedCols) {
             << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
         expected_hash_tables++;
       }
-    }
-  });
+
+      for (const auto& b : testBounds()) {
+        auto sql = fmt::format(query, tableA, tableB, tableA, tableB, b.upper_bound);
+
+        ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
+            << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+
+        if (ctx.hash_join_enabled) {
+          ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                     CacheItemType::OVERLAPS_HT),
+                    expected_hash_tables)
+              << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+          expected_hash_tables++;
+        }
+      }
+    });
+  }
+};
+
+TEST_F(RangeJoinTest, DistanceLessThanEqCompressedCols) {
+  performTest("t1_comp32"sv,
+              "t2_comp32"sv,
+              "SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};"sv);
+}
+
+TEST_F(RangeJoinTest, DistanceLessThanEqCompressedColsBySTDWithin) {
+  performTest("t1_comp32"sv,
+              "t2_comp32"sv,
+              "SELECT count(*) FROM {}, {} where ST_DWithin({}.p1, {}.p1, {});"sv);
 }
 
 TEST_F(RangeJoinTest, DistanceLessThanEqUnCompressedCols) {
-  const auto tableA = "t1";
-  const auto tableB = "t2";
-
-  executeAllScenarios([&](const ExecutionContext ctx) -> void {
-    size_t expected_hash_tables = 0;
-
-    if (ctx.hash_join_enabled) {
-      ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT),
-                expected_hash_tables)
-          << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
-      expected_hash_tables++;
-    }
-
-    for (const auto& b : testBounds()) {
-      auto sql = fmt::format(
-          "SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
-          tableA,
-          tableB,
-          tableA,
-          tableB,
-          b.upper_bound);
-
-      ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
-          << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
-
-      if (ctx.hash_join_enabled) {
-        ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                   CacheItemType::OVERLAPS_HT),
-                  expected_hash_tables)
-            << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
-        expected_hash_tables++;
-      }
-    }
-  });
+  performTest("t1"sv,
+              "t2"sv,
+              "SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};"sv);
 }
 
-TEST_F(RangeJoinTest, DistanceLessThanEqUnCompressedColsBySTPoint) {
-  const auto tableA = "t1_coord";
-  const auto tableB = "t2";
-
-  executeAllScenarios([&](const ExecutionContext ctx) -> void {
-    size_t expected_hash_tables = 0;
-
-    if (ctx.hash_join_enabled) {
-      ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                 CacheItemType::OVERLAPS_HT),
-                expected_hash_tables)
-          << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
-      expected_hash_tables++;
-    }
-
-    for (const auto& b : testBounds()) {
-      auto sql = fmt::format(
-          "SELECT count(*) FROM {}, {} where ST_Distance(ST_Point({}.x, {}.y), {}.p1) <= "
-          "{};",
-          tableA,
-          tableB,
-          tableA,
-          tableA,
-          tableB,
-          b.upper_bound);
-
-      ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
-          << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
-
-      if (ctx.hash_join_enabled) {
-        ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                   CacheItemType::OVERLAPS_HT),
-                  expected_hash_tables)
-            << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
-        expected_hash_tables++;
-      }
-    }
-  });
+TEST_F(RangeJoinTest, DistanceLessThanEqUnCompressedColsBySTDWithin) {
+  performTest("t1"sv,
+              "t2"sv,
+              "SELECT count(*) FROM {}, {} where ST_DWithin({}.p1, {}.p1, {});"sv);
 }
 
 TEST_F(RangeJoinTest, DistanceLessThanMixedEncoding) {
+  const auto tableA = "t1_comp32"sv;
+  const auto tableB = "t2"sv;
   {
-    const auto tableA = "t1_comp32";
-    const auto tableB = "t2";
-
-    executeAllScenarios([&](const ExecutionContext ctx) -> void {
-      size_t expected_hash_tables = 0;
-
-      if (ctx.hash_join_enabled) {
-        ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                   CacheItemType::OVERLAPS_HT),
-                  expected_hash_tables)
-            << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
-        expected_hash_tables++;
-      }
-
-      for (const auto& b : testBounds()) {
-        auto sql = fmt::format(
-            "SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
-            tableA,
-            tableB,
-            tableA,
-            tableB,
-            b.upper_bound);
-
-        ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
-            << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
-
-        if (ctx.hash_join_enabled) {
-          ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                     CacheItemType::OVERLAPS_HT),
-                    expected_hash_tables)
-              << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
-          expected_hash_tables++;
-        }
-      }
-    });
+    performTest(tableA,
+                tableB,
+                "SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};"sv);
   }
 
   {  // run same tests again, transpose LHS & RHS
-    const auto tableA = "t2";
-    const auto tableB = "t1_comp32";
+    performTest(tableB,
+                tableA,
+                "SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};"sv);
+  }
+}
 
-    executeAllScenarios([&](const ExecutionContext ctx) -> void {
-      size_t expected_hash_tables = 0;
+TEST_F(RangeJoinTest, DistanceLessThanMixedEncodingBySTDWithin) {
+  const auto tableA = "t1_comp32"sv;
+  const auto tableB = "t2"sv;
+  {
+    performTest(tableA,
+                tableB,
+                "SELECT count(*) FROM {}, {} where ST_DWithin({}.p1, {}.p1, {});"sv);
+  }
 
-      if (ctx.hash_join_enabled) {
-        ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                   CacheItemType::OVERLAPS_HT),
-                  expected_hash_tables)
-            << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
-        expected_hash_tables++;
-      }
-
-      for (const auto& b : testBounds()) {
-        auto sql = fmt::format(
-            "SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
-            tableA,
-            tableB,
-            tableA,
-            tableB,
-            b.upper_bound);
-
-        ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
-            << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
-
-        if (ctx.hash_join_enabled) {
-          ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
-                                                     CacheItemType::OVERLAPS_HT),
-                    expected_hash_tables)
-              << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
-          expected_hash_tables++;
-        }
-      }
-    });
+  {  // run same tests again, transpose LHS & RHS
+    performTest(tableB,
+                tableA,
+                "SELECT count(*) FROM {}, {} where ST_DWithin({}.p1, {}.p1, {});"sv);
   }
 }
 
 TEST_F(RangeJoinTest, IsEnabledByDefault) {
+  // test logic is different compared with the previous test,
+  // so we do not use performTest function here
   QR::get()->clearGpuMemory();
   QR::get()->clearCpuMemory();
   // .device_type = ExecutorDeviceType::CPU,  .hash_join_enabled = true,
@@ -2056,6 +1953,8 @@ TEST_F(RangeJoinTest, IsEnabledByDefault) {
 }
 
 TEST_F(RangeJoinTest, CanBeDisabled) {
+  // test logic is different compared with the previous test,
+  // so we do not use performTest function here
   QR::get()->clearGpuMemory();
   QR::get()->clearCpuMemory();
   g_enable_distance_rangejoin = false;
@@ -2093,6 +1992,8 @@ TEST_F(RangeJoinTest, CanBeDisabled) {
 }
 
 TEST_F(RangeJoinTest, BadOrdering) {
+  // test logic is different compared with the previous test,
+  // so we do not use performTest function here
   QR::get()->clearGpuMemory();
   QR::get()->clearCpuMemory();
   g_enable_distance_rangejoin = true;
@@ -2114,6 +2015,8 @@ TEST_F(RangeJoinTest, BadOrdering) {
 }
 
 TEST_F(RangeJoinTest, HashTableRecycling) {
+  // test logic is different compared with the previous test,
+  // so we do not use performTest function here
   QR::get()->clearGpuMemory();
   QR::get()->clearCpuMemory();
   // .device_type = ExecutorDeviceType::CPU,  .hash_join_enabled = true,

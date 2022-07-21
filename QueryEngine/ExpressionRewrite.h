@@ -52,6 +52,12 @@ struct OverlapsJoinConjunction {
 boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
     const std::shared_ptr<Analyzer::Expr> expr);
 
+boost::optional<OverlapsJoinConjunction> convert_to_range_join_oper(
+    const std::shared_ptr<Analyzer::Expr> expr,
+    const Analyzer::BinOper* range_join_expr,
+    const Analyzer::GeoOperator* lhs,
+    const Analyzer::Constant* rhs);
+
 std::list<std::shared_ptr<Analyzer::Expr>> strip_join_covered_filter_quals(
     const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
     const JoinQualsPerNestingLevel& join_quals);

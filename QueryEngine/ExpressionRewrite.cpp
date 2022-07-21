@@ -800,7 +800,8 @@ static const std::unordered_set<std::string> overlaps_supported_functions = {
     "ST_Intersects_MultiPolygon_Point",
     "ST_cIntersects_MultiPolygon_Point",
     "ST_Approx_Overlaps_MultiPolygon_Point",
-    "ST_Overlaps"};
+    "ST_Overlaps",
+    "ST_DWithin_Point_Point"};
 
 static const std::unordered_set<std::string> requires_many_to_many = {
     "ST_Contains_Polygon_Polygon",
@@ -870,6 +871,26 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
         return OverlapsJoinConjunction{{expr}, {overlaps_oper}};
       }
 
+      if (func_oper->getName() == "ST_DWithin_Point_Point") {
+        CHECK_EQ(func_oper->getArity(), size_t(8));
+        const auto lhs = func_oper->getOwnArg(0);
+        const auto rhs = func_oper->getOwnArg(1);
+        // the correctness of geo args used in the ST_DWithin function is checked by
+        // geo translation logic, i.e., RelAlgTranslator::translateTernaryGeoFunction
+        const auto distance_const_val =
+            dynamic_cast<const Analyzer::Constant*>(func_oper->getArg(7));
+        if (lhs && rhs && distance_const_val) {
+          std::vector<std::shared_ptr<Analyzer::Expr>> args{lhs, rhs};
+          auto range_oper = makeExpr<Analyzer::GeoOperator>(
+              SQLTypeInfo(kDOUBLE, 0, 8, true), "ST_Distance", args, std::nullopt);
+          auto distance_oper = makeExpr<Analyzer::BinOper>(
+              kBOOLEAN, kLE, kONE, range_oper, distance_const_val->deep_copy());
+          VLOG(1) << "Rewrite " << func_oper->getName() << " to ST_Distance_Point_Point";
+          return convert_to_range_join_oper(
+              distance_oper, distance_oper.get(), range_oper.get(), distance_const_val);
+        }
+      }
+
       auto lhs = func_oper->getOwnArg(2);
       auto rewritten_lhs = deep_copy_visitor.visit(lhs.get());
       CHECK(rewritten_lhs);
@@ -937,42 +958,54 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
       (bin_oper->get_optype() == kLE || bin_oper->get_optype() == kLT)) {
     auto lhs = dynamic_cast<const Analyzer::GeoOperator*>(bin_oper->get_left_operand());
     auto rhs = dynamic_cast<const Analyzer::Constant*>(bin_oper->get_right_operand());
-    if (lhs && rhs && lhs->getName() == "ST_Distance") {
-      CHECK_EQ(lhs->size(), size_t(2));
-      auto l_arg = lhs->getOperand(0);
-      auto r_arg = lhs->getOperand(1);
-      const bool is_geography = l_arg->get_type_info().get_subtype() == kGEOGRAPHY ||
-                                r_arg->get_type_info().get_subtype() == kGEOGRAPHY;
-      if (is_geography) {
-        VLOG(1) << "Range join not yet supported for geodesic distance "
-                << bin_oper->toString();
-        return boost::none;
-      }
-
-      // Check for compatible join ordering. If the join ordering does not match expected
-      // ordering for overlaps, the join builder will fail.
-      std::set<int> lhs_rte_idx;
-      l_arg->collect_rte_idx(lhs_rte_idx);
-      CHECK(!lhs_rte_idx.empty());
-      std::set<int> rhs_rte_idx;
-      r_arg->collect_rte_idx(rhs_rte_idx);
-      CHECK(!rhs_rte_idx.empty());
-
-      if (lhs_rte_idx.size() > 1 || rhs_rte_idx.size() > 1 || lhs_rte_idx > rhs_rte_idx) {
-        LOG(INFO) << "Unable to rewrite " << lhs->getName()
-                  << " to overlaps conjunction. Cannot build hash table over LHS type. "
-                     "Check join order.\n"
-                  << bin_oper->toString();
-        return boost::none;
-      }
-
-      const bool inclusive = bin_oper->get_optype() == kLE;
-      auto range_expr = makeExpr<Analyzer::RangeOper>(
-          inclusive, inclusive, r_arg->deep_copy(), rhs->deep_copy());
-      auto overlaps_oper = makeExpr<Analyzer::BinOper>(
-          kBOOLEAN, kOVERLAPS, kONE, l_arg->deep_copy(), range_expr);
-      return OverlapsJoinConjunction{{expr}, {overlaps_oper}};
+    if (lhs && rhs) {
+      return convert_to_range_join_oper(expr, bin_oper, lhs, rhs);
     }
+  }
+  return boost::none;
+}
+
+boost::optional<OverlapsJoinConjunction> convert_to_range_join_oper(
+    const std::shared_ptr<Analyzer::Expr> expr,
+    const Analyzer::BinOper* range_join_expr,
+    const Analyzer::GeoOperator* lhs,
+    const Analyzer::Constant* rhs) {
+  if (lhs->getName() == "ST_Distance") {
+    CHECK_EQ(lhs->size(), size_t(2));
+    auto l_arg = lhs->getOperand(0);
+    auto r_arg = lhs->getOperand(1);
+    const bool is_geography = l_arg->get_type_info().get_subtype() == kGEOGRAPHY ||
+                              r_arg->get_type_info().get_subtype() == kGEOGRAPHY;
+    if (is_geography) {
+      VLOG(1) << "Range join not yet supported for geodesic distance "
+              << expr->toString();
+      return boost::none;
+    }
+
+    // Check for compatible join ordering. If the join ordering does not match expected
+    // ordering for overlaps, the join builder will fail.
+    std::set<int> lhs_rte_idx;
+    l_arg->collect_rte_idx(lhs_rte_idx);
+    CHECK(!lhs_rte_idx.empty());
+    std::set<int> rhs_rte_idx;
+    r_arg->collect_rte_idx(rhs_rte_idx);
+    CHECK(!rhs_rte_idx.empty());
+
+    if (lhs_rte_idx.size() > 1 || rhs_rte_idx.size() > 1 || lhs_rte_idx > rhs_rte_idx) {
+      LOG(INFO) << "Unable to rewrite " << lhs->getName()
+                << " to overlaps conjunction. Cannot build hash table over LHS type. "
+                   "Check join order.\n"
+                << expr->toString();
+      return boost::none;
+    }
+
+    const bool inclusive = range_join_expr->get_optype() == kLE;
+    auto range_expr = makeExpr<Analyzer::RangeOper>(
+        inclusive, inclusive, r_arg->deep_copy(), rhs->deep_copy());
+    auto overlaps_oper = makeExpr<Analyzer::BinOper>(
+        kBOOLEAN, kOVERLAPS, kONE, l_arg->deep_copy(), range_expr);
+    VLOG(1) << "Successfully converted to overlaps join";
+    return OverlapsJoinConjunction{{expr}, {overlaps_oper}};
   }
   return boost::none;
 }
