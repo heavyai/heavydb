@@ -2084,14 +2084,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
       // computation logic returns exactly the same result)
       has_framing_clause = false;
     }
-    auto order_key_expr = order_keys.front();
-    const auto order_key_ti = order_key_expr->get_type_info();
-    if ((order_key_ti.get_type() == kTIME || order_key_ti.get_type() == kTIMESTAMP) &&
-        order_key_ti.get_compression() == kENCODING_FIXED) {
-      throw std::runtime_error(
-          "Window framing with ordering column having time and timestamp types with "
-          "fixed encoding is not supported yet");
-    }
     auto is_negative_framing_bound =
         [&](const SQLTypes t, const Datum& d, bool is_time_unit = false) {
           switch (t) {
@@ -2186,7 +2178,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
         const auto bound_bin_oper = dynamic_cast<const Analyzer::BinOper*>(bound_expr);
         CHECK(bound_bin_oper->get_optype() == kMULTIPLY);
         auto translated_expr = translateIntervalExprForWindowFraming(
-            order_key_expr,
+            order_keys.front(),
             bound_type == SqlWindowFrameBoundType::EXPR_PRECEDING,
             bound_bin_oper);
         if (for_start_bound) {

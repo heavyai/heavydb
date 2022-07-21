@@ -84,9 +84,12 @@ llvm::ConstantInt* CgenState::inlineIntNull(const SQLTypeInfo& type_info) {
       return llInt(static_cast<int32_t>(inline_int_null_val(type_info)));
     case kBIGINT:
       return llInt(static_cast<int64_t>(inline_int_null_val(type_info)));
-    case kDATE:
     case kTIME:
     case kTIMESTAMP:
+      if (type_info.get_compression() == kENCODING_FIXED) {
+        return llInt(inline_fixed_encoding_null_val(type_info));
+      }
+    case kDATE:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
       return llInt(inline_int_null_val(type_info));

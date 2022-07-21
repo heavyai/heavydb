@@ -134,6 +134,9 @@ inline int64_t inline_int_null_val(const SQL_TYPE_INFO& ti) {
       return inline_int_null_value<int64_t>();
     case kTIMESTAMP:
     case kTIME:
+      if (ti.get_compression() == kENCODING_FIXED) {
+        return inline_fixed_encoding_null_val(ti);
+      }
     case kDATE:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
@@ -230,6 +233,9 @@ inline int64_t inline_int_null_array_val(const SQL_TYPE_INFO& ti) {
       return inline_int_null_array_value<int64_t>();
     case kTIMESTAMP:
     case kTIME:
+      if (ti.get_compression() == kENCODING_FIXED) {
+        return inline_fixed_encoding_null_array_val(ti);
+      }
     case kDATE:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
