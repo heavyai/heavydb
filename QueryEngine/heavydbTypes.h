@@ -99,6 +99,11 @@ EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_getNewDictDbId(int8_t* mgr_
 
 EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_getNewDictId(int8_t* mgr_ptr);
 
+EXTENSION_NOINLINE_HOST int8_t* TableFunctionManager_getStringDictionaryProxy(
+    int8_t* mgr_ptr,
+    int32_t db_id,
+    int32_t dict_id);
+
 std::string TableFunctionManager_getString(int8_t* mgr_ptr,
                                            int32_t db_id,
                                            int32_t dict_id,
@@ -916,6 +921,10 @@ struct Column<TextEncodingDict> {
                 const int64_t num_rows,
                 StringDictionaryProxy* string_dict_proxy)
       : ptr_(ptr), num_rows_(num_rows), string_dict_proxy_(string_dict_proxy) {}
+  DEVICE Column(std::vector<TextEncodingDict>& input_vec)
+      : ptr_(input_vec.data())
+      , num_rows_(static_cast<int64_t>(input_vec.size()))
+      , string_dict_proxy_(nullptr) {}
 #else
   DEVICE Column(TextEncodingDict* ptr, const int64_t num_rows)
       : ptr_(ptr), num_rows_(num_rows) {}
@@ -1256,6 +1265,11 @@ struct TableFunctionManager {
   }
   int32_t getNewDictId() {
     return TableFunctionManager_getNewDictId(reinterpret_cast<int8_t*>(this));
+  }
+  StringDictionaryProxy* getStringDictionaryProxy(int32_t db_id, int32_t dict_id) {
+    return reinterpret_cast<StringDictionaryProxy*>(
+        TableFunctionManager_getStringDictionaryProxy(
+            reinterpret_cast<int8_t*>(this), db_id, dict_id));
   }
   std::string getString(int32_t db_id, int32_t dict_id, int32_t string_id) {
     return TableFunctionManager_getString(
