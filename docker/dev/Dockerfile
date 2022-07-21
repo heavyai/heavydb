@@ -93,18 +93,9 @@ RUN apt-get install -y \
     libmfx1 \
     --
 
-# SPIRV-Translator
-RUN apt install -y pkg-config unzip
-RUN mkdir /translator && \
-    cd /translator && \
-    wget https://github.com/KhronosGroup/SPIRV-LLVM-Translator/releases/download/v12.0.0/SPIRV-LLVM-Translator-v12.0.0-linux-Release.zip && \
-    unzip SPIRV-LLVM-Translator-v12.0.0-linux-Release.zip && \
-    rm SPIRV-LLVM-Translator-v12.0.0-linux-Release.zip \
-    --
-
-RUN sed -i "1s/.*/\prefix=/translator/" /translator/lib/pkgconfig/LLVMSPIRVLib.pc
-
-ENV PKG_CONFIG_PATH=/translator/lib/pkgconfig/
+RUN git clone -b llvm_release_120 https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git
+RUN mkdir SPIRV-LLVM-Translator/build && cd SPIRV-LLVM-Translator/build && cmake -Wno-dev ..
+RUN cd SPIRV-LLVM-Translator/build && make llvm-spirv -j`nproc` && make install
 
 RUN apt-get upgrade -y
 RUN apt-get clean
