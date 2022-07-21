@@ -34,46 +34,12 @@ const std::string calcite_explain_str = {"explain calcite"};
 const std::string optimized_explain_str = {"explain optimized"};
 const std::string plan_explain_str = {"explain plan"};
 
-std::string process_leading_comment(std::string query_str) {
-  // ParserWrapper is trying to match the SQL operand,
-  //    and a leading comment will interfere
-  //    so simply index past the leading comment
-  while (true) {
-    boost::algorithm::trim(query_str);
-    if (boost::starts_with(query_str, "//") || boost::starts_with(query_str, "--")) {
-      // scan to "\n"
-      size_t pos = query_str.find("\n");
-      if (pos == std::string::npos) {
-        // entire query_str is a comment
-        throw std::runtime_error("Empty SQL statements are currently not allowed.");
-      } else {
-        query_str = query_str.substr(pos + 1);
-      }
-
-    } else if (boost::starts_with(query_str, "/*")) {
-      // scan to closing "/*""
-      size_t pos = query_str.find("*/");
-      if (pos == std::string::npos) {
-        // entire query_str is a comment
-        throw std::runtime_error("Empty SQL statements are currently not allowed.");
-      } else {
-        query_str = query_str.substr(pos + 2);
-      }
-
-    } else {
-      return query_str;
-    }
-  }
-}
-
 }  // namespace
 
 ExplainInfo::ExplainInfo(std::string query_string) {
   // sets explain_type_ and caches a trimmed actual_query_
   explain_type_ = ExplainType::None;
   actual_query_ = "";
-
-  query_string = process_leading_comment(query_string);
 
   if (boost::istarts_with(query_string, explain_str)) {
     if (boost::istarts_with(query_string, calcite_explain_str)) {
@@ -120,8 +86,24 @@ const std::vector<std::string> ParserWrapper::update_dml_cmd = {"INSERT",
                                                                 "DELETE",
                                                                 "UPDATE"};
 
+namespace {
+
+void validate_no_leading_comments(const std::string& query_str) {
+  if (boost::starts_with(query_str, "--") || boost::starts_with(query_str, "//") ||
+      boost::starts_with(query_str, "/*")) {
+    throw std::runtime_error(
+        "SQL statements starting with comments are currently not allowed.");
+  }
+}
+
+const std::string optimize_str = {"optimize"};
+const std::string validate_str = {"validate"};
+
+}  // namespace
+
 ParserWrapper::ParserWrapper(std::string query_string) {
-  query_string = process_leading_comment(query_string);
+  validate_no_leading_comments(query_string);
+
   is_other_explain = ExplainInfo(query_string).isOtherExplain();
 
   query_type_ = QueryType::Read;

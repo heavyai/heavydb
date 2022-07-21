@@ -1336,19 +1336,6 @@ int main(int argc, char** argv) {
       }
       std::string trimmed_line = std::string(line);
       boost::algorithm::trim(trimmed_line);
-
-      // Convert single line comments ("//" and "--") to inline /* ... */
-      //    because linenoise's history buffer converts newlines into spaces
-      //    ... (see linenoiseHistoryAdd()'s implementation)
-      //    ... resulting in multi-line sql collapsing into single-line sql
-      //    ... but Calcite still requires newlines for single-line comments to terminate
-
-      size_t pos = std::min(trimmed_line.find("//"), trimmed_line.find("--"));
-      if (pos != std::string::npos) {
-        trimmed_line =
-            trimmed_line.substr(0, pos) + "/*" + trimmed_line.substr(pos + 2) + "*/ ";
-      }
-
       current_line.append(" ").append(trimmed_line);
       boost::algorithm::trim(current_line);
       if (current_line.back() == ';') {
