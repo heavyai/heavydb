@@ -287,15 +287,10 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
                                 const uint8_t* raw_data,
                                 const size_t num_bytes,
                                 const TableFunctionMetadataType value_type) {
-    std::vector<uint8_t> value(num_bytes);
-    std::memcpy(value.data(), raw_data, num_bytes);
+    MetadataValue metadata_value(num_bytes, value_type);
+    std::memcpy(metadata_value.first.data(), raw_data, num_bytes);
     std::lock_guard<std::mutex> lock(table_function_metadata_store_mutex_);
-    auto const [itr, emplaced] = table_function_metadata_store_.try_emplace(
-        std::string(key), std::move(value), value_type);
-    if (!emplaced) {
-      throw std::runtime_error("Table Function Metadata with key '" + std::string(key) +
-                               "' already exists");
-    }
+    table_function_metadata_store_[key] = std::move(metadata_value);
   }
 
   void getTableFunctionMetadata(const char* key,

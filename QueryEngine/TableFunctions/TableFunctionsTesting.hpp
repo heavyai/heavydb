@@ -2155,12 +2155,31 @@ NEVER_INLINE HOST int32_t tf_metadata_setter__cpu_template(TableFunctionManager&
 
 // clang-format off
 /*
-  UDTF: tf_metadata_setter_bad__cpu_template(TableFunctionManager) -> Column<bool> success
+  UDTF: tf_metadata_setter_repeated__cpu_template(TableFunctionManager) -> Column<bool> success
 */
 // clang-format on
 
-NEVER_INLINE HOST int32_t tf_metadata_setter_bad__cpu_template(TableFunctionManager& mgr,
-                                                               Column<bool>& success) {
+NEVER_INLINE HOST int32_t
+tf_metadata_setter_repeated__cpu_template(TableFunctionManager& mgr,
+                                          Column<bool>& success) {
+  // set the same name twice
+  mgr.set_metadata("test_int8_t", int8_t(1));
+  mgr.set_metadata("test_int8_t", int8_t(2));
+
+  mgr.set_output_row_size(1);
+  success[0] = true;
+  return 1;
+}
+
+// clang-format off
+/*
+  UDTF: tf_metadata_setter_size_mismatch__cpu_template(TableFunctionManager) -> Column<bool> success
+*/
+// clang-format on
+
+NEVER_INLINE HOST int32_t
+tf_metadata_setter_size_mismatch__cpu_template(TableFunctionManager& mgr,
+                                               Column<bool>& success) {
   // set the same name twice
   mgr.set_metadata("test_int8_t", int8_t(1));
   mgr.set_metadata("test_int8_t", int16_t(2));

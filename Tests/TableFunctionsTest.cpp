@@ -2918,16 +2918,25 @@ TEST_F(TableFunctions, MetadataSetGet) {
       run_multiple_agg("SELECT * FROM TABLE(tf_metadata_getter(CURSOR(SELECT * FROM "
                        "TABLE(tf_metadata_setter()))));",
                        ExecutorDeviceType::CPU));
+
+  // As of [HEV-82] we changed the metadata cache behavior
+  // to allow metadata overwrites to support multiple calls to the
+  // same table function within a query, meaning that the below
+  // query which would have thrown, now should not
+  EXPECT_NO_THROW(run_multiple_agg("SELECT * FROM TABLE(tf_metadata_setter_repeated());",
+                                   ExecutorDeviceType::CPU));
+
   // these should throw
+  EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(tf_metadata_getter(CURSOR(SELECT "
+                                "* FROM TABLE(tf_metadata_setter_size_mismatch()))));",
+                                ExecutorDeviceType::CPU),
+               std::runtime_error);
+
   EXPECT_THROW(
       run_multiple_agg("SELECT * FROM TABLE(tf_metadata_getter_bad(CURSOR(SELECT "
                        "* FROM TABLE(tf_metadata_setter()))));",
                        ExecutorDeviceType::CPU),
       std::runtime_error);
-  EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(tf_metadata_getter(CURSOR(SELECT "
-                                "* FROM TABLE(tf_metadata_setter_bad()))));",
-                                ExecutorDeviceType::CPU),
-               std::runtime_error);
 }
 
 TEST_F(TableFunctions, ColumnArray20KLimit) {
