@@ -28,6 +28,7 @@
 #include <rapidjson/error/error.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
+#include <boost/functional/hash.hpp>
 
 #include <string>
 #include <unordered_set>
@@ -88,6 +89,31 @@ class RexRebindInputsVisitor : public RexVisitor<void*> {
   const RelAlgNode* new_input_;
 };
 
+class RebindInputsVisitor : public DeepCopyVisitor {
+ public:
+  RebindInputsVisitor(
+      const RelAlgNode* old_input,
+      const RelAlgNode* new_input,
+      std::optional<std::unordered_map<unsigned, unsigned>>& old_to_new_index_map)
+      : old_input_(old_input), new_input_(new_input), mapping_(old_to_new_index_map) {}
+  ~RebindInputsVisitor() override = default;
+
+  RetType visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
+    if (col_ref->getNode() == old_input_) {
+      unsigned new_idx =
+          mapping_ ? mapping_->at(col_ref->getIndex()) : col_ref->getIndex();
+      return hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+          col_ref->get_type_info(), new_input_, new_idx);
+    }
+    return col_ref->deep_copy();
+  }
+
+ protected:
+  const RelAlgNode* old_input_;
+  const RelAlgNode* new_input_;
+  const std::optional<std::unordered_map<unsigned, unsigned>>& mapping_;
+};
+
 // Creates an output with n columns.
 std::vector<RexInput> n_outputs(const RelAlgNode* node, const size_t n) {
   std::vector<RexInput> outputs;
@@ -126,6 +152,7 @@ void RelProject::replaceInput(
     std::optional<std::unordered_map<unsigned, unsigned>> old_to_new_index_map) {
   RelAlgNode::replaceInput(old_input, input);
   std::unique_ptr<RexRebindInputsVisitor> rebind_inputs;
+  RebindInputsVisitor visitor(old_input.get(), input.get(), old_to_new_index_map);
   if (old_to_new_index_map) {
     rebind_inputs = std::make_unique<RexRebindReindexInputsVisitor>(
         old_input.get(), input.get(), *old_to_new_index_map);
@@ -136,6 +163,9 @@ void RelProject::replaceInput(
   CHECK(rebind_inputs);
   for (const auto& scalar_expr : scalar_exprs_) {
     rebind_inputs->visit(scalar_expr.get());
+  }
+  for (size_t i = 0; i < exprs_.size(); ++i) {
+    exprs_[i] = visitor.visit(exprs_[i].get());
   }
 }
 
@@ -211,6 +241,83 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
     return n_outputs(logical_union_node, logical_union_node->size());
   }
   LOG(FATAL) << "Unhandled ra_node type: " << ::toString(ra_node);
+  return {};
+}
+
+template <typename T>
+bool is_one_of(const RelAlgNode* node) {
+  return dynamic_cast<const T*>(node);
+}
+
+template <typename T1, typename T2, typename... Ts>
+bool is_one_of(const RelAlgNode* node) {
+  return dynamic_cast<const T1*>(node) || is_one_of<T2, Ts...>(node);
+}
+
+// TODO: always simply use node->size()
+size_t getNodeColumnCount(const RelAlgNode* node) {
+  // Nodes that don't depend on input.
+  if (is_one_of<RelScan,
+                RelProject,
+                RelAggregate,
+                RelCompound,
+                RelTableFunction,
+                RelLogicalUnion,
+                RelLogicalValues>(node)) {
+    return node->size();
+  }
+
+  // Nodes that preserve size.
+  if (is_one_of<RelFilter, RelSort>(node)) {
+    CHECK_EQ(size_t(1), node->inputCount());
+    return getNodeColumnCount(node->getInput(0));
+  }
+
+  // Join concatenates the outputs from the inputs.
+  if (is_one_of<RelJoin>(node)) {
+    CHECK_EQ(size_t(2), node->inputCount());
+    return getNodeColumnCount(node->getInput(0)) + getNodeColumnCount(node->getInput(1));
+  }
+
+  LOG(FATAL) << "Unhandled ra_node type: " << ::toString(node);
+  return 0;
+}
+
+hdk::ir::ExprPtrVector genColumnRefs(const RelAlgNode* node, size_t count) {
+  hdk::ir::ExprPtrVector res;
+  res.reserve(count);
+  for (size_t i = 0; i < count; ++i) {
+    // TODO: add types
+    res.emplace_back(hdk::ir::makeExpr<hdk::ir::ColumnRef>(SQLTypeInfo(), node, i));
+  }
+  return res;
+}
+
+hdk::ir::ExprPtrVector getNodeColumnRefs(const RelAlgNode* node) {
+  // Nodes that don't depend on input.
+  if (is_one_of<RelScan,
+                RelProject,
+                RelAggregate,
+                RelCompound,
+                RelTableFunction,
+                RelLogicalUnion,
+                RelLogicalValues,
+                RelFilter,
+                RelSort>(node)) {
+    return genColumnRefs(node, getNodeColumnCount(node));
+  }
+
+  if (is_one_of<RelJoin>(node)) {
+    CHECK_EQ(size_t(2), node->inputCount());
+    auto lhs_out =
+        genColumnRefs(node->getInput(0), getNodeColumnCount(node->getInput(0)));
+    const auto rhs_out =
+        genColumnRefs(node->getInput(1), getNodeColumnCount(node->getInput(1)));
+    lhs_out.insert(lhs_out.end(), rhs_out.begin(), rhs_out.end());
+    return lhs_out;
+  }
+
+  LOG(FATAL) << "Unhandled ra_node type: " << ::toString(node);
   return {};
 }
 
@@ -1076,6 +1183,75 @@ std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr,
                           " not supported");
 }
 
+std::unique_ptr<const RexScalar> disambiguate_rex(const RexScalar*, const RANodeOutput&);
+
+hdk::ir::ExprPtr parse_input_expr(const rapidjson::Value& expr,
+                                  const RANodeOutput& ra_output) {
+  const auto& input = field(expr, "input");
+  auto& input_rex = ra_output[json_i64(input)];
+  auto source = input_rex.getSourceNode();
+  auto col_idx = input_rex.getIndex();
+
+  return hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+      getColumnType(source, col_idx), source, col_idx);
+}
+
+hdk::ir::ExprPtr parse_literal_expr(const rapidjson::Value& expr) {
+  auto rex = parse_literal(expr);
+  return RelAlgTranslator::translateLiteral(rex.get());
+}
+
+hdk::ir::ExprPtr parse_case_expr(const rapidjson::Value& expr,
+                                 int db_id,
+                                 SchemaProviderPtr schema_provider,
+                                 RelAlgDagBuilder& root_dag_builder,
+                                 const RANodeOutput& ra_output) {
+  auto rex = parse_case(expr, db_id, schema_provider, root_dag_builder);
+  auto dis_rex = disambiguate_rex(rex.get(), ra_output);
+  RelAlgTranslator translator(root_dag_builder.config(), root_dag_builder.now(), false);
+  return translator.translateScalarRex(dis_rex.get());
+}
+
+hdk::ir::ExprPtr parse_operator_expr(const rapidjson::Value& expr,
+                                     int db_id,
+                                     SchemaProviderPtr schema_provider,
+                                     RelAlgDagBuilder& root_dag_builder,
+                                     const RANodeOutput& ra_output) {
+  auto rex = parse_operator(expr, db_id, schema_provider, root_dag_builder);
+  auto dis_rex = disambiguate_rex(rex.get(), ra_output);
+  RelAlgTranslator translator(root_dag_builder.config(), root_dag_builder.now(), false);
+  return translator.translateScalarRex(dis_rex.get());
+}
+
+hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
+                            int db_id,
+                            SchemaProviderPtr schema_provider,
+                            RelAlgDagBuilder& root_dag_builder,
+                            const RANodeOutput& ra_output) {
+  CHECK(expr.IsObject());
+  if (expr.IsObject() && expr.HasMember("input")) {
+    return parse_input_expr(expr, ra_output);
+  }
+  if (expr.IsObject() && expr.HasMember("literal")) {
+    return parse_literal_expr(expr);
+  }
+  if (expr.IsObject() && expr.HasMember("op")) {
+    const auto op_str = json_str(field(expr, "op"));
+    if (op_str == std::string("CASE")) {
+      return parse_case_expr(expr, db_id, schema_provider, root_dag_builder, ra_output);
+    }
+    if (op_str == std::string("$SCALAR_QUERY")) {
+      throw QueryNotSupported("Expression node " + json_node_to_string(expr) +
+                              " not supported");
+      // return std::unique_ptr<const RexScalar>(
+      //    parse_subquery(expr, db_id, schema_provider, root_dag_builder));
+    }
+    return parse_operator_expr(expr, db_id, schema_provider, root_dag_builder, ra_output);
+  }
+  throw QueryNotSupported("Expression node " + json_node_to_string(expr) +
+                          " not supported");
+}
+
 JoinType to_join_type(const std::string& join_type_name) {
   if (join_type_name == "inner") {
     return JoinType::INNER;
@@ -1091,8 +1267,6 @@ JoinType to_join_type(const std::string& join_type_name) {
   }
   throw QueryNotSupported("Join type (" + join_type_name + ") not supported");
 }
-
-std::unique_ptr<const RexScalar> disambiguate_rex(const RexScalar*, const RANodeOutput&);
 
 std::unique_ptr<const RexOperator> disambiguate_operator(
     const RexOperator* rex_operator,
@@ -1179,6 +1353,7 @@ std::unique_ptr<const RexScalar> disambiguate_rex(const RexScalar* rex_scalar,
 void bind_project_to_input(RelProject* project_node, const RANodeOutput& input) noexcept {
   CHECK_EQ(size_t(1), project_node->inputCount());
   std::vector<std::unique_ptr<const RexScalar>> disambiguated_exprs;
+  hdk::ir::ExprPtrVector exprs = project_node->getExprs();
   for (size_t i = 0; i < project_node->size(); ++i) {
     const auto projected_expr = project_node->getProjectAt(i);
     if (dynamic_cast<const RexSubQuery*>(projected_expr)) {
@@ -1187,7 +1362,7 @@ void bind_project_to_input(RelProject* project_node, const RANodeOutput& input) 
       disambiguated_exprs.emplace_back(disambiguate_rex(projected_expr, input));
     }
   }
-  project_node->setExpressions(disambiguated_exprs);
+  project_node->setExpressions(std::move(disambiguated_exprs), std::move(exprs));
 }
 
 void bind_table_func_to_input(RelTableFunction* table_func_node,
@@ -1636,6 +1811,10 @@ bool is_window_function_operator(const RexScalar* rex) {
   return false;
 }
 
+bool is_window_function_expr(const hdk::ir::Expr* expr) {
+  return dynamic_cast<const hdk::ir::WindowFunction*>(expr) != nullptr;
+}
+
 }  // namespace
 
 void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
@@ -1886,6 +2065,57 @@ class RexWindowFuncReplacementVisitor : public RexDeepCopyVisitor {
   mutable std::unique_ptr<const RexScalar> replacement_rex_;
 };
 
+class ReplacementExprVisitor : public DeepCopyVisitor {
+ public:
+  ReplacementExprVisitor() {}
+
+  ReplacementExprVisitor(
+      std::unordered_map<const hdk::ir::Expr*, hdk::ir::ExprPtr> replacements)
+      : replacements_(std::move(replacements)) {}
+
+  void addReplacement(const hdk::ir::Expr* from, hdk::ir::ExprPtr to) {
+    replacements_[from] = to;
+  }
+
+  hdk::ir::ExprPtr visit(const hdk::ir::Expr* expr) const {
+    auto it = replacements_.find(expr);
+    if (it != replacements_.end()) {
+      return it->second;
+    }
+    return DeepCopyVisitor::visit(expr);
+  }
+
+ private:
+  std::unordered_map<const hdk::ir::Expr*, hdk::ir::ExprPtr> replacements_;
+};
+
+class InputBackpropagationVisitor : public DeepCopyVisitor {
+ public:
+  InputBackpropagationVisitor() {}
+
+  void addReplacement(const RexInput* from, const RexInput* to) {
+    replacements_[std::make_pair(from->getSourceNode(), from->getIndex())] =
+        std::make_pair(to->getSourceNode(), to->getIndex());
+  }
+
+  hdk::ir::ExprPtr visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
+    auto it = replacements_.find(std::make_pair(col_ref->getNode(), col_ref->getIndex()));
+    if (it != replacements_.end()) {
+      return hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+          col_ref->get_type_info(), it->second.first, it->second.second);
+    }
+    return col_ref->deep_copy();
+  }
+
+ protected:
+  using InputReplacements =
+      std::unordered_map<std::pair<const RelAlgNode*, unsigned>,
+                         std::pair<const RelAlgNode*, unsigned>,
+                         boost::hash<std::pair<const RelAlgNode*, unsigned>>>;
+
+  InputReplacements replacements_;
+};
+
 /**
  * Propagate an input backwards in the RA tree. With the exception of joins, all inputs
  * must be carried through the RA tree. This visitor takes as a parameter a source
@@ -1897,19 +2127,30 @@ class RexWindowFuncReplacementVisitor : public RexDeepCopyVisitor {
  */
 class RexInputBackpropagationVisitor : public RexDeepCopyVisitor {
  public:
-  RexInputBackpropagationVisitor(RelProject* node) : node_(node) { CHECK(node_); }
+  RexInputBackpropagationVisitor(RelProject* node, InputBackpropagationVisitor& visitor)
+      : node_(node), visitor_(visitor) {
+    CHECK(node_);
+  }
 
  protected:
   RetType visitInput(const RexInput* rex_input) const final {
     if (rex_input->getSourceNode() != node_) {
       const auto cur_index = rex_input->getIndex();
       auto cur_source_node = rex_input->getSourceNode();
-      std::string field_name = "";
-      if (auto cur_project_node = dynamic_cast<const RelProject*>(cur_source_node)) {
-        field_name = cur_project_node->getFieldName(cur_index);
+      auto it = replacements_.find(std::make_pair(cur_source_node, cur_index));
+      if (it != replacements_.end()) {
+        return it->second->deepCopy();
+      } else {
+        std::string field_name = "";
+        if (auto cur_project_node = dynamic_cast<const RelProject*>(cur_source_node)) {
+          field_name = cur_project_node->getFieldName(cur_index);
+        }
+        node_->appendInput(field_name, rex_input->deepCopy());
+        auto res = std::make_unique<RexInput>(node_, node_->size() - 1);
+        visitor_.addReplacement(rex_input, res.get());
+        replacements_[std::make_pair(cur_source_node, cur_index)] = res.get();
+        return res;
       }
-      node_->appendInput(field_name, rex_input->deepCopy());
-      return std::make_unique<RexInput>(node_, node_->size() - 1);
     } else {
       return rex_input->deepCopy();
     }
@@ -1917,6 +2158,11 @@ class RexInputBackpropagationVisitor : public RexDeepCopyVisitor {
 
  private:
   mutable RelProject* node_;
+  InputBackpropagationVisitor& visitor_;
+  mutable std::unordered_map<std::pair<const RelAlgNode*, unsigned>,
+                             const RexInput*,
+                             boost::hash<std::pair<const RelAlgNode*, unsigned>>>
+      replacements_;
 };
 
 void propagate_hints_to_new_project(
@@ -1966,6 +2212,7 @@ void separate_window_function_expressions(
 
     // map scalar expression index in the project node to window function ptr
     std::unordered_map<size_t, const RexScalar*> embedded_window_function_expressions;
+    std::unordered_map<size_t, hdk::ir::ExprPtr> embedded_window_function_exprs;
 
     // Iterate the target exprs of the project node and check for window function
     // expressions. If an embedded expression exists, save it in the
@@ -1973,64 +2220,103 @@ void separate_window_function_expressions(
     // function expression and a parent expression in a subsequent project node
     for (size_t i = 0; i < window_func_project_node->size(); i++) {
       const auto scalar_rex = window_func_project_node->getProjectAt(i);
-      if (is_window_function_operator(scalar_rex)) {
+      auto expr = window_func_project_node->getExpr(i);
+      CHECK_EQ(is_window_function_expr(expr.get()),
+               is_window_function_operator(scalar_rex));
+      if (is_window_function_expr(expr.get())) {
         // top level window function exprs are fine
         continue;
       }
 
-      if (const auto window_func_rex = visitor.visit(scalar_rex)) {
-        const auto ret = embedded_window_function_expressions.insert(
+      auto window_func_rex = visitor.visit(scalar_rex);
+      std::list<const hdk::ir::Expr*> window_function_exprs;
+      expr->find_expr(is_window_function_expr, window_function_exprs);
+      CHECK_EQ(!window_func_rex, window_function_exprs.empty());
+      if (!window_function_exprs.empty()) {
+        const auto ret1 = embedded_window_function_expressions.insert(
             std::make_pair(i, window_func_rex));
+        CHECK(ret1.second);
+        const auto ret = embedded_window_function_exprs.insert(std::make_pair(
+            i,
+            const_cast<hdk::ir::Expr*>(window_function_exprs.front())->get_shared_ptr()));
         CHECK(ret.second);
       }
     }
 
     if (!embedded_window_function_expressions.empty()) {
       std::vector<std::unique_ptr<const RexScalar>> new_scalar_exprs;
+      hdk::ir::ExprPtrVector new_exprs;
 
       auto window_func_scalar_exprs =
           window_func_project_node->getExpressionsAndRelease();
+      auto window_func_exprs = window_func_project_node->getExprs();
       for (size_t rex_idx = 0; rex_idx < window_func_scalar_exprs.size(); ++rex_idx) {
-        const auto embedded_window_func_expr_pair =
+        const auto embedded_window_func_rex_pair =
             embedded_window_function_expressions.find(rex_idx);
-        if (embedded_window_func_expr_pair ==
-            embedded_window_function_expressions.end()) {
+        const auto embedded_window_func_expr_pair =
+            embedded_window_function_exprs.find(rex_idx);
+        CHECK_EQ(
+            embedded_window_func_expr_pair == embedded_window_function_exprs.end(),
+            embedded_window_func_rex_pair == embedded_window_function_expressions.end());
+        if (embedded_window_func_expr_pair == embedded_window_function_exprs.end()) {
           new_scalar_exprs.emplace_back(
               std::make_unique<const RexInput>(window_func_project_node.get(), rex_idx));
+          new_exprs.emplace_back(hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+              window_func_project_node->getExpr(rex_idx)->get_type_info(),
+              window_func_project_node.get(),
+              rex_idx));
         } else {
-          const auto window_func_rex_idx = embedded_window_func_expr_pair->first;
+          const auto window_func_rex_idx = embedded_window_func_rex_pair->first;
           CHECK_LT(window_func_rex_idx, window_func_scalar_exprs.size());
 
-          const auto& window_func_rex = embedded_window_func_expr_pair->second;
+          const auto& window_func_rex = embedded_window_func_rex_pair->second;
+          const auto& window_func_expr = embedded_window_func_expr_pair->second;
 
           RexDeepCopyVisitor copier;
           auto window_func_rex_copy = copier.visit(window_func_rex);
+          // TODO: remove copy?
+          auto window_func_expr_copy = window_func_expr->deep_copy();
 
-          auto window_func_parent_expr =
+          auto window_func_parent_scalar_expr =
               window_func_scalar_exprs[window_func_rex_idx].get();
+          auto window_func_parent_expr = window_func_exprs[window_func_rex_idx].get();
 
           // Replace window func rex with an input rex
           auto window_func_result_input = std::make_unique<const RexInput>(
               window_func_project_node.get(), window_func_rex_idx);
           RexWindowFuncReplacementVisitor replacer(std::move(window_func_result_input));
-          auto new_parent_rex = replacer.visit(window_func_parent_expr);
+          auto new_parent_rex = replacer.visit(window_func_parent_scalar_expr);
+          auto window_func_result_input_expr =
+              hdk::ir::makeExpr<hdk::ir::ColumnRef>(window_func_expr->get_type_info(),
+                                                    window_func_project_node.get(),
+                                                    window_func_rex_idx);
+          std::unordered_map<const hdk::ir::Expr*, hdk::ir::ExprPtr> replacements;
+          replacements[window_func_expr.get()] = window_func_result_input_expr;
+          ReplacementExprVisitor visitor(std::move(replacements));
+          auto new_parent_expr = visitor.visit(window_func_parent_expr);
 
           // Put the parent expr in the new scalar exprs
           new_scalar_exprs.emplace_back(std::move(new_parent_rex));
+          new_exprs.emplace_back(std::move(new_parent_expr));
 
           // Put the window func expr in cur scalar exprs
           window_func_scalar_exprs[window_func_rex_idx] = std::move(window_func_rex_copy);
+          window_func_exprs[window_func_rex_idx] = std::move(window_func_expr_copy);
         }
       }
 
       CHECK_EQ(window_func_scalar_exprs.size(), new_scalar_exprs.size());
-      window_func_project_node->setExpressions(window_func_scalar_exprs);
+      CHECK_EQ(window_func_exprs.size(), new_exprs.size());
+      window_func_project_node->setExpressions(std::move(window_func_scalar_exprs),
+                                               std::move(new_exprs));
 
       // Ensure any inputs from the node containing the expression (the "new" node)
       // exist on the window function project node, e.g. if we had a binary operation
       // involving an aggregate value or column not included in the top level
       // projection list.
-      RexInputBackpropagationVisitor input_visitor(window_func_project_node.get());
+      InputBackpropagationVisitor visitor;
+      RexInputBackpropagationVisitor input_visitor(window_func_project_node.get(),
+                                                   visitor);
       for (size_t i = 0; i < new_scalar_exprs.size(); i++) {
         if (dynamic_cast<const RexInput*>(new_scalar_exprs[i].get())) {
           // ignore top level inputs, these were copied directly from the previous
@@ -2038,12 +2324,14 @@ void separate_window_function_expressions(
           continue;
         }
         new_scalar_exprs[i] = input_visitor.visit(new_scalar_exprs[i].get());
+        new_exprs[i] = visitor.visit(new_exprs[i].get());
       }
 
       // Build the new project node and insert it into the list after the project node
       // containing the window function
       auto new_project =
           std::make_shared<RelProject>(std::move(new_scalar_exprs),
+                                       std::move(new_exprs),
                                        window_func_project_node->getFields(),
                                        window_func_project_node);
       propagate_hints_to_new_project(window_func_project_node, new_project, query_hints);
@@ -2158,6 +2446,7 @@ void add_window_function_pre_project(
               [](const auto& a, const auto& b) { return a.getIndex() < b.getIndex(); });
 
     std::vector<std::unique_ptr<const RexScalar>> scalar_exprs;
+    hdk::ir::ExprPtrVector exprs;
     std::vector<std::string> fields;
     std::unordered_map<unsigned, unsigned> old_index_to_new_index;
     for (auto& input : sorted_inputs) {
@@ -2166,11 +2455,17 @@ void add_window_function_pre_project(
                 .insert(std::make_pair(input.getIndex(), scalar_exprs.size()))
                 .second);
       scalar_exprs.emplace_back(input.deepCopy());
+      auto meta = prev_node->getOutputMetainfo();
+      CHECK(!meta.empty());
+      exprs.emplace_back(
+          hdk::ir::makeExpr<hdk::ir::ColumnRef>(meta[input.getIndex()].get_type_info(),
+                                                input.getSourceNode(),
+                                                input.getIndex()));
       fields.emplace_back("");
     }
 
-    auto new_project =
-        std::make_shared<RelProject>(std::move(scalar_exprs), fields, prev_node);
+    auto new_project = std::make_shared<RelProject>(
+        std::move(scalar_exprs), std::move(exprs), fields, prev_node);
     propagate_hints_to_new_project(window_func_project_node, new_project, query_hints);
     node_list.insert(node_itr, new_project);
     window_func_project_node->replaceInput(
@@ -2294,21 +2589,31 @@ class RelAlgDispatcher {
     CHECK_EQ(size_t(1), inputs.size());
     const auto& exprs_json = field(proj_ra, "exprs");
     CHECK(exprs_json.IsArray());
-    std::vector<std::unique_ptr<const RexScalar>> exprs;
+    std::vector<std::unique_ptr<const RexScalar>> scalar_exprs;
+    hdk::ir::ExprPtrVector exprs;
     for (auto exprs_json_it = exprs_json.Begin(); exprs_json_it != exprs_json.End();
          ++exprs_json_it) {
-      exprs.emplace_back(
+      scalar_exprs.emplace_back(
           parse_scalar_expr(*exprs_json_it, db_id_, schema_provider_, root_dag_builder));
+      exprs.emplace_back(parse_expr(*exprs_json_it,
+                                    db_id_,
+                                    schema_provider_,
+                                    root_dag_builder,
+                                    get_node_output(inputs[0].get())));
     }
     const auto& fields = field(proj_ra, "fields");
     if (proj_ra.HasMember("hints")) {
-      auto project_node = std::make_shared<RelProject>(
-          std::move(exprs), strings_from_json_array(fields), inputs.front());
+      auto project_node = std::make_shared<RelProject>(std::move(scalar_exprs),
+                                                       std::move(exprs),
+                                                       strings_from_json_array(fields),
+                                                       inputs.front());
       getRelAlgHints(proj_ra, project_node);
       return project_node;
     }
-    return std::make_shared<RelProject>(
-        std::move(exprs), strings_from_json_array(fields), inputs.front());
+    return std::make_shared<RelProject>(std::move(scalar_exprs),
+                                        std::move(exprs),
+                                        strings_from_json_array(fields),
+                                        inputs.front());
   }
 
   std::shared_ptr<RelFilter> dispatchFilter(const rapidjson::Value& filter_ra,
@@ -2728,7 +3033,7 @@ RelAlgDagBuilder::RelAlgDagBuilder(RelAlgDagBuilder& root_dag_builder,
                                    const rapidjson::Value& query_ast,
                                    int db_id,
                                    SchemaProviderPtr schema_provider)
-    : RelAlgDag(root_dag_builder.config_)
+    : RelAlgDag(root_dag_builder.config_, root_dag_builder.now())
     , db_id_(db_id)
     , schema_provider_(schema_provider) {
   build(query_ast, root_dag_builder);
@@ -2890,4 +3195,63 @@ size_t RelCompound::toHash() const {
     boost::hash_combine(*hash_, ::toString(fields_));
   }
   return *hash_;
+}
+
+SQLTypeInfo getColumnType(const RelAlgNode* node, size_t col_idx) {
+  // By default use metainfo.
+  const auto& metainfo = node->getOutputMetainfo();
+  if (metainfo.size() > col_idx) {
+    return metainfo[col_idx].get_type_info();
+  }
+
+  // For scans we can use embedded column info.
+  const auto scan = dynamic_cast<const RelScan*>(node);
+  if (scan) {
+    return scan->getColumnTypeBySpi(col_idx + 1);
+  }
+
+  // For filter and sort we can propagate column type of their sources.
+  if (is_one_of<RelFilter, RelSort>(node)) {
+    return getColumnType(node->getInput(0), col_idx);
+  }
+
+  // For aggregates we can we can propagate type from group key
+  // or extract type from RexAgg
+  const auto agg = dynamic_cast<const RelAggregate*>(node);
+  if (agg) {
+    if (col_idx < agg->getGroupByCount()) {
+      return getColumnType(agg->getInput(0), col_idx);
+    } else {
+      return agg->getAggExprs()[col_idx - agg->getGroupByCount()]->getType();
+    }
+  }
+
+  // For logical values we can use its tuple type.
+  const auto values = dynamic_cast<const RelLogicalValues*>(node);
+  if (values) {
+    CHECK_GT(values->size(), col_idx);
+    return values->getTupleType()[col_idx].get_type_info();
+  }
+
+  // For projections type can be extracted from Exprs.
+  const auto proj = dynamic_cast<const RelProject*>(node);
+  if (proj) {
+    CHECK_GT(proj->size(), col_idx);
+    return proj->getExprs()[col_idx]->get_type_info();
+  }
+
+  // For joins we can propagate type from one of its sources.
+  const auto join = dynamic_cast<const RelJoin*>(node);
+  if (join) {
+    CHECK_GT(join->size(), col_idx);
+    if (col_idx < join->getInput(0)->size()) {
+      return getColumnType(join->getInput(0), col_idx);
+    } else {
+      return getColumnType(join->getInput(1), col_idx - join->getInput(0)->size());
+    }
+  }
+
+  CHECK(false) << "Missing output metainfo for node " + node->toString() +
+                      " col_idx=" + std::to_string(col_idx);
+  return {};
 }

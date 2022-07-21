@@ -170,6 +170,29 @@ std::pair<Datum, bool> datum_from_scalar_tv(const ScalarTargetValue* scalar_tv,
 
 }  // namespace
 
+RelAlgTranslator::RelAlgTranslator(
+    const Executor* executor,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+    const std::vector<JoinType>& join_types,
+    const time_t now,
+    const bool just_explain)
+    : executor_(executor)
+    , config_(executor->getConfig())
+    , input_to_nest_level_(input_to_nest_level)
+    , join_types_(join_types)
+    , now_(now)
+    , just_explain_(just_explain)
+    , for_dag_builder_(false) {}
+
+RelAlgTranslator::RelAlgTranslator(const Config& config,
+                                   const time_t now,
+                                   const bool just_explain)
+    : executor_(nullptr)
+    , config_(config)
+    , now_(now)
+    , just_explain_(just_explain)
+    , for_dag_builder_(true) {}
+
 hdk::ir::ExprPtr RelAlgTranslator::translateScalarRex(const RexScalar* rex) const {
   const auto rex_input = dynamic_cast<const RexInput*>(rex);
   if (rex_input) {
@@ -382,9 +405,9 @@ hdk::ir::ExprPtr RelAlgTranslator::translateScalarSubquery(
 hdk::ir::ExprPtr RelAlgTranslator::translateInput(const RexInput* rex_input) const {
   const auto source = rex_input->getSourceNode();
   const auto it_rte_idx = input_to_nest_level_.find(source);
-  CHECK(it_rte_idx != input_to_nest_level_.end())
+  CHECK(for_dag_builder_ || it_rte_idx != input_to_nest_level_.end())
       << "Not found in input_to_nest_level_, source=" << source->toString();
-  const int rte_idx = it_rte_idx->second;
+  const int rte_idx = it_rte_idx == input_to_nest_level_.end() ? 0 : it_rte_idx->second;
   const auto scan_source = dynamic_cast<const RelScan*>(source);
   const auto& in_metainfo = source->getOutputMetainfo();
   if (scan_source) {
@@ -405,13 +428,21 @@ hdk::ir::ExprPtr RelAlgTranslator::translateInput(const RexInput* rex_input) con
     if (rte_idx > 0 && join_types_[rte_idx - 1] == JoinType::LEFT) {
       col_ti.set_notnull(false);
     }
+    if (for_dag_builder_) {
+      return hdk::ir::makeExpr<hdk::ir::ColumnRef>(col_ti, source, rex_input->getIndex());
+    }
     return std::make_shared<hdk::ir::ColumnVar>(col_info, rte_idx);
   }
-  CHECK(!in_metainfo.empty()) << "for " << source->toString();
   CHECK_GE(rte_idx, 0);
   const size_t col_id = rex_input->getIndex();
-  CHECK_LT(col_id, in_metainfo.size());
-  auto col_ti = in_metainfo[col_id].get_type_info();
+  SQLTypeInfo col_ti;
+  if (for_dag_builder_) {
+    col_ti = getColumnType(source, col_id);
+  } else {
+    CHECK(!in_metainfo.empty()) << "for " << source->toString();
+    CHECK_LT(col_id, in_metainfo.size());
+    col_ti = in_metainfo[col_id].get_type_info();
+  }
 
   if (join_types_.size() > 0) {
     CHECK_LE(static_cast<size_t>(rte_idx), join_types_.size());
@@ -420,6 +451,9 @@ hdk::ir::ExprPtr RelAlgTranslator::translateInput(const RexInput* rex_input) con
     }
   }
 
+  if (for_dag_builder_) {
+    return hdk::ir::makeExpr<hdk::ir::ColumnRef>(col_ti, source, rex_input->getIndex());
+  }
   return std::make_shared<hdk::ir::ColumnVar>(col_ti, -source->getId(), col_id, rte_idx);
 }
 
@@ -582,8 +616,7 @@ hdk::ir::ExprPtr RelAlgTranslator::translateInOper(
         expr = nullptr;
       }
     } else {
-      expr =
-          get_in_values_expr(lhs, *row_set, executor_->getConfig().exec.watchdog.enable);
+      expr = get_in_values_expr(lhs, *row_set, config_.exec.watchdog.enable);
     }
     if (expr) {
       return expr;
@@ -595,7 +628,7 @@ hdk::ir::ExprPtr RelAlgTranslator::translateInOper(
     if (row.empty()) {
       break;
     }
-    if (executor_->getConfig().exec.watchdog.enable && value_exprs.size() >= 10000) {
+    if (config_.exec.watchdog.enable && value_exprs.size() >= 10000) {
       throw std::runtime_error(
           "Unable to handle 'expr IN (subquery)', subquery returned 10000+ rows.");
     }
@@ -728,7 +761,7 @@ hdk::ir::ExprPtr RelAlgTranslator::getInIntegerSetExpr(hdk::ir::ExprPtr arg,
                                             sd,
                                             dd,
                                             needle_null_val,
-                                            executor_->getConfig().exec.watchdog.enable);
+                                            config_.exec.watchdog.enable);
           },
           std::ref(expr_set[i]),
           start_entry,
@@ -743,7 +776,7 @@ hdk::ir::ExprPtr RelAlgTranslator::getInIntegerSetExpr(hdk::ir::ExprPtr arg,
                                  total_in_vals_count,
                                  &val_set,
                                  {start, end},
-                                 executor_->getConfig().exec.watchdog.enable);
+                                 config_.exec.watchdog.enable);
           },
           std::ref(expr_set[i]),
           start_entry,
@@ -1373,7 +1406,7 @@ hdk::ir::ExprPtr RelAlgTranslator::translateFunction(
   if (rex_function->getName() == "CURRENT_USER"sv) {
     return translateCurrentUser(rex_function);
   }
-  if (executor_->getConfig().exec.enable_experimental_string_functions &&
+  if (config_.exec.enable_experimental_string_functions &&
       rex_function->getName() == "LOWER"sv) {
     return translateLower(rex_function);
   }

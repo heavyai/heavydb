@@ -635,6 +635,11 @@ SQLTypeInfo const& get_str_dict_cast_type(const SQLTypeInfo& lhs_type_info,
   if (rhs_type_info.get_comp_param() == TRANSIENT_DICT_ID) {
     return lhs_type_info;
   }
+  // When translator is used from DAG builder, executor is not available.
+  // In this case, simply choose LHS and revise the decision later.
+  if (!executor) {
+    return lhs_type_info;
+  }
   // If here then neither lhs or rhs type was transient, we should see which
   // type has the largest dictionary and make that the destination type
   const auto lhs_sdp = executor->getStringDictionaryProxy(lhs_comp_param, true);
@@ -705,7 +710,9 @@ hdk::ir::ExprPtr normalizeOperExpr(const SQLOps optype,
     }
   }
 
-  if (IS_COMPARISON(optype)) {
+  // No executor means we are building DAG. Skip normalization at this
+  // step and perform it later on execution unit build.
+  if (IS_COMPARISON(optype) && executor) {
     if (new_left_type.get_compression() == kENCODING_DICT &&
         new_right_type.get_compression() == kENCODING_DICT) {
       if (new_left_type.get_comp_param() != new_right_type.get_comp_param()) {

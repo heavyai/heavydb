@@ -947,9 +947,11 @@ class RelProject : public RelAlgNode {
 
   // Takes memory ownership of the expressions.
   RelProject(std::vector<std::unique_ptr<const RexScalar>> scalar_exprs,
+             hdk::ir::ExprPtrVector exprs,
              const std::vector<std::string>& fields,
              std::shared_ptr<const RelAlgNode> input)
       : scalar_exprs_(std::move(scalar_exprs))
+      , exprs_(std::move(exprs))
       , fields_(fields)
       , hint_applied_(false)
       , hints_(std::make_unique<Hints>()) {
@@ -958,8 +960,10 @@ class RelProject : public RelAlgNode {
 
   RelProject(RelProject const&);
 
-  void setExpressions(std::vector<std::unique_ptr<const RexScalar>>& exprs) const {
-    scalar_exprs_ = std::move(exprs);
+  void setExpressions(std::vector<std::unique_ptr<const RexScalar>>&& scalar_exprs,
+                      hdk::ir::ExprPtrVector&& exprs) const {
+    scalar_exprs_ = std::move(scalar_exprs);
+    exprs_ = std::move(exprs);
   }
 
   // True iff all the projected expressions are inputs. If true,
@@ -979,6 +983,10 @@ class RelProject : public RelAlgNode {
   bool isRenaming() const;
 
   size_t size() const override { return scalar_exprs_.size(); }
+
+  hdk::ir::ExprPtr getExpr(size_t idx) const { return exprs_[idx]; }
+
+  const hdk::ir::ExprPtrVector& getExprs() const { return exprs_; }
 
   const RexScalar* getProjectAt(const size_t idx) const {
     CHECK(idx < scalar_exprs_.size());
@@ -1060,23 +1068,8 @@ class RelProject : public RelAlgNode {
   Hints* getDeliveredHints() { return hints_.get(); }
 
  private:
-  template <typename EXPR_VISITOR_FUNCTOR>
-  void visitScalarExprs(EXPR_VISITOR_FUNCTOR visitor_functor) const {
-    for (int i = 0; i < static_cast<int>(scalar_exprs_.size()); i++) {
-      visitor_functor(i);
-    }
-  }
-
-  void injectOffsetInFragmentExpr() const {
-    RexFunctionOperator::ConstRexScalarPtrVector transient_vector;
-    scalar_exprs_.emplace_back(
-        std::make_unique<RexFunctionOperator const>(std::string("OFFSET_IN_FRAGMENT"),
-                                                    transient_vector,
-                                                    SQLTypeInfo(kBIGINT, false)));
-    fields_.emplace_back("EXPR$DELETE_OFFSET_IN_FRAGMENT");
-  }
-
   mutable std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_;
+  mutable hdk::ir::ExprPtrVector exprs_;
   mutable std::vector<std::string> fields_;
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;
@@ -1818,7 +1811,7 @@ class RelLogicalValues : public RelAlgNode {
 
   RelLogicalValues(RelLogicalValues const&);
 
-  const std::vector<TargetMetaInfo> getTupleType() const { return tuple_type_; }
+  const std::vector<TargetMetaInfo> &getTupleType() const { return tuple_type_; }
 
   std::string toString() const override {
     std::string ret = ::typeName(this) + "(";
@@ -1902,7 +1895,8 @@ class QueryNotSupported : public std::runtime_error {
 
 class RelAlgDag {
  public:
-  RelAlgDag(ConfigPtr config) : config_(config) {}
+  RelAlgDag(ConfigPtr config) : config_(config) { time(&now_); }
+  RelAlgDag(ConfigPtr config, time_t now) : config_(config), now_(now) {}
   virtual ~RelAlgDag() = default;
 
   void eachNode(std::function<void(RelAlgNode const*)> const& callback) const;
@@ -1948,8 +1942,11 @@ class RelAlgDag {
    */
   void resetQueryExecutionState();
 
+  time_t now() const { return now_; }
+
  protected:
   ConfigPtr config_;
+  time_t now_;
   // Root node of the query.
   RelAlgNodePtr root_;
   // All nodes including the root one.
@@ -2014,3 +2011,5 @@ std::string tree_string(const RelAlgNode*, const size_t depth = 0);
 inline InputColDescriptor column_var_to_descriptor(const hdk::ir::ColumnVar* var) {
   return InputColDescriptor(var->get_column_info(), var->get_rte_idx());
 }
+
+SQLTypeInfo getColumnType(const RelAlgNode* node, size_t col_idx);

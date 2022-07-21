@@ -62,11 +62,13 @@ class TestRelAlgDagBuilder : public RelAlgDag {
                            const std::vector<int>& cols);
   RelAlgNodePtr addProject(RelAlgNodePtr input,
                            const std::vector<std::string>& fields,
-                           std::vector<std::unique_ptr<const RexScalar>> cols);
+                           std::vector<std::unique_ptr<const RexScalar>> scalar_exprs,
+                           hdk::ir::ExprPtrVector exprs);
 
   RelAlgNodePtr addProject(RelAlgNodePtr input, const std::vector<int>& cols);
   RelAlgNodePtr addProject(RelAlgNodePtr input,
-                           std::vector<std::unique_ptr<const RexScalar>> cols);
+                           std::vector<std::unique_ptr<const RexScalar>> scalar_exprs,
+                           hdk::ir::ExprPtrVector exprs);
 
   RelAlgNodePtr addAgg(RelAlgNodePtr input,
                        const std::vector<std::string>& fields,
