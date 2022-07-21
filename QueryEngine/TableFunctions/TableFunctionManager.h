@@ -241,6 +241,11 @@ struct TableFunctionManager {
     return proxy->getDictKey().dict_id;
   }
 
+  inline int8_t* getStringDictionaryProxy(int32_t db_id, int32_t dict_id) {
+    return reinterpret_cast<int8_t*>(
+        executor_->getStringDictionaryProxy({db_id, dict_id}, row_set_mem_owner_, true));
+  }
+
   inline std::string getString(int32_t db_id, int32_t dict_id, int32_t string_id) {
     const auto proxy =
         executor_->getStringDictionaryProxy({db_id, dict_id}, row_set_mem_owner_, true);
