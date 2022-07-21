@@ -102,7 +102,9 @@ RUN mkdir /translator && \
     rm SPIRV-LLVM-Translator-v12.0.0-linux-Release.zip \
     --
 
-RUN sed -i "1s/.*/\/translator/" /translator/lib/pkgconfig/LLVMSPIRVLib.pc
+RUN sed -i "1s/.*/\prefix=/translator/" /translator/lib/pkgconfig/LLVMSPIRVLib.pc
+
+ENV PKG_CONFIG_PATH=/translator/lib/pkgconfig/
 
 RUN apt-get upgrade -y
 RUN apt-get clean
