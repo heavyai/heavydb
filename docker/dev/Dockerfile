@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:20.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -8,21 +8,30 @@ RUN apt-get update && apt-get install -y \
     automake \
     build-essential \
     ccache \
-    cmake \
+    curl \
     gdb \
     git \
     libtbb-dev \
     make \
-    python \
-    python-dev \
     rsync \
     tar \
     vim \
     wget \
     --
 
+# cmake
+RUN apt-get install -y \
+    libssl-dev \
+    libcurl4-openssl-dev \
+    --
+RUN wget https://github.com/Kitware/CMake/releases/download/v3.23.2/cmake-3.23.2.tar.gz
+RUN tar xzvf cmake-3.23.2.tar.gz
+RUN cd cmake-3.23.2/ && ./bootstrap
+RUN cd cmake-3.23.2/ && make -j`nproc`
+RUN cd cmake-3.23.2/ && make install
+
 # LLVM
-RUN apt update && apt install -y llvm-12 llvm-12-dev clang-12
+RUN apt update && apt install -y llvm-12 llvm-12-dev clang-12 libclang-12-dev
 
 # Toolchains
 RUN apt install -y \
@@ -46,7 +55,6 @@ RUN apt install -y \
     libgtest-dev \
     libncurses-dev \
     libsnappy-dev \
-    libssl-dev \
     libtbb-dev \
     libunwind-dev \
     libz-dev \
@@ -61,6 +69,7 @@ RUN wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | 
 RUN apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 RUN apt update
 RUN apt install -y -V libarrow-dev libparquet-dev
+RUN apt install -y -V libarrow-dataset-dev libarrow-flight-dev
 
 
 # Intel GPU stack
@@ -77,6 +86,7 @@ RUN apt-get install -y \
     intel-opencl-icd \
     level-zero \
     level-zero-dev \
+    libfmt-dev \
     libigc-dev \
     libigdfcl-dev \
     libigfxcmrt-dev \
