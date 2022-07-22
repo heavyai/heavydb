@@ -567,6 +567,28 @@ class RangeOper : public Expr {
   ExprPtr right_operand_;
 };
 
+class ScalarSubquery : public Expr {
+ public:
+  ScalarSubquery(const SQLTypeInfo& ti, std::shared_ptr<const RelAlgNode> node)
+      : Expr(ti), node_(node) {}
+
+  ExprPtr deep_copy() const override {
+    return makeExpr<ScalarSubquery>(type_info, node_);
+  }
+
+  bool operator==(const Expr& rhs) const override {
+    const ScalarSubquery* rhsp = dynamic_cast<const ScalarSubquery*>(&rhs);
+    return rhsp && node_ == rhsp->node_;
+  }
+
+  std::string toString() const override;
+
+  const RelAlgNode* getNode() const { return node_.get(); }
+
+ private:
+  std::shared_ptr<const RelAlgNode> node_;
+};
+
 /*
  * @type InValues
  * @brief represents predicate expr IN (v1, v2, ...)

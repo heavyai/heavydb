@@ -320,6 +320,7 @@ class RexSubQuery : public RexScalar {
   unsigned getId() const;
 
   const RelAlgNode* getRelAlg() const { return ra_.get(); }
+  std::shared_ptr<const RelAlgNode> getRelAlgShared() const { return ra_; }
 
   std::string toString() const override;
 
@@ -1811,7 +1812,7 @@ class RelLogicalValues : public RelAlgNode {
 
   RelLogicalValues(RelLogicalValues const&);
 
-  const std::vector<TargetMetaInfo> &getTupleType() const { return tuple_type_; }
+  const std::vector<TargetMetaInfo>& getTupleType() const { return tuple_type_; }
 
   std::string toString() const override {
     std::string ret = ::typeName(this) + "(";

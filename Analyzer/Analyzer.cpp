@@ -683,6 +683,8 @@ hdk::ir::ExprPtr normalizeOperExpr(const SQLOps optype,
   const auto& left_type = left_expr->get_type_info();
   auto right_type = right_expr->get_type_info();
   if (qual != kONE) {
+    // subquery not supported yet.
+    CHECK(!std::dynamic_pointer_cast<hdk::ir::ScalarSubquery>(right_expr));
     if (right_type.get_type() != kARRAY) {
       throw std::runtime_error(
           "Existential or universal qualifiers can only be used in front of a subquery "

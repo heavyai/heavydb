@@ -373,6 +373,11 @@ hdk::ir::ExprPtr RelAlgTranslator::translateScalarSubquery(
   if (just_explain_) {
     throw std::runtime_error("EXPLAIN is not supported with sub-queries");
   }
+  if (for_dag_builder_) {
+    auto node = rex_subquery->getRelAlgShared();
+    auto ti = getColumnType(node.get(), 0);
+    return hdk::ir::makeExpr<hdk::ir::ScalarSubquery>(ti, node);
+  }
   CHECK(rex_subquery);
   auto result = rex_subquery->getExecutionResult();
   auto row_set = result->getRows();

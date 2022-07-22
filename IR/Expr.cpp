@@ -2058,6 +2058,10 @@ std::string RangeOper::toString() const {
          right_operand_->toString() + " " + rhs + " )";
 }
 
+std::string ScalarSubquery::toString() const {
+  return "(Subquery node: " + std::to_string(node_->getId()) + ")";
+}
+
 std::string InValues::toString() const {
   std::string str{"(IN "};
   str += arg->toString();
