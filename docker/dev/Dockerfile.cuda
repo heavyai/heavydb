@@ -60,7 +60,7 @@ RUN apt install -y \
     libz-dev \
     --
 
-RUN apt-get install -y 
+RUN apt-get install -y \
     maven \
     libfmt-dev \
     --
