@@ -548,6 +548,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.ArrayDouble;
       case ArrayBool:
         return ExtensionFunction.ExtArgumentType.ArrayBool;
+      case ArrayTextEncodingDict:
+        return ExtensionFunction.ExtArgumentType.ArrayTextEncodingDict;
       case ColumnInt8:
         return ExtensionFunction.ExtArgumentType.ColumnInt8;
       case ColumnInt16:
@@ -614,6 +616,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.ColumnArrayDouble;
       case ColumnArrayBool:
         return ExtensionFunction.ExtArgumentType.ColumnArrayBool;
+      case ColumnArrayTextEncodingDict:
+        return ExtensionFunction.ExtArgumentType.ColumnArrayTextEncodingDict;
       case ColumnListArrayInt8:
         return ExtensionFunction.ExtArgumentType.ColumnListArrayInt8;
       case ColumnListArrayInt16:
@@ -628,6 +632,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.ColumnListArrayDouble;
       case ColumnListArrayBool:
         return ExtensionFunction.ExtArgumentType.ColumnListArrayBool;
+      case ColumnListArrayTextEncodingDict:
+        return ExtensionFunction.ExtArgumentType.ColumnListArrayTextEncodingDict;
       default:
         HEAVYDBLOGGER.error("toExtArgumentType: unknown type " + type);
         return null;

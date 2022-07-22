@@ -244,7 +244,8 @@ enum EncodingType {
   kENCODING_GEOINT = 6,        // Encoding coordinates as intergers
   kENCODING_DATE_IN_DAYS = 7,  // Date encoding in days
   kENCODING_ARRAY = 8,         // Array encoding for columns of arrays
-  kENCODING_LAST = 9
+  kENCODING_ARRAY_DICT = 9,    // Array encoding for columns of text encoding dict arrays
+  kENCODING_LAST = 10
 };
 
 #if !(defined(__CUDACC__) || defined(NO_BOOST))
@@ -277,6 +278,9 @@ inline std::ostream& operator<<(std::ostream& os, EncodingType const type) {
       break;
     case kENCODING_ARRAY:
       os << "ARRAY";
+      break;
+    case kENCODING_ARRAY_DICT:
+      os << "ARRAY_DICT";
       break;
     case kENCODING_LAST:
       break;
@@ -588,14 +592,22 @@ class SQLTypeInfo {
   inline bool is_column() const { return type == kCOLUMN; }            // Column
   inline bool is_column_list() const { return type == kCOLUMN_LIST; }  // ColumnList
   inline bool is_column_array() const {
-    return type == kCOLUMN && get_compression() == kENCODING_ARRAY;
+    const auto c = get_compression();
+    return type == kCOLUMN && (c == kENCODING_ARRAY || c == kENCODING_ARRAY_DICT);
   }  // ColumnArray
   inline bool is_column_list_array() const {
-    return type == kCOLUMN_LIST && get_compression() == kENCODING_ARRAY;
+    const auto c = get_compression();
+    return type == kCOLUMN_LIST && (c == kENCODING_ARRAY || c == kENCODING_ARRAY_DICT);
   }  // ColumnList of ColumnArray
   inline bool is_bytes() const {
     return type == kTEXT && get_compression() == kENCODING_NONE;
-  }  // rbc Bytes
+  }
+  inline bool is_text_encoding_dict() const {
+    return type == kTEXT && get_compression() == kENCODING_DICT;
+  }
+  inline bool is_text_encoding_dict_array() const {
+    return type == kARRAY && subtype == kTEXT && get_compression() == kENCODING_DICT;
+  }
   inline bool is_buffer() const {
     return is_array() || is_column() || is_column_list() || is_bytes();
   }
@@ -639,7 +651,8 @@ class SQLTypeInfo {
     if ((is_column() || is_column_list()) &&
         (other.is_column() || other.is_column_list())) {
       return subtype == other.get_subtype() &&
-             (compression != kENCODING_ARRAY || compression == other.get_compression());
+             ((compression != kENCODING_ARRAY || compression != kENCODING_ARRAY_DICT) ||
+              compression == other.get_compression());
     }
     return subtype == other.get_subtype();
   }
@@ -949,6 +962,11 @@ class SQLTypeInfo {
       return SQLTypeInfo(
           kARRAY, dimension, scale, notnull, kENCODING_NONE, comp_param, subtype);
     }
+    if ((type == kCOLUMN || type == kCOLUMN_LIST) &&
+        compression == kENCODING_ARRAY_DICT) {
+      return SQLTypeInfo(
+          kARRAY, dimension, scale, notnull, kENCODING_DICT, comp_param, subtype);
+    }
     return SQLTypeInfo(
         subtype, dimension, scale, notnull, compression, comp_param, kNULLT);
   }
@@ -984,7 +1002,7 @@ class SQLTypeInfo {
   SQLTypes type;     // type id
   SQLTypes subtype;  // element type of arrays or columns
   int dimension;     // VARCHAR/CHAR length or NUMERIC/DECIMAL precision or COLUMN_LIST
-                     // length
+                     // length or TIMESTAMP precision
   int scale;         // NUMERIC/DECIMAL scale
   bool notnull;      // nullable?  a hint, not used for type checking
   EncodingType compression;  // compression scheme
@@ -1209,42 +1227,232 @@ using ArrayOffsetT = int32_t;
 
 int8_t* append_datum(int8_t* buf, const Datum& d, const SQLTypeInfo& ti);
 
-inline auto generate_array_type(const SQLTypes subtype) {
-  auto ti = SQLTypeInfo(kARRAY, false);
-  ti.set_subtype(subtype);
+// clang-format off
+/*
+
+A note on representing collection types using SQLTypeInfo
+=========================================================
+
+In general, a collection type is a type of collection of items. A
+collection can be an array, a column, or a column list. A column list
+is as collection of columns that have the same item type.  An item can
+be of scalar type (bool, integers, floats, text encoding dict's, etc)
+or of collection type (array of scalars, column of scalars, column of
+array of scalars).
+
+SQLTypeInfo provides a structure to represent both item and collection
+types using the following list of attributes:
+  SQLTypes type
+  SQLTypes subtype
+  int dimension
+  int scale
+  bool notnull
+  EncodingType compression
+  int comp_param
+  int size
+
+To represent a particular type, not all attributes are used. However,
+there may exists multiple ways to represent the same type using
+various combinations of these attributes and this note can be used as
+a guideline to how to represent a newly introduced collection type
+using the SQLTypeInfo structure.
+
+Scalar types
+------------
+
+- Scalar types are booleans, integers, and floats that are defined
+  by type and size attributes,
+
+    SQLTypeInfo(type=kSCALAR)
+
+  where SCALAR is in {BOOL, BIGINT, INT, SMALLINT, TINYINT, DOUBLE,
+  FLOAT} while the corresponding size is specified in
+  get_storage_size().  For example, SQLTypeInfo(type=kFLOAT)
+  represents FLOAT and its size is implemented as 4 in the
+  get_storage_size() method,
+
+- Text encoding dict (as defined as index and string dictionary) is
+  represented as a 32-bit integer value and its type is specified as
+
+    SQLTypeInfo(type=kTEXT, compression=kENCODING_DICT, comp_param=<dict id>)
+
+  and size is defined as 4 by get_storage_size().
+
+Collection types
+----------------
+
+- The type of a varlen array of scalar items is specified as
+
+    SQLTypeInfo(type=kARRAY, subtype=kSCALAR)
+
+  and size is defined as -1 by get_storage_size() which can be interpreted as N/A.
+
+- The type of a varlen array of text encoding dict is specified as
+
+    SQLTypeInfo(type=kARRAY, subtype=kTEXT, compression=kENCODING_DICT, comp_param=<dict id>)
+
+  Notice that the compression and comp_param attributes apply to
+  subtype rather than to type. This quirk exemplifies the fact that
+  SQLTypeInfo provides limited ability to support composite types.
+
+- Similarly, the types of a column of scalar and text encoded dict
+  items are specified as
+
+    SQLTypeInfo(type=kCOLUMN, subtype=kSCALAR)
+
+  and
+
+    SQLTypeInfo(type=kCOLUMN, subtype=kTEXT, compression=kENCODING_DICT, comp_param=<dict id>)
+
+  respectively.
+
+- The type of column list with scalar items is specified as
+
+    SQLTypeInfo(type=kCOLUMN_LIST, subtype=kSCALAR, dimension=<nof columns>)
+
+  WARNING: Column list with items that type use compression (such as
+  TIMESTAMP), cannot be supported! See QE-427.
+
+- The type of column list with text encoded dict items is specified as
+
+    SQLTypeInfo(type=kCOLUMN_LIST, subtype=kTEXT, compression=kENCODING_DICT, dimension=<nof columns>)
+
+- The type of a column of arrays of scalar items is specified as
+
+    SQLTypeInfo(type=kCOLUMN, subtype=kSCALAR, compression=kENCODING_ARRAY)
+
+  Notice that the "a collection of collections of items" is specified
+  by introducing a new compression scheme that descibes the
+  "collections" part while the subtype attribute specifies the type of
+  items.
+
+- The type of a column of arrays of text encoding dict items is specified as
+
+    SQLTypeInfo(type=kCOLUMN, subtype=kTEXT, compression=kENCODING_ARRAY_DICT, comp_param=<dict id>)
+
+  where the compression attribute kENCODING_ARRAY_DICT carries two
+  pieces of information: (i) the items type is dict encoded string and
+  (ii) the type represents a "column of arrays".
+
+
+- The type of a column list of arrays of scalar items is specified as
+
+    SQLTypeInfo(type=kCOLUMN_LIST, subtype=kSCALAR, compression=kENCODING_ARRAY, dimension=<nof columns>)
+
+- The type of a column list of arrays of text encoding dict items is specified as
+
+    SQLTypeInfo(type=kCOLUMN_LIST, subtype=kTEXT, compression=kENCODING_ARRAY_DICT, comp_param=<dict id>, dimension=<nof columns>)
+
+  that is the most complicated currently supported type of "a
+  collection(=list) of collections(=columns) of collections(=arrays)
+  of items(=text)" with a specified compression scheme and comp_param
+  attributes.
+
+*/
+// clang-format on
+
+inline auto generate_column_type(const SQLTypeInfo& elem_ti) {
+  SQLTypes elem_type = elem_ti.get_type();
+  if (elem_type == kCOLUMN) {
+    return elem_ti;
+  }
+  auto c = elem_ti.get_compression();
+  auto d = elem_ti.get_dimension();
+  auto p = elem_ti.get_comp_param();
+  switch (elem_type) {
+    case kBOOLEAN:
+    case kTINYINT:
+    case kSMALLINT:
+    case kINT:
+    case kBIGINT:
+    case kFLOAT:
+    case kDOUBLE:
+      if (c == kENCODING_NONE && p == 0) {
+        break;  // here and below `break` means supported element type
+                // for extension functions
+      }
+    case kTEXT:
+      if (c == kENCODING_DICT && p != 0) {
+        break;
+      }
+    case kTIMESTAMP:
+      if (c == kENCODING_NONE && p == 0 && (d == 9 || d == 6 || d == 0)) {
+        break;
+      }
+    case kARRAY:
+      elem_type = elem_ti.get_subtype();
+      if (IS_NUMBER(elem_type) || elem_type == kBOOLEAN || elem_type == kTEXT) {
+        if (c == kENCODING_NONE && p == 0) {
+          c = kENCODING_ARRAY;
+          break;
+        } else if (c == kENCODING_DICT && p != 0) {
+          c = kENCODING_ARRAY_DICT;
+          break;
+        }
+      }
+    default:
+      elem_type = kNULLT;  // indicates unsupported element type that
+                           // the caller needs to handle accordingly
+  }
+  auto ti = SQLTypeInfo(kCOLUMN, c, p, elem_type);
+  ti.set_dimension(d);
   return ti;
 }
 
-inline auto generate_column_type(const SQLTypes subtype) {
-  auto ti = SQLTypeInfo(kCOLUMN, false);
-  ti.set_subtype(subtype);
-  return ti;
+inline auto generate_column_list_type(const SQLTypeInfo& elem_ti) {
+  auto type_info = generate_column_type(elem_ti);
+  if (type_info.get_subtype() != kNULLT) {
+    type_info.set_type(kCOLUMN_LIST);
+  }
+  if (type_info.get_subtype() == kTIMESTAMP) {
+    // ColumnList<Timestamp> is not supported, see QE-472
+    type_info.set_subtype(kNULLT);
+  }
+  return type_info;
 }
 
-inline auto generate_column_type(const SQLTypes subtype, EncodingType c, int p) {
-  auto ti = SQLTypeInfo(kCOLUMN, false);
-  ti.set_subtype(subtype);
-  ti.set_compression(c);
-  ti.set_comp_param(p);
-  return ti;
+// SQLTypeInfo-friendly interface to FlatBuffer:
+
+#include "../QueryEngine/Utils/FlatBuffer.h"
+
+inline int64_t getVarlenArrayBufferSize(int64_t items_count,
+                                        int64_t max_nof_values,
+                                        const SQLTypeInfo& ti) {
+  CHECK(ti.is_array());
+  const size_t array_item_size = ti.get_elem_type().get_size();
+  if (ti.is_text_encoding_dict_array()) {
+    return FlatBufferManager::get_VarlenArray_flatbuffer_size(
+        items_count,
+        max_nof_values,
+        array_item_size,
+        FlatBufferManager::DTypeMetadataKind::SIZE_DICTID);
+  } else {
+    return FlatBufferManager::get_VarlenArray_flatbuffer_size(
+        items_count,
+        max_nof_values,
+        array_item_size,
+        FlatBufferManager::DTypeMetadataKind::SIZE);
+  }
 }
 
-inline auto generate_column_array_type(const SQLTypes subtype) {
-  auto ti = SQLTypeInfo(kCOLUMN, false, kENCODING_ARRAY);
-  ti.set_subtype(subtype);
-  return ti;
-}
-
-inline auto generate_column_list_type(const SQLTypes subtype) {
-  auto ti = SQLTypeInfo(kCOLUMN_LIST, false);
-  ti.set_subtype(subtype);
-  return ti;
-}
-
-inline auto generate_column_list_array_type(const SQLTypes subtype) {
-  auto ti = SQLTypeInfo(kCOLUMN_LIST, false, kENCODING_ARRAY);
-  ti.set_subtype(subtype);
-  return ti;
+inline void initializeVarlenArray(FlatBufferManager& m,
+                                  int64_t items_count,
+                                  int64_t max_nof_values,
+                                  const SQLTypeInfo& ti) {
+  CHECK(ti.is_array());
+  const size_t array_item_size = ti.get_elem_type().get_size();
+  if (ti.is_text_encoding_dict_array()) {
+    m.initializeVarlenArray(items_count,
+                            max_nof_values,
+                            array_item_size,
+                            FlatBufferManager::DTypeMetadataKind::SIZE_DICTID);
+    m.setDTypeMetadataDictId(ti.get_comp_param());
+  } else {
+    m.initializeVarlenArray(items_count,
+                            max_nof_values,
+                            array_item_size,
+                            FlatBufferManager::DTypeMetadataKind::SIZE);
+  }
 }
 
 struct SqlLiteralArg {

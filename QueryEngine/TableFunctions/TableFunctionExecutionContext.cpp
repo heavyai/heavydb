@@ -521,6 +521,10 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
       const size_t actual_column_size = allocated_column_size;
       src = align_to_int64(src + allocated_column_size);
       dst = align_to_int64(dst + actual_column_size);
+      if (ti.is_text_encoding_dict_array()) {
+        CHECK_EQ(m.getDTypeMetadataDictId(),
+                 ti.get_comp_param());  // ensure that dict_id is preserved
+      }
     } else {
       const size_t target_width = ti.get_size();
       const size_t allocated_column_size = target_width * mgr->get_nrows();

@@ -38,7 +38,9 @@ enum TEncodingType {
   DICT,
   SPARSE,
   GEOINT,
-  DATE_IN_DAYS
+  DATE_IN_DAYS,
+  ARRAY,
+  ARRAY_DICT
 }
 
 struct TTypeInfo {

@@ -67,6 +67,8 @@ ExtArgumentType get_column_arg_elem_type(const ExtArgumentType ext_arg_column_ty
       return ExtArgumentType::ArrayDouble;
     case ExtArgumentType::ColumnArrayBool:
       return ExtArgumentType::ArrayBool;
+    case ExtArgumentType::ColumnArrayTextEncodingDict:
+      return ExtArgumentType::ArrayTextEncodingDict;
     default:
       UNREACHABLE();
   }
@@ -106,6 +108,8 @@ ExtArgumentType get_column_list_arg_elem_type(
       return ExtArgumentType::ArrayDouble;
     case ExtArgumentType::ColumnListArrayBool:
       return ExtArgumentType::ArrayBool;
+    case ExtArgumentType::ColumnListArrayTextEncodingDict:
+      return ExtArgumentType::ArrayTextEncodingDict;
     default:
       UNREACHABLE();
   }
@@ -128,6 +132,8 @@ ExtArgumentType get_array_arg_elem_type(const ExtArgumentType ext_arg_array_type
       return ExtArgumentType::Double;
     case ExtArgumentType::ArrayBool:
       return ExtArgumentType::Bool;
+    case ExtArgumentType::ArrayTextEncodingDict:
+      return ExtArgumentType::TextEncodingDict;
     default:
       UNREACHABLE();
   }
@@ -542,21 +548,15 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
     if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
       if (dynamic_cast<const Analyzer::ColumnVar*>(atype.get())) {
         SQLTypeInfo type_info = atype->get_type_info();
-        if (type_info.get_type() == kTEXT) {
-          auto ti = generate_column_type(type_info.get_type(),         // subtype
-                                         type_info.get_compression(),  // compression
-                                         type_info.get_comp_param());  // comp_param
-          type_infos_input.push_back(ti);
-          args_are_constants.push_back(false);
-        } else if (type_info.get_type() == kARRAY) {
-          auto ti = generate_column_array_type(type_info.get_elem_type().get_type());
-          type_infos_input.push_back(ti);
-          args_are_constants.push_back(true);
-        } else {
-          auto ti = generate_column_type(type_info.get_type());
-          type_infos_input.push_back(ti);
-          args_are_constants.push_back(true);
+        auto ti = generate_column_type(type_info);
+        if (ti.get_subtype() == kNULLT) {
+          throw std::runtime_error(std::string(__FILE__) + "#" +
+                                   std::to_string(__LINE__) +
+                                   ": column support for type info " +
+                                   type_info.to_string() + " is not implemented");
         }
+        type_infos_input.push_back(ti);
+        args_are_constants.push_back(type_info.get_type() != kTEXT);
         continue;
       }
     }
@@ -628,12 +628,11 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
     if (type_infos_variants.begin() == type_infos_variants.end()) {
       type_infos_variants.push_back({ti});
       if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
-        if (ti.is_column_array()) {
-          auto mti = generate_column_list_array_type(ti.get_subtype());
-          mti.set_dimension(1);
-          type_infos_variants.push_back({mti});
-        } else if (ti.is_column()) {
-          auto mti = generate_column_list_type(ti.get_subtype());
+        if (ti.is_column()) {
+          auto mti = generate_column_list_type(ti);
+          if (mti.get_subtype() == kNULLT) {
+            continue;  // skip unsupported element type.
+          }
           mti.set_dimension(1);
           type_infos_variants.push_back({mti});
         }
@@ -651,9 +650,12 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
             new_type_infos.back().set_dimension(last.get_dimension() + 1);
           } else {
             // add column as column_list argument
-            auto mti =
-                (ti.is_column_array() ? generate_column_list_array_type(ti.get_subtype())
-                                      : generate_column_list_type(ti.get_subtype()));
+            auto mti = generate_column_list_type(ti);
+            if (mti.get_subtype() == kNULLT) {
+              // skip unsupported element type
+              type_infos.push_back(ti);
+              continue;
+            }
             mti.set_dimension(1);
             new_type_infos.push_back(mti);
           }
@@ -680,7 +682,6 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
       int pos = 0;
       int original_input_idx = 0;
       CHECK_LE(type_infos.size(), args_are_constants.size());
-      // for (size_t ti_idx = 0; ti_idx != type_infos.size(); ++ti_idx) {
       for (const auto& ti : type_infos) {
         int offset = match_arguments(ti,
                                      args_are_constants[original_input_idx],

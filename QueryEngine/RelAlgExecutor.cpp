@@ -5095,7 +5095,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   constexpr int32_t transient_pos{-1};
   for (size_t i = 0; i < table_function_impl.getOutputsSize(); i++) {
     auto ti = table_function_impl.getOutputSQLType(i);
-    if (ti.is_dict_encoded_string()) {
+    if (ti.is_dict_encoded_string() || ti.is_text_encoding_dict_array()) {
       auto p = table_function_impl.getInputID(i);
 
       int32_t input_pos = p.first;

@@ -16,8 +16,9 @@
 
 #pragma once
 
+#include "QueryEngine/Execute.h"
 #include "QueryEngine/QueryMemoryInitializer.h"
-#include "QueryEngine/Utils/FlatBuffer.h"
+#include "Shared/sqltypes.h"
 
 /*
   The TableFunctionManager implements the following features:
@@ -133,7 +134,6 @@ struct TableFunctionManager {
       // All outputs have padded width set to logical column width
       auto ti = exe_unit_.target_exprs[i]->get_type_info();
       if (ti.is_array()) {
-        const size_t array_item_width = ti.get_elem_type().get_size();
         CHECK_NE(output_array_values_total_number_[i],
                  -1);  // set_output_array_values_total_number(i, ...) is not called
         /*
@@ -143,9 +143,8 @@ struct TableFunctionManager {
           QueryMemoryInitializer constructor and the memory will be
           initialized below.
          */
-        const int64_t flatbuffer_size =
-            FlatBufferManager::get_VarlenArray_flatbuffer_size(
-                output_num_rows_, output_array_values_total_number_[i], array_item_width);
+        const int64_t flatbuffer_size = getVarlenArrayBufferSize(
+            output_num_rows_, output_array_values_total_number_[i], ti);
         query_mem_desc.addColSlotInfoFlatBuffer(
             flatbuffer_size);  // used by QueryMemoryInitializer
       } else {
@@ -191,10 +190,9 @@ struct TableFunctionManager {
 
         auto ti = exe_unit_.target_exprs[i]->get_type_info();
         if (ti.is_array()) {
-          const size_t array_item_width = ti.get_elem_type().get_size();
           FlatBufferManager m{output_buffers_ptr};
-          m.initializeVarlenArray(
-              output_num_rows_, output_array_values_total_number_[i], array_item_width);
+          initializeVarlenArray(
+              m, output_num_rows_, output_array_values_total_number_[i], ti);
           output_buffers_ptr = align_to_int64(output_buffers_ptr + m.flatbufferSize());
         } else {
           const size_t col_width = ti.get_size();
@@ -229,6 +227,31 @@ struct TableFunctionManager {
                     TableFunctionMetadataType& value_type) const {
     CHECK(row_set_mem_owner_);
     row_set_mem_owner_->getTableFunctionMetadata(key, raw_bytes, num_bytes, value_type);
+  }
+
+  inline int32_t getNewDictId() {
+    const auto proxy =
+        executor_->getStringDictionaryProxy(TRANSIENT_DICT_ID, row_set_mem_owner_, true);
+    return proxy->getDictId();
+  }
+
+  inline std::string getString(int32_t dict_id, int32_t string_id) {
+    const auto proxy =
+        executor_->getStringDictionaryProxy(dict_id, row_set_mem_owner_, true);
+    return proxy->getString(string_id);
+  }
+
+  inline const char* getCString(int32_t dict_id, int32_t string_id) {
+    const auto proxy =
+        executor_->getStringDictionaryProxy(dict_id, row_set_mem_owner_, true);
+    auto [c_str, len] = proxy->getStringBytes(string_id);
+    return c_str;
+  }
+
+  inline const int32_t getOrAddTransient(int32_t dict_id, const std::string& str) {
+    const auto proxy =
+        executor_->getStringDictionaryProxy(dict_id, row_set_mem_owner_, true);
+    return proxy->getOrAddTransient(str);
   }
 
   // Methods for managing singleton instance of TableFunctionManager:

@@ -49,10 +49,10 @@
   If a FlatBuffer instance uses VarlenArray format (format id is
   0x766c61) then the <data> part of the FlatBuffer is defined as follows:
 
-    | <items count>  | <dtype size> | <max nof values> | <num specified items> | <offsets>    | <varlen array data>                |
+    | <items count>  | <dtype metadata kind/buffer size> | <max nof values> | <num specified items> | <offsets>    | <varlen array data>                |
     =
-    |<--- 8-bytes -->|<--8-bytes -->|<-- 8-bytes ----->|<-- 8-bytes ---------->|<--24-bytes-->|<--flatbuffer size minus 80 bytes-->|
-    |<------------------------- flatbuffer size minus 24 bytes ------------------------------------------------------------------->|
+    |<--- 8-bytes -->|<--16-bytes ---------------------->|<-- 8-bytes ----->|<-- 8-bytes ---------->|<--30-bytes-->|<--flatbuffer size minus 96 bytes-->|
+    |<------------------------- flatbuffer size minus 24 bytes ---------------------------------------------------------------------------------------->|
 
   where
 
@@ -61,13 +61,13 @@
       arrays, the items count is the number of rows in a column. This
       is a user-specified parameter.
 
-    <dtype size> is the byte size of a single element in an item
-      (e.g. the size of varlen array element). For example, if dtype
-      is double or int64 then dtype size is 8, for float or int32 it
-      is 4, etc. Notice that flat buffer does not store the actual
-      dtype of elements as it is unneeded from the perspective
-      managing the memory of a flat buffer instance. We may reconsider
-      this if needed.  User-specified parameter.
+    <dtype metadata kind> defines the set of parameters that the dtype
+      of a value depends on. For instance, dtype typically is
+      characterized by its byte size. In the case of text encoding
+      dict, dtype also is parameterized by the string dictionary id.
+
+    <dtype metadata buffer size> is the byte size of dtype metadata
+      buffer.
 
     <max nof values> is the maximum total number of elements in all
       items that the flat buffer instance can hold. The value defines
@@ -81,15 +81,15 @@
 
     <offsets> are precomputed offsets of data buffers. Used internally.
 
-      | <values offset> | <compressed_indices offset> | <storage indices offset> |
-      |<-- 8-bytes ---->|<-- 8-bytes ---------------->|<-- 8-bytes ------------->|
+      | <dtype metadata offset> | <values offset> | <compressed_indices offset> | <storage indices offset> |
+      |<-- 8-bytes ------------>|<-- 8-bytes ---->|<-- 8-bytes ---------------->|<-- 8-bytes ------------->|
 
     <varlen array data> is
 
-      | <values>                        | <compressed indices>           | <storage indices>          |
+      | <dtype metadata buffer>         | <values>                         | <compressed indices>           | <storage indices>          |
       =
-      |<- (max nof values) * 8 bytes -> |<-- (num items + 1) * 8 bytes-->|<-- (num items) * 8 bytes-->|
-      |<------------------------ flatbuffer size minus 56 bytes ------------------------------------->|
+      |<-- dtype metadata buffer size ->|<-- (max nof values) * 8 bytes -->|<-- (num items + 1) * 8 bytes-->|<-- (num items) * 8 bytes-->|
+      |<------------------------ flatbuffer size minus 88 bytes ------------------------------------------------------------------------>|
 
   and
 
@@ -147,7 +147,7 @@ struct FlatBufferManager {
     Success = 0,
     IndexError,
     SizeError,
-    ItemExistsError,
+    ItemAlreadySpecifiedError,
     ItemUnspecifiedError,
     ValuesBufferTooSmallError,
     MemoryError,
@@ -156,21 +156,21 @@ struct FlatBufferManager {
   };
 
   enum VarlenArrayHeader {
-    FORMAT_ID = 0,    // storage format id
-    FLATBUFFER_SIZE,  // in bytes
-    ITEMS_COUNT,      /* the number of items
-                         (e.g. the number of
-                         rows in a column) */
-    DTYPE_SIZE,       /* the size of dtype of
-                         the item elements, in
-                         bytes */
-    MAX_NOF_VALUES,   /* the upper bound to the
-                         total number of values
-                         in all items */
-    STORAGE_COUNT,    /* the number of specified
-                         items, incremented by
-                         one on each
-                         setNull/setItem call */
+    FORMAT_ID = 0,              // storage format id
+    FLATBUFFER_SIZE,            // in bytes
+    ITEMS_COUNT,                /* the number of items
+                                   (e.g. the number of
+                                   rows in a column) */
+    DTYPE_METADATA_KIND,        /* the kind of dtype metadata */
+    DTYPE_METADATA_BUFFER_SIZE, /* the size of dtype metadata buffer */
+    MAX_NOF_VALUES,             /* the upper bound to the
+                                   total number of values
+                                   in all items */
+    STORAGE_COUNT,              /* the number of specified
+                                   items, incremented by
+                                   one on each
+                                   setNull/setItem call */
+    DTYPE_METADATA_BUFFER_OFFSET,
     VALUES_OFFSET,
     COMPRESSED_INDICES_OFFSET,
     STORAGE_INDICES_OFFSET,
@@ -198,24 +198,132 @@ struct FlatBufferManager {
   }
 
   // Return the format of FlatBuffer
-  FlatBufferFormat format() const {
+  inline FlatBufferFormat format() const {
     return static_cast<FlatBufferFormat>(
         ((int64_t*)buffer)[VarlenArrayHeader::FORMAT_ID]);
   }
 
   // Return the allocation size of the the FlatBuffer storage, in bytes
-  int64_t flatbufferSize() const {
+  inline int64_t flatbufferSize() const {
     return ((int64_t*)buffer)[VarlenArrayHeader::FLATBUFFER_SIZE];
+  }
+
+  /* DType MetaData support */
+
+  enum DTypeMetadataKind {
+    SIZE = 1,
+    SIZE_DICTID,
+  };
+
+  struct DTypeMetadataSize {
+    int64_t size;
+  };
+
+  struct DTypeMetadataSizeDictId {
+    int64_t size;
+    int32_t dict_id;
+  };
+
+  static int64_t getDTypeMetadataBufferSize(DTypeMetadataKind kind) {
+    switch (kind) {
+      case DTypeMetadataKind::SIZE:
+        return _align_to_int64(sizeof(DTypeMetadataSize));
+      case DTypeMetadataKind::SIZE_DICTID:
+        return _align_to_int64(sizeof(DTypeMetadataSizeDictId));
+      default:
+        return 0;
+    }
+  }
+
+  inline DTypeMetadataKind getDTypeMetadataKind() const {
+    return static_cast<DTypeMetadataKind>(
+        ((int64_t*)buffer)[VarlenArrayHeader::DTYPE_METADATA_KIND]);
+  }
+
+  inline int8_t* getDTypeMetadataBuffer() {
+    return buffer + ((int64_t*)buffer)[VarlenArrayHeader::DTYPE_METADATA_BUFFER_OFFSET];
+  }
+
+  inline const int8_t* getDTypeMetadataBuffer() const {
+    return buffer +
+           ((const int64_t*)buffer)[VarlenArrayHeader::DTYPE_METADATA_BUFFER_OFFSET];
+  }
+
+  // dtype size accessors:
+  void setDTypeMetadataSize(int64_t size) {
+    switch (getDTypeMetadataKind()) {
+      case DTypeMetadataKind::SIZE: {
+        DTypeMetadataSize* metadata =
+            reinterpret_cast<DTypeMetadataSize*>(getDTypeMetadataBuffer());
+        metadata->size = size;
+      } break;
+      case DTypeMetadataKind::SIZE_DICTID: {
+        DTypeMetadataSizeDictId* metadata =
+            reinterpret_cast<DTypeMetadataSizeDictId*>(getDTypeMetadataBuffer());
+        metadata->size = size;
+      } break;
+      default:;
+    }
+  }
+
+  int64_t getDTypeMetadataSize() const {
+    switch (getDTypeMetadataKind()) {
+      case DTypeMetadataKind::SIZE: {
+        const DTypeMetadataSize* metadata =
+            reinterpret_cast<const DTypeMetadataSize*>(getDTypeMetadataBuffer());
+        return metadata->size;
+      }
+      case DTypeMetadataKind::SIZE_DICTID: {
+        const DTypeMetadataSizeDictId* metadata =
+            reinterpret_cast<const DTypeMetadataSizeDictId*>(getDTypeMetadataBuffer());
+        return metadata->size;
+      }
+      default:;
+    }
+    return 0;
+  }
+
+  // dtype dict id accessors:
+  void setDTypeMetadataDictId(int32_t dict_id) {
+    switch (getDTypeMetadataKind()) {
+      case DTypeMetadataKind::SIZE:
+        break;
+      case DTypeMetadataKind::SIZE_DICTID: {
+        DTypeMetadataSizeDictId* metadata =
+            reinterpret_cast<DTypeMetadataSizeDictId*>(getDTypeMetadataBuffer());
+        metadata->dict_id = dict_id;
+      } break;
+      default:;
+    }
+  }
+
+  int32_t getDTypeMetadataDictId() const {
+    switch (getDTypeMetadataKind()) {
+      case DTypeMetadataKind::SIZE:
+        break;
+      case DTypeMetadataKind::SIZE_DICTID: {
+        const DTypeMetadataSizeDictId* metadata =
+            reinterpret_cast<const DTypeMetadataSizeDictId*>(getDTypeMetadataBuffer());
+        return metadata->dict_id;
+      }
+      default:;
+    }
+    return 0;
   }
 
   // VarlenArray support:
   static int64_t get_VarlenArray_flatbuffer_size(int64_t items_count,
                                                  int64_t max_nof_values,
-                                                 int64_t dtype_size) {
-    int64_t VarlenArray_buffer_header_size =
+                                                 int64_t dtype_size,
+                                                 DTypeMetadataKind dtype_metadata_kind) {
+    const int64_t VarlenArray_buffer_header_size =
         VarlenArrayHeader::EOFHEADER * sizeof(int64_t);
-    int64_t values_buffer_size = _align_to_int64(dtype_size * max_nof_values);
+    const int64_t dtype_metadata_buffer_size =
+        getDTypeMetadataBufferSize(dtype_metadata_kind);
+    const int64_t values_buffer_size = _align_to_int64(dtype_size * max_nof_values);
     return (VarlenArray_buffer_header_size  // see above
+            + dtype_metadata_buffer_size    // size of dtype metadata buffer in bytes,
+                                            // aligned to int64
             + values_buffer_size            // size of values buffer, aligned to int64
             + (items_count + 1              // size of compressed_indices buffer
                + items_count                // size of storage_indices buffer
@@ -226,30 +334,42 @@ struct FlatBufferManager {
   // Initialize FlatBuffer for VarlenArray storage
   void initializeVarlenArray(int64_t items_count,
                              int64_t max_nof_values,
-                             int64_t dtype_size) {
+                             int64_t dtype_size,
+                             DTypeMetadataKind dtype_metadata_kind) {
     const int64_t VarlenArray_buffer_header_size =
         VarlenArrayHeader::EOFHEADER * sizeof(int64_t);
     const int64_t values_buffer_size = _align_to_int64(dtype_size * max_nof_values);
     const int64_t compressed_indices_buffer_size = (items_count + 1) * sizeof(int64_t);
-    const int64_t flatbuffer_size =
-        get_VarlenArray_flatbuffer_size(items_count, max_nof_values, dtype_size);
+    const int64_t dtype_metadata_buffer_size =
+        getDTypeMetadataBufferSize(dtype_metadata_kind);
+    const int64_t flatbuffer_size = get_VarlenArray_flatbuffer_size(
+        items_count, max_nof_values, dtype_size, dtype_metadata_kind);
     ((int64_t*)buffer)[VarlenArrayHeader::FORMAT_ID] =
         static_cast<int64_t>(FlatBufferFormat::VarlenArray);
     ((int64_t*)buffer)[VarlenArrayHeader::FLATBUFFER_SIZE] = flatbuffer_size;
     ((int64_t*)buffer)[VarlenArrayHeader::ITEMS_COUNT] = items_count;
     ((int64_t*)buffer)[VarlenArrayHeader::MAX_NOF_VALUES] = max_nof_values;
-    ((int64_t*)buffer)[VarlenArrayHeader::DTYPE_SIZE] = dtype_size;
+    ((int64_t*)buffer)[VarlenArrayHeader::DTYPE_METADATA_KIND] =
+        static_cast<int64_t>(dtype_metadata_kind);
+    ((int64_t*)buffer)[VarlenArrayHeader::DTYPE_METADATA_BUFFER_SIZE] =
+        dtype_metadata_buffer_size;
     ((int64_t*)buffer)[VarlenArrayHeader::STORAGE_COUNT] = 0;
-    ((int64_t*)buffer)[VarlenArrayHeader::VALUES_OFFSET] = VarlenArray_buffer_header_size;
+    ((int64_t*)buffer)[VarlenArrayHeader::DTYPE_METADATA_BUFFER_OFFSET] =
+        VarlenArray_buffer_header_size;
+    ((int64_t*)buffer)[VarlenArrayHeader::VALUES_OFFSET] =
+        ((const int64_t*)buffer)[VarlenArrayHeader::DTYPE_METADATA_BUFFER_OFFSET] +
+        dtype_metadata_buffer_size;
     ((int64_t*)buffer)[VarlenArrayHeader::COMPRESSED_INDICES_OFFSET] =
         ((const int64_t*)buffer)[VarlenArrayHeader::VALUES_OFFSET] + values_buffer_size;
     ((int64_t*)buffer)[VarlenArrayHeader::STORAGE_INDICES_OFFSET] =
         ((const int64_t*)buffer)[VarlenArrayHeader::COMPRESSED_INDICES_OFFSET] +
         compressed_indices_buffer_size;
 
+    setDTypeMetadataSize(dtype_size);
+
+    // initialize indices buffers
     int64_t* compressed_indices = VarlenArray_compressed_indices();
     int64_t* storage_indices = VarlenArray_storage_indices();
-
     for (int i = 0; i < items_count; i++) {
       compressed_indices[i] = 0;
       storage_indices[i] = -1;
@@ -269,9 +389,7 @@ struct FlatBufferManager {
   }
 
   // Return the size of dtype of the item elements, in bytes
-  inline int64_t dtypeSize() const {
-    return ((int64_t*)buffer)[VarlenArrayHeader::DTYPE_SIZE];
-  }
+  inline int64_t dtypeSize() const { return getDTypeMetadataSize(); }
 
   // Return the upper bound to the total number of values in all items
   inline int64_t VarlenArray_max_nof_values() const {
@@ -338,7 +456,7 @@ struct FlatBufferManager {
                            // bytes?
       }
       if (storage_indices[index] >= 0) {
-        return ItemExistsError;
+        return ItemAlreadySpecifiedError;
       }
       const int64_t cindex = compressed_indices[storage_count];
       const int64_t values_buffer_size = VarlenArray_values_buffer_size();
@@ -432,7 +550,7 @@ struct FlatBufferManager {
       }
       int64_t* storage_indices = VarlenArray_storage_indices();
       if (storage_indices[index] >= 0) {
-        return ItemExistsError;
+        return ItemAlreadySpecifiedError;
       }
       return setNullNoValidation(index);
     }
@@ -472,7 +590,7 @@ struct FlatBufferManager {
 
   // Get item at index by storing its size (in bytes), values buffer,
   // and nullity information to the corresponding pointer
-  // arguments. Return 0 on success.
+  // arguments.
   Status getItem(int64_t index, int64_t& size, int8_t*& dest, bool& is_null) {
     if (format() == FlatBufferFormat::VarlenArray) {
       if (index < 0 || index >= itemsCount()) {
@@ -537,11 +655,11 @@ inline std::ostream& operator<<(std::ostream& os,
     case FlatBufferManager::SizeError:
       os << "SizeError";
       break;
-    case FlatBufferManager::ItemExistsError:
-      os << "ItemExistsError";
+    case FlatBufferManager::ItemAlreadySpecifiedError:
+      os << "ItemAlreadySpecifiedError";
       break;
     case FlatBufferManager::ItemUnspecifiedError:
-      os << "UnknownFormatError";
+      os << "ItemUnspecifiedError";
       break;
     case FlatBufferManager::ValuesBufferTooSmallError:
       os << "ValuesBufferTooSmallError";

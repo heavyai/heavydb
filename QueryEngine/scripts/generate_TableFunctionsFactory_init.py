@@ -232,6 +232,9 @@ class Bracket:
     def is_cursor(self):
         return self.name.rsplit("::", 1)[-1] == 'Cursor'
 
+    def is_array(self):
+        return self.name.rsplit("::", 1)[-1].startswith('Array')
+
     def is_column_any(self):
         return self.name.rsplit("::", 1)[-1].startswith('Column')
 
@@ -244,8 +247,14 @@ class Bracket:
     def is_any_text_encoding_dict(self):
         return self.name.rsplit("::", 1)[-1].endswith('TextEncodingDict')
 
+    def is_array_text_encoding_dict(self):
+        return self.name.rsplit("::", 1)[-1] == 'ArrayTextEncodingDict'
+
     def is_column_text_encoding_dict(self):
         return self.name.rsplit("::", 1)[-1] == 'ColumnTextEncodingDict'
+
+    def is_column_array_text_encoding_dict(self):
+        return self.name.rsplit("::", 1)[-1] == 'ColumnArrayTextEncodingDict'
 
     def is_column_list_text_encoding_dict(self):
         return self.name.rsplit("::", 1)[-1] == 'ColumnListTextEncodingDict'
@@ -830,7 +839,6 @@ class TextEncodingDictTransformer(AstTransformer):
         * Add default_input_id to Column(List)<TextEncodingDict> without one
         """
         udtf_node = super(type(self), self).visit_udtf_node(udtf_node)
-
         # add default input_id
         default_input_id = None
         for idx, t in enumerate(udtf_node.inputs):
@@ -839,7 +847,7 @@ class TextEncodingDictTransformer(AstTransformer):
                 continue
             if default_input_id is not None:
                 pass
-            elif t.type.is_column_text_encoding_dict():
+            elif t.type.is_column_text_encoding_dict() or t.type.is_column_array_text_encoding_dict():
                 default_input_id = AnnotationNode('input_id', 'args<%s>' % (idx,))
             elif t.type.is_column_list_text_encoding_dict():
                 default_input_id = AnnotationNode('input_id', 'args<%s, 0>' % (idx,))
@@ -1156,6 +1164,9 @@ class PrimitiveNode(TypeNode):
     def is_text_encoding_dict(self):
         return self.type == 'TextEncodingDict'
 
+    def is_array_text_encoding_dict(self):
+        return self.type == 'ArrayTextEncodingDict'
+
     __repr__ = __str__
 
 
@@ -1189,14 +1200,20 @@ class ComposedNode(TypeNode, IterableNode):
     def is_text_encoding_dict(self):
         return False
 
+    def is_array_text_encoding_dict(self):
+        return self.is_array() and self.inner[0].is_text_encoding_dict()
+
     def is_column_text_encoding_dict(self):
         return self.is_column() and self.inner[0].is_text_encoding_dict()
 
     def is_column_list_text_encoding_dict(self):
         return self.is_column_list() and self.inner[0].is_text_encoding_dict()
 
+    def is_column_array_text_encoding_dict(self):
+        return self.is_column() and self.inner[0].is_array_text_encoding_dict()
+
     def is_any_text_encoding_dict(self):
-        return self.inner[0].is_text_encoding_dict()
+        return self.inner[0].is_text_encoding_dict() or self.inner[0].is_array_text_encoding_dict()
 
     __repr__ = __str__
 
@@ -1358,7 +1375,7 @@ class Parser:
         if not self.is_at_end() and self.match(Token.VBAR):
             self.consume(Token.VBAR)
             idtn = self.parse_identifier()
-            assert idtn == "output_row_size"
+            assert idtn == "output_row_size", idtn
             self.consume(Token.EQUAL)
             node = self.parse_primitive()
             key = "kPreFlightParameter"

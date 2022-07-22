@@ -188,7 +188,12 @@ class TableFunctions : public ::testing::Test {
           "iarr INT[], sum_along_row_iarr INT, concat_iarr INT[], "
           "larr BIGINT[], sum_along_row_larr BIGINT, concat_larr  BIGINT[], "
           "farr FLOAT[], sum_along_row_farr FLOAT, concat_farr FLOAT[], "
-          "darr DOUBLE[], sum_along_row_darr DOUBLE, concat_darr DOUBLE[]);");
+          "darr DOUBLE[], sum_along_row_darr DOUBLE, concat_darr DOUBLE[], "
+          "tarr TEXT[] ENCODING DICT(32), sum_along_row_tarr TEXT ENCODING DICT(32), "
+          "concat_tarr TEXT[] ENCODING DICT(32), "
+          "l BIGINT, asarray_l BIGINT[],"
+          "t TEXT ENCODING DICT(32), asarray_t TEXT[] ENCODING DICT(32)"
+          ");");
 
       TestHelpers::ValuesGenerator gen("arr_test");
 
@@ -212,7 +217,14 @@ class TableFunctions : public ::testing::Test {
                            "{1.0, 2.0, 1.0, 2.0}",
                            "{1.0, 2.0}",
                            "3.0",
-                           "{1.0, 2.0, 1.0, 2.0}"),
+                           "{1.0, 2.0, 1.0, 2.0}",
+                           "{'a', 'bc'}",
+                           "'abc'",
+                           "{'a', 'bc', 'a', 'bc'}",
+                           3,
+                           "{3}",
+                           "'ABC'",
+                           "{'ABC'}"),
                        ExecutorDeviceType::CPU);
       run_multiple_agg(gen("{'true', NULL, 'false'}",
                            "'true'",
@@ -234,7 +246,14 @@ class TableFunctions : public ::testing::Test {
                            "{1.0, NULL, 2.0, 1.0, NULL, 2.0}",
                            "{1.0, NULL, 2.0}",
                            "3.0",
-                           "{1.0, NULL, 2.0, 1.0, NULL, 2.0}"),
+                           "{1.0, NULL, 2.0, 1.0, NULL, 2.0}",
+                           "{'a', NULL, 'bc'}",
+                           "'abc'",
+                           "{'a', NULL, 'bc', 'a', NULL, 'bc'}",
+                           4,
+                           "{4}",
+                           "'DEF'",
+                           "{'DEF'}"),
                        ExecutorDeviceType::CPU);
       run_multiple_agg(gen("{}",
                            "'false'",
@@ -256,9 +275,24 @@ class TableFunctions : public ::testing::Test {
                            "{}",
                            "{}",
                            "0.0",
-                           "{}"),
+                           "{}",
+                           "{}",
+                           "''",
+                           "{}",
+                           0,
+                           "{0}",
+                           "''",
+                           "NULL"  // empty string is considered as NULL
+                           ),
                        ExecutorDeviceType::CPU);
       run_multiple_agg(gen("NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
                            "NULL",
                            "NULL",
                            "NULL",
@@ -2604,7 +2638,7 @@ template <typename T>
 void assert_equal(const TargetValue& val1,
                   const TargetValue& val2,
                   const SQLTypeInfo& ti) {
-  if (ti.is_integer() || ti.is_boolean()) {
+  if (ti.is_integer() || ti.is_boolean() || ti.is_text_encoding_dict()) {
     const auto scalar_col_val1 = boost::get<ScalarTargetValue>(&val1);
     const auto scalar_col_val2 = boost::get<ScalarTargetValue>(&val2);
     auto p1 = boost::get<int64_t>(scalar_col_val1);
@@ -2629,20 +2663,21 @@ void assert_equal(const TargetValue& val1,
     const auto array_col_val1 = boost::get<ArrayTargetValue>(&val1);
     const auto array_col_val2 = boost::get<ArrayTargetValue>(&val2);
     if (array_col_val1->is_initialized()) {
+      ASSERT_EQ(array_col_val2->is_initialized(), true);
       const auto& vec1 = array_col_val1->get();
       const auto& vec2 = array_col_val2->get();
       ASSERT_EQ(vec1.size(), vec2.size()) << "ti=" << ti.to_string();
       for (size_t i = 0; i < vec1.size(); i++) {
         const auto item1 = vec1[i];
         const auto item2 = vec2[i];
-        assert_equal<T>(item1, item2, ti.get_subtype());
+        assert_equal<T>(item1, item2, ti.get_elem_type());
       }
     } else {
       // null array
       ASSERT_EQ(array_col_val2->is_initialized(), false) << "ti=" << ti.to_string();
     }
   } else {
-    UNREACHABLE();
+    UNREACHABLE() << "ti=" << ti.to_string();
   }
 }
 
@@ -2656,11 +2691,52 @@ void assert_equal(const ResultSetPtr rows1, const ResultSetPtr rows2) {
     const auto& row1 = rows1->getRowAtNoTranslations(r);
     const auto& row2 = rows2->getRowAtNoTranslations(r);
     for (size_t c = 0; c < num_cols1; ++c) {
-      const auto ti = rows1->getColType(c);
-      ASSERT_EQ(ti, rows2->getColType(c));
-      const TargetValue item1 = row1[c];
-      const TargetValue item2 = row2[c];
-      assert_equal<T>(item1, item2, ti);
+      const auto ti1 = rows1->getColType(c);
+      const auto ti2 = rows2->getColType(c);
+      if ((ti1.is_text_encoding_dict() && ti2.is_text_encoding_dict()) &&
+          ti1.get_comp_param() != ti2.get_comp_param()) {
+        auto proxy1 = rows1->getStringDictionaryProxy(ti1.get_comp_param());
+        auto proxy2 = rows2->getStringDictionaryProxy(ti2.get_comp_param());
+        const TargetValue val1 = row1[c];
+        const TargetValue val2 = row2[c];
+        const auto scalar_col_val1 = boost::get<ScalarTargetValue>(&val1);
+        const auto scalar_col_val2 = boost::get<ScalarTargetValue>(&val2);
+        auto p1 = boost::get<int64_t>(scalar_col_val1);
+        auto p2 = boost::get<int64_t>(scalar_col_val2);
+        std::string s1 = proxy1->getString(static_cast<int32_t>(*p1));
+        std::string s2 = proxy2->getString(static_cast<int32_t>(*p2));
+        ASSERT_EQ(s1, s2);
+      } else if (ti1.is_text_encoding_dict_array() && ti2.is_text_encoding_dict_array() &&
+                 ti1.get_comp_param() != ti2.get_comp_param()) {
+        auto proxy1 = rows1->getStringDictionaryProxy(ti1.get_comp_param());
+        auto proxy2 = rows2->getStringDictionaryProxy(ti2.get_comp_param());
+        const TargetValue val1 = row1[c];
+        const TargetValue val2 = row2[c];
+        const auto array_col_val1 = boost::get<ArrayTargetValue>(&val1);
+        const auto array_col_val2 = boost::get<ArrayTargetValue>(&val2);
+        if (array_col_val1->is_initialized()) {
+          ASSERT_EQ(array_col_val2->is_initialized(), true);
+          const auto& vec1 = array_col_val1->get();
+          const auto& vec2 = array_col_val2->get();
+          ASSERT_EQ(vec1.size(), vec2.size());
+          for (size_t i = 0; i < vec1.size(); i++) {
+            const auto item1 = vec1[i];
+            const auto item2 = vec2[i];
+            auto p1 = boost::get<int64_t>(item1);
+            auto p2 = boost::get<int64_t>(item2);
+            std::string s1 = proxy1->getString(static_cast<int32_t>(p1));
+            std::string s2 = proxy2->getString(static_cast<int32_t>(p2));
+            ASSERT_EQ(s1, s2);
+          }
+        } else {
+          ASSERT_EQ(array_col_val2->is_initialized(), false);
+        }
+      } else {
+        ASSERT_EQ(ti1, ti2);
+        const TargetValue item1 = row1[c];
+        const TargetValue item2 = row2[c];
+        assert_equal<T>(item1, item2, ti1);
+      }
     }
   }
 }
@@ -2841,6 +2917,7 @@ TEST_F(TableFunctions, ColumnArraySumAlongRow) {
     COLUMNARRAYSUMALONGROWTEST(larr, int64_t);
     COLUMNARRAYSUMALONGROWTEST(farr, float);
     COLUMNARRAYSUMALONGROWTEST(darr, double);
+    COLUMNARRAYSUMALONGROWTEST(tarr, int32_t);
   }
 }
 
@@ -2863,6 +2940,7 @@ TEST_F(TableFunctions, ColumnArrayCopier) {
     COLUMNARRAYCOPIERTEST(larr, int64_t);
     COLUMNARRAYCOPIERTEST(farr, float);
     COLUMNARRAYCOPIERTEST(darr, double);
+    COLUMNARRAYCOPIERTEST(tarr, int32_t);
   }
 }
 
@@ -2886,6 +2964,7 @@ TEST_F(TableFunctions, ColumnArrayConcat) {
     COLUMNARRAYCONCATTEST(larr, int64_t);
     COLUMNARRAYCONCATTEST(farr, float);
     COLUMNARRAYCONCATTEST(darr, double);
+    COLUMNARRAYCONCATTEST(tarr, int32_t);
   }
 }
 
@@ -2909,6 +2988,25 @@ TEST_F(TableFunctions, ColumnArrayCopierOneRow) {
     COLUMNARRAYCOPIERTESTONEROW(larr, int64_t);
     COLUMNARRAYCOPIERTESTONEROW(farr, float);
     COLUMNARRAYCOPIERTESTONEROW(darr, double);
+    COLUMNARRAYCOPIERTESTONEROW(tarr, int32_t);
+  }
+}
+
+TEST_F(TableFunctions, ColumnArrayAsArray) {
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+#define COLUMNARRAYASARRAYTEST(COLNAME, CTYPE)                                          \
+  {                                                                                     \
+    const auto rows =                                                                   \
+        run_multiple_agg("SELECT out0 FROM TABLE(array_asarray(cursor(SELECT " #COLNAME \
+                         " FROM arr_test)));",                                          \
+                         dt);                                                           \
+    const auto result_rows =                                                            \
+        run_multiple_agg("SELECT asarray_" #COLNAME " FROM arr_test;", dt);             \
+    assert_equal<CTYPE>(rows, result_rows);                                             \
+  }
+    COLUMNARRAYASARRAYTEST(l, int64_t);
+    COLUMNARRAYASARRAYTEST(t, int32_t);
   }
 }
 

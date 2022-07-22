@@ -408,6 +408,10 @@ inline ExtArgumentType from_thrift(const TExtArgumentType::type& t) {
       return ExtArgumentType::ArrayDouble;
     case TExtArgumentType::ArrayBool:
       return ExtArgumentType::ArrayBool;
+    case TExtArgumentType::ArrayTextEncodingNone:
+      return ExtArgumentType::ArrayTextEncodingNone;
+    case TExtArgumentType::ArrayTextEncodingDict:
+      return ExtArgumentType::ArrayTextEncodingDict;
     case TExtArgumentType::GeoPoint:
       return ExtArgumentType::GeoPoint;
     case TExtArgumentType::GeoLineString:
@@ -434,6 +438,8 @@ inline ExtArgumentType from_thrift(const TExtArgumentType::type& t) {
       return ExtArgumentType::ColumnDouble;
     case TExtArgumentType::ColumnBool:
       return ExtArgumentType::ColumnBool;
+    case TExtArgumentType::ColumnTextEncodingNone:
+      return ExtArgumentType::ColumnTextEncodingNone;
     case TExtArgumentType::ColumnTextEncodingDict:
       return ExtArgumentType::ColumnTextEncodingDict;
     case TExtArgumentType::ColumnTimestamp:
@@ -458,6 +464,8 @@ inline ExtArgumentType from_thrift(const TExtArgumentType::type& t) {
       return ExtArgumentType::ColumnListDouble;
     case TExtArgumentType::ColumnListBool:
       return ExtArgumentType::ColumnListBool;
+    case TExtArgumentType::ColumnListTextEncodingNone:
+      return ExtArgumentType::ColumnListTextEncodingNone;
     case TExtArgumentType::ColumnListTextEncodingDict:
       return ExtArgumentType::ColumnListTextEncodingDict;
     case TExtArgumentType::ColumnArrayInt8:
@@ -474,6 +482,10 @@ inline ExtArgumentType from_thrift(const TExtArgumentType::type& t) {
       return ExtArgumentType::ColumnArrayDouble;
     case TExtArgumentType::ColumnArrayBool:
       return ExtArgumentType::ColumnArrayBool;
+    case TExtArgumentType::ColumnArrayTextEncodingNone:
+      return ExtArgumentType::ColumnArrayTextEncodingNone;
+    case TExtArgumentType::ColumnArrayTextEncodingDict:
+      return ExtArgumentType::ColumnArrayTextEncodingDict;
     case TExtArgumentType::ColumnListArrayInt8:
       return ExtArgumentType::ColumnListArrayInt8;
     case TExtArgumentType::ColumnListArrayInt16:
@@ -488,6 +500,10 @@ inline ExtArgumentType from_thrift(const TExtArgumentType::type& t) {
       return ExtArgumentType::ColumnListArrayDouble;
     case TExtArgumentType::ColumnListArrayBool:
       return ExtArgumentType::ColumnListArrayBool;
+    case TExtArgumentType::ColumnListArrayTextEncodingNone:
+      return ExtArgumentType::ColumnListArrayTextEncodingNone;
+    case TExtArgumentType::ColumnListArrayTextEncodingDict:
+      return ExtArgumentType::ColumnListArrayTextEncodingDict;
   }
   UNREACHABLE();
   return ExtArgumentType{};
@@ -539,6 +555,10 @@ inline TExtArgumentType::type to_thrift(const ExtArgumentType& t) {
       return TExtArgumentType::ArrayDouble;
     case ExtArgumentType::ArrayBool:
       return TExtArgumentType::ArrayBool;
+    case ExtArgumentType::ArrayTextEncodingNone:
+      return TExtArgumentType::ArrayTextEncodingNone;
+    case ExtArgumentType::ArrayTextEncodingDict:
+      return TExtArgumentType::ArrayTextEncodingDict;
     case ExtArgumentType::GeoPoint:
       return TExtArgumentType::GeoPoint;
     case ExtArgumentType::GeoLineString:
@@ -565,6 +585,8 @@ inline TExtArgumentType::type to_thrift(const ExtArgumentType& t) {
       return TExtArgumentType::ColumnDouble;
     case ExtArgumentType::ColumnBool:
       return TExtArgumentType::ColumnBool;
+    case ExtArgumentType::ColumnTextEncodingNone:
+      return TExtArgumentType::ColumnTextEncodingNone;
     case ExtArgumentType::ColumnTextEncodingDict:
       return TExtArgumentType::ColumnTextEncodingDict;
     case ExtArgumentType::ColumnTimestamp:
@@ -589,6 +611,8 @@ inline TExtArgumentType::type to_thrift(const ExtArgumentType& t) {
       return TExtArgumentType::ColumnListDouble;
     case ExtArgumentType::ColumnListBool:
       return TExtArgumentType::ColumnListBool;
+    case ExtArgumentType::ColumnListTextEncodingNone:
+      return TExtArgumentType::ColumnListTextEncodingNone;
     case ExtArgumentType::ColumnListTextEncodingDict:
       return TExtArgumentType::ColumnListTextEncodingDict;
     case ExtArgumentType::ColumnArrayInt8:
@@ -605,6 +629,10 @@ inline TExtArgumentType::type to_thrift(const ExtArgumentType& t) {
       return TExtArgumentType::ColumnArrayDouble;
     case ExtArgumentType::ColumnArrayBool:
       return TExtArgumentType::ColumnArrayBool;
+    case ExtArgumentType::ColumnArrayTextEncodingNone:
+      return TExtArgumentType::ColumnArrayTextEncodingNone;
+    case ExtArgumentType::ColumnArrayTextEncodingDict:
+      return TExtArgumentType::ColumnArrayTextEncodingDict;
     case ExtArgumentType::ColumnListArrayInt8:
       return TExtArgumentType::ColumnListArrayInt8;
     case ExtArgumentType::ColumnListArrayInt16:
@@ -619,6 +647,10 @@ inline TExtArgumentType::type to_thrift(const ExtArgumentType& t) {
       return TExtArgumentType::ColumnListArrayDouble;
     case ExtArgumentType::ColumnListArrayBool:
       return TExtArgumentType::ColumnListArrayBool;
+    case ExtArgumentType::ColumnListArrayTextEncodingDict:
+      return TExtArgumentType::ColumnListArrayTextEncodingDict;
+    case ExtArgumentType::ColumnListArrayTextEncodingNone:
+      return TExtArgumentType::ColumnListArrayTextEncodingNone;
   }
   UNREACHABLE();
   return TExtArgumentType::type{};

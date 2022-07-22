@@ -94,6 +94,9 @@ public class ExtensionFunction {
     ColumnListArrayDouble,
     ColumnListArrayBool,
     GeoMultiLineString,
+    ArrayTextEncodingDict,
+    ColumnArrayTextEncodingDict,
+    ColumnListArrayTextEncodingDict,
   }
   ;
 
@@ -269,6 +272,8 @@ public class ExtensionFunction {
         return "Array<double>";
       case ArrayBool:
         return "Array<bool>";
+      case ArrayTextEncodingDict:
+        return "Array<TextEncodingDict>";
       case ColumnInt8:
         return "Column<i8>";
       case ColumnInt16:
@@ -335,6 +340,8 @@ public class ExtensionFunction {
         return "Column<Array<double>>";
       case ColumnArrayBool:
         return "Column<Array<bool>>";
+      case ColumnArrayTextEncodingDict:
+        return "Column<Array<TextEncodingDict>>";
       case ColumnListArrayInt8:
         return "ColumnList<Array<i8>>";
       case ColumnListArrayInt16:
@@ -349,6 +356,8 @@ public class ExtensionFunction {
         return "ColumnList<Array<double>>";
       case ColumnListArrayBool:
         return "ColumnList<Array<bool>>";
+      case ColumnListArrayTextEncodingDict:
+        return "ColumnList<Array<TextEncodingDict>>";
     }
     HEAVYDBLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
     assert false;
@@ -399,7 +408,8 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ColumnArrayInt64
             || type == ExtArgumentType.ColumnArrayFloat
             || type == ExtArgumentType.ColumnArrayDouble
-            || type == ExtArgumentType.ColumnArrayBool;
+            || type == ExtArgumentType.ColumnArrayBool
+            || type == ExtArgumentType.ColumnArrayTextEncodingDict;
   }
 
   public static boolean isColumnListArrayType(final ExtArgumentType type) {
@@ -409,7 +419,8 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ColumnListArrayInt64
             || type == ExtArgumentType.ColumnListArrayFloat
             || type == ExtArgumentType.ColumnListArrayDouble
-            || type == ExtArgumentType.ColumnListArrayBool;
+            || type == ExtArgumentType.ColumnListArrayBool
+            || type == ExtArgumentType.ColumnListArrayTextEncodingDict;
   }
 
   public static boolean isColumnType(final ExtArgumentType type) {
@@ -480,6 +491,8 @@ public class ExtensionFunction {
       case TextEncodingDict:
       case ColumnTextEncodingDict:
       case ColumnListTextEncodingDict:
+      case ColumnArrayTextEncodingDict:
+      case ColumnListArrayTextEncodingDict:
         return ExtArgumentType.TextEncodingDict;
       case ColumnTimestamp:
         return ExtArgumentType.Timestamp;
@@ -559,6 +572,8 @@ public class ExtensionFunction {
       case ArrayFloat:
       case ArrayDouble:
       case ArrayBool:
+      case ArrayTextEncodingDict:
+        return SqlTypeName.ARRAY;
       case ColumnArrayInt8:
       case ColumnArrayInt16:
       case ColumnArrayInt32:
@@ -566,6 +581,7 @@ public class ExtensionFunction {
       case ColumnArrayFloat:
       case ColumnArrayDouble:
       case ColumnArrayBool:
+      case ColumnArrayTextEncodingDict:
         return SqlTypeName.ARRAY;
       case GeoPoint:
       case GeoLineString:
@@ -596,6 +612,7 @@ public class ExtensionFunction {
       case ColumnListArrayFloat:
       case ColumnListArrayDouble:
       case ColumnListArrayBool:
+      case ColumnListArrayTextEncodingDict:
       case ColumnListTextEncodingDict:
         return SqlTypeName.COLUMN_LIST;
       case Void:

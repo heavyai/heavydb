@@ -92,6 +92,20 @@ EXTENSION_NOINLINE_HOST void TableFunctionManager_get_metadata(
     size_t& num_bytes,
     TableFunctionMetadataType& value_type);
 
+EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_getNewDictId(int8_t* mgr_ptr);
+#ifndef UDF_COMPILED
+/* UDFCompiler uses C-linkage that does not support functions returning std::string */
+EXTENSION_NOINLINE_HOST std::string TableFunctionManager_getString(int8_t* mgr_ptr,
+                                                                   int32_t dict_id,
+                                                                   int32_t string_id);
+#endif
+EXTENSION_NOINLINE_HOST const char* TableFunctionManager_getCString(int8_t* mgr_ptr,
+                                                                    int32_t dict_id,
+                                                                    int32_t string_id);
+EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_getOrAddTransient(int8_t* mgr_ptr,
+                                                                       int32_t dict_id,
+                                                                       std::string str);
+
 // https://www.fluentcpp.com/2018/04/06/strong-types-by-struct/
 struct TextEncodingDict {
   int32_t value;
@@ -142,6 +156,12 @@ struct TextEncodingDict {
   DEVICE ALWAYS_INLINE bool operator<(const int64_t& other) const {
     return value < other;
   }
+
+#ifdef HAVE_TOSTRING
+  std::string toString() const {
+    return ::typeName(this) + "(value=" + ::toString(value) + ")";
+  }
+#endif
 };
 
 template <>
@@ -190,10 +210,7 @@ struct Array {
 
   DEVICE bool isNull() const { return is_null; }
 
-  DEVICE constexpr inline T null_value() const {
-    return std::is_signed<T>::value ? std::numeric_limits<T>::min()
-                                    : std::numeric_limits<T>::max();
-  }
+  DEVICE constexpr inline T null_value() const { return inline_null_value<T>(); }
 
   DEVICE bool isNull(const unsigned int index) const {
     return (is_null ? false : ptr[index] == null_value());
@@ -235,6 +252,7 @@ struct TextEncodingNone {
   }
   operator std::string() const { return std::string(ptr_, size_); }
   std::string getString() const { return std::string(ptr_, size_); }
+  const char* getCString() const { return ptr_; }
 #endif
 
   DEVICE ALWAYS_INLINE char& operator[](const unsigned int index) {
@@ -398,6 +416,11 @@ struct Timestamp {
   DEVICE ALWAYS_INLINE int64_t getYear() const {
     return ExtractFromTime(kYEAR, time / kNanoSecsPerSec);
   }
+#ifdef HAVE_TOSTRING
+  std::string toString() const {
+    return ::typeName(this) + "(time=" + ::toString(time) + ")";
+  }
+#endif
 #endif
 };
 
@@ -598,19 +621,47 @@ struct Column<Array<T>> {
   Column<Array<T>>(int8_t* flatbuffer, const int64_t num_rows)
       : flatbuffer_(flatbuffer), num_rows_(num_rows) {}
 
-  DEVICE Array<T> operator[](const unsigned int index) const {
+  DEVICE Array<T> getItem(const int64_t index, const int64_t expected_numel = -1) const {
     FlatBufferManager m{flatbuffer_};
     int8_t* ptr;
     int64_t size;
     bool is_null;
     auto status = m.getItem(index, size, ptr, is_null);
+    if (status == FlatBufferManager::Status::ItemUnspecifiedError) {
+      if (expected_numel < 0) {
 #ifndef __CUDACC__
-    if (status != FlatBufferManager::Status::Success) {
-      throw std::runtime_error("operator[] failed: " + ::toString(status));
-    }
+        throw std::runtime_error("getItem failed: " + ::toString(status));
 #endif
+      }
+      status = m.setItem(index,
+                         nullptr,
+                         expected_numel * sizeof(T),
+                         nullptr);  // reserves a junk in array buffer
+      if (status != FlatBufferManager::Status::Success) {
+#ifndef __CUDACC__
+        throw std::runtime_error("getItem failed[setItem]: " + ::toString(status));
+#endif
+      }
+      status = m.getItem(index, size, ptr, is_null);
+    }
+    if (status == FlatBufferManager::Status::Success) {
+      if (expected_numel >= 0 &&
+          expected_numel * static_cast<int64_t>(sizeof(T)) != size) {
+#ifndef __CUDACC__
+        throw std::runtime_error("getItem failed: unexpected size");
+#endif
+      }
+    } else {
+#ifndef __CUDACC__
+      throw std::runtime_error("getItem failed: " + ::toString(status));
+#endif
+    }
     Array<T> result(reinterpret_cast<T*>(ptr), size / sizeof(T), is_null);
     return result;
+  }
+
+  DEVICE inline Array<T> operator[](const unsigned int index) const {
+    return getItem(static_cast<int64_t>(index));
   }
 
   DEVICE int64_t size() const { return num_rows_; }
@@ -670,6 +721,11 @@ struct Column<Array<T>> {
 #endif
     }
   }
+
+  DEVICE inline int32_t getDictId() const {
+    FlatBufferManager m{flatbuffer_};
+    return m.getDTypeMetadataDictId();
+  }
 };
 
 template <>
@@ -714,10 +770,18 @@ struct Column<TextEncodingDict> {
 
 #ifndef __CUDACC__
 #ifndef UDF_COMPILED
+  DEVICE inline int32_t getDictId() const { return string_dict_proxy_->getDictId(); }
   DEVICE inline const std::string getString(int64_t index) const {
     return isNull(index) ? "" : string_dict_proxy_->getString(ptr_[index].value);
   }
-  DEVICE inline const TextEncodingDict getStringId(const std::string& str) {
+  DEVICE inline const char* getCString(int64_t index) const {
+    if (isNull(index)) {
+      return nullptr;
+    }
+    auto [c_str, len] = string_dict_proxy_->getStringBytes(ptr_[index].value);
+    return c_str;
+  }
+  DEVICE inline const TextEncodingDict getOrAddTransient(const std::string& str) {
     return string_dict_proxy_->getOrAddTransient(str);
   }
 #endif  // #ifndef UDF_COMPILED
@@ -980,6 +1044,23 @@ struct TableFunctionManager {
       throw std::runtime_error("Type mismatch for Table Function Metadata '" + key + "'");
     }
     std::memcpy(&value, raw_data, num_bytes);
+  }
+  int32_t getNewDictId() {
+    return TableFunctionManager_getNewDictId(reinterpret_cast<int8_t*>(this));
+  }
+#ifndef UDF_COMPILED
+  std::string getString(int32_t dict_id, int32_t string_id) {
+    return TableFunctionManager_getString(
+        reinterpret_cast<int8_t*>(this), dict_id, string_id);
+  }
+#endif
+  const char* getCString(int32_t dict_id, int32_t string_id) {
+    return TableFunctionManager_getCString(
+        reinterpret_cast<int8_t*>(this), dict_id, string_id);
+  }
+  int32_t getOrAddTransient(int32_t dict_id, std::string str) {
+    return TableFunctionManager_getOrAddTransient(
+        reinterpret_cast<int8_t*>(this), dict_id, str);
   }
 
 #ifdef HAVE_TOSTRING

@@ -687,7 +687,7 @@ int32_t ct_substr__cpu_(TableFunctionManager& mgr,
   for (int64_t row_idx = 0; row_idx < num_rows; row_idx++) {
     const std::string input_string{input_str.getString(row_idx)};
     const std::string substring = input_string.substr(pos[row_idx], len[row_idx]);
-    const TextEncodingDict substr_id = output_substr.getStringId(substring);
+    const TextEncodingDict substr_id = output_substr.getOrAddTransient(substring);
     output_substr[row_idx] = substr_id;
   }
   return num_rows;
@@ -715,7 +715,7 @@ int32_t ct_string_concat__cpu_(TableFunctionManager& mgr,
         concatted_output += input_strings[col_idx].getString(row_idx);
       }
       const TextEncodingDict concatted_str_id =
-          concatted_string.getStringId(concatted_output);
+          concatted_string.getOrAddTransient(concatted_output);
       concatted_string[row_idx] = concatted_str_id;
     } else {
       concatted_string.setNull(row_idx);
@@ -736,7 +736,7 @@ int32_t ct_synthesize_new_dict__cpu_(TableFunctionManager& mgr,
   mgr.set_output_row_size(num_strings);
   for (int32_t s = 0; s < num_strings; ++s) {
     const std::string new_string = "String_" + std::to_string(s);
-    const int32_t string_id = new_dict_col.getStringId(new_string);
+    const int32_t string_id = new_dict_col.getOrAddTransient(new_string);
     new_dict_col[s] = string_id;
   }
   return num_strings;
@@ -2036,7 +2036,8 @@ EXTENSION_NOINLINE_HOST int32_t ct_timestamp_truncate(TableFunctionManager& mgr,
 
 // clang-format off
 /*
-  UDTF: sum_along_row__cpu_template(Column<Array<T>> input) -> Column<T>, T=[float, double, int8_t, int16_t, int32_t, int64_t, bool] | output_row_size="input.size()"
+  UDTF: sum_along_row__cpu_template(Column<Array<T>> input) -> Column<T>,
+          T=[float, double, int8_t, int16_t, int32_t, int64_t, bool, TextEncodingDict] | output_row_size="input.size()" | input_id=args<0>
 */
 // clang-format on
 template <typename T>
@@ -2048,20 +2049,34 @@ NEVER_INLINE HOST int32_t sum_along_row__cpu_template(const Column<Array<T>>& in
     if (arr.isNull()) {
       output.setNull(i);
     } else {
-      T acc{0};
-      for (auto j = 0; j < arr.getSize(); j++) {
-        if constexpr (std::is_same_v<T, bool>) {
-          // todo: arr.isNull(i) returns arr[i] because bool does not
-          // have null value, we should introduce 8-bit boolean type
-          // for Arrays
-          acc |= arr[j];
-        } else {
+      if constexpr (std::is_same<T, TextEncodingDict>::value) {
+        auto* mgr = TableFunctionManager::get_singleton();
+        int32_t input_dict_id = input.getDictId();
+        int32_t output_dict_id = output.getDictId();
+        std::string acc = "";
+        for (auto j = 0; j < arr.getSize(); j++) {
           if (!arr.isNull(j)) {
-            acc += arr[j];
+            acc += mgr->getString(input_dict_id, arr[j]);
           }
         }
+        int32_t out_string_id = mgr->getOrAddTransient(output_dict_id, acc);
+        output[i] = out_string_id;
+      } else {
+        T acc{0};
+        for (auto j = 0; j < arr.getSize(); j++) {
+          if constexpr (std::is_same_v<T, bool>) {
+            // todo: arr.isNull(i) returns arr[i] because bool does not
+            // have null value, we should introduce 8-bit boolean type
+            // for Arrays
+            acc |= arr[j];
+          } else {
+            if (!arr.isNull(j)) {
+              acc += arr[j];
+            }
+          }
+        }
+        output[i] = acc;
       }
-      output[i] = acc;
     }
   }
   return size;
@@ -2069,7 +2084,9 @@ NEVER_INLINE HOST int32_t sum_along_row__cpu_template(const Column<Array<T>>& in
 
 // clang-format off
 /*
-  UDTF: array_copier__cpu_template(TableFunctionManager mgr, Column<Array<T>> input) -> Column<Array<T>>, T=[float, double, int8_t, int16_t, int32_t, int64_t, bool]
+  UDTF: array_copier__cpu_template(TableFunctionManager mgr, Column<Array<T>> input) -> Column<Array<T>>,
+           T=[float, double, int8_t, int16_t, int32_t, int64_t, bool]
+  UDTF: array_copier__cpu_template(TableFunctionManager mgr, Column<Array<TextEncodingDict>> input) -> Column<Array<TextEncodingDict>> | input_id=args<0>
 */
 // clang-format on
 template <typename T>
@@ -2092,7 +2109,11 @@ NEVER_INLINE HOST int32_t array_copier__cpu_template(TableFunctionManager& mgr,
 
   // set the items of output colums:
   for (int i = 0; i < size; i++) {
-    output.setItem(i, input[i]);
+    if (input.isNull(i)) {
+      output.setNull(i);
+    } else {
+      output.setItem(i, input[i]);
+    }
   }
 
   return size;
@@ -2100,7 +2121,8 @@ NEVER_INLINE HOST int32_t array_copier__cpu_template(TableFunctionManager& mgr,
 
 // clang-format off
 /*
-  UDTF: array_concat__cpu_template(TableFunctionManager mgr, ColumnList<Array<T>> input) -> Column<Array<T>>, T=[float, double, int8_t, int16_t, int32_t, int64_t, bool]
+  UDTF: array_concat__cpu_template(TableFunctionManager mgr, ColumnList<Array<T>> input) -> Column<Array<T>> | input_id=args<0>,
+          T=[float, double, int8_t, int16_t, int32_t, int64_t, bool, TextEncodingDict]
 */
 // clang-format on
 template <typename T>
@@ -2124,8 +2146,66 @@ NEVER_INLINE HOST int32_t array_concat__cpu_template(TableFunctionManager& mgr,
   for (int i = 0; i < size; i++) {
     for (int j = 0; j < inputs.numCols(); j++) {
       Column<Array<T>> col = inputs[j];
-      output.concatItem(i,
-                        col[i]);  // works only if i is the last row set, otherwise throws
+      Array<T> arr = col[i];
+      if constexpr (std::is_same<T, TextEncodingDict>::value) {
+        auto input_dict_id = col.getDictId();
+        auto output_dict_id = output.getDictId();
+        if (input_dict_id == output_dict_id) {
+          output.concatItem(i, arr);
+        } else {
+          throw std::runtime_error(
+              "concat of text encoding dict arrays with different dictionary ids is not "
+              "implemented");
+        }
+      } else {
+        output.concatItem(i,
+                          arr);  // works only if i is the last row set, otherwise throws
+      }
+    }
+  }
+  return size;
+}
+
+// clang-format off
+/*
+  UDTF: array_asarray__cpu_template(TableFunctionManager mgr, Column<T> input) -> Column<Array<T>> | input_id=args<>,
+          T=[int64_t, TextEncodingDict]
+*/
+// clang-format on
+template <typename T>
+NEVER_INLINE HOST int32_t array_asarray__cpu_template(TableFunctionManager& mgr,
+                                                      const Column<T>& input,
+                                                      Column<Array<T>>& output) {
+  int size = input.size();
+  int output_values_size = 0;
+  for (int i = 0; i < size; i++) {
+    output_values_size += (input.isNull(i) ? 0 : 1);
+  }
+  mgr.set_output_array_values_total_number(
+      /*output column index=*/0,
+      /*upper bound to the number of items in all output arrays=*/output_values_size);
+  mgr.set_output_row_size(size);
+
+  if constexpr (std::is_same<T, TextEncodingDict>::value) {
+    int32_t input_dict_id = input.getDictId();
+    int32_t output_dict_id = mgr.getNewDictId();
+    for (int i = 0; i < size; i++) {
+      if (input.isNull(i)) {
+        output.setNull(i);
+      } else {
+        Array<T> arr = output.getItem(i, 1);
+        arr[0] =
+            mgr.getOrAddTransient(output_dict_id, mgr.getString(input_dict_id, input[i]));
+      }
+    }
+  } else {
+    for (int i = 0; i < size; i++) {
+      if (input.isNull(i)) {
+        output.setNull(i);
+      } else {
+        Array<T> arr = output.getItem(i, 1);
+        arr[0] = input[i];
+      }
     }
   }
   return size;

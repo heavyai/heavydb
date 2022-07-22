@@ -43,39 +43,8 @@ SQLTypeInfo ext_arg_pointer_type_to_type_info(const ExtArgumentType ext_arg_type
       return SQLTypeInfo(kDOUBLE, false);
     case ExtArgumentType::PBool:
       return SQLTypeInfo(kBOOLEAN, false);
-    case ExtArgumentType::ColumnInt8:
-      return generate_column_type(kTINYINT);
-    case ExtArgumentType::ColumnInt16:
-      return generate_column_type(kSMALLINT);
-    case ExtArgumentType::ColumnInt32:
-      return generate_column_type(kINT);
-    case ExtArgumentType::ColumnInt64:
-      return generate_column_type(kBIGINT);
-    case ExtArgumentType::ColumnFloat:
-      return generate_column_type(kFLOAT);
-    case ExtArgumentType::ColumnDouble:
-      return generate_column_type(kDOUBLE);
-    case ExtArgumentType::ColumnBool:
-      return generate_column_type(kBOOLEAN);
-    case ExtArgumentType::ColumnListInt8:
-      return generate_column_list_type(kTINYINT);
-    case ExtArgumentType::ColumnListInt16:
-      return generate_column_list_type(kSMALLINT);
-    case ExtArgumentType::ColumnListInt32:
-      return generate_column_list_type(kINT);
-    case ExtArgumentType::ColumnListInt64:
-      return generate_column_list_type(kBIGINT);
-    case ExtArgumentType::ColumnListFloat:
-      return generate_column_list_type(kFLOAT);
-    case ExtArgumentType::ColumnListDouble:
-      return generate_column_list_type(kDOUBLE);
-    case ExtArgumentType::ColumnListBool:
-      return generate_column_list_type(kBOOLEAN);
     default:
-      LOG(WARNING) << "ext_arg_pointer_type_to_type_info: ExtArgumentType `"
-                   << ExtensionFunctionsWhitelist::toString(ext_arg_type)
-                   << "` conversion to SQLTypeInfo not implemented.";
-      UNREACHABLE();
+      return ext_arg_type_to_type_info(ext_arg_type);
   }
   UNREACHABLE();
   return SQLTypeInfo(kNULLT, false);
@@ -84,72 +53,21 @@ SQLTypeInfo ext_arg_pointer_type_to_type_info(const ExtArgumentType ext_arg_type
 SQLTypeInfo ext_arg_type_to_type_info_output(const ExtArgumentType ext_arg_type) {
   switch (ext_arg_type) {
     case ExtArgumentType::PInt8:
-    case ExtArgumentType::ColumnInt8:
-    case ExtArgumentType::ColumnListInt8:
-    case ExtArgumentType::Int8:
       return SQLTypeInfo(kTINYINT, false);
     case ExtArgumentType::PInt16:
-    case ExtArgumentType::ColumnInt16:
-    case ExtArgumentType::ColumnListInt16:
-    case ExtArgumentType::Int16:
       return SQLTypeInfo(kSMALLINT, false);
     case ExtArgumentType::PInt32:
-    case ExtArgumentType::ColumnInt32:
-    case ExtArgumentType::ColumnListInt32:
-    case ExtArgumentType::Int32:
       return SQLTypeInfo(kINT, false);
     case ExtArgumentType::PInt64:
-    case ExtArgumentType::ColumnInt64:
-    case ExtArgumentType::ColumnListInt64:
-    case ExtArgumentType::Int64:
       return SQLTypeInfo(kBIGINT, false);
     case ExtArgumentType::PFloat:
-    case ExtArgumentType::ColumnFloat:
-    case ExtArgumentType::ColumnListFloat:
-    case ExtArgumentType::Float:
       return SQLTypeInfo(kFLOAT, false);
     case ExtArgumentType::PDouble:
-    case ExtArgumentType::ColumnDouble:
-    case ExtArgumentType::ColumnListDouble:
-    case ExtArgumentType::Double:
       return SQLTypeInfo(kDOUBLE, false);
     case ExtArgumentType::PBool:
-    case ExtArgumentType::ColumnBool:
-    case ExtArgumentType::ColumnListBool:
-    case ExtArgumentType::Bool:
       return SQLTypeInfo(kBOOLEAN, false);
-    case ExtArgumentType::ColumnTextEncodingDict:
-    case ExtArgumentType::ColumnListTextEncodingDict:
-    case ExtArgumentType::TextEncodingDict:
-      return SQLTypeInfo(kTEXT, false, kENCODING_DICT);
-    case ExtArgumentType::ColumnTimestamp:
-      return SQLTypeInfo(kTIMESTAMP, 9, 0, false);
-    case ExtArgumentType::ColumnArrayInt8:
-    case ExtArgumentType::ColumnListArrayInt8:
-      return generate_array_type(kTINYINT);
-    case ExtArgumentType::ColumnArrayInt16:
-    case ExtArgumentType::ColumnListArrayInt16:
-      return generate_array_type(kSMALLINT);
-    case ExtArgumentType::ColumnArrayInt32:
-    case ExtArgumentType::ColumnListArrayInt32:
-      return generate_array_type(kINT);
-    case ExtArgumentType::ColumnArrayInt64:
-    case ExtArgumentType::ColumnListArrayInt64:
-      return generate_array_type(kBIGINT);
-    case ExtArgumentType::ColumnArrayFloat:
-    case ExtArgumentType::ColumnListArrayFloat:
-      return generate_array_type(kFLOAT);
-    case ExtArgumentType::ColumnArrayDouble:
-    case ExtArgumentType::ColumnListArrayDouble:
-      return generate_array_type(kDOUBLE);
-    case ExtArgumentType::ColumnArrayBool:
-    case ExtArgumentType::ColumnListArrayBool:
-      return generate_array_type(kBOOLEAN);
     default:
-      LOG(WARNING) << "ext_arg_type_to_type_info_output: ExtArgumentType `"
-                   << ExtensionFunctionsWhitelist::toString(ext_arg_type)
-                   << "` conversion to SQLTypeInfo not implemented.";
-      UNREACHABLE();
+      return ext_arg_type_to_type_info(ext_arg_type).get_elem_type();
   }
   UNREACHABLE();
   return SQLTypeInfo(kNULLT, false);

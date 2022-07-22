@@ -34,6 +34,10 @@ inline ExtArgumentType ext_arg_type_ensure_column(const ExtArgumentType ext_arg_
       return ExtArgumentType::ColumnDouble;
     case ExtArgumentType::Bool:
       return ExtArgumentType::ColumnBool;
+    case ExtArgumentType::TextEncodingDict:
+      return ExtArgumentType::ColumnTextEncodingDict;
+    case ExtArgumentType::TextEncodingNone:
+      return ExtArgumentType::ColumnTextEncodingNone;
     case ExtArgumentType::ArrayInt8:
       return ExtArgumentType::ColumnArrayInt8;
     case ExtArgumentType::ArrayInt16:
@@ -48,6 +52,10 @@ inline ExtArgumentType ext_arg_type_ensure_column(const ExtArgumentType ext_arg_
       return ExtArgumentType::ColumnArrayDouble;
     case ExtArgumentType::ArrayBool:
       return ExtArgumentType::ColumnArrayBool;
+    case ExtArgumentType::ArrayTextEncodingDict:
+      return ExtArgumentType::ColumnArrayTextEncodingDict;
+    case ExtArgumentType::ArrayTextEncodingNone:
+      return ExtArgumentType::ColumnArrayTextEncodingNone;
     default:
       return ext_arg_type;
   }
@@ -70,6 +78,10 @@ inline ExtArgumentType ext_arg_type_ensure_column_list(
       return ExtArgumentType::ColumnListDouble;
     case ExtArgumentType::Bool:
       return ExtArgumentType::ColumnListBool;
+    case ExtArgumentType::TextEncodingDict:
+      return ExtArgumentType::ColumnListTextEncodingDict;
+    case ExtArgumentType::TextEncodingNone:
+      return ExtArgumentType::ColumnListTextEncodingNone;
     case ExtArgumentType::ArrayInt8:
       return ExtArgumentType::ColumnListArrayInt8;
     case ExtArgumentType::ArrayInt16:
@@ -84,6 +96,10 @@ inline ExtArgumentType ext_arg_type_ensure_column_list(
       return ExtArgumentType::ColumnListArrayDouble;
     case ExtArgumentType::ArrayBool:
       return ExtArgumentType::ColumnListArrayBool;
+    case ExtArgumentType::ArrayTextEncodingDict:
+      return ExtArgumentType::ColumnListArrayTextEncodingDict;
+    case ExtArgumentType::ArrayTextEncodingNone:
+      return ExtArgumentType::ColumnListArrayTextEncodingNone;
     default:
       return ext_arg_type;
   }
@@ -98,6 +114,8 @@ inline bool is_ext_arg_type_array(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::ArrayFloat:
     case ExtArgumentType::ArrayDouble:
     case ExtArgumentType::ArrayBool:
+    case ExtArgumentType::ArrayTextEncodingDict:
+    case ExtArgumentType::ArrayTextEncodingNone:
       return true;
 
     default:
@@ -115,6 +133,7 @@ inline bool is_ext_arg_type_column(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::ColumnDouble:
     case ExtArgumentType::ColumnBool:
     case ExtArgumentType::ColumnTextEncodingDict:
+    case ExtArgumentType::ColumnTextEncodingNone:
     case ExtArgumentType::ColumnTimestamp:
     case ExtArgumentType::ColumnArrayInt8:
     case ExtArgumentType::ColumnArrayInt16:
@@ -123,6 +142,8 @@ inline bool is_ext_arg_type_column(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::ColumnArrayFloat:
     case ExtArgumentType::ColumnArrayDouble:
     case ExtArgumentType::ColumnArrayBool:
+    case ExtArgumentType::ColumnArrayTextEncodingDict:
+    case ExtArgumentType::ColumnArrayTextEncodingNone:
       return true;
 
     default:
@@ -140,6 +161,7 @@ inline bool is_ext_arg_type_column_list(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::ColumnListDouble:
     case ExtArgumentType::ColumnListBool:
     case ExtArgumentType::ColumnListTextEncodingDict:
+    case ExtArgumentType::ColumnListTextEncodingNone:
     case ExtArgumentType::ColumnListArrayInt8:
     case ExtArgumentType::ColumnListArrayInt16:
     case ExtArgumentType::ColumnListArrayInt32:
@@ -147,6 +169,8 @@ inline bool is_ext_arg_type_column_list(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::ColumnListArrayFloat:
     case ExtArgumentType::ColumnListArrayDouble:
     case ExtArgumentType::ColumnListArrayBool:
+    case ExtArgumentType::ColumnListArrayTextEncodingDict:
+    case ExtArgumentType::ColumnListArrayTextEncodingNone:
       return true;
 
     default:

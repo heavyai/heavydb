@@ -20,8 +20,8 @@
 #include "Execute.h"
 #include "Shared/Intervals.h"
 #include "Shared/likely.h"
+#include "Shared/sqltypes.h"
 #include "Shared/thread_count.h"
-#include "Utils/FlatBuffer.h"
 
 #include <tbb/parallel_reduce.h>
 #include <atomic>
@@ -79,8 +79,9 @@ int64_t toBuffer(const TargetValue& col_val, const SQLTypeInfo& type_info, int8_
     CHECK(array_col_val);
     const auto& vec = array_col_val->get();
     int64_t offset = 0;
+    const auto elem_type_info = type_info.get_elem_type();
     for (const auto& item : vec) {
-      offset += toBuffer(item, type_info.get_subtype(), buf + offset);
+      offset += toBuffer(item, elem_type_info, buf + offset);
     }
     return offset;
   } else if (type_info.is_fp()) {
@@ -97,7 +98,7 @@ int64_t toBuffer(const TargetValue& col_val, const SQLTypeInfo& type_info, int8_
         return 8;
       }
       default:
-        UNREACHABLE();
+        CHECK(false);
     }
   } else {
     const auto scalar_col_val = boost::get<ScalarTargetValue>(&col_val);
@@ -170,25 +171,23 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
   CHECK(executor_);
   CHECK_EQ(padded_target_sizes_.size(), target_types.size());
   for (size_t i = 0; i < num_columns; ++i) {
-    if (target_types[i].is_array()) {
+    const auto ti = target_types[i];
+    if (ti.is_array()) {
       if (isDirectColumnarConversionPossible() &&
           rows.isZeroCopyColumnarConversionPossible(i)) {
         const int8_t* col_buf = rows.getColumnarBuffer(i);
         CHECK(FlatBufferManager::isFlatBuffer(col_buf));
       } else {
         int64_t values_count = countNumberOfValues(rows, i);
-        const size_t array_item_width = target_types[i].get_elem_type().get_size();
         const int64_t flatbuffer_size =
-            FlatBufferManager::get_VarlenArray_flatbuffer_size(
-                num_rows_, values_count, array_item_width);
+            getVarlenArrayBufferSize(num_rows_, values_count, ti);
         column_buffers_[i] = row_set_mem_owner->allocate(flatbuffer_size, thread_idx_);
         FlatBufferManager m{column_buffers_[i]};
-        m.initializeVarlenArray(num_rows_, values_count, array_item_width);
+        initializeVarlenArray(m, num_rows_, values_count, ti);
       }
     } else {
-      const bool is_varlen = (target_types[i].is_string() &&
-                              target_types[i].get_compression() == kENCODING_NONE) ||
-                             target_types[i].is_geometry();
+      const bool is_varlen =
+          (ti.is_string() && ti.get_compression() == kENCODING_NONE) || ti.is_geometry();
       if (is_varlen) {
         throw ColumnarConversionNotSupported();
       }

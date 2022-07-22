@@ -200,6 +200,8 @@ std::string serialize_type(const ExtArgumentType type,
       return (declare ? "{double*, i64, i8}*" : "Array<double>");
     case ExtArgumentType::ArrayBool:
       return (declare ? "{i1*, i64, i8}*" : "Array<i1>");
+    case ExtArgumentType::ArrayTextEncodingDict:
+      return (declare ? "{i32*, i64, i8}*" : "Array<TextEncodingDict>");
     case ExtArgumentType::GeoPoint:
       return "geo_point";
     case ExtArgumentType::GeoLineString:
@@ -266,6 +268,8 @@ std::string serialize_type(const ExtArgumentType type,
       return (declare ? "{i8*, i64}*" : "Column<Array<double>>");
     case ExtArgumentType::ColumnArrayBool:
       return (declare ? "{i8*, i64}*" : "Column<Array<bool>>");
+    case ExtArgumentType::ColumnArrayTextEncodingDict:
+      return (declare ? "{i8*, i64}" : "Column<Array<TextEncodingDict>>");
     case ExtArgumentType::ColumnListArrayInt8:
       return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<i8>");
     case ExtArgumentType::ColumnListArrayInt16:
@@ -280,6 +284,8 @@ std::string serialize_type(const ExtArgumentType type,
       return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<double>");
     case ExtArgumentType::ColumnListArrayBool:
       return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<bool>");
+    case ExtArgumentType::ColumnListArrayTextEncodingDict:
+      return (declare ? "{i8**, i64, i64}" : "ColumnList<Array<TextEncodingDict>>");
     default:
       CHECK(false);
   }
@@ -299,112 +305,73 @@ std::string drop_suffix(const std::string& str) {
 }  // namespace
 
 SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
-  /* This function is mostly used for scalar types.
-     For non-scalar types, NULL is returned as a placeholder.
-   */
+  SQLTypes type = kNULLT;
+  int d = 0;
+  int s = 0;
+  bool n = false;
+  EncodingType c = kENCODING_NONE;
+  int p = 0;
+  SQLTypes subtype = kNULLT;
+
+#define EXTARGTYPECASE(EXTARGTYPE, ELEMTYPE, ENCODING, ARRAYENCODING) \
+  case ExtArgumentType::EXTARGTYPE:                                   \
+    type = ELEMTYPE;                                                  \
+    c = kENCODING_##ENCODING;                                         \
+    break;                                                            \
+  case ExtArgumentType::Array##EXTARGTYPE:                            \
+    type = kARRAY;                                                    \
+    c = kENCODING_##ENCODING;                                         \
+    subtype = ELEMTYPE;                                               \
+    break;                                                            \
+  case ExtArgumentType::Column##EXTARGTYPE:                           \
+    type = kCOLUMN;                                                   \
+    c = kENCODING_##ENCODING;                                         \
+    subtype = ELEMTYPE;                                               \
+    break;                                                            \
+  case ExtArgumentType::ColumnList##EXTARGTYPE:                       \
+    type = kCOLUMN_LIST;                                              \
+    c = kENCODING_##ENCODING;                                         \
+    subtype = ELEMTYPE;                                               \
+    break;                                                            \
+  case ExtArgumentType::ColumnArray##EXTARGTYPE:                      \
+    type = kCOLUMN;                                                   \
+    subtype = ELEMTYPE;                                               \
+    c = kENCODING_##ARRAYENCODING;                                    \
+    break;                                                            \
+  case ExtArgumentType::ColumnListArray##EXTARGTYPE:                  \
+    type = kCOLUMN_LIST;                                              \
+    subtype = ELEMTYPE;                                               \
+    c = kENCODING_##ARRAYENCODING;                                    \
+    break;
 
   switch (ext_arg_type) {
-    case ExtArgumentType::Bool:
-      return SQLTypeInfo(kBOOLEAN, false);
-    case ExtArgumentType::Int8:
-      return SQLTypeInfo(kTINYINT, false);
-    case ExtArgumentType::Int16:
-      return SQLTypeInfo(kSMALLINT, false);
-    case ExtArgumentType::Int32:
-      return SQLTypeInfo(kINT, false);
-    case ExtArgumentType::Int64:
-      return SQLTypeInfo(kBIGINT, false);
-    case ExtArgumentType::Float:
-      return SQLTypeInfo(kFLOAT, false);
-    case ExtArgumentType::Double:
-      return SQLTypeInfo(kDOUBLE, false);
-    case ExtArgumentType::ArrayInt8:
-      return generate_array_type(kTINYINT);
-    case ExtArgumentType::ArrayInt16:
-      return generate_array_type(kSMALLINT);
-    case ExtArgumentType::ArrayInt32:
-      return generate_array_type(kINT);
-    case ExtArgumentType::ArrayInt64:
-      return generate_array_type(kBIGINT);
-    case ExtArgumentType::ArrayFloat:
-      return generate_array_type(kFLOAT);
-    case ExtArgumentType::ArrayDouble:
-      return generate_array_type(kDOUBLE);
-    case ExtArgumentType::ArrayBool:
-      return generate_array_type(kBOOLEAN);
-    case ExtArgumentType::ColumnInt8:
-      return generate_column_type(kTINYINT);
-    case ExtArgumentType::ColumnInt16:
-      return generate_column_type(kSMALLINT);
-    case ExtArgumentType::ColumnInt32:
-      return generate_column_type(kINT);
-    case ExtArgumentType::ColumnInt64:
-      return generate_column_type(kBIGINT);
-    case ExtArgumentType::ColumnFloat:
-      return generate_column_type(kFLOAT);
-    case ExtArgumentType::ColumnDouble:
-      return generate_column_type(kDOUBLE);
-    case ExtArgumentType::ColumnBool:
-      return generate_column_type(kBOOLEAN);
-    case ExtArgumentType::ColumnTextEncodingDict:
-      return generate_column_type(kTEXT, kENCODING_DICT, 0 /* comp_param */);
-    case ExtArgumentType::TextEncodingNone:
-      return SQLTypeInfo(kTEXT, false, kENCODING_NONE);
-    case ExtArgumentType::TextEncodingDict:
-      return SQLTypeInfo(kTEXT, false, kENCODING_DICT);
+    EXTARGTYPECASE(Bool, kBOOLEAN, NONE, ARRAY);
+    EXTARGTYPECASE(Int8, kTINYINT, NONE, ARRAY);
+    EXTARGTYPECASE(Int16, kSMALLINT, NONE, ARRAY);
+    EXTARGTYPECASE(Int32, kINT, NONE, ARRAY);
+    EXTARGTYPECASE(Int64, kBIGINT, NONE, ARRAY);
+    EXTARGTYPECASE(Float, kFLOAT, NONE, ARRAY);
+    EXTARGTYPECASE(Double, kDOUBLE, NONE, ARRAY);
+    EXTARGTYPECASE(TextEncodingNone, kTEXT, NONE, ARRAY);
+    EXTARGTYPECASE(TextEncodingDict, kTEXT, DICT, ARRAY_DICT);
+    // TODO: EXTARGTYPECASE(Timestamp, kTIMESTAMP, NONE, ARRAY);
     case ExtArgumentType::Timestamp:
-      return SQLTypeInfo(kTIMESTAMP, 9, 0, false);
+      type = kTIMESTAMP;
+      c = kENCODING_NONE;
+      d = 9;
+      break;
     case ExtArgumentType::ColumnTimestamp:
-      return generate_column_type(kTIMESTAMP);
-    case ExtArgumentType::ColumnListInt8:
-      return generate_column_type(kTINYINT);
-    case ExtArgumentType::ColumnListInt16:
-      return generate_column_type(kSMALLINT);
-    case ExtArgumentType::ColumnListInt32:
-      return generate_column_type(kINT);
-    case ExtArgumentType::ColumnListInt64:
-      return generate_column_type(kBIGINT);
-    case ExtArgumentType::ColumnListFloat:
-      return generate_column_type(kFLOAT);
-    case ExtArgumentType::ColumnListDouble:
-      return generate_column_type(kDOUBLE);
-    case ExtArgumentType::ColumnListBool:
-      return generate_column_type(kBOOLEAN);
-    case ExtArgumentType::ColumnListTextEncodingDict:
-      return generate_column_type(kTEXT, kENCODING_DICT, 0 /* comp_param */);
-    case ExtArgumentType::ColumnArrayInt8:
-      return generate_column_array_type(kTINYINT);
-    case ExtArgumentType::ColumnArrayInt16:
-      return generate_column_array_type(kSMALLINT);
-    case ExtArgumentType::ColumnArrayInt32:
-      return generate_column_array_type(kINT);
-    case ExtArgumentType::ColumnArrayInt64:
-      return generate_column_array_type(kBIGINT);
-    case ExtArgumentType::ColumnArrayFloat:
-      return generate_column_array_type(kFLOAT);
-    case ExtArgumentType::ColumnArrayDouble:
-      return generate_column_array_type(kDOUBLE);
-    case ExtArgumentType::ColumnArrayBool:
-      return generate_column_array_type(kBOOLEAN);
-    case ExtArgumentType::ColumnListArrayInt8:
-      return generate_column_list_array_type(kTINYINT);
-    case ExtArgumentType::ColumnListArrayInt16:
-      return generate_column_list_array_type(kSMALLINT);
-    case ExtArgumentType::ColumnListArrayInt32:
-      return generate_column_list_array_type(kINT);
-    case ExtArgumentType::ColumnListArrayInt64:
-      return generate_column_list_array_type(kBIGINT);
-    case ExtArgumentType::ColumnListArrayFloat:
-      return generate_column_list_array_type(kFLOAT);
-    case ExtArgumentType::ColumnListArrayDouble:
-      return generate_column_list_array_type(kDOUBLE);
-    case ExtArgumentType::ColumnListArrayBool:
-      return generate_column_list_array_type(kBOOLEAN);
+      type = kCOLUMN;
+      subtype = kTIMESTAMP;
+      c = kENCODING_NONE;
+      d = 9;
+      break;
     default:
       LOG(FATAL) << "ExtArgumentType `" << serialize_type(ext_arg_type)
-                 << "` cannot be converted to SQLTypeInfo.";
+                 << "` cannot be converted to SQLTypes.";
+      UNREACHABLE();
   }
-  return SQLTypeInfo(kNULLT, false);
+  return SQLTypeInfo(type, d, s, n, c, p, subtype);
 }
 
 std::string ExtensionFunctionsWhitelist::toString(
@@ -504,6 +471,8 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "ARRAY<DOUBLE>";
     case ExtArgumentType::ArrayBool:
       return "ARRAY<BOOLEAN>";
+    case ExtArgumentType::ArrayTextEncodingDict:
+      return "ARRAY<TEXT ENCODING DICT>";
     case ExtArgumentType::ColumnInt8:
       return "COLUMN<TINYINT>";
     case ExtArgumentType::ColumnInt16:
@@ -572,6 +541,8 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "COLUMN<ARRAY<DOUBLE>>";
     case ExtArgumentType::ColumnArrayBool:
       return "COLUMN<ARRAY<BOOLEAN>>";
+    case ExtArgumentType::ColumnArrayTextEncodingDict:
+      return "COLUMN<ARRAY<TEXT ENCODING DICT>>";
     case ExtArgumentType::ColumnListArrayInt8:
       return "COLUMNLIST<ARRAY<TINYINT>>";
     case ExtArgumentType::ColumnListArrayInt16:
@@ -586,6 +557,8 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "COLUMNLIST<ARRAY<DOUBLE>>";
     case ExtArgumentType::ColumnListArrayBool:
       return "COLUMNLIST<ARRAY<BOOLEAN>>";
+    case ExtArgumentType::ColumnListArrayTextEncodingDict:
+      return "COLUMNLIST<ARRAY<TEXT ENCODING DICT>>";
     default:
       UNREACHABLE();
   }
@@ -741,6 +714,9 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   if (type_name == "Array<bool>" || type_name == "Array<i1>") {
     return ExtArgumentType::ArrayBool;
   }
+  if (type_name == "Array<TextEncodingDict>") {
+    return ExtArgumentType::ArrayTextEncodingDict;
+  }
   if (type_name == "geo_point") {
     return ExtArgumentType::GeoPoint;
   }
@@ -840,6 +816,9 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   if (type_name == "Column<Array<bool>>") {
     return ExtArgumentType::ColumnArrayBool;
   }
+  if (type_name == "Column<Array<TextEncodingDict>>") {
+    return ExtArgumentType::ColumnArrayTextEncodingDict;
+  }
   if (type_name == "ColumnList<Array<i8>>") {
     return ExtArgumentType::ColumnListArrayInt8;
   }
@@ -860,6 +839,9 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "ColumnList<Array<bool>>") {
     return ExtArgumentType::ColumnListArrayBool;
+  }
+  if (type_name == "ColumnList<Array<TextEncodingDict>>") {
+    return ExtArgumentType::ColumnListArrayTextEncodingDict;
   }
   CHECK(false);
   return ExtArgumentType::Int16;

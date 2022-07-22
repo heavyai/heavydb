@@ -1,5 +1,5 @@
 add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift ${CMAKE_SOURCE_DIR}/completion_hints.thrift
+    DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift ${CMAKE_SOURCE_DIR}/completion_hints.thrift ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
     OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/CalciteServer.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/calciteserver_types.cpp
