@@ -1,0 +1,103 @@
+FROM ubuntu:20.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Tools
+RUN apt-get update && apt-get install -y \
+    autoconf \
+    automake \
+    build-essential \
+    ccache \
+    curl \
+    gdb \
+    git \
+    libtbb-dev \
+    make \
+    rsync \
+    tar \
+    vim \
+    wget \
+    --
+
+# cmake
+RUN apt-get install -y \
+    libssl-dev \
+    libcurl4-openssl-dev \
+    --
+RUN wget https://github.com/Kitware/CMake/releases/download/v3.23.2/cmake-3.23.2.tar.gz
+RUN tar xzvf cmake-3.23.2.tar.gz
+RUN cd cmake-3.23.2/ && ./bootstrap
+RUN cd cmake-3.23.2/ && make -j`nproc`
+RUN cd cmake-3.23.2/ && make install
+
+# LLVM
+RUN apt update && apt install -y llvm-12 llvm-12-dev clang-12 libclang-12-dev
+
+# Toolchains
+RUN apt install -y \
+    gcc-9 \
+    g++-9 \
+    openjdk-11-jdk \
+    --
+
+RUN update-alternatives \
+    --install /usr/bin/gcc gcc /usr/bin/gcc-9 800 \
+    --slave /usr/bin/g++ g++ /usr/bin/g++-9
+
+# Dependencies
+RUN apt install -y \
+    binutils-dev \
+    bzip2 \
+    libboost-all-dev \
+    libbz2-dev \
+    libgflags-dev \
+    libgoogle-glog-dev \
+    libgtest-dev \
+    libncurses-dev \
+    libsnappy-dev \
+    libtbb-dev \
+    libunwind-dev \
+    libz-dev \
+    --
+
+RUN apt-get install -y 
+    maven \
+    libfmt-dev \
+    --
+
+# Arrow
+# https://arrow.apache.org/install/
+RUN apt install -y -V ca-certificates lsb-release wget
+RUN wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+RUN apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+RUN apt update
+RUN apt install -y -V libarrow-dev libparquet-dev
+RUN apt install -y -V libarrow-dataset-dev libarrow-flight-dev
+
+
+# Intel GPU stack
+# https://dgpu-docs.intel.com/installation-guides/ubuntu/ubuntu-focal.html
+RUN apt install -y gpg-agent software-properties-common
+RUN wget -qO - https://repositories.intel.com/graphics/intel-graphics.key | apt-key add -
+RUN apt-add-repository \
+    'deb [arch=amd64] https://repositories.intel.com/graphics/ubuntu focal main'
+RUN apt-get update
+RUN apt-get install -y \
+    intel-igc-cm \
+    intel-level-zero-gpu \
+    intel-media-va-driver-non-free \
+    intel-opencl-icd \
+    level-zero \
+    level-zero-dev \
+    libigc-dev \
+    libigdfcl-dev \
+    libigfxcmrt-dev \
+    libmfx1 \
+    --
+
+RUN git clone -b llvm_release_120 https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git
+RUN mkdir SPIRV-LLVM-Translator/build && cd SPIRV-LLVM-Translator/build && cmake -Wno-dev ..
+RUN cd SPIRV-LLVM-Translator/build && make llvm-spirv -j`nproc` && make install
+
+RUN apt-get upgrade -y
+RUN apt-get clean
