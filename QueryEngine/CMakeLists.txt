@@ -140,6 +140,7 @@ set(query_engine_source_files
     DataRecycler/ChunkMetadataRecycler.cpp
     Visitors/QueryPlanDagChecker.cpp
     Visitors/SQLOperatorDetector.cpp
+    Visitors/GeospatialFunctionFinder.cpp
 
     Codec.h
     Execute.h

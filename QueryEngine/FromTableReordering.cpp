@@ -15,9 +15,10 @@
  */
 
 #include "FromTableReordering.h"
-#include "../Analyzer/Analyzer.h"
 #include "Execute.h"
+#include "ExpressionRewrite.h"
 #include "RangeTableIndexVisitor.h"
+#include "Visitors/GeospatialFunctionFinder.h"
 
 #include <numeric>
 #include <queue>
@@ -35,30 +36,137 @@ static std::unordered_map<SQLTypes, cost_t> GEO_TYPE_COSTS{{kPOINT, 60},
                                                            {kMULTIPOLYGON, 90}};
 
 // Returns a lhs/rhs cost for the given qualifier. Must be strictly greater than 0.
+// todo (yoonmin): compute the cost of inner join edge and outer join edge
+// Currently, we set 100 for inner join and 200 for loop join
+// for geometries, we use types of geometries if corresponding qual is not supported
+// by overlaps hash join framework
+// otherwise, we take a different approach depending on overlaps join function to maximize
+// the chance of using the overlaps hash join framework
 std::tuple<cost_t, cost_t, InnerQualDecision> get_join_qual_cost(
     const Analyzer::Expr* qual,
     const Executor* executor) {
-  const auto func_oper = dynamic_cast<const Analyzer::FunctionOper*>(qual);
-  if (func_oper) {
-    std::vector<SQLTypes> geo_types_for_func;
-    for (size_t i = 0; i < func_oper->getArity(); i++) {
-      const auto arg_expr = func_oper->getArg(i);
-      const auto& ti = arg_expr->get_type_info();
-      if (ti.is_geometry() || is_constructed_point(arg_expr)) {
-        geo_types_for_func.push_back(ti.get_type());
+  if (executor) {
+    GeospatialFunctionFinder geo_func_finder;
+    geo_func_finder.visit(qual);
+    int inner_table_id = -1;
+    int outer_table_id = -1;
+    std::tie(inner_table_id, outer_table_id) = geo_func_finder.getTableIdsOfGeoExpr();
+    if (inner_table_id != -1 && outer_table_id != -1) {
+      // try to find a chance to swap tables in the binary join
+      // note that self-join does not need to be swapped
+      CHECK_NE(outer_table_id, inner_table_id);
+      const auto cat = executor->getCatalog();
+      const auto inner_table_metadata = cat->getMetadataForTable(inner_table_id);
+      const auto outer_table_metadata = cat->getMetadataForTable(outer_table_id);
+      const auto& target_geo_func_name = geo_func_finder.getGeoFunctionName();
+      if (inner_table_metadata->fragmenter && outer_table_metadata->fragmenter) {
+        const auto inner_table_cardinality =
+            inner_table_metadata->fragmenter->getNumRows();
+        const auto outer_table_cardinality =
+            outer_table_metadata->fragmenter->getNumRows();
+        auto inner_qual_decision = inner_table_cardinality > outer_table_cardinality
+                                       ? InnerQualDecision::LHS
+                                       : InnerQualDecision::RHS;
+        // detect the case when table reordering by cardinality incurs unexpected overhead
+        // i.e., SELECT ... FROM R, S where ST_Interesects(S.poly, R.pt) where |R| > |S|
+        // but |R| is not that larger than |S|, i.e., |R| / |S| < 10.0
+        // in this case, it might be a better when keeping the existing ordering
+        // to exploit (overlaps) hash join instead of loop join
+        const auto& geo_args = geo_func_finder.getGeoArgCvs();
+        const auto inner_cv_it =
+            std::find_if(geo_args.begin(),
+                         geo_args.end(),
+                         [inner_table_id](const Analyzer::ColumnVar* cv) {
+                           return cv->get_table_id() == inner_table_id;
+                         });
+        CHECK(inner_cv_it != geo_args.end());
+        const auto outer_cv_it =
+            std::find_if(geo_args.begin(),
+                         geo_args.end(),
+                         [outer_table_id](const Analyzer::ColumnVar* cv) {
+                           return cv->get_table_id() == outer_table_id;
+                         });
+        CHECK(outer_cv_it != geo_args.end());
+        const auto inner_cv = *inner_cv_it;
+        bool needs_table_reordering = inner_table_cardinality < outer_table_cardinality;
+        const auto outer_inner_card_ratio =
+            outer_table_cardinality / static_cast<double>(inner_table_cardinality);
+        if (OverlapsJoinSupportedFunction::is_point_poly_rewrite_target_func(
+                target_geo_func_name) ||
+            OverlapsJoinSupportedFunction::is_poly_point_rewrite_target_func(
+                target_geo_func_name)) {
+          // the goal of this is to maximize the chance of using overlaps hash join
+          // to achieve this, point column has zero for its rte_idx (so we build a
+          // hash table based on poly column which has rte_idx = 1)
+          // but if it's cardinality is smaller than that of polygon table more than 10x
+          // we try to fall back to loop join to avoid too expensive overlaps join cost
+          if (inner_cv->get_rte_idx() == 0 &&
+              (inner_cv->get_type_info().get_type() == kPOINT)) {
+            // outer is poly, and we can use overlaps hash join
+            if (needs_table_reordering && outer_inner_card_ratio > 10.0 &&
+                inner_table_cardinality < 10000) {
+              // but current pt table is small enough and hash table is larger than
+              // the pt table at least 10 times, then we fall back to loop join
+              // to avoid too expensive hash join
+              // so let's try to set inner table as poly table to invalidate
+              // rte index requirement
+              return {200, 200, InnerQualDecision::RHS};
+            } else {
+              // otherwise, try to keep the existing ordering
+              return {180, 190, InnerQualDecision::IGNORE};
+            }
+          } else {
+            // poly is the inner table, so we need to reorder tables to use overlaps hash
+            // join
+            if (needs_table_reordering) {
+              // outer point table is larger than inner poly table, so let's reorder them
+              // by table cardinality
+              return {200, 200, InnerQualDecision::RHS};
+            } else {
+              // otherwise, try to keep the existing ordering
+              return {180, 190, InnerQualDecision::IGNORE};
+            }
+          }
+        }
+        // rest of overlaps-available and overlaps-unavailable geo functions
+        // can reach here, and they are reordered by table cardinality
+        // specifically, overlaps-available geo join functions are satisfied one of
+        // followings: ST_OVERLAPS_sv and is_poly_mpoly_rewrite_target_func we can use
+        // overlaps hash join for those functions regardless of table ordering see
+        // rewrite_overlaps_conjunction function in ExpressionRewrite.cpp
+        VLOG(2) << "Detect geo join operator, initial_inner_table(table_id: "
+                << inner_table_id << ", cardinality: " << inner_table_cardinality
+                << "), initial_outer_table(table_id: " << outer_table_id
+                << ", cardinality: " << outer_table_cardinality
+                << "), inner_qual_decision: " << inner_qual_decision;
+        return {200, 200, inner_qual_decision};
+      }
+    } else {
+      // let's fall back to the old strategy by ordering tables by types of geometries
+      const auto func_oper = dynamic_cast<const Analyzer::FunctionOper*>(qual);
+      if (func_oper) {
+        std::vector<SQLTypes> geo_types_for_func;
+        for (size_t i = 0; i < func_oper->getArity(); i++) {
+          const auto arg_expr = func_oper->getArg(i);
+          const auto& ti = arg_expr->get_type_info();
+          if (ti.is_geometry() || is_constructed_point(arg_expr)) {
+            geo_types_for_func.push_back(ti.get_type());
+          }
+        }
+        std::regex geo_func_regex("ST_[\\w]*");
+        std::smatch geo_func_match;
+        const auto& func_name = func_oper->getName();
+        if (geo_types_for_func.size() == 2 &&
+            std::regex_match(func_name, geo_func_match, geo_func_regex)) {
+          const auto rhs_cost = GEO_TYPE_COSTS[geo_types_for_func[0]];
+          const auto lhs_cost = GEO_TYPE_COSTS[geo_types_for_func[1]];
+          return {lhs_cost, rhs_cost, InnerQualDecision::IGNORE};
+        }
+        return {200, 200, InnerQualDecision::IGNORE};
       }
     }
-    std::regex geo_func_regex("ST_[\\w]*");
-    std::smatch geo_func_match;
-    const auto& func_name = func_oper->getName();
-    if (geo_types_for_func.size() == 2 &&
-        std::regex_match(func_name, geo_func_match, geo_func_regex)) {
-      const auto rhs_cost = GEO_TYPE_COSTS[geo_types_for_func[0]];
-      const auto lhs_cost = GEO_TYPE_COSTS[geo_types_for_func[1]];
-      return {lhs_cost, rhs_cost, InnerQualDecision::IGNORE};
-    }
-    return {200, 200, InnerQualDecision::IGNORE};
   }
+
   const auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(qual);
   if (!bin_oper || !IS_EQUIVALENCE(bin_oper->get_optype())) {
     return {200, 200, InnerQualDecision::IGNORE};

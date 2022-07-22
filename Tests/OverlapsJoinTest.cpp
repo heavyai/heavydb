@@ -291,15 +291,11 @@ TEST_F(OverlapsTest, InnerJoinPolyInPointIntersects) {
         "count(*) from "
         "does_intersect_b as b JOIN does_intersect_a as a ON ST_Intersects(a.pt, "
         "b.poly);";
-    if (g_enable_hashjoin_many_to_many) {
-      EXPECT_ANY_THROW(execSQL(sql, ctx.device_type));
-    } else {
-      // Note(jclay): We return 0, postgis returns 4
-      // Note(adb): Now we return 3. Progress?
-      // Note(ds): After switching to cIntersects we return 0 again. Progress?
-      int64_t expected_value = (g_enable_geo_ops_on_uncompressed_coords) ? 0 : 3;
-      ASSERT_EQ(expected_value, v<int64_t>(execSQL(sql, ctx.device_type)));
-    }
+    // Note(jclay): We return 0, postgis returns 4
+    // Note(adb): Now we return 3. Progress?
+    // Note(ds): After switching to cIntersects we return 0 again. Progress?
+    int64_t expected_value = (g_enable_geo_ops_on_uncompressed_coords) ? 0 : 3;
+    ASSERT_EQ(expected_value, v<int64_t>(execSQL(sql, ctx.device_type)));
   });
 }
 

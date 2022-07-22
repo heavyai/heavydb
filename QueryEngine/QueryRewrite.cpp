@@ -51,7 +51,8 @@ RelAlgExecutionUnit QueryRewriter::rewriteOverlapsJoin(
     JoinCondition join_condition{{}, join_condition_in.type};
 
     for (const auto& join_qual_expr_in : join_condition_in.quals) {
-      auto new_overlaps_quals = rewrite_overlaps_conjunction(join_qual_expr_in);
+      auto new_overlaps_quals = rewrite_overlaps_conjunction(
+          join_qual_expr_in, ra_exe_unit_in.input_descs, executor_);
       if (new_overlaps_quals) {
         const auto& overlaps_quals = *new_overlaps_quals;
 

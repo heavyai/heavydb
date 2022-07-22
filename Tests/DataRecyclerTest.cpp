@@ -493,14 +493,18 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
   ScopeGuard reset_overlaps_state =
       [orig_overlaps_hashjoin_state = g_enable_overlaps_hashjoin,
        orig_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many,
-       orig_trivial_loop_join_threshold = g_trivial_loop_join_threshold] {
+       orig_trivial_loop_join_threshold = g_trivial_loop_join_threshold,
+       orig_table_reordering_state = g_from_table_reordering] {
         g_enable_overlaps_hashjoin = orig_overlaps_hashjoin_state;
         g_enable_overlaps_hashjoin = orig_hashjoin_many_to_many_state;
         g_trivial_loop_join_threshold = orig_trivial_loop_join_threshold;
+        g_from_table_reordering = orig_table_reordering_state;
       };
   g_enable_overlaps_hashjoin = true;
   g_enable_hashjoin_many_to_many = true;
   g_trivial_loop_join_threshold = 1;
+  // we need to disable table reordering to control our overlaps hash join logic
+  g_from_table_reordering = false;
 
   std::set<QueryPlanHash> visited_hashtable_key;
 

@@ -209,7 +209,8 @@ TEST(Ordering, Basic) {
     viti[1].info.setPhysicalNumTuples(2);
 
     auto input_permutation = get_node_input_permutation(nesting_levels, viti, nullptr);
-    decltype(input_permutation) expected_input_permutation{0, 1};
+    // now we can reorder tables for geo join by their cardinality
+    decltype(input_permutation) expected_input_permutation{1, 0};
     ASSERT_EQ(expected_input_permutation, input_permutation);
   }
 }
