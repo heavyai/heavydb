@@ -27,7 +27,16 @@
 #include <Shlobj.h>
 #include "Shared/clean_windows.h"
 #endif
+#ifdef HAVE_FOLLY
 #include <folly/portability/Unistd.h>
+#elif !defined(_WIN32)
+#include <unistd.h>
+#else
+#include <io.h>
+#ifdef _MSC_VER
+#define isatty _isatty
+#endif
+#endif
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
