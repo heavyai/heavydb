@@ -138,7 +138,10 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
   std::unique_ptr<bool[]> array_flags;
 
   set_array_flags_and_geo_columns_count(
-      array_flags, phys_cols, point_cols, request.getColumns());
+      array_flags,
+      phys_cols,
+      point_cols,
+      request.foreign_table_schema->getLogicalColumns());
   auto num_cols = request.getColumns().size() - phys_cols;
   if (columns_are_pre_filtered) {
     for (size_t col_idx = 0; col_idx < request.getColumns().size(); ++col_idx) {

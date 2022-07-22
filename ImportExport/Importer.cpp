@@ -2137,7 +2137,7 @@ static ImportStatus import_thread_delimited(
             const auto& col_ti = cd->columnType;
 
             bool is_null =
-                (row[import_idx] == copy_params.null_str || row[import_idx] == "NULL");
+                ImportHelpers::is_null_datum(row[import_idx], copy_params.null_str);
             // Note: default copy_params.null_str is "\N", but everyone uses "NULL".
             // So initially nullness may be missed and not passed to add_value,
             // which then might also check and still decide it's actually a NULL, e.g.

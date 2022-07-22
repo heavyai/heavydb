@@ -369,6 +369,10 @@ std::tuple<std::string, import_export::CopyParams> get_local_copy_source_and_par
   //
   // * filenames are chosen such that they appear in lexicographical order by
   // pathname, thus require padding by appropriate number of zeros
+  //
+  // * filenames must maintain their suffixes for some features of data
+  // wrappers to work correctly, especially in the case of archived data (such
+  // as `.zip` or `.gz` or any variant.)
   std::filesystem::path temp_dir_path{temp_dir};
   size_t counter = 0;
   size_t num_zero = get_number_of_digits(num_objects);
@@ -378,7 +382,8 @@ std::tuple<std::string, import_export::CopyParams> get_local_copy_source_and_par
     auto counter_str = std::to_string(counter++);
     auto zero_padded_counter_str =
         std::string(num_zero - counter_str.length(), '0') + counter_str;
-    auto new_path = (temp_dir_path / zero_padded_counter_str).string();
+    auto new_path = (temp_dir_path / zero_padded_counter_str).string() +
+                    std::filesystem::path{object.object_key}.extension().string();
     std::filesystem::rename(old_path, new_path);
     object.import_file_path = new_path;
   }

@@ -44,6 +44,12 @@ inline std::string sanitize_name(const std::string& name) {
   return sanitized_name;
 }
 
+template <typename DatumStringType>
+inline bool is_null_datum(const DatumStringType& datum,
+                          const std::string& null_indicator) {
+  return datum == null_indicator || datum == "NULL" || datum == "\\N";
+}
+
 }  // namespace ImportHelpers
 
 #endif  // IMPORT_HELPERS_H_

@@ -2045,6 +2045,15 @@ const char* create_table_with_side_spaced_array = R"(
     ) WITH (FRAGMENT_SIZE=75000000);
   )";
 
+const char* create_table_nulls = R"(
+    CREATE TABLE null_table (
+      int1        INTEGER,
+      var_arr2    INTEGER[],
+      fixed_arr3  INTEGER[2],
+      point4      POINT
+    );
+  )";
+
 class ImportTest : public ImportExportTestBase {
  protected:
 #ifdef HAVE_AWS_S3
@@ -2071,6 +2080,8 @@ class ImportTest : public ImportExportTestBase {
     sql(create_table_with_side_spaces);
     sql("drop table if exists array_with_side_spaces;");
     sql(create_table_with_side_spaced_array);
+    sql("drop table if exists null_table;");
+    sql(create_table_nulls);
   }
 
   void TearDown() override {
@@ -2084,6 +2095,7 @@ class ImportTest : public ImportExportTestBase {
     sql("drop table if exists null_text_arrays;");
     sql("drop table if exists with_side_spaces;");
     sql("drop table if exists array_with_side_spaces;");
+    sql("drop table if exists null_table;");
     ImportExportTestBase::TearDown();
   }
 
@@ -2599,6 +2611,14 @@ TEST_F(ImportTest, Regex_path_filter_no_match) {
       importTestLocal(
           "trip_data_dir/csv", -1, -1.0, {{"REGEX_PATH_FILTER", "very?obscure?path"}}),
       TDBException);
+}
+
+TEST_F(ImportTest, csv_nulls) {
+  sql("COPY null_table FROM '../../Tests/FsiDataFiles/csv_nulls.csv' WITH "
+      "(HEADER='false',nulls='do_not_match')");
+  TQueryResult result;
+  sqlAndCompareResult("SELECT * FROM null_table;",
+                      {{Null, Null, Null, Null}, {Null, Null, Null, Null}});
 }
 
 // Sharding tests
@@ -3368,19 +3388,38 @@ class ImportServerPrivilegeTest : public ImportExportTestBase {
   inline const static std::string AWS_DUMMY_CREDENTIALS_DIR =
       to_string(BASE_PATH) + "/aws";
   inline static std::map<std::string, std::string> aws_environment_;
+  inline static std::optional<std::string> aws_region_ = std::nullopt;
 
   static void SetUpTestSuite() {
     omnisci_aws_sdk::init_sdk();
     g_allow_s3_server_privileges = true;
     aws_environment_ = unset_aws_env();
     create_stub_aws_profile(AWS_DUMMY_CREDENTIALS_DIR);
+    aws_region_ = unsetAwsRegion();
   }
 
   static void TearDownTestSuite() {
+    if (aws_region_.has_value()) {
+      setAwsRegion(aws_region_.value());
+    }
     omnisci_aws_sdk::shutdown_sdk();
     g_allow_s3_server_privileges = false;
     restore_aws_env(aws_environment_);
     boost::filesystem::remove_all(AWS_DUMMY_CREDENTIALS_DIR);
+  }
+
+  static std::optional<std::string> unsetAwsRegion() {
+    std::optional<std::string> aws_region = std::nullopt;
+    char* env = std::getenv("AWS_REGION");
+    if (env != nullptr) {
+      aws_region = std::string(env);
+      unsetenv("AWS_REGION");
+    }
+    return aws_region;
+  }
+
+  static void setAwsRegion(const std::string& aws_region) {
+    setenv("AWS_REGION", aws_region.c_str(), true);
   }
 
   void SetUp() override {
@@ -3435,21 +3474,17 @@ TEST_F(ImportServerPrivilegeTest, S3_Public_without_credentials) {
 }
 
 TEST_F(ImportServerPrivilegeTest, S3_Public_without_credentials_NoRegion) {
-  if (g_enable_legacy_delimited_import) {
-    // the no-region check is only in FSI
-    GTEST_SKIP();
-  }
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_THROW(importPublicBucket(false, ""), TDBException);
+  executeLambdaAndAssertException([&] { importPublicBucket(false, ""); },
+                                  "Required parameter \"s3_region\" not set. Please "
+                                  "specify the \"s3_region\" configuration parameter.");
 }
 
 TEST_F(ImportServerPrivilegeTest, S3_Public_without_credentials_EmptyRegion) {
-  if (g_enable_legacy_delimited_import) {
-    // the empty-region check is only in FSI
-    GTEST_SKIP();
-  }
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_THROW(importPublicBucket(true, ""), TDBException);
+  executeLambdaAndAssertException([&] { importPublicBucket(true, ""); },
+                                  "Required parameter \"s3_region\" not set. Please "
+                                  "specify the \"s3_region\" configuration parameter.");
 }
 
 TEST_F(ImportServerPrivilegeTest, S3_Private_without_credentials) {

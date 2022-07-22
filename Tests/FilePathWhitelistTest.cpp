@@ -555,6 +555,17 @@ class DBHandlerFilePathTest
     return path;
   }
 
+  TCopyParams getCopyParams() {
+    TCopyParams copy_params;
+    auto [file_location_type, _] = getTestParams();
+#ifdef HAVE_AWS_S3
+    if (file_location_type == FileLocationType::S3) {
+      copy_params.__set_s3_region("US-WEST-1");
+    }
+#endif
+    return copy_params;
+  }
+
   static std::pair<FileLocationType, std::string> getTestParams(
       const std::tuple<int, std::string>& params = GetParam()) {
     return {static_cast<FileLocationType>(std::get<0>(params)), std::get<1>(params)};
@@ -565,20 +576,20 @@ TEST_P(DBHandlerFilePathTest, DetectColumnTypes) {
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   TDetectResult result;
   db_handler->detect_column_types(
-      result, session_id, getFilePath("example.csv"), TCopyParams{});
+      result, session_id, getFilePath("example.csv"), getCopyParams());
 }
 
 TEST_P(DBHandlerFilePathTest, DetectColumnTypes_GeoFile) {
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   TDetectResult result;
   db_handler->detect_column_types(
-      result, session_id, getFilePath("example.geojson"), TCopyParams{});
+      result, session_id, getFilePath("example.geojson"), getCopyParams());
 }
 
 TEST_P(DBHandlerFilePathTest, ImportTable) {
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   db_handler->import_table(
-      session_id, "test_table", getFilePath("example.csv"), TCopyParams{});
+      session_id, "test_table", getFilePath("example.csv"), getCopyParams());
 }
 
 TEST_P(DBHandlerFilePathTest, GetFirstGeoFileInArchive) {

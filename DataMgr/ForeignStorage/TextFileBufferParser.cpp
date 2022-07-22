@@ -15,8 +15,8 @@
  */
 
 #include "DataMgr/ForeignStorage/TextFileBufferParser.h"
-
 #include "Geospatial/Types.h"
+#include "Shared/import_helpers.h"
 
 namespace foreign_storage {
 
@@ -357,7 +357,7 @@ void TextFileBufferParser::processGeoColumn(
 bool TextFileBufferParser::isNullDatum(const std::string_view datum,
                                        const ColumnDescriptor* column,
                                        const std::string& null_indicator) {
-  bool is_null = (datum == null_indicator);
+  bool is_null = ImportHelpers::is_null_datum(datum, null_indicator);
 
   // Treating empty as NULL
   if (!column->columnType.is_string() && datum.empty()) {

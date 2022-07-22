@@ -33,6 +33,17 @@
 
 bool g_allow_s3_server_privileges{false};
 
+namespace {
+void get_s3_parameter_from_env_if_unset_or_empty(std::string& param,
+                                                 const std::string& env_variable_name) {
+  char* env;
+  if (param.empty() && (0 != (env = getenv(env_variable_name.c_str())))) {
+    param = env;
+  }
+}
+
+};  // namespace
+
 void S3Archive::init_for_read() {
   boost::filesystem::create_directories(s3_temp_dir);
   if (!boost::filesystem::is_directory(s3_temp_dir)) {
@@ -55,13 +66,23 @@ void S3Archive::init_for_read() {
     objects_request.WithPrefix(prefix_name);
     objects_request.SetMaxKeys(1 << 20);
 
+    if (g_allow_s3_server_privileges) {
+      get_s3_parameter_from_env_if_unset_or_empty(s3_region, "AWS_REGION");
+    }
+
+    if (s3_region.empty()) {
+      throw std::runtime_error(
+          "Required parameter \"s3_region\" not set. Please specify the \"s3_region\" "
+          "configuration parameter.");
+    }
+
     // for a daemon like heavydb it seems improper to set s3 credentials
     // via AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env's because that way
     // credentials are configured *globally* while different users with private
     // s3 resources may need separate credentials to access.in that case, use
     // WITH s3_access_key/s3_secret_key parameters.
     Aws::Client::ClientConfiguration s3_config;
-    s3_config.region = s3_region.size() ? s3_region : Aws::Region::US_EAST_1;
+    s3_config.region = s3_region;
     s3_config.endpointOverride = s3_endpoint;
     auto ssl_config = omnisci_aws_sdk::get_ssl_config();
     s3_config.caPath = ssl_config.ca_path;
