@@ -35,7 +35,7 @@ inline llvm::Type* get_pointer_element_type(llvm::Value* value) {
   CHECK(type && type->isPointerTy());
   auto pointer_type = llvm::dyn_cast<llvm::PointerType>(type);
   CHECK(pointer_type);
-  return pointer_type->getElementType();
+  return pointer_type->getPointerElementType();
 }
 
 template <class Attributes>
@@ -63,7 +63,11 @@ llvm::Function* default_func_builder(llvm::Module* mod, const std::string& name)
     SmallVector<Attributes, 4> Attrs;
     Attributes PAS;
     {
+#if 14 <= LLVM_VERSION_MAJOR
+      AttrBuilder B(mod->getContext());
+#else
       AttrBuilder B;
+#endif
       PAS = Attributes::get(mod->getContext(), ~0U, B);
     }
 
@@ -110,7 +114,11 @@ llvm::Function* pos_step(llvm::Module* mod) {
     SmallVector<Attributes, 4> Attrs;
     Attributes PAS;
     {
+#if 14 <= LLVM_VERSION_MAJOR
+      AttrBuilder B(mod->getContext());
+#else
       AttrBuilder B;
+#endif
       PAS = Attributes::get(mod->getContext(), ~0U, B);
     }
 
@@ -177,7 +185,11 @@ llvm::Function* row_process(llvm::Module* mod,
       SmallVector<Attributes, 4> Attrs;
       Attributes PAS;
       {
+#if 14 <= LLVM_VERSION_MAJOR
+        AttrBuilder B(mod->getContext());
+#else
         AttrBuilder B;
+#endif
         PAS = Attributes::get(mod->getContext(), ~0U, B);
       }
 
@@ -257,14 +269,22 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
     SmallVector<Attributes, 4> Attrs;
     Attributes PAS;
     {
+#if 14 <= LLVM_VERSION_MAJOR
+      AttrBuilder B(mod->getContext());
+#else
       AttrBuilder B;
+#endif
       B.addAttribute(Attribute::NoCapture);
       PAS = Attributes::get(mod->getContext(), 1U, B);
     }
 
     Attrs.push_back(PAS);
     {
+#if 14 <= LLVM_VERSION_MAJOR
+      AttrBuilder B(mod->getContext());
+#else
       AttrBuilder B;
+#endif
       B.addAttribute(Attribute::NoCapture);
       PAS = Attributes::get(mod->getContext(), 2U, B);
     }
@@ -272,13 +292,21 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
     Attrs.push_back(PAS);
 
     {
+#if 14 <= LLVM_VERSION_MAJOR
+      AttrBuilder B(mod->getContext());
+#else
       AttrBuilder B;
+#endif
       B.addAttribute(Attribute::NoCapture);
       Attrs.push_back(Attributes::get(mod->getContext(), 3U, B));
     }
 
     {
+#if 14 <= LLVM_VERSION_MAJOR
+      AttrBuilder B(mod->getContext());
+#else
       AttrBuilder B;
+#endif
       B.addAttribute(Attribute::NoCapture);
       Attrs.push_back(Attributes::get(mod->getContext(), 4U, B));
     }
@@ -632,7 +660,11 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
     SmallVector<Attributes, 4> Attrs;
     Attributes PAS;
     {
+#if 14 <= LLVM_VERSION_MAJOR
+      AttrBuilder B(mod->getContext());
+#else
       AttrBuilder B;
+#endif
       B.addAttribute(Attribute::ReadNone);
       B.addAttribute(Attribute::NoCapture);
       PAS = Attributes::get(mod->getContext(), 1U, B);
@@ -640,7 +672,11 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
 
     Attrs.push_back(PAS);
     {
+#if 14 <= LLVM_VERSION_MAJOR
+      AttrBuilder B(mod->getContext());
+#else
       AttrBuilder B;
+#endif
       B.addAttribute(Attribute::ReadOnly);
       B.addAttribute(Attribute::NoCapture);
       PAS = Attributes::get(mod->getContext(), 2U, B);
@@ -648,7 +684,11 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
 
     Attrs.push_back(PAS);
     {
+#if 14 <= LLVM_VERSION_MAJOR
+      AttrBuilder B(mod->getContext());
+#else
       AttrBuilder B;
+#endif
       B.addAttribute(Attribute::ReadNone);
       B.addAttribute(Attribute::NoCapture);
       PAS = Attributes::get(mod->getContext(), 3U, B);
@@ -656,7 +696,11 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
 
     Attrs.push_back(PAS);
     {
+#if 14 <= LLVM_VERSION_MAJOR
+      AttrBuilder B(mod->getContext());
+#else
       AttrBuilder B;
+#endif
       B.addAttribute(Attribute::ReadOnly);
       B.addAttribute(Attribute::NoCapture);
       PAS = Attributes::get(mod->getContext(), 4U, B);
@@ -664,7 +708,11 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
 
     Attrs.push_back(PAS);
     {
+#if 14 <= LLVM_VERSION_MAJOR
+      AttrBuilder B(mod->getContext());
+#else
       AttrBuilder B;
+#endif
       B.addAttribute(Attribute::UWTable);
       PAS = Attributes::get(mod->getContext(), ~0U, B);
     }
@@ -750,7 +798,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
     // make the varlen buffer the _first_ 8 byte value in the group by buffers double ptr,
     // and offset the group by buffers index by 8 bytes
     auto varlen_output_buffer_gep = GetElementPtrInst::Create(
-        Ty->getElementType(),
+        Ty->getPointerElementType(),
         group_by_buffers,
         llvm::ConstantInt::get(llvm::Type::getInt32Ty(mod->getContext()), 0),
         "",
@@ -776,7 +824,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
 
   CastInst* pos_start_i64 = new SExtInst(pos_start, i64_type, "", bb_entry);
   GetElementPtrInst* group_by_buffers_gep = GetElementPtrInst::Create(
-      Ty->getElementType(), group_by_buffers, group_buff_idx, "", bb_entry);
+      Ty->getPointerElementType(), group_by_buffers, group_buff_idx, "", bb_entry);
   LoadInst* col_buffer = new LoadInst(get_pointer_element_type(group_by_buffers_gep),
                                       group_by_buffers_gep,
                                       "",

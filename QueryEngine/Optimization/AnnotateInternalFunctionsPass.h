@@ -55,6 +55,9 @@ class AnnotateInternalFunctionsPass : public llvm::CallGraphSCCPass {
                                                      llvm::Attribute::WillReturn,
                                                      llvm::Attribute::ReadNone,
                                                      llvm::Attribute::Speculatable};
+        // WriteOnly is automatically added to all math functions in llvm 14.0
+        // https://reviews.llvm.org/D116426 which is incompatible with ReadNone.
+        fcn->removeFnAttr(llvm::Attribute::WriteOnly);
         for (const auto& attr : attrs) {
           fcn->addFnAttr(attr);
         }

@@ -33,13 +33,16 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/IRReader/IRReader.h>
-#include <llvm/Linker/Linker.h>
+#if 14 <= LLVM_VERSION_MAJOR
+#include <llvm/MC/TargetRegistry.h>
+#else
+#include <llvm/Support/TargetRegistry.h>
+#endif
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/SourceMgr.h>
-#include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Support/raw_ostream.h>
@@ -624,6 +627,7 @@ const std::string cuda_rt_decls =
     R"(
 declare void @llvm.dbg.declare(metadata, metadata, metadata)
 declare void @llvm.dbg.value(metadata, metadata, metadata)
+declare double @llvm.fmuladd.f64(double, double, double)
 declare void @llvm.lifetime.start(i64, i8* nocapture) nounwind
 declare void @llvm.lifetime.end(i64, i8* nocapture) nounwind
 declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) nounwind
@@ -1740,7 +1744,7 @@ void bind_query(llvm::Function* query_func,
   }
   for (auto& S : query_stubs) {
     std::vector<llvm::Value*> args;
-    for (size_t i = 0; i < S->getNumArgOperands(); ++i) {
+    for (size_t i = 0; i < S->getNumOperands() - 1; ++i) {
       args.push_back(S->getArgOperand(i));
     }
     llvm::ReplaceInstWithInst(S, llvm::CallInst::Create(query_func, args, ""));
@@ -2924,7 +2928,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   // replace the row func placeholder call with the call to the actual row func
   std::vector<llvm::Value*> row_func_args;
-  for (size_t i = 0; i < cgen_state_->row_func_call_->getNumArgOperands(); ++i) {
+  for (size_t i = 0; i < cgen_state_->row_func_call_->getNumOperands() - 1; ++i) {
     row_func_args.push_back(cgen_state_->row_func_call_->getArgOperand(i));
   }
   row_func_args.insert(row_func_args.end(), col_heads.begin(), col_heads.end());

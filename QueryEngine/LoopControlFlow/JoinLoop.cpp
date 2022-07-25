@@ -123,7 +123,7 @@ llvm::BasicBlock* JoinLoop::codegen(
           CHECK(iteration_domain.values_buffer->getType()->isPointerTy());
           const auto ptr_type =
               static_cast<llvm::PointerType*>(iteration_domain.values_buffer->getType());
-          if (ptr_type->getElementType()->isArrayTy()) {
+          if (ptr_type->getPointerElementType()->isArrayTy()) {
             iteration_val = builder.CreateGEP(
                 iteration_domain.values_buffer->getType()
                     ->getScalarType()

@@ -176,7 +176,7 @@ void GpuSharedMemCodeBuilder::codegenReduction() {
         }
         agg_func_found = true;
         std::vector<llvm::Value*> args;
-        for (size_t i = 0; i < func_call.getNumArgOperands(); ++i) {
+        for (size_t i = 0; i < func_call.getNumOperands() - 1; ++i) {
           args.push_back(func_call.getArgOperand(i));
         }
         auto gpu_agg_func = getFunction(func_name + "_shared");
@@ -383,7 +383,7 @@ void replace_called_function_with(llvm::Function* main_func,
     auto& instruction = llvm::cast<llvm::CallInst>(*it);
     if (std::string(instruction.getCalledFunction()->getName()) == target_func_name) {
       std::vector<llvm::Value*> args;
-      for (size_t i = 0; i < instruction.getNumArgOperands(); ++i) {
+      for (size_t i = 0; i < instruction.getNumOperands() - 1; ++i) {
         args.push_back(instruction.getArgOperand(i));
       }
       llvm::ReplaceInstWithInst(&instruction,

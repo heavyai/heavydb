@@ -19,6 +19,7 @@
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/StringTransform.h"
+#include "Shared/clean_boost_regex.hpp"
 #include "Shared/scope.h"
 
 #ifndef BASE_PATH
@@ -1160,6 +1161,8 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
 }
 
 TEST_P(GeoSpatialTestTablesFixture, Constructors) {
+  constexpr double EPS = 1e-8;  // non-zero double values should match to about 8 sigfigs
+  double expected;
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -1281,7 +1284,7 @@ TEST_P(GeoSpatialTestTablesFixture, Constructors) {
         const auto crt_row = explain_result->getNextRow(true, true);
         EXPECT_EQ(size_t(1), crt_row.size());
         const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
-        EXPECT_FALSE(explain_str.find("IR for the GPU:") == std::string::npos);
+        EXPECT_NE(explain_str.find("IR for the GPU:"), std::string::npos) << explain_str;
       }
     });
     EXPECT_DOUBLE_EQ(
@@ -1290,24 +1293,37 @@ TEST_P(GeoSpatialTestTablesFixture, Constructors) {
             R"(SELECT ST_X(ST_Transform(gp4326, 900913)) FROM geospatial_test WHERE id = 2;)",
             dt,
             false)));
-    EXPECT_DOUBLE_EQ(
-        1.7966305682390428e-05,
+    double const expected_x = 1.7966305682390428e-05;
+    EXPECT_NEAR(
+        expected_x,
         v<double>(run_simple_agg(
             R"(SELECT ST_X(ST_Transform(gp900913, 4326)) FROM geospatial_test WHERE id = 2;)",
             dt,
-            false)));
-    EXPECT_DOUBLE_EQ(
-        1.7966305676964112e-05,
+            false)),
+        expected_x * EPS);
+    double const expected_y = 1.7966305681601786e-05;
+    EXPECT_NEAR(
+        expected_y,
         v<double>(run_simple_agg(
             R"(SELECT ST_Y(ST_Transform(gp900913, 4326)) FROM geospatial_test WHERE id = 2;)",
             dt,
-            false)));
-    EXPECT_EQ(
-        "POINT (0.000017966305682 0.000017966305677)",
-        boost::get<std::string>(v<NullableString>(run_simple_agg(
-            R"(SELECT ST_Transform(gp900913, 4326) FROM geospatial_test WHERE id = 2;)",
-            dt,
-            false))));
+            false)),
+        expected_y * EPS);
+    // "POINT (0.000017966305682 0.000017966305682)"
+    std::string const point = boost::get<std::string>(v<NullableString>(run_simple_agg(
+        R"(SELECT ST_Transform(gp900913, 4326) FROM geospatial_test WHERE id = 2;)",
+        dt,
+        false)));
+    boost::cmatch md;  // match data
+    boost::regex const regex("^POINT \\((.+?) (.+?)\\)$");
+    EXPECT_TRUE(boost::regex_match(point.c_str(), md, regex)) << point;
+    char* end;
+    expected = strtod(md[1].first, &end);   // Parse x-coordinate into a double value
+    EXPECT_EQ(end, md[1].second) << point;  // Confirm no extra characters
+    EXPECT_NEAR(expected, expected_x, expected * EPS) << point;
+    expected = strtod(md[2].first, &end);   // Parse y-coordinate into a double value
+    EXPECT_EQ(end, md[2].second) << point;  // Confirm no extra characters
+    EXPECT_NEAR(expected, expected_y, expected * EPS) << point;
     SKIP_ON_AGGREGATOR({
       // ensure transforms run on GPU. transforms use math functions which need to be
       // specialized for GPU
@@ -1323,7 +1339,7 @@ TEST_P(GeoSpatialTestTablesFixture, Constructors) {
         const auto crt_row = explain_result->getNextRow(true, true);
         EXPECT_EQ(size_t(1), crt_row.size());
         const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
-        EXPECT_FALSE(explain_str.find("IR for the GPU:") == std::string::npos);
+        EXPECT_NE(explain_str.find("IR for the GPU:"), std::string::npos) << explain_str;
       }
     });
     EXPECT_ANY_THROW(run_simple_agg(
@@ -1343,10 +1359,7 @@ TEST_P(GeoSpatialTestTablesFixture, LLVMOptimization) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    // returns true if search_str is found in the generated IR
-    auto check_explain_result = [](const std::string& query,
-                                   const ExecutorDeviceType dt,
-                                   const std::string& search_str) {
+    auto get_explain_result = [](const std::string& query, const ExecutorDeviceType dt) {
       const auto query_explain_result =
           QR::get()->runSelectQuery(query,
                                     dt,
@@ -1357,39 +1370,30 @@ TEST_P(GeoSpatialTestTablesFixture, LLVMOptimization) {
       EXPECT_EQ(size_t(1), explain_result->rowCount());
       const auto crt_row = explain_result->getNextRow(true, true);
       EXPECT_EQ(size_t(1), crt_row.size());
-      const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
-      const auto n = explain_str.find(search_str);
-      const bool str_not_found = n == std::string::npos;
-      return !str_not_found;
+      return boost::get<std::string>(v<NullableString>(crt_row[0]));
     };
 
     // expect the x decompression code to be absent in optimized IR
-    EXPECT_EQ(check_explain_result(
-                  R"(SELECT ST_Y(ST_Transform(gp4326, 900913)) from geospatial_test;)",
-                  dt,
-                  "decompress_x_coord_geoint"),
-              false);
+    std::string explain = get_explain_result(
+        "SELECT ST_Y(ST_Transform(gp4326, 900913)) from geospatial_test;", dt);
+    EXPECT_EQ(explain.find("decompress_x_coord_geoint"), std::string::npos) << explain;
 
     // expect the y decompression code to be absent in optimized IR
-    EXPECT_EQ(check_explain_result(
-                  R"(SELECT ST_X(ST_Transform(gp4326, 900913)) from geospatial_test;)",
-                  dt,
-                  "decompress_y_coord_geoint"),
-              false);
+    explain = get_explain_result(
+        "SELECT ST_X(ST_Transform(gp4326, 900913)) from geospatial_test;", dt);
+    EXPECT_EQ(explain.find("decompress_y_coord_geoint"), std::string::npos) << explain;
 
     // expect both decompression codes to be present
-    EXPECT_EQ(
-        check_explain_result(
-            R"(SELECT ST_X(ST_Transform(gp4326, 900913)), ST_Y(ST_Transform(gp4326, 900913)) from geospatial_test;)",
-            dt,
-            "decompress_y_coord_geoint"),
-        true);
-    EXPECT_EQ(
-        check_explain_result(
-            R"(SELECT ST_X(ST_Transform(gp4326, 900913)), ST_Y(ST_Transform(gp4326, 900913)) from geospatial_test;)",
-            dt,
-            "decompress_y_coord_geoint"),
-        true);
+    explain = get_explain_result(
+        "SELECT ST_X(ST_Transform(gp4326, 900913)), ST_Y(ST_Transform(gp4326, 900913)) "
+        "from geospatial_test;",
+        dt);
+    EXPECT_NE(explain.find("decompress_y_coord_geoint"), std::string::npos) << explain;
+    explain = get_explain_result(
+        "SELECT ST_X(ST_Transform(gp4326, 900913)), ST_Y(ST_Transform(gp4326, 900913)) "
+        "from geospatial_test;",
+        dt);
+    EXPECT_NE(explain.find("decompress_y_coord_geoint"), std::string::npos) << explain;
   }
 }
 

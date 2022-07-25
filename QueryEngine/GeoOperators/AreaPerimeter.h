@@ -63,7 +63,7 @@ class AreaPerimeter : public Codegen {
                                          {lv, pos_lvs.front()}));
         const auto ptr_type = llvm::dyn_cast_or_null<llvm::PointerType>(lv->getType());
         CHECK(ptr_type);
-        const auto elem_type = ptr_type->getElementType();
+        const auto elem_type = ptr_type->getPointerElementType();
         CHECK(elem_type);
         std::vector<llvm::Value*> array_sz_args{
             lv,
