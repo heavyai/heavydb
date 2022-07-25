@@ -610,6 +610,13 @@ endif()
 
 ##########
 
+add_executable(SessionsStoreTest SessionsStoreTest.cpp)
+target_link_libraries(SessionsStoreTest gtest Catalog ${Boost_LIBRARIES} ${MAPD_LIBRARIES} ${CUDA_LIBRARIES})
+add_test(SessionsStoreTest SessionsStoreTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS SessionsStoreTest)
+
+##########
+
 endif()  # Partition 4
 
 ##########

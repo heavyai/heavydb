@@ -5,6 +5,7 @@ set(catalog_source_files
     Grantee.cpp
     Grantee.h
     SessionInfo.cpp
+    SessionsStore.cpp
     SharedDictionaryValidator.cpp
     SysCatalog.cpp
     SysCatalog.h

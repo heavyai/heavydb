@@ -2258,20 +2258,6 @@ struct CaseSensitiveValidate {
   }
 };
 
-template <typename T>
-struct ShouldInvalidateSessionsByDB : public std::false_type {};
-template <typename T>
-struct ShouldInvalidateSessionsByUser : public std::false_type {};
-
-template <>
-struct ShouldInvalidateSessionsByDB<DropDBStmt> : public std::true_type {};
-template <>
-struct ShouldInvalidateSessionsByUser<DropUserStmt> : public std::true_type {};
-template <>
-struct ShouldInvalidateSessionsByDB<RenameDBStmt> : public std::true_type {};
-template <>
-struct ShouldInvalidateSessionsByUser<RenameUserStmt> : public std::true_type {};
-
 /**
  * Helper functions for parsing the DDL returned from calcite as part of the plan result
  * to a parser node in this class. Currently only used in

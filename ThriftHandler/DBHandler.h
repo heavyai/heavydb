@@ -30,6 +30,7 @@
 
 #include "Calcite/Calcite.h"
 #include "Catalog/Catalog.h"
+#include "Catalog/SessionsStore.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Geospatial/Transforms.h"
 #include "ImportExport/Importer.h"
@@ -63,7 +64,6 @@
 #include <sys/types.h>
 #include <thrift/server/TServer.h>
 #include <thrift/transport/THttpClient.h>
-#include <thrift/transport/THttpTransport.h>
 #include <thrift/transport/TSocket.h>
 #include <thrift/transport/TTransport.h>
 #include <atomic>
@@ -657,8 +657,6 @@ class DBHandler : public HeavyIf {
 
   // Exactly one immutable SessionInfo copy should be taken by a typical request.
   Catalog_Namespace::SessionInfo get_session_copy(const TSessionId& session);
-  std::shared_ptr<Catalog_Namespace::SessionInfo> get_session_copy_ptr(
-      const TSessionId& session);
 
   void get_tables_meta_impl(std::vector<TTableMeta>& _return,
                             QueryStateProxy query_state_proxy,
@@ -669,7 +667,7 @@ class DBHandler : public HeavyIf {
   void resizeDispatchQueue(size_t queue_size);
 
  protected:
-  // Returns empty std::shared_ptr if !check_license && session.empty().
+  // Returns empty std::shared_ptr if session.empty().
   std::shared_ptr<Catalog_Namespace::SessionInfo> get_session_ptr(
       const TSessionId& session_id);
 
@@ -688,8 +686,7 @@ class DBHandler : public HeavyIf {
                     const Catalog_Namespace::UserMetadata& user_meta,
                     std::shared_ptr<Catalog_Namespace::Catalog> cat,
                     query_state::StdLog& stdlog);
-  void disconnect_impl(const SessionMap::iterator& session_it,
-                       heavyai::unique_lock<heavyai::shared_mutex>& write_lock);
+  void disconnect_impl(Catalog_Namespace::SessionInfoPtr& session_ptr);
   void check_table_load_privileges(const TSessionId& session,
                                    const std::string& table_name);
   void check_table_load_privileges(const Catalog_Namespace::SessionInfo& session_info,
@@ -711,7 +708,6 @@ class DBHandler : public HeavyIf {
       const std::string& granteeName,
       bool effective);
   void check_read_only(const std::string& str);
-  void check_session_exp_unsafe(const SessionMap::iterator& session_it);
   void validateGroups(const std::vector<std::string>& groups);
   void validateDashboardIdsForSharing(const Catalog_Namespace::SessionInfo& session_info,
                                       const std::vector<int32_t>& dashboard_ids);
@@ -721,19 +717,6 @@ class DBHandler : public HeavyIf {
                                 const TDashboardPermissions& permissions,
                                 const bool do_share);
 
-  // Use get_session_copy() or get_session_copy_ptr() instead of get_const_session_ptr()
-  // unless you know what you are doing. If you need to save a SessionInfo beyond the
-  // present Thrift call, then the safe way to do this is by saving the return value of
-  // get_const_session_ptr() as a std::weak_ptr.
-  // Returns empty std::shared_ptr if session.empty().
-  std::shared_ptr<const Catalog_Namespace::SessionInfo> get_const_session_ptr(
-      const TSessionId& session);
-
-  template <typename SESSION_MAP_LOCK>
-  SessionMap::iterator get_session_it_unsafe(const TSessionId& session,
-                                             SESSION_MAP_LOCK& lock);
-  template <typename SESSION_MAP_LOCK>
-  void expire_idle_sessions_unsafe(SESSION_MAP_LOCK& lock);
   static void value_to_thrift_column(const TargetValue& tv,
                                      const SQLTypeInfo& ti,
                                      TColumn& column);
@@ -948,7 +931,7 @@ class DBHandler : public HeavyIf {
       bool assign_render_groups);
 
   query_state::QueryStates query_states_;
-  SessionMap sessions_;
+  std::unique_ptr<Catalog_Namespace::SessionsStore> sessions_store_;
 
   bool super_user_rights_;           // default is "false"; setting to "true"
                                      // ignores passwd checks in "connect(..)"
@@ -1029,33 +1012,8 @@ class DBHandler : public HeavyIf {
 
   void check_and_invalidate_sessions(Parser::DDLStmt* ddl);
 
-  template <typename STMT_TYPE>
-  void invalidate_sessions(std::string& name, STMT_TYPE* stmt) {
-    using namespace Parser;
-    auto is_match = [&](auto session_it) {
-      if (ShouldInvalidateSessionsByDB<STMT_TYPE>()) {
-        return boost::iequals(name,
-                              session_it->second->getCatalog().getCurrentDB().dbName);
-      } else if (ShouldInvalidateSessionsByUser<STMT_TYPE>()) {
-        return boost::iequals(name, session_it->second->get_currentUser().userName);
-      }
-      return false;
-    };
-    auto check_and_remove_sessions = [&]() {
-      for (auto it = sessions_.begin(); it != sessions_.end();) {
-        if (is_match(it)) {
-          it = sessions_.erase(it);
-        } else {
-          ++it;
-        }
-      }
-    };
-    check_and_remove_sessions();
-  }
-
   std::string const createInMemoryCalciteSession(
       const std::shared_ptr<Catalog_Namespace::Catalog>& catalog_ptr);
-  bool isInMemoryCalciteSession(const Catalog_Namespace::UserMetadata user_meta);
   void removeInMemoryCalciteSession(const std::string& session_id);
 
   ExecutionResult getUserSessions(

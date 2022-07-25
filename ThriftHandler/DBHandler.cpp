@@ -144,92 +144,11 @@ bool dashboard_exists(const Catalog_Namespace::Catalog& cat,
   return (cat.getMetadataForDashboard(std::to_string(user_id), dashboard_name));
 }
 
-SessionMap::iterator get_session_from_map(const TSessionId& session,
-                                          SessionMap& session_map) {
-  auto session_it = session_map.find(session);
-  if (session_it == session_map.end()) {
-    THROW_DB_EXCEPTION("Session not valid.");
-  }
-  return session_it;
-}
-
 struct ForceDisconnect : public std::runtime_error {
   ForceDisconnect(const std::string& cause) : std::runtime_error(cause) {}
 };
 
 }  // namespace
-
-template <>
-SessionMap::iterator DBHandler::get_session_it_unsafe(
-    const TSessionId& session,
-    heavyai::shared_lock<heavyai::shared_mutex>& read_lock) {
-  auto session_it = get_session_from_map(session, sessions_);
-  try {
-    check_session_exp_unsafe(session_it);
-  } catch (const ForceDisconnect& e) {
-    read_lock.unlock();
-    heavyai::unique_lock<heavyai::shared_mutex> write_lock(sessions_mutex_);
-    auto session_it2 = get_session_from_map(session, sessions_);
-    disconnect_impl(session_it2, write_lock);
-    THROW_DB_EXCEPTION(e.what());
-  }
-  return session_it;
-}
-
-template <>
-SessionMap::iterator DBHandler::get_session_it_unsafe(
-    const TSessionId& session,
-    heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
-  auto session_it = get_session_from_map(session, sessions_);
-  try {
-    check_session_exp_unsafe(session_it);
-  } catch (const ForceDisconnect& e) {
-    disconnect_impl(session_it, write_lock);
-    THROW_DB_EXCEPTION(e.what());
-  }
-  return session_it;
-}
-
-template <>
-void DBHandler::expire_idle_sessions_unsafe(
-    heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
-  std::vector<std::string> expired_sessions;
-  for (auto session_pair : sessions_) {
-    auto session_it = get_session_from_map(session_pair.first, sessions_);
-    try {
-      check_session_exp_unsafe(session_it);
-    } catch (const ForceDisconnect& e) {
-      expired_sessions.emplace_back(session_it->second->get_session_id());
-    }
-  }
-
-  for (auto session_id : expired_sessions) {
-    if (leaf_aggregator_.leafCount() > 0) {
-      try {
-        leaf_aggregator_.disconnect(session_id);
-      } catch (TDBException& toe) {
-        LOG(INFO) << " Problem disconnecting from leaves : " << toe.what();
-      } catch (std::exception& e) {
-        LOG(INFO)
-            << " Problem disconnecting from leaves, check leaf logs for additonal info";
-      }
-    }
-    sessions_.erase(session_id);
-  }
-  if (render_handler_) {
-    write_lock.unlock();
-    for (auto session_id : expired_sessions) {
-      // NOTE: the render disconnect is done after the session lock is released to
-      // avoid a deadlock. See: https://heavyai.atlassian.net/browse/BE-3324
-      // This out-of-scope solution is a compromise for now until a better session
-      // handling/locking mechanism is developed for the renderer. Note as well that the
-      // session_id cannot be immediately reused. If a render request were to slip in
-      // after the lock is released and before the render disconnect could cause a
-      // problem.
-      render_handler_->disconnect(session_id);
-    }
-  }
-}
 
 #ifdef ENABLE_GEOS
 extern std::unique_ptr<std::string> g_libgeos_so_filename;
@@ -283,6 +202,13 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
     , legacy_syntax_(legacy_syntax)
     , dispatch_queue_(
           std::make_unique<QueryDispatchQueue>(system_parameters.num_executors))
+    , sessions_store_(Catalog_Namespace::SessionsStore::create(
+          base_data_path,
+          1,
+          idle_session_duration * 60,
+          max_session_duration * 60,
+          system_parameters.num_sessions,
+          [this](auto& session_ptr) { disconnect_impl(session_ptr); }))
     , super_user_rights_(false)
     , idle_session_duration_(idle_session_duration * 60)
     , max_session_duration_(max_session_duration * 60)
@@ -471,20 +397,6 @@ void DBHandler::initialize(const bool is_new_db) {
 
   query_engine_ = QueryEngine::createInstance(data_mgr_->getCudaMgr(), cpu_mode_only_);
 
-  if (leaf_aggregator_.leafCount() > 0) {
-    try {
-      agg_handler_.reset(new HeavyDBAggHandler(this));
-    } catch (const std::exception& e) {
-      LOG(ERROR) << "Distributed aggregator support disabled: " << e.what();
-    }
-  } else if (g_cluster) {
-    try {
-      leaf_handler_.reset(new HeavyDBLeafHandler(this));
-    } catch (const std::exception& e) {
-      LOG(ERROR) << "Distributed leaf support disabled: " << e.what();
-    }
-  }
-
 #ifdef ENABLE_GEOS
   if (!libgeos_so_filename_.empty()) {
     g_libgeos_so_filename.reset(new std::string(libgeos_so_filename_));
@@ -510,11 +422,6 @@ std::string const DBHandler::createInMemoryCalciteSession(
   // session would be under the name of a proxy user/password which would only persist
   // till server's lifetime or execution of calcite query(in memory) whichever is the
   // earliest.
-  heavyai::lock_guard<heavyai::shared_mutex> write_lock(sessions_mutex_);
-  std::string session_id;
-  do {
-    session_id = generate_random_string(64);
-  } while (sessions_.find(session_id) != sessions_.end());
   Catalog_Namespace::UserMetadata user_meta(-1,
                                             calcite_->getInternalSessionProxyUserName(),
                                             calcite_->getInternalSessionProxyPassword(),
@@ -522,27 +429,14 @@ std::string const DBHandler::createInMemoryCalciteSession(
                                             -1,
                                             true,
                                             false);
-  const auto emplace_ret =
-      sessions_.emplace(session_id,
-                        std::make_shared<Catalog_Namespace::SessionInfo>(
-                            catalog_ptr, user_meta, executor_device_type_, session_id));
-  CHECK(emplace_ret.second);
-  return session_id;
-}
-
-bool DBHandler::isInMemoryCalciteSession(
-    const Catalog_Namespace::UserMetadata user_meta) {
-  return user_meta.userName == calcite_->getInternalSessionProxyUserName() &&
-         user_meta.userId == -1 && user_meta.defaultDbId == -1 &&
-         user_meta.isSuper.load();
+  auto calcite_session =
+      sessions_store_->add(user_meta, catalog_ptr, executor_device_type_);
+  return calcite_session->get_session_id();
 }
 
 void DBHandler::removeInMemoryCalciteSession(const std::string& session_id) {
   // Remove InMemory calcite Session.
-  heavyai::lock_guard<heavyai::shared_mutex> write_lock(sessions_mutex_);
-  const auto it = sessions_.find(session_id);
-  CHECK(it != sessions_.end());
-  sessions_.erase(it);
+  sessions_store_->erase(session_id);
 }
 
 // internal connection for connections with no password
@@ -618,24 +512,6 @@ void DBHandler::connect(TSessionId& session,
   SysCatalog::instance().check_for_session_encryption(passwd, session);
 }
 
-std::shared_ptr<Catalog_Namespace::SessionInfo> DBHandler::create_new_session(
-    TSessionId& session,
-    const std::string& dbname,
-    const Catalog_Namespace::UserMetadata& user_meta,
-    std::shared_ptr<Catalog> cat) {
-  do {
-    session = generate_random_string(32);
-  } while (sessions_.find(session) != sessions_.end());
-  std::pair<SessionMap::iterator, bool> emplace_retval =
-      sessions_.emplace(session,
-                        std::make_shared<Catalog_Namespace::SessionInfo>(
-                            cat, user_meta, executor_device_type_, session));
-  CHECK(emplace_retval.second);
-  auto& session_ptr = emplace_retval.first->second;
-  LOG(INFO) << "User " << user_meta.userLoggable() << " connected to database " << dbname;
-  return session_ptr;
-}
-
 void DBHandler::connect_impl(TSessionId& session,
                              const std::string& passwd,
                              const std::string& dbname,
@@ -645,26 +521,13 @@ void DBHandler::connect_impl(TSessionId& session,
   // TODO(sy): Is there any reason to have dbname as a parameter
   // here when the cat parameter already provides cat->name()?
   // Should dbname and cat->name() ever differ?
-  {
-    heavyai::unique_lock<heavyai::shared_mutex> write_lock(sessions_mutex_);
-    expire_idle_sessions_unsafe(write_lock);
-    if (system_parameters_.num_sessions > 0 &&
-        sessions_.size() + 1 > static_cast<size_t>(system_parameters_.num_sessions)) {
-      THROW_DB_EXCEPTION("Too many active sessions");
-    }
-  }
-  {
-    heavyai::lock_guard<heavyai::shared_mutex> write_lock(sessions_mutex_);
-    auto session_ptr = create_new_session(session, dbname, user_meta, cat);
-    stdlog.setSessionInfo(session_ptr);
-    session_ptr->set_connection_info(getConnectionInfo().toString());
-    if (!super_user_rights_) {  // no need to connect to leaf_aggregator_ at this time
-      // while doing warmup
-      if (leaf_aggregator_.leafCount() > 0) {
-        leaf_aggregator_.connect(*session_ptr, user_meta.userName, passwd, dbname);
-        return;
-      }
-    }
+  auto session_ptr = sessions_store_->add(user_meta, cat, executor_device_type_);
+  session = session_ptr->get_session_id();
+  LOG(INFO) << "User " << user_meta.userLoggable() << " connected to database " << dbname;
+  stdlog.setSessionInfo(session_ptr);
+  session_ptr->set_connection_info(getConnectionInfo().toString());
+  if (!super_user_rights_) {  // no need to connect to leaf_aggregator_ at this time
+    // while doing warmup
   }
   auto const roles =
       stdlog.getConstSessionInfo()->get_currentUser().isSuper
@@ -677,25 +540,13 @@ void DBHandler::connect_impl(TSessionId& session,
 void DBHandler::disconnect(const TSessionId& session) {
   auto stdlog = STDLOG();
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-
-  heavyai::unique_lock<heavyai::shared_mutex> write_lock(sessions_mutex_);
-  auto session_it = get_session_it_unsafe(session, write_lock);
-  stdlog.setSessionInfo(session_it->second);
-  const auto dbname = session_it->second->getCatalog().getCurrentDB().dbName;
-
-  LOG(INFO) << "User " << session_it->second->get_currentUser().userLoggable()
-            << " disconnected from database " << dbname
-            << " with public_session_id: " << session_it->second->get_public_session_id();
-
-  disconnect_impl(session_it, write_lock);
+  auto session_ptr = get_session_ptr(session);
+  stdlog.setSessionInfo(session_ptr);
+  sessions_store_->disconnect(session);
 }
 
-void DBHandler::disconnect_impl(const SessionMap::iterator& session_it,
-                                heavyai::unique_lock<heavyai::shared_mutex>& write_lock) {
-  // session_it existence should already have been checked (i.e. called via
-  // get_session_it_unsafe(...))
-
-  const auto session_id = session_it->second->get_session_id();
+void DBHandler::disconnect_impl(Catalog_Namespace::SessionInfoPtr& session_ptr) {
+  const auto session_id = session_ptr->get_session_id();
   std::exception_ptr leaf_exception = nullptr;
   try {
     if (leaf_aggregator_.leafCount() > 0) {
@@ -710,26 +561,24 @@ void DBHandler::disconnect_impl(const SessionMap::iterator& session_it,
     render_group_assignment_map_.erase(session_id);
   }
 
-  sessions_.erase(session_it);
-  write_lock.unlock();
-
   if (render_handler_) {
     render_handler_->disconnect(session_id);
+  }
+
+  if (leaf_exception) {
+    std::rethrow_exception(leaf_exception);
   }
 }
 
 void DBHandler::switch_database(const TSessionId& session, const std::string& dbname) {
   auto stdlog = STDLOG(get_session_ptr(session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  heavyai::unique_lock<heavyai::shared_mutex> write_lock(sessions_mutex_);
-  auto session_it = get_session_it_unsafe(session, write_lock);
-
+  auto session_ptr = get_session_ptr(session);
   std::string dbname2 = dbname;  // switchDatabase() may reset dbname given as argument
-
   try {
     std::shared_ptr<Catalog> cat = SysCatalog::instance().switchDatabase(
-        dbname2, session_it->second->get_currentUser().userName);
-    session_it->second->set_catalog_ptr(cat);
+        dbname2, session_ptr->get_currentUser().userName);
+    session_ptr->set_catalog_ptr(cat);
     if (leaf_aggregator_.leafCount() > 0) {
       leaf_aggregator_.switch_database(session, dbname);
       return;
@@ -740,16 +589,17 @@ void DBHandler::switch_database(const TSessionId& session, const std::string& db
 }
 
 void DBHandler::clone_session(TSessionId& session2, const TSessionId& session1) {
-  auto stdlog = STDLOG(get_session_ptr(session1));
+  auto session1_ptr = get_session_ptr(session1);
+  auto stdlog = STDLOG(session1_ptr);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  heavyai::unique_lock<heavyai::shared_mutex> write_lock(sessions_mutex_);
-  auto session_it = get_session_it_unsafe(session1, write_lock);
 
   try {
-    const Catalog_Namespace::UserMetadata& user_meta =
-        session_it->second->get_currentUser();
-    std::shared_ptr<Catalog> cat = session_it->second->get_catalog_ptr();
-    auto session2_ptr = create_new_session(session2, cat->name(), user_meta, cat);
+    const Catalog_Namespace::UserMetadata& user_meta = session1_ptr->get_currentUser();
+    std::shared_ptr<Catalog> cat = session1_ptr->get_catalog_ptr();
+    auto session2_ptr = sessions_store_->add(user_meta, cat, executor_device_type_);
+    session2 = session2_ptr->get_session_id();
+    LOG(INFO) << "User " << user_meta.userLoggable() << " connected to database "
+              << cat->name();
     if (leaf_aggregator_.leafCount() > 0) {
       leaf_aggregator_.clone_session(session1, session2);
       return;
@@ -765,16 +615,13 @@ void DBHandler::interrupt(const TSessionId& query_session,
   // and the interrupt session is one of existing session in the leaf node (leaf)
   // so we can think there exists a logical mapping
   // between query_session (agg) and interrupt_session (leaf)
-  auto stdlog = STDLOG(get_session_ptr(interrupt_session));
+  auto session_ptr = get_session_ptr(interrupt_session);
+  auto& cat = session_ptr->getCatalog();
+  auto stdlog = STDLOG(session_ptr);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   const auto allow_query_interrupt =
       g_enable_runtime_query_interrupt || g_enable_non_kernel_time_query_interrupt;
   if (g_enable_dynamic_watchdog || allow_query_interrupt) {
-    // Shared lock to allow simultaneous interrupts of multiple sessions
-    heavyai::shared_lock<heavyai::shared_mutex> read_lock(sessions_mutex_);
-
-    auto session_it = get_session_it_unsafe(interrupt_session, read_lock);
-    auto& cat = session_it->second.get()->getCatalog();
     const auto dbname = cat.getCurrentDB().dbName;
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                           jit_debug_ ? "/tmp" : "",
@@ -792,7 +639,7 @@ void DBHandler::interrupt(const TSessionId& query_session,
       if (executor->checkIsQuerySessionEnrolled(query_session, session_read_lock)) {
         session_read_lock.unlock();
         VLOG(1) << "Received interrupt: "
-                << "User " << session_it->second->get_currentUser().userLoggable()
+                << "User " << session_ptr->get_currentUser().userLoggable()
                 << ", Database " << dbname << std::endl;
         executor->interrupt(query_session, interrupt_session);
       }
@@ -800,14 +647,14 @@ void DBHandler::interrupt(const TSessionId& query_session,
       for (auto& executor_id : target_executor_ids) {
         VLOG(1) << "Received interrupt: "
                 << "Executor " << executor_id << ", User "
-                << session_it->second->get_currentUser().userLoggable() << ", Database "
+                << session_ptr->get_currentUser().userLoggable() << ", Database "
                 << dbname << std::endl;
         auto target_executor = Executor::getExecutor(executor_id);
         target_executor->interrupt(query_session, interrupt_session);
       }
     }
 
-    LOG(INFO) << "User " << session_it->second->get_currentUser().userName
+    LOG(INFO) << "User " << session_ptr->get_currentUser().userName
               << " interrupted session with database " << dbname << std::endl;
   }
 }
@@ -909,13 +756,6 @@ void DBHandler::get_hardware_info(TClusterHardwareInfo& _return,
   // end hardware/OS dependent code
 
   _return.hardware_info.push_back(ret);
-  if (leaf_aggregator_.leafCount() > 0) {
-    ret.host_name = "aggregator";
-    TClusterHardwareInfo leaf_hardware = leaf_aggregator_.getHardwareInfo(session);
-    _return.hardware_info.insert(_return.hardware_info.end(),
-                                 leaf_hardware.hardware_info.begin(),
-                                 leaf_hardware.hardware_info.end());
-  }
 }
 
 void DBHandler::get_session_info(TSessionInfo& _return, const TSessionId& session) {
@@ -924,7 +764,6 @@ void DBHandler::get_session_info(TSessionInfo& _return, const TSessionId& sessio
   auto stdlog = STDLOG(session_ptr);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto user_metadata = session_ptr->get_currentUser();
-
   _return.user = user_metadata.userName;
   _return.database = session_ptr->getCatalog().getCurrentDB().dbName;
   _return.start_time = session_ptr->get_start_time();
@@ -2071,6 +1910,7 @@ void DBHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
                                     const TDBObjectType::type type) {
   auto stdlog = STDLOG(get_session_ptr(sessionId));
   auto session_ptr = stdlog.getConstSessionInfo();
+  const auto& cat = session_ptr->getCatalog();
   DBObjectType object_type;
   switch (type) {
     case TDBObjectType::DatabaseDBObjectType:
@@ -2105,21 +1945,20 @@ void DBHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
     } else if ((object_type == TableDBObjectType || object_type == ViewDBObjectType) &&
                !objectName.empty()) {
       // special handling for view / table
-      auto const& cat = session_ptr->getCatalog();
       auto td = cat.getMetadataForTable(objectName, false);
       if (td) {
         object_type = td->isView ? ViewDBObjectType : TableDBObjectType;
         object_to_find = DBObject(objectName, object_type);
       }
     }
-    object_to_find.loadKey(session_ptr->getCatalog());
+    object_to_find.loadKey(cat);
   } catch (const std::exception&) {
     THROW_DB_EXCEPTION("Object with name " + objectName + " does not exist.");
   }
 
   // object type on database level
   DBObject object_to_find_dblevel("", object_type);
-  object_to_find_dblevel.loadKey(session_ptr->getCatalog());
+  object_to_find_dblevel.loadKey(cat);
   // if user is superuser respond with a full priv
   if (session_ptr->get_currentUser().isSuper) {
     // using ALL_TABLE here to set max permissions
@@ -2418,6 +2257,7 @@ TTableRefreshInfo get_refresh_info(const TableDescriptor* td) {
   return refresh_info;
 }
 }  // namespace
+
 void DBHandler::get_table_details_impl(TTableDetails& _return,
                                        query_state::StdLog& stdlog,
                                        const std::string& table_name,
@@ -2761,10 +2601,6 @@ void DBHandler::clear_gpu_memory(const TSessionId& session) {
   if (render_handler_) {
     render_handler_->clear_gpu_memory();
   }
-
-  if (leaf_aggregator_.leafCount() > 0) {
-    leaf_aggregator_.clear_leaf_gpu_memory(session);
-  }
 }
 
 void DBHandler::clear_cpu_memory(const TSessionId& session) {
@@ -2781,10 +2617,6 @@ void DBHandler::clear_cpu_memory(const TSessionId& session) {
   }
   if (render_handler_) {
     render_handler_->clear_cpu_memory();
-  }
-
-  if (leaf_aggregator_.leafCount() > 0) {
-    leaf_aggregator_.clear_leaf_cpu_memory(session);
   }
 }
 
@@ -2856,9 +2688,6 @@ void DBHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
 
   for (auto memInfo : internal_memory) {
     TNodeMemoryInfo nodeInfo;
-    if (leaf_aggregator_.leafCount() > 0) {
-      nodeInfo.host_name = heavyai::get_hostname();
-    }
     nodeInfo.page_size = memInfo.pageSize;
     nodeInfo.max_num_pages = memInfo.maxNumPages;
     nodeInfo.num_pages_allocated = memInfo.numPageAllocated;
@@ -2874,11 +2703,6 @@ void DBHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
       nodeInfo.node_memory_data.push_back(md);
     }
     _return.push_back(nodeInfo);
-  }
-  if (leaf_aggregator_.leafCount() > 0) {
-    std::vector<TNodeMemoryInfo> leafSummary =
-        leaf_aggregator_.getLeafMemoryInfo(session, mem_level);
-    _return.insert(_return.begin(), leafSummary.begin(), leafSummary.end());
   }
 }
 
@@ -2913,20 +2737,10 @@ TExecuteMode::type DBHandler::getExecutionMode(const TSessionId& session) {
 
 void DBHandler::set_execution_mode(const TSessionId& session,
                                    const TExecuteMode::type mode) {
-  auto stdlog = STDLOG(get_session_ptr(session));
+  auto session_ptr = get_session_ptr(session);
+  auto stdlog = STDLOG(session_ptr);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  heavyai::unique_lock<heavyai::shared_mutex> write_lock(sessions_mutex_);
-  auto session_it = get_session_it_unsafe(session, write_lock);
-  if (leaf_aggregator_.leafCount() > 0) {
-    leaf_aggregator_.set_execution_mode(session, mode);
-    try {
-      DBHandler::set_execution_mode_nolock(session_it->second.get(), mode);
-    } catch (const TDBException& e) {
-      LOG(INFO) << "Aggregator failed to set execution mode: " << e.error_msg;
-    }
-    return;
-  }
-  DBHandler::set_execution_mode_nolock(session_it->second.get(), mode);
+  DBHandler::set_execution_mode_nolock(session_ptr.get(), mode);
 }
 
 namespace {
@@ -3233,11 +3047,7 @@ DBHandler::prepare_loader_generic(
   }
   check_table_load_privileges(session_info, table_name);
 
-  if (leaf_aggregator_.leafCount() > 0) {
-    loader->reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
-  } else {
-    loader->reset(new import_export::Loader(cat, td));
-  }
+  loader->reset(new import_export::Loader(cat, td));
 
   auto col_descs = (*loader)->get_column_descs();
   check_valid_column_names(col_descs, column_names);
@@ -4359,7 +4169,6 @@ void DBHandler::render_vega(TRenderResult& _return,
                        nonce);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   stdlog.appendNameValuePairs("nonce", nonce);
-  auto session_ptr = stdlog.getConstSessionInfo();
   if (!render_handler_) {
     THROW_DB_EXCEPTION("Backend rendering is disabled.");
   }
@@ -4584,7 +4393,7 @@ TDashboard DBHandler::get_dashboard_impl(
     // add them to the permissions.
     auto obj_to_find =
         DBObject(dashboard.dashboard_id, DBObjectType::DashboardDBObjectType);
-    obj_to_find.loadKey(session_ptr->getCatalog());
+    obj_to_find.loadKey(cat);
     std::vector<std::string> grantees =
         SysCatalog::instance().getRoles(true,
                                         session_ptr->get_currentUser().isSuper,
@@ -5137,10 +4946,7 @@ void DBHandler::import_table(const TSessionId& session,
     const auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
         session_ptr->getCatalog(), table_name);
     std::unique_ptr<import_export::AbstractImporter> importer;
-    if (leaf_aggregator_.leafCount() > 0) {
-    } else {
-      importer = import_export::create_importer(cat, td, copy_from_source, copy_params);
-    }
+    importer = import_export::create_importer(cat, td, copy_from_source, copy_params);
     auto ms = measure<>::execution([&]() { importer->import(session_ptr.get()); });
     LOG(INFO) << "Total Import Time: " << (double)ms / 1000.0 << " Seconds.";
   } catch (const TDBException& e) {
@@ -5624,15 +5430,8 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
 
       // create an importer
       std::unique_ptr<import_export::Importer> importer;
-      if (leaf_aggregator_.leafCount() > 0) {
-        importer.reset(new import_export::Importer(
-            new DistributedLoader(*session_ptr, td, &leaf_aggregator_),
-            file_path.string(),
-            copy_params));
-      } else {
-        importer.reset(
-            new import_export::Importer(cat, td, file_path.string(), copy_params_copy));
-      }
+      importer.reset(
+          new import_export::Importer(cat, td, file_path.string(), copy_params_copy));
 
       // import
       auto ms = measure<>::execution(
@@ -5868,55 +5667,8 @@ void DBHandler::get_heap_profile(std::string& profile, const TSessionId& session
 #endif  // HAVE_PROFILER
 }
 
-// NOTE: Only call check_session_exp_unsafe() when you hold a lock on sessions_mutex_.
-void DBHandler::check_session_exp_unsafe(const SessionMap::iterator& session_it) {
-  if (session_it->second.use_count() > 2 ||
-      isInMemoryCalciteSession(session_it->second->get_currentUser())) {
-    // SessionInfo is being used in more than one active operation. Original copy + one
-    // stored in StdLog. Skip the checks.
-    return;
-  }
-  time_t last_used_time = session_it->second->get_last_used_time();
-  time_t start_time = session_it->second->get_start_time();
-  const auto current_session_duration = time(0) - last_used_time;
-  if (current_session_duration > idle_session_duration_) {
-    LOG(INFO) << "Session " << session_it->second->get_public_session_id()
-              << " idle duration " << current_session_duration
-              << " seconds exceeds maximum idle duration " << idle_session_duration_
-              << " seconds. Invalidating session.";
-    throw ForceDisconnect("Idle Session Timeout. User should re-authenticate.");
-  }
-  const auto total_session_duration = time(0) - start_time;
-  if (total_session_duration > max_session_duration_) {
-    LOG(INFO) << "Session " << session_it->second->get_public_session_id()
-              << " total duration " << total_session_duration
-              << " seconds exceeds maximum total session duration "
-              << max_session_duration_ << " seconds. Invalidating session.";
-    throw ForceDisconnect("Maximum active Session Timeout. User should re-authenticate.");
-  }
-}
-
-std::shared_ptr<const Catalog_Namespace::SessionInfo> DBHandler::get_const_session_ptr(
-    const TSessionId& session) {
-  return get_session_ptr(session);
-}
-
 Catalog_Namespace::SessionInfo DBHandler::get_session_copy(const TSessionId& session) {
-  heavyai::shared_lock<heavyai::shared_mutex> read_lock(sessions_mutex_);
-  return *get_session_it_unsafe(session, read_lock)->second;
-}
-
-std::shared_ptr<Catalog_Namespace::SessionInfo> DBHandler::get_session_copy_ptr(
-    const TSessionId& session) {
-  // Note(Wamsi): We have `get_const_session_ptr` which would return as const
-  // SessionInfo stored in the map. You can use `get_const_session_ptr` instead of the
-  // copy of SessionInfo but beware that it can be changed in teh map. So if you do not
-  // care about the changes then use `get_const_session_ptr` if you do then use this
-  // function to get a copy. We should eventually aim to merge both
-  // `get_const_session_ptr` and `get_session_copy_ptr`.
-  heavyai::shared_lock<heavyai::shared_mutex> read_lock(sessions_mutex_);
-  auto& session_info_ref = *get_session_it_unsafe(session, read_lock)->second;
-  return std::make_shared<Catalog_Namespace::SessionInfo>(session_info_ref);
+  return sessions_store_->getSessionCopy(session);
 }
 
 std::shared_ptr<Catalog_Namespace::SessionInfo> DBHandler::get_session_ptr(
@@ -5932,8 +5684,11 @@ std::shared_ptr<Catalog_Namespace::SessionInfo> DBHandler::get_session_ptr(
   if (session_id.empty()) {
     return {};
   }
-  heavyai::shared_lock<heavyai::shared_mutex> read_lock(sessions_mutex_);
-  return get_session_it_unsafe(session_id, read_lock)->second;
+  auto ptr = sessions_store_->get(session_id);
+  if (!ptr) {
+    THROW_DB_EXCEPTION("Session not valid or expired.");
+  }
+  return ptr;
 }
 
 void DBHandler::check_table_load_privileges(
@@ -5955,8 +5710,7 @@ void DBHandler::check_table_load_privileges(
 
 void DBHandler::check_table_load_privileges(const TSessionId& session,
                                             const std::string& table_name) {
-  const auto session_info = get_session_copy(session);
-  check_table_load_privileges(session_info, table_name);
+  check_table_load_privileges(get_session_copy(session), table_name);
 }
 
 void DBHandler::set_execution_mode_nolock(Catalog_Namespace::SessionInfo* session_ptr,
@@ -6225,28 +5979,18 @@ bool DBHandler::user_can_access_table(const Catalog_Namespace::SessionInfo& sess
   privObjects.push_back(dbObject);
   return SysCatalog::instance().checkPrivileges(session_info.get_currentUser(),
                                                 privObjects);
-};
+}
 
+// TODO(max): usage of it was accidentally lost. Need to restore this check
 void DBHandler::check_and_invalidate_sessions(Parser::DDLStmt* ddl) {
-  const auto drop_db_stmt = dynamic_cast<Parser::DropDBStmt*>(ddl);
-  if (drop_db_stmt) {
-    invalidate_sessions(*drop_db_stmt->getDatabaseName(), drop_db_stmt);
-    return;
-  }
-  const auto rename_db_stmt = dynamic_cast<Parser::RenameDBStmt*>(ddl);
-  if (rename_db_stmt) {
-    invalidate_sessions(*rename_db_stmt->getPreviousDatabaseName(), rename_db_stmt);
-    return;
-  }
-  const auto drop_user_stmt = dynamic_cast<Parser::DropUserStmt*>(ddl);
-  if (drop_user_stmt) {
-    invalidate_sessions(*drop_user_stmt->getUserName(), drop_user_stmt);
-    return;
-  }
-  const auto rename_user_stmt = dynamic_cast<Parser::RenameUserStmt*>(ddl);
-  if (rename_user_stmt) {
-    invalidate_sessions(*rename_user_stmt->getOldUserName(), rename_user_stmt);
-    return;
+  if (const auto drop_db_stmt = dynamic_cast<Parser::DropDBStmt*>(ddl)) {
+    sessions_store_->eraseByDB(*drop_db_stmt->getDatabaseName());
+  } else if (const auto rename_db_stmt = dynamic_cast<Parser::RenameDBStmt*>(ddl)) {
+    sessions_store_->eraseByDB(*rename_db_stmt->getPreviousDatabaseName());
+  } else if (const auto drop_user_stmt = dynamic_cast<Parser::DropUserStmt*>(ddl)) {
+    sessions_store_->eraseByUser(*drop_user_stmt->getUserName());
+  } else if (const auto rename_user_stmt = dynamic_cast<Parser::RenameUserStmt*>(ddl)) {
+    sessions_store_->eraseByUser(*rename_user_stmt->getOldUserName());
   }
 }
 
@@ -6368,21 +6112,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
 
       std::string output{"Result for validate"};
       if (g_cluster) {
-        if (leaf_aggregator_.leafCount()) {
-          _return.addExecutionTime(measure<>::execution([&]() {
-            const system_validator::DistributedValidate validator(
-                validate_stmt.getType(),
-                validate_stmt.isRepairTypeRemove(),
-                cat,  // tables may be dropped here
-                leaf_aggregator_,
-                *session_ptr,
-                *this);
-            output = validator.validate(query_state_proxy);
-          }));
-        } else {
-          THROW_DB_EXCEPTION("Validate command should be executed on the aggregator.");
-        }
-
+        THROW_DB_EXCEPTION("Validate command should be executed on the aggregator.");
       } else {
         _return.addExecutionTime(measure<>::execution([&]() {
           const system_validator::SingleNodeValidator validator(validate_stmt.getType(),
@@ -7114,9 +6844,6 @@ void DBHandler::set_table_epoch(const TSessionId& session,
   ChunkKey table_key{db_id, table_id};
   auto table_write_lock = lockmgr::TableSchemaLockMgr::getWriteLockForTable(table_key);
   auto table_data_write_lock = lockmgr::TableDataLockMgr::getWriteLockForTable(table_key);
-  if (leaf_aggregator_.leafCount() > 0) {
-    return leaf_aggregator_.set_table_epochLeaf(*session_ptr, db_id, table_id, new_epoch);
-  }
   try {
     auto& cat = session_ptr->getCatalog();
     cat.setTableEpoch(db_id, table_id, new_epoch);
@@ -7149,10 +6876,6 @@ void DBHandler::set_table_epoch_by_name(const TSessionId& session,
       table_name,
       false);  // don't populate fragmenter on this call since we only want metadata
   int32_t db_id = cat.getCurrentDB().dbId;
-  if (leaf_aggregator_.leafCount() > 0) {
-    return leaf_aggregator_.set_table_epochLeaf(
-        *session_ptr, db_id, td->tableId, new_epoch);
-  }
   try {
     cat.setTableEpoch(db_id, td->tableId, new_epoch);
   } catch (const std::runtime_error& e) {
@@ -7174,9 +6897,6 @@ int32_t DBHandler::get_table_epoch(const TSessionId& session,
   ChunkKey table_key{db_id, table_id};
   auto table_read_lock = lockmgr::TableSchemaLockMgr::getReadLockForTable(table_key);
   auto table_data_write_lock = lockmgr::TableDataLockMgr::getReadLockForTable(table_key);
-  if (leaf_aggregator_.leafCount() > 0) {
-    return leaf_aggregator_.get_table_epochLeaf(*session_ptr, db_id, table_id);
-  }
   try {
     auto const& cat = session_ptr->getCatalog();
     return cat.getTableEpoch(db_id, table_id);
@@ -7204,9 +6924,6 @@ int32_t DBHandler::get_table_epoch_by_name(const TSessionId& session,
       table_name,
       false);  // don't populate fragmenter on this call since we only want metadata
   int32_t db_id = cat.getCurrentDB().dbId;
-  if (leaf_aggregator_.leafCount() > 0) {
-    return leaf_aggregator_.get_table_epochLeaf(*session_ptr, db_id, td->tableId);
-  }
   try {
     return cat.getTableEpoch(db_id, td->tableId);
   } catch (const std::runtime_error& e) {
@@ -7231,12 +6948,8 @@ void DBHandler::get_table_epochs(std::vector<TTableEpochInfo>& _return,
   auto table_data_read_lock = lockmgr::TableDataLockMgr::getReadLockForTable(table_key);
 
   std::vector<Catalog_Namespace::TableEpochInfo> table_epochs;
-  if (leaf_aggregator_.leafCount() > 0) {
-    table_epochs = leaf_aggregator_.getLeafTableEpochs(*session_ptr, db_id, table_id);
-  } else {
-    auto const& cat = session_ptr->getCatalog();
-    table_epochs = cat.getTableEpochs(db_id, table_id);
-  }
+  auto const& cat = session_ptr->getCatalog();
+  table_epochs = cat.getTableEpochs(db_id, table_id);
   CHECK(!table_epochs.empty());
 
   for (const auto& table_epoch : table_epochs) {
@@ -7284,11 +6997,7 @@ void DBHandler::set_table_epochs(const TSessionId& session,
   ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
   auto table_write_lock = lockmgr::TableSchemaLockMgr::getWriteLockForTable(table_key);
   auto table_data_write_lock = lockmgr::TableDataLockMgr::getWriteLockForTable(table_key);
-  if (leaf_aggregator_.leafCount() > 0) {
-    leaf_aggregator_.setLeafTableEpochs(*session_ptr, db_id, table_epochs_vector);
-  } else {
-    cat.setTableEpochs(db_id, table_epochs_vector);
-  }
+  cat.setTableEpochs(db_id, table_epochs_vector);
 }
 
 void DBHandler::set_license_key(TLicenseInfo& _return,
@@ -7318,8 +7027,6 @@ void DBHandler::shutdown() {
     render_handler_->shutdown();
   }
 
-  sessions_.clear();
-
   Catalog_Namespace::SysCatalog::destroy();
 }
 
@@ -7344,7 +7051,8 @@ extern std::map<std::string, std::string> get_device_parameters(bool cpu_only);
 
 void DBHandler::get_device_parameters(std::map<std::string, std::string>& _return,
                                       const TSessionId& session) {
-  const auto session_info = get_session_copy(session);
+  auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto params = ::get_device_parameters(cpu_mode_only_);
   for (auto item : params) {
     _return.insert(item);
@@ -7536,7 +7244,6 @@ ExecutionResult DBHandler::getUserSessions(
   if (!session_ptr->get_currentUser().isSuper) {
     throw std::runtime_error(
         "SHOW USER SESSIONS failed, because it can only be executed by super user.");
-
   } else {
     // label_infos -> column labels
     std::vector<std::string> labels{
@@ -7547,22 +7254,17 @@ ExecutionResult DBHandler::getUserSessions(
 
     // logical_values -> table data
     std::vector<RelLogicalValues::RowValues> logical_values;
-
-    if (!sessions_.empty()) {
-      heavyai::lock_guard<heavyai::shared_mutex> read_lock(sessions_mutex_);
-
-      for (auto sessions = sessions_.begin(); sessions_.end() != sessions; sessions++) {
-        const auto show_session_ptr = sessions->second;
-        logical_values.emplace_back(RelLogicalValues::RowValues{});
-        logical_values.back().emplace_back(
-            genLiteralStr(show_session_ptr->get_public_session_id()));
-        logical_values.back().emplace_back(
-            genLiteralStr(show_session_ptr->get_currentUser().userName));
-        logical_values.back().emplace_back(
-            genLiteralStr(show_session_ptr->get_connection_info()));
-        logical_values.back().emplace_back(
-            genLiteralStr(show_session_ptr->getCatalog().getCurrentDB().dbName));
-      }
+    auto sessions = sessions_store_->getAllSessions();
+    for (const auto& session_ptr : sessions) {
+      logical_values.emplace_back(RelLogicalValues::RowValues{});
+      logical_values.back().emplace_back(
+          genLiteralStr(session_ptr->get_public_session_id()));
+      logical_values.back().emplace_back(
+          genLiteralStr(session_ptr->get_currentUser().userName));
+      logical_values.back().emplace_back(
+          genLiteralStr(session_ptr->get_connection_info()));
+      logical_values.back().emplace_back(
+          genLiteralStr(session_ptr->getCatalog().getCurrentDB().dbName));
     }
 
     // Create ResultSet
@@ -7579,7 +7281,6 @@ ExecutionResult DBHandler::getQueries(
   auto current_user_name = session_ptr->get_currentUser().userName;
   auto is_super_user = session_ptr->get_currentUser().isSuper.load();
 
-  heavyai::lock_guard<heavyai::shared_mutex> read_lock(sessions_mutex_);
   std::vector<std::string> labels{"query_session_id",
                                   "current_status",
                                   "executor_id",
@@ -7594,61 +7295,54 @@ ExecutionResult DBHandler::getQueries(
   }
 
   std::vector<RelLogicalValues::RowValues> logical_values;
-  if (!sessions_.empty()) {
-    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
-                                          jit_debug_ ? "/tmp" : "",
-                                          jit_debug_ ? "mapdquery" : "",
-                                          system_parameters_);
-    CHECK(executor);
-    for (auto session = sessions_.begin(); sessions_.end() != session; session++) {
-      const auto id = session->first;
-      const auto query_session_ptr = session->second;
-      const auto query_session_user_name = query_session_ptr->get_currentUser().userName;
-      if (!is_super_user && query_session_user_name.compare(current_user_name) != 0) {
-        // non-admin user can only see the owned queries
-        continue;
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        jit_debug_ ? "/tmp" : "",
+                                        jit_debug_ ? "mapdquery" : "",
+                                        system_parameters_);
+  CHECK(executor);
+  auto sessions = (is_super_user ? sessions_store_->getAllSessions()
+                                 : sessions_store_->getUserSessions(current_user_name));
+  for (const auto query_session_ptr : sessions) {
+    std::vector<QuerySessionStatus> query_infos;
+    {
+      heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+          executor->getSessionLock());
+      query_infos = executor->getQuerySessionInfo(query_session_ptr->get_session_id(),
+                                                  session_read_lock);
+    }
+    // if there exists query info fired from this session we report it to user
+    const std::string getQueryStatusStr[] = {"UNDEFINED",
+                                             "PENDING_QUEUE",
+                                             "PENDING_EXECUTOR",
+                                             "RUNNING_QUERY_KERNEL",
+                                             "RUNNING_REDUCTION",
+                                             "RUNNING_IMPORTER"};
+    bool is_table_import_session = false;
+    for (QuerySessionStatus& query_info : query_infos) {
+      logical_values.emplace_back(RelLogicalValues::RowValues{});
+      logical_values.back().emplace_back(
+          genLiteralStr(query_session_ptr->get_public_session_id()));
+      auto query_status = query_info.getQueryStatus();
+      logical_values.back().emplace_back(genLiteralStr(getQueryStatusStr[query_status]));
+      if (query_status == QuerySessionStatus::QueryStatus::RUNNING_IMPORTER) {
+        is_table_import_session = true;
       }
-      std::vector<QuerySessionStatus> query_infos;
-      {
-        heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
-            executor->getSessionLock());
-        query_infos = executor->getQuerySessionInfo(query_session_ptr->get_session_id(),
-                                                    session_read_lock);
-      }
-      // if there exists query info fired from this session we report it to user
-      const std::string getQueryStatusStr[] = {"UNDEFINED",
-                                               "PENDING_QUEUE",
-                                               "PENDING_EXECUTOR",
-                                               "RUNNING_QUERY_KERNEL",
-                                               "RUNNING_REDUCTION",
-                                               "RUNNING_IMPORTER"};
-      bool is_table_import_session = false;
-      for (QuerySessionStatus& query_info : query_infos) {
-        logical_values.emplace_back(RelLogicalValues::RowValues{});
-        logical_values.back().emplace_back(
-            genLiteralStr(query_session_ptr->get_public_session_id()));
-        auto query_status = query_info.getQueryStatus();
-        logical_values.back().emplace_back(
-            genLiteralStr(getQueryStatusStr[query_status]));
-        if (query_status == QuerySessionStatus::QueryStatus::RUNNING_IMPORTER) {
-          is_table_import_session = true;
-        }
-        logical_values.back().emplace_back(
-            genLiteralStr(::toString(query_info.getExecutorId())));
-        logical_values.back().emplace_back(
-            genLiteralStr(query_info.getQuerySubmittedTime()));
-        logical_values.back().emplace_back(genLiteralStr(query_info.getQueryStr()));
-        logical_values.back().emplace_back(genLiteralStr(query_session_user_name));
-        logical_values.back().emplace_back(
-            genLiteralStr(query_session_ptr->get_connection_info()));
-        logical_values.back().emplace_back(
-            genLiteralStr(query_session_ptr->getCatalog().getCurrentDB().dbName));
-        if (query_session_ptr->get_executor_device_type() == ExecutorDeviceType::GPU &&
-            !is_table_import_session) {
-          logical_values.back().emplace_back(genLiteralStr("GPU"));
-        } else {
-          logical_values.back().emplace_back(genLiteralStr("CPU"));
-        }
+      logical_values.back().emplace_back(
+          genLiteralStr(::toString(query_info.getExecutorId())));
+      logical_values.back().emplace_back(
+          genLiteralStr(query_info.getQuerySubmittedTime()));
+      logical_values.back().emplace_back(genLiteralStr(query_info.getQueryStr()));
+      logical_values.back().emplace_back(
+          genLiteralStr(query_session_ptr->get_currentUser().userName));
+      logical_values.back().emplace_back(
+          genLiteralStr(query_session_ptr->get_connection_info()));
+      logical_values.back().emplace_back(
+          genLiteralStr(query_session_ptr->getCatalog().getCurrentDB().dbName));
+      if (query_session_ptr->get_executor_device_type() == ExecutorDeviceType::GPU &&
+          !is_table_import_session) {
+        logical_values.back().emplace_back(genLiteralStr("GPU"));
+      } else {
+        logical_values.back().emplace_back(genLiteralStr("CPU"));
       }
     }
   }
@@ -7662,16 +7356,13 @@ ExecutionResult DBHandler::getQueries(
 void DBHandler::get_queries_info(std::vector<TQueryInfo>& _return,
                                  const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
-  auto session_ptr = stdlog.getConstSessionInfo();
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
                                         system_parameters_);
   CHECK(executor);
-  heavyai::lock_guard<heavyai::shared_mutex> read_lock(sessions_mutex_);
-  for (auto session = sessions_.begin(); sessions_.end() != session; session++) {
-    const auto id = session->first;
-    const auto query_session_ptr = session->second;
+  auto sessions = sessions_store_->getAllSessions();
+  for (const auto query_session_ptr : sessions) {
     const auto query_session_user_name = query_session_ptr->get_currentUser().userName;
     std::vector<QuerySessionStatus> query_infos;
     {
@@ -7751,61 +7442,49 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
   }
 
   CHECK_EQ(target_session.length(), static_cast<unsigned long>(8));
-  bool found_valid_session = false;
-  for (auto& kv : sessions_) {
-    if (kv.second->get_public_session_id().compare(target_session) == 0) {
-      auto target_query_session = kv.second->get_session_id();
-      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
-                                            jit_debug_ ? "/tmp" : "",
-                                            jit_debug_ ? "mapdquery" : "",
-                                            system_parameters_);
-      CHECK(executor);
-
-      auto non_admin_interrupt_user = !session_info.get_currentUser().isSuper.load();
-      auto interrupt_user_name = session_info.get_currentUser().userName;
-      if (non_admin_interrupt_user) {
-        auto target_user_name = kv.second->get_currentUser().userName;
-        if (target_user_name.compare(interrupt_user_name) != 0) {
-          throw std::runtime_error("Unable to interrupt running query.");
-        }
-      }
-
-      if (leaf_aggregator_.leafCount() > 0) {
-        leaf_aggregator_.interrupt(target_query_session, session_info.get_session_id());
-      }
-      auto target_executor_ids =
-          executor->getExecutorIdsRunningQuery(target_query_session);
-      if (target_executor_ids.empty()) {
-        heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
-            executor->getSessionLock());
-        if (executor->checkIsQuerySessionEnrolled(target_query_session,
-                                                  session_read_lock)) {
-          session_read_lock.unlock();
-          VLOG(1) << "Received interrupt: "
-                  << "User " << session_info.get_currentUser().userLoggable()
-                  << ", LeafCount " << leaf_aggregator_.leafCount() << ", Database "
-                  << session_info.getCatalog().getCurrentDB().dbName << std::endl;
-          executor->interrupt(target_query_session, session_info.get_session_id());
-          found_valid_session = true;
-        }
-      } else {
-        for (auto& executor_id : target_executor_ids) {
-          VLOG(1) << "Received interrupt: "
-                  << "User " << session_info.get_currentUser().userLoggable()
-                  << ", Executor " << executor_id << ", LeafCount "
-                  << leaf_aggregator_.leafCount() << ", Database "
-                  << session_info.getCatalog().getCurrentDB().dbName << std::endl;
-          auto target_executor = Executor::getExecutor(executor_id);
-          target_executor->interrupt(target_query_session, session_info.get_session_id());
-          found_valid_session = true;
-        }
-      }
-      break;
-    }
-  }
-  if (!found_valid_session) {
+  auto target_query_session = sessions_store_->getByPublicID(target_session);
+  if (!target_query_session) {
     throw std::runtime_error(
         "Unable to interrupt running query. An invalid query session is given.");
+  }
+  auto target_session_id = target_query_session->get_session_id();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        jit_debug_ ? "/tmp" : "",
+                                        jit_debug_ ? "mapdquery" : "",
+                                        system_parameters_);
+  CHECK(executor);
+
+  auto non_admin_interrupt_user = !session_info.get_currentUser().isSuper.load();
+  auto interrupt_user_name = session_info.get_currentUser().userName;
+  if (non_admin_interrupt_user) {
+    auto target_user_name = target_query_session->get_currentUser().userName;
+    if (target_user_name.compare(interrupt_user_name) != 0) {
+      throw std::runtime_error("Unable to interrupt running query.");
+    }
+  }
+
+  auto target_executor_ids = executor->getExecutorIdsRunningQuery(target_session_id);
+  if (target_executor_ids.empty()) {
+    heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+        executor->getSessionLock());
+    if (executor->checkIsQuerySessionEnrolled(target_session_id, session_read_lock)) {
+      session_read_lock.unlock();
+      VLOG(1) << "Received interrupt: "
+              << "User " << session_info.get_currentUser().userLoggable()
+              << ", LeafCount " << leaf_aggregator_.leafCount() << ", Database "
+              << session_info.getCatalog().getCurrentDB().dbName << std::endl;
+      executor->interrupt(target_session_id, session_info.get_session_id());
+    }
+  } else {
+    for (auto& executor_id : target_executor_ids) {
+      VLOG(1) << "Received interrupt: "
+              << "User " << session_info.get_currentUser().userLoggable() << ", Executor "
+              << executor_id << ", LeafCount " << leaf_aggregator_.leafCount()
+              << ", Database " << session_info.getCatalog().getCurrentDB().dbName
+              << std::endl;
+      auto target_executor = Executor::getExecutor(executor_id);
+      target_executor->interrupt(target_session_id, session_info.get_session_id());
+    }
   }
 }
 
