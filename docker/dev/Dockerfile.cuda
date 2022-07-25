@@ -50,6 +50,7 @@ RUN apt install -y \
     bzip2 \
     libboost-all-dev \
     libbz2-dev \
+    libdouble-conversion-dev \
     libgflags-dev \
     libgoogle-glog-dev \
     libgtest-dev \
