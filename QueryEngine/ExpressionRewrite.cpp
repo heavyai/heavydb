@@ -786,6 +786,7 @@ Analyzer::ExpressionPtr rewrite_expr(const Analyzer::Expr* expr) {
 boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
     const std::shared_ptr<Analyzer::Expr> expr,
     const std::vector<InputDescriptor>& input_table_info,
+    const OverlapsJoinRewriteType rewrite_type,
     const Executor* executor) {
   auto collect_table_cardinality = [](const Analyzer::Expr* lhs,
                                       const Analyzer::Expr* rhs,
@@ -829,9 +830,7 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
           const Analyzer::GeoOperator* lhs,
           const Analyzer::Constant* rhs,
           const Executor* executor) -> std::shared_ptr<Analyzer::BinOper> {
-    if (g_enable_distance_rangejoin &&
-        OverlapsJoinSupportedFunction::is_range_join_rewrite_target_func(
-            lhs->getName())) {
+    if (OverlapsJoinSupportedFunction::is_range_join_rewrite_target_func(func_name)) {
       CHECK_EQ(lhs->size(), size_t(2));
       auto l_arg = lhs->getOperand(0);
       auto r_arg = lhs->getOperand(1);
@@ -896,175 +895,172 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
   std::shared_ptr<Analyzer::BinOper> overlaps_oper{nullptr};
   bool needs_to_return_original_expr = false;
   std::string func_name{""};
-  auto func_oper = dynamic_cast<Analyzer::FunctionOper*>(expr.get());
-  if (func_oper) {
+  if (rewrite_type == OverlapsJoinRewriteType::OVERLAPS_JOIN) {
+    auto func_oper = dynamic_cast<Analyzer::FunctionOper*>(expr.get());
+    CHECK(func_oper);
     func_name = func_oper->getName();
-    if (OverlapsJoinSupportedFunction::is_overlaps_supported_func(func_name)) {
-      if (!g_enable_hashjoin_many_to_many &&
-          OverlapsJoinSupportedFunction::is_many_to_many_func(func_name)) {
-        LOG(WARNING) << "Many-to-many hashjoin support is disabled, unable to rewrite "
-                     << func_oper->toString() << " to use accelerated geo join.";
+    if (!g_enable_hashjoin_many_to_many &&
+        OverlapsJoinSupportedFunction::is_many_to_many_func(func_name)) {
+      LOG(WARNING) << "Many-to-many hashjoin support is disabled, unable to rewrite "
+                   << func_oper->toString() << " to use accelerated geo join.";
+      return boost::none;
+    }
+    DeepCopyVisitor deep_copy_visitor;
+    if (func_name == OverlapsJoinSupportedFunction::ST_OVERLAPS_sv) {
+      CHECK_GE(func_oper->getArity(), size_t(2));
+      // this case returns {empty quals, overlaps join quals} b/c our join key matching
+      // logic for this case is the same as the implementation of ST_Overlaps function
+      // Note that we can build an overlaps join hash table regardless of table ordering
+      // and the argument order in this case b/c selecting lhs and rhs by arguments 0
+      // and 1 always match the rte index requirement (rte_lhs < rte_rhs)
+      // so what table ordering we take, the rte index requirement satisfies
+      // TODO(adb): we will likely want to actually check for true overlaps, but this
+      // works for now
+      auto lhs = func_oper->getOwnArg(0);
+      auto rewritten_lhs = deep_copy_visitor.visit(lhs.get());
+      CHECK(rewritten_lhs);
+
+      auto rhs = func_oper->getOwnArg(1);
+      auto rewritten_rhs = deep_copy_visitor.visit(rhs.get());
+      CHECK(rewritten_rhs);
+      overlaps_oper = makeExpr<Analyzer::BinOper>(
+          kBOOLEAN, kOVERLAPS, kONE, rewritten_lhs, rewritten_rhs);
+    } else if (func_name == OverlapsJoinSupportedFunction::ST_DWITHIN_POINT_POINT_sv) {
+      CHECK_EQ(func_oper->getArity(), size_t(8));
+      const auto lhs = func_oper->getOwnArg(0);
+      const auto rhs = func_oper->getOwnArg(1);
+      // the correctness of geo args used in the ST_DWithin function is checked by
+      // geo translation logic, i.e., RelAlgTranslator::translateTernaryGeoFunction
+      const auto distance_const_val =
+          dynamic_cast<const Analyzer::Constant*>(func_oper->getArg(7));
+      if (lhs && rhs && distance_const_val) {
+        std::vector<std::shared_ptr<Analyzer::Expr>> args{lhs, rhs};
+        auto range_oper = makeExpr<Analyzer::GeoOperator>(
+            SQLTypeInfo(kDOUBLE, 0, 8, true),
+            OverlapsJoinSupportedFunction::ST_DISTANCE_sv.data(),
+            args,
+            std::nullopt);
+        auto distance_oper = makeExpr<Analyzer::BinOper>(
+            kBOOLEAN, kLE, kONE, range_oper, distance_const_val->deep_copy());
+        VLOG(1) << "Rewrite " << func_oper->getName() << " to ST_Distance_Point_Point";
+        overlaps_oper =
+            convert_to_range_join_oper(OverlapsJoinSupportedFunction::ST_DISTANCE_sv,
+                                       distance_oper,
+                                       distance_oper.get(),
+                                       range_oper.get(),
+                                       distance_const_val,
+                                       executor);
+        needs_to_return_original_expr = true;
+      }
+    } else if (OverlapsJoinSupportedFunction::is_poly_mpoly_rewrite_target_func(
+                   func_name)) {
+      // in the five functions fall into this case,
+      // ST_Contains is for a pair of polygons, and for ST_Intersect cases they are
+      // combo of polygon and multipolygon so what table orders we choose, rte index
+      // requirement for overlaps join can be satisfied if we choose lhs and rhs
+      // from left-to-right order (i.e., get lhs from the arg-1 instead of arg-3)
+      // Note that we choose them from right-to-left argument order in the past
+      CHECK_GE(func_oper->getArity(), size_t(4));
+      auto lhs = func_oper->getOwnArg(1);
+      auto rewritten_lhs = deep_copy_visitor.visit(lhs.get());
+      CHECK(rewritten_lhs);
+      auto rhs = func_oper->getOwnArg(3);
+      auto rewritten_rhs = deep_copy_visitor.visit(rhs.get());
+      CHECK(rewritten_rhs);
+
+      overlaps_oper = makeExpr<Analyzer::BinOper>(
+          kBOOLEAN, kOVERLAPS, kONE, rewritten_lhs, rewritten_rhs);
+      needs_to_return_original_expr = true;
+    } else if (OverlapsJoinSupportedFunction::is_point_poly_rewrite_target_func(
+                   func_name)) {
+      // now, we try to look at one more chance to exploit overlaps hash join by
+      // rewriting the qual as: ST_INTERSECT(POLY, POINT) -> ST_INTERSECT(POINT, POLY)
+      // to support efficient evaluation of 1) ST_Intersects_Point_Polygon and
+      // 2) ST_Intersects_Point_MultiPolygon based on our overlaps hash join framework
+      // here, we have implementation of native functions for both 1) Point-Polygon pair
+      // and 2) Polygon-Point pair, but we currently do not support hash table
+      // generation on top of point column thus, the goal of this rewriting is to place
+      // a non-point geometry to the right-side of the overlaps join operator (to build
+      // hash table based on it) iff the inner table is larger than that of non-point
+      // geometry (to reduce expensive hash join performance)
+      size_t point_arg_idx = 0;
+      size_t poly_arg_idx = 2;
+      if (func_oper->getOwnArg(point_arg_idx)->get_type_info().get_type() != kPOINT) {
+        point_arg_idx = 2;
+        poly_arg_idx = 1;
+      }
+      auto point_cv = func_oper->getOwnArg(point_arg_idx);
+      auto poly_cv = func_oper->getOwnArg(poly_arg_idx);
+      CHECK_EQ(point_cv->get_type_info().get_type(), kPOINT);
+      CHECK_EQ(poly_cv->get_type_info().get_type(), kARRAY);
+      auto rewritten_lhs = deep_copy_visitor.visit(point_cv.get());
+      CHECK(rewritten_lhs);
+      auto rewritten_rhs = deep_copy_visitor.visit(poly_cv.get());
+      CHECK(rewritten_rhs);
+      VLOG(1) << "Rewriting the " << func_name << " to use overlaps join with lhs as "
+              << rewritten_lhs->toString() << " and rhs as " << rewritten_rhs->toString();
+      overlaps_oper = makeExpr<Analyzer::BinOper>(
+          kBOOLEAN, kOVERLAPS, kONE, rewritten_lhs, rewritten_rhs);
+      needs_to_return_original_expr = true;
+    } else if (OverlapsJoinSupportedFunction::is_poly_point_rewrite_target_func(
+                   func_name)) {
+      // rest of functions reaching here is poly and point geo join query
+      // to use overlaps hash join in this case, poly column must have its rte == 1
+      // lhs is the point col_var
+      auto lhs = func_oper->getOwnArg(2);
+      auto rewritten_lhs = deep_copy_visitor.visit(lhs.get());
+      CHECK(rewritten_lhs);
+      const auto& lhs_ti = rewritten_lhs->get_type_info();
+
+      if (!lhs_ti.is_geometry() && !is_constructed_point(rewritten_lhs.get())) {
+        // TODO(adb): If ST_Contains is passed geospatial literals instead of columns,
+        // the function will be expanded during translation rather than during code
+        // generation. While this scenario does not make sense for the overlaps join, we
+        // need to detect and abort the overlaps rewrite. Adding a GeospatialConstant
+        // dervied class to the Analyzer may prove to be a better way to handle geo
+        // literals, but for now we ensure the LHS type is a geospatial type, which
+        // would mean the function has not been expanded to the physical types, yet.
+        LOG(INFO) << "Unable to rewrite " << func_name
+                  << " to overlaps conjunction. LHS input type is neither a geospatial "
+                     "column nor a constructed point"
+                  << func_oper->toString();
         return boost::none;
       }
 
-      DeepCopyVisitor deep_copy_visitor;
-      if (func_name == OverlapsJoinSupportedFunction::ST_OVERLAPS_sv) {
-        CHECK_GE(func_oper->getArity(), size_t(2));
-        // this case returns {empty quals, overlaps join quals} b/c our join key matching
-        // logic for this case is the same as the implementation of ST_Overlaps function
-        // Note that we can build an overlaps join hash table regardless of table ordering
-        // and the argument order in this case b/c selecting lhs and rhs by arguments 0
-        // and 1 always match the rte index requirement (rte_lhs < rte_rhs)
-        // so what table ordering we take, the rte index requirement satisfies
-        // TODO(adb): we will likely want to actually check for true overlaps, but this
-        // works for now
-        auto lhs = func_oper->getOwnArg(0);
-        auto rewritten_lhs = deep_copy_visitor.visit(lhs.get());
-        CHECK(rewritten_lhs);
+      // rhs is coordinates of the poly col
+      auto rhs = func_oper->getOwnArg(1);
+      auto rewritten_rhs = deep_copy_visitor.visit(rhs.get());
+      CHECK(rewritten_rhs);
 
-        auto rhs = func_oper->getOwnArg(1);
-        auto rewritten_rhs = deep_copy_visitor.visit(rhs.get());
-        CHECK(rewritten_rhs);
-        overlaps_oper = makeExpr<Analyzer::BinOper>(
-            kBOOLEAN, kOVERLAPS, kONE, rewritten_lhs, rewritten_rhs);
-      } else if (func_name == OverlapsJoinSupportedFunction::ST_DWITHIN_POINT_POINT_sv) {
-        CHECK_EQ(func_oper->getArity(), size_t(8));
-        const auto lhs = func_oper->getOwnArg(0);
-        const auto rhs = func_oper->getOwnArg(1);
-        // the correctness of geo args used in the ST_DWithin function is checked by
-        // geo translation logic, i.e., RelAlgTranslator::translateTernaryGeoFunction
-        const auto distance_const_val =
-            dynamic_cast<const Analyzer::Constant*>(func_oper->getArg(7));
-        if (lhs && rhs && distance_const_val) {
-          std::vector<std::shared_ptr<Analyzer::Expr>> args{lhs, rhs};
-          auto range_oper = makeExpr<Analyzer::GeoOperator>(
-              SQLTypeInfo(kDOUBLE, 0, 8, true),
-              OverlapsJoinSupportedFunction::ST_DISTANCE_sv.data(),
-              args,
-              std::nullopt);
-          auto distance_oper = makeExpr<Analyzer::BinOper>(
-              kBOOLEAN, kLE, kONE, range_oper, distance_const_val->deep_copy());
-          VLOG(1) << "Rewrite " << func_oper->getName() << " to ST_Distance_Point_Point";
-          overlaps_oper =
-              convert_to_range_join_oper(OverlapsJoinSupportedFunction::ST_DISTANCE_sv,
-                                         distance_oper,
-                                         distance_oper.get(),
-                                         range_oper.get(),
-                                         distance_const_val,
-                                         executor);
-          needs_to_return_original_expr = true;
-        }
-      } else if (OverlapsJoinSupportedFunction::is_poly_mpoly_rewrite_target_func(
-                     func_name)) {
-        // in the five functions fall into this case,
-        // ST_Contains is for a pair of polygons, and for ST_Intersect cases they are
-        // combo of polygon and multipolygon so what table orders we choose, rte index
-        // requirement for overlaps join can be satisfied if we choose lhs and rhs
-        // from left-to-right order (i.e., get lhs from the arg-1 instead of arg-3)
-        // Note that we choose them from right-to-left argument order in the past
-        CHECK_GE(func_oper->getArity(), size_t(4));
-        auto lhs = func_oper->getOwnArg(1);
-        auto rewritten_lhs = deep_copy_visitor.visit(lhs.get());
-        CHECK(rewritten_lhs);
-        auto rhs = func_oper->getOwnArg(3);
-        auto rewritten_rhs = deep_copy_visitor.visit(rhs.get());
-        CHECK(rewritten_rhs);
+      if (has_invalid_join_col_order(lhs.get(), rhs.get()).first) {
+        LOG(INFO) << "Unable to rewrite " << func_name
+                  << " to overlaps conjunction. Cannot build hash table over LHS type. "
+                     "Check join order."
+                  << func_oper->toString();
+        return boost::none;
+      }
 
-        overlaps_oper = makeExpr<Analyzer::BinOper>(
-            kBOOLEAN, kOVERLAPS, kONE, rewritten_lhs, rewritten_rhs);
+      VLOG(1) << "Rewriting " << func_name << " to use overlaps join with lhs as "
+              << rewritten_lhs->toString() << " and rhs as " << rewritten_rhs->toString();
+
+      overlaps_oper = makeExpr<Analyzer::BinOper>(
+          kBOOLEAN, kOVERLAPS, kONE, rewritten_lhs, rewritten_rhs);
+      if (func_name !=
+          OverlapsJoinSupportedFunction::ST_APPROX_OVERLAPS_MULTIPOLYGON_POINT_sv) {
         needs_to_return_original_expr = true;
-      } else if (OverlapsJoinSupportedFunction::is_point_poly_rewrite_target_func(
-                     func_name)) {
-        // now, we try to look at one more chance to exploit overlaps hash join by
-        // rewriting the qual as: ST_INTERSECT(POLY, POINT) -> ST_INTERSECT(POINT, POLY)
-        // to support efficient evaluation of 1) ST_Intersects_Point_Polygon and
-        // 2) ST_Intersects_Point_MultiPolygon based on our overlaps hash join framework
-        // here, we have implementation of native functions for both 1) Point-Polygon pair
-        // and 2) Polygon-Point pair, but we currently do not support hash table
-        // generation on top of point column thus, the goal of this rewriting is to place
-        // a non-point geometry to the right-side of the overlaps join operator (to build
-        // hash table based on it) iff the inner table is larger than that of non-point
-        // geometry (to reduce expensive hash join performance)
-        size_t point_arg_idx = 0;
-        size_t poly_arg_idx = 2;
-        if (func_oper->getOwnArg(point_arg_idx)->get_type_info().get_type() != kPOINT) {
-          point_arg_idx = 2;
-          poly_arg_idx = 1;
-        }
-        auto point_cv = func_oper->getOwnArg(point_arg_idx);
-        auto poly_cv = func_oper->getOwnArg(poly_arg_idx);
-        CHECK_EQ(point_cv->get_type_info().get_type(), kPOINT);
-        CHECK_EQ(poly_cv->get_type_info().get_type(), kARRAY);
-        auto rewritten_lhs = deep_copy_visitor.visit(point_cv.get());
-        CHECK(rewritten_lhs);
-        auto rewritten_rhs = deep_copy_visitor.visit(poly_cv.get());
-        CHECK(rewritten_rhs);
-        VLOG(1) << "Rewriting the " << func_name << " to use overlaps join with lhs as "
-                << rewritten_lhs->toString() << " and rhs as "
-                << rewritten_rhs->toString();
-        overlaps_oper = makeExpr<Analyzer::BinOper>(
-            kBOOLEAN, kOVERLAPS, kONE, rewritten_lhs, rewritten_rhs);
-        needs_to_return_original_expr = true;
-      } else if (OverlapsJoinSupportedFunction::is_poly_point_rewrite_target_func(
-                     func_name)) {
-        // rest of functions reaching here is poly and point geo join query
-        // to use overlaps hash join in this case, poly column must have its rte == 1
-        // lhs is the point col_var
-        auto lhs = func_oper->getOwnArg(2);
-        auto rewritten_lhs = deep_copy_visitor.visit(lhs.get());
-        CHECK(rewritten_lhs);
-        const auto& lhs_ti = rewritten_lhs->get_type_info();
-
-        if (!lhs_ti.is_geometry() && !is_constructed_point(rewritten_lhs.get())) {
-          // TODO(adb): If ST_Contains is passed geospatial literals instead of columns,
-          // the function will be expanded during translation rather than during code
-          // generation. While this scenario does not make sense for the overlaps join, we
-          // need to detect and abort the overlaps rewrite. Adding a GeospatialConstant
-          // dervied class to the Analyzer may prove to be a better way to handle geo
-          // literals, but for now we ensure the LHS type is a geospatial type, which
-          // would mean the function has not been expanded to the physical types, yet.
-          LOG(INFO) << "Unable to rewrite " << func_name
-                    << " to overlaps conjunction. LHS input type is neither a geospatial "
-                       "column nor a constructed point"
-                    << func_oper->toString();
-          return boost::none;
-        }
-
-        // rhs is coordinates of the poly col
-        auto rhs = func_oper->getOwnArg(1);
-        auto rewritten_rhs = deep_copy_visitor.visit(rhs.get());
-        CHECK(rewritten_rhs);
-
-        if (has_invalid_join_col_order(lhs.get(), rhs.get()).first) {
-          LOG(INFO) << "Unable to rewrite " << func_name
-                    << " to overlaps conjunction. Cannot build hash table over LHS type. "
-                       "Check join order."
-                    << func_oper->toString();
-          return boost::none;
-        }
-
-        VLOG(1) << "Rewriting " << func_name << " to use overlaps join with lhs as "
-                << rewritten_lhs->toString() << " and rhs as "
-                << rewritten_rhs->toString();
-
-        overlaps_oper = makeExpr<Analyzer::BinOper>(
-            kBOOLEAN, kOVERLAPS, kONE, rewritten_lhs, rewritten_rhs);
-        if (func_name !=
-            OverlapsJoinSupportedFunction::ST_APPROX_OVERLAPS_MULTIPOLYGON_POINT_sv) {
-          needs_to_return_original_expr = true;
-        }
       }
     }
-  }
-  auto bin_oper = dynamic_cast<Analyzer::BinOper*>(expr.get());
-  if (bin_oper && (bin_oper->get_optype() == kLE || bin_oper->get_optype() == kLT)) {
+  } else if (rewrite_type == OverlapsJoinRewriteType::RANGE_JOIN) {
+    auto bin_oper = dynamic_cast<Analyzer::BinOper*>(expr.get());
+    CHECK(bin_oper);
     auto lhs = dynamic_cast<const Analyzer::GeoOperator*>(bin_oper->get_left_operand());
+    CHECK(lhs);
     auto rhs = dynamic_cast<const Analyzer::Constant*>(bin_oper->get_right_operand());
-    if (lhs && rhs) {
-      overlaps_oper =
-          convert_to_range_join_oper(lhs->getName(), expr, bin_oper, lhs, rhs, executor);
-      needs_to_return_original_expr = true;
-    }
+    CHECK(rhs);
+    func_name = lhs->getName();
+    overlaps_oper =
+        convert_to_range_join_oper(func_name, expr, bin_oper, lhs, rhs, executor);
+    needs_to_return_original_expr = true;
   }
   const auto expr_str = !func_name.empty() ? func_name : expr->toString();
   if (overlaps_oper) {

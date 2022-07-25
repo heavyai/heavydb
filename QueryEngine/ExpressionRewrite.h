@@ -48,6 +48,8 @@ struct OverlapsJoinConjunction {
   std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
 };
 
+enum class OverlapsJoinRewriteType { OVERLAPS_JOIN, RANGE_JOIN, UNKNOWN };
+
 struct OverlapsJoinSupportedFunction {
   static constexpr std::string_view ST_CONTAINS_POLYGON_POINT_sv{
       "ST_Contains_Polygon_Point"};
@@ -195,6 +197,7 @@ struct OverlapsJoinSupportedFunction {
 boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
     const std::shared_ptr<Analyzer::Expr> expr,
     const std::vector<InputDescriptor>& input_table_info,
+    const OverlapsJoinRewriteType rewrite_type,
     const Executor* executor);
 
 boost::optional<OverlapsJoinConjunction> convert_to_range_join_oper(

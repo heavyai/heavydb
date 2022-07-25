@@ -33,7 +33,7 @@ const std::pair<int, int> GeospatialFunctionFinder::getTableIdsOfGeoExpr() const
                   });
     if (tableIds.size() == 2) {
       const int inner_table_id = geo_arg_cvs_.front()->get_table_id();
-      int outer_table_id;
+      int outer_table_id = -1;
       std::for_each(tableIds.cbegin(),
                     tableIds.cend(),
                     [&inner_table_id, &outer_table_id](const int table_id) {

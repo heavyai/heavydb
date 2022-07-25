@@ -51,16 +51,37 @@ RelAlgExecutionUnit QueryRewriter::rewriteOverlapsJoin(
     JoinCondition join_condition{{}, join_condition_in.type};
 
     for (const auto& join_qual_expr_in : join_condition_in.quals) {
-      auto new_overlaps_quals = rewrite_overlaps_conjunction(
-          join_qual_expr_in, ra_exe_unit_in.input_descs, executor_);
+      bool try_to_rewrite_expr_to_overlaps_join = false;
+      OverlapsJoinRewriteType rewrite_type{OverlapsJoinRewriteType::UNKNOWN};
+      auto func_oper = dynamic_cast<Analyzer::FunctionOper*>(join_qual_expr_in.get());
+      if (func_oper) {
+        const auto func_name = func_oper->getName();
+        if (OverlapsJoinSupportedFunction::is_overlaps_supported_func(func_name)) {
+          try_to_rewrite_expr_to_overlaps_join = true;
+          rewrite_type = OverlapsJoinRewriteType::OVERLAPS_JOIN;
+        }
+      }
+      auto bin_oper = dynamic_cast<Analyzer::BinOper*>(join_qual_expr_in.get());
+      if (bin_oper && (bin_oper->get_optype() == kLE || bin_oper->get_optype() == kLT)) {
+        auto lhs =
+            dynamic_cast<const Analyzer::GeoOperator*>(bin_oper->get_left_operand());
+        auto rhs = dynamic_cast<const Analyzer::Constant*>(bin_oper->get_right_operand());
+        if (g_enable_distance_rangejoin && lhs && rhs) {
+          try_to_rewrite_expr_to_overlaps_join = true;
+          rewrite_type = OverlapsJoinRewriteType::RANGE_JOIN;
+        }
+      }
+      boost::optional<OverlapsJoinConjunction> new_overlaps_quals = boost::none;
+      if (try_to_rewrite_expr_to_overlaps_join) {
+        new_overlaps_quals = rewrite_overlaps_conjunction(
+            join_qual_expr_in, ra_exe_unit_in.input_descs, rewrite_type, executor_);
+      }
       if (new_overlaps_quals) {
         const auto& overlaps_quals = *new_overlaps_quals;
-
         // Add overlaps qual
         join_condition.quals.insert(join_condition.quals.end(),
                                     overlaps_quals.join_quals.begin(),
                                     overlaps_quals.join_quals.end());
-
         // Add original quals
         join_condition.quals.insert(join_condition.quals.end(),
                                     overlaps_quals.quals.begin(),
