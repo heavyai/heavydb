@@ -14,6 +14,8 @@
 
 #include "TestRelAlgDagBuilder.h"
 
+#include "QueryEngine/RelAlgTranslator.h"
+
 RelAlgNodePtr TestRelAlgDagBuilder::addScan(const TableRef& table) {
   return addScan(schema_provider_->getTableInfo(table));
 }
@@ -83,7 +85,14 @@ RelAlgNodePtr TestRelAlgDagBuilder::addAgg(
     const std::vector<std::string>& fields,
     size_t group_size,
     std::vector<std::unique_ptr<const RexAgg>> aggs) {
-  auto res = std::make_shared<RelAggregate>(group_size, std::move(aggs), fields, input);
+  hdk::ir::ExprPtrVector input_exprs = getNodeExprs(input.get());
+  hdk::ir::ExprPtrVector exprs;
+  for (auto& rex : aggs) {
+    exprs.push_back(
+        RelAlgTranslator::translateAggregateRex(rex.get(), input_exprs, false));
+  }
+  auto res = std::make_shared<RelAggregate>(
+      group_size, std::move(aggs), std::move(exprs), fields, input);
   nodes_.push_back(res);
   return res;
 }

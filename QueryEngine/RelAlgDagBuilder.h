@@ -1081,10 +1081,12 @@ class RelAggregate : public RelAlgNode {
   // Takes ownership of the aggregate expressions.
   RelAggregate(const size_t groupby_count,
                std::vector<std::unique_ptr<const RexAgg>> agg_exprs,
+               hdk::ir::ExprPtrVector aggregate_exprs,
                const std::vector<std::string>& fields,
                std::shared_ptr<const RelAlgNode> input)
       : groupby_count_(groupby_count)
       , agg_exprs_(std::move(agg_exprs))
+      , aggregate_exprs_(aggregate_exprs)
       , fields_(fields)
       , hint_applied_(false)
       , hints_(std::make_unique<Hints>()) {
@@ -1122,8 +1124,14 @@ class RelAggregate : public RelAlgNode {
     return agg_exprs_;
   }
 
-  void setAggExprs(std::vector<std::unique_ptr<const RexAgg>>& agg_exprs) {
+  // TODO: rename to getAggExprs when Rex version is removed.
+  const hdk::ir::ExprPtrVector& getAggregateExprs() const { return aggregate_exprs_; }
+  hdk::ir::ExprPtr getAggregateExpr(size_t i) const { return aggregate_exprs_[i]; }
+
+  void setAggExprs(std::vector<std::unique_ptr<const RexAgg>> agg_exprs,
+                   hdk::ir::ExprPtrVector aggregate_exprs) {
     agg_exprs_ = std::move(agg_exprs);
+    aggregate_exprs_ = std::move(aggregate_exprs);
   }
 
   std::string toString() const override {
@@ -1186,6 +1194,8 @@ class RelAggregate : public RelAlgNode {
  private:
   const size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
+  // TODO: rename to agg_exprs_ when Rex version is removed;
+  hdk::ir::ExprPtrVector aggregate_exprs_;
   std::vector<std::string> fields_;
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;
@@ -1503,6 +1513,7 @@ class RelCompound : public RelAlgNode {
   // owned by 'scalar_sources_'.
   RelCompound(std::unique_ptr<const RexScalar>& filter_expr,
               const std::vector<const Rex*>& target_exprs,
+              hdk::ir::ExprPtrVector exprs,
               const size_t groupby_count,
               const std::vector<const RexAgg*>& agg_exprs,
               const std::vector<std::string>& fields,
@@ -1514,6 +1525,7 @@ class RelCompound : public RelAlgNode {
       , is_agg_(is_agg)
       , scalar_sources_(std::move(scalar_sources))
       , target_exprs_(target_exprs)
+      , exprs_(std::move(exprs))
       , hint_applied_(false)
       , hints_(std::make_unique<Hints>()) {
     CHECK_EQ(fields.size(), target_exprs.size());
@@ -1536,6 +1548,9 @@ class RelCompound : public RelAlgNode {
   }
 
   const Rex* getTargetExpr(const size_t i) const { return target_exprs_[i]; }
+
+  hdk::ir::ExprPtrVector getExprs() const { return exprs_; }
+  hdk::ir::ExprPtr getExpr(size_t i) const { return exprs_[i]; }
 
   const std::vector<std::string>& getFields() const { return fields_; }
 
@@ -1605,6 +1620,7 @@ class RelCompound : public RelAlgNode {
       scalar_sources_;  // building blocks for group_indices_ and agg_exprs_; not actually
                         // projected, just owned
   const std::vector<const Rex*> target_exprs_;
+  hdk::ir::ExprPtrVector exprs_;
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;
 };
@@ -2014,3 +2030,7 @@ inline InputColDescriptor column_var_to_descriptor(const hdk::ir::ColumnVar* var
 }
 
 SQLTypeInfo getColumnType(const RelAlgNode* node, size_t col_idx);
+
+hdk::ir::ExprPtrVector getNodeColumnRefs(const RelAlgNode* node);
+
+hdk::ir::ExprPtrVector getNodeExprs(const RelAlgNode* node);

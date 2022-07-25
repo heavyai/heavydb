@@ -188,6 +188,31 @@ class ColumnRef : public Expr {
 };
 
 /*
+ * Used in Compound nodes to referene group by keys columns in target
+ * expressions. Numbering starts with 1 to be consistent with RexRef.
+ */
+class GroupKeyRef : public Expr {
+ public:
+  GroupKeyRef(const SQLTypeInfo& ti, unsigned idx) : Expr(ti), idx_(idx) {}
+
+  ExprPtr deep_copy() const override { return makeExpr<GroupKeyRef>(type_info, idx_); }
+
+  bool operator==(const Expr& rhs) const override {
+    const GroupKeyRef* rhsp = dynamic_cast<const GroupKeyRef*>(&rhs);
+    return rhsp && idx_ == rhsp->idx_;
+  }
+
+  std::string toString() const override {
+    return "(GroupKeyRef idx=" + std::to_string(idx_) + ")";
+  }
+
+  unsigned getIndex() const { return idx_; }
+
+ protected:
+  unsigned idx_;
+};
+
+/*
  * @type ColumnVar
  * @brief expression that evaluates to the value of a column in a given row from a base
  * table. It is used in parse trees and is only used in Scan nodes in a query plan for
@@ -1616,7 +1641,6 @@ class TargetEntry {
 
 // Returns true iff the two expression lists are equal (same size and each element are
 // equal).
-bool expr_list_match(const std::vector<hdk::ir::ExprPtr>& lhs,
-                     const std::vector<hdk::ir::ExprPtr>& rhs);
+bool expr_list_match(const ExprPtrVector& lhs, const ExprPtrVector& rhs);
 
 }  // namespace hdk::ir

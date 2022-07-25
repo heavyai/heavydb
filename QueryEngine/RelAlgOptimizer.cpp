@@ -1162,7 +1162,8 @@ sweep_dead_columns(
         node.get(), liveouts_renumbering, old_live_outs, intact_nodes, orig_node_sizes);
     if (auto aggregate = std::dynamic_pointer_cast<RelAggregate>(node)) {
       auto old_exprs = aggregate->getAggExprsAndRelease();
-      std::vector<std::unique_ptr<const RexAgg>> new_exprs;
+      std::vector<std::unique_ptr<const RexAgg>> new_scalar_exprs;
+      hdk::ir::ExprPtrVector new_exprs;
       auto key_name_it = aggregate->getFields().begin();
       std::vector<std::string> new_fields(key_name_it,
                                           key_name_it + aggregate->getGroupByCount());
@@ -1170,11 +1171,12 @@ sweep_dead_columns(
            i < aggregate->getFields().size() && j < old_exprs.size();
            ++i, ++j) {
         if (old_live_outs.count(i)) {
-          new_exprs.push_back(std::move(old_exprs[j]));
+          new_scalar_exprs.push_back(std::move(old_exprs[j]));
+          new_exprs.push_back(aggregate->getAggregateExpr(j));
           new_fields.push_back(aggregate->getFieldName(i));
         }
       }
-      aggregate->setAggExprs(new_exprs);
+      aggregate->setAggExprs(std::move(new_scalar_exprs), std::move(new_exprs));
       aggregate->setFields(std::move(new_fields));
     } else if (auto project = std::dynamic_pointer_cast<RelProject>(node)) {
       auto old_scalar_exprs = project->getExpressionsAndRelease();
@@ -1238,9 +1240,15 @@ void propagate_input_renumbering(
     } else if (auto aggregate = dynamic_cast<RelAggregate*>(node)) {
       auto src_it = liveout_renumbering.find(node->getInput(0));
       CHECK(src_it != liveout_renumbering.end());
-      auto old_exprs = aggregate->getAggExprsAndRelease();
-      auto new_exprs = renumber_rex_aggs(old_exprs, src_it->second);
-      aggregate->setAggExprs(new_exprs);
+      auto old_scalar_exprs = aggregate->getAggExprsAndRelease();
+      auto new_scalar_exprs = renumber_rex_aggs(old_scalar_exprs, src_it->second);
+      InputSimpleRenumberVisitor<true> visitor(src_it->second);
+      hdk::ir::ExprPtrVector new_exprs;
+      new_exprs.reserve(aggregate->getAggExprsCount());
+      for (auto& expr : aggregate->getAggregateExprs()) {
+        new_exprs.emplace_back(visitor.visit(expr.get()));
+      }
+      aggregate->setAggExprs(std::move(new_scalar_exprs), std::move(new_exprs));
     } else if (auto join = dynamic_cast<RelJoin*>(node)) {
       auto new_condition = renumberer.visit(join->getCondition());
       join->setCondition(new_condition);

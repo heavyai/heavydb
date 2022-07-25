@@ -287,8 +287,8 @@ hdk::ir::ExprPtrVector genColumnRefs(const RelAlgNode* node, size_t count) {
   hdk::ir::ExprPtrVector res;
   res.reserve(count);
   for (size_t i = 0; i < count; ++i) {
-    // TODO: add types
-    res.emplace_back(hdk::ir::makeExpr<hdk::ir::ColumnRef>(SQLTypeInfo(), node, i));
+    res.emplace_back(
+        hdk::ir::makeExpr<hdk::ir::ColumnRef>(getColumnType(node, i), node, i));
   }
   return res;
 }
@@ -553,6 +553,7 @@ RelCompound::RelCompound(RelCompound const& rhs)
                                         rhs.agg_exprs_,
                                         rhs.scalar_sources_,
                                         rhs.target_exprs_))
+    , exprs_(rhs.exprs_)
     , hint_applied_(false)
     , hints_(std::make_unique<Hints>()) {
   RexDeepCopyVisitor copier;
@@ -1466,8 +1467,6 @@ void mark_nops(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   }
 }
 
-namespace {
-
 std::vector<const Rex*> reproject_targets(
     const RelProject* simple_project,
     const std::vector<const Rex*>& target_exprs) noexcept {
@@ -1477,6 +1476,19 @@ std::vector<const Rex*> reproject_targets(
     CHECK(input_rex);
     CHECK_LT(static_cast<size_t>(input_rex->getIndex()), target_exprs.size());
     result.push_back(target_exprs[input_rex->getIndex()]);
+  }
+  return result;
+}
+
+hdk::ir::ExprPtrVector reprojectExprs(const RelProject* simple_project,
+                                      const hdk::ir::ExprPtrVector& exprs) noexcept {
+  hdk::ir::ExprPtrVector result;
+  for (size_t i = 0; i < simple_project->size(); ++i) {
+    const auto col_ref =
+        dynamic_cast<const hdk::ir::ColumnRef*>(simple_project->getExpr(i).get());
+    CHECK(col_ref);
+    CHECK_LT(static_cast<size_t>(col_ref->getIndex()), exprs.size());
+    result.push_back(exprs[col_ref->getIndex()]);
   }
   return result;
 }
@@ -1509,7 +1521,26 @@ class RexInputReplacementVisitor : public RexDeepCopyVisitor {
   const std::vector<std::unique_ptr<const RexScalar>>& scalar_sources_;
 };
 
-}  // namespace
+class InputReplacementVisitor : public DeepCopyVisitor {
+ public:
+  InputReplacementVisitor(const RelAlgNode* node_to_keep,
+                          const hdk::ir::ExprPtrVector& exprs)
+      : node_to_keep_(node_to_keep), exprs_(exprs) {}
+  ~InputReplacementVisitor() override = default;
+
+  hdk::ir::ExprPtr visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
+    if (col_ref->getNode() == node_to_keep_) {
+      const auto index = col_ref->getIndex();
+      CHECK_LT(index, exprs_.size());
+      return visit(exprs_[index].get());
+    }
+    return col_ref->deep_copy();
+  }
+
+ private:
+  const RelAlgNode* node_to_keep_;
+  const hdk::ir::ExprPtrVector& exprs_;
+};
 
 void create_compound(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes,
@@ -1524,6 +1555,7 @@ void create_compound(
   std::vector<std::string> fields;
   std::vector<const RexAgg*> agg_exprs;
   std::vector<const Rex*> target_exprs;
+  hdk::ir::ExprPtrVector exprs;
   bool first_project{true};
   bool is_agg{false};
   RelAlgNode* last_node{nullptr};
@@ -1564,15 +1596,21 @@ void create_compound(
         for (const auto& scalar_expr : scalar_sources) {
           target_exprs.push_back(scalar_expr.get());
         }
+        for (auto& expr : ra_project->getExprs()) {
+          exprs.push_back(expr);
+        }
         first_project = false;
       } else {
         if (ra_project->isSimple()) {
           target_exprs = reproject_targets(ra_project.get(), target_exprs);
+          exprs = reprojectExprs(ra_project.get(), exprs);
         } else {
           // TODO(adb): This is essentially a more general case of simple project, we
           // could likely merge the two
           std::vector<const Rex*> result;
+          hdk::ir::ExprPtrVector new_exprs;
           RexInputReplacementVisitor rex_visitor(last_node, scalar_sources);
+          InputReplacementVisitor visitor(last_node, exprs);
           for (size_t i = 0; i < ra_project->size(); ++i) {
             const auto rex = ra_project->getProjectAt(i);
             if (auto rex_input = dynamic_cast<const RexInput*>(rex)) {
@@ -1583,8 +1621,18 @@ void create_compound(
               scalar_sources.push_back(rex_visitor.visit(rex));
               result.push_back(scalar_sources.back().get());
             }
+
+            auto expr = ra_project->getExpr(i);
+            if (auto col_ref = dynamic_cast<const hdk::ir::ColumnRef*>(expr.get())) {
+              const auto index = col_ref->getIndex();
+              CHECK_LT(index, exprs.size());
+              new_exprs.push_back(exprs[index]);
+            } else {
+              new_exprs.push_back(visitor.visit(expr.get()));
+            }
           }
           target_exprs = result;
+          exprs = std::move(new_exprs);
         }
       }
       last_node = ra_node.get();
@@ -1602,17 +1650,29 @@ void create_compound(
         const auto rex_ref = new RexRef(group_idx + 1);
         target_exprs.push_back(rex_ref);
         scalar_sources.emplace_back(rex_ref);
+
+        auto ti = getColumnType(ra_node->getInput(0), group_idx);
+        exprs.push_back(hdk::ir::makeExpr<hdk::ir::GroupKeyRef>(ti, group_idx + 1));
       }
       for (const auto rex_agg : agg_exprs) {
         target_exprs.push_back(rex_agg);
+      }
+      for (auto& expr : ra_aggregate->getAggregateExprs()) {
+        exprs.push_back(expr);
       }
       last_node = ra_node.get();
       continue;
     }
   }
 
-  auto compound_node = std::make_shared<RelCompound>(
-      filter_rex, target_exprs, groupby_count, agg_exprs, fields, scalar_sources, is_agg);
+  auto compound_node = std::make_shared<RelCompound>(filter_rex,
+                                                     target_exprs,
+                                                     exprs,
+                                                     groupby_count,
+                                                     agg_exprs,
+                                                     fields,
+                                                     scalar_sources,
+                                                     is_agg);
   auto old_node = nodes[pattern.back()];
   nodes[pattern.back()] = compound_node;
   auto first_node = nodes[pattern.front()];
@@ -1716,8 +1776,6 @@ class RANodeIterator : public std::vector<std::shared_ptr<RelAlgNode>>::const_it
   std::unordered_set<size_t> visited_;
 };
 
-namespace {
-
 bool input_can_be_coalesced(const RelAlgNode* parent_node,
                             const size_t index,
                             const bool first_rex_is_input) {
@@ -1814,8 +1872,6 @@ bool is_window_function_operator(const RexScalar* rex) {
 bool is_window_function_expr(const hdk::ir::Expr* expr) {
   return dynamic_cast<const hdk::ir::WindowFunction*>(expr) != nullptr;
 }
-
-}  // namespace
 
 void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
                     const std::vector<const RelAlgNode*>& left_deep_joins,
@@ -2544,7 +2600,7 @@ class RelAlgDispatcher {
       } else if (rel_op == std::string("LogicalFilter")) {
         ra_node = dispatchFilter(crt_node, root_dag_builder);
       } else if (rel_op == std::string("LogicalAggregate")) {
-        ra_node = dispatchAggregate(crt_node);
+        ra_node = dispatchAggregate(crt_node, root_dag_builder);
       } else if (rel_op == std::string("LogicalJoin")) {
         ra_node = dispatchJoin(crt_node, root_dag_builder);
       } else if (rel_op == std::string("LogicalSort")) {
@@ -2627,7 +2683,8 @@ class RelAlgDispatcher {
     return std::make_shared<RelFilter>(condition, inputs.front());
   }
 
-  std::shared_ptr<RelAggregate> dispatchAggregate(const rapidjson::Value& agg_ra) {
+  std::shared_ptr<RelAggregate> dispatchAggregate(const rapidjson::Value& agg_ra,
+                                                  RelAlgDagBuilder& root_dag_builder) {
     const auto inputs = getRelAlgInputs(agg_ra);
     CHECK_EQ(size_t(1), inputs.size());
     const auto fields = strings_from_json_array(field(agg_ra, "fields"));
@@ -2641,19 +2698,24 @@ class RelAlgDispatcher {
     const auto& aggs_json_arr = field(agg_ra, "aggs");
     CHECK(aggs_json_arr.IsArray());
     std::vector<std::unique_ptr<const RexAgg>> aggs;
+    hdk::ir::ExprPtrVector input_exprs = getNodeExprs(inputs[0].get());
+    hdk::ir::ExprPtrVector exprs;
+    bool bigint_count = root_dag_builder.config().exec.group_by.bigint_count;
     for (auto aggs_json_arr_it = aggs_json_arr.Begin();
          aggs_json_arr_it != aggs_json_arr.End();
          ++aggs_json_arr_it) {
       aggs.emplace_back(parse_aggregate_expr(*aggs_json_arr_it));
+      exprs.push_back(RelAlgTranslator::translateAggregateRex(
+          aggs.back().get(), input_exprs, bigint_count));
     }
     if (agg_ra.HasMember("hints")) {
       auto agg_node = std::make_shared<RelAggregate>(
-          group.size(), std::move(aggs), fields, inputs.front());
+          group.size(), std::move(aggs), std::move(exprs), fields, inputs.front());
       getRelAlgHints(agg_ra, agg_node);
       return agg_node;
     }
     return std::make_shared<RelAggregate>(
-        group.size(), std::move(aggs), fields, inputs.front());
+        group.size(), std::move(aggs), std::move(exprs), fields, inputs.front());
   }
 
   std::shared_ptr<RelJoin> dispatchJoin(const rapidjson::Value& join_ra,
@@ -3169,6 +3231,8 @@ std::string RelCompound::toString() const {
              ::toString(fields_),
              ", scalar_sources=",
              ::toString(scalar_sources_),
+             ", exprs=",
+             ::toString(exprs_),
              ", is_agg=",
              std::to_string(is_agg_),
              ")");
@@ -3236,7 +3300,7 @@ SQLTypeInfo getColumnType(const RelAlgNode* node, size_t col_idx) {
   // For projections type can be extracted from Exprs.
   const auto proj = dynamic_cast<const RelProject*>(node);
   if (proj) {
-    CHECK_GT(proj->size(), col_idx);
+    CHECK_GT(proj->getExprs().size(), col_idx);
     return proj->getExprs()[col_idx]->get_type_info();
   }
 
@@ -3251,7 +3315,28 @@ SQLTypeInfo getColumnType(const RelAlgNode* node, size_t col_idx) {
     }
   }
 
+  // For coumpounds type can be extracted from Exprs.
+  const auto compound = dynamic_cast<const RelCompound*>(node);
+  if (compound) {
+    CHECK_GT(compound->size(), col_idx);
+    return compound->getExprs()[col_idx]->get_type_info();
+  }
+
   CHECK(false) << "Missing output metainfo for node " + node->toString() +
                       " col_idx=" + std::to_string(col_idx);
+  return {};
+}
+
+hdk::ir::ExprPtrVector getNodeExprs(const RelAlgNode* node) {
+  if (auto project = dynamic_cast<const RelProject*>(node)) {
+    return project->getExprs();
+  }
+  if (auto compound = dynamic_cast<const RelCompound*>(node)) {
+    return compound->getExprs();
+  }
+  if (auto aggregate = dynamic_cast<const RelAggregate*>(node)) {
+    return aggregate->getAggregateExprs();
+  }
+  CHECK(false) << "Unexpected node: " << node->toString();
   return {};
 }
