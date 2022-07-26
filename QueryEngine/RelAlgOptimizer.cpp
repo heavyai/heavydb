@@ -1102,13 +1102,11 @@ void try_insert_coalesceable_proj(
     std::vector<std::unique_ptr<const RexScalar>> scalar_exprs;
     hdk::ir::ExprPtrVector exprs;
     std::vector<std::string> fields;
-    auto& meta = filter->getOutputMetainfo();
-    CHECK(!meta.empty());
     for (size_t i = 0; i < filter->size(); ++i) {
       scalar_exprs.push_back(
           boost::make_unique<RexInput>(filter, static_cast<unsigned>(i)));
       exprs.emplace_back(hdk::ir::makeExpr<hdk::ir::ColumnRef>(
-          meta[i].get_physical_type_info(), filter, static_cast<unsigned>(i)));
+          getColumnType(filter, i), filter, static_cast<unsigned>(i)));
       fields.push_back(get_field_name(filter, i));
     }
     auto project_owner = std::make_shared<RelProject>(
