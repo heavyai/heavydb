@@ -353,7 +353,7 @@ class SysCatalog : private CommonFileOperations {
   }
 
   void populateRoleDbObjects(const std::vector<DBObject>& objects);
-  std::string name() const { return shared::kDefaultDbName; }
+  std::string name() const { return shared::kSystemCatalogName; }
   void renameObjectsInDescriptorMap(DBObject& object,
                                     const Catalog_Namespace::Catalog& cat);
   void syncUserWithRemoteProvider(const std::string& user_name,

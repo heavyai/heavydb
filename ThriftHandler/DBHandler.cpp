@@ -6384,8 +6384,15 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
   ParserWrapper pw{query_str};
   TPlanResult result;
+  lockmgr::LockedTableDescriptors locks;
   if (pw.is_ddl || (!pw.is_validate && !pw.is_other_explain)) {
     auto cat = query_state_proxy.getQueryState().getConstSessionInfo()->get_catalog_ptr();
+    // Need to read lock the catalog while determining what table names are used by this
+    // query, confirming the tables exist, checking the user's permissions, and finally
+    // locking the individual tables. The catalog lock can be released once the query
+    // begins running. The table locks will protect the running query.
+    auto cat_lock =
+        std::shared_lock<heavyai::DistributedSharedMutex>(*cat->dcatalogMutex_);
     auto session_cleanup_handler = [&](const auto& session_id) {
       removeInMemoryCalciteSession(session_id);
     };
@@ -6436,7 +6443,6 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
       }
     }
 
-    lockmgr::LockedTableDescriptors locks;
     if (acquire_locks) {
       std::set<std::vector<std::string>> write_only_tables;
       std::vector<std::vector<std::string>> tables;
@@ -6504,9 +6510,8 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
         }
       }
     }
-    return std::make_pair(result, std::move(locks));
   }
-  return std::make_pair(result, lockmgr::LockedTableDescriptors{});
+  return std::make_pair(result, std::move(locks));
 }
 
 int64_t DBHandler::query_get_outer_fragment_count(const TSessionId& session,

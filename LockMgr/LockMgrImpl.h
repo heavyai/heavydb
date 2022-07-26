@@ -283,7 +283,7 @@ class TableLockMgrImpl {
         auto cat = Catalog_Namespace::SysCatalog::instance().getCatalog(
             table_key[CHUNK_KEY_DB_IDX]);
         CHECK(cat);
-        std::unique_lock<heavyai::DistributedSharedMutex> dwrite_lock(
+        heavyai::shared_lock<heavyai::DistributedSharedMutex> dread_lock(
             *cat->dcatalogMutex_);
         cat->reloadTableMetadataUnlocked(table_key[CHUNK_KEY_TABLE_IDX]);
       };
@@ -321,13 +321,14 @@ class TableLockMgrImpl {
 
       // A callback used for syncing with outside changes to this table's row data.
       auto cb_reload_row_data = [table_key, rows_mutex](bool /*write*/) {
-        std::shared_lock rows_read_lock(*rows_mutex);
+        heavyai::shared_lock<heavyai::DistributedSharedMutex> rows_read_lock(*rows_mutex);
       };
 
       // A callback to notify other nodes about our changes to this table's row data.
       auto cb_notify_about_row_data = [table_key, rows_mutex](bool write) {
         if (write) {
-          std::unique_lock rows_write_lock(*rows_mutex);
+          heavyai::unique_lock<heavyai::DistributedSharedMutex> rows_write_lock(
+              *rows_mutex);
         }
       };
 
