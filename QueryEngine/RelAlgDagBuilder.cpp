@@ -1842,6 +1842,19 @@ bool is_window_function_sum(const RexScalar* rex) {
   return false;
 }
 
+// Detect the window function SUM pattern: CASE WHEN COUNT() > 0 THEN SUM ELSE 0
+bool is_window_function_sum(const hdk::ir::Expr* expr) {
+  const auto case_expr = dynamic_cast<const hdk::ir::CaseExpr*>(expr);
+  if (case_expr && case_expr->get_expr_pair_list().size() == 1) {
+    const auto then_window = dynamic_cast<const hdk::ir::WindowFunction*>(
+        case_expr->get_expr_pair_list().front().second.get());
+    if (then_window && then_window->getKind() == SqlWindowFunctionKind::SUM_INTERNAL) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Detect both window function operators and window function operators embedded in case
 // statements (for null handling)
 bool is_window_function_operator(const RexScalar* rex) {
@@ -1879,7 +1892,36 @@ bool is_window_function_operator(const RexScalar* rex) {
 }
 
 bool is_window_function_expr(const hdk::ir::Expr* expr) {
-  return dynamic_cast<const hdk::ir::WindowFunction*>(expr) != nullptr;
+  if (dynamic_cast<const hdk::ir::WindowFunction*>(expr) != nullptr) {
+    return true;
+  }
+
+  // unwrap from casts, if they exist
+  const auto cast = dynamic_cast<const hdk::ir::UOper*>(expr);
+  if (cast && cast->get_optype() == kCAST) {
+    return is_window_function_expr(cast->get_operand());
+  }
+
+  if (is_window_function_sum(expr)) {
+    return true;
+  }
+
+  // Check for Window Function AVG:
+  // (CASE WHEN count > 0 THEN sum ELSE 0) / COUNT
+  const auto div = dynamic_cast<const hdk::ir::BinOper*>(expr);
+  if (div && div->get_optype() == kDIVIDE) {
+    const auto case_expr =
+        dynamic_cast<const hdk::ir::CaseExpr*>(div->get_left_operand());
+    const auto second_window =
+        dynamic_cast<const hdk::ir::WindowFunction*>(div->get_right_operand());
+    if (case_expr && second_window &&
+        second_window->getKind() == SqlWindowFunctionKind::COUNT) {
+      if (is_window_function_sum(case_expr)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
@@ -2375,7 +2417,7 @@ void separate_window_function_expressions(
       CHECK_EQ(window_func_scalar_exprs.size(), new_scalar_exprs.size());
       CHECK_EQ(window_func_exprs.size(), new_exprs.size());
       window_func_project_node->setExpressions(std::move(window_func_scalar_exprs),
-                                               std::move(new_exprs));
+                                               std::move(window_func_exprs));
 
       // Ensure any inputs from the node containing the expression (the "new" node)
       // exist on the window function project node, e.g. if we had a binary operation
@@ -2522,12 +2564,10 @@ void add_window_function_pre_project(
                 .insert(std::make_pair(input.getIndex(), scalar_exprs.size()))
                 .second);
       scalar_exprs.emplace_back(input.deepCopy());
-      auto meta = prev_node->getOutputMetainfo();
-      CHECK(!meta.empty());
-      exprs.emplace_back(
-          hdk::ir::makeExpr<hdk::ir::ColumnRef>(meta[input.getIndex()].get_type_info(),
-                                                input.getSourceNode(),
-                                                input.getIndex()));
+      exprs.emplace_back(hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+          getColumnType(input.getSourceNode(), input.getIndex()),
+          input.getSourceNode(),
+          input.getIndex()));
       fields.emplace_back("");
     }
 
