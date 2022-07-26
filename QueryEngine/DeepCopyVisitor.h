@@ -23,6 +23,10 @@ class DeepCopyVisitor : public ScalarExprVisitor<hdk::ir::ExprPtr> {
     return col_var->deep_copy();
   }
 
+  RetType visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
+    return col_ref->deep_copy();
+  }
+
   RetType visitColumnVarTuple(
       const hdk::ir::ExpressionTuple* col_var_tuple) const override {
     return col_var_tuple->deep_copy();
@@ -50,6 +54,10 @@ class DeepCopyVisitor : public ScalarExprVisitor<hdk::ir::ExprPtr> {
                                                visit(bin_oper->get_right_operand()));
   }
 
+  RetType visitScalarSubquery(const hdk::ir::ScalarSubquery* subquery) const override {
+    return subquery->deep_copy();
+  }
+
   RetType visitInValues(const hdk::ir::InValues* in_values) const override {
     const auto& value_list = in_values->get_value_list();
     std::list<RetType> new_list;
@@ -64,6 +72,12 @@ class DeepCopyVisitor : public ScalarExprVisitor<hdk::ir::ExprPtr> {
         visit(in_integer_set->get_arg()),
         in_integer_set->get_value_list(),
         in_integer_set->get_type_info().get_notnull());
+  }
+
+  RetType visitInSubquery(const hdk::ir::InSubquery* in_subquery) const override {
+    return hdk::ir::makeExpr<hdk::ir::InSubquery>(in_subquery->get_type_info(),
+                                                  visit(in_subquery->getArg().get()),
+                                                  in_subquery->getNodeShared());
   }
 
   RetType visitCharLength(const hdk::ir::CharLengthExpr* char_length) const override {

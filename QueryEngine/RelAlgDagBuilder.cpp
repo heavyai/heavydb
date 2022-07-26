@@ -3349,6 +3349,9 @@ hdk::ir::ExprPtrVector getNodeExprs(const RelAlgNode* node) {
   if (auto aggregate = dynamic_cast<const RelAggregate*>(node)) {
     return aggregate->getAggregateExprs();
   }
+  if (auto values = dynamic_cast<const RelLogicalValues*>(node)) {
+    return getNodeColumnRefs(values);
+  }
   CHECK(false) << "Unexpected node: " << node->toString();
   return {};
 }

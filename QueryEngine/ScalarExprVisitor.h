@@ -176,6 +176,10 @@ class ScalarExprVisitor {
     return result;
   }
 
+  virtual T visitScalarSubquery(const hdk::ir::ScalarSubquery* subquery) const {
+    return defaultResult();
+  }
+
   virtual T visitInValues(const hdk::ir::InValues* in_values) const {
     T result = visit(in_values->get_arg());
     const auto& value_list = in_values->get_value_list();
@@ -187,6 +191,10 @@ class ScalarExprVisitor {
 
   virtual T visitInIntegerSet(const hdk::ir::InIntegerSet* in_integer_set) const {
     return visit(in_integer_set->get_arg());
+  }
+
+  virtual T visitInSubquery(const hdk::ir::InSubquery* in_subquery) const {
+    return visit(in_subquery->getArg().get());
   }
 
   virtual T visitCharLength(const hdk::ir::CharLengthExpr* char_length) const {

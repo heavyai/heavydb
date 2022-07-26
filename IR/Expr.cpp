@@ -2121,6 +2121,11 @@ std::string InIntegerSet::toString() const {
   return str;
 }
 
+std::string InSubquery::toString() const {
+  return "(InSubquery arg: " + arg_->toString() +
+         " node: " + std::to_string(node_->getId()) + ")";
+}
+
 std::string CharLengthExpr::toString() const {
   std::string str;
   if (calc_encoded_length) {

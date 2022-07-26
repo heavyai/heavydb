@@ -596,6 +596,11 @@ hdk::ir::ExprPtr RelAlgTranslator::translateInOper(
   const auto rex_subquery = dynamic_cast<const RexSubQuery*>(rhs);
   CHECK(rex_subquery);
   auto ti = lhs->get_type_info();
+  if (for_dag_builder_) {
+    SQLTypeInfo ti(kBOOLEAN);
+    return hdk::ir::makeExpr<hdk::ir::InSubquery>(
+        ti, lhs, rex_subquery->getRelAlgShared());
+  }
   auto result = rex_subquery->getExecutionResult();
   CHECK(result);
   auto& row_set = result->getRows();

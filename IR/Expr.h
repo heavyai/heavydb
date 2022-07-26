@@ -682,6 +682,34 @@ class InIntegerSet : public Expr {
   const std::vector<int64_t> value_list;  // the list of values right of IN
 };
 
+class InSubquery : public Expr {
+ public:
+  InSubquery(const SQLTypeInfo& ti,
+             hdk::ir::ExprPtr arg,
+             std::shared_ptr<const RelAlgNode> node)
+      : Expr(ti), arg_(std::move(arg)), node_(std::move(node)) {}
+
+  ExprPtr deep_copy() const override {
+    return makeExpr<InSubquery>(type_info, arg_->deep_copy(), node_);
+  }
+
+  bool operator==(const Expr& rhs) const override {
+    const InSubquery* rhsp = dynamic_cast<const InSubquery*>(&rhs);
+    return rhsp && node_ == rhsp->node_;
+  }
+
+  std::string toString() const override;
+
+  hdk::ir::ExprPtr getArg() const { return arg_; }
+
+  const RelAlgNode* getNode() const { return node_.get(); }
+  std::shared_ptr<const RelAlgNode> getNodeShared() const { return node_; }
+
+ private:
+  hdk::ir::ExprPtr arg_;
+  std::shared_ptr<const RelAlgNode> node_;
+};
+
 /*
  * @type CharLengthExpr
  * @brief expression for the CHAR_LENGTH expression.
