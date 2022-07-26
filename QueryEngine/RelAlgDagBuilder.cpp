@@ -3213,8 +3213,8 @@ std::string RexInput::toString() const {
     return ::typeName(this) + "(" + table_name + "." + field_name + ")";
   }
   return cat(::typeName(this),
-             "(node=",
-             ::toString(node_),
+             "(",
+             node_->getIdString(),
              ", in_index=",
              std::to_string(getIndex()),
              ")");
@@ -3347,7 +3347,16 @@ hdk::ir::ExprPtrVector getNodeExprs(const RelAlgNode* node) {
     return compound->getExprs();
   }
   if (auto aggregate = dynamic_cast<const RelAggregate*>(node)) {
-    return aggregate->getAggregateExprs();
+    auto source = node->getInput(0);
+    hdk::ir::ExprPtrVector res;
+    for (unsigned i = 0; i < aggregate->getGroupByCount(); ++i) {
+      res.emplace_back(
+          hdk::ir::makeExpr<hdk::ir::ColumnRef>(getColumnType(source, i), source, i));
+    }
+    res.insert(res.end(),
+               aggregate->getAggregateExprs().begin(),
+               aggregate->getAggregateExprs().end());
+    return res;
   }
   if (auto values = dynamic_cast<const RelLogicalValues*>(node)) {
     return getNodeColumnRefs(values);

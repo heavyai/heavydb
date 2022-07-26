@@ -754,6 +754,8 @@ class RelAlgNode {
 
   unsigned getId() const { return id_; }
 
+  std::string getIdString() const { return "#" + std::to_string(id_); }
+
   bool hasContextData() const { return !(context_data_ == nullptr); }
 
   const RaExecutionDesc* getContextData() const { return context_data_; }
@@ -832,6 +834,19 @@ class RelAlgNode {
   mutable size_t dag_node_id_;
 };
 
+inline std::string inputsToString(const RelAlgInputs& inputs) {
+  std::stringstream ss;
+  ss << "[";
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    if (i) {
+      ss << ", ";
+    }
+    ss << inputs[i]->getIdString();
+  }
+  ss << "]";
+  return ss.str();
+}
+
 using RelAlgNodePtr = std::shared_ptr<RelAlgNode>;
 
 class RelScan : public RelAlgNode {
@@ -888,8 +903,13 @@ class RelScan : public RelAlgNode {
     for (auto& info : column_infos_) {
       field_names.emplace_back(info->name);
     }
-    return cat(
-        ::typeName(this), "(", table_info_->name, ", ", ::toString(field_names), ")");
+    return cat(::typeName(this),
+               getIdString(),
+               "(",
+               table_info_->name,
+               ", ",
+               ::toString(field_names),
+               ")");
   }
 
   size_t toHash() const override {
@@ -1026,6 +1046,7 @@ class RelProject : public RelAlgNode {
 
   std::string toString() const override {
     return cat(::typeName(this),
+               getIdString(),
                "(",
                ::toString(scalar_exprs_),
                ", exprs=",
@@ -1145,6 +1166,7 @@ class RelAggregate : public RelAlgNode {
 
   std::string toString() const override {
     return cat(::typeName(this),
+               getIdString(),
                "(",
                std::to_string(groupby_count_),
                ", agg_exprs=",
@@ -1152,7 +1174,7 @@ class RelAggregate : public RelAlgNode {
                ", fields=",
                ::toString(fields_),
                ", inputs=",
-               ::toString(inputs_),
+               inputsToString(inputs_),
                ")");
   }
 
@@ -1242,8 +1264,9 @@ class RelJoin : public RelAlgNode {
 
   std::string toString() const override {
     return cat(::typeName(this),
+               getIdString(),
                "(",
-               ::toString(inputs_),
+               ::inputsToString(inputs_),
                ", condition=",
                (condition_ ? condition_->toString() : "null"),
                ", join_type=",
@@ -1332,6 +1355,7 @@ class RelTranslatedJoin : public RelAlgNode {
 
   std::string toString() const override {
     return cat(::typeName(this),
+               getIdString(),
                "( join_quals { lhs: ",
                ::toString(lhs_join_cols_),
                ", rhs: ",
@@ -1452,10 +1476,11 @@ class RelFilter : public RelAlgNode {
 
   std::string toString() const override {
     return cat(::typeName(this),
+               getIdString(),
                "(",
                (filter_ ? filter_->toString() : "null"),
                ", ",
-               ::toString(inputs_) + ")");
+               ::inputsToString(inputs_) + ")");
   }
 
   size_t toHash() const override {
@@ -1670,6 +1695,7 @@ class RelSort : public RelAlgNode {
 
   std::string toString() const override {
     return cat(::typeName(this),
+               getIdString(),
                "(",
                "empty_result: ",
                ::toString(empty_result_),
@@ -1680,7 +1706,7 @@ class RelSort : public RelAlgNode {
                ", offset",
                std::to_string(offset_),
                ", inputs=",
-               ::toString(inputs_),
+               inputsToString(inputs_),
                ")");
   }
 
@@ -1781,10 +1807,11 @@ class RelTableFunction : public RelAlgNode {
 
   std::string toString() const override {
     return cat(::typeName(this),
+               getIdString(),
                "(",
                function_name_,
                ", inputs=",
-               ::toString(inputs_),
+               inputsToString(inputs_),
                ", fields=",
                ::toString(fields_),
                ", col_inputs=...",
@@ -1840,7 +1867,7 @@ class RelLogicalValues : public RelAlgNode {
   const std::vector<TargetMetaInfo>& getTupleType() const { return tuple_type_; }
 
   std::string toString() const override {
-    std::string ret = ::typeName(this) + "(";
+    std::string ret = ::typeName(this) + getIdString() + "(";
     for (const auto& target_meta_info : tuple_type_) {
       ret += " (" + target_meta_info.get_resname() + " " +
              target_meta_info.get_type_info().get_type_name() + ")";
