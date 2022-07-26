@@ -27,8 +27,13 @@ std::shared_ptr<CompilationContext> CUDABackend::generateNativeCode(
     const std::unordered_set<llvm::Function*>& live_funcs,
     const CompilationOptions& co) {
   return std::dynamic_pointer_cast<GpuCompilationContext>(
-      CodeGenerator::generateNativeGPUCode(
-          executor_, func, wrapper_func, live_funcs, is_gpu_smem_used_, co, gpu_target_));
+      CodeGenerator::generateNativeGPUCode(executor_->get_extention_modules(),
+                                           func,
+                                           wrapper_func,
+                                           live_funcs,
+                                           is_gpu_smem_used_,
+                                           co,
+                                           gpu_target_));
 }
 
 std::shared_ptr<Backend> getBackend(ExecutorDeviceType dt,

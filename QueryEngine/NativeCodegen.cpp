@@ -1049,14 +1049,14 @@ std::unordered_set<llvm::Function*> findAliveRuntimeFuncs(
 }  // namespace
 
 void CodeGenerator::linkModuleWithLibdevice(
-    Executor* executor,
+    const std::unique_ptr<llvm::Module>& ext,
     llvm::Module& llvm_module,
     llvm::PassManagerBuilder& pass_manager_builder,
     const GPUTarget& gpu_target) {
 #ifdef HAVE_CUDA
   auto timer = DEBUG_TIMER(__func__);
 
-  if (!executor->has_libdevice_module()) {
+  if (!ext) {
     // raise error
     throw std::runtime_error(
         "libdevice library is not available but required by the UDF module");
@@ -1070,10 +1070,8 @@ void CodeGenerator::linkModuleWithLibdevice(
   }
 
   // Bind libdevice to the current module
-  CodeGenerator::link_udf_module(executor->get_libdevice_module(),
-                                 llvm_module,
-                                 gpu_target.cgen_state,
-                                 llvm::Linker::Flags::OverrideFromSrc);
+  CodeGenerator::link_udf_module(
+      ext, llvm_module, gpu_target.cgen_state, llvm::Linker::Flags::OverrideFromSrc);
 
   std::unordered_set<llvm::Function*> live_funcs =
       findAliveRuntimeFuncs(llvm_module, roots);
@@ -1119,7 +1117,7 @@ void CodeGenerator::linkModuleWithLibdevice(
 }
 
 std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
-    Executor* executor,
+    const std::map<Executor::ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts,
     llvm::Function* func,
     llvm::Function* wrapper_func,
     const std::unordered_set<llvm::Function*>& live_funcs,
@@ -1166,7 +1164,10 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   bool requires_libdevice = check_module_requires_libdevice(llvm_module);
 
   if (requires_libdevice) {
-    linkModuleWithLibdevice(executor, *llvm_module, pass_manager_builder, gpu_target);
+    linkModuleWithLibdevice(exts.at(Executor::ExtModuleKinds::rt_libdevice_module),
+                            *llvm_module,
+                            pass_manager_builder,
+                            gpu_target);
   }
 
   // run optimizations
@@ -1221,8 +1222,8 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   // Prevent the udf function(s) from being removed the way the runtime functions are
   std::unordered_set<std::string> udf_declarations;
 
-  if (executor->has_udf_module(/*is_gpu=*/true)) {
-    for (auto& f : executor->get_udf_module(/*is_gpu=*/true)->getFunctionList()) {
+  if (exts.find(Executor::ExtModuleKinds::udf_gpu_module) != exts.end()) {
+    for (auto& f : exts.at(Executor::ExtModuleKinds::udf_gpu_module)->getFunctionList()) {
       llvm::Function* udf_function = llvm_module->getFunction(f.getName());
 
       if (udf_function) {
@@ -1238,8 +1239,9 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     }
   }
 
-  if (executor->has_rt_udf_module(/*is_gpu=*/true)) {
-    for (auto& f : executor->get_rt_udf_module(/*is_gpu=*/true)->getFunctionList()) {
+  if (exts.find(Executor::ExtModuleKinds::rt_udf_gpu_module) != exts.end()) {
+    for (auto& f :
+         exts.at(Executor::ExtModuleKinds::rt_udf_gpu_module)->getFunctionList()) {
       llvm::Function* udf_function = llvm_module->getFunction(f.getName());
       if (udf_function) {
         legalize_nvvm_ir(udf_function);

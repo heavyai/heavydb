@@ -96,13 +96,13 @@ class CodeGenerator {
     bool row_func_not_inlined;
   };
 
-  static void linkModuleWithLibdevice(Executor* executor,
+  static void linkModuleWithLibdevice(const std::unique_ptr<llvm::Module>& ext,
                                       llvm::Module& module,
                                       llvm::PassManagerBuilder& pass_manager_builder,
                                       const GPUTarget& gpu_target);
 
   static std::shared_ptr<GpuCompilationContext> generateNativeGPUCode(
-      Executor* executor,
+      const std::map<Executor::ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts,
       llvm::Function* func,
       llvm::Function* wrapper_func,
       const std::unordered_set<llvm::Function*>& live_funcs,

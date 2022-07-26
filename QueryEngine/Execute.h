@@ -440,6 +440,12 @@ class Executor {
     return has_extension_module(ExtModuleKinds::rt_libdevice_module);
   }
 
+  const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& get_extention_modules()
+      const {
+    // todo: thread safety?
+    return extension_modules_;
+  }
+
   /**
    * Returns pointer to the intermediate tables vector currently stored by this
    * executor.
