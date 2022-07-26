@@ -1774,14 +1774,16 @@ const int64_t PAGES_PER_DATA_FILE =
 const int64_t PAGES_PER_METADATA_FILE =
     File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_METADATA_FILE;
 const int64_t DEFAULT_DATA_FILE_SIZE{DEFAULT_PAGE_SIZE * PAGES_PER_DATA_FILE};
-const int64_t DEFAULT_METADATA_FILE_SIZE{METADATA_PAGE_SIZE * PAGES_PER_METADATA_FILE};
+const int64_t DEFAULT_METADATA_FILE_SIZE{DEFAULT_METADATA_PAGE_SIZE *
+                                         PAGES_PER_METADATA_FILE};
 }  // namespace
 
 class ShowDiskCacheUsageTest : public DBHandlerTestFixture {
  public:
   static inline constexpr int64_t epoch_file_size{2 * sizeof(int64_t)};
   static inline constexpr int64_t empty_mgr_size{0};
-  static inline constexpr int64_t chunk_size{DEFAULT_PAGE_SIZE + METADATA_PAGE_SIZE};
+  static inline constexpr int64_t chunk_size{DEFAULT_PAGE_SIZE +
+                                             DEFAULT_METADATA_PAGE_SIZE};
   // TODO(Misiu): These can be made constexpr once c++20 is supported.
   static inline std::string cache_path_ =
       to_string(BASE_PATH) + "/" + shared::kDefaultDiskCacheDirName;
@@ -1971,7 +1973,8 @@ TEST_F(ShowDiskCacheUsageTest, SingleTableMetadataOnly) {
 
   sqlAndCompareResult(
       "SHOW DISK CACHE USAGE;",
-      {{foreign_table1, i(METADATA_PAGE_SIZE + getWrapperSizeForTable(foreign_table1))}});
+      {{foreign_table1,
+        i(DEFAULT_METADATA_PAGE_SIZE + getWrapperSizeForTable(foreign_table1))}});
 }
 
 TEST_F(ShowDiskCacheUsageTest, ForeignAndNormalTable) {
@@ -2003,7 +2006,7 @@ TEST_F(ShowDiskCacheUsageTest, MultipleChunks) {
   sqlAndCompareResult("SHOW DISK CACHE USAGE;",
                       {{foreign_table1,
                         i(getMinSizeForTable(foreign_table1) +
-                          (2 * (METADATA_PAGE_SIZE + DEFAULT_PAGE_SIZE)))}});
+                          (2 * (DEFAULT_METADATA_PAGE_SIZE + DEFAULT_PAGE_SIZE)))}});
 }
 
 class ShowDiskCacheUsageForNormalTableTest : public ShowDiskCacheUsageTest {
@@ -2245,10 +2248,10 @@ class ShowTableDetailsTest : public DBHandlerTestFixture,
     // clang-format on
   }
 
-  // In the case where table page size is set to METADATA_PAGE_SIZE, both
+  // In the case where table page size is set to DEFAULT_METADATA_PAGE_SIZE, both
   // the data and metadata content are stored in the data files
   void assertTablesWithContentAndSamePageSizeResult(const TQueryResult result) {
-    int64_t data_file_size{METADATA_PAGE_SIZE * PAGES_PER_DATA_FILE};
+    int64_t data_file_size{DEFAULT_METADATA_PAGE_SIZE * PAGES_PER_DATA_FILE};
     // clang-format off
     if (isDistributedMode()) {
       assertResultSetEqual({{i(0), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
@@ -2417,7 +2420,7 @@ TEST_P(ShowTableDetailsTest, TablesWithContent) {
   assertExpectedHeaders(result);
 
   auto page_size = GetParam();
-  if (page_size == METADATA_PAGE_SIZE) {
+  if (page_size == DEFAULT_METADATA_PAGE_SIZE) {
     assertTablesWithContentAndSamePageSizeResult(result);
   } else {
     assertTablesWithContentResult(result, page_size);
@@ -2429,7 +2432,7 @@ INSTANTIATE_TEST_SUITE_P(
     ShowTableDetailsTest,
     testing::Values(-1 /* Use default */,
                     100 /* Arbitrary page size */,
-                    METADATA_PAGE_SIZE,
+                    DEFAULT_METADATA_PAGE_SIZE,
                     65536 /* Results in the same file size as the metadata file */),
     [](const auto& param_info) {
       auto page_size = param_info.param;
@@ -3909,7 +3912,7 @@ TEST_P(StorageDetailsSystemTableTest, DifferentPageSizes) {
   result.table_id = table_id;
   result.table_name = table_name;
   result.total_data_file_size = page_size * PAGES_PER_DATA_FILE;
-  if (page_size == METADATA_PAGE_SIZE) {
+  if (page_size == DEFAULT_METADATA_PAGE_SIZE) {
     // In the case where the data page size is the same as the metadata page size, the
     // same (data) files will be used for both the data and metadata.
     result.metadata_file_count = 0;
@@ -3946,7 +3949,7 @@ INSTANTIATE_TEST_SUITE_P(
     DifferentPageSizes,
     StorageDetailsSystemTableTest,
     testing::Values(100 /* Arbitrary page size */,
-                    METADATA_PAGE_SIZE,
+                    DEFAULT_METADATA_PAGE_SIZE,
                     65536 /* Results in the same file size as the metadata file */),
     [](const auto& param_info) {
       return "Page_Size_" + std::to_string(param_info.param);

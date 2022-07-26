@@ -70,10 +70,10 @@ std::string CachingFileMgr::dump() const {
   return ss.str();
 }
 
-CachingFileMgr::CachingFileMgr(const DiskCacheConfig& config) {
+CachingFileMgr::CachingFileMgr(const DiskCacheConfig& config)
+    : FileMgr(config.page_size, DEFAULT_METADATA_PAGE_SIZE) {
   fileMgrBasePath_ = config.path;
   maxRollbackEpochs_ = 0;
-  defaultPageSize_ = config.page_size;
   nextFileId_ = 0;
   max_size_ = config.size_limit;
   init(config.num_reader_threads);
@@ -203,7 +203,7 @@ size_t CachingFileMgr::getChunkSpaceReservedByTable(int32_t db_id, int32_t tb_id
        it != chunkIndex_.upper_bound(max_table_key);
        ++it) {
     auto& [key, buffer] = *it;
-    space_used += (buffer->numChunkPages() * defaultPageSize_);
+    space_used += (buffer->numChunkPages() * page_size_);
   }
   return space_used;
 }
@@ -218,7 +218,7 @@ size_t CachingFileMgr::getMetadataSpaceReservedByTable(int32_t db_id,
        it != chunkIndex_.upper_bound(max_table_key);
        ++it) {
     auto& [key, buffer] = *it;
-    space_used += (buffer->numMetadataPages() * METADATA_PAGE_SIZE);
+    space_used += (buffer->numMetadataPages() * metadata_page_size_);
   }
   return space_used;
 }
@@ -573,12 +573,12 @@ size_t CachingFileMgr::getTableFileMgrsSize() const {
 
 size_t CachingFileMgr::getNumDataFiles() const {
   heavyai::shared_lock<heavyai::shared_mutex> read_lock(files_rw_mutex_);
-  return fileIndex_.count(defaultPageSize_);
+  return fileIndex_.count(page_size_);
 }
 
 size_t CachingFileMgr::getNumMetaFiles() const {
   heavyai::shared_lock<heavyai::shared_mutex> read_lock(files_rw_mutex_);
-  return fileIndex_.count(METADATA_PAGE_SIZE);
+  return fileIndex_.count(metadata_page_size_);
 }
 
 std::vector<ChunkKey> CachingFileMgr::getChunkKeysForPrefix(
@@ -642,11 +642,8 @@ std::string CachingFileMgr::dumpKeysWithChunkData() const {
 }
 
 std::unique_ptr<CachingFileMgr> CachingFileMgr::reconstruct() const {
-  DiskCacheConfig config{fileMgrBasePath_,
-                         DiskCacheLevel::none,
-                         num_reader_threads_,
-                         max_size_,
-                         defaultPageSize_};
+  DiskCacheConfig config{
+      fileMgrBasePath_, DiskCacheLevel::none, num_reader_threads_, max_size_, page_size_};
   return std::make_unique<CachingFileMgr>(config);
 }
 
@@ -692,8 +689,8 @@ void CachingFileMgr::setMaxSizes() {
   size_t max_meta_file_space = std::floor(max_size_ * METADATA_FILE_SPACE_PERCENTAGE);
   max_wrapper_space_ = max_meta_space - max_meta_file_space;
   auto max_data_space = max_size_ - max_meta_space;
-  auto meta_file_size = METADATA_PAGE_SIZE * num_pages_per_metadata_file_;
-  auto data_file_size = defaultPageSize_ * num_pages_per_data_file_;
+  auto meta_file_size = metadata_page_size_ * num_pages_per_metadata_file_;
+  auto data_file_size = page_size_ * num_pages_per_data_file_;
   max_num_data_files_ = max_data_space / data_file_size;
   max_num_meta_files_ = max_meta_file_space / meta_file_size;
   CHECK_GT(max_num_data_files_, 0U) << "Cannot create a cache of size " << max_size_

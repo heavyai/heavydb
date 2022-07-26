@@ -31,6 +31,542 @@
 #include "Shared/File.h"
 #include "TestHelpers.h"
 
+namespace bf = boost::filesystem;
+
+class FileInfoTest : public testing::Test {
+ public:
+  constexpr static const char* test_data_dir = "./test_dir";
+  constexpr static const char* data_file_name = "./test_dir/0.64.data";
+  constexpr static const char* meta_file_name = "./test_dir/1.128.data";
+  constexpr static const int32_t db = 1, tb = 1, data_file_id = 0, meta_file_id = 1;
+  constexpr static const size_t num_pages = 16, page_size = 64, meta_page_size = 128;
+
+ protected:
+  void SetUp() override {
+    bf::remove_all(test_data_dir);
+    bf::create_directory(test_data_dir);
+
+    // Currently FileInfo has a dependency on having a parent FileMgr, so we generate them
+    // here.  Other than openExistingFile() the parent FileMgr state will not affect the
+    // FileInfo's method calls.  Future work is underway to remove this dependency
+    // entirely (a FileInfo should not need access to a parent FileMgr).
+    fsi_ = std::make_shared<ForeignStorageInterface>();
+    gfm_ = std::make_unique<File_Namespace::GlobalFileMgr>(
+        0, fsi_, test_data_dir, 0, page_size, meta_page_size);
+    fm_ptr_ = dynamic_cast<File_Namespace::FileMgr*>(gfm_->getFileMgr(1, 1));
+
+    auto fd = File_Namespace::create(test_data_dir, data_file_id, page_size, num_pages);
+    file_info_ = std::make_unique<File_Namespace::FileInfo>(
+        fm_ptr_, data_file_id, fd, page_size, num_pages);
+  }
+
+  void TearDown() override {
+    file_info_ = nullptr;
+    bf::remove_all(test_data_dir);
+  }
+
+  static void SetUpTestSuite() {
+    File_Namespace::FileMgr::setNumPagesPerDataFile(num_pages);
+    File_Namespace::FileMgr::setNumPagesPerMetadataFile(num_pages);
+  }
+
+  static void TearDownTestSute() {
+    File_Namespace::FileMgr::setNumPagesPerDataFile(
+        File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_DATA_FILE);
+    File_Namespace::FileMgr::setNumPagesPerMetadataFile(
+        File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_METADATA_FILE);
+  }
+
+  template <class T>
+  std::vector<T> readFromFile(const char* file, size_t offset, size_t num_elems) {
+    CHECK(!file_info_) << "File desc must be closed before we read file directly.";
+    auto fd = heavyai::fopen(file, "r");
+    std::vector<T> buf(num_elems);
+    File_Namespace::read(
+        fd, offset, num_elems * sizeof(T), reinterpret_cast<int8_t*>(buf.data()));
+    fclose(fd);
+    return buf;
+  }
+
+  std::vector<int32_t> getTypeInfoBufferFromSqlInfo(const SQLTypeInfo& sql_type) {
+    CHECK_EQ(NUM_METADATA, 10);  // Defined in FileBuffer.h
+    std::vector<int32_t> type_data(NUM_METADATA);
+    type_data[0] = METADATA_VERSION;  // METADATA_VERSION is currently 0.
+    type_data[1] = 1;                 // Set has_encoder.
+    type_data[2] = static_cast<int32_t>(sql_type.get_type());
+    type_data[3] = static_cast<int32_t>(sql_type.get_subtype());
+    type_data[4] = sql_type.get_dimension();
+    type_data[5] = sql_type.get_scale();
+    type_data[6] = static_cast<int32_t>(sql_type.get_notnull());
+    type_data[7] = static_cast<int32_t>(sql_type.get_compression());
+    type_data[8] = sql_type.get_comp_param();
+    type_data[9] = sql_type.get_size();
+    return type_data;
+  }
+
+  std::shared_ptr<ForeignStorageInterface> fsi_;
+  std::unique_ptr<File_Namespace::GlobalFileMgr> gfm_;
+  File_Namespace::FileMgr* fm_ptr_;
+  std::unique_ptr<File_Namespace::FileInfo> file_info_;
+};
+
+TEST_F(FileInfoTest, initNewFile) {
+  file_info_->initNewFile();
+  EXPECT_EQ(file_info_->numFreePages(), num_pages);
+  file_info_ = nullptr;  // close file descriptor;
+
+  ASSERT_TRUE(bf::exists(data_file_name));
+  ASSERT_EQ(bf::file_size(data_file_name), num_pages * page_size);
+
+  auto fd = heavyai::fopen(data_file_name, "r");
+  int32_t header_size = 0;
+  int8_t* buf = reinterpret_cast<int8_t*>(&header_size);
+  for (size_t i = 0; i < page_size * num_pages; i += page_size) {
+    File_Namespace::read(fd, i, sizeof(int32_t), buf);
+    // Check that all pages have zero-ed headers
+    ASSERT_EQ(*(reinterpret_cast<int32_t*>(buf)), 0);
+  }
+}
+
+TEST_F(FileInfoTest, Size) {
+  file_info_->initNewFile();
+
+  // All pages should be included in the size.
+  EXPECT_EQ(file_info_->size(), page_size * num_pages);
+}
+
+TEST_F(FileInfoTest, Available) {
+  file_info_->initNewFile();
+
+  // All pages are available by default.
+  ASSERT_EQ(file_info_->available(), num_pages * page_size);
+
+  file_info_->getFreePage();
+
+  // One less page is now available.
+  EXPECT_EQ(file_info_->available(), (num_pages - 1) * page_size);
+}
+
+TEST_F(FileInfoTest, NumFreePages) {
+  file_info_->initNewFile();
+
+  // All pages are free by default.
+  ASSERT_EQ(file_info_->numFreePages(), num_pages);
+
+  file_info_->getFreePage();
+
+  // One less page is now free.
+  EXPECT_EQ(file_info_->numFreePages(), num_pages - 1);
+}
+
+TEST_F(FileInfoTest, Used) {
+  file_info_->initNewFile();
+
+  // No bytes used if no pages used.
+  ASSERT_EQ(file_info_->used(), 0U);
+
+  file_info_->getFreePage();
+
+  // One page is now in use.
+  EXPECT_EQ(file_info_->used(), page_size);
+}
+
+TEST_F(FileInfoTest, getFreePages) {
+  file_info_->initNewFile();
+
+  // All pages should be free by default.
+  std::set<size_t> free_pages;
+  for (size_t i = 0; i < num_pages; ++i) {
+    free_pages.emplace(i);
+  }
+  ASSERT_EQ(file_info_->getFreePages(), free_pages);
+
+  auto page_id = file_info_->getFreePage();
+  free_pages.erase(page_id);
+
+  // Reserved page should be missing.
+  EXPECT_EQ(file_info_->getFreePages(), free_pages);
+}
+
+TEST_F(FileInfoTest, Print) {
+  file_info_->initNewFile();
+
+  std::stringstream ss;
+  ss << "File: " << data_file_id << std::endl;
+  ss << "Size: " << num_pages * page_size << std::endl;
+  ss << "Used: " << 0 << std::endl;
+  ss << "Free: " << num_pages * page_size << std::endl;
+
+  ASSERT_EQ(file_info_->print(), ss.str());
+}
+
+class FreePageDeferredTest : public FileInfoTest {};
+TEST_F(FreePageDeferredTest, Reserved) {
+  // Reserve a page.
+  file_info_->initNewFile();
+  auto page = file_info_->getFreePage();
+
+  ASSERT_GT(page, -1);
+
+  // Write to the reserved page
+  std::vector<int32_t> write_buf(page_size / sizeof(int32_t), 1);
+  file_info_->write(page, page_size, reinterpret_cast<const int8_t*>(write_buf.data()));
+
+  // Free the reserved page.
+  file_info_->freePageDeferred(page);
+
+  // Page should be back in free pages.
+  auto free_pages = file_info_->getFreePages();
+  EXPECT_NE(free_pages.count(page), 0U);
+
+  // Page should not have a zero-ed header.
+  file_info_ = nullptr;  // close file descriptor.
+  auto buf = readFromFile<int32_t>(data_file_name, page * page_size, 1);
+  ASSERT_EQ(buf[0], 1);
+}
+
+TEST_F(FreePageDeferredTest, AlreadyFree) {
+  // Reserve a page.
+  file_info_->initNewFile();
+
+  // Write to the reserved page
+  std::vector<int32_t> write_buf(page_size / sizeof(int32_t), 1);
+  file_info_->write(
+      page_size, page_size, reinterpret_cast<const int8_t*>(write_buf.data()));
+
+  // Free the reserved page.
+  file_info_->freePageDeferred(1);
+
+  // Page should be in free pages.
+  auto free_pages = file_info_->getFreePages();
+  EXPECT_NE(free_pages.count(1), 0U);
+
+  // Page should not have a zero-ed header.
+  file_info_ = nullptr;  // Close file desc.
+  auto buf = readFromFile<int32_t>(data_file_name, page_size, 1);
+  ASSERT_EQ(buf[0], 1);
+}
+
+class FreePageImmediateTest : public FileInfoTest {};
+TEST_F(FreePageImmediateTest, Reserved) {
+  // Reserve a page.
+  file_info_->initNewFile();
+  auto page = file_info_->getFreePage();
+
+  ASSERT_GT(page, -1);
+
+  // Write to the reserved page
+  std::vector<int32_t> write_buf(page_size / sizeof(int32_t), 1);
+  file_info_->write(page, page_size, reinterpret_cast<const int8_t*>(write_buf.data()));
+
+  // Free the reserved page.
+  file_info_->freePageImmediate(page);
+
+  // Page should be back in free pages.
+  auto free_pages = file_info_->getFreePages();
+  EXPECT_NE(free_pages.count(page), 0U);
+
+  // Page should have a zero-ed header.
+  file_info_ = nullptr;  // close file descriptor.
+  auto buf = readFromFile<int32_t>(data_file_name, page * page_size, 1);
+  ASSERT_EQ(buf[0], 0);
+}
+
+TEST_F(FreePageImmediateTest, AlreadyFree) {
+  // Reserve a page.
+  file_info_->initNewFile();
+
+  // Write to the reserved page
+  std::vector<int32_t> write_buf(page_size / sizeof(int32_t), 1);
+  file_info_->write(
+      page_size, page_size, reinterpret_cast<const int8_t*>(write_buf.data()));
+
+  // Free the reserved page.
+  file_info_->freePageImmediate(1);
+
+  // Page should be in free pages.
+  auto free_pages = file_info_->getFreePages();
+  EXPECT_NE(free_pages.count(1), 0U);
+
+  // Page should have a zero-ed header.
+  file_info_ = nullptr;  // Close file desc.
+  auto buf = readFromFile<int32_t>(data_file_name, page_size, 1);
+  ASSERT_EQ(buf[0], 0);
+}
+
+class GetFreePageTest : public FileInfoTest {};
+TEST_F(GetFreePageTest, NoPagesAvailable) {
+  // Verify we have no pages available.
+  EXPECT_EQ(file_info_->numFreePages(), 0U);
+
+  // Verify we don't get a page when requested.
+  auto page = file_info_->getFreePage();
+  EXPECT_EQ(page, -1);
+  ASSERT_EQ(file_info_->numFreePages(), 0U);
+}
+
+TEST_F(GetFreePageTest, PagesAvailable) {
+  // Verify we have some pages available.
+  file_info_->initNewFile();
+  EXPECT_GT(file_info_->numFreePages(), 0U);
+
+  // Request free page.
+  auto page = file_info_->getFreePage();
+
+  // Verify we have gotten a page.
+  ASSERT_GT(page, -1);
+
+  // Verify that the page we got is no longer free.
+  auto free_pages = file_info_->getFreePages();
+  ASSERT_EQ(free_pages.count(page), 0U);
+}
+
+class FreePageTest : public FileInfoTest {};
+TEST_F(FreePageTest, Delete) {
+  // Initialize pages with zeroed headers.
+  file_info_->initNewFile();
+
+  // Delete page.
+  file_info_->freePage(1, false, 2);
+
+  // Verify page header has been overwritten with contingent and epoch.
+  file_info_ = nullptr;  // Close file desc.
+  auto buf = readFromFile<int32_t>(data_file_name, page_size + sizeof(int32_t), 2);
+  EXPECT_EQ(buf[0], -1);  // delete contingent.
+  ASSERT_EQ(buf[1], 2);   // epoch.
+}
+
+TEST_F(FreePageTest, Rolloff) {
+  // Initialize pages with zeroed headers.
+  file_info_->initNewFile();
+
+  // Delete page.
+  file_info_->freePage(1, true, 2);
+
+  // Verify page header has been overwritten with contingent and epoch.
+  file_info_ = nullptr;  // Close file desc.
+  auto buf = readFromFile<int32_t>(data_file_name, page_size + sizeof(int32_t), 2);
+  EXPECT_EQ(buf[0], -2);  // rolloff contingent.
+  ASSERT_EQ(buf[1], 2);   // epoch.
+}
+
+TEST_F(FileInfoTest, RecoverPage) {
+  // Initialize pages with zeroed headers.
+  file_info_->initNewFile();
+
+  // Delete page.
+  file_info_->freePage(1, false, 2);
+
+  // Recover page (replace the contingent and epoch with chunk key values).
+  file_info_->recoverPage({1, 2}, 1);
+
+  file_info_ = nullptr;  // Close file desc.
+  auto buf = readFromFile<int32_t>(data_file_name, page_size + sizeof(int32_t), 2);
+  EXPECT_EQ(buf[0], 1);  // contingent replaced with db_id.
+  ASSERT_EQ(buf[1], 2);  // epoch replaced with tb_id.
+}
+
+TEST_F(FileInfoTest, Write) {
+  // Write data to file
+  int8_t write_buf[8]{1, 2, 3, 4, 5, 6, 7, 8};
+  file_info_->write(0, 8, write_buf);
+
+  file_info_ = nullptr;  // Close file desc.
+  // Verify read from disk is what we expected to write.
+  auto read_buf = readFromFile<int8_t>(data_file_name, 0, 8);
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_EQ(read_buf[i], write_buf[i]);
+  }
+}
+
+TEST_F(FileInfoTest, Read) {
+  // Write data to file
+  int8_t write_buf[8]{1, 2, 3, 4, 5, 6, 7, 8};
+  file_info_->write(0, 8, write_buf);
+
+  int8_t read_buf[8];
+  file_info_->read(0, 8, read_buf);
+
+  // Verify we have read what we expected.
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_EQ(read_buf[i], write_buf[i]);
+  }
+}
+
+class OpenExistingFileTest : public FileInfoTest {
+ protected:
+  constexpr static const char* source_data_file =
+      "../../Tests/FileMgrDataFiles/0.64.data";
+  constexpr static const char* source_meta_file =
+      "../../Tests/FileMgrDataFiles/1.128.data";
+
+  void SetUp() override {
+    bf::remove_all(test_data_dir);
+    bf::create_directory(test_data_dir);
+
+    // Tests need a FileMgr to access epoch data.
+    fsi_ = std::make_shared<ForeignStorageInterface>();
+    gfm_ = std::make_unique<File_Namespace::GlobalFileMgr>(
+        0, fsi_, test_data_dir, 0, page_size, meta_page_size);
+
+    // The last checkpointed epoch for the pre-created files is actually "2", but the
+    // FileMgr will automatically increment the epoch during initialization so we need to
+    // override the epoch to "1" so that we get "2" once it's done.
+    // This is necessary because openExistingFile() is expected to be called as part of FM
+    // initialization before we increment the epoch, so if we were callilng it normally,
+    // the epoch would be read as "2", then we call openExistingFile(), then we increment.
+    // But here we are pre-initializing a FM and calling the function after the epoch is
+    // incremented (so as not to depend on any of the initialiation code).
+    fm_ = std::make_unique<File_Namespace::FileMgr>(
+        0, gfm_.get(), File_Namespace::TablePair{1, 1}, -1, 0, 1 /* epoch */);
+  }
+
+  // These methods were used to create the data files used for comparison purposes.
+  void createTestingFiles(const std::string& gfm_path) const {
+    CHECK_NE(gfm_path, test_data_dir)
+        << "Can't create new test files in a directory that will be used.";
+    bf::remove_all(gfm_path);
+
+    // Need to setup a temporary FileMgr to create files.
+    auto fsi = std::make_shared<ForeignStorageInterface>();
+    auto gfm = std::make_unique<File_Namespace::GlobalFileMgr>(
+        0, fsi, gfm_path, 0, page_size, meta_page_size);
+    auto fm = dynamic_cast<File_Namespace::FileMgr*>(gfm->getFileMgr(1, 1));
+
+    // Data to write.
+    auto sql_info = SQLTypeInfo{kINT};
+    std::vector<int32_t> int_data{1, 2, 3, 4, 5, 6, 7, 8};
+    auto data_size = int_data.size() * sizeof(int32_t);
+
+    // Normal checkpointed chunk (should be present).
+    auto int_buf = fm->createBuffer({1, 1, 1, 0});
+    int_buf->initEncoder(sql_info);
+
+    // A chunk that will be written, but never checkpointed.
+    auto uncheckpointed_buf = fm->createBuffer({1, 1, 1, 2});
+    uncheckpointed_buf->initEncoder(sql_info);
+
+    // Chunk that is deleted and the delete has been checkpointed (should be gone).
+    auto deleted_buf = fm->createBuffer({1, 1, 1, 1});
+    deleted_buf->initEncoder(sql_info);
+
+    // Chunk that was written, then checkpointed, then deleted without checkpoint (should
+    // be present).
+    auto uncheckpointed_deleted_buf = fm->createBuffer({1, 1, 1, 3});
+    uncheckpointed_deleted_buf->initEncoder(sql_info);
+
+    // All the appends for the first checkpoint.
+    int_buf->append(reinterpret_cast<int8_t*>(int_data.data()), data_size);
+    deleted_buf->append(reinterpret_cast<int8_t*>(int_data.data()), data_size);
+    uncheckpointed_deleted_buf->append(reinterpret_cast<int8_t*>(int_data.data()),
+                                       data_size);
+    int_buf->append(reinterpret_cast<int8_t*>(int_data.data()), data_size);
+    fm->checkpoint();  // Checkpointed with epoch '2'.
+
+    // Delete one buffer before second checkpoint.
+    fm->deleteBuffer({1, 1, 1, 1});
+    fm->checkpoint();  // Checkpointed with epoch '3'.
+
+    uncheckpointed_buf->append(reinterpret_cast<int8_t*>(int_data.data()), data_size);
+
+    fm->deleteBuffer({1, 1, 1, 3});  // Uncheckpointed delete
+  }
+
+  std::shared_ptr<ForeignStorageInterface> fsi_;
+  std::unique_ptr<File_Namespace::GlobalFileMgr> gfm_;
+  std::unique_ptr<File_Namespace::FileMgr> fm_;
+};
+
+TEST_F(OpenExistingFileTest, Data) {
+  ASSERT_EQ(fm_->epoch(1, 1), 2) << "FM was not initialized correctly.";
+
+  // Fetch source file.
+  bf::copy(source_data_file, data_file_name);
+
+  auto fd = heavyai::fopen(data_file_name, "r+w");
+  File_Namespace::FileInfo file_info(fm_.get(), data_file_id, fd, page_size, num_pages);
+
+  std::vector<File_Namespace::HeaderInfo> headers;
+  file_info.openExistingFile(headers);
+
+  EXPECT_EQ(file_info.numFreePages(), 13U);
+  ASSERT_EQ(headers.size(), 3U);
+
+  // TODO(Misiu): Implement HeaderInfo/Page ==() operator to simplify these comparisons.
+
+  // Normally checkpointed buffer.
+  EXPECT_EQ(headers[0].chunkKey, (ChunkKey{1, 1, 1, 0}));
+  EXPECT_EQ(headers[0].pageId, 0);  // Page's ordering within buffer.
+  EXPECT_EQ(headers[0].versionEpoch, 1);
+  EXPECT_EQ(headers[0].page.fileId, data_file_id);
+  EXPECT_EQ(headers[0].page.pageNum, 0U);  // First write.
+
+  // Uncheckpointed deleted buffer (restored).
+  EXPECT_EQ(headers[1].chunkKey, (ChunkKey{1, 1, 1, 3}));
+  EXPECT_EQ(headers[1].pageId, 0);  // Page's ordering within buffer.
+  EXPECT_EQ(headers[1].versionEpoch, 1);
+  EXPECT_EQ(headers[1].page.fileId, data_file_id);
+  EXPECT_EQ(headers[1].page.pageNum, 2U);  // Third write.
+
+  // Second append to checkpointed buffer takes pageNum after checkpointed buffer,
+  // deleted buffer, and uncheckpointed_deleted buffer (4th page).
+  EXPECT_EQ(headers[2].chunkKey, (ChunkKey{1, 1, 1, 0}));
+  EXPECT_EQ(headers[2].pageId, 1);  // Page's ordering within buffer.
+  EXPECT_EQ(headers[2].versionEpoch, 1);
+  EXPECT_EQ(headers[2].page.fileId, data_file_id);
+  EXPECT_EQ(headers[2].page.pageNum, 3U);  // Fourth write.
+}
+
+TEST_F(OpenExistingFileTest, Metadata) {
+  ASSERT_EQ(fm_->epoch(1, 1), 2) << "FM was not initialized correctly.";
+
+  // Fetch source file.
+  bf::copy(source_meta_file, meta_file_name);
+
+  auto fd = heavyai::fopen(meta_file_name, "r+w");
+  File_Namespace::FileInfo file_info(
+      fm_.get(), meta_file_id, fd, meta_page_size, num_pages);
+
+  std::vector<File_Namespace::HeaderInfo> headers;
+  file_info.openExistingFile(headers);
+
+  ASSERT_EQ(headers.size(), 2U);
+
+  EXPECT_EQ(headers[0].chunkKey, (ChunkKey{1, 1, 1, 0}));
+  EXPECT_EQ(headers[0].pageId, -1);
+  EXPECT_EQ(headers[0].versionEpoch, 1);
+  EXPECT_EQ(headers[0].page.fileId, meta_file_id);
+  EXPECT_EQ(headers[0].page.pageNum, 0U);
+
+  EXPECT_EQ(headers[1].chunkKey, (ChunkKey{1, 1, 1, 3}));
+  EXPECT_EQ(headers[1].pageId, -1);
+  EXPECT_EQ(headers[1].versionEpoch, 1);
+  EXPECT_EQ(headers[1].page.fileId, meta_file_id);
+  EXPECT_EQ(headers[1].page.pageNum, 2U);  // 2 because page 1 was deleted.
+}
+
+TEST_F(FileInfoTest, SyncToDisk) {
+  // Write data to file
+  int8_t write_buf[8]{1, 2, 3, 4, 5, 6, 7, 8};
+  file_info_->write(0, 8, write_buf);
+  EXPECT_TRUE(file_info_->isDirty);
+
+  // Sync file descriptor to disk.
+  file_info_->syncToDisk();
+
+  // The file will clear the dirty flag if all the flushing system calls succeed.
+  EXPECT_FALSE(file_info_->isDirty);
+
+  file_info_ = nullptr;  // Close file desc.
+  // Verify read from disk is what we expected to write.
+  auto read_buf = readFromFile<int8_t>(data_file_name, 0, 8);
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_EQ(read_buf[i], write_buf[i]);
+  }
+}
+
+// TODO(Misiu): Add concurrency tests for FileInfo.
+
 class FileMgrTest : public testing::Test {
  protected:
   inline static const std::string TEST_DATA_DIR{"./test_dir"};
@@ -41,10 +577,10 @@ class FileMgrTest : public testing::Test {
     initializeChunk(1);
   }
 
-  void TearDown() override { boost::filesystem::remove_all(TEST_DATA_DIR); }
+  void TearDown() override { bf::remove_all(TEST_DATA_DIR); }
 
   void initializeGlobalFileMgr() {
-    boost::filesystem::remove_all(TEST_DATA_DIR);
+    bf::remove_all(TEST_DATA_DIR);
     global_file_mgr_ = std::make_unique<File_Namespace::GlobalFileMgr>(
         0, std::make_shared<ForeignStorageInterface>(), TEST_DATA_DIR, 0);
   }
@@ -458,7 +994,10 @@ TEST_F(FileMgrTest, capped_metadata) {
 
 class DataCompactionTest : public FileMgrTest {
  protected:
-  void SetUp() override { initializeGlobalFileMgr(); }
+  void SetUp() override {
+    TearDown();
+    initializeGlobalFileMgr();
+  }
 
   void TearDown() override {
     File_Namespace::FileMgr::setNumPagesPerDataFile(
@@ -1056,7 +1595,6 @@ TEST_F(MaxRollbackEpochTest, WriteEmptyBufferAndMultipleEpochVersions) {
 }
 
 constexpr char file_mgr_path[] = "./FileMgrTestDir";
-namespace bf = boost::filesystem;
 
 class FileMgrUnitTest : public testing::Test {
  protected:
@@ -1128,7 +1666,7 @@ TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedAppendPages) {
 class RebrandMigrationTest : public FileMgrUnitTest {
  protected:
   void setFileMgrVersion(int32_t version_number) {
-    const auto table_data_dir = boost::filesystem::path(file_mgr_path) / "table_1_1";
+    const auto table_data_dir = bf::path(file_mgr_path) / "table_1_1";
     const auto filename = table_data_dir / "filemgr_version";
     std::ofstream version_file{filename.string()};
     version_file.write(reinterpret_cast<char*>(&version_number), sizeof(int32_t));
@@ -1136,7 +1674,7 @@ class RebrandMigrationTest : public FileMgrUnitTest {
   }
 
   int32_t getFileMgrVersion() {
-    const auto table_data_dir = boost::filesystem::path(file_mgr_path) / "table_1_1";
+    const auto table_data_dir = bf::path(file_mgr_path) / "table_1_1";
     const auto filename = table_data_dir / "filemgr_version";
     std::ifstream version_file{filename.string()};
     int32_t version_number;
@@ -1151,29 +1689,29 @@ TEST_F(RebrandMigrationTest, ExistingLegacyDataFiles) {
   constexpr int32_t db_id{1};
   constexpr int32_t table_id{1};
   global_file_mgr->closeFileMgr(db_id, table_id);
-  const auto table_data_dir = boost::filesystem::path(file_mgr_path) / "table_1_1";
+  const auto table_data_dir = bf::path(file_mgr_path) / "table_1_1";
   const auto legacy_data_file_path =
       table_data_dir / ("0." + std::to_string(page_size_) + ".mapd");
   const auto new_data_file_path =
       table_data_dir / ("0." + std::to_string(page_size_) + ".data");
   const auto legacy_metadata_file_path =
-      table_data_dir / ("1." + std::to_string(METADATA_PAGE_SIZE) + ".mapd");
+      table_data_dir / ("1." + std::to_string(DEFAULT_METADATA_PAGE_SIZE) + ".mapd");
   const auto new_metadata_file_path =
-      table_data_dir / ("1." + std::to_string(METADATA_PAGE_SIZE) + ".data");
+      table_data_dir / ("1." + std::to_string(DEFAULT_METADATA_PAGE_SIZE) + ".data");
 
-  if (boost::filesystem::exists(legacy_data_file_path)) {
-    boost::filesystem::remove(legacy_data_file_path);
+  if (bf::exists(legacy_data_file_path)) {
+    bf::remove(legacy_data_file_path);
   }
 
-  if (boost::filesystem::exists(legacy_metadata_file_path)) {
-    boost::filesystem::remove(legacy_metadata_file_path);
+  if (bf::exists(legacy_metadata_file_path)) {
+    bf::remove(legacy_metadata_file_path);
   }
 
-  ASSERT_TRUE(boost::filesystem::exists(new_data_file_path));
-  boost::filesystem::rename(new_data_file_path, legacy_data_file_path);
+  ASSERT_TRUE(bf::exists(new_data_file_path));
+  bf::rename(new_data_file_path, legacy_data_file_path);
 
-  ASSERT_TRUE(boost::filesystem::exists(new_metadata_file_path));
-  boost::filesystem::rename(new_metadata_file_path, legacy_metadata_file_path);
+  ASSERT_TRUE(bf::exists(new_metadata_file_path));
+  bf::rename(new_metadata_file_path, legacy_metadata_file_path);
 
   setFileMgrVersion(1);
   ASSERT_EQ(getFileMgrVersion(), 1);
@@ -1181,44 +1719,44 @@ TEST_F(RebrandMigrationTest, ExistingLegacyDataFiles) {
   global_file_mgr->getFileMgr(db_id, table_id);
   ASSERT_EQ(getFileMgrVersion(), 2);
 
-  ASSERT_TRUE(boost::filesystem::exists(new_data_file_path));
-  ASSERT_TRUE(boost::filesystem::is_regular_file(new_data_file_path));
+  ASSERT_TRUE(bf::exists(new_data_file_path));
+  ASSERT_TRUE(bf::is_regular_file(new_data_file_path));
 
-  ASSERT_TRUE(boost::filesystem::exists(new_metadata_file_path));
-  ASSERT_TRUE(boost::filesystem::is_regular_file(new_metadata_file_path));
+  ASSERT_TRUE(bf::exists(new_metadata_file_path));
+  ASSERT_TRUE(bf::is_regular_file(new_metadata_file_path));
 
-  boost::filesystem::canonical(legacy_data_file_path);
-  ASSERT_TRUE(boost::filesystem::exists(legacy_data_file_path));
-  ASSERT_TRUE(boost::filesystem::is_symlink(legacy_data_file_path));
+  bf::canonical(legacy_data_file_path);
+  ASSERT_TRUE(bf::exists(legacy_data_file_path));
+  ASSERT_TRUE(bf::is_symlink(legacy_data_file_path));
 
-  ASSERT_TRUE(boost::filesystem::exists(legacy_metadata_file_path));
-  ASSERT_TRUE(boost::filesystem::is_symlink(legacy_metadata_file_path));
+  ASSERT_TRUE(bf::exists(legacy_metadata_file_path));
+  ASSERT_TRUE(bf::is_symlink(legacy_metadata_file_path));
 }
 
 TEST_F(RebrandMigrationTest, NewDataFiles) {
   initializeGFM(std::make_shared<ForeignStorageInterface>(), 1);
 
-  const auto table_data_dir = boost::filesystem::path(file_mgr_path) / "table_1_1";
+  const auto table_data_dir = bf::path(file_mgr_path) / "table_1_1";
   const auto legacy_data_file_path =
       table_data_dir / ("0." + std::to_string(page_size_) + ".mapd");
   const auto new_data_file_path =
       table_data_dir / ("0." + std::to_string(page_size_) + ".data");
   const auto legacy_metadata_file_path =
-      table_data_dir / ("1." + std::to_string(METADATA_PAGE_SIZE) + ".mapd");
+      table_data_dir / ("1." + std::to_string(DEFAULT_METADATA_PAGE_SIZE) + ".mapd");
   const auto new_metadata_file_path =
-      table_data_dir / ("1." + std::to_string(METADATA_PAGE_SIZE) + ".data");
+      table_data_dir / ("1." + std::to_string(DEFAULT_METADATA_PAGE_SIZE) + ".data");
 
-  ASSERT_TRUE(boost::filesystem::exists(new_data_file_path));
-  ASSERT_TRUE(boost::filesystem::is_regular_file(new_data_file_path));
+  ASSERT_TRUE(bf::exists(new_data_file_path));
+  ASSERT_TRUE(bf::is_regular_file(new_data_file_path));
 
-  ASSERT_TRUE(boost::filesystem::exists(new_metadata_file_path));
-  ASSERT_TRUE(boost::filesystem::is_regular_file(new_metadata_file_path));
+  ASSERT_TRUE(bf::exists(new_metadata_file_path));
+  ASSERT_TRUE(bf::is_regular_file(new_metadata_file_path));
 
-  ASSERT_TRUE(boost::filesystem::exists(legacy_data_file_path));
-  ASSERT_TRUE(boost::filesystem::is_symlink(legacy_data_file_path));
+  ASSERT_TRUE(bf::exists(legacy_data_file_path));
+  ASSERT_TRUE(bf::is_symlink(legacy_data_file_path));
 
-  ASSERT_TRUE(boost::filesystem::exists(legacy_metadata_file_path));
-  ASSERT_TRUE(boost::filesystem::is_symlink(legacy_metadata_file_path));
+  ASSERT_TRUE(bf::exists(legacy_metadata_file_path));
+  ASSERT_TRUE(bf::is_symlink(legacy_metadata_file_path));
 }
 
 int main(int argc, char** argv) {

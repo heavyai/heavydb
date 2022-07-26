@@ -41,7 +41,8 @@ FileBuffer::FileBuffer(FileMgr* fm,
                        const size_t initialSize)
     : AbstractBuffer(fm->getDeviceId())
     , fm_(fm)
-    , metadataPages_(METADATA_PAGE_SIZE)
+    , metadataPageSize_(fm_->getMetadataPageSize())
+    , metadataPages_(metadataPageSize_)
     , pageSize_(pageSize)
     , chunkKey_(chunkKey) {
   // Create a new FileBuffer
@@ -71,7 +72,8 @@ FileBuffer::FileBuffer(FileMgr* fm,
                        const size_t initialSize)
     : AbstractBuffer(fm->getDeviceId(), sqlType)
     , fm_(fm)
-    , metadataPages_(METADATA_PAGE_SIZE)
+    , metadataPageSize_(fm->getMetadataPageSize())
+    , metadataPages_(metadataPageSize_)
     , pageSize_(pageSize)
     , chunkKey_(chunkKey) {
   CHECK(fm_);
@@ -85,7 +87,8 @@ FileBuffer::FileBuffer(FileMgr* fm,
                        const std::vector<HeaderInfo>::const_iterator& headerEndIt)
     : AbstractBuffer(fm->getDeviceId())
     , fm_(fm)
-    , metadataPages_(METADATA_PAGE_SIZE)
+    , metadataPageSize_(fm->getMetadataPageSize())
+    , metadataPages_(metadataPageSize_)
     , pageSize_(0)
     , chunkKey_(chunkKey) {
   // We are being assigned an existing FileBuffer on disk
@@ -425,14 +428,14 @@ void FileBuffer::writeHeader(Page& page,
   header[intHeaderSize - 2] = pageId;
   header[intHeaderSize - 1] = epoch;
   FileInfo* fileInfo = fm_->getFileInfoForFileId(page.fileId);
-  size_t pageSize = writeMetadata ? METADATA_PAGE_SIZE : pageSize_;
+  size_t pageSize = writeMetadata ? metadataPageSize_ : pageSize_;
   fileInfo->write(
       page.pageNum * pageSize, (intHeaderSize) * sizeof(int32_t), (int8_t*)&header[0]);
 }
 
 void FileBuffer::readMetadata(const Page& page) {
   FILE* f = fm_->getFileForFileId(page.fileId);
-  fseek(f, page.pageNum * METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
+  fseek(f, page.pageNum * metadataPageSize_ + reservedHeaderSize_, SEEK_SET);
   fread((int8_t*)&pageSize_, sizeof(size_t), 1, f);
   fread((int8_t*)&size_, sizeof(size_t), 1, f);
   vector<int32_t> typeData(
@@ -459,10 +462,10 @@ void FileBuffer::readMetadata(const Page& page) {
 void FileBuffer::writeMetadata(const int32_t epoch) {
   // Right now stats page is size_ (in bytes), bufferType, encodingType,
   // encodingDataType, numElements
-  Page page = fm_->requestFreePage(METADATA_PAGE_SIZE, true);
+  Page page = fm_->requestFreePage(metadataPageSize_, true);
   writeHeader(page, -1, epoch, true);
   FILE* f = fm_->getFileForFileId(page.fileId);
-  fseek(f, page.pageNum * METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
+  fseek(f, page.pageNum * metadataPageSize_ + reservedHeaderSize_, SEEK_SET);
   fwrite((int8_t*)&pageSize_, sizeof(size_t), 1, f);
   fwrite((int8_t*)&size_, sizeof(size_t), 1, f);
   vector<int32_t> typeData(

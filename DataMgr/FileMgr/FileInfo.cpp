@@ -214,15 +214,15 @@ int32_t FileInfo::getFreePage() {
   return pageNum;
 }
 
-void FileInfo::print(bool pagesummary) {
-  std::cout << "File: " << fileId << std::endl;
-  std::cout << "Size: " << size() << std::endl;
-  std::cout << "Used: " << used() << std::endl;
-  std::cout << "Free: " << available() << std::endl;
-  if (!pagesummary) {
-    return;
-  }
+std::string FileInfo::print() const {
+  std::stringstream ss;
+  ss << "File: " << fileId << std::endl;
+  ss << "Size: " << size() << std::endl;
+  ss << "Used: " << used() << std::endl;
+  ss << "Free: " << available() << std::endl;
+  return ss.str();
 }
+
 int32_t FileInfo::syncToDisk() {
   std::lock_guard<std::mutex> lock(readWriteMutex_);
   if (isDirty) {

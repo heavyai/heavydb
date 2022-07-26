@@ -34,7 +34,6 @@ using namespace Data_Namespace;
 
 #define NUM_METADATA 10
 #define METADATA_VERSION 0
-#define METADATA_PAGE_SIZE 4096
 
 namespace File_Namespace {
 
@@ -190,6 +189,11 @@ class FileBuffer : public AbstractBuffer {
 
   FileMgr* fm_;  // a reference to FileMgr is needed for writing to new pages in available
                  // files
+  // pageSize_ is non-const because it can be read from a metadata file to create a
+  // non-standard page size. metadataPageSize_ is const because we need to know what the
+  // metadata page size is in order to know which files are metadata files (and therefore
+  // determine page size).  This is set earlier in FileMgr construction.
+  const size_t metadataPageSize_;
   MultiPage metadataPages_;
   std::vector<MultiPage> multiPages_;
   size_t pageSize_;

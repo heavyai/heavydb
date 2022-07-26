@@ -182,7 +182,7 @@ class CachingFileMgr : public FileMgr {
   static size_t getMinimumSize() {
     // Currently the minimum default size is based on the metadata file size and
     // percentage usage.
-    return (METADATA_PAGE_SIZE * DEFAULT_NUM_PAGES_PER_METADATA_FILE) /
+    return (DEFAULT_METADATA_PAGE_SIZE * DEFAULT_NUM_PAGES_PER_METADATA_FILE) /
            METADATA_FILE_SPACE_PERCENTAGE;
   }
 
@@ -193,16 +193,14 @@ class CachingFileMgr : public FileMgr {
   // Simple getters.
   inline MgrType getMgrType() override { return CACHING_FILE_MGR; };
   inline std::string getStringMgrType() override { return ToString(CACHING_FILE_MGR); }
-  inline size_t getDefaultPageSize() { return defaultPageSize_; }
+  inline size_t getPageSize() { return page_size_; }
   inline size_t getMaxSize() override { return max_size_; }
   inline size_t getMaxDataFiles() const { return max_num_data_files_; }
   inline size_t getMaxMetaFiles() const { return max_num_meta_files_; }
   inline size_t getMaxWrapperSize() const { return max_wrapper_space_; }
-  inline size_t getDataFileSize() const {
-    return defaultPageSize_ * num_pages_per_data_file_;
-  }
+  inline size_t getDataFileSize() const { return page_size_ * num_pages_per_data_file_; }
   inline size_t getMetadataFileSize() const {
-    return METADATA_PAGE_SIZE * num_pages_per_metadata_file_;
+    return metadata_page_size_ * num_pages_per_metadata_file_;
   }
 
   size_t getNumDataFiles() const;

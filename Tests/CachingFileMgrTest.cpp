@@ -59,7 +59,8 @@ class CachingFileMgrTest : public testing::Test {
   static constexpr size_t data_file_size_ =
       page_size_ * fn::CachingFileMgr::DEFAULT_NUM_PAGES_PER_DATA_FILE;
   static constexpr size_t meta_file_size_ =
-      METADATA_PAGE_SIZE * fn::CachingFileMgr::DEFAULT_NUM_PAGES_PER_METADATA_FILE;
+      DEFAULT_METADATA_PAGE_SIZE *
+      fn::CachingFileMgr::DEFAULT_NUM_PAGES_PER_METADATA_FILE;
   static constexpr size_t cache_size_ = fn::DiskCacheConfig::DEFAULT_MAX_SIZE;
   static constexpr int32_t db_ = 1, tb_ = 1;
   const ChunkKey key_{db_, tb_, 1, 1};
@@ -507,7 +508,7 @@ TEST_F(SizeTest, MetaSpace) {
   auto cfm = initializeCFM();
   ASSERT_EQ(cfm->getMetadataSpaceReservedByTable(1, 1), 0U);
   writeMetaPages(*cfm, 1, 1, 2);
-  ASSERT_EQ(cfm->getMetadataSpaceReservedByTable(1, 1), METADATA_PAGE_SIZE * 2U);
+  ASSERT_EQ(cfm->getMetadataSpaceReservedByTable(1, 1), DEFAULT_METADATA_PAGE_SIZE * 2U);
 }
 
 TEST_F(SizeTest, WrapperSpace) {

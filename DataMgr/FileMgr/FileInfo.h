@@ -60,8 +60,8 @@ struct FileInfo {
   size_t numPages;             /// the number of pages in the file
   bool isDirty{false};         // True if writes have occured since last sync
   std::set<size_t> freePages;  /// set of page numbers of free pages
-  std::mutex freePagesMutex_;
-  std::mutex readWriteMutex_;
+  mutable std::mutex freePagesMutex_;
+  mutable std::mutex readWriteMutex_;
 
   /// Constructor
   FileInfo(FileMgr* fileMgr,
@@ -85,8 +85,9 @@ struct FileInfo {
   size_t read(const size_t offset, const size_t size, int8_t* buf);
 
   void openExistingFile(std::vector<HeaderInfo>& headerVec);
+
   /// Prints a summary of the file to stdout
-  void print(bool pagesummary);
+  std::string print() const;
 
   /// Returns the number of bytes used by the file
   inline size_t size() const { return pageSize * numPages; }
@@ -96,16 +97,21 @@ struct FileInfo {
   int32_t syncToDisk();
 
   /// Returns the number of free bytes available
-  inline size_t available() { return freePages.size() * pageSize; }
+  inline size_t available() const { return numFreePages() * pageSize; }
 
   /// Returns the number of free pages available
-  inline size_t numFreePages() {
+  inline size_t numFreePages() const {
     std::lock_guard<std::mutex> lock(freePagesMutex_);
     return freePages.size();
   }
 
+  inline std::set<size_t> getFreePages() const {
+    std::lock_guard<std::mutex> lock(freePagesMutex_);
+    return freePages;
+  }
+
   /// Returns the amount of used bytes; size() - available()
-  inline size_t used() { return size() - available(); }
+  inline size_t used() const { return size() - available(); }
 
   void freePageImmediate(int32_t page_num);
   void recoverPage(const ChunkKey& chunk_key, int32_t page_num);

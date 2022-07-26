@@ -156,22 +156,20 @@ class FileMgr : public AbstractBufferMgr {  // implements
 
  public:
   /// Constructor
-  FileMgr(const int32_t deviceId,
+  FileMgr(const int32_t device_id,
           GlobalFileMgr* gfm,
-          const TablePair fileMgrKey,
+          const TablePair file_mgr_key,
           const int32_t max_rollback_epochs = -1,
           const size_t num_reader_threads = 0,
-          const int32_t epoch = -1,
-          const size_t defaultPageSize = DEFAULT_PAGE_SIZE);
+          const int32_t epoch = -1);
 
   // used only to initialize enough to drop or to get basic metadata
-  FileMgr(const int32_t deviceId,
+  FileMgr(const int32_t device_id,
           GlobalFileMgr* gfm,
-          const TablePair fileMgrKey,
-          const size_t defaultPageSize,
-          const bool runCoreInit);
+          const TablePair file_mgr_key,
+          const bool run_core_init);
 
-  FileMgr(GlobalFileMgr* gfm, const size_t defaultPageSize, std::string basePath);
+  FileMgr(GlobalFileMgr* gfm, std::string basePath);
 
   /// Destructor
   ~FileMgr() override;
@@ -364,6 +362,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
    **/
   inline virtual bool failOnReadError() const { return true; }
 
+  inline size_t getPageSize() const { return page_size_; }
+  inline size_t getMetadataPageSize() const { return metadata_page_size_; }
+
   // Used to describe the manager in logging and error messages.
   virtual std::string describeSelf() const;
 
@@ -390,7 +391,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
 
  protected:
   // Used to initialize CachingFileMgr.
-  FileMgr();
+  FileMgr(const size_t defaultPageSize, const size_t defaultMetadataPageSize);
 
   int32_t maxRollbackEpochs_;
   std::string fileMgrBasePath_;  /// The OS file system path containing files related to
@@ -399,10 +400,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
       files_;                   /// A map of files accessible via a file identifier.
   PageSizeFileMMap fileIndex_;  /// Maps page sizes to FileInfo objects.
   size_t num_reader_threads_;   /// number of threads used when loading data
-  size_t defaultPageSize_;
-  unsigned nextFileId_;  /// the index of the next file id
-  int32_t db_version_;   /// DB version from dbmeta file, should be compatible with
-                         /// GlobalFileMgr::omnisci_db_version_
+  unsigned nextFileId_;         /// the index of the next file id
+  int32_t db_version_;          /// DB version from dbmeta file, should be compatible with
+                                /// GlobalFileMgr::omnisci_db_version_
   int32_t fileMgrVersion_;
   const int32_t latestFileMgrVersion_{2};
   FILE* DBMetaFile_ = nullptr;  /// pointer to DB level metadata
@@ -526,6 +526,14 @@ class FileMgr : public AbstractBufferMgr {  // implements
   Epoch epoch_;
   bool epochIsCheckpointed_ = true;
   FILE* epochFile_ = nullptr;
+
+ protected:
+  // gfm_ needs to be defined before the page_size_ because it may be used to
+  // initialize it.  However, we also want it to remain private, as the CachingFileMgr
+  // should not be allowed to access it (it will be null). page_size_ should be
+  // be protected.
+  const size_t page_size_;
+  const size_t metadata_page_size_;
 };
 
 }  // namespace File_Namespace

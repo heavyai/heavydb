@@ -320,12 +320,9 @@ void DataMgr::convertDB(const std::string basePath) {
   gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
   CHECK(gfm);
 
-  size_t defaultPageSize = gfm->getDefaultPageSize();
   LOG(INFO) << "Database conversion started.";
-  File_Namespace::FileMgr* fm_base_db = new File_Namespace::FileMgr(
-      gfm,
-      defaultPageSize,
-      basePath);  // this call also copies data into new DB structure
+  // this call also copies data into new DB structure
+  File_Namespace::FileMgr* fm_base_db = new File_Namespace::FileMgr(gfm, basePath);
   delete fm_base_db;
 
   /* write content of DB into newly created/converted DB structure & location */

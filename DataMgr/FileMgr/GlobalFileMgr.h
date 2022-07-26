@@ -55,11 +55,12 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
 
  public:
   /// Constructor
-  GlobalFileMgr(const int32_t deviceId,
+  GlobalFileMgr(const int32_t device_id,
                 std::shared_ptr<ForeignStorageInterface> fsi,
-                std::string basePath = ".",
+                std::string base_path = ".",
                 const size_t num_reader_threads = 0,
-                const size_t defaultPageSize = DEFAULT_PAGE_SIZE);
+                const size_t page_size = DEFAULT_PAGE_SIZE,
+                const size_t metadata_page_size = DEFAULT_METADATA_PAGE_SIZE);
 
   ~GlobalFileMgr() override {}
 
@@ -167,7 +168,8 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   }
 
   std::string getBasePath() const { return basePath_; }
-  size_t getDefaultPageSize() const { return defaultPageSize_; }
+  size_t getPageSize() const { return page_size_; }
+  size_t getMetadataPageSize() const { return metadata_page_size_; }
 
   void writeFileMgrData(FileMgr* fileMgr = 0);
 
@@ -203,7 +205,8 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
                * tables except of the one for which the value of the epoch has been reset
                * using --start-epoch option at start up to rollback this table's updates.
                */
-  size_t defaultPageSize_;  /// default page size, used to set FileMgr defaultPageSize_
+  const size_t page_size_;           /// used to set FileMgr page_size_
+  const size_t metadata_page_size_;  /// used to set FileMgr metadta_page_size_
   // bool isDirty_;               /// true if metadata changed since last writeState()
 
   int32_t omnisci_db_version_;  /// DB version for DataMgr DS and corresponding file

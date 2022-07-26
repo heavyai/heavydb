@@ -39,19 +39,20 @@ using namespace std;
 
 namespace File_Namespace {
 
-GlobalFileMgr::GlobalFileMgr(const int32_t deviceId,
+GlobalFileMgr::GlobalFileMgr(const int32_t device_id,
                              std::shared_ptr<ForeignStorageInterface> fsi,
-                             std::string basePath,
+                             std::string base_path,
                              const size_t num_reader_threads,
-                             const size_t defaultPageSize)
-    : AbstractBufferMgr(deviceId)
+                             const size_t page_size,
+                             const size_t metadata_page_size)
+    : AbstractBufferMgr(device_id)
     , fsi_(fsi)
-    , basePath_(basePath)
+    , basePath_(base_path)
     , num_reader_threads_(num_reader_threads)
-    , epoch_(-1)
-    ,  // set the default epoch for all tables corresponding to the time of
-       // last checkpoint
-    defaultPageSize_(defaultPageSize) {
+    , epoch_(-1)  // set the default epoch for all tables corresponding to the time of
+                  // last checkpoint
+    , page_size_(page_size)
+    , metadata_page_size_(metadata_page_size) {
   omnisci_db_version_ = 2;
   // DS changes also triggered by individual FileMgr per table project (release 2.1.0)
   dbConvert_ = false;
@@ -168,8 +169,7 @@ void GlobalFileMgr::setFileMgrParams(const int32_t db_id,
       file_mgr_key,
       max_rollback_epochs,
       num_reader_threads_,
-      file_mgr_params.epoch != -1 ? file_mgr_params.epoch : epoch_,
-      defaultPageSize_);
+      file_mgr_params.epoch != -1 ? file_mgr_params.epoch : epoch_);
   CHECK(ownedFileMgrs_.insert(std::make_pair(file_mgr_key, s)).second);
   CHECK(allFileMgrs_.insert(std::make_pair(file_mgr_key, s.get())).second);
   max_rollback_epochs_per_table_[file_mgr_key] = max_rollback_epochs;
@@ -204,13 +204,8 @@ AbstractBufferMgr* GlobalFileMgr::getFileMgr(const int32_t db_id, const int32_t 
           max_rollback_epochs_per_table_.end()) {
         max_rollback_epochs = max_rollback_epochs_per_table_[file_mgr_key];
       }
-      auto s = std::make_shared<FileMgr>(0,
-                                         this,
-                                         file_mgr_key,
-                                         max_rollback_epochs,
-                                         num_reader_threads_,
-                                         epoch_,
-                                         defaultPageSize_);
+      auto s = std::make_shared<FileMgr>(
+          0, this, file_mgr_key, max_rollback_epochs, num_reader_threads_, epoch_);
       CHECK(ownedFileMgrs_.insert(std::make_pair(file_mgr_key, s)).second);
       CHECK(allFileMgrs_.insert(std::make_pair(file_mgr_key, s.get())).second);
       lazy_initialized_stats_.erase(file_mgr_key);
@@ -269,7 +264,7 @@ void GlobalFileMgr::removeTableRelatedDS(const int32_t db_id, const int32_t tb_i
     // spend the time initializing
     // initialize just enough to have to rename
     const auto file_mgr_key = std::make_pair(db_id, tb_id);
-    auto u = std::make_unique<FileMgr>(0, this, file_mgr_key, defaultPageSize_, true);
+    auto u = std::make_unique<FileMgr>(0, this, file_mgr_key, true);
     u->closeRemovePhysical();
   }
   // remove table related in-memory DS only if directory was removed successfully
@@ -292,7 +287,7 @@ void GlobalFileMgr::setTableEpoch(const int32_t db_id,
   // performed
   // Will call set_epoch with start_epoch internally
   auto u = std::make_unique<FileMgr>(
-      0, this, file_mgr_key, -1, num_reader_threads_, start_epoch, defaultPageSize_);
+      0, this, file_mgr_key, -1, num_reader_threads_, start_epoch);
   // remove the dummy one we built
   u.reset();
 }
@@ -307,7 +302,7 @@ size_t GlobalFileMgr::getTableEpoch(const int32_t db_id, const int32_t tb_id) {
   }
   // Do not do full init of table just to get table epoch, just check file instead
   const auto file_mgr_key = std::make_pair(db_id, tb_id);
-  auto u = std::make_unique<FileMgr>(0, this, file_mgr_key, defaultPageSize_, true);
+  auto u = std::make_unique<FileMgr>(0, this, file_mgr_key, true);
   const auto epoch = u->lastCheckpointedEpoch();
   u.reset();
   return epoch;
@@ -331,7 +326,7 @@ StorageStats GlobalFileMgr::getStorageStats(const int32_t db_id, const int32_t t
     return it->second;
   } else {
     // Do not do full init of table just to get storage stats, just check file instead
-    auto u = std::make_unique<FileMgr>(0, this, file_mgr_key, defaultPageSize_, true);
+    auto u = std::make_unique<FileMgr>(0, this, file_mgr_key, true);
     lazy_initialized_stats_[file_mgr_key] = u->getStorageStats();
     u.reset();
     return lazy_initialized_stats_[file_mgr_key];

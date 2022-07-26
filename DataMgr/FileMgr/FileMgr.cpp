@@ -44,64 +44,71 @@ using namespace std;
 
 namespace File_Namespace {
 
-FileMgr::FileMgr(const int32_t deviceId,
+FileMgr::FileMgr(const int32_t device_id,
                  GlobalFileMgr* gfm,
-                 const TablePair fileMgrKey,
-                 const int32_t maxRollbackEpochs,
+                 const TablePair file_mgr_key,
+                 const int32_t max_rollback_epochs,
                  const size_t num_reader_threads,
-                 const int32_t epoch,
-                 const size_t defaultPageSize)
-    : AbstractBufferMgr(deviceId)
-    , maxRollbackEpochs_(maxRollbackEpochs)
-    , defaultPageSize_(defaultPageSize)
+                 const int32_t epoch)
+    : AbstractBufferMgr(device_id)
+    , maxRollbackEpochs_(max_rollback_epochs)
     , nextFileId_(0)
     , gfm_(gfm)
-    , fileMgrKey_(fileMgrKey) {
+    , fileMgrKey_(file_mgr_key)
+    , page_size_(gfm->getPageSize())
+    , metadata_page_size_(gfm->getMetadataPageSize()) {
   init(num_reader_threads, epoch);
 }
 
 // used only to initialize enough to drop
-FileMgr::FileMgr(const int32_t deviceId,
+FileMgr::FileMgr(const int32_t device_id,
                  GlobalFileMgr* gfm,
-                 const TablePair fileMgrKey,
-                 const size_t defaultPageSize,
-                 const bool runCoreInit)
-    : AbstractBufferMgr(deviceId)
+                 const TablePair file_mgr_key,
+                 const bool run_core_init)
+    : AbstractBufferMgr(device_id)
     , maxRollbackEpochs_(-1)
-    , defaultPageSize_(defaultPageSize)
     , nextFileId_(0)
     , gfm_(gfm)
-    , fileMgrKey_(fileMgrKey) {
+    , fileMgrKey_(file_mgr_key)
+    , page_size_(gfm->getPageSize())
+    , metadata_page_size_(gfm->getMetadataPageSize()) {
   const std::string fileMgrDirPrefix("table");
-  const std::string FileMgrDirDelim("_");
-  fileMgrBasePath_ = (gfm_->getBasePath() + fileMgrDirPrefix + FileMgrDirDelim +
+  const std::string fileMgrDirDelim("_");
+  fileMgrBasePath_ = (gfm_->getBasePath() + fileMgrDirPrefix + fileMgrDirDelim +
                       std::to_string(fileMgrKey_.first) +                     // db_id
-                      FileMgrDirDelim + std::to_string(fileMgrKey_.second));  // tb_id
+                      fileMgrDirDelim + std::to_string(fileMgrKey_.second));  // tb_id
   epochFile_ = nullptr;
   files_.clear();
-  if (runCoreInit) {
+  if (run_core_init) {
     coreInit();
   }
 }
 
-FileMgr::FileMgr(GlobalFileMgr* gfm, const size_t defaultPageSize, std::string basePath)
+FileMgr::FileMgr(GlobalFileMgr* gfm, std::string base_path)
     : AbstractBufferMgr(0)
     , maxRollbackEpochs_(-1)
-    , fileMgrBasePath_(basePath)
-    , defaultPageSize_(defaultPageSize)
+    , fileMgrBasePath_(base_path)
     , nextFileId_(0)
     , gfm_(gfm)
-    , fileMgrKey_(0, 0) {
-  init(basePath, -1);
+    , fileMgrKey_(0, 0)
+    , page_size_(gfm->getPageSize())
+    , metadata_page_size_(gfm->getMetadataPageSize()) {
+  init(base_path, -1);
 }
 
 // For testing purposes only
-FileMgr::FileMgr(const int epoch) : AbstractBufferMgr(-1) {
+FileMgr::FileMgr(const int epoch)
+    : AbstractBufferMgr(-1)
+    , page_size_(DEFAULT_PAGE_SIZE)
+    , metadata_page_size_(DEFAULT_METADATA_PAGE_SIZE) {
   epoch_.ceiling(epoch);
 }
 
 // Used to initialize CachingFileMgr.
-FileMgr::FileMgr() : AbstractBufferMgr(0) {}
+FileMgr::FileMgr(const size_t page_size, const size_t metadata_page_size)
+    : AbstractBufferMgr(0)
+    , page_size_(page_size)
+    , metadata_page_size_(metadata_page_size) {}
 
 FileMgr::~FileMgr() {
   // free memory used by FileInfo objects
@@ -320,9 +327,10 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
 namespace {
 bool is_metadata_file(size_t file_size,
                       size_t page_size,
+                      size_t metadata_page_size,
                       size_t num_pages_per_metadata_file) {
-  return (file_size == (METADATA_PAGE_SIZE * num_pages_per_metadata_file) &&
-          page_size == METADATA_PAGE_SIZE);
+  return (file_size == (metadata_page_size * num_pages_per_metadata_file) &&
+          page_size == metadata_page_size);
 }
 }  // namespace
 
@@ -356,6 +364,7 @@ void FileMgr::setDataAndMetadataFileStats(StorageStats& storage_stats) const {
         if (file_metadata.is_data_file) {
           if (is_metadata_file(file_metadata.file_size,
                                file_metadata.page_size,
+                               metadata_page_size_,
                                num_pages_per_metadata_file_)) {
             storage_stats.metadata_file_count++;
             storage_stats.total_metadata_file_size += file_metadata.file_size;
@@ -378,8 +387,10 @@ void FileMgr::setDataAndMetadataFileStats(StorageStats& storage_stats) const {
     // FileInfo objects and getting metadata from there
     for (const auto& file_info_entry : files_) {
       const auto file_info = file_info_entry.second;
-      if (is_metadata_file(
-              file_info->size(), file_info->pageSize, num_pages_per_metadata_file_)) {
+      if (is_metadata_file(file_info->size(),
+                           file_info->pageSize,
+                           metadata_page_size_,
+                           num_pages_per_metadata_file_)) {
         storage_stats.metadata_file_count++;
         storage_stats.total_metadata_file_size +=
             file_info->pageSize * file_info->numPages;
@@ -576,18 +587,16 @@ void FileMgr::copyPage(Page& srcPage,
                        const size_t reservedHeaderSize,
                        const size_t numBytes,
                        const size_t offset) {
-  CHECK(offset + numBytes <= defaultPageSize_);
+  CHECK(offset + numBytes <= page_size_);
   FileInfo* srcFileInfo = getFileInfoForFileId(srcPage.fileId);
   FileInfo* destFileInfo = destFileMgr->getFileInfoForFileId(destPage.fileId);
   int8_t* buffer = reinterpret_cast<int8_t*>(checked_malloc(numBytes));
 
   size_t bytesRead = srcFileInfo->read(
-      srcPage.pageNum * defaultPageSize_ + offset + reservedHeaderSize, numBytes, buffer);
+      srcPage.pageNum * page_size_ + offset + reservedHeaderSize, numBytes, buffer);
   CHECK(bytesRead == numBytes);
   size_t bytesWritten = destFileInfo->write(
-      destPage.pageNum * defaultPageSize_ + offset + reservedHeaderSize,
-      numBytes,
-      buffer);
+      destPage.pageNum * page_size_ + offset + reservedHeaderSize, numBytes, buffer);
   CHECK(bytesWritten == numBytes);
   ::free(buffer);
 }
@@ -716,7 +725,7 @@ FileBuffer* FileMgr::createBufferUnlocked(const ChunkKey& key,
                                           const size_t num_bytes) {
   size_t actual_page_size = page_size;
   if (actual_page_size == 0) {
-    actual_page_size = defaultPageSize_;
+    actual_page_size = page_size_;
   }
   chunkIndex_[key] = allocateBuffer(actual_page_size, key, num_bytes);
   return (chunkIndex_[key]);
