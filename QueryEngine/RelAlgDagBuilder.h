@@ -1747,13 +1747,19 @@ class RelTableFunction : public RelAlgNode {
                    RelAlgInputs inputs,
                    std::vector<std::string>& fields,
                    std::vector<const Rex*> col_inputs,
+                   hdk::ir::ExprPtrVector col_input_exprs,
                    std::vector<std::unique_ptr<const RexScalar>>& table_func_inputs,
-                   std::vector<std::unique_ptr<const RexScalar>>& target_exprs)
+                   hdk::ir::ExprPtrVector table_func_input_exprs,
+                   std::vector<std::unique_ptr<const RexScalar>>& target_exprs,
+                   std::vector<TargetMetaInfo> tuple_type)
       : function_name_(function_name)
       , fields_(fields)
       , col_inputs_(col_inputs)
+      , col_input_exprs_(col_input_exprs)
       , table_func_inputs_(std::move(table_func_inputs))
-      , target_exprs_(std::move(target_exprs)) {
+      , table_func_input_exprs_(table_func_input_exprs)
+      , target_exprs_(std::move(target_exprs))
+      , tuple_type_(std::move(tuple_type)) {
     for (const auto& input : inputs) {
       inputs_.emplace_back(input);
     }
@@ -1768,10 +1774,12 @@ class RelTableFunction : public RelAlgNode {
 
   size_t size() const override { return target_exprs_.size(); }
 
-  const RexScalar* getTargetExpr(size_t idx) const {
-    CHECK_LT(idx, target_exprs_.size());
-    return target_exprs_[idx].get();
-  }
+  // const RexScalar* getTargetExpr(size_t idx) const {
+  //  CHECK_LT(idx, target_exprs_.size());
+  //  return target_exprs_[idx].get();
+  //}
+
+  const std::vector<TargetMetaInfo>& getTupleType() const { return tuple_type_; }
 
   size_t getTableFuncInputsSize() const { return table_func_inputs_.size(); }
 
@@ -1847,11 +1855,14 @@ class RelTableFunction : public RelAlgNode {
   std::vector<const Rex*>
       col_inputs_;  // owned by `table_func_inputs_`, but allows picking out the specific
                     // input columns vs other table function inputs (e.g. literals)
+  hdk::ir::ExprPtrVector col_input_exprs_;
   std::vector<std::unique_ptr<const RexScalar>> table_func_inputs_;
+  hdk::ir::ExprPtrVector table_func_input_exprs_;
 
   std::vector<std::unique_ptr<const RexScalar>>
       target_exprs_;  // Note: these should all be RexRef but are stored as RexScalar for
                       // consistency
+  const std::vector<TargetMetaInfo> tuple_type_;
 };
 
 class RelLogicalValues : public RelAlgNode {

@@ -596,7 +596,9 @@ RelTableFunction::RelTableFunction(RelTableFunction const& rhs)
     , function_name_(rhs.function_name_)
     , fields_(rhs.fields_)
     , col_inputs_(rhs.col_inputs_)
+    , col_input_exprs_(rhs.col_input_exprs_)
     , table_func_inputs_(copyRexScalars(rhs.table_func_inputs_))
+    , table_func_input_exprs_(rhs.table_func_input_exprs_)
     , target_exprs_(copyRexScalars(rhs.target_exprs_)) {
   std::unordered_map<const Rex*, const Rex*> old_to_new_input;
   for (size_t i = 0; i < table_func_inputs_.size(); ++i) {
@@ -2809,6 +2811,19 @@ class RelAlgDispatcher {
     return ret;
   }
 
+  std::vector<TargetMetaInfo> parseTupleType(const rapidjson::Value& tuple_type_arr) {
+    CHECK(tuple_type_arr.IsArray());
+    std::vector<TargetMetaInfo> tuple_type;
+    for (auto tuple_type_arr_it = tuple_type_arr.Begin();
+         tuple_type_arr_it != tuple_type_arr.End();
+         ++tuple_type_arr_it) {
+      const auto component_type = parse_type(*tuple_type_arr_it);
+      const auto component_name = json_str(field(*tuple_type_arr_it, "name"));
+      tuple_type.emplace_back(component_name, component_type);
+    }
+    return tuple_type;
+  }
+
   std::shared_ptr<RelTableFunction> dispatchTableFunction(
       const rapidjson::Value& table_func_ra,
       RelAlgDagBuilder& root_dag_builder) {
@@ -2821,7 +2836,9 @@ class RelAlgDispatcher {
     CHECK_GE(operands.Size(), unsigned(0));
 
     std::vector<const Rex*> col_inputs;
+    hdk::ir::ExprPtrVector col_input_exprs;
     std::vector<std::unique_ptr<const RexScalar>> table_func_inputs;
+    hdk::ir::ExprPtrVector table_func_input_exprs;
     std::vector<std::string> fields;
 
     for (auto exprs_json_it = operands.Begin(); exprs_json_it != operands.End();
@@ -2849,6 +2866,10 @@ class RelAlgDispatcher {
               table_func_inputs.emplace_back(
                   std::make_unique<RexAbstractInput>(col_inputs.size()));
               col_inputs.emplace_back(table_func_inputs.back().get());
+
+              unsigned col_idx = static_cast<unsigned>(inputs[pos]->size() - i);
+              col_input_exprs.emplace_back(hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+                  getColumnType(inputs[pos].get(), col_idx), inputs[pos].get(), col_idx));
             }
             continue;
           }
@@ -2856,6 +2877,17 @@ class RelAlgDispatcher {
       }
       table_func_inputs.emplace_back(
           parse_scalar_expr(*exprs_json_it, db_id_, schema_provider_, root_dag_builder));
+      RANodeOutput ra_output;
+      for (auto& node : inputs) {
+        auto node_output = get_node_output(node.get());
+        ra_output.insert(ra_output.end(), node_output.begin(), node_output.end());
+      }
+      table_func_input_exprs.emplace_back(parse_expr(*exprs_json_it,
+                                                     table_func_inputs.back().get(),
+                                                     db_id_,
+                                                     schema_provider_,
+                                                     root_dag_builder,
+                                                     ra_output));
     }
 
     const auto& op_name = field(invocation, "op");
@@ -2863,10 +2895,8 @@ class RelAlgDispatcher {
 
     std::vector<std::unique_ptr<const RexScalar>> table_function_projected_outputs;
     const auto& row_types = field(table_func_ra, "rowType");
-    CHECK(row_types.IsArray());
-    CHECK_GE(row_types.Size(), unsigned(0));
-    const auto& row_types_array = row_types.GetArray();
-    for (size_t i = 0; i < row_types_array.Size(); i++) {
+    std::vector<TargetMetaInfo> tuple_type = parseTupleType(row_types);
+    for (size_t i = 0; i < tuple_type.size(); i++) {
       // We don't care about the type information in rowType -- replace each output with
       // a reference to be resolved later in the translator
       table_function_projected_outputs.emplace_back(std::make_unique<RexRef>(i));
@@ -2876,22 +2906,17 @@ class RelAlgDispatcher {
                                               inputs,
                                               fields,
                                               col_inputs,
+                                              std::move(col_input_exprs),
                                               table_func_inputs,
-                                              table_function_projected_outputs);
+                                              std::move(table_func_input_exprs),
+                                              table_function_projected_outputs,
+                                              std::move(tuple_type));
   }
 
   std::shared_ptr<RelLogicalValues> dispatchLogicalValues(
       const rapidjson::Value& logical_values_ra) {
     const auto& tuple_type_arr = field(logical_values_ra, "type");
-    CHECK(tuple_type_arr.IsArray());
-    std::vector<TargetMetaInfo> tuple_type;
-    for (auto tuple_type_arr_it = tuple_type_arr.Begin();
-         tuple_type_arr_it != tuple_type_arr.End();
-         ++tuple_type_arr_it) {
-      const auto component_type = parse_type(*tuple_type_arr_it);
-      const auto component_name = json_str(field(*tuple_type_arr_it, "name"));
-      tuple_type.emplace_back(component_name, component_type);
-    }
+    std::vector<TargetMetaInfo> tuple_type = parseTupleType(tuple_type_arr);
     const auto& inputs_arr = field(logical_values_ra, "inputs");
     CHECK(inputs_arr.IsArray());
     const auto& tuples_arr = field(logical_values_ra, "tuples");
@@ -3350,6 +3375,13 @@ SQLTypeInfo getColumnType(const RelAlgNode* node, size_t col_idx) {
     return values->getTupleType()[col_idx].get_type_info();
   }
 
+  // For table functions we can use its tuple type.
+  const auto table_fn = dynamic_cast<const RelTableFunction*>(node);
+  if (table_fn) {
+    CHECK_GT(table_fn->size(), col_idx);
+    return table_fn->getTupleType()[col_idx].get_type_info();
+  }
+
   // For projections type can be extracted from Exprs.
   const auto proj = dynamic_cast<const RelProject*>(node);
   if (proj) {
@@ -3399,7 +3431,7 @@ hdk::ir::ExprPtrVector getNodeExprs(const RelAlgNode* node) {
                aggregate->getAggregateExprs().end());
     return res;
   }
-  if (is_one_of<RelLogicalValues, RelLogicalUnion>(node)) {
+  if (is_one_of<RelLogicalValues, RelLogicalUnion, RelTableFunction>(node)) {
     return getNodeColumnRefs(node);
   }
   CHECK(false) << "Unexpected node: " << node->toString();
