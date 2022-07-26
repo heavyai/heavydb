@@ -957,6 +957,7 @@ class RelProject : public RelAlgNode {
       , hint_applied_(false)
       , hints_(std::make_unique<Hints>()) {
     inputs_.push_back(input);
+    CHECK_EQ(scalar_exprs_.size(), exprs_.size());
   }
 
   RelProject(RelProject const&);
@@ -965,6 +966,7 @@ class RelProject : public RelAlgNode {
                       hdk::ir::ExprPtrVector&& exprs) const {
     scalar_exprs_ = std::move(scalar_exprs);
     exprs_ = std::move(exprs);
+    CHECK_EQ(scalar_exprs_.size(), exprs_.size());
   }
 
   // True iff all the projected expressions are inputs. If true,
@@ -1019,11 +1021,18 @@ class RelProject : public RelAlgNode {
       std::optional<std::unordered_map<unsigned, unsigned>> old_to_new_index_map);
 
   void appendInput(std::string new_field_name,
-                   std::unique_ptr<const RexScalar> new_input);
+                   std::unique_ptr<const RexScalar> new_input,
+                   hdk::ir::ExprPtr expr);
 
   std::string toString() const override {
-    return cat(
-        ::typeName(this), "(", ::toString(scalar_exprs_), ", ", ::toString(fields_), ")");
+    return cat(::typeName(this),
+               "(",
+               ::toString(scalar_exprs_),
+               ", exprs=",
+               ::toString(exprs_),
+               ", ",
+               ::toString(fields_),
+               ")");
   }
 
   size_t toHash() const override {

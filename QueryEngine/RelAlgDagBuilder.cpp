@@ -170,9 +170,11 @@ void RelProject::replaceInput(
 }
 
 void RelProject::appendInput(std::string new_field_name,
-                             std::unique_ptr<const RexScalar> new_input) {
+                             std::unique_ptr<const RexScalar> new_input,
+                             hdk::ir::ExprPtr expr) {
   fields_.emplace_back(std::move(new_field_name));
   scalar_exprs_.emplace_back(std::move(new_input));
+  exprs_.emplace_back(std::move(expr));
 }
 
 RANodeOutput get_node_output(const RelAlgNode* ra_node) {
@@ -439,6 +441,7 @@ void RelCompound::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
 
 RelProject::RelProject(RelProject const& rhs)
     : RelAlgNode(rhs)
+    , exprs_(rhs.exprs_)
     , fields_(rhs.fields_)
     , hint_applied_(false)
     , hints_(std::make_unique<Hints>()) {
@@ -1225,6 +1228,7 @@ hdk::ir::ExprPtr parse_operator_expr(const rapidjson::Value& expr,
 }
 
 hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
+                            const RexScalar* rex,
                             int db_id,
                             SchemaProviderPtr schema_provider,
                             RelAlgDagBuilder& root_dag_builder,
@@ -1237,6 +1241,7 @@ hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
     return parse_literal_expr(expr);
   }
   if (expr.IsObject() && expr.HasMember("op")) {
+    /*
     const auto op_str = json_str(field(expr, "op"));
     if (op_str == std::string("CASE")) {
       return parse_case_expr(expr, db_id, schema_provider, root_dag_builder, ra_output);
@@ -1248,6 +1253,10 @@ hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
       //    parse_subquery(expr, db_id, schema_provider, root_dag_builder));
     }
     return parse_operator_expr(expr, db_id, schema_provider, root_dag_builder, ra_output);
+    */
+    auto dis_rex = disambiguate_rex(rex, ra_output);
+    RelAlgTranslator translator(root_dag_builder.config(), root_dag_builder.now(), false);
+    return translator.translateScalarRex(dis_rex.get());
   }
   throw QueryNotSupported("Expression node " + json_node_to_string(expr) +
                           " not supported");
@@ -1275,11 +1284,11 @@ std::unique_ptr<const RexOperator> disambiguate_operator(
   std::vector<std::unique_ptr<const RexScalar>> disambiguated_operands;
   for (size_t i = 0; i < rex_operator->size(); ++i) {
     auto operand = rex_operator->getOperand(i);
-    if (dynamic_cast<const RexSubQuery*>(operand)) {
-      disambiguated_operands.emplace_back(rex_operator->getOperandAndRelease(i));
-    } else {
-      disambiguated_operands.emplace_back(disambiguate_rex(operand, ra_output));
-    }
+    // if (dynamic_cast<const RexSubQuery*>(operand)) {
+    // disambiguated_operands.emplace_back(rex_operator->getOperandAndRelease(i));
+    //} else {
+    disambiguated_operands.emplace_back(disambiguate_rex(operand, ra_output));
+    //}
   }
   const auto rex_window_function_operator =
       dynamic_cast<const RexWindowFunctionOperator*>(rex_operator);
@@ -2201,7 +2210,9 @@ class RexInputBackpropagationVisitor : public RexDeepCopyVisitor {
         if (auto cur_project_node = dynamic_cast<const RelProject*>(cur_source_node)) {
           field_name = cur_project_node->getFieldName(cur_index);
         }
-        node_->appendInput(field_name, rex_input->deepCopy());
+        auto expr = hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+            getColumnType(cur_source_node, cur_index), cur_source_node, cur_index);
+        node_->appendInput(field_name, rex_input->deepCopy(), expr);
         auto res = std::make_unique<RexInput>(node_, node_->size() - 1);
         visitor_.addReplacement(rex_input, res.get());
         replacements_[std::make_pair(cur_source_node, cur_index)] = res.get();
@@ -2652,6 +2663,7 @@ class RelAlgDispatcher {
       scalar_exprs.emplace_back(
           parse_scalar_expr(*exprs_json_it, db_id_, schema_provider_, root_dag_builder));
       exprs.emplace_back(parse_expr(*exprs_json_it,
+                                    scalar_exprs.back().get(),
                                     db_id_,
                                     schema_provider_,
                                     root_dag_builder,
