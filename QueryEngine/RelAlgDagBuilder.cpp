@@ -3326,8 +3326,9 @@ SQLTypeInfo getColumnType(const RelAlgNode* node, size_t col_idx) {
     return scan->getColumnTypeBySpi(col_idx + 1);
   }
 
-  // For filter and sort we can propagate column type of their sources.
-  if (is_one_of<RelFilter, RelSort>(node)) {
+  // For filter, sort and union we can propagate column type of
+  // their sources.
+  if (is_one_of<RelFilter, RelSort, RelLogicalUnion>(node)) {
     return getColumnType(node->getInput(0), col_idx);
   }
 
@@ -3398,8 +3399,8 @@ hdk::ir::ExprPtrVector getNodeExprs(const RelAlgNode* node) {
                aggregate->getAggregateExprs().end());
     return res;
   }
-  if (auto values = dynamic_cast<const RelLogicalValues*>(node)) {
-    return getNodeColumnRefs(values);
+  if (is_one_of<RelLogicalValues, RelLogicalUnion>(node)) {
+    return getNodeColumnRefs(node);
   }
   CHECK(false) << "Unexpected node: " << node->toString();
   return {};
