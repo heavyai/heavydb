@@ -41,14 +41,11 @@ RelAlgNodePtr TestRelAlgDagBuilder::addProject(RelAlgNodePtr input,
   std::vector<std::unique_ptr<const RexScalar>> scalar_exprs;
   hdk::ir::ExprPtrVector exprs;
   auto input_cols = get_node_output(input.get());
-  auto scan = dynamic_cast<const RelScan*>(input.get());
-  auto& meta = input->getOutputMetainfo();
-  CHECK(scan || !meta.empty());
   for (auto col_idx : cols) {
     CHECK_LT((size_t)col_idx, input_cols.size());
     scalar_exprs.push_back(input_cols[col_idx].deepCopy());
-    SQLTypeInfo ti =
-        scan ? scan->getColumnTypeBySpi(col_idx + 1) : meta[col_idx].get_type_info();
+    SQLTypeInfo ti = getColumnType(input_cols[col_idx].getSourceNode(),
+                                   input_cols[col_idx].getIndex());
     exprs.push_back(hdk::ir::makeExpr<hdk::ir::ColumnRef>(
         ti, input_cols[col_idx].getSourceNode(), input_cols[col_idx].getIndex()));
   }
