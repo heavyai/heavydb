@@ -650,7 +650,7 @@ CountDistinctDescriptors init_count_distinct_descriptors(
       const auto it = ra_exe_unit.target_exprs_original_type_infos.find(i);
       if (it != ra_exe_unit.target_exprs_original_type_infos.end()) {
         const auto& original_target_expr_ti = it->second;
-        if (original_target_expr_ti.get_type() == kDATE &&
+        if (arg_ti.is_integer() && original_target_expr_ti.get_type() == kDATE &&
             original_target_expr_ti.get_compression() == kENCODING_DATE_IN_DAYS) {
           // manually encode the col range of date col if necessary
           // (see conditionally_change_arg_to_int_type function in RelAlgExecutor.cpp)
@@ -671,6 +671,9 @@ CountDistinctDescriptors init_count_distinct_descriptors(
             arg_range_info.max =
                 DateConverters::get_epoch_days_from_seconds(arg_range_info.max);
           }
+          // now we manually encode the value, so we need to invalidate bucket value
+          // i.e., 86000 -> 0, to correctly calculate the size of bitmap
+          arg_range_info.bucket = 0;
         }
       }
 
