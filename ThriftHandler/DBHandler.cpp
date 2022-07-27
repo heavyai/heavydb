@@ -7307,7 +7307,7 @@ ExecutionResult DBHandler::getQueries(
   CHECK(executor);
   auto sessions = (is_super_user ? sessions_store_->getAllSessions()
                                  : sessions_store_->getUserSessions(current_user_name));
-  for (const auto query_session_ptr : sessions) {
+  for (const auto& query_session_ptr : sessions) {
     std::vector<QuerySessionStatus> query_infos;
     {
       heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
@@ -7367,7 +7367,7 @@ void DBHandler::get_queries_info(std::vector<TQueryInfo>& _return,
                                         system_parameters_);
   CHECK(executor);
   auto sessions = sessions_store_->getAllSessions();
-  for (const auto query_session_ptr : sessions) {
+  for (const auto& query_session_ptr : sessions) {
     const auto query_session_user_name = query_session_ptr->get_currentUser().userName;
     std::vector<QuerySessionStatus> query_infos;
     {
