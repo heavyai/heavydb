@@ -8,6 +8,7 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/Udf/udf_sample.cpp DESTINATION ${CMAKE_BIN
 
 add_executable(CodeGeneratorTest CodeGeneratorTest.cpp)
 add_executable(ArrowBasedExecuteTest ArrowBasedExecuteTest.cpp)
+add_executable(StandaloneQueryRunner StandaloneQueryRunner.cpp)
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 add_executable(StringTransformTest StringTransformTest.cpp)
 add_executable(StringFunctionsTest StringFunctionsTest.cpp)
@@ -87,6 +88,7 @@ target_link_libraries(StringTransformTest Logger Shared gtest ${Boost_LIBRARIES}
 target_link_libraries(StringFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrowBasedExecuteTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(StandaloneQueryRunner ${EXECUTE_TEST_LIBS})
 target_link_libraries(TableFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrayTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(GroupByTest ${EXECUTE_TEST_LIBS})
