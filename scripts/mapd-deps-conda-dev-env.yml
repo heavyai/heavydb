@@ -47,3 +47,4 @@ dependencies:
   # when cuda is enabled, install also
   #- arrow-cpp=5.0=*cuda
   - binutils
+  - llvm-spirv 12.0.*
