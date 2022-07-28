@@ -159,8 +159,9 @@ TableFunctionManager_getNewDictId(int8_t* mgr_ptr) {
   return mgr->getNewDictId();
 }
 
-extern "C" DEVICE RUNTIME_EXPORT std::string
-TableFunctionManager_getString(int8_t* mgr_ptr, int32_t dict_id, int32_t string_id) {
+DEVICE RUNTIME_EXPORT std::string TableFunctionManager_getString(int8_t* mgr_ptr,
+                                                                 int32_t dict_id,
+                                                                 int32_t string_id) {
   auto mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
   CHECK(mgr);
   return mgr->getString(dict_id, string_id);

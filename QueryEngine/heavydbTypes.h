@@ -93,12 +93,9 @@ EXTENSION_NOINLINE_HOST void TableFunctionManager_get_metadata(
     TableFunctionMetadataType& value_type);
 
 EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_getNewDictId(int8_t* mgr_ptr);
-#ifndef UDF_COMPILED
-/* UDFCompiler uses C-linkage that does not support functions returning std::string */
-EXTENSION_NOINLINE_HOST std::string TableFunctionManager_getString(int8_t* mgr_ptr,
-                                                                   int32_t dict_id,
-                                                                   int32_t string_id);
-#endif
+std::string TableFunctionManager_getString(int8_t* mgr_ptr,
+                                           int32_t dict_id,
+                                           int32_t string_id);
 EXTENSION_NOINLINE_HOST const char* TableFunctionManager_getCString(int8_t* mgr_ptr,
                                                                     int32_t dict_id,
                                                                     int32_t string_id);
@@ -1048,12 +1045,10 @@ struct TableFunctionManager {
   int32_t getNewDictId() {
     return TableFunctionManager_getNewDictId(reinterpret_cast<int8_t*>(this));
   }
-#ifndef UDF_COMPILED
   std::string getString(int32_t dict_id, int32_t string_id) {
     return TableFunctionManager_getString(
         reinterpret_cast<int8_t*>(this), dict_id, string_id);
   }
-#endif
   const char* getCString(int32_t dict_id, int32_t string_id) {
     return TableFunctionManager_getCString(
         reinterpret_cast<int8_t*>(this), dict_id, string_id);

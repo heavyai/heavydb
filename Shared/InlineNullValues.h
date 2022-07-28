@@ -75,7 +75,7 @@ constexpr inline T inline_fp_null_value() {
 #if !(defined(__CUDACC__) || defined(NO_BOOST))
   LOG(FATAL) << "Only float or double overloads should be called.";
 #else
-  LOG(FATAL);
+  assert(false);
 #endif
   return T{};
 }
