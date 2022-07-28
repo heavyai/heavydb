@@ -1164,6 +1164,9 @@ class RelAggregate : public RelAlgNode {
     aggregate_exprs_ = std::move(aggregate_exprs);
   }
 
+  void replaceInput(std::shared_ptr<const RelAlgNode> old_input,
+                    std::shared_ptr<const RelAlgNode> input) override;
+
   std::string toString() const override {
     return cat(::typeName(this),
                getIdString(),
@@ -1171,6 +1174,8 @@ class RelAggregate : public RelAlgNode {
                std::to_string(groupby_count_),
                ", agg_exprs=",
                ::toString(agg_exprs_),
+               ", aggregate_exprs=",
+               ::toString(aggregate_exprs_),
                ", fields=",
                ::toString(fields_),
                ", inputs=",
@@ -2080,4 +2085,4 @@ SQLTypeInfo getColumnType(const RelAlgNode* node, size_t col_idx);
 
 hdk::ir::ExprPtrVector getNodeColumnRefs(const RelAlgNode* node);
 
-hdk::ir::ExprPtrVector getNodeExprs(const RelAlgNode* node);
+hdk::ir::ExprPtrVector getInputExprsForAgg(const RelAlgNode* node);

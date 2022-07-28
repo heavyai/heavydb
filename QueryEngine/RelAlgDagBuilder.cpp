@@ -91,19 +91,13 @@ class RexRebindInputsVisitor : public RexVisitor<void*> {
 
 class RebindInputsVisitor : public DeepCopyVisitor {
  public:
-  RebindInputsVisitor(
-      const RelAlgNode* old_input,
-      const RelAlgNode* new_input,
-      std::optional<std::unordered_map<unsigned, unsigned>>& old_to_new_index_map)
-      : old_input_(old_input), new_input_(new_input), mapping_(old_to_new_index_map) {}
-  ~RebindInputsVisitor() override = default;
+  RebindInputsVisitor(const RelAlgNode* old_input, const RelAlgNode* new_input)
+      : old_input_(old_input), new_input_(new_input) {}
 
   RetType visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
     if (col_ref->getNode() == old_input_) {
-      unsigned new_idx =
-          mapping_ ? mapping_->at(col_ref->getIndex()) : col_ref->getIndex();
       return hdk::ir::makeExpr<hdk::ir::ColumnRef>(
-          col_ref->get_type_info(), new_input_, new_idx);
+          col_ref->get_type_info(), new_input_, col_ref->getIndex());
     }
     return col_ref->deep_copy();
   }
@@ -111,6 +105,30 @@ class RebindInputsVisitor : public DeepCopyVisitor {
  protected:
   const RelAlgNode* old_input_;
   const RelAlgNode* new_input_;
+};
+
+class RebindReindexInputsVisitor : public RebindInputsVisitor {
+ public:
+  RebindReindexInputsVisitor(
+      const RelAlgNode* old_input,
+      const RelAlgNode* new_input,
+      const std::optional<std::unordered_map<unsigned, unsigned>>& old_to_new_index_map)
+      : RebindInputsVisitor(old_input, new_input), mapping_(old_to_new_index_map) {}
+
+  RetType visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
+    auto res = RebindInputsVisitor::visitColumnRef(col_ref);
+    if (mapping_) {
+      auto new_col_ref = dynamic_cast<const hdk::ir::ColumnRef*>(res.get());
+      CHECK(new_col_ref);
+      auto it = mapping_->find(new_col_ref->getIndex());
+      CHECK(it != mapping_->end());
+      return hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+          new_col_ref->get_type_info(), new_col_ref->getNode(), it->second);
+    }
+    return res;
+  }
+
+ protected:
   const std::optional<std::unordered_map<unsigned, unsigned>>& mapping_;
 };
 
@@ -152,7 +170,7 @@ void RelProject::replaceInput(
     std::optional<std::unordered_map<unsigned, unsigned>> old_to_new_index_map) {
   RelAlgNode::replaceInput(old_input, input);
   std::unique_ptr<RexRebindInputsVisitor> rebind_inputs;
-  RebindInputsVisitor visitor(old_input.get(), input.get(), old_to_new_index_map);
+  RebindReindexInputsVisitor visitor(old_input.get(), input.get(), old_to_new_index_map);
   if (old_to_new_index_map) {
     rebind_inputs = std::make_unique<RexRebindReindexInputsVisitor>(
         old_input.get(), input.get(), *old_to_new_index_map);
@@ -411,6 +429,15 @@ bool RelProject::isRenaming() const {
   return false;
 }
 
+void RelAggregate::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
+                                std::shared_ptr<const RelAlgNode> input) {
+  RelAlgNode::replaceInput(old_input, input);
+  RebindInputsVisitor visitor(old_input.get(), input.get());
+  for (size_t i = 0; i < aggregate_exprs_.size(); ++i) {
+    aggregate_exprs_[i] = visitor.visit(aggregate_exprs_[i].get());
+  }
+}
+
 void RelJoin::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                            std::shared_ptr<const RelAlgNode> input) {
   RelAlgNode::replaceInput(old_input, input);
@@ -469,6 +496,7 @@ RelFilter::RelFilter(RelFilter const& rhs) : RelAlgNode(rhs) {
 RelAggregate::RelAggregate(RelAggregate const& rhs)
     : RelAlgNode(rhs)
     , groupby_count_(rhs.groupby_count_)
+    , aggregate_exprs_(rhs.aggregate_exprs_)
     , fields_(rhs.fields_)
     , hint_applied_(false)
     , hints_(std::make_unique<Hints>()) {
@@ -1656,20 +1684,23 @@ void create_compound(
       agg_exprs = ra_aggregate->getAggregatesAndRelease();
       groupby_count = ra_aggregate->getGroupByCount();
       decltype(target_exprs){}.swap(target_exprs);
+      hdk::ir::ExprPtrVector old_exprs;
+      old_exprs.swap(exprs);
       CHECK_LE(groupby_count, scalar_sources.size());
+      CHECK_LE(groupby_count, old_exprs.size());
+      InputReplacementVisitor visitor(last_node, old_exprs);
       for (size_t group_idx = 0; group_idx < groupby_count; ++group_idx) {
         const auto rex_ref = new RexRef(group_idx + 1);
         target_exprs.push_back(rex_ref);
         scalar_sources.emplace_back(rex_ref);
 
-        auto ti = getColumnType(ra_node->getInput(0), group_idx);
-        exprs.push_back(hdk::ir::makeExpr<hdk::ir::GroupKeyRef>(ti, group_idx + 1));
+        exprs.push_back(old_exprs[group_idx]);
       }
       for (const auto rex_agg : agg_exprs) {
         target_exprs.push_back(rex_agg);
       }
       for (auto& expr : ra_aggregate->getAggregateExprs()) {
-        exprs.push_back(expr);
+        exprs.push_back(visitor.visit(expr.get()));
       }
       last_node = ra_node.get();
       continue;
@@ -1848,8 +1879,15 @@ bool is_window_function_sum(const RexScalar* rex) {
 bool is_window_function_sum(const hdk::ir::Expr* expr) {
   const auto case_expr = dynamic_cast<const hdk::ir::CaseExpr*>(expr);
   if (case_expr && case_expr->get_expr_pair_list().size() == 1) {
-    const auto then_window = dynamic_cast<const hdk::ir::WindowFunction*>(
-        case_expr->get_expr_pair_list().front().second.get());
+    const hdk::ir::Expr* then = case_expr->get_expr_pair_list().front().second.get();
+
+    // Allow optional cast.
+    const auto cast = dynamic_cast<const hdk::ir::UOper*>(then);
+    if (cast && cast->get_optype() == kCAST) {
+      then = cast->get_operand();
+    }
+
+    const auto then_window = dynamic_cast<const hdk::ir::WindowFunction*>(then);
     if (then_window && then_window->getKind() == SqlWindowFunctionKind::SUM_INTERNAL) {
       return true;
     }
@@ -2752,7 +2790,7 @@ class RelAlgDispatcher {
     const auto& aggs_json_arr = field(agg_ra, "aggs");
     CHECK(aggs_json_arr.IsArray());
     std::vector<std::unique_ptr<const RexAgg>> aggs;
-    hdk::ir::ExprPtrVector input_exprs = getNodeExprs(inputs[0].get());
+    hdk::ir::ExprPtrVector input_exprs = getInputExprsForAgg(inputs[0].get());
     hdk::ir::ExprPtrVector exprs;
     bool bigint_count = root_dag_builder.config().exec.group_by.bigint_count;
     for (auto aggs_json_arr_it = aggs_json_arr.Begin();
@@ -2762,14 +2800,12 @@ class RelAlgDispatcher {
       exprs.push_back(RelAlgTranslator::translateAggregateRex(
           aggs.back().get(), input_exprs, bigint_count));
     }
-    if (agg_ra.HasMember("hints")) {
-      auto agg_node = std::make_shared<RelAggregate>(
-          group.size(), std::move(aggs), std::move(exprs), fields, inputs.front());
-      getRelAlgHints(agg_ra, agg_node);
-      return agg_node;
-    }
-    return std::make_shared<RelAggregate>(
+    auto agg_node = std::make_shared<RelAggregate>(
         group.size(), std::move(aggs), std::move(exprs), fields, inputs.front());
+    if (agg_ra.HasMember("hints")) {
+      getRelAlgHints(agg_ra, agg_node);
+    }
+    return agg_node;
   }
 
   std::shared_ptr<RelJoin> dispatchJoin(const rapidjson::Value& join_ra,
@@ -3364,7 +3400,7 @@ SQLTypeInfo getColumnType(const RelAlgNode* node, size_t col_idx) {
     if (col_idx < agg->getGroupByCount()) {
       return getColumnType(agg->getInput(0), col_idx);
     } else {
-      return agg->getAggExprs()[col_idx - agg->getGroupByCount()]->getType();
+      return agg->getAggregateExprs()[col_idx - agg->getGroupByCount()]->get_type_info();
     }
   }
 
@@ -3412,28 +3448,28 @@ SQLTypeInfo getColumnType(const RelAlgNode* node, size_t col_idx) {
   return {};
 }
 
-hdk::ir::ExprPtrVector getNodeExprs(const RelAlgNode* node) {
-  if (auto project = dynamic_cast<const RelProject*>(node)) {
-    return project->getExprs();
-  }
-  if (auto compound = dynamic_cast<const RelCompound*>(node)) {
-    return compound->getExprs();
-  }
-  if (auto aggregate = dynamic_cast<const RelAggregate*>(node)) {
-    auto source = node->getInput(0);
-    hdk::ir::ExprPtrVector res;
-    for (unsigned i = 0; i < aggregate->getGroupByCount(); ++i) {
-      res.emplace_back(
-          hdk::ir::makeExpr<hdk::ir::ColumnRef>(getColumnType(source, i), source, i));
+hdk::ir::ExprPtrVector getInputExprsForAgg(const RelAlgNode* node) {
+  hdk::ir::ExprPtrVector res;
+  res.reserve(node->size());
+  auto project = dynamic_cast<const RelProject*>(node);
+  auto compound = dynamic_cast<const RelCompound*>(node);
+  if (project || compound) {
+    const auto& exprs = project ? project->getExprs() : compound->getExprs();
+    for (unsigned col_idx = 0; col_idx < static_cast<unsigned>(exprs.size()); ++col_idx) {
+      auto& expr = exprs[col_idx];
+      if (dynamic_cast<const hdk::ir::Constant*>(expr.get())) {
+        res.emplace_back(expr);
+      } else {
+        res.emplace_back(
+            hdk::ir::makeExpr<hdk::ir::ColumnRef>(expr->get_type_info(), node, col_idx));
+      }
     }
-    res.insert(res.end(),
-               aggregate->getAggregateExprs().begin(),
-               aggregate->getAggregateExprs().end());
-    return res;
+  } else if (is_one_of<RelLogicalValues, RelAggregate, RelLogicalUnion, RelTableFunction>(
+                 node)) {
+    res = getNodeColumnRefs(node);
+  } else {
+    CHECK(false) << "Unexpected node: " << node->toString();
   }
-  if (is_one_of<RelLogicalValues, RelLogicalUnion, RelTableFunction>(node)) {
-    return getNodeColumnRefs(node);
-  }
-  CHECK(false) << "Unexpected node: " << node->toString();
-  return {};
+
+  return res;
 }

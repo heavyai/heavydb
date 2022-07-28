@@ -82,7 +82,7 @@ RelAlgNodePtr TestRelAlgDagBuilder::addAgg(
     const std::vector<std::string>& fields,
     size_t group_size,
     std::vector<std::unique_ptr<const RexAgg>> aggs) {
-  hdk::ir::ExprPtrVector input_exprs = getNodeExprs(input.get());
+  hdk::ir::ExprPtrVector input_exprs = getInputExprsForAgg(input.get());
   hdk::ir::ExprPtrVector exprs;
   for (auto& rex : aggs) {
     exprs.push_back(

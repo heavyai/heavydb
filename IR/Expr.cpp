@@ -265,8 +265,9 @@ ExprPtr Expr::add_cast(const SQLTypeInfo& new_type_info) {
 }
 
 std::string ColumnRef::toString() const {
-  return "(ColumnRef node: " + std::to_string(node_->getId()) +
-         " idx: " + std::to_string(idx_) + ")";
+  std::stringstream ss;
+  ss << "(ColumnRef " << node_->getIdString() << ":" << idx_ << ")";
+  return ss.str();
 }
 
 Constant::~Constant() {

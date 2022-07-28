@@ -1391,13 +1391,21 @@ std::vector<hdk::ir::Expr*> translate_targets(
     target_exprs.push_back(target_expr.get());
   }
 
-  for (const auto& target_rex_agg : aggregate->getAggExprs()) {
-    auto target_expr = RelAlgTranslator::translateAggregateRex(
-        target_rex_agg.get(), scalar_sources, bigint_count);
-    CHECK(target_expr);
+  size_t i = 0;
+  for (const auto& agg : aggregate->getAggregateExprs()) {
+    auto target_expr = translator.translateColumnRefs(agg.get());
     target_expr = fold_expr(target_expr.get());
-    target_exprs_owned.push_back(target_expr);
-    target_exprs.push_back(target_expr.get());
+    target_exprs.emplace_back(target_expr.get());
+    target_exprs_owned.emplace_back(std::move(target_expr));
+
+    // TODO: remove this check
+    auto orig_target_expr = RelAlgTranslator::translateAggregateRex(
+        aggregate->getAggExprs()[i++].get(), scalar_sources, bigint_count);
+    CHECK(orig_target_expr);
+    orig_target_expr = fold_expr(orig_target_expr.get());
+    CHECK(*orig_target_expr == *target_exprs.back())
+        << "Aggregate expr mismatch: orig=" << target_exprs.back()->toString()
+        << " new=" << target_expr->toString();
   }
   return target_exprs;
 }

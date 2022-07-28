@@ -18,6 +18,7 @@
 #include "CalciteDeserializerUtils.h"
 #include "DateTimePlusRewrite.h"
 #include "DateTimeTranslator.h"
+#include "DeepCopyVisitor.h"
 #include "ExpressionRewrite.h"
 #include "ExtensionFunctionsBinding.h"
 #include "ExtensionFunctionsWhitelist.h"
@@ -168,6 +169,65 @@ std::pair<Datum, bool> datum_from_scalar_tv(const ScalarTargetValue* scalar_tv,
   return {d, is_null_const};
 }
 
+class RewriteColumnRefVisitor : public DeepCopyVisitor {
+ public:
+  RewriteColumnRefVisitor(
+      const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+      const std::vector<JoinType>& join_types)
+      : input_to_nest_level_(input_to_nest_level), join_types_(join_types) {}
+
+  hdk::ir::ExprPtr visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
+    auto source = col_ref->getNode();
+    auto col_idx = col_ref->getIndex();
+    const auto it_rte_idx = input_to_nest_level_.find(source);
+    const int rte_idx = it_rte_idx == input_to_nest_level_.end() ? 0 : it_rte_idx->second;
+    CHECK_LE(static_cast<size_t>(rte_idx), join_types_.size());
+    const auto scan_source = dynamic_cast<const RelScan*>(source);
+    const auto& in_metainfo = source->getOutputMetainfo();
+    if (scan_source) {
+      // We're at leaf (scan) level and not supposed to have input metadata,
+      // the name and type information come directly from the catalog.
+      CHECK(in_metainfo.empty());
+      auto col_info = scan_source->getColumnInfoBySpi(col_idx + 1);
+      auto col_ti = col_info->type;
+      if (col_ti.is_string()) {
+        col_ti.set_type(kTEXT);
+      }
+      if (rte_idx > 0 && join_types_[rte_idx - 1] == JoinType::LEFT) {
+        col_ti.set_notnull(false);
+      }
+      return std::make_shared<hdk::ir::ColumnVar>(col_info, rte_idx);
+    }
+    CHECK_GE(rte_idx, 0);
+    SQLTypeInfo col_ti;
+    CHECK(!in_metainfo.empty()) << "for " << source->toString();
+    CHECK_LT(col_idx, in_metainfo.size());
+    col_ti = in_metainfo[col_idx].get_type_info();
+
+    {
+      // TODO: remove check when rex are removed.
+      // We expect column ref type to match physical type from output meta.
+      auto meta_type = in_metainfo[col_idx].get_physical_type_info();
+      auto col_type = col_ref->get_type_info();
+      CHECK(meta_type == col_type) << "Type mismatch: meta_type=" << meta_type.toString()
+                                   << " col_type=" << col_type.toString();
+    }
+
+    if (join_types_.size() > 0) {
+      if (rte_idx > 0 && join_types_[rte_idx - 1] == JoinType::LEFT) {
+        col_ti.set_notnull(false);
+      }
+    }
+
+    return std::make_shared<hdk::ir::ColumnVar>(
+        col_ti, -source->getId(), col_idx, rte_idx);
+  }
+
+ private:
+  const std::unordered_map<const RelAlgNode*, int> input_to_nest_level_;
+  const std::vector<JoinType> join_types_;
+};
+
 }  // namespace
 
 RelAlgTranslator::RelAlgTranslator(
@@ -288,6 +348,11 @@ hdk::ir::ExprPtr RelAlgTranslator::translateAggregateRex(
   const auto agg_ti = get_agg_type(agg_kind, arg_expr.get(), bigint_count);
   return hdk::ir::makeExpr<hdk::ir::AggExpr>(
       agg_ti, agg_kind, arg_expr, is_distinct, arg1);
+}
+
+hdk::ir::ExprPtr RelAlgTranslator::translateColumnRefs(const hdk::ir::Expr* expr) const {
+  RewriteColumnRefVisitor visitor(input_to_nest_level_, join_types_);
+  return visitor.visit(expr);
 }
 
 hdk::ir::ExprPtr RelAlgTranslator::translateLiteral(const RexLiteral* rex_literal) {
