@@ -2212,18 +2212,30 @@ class OverlapsJoinRewriteTest : public ::testing::Test {
     for (const auto& stmt : OverlapsJoinRewriter::cleanup_stmts) {
       QR::get()->runDDLStatement(stmt);
     }
+    for (const auto& stmt : cleanup_stmts) {
+      QR::get()->runDDLStatement(stmt);
+    }
 
     for (const auto& stmt : OverlapsJoinRewriter::setup_stmts) {
+      QR::get()->runDDLStatement(stmt);
+    }
+    for (const auto& stmt : init_stmts_ddl) {
       QR::get()->runDDLStatement(stmt);
     }
 
     for (const auto& stmt : OverlapsJoinRewriter::insert_data_stmts) {
       QR::get()->runSQL(stmt, ExecutorDeviceType::CPU);
     }
+    for (const auto& stmt : init_stmts_dml) {
+      QR::get()->runDDLStatement(stmt);
+    }
   }
 
   static void TearDownTestSuite() {
-    for (const auto& stmt : range_join::cleanup_stmts) {
+    for (const auto& stmt : OverlapsJoinRewriter::cleanup_stmts) {
+      QR::get()->runDDLStatement(stmt);
+    }
+    for (const auto& stmt : cleanup_stmts) {
       QR::get()->runDDLStatement(stmt);
     }
   }
@@ -2231,7 +2243,7 @@ class OverlapsJoinRewriteTest : public ::testing::Test {
 
 TEST(OverlapsJoinRewriteTest, VariousHashKeyExpressionsForP2PSTDistanceJoin) {
   std::vector<int64_t> answer_sheet;
-  std::array<std::string, 5> queries{
+  std::array<std::string, 11> queries{
       "SELECT COUNT(1) FROM TEST_GEOPT a, TEST_GEOPT b WHERE ST_DISTANCE(a.pt4326, "
       "b.pt4326) < 1;",
       "SELECT COUNT(1) FROM TEST_GEOPT R, TEST_GEOPT S where ST_DISTANCE(ST_POINT(R.x, "
@@ -2242,7 +2254,20 @@ TEST(OverlapsJoinRewriteTest, VariousHashKeyExpressionsForP2PSTDistanceJoin) {
       "ST_DISTANCE(ST_SETSRID(ST_POINT(a.x, a.y), 4326), b.pt4326) < 1;",
       "SELECT COUNT(1) FROM TEST_GEOPT a, TEST_GEOPT b WHERE "
       "ST_DISTANCE(ST_TRANSFORM(ST_SETSRID(ST_POINT(a.x, a.y), 900913), 4326), b.pt4326) "
-      "< 1;"};
+      "< 1;",
+      "SELECT COUNT(1) FROM TEST_GEOPT R, TEST_GEOPT S where "
+      "ST_DISTANCE(ST_CENTROID(R.pt900913), S.pt900913) < 0.00005;",
+      "SELECT COUNT(1) FROM TEST_GEOPT a, TEST_GEOPT b WHERE "
+      "ST_DISTANCE(ST_CENTROID(ST_TRANSFORM(a.pt900913, 4326)), b.pt4326) < 1;",
+      "SELECT COUNT(1) FROM TEST_GEOPT a, TEST_GEOPT b WHERE "
+      "ST_DISTANCE(ST_SETSRID(ST_CENTROID(ST_POINT(a.x, a.y), 4326)), b.pt4326) < 1;",
+      "SELECT COUNT(1) FROM TEST_GEOPT a, TEST_GEOPT b WHERE "
+      "ST_DISTANCE(ST_CENTROID(ST_TRANSFORM(ST_SETSRID(ST_POINT(a.x, a.y), 900913), "
+      "4326)), b.pt4326) < 1;",
+      "SELECT COUNT(1) FROM does_intersect_a a, does_intersect_b b WHERE "
+      "ST_DISTANCE(ST_CENTROID(a.poly), b.pt) < 1;",
+      "SELECT COUNT(1) FROM does_intersect_a a, does_intersect_b b WHERE "
+      "ST_DISTANCE(ST_CENTROID(a.mpoly), b.pt) < 1;"};
   ScopeGuard flag_reset = [orig = g_enable_overlaps_hashjoin] {
     g_enable_overlaps_hashjoin = orig;
   };

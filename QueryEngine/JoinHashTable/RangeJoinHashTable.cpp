@@ -760,8 +760,7 @@ llvm::Value* RangeJoinHashTable::codegenKey(const CompilationOptions& co,
     } else if (auto geo_expr_outer_col =
                    dynamic_cast<const Analyzer::GeoOperator*>(outer_col)) {
       const auto geo_expr_name = geo_expr_outer_col->getName();
-      if (func_resolve(geo_expr_name, "ST_Point"sv, "ST_Transform"sv)) {
-        // todo (yoonmin) : support "ST_Centroid" (and "ST_SetSRID" when necessary)
+      if (func_resolve(geo_expr_name, "ST_Point"sv, "ST_Transform"sv, "ST_Centroid"sv)) {
         // note that ST_SetSRID changes type info of the column, and is handled by
         // translation phase, so when we use ST_SETSRID(ST_POINT(x, y), 4326)
         // as a join column expression, we recognize it as ST_POINT (with SRID as 4326)
