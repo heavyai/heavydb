@@ -331,7 +331,11 @@ struct CgenState {
                                bool always_clone = false);
 
   size_t executor_id_;
+
   /*
+    Managing LLVM modules
+    ---------------------
+
     Quoting https://groups.google.com/g/llvm-dev/c/kuil5XjasUs/m/7PBpOWZFDAAJ :
     """
     The state of Module/Context ownership is very muddled in the
@@ -346,15 +350,81 @@ struct CgenState {
     LLVMContext ownership.
     """
 
-    Here we do the opposite to the last argument because we store
-    llvm::Module pointers in CodeCache and it is hard to sync the
-    destruction of LLVMContext and removing its modules from the
-    CodeCache. Instead, we'll never explicitly delete llvm::Module
-    instances and we'll let LLVMContext or unique_ptr to manage the
-    destruction of llvm::Modules. As a result, whenever LLVMContext is
-    destroyed, the corresponding llvm::Module pointers in CodeCache
-    become invalid and it is recommended to clear the CodeCache as
-    well.
+    Here we follow the last argument only partially for reasons
+    explained below.
+
+    HeavyDB supports concurrent query executions. For that, a global
+    cache of Executor instances is used. Each instance is able to
+    generate LLVM code, compile it to machine code (with code
+    caching), and execute the code --- all that concurrently with
+    other Executor instances.
+
+    Each Executor instance holds as set of extension modules (LLVM
+    Module instances) that are either loaded at Executor construction
+    time (template module from RuntimeFunctions.bc, rt_geos from
+    GeosRuntime.bc, rt_libdevice from libdevice.10.bc, udf_cpu/gpu
+    modules from LLVM IR file), or at run-time (rt_udf_cpu/gpu modules
+    from LLVM IR string).  All these extension modules are owned by
+    the Executor instance via unique_ptr. Since Executor also owns the
+    LLVM Context instance that technically also owns these extension
+    modules, then the LLVM Context-Module ownership can be ignored
+    (see the quote above).
+
+    Code generation is a process that compiles
+    (generated/user-provided) LLVM IR code into machine code that can
+    be executed on a CPU or GPU.
+
+    Typically, a copy of the template module (let's call this copy as
+    a worker module) is used as an input to code generation that is
+    updated with generated/user-provided LLVM Functions and with other
+    extension modules being linked in. The worker module is created by
+    set_module_shallow_copy and is owned by an Executor instance as a
+    raw pointer (via cgen_state member). Notice that
+    set_module_shallow_copy clones the template module and then
+    releases unique_ptr as a raw pointer.  This means that Executor is
+    now responsible of deleting the worker module after the
+    compilation process completes.
+
+    The reason why the worker module is stored via raw pointer value
+    (rather than using unique_ptr as suggested in the quote above) is
+    as follows.  First, the code generation in HeavyDB can be a
+    recursive process (e.g. in the case of multi-step
+    multi-subqueries) that involves temporary "shelving" of parent
+    compilation processes (the corresponding worker modules are put on
+    hold). In addition, the Executor may trigger threaded compilations
+    that involve "resetting" the worker module for different threads
+    (btw, these compilations cannot be concurrent because LLVM Context
+    is not threadsafe.  The shelving and resetting of worker modules
+    makes the scope of a worker module dynamic (only one worker module
+    instance can be in scope while other worker modules are on hold)
+    that contradicts with the purpose of unique_ptr (out-of-scope
+    worker modules can be destroyed) and would make managing all
+    worker modules very painful if these would be stored as unique_ptr
+    instances.
+
+    An entry point to the code generation is Executor::compileWorkUnit
+    method. Its scope includes creating an Executor::CgenStateManager
+    instance that uses RAII pattern to manage the CgenState instance
+    held by an Executor instance. In addition, the CgenStateManager
+    locks other compilations within the same Executor instance. The
+    compilation lock enables the threaded compilation feature.
+
+    Construction of CgenStateManager (i) stores the existing CgenState
+    instance held by the Executor instance, and (ii) creates an new
+    CgenState instance with un-instantiated worker module.  The worker
+    module is instantiated after the construction (unless
+    QueryMustRunOnCpu is thrown) via set_module_shallow_copy, followed
+    by updating the worker module according to the given query and
+    compiling it to machine code. Destruction of CgenStateManager
+    (read: when leaving the compileWorkUnit method) will delete the
+    instantiated worker module and restores the previous CgenState
+    instance.  This CgenState management enables the recursive
+    compilation feature.
+
+    Finally, we note that the worker module compilation caches the
+    compilation results using the full LLVM IR as the cache
+    key. Caching compilation results is especially effective for CUDA
+    target due to a considerable overhead from the CUDA compilation.
    */
 
   llvm::Module* module_;

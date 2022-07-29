@@ -461,6 +461,15 @@ Executor::CgenStateManager::~CgenStateManager() {
   }
   executor_.cgen_state_->in_values_bitmaps_.clear();
 
+  // Delete worker module that may have been set by
+  // set_module_shallow_copy. If QueryMustRunOnCpu is thrown, the
+  // worker module is not instantiated, so the worker module needs to
+  // be deleted conditionally [see "Managing LLVM modules" comment in
+  // CgenState.h]:
+  if (executor_.cgen_state_->module_) {
+    delete executor_.cgen_state_->module_;
+  }
+
   // restore the old CgenState instance
   executor_.cgen_state_.reset(cgen_state_.release());
 }
