@@ -47,7 +47,7 @@ def heavydb_server():
                 '6274:6274',
                 '-p',
                 '9092:9092',
-                'omnisci/core-os-cpu:latest',
+                'heavyai/core-os-cpu:latest',
             ]
         )
         # yield and stop afterwards?

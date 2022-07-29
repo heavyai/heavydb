@@ -1810,15 +1810,17 @@ class TCopyParams(object):
      - odbc_dsn
      - odbc_connection_string
      - odbc_sql_select
+     - odbc_sql_order_by
      - odbc_username
      - odbc_password
      - odbc_credential_string
      - add_metadata_columns
+     - trim_spaces
 
     """
 
 
-    def __init__(self, delimiter=None, null_str=None, has_header=0, quoted=None, quote=None, escape=None, line_delim=None, array_delim=None, array_begin=None, array_end=None, threads=None, source_type=0, s3_access_key=None, s3_secret_key=None, s3_region=None, geo_coords_encoding=6, geo_coords_comp_param=32, geo_coords_type=18, geo_coords_srid=4326, sanitize_column_names=True, geo_layer_name=None, s3_endpoint=None, geo_assign_render_groups=True, geo_explode_collections=False, source_srid=0, s3_session_token=None, raster_point_type=1, raster_import_bands=None, raster_scanlines_per_thread=None, raster_point_transform=1, raster_point_compute_angle=False, raster_import_dimensions=None, odbc_dsn=None, odbc_connection_string=None, odbc_sql_select=None, odbc_username=None, odbc_password=None, odbc_credential_string=None, add_metadata_columns=None,):
+    def __init__(self, delimiter=None, null_str=None, has_header=0, quoted=None, quote=None, escape=None, line_delim=None, array_delim=None, array_begin=None, array_end=None, threads=None, source_type=0, s3_access_key=None, s3_secret_key=None, s3_region=None, geo_coords_encoding=6, geo_coords_comp_param=32, geo_coords_type=18, geo_coords_srid=4326, sanitize_column_names=True, geo_layer_name=None, s3_endpoint=None, geo_assign_render_groups=True, geo_explode_collections=False, source_srid=0, s3_session_token=None, raster_point_type=1, raster_import_bands=None, raster_scanlines_per_thread=None, raster_point_transform=1, raster_point_compute_angle=False, raster_import_dimensions=None, odbc_dsn=None, odbc_connection_string=None, odbc_sql_select=None, odbc_sql_order_by=None, odbc_username=None, odbc_password=None, odbc_credential_string=None, add_metadata_columns=None, trim_spaces=None,):
         self.delimiter = delimiter
         self.null_str = null_str
         self.has_header = has_header
@@ -1854,10 +1856,12 @@ class TCopyParams(object):
         self.odbc_dsn = odbc_dsn
         self.odbc_connection_string = odbc_connection_string
         self.odbc_sql_select = odbc_sql_select
+        self.odbc_sql_order_by = odbc_sql_order_by
         self.odbc_username = odbc_username
         self.odbc_password = odbc_password
         self.odbc_credential_string = odbc_credential_string
         self.add_metadata_columns = add_metadata_columns
+        self.trim_spaces = trim_spaces
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -2045,22 +2049,32 @@ class TCopyParams(object):
                     iprot.skip(ftype)
             elif fid == 36:
                 if ftype == TType.STRING:
-                    self.odbc_username = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
+                    self.odbc_sql_order_by = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
                 else:
                     iprot.skip(ftype)
             elif fid == 37:
                 if ftype == TType.STRING:
-                    self.odbc_password = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
+                    self.odbc_username = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
                 else:
                     iprot.skip(ftype)
             elif fid == 38:
                 if ftype == TType.STRING:
-                    self.odbc_credential_string = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
+                    self.odbc_password = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
                 else:
                     iprot.skip(ftype)
             elif fid == 39:
                 if ftype == TType.STRING:
+                    self.odbc_credential_string = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 40:
+                if ftype == TType.STRING:
                     self.add_metadata_columns = iprot.readString().decode('utf-8', errors='replace') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 41:
+                if ftype == TType.BOOL:
+                    self.trim_spaces = iprot.readBool()
                 else:
                     iprot.skip(ftype)
             else:
@@ -2213,21 +2227,29 @@ class TCopyParams(object):
             oprot.writeFieldBegin('odbc_sql_select', TType.STRING, 35)
             oprot.writeString(self.odbc_sql_select.encode('utf-8') if sys.version_info[0] == 2 else self.odbc_sql_select)
             oprot.writeFieldEnd()
+        if self.odbc_sql_order_by is not None:
+            oprot.writeFieldBegin('odbc_sql_order_by', TType.STRING, 36)
+            oprot.writeString(self.odbc_sql_order_by.encode('utf-8') if sys.version_info[0] == 2 else self.odbc_sql_order_by)
+            oprot.writeFieldEnd()
         if self.odbc_username is not None:
-            oprot.writeFieldBegin('odbc_username', TType.STRING, 36)
+            oprot.writeFieldBegin('odbc_username', TType.STRING, 37)
             oprot.writeString(self.odbc_username.encode('utf-8') if sys.version_info[0] == 2 else self.odbc_username)
             oprot.writeFieldEnd()
         if self.odbc_password is not None:
-            oprot.writeFieldBegin('odbc_password', TType.STRING, 37)
+            oprot.writeFieldBegin('odbc_password', TType.STRING, 38)
             oprot.writeString(self.odbc_password.encode('utf-8') if sys.version_info[0] == 2 else self.odbc_password)
             oprot.writeFieldEnd()
         if self.odbc_credential_string is not None:
-            oprot.writeFieldBegin('odbc_credential_string', TType.STRING, 38)
+            oprot.writeFieldBegin('odbc_credential_string', TType.STRING, 39)
             oprot.writeString(self.odbc_credential_string.encode('utf-8') if sys.version_info[0] == 2 else self.odbc_credential_string)
             oprot.writeFieldEnd()
         if self.add_metadata_columns is not None:
-            oprot.writeFieldBegin('add_metadata_columns', TType.STRING, 39)
+            oprot.writeFieldBegin('add_metadata_columns', TType.STRING, 40)
             oprot.writeString(self.add_metadata_columns.encode('utf-8') if sys.version_info[0] == 2 else self.add_metadata_columns)
+            oprot.writeFieldEnd()
+        if self.trim_spaces is not None:
+            oprot.writeFieldBegin('trim_spaces', TType.BOOL, 41)
+            oprot.writeBool(self.trim_spaces)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -7172,7 +7194,7 @@ all_structs.append(TColumnType)
 TColumnType.thrift_spec = (
     None,  # 0
     (1, TType.STRING, 'col_name', 'UTF8', None, ),  # 1
-    (2, TType.STRUCT, 'col_type', [heavydb.common.ttypes.TTypeInfo, None], None,),  # 2
+    (2, TType.STRUCT, 'col_type', [heavydb.common.ttypes.TTypeInfo, None], None, ),  # 2
     (3, TType.BOOL, 'is_reserved_keyword', None, None, ),  # 3
     (4, TType.STRING, 'src_name', 'UTF8', None, ),  # 4
     (5, TType.BOOL, 'is_system', None, None, ),  # 5
@@ -7213,7 +7235,7 @@ TKrb5Session.thrift_spec = (
 all_structs.append(TStepResult)
 TStepResult.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'serialized_rows', [heavydb.serialized_result_set.ttypes.TSerializedRows, None], None,),  # 1
+    (1, TType.STRUCT, 'serialized_rows', [heavydb.serialized_result_set.ttypes.TSerializedRows, None], None, ),  # 1
     (2, TType.BOOL, 'execution_finished', None, None, ),  # 2
     (3, TType.I32, 'merge_type', None, None, ),  # 3
     (4, TType.BOOL, 'sharded', None, None, ),  # 4
@@ -7299,10 +7321,12 @@ TCopyParams.thrift_spec = (
     (33, TType.STRING, 'odbc_dsn', 'UTF8', None, ),  # 33
     (34, TType.STRING, 'odbc_connection_string', 'UTF8', None, ),  # 34
     (35, TType.STRING, 'odbc_sql_select', 'UTF8', None, ),  # 35
-    (36, TType.STRING, 'odbc_username', 'UTF8', None, ),  # 36
-    (37, TType.STRING, 'odbc_password', 'UTF8', None, ),  # 37
-    (38, TType.STRING, 'odbc_credential_string', 'UTF8', None, ),  # 38
-    (39, TType.STRING, 'add_metadata_columns', 'UTF8', None, ),  # 39
+    (36, TType.STRING, 'odbc_sql_order_by', 'UTF8', None, ),  # 36
+    (37, TType.STRING, 'odbc_username', 'UTF8', None, ),  # 37
+    (38, TType.STRING, 'odbc_password', 'UTF8', None, ),  # 38
+    (39, TType.STRING, 'odbc_credential_string', 'UTF8', None, ),  # 39
+    (40, TType.STRING, 'add_metadata_columns', 'UTF8', None, ),  # 40
+    (41, TType.BOOL, 'trim_spaces', None, None, ),  # 41
 )
 all_structs.append(TCreateParams)
 TCreateParams.thrift_spec = (
@@ -7428,7 +7452,7 @@ TTableMeta.thrift_spec = (
     (7, TType.I64, 'max_rows', None, None, ),  # 7
     (8, TType.I64, 'table_id', None, None, ),  # 8
     (9, TType.I64, 'max_table_id', None, None, ),  # 9
-    (10, TType.LIST, 'col_types', (TType.STRUCT, [heavydb.common.ttypes.TTypeInfo, None], False), None,),  # 10
+    (10, TType.LIST, 'col_types', (TType.STRUCT, [heavydb.common.ttypes.TTypeInfo, None], False), None, ),  # 10
     (11, TType.LIST, 'col_names', (TType.STRING, 'UTF8', False), None, ),  # 11
 )
 all_structs.append(TTableRefreshInfo)

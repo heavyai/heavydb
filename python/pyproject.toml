@@ -4,7 +4,7 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "pyheavydb"
-version = "6.0.0.post2"
+version = "6.1.1"
 requires-python = ">=3.7"
 authors = [{name = "Heavy.AI", email = "community@heavy.ai"}]
 description = "A DB API 2 compatible client for HeavyDB (formerly OmniSci and MapD)."

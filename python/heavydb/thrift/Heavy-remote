@@ -125,6 +125,9 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
     print('   get_table_function_names(TSessionId session)')
     print('   get_runtime_table_function_names(TSessionId session)')
     print('   get_table_function_details(TSessionId session,  udtf_names)')
+    print('   get_function_names(TSessionId session)')
+    print('   get_runtime_function_names(TSessionId session)')
+    print('   get_function_details(TSessionId session,  udf_names)')
     print('')
     sys.exit(0)
 
@@ -809,6 +812,24 @@ elif cmd == 'get_table_function_details':
         print('get_table_function_details requires 2 args')
         sys.exit(1)
     pp.pprint(client.get_table_function_details(eval(args[0]), eval(args[1]),))
+
+elif cmd == 'get_function_names':
+    if len(args) != 1:
+        print('get_function_names requires 1 args')
+        sys.exit(1)
+    pp.pprint(client.get_function_names(eval(args[0]),))
+
+elif cmd == 'get_runtime_function_names':
+    if len(args) != 1:
+        print('get_runtime_function_names requires 1 args')
+        sys.exit(1)
+    pp.pprint(client.get_runtime_function_names(eval(args[0]),))
+
+elif cmd == 'get_function_details':
+    if len(args) != 2:
+        print('get_function_details requires 2 args')
+        sys.exit(1)
+    pp.pprint(client.get_function_details(eval(args[0]), eval(args[1]),))
 
 else:
     print('Unrecognized method %s' % cmd)
