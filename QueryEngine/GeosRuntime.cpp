@@ -118,6 +118,21 @@ bool toWkb(WKB& wkb,
     }
     return point.getWkb(wkb);
   }
+  if (static_cast<SQLTypes>(type) == kMULTIPOINT) {
+    GeoMultiPoint multipoint(*cv);
+    if (execute_transform && !multipoint.transform(srid_in, srid_out)) {
+      return false;
+    }
+    if (best_planar_srid_ptr) {
+      // A non-NULL pointer signifies a request to find the best planar srid
+      // to transform this WGS84 geometry to, based on geometry's centroid.
+      *best_planar_srid_ptr = multipoint.getBestPlanarSRID();
+      if (!multipoint.transform(4326, *best_planar_srid_ptr)) {
+        return false;
+      }
+    }
+    return multipoint.getWkb(wkb);
+  }
   if (static_cast<SQLTypes>(type) == kLINESTRING) {
     GeoLineString linestring(*cv);
     if (execute_transform && !linestring.transform(srid_in, srid_out)) {

@@ -2408,6 +2408,18 @@ TEST_F(GeoSpatialTempTables, Geos) {
             R"(SELECT ST_Distance(ST_Buffer(p, 1.0), 'POINT(0 3)') FROM geospatial_test WHERE id = 3;)",
             dt)),
         static_cast<double>(0.03)));
+    // ST_Buffer on a multipoint, 1.0 width: basically circles around each point
+    EXPECT_GPU_THROW(ASSERT_NEAR(
+        static_cast<double>(3.14159 * 3),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Area(ST_Buffer('MULTIPOINT(0 0, 10 0, 10 10)', 1.0));)", dt)),
+        static_cast<double>(0.03)));
+    EXPECT_GPU_THROW(ASSERT_NEAR(
+        static_cast<double>(3.14159 * 3.9018),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Area(ST_Buffer(mp, 1.0)) FROM geospatial_test WHERE id = 3;)",
+            dt)),
+        static_cast<double>(0.03)));
     // ST_Buffer on a linestring, 1.0 width: two 10-unit segments
     // each segment is buffered by ~2x10 wide stretch (2 * 2 * 10) plus circular areas
     // around mid- and endpoints
