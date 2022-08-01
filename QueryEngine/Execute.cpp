@@ -112,6 +112,37 @@ std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> Executor::s_stubs_acce
 std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> Executor::s_code_accessor;
 std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> Executor::cpu_code_accessor;
 std::unique_ptr<CodeCacheAccessor<GpuCompilationContext>> Executor::gpu_code_accessor;
+size_t Executor::code_cache_size;
+namespace {
+
+void init_code_caches() {
+  Executor::s_stubs_accessor = std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(
+      Executor::code_cache_size, "s_stubs_cache");
+  Executor::s_code_accessor = std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(
+      Executor::code_cache_size, "s_code_cache");
+  Executor::cpu_code_accessor =
+      std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(
+          Executor::code_cache_size, "cpu_code_cache");
+  Executor::gpu_code_accessor =
+      std::make_unique<CodeCacheAccessor<GpuCompilationContext>>(
+          Executor::code_cache_size, "gpu_code_cache");
+}
+
+}  // namespace
+
+/**
+ * Flushes and re-initializes the code caches. Any cached references will be dropped. The
+ * re-initialized code caches will be empty, allowing for higher-level buffer mgrs to be
+ * torn down. If code caches are used, this must be called before the DataMgr global is
+ * destroyed at exit.
+ */
+void Executor::resetCodeCache() {
+  s_stubs_accessor.reset();
+  s_code_accessor.reset();
+  cpu_code_accessor.reset();
+  gpu_code_accessor.reset();
+  init_code_caches();
+}
 
 Executor::Executor(const ExecutorId executor_id,
                    Data_Namespace::DataMgr* data_mgr,
@@ -139,14 +170,8 @@ Executor::Executor(const ExecutorId executor_id,
   std::call_once(first_init_flag_, [this]() {
     query_plan_dag_cache_ =
         std::make_unique<QueryPlanDagCache>(config_->cache.dag_cache_size);
-    s_stubs_accessor = std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(
-        config_->cache.code_cache_size, "s_stubs_cache");
-    s_code_accessor = std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(
-        config_->cache.code_cache_size, "s_code_cache");
-    cpu_code_accessor = std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(
-        config_->cache.code_cache_size, "cpu_code_cache");
-    gpu_code_accessor = std::make_unique<CodeCacheAccessor<GpuCompilationContext>>(
-        config_->cache.code_cache_size, "gpu_code_cache");
+    code_cache_size = config_->cache.code_cache_size;
+    init_code_caches();
   });
   Executor::initialize_extension_module_sources();
   update_extension_modules();

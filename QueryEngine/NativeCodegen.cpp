@@ -1450,6 +1450,7 @@ std::unique_ptr<llvm::TargetMachine> CodeGenerator::initializeNVPTXBackend(
   if (!target) {
     LOG(FATAL) << err;
   }
+
   return std::unique_ptr<llvm::TargetMachine>(
       target->createTargetMachine("nvptx64-nvidia-cuda",
                                   CudaMgr_Namespace::CudaMgr::deviceArchToSM(arch),

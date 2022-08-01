@@ -96,6 +96,7 @@ class ArrowSQLRunnerImpl {
   ExecutionResult runSqlQuery(const std::string& sql,
                               const CompilationOptions& co,
                               const ExecutionOptions& eo) {
+    VLOG(1) << "Executing sql: " << sql;
     auto ra_executor = makeRelAlgExecutor(sql);
     ExecutionResult res;
 
@@ -319,11 +320,13 @@ class ArrowSQLRunnerImpl {
   std::shared_ptr<CalciteJNI> getCalcite() { return calcite_; }
 
   ~ArrowSQLRunnerImpl() {
-    storage_.reset();
     executor_.reset();
-    data_mgr_.reset();
+    storage_.reset();
     calcite_.reset();
     rel_alg_cache_.reset();
+
+    Executor::resetCodeCache();  // flush caches before tearing down buffer mgrs
+    data_mgr_.reset();
   }
 
  protected:
@@ -349,7 +352,7 @@ class ArrowSQLRunnerImpl {
 
     SystemParameters system_parameters;
     system_parameters.gpu_buffer_mem_bytes = max_gpu_mem;
-    data_mgr_ = std::make_shared<DataMgr>(
+    data_mgr_ = std::make_unique<DataMgr>(
         *config_, system_parameters, std::move(gpu_mgrs), uses_gpu);
     auto* ps_mgr = data_mgr_->getPersistentStorageMgr();
     ps_mgr->registerDataProvider(TEST_SCHEMA_ID, storage_);
@@ -386,11 +389,12 @@ class ArrowSQLRunnerImpl {
   }
 
   ConfigPtr config_;
-  std::shared_ptr<DataMgr> data_mgr_;
-  std::shared_ptr<ArrowStorage> storage_;
+  std::unique_ptr<DataMgr> data_mgr_;
   std::shared_ptr<Executor> executor_;
+  std::shared_ptr<ArrowStorage> storage_;
   std::shared_ptr<CalciteJNI> calcite_;
   std::shared_ptr<RelAlgCache> rel_alg_cache_;
+
   SQLiteComparator sqlite_comparator_;
   int64_t calcite_time_ = 0;
   int64_t execution_time_ = 0;
