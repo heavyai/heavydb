@@ -26,6 +26,7 @@ using namespace TestHelpers;
 namespace {
 
 const size_t g_num_rows{10};
+bool g_cpu_only{false};
 
 }  // namespace
 
@@ -106,6 +107,10 @@ int main(int argc, char** argv) {
                      po::value<bool>()->default_value(false)->implicit_value(true),
                      "Dump IR and PTX for all executed queries to file."
                      " Currently only supports single node tests.");
+  desc.add_options()(
+      "cpu-only",
+      po::value<bool>(&g_cpu_only)->default_value(g_cpu_only)->implicit_value(true),
+      "Force CPU only execution for all queries.");
 
   logger::LogOptions log_options(argv[0]);
   log_options.severity_ = logger::Severity::FATAL;
@@ -137,21 +142,28 @@ int main(int argc, char** argv) {
       auto eo = ArrowSQLRunner::getExecutionOptions(/*allow_loop_joins=*/false,
                                                     /*just_explain=*/false);
       auto co = ArrowSQLRunner::getCompilationOptions(dt);
-      auto res = ArrowSQLRunner::runSqlQuery(R"(SELECT COUNT(*) FROM test;)", co, eo);
+      auto res = ArrowSQLRunner::runSqlQuery(
+          R"(SELECT AVG(dd) / (SELECT STDDEV(dd) FROM test) FROM test;)", co, eo);
       auto rows = res.getRows();
       CHECK_EQ(rows->rowCount(), size_t(1));
       auto row = rows->getNextRow(/*translate_strings=*/true, /*decimal_to_double=*/true);
       CHECK_EQ(row.size(), size_t(1));
-      std::cout << "Result for CPU: " << v<int64_t>(row[0]) << std::endl;
+      std::cout << "Result for CPU: " << v<double>(row[0]) << std::endl;
     }
     {
-      const ExecutorDeviceType dt = ExecutorDeviceType::GPU;
+      const ExecutorDeviceType dt =
+          g_cpu_only ? ExecutorDeviceType::CPU : ExecutorDeviceType::GPU;
       auto eo = ArrowSQLRunner::getExecutionOptions(/*allow_loop_joins=*/false,
                                                     /*just_explain=*/false);
       auto co = ArrowSQLRunner::getCompilationOptions(dt);
       auto res = ArrowSQLRunner::runSqlQuery(
-          R"(SELECT SAMPLE(real_str), COUNT(*) FROM test WHERE x > 7;)", co, eo);
-      std::cout << "Result for GPU: " << res.getRows()->rowCount() << std::endl;
+          R"(SELECT AVG(dd) / (SELECT STDDEV(dd) FROM test) FROM test;)", co, eo);
+      auto rows = res.getRows();
+      CHECK_EQ(rows->rowCount(), size_t(1));
+      auto row = rows->getNextRow(/*translate_strings=*/true, /*decimal_to_double=*/true);
+      CHECK_EQ(row.size(), size_t(1));
+      const auto device_type_str = dt == ExecutorDeviceType::CPU ? " CPU: " : " GPU: ";
+      std::cout << "Result for " << device_type_str << v<double>(row[0]) << std::endl;
     }
 
   } catch (const std::exception& e) {
