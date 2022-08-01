@@ -3506,6 +3506,7 @@ int32_t Executor::executePlanWithoutGroupBy(
         reduced_outs.push_back(val2);
         ++out_vec_idx;
       }
+      ++out_vec_idx;
     }
   }
 
