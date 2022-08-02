@@ -34,6 +34,20 @@
 #include <type_traits>
 #include <vector>
 
+namespace sql_constants {
+/*
+The largest precision an SQL type is allowed to specify is currently 18 digits,
+however, the most precise numeric value we can represent is actually precise to 19 digits.
+This means that we can be slightly more relaxed when doing internal calculations than when
+setting column types (e.g. a CAST from double to numeric could use precision 19 as long as
+it doesn't overflow but a column cannot be specified to have precision 19+).
+*/
+constexpr static int32_t kMaxNumericPrecision =
+    std::numeric_limits<int64_t>::digits10;  // 18
+constexpr static int32_t kMaxRepresentableNumericPrecision =
+    kMaxNumericPrecision + 1;  // 19
+}  // namespace sql_constants
+
 // must not change because these values persist in catalogs.
 enum SQLTypes {
   kNULLT = 0,  // type for null values

@@ -78,7 +78,7 @@ namespace {
 // Return decimal_value * 10^dscale
 int64_t convert_decimal_value_to_scale_internal(const int64_t decimal_value,
                                                 int const dscale) {
-  constexpr int max_scale = std::numeric_limits<uint64_t>::digits10;  // 19
+  constexpr int max_scale = sql_constants::kMaxRepresentableNumericPrecision;  // 19
   constexpr auto pow10 = shared::powersOf<uint64_t, max_scale + 1>(10);
   if (dscale < 0) {
     if (dscale < -max_scale) {

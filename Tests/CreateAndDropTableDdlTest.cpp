@@ -1147,7 +1147,7 @@ TEST_P(PrecisionAndScaleTest, MaxPrecisionExceeded) {
   std::string query =
       getCreateTableQuery(table_type, "test_table", "(col1 " + data_type + "(20))");
   queryAndAssertException(query,
-                          "DECIMAL and NUMERIC precision cannot be larger than 19.");
+                          "DECIMAL and NUMERIC precision cannot be larger than 18.");
 }
 
 TEST_P(PrecisionAndScaleTest, ScaleNotLessThanPrecision) {

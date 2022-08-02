@@ -2384,7 +2384,7 @@ Literal* parse_insert_literal(const rapidjson::Value& literal) {
     if (scale == 0) {
       auto int_val = std::stol(json_str(literal["literal"]));
       return new IntLiteral(int_val);
-    } else if (precision > 18) {
+    } else if (precision > sql_constants::kMaxNumericPrecision) {
       auto dbl_val = std::stod(json_str(literal["literal"]));
       return new DoubleLiteral(dbl_val);
     } else {
@@ -4275,8 +4275,11 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
     // some validation as the QE might return some out of range column types
     for (auto& cd : column_descriptors_for_create) {
-      if (cd.columnType.is_decimal() && cd.columnType.get_precision() > 18) {
-        throw std::runtime_error(cd.columnName + ": Precision too high, max 18.");
+      if (cd.columnType.is_decimal() &&
+          cd.columnType.get_precision() > sql_constants::kMaxNumericPrecision) {
+        throw std::runtime_error(cd.columnName + ": Precision too high, max " +
+                                 std::to_string(sql_constants::kMaxNumericPrecision) +
+                                 ".");
       }
     }
 

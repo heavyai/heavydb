@@ -573,7 +573,9 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1,
         case kDECIMAL:
           common_type = SQLTypeInfo(
               kDECIMAL,
-              std::max(std::min(19, 10 + type2.get_scale()), type2.get_dimension()),
+              std::max(std::min(sql_constants::kMaxRepresentableNumericPrecision,
+                                10 + type2.get_scale()),
+                       type2.get_dimension()),
               type2.get_scale(),
               notnull);
           break;
@@ -600,7 +602,10 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1,
           break;
         case kNUMERIC:
         case kDECIMAL:
-          common_type = SQLTypeInfo(kDECIMAL, 19, type2.get_scale(), notnull);
+          common_type = SQLTypeInfo(kDECIMAL,
+                                    sql_constants::kMaxRepresentableNumericPrecision,
+                                    type2.get_scale(),
+                                    notnull);
           break;
         default:
           CHECK(false);
@@ -666,12 +671,17 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1,
         case kINT:
           common_type = SQLTypeInfo(
               kDECIMAL,
-              std::max(std::min(19, 10 + type1.get_scale()), type2.get_dimension()),
+              std::max(std::min(sql_constants::kMaxRepresentableNumericPrecision,
+                                10 + type1.get_scale()),
+                       type2.get_dimension()),
               type1.get_scale(),
               notnull);
           break;
         case kBIGINT:
-          common_type = SQLTypeInfo(kDECIMAL, 19, type1.get_scale(), notnull);
+          common_type = SQLTypeInfo(kDECIMAL,
+                                    sql_constants::kMaxRepresentableNumericPrecision,
+                                    type1.get_scale(),
+                                    notnull);
           break;
         case kFLOAT:
           common_type = SQLTypeInfo(kFLOAT, notnull);

@@ -1163,11 +1163,12 @@ SQLTypeInfo suggest_decimal_mapping(const parquet::ColumnDescriptor* parquet_col
           parquet_column->logical_type().get())) {
     auto parquet_precision = decimal_logical_column->precision();
     auto parquet_scale = decimal_logical_column->scale();
-    if (parquet_precision > 18) {
+    if (parquet_precision > sql_constants::kMaxNumericPrecision) {
       throw ForeignStorageException(
           "Parquet column \"" + parquet_column->ToString() +
           "\" has decimal precision of " + std::to_string(parquet_precision) +
-          " which is too high to import, maximum precision supported is 18.");
+          " which is too high to import, maximum precision supported is " +
+          std::to_string(sql_constants::kMaxNumericPrecision) + ".");
     }
     SQLTypeInfo type;
     type.set_type(kDECIMAL);

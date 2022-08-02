@@ -162,9 +162,10 @@ void SqlType::check_type() {
     case kNUMERIC:
       if (param1 <= 0) {
         throw std::runtime_error("DECIMAL and NUMERIC must have a positive precision.");
-      } else if (param1 > 19) {
-        throw std::runtime_error(
-            "DECIMAL and NUMERIC precision cannot be larger than 19.");
+      } else if (param1 > sql_constants::kMaxNumericPrecision) {
+        throw std::runtime_error("DECIMAL and NUMERIC precision cannot be larger than " +
+                                 std::to_string(sql_constants::kMaxNumericPrecision) +
+                                 ".");
       } else if (param1 <= param2) {
         throw std::runtime_error(
             "DECIMAL and NUMERIC must have precision larger than scale.");
@@ -224,8 +225,10 @@ void set_default_encoding(ColumnDescriptor& cd) {
   } else if (cd.columnType.is_decimal() && cd.columnType.get_precision() <= 9) {
     cd.columnType.set_compression(kENCODING_FIXED);
     cd.columnType.set_comp_param(32);
-  } else if (cd.columnType.is_decimal() && cd.columnType.get_precision() > 18) {
-    throw std::runtime_error(cd.columnName + ": Precision too high, max 18.");
+  } else if (cd.columnType.is_decimal() &&
+             cd.columnType.get_precision() > sql_constants::kMaxNumericPrecision) {
+    throw std::runtime_error(cd.columnName + ": Precision too high, max " +
+                             std::to_string(sql_constants::kMaxNumericPrecision) + ".");
   } else if (cd.columnType.is_geometry() && cd.columnType.get_output_srid() == 4326) {
     // default to GEOINT 32-bits
     cd.columnType.set_compression(kENCODING_GEOINT);

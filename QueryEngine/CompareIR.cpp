@@ -432,8 +432,10 @@ llvm::Value* CodeGenerator::codegenCmpDecimalConst(const SQLOps optype,
   if (truncated_decimal % 10 == 0 && decimal_tail > 0) {
     truncated_decimal += 1;
   }
-  SQLTypeInfo new_ti = SQLTypeInfo(
-      kDECIMAL, 19, lhs_ti.get_scale() - scale_diff, operand_ti.get_notnull());
+  SQLTypeInfo new_ti = SQLTypeInfo(kDECIMAL,
+                                   sql_constants::kMaxRepresentableNumericPrecision,
+                                   lhs_ti.get_scale() - scale_diff,
+                                   operand_ti.get_notnull());
   if (negative) {
     truncated_decimal = -truncated_decimal;
   }
