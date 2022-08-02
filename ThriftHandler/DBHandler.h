@@ -932,6 +932,8 @@ class DBHandler : public HeavyIf {
 
   query_state::QueryStates query_states_;
   std::unique_ptr<Catalog_Namespace::SessionsStore> sessions_store_;
+  std::unordered_map<std::string, Catalog_Namespace::SessionInfoPtr> calcite_sessions_;
+  heavyai::shared_mutex calcite_sessions_mtx_;
 
   bool super_user_rights_;           // default is "false"; setting to "true"
                                      // ignores passwd checks in "connect(..)"

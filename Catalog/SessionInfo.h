@@ -123,6 +123,9 @@ class SessionInfo {
 
 std::ostream& operator<<(std::ostream& os, const SessionInfo& session_info);
 
+const size_t CALCITE_SESSION_ID_LENGTH = 64;
+const size_t SESSION_ID_LENGTH = 32;
+
 }  // namespace Catalog_Namespace
 
 #endif /* SESSION_INFO_H */

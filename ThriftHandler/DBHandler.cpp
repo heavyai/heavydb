@@ -422,6 +422,11 @@ std::string const DBHandler::createInMemoryCalciteSession(
   // session would be under the name of a proxy user/password which would only persist
   // till server's lifetime or execution of calcite query(in memory) whichever is the
   // earliest.
+  heavyai::lock_guard<heavyai::shared_mutex> lg(calcite_sessions_mtx_);
+  std::string session_id;
+  do {
+    session_id = generate_random_string(Catalog_Namespace::CALCITE_SESSION_ID_LENGTH);
+  } while (calcite_sessions_.find(session_id) != calcite_sessions_.end());
   Catalog_Namespace::UserMetadata user_meta(-1,
                                             calcite_->getInternalSessionProxyUserName(),
                                             calcite_->getInternalSessionProxyPassword(),
@@ -429,14 +434,20 @@ std::string const DBHandler::createInMemoryCalciteSession(
                                             -1,
                                             true,
                                             false);
-  auto calcite_session =
-      sessions_store_->add(user_meta, catalog_ptr, executor_device_type_);
-  return calcite_session->get_session_id();
+  const auto emplace_ret = calcite_sessions_.emplace(
+      session_id,
+      std::make_shared<Catalog_Namespace::SessionInfo>(
+          catalog_ptr, user_meta, executor_device_type_, session_id));
+  CHECK(emplace_ret.second);
+  return session_id;
 }
 
 void DBHandler::removeInMemoryCalciteSession(const std::string& session_id) {
   // Remove InMemory calcite Session.
-  sessions_store_->erase(session_id);
+  heavyai::lock_guard<heavyai::shared_mutex> lg(calcite_sessions_mtx_);
+  const auto it = calcite_sessions_.find(session_id);
+  CHECK(it != calcite_sessions_.end());
+  calcite_sessions_.erase(it);
 }
 
 // internal connection for connections with no password
@@ -5668,6 +5679,13 @@ void DBHandler::get_heap_profile(std::string& profile, const TSessionId& session
 }
 
 Catalog_Namespace::SessionInfo DBHandler::get_session_copy(const TSessionId& session) {
+  if (session.length() == Catalog_Namespace::CALCITE_SESSION_ID_LENGTH) {
+    heavyai::shared_lock<heavyai::shared_mutex> lock(calcite_sessions_mtx_);
+    if (auto it = calcite_sessions_.find(session); it != calcite_sessions_.end()) {
+      return *it->second;
+    }
+    throw std::runtime_error("No session with id " + session);
+  }
   return sessions_store_->getSessionCopy(session);
 }
 
@@ -5684,7 +5702,13 @@ std::shared_ptr<Catalog_Namespace::SessionInfo> DBHandler::get_session_ptr(
   if (session_id.empty()) {
     return {};
   }
-  auto ptr = sessions_store_->get(session_id);
+  Catalog_Namespace::SessionInfoPtr ptr = nullptr;
+  if (session_id.length() == Catalog_Namespace::CALCITE_SESSION_ID_LENGTH) {
+    heavyai::lock_guard<heavyai::shared_mutex> lg(calcite_sessions_mtx_);
+    ptr = calcite_sessions_[session_id];
+  } else {
+    ptr = sessions_store_->get(session_id);
+  }
   if (!ptr) {
     THROW_DB_EXCEPTION("Session not valid or expired.");
   }

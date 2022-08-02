@@ -64,17 +64,10 @@ void SessionsStore::disconnect(const std::string session_id) {
   }
 }
 
-static bool isCalciteSession(const SessionInfoPtr& session_ptr) {
-  const auto& user_meta = session_ptr->get_currentUser();
-  return user_meta.userName == Calcite::getInternalSessionProxyUserName() &&
-         user_meta.userId == -1 && user_meta.defaultDbId == -1 &&
-         user_meta.isSuper.load();
-}
-
 bool SessionsStore::isSessionExpired(const SessionInfoPtr& session_ptr,
                                      int idle_session_duration,
                                      int max_session_duration) {
-  if (isSessionInUse(session_ptr) || isCalciteSession(session_ptr)) {
+  if (isSessionInUse(session_ptr)) {
     return false;
   }
   time_t last_used_time = session_ptr->get_last_used_time();
@@ -152,7 +145,7 @@ class CachedSessionStore : public SessionsStore {
     }
     if (int(sessions_.size()) < capacity_) {
       do {
-        auto session_id = generate_random_string(64);
+        auto session_id = generate_random_string(Catalog_Namespace::SESSION_ID_LENGTH);
         if (sessions_.count(session_id) != 0) {
           continue;
         }
