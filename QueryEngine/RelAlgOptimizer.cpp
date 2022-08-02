@@ -279,6 +279,8 @@ void propagate_rex_input_renumber(
     auto modified_node = const_cast<RelAlgNode*>(node);
     if (auto filter = dynamic_cast<RelFilter*>(modified_node)) {
       auto new_condition = renumber.visit(filter->getCondition());
+      auto new_condition_expr = visitor.visit(filter->getConditionExpr());
+      filter->setCondition(new_condition, new_condition_expr);
       auto usrs_it = du_web.find(filter);
       CHECK(usrs_it != du_web.end() && usrs_it->second.size() == 1);
       work_set.push_back(*usrs_it->second.begin());
@@ -365,8 +367,10 @@ void redirect_inputs_of(
       }
       filter->RelAlgNode::replaceInput(src_project, src_project->getAndOwnInput(0));
       RexProjectInputRedirector redirector(projects);
+      ProjectInputRedirector visitor(projects);
       auto new_condition = redirector.visit(filter->getCondition());
-      filter->setCondition(new_condition);
+      auto new_condition_expr = visitor.visit(filter->getConditionExpr());
+      filter->setCondition(new_condition, new_condition_expr);
     } else {
       filter->replaceInput(src_project, src_project->getAndOwnInput(0));
     }
@@ -1252,7 +1256,8 @@ void propagate_input_renumbering(
       join->setCondition(new_condition);
     } else if (auto filter = dynamic_cast<RelFilter*>(node)) {
       auto new_condition = renumberer.visit(filter->getCondition());
-      filter->setCondition(new_condition);
+      auto new_condition_expr = visitor.visit(filter->getConditionExpr());
+      filter->setCondition(new_condition, new_condition_expr);
     } else if (auto sort = dynamic_cast<RelSort*>(node)) {
       auto src_it = liveout_renumbering.find(node->getInput(0));
       CHECK(src_it != liveout_renumbering.end());
@@ -1615,7 +1620,11 @@ void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
                              other_condition->getType().get_notnull();
         auto new_condition = std::unique_ptr<const RexScalar>(
             new RexOperator(kAND, std::move(operands), SQLTypeInfo(kBOOLEAN, notnull)));
-        folded_filter->setCondition(new_condition);
+        hdk::ir::ExprPtr lhs = folded_filter->getConditionExprShared();
+        hdk::ir::ExprPtr rhs = filter->getConditionExprShared();
+        auto new_condition_expr = hdk::ir::makeExpr<hdk::ir::BinOper>(
+            SQLTypeInfo(kBOOLEAN, notnull), false, kAND, kONE, lhs, rhs);
+        folded_filter->setCondition(new_condition, new_condition_expr);
         replace_all_usages(filter, folded_filter, deconst_mapping, web);
         deconst_mapping.erase(filter.get());
         web.erase(filter.get());
@@ -1637,6 +1646,8 @@ void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
     cleanup_dead_nodes(nodes);
   }
 }
+
+namespace {
 
 std::vector<const RexScalar*> find_hoistable_conditions(const RexScalar* condition,
                                                         const RelAlgNode* source,
@@ -1694,6 +1705,58 @@ std::vector<const RexScalar*> find_hoistable_conditions(const RexScalar* conditi
   return {};
 }
 
+std::vector<const hdk::ir::Expr*> find_hoistable_conditions(
+    const hdk::ir::Expr* condition,
+    const RelAlgNode* source,
+    const size_t first_col_idx,
+    const size_t last_col_idx) {
+  if (auto bin_op = dynamic_cast<const hdk::ir::BinOper*>(condition)) {
+    switch (bin_op->get_optype()) {
+      case kAND: {
+        auto lhs_conditions = find_hoistable_conditions(
+            bin_op->get_left_operand(), source, first_col_idx, last_col_idx);
+        auto rhs_conditions = find_hoistable_conditions(
+            bin_op->get_right_operand(), source, first_col_idx, last_col_idx);
+        if (lhs_conditions.size() == 1 && rhs_conditions.size() == 1 &&
+            lhs_conditions.front() == bin_op->get_left_operand() &&
+            rhs_conditions.front() == bin_op->get_right_operand()) {
+          return {condition};
+        }
+        lhs_conditions.insert(
+            lhs_conditions.end(), rhs_conditions.begin(), rhs_conditions.end());
+        return lhs_conditions;
+      }
+      case kEQ: {
+        auto lhs_conditions = find_hoistable_conditions(
+            bin_op->get_left_operand(), source, first_col_idx, last_col_idx);
+        auto rhs_conditions = find_hoistable_conditions(
+            bin_op->get_right_operand(), source, first_col_idx, last_col_idx);
+        auto lhs_in =
+            lhs_conditions.size() == 1
+                ? dynamic_cast<const hdk::ir::ColumnRef*>(lhs_conditions.front())
+                : nullptr;
+        auto rhs_in =
+            rhs_conditions.size() == 1
+                ? dynamic_cast<const hdk::ir::ColumnRef*>(rhs_conditions.front())
+                : nullptr;
+        if (lhs_in && rhs_in) {
+          return {condition};
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  } else if (auto col_ref = dynamic_cast<const hdk::ir::ColumnRef*>(condition)) {
+    if (col_ref->getNode() == source) {
+      const auto col_idx = col_ref->getIndex();
+      return {col_idx >= first_col_idx && col_idx <= last_col_idx ? condition : nullptr};
+    }
+  }
+
+  return {};
+}
+
 class JoinTargetRebaser : public RexDeepCopyVisitor {
  public:
   JoinTargetRebaser(const RelJoin* join, const unsigned old_base)
@@ -1720,6 +1783,29 @@ class JoinTargetRebaser : public RexDeepCopyVisitor {
   const size_t target_count_;
 };
 
+class JoinTargetRebaseVisitor : public DeepCopyVisitor {
+ public:
+  JoinTargetRebaseVisitor(const RelJoin* join, const unsigned old_base)
+      : join_(join), old_base_(old_base), inp0_size_(join->getInput(0)->size()) {}
+
+  RetType visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
+    auto cur_idx = col_ref->getIndex();
+    CHECK_GE(cur_idx, old_base_);
+    auto new_idx = cur_idx - old_base_;
+    auto ti = getColumnType(join_, new_idx);
+    if (new_idx >= inp0_size_) {
+      return hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+          ti, join_->getInput(1), new_idx - inp0_size_);
+    }
+    return hdk::ir::makeExpr<hdk::ir::ColumnRef>(ti, join_->getInput(0), new_idx);
+  }
+
+ private:
+  const RelJoin* join_;
+  const unsigned old_base_;
+  const size_t inp0_size_;
+};
+
 class SubConditionRemover : public RexDeepCopyVisitor {
  public:
   SubConditionRemover(const std::vector<const RexScalar*> sub_conds)
@@ -1735,6 +1821,37 @@ class SubConditionRemover : public RexDeepCopyVisitor {
  private:
   std::unordered_set<const RexScalar*> sub_conditions_;
 };
+
+hdk::ir::ExprPtr makeConstantExpr(bool val) {
+  Datum d;
+  d.boolval = val;
+  return hdk::ir::makeExpr<hdk::ir::Constant>(kBOOLEAN, false, d);
+}
+
+class SubConditionRemoveVisitor : public DeepCopyVisitor {
+ public:
+  SubConditionRemoveVisitor(const std::vector<const hdk::ir::Expr*> sub_conds)
+      : sub_conditions_(sub_conds.begin(), sub_conds.end()) {}
+
+  RetType visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
+    if (sub_conditions_.count(col_ref)) {
+      return makeConstantExpr(true);
+    }
+    return DeepCopyVisitor::visitColumnRef(col_ref);
+  }
+
+  RetType visitBinOper(const hdk::ir::BinOper* bin_oper) const override {
+    if (sub_conditions_.count(bin_oper)) {
+      return makeConstantExpr(true);
+    }
+    return DeepCopyVisitor::visitBinOper(bin_oper);
+  }
+
+ private:
+  std::unordered_set<const hdk::ir::Expr*> sub_conditions_;
+};
+
+}  // namespace
 
 void hoist_filter_cond_to_cross_join(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
@@ -1794,7 +1911,7 @@ void hoist_filter_cond_to_cross_join(
                                              1,
                                              unsigned(-2147483648),
                                              1);
-          modified_filter->setCondition(true_condition);
+          modified_filter->setCondition(true_condition, makeConstantExpr(true));
           join->setCondition(filter_condition);
           continue;
         }
@@ -1808,14 +1925,22 @@ void hoist_filter_cond_to_cross_join(
                                       source,
                                       first_col_idx,
                                       first_col_idx + join->size() - 1);
+        auto join_condition_exprs =
+            find_hoistable_conditions(filter->getConditionExpr(),
+                                      source,
+                                      first_col_idx,
+                                      first_col_idx + join->size() - 1);
+        CHECK_EQ(join_conditions.size(), join_condition_exprs.size());
         if (join_conditions.empty()) {
           continue;
         }
 
         JoinTargetRebaser rebaser(join, first_col_idx);
+        // JoinTargetRebaseVisitor visitor(join, first_col_idx);
         if (join_conditions.size() == 1) {
           auto new_join_condition = rebaser.visit(*join_conditions.begin());
-          join->setCondition(new_join_condition);
+          // auto new_join_condition_expr = visitor.visit(join_condition_exprs.front());
+          join->setCondition(new_join_condition /*, new_join_condition_expr*/);
         } else {
           std::vector<std::unique_ptr<const RexScalar>> operands;
           bool notnull = true;
@@ -1827,12 +1952,28 @@ void hoist_filter_cond_to_cross_join(
           }
           auto new_join_condition = std::unique_ptr<const RexScalar>(
               new RexOperator(kAND, std::move(operands), SQLTypeInfo(kBOOLEAN, notnull)));
-          join->setCondition(new_join_condition);
+
+          /*
+          auto new_join_condition_expr = visitor.visit(join_condition_exprs[0]);
+          for (size_t i = 1; i < join_condition_exprs.size(); ++i) {
+            bool notnull = new_join_condition_expr->get_type_info().get_notnull() &&
+                           join_condition_exprs[i]->get_type_info().get_notnull();
+            new_join_condition_expr = hdk::ir::makeExpr<hdk::ir::BinOper>(
+                SQLTypeInfo(kBOOLEAN, notnull),
+                kAND,
+                kONE,
+                new_join_condition_expr,
+                visitor.visit(join_condition_exprs[i]));
+          }
+          */
+          join->setCondition(new_join_condition /*,new_join_condition_expr*/);
         }
 
         SubConditionRemover remover(join_conditions);
         auto new_filter_condition = remover.visit(filter->getCondition());
-        modified_filter->setCondition(new_filter_condition);
+        SubConditionRemoveVisitor visitor(join_condition_exprs);
+        auto new_filter_expr = visitor.visit(filter->getConditionExpr());
+        modified_filter->setCondition(new_filter_condition, new_filter_expr);
       }
     }
   }

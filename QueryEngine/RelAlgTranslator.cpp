@@ -169,12 +169,14 @@ std::pair<Datum, bool> datum_from_scalar_tv(const ScalarTargetValue* scalar_tv,
   return {d, is_null_const};
 }
 
-class RewriteColumnRefVisitor : public DeepCopyVisitor {
+class NormalizerVisitor : public DeepCopyVisitor {
  public:
-  RewriteColumnRefVisitor(
-      const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-      const std::vector<JoinType>& join_types)
-      : input_to_nest_level_(input_to_nest_level), join_types_(join_types) {}
+  NormalizerVisitor(const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+                    const std::vector<JoinType>& join_types,
+                    const Executor* executor)
+      : input_to_nest_level_(input_to_nest_level)
+      , join_types_(join_types)
+      , executor_(executor) {}
 
   hdk::ir::ExprPtr visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
     auto source = col_ref->getNode();
@@ -223,9 +225,20 @@ class RewriteColumnRefVisitor : public DeepCopyVisitor {
         col_ti, -source->getId(), col_idx, rte_idx);
   }
 
+  hdk::ir::ExprPtr visitBinOper(const hdk::ir::BinOper* bin_oper) const override {
+    auto lhs = visit(bin_oper->get_left_operand());
+    auto rhs = visit(bin_oper->get_right_operand());
+    return Analyzer::normalizeOperExpr(bin_oper->get_optype(),
+                                       bin_oper->get_qualifier(),
+                                       std::move(lhs),
+                                       std::move(rhs),
+                                       executor_);
+  }
+
  private:
   const std::unordered_map<const RelAlgNode*, int> input_to_nest_level_;
   const std::vector<JoinType> join_types_;
+  const Executor* executor_;
 };
 
 }  // namespace
@@ -350,8 +363,8 @@ hdk::ir::ExprPtr RelAlgTranslator::translateAggregateRex(
       agg_ti, agg_kind, arg_expr, is_distinct, arg1);
 }
 
-hdk::ir::ExprPtr RelAlgTranslator::translateColumnRefs(const hdk::ir::Expr* expr) const {
-  RewriteColumnRefVisitor visitor(input_to_nest_level_, join_types_);
+hdk::ir::ExprPtr RelAlgTranslator::normalize(const hdk::ir::Expr* expr) const {
+  NormalizerVisitor visitor(input_to_nest_level_, join_types_, executor_);
   return visitor.visit(expr);
 }
 

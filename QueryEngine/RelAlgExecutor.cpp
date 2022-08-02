@@ -1393,7 +1393,7 @@ std::vector<hdk::ir::Expr*> translate_targets(
 
   size_t i = 0;
   for (const auto& agg : aggregate->getAggregateExprs()) {
-    auto target_expr = translator.translateColumnRefs(agg.get());
+    auto target_expr = translator.normalize(agg.get());
     target_expr = fold_expr(target_expr.get());
     target_exprs.emplace_back(target_expr.get());
     target_exprs_owned.emplace_back(std::move(target_expr));
@@ -3573,8 +3573,14 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
       executor_, input_to_nest_level, {join_type}, now_, just_explain);
   std::tie(in_metainfo, target_exprs_owned) =
       get_inputs_meta(filter, translator, used_inputs_owned, input_to_nest_level);
-  const auto filter_expr = translator.translateScalarRex(filter->getCondition());
-  const auto qual = fold_expr(filter_expr.get());
+  const auto filter_scalar_expr = translator.translateScalarRex(filter->getCondition());
+  const auto orig_qual = fold_expr(filter_scalar_expr.get());
+
+  auto filter_expr = translator.normalize(filter->getConditionExpr());
+  auto qual = fold_expr(filter_expr.get());
+  CHECK(*orig_qual == *qual) << "Filter expr mismatch: orig=" << orig_qual->toString()
+                             << " new=" << qual->toString();
+
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);

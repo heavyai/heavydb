@@ -1452,9 +1452,11 @@ class RelTranslatedJoin : public RelAlgNode {
 class RelFilter : public RelAlgNode {
  public:
   RelFilter(std::unique_ptr<const RexScalar>& filter,
+            hdk::ir::ExprPtr filter_expr,
             std::shared_ptr<const RelAlgNode> input)
-      : filter_(std::move(filter)) {
+      : filter_(std::move(filter)), filter_expr_(std::move(filter_expr)) {
     CHECK(filter_);
+    CHECK(filter_expr_);
     inputs_.push_back(input);
   }
 
@@ -1466,12 +1468,17 @@ class RelFilter : public RelAlgNode {
   RelFilter(RelFilter const&);
 
   const RexScalar* getCondition() const { return filter_.get(); }
+  const hdk::ir::Expr* getConditionExpr() const { return filter_expr_.get(); }
+  hdk::ir::ExprPtr getConditionExprShared() const { return filter_expr_; }
 
   const RexScalar* getAndReleaseCondition() { return filter_.release(); }
 
-  void setCondition(std::unique_ptr<const RexScalar>& condition) {
+  void setCondition(std::unique_ptr<const RexScalar>& condition,
+                    hdk::ir::ExprPtr filter_expr) {
     CHECK(condition);
     filter_ = std::move(condition);
+    CHECK(filter_expr);
+    filter_expr_ = std::move(filter_expr_);
   }
 
   size_t size() const override { return inputs_[0]->size(); }
@@ -1505,6 +1512,7 @@ class RelFilter : public RelAlgNode {
 
  private:
   std::unique_ptr<const RexScalar> filter_;
+  hdk::ir::ExprPtr filter_expr_;
 };
 
 // Synthetic node to assist execution of left-deep join relational algebra.

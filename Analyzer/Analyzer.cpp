@@ -771,7 +771,7 @@ hdk::ir::ExprPtr normalizeOperExpr(const SQLOps optype,
       left_expr = left_expr->decompress();
       right_expr = right_expr->decompress();
     }
-  } else {
+  } else if (!IS_COMPARISON(optype)) {
     left_expr = left_expr->decompress();
     right_expr = right_expr->decompress();
   }

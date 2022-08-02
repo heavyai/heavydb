@@ -452,6 +452,8 @@ void RelFilter::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
   RelAlgNode::replaceInput(old_input, input);
   RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
   rebind_inputs.visit(filter_.get());
+  RebindInputsVisitor visitor(old_input.get(), input.get());
+  filter_expr_ = visitor.visit(filter_expr_.get());
 }
 
 void RelCompound::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
@@ -488,7 +490,8 @@ RelLogicalValues::RelLogicalValues(RelLogicalValues const& rhs)
     , tuple_type_(rhs.tuple_type_)
     , values_(RexDeepCopyVisitor::copy(rhs.values_)) {}
 
-RelFilter::RelFilter(RelFilter const& rhs) : RelAlgNode(rhs) {
+RelFilter::RelFilter(RelFilter const& rhs)
+    : RelAlgNode(rhs), filter_expr_(rhs.filter_expr_) {
   RexDeepCopyVisitor copier;
   filter_ = copier.visit(rhs.filter_.get());
 }
@@ -1426,7 +1429,8 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept
       CHECK_EQ(size_t(1), filter_node->inputCount());
       auto disambiguated_condition = disambiguate_rex(
           filter_node->getCondition(), get_node_output(filter_node->getInput(0)));
-      filter_node->setCondition(disambiguated_condition);
+      filter_node->setCondition(disambiguated_condition,
+                                filter_node->getConditionExprShared());
       continue;
     }
     const auto join_node = std::dynamic_pointer_cast<RelJoin>(ra_node);
@@ -1624,12 +1628,13 @@ void create_compound(
         CHECK_EQ(size_t(1), ra_project->inputCount());
         // Rebind the input of the project to the input of the filter itself
         // since we know that we'll evaluate the filter on the fly, with no
-        // intermediate buffer.
+        // intermediate buffer. There are cases when filter is not a part of
+        // the pattern, detect it by simply cehcking current filter rex.
         const auto filter_input = dynamic_cast<const RelFilter*>(ra_project->getInput(0));
-        if (filter_input) {
+        if (filter_input && filter_rex) {
           CHECK_EQ(size_t(1), filter_input->inputCount());
-          bind_project_to_input(ra_project.get(),
-                                get_node_output(filter_input->getInput(0)));
+          ra_project->replaceInput(ra_project->getAndOwnInput(0),
+                                   filter_input->getAndOwnInput(0));
         }
         scalar_sources = ra_project->getExpressionsAndRelease();
         for (const auto& scalar_expr : scalar_sources) {
@@ -2772,7 +2777,14 @@ class RelAlgDispatcher {
     CHECK(id);
     auto condition = parse_scalar_expr(
         field(filter_ra, "condition"), db_id_, schema_provider_, root_dag_builder);
-    return std::make_shared<RelFilter>(condition, inputs.front());
+    auto condition_expr = parse_expr(field(filter_ra, "condition"),
+                                     condition.get(),
+                                     db_id_,
+                                     schema_provider_,
+                                     root_dag_builder,
+                                     get_node_output(inputs[0].get()));
+    return std::make_shared<RelFilter>(
+        condition, std::move(condition_expr), inputs.front());
   }
 
   std::shared_ptr<RelAggregate> dispatchAggregate(const rapidjson::Value& agg_ra,
@@ -3332,6 +3344,7 @@ size_t RexInput::toHash() const {
 
 std::string RelCompound::toString() const {
   return cat(::typeName(this),
+             getIdString(),
              "(",
              (filter_expr_ ? filter_expr_->toString() : "null"),
              ", target_exprs=",
@@ -3348,6 +3361,8 @@ std::string RelCompound::toString() const {
              ::toString(exprs_),
              ", is_agg=",
              std::to_string(is_agg_),
+             ", inputs=",
+             inputsToString(inputs_),
              ")");
 }
 

@@ -54,7 +54,7 @@ class RelAlgTranslator {
       const std::vector<hdk::ir::ExprPtr>& scalar_sources,
       bool bigint_count);
 
-  hdk::ir::ExprPtr translateColumnRefs(const hdk::ir::Expr* expr) const;
+  hdk::ir::ExprPtr normalize(const hdk::ir::Expr* expr) const;
 
   static hdk::ir::ExprPtr translateLiteral(const RexLiteral*);
 
