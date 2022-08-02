@@ -92,7 +92,8 @@ class CodeGenerator {
   static void linkModuleWithLibdevice(const std::unique_ptr<llvm::Module>& ext,
                                       llvm::Module& module,
                                       llvm::PassManagerBuilder& pass_manager_builder,
-                                      const GPUTarget& gpu_target);
+                                      const GPUTarget& gpu_target,
+                                      llvm::TargetMachine* nvptx_target_machine);
 
   static std::shared_ptr<GpuCompilationContext> generateNativeGPUCode(
       const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts,
@@ -101,7 +102,8 @@ class CodeGenerator {
       const std::unordered_set<llvm::Function*>& live_funcs,
       const bool is_gpu_smem_used,
       const CompilationOptions& co,
-      const GPUTarget& gpu_target);
+      const GPUTarget& gpu_target,
+      llvm::TargetMachine* nvptx_target_machine);
 
   static void link_udf_module(const std::unique_ptr<llvm::Module>& udf_module,
                               llvm::Module& module,

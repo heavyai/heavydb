@@ -183,7 +183,6 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
   const auto& dev_props = cuda_mgr_->getAllDeviceProperties();
   int block_size = dev_props.front().maxThreadsPerBlock;
   GPUTarget gpu_target;
-  gpu_target.nvptx_target_machine = nvptx_target_machine_.get();
   gpu_target.cuda_mgr = cuda_mgr_.get();
   gpu_target.block_size = block_size;
   gpu_target.cgen_state = cgen_state_;
@@ -195,6 +194,7 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
                                            {func, wrapper_func},
                                            /*is_gpu_smem_used=*/false,
                                            co,
-                                           gpu_target);
+                                           gpu_target,
+                                           nvptx_target_machine_.get());
   return gpu_compilation_context_->getNativeFunctionPointers();
 }

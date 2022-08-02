@@ -1054,7 +1054,8 @@ void CodeGenerator::linkModuleWithLibdevice(
     const std::unique_ptr<llvm::Module>& ext,
     llvm::Module& llvm_module,
     llvm::PassManagerBuilder& pass_manager_builder,
-    const GPUTarget& gpu_target) {
+    const GPUTarget& gpu_target,
+    llvm::TargetMachine* nvptx_target_machine) {
 #ifdef HAVE_CUDA
   auto timer = DEBUG_TIMER(__func__);
 
@@ -1105,7 +1106,7 @@ void CodeGenerator::linkModuleWithLibdevice(
   }
 
   // add nvvm reflect pass replacing any NVVM conditionals with constants
-  gpu_target.nvptx_target_machine->adjustPassManager(pass_manager_builder);
+  nvptx_target_machine->adjustPassManager(pass_manager_builder);
   llvm::legacy::FunctionPassManager FPM(&llvm_module);
   pass_manager_builder.populateFunctionPassManager(FPM);
 
@@ -1125,7 +1126,8 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     const std::unordered_set<llvm::Function*>& live_funcs,
     const bool is_gpu_smem_used,
     const CompilationOptions& co,
-    const GPUTarget& gpu_target) {
+    const GPUTarget& gpu_target,
+    llvm::TargetMachine* nvptx_target_machine) {
 #ifdef HAVE_CUDA
   auto timer = DEBUG_TIMER(__func__);
   auto llvm_module = func->getParent();
@@ -1156,7 +1158,6 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
       "f32:32:32-f64:64:64-v16:16:16-"
       "v32:32:32-v64:64:64-v128:128:128-n16:32:64");
   llvm_module->setTargetTriple("nvptx64-nvidia-cuda");
-  CHECK(gpu_target.nvptx_target_machine);
   llvm::PassManagerBuilder pass_manager_builder = llvm::PassManagerBuilder();
 
   pass_manager_builder.OptLevel = 0;
@@ -1169,7 +1170,8 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     linkModuleWithLibdevice(exts.at(ExtModuleKinds::rt_libdevice_module),
                             *llvm_module,
                             pass_manager_builder,
-                            gpu_target);
+                            gpu_target,
+                            nvptx_target_machine);
   }
 
   // run optimizations
@@ -1283,8 +1285,7 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   auto cuda_llir = ss.str() + cuda_rt_decls + extension_function_decls(udf_declarations);
   std::string ptx;
   try {
-    ptx = generatePTX(
-        cuda_llir, gpu_target.nvptx_target_machine, gpu_target.cgen_state->context_);
+    ptx = generatePTX(cuda_llir, nvptx_target_machine, gpu_target.cgen_state->context_);
   } catch (ParseIRError& e) {
     LOG(WARNING) << "Failed to generate PTX: " << e.what()
                  << ". Switching to CPU execution target.";
@@ -2896,8 +2897,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
     }
   }
 
-  GPUTarget target{
-      nullptr, cuda_mgr, blockSize(), cgen_state_.get(), row_func_not_inlined};
+  GPUTarget target{cuda_mgr, blockSize(), cgen_state_.get(), row_func_not_inlined};
   auto backend = compiler::getBackend(co.device_type,
                                       get_extension_modules(),
                                       gpu_smem_context.isSharedMemoryUsed(),
