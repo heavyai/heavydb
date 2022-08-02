@@ -505,6 +505,7 @@ std::shared_ptr<CpuCompilationContext> CodeGenerator::generateNativeCPUCode(
 std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
     llvm::Function* query_func,
     llvm::Function* multifrag_query_func,
+    std::shared_ptr<compiler::Backend> backend,
     const std::unordered_set<llvm::Function*>& live_funcs,
     const CompilationOptions& co) {
   CodeCacheKey key{serialize_llvm_object(query_func),
@@ -519,11 +520,6 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
   if (cached_code) {
     return cached_code;
   }
-
-  // todo: move up to workunit compilation
-  CodeGenerator::GPUTarget target{};
-  auto backend =
-      compiler::getBackend(co.device_type, get_extension_modules(), false, target);
 
   std::shared_ptr<CpuCompilationContext> cpu_compilation_context =
       std::dynamic_pointer_cast<CpuCompilationContext>(
@@ -1322,8 +1318,8 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
 std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
     llvm::Function* query_func,
     llvm::Function* multifrag_query_func,
+    std::shared_ptr<compiler::Backend> backend,
     std::unordered_set<llvm::Function*>& live_funcs,
-    const bool no_inline,
     const CudaMgr_Namespace::CudaMgr* cuda_mgr,
     const bool is_gpu_smem_used,
     const CompilationOptions& co) {
@@ -1344,27 +1340,6 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
     return cached_code;
   }
 
-  bool row_func_not_inlined = false;
-  if (no_inline) {
-    for (auto it = llvm::inst_begin(cgen_state_->row_func_),
-              e = llvm::inst_end(cgen_state_->row_func_);
-         it != e;
-         ++it) {
-      if (llvm::isa<llvm::CallInst>(*it)) {
-        auto& get_gv_call = llvm::cast<llvm::CallInst>(*it);
-        if (get_gv_call.getCalledFunction()->getName() == "array_size" ||
-            get_gv_call.getCalledFunction()->getName() == "linear_probabilistic_count") {
-          mark_function_never_inline(cgen_state_->row_func_);
-          row_func_not_inlined = true;
-          break;
-        }
-      }
-    }
-  }
-
-  CodeGenerator::GPUTarget gpu_target{
-      nullptr, cuda_mgr, blockSize(), cgen_state_.get(), row_func_not_inlined};
-  auto backend = compiler::getBackend(co.device_type, get_extension_modules(), is_gpu_smem_used, gpu_target);
   std::shared_ptr<GpuCompilationContext> compilation_context;
 
   try {
@@ -2908,15 +2883,41 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
     verify_function_ir(cgen_state_->filter_func_);
   }
 
+  bool row_func_not_inlined = false;
+  if (is_group_by || ra_exe_unit.estimator) {
+    for (auto it = llvm::inst_begin(cgen_state_->row_func_),
+              e = llvm::inst_end(cgen_state_->row_func_);
+         it != e;
+         ++it) {
+      if (llvm::isa<llvm::CallInst>(*it)) {
+        auto& get_gv_call = llvm::cast<llvm::CallInst>(*it);
+        if (get_gv_call.getCalledFunction()->getName() == "array_size" ||
+            get_gv_call.getCalledFunction()->getName() == "linear_probabilistic_count") {
+          mark_function_never_inline(cgen_state_->row_func_);
+          row_func_not_inlined = true;
+          break;
+        }
+      }
+    }
+  }
+
+  GPUTarget target{
+      nullptr, cuda_mgr, blockSize(), cgen_state_.get(), row_func_not_inlined};
+  auto backend = compiler::getBackend(co.device_type,
+                                      get_extension_modules(),
+                                      gpu_smem_context.isSharedMemoryUsed(),
+                                      target);
+
   // Generate final native code from the LLVM IR.
   return std::make_tuple(
       CompilationResult{
           co.device_type == ExecutorDeviceType::CPU
-              ? optimizeAndCodegenCPU(query_func, multifrag_query_func, live_funcs, co)
+              ? optimizeAndCodegenCPU(
+                    query_func, multifrag_query_func, backend, live_funcs, co)
               : optimizeAndCodegenGPU(query_func,
                                       multifrag_query_func,
+                                      backend,
                                       live_funcs,
-                                      is_group_by || ra_exe_unit.estimator,
                                       cuda_mgr,
                                       gpu_smem_context.isSharedMemoryUsed(),
                                       co),

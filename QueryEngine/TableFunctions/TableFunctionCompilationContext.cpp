@@ -528,7 +528,7 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
 
   LOG(IR) << "Table Function Entry Point IR\n"
           << serialize_llvm_object(entry_point_func_);
-  CodeGenerator::GPUTarget target{};
+  GPUTarget target{};
   if (is_gpu) {
     LOG(IR) << "Table Function Kernel IR\n" << serialize_llvm_object(kernel_func_);
     CHECK(executor_);

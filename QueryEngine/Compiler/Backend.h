@@ -16,9 +16,8 @@
 #include <llvm/IR/Value.h>
 #include <memory>
 
-// todo: remove
-#include "QueryEngine/CodeGenerator.h"
 #include "QueryEngine/ExtensionModules.h"
+#include "QueryEngine/Target.h"
 
 namespace compiler {
 class Backend {
@@ -45,7 +44,7 @@ class CUDABackend : public Backend {
  public:
   CUDABackend(const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts,
               bool is_gpu_smem_used,
-              CodeGenerator::GPUTarget& gpu_target);
+              GPUTarget& gpu_target);
 
   std::shared_ptr<CompilationContext> generateNativeCode(
       llvm::Function* func,
@@ -56,7 +55,7 @@ class CUDABackend : public Backend {
  private:
   const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts_;
   bool is_gpu_smem_used_;
-  CodeGenerator::GPUTarget& gpu_target_;
+  GPUTarget& gpu_target_;
 
   mutable std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 };
@@ -65,6 +64,6 @@ std::shared_ptr<Backend> getBackend(
     ExecutorDeviceType dt,
     const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts,
     bool is_gpu_smem_used_,
-    CodeGenerator::GPUTarget& gpu_target);
+    GPUTarget& gpu_target);
 
 }  // namespace compiler

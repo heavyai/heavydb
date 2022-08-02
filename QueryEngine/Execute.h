@@ -46,6 +46,7 @@
 #include "QueryEngine/CodeCache.h"
 #include "QueryEngine/CodeCacheAccessor.h"
 #include "QueryEngine/CompilationOptions.h"
+#include "QueryEngine/Compiler/Backend.h"
 #include "QueryEngine/DateTimeUtils.h"
 #include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
 #include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
@@ -954,13 +955,14 @@ class Executor {
   std::shared_ptr<CompilationContext> optimizeAndCodegenCPU(
       llvm::Function*,
       llvm::Function*,
+      std::shared_ptr<compiler::Backend>,
       const std::unordered_set<llvm::Function*>&,
       const CompilationOptions&);
   std::shared_ptr<CompilationContext> optimizeAndCodegenGPU(
       llvm::Function*,
       llvm::Function*,
+      std::shared_ptr<compiler::Backend>,
       std::unordered_set<llvm::Function*>&,
-      const bool no_inline,
       const CudaMgr_Namespace::CudaMgr* cuda_mgr,
       const bool is_gpu_smem_used,
       const CompilationOptions&);

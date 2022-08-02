@@ -20,6 +20,7 @@
 
 #include "../Analyzer/Analyzer.h"
 #include "Execute.h"
+#include "QueryEngine/Target.h"
 
 // Code generation utility to be used for queries and scalar expressions.
 class CodeGenerator {
@@ -87,14 +88,6 @@ class CodeGenerator {
       const CudaMgr_Namespace::NvidiaDeviceArch arch);
 
   static bool alwaysCloneRuntimeFunction(const llvm::Function* func);
-
-  struct GPUTarget {
-    llvm::TargetMachine* nvptx_target_machine;
-    const CudaMgr_Namespace::CudaMgr* cuda_mgr;
-    unsigned block_size;
-    CgenState* cgen_state;
-    bool row_func_not_inlined;
-  };
 
   static void linkModuleWithLibdevice(const std::unique_ptr<llvm::Module>& ext,
                                       llvm::Module& module,

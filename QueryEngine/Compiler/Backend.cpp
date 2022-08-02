@@ -28,7 +28,7 @@ std::shared_ptr<CompilationContext> CPUBackend::generateNativeCode(
 CUDABackend::CUDABackend(
     const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts,
     bool is_gpu_smem_used,
-    CodeGenerator::GPUTarget& gpu_target)
+    GPUTarget& gpu_target)
     : exts_(exts), is_gpu_smem_used_(is_gpu_smem_used), gpu_target_(gpu_target) {
   const auto arch = gpu_target_.cuda_mgr->getDeviceArch();
   nvptx_target_machine_ = CodeGenerator::initializeNVPTXBackend(arch);
@@ -49,7 +49,7 @@ std::shared_ptr<Backend> getBackend(
     ExecutorDeviceType dt,
     const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts,
     bool is_gpu_smem_used_,
-    CodeGenerator::GPUTarget& gpu_target) {
+    GPUTarget& gpu_target) {
   switch (dt) {
     case ExecutorDeviceType::CPU:
       return std::make_shared<CPUBackend>();
