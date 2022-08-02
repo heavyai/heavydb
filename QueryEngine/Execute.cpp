@@ -94,7 +94,7 @@ int const Executor::max_gpu_count;
 
 const int32_t Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES;
 
-std::map<Executor::ExtModuleKinds, std::string> Executor::extension_module_sources;
+std::map<ExtModuleKinds, std::string> Executor::extension_module_sources;
 
 extern std::unique_ptr<llvm::Module> read_llvm_module_from_bc_file(
     const std::string& udf_ir_filename,
@@ -178,18 +178,16 @@ Executor::Executor(const ExecutorId executor_id,
 }
 
 void Executor::initialize_extension_module_sources() {
-  if (Executor::extension_module_sources.find(
-          Executor::ExtModuleKinds::template_module) ==
+  if (Executor::extension_module_sources.find(ExtModuleKinds::template_module) ==
       Executor::extension_module_sources.end()) {
     auto root_path = omnisci::get_root_abs_path();
     auto template_path = root_path + "/QueryEngine/RuntimeFunctions.bc";
     CHECK(boost::filesystem::exists(template_path));
-    Executor::extension_module_sources[Executor::ExtModuleKinds::template_module] =
-        template_path;
+    Executor::extension_module_sources[ExtModuleKinds::template_module] = template_path;
 #ifdef HAVE_CUDA
     auto rt_libdevice_path = get_cuda_home() + "/nvvm/libdevice/libdevice.10.bc";
     if (boost::filesystem::exists(rt_libdevice_path)) {
-      Executor::extension_module_sources[Executor::ExtModuleKinds::rt_libdevice_module] =
+      Executor::extension_module_sources[ExtModuleKinds::rt_libdevice_module] =
           rt_libdevice_path;
     } else {
       LOG(WARNING) << "File " << rt_libdevice_path
@@ -208,9 +206,9 @@ void Executor::reset(bool discard_runtime_modules_only) {
   gpu_code_accessor->clear();
 
   if (discard_runtime_modules_only) {
-    extension_modules_.erase(Executor::ExtModuleKinds::rt_udf_cpu_module);
+    extension_modules_.erase(ExtModuleKinds::rt_udf_cpu_module);
 #ifdef HAVE_CUDA
-    extension_modules_.erase(Executor::ExtModuleKinds::rt_udf_gpu_module);
+    extension_modules_.erase(ExtModuleKinds::rt_udf_gpu_module);
 #endif
     cgen_state_->module_ = nullptr;
   } else {
@@ -222,8 +220,7 @@ void Executor::reset(bool discard_runtime_modules_only) {
 }
 
 void Executor::update_extension_modules(bool update_runtime_modules_only) {
-  auto read_module = [&](Executor::ExtModuleKinds module_kind,
-                         const std::string& source) {
+  auto read_module = [&](ExtModuleKinds module_kind, const std::string& source) {
     /*
       source can be either a filename of a LLVM IR
       or LLVM BC source, or a string containing
@@ -231,20 +228,20 @@ void Executor::update_extension_modules(bool update_runtime_modules_only) {
      */
     CHECK(!source.empty());
     switch (module_kind) {
-      case Executor::ExtModuleKinds::template_module:
-      case Executor::ExtModuleKinds::rt_libdevice_module: {
+      case ExtModuleKinds::template_module:
+      case ExtModuleKinds::rt_libdevice_module: {
         return read_llvm_module_from_bc_file(source, getContext());
       }
-      case Executor::ExtModuleKinds::udf_cpu_module: {
+      case ExtModuleKinds::udf_cpu_module: {
         return read_llvm_module_from_ir_file(source, getContext(), /**is_gpu=*/false);
       }
-      case Executor::ExtModuleKinds::udf_gpu_module: {
+      case ExtModuleKinds::udf_gpu_module: {
         return read_llvm_module_from_ir_file(source, getContext(), /**is_gpu=*/true);
       }
-      case Executor::ExtModuleKinds::rt_udf_cpu_module: {
+      case ExtModuleKinds::rt_udf_cpu_module: {
         return read_llvm_module_from_ir_string(source, getContext(), /**is_gpu=*/false);
       }
-      case Executor::ExtModuleKinds::rt_udf_gpu_module: {
+      case ExtModuleKinds::rt_udf_gpu_module: {
         return read_llvm_module_from_ir_string(source, getContext(), /**is_gpu=*/true);
       }
       default: {
@@ -253,8 +250,7 @@ void Executor::update_extension_modules(bool update_runtime_modules_only) {
       }
     }
   };
-  auto update_module = [&](Executor::ExtModuleKinds module_kind,
-                           bool erase_not_found = false) {
+  auto update_module = [&](ExtModuleKinds module_kind, bool erase_not_found = false) {
     auto it = Executor::extension_module_sources.find(module_kind);
     if (it != Executor::extension_module_sources.end()) {
       auto llvm_module = read_module(module_kind, it->second);
@@ -289,18 +285,18 @@ void Executor::update_extension_modules(bool update_runtime_modules_only) {
   if (!update_runtime_modules_only) {
     // required compile-time modules, their requirements are enforced
     // by Executor::initialize_extension_module_sources():
-    update_module(Executor::ExtModuleKinds::template_module);
+    update_module(ExtModuleKinds::template_module);
     // load-time modules, these are optional:
-    update_module(Executor::ExtModuleKinds::udf_cpu_module, true);
+    update_module(ExtModuleKinds::udf_cpu_module, true);
 #ifdef HAVE_CUDA
-    update_module(Executor::ExtModuleKinds::udf_gpu_module, true);
-    update_module(Executor::ExtModuleKinds::rt_libdevice_module);
+    update_module(ExtModuleKinds::udf_gpu_module, true);
+    update_module(ExtModuleKinds::rt_libdevice_module);
 #endif
   }
   // run-time modules, these are optional and erasable:
-  update_module(Executor::ExtModuleKinds::rt_udf_cpu_module, true);
+  update_module(ExtModuleKinds::rt_udf_cpu_module, true);
 #ifdef HAVE_CUDA
-  update_module(Executor::ExtModuleKinds::rt_udf_gpu_module, true);
+  update_module(ExtModuleKinds::rt_udf_gpu_module, true);
 #endif
 }
 

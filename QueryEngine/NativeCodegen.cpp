@@ -522,7 +522,8 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
 
   // todo: move up to workunit compilation
   CodeGenerator::GPUTarget target{};
-  auto backend = compiler::getBackend(co.device_type, this, false, target);
+  auto backend =
+      compiler::getBackend(co.device_type, get_extension_modules(), false, target);
 
   std::shared_ptr<CpuCompilationContext> cpu_compilation_context =
       std::dynamic_pointer_cast<CpuCompilationContext>(
@@ -1117,7 +1118,7 @@ void CodeGenerator::linkModuleWithLibdevice(
 }
 
 std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
-    const std::map<Executor::ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts,
+    const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts,
     llvm::Function* func,
     llvm::Function* wrapper_func,
     const std::unordered_set<llvm::Function*>& live_funcs,
@@ -1164,7 +1165,7 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   bool requires_libdevice = check_module_requires_libdevice(llvm_module);
 
   if (requires_libdevice) {
-    linkModuleWithLibdevice(exts.at(Executor::ExtModuleKinds::rt_libdevice_module),
+    linkModuleWithLibdevice(exts.at(ExtModuleKinds::rt_libdevice_module),
                             *llvm_module,
                             pass_manager_builder,
                             gpu_target);
@@ -1222,8 +1223,8 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   // Prevent the udf function(s) from being removed the way the runtime functions are
   std::unordered_set<std::string> udf_declarations;
 
-  if (exts.find(Executor::ExtModuleKinds::udf_gpu_module) != exts.end()) {
-    for (auto& f : exts.at(Executor::ExtModuleKinds::udf_gpu_module)->getFunctionList()) {
+  if (exts.find(ExtModuleKinds::udf_gpu_module) != exts.end()) {
+    for (auto& f : exts.at(ExtModuleKinds::udf_gpu_module)->getFunctionList()) {
       llvm::Function* udf_function = llvm_module->getFunction(f.getName());
 
       if (udf_function) {
@@ -1239,9 +1240,8 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     }
   }
 
-  if (exts.find(Executor::ExtModuleKinds::rt_udf_gpu_module) != exts.end()) {
-    for (auto& f :
-         exts.at(Executor::ExtModuleKinds::rt_udf_gpu_module)->getFunctionList()) {
+  if (exts.find(ExtModuleKinds::rt_udf_gpu_module) != exts.end()) {
+    for (auto& f : exts.at(ExtModuleKinds::rt_udf_gpu_module)->getFunctionList()) {
       llvm::Function* udf_function = llvm_module->getFunction(f.getName());
       if (udf_function) {
         legalize_nvvm_ir(udf_function);
@@ -1364,7 +1364,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
 
   CodeGenerator::GPUTarget gpu_target{
       nullptr, cuda_mgr, blockSize(), cgen_state_.get(), row_func_not_inlined};
-  auto backend = compiler::getBackend(co.device_type, this, is_gpu_smem_used, gpu_target);
+  auto backend = compiler::getBackend(co.device_type, get_extension_modules(), is_gpu_smem_used, gpu_target);
   std::shared_ptr<GpuCompilationContext> compilation_context;
 
   try {
@@ -1813,9 +1813,8 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
 
 void Executor::addUdfIrToModule(const std::string& udf_ir_filename,
                                 const bool is_cuda_ir) {
-  Executor::extension_module_sources[is_cuda_ir
-                                         ? Executor::ExtModuleKinds::udf_gpu_module
-                                         : Executor::ExtModuleKinds::udf_cpu_module] =
+  Executor::extension_module_sources[is_cuda_ir ? ExtModuleKinds::udf_gpu_module
+                                                : ExtModuleKinds::udf_cpu_module] =
       udf_ir_filename;
 }
 

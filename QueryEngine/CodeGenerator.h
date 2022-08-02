@@ -102,7 +102,7 @@ class CodeGenerator {
                                       const GPUTarget& gpu_target);
 
   static std::shared_ptr<GpuCompilationContext> generateNativeGPUCode(
-      const std::map<Executor::ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts,
+      const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts,
       llvm::Function* func,
       llvm::Function* wrapper_func,
       const std::unordered_set<llvm::Function*>& live_funcs,

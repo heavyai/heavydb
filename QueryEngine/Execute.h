@@ -50,6 +50,7 @@
 #include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
 #include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
 #include "QueryEngine/ExecutionKernel.h"
+#include "QueryEngine/ExtensionModules.h"
 #include "QueryEngine/GpuSharedMemoryContext.h"
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
@@ -396,14 +397,6 @@ class Executor {
 
   static void addUdfIrToModule(const std::string& udf_ir_filename, const bool is_cuda_ir);
 
-  enum class ExtModuleKinds {
-    template_module,     // RuntimeFunctions.bc
-    udf_cpu_module,      // Load-time UDFs for CPU execution
-    udf_gpu_module,      // Load-time UDFs for GPU execution
-    rt_udf_cpu_module,   // Run-time UDF/UDTFs for CPU execution
-    rt_udf_gpu_module,   // Run-time UDF/UDTFs for GPU execution
-    rt_libdevice_module  // math library functions for GPU execution
-  };
   // Globally available mapping of extension module sources. Not thread-safe.
   static std::map<ExtModuleKinds, std::string> extension_module_sources;
   static void initialize_extension_module_sources();
@@ -440,7 +433,7 @@ class Executor {
     return has_extension_module(ExtModuleKinds::rt_libdevice_module);
   }
 
-  const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& get_extention_modules()
+  const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& get_extension_modules()
       const {
     // todo: thread safety?
     return extension_modules_;
@@ -1376,19 +1369,19 @@ extern "C" RUNTIME_EXPORT void register_buffer_with_executor_rsm(int64_t exec,
 
 const Analyzer::Expr* remove_cast_to_int(const Analyzer::Expr* expr);
 
-inline std::string toString(const Executor::ExtModuleKinds& kind) {
+inline std::string toString(const ExtModuleKinds& kind) {
   switch (kind) {
-    case Executor::ExtModuleKinds::template_module:
+    case ExtModuleKinds::template_module:
       return "template_module";
-    case Executor::ExtModuleKinds::rt_libdevice_module:
+    case ExtModuleKinds::rt_libdevice_module:
       return "rt_libdevice_module";
-    case Executor::ExtModuleKinds::udf_cpu_module:
+    case ExtModuleKinds::udf_cpu_module:
       return "udf_cpu_module";
-    case Executor::ExtModuleKinds::udf_gpu_module:
+    case ExtModuleKinds::udf_gpu_module:
       return "udf_gpu_module";
-    case Executor::ExtModuleKinds::rt_udf_cpu_module:
+    case ExtModuleKinds::rt_udf_cpu_module:
       return "rt_udf_cpu_module";
-    case Executor::ExtModuleKinds::rt_udf_gpu_module:
+    case ExtModuleKinds::rt_udf_gpu_module:
       return "rt_udf_gpu_module";
   }
   LOG(FATAL) << "Invalid LLVM module kind.";

@@ -535,8 +535,10 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
     target = {nullptr, executor_->cudaMgr(), executor_->blockSize(), cgen_state, false};
   }
 
-  auto backend =
-      compiler::getBackend(co.device_type, executor_, /*is_gpu_smem_used=*/false, target);
+  auto backend = compiler::getBackend(co.device_type,
+                                      executor_->get_extension_modules(),
+                                      /*is_gpu_smem_used=*/false,
+                                      target);
   auto ctx = backend->generateNativeCode(
       entry_point_func_, kernel_func_, {entry_point_func_, kernel_func_}, co);
 

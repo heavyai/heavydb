@@ -189,7 +189,7 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
   gpu_target.cgen_state = cgen_state_;
   gpu_target.row_func_not_inlined = false;
   gpu_compilation_context_ =
-      CodeGenerator::generateNativeGPUCode(executor->get_extention_modules(),
+      CodeGenerator::generateNativeGPUCode(executor->get_extension_modules(),
                                            func,
                                            wrapper_func,
                                            {func, wrapper_func},

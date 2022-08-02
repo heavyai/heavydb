@@ -18,10 +18,9 @@
 
 // todo: remove
 #include "QueryEngine/CodeGenerator.h"
-#include "QueryEngine/Execute.h"
+#include "QueryEngine/ExtensionModules.h"
 
 namespace compiler {
-
 class Backend {
  public:
   virtual ~Backend(){};
@@ -44,7 +43,7 @@ class CPUBackend : public Backend {
 
 class CUDABackend : public Backend {
  public:
-  CUDABackend(Executor* executor,
+  CUDABackend(const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts,
               bool is_gpu_smem_used,
               CodeGenerator::GPUTarget& gpu_target);
 
@@ -55,16 +54,17 @@ class CUDABackend : public Backend {
       const CompilationOptions& co) override;
 
  private:
-  Executor* executor_;
+  const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts_;
   bool is_gpu_smem_used_;
   CodeGenerator::GPUTarget& gpu_target_;
 
   mutable std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 };
 
-std::shared_ptr<Backend> getBackend(ExecutorDeviceType dt,
-                                    Executor* executor,
-                                    bool is_gpu_smem_used_,
-                                    CodeGenerator::GPUTarget& gpu_target);
+std::shared_ptr<Backend> getBackend(
+    ExecutorDeviceType dt,
+    const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts,
+    bool is_gpu_smem_used_,
+    CodeGenerator::GPUTarget& gpu_target);
 
 }  // namespace compiler
