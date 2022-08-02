@@ -317,6 +317,18 @@ void optimize_ir(llvm::Function* query_func,
 }
 #endif
 
+CodeCacheKey get_code_cache_key(llvm::Function* query_func, CgenState* cgen_state) {
+  CodeCacheKey key{serialize_llvm_object(query_func),
+                   serialize_llvm_object(cgen_state->row_func_)};
+  if (cgen_state->filter_func_) {
+    key.push_back(serialize_llvm_object(cgen_state->filter_func_));
+  }
+  for (const auto helper : cgen_state->helper_functions_) {
+    key.push_back(serialize_llvm_object(helper));
+  }
+  return key;
+}
+
 }  // namespace
 
 #ifdef ENABLE_ORCJIT
@@ -508,14 +520,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
     std::shared_ptr<compiler::Backend> backend,
     const std::unordered_set<llvm::Function*>& live_funcs,
     const CompilationOptions& co) {
-  CodeCacheKey key{serialize_llvm_object(query_func),
-                   serialize_llvm_object(cgen_state_->row_func_)};
-  if (cgen_state_->filter_func_) {
-    key.push_back(serialize_llvm_object(cgen_state_->filter_func_));
-  }
-  for (const auto helper : cgen_state_->helper_functions_) {
-    key.push_back(serialize_llvm_object(helper));
-  }
+  auto key = get_code_cache_key(query_func, cgen_state_.get());
   auto cached_code = cpu_code_accessor->get_value(key);
   if (cached_code) {
     return cached_code;
@@ -1320,21 +1325,11 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
     llvm::Function* multifrag_query_func,
     std::shared_ptr<compiler::Backend> backend,
     std::unordered_set<llvm::Function*>& live_funcs,
-    const CudaMgr_Namespace::CudaMgr* cuda_mgr,
-    const bool is_gpu_smem_used,
     const CompilationOptions& co) {
 #ifdef HAVE_CUDA
   auto timer = DEBUG_TIMER(__func__);
 
-  CHECK(cuda_mgr);
-  CodeCacheKey key{serialize_llvm_object(query_func),
-                   serialize_llvm_object(cgen_state_->row_func_)};
-  if (cgen_state_->filter_func_) {
-    key.push_back(serialize_llvm_object(cgen_state_->filter_func_));
-  }
-  for (const auto helper : cgen_state_->helper_functions_) {
-    key.push_back(serialize_llvm_object(helper));
-  }
+  auto key = get_code_cache_key(query_func, cgen_state_.get());
   auto cached_code = Executor::gpu_code_accessor->get_value(key);
   if (cached_code) {
     return cached_code;
@@ -2914,13 +2909,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
           co.device_type == ExecutorDeviceType::CPU
               ? optimizeAndCodegenCPU(
                     query_func, multifrag_query_func, backend, live_funcs, co)
-              : optimizeAndCodegenGPU(query_func,
-                                      multifrag_query_func,
-                                      backend,
-                                      live_funcs,
-                                      cuda_mgr,
-                                      gpu_smem_context.isSharedMemoryUsed(),
-                                      co),
+              : optimizeAndCodegenGPU(
+                    query_func, multifrag_query_func, backend, live_funcs, co),
           cgen_state_->getLiterals(),
           output_columnar,
           llvm_ir,

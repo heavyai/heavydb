@@ -963,8 +963,6 @@ class Executor {
       llvm::Function*,
       std::shared_ptr<compiler::Backend>,
       std::unordered_set<llvm::Function*>&,
-      const CudaMgr_Namespace::CudaMgr* cuda_mgr,
-      const bool is_gpu_smem_used,
       const CompilationOptions&);
 
   int64_t deviceCycles(int milliseconds) const;

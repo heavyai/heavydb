@@ -30,6 +30,7 @@ CUDABackend::CUDABackend(
     bool is_gpu_smem_used,
     GPUTarget& gpu_target)
     : exts_(exts), is_gpu_smem_used_(is_gpu_smem_used), gpu_target_(gpu_target) {
+  CHECK(gpu_target_.cuda_mgr);
   const auto arch = gpu_target_.cuda_mgr->getDeviceArch();
   nvptx_target_machine_ = CodeGenerator::initializeNVPTXBackend(arch);
   gpu_target_.nvptx_target_machine = nvptx_target_machine_.get();
