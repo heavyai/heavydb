@@ -24,6 +24,7 @@
 #include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExternalExecutor.h"
+#include "QueryEngine/MemoryLayoutBuilder.h"
 #include "QueryEngine/SerializeToSql.h"
 
 namespace {
@@ -254,8 +255,18 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                shared_context.getQueryInfos(),
                                                executor->row_set_mem_owner_,
                                                std::nullopt);
-    const auto query_mem_desc =
-        group_by_and_aggregate.initQueryMemoryDescriptor(false, 0, 8, false);
+    MemoryLayoutBuilder mem_layout_builder(ra_exe_unit_);
+    auto query_mem_desc = mem_layout_builder.build(ra_exe_unit_,
+                                                   shared_context.getQueryInfos(),
+                                                   /*allow_multifrag=*/false,
+                                                   /*max_groups_buffer_entry_guess=*/0,
+                                                   /*crt_min_byte_width=*/8,
+                                                   /*output_columnar_hint=*/false,
+                                                   /*just_explain*/ false,
+                                                   std::nullopt,
+                                                   executor,
+                                                   ExecutorDeviceType::CPU);
+
     device_results_ = run_query_external(
         query,
         *fetch_result,

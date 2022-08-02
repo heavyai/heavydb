@@ -22,6 +22,7 @@
 #include "../StreamingTopN.h"
 #include "../UsedColumnsVisitor.h"
 #include "ColSlotContext.h"
+#include "QueryEngine/MemoryLayoutBuilder.h"
 
 #include <boost/algorithm/cxx11/any_of.hpp>
 
@@ -296,8 +297,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
         actual_col_range_info.bucket = 0;
       } else {
         // single column perfect hash
-        entry_count = std::max(
-            GroupByAndAggregate::getBucketedCardinality(col_range_info), int64_t(1));
+        entry_count = std::max(col_range_info.getBucketedCardinality(), int64_t(1));
         const size_t interleaved_max_threshold{512};
 
         if (must_use_baseline_sort) {

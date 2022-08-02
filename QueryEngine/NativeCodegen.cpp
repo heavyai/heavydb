@@ -72,6 +72,7 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/GpuSharedMemoryUtils.h"
 #include "QueryEngine/LLVMFunctionAttributesUtil.h"
+#include "QueryEngine/MemoryLayoutBuilder.h"
 #include "QueryEngine/Optimization/AnnotateInternalFunctionsPass.h"
 #include "QueryEngine/OutputBufferInitialization.h"
 #include "QueryEngine/QueryTemplateGenerator.h"
@@ -2312,129 +2313,6 @@ std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
 
 namespace {
 
-size_t get_shared_memory_size(const bool shared_mem_used,
-                              const QueryMemoryDescriptor* query_mem_desc_ptr) {
-  return shared_mem_used
-             ? (query_mem_desc_ptr->getRowSize() * query_mem_desc_ptr->getEntryCount())
-             : 0;
-}
-
-bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr,
-                                 const RelAlgExecutionUnit& ra_exe_unit,
-                                 const CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                                 const ExecutorDeviceType device_type,
-                                 const unsigned gpu_blocksize,
-                                 const unsigned num_blocks_per_mp,
-                                 const Config& config) {
-  if (device_type == ExecutorDeviceType::CPU) {
-    return false;
-  }
-  if (query_mem_desc_ptr->didOutputColumnar()) {
-    return false;
-  }
-  CHECK(query_mem_desc_ptr);
-  CHECK(cuda_mgr);
-  /*
-   * We only use shared memory strategy if GPU hardware provides native shared
-   * memory atomics support. From CUDA Toolkit documentation:
-   * https://docs.nvidia.com/cuda/pascal-tuning-guide/index.html#atomic-ops "Like
-   * Maxwell, Pascal [and Volta] provides native shared memory atomic operations
-   * for 32-bit integer arithmetic, along with native 32 or 64-bit compare-and-swap
-   * (CAS)."
-   *
-   **/
-  if (!cuda_mgr->isArchMaxwellOrLaterForAll()) {
-    return false;
-  }
-
-  if (query_mem_desc_ptr->getQueryDescriptionType() ==
-          QueryDescriptionType::NonGroupedAggregate &&
-      config.exec.group_by.enable_gpu_smem_non_grouped_agg &&
-      query_mem_desc_ptr->countDistinctDescriptorsLogicallyEmpty()) {
-    // TODO: relax this, if necessary
-    if (gpu_blocksize < query_mem_desc_ptr->getEntryCount()) {
-      return false;
-    }
-    // skip shared memory usage when dealing with 1) variable length targets, 2)
-    // not a COUNT aggregate
-    const auto target_infos = target_exprs_to_infos(
-        ra_exe_unit.target_exprs, *query_mem_desc_ptr, config.exec.group_by.bigint_count);
-    std::unordered_set<SQLAgg> supported_aggs{kCOUNT};
-    if (std::find_if(target_infos.begin(),
-                     target_infos.end(),
-                     [&supported_aggs](const TargetInfo& ti) {
-                       if (ti.sql_type.is_varlen() ||
-                           !supported_aggs.count(ti.agg_kind)) {
-                         return true;
-                       } else {
-                         return false;
-                       }
-                     }) == target_infos.end()) {
-      return true;
-    }
-  }
-
-  if (query_mem_desc_ptr->getQueryDescriptionType() ==
-          QueryDescriptionType::GroupByPerfectHash &&
-      config.exec.group_by.enable_gpu_smem_group_by) {
-    /**
-     * To simplify the implementation for practical purposes, we
-     * initially provide shared memory support for cases where there are at most as many
-     * entries in the output buffer as there are threads within each GPU device. In
-     * order to relax this assumption later, we need to add a for loop in generated
-     * codes such that each thread loops over multiple entries.
-     * TODO: relax this if necessary
-     */
-    if (gpu_blocksize < query_mem_desc_ptr->getEntryCount()) {
-      return false;
-    }
-
-    // Fundamentally, we should use shared memory whenever the output buffer
-    // is small enough so that we can fit it in the shared memory and yet expect
-    // good occupancy.
-    // For now, we allow keyless, row-wise layout, and only for perfect hash
-    // group by operations.
-    if (query_mem_desc_ptr->hasKeylessHash() &&
-        query_mem_desc_ptr->countDistinctDescriptorsLogicallyEmpty() &&
-        !query_mem_desc_ptr->useStreamingTopN()) {
-      const size_t shared_memory_threshold_bytes = std::min(
-          config.exec.group_by.gpu_smem_threshold == 0
-              ? SIZE_MAX
-              : config.exec.group_by.gpu_smem_threshold,
-          cuda_mgr->getMinSharedMemoryPerBlockForAllDevices() / num_blocks_per_mp);
-      const auto output_buffer_size =
-          query_mem_desc_ptr->getRowSize() * query_mem_desc_ptr->getEntryCount();
-      if (output_buffer_size > shared_memory_threshold_bytes) {
-        return false;
-      }
-
-      // skip shared memory usage when dealing with 1) variable length targets, 2)
-      // non-basic aggregates (COUNT, SUM, MIN, MAX, AVG)
-      // TODO: relax this if necessary
-      const auto target_infos = target_exprs_to_infos(ra_exe_unit.target_exprs,
-                                                      *query_mem_desc_ptr,
-                                                      config.exec.group_by.bigint_count);
-      std::unordered_set<SQLAgg> supported_aggs{kCOUNT};
-      if (config.exec.group_by.enable_gpu_smem_grouped_non_count_agg) {
-        supported_aggs = {kCOUNT, kMIN, kMAX, kSUM, kAVG};
-      }
-      if (std::find_if(target_infos.begin(),
-                       target_infos.end(),
-                       [&supported_aggs](const TargetInfo& ti) {
-                         if (ti.sql_type.is_varlen() ||
-                             !supported_aggs.count(ti.agg_kind)) {
-                           return true;
-                         } else {
-                           return false;
-                         }
-                       }) == target_infos.end()) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 #ifndef NDEBUG
 std::string serialize_llvm_metadata_footnotes(llvm::Function* query_func,
                                               CgenState* cgen_state) {
@@ -2544,6 +2422,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   addTransientStringLiterals(ra_exe_unit, row_set_mem_owner);
 
+  MemoryLayoutBuilder mem_layout_builder(ra_exe_unit);
+
   GroupByAndAggregate group_by_and_aggregate(
       this,
       co.device_type,
@@ -2552,42 +2432,33 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       row_set_mem_owner,
       has_cardinality_estimation ? std::optional<int64_t>(max_groups_buffer_entry_guess)
                                  : std::nullopt);
-  auto query_mem_desc =
-      group_by_and_aggregate.initQueryMemoryDescriptor(eo.allow_multifrag,
-                                                       max_groups_buffer_entry_guess,
-                                                       crt_min_byte_width,
-                                                       eo.output_columnar_hint);
-
-  if (query_mem_desc->getQueryDescriptionType() ==
-          QueryDescriptionType::GroupByBaselineHash &&
-      !has_cardinality_estimation && !eo.just_explain) {
-    const auto col_range_info = group_by_and_aggregate.getColRangeInfo();
-    throw CardinalityEstimationRequired(col_range_info.max - col_range_info.min);
-  }
+  auto query_mem_desc = mem_layout_builder.build(
+      ra_exe_unit,
+      query_infos,
+      eo.allow_multifrag,
+      max_groups_buffer_entry_guess,
+      crt_min_byte_width,
+      eo.output_columnar_hint,
+      eo.just_explain,
+      has_cardinality_estimation ? std::optional<int64_t>(max_groups_buffer_entry_guess)
+                                 : std::nullopt,
+      this,
+      co.device_type);
 
   const bool output_columnar = query_mem_desc->didOutputColumnar();
-  const bool gpu_shared_mem_optimization =
-      is_gpu_shared_mem_supported(query_mem_desc.get(),
-                                  ra_exe_unit,
-                                  cuda_mgr,
-                                  co.device_type,
-                                  cuda_mgr ? this->blockSize() : 1,
-                                  cuda_mgr ? this->numBlocksPerMP() : 1,
-                                  getConfig());
-  if (gpu_shared_mem_optimization) {
+  const auto shared_memory_size = mem_layout_builder.cudaSharedMemorySize(
+      ra_exe_unit, query_mem_desc.get(), cuda_mgr, this, co.device_type);
+  if (shared_memory_size > 0) {
     // disable interleaved bins optimization on the GPU
     query_mem_desc->setHasInterleavedBinsOnGpu(false);
     LOG(DEBUG1) << "GPU shared memory is used for the " +
                        query_mem_desc->queryDescTypeToString() + " query(" +
-                       std::to_string(get_shared_memory_size(gpu_shared_mem_optimization,
-                                                             query_mem_desc.get())) +
-                       " out of " +
+                       std::to_string(shared_memory_size) + " out of " +
                        std::to_string(config_->exec.group_by.gpu_smem_threshold) +
                        " bytes).";
   }
 
-  const GpuSharedMemoryContext gpu_smem_context(
-      get_shared_memory_size(gpu_shared_mem_optimization, query_mem_desc.get()));
+  const GpuSharedMemoryContext gpu_smem_context(shared_memory_size);
 
   if (co.device_type == ExecutorDeviceType::GPU) {
     const size_t num_count_distinct_descs =

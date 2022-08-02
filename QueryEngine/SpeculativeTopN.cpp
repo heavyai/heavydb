@@ -182,7 +182,7 @@ bool SpeculativeTopNBlacklist::contains(const std::shared_ptr<Analyzer::Expr> ex
 /**
  * SpeculativeTopN sort is used when there are multiple already sorted results
  * (when GPU sort is used on multiple devices, refer to
- * GroupByAndAggregate::gpuCanHandleOrderEntries), and we want to pick top n elements
+ * MemoryLayoutBuilder::gpu_can_handle_order_entries), and we want to pick top n elements
  * (LIMIT caluse exists), and we have already chosen this algorithm when creating the
  * proper work unit (refer to RelAlgExecutor::createSortInputWorkUnit).
  *

@@ -72,6 +72,7 @@ set(query_engine_source_files
     LLVMFunctionAttributesUtil.cpp
     LLVMGlobalContext.cpp
     MaxwellCodegenPatch.cpp
+    MemoryLayoutBuilder.cpp
     MurmurHash.cpp
     NativeCodegen.cpp
     NvidiaKernel.cpp

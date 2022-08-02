@@ -48,7 +48,14 @@ struct ColRangeInfo {
   int64_t bucket;
   bool has_nulls;
   bool isEmpty() { return min == 0 && max == -1; }
+
+  int64_t getBucketedCardinality() const;
 };
+
+ColRangeInfo get_expr_range_info(const RelAlgExecutionUnit& ra_exe_unit,
+                                 const std::vector<InputTableInfo>& query_infos,
+                                 const Analyzer::Expr* expr,
+                                 Executor* executor);
 
 struct KeylessInfo {
   const bool keyless;
@@ -73,22 +80,6 @@ class GroupByAndAggregate {
                const GpuSharedMemoryContext& gpu_smem_context);
 
  private:
-  bool gpuCanHandleOrderEntries(const std::list<Analyzer::OrderEntry>& order_entries);
-
-  std::unique_ptr<QueryMemoryDescriptor> initQueryMemoryDescriptor(
-      const bool allow_multifrag,
-      const size_t max_groups_buffer_entry_count,
-      const int8_t crt_min_byte_width,
-      const bool output_columnar_hint);
-
-  std::unique_ptr<QueryMemoryDescriptor> initQueryMemoryDescriptorImpl(
-      const bool allow_multifrag,
-      const size_t max_groups_buffer_entry_count,
-      const int8_t crt_min_byte_width,
-      const bool sort_on_gpu_hint,
-      const bool must_use_baseline_sort,
-      const bool output_columnar_hint);
-
   llvm::Value* codegenOutputSlot(llvm::Value* groups_buffer,
                                  const QueryMemoryDescriptor& query_mem_desc,
                                  const CompilationOptions& co,
@@ -125,10 +116,6 @@ class GroupByAndAggregate {
       const QueryMemoryDescriptor& query_mem_desc,
       const size_t key_width,
       const int32_t row_size_quad);
-
-  ColRangeInfo getColRangeInfo();
-
-  static int64_t getBucketedCardinality(const ColRangeInfo& col_range_info);
 
   llvm::Value* convertNullIfAny(const SQLTypeInfo& arg_type,
                                 const TargetInfo& agg_info,
@@ -196,10 +183,6 @@ class GroupByAndAggregate {
   const RelAlgExecutionUnit& ra_exe_unit_;
   const std::vector<InputTableInfo>& query_infos_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
-  bool output_columnar_;
-  const ExecutorDeviceType device_type_;
-
-  const std::optional<int64_t> group_cardinality_estimation_;
 
   friend class Executor;
   friend class QueryMemoryDescriptor;
