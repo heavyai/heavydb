@@ -18,3 +18,4 @@ race:^tzset
 race_top:StringDictionaryProxy_GetTransientBulk_Test::TestBody
 # BE-6333 QE-348
 race:tsan_safe_*
+race:^testing::internal::TestEventRepeater::OnTestIterationEnd

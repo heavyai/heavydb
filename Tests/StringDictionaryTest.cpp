@@ -839,6 +839,13 @@ TEST(StringDictionaryProxy, BuildUnionTranslationMapToPartialOverlapProxy) {
                      true);
 }
 
+NEVER_INLINE
+StringDictionaryProxy::IdMap tsan_safe_sdp_transient_union(
+    StringDictionaryProxy& source_string_dict_proxy,
+    const StringDictionaryProxy& dest_string_dict_proxy) {
+  return source_string_dict_proxy.transientUnion(dest_string_dict_proxy);
+}
+
 TEST(StringDictionary, TransientUnion) {
   std::string const sd_lhs_path = std::string(BASE_PATH) + "/sd_lhs";
   std::string const sd_rhs_path = std::string(BASE_PATH) + "/sd_rhs";
@@ -879,7 +886,7 @@ TEST(StringDictionary, TransientUnion) {
         sd_rhs, dict_ref_rhs.dictId, sd_rhs->storageEntryCount());
     tsan_safe_getOrAddTransient(sdp_rhs, "t0");  // id = -2
     tsan_safe_getOrAddTransient(sdp_rhs, "t1");  // id = -3
-    auto const id_map = sdp_lhs.transientUnion(sdp_rhs);
+    auto const id_map = tsan_safe_sdp_transient_union(sdp_lhs, sdp_rhs);
     // Expected output:
     // source_domain_min_ = -3 = -1 - number of transients in sdp_rhs
     // t1 -3 (1st transient added to lhs when calling transientUnion())
@@ -917,7 +924,7 @@ TEST(StringDictionary, TransientUnion) {
         sd_lhs, dict_ref_rhs.dictId, sd_lhs->storageEntryCount());
     tsan_safe_getOrAddTransient(sdp_rhs, "t0");
     tsan_safe_getOrAddTransient(sdp_rhs, "t1");
-    auto const id_map = sdp_lhs.transientUnion(sdp_rhs);
+    auto const id_map = tsan_safe_sdp_transient_union(sdp_lhs, sdp_rhs);
     // Expected output:
     // source_domain_min_ = -3 = -1 - number of transients in sdp_rhs
     // t1 -3 (1st transient added to lhs when calling transientUnion())
