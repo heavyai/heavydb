@@ -49,9 +49,6 @@ class AreaPerimeter : public Codegen {
       size_fn_name += "_nullable";
     }
 
-    const uint32_t coords_elem_sz_bytes =
-        operand_ti.get_compression() == kENCODING_GEOINT ? 1 : 8;
-
     std::vector<llvm::Value*> operand_lvs;
     // iterate over column inputs
     if (dynamic_cast<const Analyzer::ColumnVar*>(operand)) {
@@ -65,10 +62,10 @@ class AreaPerimeter : public Codegen {
         CHECK(ptr_type);
         const auto elem_type = ptr_type->getPointerElementType();
         CHECK(elem_type);
+        auto const is_coords = (i == 0);
+        auto const shift = log2_bytes(is_coords ? 1 : 4);
         std::vector<llvm::Value*> array_sz_args{
-            lv,
-            pos_lvs.front(),
-            cgen_state->llInt(log2_bytes(i == 0 ? coords_elem_sz_bytes : 4))};
+            lv, pos_lvs.front(), cgen_state->llInt(shift)};
         if (is_nullable_) {  // TODO: should we do this for all arguments, or just points?
           array_sz_args.push_back(
               cgen_state->llInt(static_cast<int32_t>(inline_int_null_value<int32_t>())));

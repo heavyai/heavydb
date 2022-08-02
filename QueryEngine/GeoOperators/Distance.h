@@ -67,7 +67,8 @@ class Distance : public Codegen {
               cgen_state->emitExternalCall("array_buff",
                                            llvm::Type::getInt8PtrTy(cgen_state->context_),
                                            {lv, pos_lvs[i]});
-          if (j > 0) {
+          auto const is_coords = (j == 0);
+          if (!is_coords) {
             // cast additional columns to i32*
             array_buff_lv = builder.CreateBitCast(
                 array_buff_lv, llvm::Type::getInt32PtrTy(cgen_state->context_));
@@ -78,15 +79,9 @@ class Distance : public Codegen {
           CHECK(ptr_type);
           const auto elem_type = ptr_type->getPointerElementType();
           CHECK(elem_type);
-          const uint32_t coords_elem_sz_bytes =
-              operand_ti.get_compression() == kENCODING_NONE &&
-                      operand_ti.get_type() == kPOINT
-                  ? 8
-                  : 1;
+          auto const shift = log2_bytes(is_coords ? 1 : 4);
           std::vector<llvm::Value*> array_sz_args{
-              lv,
-              pos_lvs[i],
-              cgen_state->llInt(log2_bytes(j == 0 ? coords_elem_sz_bytes : 4))};
+              lv, pos_lvs[i], cgen_state->llInt(shift)};
           if (is_nullable_) {  // TODO: should we do this for all arguments, or just
                                // coords?
             array_sz_args.push_back(cgen_state->llInt(

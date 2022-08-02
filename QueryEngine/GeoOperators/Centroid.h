@@ -48,8 +48,6 @@ class Centroid : public Codegen {
       size_fn_name += "_nullable";
     }
 
-    const uint32_t coords_elem_sz_bytes =
-        operand_ti.get_compression() == kENCODING_GEOINT ? 1 : 8;
     auto& builder = cgen_state->ir_builder_;
 
     std::vector<llvm::Value*> operand_lvs;
@@ -61,7 +59,8 @@ class Centroid : public Codegen {
             cgen_state->emitExternalCall("array_buff",
                                          llvm::Type::getInt8PtrTy(cgen_state->context_),
                                          {lv, pos_lvs.front()});
-        if (i > 0) {
+        auto const is_coords = (i == 0);
+        if (!is_coords) {
           array_buff_lv = builder.CreateBitCast(
               array_buff_lv, llvm::Type::getInt32PtrTy(cgen_state->context_));
         }
@@ -70,10 +69,9 @@ class Centroid : public Codegen {
         CHECK(ptr_type);
         const auto elem_type = ptr_type->getPointerElementType();
         CHECK(elem_type);
+        auto const shift = log2_bytes(is_coords ? 1 : 4);
         std::vector<llvm::Value*> array_sz_args{
-            lv,
-            pos_lvs.front(),
-            cgen_state->llInt(log2_bytes(i == 0 ? coords_elem_sz_bytes : 4))};
+            lv, pos_lvs.front(), cgen_state->llInt(shift)};
         if (is_nullable_) {  // TODO: should we do this for all arguments, or just points?
           array_sz_args.push_back(
               cgen_state->llInt(static_cast<int32_t>(inline_int_null_value<int32_t>())));
