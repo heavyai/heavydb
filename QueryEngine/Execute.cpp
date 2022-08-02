@@ -1929,7 +1929,7 @@ TemporaryTable Executor::executeWorkUnitImpl(
     }
 
     if (eo.just_explain) {
-      return {executeExplain(*query_comp_descs_owned.at(ExecutorDeviceType::CPU))};
+      return {executeExplain(*query_comp_descs_owned.at(device_type))};
     }
 
     for (const auto target_expr : ra_exe_unit.target_exprs) {
