@@ -328,47 +328,6 @@ GroupByAndAggregate::GroupByAndAggregate(
   }
 }
 
-int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_info,
-                                                 const size_t shard_count) const {
-  size_t device_count{0};
-  if (device_type_ == ExecutorDeviceType::GPU) {
-    device_count = executor_->cudaMgr()->getDeviceCount();
-    CHECK_GT(device_count, 0u);
-  }
-
-  int64_t bucket{col_range_info.bucket};
-
-  if (shard_count) {
-    CHECK(!col_range_info.bucket);
-    /*
-      when a node has fewer devices than shard count,
-      a) In a distributed setup, the minimum distance between two keys would be
-      device_count because shards are stored consecutively across the physical tables,
-      i.e if a shard column has values 0 to 9, and 3 shards on each leaf, then node 1
-      would have values: 0,1,2,6,7,8 and node 2 would have values: 3,4,5,9. If each leaf
-      node has only 1 device, in this case, all the keys from each node are loaded on
-      the device each.
-
-      b) In a single node setup, the distance would be minimum of device_count or
-      difference of device_count - shard_count. For example: If a single node server
-      running on 3 devices a shard column has values 0 to 9 in a table with 4 shards,
-      device to fragment keys mapping would be: device 1 - 4,8,3,7 device 2 - 1,5,9
-      device 3 - 2, 6 The bucket value would be 4(shards) - 3(devices) = 1 i.e. minimum
-      of device_count or difference.
-
-      When a node has device count equal to or more than shard count then the
-      minimum distance is always at least shard_count * no of leaf nodes.
-    */
-    if (device_count < shard_count) {
-      bucket = std::min(device_count, shard_count - device_count);
-    } else {
-      bucket = shard_count;
-    }
-  }
-
-  return bucket;
-}
-
 namespace {
 
 /**
@@ -648,19 +607,14 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
     const size_t max_groups_buffer_entry_count,
     const int8_t crt_min_byte_width,
     const bool output_columnar_hint) {
-  const auto shard_count =
-      device_type_ == ExecutorDeviceType::GPU
-          ? shard_count_for_top_groups(ra_exe_unit_, *executor_->getSchemaProvider())
-          : 0;
-  bool sort_on_gpu_hint =
-      device_type_ == ExecutorDeviceType::GPU && allow_multifrag &&
-      !ra_exe_unit_.sort_info.order_entries.empty() &&
-      gpuCanHandleOrderEntries(ra_exe_unit_.sort_info.order_entries) && !shard_count;
+  bool sort_on_gpu_hint = device_type_ == ExecutorDeviceType::GPU && allow_multifrag &&
+                          !ra_exe_unit_.sort_info.order_entries.empty() &&
+                          gpuCanHandleOrderEntries(ra_exe_unit_.sort_info.order_entries);
   // must_use_baseline_sort is true iff we'd sort on GPU with the old algorithm
   // but the total output buffer size would be too big or it's a sharded top query.
   // For the sake of managing risk, use the new result set way very selectively for
   // this case only (alongside the baseline layout we've enabled for a while now).
-  bool must_use_baseline_sort = shard_count;
+  bool must_use_baseline_sort = false;
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
   while (true) {
     query_mem_desc = initQueryMemoryDescriptorImpl(allow_multifrag,
@@ -692,7 +646,7 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
     const bool output_columnar_hint) {
   const bool is_group_by{!ra_exe_unit_.groupby_exprs.empty()};
 
-  auto col_range_info_nosharding = getColRangeInfo();
+  auto col_range_info = getColRangeInfo();
 
   const auto count_distinct_descriptors =
       init_count_distinct_descriptors(ra_exe_unit_,
@@ -700,19 +654,7 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                                       device_type_,
                                       executor_,
                                       max_groups_buffer_entry_count,
-                                      col_range_info_nosharding.hash_type_);
-
-  const auto shard_count =
-      device_type_ == ExecutorDeviceType::GPU
-          ? shard_count_for_top_groups(ra_exe_unit_, *executor_->getSchemaProvider())
-          : 0;
-
-  const auto col_range_info =
-      ColRangeInfo{col_range_info_nosharding.hash_type_,
-                   col_range_info_nosharding.min,
-                   col_range_info_nosharding.max,
-                   getShardedTopBucket(col_range_info_nosharding, shard_count),
-                   col_range_info_nosharding.has_nulls};
+                                      col_range_info.hash_type_);
 
   // Non-grouped aggregates do not support accessing aggregated ranges
   // Keyless hash is currently only supported with single-column perfect hash
@@ -742,7 +684,6 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                                        device_type_,
                                        crt_min_byte_width,
                                        sort_on_gpu_hint,
-                                       shard_count,
                                        max_groups_buffer_entry_count,
                                        count_distinct_descriptors,
                                        must_use_baseline_sort,
@@ -759,7 +700,6 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                                        device_type_,
                                        crt_min_byte_width,
                                        sort_on_gpu_hint,
-                                       shard_count,
                                        max_groups_buffer_entry_count,
                                        count_distinct_descriptors,
                                        must_use_baseline_sort,
@@ -1935,9 +1875,3 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::genLoadHashDesc(
 #undef LL_BOOL
 #undef LL_BUILDER
 #undef LL_CONTEXT
-
-size_t GroupByAndAggregate::shard_count_for_top_groups(
-    const RelAlgExecutionUnit& ra_exe_unit,
-    const SchemaProvider& schema_provider) {
-  return 0;
-}

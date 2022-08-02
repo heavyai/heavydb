@@ -158,8 +158,6 @@ class BaselineJoinHashTable : public HashJoin {
 
   virtual llvm::Value* codegenKey(const CompilationOptions&);
 
-  size_t shardCount() const;
-
   Data_Namespace::MemoryLevel getEffectiveMemoryLevel(
       const std::vector<InnerOuter>& inner_outer_pairs) const;
 

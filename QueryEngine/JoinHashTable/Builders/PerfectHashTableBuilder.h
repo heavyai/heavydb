@@ -27,18 +27,10 @@ class PerfectJoinHashTableBuilder {
   void allocateDeviceMemory(const JoinColumn& join_column,
                             const HashType layout,
                             HashEntryInfo& hash_entry_info,
-                            const size_t shard_count,
                             const int device_id,
                             const int device_count,
                             const Executor* executor) {
 #ifdef HAVE_CUDA
-    if (shard_count) {
-      const auto shards_per_device = (shard_count + device_count - 1) / device_count;
-      CHECK_GT(shards_per_device, 0u);
-      const size_t entries_per_shard =
-          get_entries_per_shard(hash_entry_info.hash_entry_count, shard_count);
-      hash_entry_info.hash_entry_count = entries_per_shard * shards_per_device;
-    }
     const size_t total_count =
         layout == HashType::OneToOne
             ? hash_entry_info.getNormalizedHashEntryCount()
@@ -65,7 +57,6 @@ class PerfectJoinHashTableBuilder {
                           const JoinType join_type,
                           const HashType layout,
                           const HashEntryInfo hash_entry_info,
-                          const size_t shard_count,
                           const int32_t hash_join_invalid_val,
                           const int device_id,
                           const int device_count,
@@ -348,12 +339,6 @@ class PerfectJoinHashTableBuilder {
   }
 
   std::unique_ptr<PerfectHashTable> getHashTable() { return std::move(hash_table_); }
-
-  static size_t get_entries_per_shard(const size_t total_entry_count,
-                                      const size_t shard_count) {
-    CHECK_NE(size_t(0), shard_count);
-    return (total_entry_count + shard_count - 1) / shard_count;
-  }
 
   const bool for_semi_anti_join(const JoinType join_type) {
     return join_type == JoinType::SEMI || join_type == JoinType::ANTI;

@@ -538,47 +538,42 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
   CHECK(exe_desc_ptr);
   const auto sort = dynamic_cast<const RelSort*>(exe_desc_ptr->getBody());
 
-  size_t shard_count{0};
-  auto merge_type = [&shard_count](const RelAlgNode* body) -> MergeType {
-    return node_is_aggregate(body) && !shard_count ? MergeType::Reduce : MergeType::Union;
+  auto merge_type = [](const RelAlgNode* body) -> MergeType {
+    return node_is_aggregate(body) ? MergeType::Reduce : MergeType::Union;
   };
 
   if (sort) {
     check_sort_node_source_constraint(sort);
     const auto source_work_unit = createSortInputWorkUnit(sort, eo);
-    shard_count = GroupByAndAggregate::shard_count_for_top_groups(
-        source_work_unit.exe_unit, *schema_provider_);
-    if (!shard_count) {
-      // No point in sorting on the leaf, only execute the input to the sort node.
-      CHECK_EQ(size_t(1), sort->inputCount());
-      const auto source = sort->getInput(0);
-      if (sort->collationCount() || node_is_aggregate(source)) {
-        auto temp_seq = RaExecutionSequence(std::make_unique<RaExecutionDesc>(source));
-        CHECK_EQ(temp_seq.size(), size_t(1));
-        ExecutionOptions eo_copy = {
-            eo.output_columnar_hint,
-            eo.allow_multifrag,
-            eo.just_explain,
-            eo.allow_loop_joins,
-            eo.with_watchdog,
-            eo.jit_debug,
-            eo.just_validate || sort->isEmptyResult(),
-            eo.with_dynamic_watchdog,
-            eo.dynamic_watchdog_time_limit,
-            eo.find_push_down_candidates,
-            eo.just_calcite_explain,
-            eo.gpu_input_mem_limit_percent,
-            eo.allow_runtime_query_interrupt,
-            eo.running_query_interrupt_freq,
-            eo.pending_query_interrupt_freq,
-            eo.executor_type,
-        };
-        // Use subseq to avoid clearing existing temporary tables
-        return {executeRelAlgSubSeq(temp_seq, std::make_pair(0, 1), co, eo_copy, 0),
-                merge_type(source),
-                source->getId(),
-                false};
-      }
+    // No point in sorting on the leaf, only execute the input to the sort node.
+    CHECK_EQ(size_t(1), sort->inputCount());
+    const auto source = sort->getInput(0);
+    if (sort->collationCount() || node_is_aggregate(source)) {
+      auto temp_seq = RaExecutionSequence(std::make_unique<RaExecutionDesc>(source));
+      CHECK_EQ(temp_seq.size(), size_t(1));
+      ExecutionOptions eo_copy = {
+          eo.output_columnar_hint,
+          eo.allow_multifrag,
+          eo.just_explain,
+          eo.allow_loop_joins,
+          eo.with_watchdog,
+          eo.jit_debug,
+          eo.just_validate || sort->isEmptyResult(),
+          eo.with_dynamic_watchdog,
+          eo.dynamic_watchdog_time_limit,
+          eo.find_push_down_candidates,
+          eo.just_calcite_explain,
+          eo.gpu_input_mem_limit_percent,
+          eo.allow_runtime_query_interrupt,
+          eo.running_query_interrupt_freq,
+          eo.pending_query_interrupt_freq,
+          eo.executor_type,
+      };
+      // Use subseq to avoid clearing existing temporary tables
+      return {executeRelAlgSubSeq(temp_seq, std::make_pair(0, 1), co, eo_copy, 0),
+              merge_type(source),
+              source->getId(),
+              false};
     }
   }
   QueryStepExecutionResult result{

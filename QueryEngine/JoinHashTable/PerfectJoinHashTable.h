@@ -204,8 +204,6 @@ class PerfectJoinHashTable : public HashJoin {
 
   const InputTableInfo& getInnerQueryInfo(const Analyzer::ColumnVar* inner_col) const;
 
-  size_t shardCount() const;
-
   llvm::Value* codegenHashTableLoad(const size_t table_idx);
 
   std::vector<llvm::Value*> getHashJoinArgs(llvm::Value* hash_ptr,
@@ -273,8 +271,3 @@ bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
 const InputTableInfo& get_inner_query_info(
     const int inner_table_id,
     const std::vector<InputTableInfo>& query_infos);
-
-size_t get_entries_per_device(const size_t total_entries,
-                              const size_t shard_count,
-                              const size_t device_count,
-                              const Data_Namespace::MemoryLevel memory_level);

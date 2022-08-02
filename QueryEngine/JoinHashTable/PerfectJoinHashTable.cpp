@@ -632,7 +632,6 @@ int PerfectJoinHashTable::initHashTableForDevice(
       gpu_builder.allocateDeviceMemory(join_column,
                                        hash_table->getLayout(),
                                        hash_entry_info,
-                                       shardCount(),
                                        device_id,
                                        device_count_,
                                        executor_);
@@ -667,7 +666,6 @@ int PerfectJoinHashTable::initHashTableForDevice(
     builder.allocateDeviceMemory(join_column,
                                  hashtable_layout,
                                  hash_entry_info,
-                                 shardCount(),
                                  device_id,
                                  device_count_,
                                  executor_);
@@ -679,7 +677,6 @@ int PerfectJoinHashTable::initHashTableForDevice(
                                join_type_,
                                hashtable_layout,
                                hash_entry_info,
-                               shardCount(),
                                hash_join_invalid_val,
                                device_id,
                                device_count_,
@@ -1015,25 +1012,6 @@ const InputTableInfo& get_inner_query_info(
   }
   CHECK(ti_idx);
   return query_infos[*ti_idx];
-}
-
-size_t get_entries_per_device(const size_t total_entries,
-                              const size_t shard_count,
-                              const size_t device_count,
-                              const Data_Namespace::MemoryLevel memory_level) {
-  const auto entries_per_shard =
-      shard_count ? (total_entries + shard_count - 1) / shard_count : total_entries;
-  size_t entries_per_device = entries_per_shard;
-  if (memory_level == Data_Namespace::GPU_LEVEL && shard_count) {
-    const auto shards_per_device = (shard_count + device_count - 1) / device_count;
-    CHECK_GT(shards_per_device, 0u);
-    entries_per_device = entries_per_shard * shards_per_device;
-  }
-  return entries_per_device;
-}
-
-size_t PerfectJoinHashTable::shardCount() const {
-  return 0;
 }
 
 bool PerfectJoinHashTable::isBitwiseEq() const {

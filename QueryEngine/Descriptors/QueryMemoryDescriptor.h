@@ -109,7 +109,6 @@ class QueryMemoryDescriptor {
       const ExecutorDeviceType device_type,
       const int8_t crt_min_byte_width,
       const bool sort_on_gpu_hint,
-      const size_t shard_count,
       const size_t max_groups_buffer_entry_count,
       const CountDistinctDescriptors count_distinct_descriptors,
       const bool must_use_baseline_sort,

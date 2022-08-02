@@ -637,10 +637,6 @@ class Executor {
       const ExecutorDeviceType device_type,
       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
-  ResultSetPtr collectAllDeviceShardedTopResults(
-      SharedKernelContext& shared_context,
-      const RelAlgExecutionUnit& ra_exe_unit) const;
-
   std::unordered_map<int, const Analyzer::BinOper*> getInnerTabIdToJoinCond() const;
 
   /**

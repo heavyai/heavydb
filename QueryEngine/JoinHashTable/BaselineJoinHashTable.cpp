@@ -260,9 +260,7 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
     }
   }
   std::vector<ColumnsForDevice> columns_per_device;
-  const auto shard_count = shardCount();
-  auto entries_per_device =
-      get_entries_per_device(total_entries, shard_count, device_count_, memory_level_);
+  auto entries_per_device = total_entries;
 
   for (int device_id = 0; device_id < device_count_; ++device_id) {
     const auto fragments = query_info.fragments;
@@ -301,8 +299,7 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
     const auto entry_count = 2 * std::max(tuple_count, size_t(1));
 
     // reset entries per device with one to many info
-    entries_per_device =
-        get_entries_per_device(entry_count, shard_count, device_count_, memory_level_);
+    entries_per_device = entry_count;
   }
   std::vector<std::future<void>> init_threads;
   for (int device_id = 0; device_id < device_count_; ++device_id) {
@@ -493,10 +490,6 @@ void BaselineJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_d
         std::string("Unrecognized error when initializing baseline hash table (") +
         std::to_string(err) + std::string(")"));
   }
-}
-
-size_t BaselineJoinHashTable::shardCount() const {
-  return 0;
 }
 
 size_t BaselineJoinHashTable::getKeyComponentWidth() const {

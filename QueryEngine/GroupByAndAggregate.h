@@ -72,9 +72,6 @@ class GroupByAndAggregate {
                const CompilationOptions& co,
                const GpuSharedMemoryContext& gpu_smem_context);
 
-  static size_t shard_count_for_top_groups(const RelAlgExecutionUnit& ra_exe_unit,
-                                           const SchemaProvider& schema_provider);
-
  private:
   bool gpuCanHandleOrderEntries(const std::list<Analyzer::OrderEntry>& order_entries);
 
@@ -91,9 +88,6 @@ class GroupByAndAggregate {
       const bool sort_on_gpu_hint,
       const bool must_use_baseline_sort,
       const bool output_columnar_hint);
-
-  int64_t getShardedTopBucket(const ColRangeInfo& col_range_info,
-                              const size_t shard_count) const;
 
   llvm::Value* codegenOutputSlot(llvm::Value* groups_buffer,
                                  const QueryMemoryDescriptor& query_mem_desc,

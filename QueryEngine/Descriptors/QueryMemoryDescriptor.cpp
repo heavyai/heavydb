@@ -216,7 +216,6 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
     const ExecutorDeviceType device_type,
     const int8_t crt_min_byte_width,
     const bool sort_on_gpu_hint,
-    const size_t shard_count,
     const size_t max_groups_buffer_entry_count,
     const CountDistinctDescriptors count_distinct_descriptors,
     const bool must_use_baseline_sort,
@@ -333,9 +332,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       break;
     }
     case QueryDescriptionType::GroupByBaselineHash: {
-      entry_count = shard_count
-                        ? (max_groups_buffer_entry_count + shard_count - 1) / shard_count
-                        : max_groups_buffer_entry_count;
+      entry_count = max_groups_buffer_entry_count;
       target_groupby_indices = target_expr_group_by_indices(ra_exe_unit.groupby_exprs,
                                                             ra_exe_unit.target_exprs);
       col_slot_context = ColSlotContext(ra_exe_unit.target_exprs,
