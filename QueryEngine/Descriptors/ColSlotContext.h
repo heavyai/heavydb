@@ -133,8 +133,10 @@ class ColSlotContext {
       str += "\t" + std::to_string(i) + " | " + std::to_string(slot_size.padded_size) +
              " , " + std::to_string(slot_size.logical_size) + "\n";
     }
+#ifdef HAVE_TOSTRING
     str += "\tcol_to_slot_map=" + ::toString(col_to_slot_map_) + "\n";
     str += "\tvarlen_output_slot_map=" + ::toString(varlen_output_slot_map_) + "\n";
+#endif
     return str;
   }
 

@@ -257,7 +257,7 @@ add_custom_command(
   DEPENDS GeosRuntime.cpp GeosRuntime.h ${CMAKE_SOURCE_DIR}/Geospatial/Compression.cpp
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc
   COMMAND ${llvm_clangpp_cmd}
-  ARGS -std=c++17 ${RT_OPT_FLAGS} -c -emit-llvm
+  ARGS -DNO_BOOST -std=c++17 ${RT_OPT_FLAGS} -c -emit-llvm
   ${CLANG_SDK_INC}
   ${CLANG_CRT_INC}
   -I ${Boost_INCLUDE_DIR}

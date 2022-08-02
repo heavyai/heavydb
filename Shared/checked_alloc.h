@@ -32,7 +32,7 @@ class OutOfHostMemory : public std::bad_alloc {
  public:
   OutOfHostMemory(const size_t size)
       : what_str_("Not enough CPU memory available to allocate " + std::to_string(size)) {
-    VLOG(1) << "Failed to allocate " << size << " bytes " << std::endl
+    VLOG(1) << "Failed to allocate " << size << " bytes\n"
             << boost::stacktrace::stacktrace();
   }
 

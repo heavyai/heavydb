@@ -19,12 +19,16 @@
 #ifndef __CUDACC__
 
 #include <cstdarg>
+#include <cstring>
 #include <mutex>
+
+#ifdef NO_BOOST
+#define SUPPRESS_NULL_LOGGER_DEPRECATION_WARNINGS
+#endif
 
 #include "Geospatial/Compression.h"
 #include "Geospatial/Types.h"
 #include "QueryEngine/GeosRuntime.h"
-#include "Shared/checked_alloc.h"
 #include "Shared/funcannotations.h"
 
 #define GEOS_USE_ONLY_R_API
@@ -278,7 +282,9 @@ bool fromWkb(WKB& wkb,
   *result_coords = nullptr;
   int64_t size = coords.size() * sizeof(double);
   if (size > 0) {
-    auto buf = checked_malloc(size);
+    auto buf = malloc(size);
+    if (!buf)
+      return false;
     std::memcpy(buf, coords.data(), size);
     *result_coords = reinterpret_cast<int8_t*>(buf);
   }
@@ -287,7 +293,9 @@ bool fromWkb(WKB& wkb,
   *result_meta1 = nullptr;
   size = ring_sizes.size() * sizeof(int32_t);
   if (size > 0) {
-    auto buf = checked_malloc(size);
+    auto buf = malloc(size);
+    if (!buf)
+      return false;
     std::memcpy(buf, ring_sizes.data(), size);
     *result_meta1 = reinterpret_cast<int32_t*>(buf);
   }
@@ -296,7 +304,9 @@ bool fromWkb(WKB& wkb,
   *result_meta2 = nullptr;
   size = poly_rings.size() * sizeof(int32_t);
   if (size > 0) {
-    auto buf = checked_malloc(size);
+    auto buf = malloc(size);
+    if (!buf)
+      return false;
     std::memcpy(buf, poly_rings.data(), size);
     *result_meta2 = reinterpret_cast<int32_t*>(buf);
   }

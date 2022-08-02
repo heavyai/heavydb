@@ -24,7 +24,6 @@
 
 #include "../Logger/Logger.h"
 #include "funcannotations.h"
-#include "toString.h"
 
 #include <cassert>
 #include <ctime>
@@ -1176,7 +1175,7 @@ int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
                                        const SQLTypeInfo& new_type_info);
 #endif
 
-#if !(defined(__CUDACC__) || defined(NO_BOOST))
+#ifdef HAVE_TOSTRING
 inline std::ostream& operator<<(std::ostream& os, const SQLTypeInfo& type_info) {
   os << toString(type_info);
   return os;

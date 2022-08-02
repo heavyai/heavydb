@@ -36,6 +36,7 @@
 
 #ifndef __CUDACC__
 #ifndef UDF_COMPILED
+#include "../Shared/toString.h"
 #include "../StringDictionary/StringDictionaryProxy.h"
 #endif  // #ifndef UDF_COMPILED
 #endif  // #ifndef __CUDACC__

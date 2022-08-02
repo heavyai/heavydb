@@ -128,6 +128,7 @@
 #ifdef HAVE_TOSTRING
 #include <ostream>
 #endif
+#include <string.h>
 
 // Notice that the format value is used to recognize if a memory
 // buffer uses some flat buffer format or not. To minimize chances for

@@ -42,6 +42,7 @@
 #include <cxxabi.h>
 #endif
 
+#include <cassert>
 #include <chrono>
 #include <iostream>
 #include <list>
@@ -290,7 +291,7 @@ std::string toString(const T& v) {
       case JoinType::INVALID:
         return "INVALID";
     }
-    UNREACHABLE();
+    assert(false);
     return "";
   } else if constexpr (std::is_pointer_v<T>) {
     return (v == NULL ? "NULL" : "&" + toString(*v));
