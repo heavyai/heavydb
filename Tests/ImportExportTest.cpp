@@ -891,10 +891,7 @@ TEST_P(ParquetImportErrorHandlingOfTypes, OneInvalidType) {
 using ImportAndSelectTestParameters =
     std::tuple<ImportType, DataSourceType, FragmentSize, MaxChunkSize>;
 
-class ImportAndSelectTest
-    : public ImportExportTestBase,
-      public ::testing::WithParamInterface<ImportAndSelectTestParameters>,
-      public FsiImportTest {
+class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTest {
  protected:
   struct Param {
     std::string import_type, data_source_type;
@@ -915,11 +912,15 @@ class ImportAndSelectTest
     FsiImportTest::teardownS3();
   }
 
+  virtual ~ImportAndSelectTestBase() = default;
+
+  virtual ImportAndSelectTestParameters TestParam() = 0;
+
   void SetUp() override {
     std::tie(param_.import_type,
              param_.data_source_type,
              param_.fragment_size,
-             param_.num_elements_per_chunk) = GetParam();
+             param_.num_elements_per_chunk) = TestParam();
     if (testShouldBeSkipped()) {
       GTEST_SKIP();
     }
@@ -1197,6 +1198,13 @@ class ImportAndSelectTest
       }
     }
   }
+};
+
+class ImportAndSelectTest
+    : public ImportAndSelectTestBase,
+      public ::testing::WithParamInterface<ImportAndSelectTestParameters> {
+ protected:
+  ImportAndSelectTestParameters TestParam() override { return GetParam(); }
 };
 
 TEST_P(ImportAndSelectTest, GeoTypes) {
@@ -1815,6 +1823,75 @@ INSTANTIATE_TEST_SUITE_P(FileAndDataSourceTypes,
                                             ::testing::Values(1, DEFAULT_FRAGMENT_ROWS),
                                             ::testing::Values(1, 1000000)),
                          print_import_and_select_test_param);
+
+using FileTypeOnlyImportAndSelectTestParameters = DataSourceType;
+
+class FileTypeOnlyImportAndSelectTest
+    : public ImportAndSelectTestBase,
+      public ::testing::WithParamInterface<DataSourceType> {
+ protected:
+  ImportAndSelectTestParameters TestParam() override {
+    return {GetParam(), "local", DEFAULT_FRAGMENT_ROWS, 1000000};
+  }
+
+ public:
+  static std::string toString(
+      const ::testing::TestParamInfo<FileTypeOnlyImportAndSelectTestParameters>&
+          param_info) {
+    auto file_type = param_info.param;
+    return file_type;
+  }
+};
+
+class LowProxyForeignTableFragmentSizeImportTest
+    : public FileTypeOnlyImportAndSelectTest {
+ protected:
+  void SetUp() override {
+    FileTypeOnlyImportAndSelectTest::SetUp();
+    saved_proxy_foreign_table_fragment_size_ =
+        import_export::ForeignDataImporter::proxy_foreign_table_fragment_size_;
+    import_export::ForeignDataImporter::proxy_foreign_table_fragment_size_ = 2;
+  }
+
+  void TearDown() override {
+    import_export::ForeignDataImporter::proxy_foreign_table_fragment_size_ =
+        saved_proxy_foreign_table_fragment_size_;
+    FileTypeOnlyImportAndSelectTest::TearDown();
+  }
+
+  size_t saved_proxy_foreign_table_fragment_size_;
+};
+
+TEST_P(LowProxyForeignTableFragmentSizeImportTest, ImportWithSmallProxyFragmentSize) {
+  auto query = createTableCopyFromAndSelect(
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
+      "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
+      "txt_2 TEXT ENCODING NONE",
+      "scalar_types",
+      "SELECT * FROM import_test_new ORDER BY s;",
+      get_line_regex(12),
+      14);
+
+  // clang-format off
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{
+      {True, 100L, 30000L, 2000000000L, 9000000000000000000L, 10.1f, 100.1234,
+        "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"},
+      {False, 110L, 30500L, 2000500000L, 9000000050000000000L, 100.12f, 2.1234,
+        "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"},
+      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, (param_.import_type == "redshift" ? 1000.12f : 1000.123f), 100.1,
+        "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"},
+      {Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null}
+  };
+  // clang-format on
+
+  validateImportStatus(4, 0, false);
+  assertResultSetEqual(expected_values, query);
+}
+
+INSTANTIATE_TEST_SUITE_P(LocalFiles,
+                         LowProxyForeignTableFragmentSizeImportTest,
+                         ::testing::Values("csv", "regex_parser", "parquet"),
+                         FileTypeOnlyImportAndSelectTest::toString);
 
 const char* create_table_timestamps = R"(
     CREATE TABLE import_test_timestamps(

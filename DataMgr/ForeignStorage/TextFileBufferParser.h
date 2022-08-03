@@ -81,6 +81,10 @@ struct ParseBufferRequest {
 
   // This parameter controls the behaviour of error handling in the data wrapper
   const bool track_rejected_rows;
+
+  // This tracks the number of rows processed, is necessary to identify requests that are
+  // not completed
+  size_t processed_row_count;
 };
 
 struct ParseBufferResult {

@@ -37,7 +37,11 @@ namespace foreign_storage {
  */
 struct MetadataScanMultiThreadingParams {
   std::queue<ParseBufferRequest> pending_requests;
+  std::queue<ParseBufferRequest>
+      deferred_requests;  // holds requests that will be processed in the next iteration
+                          // during an iterative file scan
   std::mutex pending_requests_mutex;
+  std::mutex deferred_requests_mutex;
   std::condition_variable pending_requests_condition;
   std::queue<ParseBufferRequest> request_pool;
   std::mutex request_pool_mutex;
@@ -49,22 +53,26 @@ struct MetadataScanMultiThreadingParams {
   bool disable_cache;
 };
 
-struct ReentrantMetadataScanParameters {
+struct IterativeFileScanParameters {
   std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map;
   int32_t fragment_id;
   AbstractBuffer* delete_buffer;
 
   mutable std::map<int, std::unique_ptr<std::mutex>> column_id_to_chunk_mutex;
+  mutable std::map<int, std::unique_ptr<std::condition_variable>>
+      column_id_to_chunk_conditional_var;
   mutable std::mutex delete_buffer_mutex;
 
-  ReentrantMetadataScanParameters(std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
-                                  int32_t fragment_id,
-                                  AbstractBuffer* delete_buffer)
+  IterativeFileScanParameters(std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
+                              int32_t fragment_id,
+                              AbstractBuffer* delete_buffer)
       : column_id_to_chunk_map(column_id_to_chunk_map)
       , fragment_id(fragment_id)
       , delete_buffer(delete_buffer) {
     for (const auto& [key, _] : column_id_to_chunk_map) {
       column_id_to_chunk_mutex[key] = std::make_unique<std::mutex>();
+      column_id_to_chunk_conditional_var[key] =
+          std::make_unique<std::condition_variable>();
     }
   }
 
@@ -72,6 +80,12 @@ struct ReentrantMetadataScanParameters {
     auto mutex_it = column_id_to_chunk_mutex.find(col_id);
     CHECK(mutex_it != column_id_to_chunk_mutex.end());
     return *mutex_it->second;
+  }
+
+  std::condition_variable& getChunkConditionalVariable(const int col_id) const {
+    auto var_it = column_id_to_chunk_conditional_var.find(col_id);
+    CHECK(var_it != column_id_to_chunk_conditional_var.end());
+    return *var_it->second;
   }
 };
 
@@ -123,14 +137,11 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
   AbstractTextFileDataWrapper(const ForeignTable* foreign_table);
 
   /**
-   * Implements a reentrant variant of the `populateChunkMetadata` member,
-   * allowing subsequent calls that respect the current state of the metadata
-   * scan.
+   * Implements an iterative file scan that enables populating chunks fragment
+   * by fragment.
    */
-  void populateChunkMetadataReentrant(
-      ChunkMetadataVector& chunk_metadata_vector,
-      const std::optional<ReentrantMetadataScanParameters>&
-          reentrant_metadata_scan_param = std::nullopt);
+  void iterativeFileScan(ChunkMetadataVector& chunk_metadata_vector,
+                         IterativeFileScanParameters& file_scan_param);
 
   /**
    * Populates provided chunks with appropriate data by parsing all file regions
@@ -178,8 +189,8 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
   // Force cache to be disabled
   const bool disable_cache_;
 
-  bool is_first_metadata_scan_call_;
-  bool is_reentrant_metadata_scan_in_progress_;
+  bool is_first_file_scan_call_;
+  bool is_file_scan_in_progress_;
 
   // declared in three derived classes to avoid
   // polluting ForeignDataWrapper virtual base

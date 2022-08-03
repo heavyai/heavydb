@@ -39,8 +39,8 @@ AbstractTextFileDataWrapper::AbstractTextFileDataWrapper()
     , foreign_table_(nullptr)
     , user_mapping_(nullptr)
     , disable_cache_(false)
-    , is_first_metadata_scan_call_(true)
-    , is_reentrant_metadata_scan_in_progress_(false) {}
+    , is_first_file_scan_call_(true)
+    , is_file_scan_in_progress_(false) {}
 
 AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
     const int db_id,
@@ -50,8 +50,8 @@ AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
     , is_restored_(false)
     , user_mapping_(nullptr)
     , disable_cache_(false)
-    , is_first_metadata_scan_call_(true)
-    , is_reentrant_metadata_scan_in_progress_(false) {}
+    , is_first_file_scan_call_(true)
+    , is_file_scan_in_progress_(false) {}
 
 AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
     const int db_id,
@@ -63,8 +63,8 @@ AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
     , is_restored_(false)
     , user_mapping_(user_mapping)
     , disable_cache_(disable_cache)
-    , is_first_metadata_scan_call_(true)
-    , is_reentrant_metadata_scan_in_progress_(false) {}
+    , is_first_file_scan_call_(true)
+    , is_file_scan_in_progress_(false) {}
 
 namespace {
 
@@ -93,8 +93,8 @@ std::set<const ColumnDescriptor*> get_columns(const ChunkToBufferMap& buffers,
   return columns;
 }
 
-bool skip_metadata_scan(const ColumnDescriptor* column, const bool is_reentrant_mode) {
-  return column->columnType.is_dict_encoded_type() && !is_reentrant_mode;
+bool skip_metadata_scan(const ColumnDescriptor* column) {
+  return column->columnType.is_dict_encoded_type();
 }
 }  // namespace
 
@@ -136,7 +136,9 @@ void AbstractTextFileDataWrapper::populateChunkBuffers(
         optional_columns, fragment_id, optional_buffers, column_id_to_chunk_map);
   }
   populateChunks(column_id_to_chunk_map, fragment_id, delete_buffer);
-  updateMetadata(column_id_to_chunk_map, fragment_id);
+  if (!is_file_scan_in_progress_) {
+    updateMetadata(column_id_to_chunk_map, fragment_id);
+  }
 }
 
 // if column was skipped during scan, update metadata now
@@ -148,7 +150,7 @@ void AbstractTextFileDataWrapper::updateMetadata(
   for (auto& entry : column_id_to_chunk_map) {
     const auto& column =
         catalog->getMetadataForColumn(foreign_table_->tableId, entry.first);
-    if (skip_metadata_scan(column, is_reentrant_metadata_scan_in_progress_)) {
+    if (skip_metadata_scan(column)) {
       ChunkKey data_chunk_key = {
           db_id_, foreign_table_->tableId, column->columnId, fragment_id};
       if (column->columnType.is_varlen_indeed()) {
@@ -252,6 +254,8 @@ ParseFileRegionResult parse_file_regions(
   return load_file_region_result;
 }
 
+namespace {
+
 /**
  * Gets the appropriate buffer size to be used when processing file(s).
  */
@@ -316,6 +320,19 @@ void resize_delete_buffer(AbstractBuffer* delete_buffer,
   }
 }
 
+bool no_deferred_requests(MetadataScanMultiThreadingParams& multi_threading_params) {
+  std::unique_lock<std::mutex> deferred_requests_lock(
+      multi_threading_params.deferred_requests_mutex);
+  return multi_threading_params.deferred_requests.empty();
+}
+
+bool is_file_scan_finished(const FileReader* file_reader,
+                           MetadataScanMultiThreadingParams& multi_threading_params) {
+  return file_reader->isScanFinished() && no_deferred_requests(multi_threading_params);
+}
+
+}  // namespace
+
 void AbstractTextFileDataWrapper::populateChunks(
     std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
     int fragment_id,
@@ -324,39 +341,39 @@ void AbstractTextFileDataWrapper::populateChunks(
 
   CHECK(!column_id_to_chunk_map.empty());
 
-  // check to see if a reentrant metadata scan step is required
+  // check to see if a iterative scan step is required
   auto file_regions_it = fragment_id_to_file_regions_map_.find(fragment_id);
   if (file_regions_it == fragment_id_to_file_regions_map_.end() ||
-      is_reentrant_metadata_scan_in_progress_) {
+      is_file_scan_in_progress_) {
     // check to see if there is more foreign data to scan
-    if (is_first_metadata_scan_call_ || !file_reader_->isScanFinished()) {
+    if (is_first_file_scan_call_ ||
+        !is_file_scan_finished(file_reader_.get(), multi_threading_params_)) {
       // NOTE: we can only guarantee the current `fragment_id` is fully done
-      // metadata scan if either
+      // iterative scan if either
       //   1) the scan is finished OR
       //   2) `fragment_id+1` exists in the internal map
       // this is why `fragment_id+1` is checked for below
       auto file_regions_it_one_ahead =
           fragment_id_to_file_regions_map_.find(fragment_id + 1);
-      if (is_first_metadata_scan_call_ ||
+      if (is_first_file_scan_call_ ||
           (file_regions_it_one_ahead == fragment_id_to_file_regions_map_.end())) {
         ChunkMetadataVector chunk_metadata_vector;
-        std::optional<ReentrantMetadataScanParameters> reentrant_params_opt(
-            std::in_place, column_id_to_chunk_map, fragment_id, delete_buffer);
-        populateChunkMetadataReentrant(chunk_metadata_vector, reentrant_params_opt);
+        IterativeFileScanParameters iterative_params{
+            column_id_to_chunk_map, fragment_id, delete_buffer};
+        iterativeFileScan(chunk_metadata_vector, iterative_params);
       }
     }
 
     file_regions_it = fragment_id_to_file_regions_map_.find(fragment_id);
     if (file_regions_it == fragment_id_to_file_regions_map_.end()) {
-      CHECK(file_reader_->isScanFinished());
-      is_reentrant_metadata_scan_in_progress_ =
-          false;  // conclude the reentrant metadata scan is finished
-      is_first_metadata_scan_call_ =
-          true;  // any subsequent reentrant request can assume they will be the first
+      CHECK(is_file_scan_finished(file_reader_.get(), multi_threading_params_));
+      is_file_scan_in_progress_ = false;  // conclude the iterative scan is finished
+      is_first_file_scan_call_ =
+          true;  // any subsequent iterative request can assume they will be the first
       throw_fragment_id_out_of_bounds_error(
           foreign_table_, fragment_id, fragment_id_to_file_regions_map_.rbegin()->first);
     } else {
-      // reentrant metadata scan is required to have loaded all required chunks thus we
+      // iterative scan is required to have loaded all required chunks thus we
       // can exit early
       return;
     }
@@ -456,6 +473,18 @@ void AbstractTextFileDataWrapper::populateChunks(
 }
 
 /**
+ * Number of rows to process given the current position defined by
+ * `start_row_index`, the max fragment size and the number of rows left to
+ * process.
+ */
+size_t num_rows_to_process(const size_t start_row_index,
+                           const size_t max_fragment_size,
+                           const size_t rows_remaining) {
+  size_t start_position_in_fragment = start_row_index % max_fragment_size;
+  return max_fragment_size - start_position_in_fragment;
+}
+
+/**
  * Given a start row index, maximum fragment size, and number of rows in
  * a buffer, this function returns a vector indicating how the rows in
  * the buffer should be partitioned in order to fill up available fragment
@@ -494,7 +523,7 @@ std::vector<size_t> partition_by_fragment(const size_t start_row_index,
  * Gets the next metadata scan request object from the pending requests queue.
  * A null optional is returned if there are no further requests to be processed.
  */
-std::optional<ParseBufferRequest> get_next_metadata_scan_request(
+std::optional<ParseBufferRequest> get_next_scan_request(
     MetadataScanMultiThreadingParams& multi_threading_params) {
   std::unique_lock<std::mutex> pending_requests_lock(
       multi_threading_params.pending_requests_mutex);
@@ -605,25 +634,36 @@ void cache_blocks(std::map<ChunkKey, Chunk_NS::Chunk>& cached_chunks,
 }
 
 void append_data_block_to_chunk(
-    const foreign_storage::ReentrantMetadataScanParameters& reentrant_metadata_scan_param,
+    const foreign_storage::IterativeFileScanParameters& file_scan_param,
     DataBlockPtr data_block,
     size_t row_count,
     const ChunkKey& chunk_key,
     const ColumnDescriptor* column,
-    const std::set<size_t>& rejected_row_indices) {
-  auto chunk = shared::get_from_map(reentrant_metadata_scan_param.column_id_to_chunk_map,
+    const std::set<size_t>& rejected_row_indices,
+    const size_t element_count_required) {
+  auto chunk = shared::get_from_map(file_scan_param.column_id_to_chunk_map,
                                     chunk_key[CHUNK_KEY_COLUMN_IDX]);
 
-  std::unique_lock<std::mutex> chunk_lock(
-      reentrant_metadata_scan_param.getChunkMutex(chunk_key[CHUNK_KEY_COLUMN_IDX]));
-  size_t chunk_offset = chunk.getBuffer()->getEncoder()->getNumElems();
-  chunk.appendData(data_block, row_count, 0);
+  auto& conditional_variable =
+      file_scan_param.getChunkConditionalVariable(chunk_key[CHUNK_KEY_COLUMN_IDX]);
+  {
+    std::unique_lock<std::mutex> chunk_lock(
+        file_scan_param.getChunkMutex(chunk_key[CHUNK_KEY_COLUMN_IDX]));
+    conditional_variable.wait(chunk_lock, [element_count_required, &chunk]() {
+      return chunk.getBuffer()->getEncoder()->getNumElems() == element_count_required;
+    });
 
-  if (reentrant_metadata_scan_param.delete_buffer) {
-    std::unique_lock delete_buffer_lock(
-        reentrant_metadata_scan_param.delete_buffer_mutex);
-    auto& delete_buffer = reentrant_metadata_scan_param.delete_buffer;
-    auto chunk_element_count = chunk.getBuffer()->getEncoder()->getNumElems();
+    chunk.appendData(data_block, row_count, 0);
+  }
+
+  conditional_variable
+      .notify_all();  // notify any threads waiting on the correct element count
+
+  if (file_scan_param.delete_buffer) {
+    std::unique_lock delete_buffer_lock(file_scan_param.delete_buffer_mutex);
+    auto& delete_buffer = file_scan_param.delete_buffer;
+    auto chunk_offset = element_count_required;
+    auto chunk_element_count = chunk_offset + row_count;
 
     // ensure delete buffer is sized appropriately
     resize_delete_buffer(delete_buffer, chunk_element_count);
@@ -636,21 +676,68 @@ void append_data_block_to_chunk(
   }
 }
 
-/**
- * Updates metadata encapsulated in encoders for all table columns given
- * new data blocks gotten from parsing a new set of rows in a file buffer.
- * If cache is available, also append the data_blocks to chunks in the cache
- */
-void process_data_blocks(
+void populate_chunks_using_data_blocks(
     MetadataScanMultiThreadingParams& multi_threading_params,
     int fragment_id,
     const ParseBufferRequest& request,
     ParseBufferResult& result,
     std::map<int, const ColumnDescriptor*>& column_by_id,
     std::map<int, FileRegions>& fragment_id_to_file_regions_map,
-    const std::optional<foreign_storage::ReentrantMetadataScanParameters>&
-        reentrant_metadata_scan_param) {
+    const foreign_storage::IterativeFileScanParameters& file_scan_param) {
   std::unique_lock<std::mutex> lock(multi_threading_params.chunk_encoder_buffers_mutex);
+  // File regions should be added in same order as appendData
+  add_file_region(fragment_id_to_file_regions_map,
+                  fragment_id,
+                  request.first_row_index,
+                  result,
+                  request.getFilePath());
+  CHECK_EQ(fragment_id, file_scan_param.fragment_id);
+
+  for (auto& [column_id, data_block] : result.column_id_to_data_blocks_map) {
+    ChunkKey chunk_key{request.db_id, request.getTableId(), column_id, fragment_id};
+    const auto column = column_by_id[column_id];
+    if (column->columnType.is_varlen_indeed()) {
+      chunk_key.emplace_back(1);
+    }
+    if (multi_threading_params.chunk_encoder_buffers.find(chunk_key) ==
+        multi_threading_params.chunk_encoder_buffers.end()) {
+      multi_threading_params.chunk_encoder_buffers[chunk_key] =
+          std::make_unique<ForeignStorageBuffer>();
+      multi_threading_params.chunk_encoder_buffers[chunk_key]->initEncoder(
+          column->columnType);
+    }
+    size_t current_element_count =
+        multi_threading_params.chunk_encoder_buffers[chunk_key]
+            ->getEncoder()
+            ->getNumElems();
+    size_t num_elements = current_element_count + result.row_count;
+    multi_threading_params.chunk_encoder_buffers[chunk_key]->getEncoder()->setNumElems(
+        num_elements);
+    lock.unlock();  // unlock the fragment based lock in order to achieve better
+                    // performance
+    append_data_block_to_chunk(file_scan_param,
+                               data_block,
+                               result.row_count,
+                               chunk_key,
+                               column,
+                               result.rejected_rows,
+                               current_element_count);
+    lock.lock();
+  }
+}
+
+/**
+ * Updates metadata encapsulated in encoders for all table columns given
+ * new data blocks gotten from parsing a new set of rows in a file buffer.
+ * If cache is available, also append the data_blocks to chunks in the cache
+ */
+void process_data_blocks(MetadataScanMultiThreadingParams& multi_threading_params,
+                         int fragment_id,
+                         const ParseBufferRequest& request,
+                         ParseBufferResult& result,
+                         std::map<int, const ColumnDescriptor*>& column_by_id,
+                         std::map<int, FileRegions>& fragment_id_to_file_regions_map) {
+  std::lock_guard<std::mutex> lock(multi_threading_params.chunk_encoder_buffers_mutex);
   // File regions should be added in same order as appendData
   add_file_region(fragment_id_to_file_regions_map,
                   fragment_id,
@@ -681,25 +768,14 @@ void process_data_blocks(
                           result.row_count;
     multi_threading_params.chunk_encoder_buffers[chunk_key]->getEncoder()->setNumElems(
         num_elements);
-    if (reentrant_metadata_scan_param.has_value()) {
-      lock.unlock();
-      append_data_block_to_chunk(*reentrant_metadata_scan_param,
-                                 data_block,
-                                 result.row_count,
-                                 chunk_key,
-                                 column,
-                                 result.rejected_rows);
-      lock.lock();
-    } else {
-      cache_blocks(multi_threading_params.cached_chunks,
-                   data_block,
-                   result.row_count,
-                   chunk_key,
-                   column,
-                   (num_elements - result.row_count) ==
-                       0,  // Is the first block added to this chunk
-                   multi_threading_params.disable_cache);
-    }
+    cache_blocks(
+        multi_threading_params.cached_chunks,
+        data_block,
+        result.row_count,
+        chunk_key,
+        column,
+        (num_elements - result.row_count) == 0,  // Is the first block added to this chunk
+        multi_threading_params.disable_cache);
   }
 }
 
@@ -722,12 +798,10 @@ void add_request_to_pool(MetadataScanMultiThreadingParams& multi_threading_param
  */
 void scan_metadata(MetadataScanMultiThreadingParams& multi_threading_params,
                    std::map<int, FileRegions>& fragment_id_to_file_regions_map,
-                   const TextFileBufferParser& parser,
-                   const std::optional<foreign_storage::ReentrantMetadataScanParameters>&
-                       reentrant_metadata_scan_param) {
+                   const TextFileBufferParser& parser) {
   std::map<int, const ColumnDescriptor*> column_by_id{};
   while (true) {
-    auto request_opt = get_next_metadata_scan_request(multi_threading_params);
+    auto request_opt = get_next_scan_request(multi_threading_params);
     if (!request_opt.has_value()) {
       break;
     }
@@ -756,8 +830,7 @@ void scan_metadata(MetadataScanMultiThreadingParams& multi_threading_params,
                             request,
                             result,
                             column_by_id,
-                            fragment_id_to_file_regions_map,
-                            reentrant_metadata_scan_param);
+                            fragment_id_to_file_regions_map);
         row_index += result.row_count;
         request.begin_pos = result.row_offsets.back() - request.file_offset;
       }
@@ -792,19 +865,119 @@ ParseBufferRequest get_request_from_pool(
   return request;
 }
 
+/*
+ * Defer processing a request until next iteration. The use case for this is
+ * during an iterative, some requests must defer processing until the correct
+ * fragment is being processed.
+ */
+void defer_scan_request(MetadataScanMultiThreadingParams& multi_threading_params,
+                        ParseBufferRequest& request) {
+  std::unique_lock<std::mutex> deferred_requests_lock(
+      multi_threading_params.deferred_requests_mutex);
+  multi_threading_params.deferred_requests.emplace(std::move(request));
+}
+
+/*
+ * Dispatch all requests that are currently deferred onto the pending request queue.
+ */
+void dispatch_all_deferred_requests(
+    MetadataScanMultiThreadingParams& multi_threading_params) {
+  std::unique_lock<std::mutex> deferred_requests_lock(
+      multi_threading_params.deferred_requests_mutex);
+  {
+    std::unique_lock<std::mutex> pending_requests_lock(
+        multi_threading_params.pending_requests_mutex);
+
+    while (!multi_threading_params.deferred_requests.empty()) {
+      auto& request = multi_threading_params.deferred_requests.front();
+      multi_threading_params.pending_requests.emplace(std::move(request));
+      multi_threading_params.deferred_requests.pop();
+    }
+    multi_threading_params.pending_requests_condition.notify_all();
+  }
+}
+
 /**
  * Dispatches a new metadata scan request by adding the request to
  * the pending requests queue to be consumed by a worker thread.
  */
-void dispatch_metadata_scan_request(
-    MetadataScanMultiThreadingParams& multi_threading_params,
-    ParseBufferRequest& request) {
+void dispatch_scan_request(MetadataScanMultiThreadingParams& multi_threading_params,
+                           ParseBufferRequest& request) {
   {
     std::unique_lock<std::mutex> pending_requests_lock(
         multi_threading_params.pending_requests_mutex);
     multi_threading_params.pending_requests.emplace(std::move(request));
   }
   multi_threading_params.pending_requests_condition.notify_all();
+}
+
+/**
+ * Consumes and processes scan requests from a pending requests queue
+ * and populates chunks during an iterative file scan
+ */
+void populate_chunks(MetadataScanMultiThreadingParams& multi_threading_params,
+                     std::map<int, FileRegions>& fragment_id_to_file_regions_map,
+                     const TextFileBufferParser& parser,
+                     foreign_storage::IterativeFileScanParameters& file_scan_param) {
+  std::map<int, const ColumnDescriptor*> column_by_id{};
+  while (true) {
+    auto request_opt = get_next_scan_request(multi_threading_params);
+    if (!request_opt.has_value()) {
+      break;
+    }
+    ParseBufferRequest& request = request_opt.value();
+    try {
+      if (column_by_id.empty()) {
+        for (const auto column : request.getColumns()) {
+          column_by_id[column->columnId] = column;
+        }
+      }
+      CHECK_LE(request.processed_row_count, request.buffer_row_count);
+      for (size_t num_rows_left_to_process =
+               request.buffer_row_count - request.processed_row_count;
+           num_rows_left_to_process > 0;
+           num_rows_left_to_process =
+               request.buffer_row_count - request.processed_row_count) {
+        // NOTE: `request.begin_pos` state is required to be set correctly by this point
+        // in execution
+        size_t row_index = request.first_row_index + request.processed_row_count;
+        int fragment_id = row_index / request.getMaxFragRows();
+        if (fragment_id >
+            file_scan_param.fragment_id) {  // processing must continue next iteration
+          defer_scan_request(multi_threading_params, request);
+          return;
+        }
+        request.process_row_count = num_rows_to_process(
+            row_index, request.getMaxFragRows(), num_rows_left_to_process);
+        for (const auto& import_buffer : request.import_buffers) {
+          if (import_buffer != nullptr) {
+            import_buffer->clear();
+          }
+        }
+        auto result = parser.parseBuffer(request, true);
+        populate_chunks_using_data_blocks(multi_threading_params,
+                                          fragment_id,
+                                          request,
+                                          result,
+                                          column_by_id,
+                                          fragment_id_to_file_regions_map,
+                                          file_scan_param);
+        request.processed_row_count += result.row_count;
+        request.begin_pos = result.row_offsets.back() - request.file_offset;
+      }
+
+    } catch (...) {
+      // Re-add request to pool so we dont block any other threads
+      {
+        std::lock_guard<std::mutex> pending_requests_lock(
+            multi_threading_params.pending_requests_mutex);
+        multi_threading_params.continue_processing = false;
+      }
+      add_request_to_pool(multi_threading_params, request);
+      throw;
+    }
+    add_request_to_pool(multi_threading_params, request);
+  }
 }
 
 /**
@@ -826,6 +999,7 @@ void reset_multithreading_params(
   multi_threading_params.request_pool = {};
   multi_threading_params.cached_chunks = {};
   multi_threading_params.pending_requests = {};
+  multi_threading_params.deferred_requests = {};
   multi_threading_params.chunk_encoder_buffers.clear();
 }
 
@@ -833,7 +1007,7 @@ void reset_multithreading_params(
  * Reads from a text file iteratively and dispatches metadata scan
  * requests that are processed by worker threads.
  */
-void dispatch_metadata_scan_requests(
+void dispatch_scan_requests(
     const foreign_storage::ForeignTable* table,
     const size_t& buffer_size,
     const std::string& file_path,
@@ -843,21 +1017,22 @@ void dispatch_metadata_scan_requests(
     size_t& first_row_index_in_buffer,
     size_t& current_file_offset,
     const TextFileBufferParser& parser,
-    const std::optional<foreign_storage::ReentrantMetadataScanParameters>&
-        reentrant_metadata_scan_param,
+    const foreign_storage::IterativeFileScanParameters* file_scan_param,
     foreign_storage::AbstractTextFileDataWrapper::ResidualBuffer&
-        reentrant_residual_buffer,
-    const bool is_first_metadata_scan_call) {
-  auto& alloc_size = reentrant_residual_buffer.alloc_size;
-  auto& residual_buffer = reentrant_residual_buffer.residual_data;
-  auto& residual_buffer_size = reentrant_residual_buffer.residual_buffer_size;
-  auto& residual_buffer_alloc_size = reentrant_residual_buffer.residual_buffer_alloc_size;
+        iterative_residual_buffer,
+    const bool is_first_file_scan_call) {
+  auto& alloc_size = iterative_residual_buffer.alloc_size;
+  auto& residual_buffer = iterative_residual_buffer.residual_data;
+  auto& residual_buffer_size = iterative_residual_buffer.residual_buffer_size;
+  auto& residual_buffer_alloc_size = iterative_residual_buffer.residual_buffer_alloc_size;
 
-  if (is_first_metadata_scan_call) {
+  if (is_first_file_scan_call) {
     alloc_size = buffer_size;
     residual_buffer = std::make_unique<char[]>(alloc_size);
     residual_buffer_size = 0;
     residual_buffer_alloc_size = alloc_size;
+  } else if (!no_deferred_requests(multi_threading_params)) {
+    dispatch_all_deferred_requests(multi_threading_params);
   }
 
   while (!file_reader.isScanFinished()) {
@@ -906,6 +1081,8 @@ void dispatch_metadata_scan_requests(
     request.first_row_index = first_row_index_in_buffer;
     request.file_offset = current_file_offset;
     request.buffer_row_count = num_rows_in_buffer;
+    request.processed_row_count = 0;
+    request.begin_pos = 0;
 
     residual_buffer_size = size - request.end_pos;
     if (residual_buffer_size > 0) {
@@ -919,15 +1096,15 @@ void dispatch_metadata_scan_requests(
     first_row_index_in_buffer += num_rows_in_buffer;
 
     if (num_rows_in_buffer > 0) {
-      dispatch_metadata_scan_request(multi_threading_params, request);
+      dispatch_scan_request(multi_threading_params, request);
     } else {
       add_request_to_pool(multi_threading_params, request);
     }
 
-    if (reentrant_metadata_scan_param.has_value()) {
+    if (file_scan_param) {
       const int32_t last_fragment_index =
           (first_row_index_in_buffer) / table->maxFragRows;
-      if (last_fragment_index > reentrant_metadata_scan_param->fragment_id) {
+      if (last_fragment_index > file_scan_param->fragment_id) {
         break;
       }
     }
@@ -943,6 +1120,44 @@ void dispatch_metadata_scan_requests(
   multi_threading_params.continue_processing = false;
   pending_requests_queue_lock.unlock();
   multi_threading_params.pending_requests_condition.notify_all();
+}
+
+void dispatch_scan_requests_with_exception_handling(
+    const foreign_storage::ForeignTable* table,
+    const size_t& buffer_size,
+    const std::string& file_path,
+    FileReader& file_reader,
+    const import_export::CopyParams& copy_params,
+    MetadataScanMultiThreadingParams& multi_threading_params,
+    size_t& first_row_index_in_buffer,
+    size_t& current_file_offset,
+    const TextFileBufferParser& parser,
+    const foreign_storage::IterativeFileScanParameters* file_scan_param,
+    foreign_storage::AbstractTextFileDataWrapper::ResidualBuffer&
+        iterative_residual_buffer,
+    const bool is_first_file_scan_call) {
+  try {
+    dispatch_scan_requests(table,
+                           buffer_size,
+                           file_path,
+                           file_reader,
+                           copy_params,
+                           multi_threading_params,
+                           first_row_index_in_buffer,
+                           current_file_offset,
+                           parser,
+                           file_scan_param,
+                           iterative_residual_buffer,
+                           is_first_file_scan_call);
+  } catch (...) {
+    {
+      std::unique_lock<std::mutex> pending_requests_lock(
+          multi_threading_params.pending_requests_mutex);
+      multi_threading_params.continue_processing = false;
+    }
+    multi_threading_params.pending_requests_condition.notify_all();
+    throw;
+  }
 }
 
 namespace {
@@ -979,6 +1194,37 @@ void add_placeholder_metadata(
         get_placeholder_metadata(column->columnType, num_elements);
   }
 }
+
+void initialize_non_append_mode_scan(
+    const std::map<ChunkKey, std::shared_ptr<ChunkMetadata>>& chunk_metadata_map,
+    const std::map<int, FileRegions>& fragment_id_to_file_regions_map,
+    const foreign_storage::OptionsMap& server_options,
+    std::unique_ptr<FileReader>& file_reader,
+    const std::string& file_path,
+    const import_export::CopyParams& copy_params,
+    const shared::FilePathOptions& file_path_options,
+    const std::optional<size_t>& max_file_count,
+    const foreign_storage::ForeignTable* foreign_table,
+    const foreign_storage::UserMapping* user_mapping,
+    const foreign_storage::TextFileBufferParser& parser,
+    std::function<std::string()> get_s3_key,
+    size_t& num_rows,
+    size_t& append_start_offset) {
+  // Should only be called once for non-append tables
+  CHECK(chunk_metadata_map.empty());
+  CHECK(fragment_id_to_file_regions_map.empty());
+  if (server_options.find(foreign_storage::AbstractTextFileDataWrapper::STORAGE_TYPE_KEY)
+          ->second ==
+      foreign_storage::AbstractTextFileDataWrapper::LOCAL_FILE_STORAGE_TYPE) {
+    file_reader = std::make_unique<LocalMultiFileReader>(
+        file_path, copy_params, file_path_options, max_file_count);
+  } else {
+    UNREACHABLE();
+  }
+  parser.validateFiles(file_reader.get(), foreign_table);
+  num_rows = 0;
+  append_start_offset = 0;
+}
 }  // namespace
 
 /**
@@ -995,26 +1241,7 @@ void add_placeholder_metadata(
  */
 void AbstractTextFileDataWrapper::populateChunkMetadata(
     ChunkMetadataVector& chunk_metadata_vector) {
-  populateChunkMetadataReentrant(chunk_metadata_vector);
-}
-
-void AbstractTextFileDataWrapper::populateChunkMetadataReentrant(
-    ChunkMetadataVector& chunk_metadata_vector,
-    const std::optional<ReentrantMetadataScanParameters>& reentrant_metadata_scan_param) {
   auto timer = DEBUG_TIMER(__func__);
-
-  const bool is_reentrant_mode = reentrant_metadata_scan_param.has_value();
-
-  // always treat a non-reentrant metadata scan as the first scan for puposes of parameter
-  // initialization
-  if (!is_reentrant_mode) {
-    is_first_metadata_scan_call_ = true;
-  } else {
-    is_reentrant_metadata_scan_in_progress_ = true;
-  }
-
-  CHECK(!is_reentrant_mode || !foreign_table_->isAppendMode())
-      << " reentrant metadata scan can not be used with APPEND mode.";
 
   const auto copy_params = getFileBufferParser().validateAndGetCopyParams(foreign_table_);
   const auto file_path = getFullFilePath(foreign_table_);
@@ -1036,20 +1263,21 @@ void AbstractTextFileDataWrapper::populateChunkMetadataReentrant(
       UNREACHABLE();
     }
   } else {
-    // Should only be called once for non-append tables
-    if (is_first_metadata_scan_call_) {
-      CHECK(chunk_metadata_map_.empty());
-      CHECK(fragment_id_to_file_regions_map_.empty());
-      if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
-        file_reader_ = std::make_unique<LocalMultiFileReader>(
-            file_path, copy_params, file_path_options, getMaxFileCount());
-      } else {
-        UNREACHABLE();
-      }
-      parser.validateFiles(file_reader_.get(), foreign_table_);
-      num_rows_ = 0;
-      append_start_offset_ = 0;
-    }
+    initialize_non_append_mode_scan(
+        chunk_metadata_map_,
+        fragment_id_to_file_regions_map_,
+        server_options,
+        file_reader_,
+        file_path,
+        copy_params,
+        file_path_options,
+        getMaxFileCount(),
+        foreign_table_,
+        user_mapping_,
+        parser,
+        [this] { return ""; },
+        num_rows_,
+        append_start_offset_);
   }
 
   auto columns =
@@ -1058,22 +1286,17 @@ void AbstractTextFileDataWrapper::populateChunkMetadataReentrant(
   for (auto column : columns) {
     column_by_id[column->columnId] = column;
   }
-
-  if (is_first_metadata_scan_call_) {  // reiniitialize all members that may have state in
-                                       // `multi_threading_params_`
-    reset_multithreading_params(multi_threading_params_);
-  }
-
-  multi_threading_params_.disable_cache = disable_cache_;
+  MetadataScanMultiThreadingParams multi_threading_params;
+  multi_threading_params.disable_cache = disable_cache_;
 
   // Restore previous chunk data
   if (foreign_table_->isAppendMode()) {
-    multi_threading_params_.chunk_encoder_buffers = std::move(chunk_encoder_buffers_);
+    multi_threading_params.chunk_encoder_buffers = std::move(chunk_encoder_buffers_);
   }
 
   std::set<int> columns_to_scan;
   for (auto column : columns) {
-    if (!skip_metadata_scan(column, is_reentrant_mode)) {
+    if (!skip_metadata_scan(column)) {
       columns_to_scan.insert(column->columnId);
     }
   }
@@ -1081,63 +1304,46 @@ void AbstractTextFileDataWrapper::populateChunkMetadataReentrant(
   // Track where scan started for appends
   int start_row = num_rows_;
   if (!file_reader_->isScanFinished()) {
-    if (is_first_metadata_scan_call_) {
-      // NOTE: `buffer_size_` and `thread_count_` must not change across a reentrant
-      // metadata scan
-      buffer_size_ = get_buffer_size(copy_params,
-                                     file_reader_->isRemainingSizeKnown(),
-                                     file_reader_->getRemainingSize());
-      thread_count_ = get_thread_count(copy_params,
+    auto buffer_size = get_buffer_size(copy_params,
                                        file_reader_->isRemainingSizeKnown(),
-                                       file_reader_->getRemainingSize(),
-                                       buffer_size_);
-    }
-    multi_threading_params_.continue_processing = true;
+                                       file_reader_->getRemainingSize());
+    auto thread_count = get_thread_count(copy_params,
+                                         file_reader_->isRemainingSizeKnown(),
+                                         file_reader_->getRemainingSize(),
+                                         buffer_size);
+    multi_threading_params.continue_processing = true;
 
     std::vector<std::future<void>> futures{};
-    for (size_t i = 0; i < thread_count_; i++) {
-      if (is_first_metadata_scan_call_) {
-        multi_threading_params_.request_pool.emplace(
-            buffer_size_,
-            copy_params,
-            db_id_,
-            foreign_table_,
-            columns_to_scan,
-            getFullFilePath(foreign_table_),
-            is_reentrant_mode ? &render_group_analyzer_map_ : nullptr,
-            is_reentrant_mode);
-      }
+    for (size_t i = 0; i < thread_count; i++) {
+      multi_threading_params.request_pool.emplace(buffer_size,
+                                                  copy_params,
+                                                  db_id_,
+                                                  foreign_table_,
+                                                  columns_to_scan,
+                                                  getFullFilePath(foreign_table_),
+                                                  nullptr,
+                                                  disable_cache_);
 
       futures.emplace_back(std::async(std::launch::async,
                                       scan_metadata,
-                                      std::ref(multi_threading_params_),
+                                      std::ref(multi_threading_params),
                                       std::ref(fragment_id_to_file_regions_map_),
-                                      std::ref(parser),
-                                      std::ref(reentrant_metadata_scan_param)));
+                                      std::ref(parser)));
     }
 
-    try {
-      dispatch_metadata_scan_requests(foreign_table_,
-                                      buffer_size_,
-                                      file_path,
-                                      (*file_reader_),
-                                      copy_params,
-                                      multi_threading_params_,
-                                      num_rows_,
-                                      append_start_offset_,
-                                      getFileBufferParser(),
-                                      reentrant_metadata_scan_param,
-                                      residual_buffer_,
-                                      is_first_metadata_scan_call_);
-    } catch (...) {
-      {
-        std::unique_lock<std::mutex> pending_requests_lock(
-            multi_threading_params_.pending_requests_mutex);
-        multi_threading_params_.continue_processing = false;
-      }
-      multi_threading_params_.pending_requests_condition.notify_all();
-      throw;
-    }
+    ResidualBuffer residual_buffer;
+    dispatch_scan_requests_with_exception_handling(foreign_table_,
+                                                   buffer_size,
+                                                   file_path,
+                                                   (*file_reader_),
+                                                   copy_params,
+                                                   multi_threading_params,
+                                                   num_rows_,
+                                                   append_start_offset_,
+                                                   getFileBufferParser(),
+                                                   nullptr,
+                                                   residual_buffer,
+                                                   true);
 
     for (auto& future : futures) {
       // get() instead of wait() because we need to propagate potential exceptions.
@@ -1145,13 +1351,13 @@ void AbstractTextFileDataWrapper::populateChunkMetadataReentrant(
     }
   }
 
-  for (auto& [chunk_key, buffer] : multi_threading_params_.chunk_encoder_buffers) {
+  for (auto& [chunk_key, buffer] : multi_threading_params.chunk_encoder_buffers) {
     auto column_entry = column_by_id.find(chunk_key[CHUNK_KEY_COLUMN_IDX]);
     CHECK(column_entry != column_by_id.end());
     const auto& column_type = column_entry->second->columnType;
     auto chunk_metadata = buffer->getEncoder()->getMetadata(column_type);
     chunk_metadata->numElements = buffer->getEncoder()->getNumElems();
-    const auto& cached_chunks = multi_threading_params_.cached_chunks;
+    const auto& cached_chunks = multi_threading_params.cached_chunks;
     if (!column_type.is_varlen_indeed()) {
       chunk_metadata->numBytes = column_type.get_size() * chunk_metadata->numElements;
     } else if (auto chunk_entry = cached_chunks.find(chunk_key);
@@ -1166,7 +1372,7 @@ void AbstractTextFileDataWrapper::populateChunkMetadataReentrant(
   }
 
   for (auto column : columns) {
-    if (skip_metadata_scan(column, is_reentrant_mode)) {
+    if (skip_metadata_scan(column)) {
       add_placeholder_metadata(
           column, foreign_table_, db_id_, start_row, num_rows_, chunk_metadata_map_);
     }
@@ -1182,14 +1388,123 @@ void AbstractTextFileDataWrapper::populateChunkMetadataReentrant(
 
   // Save chunk data
   if (foreign_table_->isAppendMode()) {
-    chunk_encoder_buffers_ = std::move(multi_threading_params_.chunk_encoder_buffers);
+    chunk_encoder_buffers_ = std::move(multi_threading_params.chunk_encoder_buffers);
+  }
+}
+
+void AbstractTextFileDataWrapper::iterativeFileScan(
+    ChunkMetadataVector& chunk_metadata_vector,
+    IterativeFileScanParameters& file_scan_param) {
+  auto timer = DEBUG_TIMER(__func__);
+
+  is_file_scan_in_progress_ = true;
+
+  CHECK(!foreign_table_->isAppendMode())
+      << " iterative file scan can not be used with APPEND mode.";
+
+  const auto copy_params = getFileBufferParser().validateAndGetCopyParams(foreign_table_);
+  const auto file_path = getFullFilePath(foreign_table_);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
+  CHECK(catalog);
+  auto& parser = getFileBufferParser();
+  const auto file_path_options = getFilePathOptions(foreign_table_);
+  auto& server_options = foreign_table_->foreign_server->options;
+
+  if (is_first_file_scan_call_) {
+    initialize_non_append_mode_scan(
+        chunk_metadata_map_,
+        fragment_id_to_file_regions_map_,
+        server_options,
+        file_reader_,
+        file_path,
+        copy_params,
+        file_path_options,
+        getMaxFileCount(),
+        foreign_table_,
+        user_mapping_,
+        parser,
+        [this] { return ""; },
+        num_rows_,
+        append_start_offset_);
   }
 
-  if (is_first_metadata_scan_call_) {
-    is_first_metadata_scan_call_ = false;
+  auto columns =
+      catalog->getAllColumnMetadataForTable(foreign_table_->tableId, false, false, true);
+  std::map<int32_t, const ColumnDescriptor*> column_by_id{};
+  for (auto column : columns) {
+    column_by_id[column->columnId] = column;
   }
 
-  if (!is_reentrant_metadata_scan_in_progress_) {
+  if (is_first_file_scan_call_) {  // reiniitialize all members that may have state in
+                                   // `multi_threading_params_`
+    reset_multithreading_params(multi_threading_params_);
+  }
+
+  multi_threading_params_.disable_cache = disable_cache_;
+
+  std::set<int> columns_to_scan;
+  for (auto column : columns) {
+    columns_to_scan.insert(column->columnId);
+  }
+
+  if (!is_file_scan_finished(file_reader_.get(), multi_threading_params_)) {
+    if (is_first_file_scan_call_) {
+      // NOTE: `buffer_size_` and `thread_count_` must not change across an iterative
+      // scan
+      buffer_size_ = get_buffer_size(copy_params,
+                                     file_reader_->isRemainingSizeKnown(),
+                                     file_reader_->getRemainingSize());
+      thread_count_ = get_thread_count(copy_params,
+                                       file_reader_->isRemainingSizeKnown(),
+                                       file_reader_->getRemainingSize(),
+                                       buffer_size_);
+    }
+    multi_threading_params_.continue_processing = true;
+
+    std::vector<std::future<void>> futures{};
+    for (size_t i = 0; i < thread_count_; i++) {
+      if (is_first_file_scan_call_) {
+        multi_threading_params_.request_pool.emplace(buffer_size_,
+                                                     copy_params,
+                                                     db_id_,
+                                                     foreign_table_,
+                                                     columns_to_scan,
+                                                     getFullFilePath(foreign_table_),
+                                                     &render_group_analyzer_map_,
+                                                     true);
+      }
+      futures.emplace_back(std::async(std::launch::async,
+                                      populate_chunks,
+                                      std::ref(multi_threading_params_),
+                                      std::ref(fragment_id_to_file_regions_map_),
+                                      std::ref(parser),
+                                      std::ref(file_scan_param)));
+    }
+
+    dispatch_scan_requests_with_exception_handling(foreign_table_,
+                                                   buffer_size_,
+                                                   file_path,
+                                                   (*file_reader_),
+                                                   copy_params,
+                                                   multi_threading_params_,
+                                                   num_rows_,
+                                                   append_start_offset_,
+                                                   getFileBufferParser(),
+                                                   &file_scan_param,
+                                                   residual_buffer_,
+                                                   is_first_file_scan_call_);
+
+    for (auto& future : futures) {
+      // get() instead of wait() because we need to propagate potential exceptions.
+      future.get();
+    }
+  }
+
+  if (is_first_file_scan_call_) {
+    is_first_file_scan_call_ = false;
+  }
+
+  if (!is_file_scan_in_progress_) {
     reset_multithreading_params(multi_threading_params_);
   }
 }
