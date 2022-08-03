@@ -2433,7 +2433,6 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       has_cardinality_estimation ? std::optional<int64_t>(max_groups_buffer_entry_guess)
                                  : std::nullopt);
   auto query_mem_desc = mem_layout_builder.build(
-      ra_exe_unit,
       query_infos,
       eo.allow_multifrag,
       max_groups_buffer_entry_guess,
@@ -2447,7 +2446,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   const bool output_columnar = query_mem_desc->didOutputColumnar();
   const auto shared_memory_size = mem_layout_builder.cudaSharedMemorySize(
-      ra_exe_unit, query_mem_desc.get(), cuda_mgr, this, co.device_type);
+      query_mem_desc.get(), cuda_mgr, this, co.device_type);
   if (shared_memory_size > 0) {
     // disable interleaved bins optimization on the GPU
     query_mem_desc->setHasInterleavedBinsOnGpu(false);

@@ -27,12 +27,16 @@
 
 class Executor;
 
+/**
+ * @brief Determines memory layout for a given RelAlgExecutionUnit and builds
+ * QueryMemoryDescriptor, which conveys memory layout information.
+ *
+ */
 class MemoryLayoutBuilder {
  public:
   MemoryLayoutBuilder(const RelAlgExecutionUnit& ra_exe_unit);
 
   std::unique_ptr<QueryMemoryDescriptor> build(
-      const RelAlgExecutionUnit& ra_exe_unit,
       const std::vector<InputTableInfo>& query_infos,
       const bool allow_multifrag,
       const size_t max_groups_buffer_entry_count,
@@ -43,9 +47,11 @@ class MemoryLayoutBuilder {
       Executor* executor,
       const ExecutorDeviceType device_type);
 
-  size_t cudaSharedMemorySize(const RelAlgExecutionUnit& ra_exe_unit,
-                              QueryMemoryDescriptor* query_mem_desc,
+  size_t cudaSharedMemorySize(QueryMemoryDescriptor* query_mem_desc,
                               const CudaMgr_Namespace::CudaMgr* cuda_mgr,
                               Executor* executor,
                               const ExecutorDeviceType device_type) const;
+
+ private:
+  const RelAlgExecutionUnit& ra_exe_unit_;
 };

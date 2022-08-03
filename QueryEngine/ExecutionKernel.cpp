@@ -256,8 +256,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                executor->row_set_mem_owner_,
                                                std::nullopt);
     MemoryLayoutBuilder mem_layout_builder(ra_exe_unit_);
-    auto query_mem_desc = mem_layout_builder.build(ra_exe_unit_,
-                                                   shared_context.getQueryInfos(),
+    auto query_mem_desc = mem_layout_builder.build(shared_context.getQueryInfos(),
                                                    /*allow_multifrag=*/false,
                                                    /*max_groups_buffer_entry_guess=*/0,
                                                    /*crt_min_byte_width=*/8,

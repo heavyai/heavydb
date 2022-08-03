@@ -20,8 +20,9 @@
 #include "QueryEngine/CardinalityEstimator.h"
 #include "QueryEngine/OutputBufferInitialization.h"
 
-MemoryLayoutBuilder::MemoryLayoutBuilder(const RelAlgExecutionUnit& ra_exe_unit) {
-  for (const auto& groupby_expr : ra_exe_unit.groupby_exprs) {
+MemoryLayoutBuilder::MemoryLayoutBuilder(const RelAlgExecutionUnit& ra_exe_unit)
+    : ra_exe_unit_(ra_exe_unit) {
+  for (const auto& groupby_expr : ra_exe_unit_.groupby_exprs) {
     if (!groupby_expr) {
       continue;
     }
@@ -605,7 +606,6 @@ bool gpu_can_handle_order_entries(const RelAlgExecutionUnit& ra_exe_unit,
 }  // namespace
 
 std::unique_ptr<QueryMemoryDescriptor> MemoryLayoutBuilder::build(
-    const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos,
     const bool allow_multifrag,
     const size_t max_groups_buffer_entry_count,
@@ -617,9 +617,9 @@ std::unique_ptr<QueryMemoryDescriptor> MemoryLayoutBuilder::build(
     const ExecutorDeviceType device_type) {
   bool sort_on_gpu_hint =
       device_type == ExecutorDeviceType::GPU && allow_multifrag &&
-      !ra_exe_unit.sort_info.order_entries.empty() &&
+      !ra_exe_unit_.sort_info.order_entries.empty() &&
       gpu_can_handle_order_entries(
-          ra_exe_unit, query_infos, ra_exe_unit.sort_info.order_entries, executor);
+          ra_exe_unit_, query_infos, ra_exe_unit_.sort_info.order_entries, executor);
   // must_use_baseline_sort is true iff we'd sort on GPU with the old algorithm
   // but the total output buffer size would be too big or it's a sharded top query.
   // For the sake of managing risk, use the new result set way very selectively for
@@ -627,7 +627,7 @@ std::unique_ptr<QueryMemoryDescriptor> MemoryLayoutBuilder::build(
   bool must_use_baseline_sort = false;
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
   while (true) {
-    query_mem_desc = build_query_memory_descriptor(ra_exe_unit,
+    query_mem_desc = build_query_memory_descriptor(ra_exe_unit_,
                                                    query_infos,
                                                    allow_multifrag,
                                                    max_groups_buffer_entry_count,
@@ -654,7 +654,7 @@ std::unique_ptr<QueryMemoryDescriptor> MemoryLayoutBuilder::build(
           QueryDescriptionType::GroupByBaselineHash &&
       !group_cardinality_estimation && !just_explain) {
     const auto col_range_info = get_col_range_info(
-        ra_exe_unit, query_infos, group_cardinality_estimation, executor, device_type);
+        ra_exe_unit_, query_infos, group_cardinality_estimation, executor, device_type);
     throw CardinalityEstimationRequired(col_range_info.max - col_range_info.min);
   }
 
@@ -662,7 +662,6 @@ std::unique_ptr<QueryMemoryDescriptor> MemoryLayoutBuilder::build(
 }
 
 size_t MemoryLayoutBuilder::cudaSharedMemorySize(
-    const RelAlgExecutionUnit& ra_exe_unit,
     QueryMemoryDescriptor* query_mem_desc,
     const CudaMgr_Namespace::CudaMgr* cuda_mgr,
     Executor* executor,
@@ -707,7 +706,7 @@ size_t MemoryLayoutBuilder::cudaSharedMemorySize(
     // skip shared memory usage when dealing with 1) variable length targets, 2)
     // not a COUNT aggregate
     const auto target_infos = target_exprs_to_infos(
-        ra_exe_unit.target_exprs, *query_mem_desc, config.exec.group_by.bigint_count);
+        ra_exe_unit_.target_exprs, *query_mem_desc, config.exec.group_by.bigint_count);
     std::unordered_set<SQLAgg> supported_aggs{kCOUNT};
     if (std::find_if(target_infos.begin(),
                      target_infos.end(),
@@ -761,7 +760,7 @@ size_t MemoryLayoutBuilder::cudaSharedMemorySize(
       // non-basic aggregates (COUNT, SUM, MIN, MAX, AVG)
       // TODO: relax this if necessary
       const auto target_infos = target_exprs_to_infos(
-          ra_exe_unit.target_exprs, *query_mem_desc, config.exec.group_by.bigint_count);
+          ra_exe_unit_.target_exprs, *query_mem_desc, config.exec.group_by.bigint_count);
       std::unordered_set<SQLAgg> supported_aggs{kCOUNT};
       if (config.exec.group_by.enable_gpu_smem_grouped_non_count_agg) {
         supported_aggs = {kCOUNT, kMIN, kMAX, kSUM, kAVG};
