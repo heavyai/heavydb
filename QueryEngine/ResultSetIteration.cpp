@@ -1902,7 +1902,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
         CHECK(false);
     }
   }
-  if (chosen_type.is_integer() | chosen_type.is_boolean() || chosen_type.is_time() ||
+  if (chosen_type.is_integer() || chosen_type.is_boolean() || chosen_type.is_time() ||
       chosen_type.is_timeinterval()) {
     if (is_distinct_target(target_info)) {
       return TargetValue(count_distinct_set_size(
