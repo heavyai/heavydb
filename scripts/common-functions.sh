@@ -68,7 +68,7 @@ function download_make_install() {
     popd
 }
 
-CMAKE_VERSION=3.16.5
+CMAKE_VERSION=3.23.3
 
 function install_cmake() {
   CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-${CMAKE_VERSION}.tar.gz
@@ -169,8 +169,8 @@ function install_llvm() {
     download ${HTTP_DEPS}/llvm/$VERS/compiler-rt-$VERS.src.tar.xz
     ##download ${HTTP_DEPS}/llvm/$VERS/lldb-$VERS.src.tar.xz
     ##download ${HTTP_DEPS}/llvm/$VERS/lld-$VERS.src.tar.xz
-    download ${HTTP_DEPS}/llvm/$VERS/libcxx-$VERS.src.tar.xz
-    download ${HTTP_DEPS}/llvm/$VERS/libcxxabi-$VERS.src.tar.xz
+    ##download ${HTTP_DEPS}/llvm/$VERS/libcxx-$VERS.src.tar.xz
+    ##download ${HTTP_DEPS}/llvm/$VERS/libcxxabi-$VERS.src.tar.xz
     download ${HTTP_DEPS}/llvm/$VERS/clang-tools-extra-$VERS.src.tar.xz
     rm -rf llvm-$VERS.src
     extract llvm-$VERS.src.tar.xz
@@ -178,15 +178,15 @@ function install_llvm() {
     extract compiler-rt-$VERS.src.tar.xz
     ##extract lld-$VERS.src.tar.xz
     ##extract lldb-$VERS.src.tar.xz
-    extract libcxx-$VERS.src.tar.xz
-    extract libcxxabi-$VERS.src.tar.xz
+    ##extract libcxx-$VERS.src.tar.xz
+    ##extract libcxxabi-$VERS.src.tar.xz
     extract clang-tools-extra-$VERS.src.tar.xz
     mv clang-$VERS.src llvm-$VERS.src/tools/clang
     mv compiler-rt-$VERS.src llvm-$VERS.src/projects/compiler-rt
     ##mv lld-$VERS.src llvm-$VERS.src/tools/lld
     ##mv lldb-$VERS.src llvm-$VERS.src/tools/lldb
-    mv libcxx-$VERS.src llvm-$VERS.src/projects/libcxx
-    mv libcxxabi-$VERS.src llvm-$VERS.src/projects/libcxxabi
+    ##mv libcxx-$VERS.src llvm-$VERS.src/projects/libcxx
+    ##mv libcxxabi-$VERS.src llvm-$VERS.src/projects/libcxxabi
     mkdir -p llvm-$VERS.src/tools/clang/tools
     mv clang-tools-extra-$VERS.src llvm-$VERS.src/tools/clang/tools/extra
 
@@ -194,12 +194,25 @@ function install_llvm() {
     mkdir build.llvm-$VERS
     pushd build.llvm-$VERS
 
+    # always use generate combined shared lib, to be distributed alongside product
     LLVM_SHARED=""
-    if [ "$LLVM_BUILD_DYLIB" = "true" ]; then
+    #if [ "$LLVM_BUILD_DYLIB" = "true" ]; then
+    if [ true ]; then
       LLVM_SHARED="-DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_LINK_LLVM_DYLIB=ON"
     fi
 
-    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DLLVM_ENABLE_RTTI=on -DLLVM_USE_INTEL_JITEVENTS=on $LLVM_SHARED ../llvm-$VERS.src
+    cmake \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=$PREFIX \
+      -DLLVM_ENABLE_RTTI=on \
+      -DLLVM_USE_INTEL_JITEVENTS=on \
+      -DLLVM_ENABLE_LIBEDIT=off \
+      -DLLVM_ENABLE_ZLIB=off \
+      -DLLVM_INCLUDE_BENCHMARKS=off \
+      -DLLVM_ENABLE_LIBXML2=off \
+      -DLLVM_TARGETS_TO_BUILD="X86;AArch64;PowerPC;NVPTX" \
+      $LLVM_SHARED \
+      ../llvm-$VERS.src
     makej
     make install
     popd

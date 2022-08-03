@@ -78,7 +78,7 @@ download_make_install ftp://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.xz # "" "
 download_make_install ftp://ftp.gnu.org/gnu/automake/automake-1.16.1.tar.xz
 
 # gcc
-VERS=11.3.0
+VERS=10.4.0
 download ftp://ftp.gnu.org/gnu/gcc/gcc-$VERS/gcc-$VERS.tar.xz
 extract gcc-$VERS.tar.xz
 pushd gcc-$VERS

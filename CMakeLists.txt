@@ -651,8 +651,29 @@ else()
 
   set(clang_libs ${CLANG_LIB})
   set(llvm_libs ${LLVM_LIB})
+
 endif()
 
+    file(GET_RUNTIME_DEPENDENCIES RESOLVED_DEPENDENCIES_VAR _r_deps LIBRARIES ${llvm_libs})
+		message(STATUS "libs: " ${_r_deps})
+		message(STATUS "libs2: " ${clang_libs})
+    foreach(_file ${_r_deps})
+      install(FILES
+        "${_file}"
+        DESTINATION "lib"
+      )
+    endforeach()
+install(CODE [[
+    file(GET_RUNTIME_DEPENDENCIES RESOLVED_DEPENDENCIES_VAR _r_deps LIBRARIES ${clang_libs})
+		message(STATUS "libs: " ${_r_deps})
+    foreach(_file ${_r_deps})
+      file(INSTALL
+        DESTINATION "lib"
+        TYPE SHARED_LIBRARY
+        FILES "${_file}"
+      )
+    endforeach()
+    ]])
 
 # Boost
 find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale iostreams REQUIRED)
