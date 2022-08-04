@@ -72,7 +72,8 @@ enum TExtArgumentType {
   ColumnListArrayTextEncodingNone,
   ArrayTextEncodingDict,
   ColumnArrayTextEncodingDict,
-  ColumnListArrayTextEncodingDict
+  ColumnListArrayTextEncodingDict,
+  GeoMultiPoint
 }
 
 /* See QueryEngine/TableFunctions/TableFunctionsFactory.h for required values */

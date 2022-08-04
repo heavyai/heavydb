@@ -204,6 +204,8 @@ std::string serialize_type(const ExtArgumentType type,
       return (declare ? "{i32*, i64, i8}*" : "Array<TextEncodingDict>");
     case ExtArgumentType::GeoPoint:
       return "geo_point";
+    case ExtArgumentType::GeoMultiPoint:
+      return "geo_multi_point";
     case ExtArgumentType::GeoLineString:
       return "geo_linestring";
     case ExtArgumentType::GeoMultiLineString:
@@ -495,6 +497,8 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "CURSOR";
     case ExtArgumentType::GeoPoint:
       return "POINT";
+    case ExtArgumentType::GeoMultiPoint:
+      return "MULTIPOINT";
     case ExtArgumentType::GeoLineString:
       return "LINESTRING";
     case ExtArgumentType::GeoMultiLineString:
@@ -719,6 +723,9 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "geo_point") {
     return ExtArgumentType::GeoPoint;
+  }
+  if (type_name == "geo_multi_point") {
+    return ExtArgumentType::GeoMultiPoint;
   }
   if (type_name == "geo_linestring") {
     return ExtArgumentType::GeoLineString;

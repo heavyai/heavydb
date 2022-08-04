@@ -276,6 +276,7 @@ static int match_arguments(const SQLTypeInfo& arg_type,
     case kNUMERIC:
       return match_numeric_argument(arg_type, is_arg_literal, sig_type, penalty_score);
     case kPOINT:
+    case kMULTIPOINT:
     case kLINESTRING:
       if ((sig_type == ExtArgumentType::PInt8 || sig_type == ExtArgumentType::PInt16 ||
            sig_type == ExtArgumentType::PInt32 || sig_type == ExtArgumentType::PInt64 ||
@@ -284,6 +285,7 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         penalty_score += 1000;
         return 2;
       } else if (sig_type == ExtArgumentType::GeoPoint ||
+                 sig_type == ExtArgumentType::GeoMultiPoint ||
                  sig_type == ExtArgumentType::GeoLineString) {
         penalty_score += 1000;
         return 1;

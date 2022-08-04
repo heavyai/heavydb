@@ -570,6 +570,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.ColumnTimestamp;
       case GeoPoint:
         return ExtensionFunction.ExtArgumentType.GeoPoint;
+      case GeoMultiPoint:
+        return ExtensionFunction.ExtArgumentType.GeoMultiPoint;
       case GeoLineString:
         return ExtensionFunction.ExtArgumentType.GeoLineString;
       case GeoMultiLineString:

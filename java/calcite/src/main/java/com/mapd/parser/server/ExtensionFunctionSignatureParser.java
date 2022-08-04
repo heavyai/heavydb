@@ -263,6 +263,9 @@ class ExtensionFunctionSignatureParser {
     if (type_name.equals("GeoPoint")) {
       return ExtensionFunction.ExtArgumentType.GeoPoint;
     }
+    if (type_name.equals("GeoMultiPoint")) {
+      return ExtensionFunction.ExtArgumentType.GeoMultiPoint;
+    }
     if (type_name.equals("GeoLineString")) {
       return ExtensionFunction.ExtArgumentType.GeoLineString;
     }

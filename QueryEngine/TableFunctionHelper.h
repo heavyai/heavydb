@@ -181,6 +181,7 @@ inline bool is_ext_arg_type_column_list(const ExtArgumentType ext_arg_type) {
 inline bool is_ext_arg_type_geo(const ExtArgumentType ext_arg_type) {
   switch (ext_arg_type) {
     case ExtArgumentType::GeoPoint:
+    case ExtArgumentType::GeoMultiPoint:
     case ExtArgumentType::GeoLineString:
     case ExtArgumentType::GeoMultiLineString:
     case ExtArgumentType::GeoPolygon:

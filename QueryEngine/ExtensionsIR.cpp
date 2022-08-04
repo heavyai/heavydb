@@ -734,7 +734,8 @@ llvm::StructType* CodeGenerator::createPointStructType(const std::string& udf_fu
     llvm::Type* param_type = param_pointer_type->getPointerElementType();
     CHECK(param_type->isStructTy());
     llvm::StructType* struct_type = llvm::cast<llvm::StructType>(param_type);
-    CHECK(struct_type->getStructNumElements() == 5) << serialize_llvm_object(struct_type);
+    CHECK_EQ(struct_type->getStructNumElements(), 5u)
+        << serialize_llvm_object(struct_type);
     const auto expected_elems = generated_struct_type->elements();
     const auto current_elems = struct_type->elements();
     for (size_t i = 0; i < expected_elems.size(); i++) {
@@ -753,7 +754,7 @@ llvm::StructType* CodeGenerator::createPointStructType(const std::string& udf_fu
 #endif
     CHECK(point_type);
 
-    return (point_type);
+    return point_type;
   }
   return generated_struct_type;
 }
@@ -799,6 +800,97 @@ void CodeGenerator::codegenGeoPointArgs(const std::string& udf_func_name,
   output_args.push_back(alloc_mem);
 }
 
+llvm::StructType* CodeGenerator::createMultiPointStructType(
+    const std::string& udf_func_name,
+    size_t param_num) {
+  llvm::Module* module_for_lookup = cgen_state_->module_;
+  llvm::Function* udf_func = module_for_lookup->getFunction(udf_func_name);
+
+  llvm::StructType* generated_struct_type =
+      llvm::StructType::get(cgen_state_->context_,
+                            {llvm::Type::getInt8PtrTy(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_),
+                             llvm::Type::getInt32Ty(cgen_state_->context_)},
+                            false);
+
+  if (udf_func) {
+    llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
+    CHECK(param_num < udf_func_type->getNumParams());
+    llvm::Type* param_pointer_type = udf_func_type->getParamType(param_num);
+    CHECK(param_pointer_type->isPointerTy());
+    llvm::Type* param_type = param_pointer_type->getPointerElementType();
+    CHECK(param_type->isStructTy());
+    llvm::StructType* struct_type = llvm::cast<llvm::StructType>(param_type);
+    CHECK(struct_type->isStructTy());
+    CHECK_EQ(struct_type->getStructNumElements(), 5u);
+
+    const auto expected_elems = generated_struct_type->elements();
+    const auto current_elems = struct_type->elements();
+    for (size_t i = 0; i < expected_elems.size(); i++) {
+      CHECK_EQ(expected_elems[i], current_elems[i]);
+    }
+    if (struct_type->isLiteral()) {
+      return struct_type;
+    }
+
+    llvm::StringRef struct_name = struct_type->getStructName();
+#if LLVM_VERSION_MAJOR >= 12
+    llvm::StructType* multi_point_type =
+        struct_type->getTypeByName(cgen_state_->context_, struct_name);
+#else
+    llvm::StructType* multi_point_type = module_for_lookup->getTypeByName(struct_name);
+#endif
+    CHECK(multi_point_type);
+
+    return multi_point_type;
+  }
+  return generated_struct_type;
+}
+
+void CodeGenerator::codegenGeoMultiPointArgs(const std::string& udf_func_name,
+                                             size_t param_num,
+                                             llvm::Value* multi_point_buf,
+                                             llvm::Value* multi_point_size,
+                                             llvm::Value* compression,
+                                             llvm::Value* input_srid,
+                                             llvm::Value* output_srid,
+                                             std::vector<llvm::Value*>& output_args) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
+  CHECK(multi_point_buf);
+  CHECK(multi_point_size);
+  CHECK(compression);
+  CHECK(input_srid);
+  CHECK(output_srid);
+
+  auto multi_point_abstraction = createMultiPointStructType(udf_func_name, param_num);
+  auto alloc_mem =
+      cgen_state_->ir_builder_.CreateAlloca(multi_point_abstraction, nullptr);
+
+  auto multi_point_buf_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(multi_point_abstraction, alloc_mem, 0);
+  cgen_state_->ir_builder_.CreateStore(multi_point_buf, multi_point_buf_ptr);
+
+  auto multi_point_size_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(multi_point_abstraction, alloc_mem, 1);
+  cgen_state_->ir_builder_.CreateStore(multi_point_size, multi_point_size_ptr);
+
+  auto compression_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(multi_point_abstraction, alloc_mem, 2);
+  cgen_state_->ir_builder_.CreateStore(compression, compression_ptr);
+
+  auto input_srid_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(multi_point_abstraction, alloc_mem, 3);
+  cgen_state_->ir_builder_.CreateStore(input_srid, input_srid_ptr);
+
+  auto output_srid_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(multi_point_abstraction, alloc_mem, 4);
+  cgen_state_->ir_builder_.CreateStore(output_srid, output_srid_ptr);
+
+  output_args.push_back(alloc_mem);
+}
+
 llvm::StructType* CodeGenerator::createLineStringStructType(
     const std::string& udf_func_name,
     size_t param_num) {
@@ -823,7 +915,7 @@ llvm::StructType* CodeGenerator::createLineStringStructType(
     CHECK(param_type->isStructTy());
     llvm::StructType* struct_type = llvm::cast<llvm::StructType>(param_type);
     CHECK(struct_type->isStructTy());
-    CHECK(struct_type->getStructNumElements() == 5);
+    CHECK_EQ(struct_type->getStructNumElements(), 5u);
 
     const auto expected_elems = generated_struct_type->elements();
     const auto current_elems = struct_type->elements();
@@ -843,7 +935,7 @@ llvm::StructType* CodeGenerator::createLineStringStructType(
 #endif
     CHECK(line_string_type);
 
-    return (line_string_type);
+    return line_string_type;
   }
   return generated_struct_type;
 }
@@ -916,7 +1008,7 @@ llvm::StructType* CodeGenerator::createMultiLineStringStructType(
     CHECK(param_type->isStructTy());
     llvm::StructType* struct_type = llvm::cast<llvm::StructType>(param_type);
     CHECK(struct_type->isStructTy());
-    CHECK(struct_type->getStructNumElements() == 7);
+    CHECK_EQ(struct_type->getStructNumElements(), 7u);
 
     const auto expected_elems = generated_struct_type->elements();
     const auto current_elems = struct_type->elements();
@@ -937,7 +1029,7 @@ llvm::StructType* CodeGenerator::createMultiLineStringStructType(
 #endif
     CHECK(multi_linestring_type);
 
-    return (multi_linestring_type);
+    return multi_linestring_type;
   }
   return generated_struct_type;
 }
@@ -1032,7 +1124,7 @@ llvm::StructType* CodeGenerator::createPolygonStructType(const std::string& udf_
     llvm::StructType* struct_type = llvm::cast<llvm::StructType>(param_type);
 
     CHECK(struct_type->isStructTy());
-    CHECK(struct_type->getStructNumElements() == 7);
+    CHECK_EQ(struct_type->getStructNumElements(), 7u);
 
     const auto expected_elems = generated_struct_type->elements();
     const auto current_elems = struct_type->elements();
@@ -1053,7 +1145,7 @@ llvm::StructType* CodeGenerator::createPolygonStructType(const std::string& udf_
 #endif
     CHECK(polygon_type);
 
-    return (polygon_type);
+    return polygon_type;
   }
   return generated_struct_type;
 }
@@ -1141,7 +1233,7 @@ llvm::StructType* CodeGenerator::createMultiPolygonStructType(
     CHECK(param_type->isStructTy());
     llvm::StructType* struct_type = llvm::cast<llvm::StructType>(param_type);
     CHECK(struct_type->isStructTy());
-    CHECK(struct_type->getStructNumElements() == 9);
+    CHECK_EQ(struct_type->getStructNumElements(), 9u);
     const auto expected_elems = generated_struct_type->elements();
     const auto current_elems = struct_type->elements();
     for (size_t i = 0; i < expected_elems.size(); i++) {
@@ -1160,7 +1252,7 @@ llvm::StructType* CodeGenerator::createMultiPolygonStructType(
 #endif
     CHECK(polygon_type);
 
-    return (polygon_type);
+    return polygon_type;
   }
   return generated_struct_type;
 }
@@ -1393,7 +1485,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
       }
 
       if (is_ext_arg_type_geo(ext_func_arg)) {
-        if (arg_ti.get_type() == kPOINT || arg_ti.get_type() == kLINESTRING) {
+        if (arg_ti.get_type() == kPOINT || arg_ti.get_type() == kLINESTRING ||
+            arg_ti.get_type() == kMULTIPOINT) {
           auto array_buf_arg = castArrayPointer(ptr_lv, elem_ti);
           auto compression_val = codegenCompression(arg_ti);
           auto input_srid_val = cgen_state_->llInt(arg_ti.get_input_srid());
@@ -1409,6 +1502,16 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
                                 input_srid_val,
                                 output_srid_val,
                                 args);
+          } else if (arg_ti.get_type() == kMULTIPOINT) {
+            CHECK_EQ(k, ij);
+            codegenGeoMultiPointArgs(ext_func_sig->getName(),
+                                     ij + dj,
+                                     array_buf_arg,
+                                     len_lv,
+                                     compression_val,
+                                     input_srid_val,
+                                     output_srid_val,
+                                     args);
           } else {
             CHECK_EQ(k, ij);
             codegenGeoLineStringArgs(ext_func_sig->getName(),
@@ -1431,6 +1534,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
 
       switch (arg_ti.get_type()) {
         case kPOINT:
+        case kMULTIPOINT:
         case kLINESTRING:
           break;
         case kMULTILINESTRING: {

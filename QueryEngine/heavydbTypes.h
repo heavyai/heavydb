@@ -443,6 +443,22 @@ struct GeoPoint {
   DEVICE int32_t getOutputSrid() const { return output_srid; }
 };
 
+struct GeoMultiPoint {
+  int8_t* ptr;
+  int32_t sz;
+  int32_t compression;
+  int32_t input_srid;
+  int32_t output_srid;
+
+  DEVICE int32_t getSize() const { return sz; }
+
+  DEVICE int32_t getCompression() const { return compression; }
+
+  DEVICE int32_t getInputSrid() const { return input_srid; }
+
+  DEVICE int32_t getOutputSrid() const { return output_srid; }
+};
+
 struct GeoLineString {
   int8_t* ptr;
   int32_t sz;

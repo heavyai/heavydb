@@ -97,6 +97,7 @@ public class ExtensionFunction {
     ArrayTextEncodingDict,
     ColumnArrayTextEncodingDict,
     ColumnListArrayTextEncodingDict,
+    GeoMultiPoint
   }
   ;
 
@@ -294,6 +295,8 @@ public class ExtensionFunction {
         return "Column<timestamp>";
       case GeoPoint:
         return "geo_point";
+      case GeoMultiPoint:
+        return "geo_multi_point";
       case Cursor:
         return "cursor";
       case GeoLineString:
@@ -584,6 +587,7 @@ public class ExtensionFunction {
       case ColumnArrayTextEncodingDict:
         return SqlTypeName.ARRAY;
       case GeoPoint:
+      case GeoMultiPoint:
       case GeoLineString:
       case GeoMultiLineString:
       case GeoPolygon:

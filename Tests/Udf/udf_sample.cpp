@@ -219,6 +219,28 @@ double ST_Length_MultiLineString(int8_t* coords,
                                  int32_t isr,
                                  int32_t osr);
 
+EXTENSION_NOINLINE
+double ST_Centroid_MultiPoint(int8_t* mp,
+                              int64_t mpsize,
+                              int32_t ic1,
+                              int32_t isr1,
+                              int32_t osr,
+                              double* multipoint_centroid);
+
+// MultiPoint udf
+
+EXTENSION_NOINLINE
+double multipoint_centroid(GeoMultiPoint mp) {
+  double centroid[2] = {0.0, 0.0};
+  ST_Centroid_MultiPoint(mp.ptr,
+                         mp.getSize(),
+                         mp.getCompression(),
+                         mp.getInputSrid(),
+                         mp.getOutputSrid(),
+                         centroid);
+  return centroid[0] + centroid[1];
+}
+
 // LineString udf
 
 EXTENSION_NOINLINE

@@ -261,6 +261,7 @@ TEST_F(UDFCompilerTest, UdfQuery) {
   run_ddl_statement("DROP TABLE IF EXISTS stocks;");
   run_ddl_statement("DROP TABLE IF EXISTS sal_emp;");
   run_ddl_statement("DROP TABLE IF EXISTS geospatial_test;");
+  run_ddl_statement("DROP TABLE IF EXISTS geospatial_multipoint;");
   run_ddl_statement("DROP TABLE IF EXISTS geospatial_linestring;");
   run_ddl_statement("DROP TABLE IF EXISTS geospatial_multilinestring;");
   run_ddl_statement("DROP TABLE IF EXISTS geo_poly;");
@@ -276,6 +277,7 @@ TEST_F(UDFCompilerTest, UdfQuery) {
 
   run_ddl_statement("CREATE TABLE sal_emp(name text, pay_by_quarter integer[]);");
 
+  run_ddl_statement("CREATE TABLE geospatial_multipoint (id INT, mp MULTIPOINT)");
   run_ddl_statement("CREATE TABLE geospatial_linestring (id INT, l LINESTRING)");
   run_ddl_statement(
       "CREATE TABLE geospatial_multilinestring (id INT, ml MULTILINESTRING)");
@@ -317,6 +319,15 @@ TEST_F(UDFCompilerTest, UdfQuery) {
       "'POINT(51.4618933852762 -0.926690306514502)', "
       "'POINT(55.9523783996701 -3.20510306395594326)');");
   EXPECT_NO_THROW(run_multiple_agg(point_insert1, ExecutorDeviceType::CPU));
+
+  std::string multipoint_insert1(
+      "INSERT into geospatial_multipoint VALUES(0, 'MULTIPOINT(1 0, 2 3, 3 4)');");
+  std::string multipoint_insert2(
+      "INSERT into geospatial_multipoint VALUES(1, 'MULTIPOINT(1 0, 0 1, -1 0, 0 -1, 1 "
+      "0)');");
+
+  EXPECT_NO_THROW(run_multiple_agg(multipoint_insert1, ExecutorDeviceType::CPU));
+  EXPECT_NO_THROW(run_multiple_agg(multipoint_insert2, ExecutorDeviceType::CPU));
 
   std::string linestring_insert1(
       "INSERT into geospatial_linestring VALUES(0, 'LINESTRING(1 0, 2 3, 3 4)');");
@@ -447,6 +458,12 @@ TEST_F(UDFCompilerTest, UdfQuery) {
             dt)));
 
     ASSERT_DOUBLE_EQ(
+        0.2,
+        v<double>(run_simple_agg(
+            "select multipoint_centroid(mp) from geospatial_multipoint WHERE id = 1;",
+            dt)));
+
+    ASSERT_DOUBLE_EQ(
         0,
         v<double>(run_simple_agg(
             "select linestring_x_mod(l, 2) from geospatial_linestring WHERE id = 0;",
@@ -547,6 +564,7 @@ TEST_F(UDFCompilerTest, UdfQuery) {
   run_ddl_statement("DROP TABLE stocks;");
   run_ddl_statement("DROP TABLE sal_emp;");
   run_ddl_statement("DROP TABLE geospatial_test;");
+  run_ddl_statement("DROP TABLE geospatial_multipoint;");
   run_ddl_statement("DROP TABLE geospatial_linestring;");
   run_ddl_statement("DROP TABLE geospatial_multilinestring;");
   run_ddl_statement("DROP TABLE geo_poly;");
