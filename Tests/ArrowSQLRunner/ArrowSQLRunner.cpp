@@ -343,8 +343,15 @@ class ArrowSQLRunnerImpl {
     std::map<GpuMgrName, std::unique_ptr<GpuMgr>> gpu_mgrs;
     bool uses_gpu = false;
 #ifdef HAVE_CUDA
-    gpu_mgrs[GpuMgrName::CUDA] = std::make_unique<CudaMgr_Namespace::CudaMgr>(-1, 0);
-    uses_gpu = true;
+    try {
+      gpu_mgrs[GpuMgrName::CUDA] = std::make_unique<CudaMgr_Namespace::CudaMgr>(-1, 0);
+      uses_gpu = true;
+    } catch (const std::exception& e) {
+      LOG(ERROR) << "Failed to initialize CUDA GPU: " << e.what()
+                 << "\nContinuing on CPU...";
+      uses_gpu = false;
+      gpu_mgrs.erase(GpuMgrName::CUDA);
+    }
 #elif HAVE_L0
     gpu_mgrs[GpuMgrName::L0] = std::make_unique<l0::L0Manager>();
     uses_gpu = true;
