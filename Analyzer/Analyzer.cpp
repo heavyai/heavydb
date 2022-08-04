@@ -23,6 +23,7 @@
  **/
 
 #include "Analyzer/Analyzer.h"
+#include "DataProvider/DataProvider.h"
 #include "QueryEngine/DateTimeUtils.h"
 #include "QueryEngine/Execute.h"  // TODO: remove
 #include "Shared/DateConverters.h"
@@ -701,14 +702,21 @@ hdk::ir::ExprPtr normalizeOperExpr(const SQLOps optype,
     return hdk::ir::makeExpr<hdk::ir::BinOper>(
         result_type, false, optype, qual, left_expr, right_expr);
   }
-  if (left_type != new_left_type) {
-    left_expr = left_expr->add_cast(new_left_type);
-  }
-  if (right_type != new_right_type) {
-    if (qual == kONE) {
-      right_expr = right_expr->add_cast(new_right_type);
-    } else {
-      right_expr = right_expr->add_cast(new_right_type.get_array_type());
+  // No executor means we build an expression for further normalization.
+  // Required casts will be added at normalization. Double normalization
+  // with casts may cause a change in the resulting type. E.g. it would
+  // increase dimension for decimals on each normalization for arithmetic
+  // operations.
+  if (executor) {
+    if (left_type != new_left_type) {
+      left_expr = left_expr->add_cast(new_left_type);
+    }
+    if (right_type != new_right_type) {
+      if (qual == kONE) {
+        right_expr = right_expr->add_cast(new_right_type);
+      } else {
+        right_expr = right_expr->add_cast(new_right_type.get_array_type());
+      }
     }
   }
 
@@ -883,10 +891,11 @@ hdk::ir::ExprPtr normalizeCaseExpr(
   std::list<std::pair<hdk::ir::ExprPtr, hdk::ir::ExprPtr>> cast_expr_pair_list;
   for (auto p : expr_pair_list) {
     ti.set_notnull(false);
-    cast_expr_pair_list.emplace_back(p.first, p.second->add_cast(ti));
+    cast_expr_pair_list.emplace_back(p.first,
+                                     executor ? p.second->add_cast(ti) : p.second);
   }
   if (else_e != nullptr) {
-    else_e = else_e->add_cast(ti);
+    else_e = executor ? else_e->add_cast(ti) : else_e;
   } else {
     Datum d;
     // always create an else expr so that executor doesn't need to worry about it

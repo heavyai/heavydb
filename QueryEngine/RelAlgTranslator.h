@@ -58,6 +58,10 @@ class RelAlgTranslator {
 
   static hdk::ir::ExprPtr translateLiteral(const RexLiteral*);
 
+  hdk::ir::ExprPtr translateInSubquery(
+      hdk::ir::ExprPtr lhs,
+      std::shared_ptr<const ExecutionResult> result) const;
+
  private:
   hdk::ir::ExprPtr translateScalarSubquery(const RexSubQuery*) const;
 

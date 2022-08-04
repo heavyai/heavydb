@@ -55,7 +55,7 @@ void RexSubQuery::setExecutionResult(
 }
 
 std::unique_ptr<RexSubQuery> RexSubQuery::deepCopy() const {
-  return std::make_unique<RexSubQuery>(type_, result_, ra_->deepCopy());
+  return std::make_unique<RexSubQuery>(type_, result_, ra_);
 }
 
 unsigned RexSubQuery::getId() const {
@@ -96,6 +96,10 @@ class RebindInputsVisitor : public DeepCopyVisitor {
 
   RetType visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
     if (col_ref->getNode() == old_input_) {
+      auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(new_input_);
+      if (left_deep_join) {
+        return rebind_inputs_from_left_deep_join(col_ref, left_deep_join);
+      }
       return hdk::ir::makeExpr<hdk::ir::ColumnRef>(
           col_ref->get_type_info(), new_input_, col_ref->getIndex());
     }
@@ -466,6 +470,13 @@ void RelCompound::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
   if (filter_expr_) {
     rebind_inputs.visit(filter_expr_.get());
   }
+  RebindInputsVisitor visitor(old_input.get(), input.get());
+  if (filter_) {
+    filter_ = visitor.visit(filter_.get());
+  }
+  for (size_t i = 0; i < exprs_.size(); ++i) {
+    exprs_[i] = visitor.visit(exprs_[i].get());
+  }
 }
 
 RelProject::RelProject(RelProject const& rhs)
@@ -592,6 +603,7 @@ RelCompound::RelCompound(RelCompound const& rhs)
     , hints_(std::make_unique<Hints>()) {
   RexDeepCopyVisitor copier;
   filter_expr_ = rhs.filter_expr_ ? copier.visit(rhs.filter_expr_.get()) : nullptr;
+  filter_ = rhs.filter_ ? rhs.filter_->deep_copy() : nullptr;
   if (rhs.hint_applied_) {
     for (auto const& kv : *rhs.hints_) {
       addHint(kv.second);
@@ -1072,8 +1084,11 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
   const auto& subquery_ast = field(expr, "subquery");
 
   RelAlgDagBuilder subquery_dag(root_dag_builder, subquery_ast, db_id, schema_provider);
-  auto subquery = std::make_shared<RexSubQuery>(subquery_dag.getRootNodeShPtr());
-  root_dag_builder.registerSubquery(subquery);
+  auto node = subquery_dag.getRootNodeShPtr();
+  auto subquery = std::make_shared<RexSubQuery>(node);
+  auto subquery_expr =
+      hdk::ir::makeExpr<hdk::ir::ScalarSubquery>(getColumnType(node.get(), 0), node);
+  root_dag_builder.registerSubquery(subquery, subquery_expr);
   return subquery->deepCopy();
 }
 
@@ -1593,6 +1608,7 @@ void create_compound(
   CHECK_LE(pattern.size(), size_t(4));
 
   std::unique_ptr<const RexScalar> filter_rex;
+  hdk::ir::ExprPtr filter_expr;
   std::vector<std::unique_ptr<const RexScalar>> scalar_sources;
   size_t groupby_count{0};
   std::vector<std::string> fields;
@@ -1617,6 +1633,7 @@ void create_compound(
       CHECK(!filter_rex);
       filter_rex.reset(ra_filter->getAndReleaseCondition());
       CHECK(filter_rex);
+      filter_expr = ra_filter->getConditionExprShared();
       last_node = ra_node.get();
       continue;
     }
@@ -1713,6 +1730,7 @@ void create_compound(
   }
 
   auto compound_node = std::make_shared<RelCompound>(filter_rex,
+                                                     filter_expr,
                                                      target_exprs,
                                                      exprs,
                                                      groupby_count,
@@ -3323,7 +3341,8 @@ std::string RexInput::toString() const {
   if (scan_node) {
     auto field_name = scan_node->getFieldName(getIndex());
     auto table_name = scan_node->getTableInfo()->name;
-    return ::typeName(this) + "(" + table_name + "." + field_name + ")";
+    return ::typeName(this) + "(" + table_name + "." + field_name + "[" +
+           node_->getIdString() + ":" + std::to_string(getIndex()) + "])";
   }
   return cat(::typeName(this),
              "(",
@@ -3345,8 +3364,10 @@ size_t RexInput::toHash() const {
 std::string RelCompound::toString() const {
   return cat(::typeName(this),
              getIdString(),
-             "(",
+             "(filter_rex=",
              (filter_expr_ ? filter_expr_->toString() : "null"),
+             ", filter=",
+             (filter_ ? filter_->toString() : "null"),
              ", target_exprs=",
              ::toString(target_exprs_),
              ", ",

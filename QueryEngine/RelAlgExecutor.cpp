@@ -448,7 +448,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
       ss << "Subqueries: "
          << "\n";
       for (const auto& subquery : subqueries) {
-        const auto ra = subquery->getRelAlg();
+        const auto ra = subquery.first->getRelAlg();
         ss << "\t" << ra->toString() << "\n";
       }
     }
@@ -464,8 +464,9 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   timer_setup.stop();
 
   // Dispatch the subqueries first
-  for (auto subquery : getSubqueries()) {
-    const auto subquery_ra = subquery->getRelAlg();
+  for (auto& subquery_pr : getSubqueries()) {
+    auto& subquery = subquery_pr.first;
+    auto subquery_ra = subquery->getRelAlg();
     CHECK(subquery_ra);
     if (subquery_ra->hasContextData()) {
       continue;
@@ -474,7 +475,9 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     RelAlgExecutor ra_executor(executor_, schema_provider_, data_provider_);
     RaExecutionSequence subquery_seq(subquery_ra);
     auto result = ra_executor.executeRelAlgSeq(subquery_seq, co, eo, 0);
-    subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
+    auto shared_result = std::make_shared<ExecutionResult>(std::move(result));
+    subquery->setExecutionResult(shared_result);
+    subquery_ra->setResult(shared_result);
   }
   return executeRelAlgSeq(ed_seq, co, eo, queue_time_ms);
 }
@@ -1322,10 +1325,19 @@ std::list<hdk::ir::ExprPtr> translate_groupby_exprs(
 QualsConjunctiveForm translate_quals(const RelCompound* compound,
                                      const RelAlgTranslator& translator) {
   const auto filter_rex = compound->getFilterExpr();
-  const auto filter_expr =
-      filter_rex ? translator.translateScalarRex(filter_rex) : nullptr;
-  return filter_expr ? qual_to_conjunctive_form(fold_expr(filter_expr.get()))
-                     : QualsConjunctiveForm{};
+  if (filter_rex) {
+    auto filter_expr = translator.translateScalarRex(filter_rex);
+    auto orig_filter_expr = fold_expr(filter_expr.get());
+
+    filter_expr = translator.normalize(compound->getFilter().get());
+    filter_expr = fold_expr(filter_expr.get());
+
+    CHECK(*orig_filter_expr == *filter_expr)
+        << "Compound filter expr mismatch: orig=" << orig_filter_expr->toString()
+        << " new=" << filter_expr->toString();
+    return qual_to_conjunctive_form(filter_expr);
+  }
+  return {};
 }
 
 std::vector<hdk::ir::Expr*> translate_targets(

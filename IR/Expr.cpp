@@ -7,9 +7,9 @@
 
 #include "Expr.h"
 
-#include "QueryEngine/RelAlgDagBuilder.h"
-
 #include "QueryEngine/DateTimeUtils.h"
+#include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
+#include "QueryEngine/RelAlgDagBuilder.h"
 #include "Shared/misc.h"
 #include "Shared/sqldefs.h"
 

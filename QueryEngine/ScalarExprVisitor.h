@@ -54,6 +54,10 @@ class ScalarExprVisitor {
     if (bin_oper) {
       return visitBinOper(bin_oper);
     }
+    const auto scalar_subquery = dynamic_cast<const hdk::ir::ScalarSubquery*>(expr);
+    if (scalar_subquery) {
+      return visitScalarSubquery(scalar_subquery);
+    }
     const auto in_values = dynamic_cast<const hdk::ir::InValues*>(expr);
     if (in_values) {
       return visitInValues(in_values);
@@ -61,6 +65,10 @@ class ScalarExprVisitor {
     const auto in_integer_set = dynamic_cast<const hdk::ir::InIntegerSet*>(expr);
     if (in_integer_set) {
       return visitInIntegerSet(in_integer_set);
+    }
+    const auto in_subquery = dynamic_cast<const hdk::ir::InSubquery*>(expr);
+    if (in_subquery) {
+      return visitInSubquery(in_subquery);
     }
     const auto char_length = dynamic_cast<const hdk::ir::CharLengthExpr*>(expr);
     if (char_length) {

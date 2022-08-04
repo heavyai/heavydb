@@ -15,6 +15,7 @@
  */
 
 #include "RelLeftDeepInnerJoin.h"
+#include "DeepCopyVisitor.h"
 #include "Logger/Logger.h"
 #include "RelAlgDagBuilder.h"
 #include "RexVisitor.h"
@@ -245,6 +246,48 @@ class RebindRexInputsFromLeftDeepJoin : public RexVisitor<void*> {
   const RelLeftDeepInnerJoin* left_deep_join_;
 };
 
+class RebindInputsFromLeftDeepJoinVisitor : public DeepCopyVisitor {
+ public:
+  RebindInputsFromLeftDeepJoinVisitor(const RelLeftDeepInnerJoin* left_deep_join)
+      : left_deep_join_(left_deep_join) {
+    std::vector<size_t> input_sizes;
+    input_sizes.reserve(left_deep_join->inputCount());
+    CHECK_GT(left_deep_join->inputCount(), size_t(1));
+    for (size_t i = 0; i < left_deep_join->inputCount(); ++i) {
+      input_sizes.push_back(left_deep_join->getInput(i)->size());
+    }
+    input_size_prefix_sums_.resize(input_sizes.size());
+    std::partial_sum(
+        input_sizes.begin(), input_sizes.end(), input_size_prefix_sums_.begin());
+  }
+
+  hdk::ir::ExprPtr visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
+    const auto node = col_ref->getNode();
+    if (left_deep_join_->coversOriginalNode(node)) {
+      const auto it = std::lower_bound(input_size_prefix_sums_.begin(),
+                                       input_size_prefix_sums_.end(),
+                                       col_ref->getIndex(),
+                                       std::less_equal<size_t>());
+      CHECK(it != input_size_prefix_sums_.end());
+      auto new_node =
+          left_deep_join_->getInput(std::distance(input_size_prefix_sums_.begin(), it));
+      auto new_index = col_ref->getIndex();
+      if (it != input_size_prefix_sums_.begin()) {
+        const auto prev_input_count = *(it - 1);
+        CHECK_LE(prev_input_count, new_index);
+        new_index -= prev_input_count;
+      }
+      return hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+          col_ref->get_type_info(), new_node, new_index);
+    }
+    return col_ref->deep_copy();
+  };
+
+ private:
+  std::vector<size_t> input_size_prefix_sums_;
+  const RelLeftDeepInnerJoin* left_deep_join_;
+};
+
 }  // namespace
 
 // Recognize the left-deep join tree pattern with an optional filter as root
@@ -277,6 +320,13 @@ void rebind_inputs_from_left_deep_join(const RexScalar* rex,
                                        const RelLeftDeepInnerJoin* left_deep_join) {
   RebindRexInputsFromLeftDeepJoin rebind_rex_inputs_from_left_deep_join(left_deep_join);
   rebind_rex_inputs_from_left_deep_join.visit(rex);
+}
+
+hdk::ir::ExprPtr rebind_inputs_from_left_deep_join(
+    const hdk::ir::Expr* expr,
+    const RelLeftDeepInnerJoin* left_deep_join) {
+  RebindInputsFromLeftDeepJoinVisitor visitor(left_deep_join);
+  return visitor.visit(expr);
 }
 
 void create_left_deep_join(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {

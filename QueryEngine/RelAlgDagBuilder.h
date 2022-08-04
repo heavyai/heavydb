@@ -821,6 +821,12 @@ class RelAlgNode {
    */
   void clearContextData() const { context_data_ = nullptr; }
 
+  std::shared_ptr<const ExecutionResult> getResult() const { return result_; }
+
+  void setResult(std::shared_ptr<const ExecutionResult> result) const {
+    result_ = result;
+  }
+
  protected:
   RelAlgInputs inputs_;
   const unsigned id_;
@@ -832,6 +838,7 @@ class RelAlgNode {
   mutable std::vector<TargetMetaInfo> targets_metainfo_;
   static thread_local unsigned crt_id_;
   mutable size_t dag_node_id_;
+  mutable std::shared_ptr<const ExecutionResult> result_;
 };
 
 inline std::string inputsToString(const RelAlgInputs& inputs) {
@@ -1478,7 +1485,7 @@ class RelFilter : public RelAlgNode {
     CHECK(condition);
     filter_ = std::move(condition);
     CHECK(filter_expr);
-    filter_expr_ = std::move(filter_expr_);
+    filter_expr_ = std::move(filter_expr);
   }
 
   size_t size() const override { return inputs_[0]->size(); }
@@ -1559,6 +1566,7 @@ class RelCompound : public RelAlgNode {
   // or aggregate expressions owned by 'agg_exprs_', with the arguments
   // owned by 'scalar_sources_'.
   RelCompound(std::unique_ptr<const RexScalar>& filter_expr,
+              hdk::ir::ExprPtr filter,
               const std::vector<const Rex*>& target_exprs,
               hdk::ir::ExprPtrVector exprs,
               const size_t groupby_count,
@@ -1567,6 +1575,7 @@ class RelCompound : public RelAlgNode {
               std::vector<std::unique_ptr<const RexScalar>>& scalar_sources,
               const bool is_agg)
       : filter_expr_(std::move(filter_expr))
+      , filter_(std::move(filter))
       , groupby_count_(groupby_count)
       , fields_(fields)
       , is_agg_(is_agg)
@@ -1590,8 +1599,12 @@ class RelCompound : public RelAlgNode {
 
   const RexScalar* getFilterExpr() const { return filter_expr_.get(); }
 
-  void setFilterExpr(std::unique_ptr<const RexScalar>& new_expr) {
+  hdk::ir::ExprPtr getFilter() const { return filter_; }
+
+  void setFilterExpr(std::unique_ptr<const RexScalar>& new_expr,
+                     hdk::ir::ExprPtr new_filter) {
     filter_expr_ = std::move(new_expr);
+    filter_ = new_filter;
   }
 
   const Rex* getTargetExpr(const size_t i) const { return target_exprs_[i]; }
@@ -1659,6 +1672,7 @@ class RelCompound : public RelAlgNode {
 
  private:
   std::unique_ptr<const RexScalar> filter_expr_;
+  hdk::ir::ExprPtr filter_;
   const size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
   std::vector<std::string> fields_;
@@ -1992,8 +2006,9 @@ class RelAlgDag {
    * Registers a subquery with a root DAG builder. Should only be called during DAG
    * building and registration should only occur on the root.
    */
-  void registerSubquery(std::shared_ptr<RexSubQuery> subquery) {
-    subqueries_.push_back(subquery);
+  void registerSubquery(std::shared_ptr<RexSubQuery> subquery,
+                        std::shared_ptr<hdk::ir::ScalarSubquery> subquery_expr) {
+    subqueries_.emplace_back(std::move(subquery), std::move(subquery_expr));
   }
 
   void registerQueryHints(RelAlgNodePtr node, Hints* hints_delivered);
@@ -2001,7 +2016,9 @@ class RelAlgDag {
   /**
    * Gets all registered subqueries. Only the root DAG can contain subqueries.
    */
-  const std::vector<std::shared_ptr<RexSubQuery>>& getSubqueries() const {
+  const std::vector<
+      std::pair<std::shared_ptr<RexSubQuery>, std::shared_ptr<hdk::ir::ScalarSubquery>>>&
+  getSubqueries() const {
     return subqueries_;
   }
 
@@ -2028,7 +2045,9 @@ class RelAlgDag {
   RelAlgNodePtr root_;
   // All nodes including the root one.
   std::vector<RelAlgNodePtr> nodes_;
-  std::vector<std::shared_ptr<RexSubQuery>> subqueries_;
+  std::vector<
+      std::pair<std::shared_ptr<RexSubQuery>, std::shared_ptr<hdk::ir::ScalarSubquery>>>
+      subqueries_;
   std::unordered_map<size_t, RegisteredQueryHint> query_hint_;
 };
 

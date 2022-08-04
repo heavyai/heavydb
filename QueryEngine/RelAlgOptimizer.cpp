@@ -1357,16 +1357,18 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
       liveout_renumbering, ready_nodes, old_liveouts, intact_nodes, web, orig_node_sizes);
 }
 
-void eliminate_dead_subqueries(std::vector<std::shared_ptr<RexSubQuery>>& subqueries,
-                               RelAlgNode const* root) {
+void eliminate_dead_subqueries(
+    std::vector<std::pair<std::shared_ptr<RexSubQuery>,
+                          std::shared_ptr<hdk::ir::ScalarSubquery>>>& subqueries,
+    RelAlgNode const* root) {
   if (!subqueries.empty()) {
     auto live_ids = RexSubQueryIdCollector::getLiveRexSubQueryIds(root);
     auto sort_live_ids_first = [&live_ids](auto& a, auto& b) {
-      return live_ids.count(a->getId()) && !live_ids.count(b->getId());
+      return live_ids.count(a.first->getId()) && !live_ids.count(b.first->getId());
     };
     std::stable_sort(subqueries.begin(), subqueries.end(), sort_live_ids_first);
     size_t n_dead_subqueries;
-    if (live_ids.count(subqueries.front()->getId())) {
+    if (live_ids.count(subqueries.front().first->getId())) {
       auto first_dead_itr = std::upper_bound(subqueries.cbegin(),
                                              subqueries.cend(),
                                              subqueries.front(),
@@ -1553,6 +1555,35 @@ class RexInputRedirector : public RexDeepCopyVisitor {
   const RelAlgNode* new_src_;
 };
 
+class InputRedirector : public DeepCopyVisitor {
+ public:
+  InputRedirector(const RelAlgNode* old_src, const RelAlgNode* new_src)
+      : old_src_(old_src), new_src_(new_src) {
+    CHECK_NE(old_src_, new_src_);
+  }
+
+  hdk::ir::ExprPtr visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
+    CHECK_EQ(old_src_, col_ref->getNode());
+    auto idx = col_ref->getIndex();
+    auto ti = getColumnType(new_src_, idx);
+    if (auto join = dynamic_cast<const RelJoin*>(new_src_)) {
+      auto lhs_size = join->getInput(0)->size();
+      if (idx >= lhs_size) {
+        return hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+            ti, join->getInput(1), idx - lhs_size);
+      } else {
+        return hdk::ir::makeExpr<hdk::ir::ColumnRef>(ti, join->getInput(0), idx);
+      }
+    }
+
+    return hdk::ir::makeExpr<hdk::ir::ColumnRef>(ti, new_src_, idx);
+  }
+
+ private:
+  const RelAlgNode* old_src_;
+  const RelAlgNode* new_src_;
+};
+
 void replace_all_usages(
     std::shared_ptr<const RelAlgNode> old_def_node,
     std::shared_ptr<const RelAlgNode> new_def_node,
@@ -1620,8 +1651,9 @@ void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
                              other_condition->getType().get_notnull();
         auto new_condition = std::unique_ptr<const RexScalar>(
             new RexOperator(kAND, std::move(operands), SQLTypeInfo(kBOOLEAN, notnull)));
+        InputRedirector visitor(folded_filter.get(), folded_filter->getInput(0));
         hdk::ir::ExprPtr lhs = folded_filter->getConditionExprShared();
-        hdk::ir::ExprPtr rhs = filter->getConditionExprShared();
+        hdk::ir::ExprPtr rhs = visitor.visit(filter->getConditionExpr());
         auto new_condition_expr = hdk::ir::makeExpr<hdk::ir::BinOper>(
             SQLTypeInfo(kBOOLEAN, notnull), false, kAND, kONE, lhs, rhs);
         folded_filter->setCondition(new_condition, new_condition_expr);

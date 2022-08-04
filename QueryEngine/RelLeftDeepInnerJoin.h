@@ -19,6 +19,8 @@
 #include <memory>
 #include <vector>
 
+#include "IR/Expr.h"
+
 class RelAlgNode;
 class RelLeftDeepInnerJoin;
 class RexScalar;
@@ -31,3 +33,6 @@ void create_left_deep_join(std::vector<std::shared_ptr<RelAlgNode>>& nodes);
 
 void rebind_inputs_from_left_deep_join(const RexScalar* rex,
                                        const RelLeftDeepInnerJoin* left_deep_join);
+hdk::ir::ExprPtr rebind_inputs_from_left_deep_join(
+    const hdk::ir::Expr* expr,
+    const RelLeftDeepInnerJoin* left_deep_join);

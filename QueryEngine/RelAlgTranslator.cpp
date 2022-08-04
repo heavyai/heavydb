@@ -169,12 +169,44 @@ std::pair<Datum, bool> datum_from_scalar_tv(const ScalarTargetValue* scalar_tv,
   return {d, is_null_const};
 }
 
+hdk::ir::ExprPtr translateScalarSubqueryResult(
+    std::shared_ptr<const ExecutionResult> result) {
+  auto row_set = result->getRows();
+  const size_t row_count = row_set->rowCount();
+  CHECK_EQ(size_t(1), row_set->colCount());
+  auto ti = row_set->getColType(0);
+  if (row_count > size_t(1)) {
+    throw std::runtime_error("Scalar sub-query returned multiple rows");
+  }
+  if (row_count == size_t(0)) {
+    if (row_set->isValidationOnlyRes()) {
+      Datum d{0};
+      return hdk::ir::makeExpr<hdk::ir::Constant>(ti, false, d);
+    }
+    throw std::runtime_error("Scalar sub-query returned no results");
+  }
+  CHECK_EQ(row_count, size_t(1));
+  row_set->moveToBegin();
+  auto first_row = row_set->getNextRow(false, false);
+  CHECK_EQ(first_row.size(), size_t(1));
+  auto scalar_tv = boost::get<ScalarTargetValue>(&first_row[0]);
+  if (ti.is_string()) {
+    throw std::runtime_error("Scalar sub-queries which return strings not supported");
+  }
+  Datum d{0};
+  bool is_null_const{false};
+  std::tie(d, is_null_const) = datum_from_scalar_tv(scalar_tv, ti);
+  return hdk::ir::makeExpr<hdk::ir::Constant>(ti, is_null_const, d);
+}
+
 class NormalizerVisitor : public DeepCopyVisitor {
  public:
-  NormalizerVisitor(const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+  NormalizerVisitor(const RelAlgTranslator& translator,
+                    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
                     const std::vector<JoinType>& join_types,
                     const Executor* executor)
-      : input_to_nest_level_(input_to_nest_level)
+      : translator_(translator)
+      , input_to_nest_level_(input_to_nest_level)
       , join_types_(join_types)
       , executor_(executor) {}
 
@@ -211,6 +243,8 @@ class NormalizerVisitor : public DeepCopyVisitor {
       // We expect column ref type to match physical type from output meta.
       auto meta_type = in_metainfo[col_idx].get_physical_type_info();
       auto col_type = col_ref->get_type_info();
+      // Allow diff in nullable flag.
+      col_type.set_notnull(meta_type.get_notnull());
       CHECK(meta_type == col_type) << "Type mismatch: meta_type=" << meta_type.toString()
                                    << " col_type=" << col_type.toString();
     }
@@ -228,6 +262,17 @@ class NormalizerVisitor : public DeepCopyVisitor {
   hdk::ir::ExprPtr visitBinOper(const hdk::ir::BinOper* bin_oper) const override {
     auto lhs = visit(bin_oper->get_left_operand());
     auto rhs = visit(bin_oper->get_right_operand());
+    // Some binary expressions are not results of operation translation. They are
+    // not covered in Analyzer normalization.
+    if (bin_oper->get_optype() == kARRAY_AT) {
+      return hdk::ir::makeExpr<hdk::ir::BinOper>(
+          bin_oper->get_type_info(),
+          lhs->get_contains_agg() || rhs->get_contains_agg(),
+          bin_oper->get_optype(),
+          bin_oper->get_qualifier(),
+          std::move(lhs),
+          std::move(rhs));
+    }
     return Analyzer::normalizeOperExpr(bin_oper->get_optype(),
                                        bin_oper->get_qualifier(),
                                        std::move(lhs),
@@ -235,7 +280,40 @@ class NormalizerVisitor : public DeepCopyVisitor {
                                        executor_);
   }
 
+  hdk::ir::ExprPtr visitUOper(const hdk::ir::UOper* uoper) const override {
+    // Casts introduced on DAG build stage might become NOPs.
+    if (uoper->get_optype() == kCAST) {
+      auto op = visit(uoper->get_operand());
+      if (uoper->get_type_info() == op->get_type_info()) {
+        return op;
+      }
+      return hdk::ir::makeExpr<hdk::ir::UOper>(
+          uoper->get_type_info(), op->get_contains_agg(), kCAST, op);
+    }
+    return DeepCopyVisitor::visitUOper(uoper);
+  }
+
+  hdk::ir::ExprPtr visitCaseExpr(const hdk::ir::CaseExpr* case_expr) const override {
+    std::list<std::pair<hdk::ir::ExprPtr, hdk::ir::ExprPtr>> expr_list;
+    for (auto& pr : case_expr->get_expr_pair_list()) {
+      expr_list.emplace_back(visit(pr.first.get()), visit(pr.second.get()));
+    }
+    auto else_expr = visit(case_expr->get_else_expr());
+    return Analyzer::normalizeCaseExpr(expr_list, else_expr, executor_);
+  }
+
+  hdk::ir::ExprPtr visitScalarSubquery(
+      const hdk::ir::ScalarSubquery* subquery) const override {
+    return translateScalarSubqueryResult(subquery->getNode()->getResult());
+  }
+
+  hdk::ir::ExprPtr visitInSubquery(const hdk::ir::InSubquery* subquery) const override {
+    return translator_.translateInSubquery(visit(subquery->getArg().get()),
+                                           subquery->getNode()->getResult());
+  }
+
  private:
+  const RelAlgTranslator& translator_;
   const std::unordered_map<const RelAlgNode*, int> input_to_nest_level_;
   const std::vector<JoinType> join_types_;
   const Executor* executor_;
@@ -364,7 +442,7 @@ hdk::ir::ExprPtr RelAlgTranslator::translateAggregateRex(
 }
 
 hdk::ir::ExprPtr RelAlgTranslator::normalize(const hdk::ir::Expr* expr) const {
-  NormalizerVisitor visitor(input_to_nest_level_, join_types_, executor_);
+  NormalizerVisitor visitor(*this, input_to_nest_level_, join_types_, executor_);
   return visitor.visit(expr);
 }
 
@@ -458,31 +536,8 @@ hdk::ir::ExprPtr RelAlgTranslator::translateScalarSubquery(
   }
   CHECK(rex_subquery);
   auto result = rex_subquery->getExecutionResult();
-  auto row_set = result->getRows();
-  const size_t row_count = row_set->rowCount();
-  if (row_count > size_t(1)) {
-    throw std::runtime_error("Scalar sub-query returned multiple rows");
-  }
-  if (row_count == size_t(0)) {
-    if (row_set->isValidationOnlyRes()) {
-      Datum d{0};
-      return hdk::ir::makeExpr<hdk::ir::Constant>(rex_subquery->getType(), false, d);
-    }
-    throw std::runtime_error("Scalar sub-query returned no results");
-  }
-  CHECK_EQ(row_count, size_t(1));
-  row_set->moveToBegin();
-  auto first_row = row_set->getNextRow(false, false);
-  CHECK_EQ(first_row.size(), size_t(1));
-  auto scalar_tv = boost::get<ScalarTargetValue>(&first_row[0]);
-  auto ti = rex_subquery->getType();
-  if (ti.is_string()) {
-    throw std::runtime_error("Scalar sub-queries which return strings not supported");
-  }
-  Datum d{0};
-  bool is_null_const{false};
-  std::tie(d, is_null_const) = datum_from_scalar_tv(scalar_tv, ti);
-  return hdk::ir::makeExpr<hdk::ir::Constant>(ti, is_null_const, d);
+  CHECK(rex_subquery->getRelAlg()->getResult());
+  return translateScalarSubqueryResult(result);
 }
 
 hdk::ir::ExprPtr RelAlgTranslator::translateInput(const RexInput* rex_input) const {
@@ -680,7 +735,14 @@ hdk::ir::ExprPtr RelAlgTranslator::translateInOper(
         ti, lhs, rex_subquery->getRelAlgShared());
   }
   auto result = rex_subquery->getExecutionResult();
+  return translateInSubquery(lhs, result);
+}
+
+hdk::ir::ExprPtr RelAlgTranslator::translateInSubquery(
+    hdk::ir::ExprPtr lhs,
+    std::shared_ptr<const ExecutionResult> result) const {
   CHECK(result);
+  auto ti = lhs->get_type_info();
   auto& row_set = result->getRows();
   CHECK_EQ(size_t(1), row_set->colCount());
   const auto& rhs_ti = row_set->getColType(0);

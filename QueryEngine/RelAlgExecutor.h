@@ -112,7 +112,9 @@ class RelAlgExecutor {
 
   std::shared_ptr<RelAlgTranslator> getRelAlgTranslator(const RelAlgNode* root_node);
 
-  const std::vector<std::shared_ptr<RexSubQuery>>& getSubqueries() const noexcept {
+  const std::vector<
+      std::pair<std::shared_ptr<RexSubQuery>, std::shared_ptr<hdk::ir::ScalarSubquery>>>&
+  getSubqueries() const noexcept {
     CHECK(query_dag_);
     return query_dag_->getSubqueries();
   };
