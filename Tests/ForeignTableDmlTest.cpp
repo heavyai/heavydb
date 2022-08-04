@@ -32,6 +32,8 @@
 #include "Catalog/OptionsContainer.h"
 #include "Catalog/RefreshTimeCalculator.h"
 #include "DBHandlerTestHelpers.h"
+#include "Shared/StringTransform.h"
+#include "DataMgr/ForeignStorage/DataPreview.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "DataMgr/ForeignStorage/RegexFileBufferParser.h"
