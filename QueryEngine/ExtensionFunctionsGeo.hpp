@@ -1481,6 +1481,26 @@ void ST_Centroid_Point(int8_t* p,
   point_centroid[1] = centroid.y;
 }
 
+EXTENSION_NOINLINE
+void ST_Centroid_MultiPoint(int8_t* mp,
+                            int32_t mpsize,
+                            int32_t ic,
+                            int32_t isr,
+                            int32_t osr,
+                            double* multipoint_centroid) {
+  auto mp_num_coords = mpsize / compression_unit_size(ic);
+  double x = 0.0;
+  double y = 0.0;
+  for (int32_t i = 0; i < mp_num_coords; i += 2) {
+    Point2D mpp = get_point(mp, i, ic, isr, osr);
+    x += mpp.x;  // In case of overflows on large geometries,
+    y += mpp.y;  // move division into the loop
+  }
+  auto mp_num_points = mp_num_coords >> 1;
+  multipoint_centroid[0] = x / mp_num_points;
+  multipoint_centroid[1] = y / mp_num_points;
+}
+
 DEVICE ALWAYS_INLINE bool centroid_add_segment(double x1,
                                                double y1,
                                                double x2,
@@ -1987,19 +2007,18 @@ double ST_Distance_Point_LineString(int8_t* p,
       p, psize, l, lsize, ic1, isr1, ic2, isr2, osr, false, threshold);
 }
 
-EXTENSION_NOINLINE
-double ST_Distance_Point_MultiLineString(int8_t* p,
-                                         int64_t psize,
-                                         int8_t* mls,
-                                         int64_t mls_size,
-                                         int32_t* mls_ls_sizes,
-                                         int64_t mls_ls_num,
-                                         int32_t ic1,
-                                         int32_t isr1,
-                                         int32_t ic2,
-                                         int32_t isr2,
-                                         int32_t osr,
-                                         double threshold) {
+DEVICE ALWAYS_INLINE double distance_point_multilinestring(int8_t* p,
+                                                           int64_t psize,
+                                                           int8_t* mls,
+                                                           int64_t mls_size,
+                                                           int32_t* mls_ls_sizes,
+                                                           int64_t mls_ls_num,
+                                                           int32_t ic1,
+                                                           int32_t isr1,
+                                                           int32_t ic2,
+                                                           int32_t isr2,
+                                                           int32_t osr,
+                                                           double threshold) {
   if (mls_ls_num <= 0) {
     return 0.0;
   }
@@ -2040,18 +2059,44 @@ double ST_Distance_Point_MultiLineString(int8_t* p,
 }
 
 EXTENSION_NOINLINE
-double ST_Distance_Point_Polygon(int8_t* p,
-                                 int64_t psize,
-                                 int8_t* poly,
-                                 int64_t polysize,
-                                 int32_t* poly_ring_sizes,
-                                 int64_t poly_num_rings,
-                                 int32_t ic1,
-                                 int32_t isr1,
-                                 int32_t ic2,
-                                 int32_t isr2,
-                                 int32_t osr,
-                                 double threshold) {
+double ST_Distance_Point_MultiLineString(int8_t* p,
+                                         int64_t psize,
+                                         int8_t* mls,
+                                         int64_t mls_size,
+                                         int32_t* mls_ls_sizes,
+                                         int64_t mls_ls_num,
+                                         int32_t ic1,
+                                         int32_t isr1,
+                                         int32_t ic2,
+                                         int32_t isr2,
+                                         int32_t osr,
+                                         double threshold) {
+  return distance_point_multilinestring(p,
+                                        psize,
+                                        mls,
+                                        mls_size,
+                                        mls_ls_sizes,
+                                        mls_ls_num,
+                                        ic1,
+                                        isr1,
+                                        ic2,
+                                        isr2,
+                                        osr,
+                                        threshold);
+}
+
+DEVICE ALWAYS_INLINE double distance_point_polygon(int8_t* p,
+                                                   int64_t psize,
+                                                   int8_t* poly,
+                                                   int64_t polysize,
+                                                   int32_t* poly_ring_sizes,
+                                                   int64_t poly_num_rings,
+                                                   int32_t ic1,
+                                                   int32_t isr1,
+                                                   int32_t ic2,
+                                                   int32_t isr2,
+                                                   int32_t osr,
+                                                   double threshold) {
   auto exterior_ring_num_coords = polysize / compression_unit_size(ic2);
   if (poly_num_rings > 0) {
     exterior_ring_num_coords = poly_ring_sizes[0] * 2;
@@ -2092,21 +2137,20 @@ double ST_Distance_Point_Polygon(int8_t* p,
   return 0.0;
 }
 
-EXTENSION_NOINLINE
-double ST_Distance_Point_MultiPolygon(int8_t* p,
-                                      int64_t psize,
-                                      int8_t* mpoly_coords,
-                                      int64_t mpoly_coords_size,
-                                      int32_t* mpoly_ring_sizes,
-                                      int64_t mpoly_num_rings,
-                                      int32_t* mpoly_poly_sizes,
-                                      int64_t mpoly_num_polys,
-                                      int32_t ic1,
-                                      int32_t isr1,
-                                      int32_t ic2,
-                                      int32_t isr2,
-                                      int32_t osr,
-                                      double threshold) {
+DEVICE ALWAYS_INLINE double distance_point_multipolygon(int8_t* p,
+                                                        int64_t psize,
+                                                        int8_t* mpoly_coords,
+                                                        int64_t mpoly_coords_size,
+                                                        int32_t* mpoly_ring_sizes,
+                                                        int64_t mpoly_num_rings,
+                                                        int32_t* mpoly_poly_sizes,
+                                                        int64_t mpoly_num_polys,
+                                                        int32_t ic1,
+                                                        int32_t isr1,
+                                                        int32_t ic2,
+                                                        int32_t isr2,
+                                                        int32_t osr,
+                                                        double threshold) {
   if (mpoly_num_polys <= 0) {
     return 0.0;
   }
@@ -2127,18 +2171,18 @@ double ST_Distance_Point_MultiPolygon(int8_t* p,
     }
     auto poly_coords_size = poly_num_coords * compression_unit_size(ic2);
     next_poly_coords += poly_coords_size;
-    double distance = ST_Distance_Point_Polygon(p,
-                                                psize,
-                                                poly_coords,
-                                                poly_coords_size,
-                                                poly_ring_sizes,
-                                                poly_num_rings,
-                                                ic1,
-                                                isr1,
-                                                ic2,
-                                                isr2,
-                                                osr,
-                                                threshold);
+    double distance = distance_point_polygon(p,
+                                             psize,
+                                             poly_coords,
+                                             poly_coords_size,
+                                             poly_ring_sizes,
+                                             poly_num_rings,
+                                             ic1,
+                                             isr1,
+                                             ic2,
+                                             isr2,
+                                             osr,
+                                             threshold);
     if (poly == 0 || min_distance > distance) {
       min_distance = distance;
       if (tol_zero(min_distance)) {
@@ -2152,6 +2196,234 @@ double ST_Distance_Point_MultiPolygon(int8_t* p,
   }
 
   return min_distance;
+}
+
+EXTENSION_NOINLINE
+double ST_Distance_Point_Polygon(int8_t* p,
+                                 int64_t psize,
+                                 int8_t* poly,
+                                 int64_t polysize,
+                                 int32_t* poly_ring_sizes,
+                                 int64_t poly_num_rings,
+                                 int32_t ic1,
+                                 int32_t isr1,
+                                 int32_t ic2,
+                                 int32_t isr2,
+                                 int32_t osr,
+                                 double threshold) {
+  return distance_point_polygon(p,
+                                psize,
+                                poly,
+                                polysize,
+                                poly_ring_sizes,
+                                poly_num_rings,
+                                ic1,
+                                isr1,
+                                ic2,
+                                isr2,
+                                osr,
+                                threshold);
+}
+
+EXTENSION_NOINLINE
+double ST_Distance_Point_MultiPolygon(int8_t* p,
+                                      int64_t psize,
+                                      int8_t* mpoly_coords,
+                                      int64_t mpoly_coords_size,
+                                      int32_t* mpoly_ring_sizes,
+                                      int64_t mpoly_num_rings,
+                                      int32_t* mpoly_poly_sizes,
+                                      int64_t mpoly_num_polys,
+                                      int32_t ic1,
+                                      int32_t isr1,
+                                      int32_t ic2,
+                                      int32_t isr2,
+                                      int32_t osr,
+                                      double threshold) {
+  return distance_point_multipolygon(p,
+                                     psize,
+                                     mpoly_coords,
+                                     mpoly_coords_size,
+                                     mpoly_ring_sizes,
+                                     mpoly_num_rings,
+                                     mpoly_poly_sizes,
+                                     mpoly_num_polys,
+                                     ic1,
+                                     isr1,
+                                     ic2,
+                                     isr2,
+                                     osr,
+                                     threshold);
+}
+
+EXTENSION_INLINE
+double ST_Distance_MultiPoint_Polygon(int8_t* mp,
+                                      int64_t mpsize,
+                                      int8_t* poly,
+                                      int64_t polysize,
+                                      int32_t* poly_ring_sizes,
+                                      int64_t poly_num_rings,
+                                      int32_t ic1,
+                                      int32_t isr1,
+                                      int32_t ic2,
+                                      int32_t isr2,
+                                      int32_t osr,
+                                      double threshold) {
+  auto mp_num_coords = mpsize / compression_unit_size(ic1);
+  auto* p = mp;
+  auto const psize = compression_unit_size(ic1) * 2;
+  auto dist = distance_point_polygon(p,
+                                     psize,
+                                     poly,
+                                     polysize,
+                                     poly_ring_sizes,
+                                     poly_num_rings,
+                                     ic1,
+                                     isr1,
+                                     ic2,
+                                     isr2,
+                                     osr,
+                                     threshold);
+  p += psize;
+  for (int32_t i = 2; i < mp_num_coords; i += 2) {
+    auto ldist = distance_point_polygon(p,
+                                        psize,
+                                        poly,
+                                        polysize,
+                                        poly_ring_sizes,
+                                        poly_num_rings,
+                                        ic1,
+                                        isr1,
+                                        ic2,
+                                        isr2,
+                                        osr,
+                                        threshold);
+    p += psize;
+    if (dist > ldist) {
+      dist = ldist;
+    }
+    if (dist <= threshold) {
+      return dist;
+    }
+  }
+  return dist;
+}
+
+EXTENSION_INLINE
+double ST_Distance_MultiPoint_MultiPolygon(int8_t* mp,
+                                           int64_t mpsize,
+                                           int8_t* mpoly_coords,
+                                           int64_t mpoly_coords_size,
+                                           int32_t* mpoly_ring_sizes,
+                                           int64_t mpoly_num_rings,
+                                           int32_t* mpoly_poly_sizes,
+                                           int64_t mpoly_num_polys,
+                                           int32_t ic1,
+                                           int32_t isr1,
+                                           int32_t ic2,
+                                           int32_t isr2,
+                                           int32_t osr,
+                                           double threshold) {
+  auto mp_num_coords = mpsize / compression_unit_size(ic1);
+  auto* p = mp;
+  auto const psize = compression_unit_size(ic1) * 2;
+  auto dist = distance_point_multipolygon(p,
+                                          psize,
+                                          mpoly_coords,
+                                          mpoly_coords_size,
+                                          mpoly_ring_sizes,
+                                          mpoly_num_rings,
+                                          mpoly_poly_sizes,
+                                          mpoly_num_polys,
+                                          ic1,
+                                          isr1,
+                                          ic2,
+                                          isr2,
+                                          osr,
+                                          threshold);
+  p += psize;
+  for (int32_t i = 2; i < mp_num_coords; i += 2) {
+    auto ldist = distance_point_multipolygon(p,
+                                             psize,
+                                             mpoly_coords,
+                                             mpoly_coords_size,
+                                             mpoly_ring_sizes,
+                                             mpoly_num_rings,
+                                             mpoly_poly_sizes,
+                                             mpoly_num_polys,
+                                             ic1,
+                                             isr1,
+                                             ic2,
+                                             isr2,
+                                             osr,
+                                             threshold);
+    p += psize;
+    if (dist > ldist) {
+      dist = ldist;
+    }
+    if (dist <= threshold) {
+      return dist;
+    }
+  }
+  return dist;
+}
+
+EXTENSION_INLINE
+double ST_Distance_Polygon_MultiPoint(int8_t* poly,
+                                      int64_t polysize,
+                                      int32_t* poly_ring_sizes,
+                                      int64_t poly_num_rings,
+                                      int8_t* mp,
+                                      int64_t mpsize,
+                                      int32_t ic1,
+                                      int32_t isr1,
+                                      int32_t ic2,
+                                      int32_t isr2,
+                                      int32_t osr,
+                                      double threshold) {
+  return ST_Distance_MultiPoint_Polygon(mp,
+                                        mpsize,
+                                        poly,
+                                        polysize,
+                                        poly_ring_sizes,
+                                        poly_num_rings,
+                                        ic2,
+                                        isr2,
+                                        ic1,
+                                        isr1,
+                                        osr,
+                                        threshold);
+}
+
+EXTENSION_INLINE
+double ST_Distance_MultiPolygon_MultiPoint(int8_t* mpoly_coords,
+                                           int64_t mpoly_coords_size,
+                                           int32_t* mpoly_ring_sizes,
+                                           int64_t mpoly_num_rings,
+                                           int32_t* mpoly_poly_sizes,
+                                           int64_t mpoly_num_polys,
+                                           int8_t* mp,
+                                           int64_t mpsize,
+                                           int32_t ic1,
+                                           int32_t isr1,
+                                           int32_t ic2,
+                                           int32_t isr2,
+                                           int32_t osr,
+                                           double threshold) {
+  return ST_Distance_MultiPoint_MultiPolygon(mp,
+                                             mpsize,
+                                             mpoly_coords,
+                                             mpoly_coords_size,
+                                             mpoly_ring_sizes,
+                                             mpoly_num_rings,
+                                             mpoly_poly_sizes,
+                                             mpoly_num_polys,
+                                             ic2,
+                                             isr2,
+                                             ic1,
+                                             isr1,
+                                             osr,
+                                             threshold);
 }
 
 EXTENSION_INLINE
@@ -2229,9 +2501,9 @@ double ST_Distance_MultiPoint_MultiPoint_Squared(int8_t* mp1,
   auto mp2_num_coords = mp2size / compression_unit_size(ic2);
   double dist = -1.0;
   for (int32_t i = 0; i < mp1_num_coords; i += 2) {
-    Point2D mp1p = get_point(mp1, 0, ic1, isr1, osr);
+    Point2D mp1p = get_point(mp1, i, ic1, isr1, osr);
     for (int32_t j = 0; j < mp2_num_coords; j += 2) {
-      Point2D mp2p = get_point(mp2, 0, ic2, isr2, osr);
+      Point2D mp2p = get_point(mp2, j, ic2, isr2, osr);
       double ldist = distance_point_point_squared(mp1p.x, mp1p.y, mp2p.x, mp2p.y);
       if (dist > ldist || dist < 0.0) {
         dist = ldist;
@@ -2239,6 +2511,90 @@ double ST_Distance_MultiPoint_MultiPoint_Squared(int8_t* mp1,
       if (dist <= threshold) {
         return dist;
       }
+    }
+  }
+  return dist;
+}
+
+EXTENSION_INLINE
+double ST_Distance_MultiPoint_LineString(int8_t* mp,
+                                         int64_t mpsize,
+                                         int8_t* l,
+                                         int64_t lsize,
+                                         int32_t ic1,
+                                         int32_t isr1,
+                                         int32_t ic2,
+                                         int32_t isr2,
+                                         int32_t osr,
+                                         double threshold) {
+  auto mp_num_coords = mpsize / compression_unit_size(ic1);
+  auto* p = mp;
+  auto const psize = compression_unit_size(ic1) * 2;
+  auto dist = distance_point_linestring(
+      p, psize, l, lsize, ic1, isr1, ic2, isr2, osr, true, threshold);
+  p += psize;
+  for (int32_t i = 2; i < mp_num_coords; i += 2) {
+    auto ldist = distance_point_linestring(
+        p, psize, l, lsize, ic1, isr1, ic2, isr2, osr, true, threshold);
+    p += psize;
+    if (dist > ldist) {
+      dist = ldist;
+    }
+    if (dist <= threshold) {
+      return dist;
+    }
+  }
+  return dist;
+}
+
+EXTENSION_INLINE
+double ST_Distance_MultiPoint_MultiLineString(int8_t* mp,
+                                              int64_t mpsize,
+                                              int8_t* mls,
+                                              int64_t mls_size,
+                                              int32_t* mls_ls_sizes,
+                                              int64_t mls_ls_num,
+                                              int32_t ic1,
+                                              int32_t isr1,
+                                              int32_t ic2,
+                                              int32_t isr2,
+                                              int32_t osr,
+                                              double threshold) {
+  auto mp_num_coords = mpsize / compression_unit_size(ic1);
+  auto* p = mp;
+  auto const psize = compression_unit_size(ic1) * 2;
+  auto dist = distance_point_multilinestring(p,
+                                             psize,
+                                             mls,
+                                             mls_size,
+                                             mls_ls_sizes,
+                                             mls_ls_num,
+                                             ic1,
+                                             isr1,
+                                             ic2,
+                                             isr2,
+                                             osr,
+                                             threshold);
+  p += psize;
+  for (int32_t i = 2; i < mp_num_coords; i += 2) {
+    auto ldist = distance_point_multilinestring(p,
+                                                psize,
+                                                mls,
+                                                mls_size,
+                                                mls_ls_sizes,
+                                                mls_ls_num,
+                                                ic1,
+                                                isr1,
+                                                ic2,
+                                                isr2,
+                                                osr,
+                                                threshold);
+    p += psize;
+    if (dist > ldist) {
+      dist = ldist;
+    }
+    if (dist <= threshold) {
+      return dist;
     }
   }
   return dist;
@@ -2257,6 +2613,48 @@ double ST_Distance_LineString_Point(int8_t* l,
                                     double threshold) {
   return ST_Distance_Point_LineString(
       p, psize, l, lsize, ic2, isr2, ic1, isr1, osr, threshold);
+}
+
+EXTENSION_INLINE
+double ST_Distance_LineString_MultiPoint(int8_t* l,
+                                         int64_t lsize,
+                                         int8_t* mp,
+                                         int64_t mpsize,
+                                         int32_t ic1,
+                                         int32_t isr1,
+                                         int32_t ic2,
+                                         int32_t isr2,
+                                         int32_t osr,
+                                         double threshold) {
+  return ST_Distance_MultiPoint_LineString(
+      mp, mpsize, l, lsize, ic2, isr2, ic1, isr1, osr, threshold);
+}
+
+EXTENSION_INLINE
+double ST_Distance_MultiLineString_MultiPoint(int8_t* mls,
+                                              int64_t mls_size,
+                                              int32_t* mls_ls_sizes,
+                                              int64_t mls_ls_num,
+                                              int8_t* mp,
+                                              int64_t mpsize,
+                                              int32_t ic1,
+                                              int32_t isr1,
+                                              int32_t ic2,
+                                              int32_t isr2,
+                                              int32_t osr,
+                                              double threshold) {
+  return ST_Distance_MultiPoint_MultiLineString(mp,
+                                                mpsize,
+                                                mls,
+                                                mls_size,
+                                                mls_ls_sizes,
+                                                mls_ls_num,
+                                                ic2,
+                                                isr2,
+                                                ic1,
+                                                isr1,
+                                                osr,
+                                                threshold);
 }
 
 EXTENSION_NOINLINE

@@ -1126,6 +1126,11 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
         double(0.01));
 
     // centroid
+    ASSERT_EQ(
+        static_cast<int64_t>(6),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM geospatial_test where ST_Distance(gp4326,ST_Centroid(gmp4326)) < 3;)",
+            dt)));
     ASSERT_NEAR(
         v<double>(run_simple_agg(
             R"(SELECT ST_Distance(ST_Centroid(gpoly4326),'POINT (1.6666666 1.66666666)') FROM geospatial_test WHERE id = 4;)",
@@ -2238,6 +2243,18 @@ TEST(GeoSpatial, Math) {
         static_cast<double>(0.0),
         v<double>(run_simple_agg(
             R"(SELECT ST_Distance('POINT(1 1)', ST_Centroid('POINT(1 1)'));)", dt)),
+        static_cast<double>(0.00001));
+    ASSERT_NEAR(
+        static_cast<double>(0.0),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Distance('POINT(1 1)', ST_Centroid('MULTIPOINT(0 0, 2 0, 2 2, 0 2)'));)",
+            dt)),
+        static_cast<double>(0.00001));
+    ASSERT_NEAR(
+        static_cast<double>(0.0),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Distance('POINT(0.8 0.8)', ST_Centroid('MULTIPOINT(0 0, 2 0, 2 2, 0 2, 0 0)'));)",
+            dt)),
         static_cast<double>(0.00001));
     ASSERT_NEAR(
         static_cast<double>(0.0),
