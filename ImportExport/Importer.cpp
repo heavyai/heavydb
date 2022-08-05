@@ -4527,18 +4527,25 @@ ImportStatus Importer::importDelimited(
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-  if (g_enable_assign_render_groups && copy_params.geo_assign_render_groups) {
-    auto& cat = loader->getCatalog();
-    auto* td = loader->getTableDesc();
-    CHECK(td);
-    auto column_descriptors =
-        cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
-    for (auto const& cd : column_descriptors) {
-      if (IS_GEO_POLY(cd->columnType.get_type())) {
-        auto rga = std::make_shared<RenderGroupAnalyzer>();
-        rga->seedFromExistingTableContents(cat, td->tableName, cd->columnName);
-        columnIdToRenderGroupAnalyzerMap[cd->columnId] = rga;
+  if (copy_params.geo_assign_render_groups) {
+    if (g_enable_assign_render_groups) {
+      auto& cat = loader->getCatalog();
+      auto* td = loader->getTableDesc();
+      CHECK(td);
+      auto column_descriptors =
+          cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
+      for (auto const& cd : column_descriptors) {
+        if (IS_GEO_POLY(cd->columnType.get_type())) {
+          auto rga = std::make_shared<RenderGroupAnalyzer>();
+          rga->seedFromExistingTableContents(cat, td->tableName, cd->columnName);
+          columnIdToRenderGroupAnalyzerMap[cd->columnId] = rga;
+        }
       }
+    } else {
+      fclose(p_file);
+      throw std::runtime_error(
+          "Render Group Assignment requested in CopyParams but disabled in Server "
+          "Config. Set enable_assign_render_groups=true in Server Config to override.");
     }
   }
 
@@ -5448,18 +5455,24 @@ ImportStatus Importer::importGDALGeo(
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-  if (g_enable_assign_render_groups && copy_params.geo_assign_render_groups) {
-    auto& cat = loader->getCatalog();
-    auto* td = loader->getTableDesc();
-    CHECK(td);
-    auto column_descriptors =
-        cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
-    for (auto const& cd : column_descriptors) {
-      if (IS_GEO_POLY(cd->columnType.get_type())) {
-        auto rga = std::make_shared<RenderGroupAnalyzer>();
-        rga->seedFromExistingTableContents(cat, td->tableName, cd->columnName);
-        columnIdToRenderGroupAnalyzerMap[cd->columnId] = rga;
+  if (copy_params.geo_assign_render_groups) {
+    if (g_enable_assign_render_groups) {
+      auto& cat = loader->getCatalog();
+      auto* td = loader->getTableDesc();
+      CHECK(td);
+      auto column_descriptors =
+          cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
+      for (auto const& cd : column_descriptors) {
+        if (IS_GEO_POLY(cd->columnType.get_type())) {
+          auto rga = std::make_shared<RenderGroupAnalyzer>();
+          rga->seedFromExistingTableContents(cat, td->tableName, cd->columnName);
+          columnIdToRenderGroupAnalyzerMap[cd->columnId] = rga;
+        }
       }
+    } else {
+      throw std::runtime_error(
+          "Render Group Assignment requested in CopyParams but disabled in Server "
+          "Config. Set enable_assign_render_groups=true in Server Config to override.");
     }
   }
 

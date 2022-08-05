@@ -23,4 +23,4 @@
 
 #include "Shared/enable_assign_render_groups.h"
 
-bool g_enable_assign_render_groups{true};
+bool g_enable_assign_render_groups{false};

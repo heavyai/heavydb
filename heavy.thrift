@@ -231,7 +231,7 @@ struct TCopyParams {
   20: bool sanitize_column_names=true;
   21: string geo_layer_name;
   22: string s3_endpoint;
-  23: bool geo_assign_render_groups=true;
+  23: bool geo_assign_render_groups=false;
   24: bool geo_explode_collections=false;
   25: i32 source_srid=0;
   26: string s3_session_token;

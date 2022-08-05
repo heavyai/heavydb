@@ -1259,12 +1259,10 @@ TEST_P(ImportAndSelectTest, GeoTypesRenderGroups) {
     GTEST_SKIP() << "Skipping test for import type '" << param_.import_type << "'";
   }
 
-  // enable render group assignment for this test
-  bool enable_assign_render_groups = g_enable_assign_render_groups;
-  ScopeGuard restore = [&]() {
-    g_enable_assign_render_groups = enable_assign_render_groups;
-  };
-  g_enable_assign_render_groups = true;
+  // skip if render group assignment is disabled
+  if (!g_enable_assign_render_groups) {
+    GTEST_SKIP() << "Skipping test because Render Group Assignment is disabled";
+  }
 
   // run the test
   auto query = createTableCopyFromAndSelectRenderGroups("overlap");
