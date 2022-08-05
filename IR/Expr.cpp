@@ -1911,7 +1911,7 @@ bool ArrayExpr::operator==(Expr const& rhs) const {
   for (unsigned i = 0; i < contained_expressions_.size(); i++) {
     auto& lhs_expr = contained_expressions_[i];
     auto& rhs_expr = casted_rhs.contained_expressions_[i];
-    if (!(lhs_expr == rhs_expr)) {
+    if (!(*lhs_expr == *rhs_expr)) {
       return false;
     }
   }
@@ -1920,7 +1920,6 @@ bool ArrayExpr::operator==(Expr const& rhs) const {
   }
 
   return true;
-  ;
 }
 
 std::string ColumnVar::toString() const {

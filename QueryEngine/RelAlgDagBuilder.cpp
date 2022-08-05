@@ -474,6 +474,9 @@ void RelCompound::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
   if (filter_) {
     filter_ = visitor.visit(filter_.get());
   }
+  for (size_t i = 0; i < groupby_exprs_.size(); ++i) {
+    groupby_exprs_[i] = visitor.visit(groupby_exprs_[i].get());
+  }
   for (size_t i = 0; i < exprs_.size(); ++i) {
     exprs_[i] = visitor.visit(exprs_[i].get());
   }
@@ -598,6 +601,7 @@ RelCompound::RelCompound(RelCompound const& rhs)
                                         rhs.agg_exprs_,
                                         rhs.scalar_sources_,
                                         rhs.target_exprs_))
+    , groupby_exprs_(rhs.groupby_exprs_)
     , exprs_(rhs.exprs_)
     , hint_applied_(false)
     , hints_(std::make_unique<Hints>()) {
@@ -1582,9 +1586,9 @@ class RexInputReplacementVisitor : public RexDeepCopyVisitor {
 class InputReplacementVisitor : public DeepCopyVisitor {
  public:
   InputReplacementVisitor(const RelAlgNode* node_to_keep,
-                          const hdk::ir::ExprPtrVector& exprs)
-      : node_to_keep_(node_to_keep), exprs_(exprs) {}
-  ~InputReplacementVisitor() override = default;
+                          const hdk::ir::ExprPtrVector& exprs,
+                          const hdk::ir::ExprPtrVector* groupby_exprs = nullptr)
+      : node_to_keep_(node_to_keep), exprs_(exprs), groupby_exprs_(groupby_exprs) {}
 
   hdk::ir::ExprPtr visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
     if (col_ref->getNode() == node_to_keep_) {
@@ -1595,9 +1599,17 @@ class InputReplacementVisitor : public DeepCopyVisitor {
     return col_ref->deep_copy();
   }
 
+  hdk::ir::ExprPtr visitGroupColumnRef(
+      const hdk::ir::GroupColumnRef* col_ref) const override {
+    CHECK(groupby_exprs_);
+    CHECK_LE(col_ref->getIndex(), groupby_exprs_->size());
+    return visit((*groupby_exprs_)[col_ref->getIndex() - 1].get());
+  }
+
  private:
   const RelAlgNode* node_to_keep_;
   const hdk::ir::ExprPtrVector& exprs_;
+  const hdk::ir::ExprPtrVector* groupby_exprs_;
 };
 
 void create_compound(
@@ -1615,6 +1627,7 @@ void create_compound(
   std::vector<const RexAgg*> agg_exprs;
   std::vector<const Rex*> target_exprs;
   hdk::ir::ExprPtrVector exprs;
+  hdk::ir::ExprPtrVector groupby_exprs;
   bool first_project{true};
   bool is_agg{false};
   RelAlgNode* last_node{nullptr};
@@ -1671,7 +1684,7 @@ void create_compound(
           std::vector<const Rex*> result;
           hdk::ir::ExprPtrVector new_exprs;
           RexInputReplacementVisitor rex_visitor(last_node, scalar_sources);
-          InputReplacementVisitor visitor(last_node, exprs);
+          InputReplacementVisitor visitor(last_node, exprs, &groupby_exprs);
           for (size_t i = 0; i < ra_project->size(); ++i) {
             const auto rex = ra_project->getProjectAt(i);
             if (auto rex_input = dynamic_cast<const RexInput*>(rex)) {
@@ -1706,17 +1719,17 @@ void create_compound(
       agg_exprs = ra_aggregate->getAggregatesAndRelease();
       groupby_count = ra_aggregate->getGroupByCount();
       decltype(target_exprs){}.swap(target_exprs);
-      hdk::ir::ExprPtrVector old_exprs;
-      old_exprs.swap(exprs);
+      groupby_exprs.swap(exprs);
       CHECK_LE(groupby_count, scalar_sources.size());
-      CHECK_LE(groupby_count, old_exprs.size());
-      InputReplacementVisitor visitor(last_node, old_exprs);
+      CHECK_LE(groupby_count, groupby_exprs.size());
+      InputReplacementVisitor visitor(last_node, groupby_exprs);
       for (size_t group_idx = 0; group_idx < groupby_count; ++group_idx) {
         const auto rex_ref = new RexRef(group_idx + 1);
         target_exprs.push_back(rex_ref);
         scalar_sources.emplace_back(rex_ref);
 
-        exprs.push_back(old_exprs[group_idx]);
+        exprs.push_back(hdk::ir::makeExpr<hdk::ir::GroupColumnRef>(
+            groupby_exprs[group_idx]->get_type_info(), group_idx + 1));
       }
       for (const auto rex_agg : agg_exprs) {
         target_exprs.push_back(rex_agg);
@@ -1732,8 +1745,9 @@ void create_compound(
   auto compound_node = std::make_shared<RelCompound>(filter_rex,
                                                      filter_expr,
                                                      target_exprs,
-                                                     exprs,
+                                                     std::move(exprs),
                                                      groupby_count,
+                                                     std::move(groupby_exprs),
                                                      agg_exprs,
                                                      fields,
                                                      scalar_sources,
@@ -3378,6 +3392,8 @@ std::string RelCompound::toString() const {
              ::toString(fields_),
              ", scalar_sources=",
              ::toString(scalar_sources_),
+             ", groupby_exprs=",
+             ::toString(groupby_exprs_),
              ", exprs=",
              ::toString(exprs_),
              ", is_agg=",

@@ -245,6 +245,12 @@ class NormalizerVisitor : public DeepCopyVisitor {
       auto col_type = col_ref->get_type_info();
       // Allow diff in nullable flag.
       col_type.set_notnull(meta_type.get_notnull());
+      // During DAG build we don't have enough information to properly choose between
+      // dictionaries. It's OK because normalization will add all required casts.
+      if (col_type.is_dict_encoded_string()) {
+        CHECK(meta_type.is_dict_encoded_string());
+        col_type.set_comp_param(meta_type.get_comp_param());
+      }
       CHECK(meta_type == col_type) << "Type mismatch: meta_type=" << meta_type.toString()
                                    << " col_type=" << col_type.toString();
     }
@@ -1424,12 +1430,11 @@ hdk::ir::ExprPtr RelAlgTranslator::translateAbs(
   const auto& operand_ti = operand->get_type_info();
   CHECK(operand_ti.is_number());
   const auto zero = makeNumericConstant(operand_ti, 0);
-  const auto lt_zero =
-      hdk::ir::makeExpr<hdk::ir::BinOper>(kBOOLEAN, kLT, kONE, operand, zero);
+  const auto lt_zero = Analyzer::normalizeOperExpr(kLT, kONE, operand, zero);
   const auto uminus_operand =
-      hdk::ir::makeExpr<hdk::ir::UOper>(operand_ti.get_type(), kUMINUS, operand);
+      hdk::ir::makeExpr<hdk::ir::UOper>(operand_ti, false, kUMINUS, operand);
   expr_list.emplace_back(lt_zero, uminus_operand);
-  return hdk::ir::makeExpr<hdk::ir::CaseExpr>(operand_ti, false, expr_list, operand);
+  return Analyzer::normalizeCaseExpr(expr_list, operand, executor_);
 }
 
 hdk::ir::ExprPtr RelAlgTranslator::translateSign(
@@ -1449,11 +1454,7 @@ hdk::ir::ExprPtr RelAlgTranslator::translateSign(
   const auto gt_zero =
       hdk::ir::makeExpr<hdk::ir::BinOper>(kBOOLEAN, kGT, kONE, operand, zero);
   expr_list.emplace_back(gt_zero, makeNumericConstant(operand_ti, 1));
-  return hdk::ir::makeExpr<hdk::ir::CaseExpr>(
-      operand_ti,
-      false,
-      expr_list,
-      hdk::ir::makeExpr<hdk::ir::Constant>(operand_ti, true, Datum{0}));
+  return Analyzer::normalizeCaseExpr(expr_list, nullptr, executor_);
 }
 
 hdk::ir::ExprPtr RelAlgTranslator::translateOffsetInFragment() const {

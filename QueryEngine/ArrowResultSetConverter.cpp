@@ -1602,7 +1602,7 @@ void appendToColumnBuilder<arrow::StringDictionary32Builder, int32_t>(
     auto& val = vals[i];
     if ((column_builder.string_remap_mode == ArrowStringRemapMode::ALL_STRINGS_REMAPPED ||
          val < 0) &&
-        (*is_valid)[i]) {
+        (!is_valid || (*is_valid)[i])) {
       vals[i] = column_builder.string_remapping.at(val);
     }
   }

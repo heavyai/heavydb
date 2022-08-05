@@ -879,6 +879,8 @@ hdk::ir::ExprPtr normalizeCaseExpr(
         }
       }
     }
+  } else {
+    ti.set_notnull(false);
   }
 
   if (ti.get_type() == kNULLT && none_encoded_literal_ti.get_type() != kNULLT) {
@@ -890,7 +892,6 @@ hdk::ir::ExprPtr normalizeCaseExpr(
 
   std::list<std::pair<hdk::ir::ExprPtr, hdk::ir::ExprPtr>> cast_expr_pair_list;
   for (auto p : expr_pair_list) {
-    ti.set_notnull(false);
     cast_expr_pair_list.emplace_back(p.first,
                                      executor ? p.second->add_cast(ti) : p.second);
   }
@@ -899,7 +900,6 @@ hdk::ir::ExprPtr normalizeCaseExpr(
   } else {
     Datum d;
     // always create an else expr so that executor doesn't need to worry about it
-    ti.set_notnull(false);
     else_e = hdk::ir::makeExpr<hdk::ir::Constant>(ti, true, d);
   }
   if (ti.get_type() == kNULLT) {

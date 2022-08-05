@@ -38,6 +38,10 @@ class ScalarExprVisitor {
     if (column_ref) {
       return visitColumnRef(column_ref);
     }
+    const auto group_column_ref = dynamic_cast<const hdk::ir::GroupColumnRef*>(expr);
+    if (group_column_ref) {
+      return visitGroupColumnRef(group_column_ref);
+    }
     const auto column_var_tuple = dynamic_cast<const hdk::ir::ExpressionTuple*>(expr);
     if (column_var_tuple) {
       return visitColumnVarTuple(column_var_tuple);
@@ -164,6 +168,10 @@ class ScalarExprVisitor {
   virtual T visitColumnVar(const hdk::ir::ColumnVar*) const { return defaultResult(); }
 
   virtual T visitColumnRef(const hdk::ir::ColumnRef*) const { return defaultResult(); }
+
+  virtual T visitGroupColumnRef(const hdk::ir::GroupColumnRef*) const {
+    return defaultResult();
+  }
 
   virtual T visitColumnVarTuple(const hdk::ir::ExpressionTuple*) const {
     return defaultResult();

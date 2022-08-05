@@ -129,7 +129,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   }
   virtual bool operator==(const Expr& rhs) const = 0;
   virtual std::string toString() const = 0;
-  virtual void print() const { std::cout << toString(); }
+  virtual void print() const { std::cout << toString() << std::endl; }
 
   virtual void add_unique(std::list<const Expr*>& expr_list) const;
   /*
@@ -191,19 +191,19 @@ class ColumnRef : public Expr {
  * Used in Compound nodes to referene group by keys columns in target
  * expressions. Numbering starts with 1 to be consistent with RexRef.
  */
-class GroupKeyRef : public Expr {
+class GroupColumnRef : public Expr {
  public:
-  GroupKeyRef(const SQLTypeInfo& ti, unsigned idx) : Expr(ti), idx_(idx) {}
+  GroupColumnRef(const SQLTypeInfo& ti, unsigned idx) : Expr(ti), idx_(idx) {}
 
-  ExprPtr deep_copy() const override { return makeExpr<GroupKeyRef>(type_info, idx_); }
+  ExprPtr deep_copy() const override { return makeExpr<GroupColumnRef>(type_info, idx_); }
 
   bool operator==(const Expr& rhs) const override {
-    const GroupKeyRef* rhsp = dynamic_cast<const GroupKeyRef*>(&rhs);
+    const GroupColumnRef* rhsp = dynamic_cast<const GroupColumnRef*>(&rhs);
     return rhsp && idx_ == rhsp->idx_;
   }
 
   std::string toString() const override {
-    return "(GroupKeyRef idx=" + std::to_string(idx_) + ")";
+    return "(GroupColumnRef idx=" + std::to_string(idx_) + ")";
   }
 
   unsigned getIndex() const { return idx_; }
@@ -1556,7 +1556,7 @@ struct OrderEntry {
   OrderEntry(int t, bool d, bool nf) : tle_no(t), is_desc(d), nulls_first(nf){};
   ~OrderEntry() {}
   std::string toString() const;
-  void print() const { std::cout << toString(); }
+  void print() const { std::cout << toString() << std::endl; }
   int tle_no;       /* targetlist entry number: 1-based */
   bool is_desc;     /* true if order is DESC */
   bool nulls_first; /* true if nulls are ordered first.  otherwise last. */
@@ -1659,7 +1659,7 @@ class TargetEntry {
   void set_expr(ExprPtr e) { expr = e; }
   bool get_unnest() const { return unnest; }
   std::string toString() const;
-  void print() const { std::cout << toString(); }
+  void print() const { std::cout << toString() << std::endl; }
 
  private:
   std::string resname;  // alias name, e.g., SELECT salary + bonus AS compensation,

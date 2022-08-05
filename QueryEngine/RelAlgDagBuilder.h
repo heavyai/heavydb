@@ -47,6 +47,8 @@ class Rex {
  public:
   virtual std::string toString() const = 0;
 
+  void print() const { std::cout << toString() << std::endl; }
+
   // return hashed value of string representation of this rex
   virtual size_t toHash() const = 0;
 
@@ -805,6 +807,8 @@ class RelAlgNode {
   void markAsNop() { is_nop_ = true; }
 
   virtual std::string toString() const = 0;
+
+  void print() const { std::cout << toString() << std::endl; }
 
   // return hashed value of a string representation of this rel node
   virtual size_t toHash() const = 0;
@@ -1570,6 +1574,7 @@ class RelCompound : public RelAlgNode {
               const std::vector<const Rex*>& target_exprs,
               hdk::ir::ExprPtrVector exprs,
               const size_t groupby_count,
+              hdk::ir::ExprPtrVector groupby_exprs,
               const std::vector<const RexAgg*>& agg_exprs,
               const std::vector<std::string>& fields,
               std::vector<std::unique_ptr<const RexScalar>>& scalar_sources,
@@ -1581,6 +1586,7 @@ class RelCompound : public RelAlgNode {
       , is_agg_(is_agg)
       , scalar_sources_(std::move(scalar_sources))
       , target_exprs_(target_exprs)
+      , groupby_exprs_(groupby_exprs)
       , exprs_(std::move(exprs))
       , hint_applied_(false)
       , hints_(std::make_unique<Hints>()) {
@@ -1608,6 +1614,9 @@ class RelCompound : public RelAlgNode {
   }
 
   const Rex* getTargetExpr(const size_t i) const { return target_exprs_[i]; }
+
+  hdk::ir::ExprPtrVector getGroupByExprs() const { return groupby_exprs_; }
+  hdk::ir::ExprPtr getGroupByExpr(size_t i) const { return groupby_exprs_[i]; }
 
   hdk::ir::ExprPtrVector getExprs() const { return exprs_; }
   hdk::ir::ExprPtr getExpr(size_t i) const { return exprs_[i]; }
@@ -1681,6 +1690,7 @@ class RelCompound : public RelAlgNode {
       scalar_sources_;  // building blocks for group_indices_ and agg_exprs_; not actually
                         // projected, just owned
   const std::vector<const Rex*> target_exprs_;
+  hdk::ir::ExprPtrVector groupby_exprs_;
   hdk::ir::ExprPtrVector exprs_;
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;

@@ -1259,6 +1259,14 @@ void set_transient_dict_maybe(std::vector<hdk::ir::ExprPtr>& scalar_sources,
   }
 }
 
+hdk::ir::ExprPtr set_transient_dict_maybe(hdk::ir::ExprPtr expr) {
+  try {
+    return set_transient_dict(fold_expr(expr.get()));
+  } catch (...) {
+    return expr;
+  }
+}
+
 hdk::ir::ExprPtr cast_dict_to_none(const hdk::ir::ExprPtr& input) {
   const auto& input_ti = input->get_type_info();
   if (input_ti.is_string() && input_ti.get_compression() == kENCODING_DICT) {
@@ -1299,15 +1307,56 @@ std::vector<hdk::ir::ExprPtr> translate_scalar_sources(
   return scalar_sources;
 }
 
+hdk::ir::ExprPtr translate(const hdk::ir::Expr* expr,
+                           const RelAlgTranslator& translator,
+                           ::ExecutorType executor_type) {
+  auto res = translator.normalize(expr);
+  res = rewrite_array_elements(res.get());
+  res = rewrite_expr(res.get());
+  if (executor_type == ExecutorType::Native) {
+    // This is actually added to get full match of translated legacy
+    // rex expressions and new Exprs. It's done only for testing purposes
+    // and shouldn't have any effect on functionality and performance.
+    // TODO: remove when rex are not used anymore
+    if (auto* agg = dynamic_cast<const hdk::ir::AggExpr*>(res.get())) {
+      if (agg->get_arg()) {
+        auto new_arg = set_transient_dict_maybe(agg->get_own_arg());
+        res = hdk::ir::makeExpr<hdk::ir::AggExpr>(agg->get_type_info(),
+                                                  agg->get_aggtype(),
+                                                  new_arg,
+                                                  agg->get_is_distinct(),
+                                                  agg->get_arg1());
+      }
+    } else {
+      res = set_transient_dict_maybe(res);
+    }
+  } else if (executor_type == ExecutorType::TableFunctions) {
+    res = fold_expr(res.get());
+  } else {
+    res = cast_dict_to_none(fold_expr(res.get()));
+  }
+  return res;
+}
+
 std::list<hdk::ir::ExprPtr> translate_groupby_exprs(
     const RelCompound* compound,
-    const std::vector<hdk::ir::ExprPtr>& scalar_sources) {
+    const RelAlgTranslator& translator,
+    const std::vector<hdk::ir::ExprPtr>& scalar_sources,
+    ::ExecutorType executor_type) {
   if (!compound->isAggregate()) {
     return {nullptr};
   }
   std::list<hdk::ir::ExprPtr> groupby_exprs;
   for (size_t group_idx = 0; group_idx < compound->getGroupByCount(); ++group_idx) {
-    groupby_exprs.push_back(set_transient_dict(scalar_sources[group_idx]));
+    auto orig_expr = set_transient_dict(scalar_sources[group_idx]);
+
+    auto expr = compound->getGroupByExpr(group_idx);
+    expr = translate(expr.get(), translator, executor_type);
+
+    CHECK(*orig_expr == *expr) << "Groupby expr mismatch: orig=" << orig_expr->toString()
+                               << " new=" << expr->toString();
+
+    groupby_exprs.push_back(expr);
   }
   return groupby_exprs;
 }
@@ -1352,9 +1401,9 @@ std::vector<hdk::ir::Expr*> translate_targets(
   for (size_t i = 0; i < compound->size(); ++i) {
     const auto target_rex = compound->getTargetExpr(i);
     const auto target_rex_agg = dynamic_cast<const RexAgg*>(target_rex);
-    hdk::ir::ExprPtr target_expr;
+    hdk::ir::ExprPtr orig_target_expr;
     if (target_rex_agg) {
-      target_expr = RelAlgTranslator::translateAggregateRex(
+      orig_target_expr = RelAlgTranslator::translateAggregateRex(
           target_rex_agg, scalar_sources, bigint_count);
     } else {
       const auto target_rex_scalar = dynamic_cast<const RexScalar*>(target_rex);
@@ -1364,23 +1413,40 @@ std::vector<hdk::ir::Expr*> translate_targets(
         CHECK_GE(ref_idx, size_t(1));
         CHECK_LE(ref_idx, groupby_exprs.size());
         const auto groupby_expr = *std::next(groupby_exprs.begin(), ref_idx - 1);
-        target_expr = var_ref(groupby_expr.get(), hdk::ir::Var::kGROUPBY, ref_idx);
+        orig_target_expr = var_ref(groupby_expr.get(), hdk::ir::Var::kGROUPBY, ref_idx);
       } else {
-        target_expr = translator.translateScalarRex(target_rex_scalar);
-        auto rewritten_expr = rewrite_expr(target_expr.get());
-        target_expr = fold_expr(rewritten_expr.get());
+        orig_target_expr = translator.translateScalarRex(target_rex_scalar);
+        auto rewritten_expr = rewrite_expr(orig_target_expr.get());
+        orig_target_expr = fold_expr(rewritten_expr.get());
         if (executor_type == ExecutorType::Native) {
           try {
-            target_expr = set_transient_dict(target_expr);
+            orig_target_expr = set_transient_dict(orig_target_expr);
           } catch (...) {
             // noop
           }
         } else {
-          target_expr = cast_dict_to_none(target_expr);
+          orig_target_expr = cast_dict_to_none(orig_target_expr);
         }
       }
     }
-    CHECK(target_expr);
+    CHECK(orig_target_expr);
+
+    const auto* expr = compound->getExprs()[i].get();
+    hdk::ir::ExprPtr target_expr;
+    if (auto* group_ref = dynamic_cast<const hdk::ir::GroupColumnRef*>(expr)) {
+      const auto ref_idx = group_ref->getIndex();
+      CHECK_GE(ref_idx, size_t(1));
+      CHECK_LE(ref_idx, groupby_exprs.size());
+      const auto groupby_expr = *std::next(groupby_exprs.begin(), ref_idx - 1);
+      target_expr = var_ref(groupby_expr.get(), hdk::ir::Var::kGROUPBY, ref_idx);
+    } else {
+      target_expr = translate(expr, translator, executor_type);
+    }
+
+    CHECK(*orig_target_expr == *target_expr)
+        << "Target expr mismatch: orig=" << orig_target_expr->toString()
+        << " new=" << target_expr->toString();
+
     target_exprs_owned.push_back(target_expr);
     target_exprs.push_back(target_expr.get());
   }
@@ -2820,7 +2886,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
       executor_, input_to_nest_level, join_types, now_, eo.just_explain);
   const auto scalar_sources =
       translate_scalar_sources(compound, translator, eo.executor_type);
-  const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
+  const auto groupby_exprs =
+      translate_groupby_exprs(compound, translator, scalar_sources, eo.executor_type);
   const auto quals_cf = translate_quals(compound, translator);
   const auto target_exprs = translate_targets(target_exprs_owned_,
                                               scalar_sources,

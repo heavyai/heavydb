@@ -27,6 +27,10 @@ class DeepCopyVisitor : public ScalarExprVisitor<hdk::ir::ExprPtr> {
     return col_ref->deep_copy();
   }
 
+  RetType visitGroupColumnRef(const hdk::ir::GroupColumnRef* col_ref) const override {
+    return col_ref->deep_copy();
+  }
+
   RetType visitColumnVarTuple(
       const hdk::ir::ExpressionTuple* col_var_tuple) const override {
     return col_var_tuple->deep_copy();
