@@ -170,10 +170,10 @@ std::string GeoBase::getWktString() const {
   return wkt_str;
 }
 
-OGRErr GeoBase::createFromWkb(const std::vector<uint8_t>& wkb, OGRGeometry** geom) {
+OGRErr GeoBase::createFromWkbView(OGRGeometry** geom, WkbView const wkb_view) {
 #if (GDAL_VERSION_MAJOR > 2) || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR >= 3)
   OGRErr ogr_status =
-      OGRGeometryFactory::createFromWkb(wkb.data(), nullptr, geom, wkb.size());
+      OGRGeometryFactory::createFromWkb(wkb_view.ptr_, nullptr, geom, wkb_view.size_);
   return ogr_status;
 #else
   CHECK(false);
@@ -1047,7 +1047,8 @@ OGRGeometry* GeoTypesFactory::createOGRGeometry(const std::string& wkt_or_wkb_he
   if (wkt_or_wkb_hex.empty()) {
     err = OGRERR_NOT_ENOUGH_DATA;
   } else if (wkt_or_wkb_hex[0] == '0') {  // all WKB hex strings start with a 0
-    err = GeoBase::createFromWkb(hex_string_to_binary_vector(wkt_or_wkb_hex), &geom);
+    auto const wkb = hex_string_to_binary_vector(wkt_or_wkb_hex);
+    err = GeoBase::createFromWkbView(&geom, {wkb.data(), wkb.size()});
   } else {
     err = GeoBase::createFromWktString(wkt_or_wkb_hex, &geom);
   }
@@ -1062,9 +1063,9 @@ std::unique_ptr<GeoBase> GeoTypesFactory::createGeoType(
   return GeoTypesFactory::createGeoTypeImpl(createOGRGeometry(wkt_or_wkb_hex));
 }
 
-std::unique_ptr<GeoBase> GeoTypesFactory::createGeoType(const std::vector<uint8_t>& wkb) {
+std::unique_ptr<GeoBase> GeoTypesFactory::createGeoType(const WkbView wkb_view) {
   OGRGeometry* geom = nullptr;
-  const auto err = GeoBase::createFromWkb(wkb, &geom);
+  const auto err = GeoBase::createFromWkbView(&geom, wkb_view);
   if (err != OGRERR_NONE) {
     throw GeoTypesError("GeoFactory", err);
   }
@@ -1119,7 +1120,7 @@ bool GeoTypesFactory::getGeoColumns(const std::vector<uint8_t>& wkb,
                                     std::vector<int>& poly_rings,
                                     const bool promote_poly_to_mpoly) {
   try {
-    const auto geospatial_base = GeoTypesFactory::createGeoType(wkb);
+    const auto geospatial_base = GeoTypesFactory::createGeoType({wkb.data(), wkb.size()});
 
     if (!geospatial_base || !geospatial_base->transform(ti)) {
       return false;

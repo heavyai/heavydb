@@ -43,6 +43,13 @@ using WKB = std::vector<uint8_t>;
 static std::mutex geos_log_info_mutex;
 static std::mutex geos_log_error_mutex;
 
+namespace {
+struct FreeDeleter {
+  void operator()(uint8_t* p) { free(p); }
+};
+using WkbUniquePtr = std::unique_ptr<uint8_t, FreeDeleter>;
+}  // namespace
+
 // called by GEOS on notice
 static void geos_notice_handler(const char* fmt, ...) {
   char buffer[MAX_GEOS_MESSAGE_LEN];
@@ -214,7 +221,7 @@ bool toWkb(WKB& wkb,
 
 // Conversion form wkb to internal vector representation.
 // Each vector components is malloced, caller is reponsible for freeing.
-bool fromWkb(WKB& wkb,
+bool fromWkb(WkbView const wkb_view,
              int* result_type,
              int8_t** result_coords,
              int64_t* result_coords_size,
@@ -225,7 +232,7 @@ bool fromWkb(WKB& wkb,
              int32_t result_srid_in,
              int32_t result_srid_out,
              int32_t* best_planar_srid_ptr) {
-  auto result = GeoTypesFactory::createGeoType(wkb);
+  auto result = GeoTypesFactory::createGeoType(wkb_view);
   if (!result->isEmpty()) {
     if (best_planar_srid_ptr) {
       // If original geometry has previously been projected to planar srid,
@@ -333,8 +340,8 @@ GEOSGeometry* postprocess(GEOSContextHandle_t context, GEOSGeometry* g) {
 #endif
 
 extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb(
-    int op,
-    int arg1_type,
+    int32_t op,
+    int32_t arg1_type,
     int8_t* arg1_coords,
     int64_t arg1_coords_size,
     int32_t* arg1_meta1,
@@ -345,7 +352,7 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb(
     int32_t arg1_ic,
     int32_t arg1_srid_in,
     int32_t arg1_srid_out,
-    int arg2_type,
+    int32_t arg2_type,
     int8_t* arg2_coords,
     int64_t arg2_coords_size,
     int32_t* arg2_meta1,
@@ -357,7 +364,7 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb(
     int32_t arg2_srid_in,
     int32_t arg2_srid_out,
     // TODO: add transform args
-    int* result_type,
+    int32_t* result_type,
     int8_t** result_coords,
     int64_t* result_coords_size,
     int32_t** result_meta1,
@@ -431,11 +438,10 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb(
       g = postprocess(context, g);
       if (g) {
         size_t wkb_size = 0ULL;
-        auto wkb_buf = GEOSGeomToWKB_buf_r(context, g, &wkb_size);
-        if (wkb_buf && wkb_size > 0ULL) {
-          WKB wkb(wkb_buf, wkb_buf + wkb_size);
-          free(wkb_buf);
-          status = fromWkb(wkb,
+        WkbUniquePtr wkb_unique_ptr(GEOSGeomToWKB_buf_r(context, g, &wkb_size));
+        WkbView wkb_view{wkb_unique_ptr.get(), wkb_size};
+        if (wkb_view.ptr_ && wkb_view.size_) {
+          status = fromWkb(wkb_view,
                            result_type,
                            result_coords,
                            result_coords_size,
@@ -620,12 +626,11 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_double(
     g = postprocess(context, g);
     if (g) {
       size_t wkb_size = 0ULL;
-      auto wkb_buf = GEOSGeomToWKB_buf_r(context, g, &wkb_size);
-      if (wkb_buf && wkb_size > 0ULL) {
-        WKB wkb(wkb_buf, wkb_buf + wkb_size);
-        free(wkb_buf);
+      WkbUniquePtr wkb_unique_ptr(GEOSGeomToWKB_buf_r(context, g, &wkb_size));
+      WkbView wkb_view{wkb_unique_ptr.get(), wkb_size};
+      if (wkb_view.ptr_ && wkb_view.size_) {
         // Back-project the result from planar to 4326 if necessary
-        status = fromWkb(wkb,
+        status = fromWkb(wkb_view,
                          result_type,
                          result_coords,
                          result_coords_size,

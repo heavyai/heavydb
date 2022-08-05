@@ -28,6 +28,11 @@ class OGRCoordinateTransformation;
 
 namespace Geospatial {
 
+struct WkbView {
+  uint8_t const* ptr_;
+  size_t size_;
+};
+
 class GeoTypesError : public std::runtime_error {
  public:
   explicit GeoTypesError(const std::string& type, const int ogr_err)
@@ -98,7 +103,7 @@ class GeoBase {
   bool owns_geom_obj_;
 
   static int createFromWktString(const std::string& wkt, OGRGeometry** geom);
-  static int createFromWkb(const std::vector<uint8_t>& wkb, OGRGeometry** geom);
+  static int createFromWkbView(OGRGeometry** geom, WkbView const);
 
   friend class GeoTypesFactory;
 };
@@ -288,7 +293,7 @@ class GeoTypesFactory {
   static OGRGeometry* createOGRGeometry(const std::string& wkt_or_wkb_hex);
 
   static std::unique_ptr<GeoBase> createGeoType(const std::string& wkt_or_wkb_hex);
-  static std::unique_ptr<GeoBase> createGeoType(const std::vector<uint8_t>& wkb);
+  static std::unique_ptr<GeoBase> createGeoType(const WkbView);
   static std::unique_ptr<GeoBase> createGeoType(OGRGeometry* geom);
 
   static bool getGeoColumns(const std::string& wkt_or_wkb_hex,

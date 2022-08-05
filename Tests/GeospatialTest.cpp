@@ -2359,9 +2359,13 @@ TEST(GeoSpatial, Projections) {
 
 class GeoSpatialTempTables : public ::testing::Test {
  protected:
-  void SetUp() override { import_geospatial_test(/*with_temporary_tables=*/true); }
+  void SetUp() override { import_geospatial_test(/*with_temporary_tables=*/false); }
 
-  void TearDown() override { run_ddl_statement("DROP TABLE IF EXISTS geospatial_test;"); }
+  void TearDown() override {
+    if (!g_keep_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS geospatial_test;");
+    }
+  }
 };
 
 TEST_F(GeoSpatialTempTables, Geos) {
