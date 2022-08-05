@@ -40,6 +40,7 @@
 #include "Shared/misc.h"
 
 #include <boost/algorithm/cxx11/any_of.hpp>
+#include <boost/make_unique.hpp>
 #include <boost/range/adaptor/reversed.hpp>
 
 #include <algorithm>

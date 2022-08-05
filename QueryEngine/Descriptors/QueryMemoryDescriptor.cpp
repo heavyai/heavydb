@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 
-#include "QueryMemoryDescriptor.h"
-
-#include "../Execute.h"
-#include "../ExpressionRewrite.h"
-#include "../StreamingTopN.h"
-#include "../UsedColumnsVisitor.h"
-#include "ColSlotContext.h"
-#include "QueryEngine/MemoryLayoutBuilder.h"
+#include "QueryEngine/Descriptors/QueryMemoryDescriptor.h"
 
 #include <boost/algorithm/cxx11/any_of.hpp>
+
+#include "QueryEngine/ColRangeInfo.h"
+#include "QueryEngine/Descriptors/ColSlotContext.h"
+#include "QueryEngine/Execute.h"
+#include "QueryEngine/ExpressionRewrite.h"
+#include "QueryEngine/MemoryLayoutBuilder.h"
+#include "QueryEngine/StreamingTopN.h"
+#include "QueryEngine/UsedColumnsVisitor.h"
 
 namespace {
 

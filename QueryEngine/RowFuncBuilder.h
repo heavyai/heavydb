@@ -14,62 +14,37 @@
  * limitations under the License.
  */
 
-#ifndef QUERYENGINE_GROUPBYANDAGGREGATE_H
-#define QUERYENGINE_GROUPBYANDAGGREGATE_H
+#pragma once
 
-#include "BufferCompaction.h"
-#include "ColumnarResults.h"
-#include "CompilationOptions.h"
-#include "GpuMemUtils.h"
-#include "GpuSharedMemoryContext.h"
-#include "InputMetadata.h"
-#include "QueryExecutionContext.h"
-#include "RuntimeFunctions.h"
-
-#include "QueryEngine/Utils/DiamondCodegen.h"
-
-#include "../Shared/sqltypes.h"
-#include "Logger/Logger.h"
-#include "SchemaMgr/SchemaProvider.h"
+#include <stack>
+#include <vector>
 
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Value.h>
 #include <boost/algorithm/string/join.hpp>
-#include <boost/make_unique.hpp>
 
-#include <stack>
-#include <vector>
+#include "Logger/Logger.h"
+#include "QueryEngine/BufferCompaction.h"
+#include "QueryEngine/ColumnarResults.h"
+#include "QueryEngine/CompilationOptions.h"
+#include "QueryEngine/GpuMemUtils.h"
+#include "QueryEngine/GpuSharedMemoryContext.h"
+#include "QueryEngine/InputMetadata.h"
+#include "QueryEngine/QueryExecutionContext.h"
+#include "QueryEngine/RuntimeFunctions.h"
+#include "QueryEngine/Utils/DiamondCodegen.h"
+#include "SchemaMgr/SchemaProvider.h"
+#include "Shared/sqltypes.h"
 
-struct ColRangeInfo {
-  QueryDescriptionType hash_type_;
-  int64_t min;
-  int64_t max;
-  int64_t bucket;
-  bool has_nulls;
-  bool isEmpty() { return min == 0 && max == -1; }
-
-  int64_t getBucketedCardinality() const;
-};
-
-ColRangeInfo get_expr_range_info(const RelAlgExecutionUnit& ra_exe_unit,
-                                 const std::vector<InputTableInfo>& query_infos,
-                                 const Analyzer::Expr* expr,
-                                 Executor* executor);
-
-struct KeylessInfo {
-  const bool keyless;
-  const int32_t target_index;
-};
-
-class GroupByAndAggregate {
+class RowFuncBuilder {
  public:
-  GroupByAndAggregate(Executor* executor,
-                      const ExecutorDeviceType device_type,
-                      const RelAlgExecutionUnit& ra_exe_unit,
-                      const std::vector<InputTableInfo>& query_infos,
-                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                      const std::optional<int64_t>& group_cardinality_estimation);
+  RowFuncBuilder(Executor* executor,
+                 const ExecutorDeviceType device_type,
+                 const RelAlgExecutionUnit& ra_exe_unit,
+                 const std::vector<InputTableInfo>& query_infos,
+                 std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                 const std::optional<int64_t>& group_cardinality_estimation);
 
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now
@@ -182,5 +157,3 @@ class GroupByAndAggregate {
   friend struct TargetExprCodegen;
   friend struct TargetExprCodegenBuilder;
 };
-
-#endif  // QUERYENGINE_GROUPBYANDAGGREGATE_H

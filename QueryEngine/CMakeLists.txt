@@ -22,6 +22,7 @@ set(query_engine_source_files
     CastIR.cpp
     CgenState.cpp
     Codec.cpp
+    ColRangeInfo.cpp
     ColumnarResults.cpp
     ColumnFetcher.cpp
     ColumnIR.cpp
@@ -59,7 +60,7 @@ set(query_engine_source_files
     InPlaceSort.cpp
     InValuesIR.cpp
     IRCodegen.cpp
-    GroupByAndAggregate.cpp
+    RowFuncBuilder.cpp
     InValuesBitmap.cpp
     InputMetadata.cpp
     JoinFilterPushDown.cpp

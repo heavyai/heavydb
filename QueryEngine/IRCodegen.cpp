@@ -1020,7 +1020,7 @@ llvm::Value* Executor::addJoinLoopIterator(const std::vector<llvm::Value*>& prev
 
 void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
                                 const RelAlgExecutionUnit& ra_exe_unit,
-                                GroupByAndAggregate& group_by_and_aggregate,
+                                RowFuncBuilder& row_func_builder,
                                 llvm::Function* query_func,
                                 llvm::BasicBlock* entry_bb,
                                 QueryMemoryDescriptor& query_mem_desc,
@@ -1098,7 +1098,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
          &query_mem_desc,
          &co,
          &eo,
-         &group_by_and_aggregate,
+         &row_func_builder,
          &join_loops,
          &ra_exe_unit](const std::vector<llvm::Value*>& prev_iters) {
           auto& builder = cgen_state_->ir_builder_;
@@ -1121,7 +1121,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
                &query_mem_desc,
                &co,
                &eo,
-               &group_by_and_aggregate,
+               &row_func_builder,
                &join_loops,
                &ra_exe_unit](const std::vector<llvm::Value*>& prev_iters) {
                 addJoinLoopIterator(prev_iters, join_loops.size());
@@ -1132,14 +1132,14 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
                                              builder.GetInsertBlock()->getParent());
                 builder.SetInsertPoint(loop_body_bb);
                 const bool can_return_error =
-                    compileBody(ra_exe_unit, group_by_and_aggregate, query_mem_desc, co);
+                    compileBody(ra_exe_unit, row_func_builder, query_mem_desc, co);
                 if (can_return_error || cgen_state_->needs_error_check_ ||
                     eo.with_dynamic_watchdog || eo.allow_runtime_query_interrupt) {
                   createErrorCheckControlFlow(query_func,
                                               eo.with_dynamic_watchdog,
                                               eo.allow_runtime_query_interrupt,
                                               co.device_type,
-                                              group_by_and_aggregate.query_infos_);
+                                              row_func_builder.query_infos_);
                 }
                 return loop_body_bb;
               },
@@ -1165,7 +1165,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
          &query_mem_desc,
          &co,
          &eo,
-         &group_by_and_aggregate,
+         &row_func_builder,
          &join_loops,
          &ra_exe_unit](const std::vector<llvm::Value*>& prev_iters) {
           AUTOMATIC_IR_METADATA(cgen_state_.get());
@@ -1175,14 +1175,14 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
               builder.getContext(), "loop_body", builder.GetInsertBlock()->getParent());
           builder.SetInsertPoint(loop_body_bb);
           const bool can_return_error =
-              compileBody(ra_exe_unit, group_by_and_aggregate, query_mem_desc, co);
+              compileBody(ra_exe_unit, row_func_builder, query_mem_desc, co);
           if (can_return_error || cgen_state_->needs_error_check_ ||
               eo.with_dynamic_watchdog || eo.allow_runtime_query_interrupt) {
             createErrorCheckControlFlow(query_func,
                                         eo.with_dynamic_watchdog,
                                         eo.allow_runtime_query_interrupt,
                                         co.device_type,
-                                        group_by_and_aggregate.query_infos_);
+                                        row_func_builder.query_infos_);
           }
           return loop_body_bb;
         },

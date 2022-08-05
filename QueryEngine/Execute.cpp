@@ -4030,7 +4030,7 @@ AggregatedColRange Executor::computeColRangesCache(
   for (const auto& col_desc : col_descs) {
     if (ExpressionRange::typeSupportsRange(col_desc.getType())) {
       const auto col_var =
-          boost::make_unique<Analyzer::ColumnVar>(col_desc.getColInfo(), 0);
+          std::make_unique<Analyzer::ColumnVar>(col_desc.getColInfo(), 0);
       const auto col_range = getLeafColumnRange(col_var.get(), query_infos, this, false);
       agg_col_range_cache.setColRange({col_desc.getColId(), col_desc.getTableId()},
                                       col_range);

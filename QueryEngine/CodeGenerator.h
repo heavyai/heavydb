@@ -489,7 +489,7 @@ class CodeGenerator {
   CgenState* cgen_state_;
   PlanState* plan_state_;
 
-  friend class GroupByAndAggregate;
+  friend class RowFuncBuilder;
 };
 
 // Code generator specialized for scalar expressions which doesn't require an executor.

@@ -18,6 +18,7 @@
 #include "QueryEngine/MemoryLayoutBuilder.h"
 
 #include "QueryEngine/CardinalityEstimator.h"
+#include "QueryEngine/ColRangeInfo.h"
 #include "QueryEngine/OutputBufferInitialization.h"
 
 MemoryLayoutBuilder::MemoryLayoutBuilder(const RelAlgExecutionUnit& ra_exe_unit)

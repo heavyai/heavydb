@@ -19,6 +19,7 @@
 #include "RexVisitor.h"
 #include "Visitors/RexSubQueryIdCollector.h"
 
+#include <boost/make_unique.hpp>
 #include <numeric>
 #include <string>
 #include <unordered_map>

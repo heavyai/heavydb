@@ -51,7 +51,6 @@ struct InputTableInfo;
 struct RelAlgExecutionUnit;
 class TResultSetBufferDescriptor;
 struct ColRangeInfo;
-struct KeylessInfo;
 
 class StreamingTopNOOM : public std::runtime_error {
  public:
@@ -59,6 +58,11 @@ class StreamingTopNOOM : public std::runtime_error {
       : std::runtime_error("Unable to use streaming top N due to required heap size of " +
                            std::to_string(heap_size_bytes) +
                            " bytes exceeding maximum slab size.") {}
+};
+
+struct KeylessInfo {
+  const bool keyless;
+  const int32_t target_index;
 };
 
 class QueryMemoryDescriptor {

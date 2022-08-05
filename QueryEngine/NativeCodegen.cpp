@@ -2424,7 +2424,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   MemoryLayoutBuilder mem_layout_builder(ra_exe_unit);
 
-  GroupByAndAggregate group_by_and_aggregate(
+  RowFuncBuilder row_func_builder(
       this,
       co.device_type,
       ra_exe_unit,
@@ -2569,22 +2569,22 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   if (!join_loops.empty()) {
     codegenJoinLoops(join_loops,
                      body_execution_unit,
-                     group_by_and_aggregate,
+                     row_func_builder,
                      query_func,
                      cgen_state_->row_func_bb_,
                      *(query_mem_desc.get()),
                      co,
                      eo);
   } else {
-    const bool can_return_error = compileBody(
-        ra_exe_unit, group_by_and_aggregate, *query_mem_desc, co, gpu_smem_context);
+    const bool can_return_error =
+        compileBody(ra_exe_unit, row_func_builder, *query_mem_desc, co, gpu_smem_context);
     if (can_return_error || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog ||
         eo.allow_runtime_query_interrupt) {
       createErrorCheckControlFlow(query_func,
                                   eo.with_dynamic_watchdog,
                                   eo.allow_runtime_query_interrupt,
                                   co.device_type,
-                                  group_by_and_aggregate.query_infos_);
+                                  row_func_builder.query_infos_);
     }
   }
   std::vector<llvm::Value*> hoisted_literals;
@@ -2873,7 +2873,7 @@ void Executor::insertErrorCodeChecker(llvm::Function* query_func,
 }
 
 bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
-                           GroupByAndAggregate& group_by_and_aggregate,
+                           RowFuncBuilder& row_func_builder,
                            QueryMemoryDescriptor& query_mem_desc,
                            const CompilationOptions& co,
                            const GpuSharedMemoryContext& gpu_smem_context) {
@@ -2939,8 +2939,8 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
   }
 
   CHECK(filter_lv->getType()->isIntegerTy(1));
-  auto ret = group_by_and_aggregate.codegen(
-      filter_lv, sc_false, query_mem_desc, co, gpu_smem_context);
+  auto ret =
+      row_func_builder.codegen(filter_lv, sc_false, query_mem_desc, co, gpu_smem_context);
 
   // Switch the code generation back to the row function if a filter
   // function was enabled.

@@ -94,7 +94,7 @@ bool is_simple_count(const TargetInfo& target_info) {
 }  // namespace
 
 void TargetExprCodegen::codegen(
-    GroupByAndAggregate* group_by_and_agg,
+    RowFuncBuilder* row_func_builder,
     Executor* executor,
     const QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co,
@@ -106,7 +106,7 @@ void TargetExprCodegen::codegen(
     llvm::Value* varlen_output_buffer,
     DiamondCodegen& diamond_codegen,
     DiamondCodegen* sample_cfg) const {
-  CHECK(group_by_and_agg);
+  CHECK(row_func_builder);
   CHECK(executor);
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
 
@@ -120,9 +120,9 @@ void TargetExprCodegen::codegen(
   auto target_lvs =
       window_func
           ? std::vector<llvm::Value*>{executor->codegenWindowFunction(target_idx, co)}
-          : group_by_and_agg->codegenAggArg(target_expr, co);
+          : row_func_builder->codegenAggArg(target_expr, co);
   const auto window_row_ptr = window_func
-                                  ? group_by_and_agg->codegenWindowRowPointer(
+                                  ? row_func_builder->codegenWindowRowPointer(
                                         window_func, query_mem_desc, co, diamond_codegen)
                                   : nullptr;
   if (window_row_ptr) {
@@ -199,7 +199,7 @@ void TargetExprCodegen::codegen(
             is_group_by ? agg_col_ptr : agg_out_vec[slot_index],
             llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0));
         if (gpu_smem_context.isSharedMemoryUsed()) {
-          group_by_and_agg->emitCall(
+          row_func_builder->emitCall(
               "agg_count_shared", std::vector<llvm::Value*>{acc_i64, LL_INT(int64_t(1))});
         } else {
           LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add,
@@ -252,7 +252,7 @@ void TargetExprCodegen::codegen(
     return;
   }
 
-  codegenAggregate(group_by_and_agg,
+  codegenAggregate(row_func_builder,
                    executor,
                    query_mem_desc,
                    co,
@@ -266,7 +266,7 @@ void TargetExprCodegen::codegen(
 }
 
 void TargetExprCodegen::codegenAggregate(
-    GroupByAndAggregate* group_by_and_agg,
+    RowFuncBuilder* row_func_builder,
     Executor* executor,
     const QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co,
@@ -333,7 +333,7 @@ void TargetExprCodegen::codegenAggregate(
     const bool is_fp_arg =
         !lazy_fetched && arg_type.get_type() != kNULLT && arg_type.is_fp();
     if (is_group_by) {
-      agg_col_ptr = group_by_and_agg->codegenAggColumnPtr(output_buffer_byte_stream,
+      agg_col_ptr = row_func_builder->codegenAggColumnPtr(output_buffer_byte_stream,
                                                           out_row_idx,
                                                           agg_out_ptr_w_idx,
                                                           query_mem_desc,
@@ -363,7 +363,7 @@ void TargetExprCodegen::codegenAggregate(
     const auto need_skip_null = !needs_unnest_double_patch && target_info.skip_null_val;
     if (!needs_unnest_double_patch) {
       if (need_skip_null && !is_agg_domain_range_equivalent(target_info.agg_kind)) {
-        target_lv = group_by_and_agg->convertNullIfAny(arg_type, target_info, target_lv);
+        target_lv = row_func_builder->convertNullIfAny(arg_type, target_info, target_lv);
       } else if (is_fp_arg) {
         target_lv = executor->castToFP(target_lv, arg_type, target_info.sql_type);
       }
@@ -416,11 +416,11 @@ void TargetExprCodegen::codegenAggregate(
     if (is_distinct_target(target_info)) {
       CHECK_EQ(agg_chosen_bytes, sizeof(int64_t));
       CHECK(!chosen_type.is_fp());
-      group_by_and_agg->codegenCountDistinct(
+      row_func_builder->codegenCountDistinct(
           target_idx, target_expr, agg_args, query_mem_desc, co.device_type);
     } else if (target_info.agg_kind == kAPPROX_QUANTILE) {
       CHECK_EQ(agg_chosen_bytes, sizeof(int64_t));
-      group_by_and_agg->codegenApproxQuantile(
+      row_func_builder->codegenApproxQuantile(
           target_idx, target_expr, agg_args, query_mem_desc, co.device_type);
     } else {
       const auto& arg_ti = target_info.agg_arg_type;
@@ -452,10 +452,10 @@ void TargetExprCodegen::codegenAggregate(
             agg_fname = patch_agg_fname(agg_fname);
           }
         }
-        auto agg_fname_call_ret_lv = group_by_and_agg->emitCall(agg_fname, agg_args);
+        auto agg_fname_call_ret_lv = row_func_builder->emitCall(agg_fname, agg_args);
 
         if (agg_fname.find("checked") != std::string::npos) {
-          group_by_and_agg->checkErrorCode(agg_fname_call_ret_lv);
+          row_func_builder->checkErrorCode(agg_fname_call_ret_lv);
         }
       }
     }
@@ -599,7 +599,7 @@ inline int64_t get_initial_agg_val(const TargetInfo& target_info,
 }  // namespace
 
 void TargetExprCodegenBuilder::codegen(
-    GroupByAndAggregate* group_by_and_agg,
+    RowFuncBuilder* row_func_builder,
     Executor* executor,
     const QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co,
@@ -610,12 +610,12 @@ void TargetExprCodegenBuilder::codegen(
     llvm::Value* out_row_idx,
     llvm::Value* varlen_output_buffer,
     DiamondCodegen& diamond_codegen) const {
-  CHECK(group_by_and_agg);
+  CHECK(row_func_builder);
   CHECK(executor);
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
 
   for (const auto& target_expr_codegen : target_exprs_to_codegen) {
-    target_expr_codegen.codegen(group_by_and_agg,
+    target_expr_codegen.codegen(row_func_builder,
                                 executor,
                                 query_mem_desc,
                                 co,
@@ -628,7 +628,7 @@ void TargetExprCodegenBuilder::codegen(
                                 diamond_codegen);
   }
   if (!sample_exprs_to_codegen.empty()) {
-    codegenSampleExpressions(group_by_and_agg,
+    codegenSampleExpressions(row_func_builder,
                              executor,
                              query_mem_desc,
                              co,
@@ -641,7 +641,7 @@ void TargetExprCodegenBuilder::codegen(
 }
 
 void TargetExprCodegenBuilder::codegenSampleExpressions(
-    GroupByAndAggregate* group_by_and_agg,
+    RowFuncBuilder* row_func_builder,
     Executor* executor,
     const QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co,
@@ -655,7 +655,7 @@ void TargetExprCodegenBuilder::codegenSampleExpressions(
   CHECK(co.device_type == ExecutorDeviceType::GPU);
   if (sample_exprs_to_codegen.size() == 1 &&
       !sample_exprs_to_codegen.front().target_info.sql_type.is_varlen()) {
-    codegenSingleSlotSampleExpression(group_by_and_agg,
+    codegenSingleSlotSampleExpression(row_func_builder,
                                       executor,
                                       query_mem_desc,
                                       co,
@@ -665,7 +665,7 @@ void TargetExprCodegenBuilder::codegenSampleExpressions(
                                       out_row_idx,
                                       diamond_codegen);
   } else {
-    codegenMultiSlotSampleExpressions(group_by_and_agg,
+    codegenMultiSlotSampleExpressions(row_func_builder,
                                       executor,
                                       query_mem_desc,
                                       co,
@@ -678,7 +678,7 @@ void TargetExprCodegenBuilder::codegenSampleExpressions(
 }
 
 void TargetExprCodegenBuilder::codegenSingleSlotSampleExpression(
-    GroupByAndAggregate* group_by_and_agg,
+    RowFuncBuilder* row_func_builder,
     Executor* executor,
     const QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co,
@@ -692,7 +692,7 @@ void TargetExprCodegenBuilder::codegenSingleSlotSampleExpression(
   CHECK(!sample_exprs_to_codegen.front().target_info.sql_type.is_varlen());
   CHECK(co.device_type == ExecutorDeviceType::GPU);
   // no need for the atomic if we only have one SAMPLE target
-  sample_exprs_to_codegen.front().codegen(group_by_and_agg,
+  sample_exprs_to_codegen.front().codegen(row_func_builder,
                                           executor,
                                           query_mem_desc,
                                           co,
@@ -706,7 +706,7 @@ void TargetExprCodegenBuilder::codegenSingleSlotSampleExpression(
 }
 
 void TargetExprCodegenBuilder::codegenMultiSlotSampleExpressions(
-    GroupByAndAggregate* group_by_and_agg,
+    RowFuncBuilder* row_func_builder,
     Executor* executor,
     const QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co,
@@ -720,7 +720,7 @@ void TargetExprCodegenBuilder::codegenMultiSlotSampleExpressions(
         sample_exprs_to_codegen.front().target_info.sql_type.is_varlen());
   CHECK(co.device_type == ExecutorDeviceType::GPU);
   const auto& first_sample_expr = sample_exprs_to_codegen.front();
-  auto target_lvs = group_by_and_agg->codegenAggArg(first_sample_expr.target_expr, co);
+  auto target_lvs = row_func_builder->codegenAggArg(first_sample_expr.target_expr, co);
   CHECK_GE(target_lvs.size(), size_t(1));
 
   const auto init_val =
@@ -733,7 +733,7 @@ void TargetExprCodegenBuilder::codegenMultiSlotSampleExpressions(
                 !first_sample_expr.target_info.sql_type.is_varlen()
             ? first_sample_expr.target_info.sql_type.get_size()
             : sizeof(int64_t);
-    agg_col_ptr = group_by_and_agg->codegenAggColumnPtr(output_buffer_byte_stream,
+    agg_col_ptr = row_func_builder->codegenAggColumnPtr(output_buffer_byte_stream,
                                                         out_row_idx,
                                                         agg_out_ptr_w_idx,
                                                         query_mem_desc,
@@ -753,7 +753,7 @@ void TargetExprCodegenBuilder::codegenMultiSlotSampleExpressions(
       sample_cas_lv, executor, false, "sample_valcheck", &diamond_codegen, false);
 
   for (const auto& target_expr_codegen : sample_exprs_to_codegen) {
-    target_expr_codegen.codegen(group_by_and_agg,
+    target_expr_codegen.codegen(row_func_builder,
                                 executor,
                                 query_mem_desc,
                                 co,

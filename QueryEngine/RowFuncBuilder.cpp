@@ -14,33 +14,7 @@
  * limitations under the License.
  */
 
-#include "GroupByAndAggregate.h"
-#include "AggregateUtils.h"
-
-#include "CardinalityEstimator.h"
-#include "CodeGenerator.h"
-#include "Descriptors/QueryMemoryDescriptor.h"
-#include "ExpressionRange.h"
-#include "ExpressionRewrite.h"
-#include "GpuInitGroups.h"
-#include "InPlaceSort.h"
-#include "LLVMFunctionAttributesUtil.h"
-#include "MaxwellCodegenPatch.h"
-#include "OutputBufferInitialization.h"
-#include "TargetExprBuilder.h"
-
-#include "../CudaMgr/CudaMgr.h"
-#include "../Shared/checked_alloc.h"
-#include "../Shared/funcannotations.h"
-#include "../ThirdParty/robin_hood.h"
-#include "../Utils/ChunkIter.h"
-#include "DataMgr/BufferMgr/BufferMgr.h"
-#include "Execute.h"
-#include "QueryTemplateGenerator.h"
-#include "RuntimeFunctions.h"
-#include "StreamingTopN.h"
-#include "TopKSort.h"
-#include "WindowContext.h"
+#include "QueryEngine/RowFuncBuilder.h"
 
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
@@ -49,52 +23,31 @@
 #include <string_view>
 #include <thread>
 
-int64_t ColRangeInfo::getBucketedCardinality() const {
-  checked_int64_t crt_col_cardinality = checked_int64_t(max) - checked_int64_t(min);
-  if (bucket) {
-    crt_col_cardinality /= bucket;
-  }
-  return static_cast<int64_t>(crt_col_cardinality + (1 + (has_nulls ? 1 : 0)));
-}
-
-ColRangeInfo get_expr_range_info(const RelAlgExecutionUnit& ra_exe_unit,
-                                 const std::vector<InputTableInfo>& query_infos,
-                                 const Analyzer::Expr* expr,
-                                 Executor* executor) {
-  if (!expr) {
-    return {QueryDescriptionType::Projection, 0, 0, 0, false};
-  }
-
-  const auto expr_range = getExpressionRange(
-      expr, query_infos, executor, boost::make_optional(ra_exe_unit.simple_quals));
-  switch (expr_range.getType()) {
-    case ExpressionRangeType::Integer: {
-      if (expr_range.getIntMin() > expr_range.getIntMax()) {
-        return {
-            QueryDescriptionType::GroupByBaselineHash, 0, -1, 0, expr_range.hasNulls()};
-      }
-      return {QueryDescriptionType::GroupByPerfectHash,
-              expr_range.getIntMin(),
-              expr_range.getIntMax(),
-              expr_range.getBucket(),
-              expr_range.hasNulls()};
-    }
-    case ExpressionRangeType::Float:
-    case ExpressionRangeType::Double: {
-      if (expr_range.getFpMin() > expr_range.getFpMax()) {
-        return {
-            QueryDescriptionType::GroupByBaselineHash, 0, -1, 0, expr_range.hasNulls()};
-      }
-      return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
-    }
-    case ExpressionRangeType::Invalid:
-      return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
-    default:
-      CHECK(false);
-  }
-  CHECK(false);
-  return {QueryDescriptionType::NonGroupedAggregate, 0, 0, 0, false};
-}
+#include "CudaMgr/CudaMgr.h"
+#include "DataMgr/BufferMgr/BufferMgr.h"
+#include "QueryEngine/AggregateUtils.h"
+#include "QueryEngine/CardinalityEstimator.h"
+#include "QueryEngine/CodeGenerator.h"
+#include "QueryEngine/ColRangeInfo.h"
+#include "QueryEngine/Descriptors/QueryMemoryDescriptor.h"
+#include "QueryEngine/Execute.h"
+#include "QueryEngine/ExpressionRange.h"
+#include "QueryEngine/ExpressionRewrite.h"
+#include "QueryEngine/GpuInitGroups.h"
+#include "QueryEngine/InPlaceSort.h"
+#include "QueryEngine/LLVMFunctionAttributesUtil.h"
+#include "QueryEngine/MaxwellCodegenPatch.h"
+#include "QueryEngine/OutputBufferInitialization.h"
+#include "QueryEngine/QueryTemplateGenerator.h"
+#include "QueryEngine/RuntimeFunctions.h"
+#include "QueryEngine/StreamingTopN.h"
+#include "QueryEngine/TargetExprBuilder.h"
+#include "QueryEngine/TopKSort.h"
+#include "QueryEngine/WindowContext.h"
+#include "Shared/checked_alloc.h"
+#include "Shared/funcannotations.h"
+#include "ThirdParty/robin_hood.h"
+#include "Utils/ChunkIter.h"
 
 #define LL_CONTEXT executor_->cgen_state_->context_
 #define LL_BUILDER executor_->cgen_state_->ir_builder_
@@ -104,13 +57,12 @@ ColRangeInfo get_expr_range_info(const RelAlgExecutionUnit& ra_exe_unit,
 #define ROW_FUNC executor_->cgen_state_->row_func_
 #define CUR_FUNC executor_->cgen_state_->current_func_
 
-GroupByAndAggregate::GroupByAndAggregate(
-    Executor* executor,
-    const ExecutorDeviceType device_type,
-    const RelAlgExecutionUnit& ra_exe_unit,
-    const std::vector<InputTableInfo>& query_infos,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const std::optional<int64_t>& group_cardinality_estimation)
+RowFuncBuilder::RowFuncBuilder(Executor* executor,
+                               const ExecutorDeviceType device_type,
+                               const RelAlgExecutionUnit& ra_exe_unit,
+                               const std::vector<InputTableInfo>& query_infos,
+                               std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                               const std::optional<int64_t>& group_cardinality_estimation)
     : executor_(executor)
     , config_(executor->getConfig())
     , ra_exe_unit_(ra_exe_unit)
@@ -143,11 +95,11 @@ int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {
 
 }  // namespace
 
-bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
-                                  llvm::BasicBlock* sc_false,
-                                  QueryMemoryDescriptor& query_mem_desc,
-                                  const CompilationOptions& co,
-                                  const GpuSharedMemoryContext& gpu_smem_context) {
+bool RowFuncBuilder::codegen(llvm::Value* filter_result,
+                             llvm::BasicBlock* sc_false,
+                             QueryMemoryDescriptor& query_mem_desc,
+                             const CompilationOptions& co,
+                             const GpuSharedMemoryContext& gpu_smem_context) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   CHECK(filter_result);
 
@@ -281,7 +233,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
   return can_return_error;
 }
 
-llvm::Value* GroupByAndAggregate::codegenOutputSlot(
+llvm::Value* RowFuncBuilder::codegenOutputSlot(
     llvm::Value* groups_buffer,
     const QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co,
@@ -364,7 +316,7 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
   }
 }
 
-std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
+std::tuple<llvm::Value*, llvm::Value*> RowFuncBuilder::codegenGroupBy(
     const QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co,
     DiamondCodegen& diamond_codegen) {
@@ -487,7 +439,7 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
   return std::make_tuple(nullptr, nullptr);
 }
 
-llvm::Value* GroupByAndAggregate::codegenVarlenOutputBuffer(
+llvm::Value* RowFuncBuilder::codegenVarlenOutputBuffer(
     const QueryMemoryDescriptor& query_mem_desc) {
   if (!query_mem_desc.hasVarlenOutput()) {
     return nullptr;
@@ -501,8 +453,7 @@ llvm::Value* GroupByAndAggregate::codegenVarlenOutputBuffer(
   return varlen_output_buffer;
 }
 
-std::tuple<llvm::Value*, llvm::Value*>
-GroupByAndAggregate::codegenSingleColumnPerfectHash(
+std::tuple<llvm::Value*, llvm::Value*> RowFuncBuilder::codegenSingleColumnPerfectHash(
     const QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co,
     llvm::Value* groups_buffer,
@@ -552,7 +503,7 @@ GroupByAndAggregate::codegenSingleColumnPerfectHash(
   return std::make_tuple(emitCall(get_group_fn_name, get_group_fn_args), nullptr);
 }
 
-std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenMultiColumnPerfectHash(
+std::tuple<llvm::Value*, llvm::Value*> RowFuncBuilder::codegenMultiColumnPerfectHash(
     llvm::Value* groups_buffer,
     llvm::Value* group_key,
     llvm::Value* key_size_lv,
@@ -595,8 +546,7 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenMultiColumnPe
   }
 }
 
-std::tuple<llvm::Value*, llvm::Value*>
-GroupByAndAggregate::codegenMultiColumnBaselineHash(
+std::tuple<llvm::Value*, llvm::Value*> RowFuncBuilder::codegenMultiColumnBaselineHash(
     const CompilationOptions& co,
     llvm::Value* groups_buffer,
     llvm::Value* group_key,
@@ -649,7 +599,7 @@ GroupByAndAggregate::codegenMultiColumnBaselineHash(
   }
 }
 
-llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
+llvm::Function* RowFuncBuilder::codegenPerfectHashFunction() {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
 
   CHECK_GT(ra_exe_unit_.groupby_exprs.size(), size_t(1));
@@ -703,9 +653,9 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
   return key_hash_func;
 }
 
-llvm::Value* GroupByAndAggregate::convertNullIfAny(const SQLTypeInfo& arg_type,
-                                                   const TargetInfo& agg_info,
-                                                   llvm::Value* target) {
+llvm::Value* RowFuncBuilder::convertNullIfAny(const SQLTypeInfo& arg_type,
+                                              const TargetInfo& agg_info,
+                                              llvm::Value* target) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
 
   const auto& agg_type = agg_info.sql_type;
@@ -755,7 +705,7 @@ llvm::Value* GroupByAndAggregate::convertNullIfAny(const SQLTypeInfo& arg_type,
   }
 }
 
-llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
+llvm::Value* RowFuncBuilder::codegenWindowRowPointer(
     const Analyzer::WindowFunction* window_func,
     const QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co,
@@ -802,7 +752,7 @@ llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
   return codegenOutputSlot(groups_buffer, query_mem_desc, co, diamond_codegen);
 }
 
-bool GroupByAndAggregate::codegenAggCalls(
+bool RowFuncBuilder::codegenAggCalls(
     const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx_in,
     llvm::Value* varlen_output_buffer,
     const std::vector<llvm::Value*>& agg_out_vec,
@@ -870,7 +820,7 @@ bool GroupByAndAggregate::codegenAggCalls(
 /**
  * @brief: returns the pointer to where the aggregation should be stored.
  */
-llvm::Value* GroupByAndAggregate::codegenAggColumnPtr(
+llvm::Value* RowFuncBuilder::codegenAggColumnPtr(
     llvm::Value* output_buffer_byte_stream,
     llvm::Value* out_row_idx,
     const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
@@ -937,10 +887,10 @@ llvm::Value* GroupByAndAggregate::codegenAggColumnPtr(
   return agg_col_ptr;
 }
 
-void GroupByAndAggregate::codegenEstimator(std::stack<llvm::BasicBlock*>& array_loops,
-                                           DiamondCodegen& diamond_codegen,
-                                           const QueryMemoryDescriptor& query_mem_desc,
-                                           const CompilationOptions& co) {
+void RowFuncBuilder::codegenEstimator(std::stack<llvm::BasicBlock*>& array_loops,
+                                      DiamondCodegen& diamond_codegen,
+                                      const QueryMemoryDescriptor& query_mem_desc,
+                                      const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   const auto& estimator_arg = ra_exe_unit_.estimator->getArgument();
   auto estimator_comp_count_lv = LL_INT(static_cast<int32_t>(estimator_arg.size()));
@@ -996,12 +946,11 @@ extern "C" RUNTIME_EXPORT void agg_approx_quantile(int64_t* agg, const double va
   t_digest->add(val);
 }
 
-void GroupByAndAggregate::codegenCountDistinct(
-    const size_t target_idx,
-    const Analyzer::Expr* target_expr,
-    std::vector<llvm::Value*>& agg_args,
-    const QueryMemoryDescriptor& query_mem_desc,
-    const ExecutorDeviceType device_type) {
+void RowFuncBuilder::codegenCountDistinct(const size_t target_idx,
+                                          const Analyzer::Expr* target_expr,
+                                          std::vector<llvm::Value*>& agg_args,
+                                          const QueryMemoryDescriptor& query_mem_desc,
+                                          const ExecutorDeviceType device_type) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   const auto agg_info = get_target_info(target_expr, config_.exec.group_by.bigint_count);
   const auto& arg_ti =
@@ -1065,12 +1014,11 @@ void GroupByAndAggregate::codegenCountDistinct(
   }
 }
 
-void GroupByAndAggregate::codegenApproxQuantile(
-    const size_t target_idx,
-    const Analyzer::Expr* target_expr,
-    std::vector<llvm::Value*>& agg_args,
-    const QueryMemoryDescriptor& query_mem_desc,
-    const ExecutorDeviceType device_type) {
+void RowFuncBuilder::codegenApproxQuantile(const size_t target_idx,
+                                           const Analyzer::Expr* target_expr,
+                                           std::vector<llvm::Value*>& agg_args,
+                                           const QueryMemoryDescriptor& query_mem_desc,
+                                           const ExecutorDeviceType device_type) {
   if (device_type == ExecutorDeviceType::GPU) {
     throw QueryMustRunOnCpu();
   }
@@ -1107,7 +1055,7 @@ void GroupByAndAggregate::codegenApproxQuantile(
   }
 }
 
-llvm::Value* GroupByAndAggregate::getAdditionalLiteral(const int32_t off) {
+llvm::Value* RowFuncBuilder::getAdditionalLiteral(const int32_t off) {
   CHECK_LT(off, 0);
   const auto lit_buff_lv = get_arg_by_name(ROW_FUNC, "literals");
   auto* bit_cast = LL_BUILDER.CreateBitCast(
@@ -1119,9 +1067,8 @@ llvm::Value* GroupByAndAggregate::getAdditionalLiteral(const int32_t off) {
   return LL_BUILDER.CreateLoad(gep->getType()->getPointerElementType(), gep);
 }
 
-std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
-    const Analyzer::Expr* target_expr,
-    const CompilationOptions& co) {
+std::vector<llvm::Value*> RowFuncBuilder::codegenAggArg(const Analyzer::Expr* target_expr,
+                                                        const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
   const auto func_expr = dynamic_cast<const Analyzer::FunctionOper*>(target_expr);
@@ -1224,13 +1171,13 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
                         target_expr, !executor_->plan_state_->allow_lazy_fetch_, co);
 }
 
-llvm::Value* GroupByAndAggregate::emitCall(const std::string& fname,
-                                           const std::vector<llvm::Value*>& args) {
+llvm::Value* RowFuncBuilder::emitCall(const std::string& fname,
+                                      const std::vector<llvm::Value*>& args) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   return executor_->cgen_state_->emitCall(fname, args);
 }
 
-void GroupByAndAggregate::checkErrorCode(llvm::Value* retCode) {
+void RowFuncBuilder::checkErrorCode(llvm::Value* retCode) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   auto zero_const = llvm::ConstantInt::get(retCode->getType(), 0, true);
   auto rc_check_condition = executor_->cgen_state_->ir_builder_.CreateICmp(
@@ -1239,7 +1186,7 @@ void GroupByAndAggregate::checkErrorCode(llvm::Value* retCode) {
   executor_->cgen_state_->emitErrorCheck(rc_check_condition, retCode, "rc");
 }
 
-std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::genLoadHashDesc(
+std::tuple<llvm::Value*, llvm::Value*> RowFuncBuilder::genLoadHashDesc(
     llvm::Value* groups_buffer) {
   auto* desc_type = llvm::StructType::get(llvm::Type::getInt8PtrTy(LL_CONTEXT),
                                           LL_BUILDER.getInt32Ty());

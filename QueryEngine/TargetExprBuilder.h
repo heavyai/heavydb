@@ -26,7 +26,7 @@
 #include <Shared/TargetInfo.h>
 
 #include "Descriptors/QueryMemoryDescriptor.h"
-#include "GroupByAndAggregate.h"
+#include "RowFuncBuilder.h"
 
 #include <vector>
 
@@ -42,7 +42,7 @@ struct TargetExprCodegen {
       , target_idx(target_idx)
       , is_group_by(is_group_by) {}
 
-  void codegen(GroupByAndAggregate* group_by_and_agg,
+  void codegen(RowFuncBuilder* row_func_builder,
                Executor* executor,
                const QueryMemoryDescriptor& query_mem_desc,
                const CompilationOptions& co,
@@ -55,7 +55,7 @@ struct TargetExprCodegen {
                DiamondCodegen& diamond_codegen,
                DiamondCodegen* sample_cfg = nullptr) const;
 
-  void codegenAggregate(GroupByAndAggregate* group_by_and_agg,
+  void codegenAggregate(RowFuncBuilder* row_func_builder,
                         Executor* executor,
                         const QueryMemoryDescriptor& query_mem_desc,
                         const CompilationOptions& co,
@@ -84,7 +84,7 @@ struct TargetExprCodegenBuilder {
                   QueryMemoryDescriptor& query_mem_desc,
                   const CompilationOptions& co);
 
-  void codegen(GroupByAndAggregate* group_by_and_agg,
+  void codegen(RowFuncBuilder* row_func_builder,
                Executor* executor,
                const QueryMemoryDescriptor& query_mem_desc,
                const CompilationOptions& co,
@@ -97,7 +97,7 @@ struct TargetExprCodegenBuilder {
                DiamondCodegen& diamond_codegen) const;
 
   void codegenSampleExpressions(
-      GroupByAndAggregate* group_by_and_agg,
+      RowFuncBuilder* row_func_builder,
       Executor* executor,
       const QueryMemoryDescriptor& query_mem_desc,
       const CompilationOptions& co,
@@ -108,7 +108,7 @@ struct TargetExprCodegenBuilder {
       DiamondCodegen& diamond_codegen) const;
 
   void codegenSingleSlotSampleExpression(
-      GroupByAndAggregate* group_by_and_agg,
+      RowFuncBuilder* row_func_builder,
       Executor* executor,
       const QueryMemoryDescriptor& query_mem_desc,
       const CompilationOptions& co,
@@ -119,7 +119,7 @@ struct TargetExprCodegenBuilder {
       DiamondCodegen& diamond_codegen) const;
 
   void codegenMultiSlotSampleExpressions(
-      GroupByAndAggregate* group_by_and_agg,
+      RowFuncBuilder* row_func_builder,
       Executor* executor,
       const QueryMemoryDescriptor& query_mem_desc,
       const CompilationOptions& co,

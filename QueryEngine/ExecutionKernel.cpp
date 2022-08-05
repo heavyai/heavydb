@@ -249,12 +249,12 @@ void ExecutionKernel::runImpl(Executor* executor,
       throw std::runtime_error("Joins not supported through external execution");
     }
     const auto query = serialize_to_sql(&ra_exe_unit_, executor->getSchemaProvider());
-    GroupByAndAggregate group_by_and_aggregate(executor,
-                                               ExecutorDeviceType::CPU,
-                                               ra_exe_unit_,
-                                               shared_context.getQueryInfos(),
-                                               executor->row_set_mem_owner_,
-                                               std::nullopt);
+    RowFuncBuilder row_func_builder(executor,
+                                    ExecutorDeviceType::CPU,
+                                    ra_exe_unit_,
+                                    shared_context.getQueryInfos(),
+                                    executor->row_set_mem_owner_,
+                                    std::nullopt);
     MemoryLayoutBuilder mem_layout_builder(ra_exe_unit_);
     auto query_mem_desc = mem_layout_builder.build(shared_context.getQueryInfos(),
                                                    /*allow_multifrag=*/false,

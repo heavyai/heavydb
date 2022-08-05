@@ -53,7 +53,6 @@
 #include "QueryEngine/ExecutionKernel.h"
 #include "QueryEngine/ExtensionModules.h"
 #include "QueryEngine/GpuSharedMemoryContext.h"
-#include "QueryEngine/GroupByAndAggregate.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 #include "QueryEngine/LoopControlFlow/JoinLoop.h"
 #include "QueryEngine/NvidiaKernel.h"
@@ -61,6 +60,7 @@
 #include "QueryEngine/QueryPlanDagCache.h"
 #include "QueryEngine/RelAlgExecutionUnit.h"
 #include "QueryEngine/RelAlgTranslator.h"
+#include "QueryEngine/RowFuncBuilder.h"
 #include "QueryEngine/StringDictionaryGenerations.h"
 #include "QueryEngine/TableGenerations.h"
 #include "QueryEngine/TargetMetaInfo.h"
@@ -896,14 +896,14 @@ class Executor {
                                    const size_t level_idx);
   void codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
                         const RelAlgExecutionUnit& ra_exe_unit,
-                        GroupByAndAggregate& group_by_and_aggregate,
+                        RowFuncBuilder& row_func_builder,
                         llvm::Function* query_func,
                         llvm::BasicBlock* entry_bb,
                         QueryMemoryDescriptor& query_mem_desc,
                         const CompilationOptions& co,
                         const ExecutionOptions& eo);
   bool compileBody(const RelAlgExecutionUnit& ra_exe_unit,
-                   GroupByAndAggregate& group_by_and_aggregate,
+                   RowFuncBuilder& row_func_builder,
                    QueryMemoryDescriptor& query_mem_desc,
                    const CompilationOptions& co,
                    const GpuSharedMemoryContext& gpu_smem_context = {});
@@ -1294,7 +1294,7 @@ class Executor {
   friend class ExecutionKernel;
   friend class KernelSubtask;
   friend class HashJoin;  // cgen_state_
-  friend class GroupByAndAggregate;
+  friend class RowFuncBuilder;
   friend class QueryCompilationDescriptor;
   friend class QueryMemoryDescriptor;
   friend class QueryMemoryInitializer;
