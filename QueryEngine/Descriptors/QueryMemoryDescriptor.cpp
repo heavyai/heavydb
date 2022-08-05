@@ -18,7 +18,6 @@
 
 #include "../Execute.h"
 #include "../ExpressionRewrite.h"
-#include "../GroupByAndAggregate.h"
 #include "../StreamingTopN.h"
 #include "../UsedColumnsVisitor.h"
 #include "ColSlotContext.h"

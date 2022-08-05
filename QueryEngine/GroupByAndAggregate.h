@@ -169,40 +169,18 @@ class GroupByAndAggregate {
 
   void checkErrorCode(llvm::Value* retCode);
 
-  bool needsUnnestDoublePatch(llvm::Value const* val_ptr,
-                              const std::string& agg_base_name,
-                              const bool threads_share_memory,
-                              const CompilationOptions& co) const;
-
-  void prependForceSync();
-
   std::tuple<llvm::Value*, llvm::Value*> genLoadHashDesc(llvm::Value* groups_buffer);
 
   Executor* executor_;
   const Config& config_;
   const RelAlgExecutionUnit& ra_exe_unit_;
   const std::vector<InputTableInfo>& query_infos_;
-  std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
 
   friend class Executor;
-  friend class QueryMemoryDescriptor;
   friend class CodeGenerator;
   friend class ExecutionKernel;
   friend struct TargetExprCodegen;
   friend struct TargetExprCodegenBuilder;
 };
-
-inline size_t get_count_distinct_sub_bitmap_count(const size_t bitmap_sz_bits,
-                                                  const RelAlgExecutionUnit& ra_exe_unit,
-                                                  const ExecutorDeviceType device_type) {
-  // For count distinct on a column with a very small number of distinct values
-  // contention can be very high, especially for non-grouped queries. We'll split
-  // the bitmap into multiple sub-bitmaps which are unified to get the full result.
-  // The threshold value for bitmap_sz_bits works well on Kepler.
-  return bitmap_sz_bits < 50000 && ra_exe_unit.groupby_exprs.empty() &&
-                 device_type == ExecutorDeviceType::GPU
-             ? 64  // NB: must be a power of 2 to keep runtime offset computations cheap
-             : 1;
-}
 
 #endif  // QUERYENGINE_GROUPBYANDAGGREGATE_H

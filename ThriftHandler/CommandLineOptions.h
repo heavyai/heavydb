@@ -118,9 +118,9 @@ class CommandLineOptions {
   std::vector<std::string> getNodeIdsArray();
   static const std::string nodeIds_token;
 
-  boost::optional<int> parse_command_line(int argc,
-                                          char const* const* argv,
-                                          const bool should_init_logging = false);
+  std::optional<int> parse_command_line(int argc,
+                                        char const* const* argv,
+                                        const bool should_init_logging = false);
   void validate();
   void validate_base_path();
   void init_logging();

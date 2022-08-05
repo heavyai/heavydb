@@ -50,7 +50,6 @@ class RowSetMemoryOwner;
 struct InputTableInfo;
 struct RelAlgExecutionUnit;
 class TResultSetBufferDescriptor;
-class GroupByAndAggregate;
 struct ColRangeInfo;
 struct KeylessInfo;
 

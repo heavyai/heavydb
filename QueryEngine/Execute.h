@@ -474,7 +474,14 @@ class Executor {
 
   bool isCPUOnly() const;
 
+  bool needsUnnestDoublePatch(llvm::Value const* val_ptr,
+                              const std::string& agg_base_name,
+                              const bool threads_share_memory,
+                              const CompilationOptions& co) const;
+
   bool isArchMaxwell(const ExecutorDeviceType dt) const;
+
+  void prependForceSync();
 
   bool containsLeftDeepOuterJoin() const {
     return cgen_state_->contains_left_deep_outer_join_;

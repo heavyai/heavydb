@@ -21,7 +21,6 @@
 #include "StreamingTopN.h"
 
 #include "../CudaMgr/CudaMgr.h"
-#include "GroupByAndAggregate.h"
 
 #include <vector>
 

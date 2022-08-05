@@ -19,11 +19,11 @@
 #include <sys/types.h>
 
 #include <iostream>
+#include <optional>
 
 #include "CommandLineOptions.h"
 #include "MapDRelease.h"
 #include "OSDependent/omnisci_fs.h"
-#include "QueryEngine/GroupByAndAggregate.h"
 #include "StringDictionary/StringDictionary.h"
 
 #ifdef _WIN32
@@ -578,7 +578,7 @@ void CommandLineOptions::validate() {
   LOG(INFO) << "Allowed export paths is set to " << allowed_export_paths;
 }
 
-boost::optional<int> CommandLineOptions::parse_command_line(
+std::optional<int> CommandLineOptions::parse_command_line(
     int argc,
     char const* const* argv,
     const bool should_init_logging) {
@@ -740,5 +740,5 @@ boost::optional<int> CommandLineOptions::parse_command_line(
   boost::algorithm::trim_if(authMetadata.ldapRoleRegex, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.ldapSuperUserRole, boost::is_any_of("\"'"));
 
-  return boost::none;
+  return std::nullopt;
 }

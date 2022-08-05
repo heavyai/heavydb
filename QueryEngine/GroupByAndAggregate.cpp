@@ -114,8 +114,7 @@ GroupByAndAggregate::GroupByAndAggregate(
     : executor_(executor)
     , config_(executor->getConfig())
     , ra_exe_unit_(ra_exe_unit)
-    , query_infos_(query_infos)
-    , row_set_mem_owner_(row_set_mem_owner) {}
+    , query_infos_(query_infos) {}
 
 namespace {
 
@@ -159,7 +158,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
     const bool is_group_by = !ra_exe_unit_.groupby_exprs.empty();
 
     if (executor_->isArchMaxwell(co.device_type)) {
-      prependForceSync();
+      executor_->prependForceSync();
     }
     DiamondCodegen filter_cfg(filter_result,
                               executor_,

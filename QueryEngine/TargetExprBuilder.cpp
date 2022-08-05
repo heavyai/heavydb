@@ -24,7 +24,6 @@
 
 #include "CodeGenerator.h"
 #include "Execute.h"
-#include "GroupByAndAggregate.h"
 #include "Logger/Logger.h"
 #include "MaxwellCodegenPatch.h"
 #include "OutputBufferInitialization.h"
@@ -359,7 +358,7 @@ void TargetExprCodegen::codegenAggregate(
     }
 
     auto target_lv = target_lvs[target_lv_idx];
-    const auto needs_unnest_double_patch = group_by_and_agg->needsUnnestDoublePatch(
+    const auto needs_unnest_double_patch = executor->needsUnnestDoublePatch(
         target_lv, agg_base_name, query_mem_desc.threadsShareMemory(), co);
     const auto need_skip_null = !needs_unnest_double_patch && target_info.skip_null_val;
     if (!needs_unnest_double_patch) {

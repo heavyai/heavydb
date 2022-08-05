@@ -17,8 +17,6 @@
 #ifndef QUERYENGINE_QUERYTEMPLATEGENERATOR_H
 #define QUERYENGINE_QUERYTEMPLATEGENERATOR_H
 
-#include "GroupByAndAggregate.h"
-
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
 

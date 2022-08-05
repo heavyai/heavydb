@@ -55,3 +55,16 @@ class MemoryLayoutBuilder {
  private:
   const RelAlgExecutionUnit& ra_exe_unit_;
 };
+
+inline size_t get_count_distinct_sub_bitmap_count(const size_t bitmap_sz_bits,
+                                                  const RelAlgExecutionUnit& ra_exe_unit,
+                                                  const ExecutorDeviceType device_type) {
+  // For count distinct on a column with a very small number of distinct values
+  // contention can be very high, especially for non-grouped queries. We'll split
+  // the bitmap into multiple sub-bitmaps which are unified to get the full result.
+  // The threshold value for bitmap_sz_bits works well on Kepler.
+  return bitmap_sz_bits < 50000 && ra_exe_unit.groupby_exprs.empty() &&
+                 device_type == ExecutorDeviceType::GPU
+             ? 64  // NB: must be a power of 2 to keep runtime offset computations cheap
+             : 1;
+}

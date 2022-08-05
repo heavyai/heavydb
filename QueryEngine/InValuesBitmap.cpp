@@ -20,7 +20,6 @@
 #ifdef HAVE_CUDA
 #include "GpuMemUtils.h"
 #endif  // HAVE_CUDA
-#include "GroupByAndAggregate.h"
 #include "Logger/Logger.h"
 #include "RuntimeFunctions.h"
 #include "Shared/checked_alloc.h"

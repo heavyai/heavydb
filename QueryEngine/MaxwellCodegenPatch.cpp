@@ -26,18 +26,16 @@ bool Executor::isArchMaxwell(const ExecutorDeviceType dt) const {
   return dt == ExecutorDeviceType::GPU && cudaMgr()->isArchMaxwell();
 }
 
-bool GroupByAndAggregate::needsUnnestDoublePatch(llvm::Value const* val_ptr,
-                                                 const std::string& agg_base_name,
-                                                 const bool threads_share_memory,
-                                                 const CompilationOptions& co) const {
-  return (executor_->isArchMaxwell(co.device_type) && threads_share_memory &&
+bool Executor::needsUnnestDoublePatch(llvm::Value const* val_ptr,
+                                      const std::string& agg_base_name,
+                                      const bool threads_share_memory,
+                                      const CompilationOptions& co) const {
+  return (isArchMaxwell(co.device_type) && threads_share_memory &&
           llvm::isa<llvm::AllocaInst>(val_ptr) &&
-          val_ptr->getType() ==
-              llvm::Type::getDoublePtrTy(executor_->cgen_state_->context_) &&
+          val_ptr->getType() == llvm::Type::getDoublePtrTy(cgen_state_->context_) &&
           "agg_id" == agg_base_name);
 }
 
-void GroupByAndAggregate::prependForceSync() {
-  executor_->cgen_state_->ir_builder_.CreateCall(
-      executor_->cgen_state_->module_->getFunction("force_sync"));
+void Executor::prependForceSync() {
+  cgen_state_->ir_builder_.CreateCall(cgen_state_->module_->getFunction("force_sync"));
 }
