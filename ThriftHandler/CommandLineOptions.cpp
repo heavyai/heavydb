@@ -750,6 +750,11 @@ void CommandLineOptions::fillAdvancedOptions() {
       po::value<size_t>(&g_cpu_sub_task_size)->default_value(g_cpu_sub_task_size),
       "Set CPU sub-task size in rows.");
   developer_desc.add_options()(
+      "cpu-threads",
+      po::value<unsigned>(&g_cpu_threads_override)->default_value(g_cpu_threads_override),
+      "Set max CPU concurrent threads. Values <= 0 will use default of 2X the number of "
+      "hardware threads.");
+  developer_desc.add_options()(
       "skip-intermediate-count",
       po::value<bool>(&g_skip_intermediate_count)
           ->default_value(g_skip_intermediate_count)

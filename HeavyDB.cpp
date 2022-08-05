@@ -382,6 +382,12 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
   // Prepare to launch the Thrift server.
   LOG(INFO) << "HeavyDB starting up";
   register_signal_handlers();
+#ifdef ENABLE_TBB
+  LOG(INFO) << "Initializing TBB with " << cpu_threads() << " threads.";
+  threading_tbb::g_tbb_arena.initialize(cpu_threads());
+  const int32_t tbb_max_concurrency{threading_tbb::g_tbb_arena.max_concurrency()};
+  LOG(INFO) << "TBB max concurrency: " << tbb_max_concurrency << " threads.";
+#endif  // ENABLE_TBB
 #ifdef HAVE_AWS_S3
   omnisci_aws_sdk::init_sdk();
 #endif  // HAVE_AWS_S3

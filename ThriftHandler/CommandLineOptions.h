@@ -225,6 +225,7 @@ extern bool g_enable_interop;
 extern bool g_enable_union;
 extern bool g_enable_cpu_sub_tasks;
 extern size_t g_cpu_sub_task_size;
+extern unsigned g_cpu_threads_override;
 extern bool g_enable_filter_function;
 extern size_t g_max_import_threads;
 extern bool g_enable_auto_metadata_update;
