@@ -2003,27 +2003,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
     order_keys.push_back(translateScalarRex(order_key.get()));
   }
   auto ti = rex_window_function->getType();
-  if (window_function_is_value(rex_window_function->getKind())) {
+  auto window_func_kind = rex_window_function->getKind();
+  if (window_function_is_value(window_func_kind)) {
     CHECK_GE(args.size(), 1u);
     ti = args.front()->get_type_info();
-  }
-  bool has_framing_clause = true;
-  switch (rex_window_function->getKind()) {
-    case SqlWindowFunctionKind::RANK:
-    case SqlWindowFunctionKind::DENSE_RANK:
-    case SqlWindowFunctionKind::ROW_NUMBER:
-    case SqlWindowFunctionKind::NTILE:
-    case SqlWindowFunctionKind::PERCENT_RANK:
-    case SqlWindowFunctionKind::CUME_DIST:
-    case SqlWindowFunctionKind::LEAD:
-    case SqlWindowFunctionKind::LAG: {
-      VLOG(1) << "Window framing is ignored: given window function "
-              << rex_window_function->getName() + " operates on an entire partition";
-      has_framing_clause = false;
-      break;
-    }
-    default:
-      break;
   }
   auto determine_frame_bound_type =
       [](const RexWindowFunctionOperator::RexWindowBound& bound) {
@@ -2049,6 +2032,33 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
         }
         return SqlWindowFrameBoundType::UNKNOWN;
       };
+  auto is_negative_framing_bound =
+      [](const SQLTypes t, const Datum& d, bool is_time_unit = false) {
+        switch (t) {
+          case kTINYINT:
+            return d.tinyintval < 0;
+          case kSMALLINT:
+            return d.smallintval < 0;
+          case kINT:
+            return d.intval < 0;
+          case kDOUBLE: {
+            // the only case that double type is used is for handling time interval
+            // i.e., represent tiny time units like nanosecond and microsecond as the
+            // equivalent time value with SECOND time unit
+            CHECK(is_time_unit);
+            return d.doubleval < 0;
+          }
+          case kDECIMAL:
+          case kNUMERIC:
+          case kBIGINT:
+            return d.bigintval < 0;
+          default: {
+            throw std::runtime_error(
+                "We currently only support integer-type literal expression as a window "
+                "frame bound expression");
+          }
+        }
+      };
 
   bool negative_constant = false;
   bool detect_invalid_frame_start_bound_expr = false;
@@ -2062,6 +2072,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
   std::shared_ptr<Analyzer::Expr> frame_end_bound_expr;
   SqlWindowFrameBoundType frame_end_bound_type =
       determine_frame_bound_type(frame_end_bound);
+  bool has_framing_clause =
+      Analyzer::WindowFunction::isFramingAvailableWindowFunc(window_func_kind);
   auto frame_mode = rex_window_function->isRows()
                         ? Analyzer::WindowFunction::FrameBoundType::ROW
                         : Analyzer::WindowFunction::FrameBoundType::RANGE;
@@ -2073,8 +2085,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
       // user-given window frame bound but at this point we have no way to recognize the
       // absence of the frame definition of this window context
       has_framing_clause = false;
-      LOG(INFO) << "The frame clause is ignored in row mode when no order by clause is "
-                   "specified.";
     }
   } else {
     if (frame_start_bound_type == SqlWindowFrameBoundType::UNBOUNDED_PRECEDING &&
@@ -2084,41 +2094,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
       // computation logic returns exactly the same result)
       has_framing_clause = false;
     }
-    auto is_negative_framing_bound =
-        [&](const SQLTypes t, const Datum& d, bool is_time_unit = false) {
-          switch (t) {
-            case kTINYINT: {
-              return d.tinyintval < 0;
-            }
-            case kSMALLINT: {
-              return d.smallintval < 0;
-            }
-            case kINT: {
-              return d.intval < 0;
-            }
-            case kDOUBLE: {
-              // the only case that double type is used is for handling time interval
-              // i.e., represent tiny time units like nanosecond and microsecond as the
-              // equivalent time value with SECOND time unit
-              CHECK(is_time_unit);
-              return d.doubleval < 0;
-            }
-            case kDECIMAL:
-            case kNUMERIC:
-            case kBIGINT: {
-              return d.bigintval < 0;
-            }
-            default: {
-              throw std::runtime_error(
-                  "We currently only support integer-type literal expression as a window "
-                  "frame "
-                  "bound "
-                  "expression");
-              break;
-            }
-          }
-        };
-
     auto translate_frame_bound_expr = [&](const RexScalar* bound_expr) {
       std::shared_ptr<Analyzer::Expr> translated_expr;
       const auto rex_oper = dynamic_cast<const RexOperator*>(bound_expr);
@@ -2210,7 +2185,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
   }
   if (has_framing_clause) {
     if (frame_mode == Analyzer::WindowFunction::FrameBoundType::RANGE) {
-      if (order_keys.size() > 1) {
+      if (order_keys.size() != 1) {
         throw std::runtime_error(
             "Window framing with range mode requires a single order-by column");
       }
@@ -2235,6 +2210,47 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
         }
       }
     }
+  }
+  switch (window_func_kind) {
+    case SqlWindowFunctionKind::LEAD_IN_FRAME:
+    case SqlWindowFunctionKind::LAG_IN_FRAME: {
+      CHECK(has_framing_clause);
+      const auto num_args = args.size();
+      const auto func_name = ::toString(window_func_kind);
+      if (num_args == 1) {
+        Datum d;
+        d.intval = 1;
+        args.push_back(makeExpr<Analyzer::Constant>(kINT, false, d));
+      } else if (num_args < 1 || num_args > 2) {
+        throw std::runtime_error(func_name + " has an invalid number of input arguments");
+      }
+      const auto target_expr_cv =
+          dynamic_cast<const Analyzer::ColumnVar*>(args.front().get());
+      if (!target_expr_cv) {
+        throw std::runtime_error("Currently, " + func_name +
+                                 " only allows a column reference as its first argument");
+      }
+      const auto target_ti = target_expr_cv->get_type_info();
+      if (target_ti.is_dict_encoded_string()) {
+        // Calcite does not represent a window function having dictionary encoded text
+        // type as its output properly, so we need to set its output type manually
+        ti.set_compression(kENCODING_DICT);
+        ti.set_comp_param(target_expr_cv->get_comp_param());
+        ti.set_fixed_size();
+      }
+      const auto target_offset_cv =
+          dynamic_cast<const Analyzer::Constant*>(args[1].get());
+      if (!target_expr_cv ||
+          is_negative_framing_bound(target_offset_cv->get_type_info().get_type(),
+                                    target_offset_cv->get_constval())) {
+        throw std::runtime_error(
+            "Currently, " + func_name +
+            " only allows non-negative constant as its second argument");
+      }
+      break;
+    }
+    default:
+      break;
   }
   if (!has_framing_clause) {
     frame_start_bound_type = SqlWindowFrameBoundType::UNKNOWN;

@@ -19,6 +19,7 @@ package com.mapd.calcite.parser;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
+import com.mapd.parser.extension.ddl.SqlLeadLag;
 import com.mapd.parser.server.ExtensionFunction;
 
 import org.apache.calcite.rel.metadata.RelColumnMapping;
@@ -194,6 +195,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new KeyForString());
     addOperator(new SampleRatio());
     addOperator(new WidthBucket());
+    addOperator(new LagInFrame());
+    addOperator(new LeadInFrame());
     addOperator(new ArrayLength());
     addOperator(new PgILike());
     addOperator(new LTrim());
@@ -697,6 +700,18 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       families.add(SqlTypeFamily.NUMERIC);
       families.add(SqlTypeFamily.INTEGER);
       return families;
+    }
+  }
+
+  public static class LeadInFrame extends SqlLeadLag {
+    public LeadInFrame() {
+      super("LEAD_IN_FRAME", SqlKind.LEAD);
+    }
+  }
+
+  public static class LagInFrame extends SqlLeadLag {
+    public LagInFrame() {
+      super("LAG_IN_FRAME", SqlKind.LAG);
     }
   }
 

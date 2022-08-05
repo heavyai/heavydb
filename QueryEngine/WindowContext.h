@@ -142,6 +142,8 @@ class WindowFunctionContext {
 
   const int64_t* partitionNumCountBuf() const;
 
+  const std::vector<const int8_t*>& getColumnBufferForWindowFunctionExpressions() const;
+
   const std::vector<const int8_t*>& getOrderKeyColumnBuffers() const;
 
   const std::vector<SQLTypeInfo>& getOrderKeyColumnBufferTypes() const;
@@ -203,10 +205,10 @@ class WindowFunctionContext {
                      int64_t* output_for_partition_buff,
                      bool should_parallelize);
 
-  IndexPair computeNullRangeOfSortedPartition(SQLTypeInfo order_col_ti,
-                                              size_t partition_idx,
-                                              const int32_t* original_col_idx_buf,
-                                              const int64_t* ordered_col_idx_buf);
+  void computeNullRangeOfSortedPartition(const SQLTypeInfo& order_col_ti,
+                                         size_t partition_idx,
+                                         const int32_t* original_col_idx_buf,
+                                         const int64_t* ordered_col_idx_buf);
 
   void buildAggregationTreeForPartition(SqlWindowFunctionKind agg_type,
                                         size_t partition_idx,
@@ -214,7 +216,7 @@ class WindowFunctionContext {
                                         const int8_t* col_buf,
                                         const int32_t* original_rowid_buf,
                                         const int64_t* ordered_rowid_buf,
-                                        SQLTypeInfo input_col_ti);
+                                        const SQLTypeInfo& input_col_ti);
 
   void fillPartitionStart();
 
@@ -245,8 +247,8 @@ class WindowFunctionContext {
   AggregateTreeForWindowFraming aggregate_trees_;
   size_t aggregate_trees_fan_out_;
   size_t* aggregate_trees_depth_;
-  int64_t* aggregate_tree_null_start_pos_;
-  int64_t* aggregate_tree_null_end_pos_;
+  int64_t* ordered_partition_null_start_pos_;
+  int64_t* ordered_partition_null_end_pos_;
   int64_t* partition_start_offset_;
   // Markers for partition start used to reinitialize state for aggregate window
   // functions.

@@ -460,6 +460,52 @@ get_valid_buf_end_pos(const int64_t num_elems,
   return null_end_pos == num_elems ? null_start_pos : num_elems;
 }
 
+#define DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(value_type)                         \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t                                \
+      compute_##value_type##_current_row_idx_in_frame(                           \
+          const int64_t num_elems,                                               \
+          const int64_t cur_row_idx,                                             \
+          const value_type* col_buf,                                             \
+          const int32_t* partition_rowid_buf,                                    \
+          const int64_t* ordered_index_buf,                                      \
+          const value_type null_val,                                             \
+          const int64_t null_start_pos,                                          \
+          const int64_t null_end_pos) {                                          \
+    const auto target_value = col_buf[cur_row_idx];                              \
+    if (target_value == null_val) {                                              \
+      for (int64_t target_offset = null_start_pos; target_offset < null_end_pos; \
+           target_offset++) {                                                    \
+        const auto candidate_offset =                                            \
+            partition_rowid_buf[ordered_index_buf[target_offset]];               \
+        if (candidate_offset == cur_row_idx) {                                   \
+          return target_offset;                                                  \
+        }                                                                        \
+      }                                                                          \
+    }                                                                            \
+    int64_t l = get_valid_buf_start_pos(null_start_pos, null_end_pos);           \
+    int64_t h = get_valid_buf_end_pos(num_elems, null_start_pos, null_end_pos);  \
+    while (l <= h) {                                                             \
+      int64_t mid = l + (h - l) / 2;                                             \
+      auto row_idx_in_frame = partition_rowid_buf[ordered_index_buf[mid]];       \
+      auto cur_value = col_buf[row_idx_in_frame];                                \
+      if (cur_value == target_value) {                                           \
+        return mid;                                                              \
+      } else if (cur_value < target_value) {                                     \
+        l = mid + 1;                                                             \
+      } else {                                                                   \
+        h = mid - 1;                                                             \
+      }                                                                          \
+    }                                                                            \
+    return -1;                                                                   \
+  }
+DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(int8_t)
+DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(int16_t)
+DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(int32_t)
+DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(int64_t)
+DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(float)
+DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(double)
+#undef DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME
+
 #define DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX(value_type)                    \
   extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t                                 \
       compute_##value_type##_lower_bound_from_ordered_index(                      \
@@ -589,6 +635,49 @@ DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(int16_t)
 DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(int32_t)
 DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(int64_t)
 #undef DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL
+
+#define DEF_GET_VALUE_IN_FRAME(value_type, logical_type)                 \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE logical_type                   \
+      get_##value_type##_value_##logical_type##_type_in_frame(           \
+          const int64_t target_row_idx_in_frame,                         \
+          const int64_t frame_start_offset,                              \
+          const int64_t frame_end_offset,                                \
+          const value_type* col_buf,                                     \
+          const int32_t* partition_rowid_buf,                            \
+          const int64_t* ordered_index_buf,                              \
+          const logical_type logical_null_val,                           \
+          const logical_type col_null_val) {                             \
+    if (target_row_idx_in_frame < frame_start_offset ||                  \
+        target_row_idx_in_frame >= frame_end_offset) {                   \
+      return logical_null_val;                                           \
+    }                                                                    \
+    const auto target_offset =                                           \
+        partition_rowid_buf[ordered_index_buf[target_row_idx_in_frame]]; \
+    logical_type target_val = col_buf[target_offset];                    \
+    if (target_val == col_null_val) {                                    \
+      target_val = logical_null_val;                                     \
+    }                                                                    \
+    return target_val;                                                   \
+  }
+DEF_GET_VALUE_IN_FRAME(int8_t, int8_t)
+DEF_GET_VALUE_IN_FRAME(int8_t, int16_t)
+DEF_GET_VALUE_IN_FRAME(int8_t, int32_t)
+DEF_GET_VALUE_IN_FRAME(int8_t, int64_t)
+DEF_GET_VALUE_IN_FRAME(int16_t, int16_t)
+DEF_GET_VALUE_IN_FRAME(int16_t, int32_t)
+DEF_GET_VALUE_IN_FRAME(int16_t, int64_t)
+DEF_GET_VALUE_IN_FRAME(int32_t, int32_t)
+DEF_GET_VALUE_IN_FRAME(int32_t, int64_t)
+DEF_GET_VALUE_IN_FRAME(int64_t, int64_t)
+DEF_GET_VALUE_IN_FRAME(float, float)
+DEF_GET_VALUE_IN_FRAME(double, double)
+#undef DEF_GET_VALUE_IN_FRAME
+
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t encode_date(int64_t decoded_val,
+                                                            int64_t null_val,
+                                                            int64_t multiplier) {
+  return decoded_val == null_val ? decoded_val : decoded_val * multiplier;
+}
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t
 compute_row_mode_start_index_sub(int64_t candidate_index,

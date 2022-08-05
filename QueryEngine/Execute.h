@@ -658,6 +658,38 @@ class Executor {
   llvm::Value* codegenWindowFunctionAggregateCalls(llvm::Value* aggregate_state,
                                                    const CompilationOptions& co);
 
+  // Generate code for computing window function on frame
+  llvm::Value* codegenWindowFunctionOnFrame(const CompilationOptions& co);
+
+  // Generate code for computing current partition index from a given row_pos
+  llvm::Value* codegenCurrentPartitionIndex(
+      const WindowFunctionContext* window_func_context,
+      llvm::Value* current_row_pos_lv);
+
+  // Generate code to analyze user-given window frame bound expr
+  llvm::Value* codegenFrameBoundExpr(const Analyzer::WindowFunction* window_func,
+                                     const Analyzer::WindowFrame* frame_bound,
+                                     CodeGenerator& code_generator,
+                                     const CompilationOptions& co);
+
+  // Generate code for computing window frame bounds
+  std::pair<llvm::Value*, llvm::Value*> codegenWindowFrameBound(
+      WindowFunctionContext* window_func_context,
+      const Analyzer::WindowFrame* frame_start_bound,
+      const Analyzer::WindowFrame* frame_end_bound,
+      llvm::Value* current_row_pos_lv,
+      llvm::Value* current_partition_start_offset_lv,
+      llvm::Value* order_key_buf_ptr_lv,
+      llvm::Value* order_key_col_null_val_lv,
+      llvm::Value* frame_start_bound_expr_lv,
+      llvm::Value* frame_end_bound_expr_lv,
+      llvm::Value* num_elem_current_partition_lv,
+      llvm::Value* target_partition_rowid_ptr_lv,
+      llvm::Value* target_partition_sorted_rowid_ptr_lv,
+      llvm::Value* null_start_pos_lv,
+      llvm::Value* null_end_pos_lv,
+      CodeGenerator& code_generator);
+
   // The AVG window function requires some post-processing: the sum is divided by count
   // and the result is stored back for the current row.
   void codegenWindowAvgEpilogue(llvm::Value* crt_val,

@@ -27,6 +27,7 @@
 #include "Shared/sqldefs.h"
 #include "Shared/sqltypes.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <iostream>
 #include <list>
@@ -2359,6 +2360,24 @@ class WindowFrame : public Expr {
 class WindowFunction : public Expr {
  public:
   enum class FrameBoundType { NONE, ROW, RANGE };
+  static constexpr std::array<SqlWindowFunctionKind, 8> FRAMING_ALLOWED_WINDOW_FUNCS{
+      SqlWindowFunctionKind::SUM,
+      SqlWindowFunctionKind::SUM_INTERNAL,
+      SqlWindowFunctionKind::AVG,
+      SqlWindowFunctionKind::MIN,
+      SqlWindowFunctionKind::MAX,
+      SqlWindowFunctionKind::COUNT,
+      SqlWindowFunctionKind::LAG_IN_FRAME,
+      SqlWindowFunctionKind::LEAD_IN_FRAME};
+  static constexpr std::array<SqlWindowFunctionKind, 6>
+      AGGREGATION_TREE_REQUIRED_WINDOW_FUNCS_FOR_FRAMING{
+          SqlWindowFunctionKind::SUM,
+          SqlWindowFunctionKind::SUM_INTERNAL,
+          SqlWindowFunctionKind::AVG,
+          SqlWindowFunctionKind::MIN,
+          SqlWindowFunctionKind::MAX,
+          SqlWindowFunctionKind::COUNT,
+      };
 
   WindowFunction(const SQLTypeInfo& ti,
                  const SqlWindowFunctionKind kind,
@@ -2416,11 +2435,28 @@ class WindowFunction : public Expr {
     return frame_bound_type_;
   }
 
-  bool hasFraming() const { return frame_bound_type_ != FrameBoundType::NONE; }
-
   bool hasRowModeFraming() const { return frame_bound_type_ == FrameBoundType::ROW; }
 
   bool hasRangeModeFraming() const { return frame_bound_type_ == FrameBoundType::RANGE; }
+
+  bool hasFraming() const {
+    return frame_bound_type_ != FrameBoundType::NONE &&
+           isFramingAvailableWindowFunc(kind_);
+  }
+
+  static bool isFramingAvailableWindowFunc(SqlWindowFunctionKind kind) {
+    return std::any_of(
+        FRAMING_ALLOWED_WINDOW_FUNCS.begin(),
+        FRAMING_ALLOWED_WINDOW_FUNCS.end(),
+        [kind](SqlWindowFunctionKind target_kind) { return kind == target_kind; });
+  }
+
+  bool hasAggregateTreeRequiredWindowFunc() const {
+    return std::any_of(
+        AGGREGATION_TREE_REQUIRED_WINDOW_FUNCS_FOR_FRAMING.begin(),
+        AGGREGATION_TREE_REQUIRED_WINDOW_FUNCS_FOR_FRAMING.end(),
+        [&](SqlWindowFunctionKind target_kind) { return kind_ == target_kind; });
+  }
 
  private:
   const SqlWindowFunctionKind kind_;

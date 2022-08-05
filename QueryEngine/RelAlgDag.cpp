@@ -1056,8 +1056,14 @@ SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
   if (name == "LAG") {
     return SqlWindowFunctionKind::LAG;
   }
+  if (name == "LAG_IN_FRAME") {
+    return SqlWindowFunctionKind::LAG_IN_FRAME;
+  }
   if (name == "LEAD") {
     return SqlWindowFunctionKind::LEAD;
+  }
+  if (name == "LEAD_IN_FRAME") {
+    return SqlWindowFunctionKind::LEAD_IN_FRAME;
   }
   if (name == "FIRST_VALUE") {
     return SqlWindowFunctionKind::FIRST_VALUE;

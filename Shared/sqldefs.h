@@ -130,7 +130,9 @@ enum class SqlWindowFunctionKind {
   CUME_DIST,
   NTILE,
   LAG,
+  LAG_IN_FRAME,
   LEAD,
+  LEAD_IN_FRAME,
   FIRST_VALUE,
   LAST_VALUE,
   SUM_INTERNAL  // For deserialization from Calcite only. Gets rewritten to a regular SUM.
@@ -427,6 +429,10 @@ inline std::string toString(const SqlWindowFunctionKind& kind) {
       return "LAST_EXPR";
     case SqlWindowFunctionKind::NTH_EXPR:
       return "NTH_EXPR";
+    case SqlWindowFunctionKind::LEAD_IN_FRAME:
+      return "LEAD_IN_FRAME";
+    case SqlWindowFunctionKind::LAG_IN_FRAME:
+      return "LAG_IN_FRAME";
   }
   LOG(FATAL) << "Invalid window function kind.";
   return "";

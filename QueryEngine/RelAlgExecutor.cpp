@@ -2619,30 +2619,29 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
       context->addOrderColumn(column, order_col->get_type_info(), chunks_owner);
     }
   }
-  if (context->needsToBuildAggregateTree()) {
+  if (context->getWindowFunction()->hasFraming()) {
     // todo (yoonmin) : if we try to support generic window function expression without
     // extra project node, we need to revisit here b/c the current logic assumes that
     // window function expression has a single input source
     auto& window_function_expression_args = window_func->getArgs();
     std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
     for (auto& expr : window_function_expression_args) {
-      const auto arg_col_var = std::dynamic_pointer_cast<const Analyzer::ColumnVar>(expr);
-      CHECK(arg_col_var);
-      const int8_t* column;
-      size_t join_col_elem_count;
-      std::tie(column, join_col_elem_count) =
-          ColumnFetcher::getOneColumnFragment(executor_,
-                                              *arg_col_var,
-                                              query_infos.front().info.fragments.front(),
-                                              memory_level,
-                                              0,
-                                              nullptr,
-                                              /*thread_idx=*/0,
-                                              chunks_owner,
-                                              column_cache_map);
+      if (const auto arg_col_var =
+              std::dynamic_pointer_cast<const Analyzer::ColumnVar>(expr)) {
+        auto const [column, join_col_elem_count] = ColumnFetcher::getOneColumnFragment(
+            executor_,
+            *arg_col_var,
+            query_infos.front().info.fragments.front(),
+            memory_level,
+            0,
+            nullptr,
+            /*thread_idx=*/0,
+            chunks_owner,
+            column_cache_map);
 
-      CHECK_EQ(join_col_elem_count, elem_count);
-      context->addColumnBufferForWindowFunctionExpression(column, chunks_owner);
+        CHECK_EQ(join_col_elem_count, elem_count);
+        context->addColumnBufferForWindowFunctionExpression(column, chunks_owner);
+      }
     }
   }
   return context;

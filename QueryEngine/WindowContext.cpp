@@ -61,8 +61,8 @@ WindowFunctionContext::WindowFunctionContext(
     , sorted_partition_buf_(nullptr)
     , aggregate_trees_fan_out_(g_window_function_aggregation_tree_fanout)
     , aggregate_trees_depth_(nullptr)
-    , aggregate_tree_null_start_pos_(nullptr)
-    , aggregate_tree_null_end_pos_(nullptr)
+    , ordered_partition_null_start_pos_(nullptr)
+    , ordered_partition_null_end_pos_(nullptr)
     , partition_start_offset_(nullptr)
     , partition_start_(nullptr)
     , partition_end_(nullptr)
@@ -82,9 +82,9 @@ WindowFunctionContext::WindowFunctionContext(
         reinterpret_cast<int64_t*>(checked_calloc(2, sizeof(int64_t)));
     partition_start_offset_[1] = elem_count_;
     aggregate_trees_depth_ = reinterpret_cast<size_t*>(checked_calloc(1, sizeof(size_t)));
-    aggregate_tree_null_start_pos_ =
+    ordered_partition_null_start_pos_ =
         reinterpret_cast<int64_t*>(checked_calloc(1, sizeof(int64_t)));
-    aggregate_tree_null_end_pos_ =
+    ordered_partition_null_end_pos_ =
         reinterpret_cast<int64_t*>(checked_calloc(1, sizeof(int64_t)));
   }
 }
@@ -107,8 +107,8 @@ WindowFunctionContext::WindowFunctionContext(
     , sorted_partition_buf_(nullptr)
     , aggregate_trees_fan_out_(aggregation_tree_fan_out)
     , aggregate_trees_depth_(nullptr)
-    , aggregate_tree_null_start_pos_(nullptr)
-    , aggregate_tree_null_end_pos_(nullptr)
+    , ordered_partition_null_start_pos_(nullptr)
+    , ordered_partition_null_end_pos_(nullptr)
     , partition_start_offset_(nullptr)
     , partition_start_(nullptr)
     , partition_end_(nullptr)
@@ -124,9 +124,9 @@ WindowFunctionContext::WindowFunctionContext(
   if (window_func_->hasFraming()) {
     aggregate_trees_depth_ =
         reinterpret_cast<size_t*>(checked_calloc(partition_count, sizeof(size_t)));
-    aggregate_tree_null_start_pos_ =
+    ordered_partition_null_start_pos_ =
         reinterpret_cast<int64_t*>(checked_calloc(partition_count, sizeof(int64_t)));
-    aggregate_tree_null_end_pos_ =
+    ordered_partition_null_end_pos_ =
         reinterpret_cast<int64_t*>(checked_calloc(partition_count, sizeof(int64_t)));
   }
   // the first partition starts at zero position
@@ -145,11 +145,11 @@ WindowFunctionContext::~WindowFunctionContext() {
   if (aggregate_trees_depth_) {
     free(aggregate_trees_depth_);
   }
-  if (aggregate_tree_null_start_pos_) {
-    free(aggregate_tree_null_start_pos_);
+  if (ordered_partition_null_start_pos_) {
+    free(ordered_partition_null_start_pos_);
   }
-  if (aggregate_tree_null_end_pos_) {
-    free(aggregate_tree_null_end_pos_);
+  if (ordered_partition_null_end_pos_) {
+    free(ordered_partition_null_end_pos_);
   }
 }
 
@@ -168,6 +168,11 @@ void WindowFunctionContext::addColumnBufferForWindowFunctionExpression(
   window_func_expr_columns_owner_.push_back(chunks_owner);
   window_func_expr_columns_.push_back(column);
 };
+
+const std::vector<const int8_t*>&
+WindowFunctionContext::getColumnBufferForWindowFunctionExpressions() const {
+  return window_func_expr_columns_;
+}
 
 const std::vector<const int8_t*>& WindowFunctionContext::getOrderKeyColumnBuffers()
     const {
@@ -545,17 +550,18 @@ void WindowFunctionContext::compute(
       elem_count_ * window_function_buffer_element_size(window_func_->getKind());
   output_ = static_cast<int8_t*>(row_set_mem_owner_->allocate(output_buf_sz,
                                                               /*thread_idx=*/0));
-  const bool is_window_function_aggregate =
-      window_function_is_aggregate(window_func_->getKind());
-  if (is_window_function_aggregate) {
+  const bool is_window_function_aggregate_or_has_framing =
+      window_function_is_aggregate(window_func_->getKind()) || window_func_->hasFraming();
+  if (is_window_function_aggregate_or_has_framing) {
     fillPartitionStart();
-    if (window_function_requires_peer_handling(window_func_)) {
+    if (window_function_requires_peer_handling(window_func_) ||
+        window_func_->hasFraming()) {
       fillPartitionEnd();
     }
   }
   std::unique_ptr<int64_t[]> scratchpad;
   int64_t* intermediate_output_buffer;
-  if (is_window_function_aggregate) {
+  if (is_window_function_aggregate_or_has_framing) {
     intermediate_output_buffer = reinterpret_cast<int64_t*>(output_);
   } else {
     output_buf_sz = sizeof(int64_t) * elem_count_;
@@ -624,50 +630,70 @@ void WindowFunctionContext::compute(
     }
   }
 
-  if (needsToBuildAggregateTree()) {
-    // let's allow aggregation functions first
-    // todo (yoonmin) : support navigation functions, i.e., first_expr, last_expr, and
-    // nth_expr, and first_value / last values
-    if (!window_function_is_aggregate(window_func_->getKind())) {
-      throw std::runtime_error(
-          "We do not support window framing for non aggregate functions");
-    }
-    // construct segment tree per partition to deal with aggregation over frame
-    const auto build_aggregation_tree_for_partitions = [&](const size_t start,
-                                                           const size_t end) {
+  if (window_func_->hasFraming()) {
+    const auto compute_ordered_partition_null_range = [=](const size_t start,
+                                                          const size_t end) {
       for (size_t partition_idx = start; partition_idx < end; ++partition_idx) {
-        // build a segment tree for the partition
-        // todo (yoonmin) : support generic window function expression
-        // i.e., when window_func_expr_columns_.size() > 1
-        const auto partition_size = counts()[partition_idx];
-        buildAggregationTreeForPartition(
-            window_func_->getKind(),
+        computeNullRangeOfSortedPartition(
+            window_func_->getOrderKeys().front()->get_type_info(),
             partition_idx,
-            partition_size,
-            window_func_expr_columns_.front(),
             payload() + offsets()[partition_idx],
-            intermediate_output_buffer,
-            window_func_->getArgs().front()->get_type_info());
+            intermediate_output_buffer + offsets()[partition_idx]);
       }
     };
     auto partition_count = partitionCount();
     if (should_parallelize) {
       auto partition_compuation_timer =
-          DEBUG_TIMER("Window Function Build Segment Tree for Partitions");
+          DEBUG_TIMER("Window Function Ordered-Partition Null-Range Compute");
       threading::task_group thread_pool;
-      for (auto interval : makeIntervals<size_t>(0, partition_count, cpu_threads())) {
+      for (auto interval : makeIntervals<size_t>(0, partitionCount(), cpu_threads())) {
         thread_pool.run(
-            [=] { build_aggregation_tree_for_partitions(interval.begin, interval.end); });
+            [=] { compute_ordered_partition_null_range(interval.begin, interval.end); });
       }
       thread_pool.wait();
     } else {
-      auto partition_compuation_timer =
-          DEBUG_TIMER("Window Function Build Segment Tree for Partitions");
-      build_aggregation_tree_for_partitions(0, partition_count);
+      auto partition_compuation_timer = DEBUG_TIMER(
+          "Window Function Non-Parallelized Ordered-Partition Null-Range Compute");
+      compute_ordered_partition_null_range(0, partitionCount());
+    }
+
+    if (needsToBuildAggregateTree()) {
+      const auto build_aggregation_tree_for_partitions = [=](const size_t start,
+                                                             const size_t end) {
+        for (size_t partition_idx = start; partition_idx < end; ++partition_idx) {
+          // build a segment tree for the partition
+          // todo (yoonmin) : support generic window function expression
+          // i.e., when window_func_expr_columns_.size() > 1
+          const auto partition_size = counts()[partition_idx];
+          buildAggregationTreeForPartition(
+              window_func_->getKind(),
+              partition_idx,
+              partition_size,
+              window_func_expr_columns_.front(),
+              payload() + offsets()[partition_idx],
+              intermediate_output_buffer,
+              window_func_->getArgs().front()->get_type_info());
+        }
+      };
+      if (should_parallelize) {
+        auto partition_compuation_timer =
+            DEBUG_TIMER("Window Function Build Segment Tree for Partitions");
+        threading::task_group thread_pool;
+        for (auto interval : makeIntervals<size_t>(0, partition_count, cpu_threads())) {
+          thread_pool.run([=] {
+            build_aggregation_tree_for_partitions(interval.begin, interval.end);
+          });
+        }
+        thread_pool.wait();
+      } else {
+        auto partition_compuation_timer =
+            DEBUG_TIMER("Window Function Build Segment Tree for Partitions");
+        build_aggregation_tree_for_partitions(0, partition_count);
+      }
     }
   }
 
-  const auto compute_partitions = [&](const size_t start, const size_t end) {
+  const auto compute_partitions = [=](const size_t start, const size_t end) {
     for (size_t partition_idx = start; partition_idx < end; ++partition_idx) {
       computePartitionBuffer(partition_idx,
                              intermediate_output_buffer + offsets()[partition_idx],
@@ -688,14 +714,14 @@ void WindowFunctionContext::compute(
     compute_partitions(0, partitionCount());
   }
 
-  if (is_window_function_aggregate) {
+  if (is_window_function_aggregate_or_has_framing) {
     // If window function is aggregate we were able to write to the final output buffer
     // directly in computePartition and we are done.
     return;
   }
 
   auto output_i64 = reinterpret_cast<int64_t*>(output_);
-  const auto payload_copy = [&](const size_t start, const size_t end) {
+  const auto payload_copy = [=](const size_t start, const size_t end) {
     for (size_t i = start; i < end; ++i) {
       output_i64[payload()[i]] = intermediate_output_buffer[i];
     }
@@ -720,8 +746,8 @@ void WindowFunctionContext::compute(
   }
 }
 
-IndexPair WindowFunctionContext::computeNullRangeOfSortedPartition(
-    SQLTypeInfo order_col_ti,
+void WindowFunctionContext::computeNullRangeOfSortedPartition(
+    const SQLTypeInfo& order_col_ti,
     size_t partition_idx,
     const int32_t* original_col_idx_buf,
     const int64_t* ordered_col_idx_buf) {
@@ -855,7 +881,8 @@ IndexPair WindowFunctionContext::computeNullRangeOfSortedPartition(
       }
     }
   }
-  return null_range;
+  ordered_partition_null_start_pos_[partition_idx] = null_range.first;
+  ordered_partition_null_end_pos_[partition_idx] = null_range.second + 1;
 }
 
 std::vector<WindowFunctionContext::Comparator> WindowFunctionContext::createComparator(
@@ -1216,7 +1243,9 @@ void WindowFunctionContext::computePartitionBuffer(
     case SqlWindowFunctionKind::MIN:
     case SqlWindowFunctionKind::MAX:
     case SqlWindowFunctionKind::SUM:
-    case SqlWindowFunctionKind::COUNT: {
+    case SqlWindowFunctionKind::COUNT:
+    case SqlWindowFunctionKind::LEAD_IN_FRAME:
+    case SqlWindowFunctionKind::LAG_IN_FRAME: {
       const auto partition_row_offsets = payload() + offset;
       if (window_function_requires_peer_handling(window_func)) {
         index_to_partition_end(partitionEnd(),
@@ -1243,7 +1272,7 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
     const int8_t* col_buf,
     const int32_t* original_rowid_buf,
     const int64_t* ordered_rowid_buf,
-    SQLTypeInfo input_col_ti) {
+    const SQLTypeInfo& input_col_ti) {
   CHECK(col_buf);
   if (!input_col_ti.is_number()) {
     throw QueryNotSupported("Window aggregate function over frame on a column type " +
@@ -1251,18 +1280,11 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
   }
   const auto type = input_col_ti.is_decimal() ? decimal_to_int_type(input_col_ti)
                                               : input_col_ti.get_type();
-  IndexPair order_col_null_range{-1, -1};
-  const int64_t* ordered_rowid_buf_for_partition =
-      ordered_rowid_buf + offsets()[partition_idx];
   if (partition_size > 0) {
-    // compute null range first
-    order_col_null_range = computeNullRangeOfSortedPartition(
-        window_func_->getOrderKeys().front()->get_type_info(),
-        partition_idx,
-        original_rowid_buf,
-        ordered_rowid_buf_for_partition);
-    aggregate_tree_null_start_pos_[partition_idx] = order_col_null_range.first;
-    aggregate_tree_null_end_pos_[partition_idx] = order_col_null_range.second + 1;
+    IndexPair order_col_null_range{ordered_partition_null_start_pos_[partition_idx],
+                                   ordered_partition_null_end_pos_[partition_idx]};
+    const int64_t* ordered_rowid_buf_for_partition =
+        ordered_rowid_buf + offsets()[partition_idx];
     VLOG(2) << "Build Aggregation Tree For Partition-" << ::toString(partition_idx)
             << " (# elems: " << ::toString(partition_size)
             << ", null_range: " << order_col_null_range.first << " ~ "
@@ -1454,11 +1476,11 @@ size_t WindowFunctionContext::getAggregateTreeFanout() const {
 }
 
 int64_t* WindowFunctionContext::getNullValueStartPos() const {
-  return aggregate_tree_null_start_pos_;
+  return ordered_partition_null_start_pos_;
 }
 
 int64_t* WindowFunctionContext::getNullValueEndPos() const {
-  return aggregate_tree_null_end_pos_;
+  return ordered_partition_null_end_pos_;
 }
 
 void WindowFunctionContext::fillPartitionStart() {
@@ -1573,7 +1595,8 @@ size_t WindowFunctionContext::partitionCount() const {
 }
 
 const bool WindowFunctionContext::needsToBuildAggregateTree() const {
-  return window_func_->hasFraming() && elem_count_ > 0;
+  return window_func_->hasFraming() &&
+         window_func_->hasAggregateTreeRequiredWindowFunc() && elem_count_ > 0;
 }
 
 void WindowProjectNodeContext::addWindowFunctionContext(
