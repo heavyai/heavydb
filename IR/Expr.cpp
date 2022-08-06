@@ -276,6 +276,45 @@ Constant::~Constant() {
   }
 }
 
+ExprPtr Constant::make(const SQLTypeInfo& ti, int64_t val) {
+  CHECK(ti.is_number());
+  Datum datum{0};
+  switch (ti.get_type()) {
+    case kTINYINT: {
+      datum.tinyintval = static_cast<int8_t>(val);
+      break;
+    }
+    case kSMALLINT: {
+      datum.smallintval = static_cast<int16_t>(val);
+      break;
+    }
+    case kINT: {
+      datum.intval = static_cast<int32_t>(val);
+      break;
+    }
+    case kBIGINT: {
+      datum.bigintval = val;
+      break;
+    }
+    case kDECIMAL:
+    case kNUMERIC: {
+      datum.bigintval = val * exp_to_scale(ti.get_scale());
+      break;
+    }
+    case kFLOAT: {
+      datum.floatval = static_cast<float>(val);
+      break;
+    }
+    case kDOUBLE: {
+      datum.doubleval = static_cast<double>(val);
+      break;
+    }
+    default:
+      CHECK(false);
+  }
+  return makeExpr<Constant>(ti, false, datum);
+}
+
 ExprPtr ColumnVar::deep_copy() const {
   return makeExpr<ColumnVar>(col_info_, rte_idx);
 }

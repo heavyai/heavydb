@@ -43,7 +43,8 @@ class QueryRewriter {
       const std::list<hdk::ir::ExprPtr>& groupby_exprs) const;
 
   std::shared_ptr<hdk::ir::CaseExpr> generateCaseExprForCountDistinctOnGroupByCol(
-      hdk::ir::ExprPtr expr) const;
+      hdk::ir::ExprPtr expr,
+      const SQLTypeInfo& ti) const;
 
   const std::vector<InputTableInfo>& query_infos_;
   Executor* executor_;

@@ -152,19 +152,16 @@ std::shared_ptr<hdk::ir::CaseExpr> QueryRewriter::generateCaseForDomainValues(
 }
 
 std::shared_ptr<hdk::ir::CaseExpr>
-QueryRewriter::generateCaseExprForCountDistinctOnGroupByCol(hdk::ir::ExprPtr expr) const {
+QueryRewriter::generateCaseExprForCountDistinctOnGroupByCol(hdk::ir::ExprPtr expr,
+                                                            const SQLTypeInfo& ti) const {
   std::list<std::pair<hdk::ir::ExprPtr, hdk::ir::ExprPtr>> case_expr_list;
   auto is_null = std::make_shared<hdk::ir::UOper>(kBOOLEAN, kISNULL, expr);
   auto is_not_null = std::make_shared<hdk::ir::UOper>(kBOOLEAN, kNOT, is_null);
-  Datum then_d;
-  then_d.bigintval = 1;
-  const auto then_constant = hdk::ir::makeExpr<hdk::ir::Constant>(kBIGINT, false, then_d);
+  const auto then_constant = hdk::ir::Constant::make(ti, 1);
   case_expr_list.emplace_back(is_not_null, then_constant);
-  Datum else_d;
-  else_d.bigintval = 0;
-  const auto else_constant = hdk::ir::makeExpr<hdk::ir::Constant>(kBIGINT, false, else_d);
-  auto case_expr = hdk::ir::makeExpr<hdk::ir::CaseExpr>(
-      then_constant->get_type_info(), false, case_expr_list, else_constant);
+  const auto else_constant = hdk::ir::Constant::make(ti, 0);
+  auto case_expr =
+      hdk::ir::makeExpr<hdk::ir::CaseExpr>(ti, false, case_expr_list, else_constant);
   return case_expr;
 }
 
@@ -220,8 +217,8 @@ RelAlgExecutionUnit QueryRewriter::rewriteAggregateOnGroupByColumn(
                   !agg_expr->get_is_distinct()) {
                 break;
               }
-              auto case_expr =
-                  generateCaseExprForCountDistinctOnGroupByCol(agg_expr->get_own_arg());
+              auto case_expr = generateCaseExprForCountDistinctOnGroupByCol(
+                  agg_expr->get_own_arg(), agg_expr->get_type_info());
               new_target_exprs.push_back(case_expr.get());
               target_exprs_owned_.emplace_back(case_expr);
               rewritten = true;

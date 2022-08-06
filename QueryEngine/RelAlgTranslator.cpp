@@ -251,8 +251,13 @@ class NormalizerVisitor : public DeepCopyVisitor {
         CHECK(meta_type.is_dict_encoded_string());
         col_type.set_comp_param(meta_type.get_comp_param());
       }
-      CHECK(meta_type == col_type) << "Type mismatch: meta_type=" << meta_type.toString()
-                                   << " col_type=" << col_type.toString();
+      CHECK(meta_type == col_type)
+          << "Type mismatch:" << std::endl
+          << "meta_type=" << meta_type.toString() << std::endl
+          << "col_type=" << col_type.toString() << std::endl
+          << "col_ref=" << col_ref->toString() << std::endl
+          << "source=" << source->toString() << std::endl
+          << "getColumnType=" << getColumnType(source, col_ref->getIndex()).toString();
     }
 
     if (join_types_.size() > 0) {
@@ -1112,50 +1117,6 @@ hdk::ir::ExprPtr RelAlgTranslator::translateExtract(
   }
 }
 
-namespace {
-
-std::shared_ptr<hdk::ir::Constant> makeNumericConstant(const SQLTypeInfo& ti,
-                                                       const long val) {
-  CHECK(ti.is_number());
-  Datum datum{0};
-  switch (ti.get_type()) {
-    case kTINYINT: {
-      datum.tinyintval = val;
-      break;
-    }
-    case kSMALLINT: {
-      datum.smallintval = val;
-      break;
-    }
-    case kINT: {
-      datum.intval = val;
-      break;
-    }
-    case kBIGINT: {
-      datum.bigintval = val;
-      break;
-    }
-    case kDECIMAL:
-    case kNUMERIC: {
-      datum.bigintval = val * exp_to_scale(ti.get_scale());
-      break;
-    }
-    case kFLOAT: {
-      datum.floatval = val;
-      break;
-    }
-    case kDOUBLE: {
-      datum.doubleval = val;
-      break;
-    }
-    default:
-      CHECK(false);
-  }
-  return hdk::ir::makeExpr<hdk::ir::Constant>(ti, false, datum);
-}
-
-}  // namespace
-
 hdk::ir::ExprPtr RelAlgTranslator::translateDateadd(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(3), rex_function->size());
@@ -1220,11 +1181,12 @@ hdk::ir::ExprPtr RelAlgTranslator::translateDatePlusMinus(
         bigint_ti, datediff_field, rhs, datetime);
     // multiply 1000 to result since expected result should be in millisecond precision.
     if (rex_operator_ti.get_type() == kINTERVAL_DAY_TIME) {
-      return hdk::ir::makeExpr<hdk::ir::BinOper>(bigint_ti.get_type(),
-                                                 kMULTIPLY,
-                                                 kONE,
-                                                 result,
-                                                 makeNumericConstant(bigint_ti, 1000));
+      return hdk::ir::makeExpr<hdk::ir::BinOper>(
+          bigint_ti.get_type(),
+          kMULTIPLY,
+          kONE,
+          result,
+          hdk::ir::Constant::make(bigint_ti, 1000));
     } else {
       return result;
     }
@@ -1246,18 +1208,18 @@ hdk::ir::ExprPtr RelAlgTranslator::translateDatePlusMinus(
   if (interval_ti.get_type() == kINTERVAL_DAY_TIME) {
     hdk::ir::ExprPtr interval_sec;
     if (interval_lit) {
-      interval_sec =
-          makeNumericConstant(bigint_ti,
-                              (op == kMINUS ? -interval_lit->get_constval().bigintval
-                                            : interval_lit->get_constval().bigintval) /
-                                  1000);
+      interval_sec = hdk::ir::Constant::make(
+          bigint_ti,
+          (op == kMINUS ? -interval_lit->get_constval().bigintval
+                        : interval_lit->get_constval().bigintval) /
+              1000);
     } else {
       interval_sec =
           hdk::ir::makeExpr<hdk::ir::BinOper>(bigint_ti.get_type(),
                                               kDIVIDE,
                                               kONE,
                                               interval,
-                                              makeNumericConstant(bigint_ti, 1000));
+                                              hdk::ir::Constant::make(bigint_ti, 1000));
       if (op == kMINUS) {
         interval_sec =
             std::make_shared<hdk::ir::UOper>(bigint_ti, false, kUMINUS, interval_sec);
@@ -1373,7 +1335,7 @@ hdk::ir::ExprPtr RelAlgTranslator::translateCardinality(
                                ": unexpected array element type.");
     }
     // Return cardinality of a fixed length array
-    return makeNumericConstant(ret_ti, array_size / array_elem_size);
+    return hdk::ir::Constant::make(ret_ti, array_size / array_elem_size);
   }
   // Variable length array cardinality will be calculated at runtime
   return hdk::ir::makeExpr<hdk::ir::CardinalityExpr>(arg);
@@ -1429,7 +1391,7 @@ hdk::ir::ExprPtr RelAlgTranslator::translateAbs(
   const auto operand = translateScalarRex(rex_function->getOperand(0));
   const auto& operand_ti = operand->get_type_info();
   CHECK(operand_ti.is_number());
-  const auto zero = makeNumericConstant(operand_ti, 0);
+  const auto zero = hdk::ir::Constant::make(operand_ti, 0);
   const auto lt_zero = Analyzer::normalizeOperExpr(kLT, kONE, operand, zero);
   const auto uminus_operand =
       hdk::ir::makeExpr<hdk::ir::UOper>(operand_ti, false, kUMINUS, operand);
@@ -1444,16 +1406,16 @@ hdk::ir::ExprPtr RelAlgTranslator::translateSign(
   const auto operand = translateScalarRex(rex_function->getOperand(0));
   const auto& operand_ti = operand->get_type_info();
   CHECK(operand_ti.is_number());
-  const auto zero = makeNumericConstant(operand_ti, 0);
+  const auto zero = hdk::ir::Constant::make(operand_ti, 0);
   const auto lt_zero =
       hdk::ir::makeExpr<hdk::ir::BinOper>(kBOOLEAN, kLT, kONE, operand, zero);
-  expr_list.emplace_back(lt_zero, makeNumericConstant(operand_ti, -1));
+  expr_list.emplace_back(lt_zero, hdk::ir::Constant::make(operand_ti, -1));
   const auto eq_zero =
       hdk::ir::makeExpr<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, operand, zero);
-  expr_list.emplace_back(eq_zero, makeNumericConstant(operand_ti, 0));
+  expr_list.emplace_back(eq_zero, hdk::ir::Constant::make(operand_ti, 0));
   const auto gt_zero =
       hdk::ir::makeExpr<hdk::ir::BinOper>(kBOOLEAN, kGT, kONE, operand, zero);
-  expr_list.emplace_back(gt_zero, makeNumericConstant(operand_ti, 1));
+  expr_list.emplace_back(gt_zero, hdk::ir::Constant::make(operand_ti, 1));
   return Analyzer::normalizeCaseExpr(expr_list, nullptr, executor_);
 }
 

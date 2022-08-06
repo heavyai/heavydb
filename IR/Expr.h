@@ -393,6 +393,8 @@ class Constant : public Expr {
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
 
+  static ExprPtr make(const SQLTypeInfo& ti, int64_t val);
+
  protected:
   bool is_null;    // constant is NULL
   Datum constval;  // the constant value
