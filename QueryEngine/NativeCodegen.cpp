@@ -2424,14 +2424,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   MemoryLayoutBuilder mem_layout_builder(ra_exe_unit);
 
-  RowFuncBuilder row_func_builder(
-      this,
-      co.device_type,
-      ra_exe_unit,
-      query_infos,
-      row_set_mem_owner,
-      has_cardinality_estimation ? std::optional<int64_t>(max_groups_buffer_entry_guess)
-                                 : std::nullopt);
+  RowFuncBuilder row_func_builder(ra_exe_unit, query_infos, this);
   auto query_mem_desc = mem_layout_builder.build(
       query_infos,
       eo.allow_multifrag,

@@ -57,12 +57,9 @@
 #define ROW_FUNC executor_->cgen_state_->row_func_
 #define CUR_FUNC executor_->cgen_state_->current_func_
 
-RowFuncBuilder::RowFuncBuilder(Executor* executor,
-                               const ExecutorDeviceType device_type,
-                               const RelAlgExecutionUnit& ra_exe_unit,
+RowFuncBuilder::RowFuncBuilder(const RelAlgExecutionUnit& ra_exe_unit,
                                const std::vector<InputTableInfo>& query_infos,
-                               std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                               const std::optional<int64_t>& group_cardinality_estimation)
+                               Executor* executor)
     : executor_(executor)
     , config_(executor->getConfig())
     , ra_exe_unit_(ra_exe_unit)

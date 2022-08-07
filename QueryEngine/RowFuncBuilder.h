@@ -39,12 +39,9 @@
 
 class RowFuncBuilder {
  public:
-  RowFuncBuilder(Executor* executor,
-                 const ExecutorDeviceType device_type,
-                 const RelAlgExecutionUnit& ra_exe_unit,
+  RowFuncBuilder(const RelAlgExecutionUnit& ra_exe_unit,
                  const std::vector<InputTableInfo>& query_infos,
-                 std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                 const std::optional<int64_t>& group_cardinality_estimation);
+                 Executor* executor);
 
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now
