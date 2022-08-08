@@ -363,7 +363,8 @@ std::map<std::string, std::string> get_device_parameters(bool cpu_only) {
       result.insert(std::make_pair("gpu_count", std::to_string(device_count)));
       result.insert(std::make_pair("gpu_compute_capability",
                                    std::to_string(major) + "." + std::to_string(minor)));
-      result.insert(std::make_pair("gpu_triple", compiler::get_gpu_target_triple_string()));
+      result.insert(
+          std::make_pair("gpu_triple", compiler::get_gpu_target_triple_string()));
       result.insert(std::make_pair("gpu_datalayout", compiler::get_gpu_data_layout()));
       result.insert(std::make_pair("gpu_driver",
                                    "CUDA " + std::to_string(driver_version / 1000) + "." +
