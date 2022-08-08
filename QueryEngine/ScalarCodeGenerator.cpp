@@ -15,6 +15,7 @@
  */
 
 #include "CodeGenerator.h"
+#include "QueryEngine/Compiler/Backend.h"
 #include "ScalarExprVisitor.h"
 
 namespace {
@@ -143,8 +144,8 @@ std::vector<void*> ScalarCodeGenerator::generateNativeCode(
   module_.release();
   switch (co.device_type) {
     case ExecutorDeviceType::CPU: {
-      cpu_compilation_context_ =
-          generateNativeCPUCode(compiled_expression.func, {compiled_expression.func}, co);
+      cpu_compilation_context_ = compiler::CPUBackend::generateNativeCPUCode(
+          compiled_expression.func, {compiled_expression.func}, co);
       return {cpu_compilation_context_->getPointerToFunction(compiled_expression.func)};
     }
     case ExecutorDeviceType::GPU: {
@@ -174,8 +175,8 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
     llvm::Function* wrapper_func,
     const CompilationOptions& co) {
   if (!nvptx_target_machine_) {
-    nvptx_target_machine_ =
-        initializeNVPTXBackend(CudaMgr_Namespace::NvidiaDeviceArch::Kepler);
+    nvptx_target_machine_ = compiler::CUDABackend::initializeNVPTXBackend(
+        CudaMgr_Namespace::NvidiaDeviceArch::Kepler);
   }
   if (!cuda_mgr_) {
     cuda_mgr_ = std::make_unique<CudaMgr_Namespace::CudaMgr>(0);
@@ -188,13 +189,13 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
   gpu_target.cgen_state = cgen_state_;
   gpu_target.row_func_not_inlined = false;
   gpu_compilation_context_ =
-      CodeGenerator::generateNativeGPUCode(executor->get_extension_modules(),
-                                           func,
-                                           wrapper_func,
-                                           {func, wrapper_func},
-                                           /*is_gpu_smem_used=*/false,
-                                           co,
-                                           gpu_target,
-                                           nvptx_target_machine_.get());
+      compiler::CUDABackend::generateNativeGPUCode(executor->get_extension_modules(),
+                                                   func,
+                                                   wrapper_func,
+                                                   {func, wrapper_func},
+                                                   /*is_gpu_smem_used=*/false,
+                                                   co,
+                                                   gpu_target,
+                                                   nvptx_target_machine_.get());
   return gpu_compilation_context_->getNativeFunctionPointers();
 }

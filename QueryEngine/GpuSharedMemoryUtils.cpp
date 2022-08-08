@@ -20,6 +20,8 @@
 #include "ResultSetReductionJIT.h"
 #include "RuntimeFunctions.h"
 
+#include "QueryEngine/Compiler/HelperFunctions.h"
+
 GpuSharedMemCodeBuilder::GpuSharedMemCodeBuilder(
     llvm::Module* llvm_module,
     llvm::LLVMContext& context,
@@ -60,13 +62,13 @@ void GpuSharedMemCodeBuilder::codegen() {
   init_func_ = createInitFunction();
   CHECK(init_func_);
   codegenInitialization();
-  verify_function_ir(init_func_);
+  compiler::verify_function_ir(init_func_);
 
   // codegen the reduction function:
   reduction_func_ = createReductionFunction();
   CHECK(reduction_func_);
   codegenReduction();
-  verify_function_ir(reduction_func_);
+  compiler::verify_function_ir(reduction_func_);
 }
 
 /**

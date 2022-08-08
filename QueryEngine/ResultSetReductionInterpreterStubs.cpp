@@ -18,6 +18,8 @@
 #include "CodeGenerator.h"
 #include "ResultSetReductionCodegen.h"
 
+#include "QueryEngine/Compiler/HelperFunctions.h"
+
 #include "Shared/funcannotations.h"
 
 namespace {
@@ -258,11 +260,11 @@ StubGenerator::Stub StubGenerator::generateStub(const size_t executor_id,
     cgen_state->emitExternalCall(write_arg_name, void_type, {output, value});
   }
   cgen_state->ir_builder_.CreateRetVoid();
-  verify_function_ir(function);
+  compiler::verify_function_ir(function);
   CompilationOptions co{
       ExecutorDeviceType::CPU, false, ExecutorOptLevel::ReductionJIT, false};
   auto cpu_compilation_context =
-      CodeGenerator::generateNativeCPUCode(function, {function}, co);
+      compiler::CPUBackend::generateNativeCPUCode(function, {function}, co);
   cpu_compilation_context->setFunctionPointer(function);
   auto func_ptr = reinterpret_cast<StubGenerator::Stub>(cpu_compilation_context->func());
   Executor::s_stubs_accessor->put(key, std::move(cpu_compilation_context));

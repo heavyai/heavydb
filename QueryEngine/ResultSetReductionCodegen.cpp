@@ -23,6 +23,8 @@
 
 #include <llvm/IR/Instructions.h>
 
+#include "QueryEngine/Compiler/HelperFunctions.h"
+
 llvm::Type* llvm_type(const Type type, llvm::LLVMContext& ctx) {
   switch (type) {
     case Type::Int1: {
@@ -416,5 +418,5 @@ void translate_function(const Function* function,
     CHECK(it_ok.second);
   }
   translate_body(function->body(), function, llvm_function, reduction_code, m, f);
-  verify_function_ir(llvm_function);
+  compiler::verify_function_ir(llvm_function);
 }

@@ -47,6 +47,7 @@
 #include "QueryEngine/CodeCacheAccessor.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/Compiler/Backend.h"
+#include "QueryEngine/Compiler/Exceptions.h"
 #include "QueryEngine/DateTimeUtils.h"
 #include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
 #include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
@@ -241,32 +242,6 @@ inline std::vector<Analyzer::Expr*> get_exprs_not_owned(
   return exprs_not_owned;
 }
 
-class CompilationRetryNoLazyFetch : public std::runtime_error {
- public:
-  CompilationRetryNoLazyFetch()
-      : std::runtime_error("Retry query compilation with no GPU lazy fetch.") {}
-};
-
-class CompilationRetryNewScanLimit : public std::runtime_error {
- public:
-  CompilationRetryNewScanLimit(const size_t new_scan_limit)
-      : std::runtime_error("Retry query compilation with new scan limit.")
-      , new_scan_limit_(new_scan_limit) {}
-
-  size_t new_scan_limit_;
-};
-
-class TooManyLiterals : public std::runtime_error {
- public:
-  TooManyLiterals() : std::runtime_error("Too many literals in the query") {}
-};
-
-class CompilationRetryNoCompaction : public std::runtime_error {
- public:
-  CompilationRetryNoCompaction()
-      : std::runtime_error("Retry query compilation with no compaction.") {}
-};
-
 // Throwing QueryMustRunOnCpu allows us retry a query step on CPU if
 // allow_query_step_cpu_retry is true (on by default) by catching
 // the exception at the query step execution level in RelAlgExecutor,
@@ -291,11 +266,6 @@ class QueryMustRunOnCpu : public std::runtime_error {
   QueryMustRunOnCpu() : std::runtime_error("Query must run in cpu mode.") {}
 
   QueryMustRunOnCpu(const std::string& err) : std::runtime_error(err) {}
-};
-
-class ParseIRError : public std::runtime_error {
- public:
-  ParseIRError(const std::string message) : std::runtime_error(message) {}
 };
 
 class StringConstInResultSet : public std::runtime_error {

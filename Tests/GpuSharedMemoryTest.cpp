@@ -174,9 +174,9 @@ std::unique_ptr<CudaDeviceCompilationContext> compile_and_link_gpu_code(
   CHECK(cuda_mgr);
   auto& context = module->getContext();
   std::unique_ptr<llvm::TargetMachine> nvptx_target_machine =
-      CodeGenerator::initializeNVPTXBackend(cuda_mgr->getDeviceArch());
+      compiler::CUDABackend::initializeNVPTXBackend(cuda_mgr->getDeviceArch());
   const auto ptx =
-      CodeGenerator::generatePTX(cuda_llir, nvptx_target_machine.get(), context);
+      compiler::CUDABackend::generatePTX(cuda_llir, nvptx_target_machine.get(), context);
 
   auto cubin_result = ptx_to_cubin(ptx, gpu_block_size, cuda_mgr);
   auto& option_keys = cubin_result.option_keys;

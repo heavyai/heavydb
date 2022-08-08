@@ -25,6 +25,7 @@
 
 #include "Analyzer/Analyzer.h"
 #include "QueryEngine/CodeGenerator.h"
+#include "QueryEngine/Compiler/HelperFunctions.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/IRCodegenUtils.h"
 #include "QueryEngine/LLVMGlobalContext.h"
@@ -42,7 +43,7 @@ TEST(CodeGeneratorTest, IntegerConstant) {
   d.intval = 42;
   auto constant = makeExpr<Analyzer::Constant>(kINT, false, d);
   const auto compiled_expr = code_generator.compile(constant.get(), true, co);
-  verify_function_ir(compiled_expr.func);
+  compiler::verify_function_ir(compiled_expr.func);
   ASSERT_TRUE(compiled_expr.inputs.empty());
 
   using FuncPtr = int (*)(int*);
@@ -69,7 +70,7 @@ TEST(CodeGeneratorTest, IntegerAdd) {
   auto rhs = makeExpr<Analyzer::Constant>(kINT, false, d);
   auto plus = makeExpr<Analyzer::BinOper>(kINT, kPLUS, kONE, lhs, rhs);
   const auto compiled_expr = code_generator.compile(plus.get(), true, co);
-  verify_function_ir(compiled_expr.func);
+  compiler::verify_function_ir(compiled_expr.func);
   ASSERT_TRUE(compiled_expr.inputs.empty());
 
   using FuncPtr = int (*)(int*);
@@ -96,7 +97,7 @@ TEST(CodeGeneratorTest, IntegerColumn) {
   int rte_idx = 0;
   auto col = makeExpr<Analyzer::ColumnVar>(ti, table_id, column_id, rte_idx);
   const auto compiled_expr = code_generator.compile(col.get(), true, co);
-  verify_function_ir(compiled_expr.func);
+  compiler::verify_function_ir(compiled_expr.func);
   ASSERT_EQ(compiled_expr.inputs.size(), size_t(1));
   ASSERT_TRUE(*compiled_expr.inputs.front() == *col);
 
@@ -128,7 +129,7 @@ TEST(CodeGeneratorTest, IntegerExpr) {
   auto rhs = makeExpr<Analyzer::Constant>(kINT, false, d);
   auto plus = makeExpr<Analyzer::BinOper>(kINT, kPLUS, kONE, lhs, rhs);
   const auto compiled_expr = code_generator.compile(plus.get(), true, co);
-  verify_function_ir(compiled_expr.func);
+  compiler::verify_function_ir(compiled_expr.func);
   ASSERT_EQ(compiled_expr.inputs.size(), size_t(1));
   ASSERT_TRUE(*compiled_expr.inputs.front() == *lhs);
 
@@ -164,7 +165,7 @@ TEST(CodeGeneratorTest, IntegerConstantGPU) {
   d.intval = 42;
   auto constant = makeExpr<Analyzer::Constant>(kINT, false, d);
   const auto compiled_expr = code_generator.compile(constant.get(), true, co);
-  verify_function_ir(compiled_expr.func);
+  compiler::verify_function_ir(compiled_expr.func);
   ASSERT_TRUE(compiled_expr.inputs.empty());
 
   const auto native_function_pointers =
@@ -213,7 +214,7 @@ TEST(CodeGeneratorTest, IntegerAddGPU) {
   auto rhs = makeExpr<Analyzer::Constant>(kINT, false, d);
   auto plus = makeExpr<Analyzer::BinOper>(kINT, kPLUS, kONE, lhs, rhs);
   const auto compiled_expr = code_generator.compile(plus.get(), true, co);
-  verify_function_ir(compiled_expr.func);
+  compiler::verify_function_ir(compiled_expr.func);
   ASSERT_TRUE(compiled_expr.inputs.empty());
 
   const auto native_function_pointers =
@@ -262,7 +263,7 @@ TEST(CodeGeneratorTest, IntegerColumnGPU) {
   int rte_idx = 0;
   auto col = makeExpr<Analyzer::ColumnVar>(ti, table_id, column_id, rte_idx);
   const auto compiled_expr = code_generator.compile(col.get(), true, co);
-  verify_function_ir(compiled_expr.func);
+  compiler::verify_function_ir(compiled_expr.func);
   ASSERT_EQ(compiled_expr.inputs.size(), size_t(1));
   ASSERT_TRUE(*compiled_expr.inputs.front() == *col);
 
@@ -325,7 +326,7 @@ TEST(CodeGeneratorTest, IntegerExprGPU) {
   auto rhs = makeExpr<Analyzer::Constant>(kINT, false, d);
   auto plus = makeExpr<Analyzer::BinOper>(kINT, kPLUS, kONE, lhs, rhs);
   const auto compiled_expr = code_generator.compile(plus.get(), true, co);
-  verify_function_ir(compiled_expr.func);
+  compiler::verify_function_ir(compiled_expr.func);
   ASSERT_EQ(compiled_expr.inputs.size(), size_t(1));
   ASSERT_TRUE(*compiled_expr.inputs.front() == *lhs);
 

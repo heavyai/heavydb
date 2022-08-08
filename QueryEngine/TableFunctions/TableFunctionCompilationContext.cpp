@@ -23,6 +23,7 @@
 
 #include "QueryEngine/CodeGenerator.h"
 #include "QueryEngine/Compiler/Backend.h"
+#include "QueryEngine/Compiler/HelperFunctions.h"
 
 namespace {
 
@@ -464,7 +465,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
   // entry_point_func_->print(llvm::outs());
   // std::cout << "=================================" << std::endl;
 
-  verify_function_ir(entry_point_func_);
+  compiler::verify_function_ir(entry_point_func_);
 }
 
 void TableFunctionCompilationContext::generateGpuKernel() {

@@ -18,6 +18,8 @@
 #include <memory>
 
 #include "QueryEngine/ExtensionModules.h"
+#include "QueryEngine/LLVMFunctionAttributesUtil.h"
+#include "QueryEngine/NvidiaKernel.h"
 #include "QueryEngine/Target.h"
 
 namespace compiler {
@@ -39,6 +41,11 @@ class CPUBackend : public Backend {
       llvm::Function* wrapper_func /*ignored*/,
       const std::unordered_set<llvm::Function*>& live_funcs,
       const CompilationOptions& co) override;
+
+  static std::shared_ptr<CpuCompilationContext> generateNativeCPUCode(
+      llvm::Function* func,
+      const std::unordered_set<llvm::Function*>& live_funcs,
+      const CompilationOptions& co);
 };
 
 class CUDABackend : public Backend {
@@ -52,6 +59,29 @@ class CUDABackend : public Backend {
       llvm::Function* wrapper_func,
       const std::unordered_set<llvm::Function*>& live_funcs,
       const CompilationOptions& co) override;
+
+  static std::string generatePTX(const std::string& cuda_llir,
+                                 llvm::TargetMachine* nvptx_target_machine,
+                                 llvm::LLVMContext& context);
+
+  static void linkModuleWithLibdevice(const std::unique_ptr<llvm::Module>& ext,
+                                      llvm::Module& module,
+                                      llvm::PassManagerBuilder& pass_manager_builder,
+                                      const GPUTarget& gpu_target,
+                                      llvm::TargetMachine* nvptx_target_machine);
+
+  static std::unique_ptr<llvm::TargetMachine> initializeNVPTXBackend(
+      const CudaMgr_Namespace::NvidiaDeviceArch arch);
+
+  static std::shared_ptr<CudaCompilationContext> generateNativeGPUCode(
+      const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts,
+      llvm::Function* func,
+      llvm::Function* wrapper_func,
+      const std::unordered_set<llvm::Function*>& live_funcs,
+      const bool is_gpu_smem_used,
+      const CompilationOptions& co,
+      const GPUTarget& gpu_target,
+      llvm::TargetMachine* nvptx_target_machine);
 
  private:
   const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts_;
