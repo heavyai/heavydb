@@ -21,9 +21,9 @@
 #include "TestHelpers.h"
 
 TEST(DataMgrWithL0, SanityTest) {
-  std::map<GpuMgrName, std::unique_ptr<GpuMgr>> gpu_mgrs;
-  gpu_mgrs[GpuMgrName::L0] = std::make_unique<l0::L0Manager>();
-  l0::L0Manager* original_mgr = (l0::L0Manager*)gpu_mgrs[GpuMgrName::L0].get();
+  std::map<GpuMgrPlatform, std::unique_ptr<GpuMgr>> gpu_mgrs;
+  gpu_mgrs[GpuMgrPlatform::L0] = std::make_unique<l0::L0Manager>();
+  l0::L0Manager* original_mgr = (l0::L0Manager*)gpu_mgrs[GpuMgrPlatform::L0].get();
 
   ConfigPtr config_ = std::make_shared<Config>();
   SystemParameters sys_params = {};
@@ -34,13 +34,13 @@ TEST(DataMgrWithL0, SanityTest) {
 
   ASSERT_EQ(original_mgr, data_mgr->getL0Mgr());
   ASSERT_EQ(original_mgr, data_mgr->getGpuMgr());
-  ASSERT_EQ(original_mgr, data_mgr->getGpuMgr(GpuMgrName::L0));
+  ASSERT_EQ(original_mgr, data_mgr->getGpuMgr(GpuMgrPlatform::L0));
   ASSERT_EQ(nullptr, data_mgr->getCudaMgr());
 }
 
 TEST(DataMgrWithL0, SimpleReadWriteTest) {
-  std::map<GpuMgrName, std::unique_ptr<GpuMgr>> gpu_mgrs;
-  gpu_mgrs[GpuMgrName::L0] = std::make_unique<l0::L0Manager>();
+  std::map<GpuMgrPlatform, std::unique_ptr<GpuMgr>> gpu_mgrs;
+  gpu_mgrs[GpuMgrPlatform::L0] = std::make_unique<l0::L0Manager>();
 
   ConfigPtr config_ = std::make_shared<Config>();
   SystemParameters sys_params = {};

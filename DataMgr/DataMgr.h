@@ -157,7 +157,7 @@ class DataMgr {
  public:
   explicit DataMgr(const Config& config,
                    const SystemParameters& system_parameters,
-                   std::map<GpuMgrName, std::unique_ptr<GpuMgr>>&& gpuMgrs,
+                   std::map<GpuMgrPlatform, std::unique_ptr<GpuMgr>>&& gpuMgrs,
                    const size_t reservedGpuMem = (1 << 27),
                    const size_t numReaderThreads = 0);
   ~DataMgr();
@@ -191,14 +191,14 @@ class DataMgr {
   void setTableEpoch(const int db_id, const int tb_id, const int start_epoch);
   size_t getTableEpoch(const int db_id, const int tb_id);
 
-  void setGpuMgrContext(GpuMgrName name);
+  void setGpuMgrContext(GpuMgrPlatform name);
   CudaMgr_Namespace::CudaMgr* getCudaMgr() const {
-    return dynamic_cast<CudaMgr_Namespace::CudaMgr*>(getGpuMgr(GpuMgrName::CUDA));
+    return dynamic_cast<CudaMgr_Namespace::CudaMgr*>(getGpuMgr(GpuMgrPlatform::CUDA));
   }
   l0::L0Manager* getL0Mgr() const {
-    return dynamic_cast<l0::L0Manager*>(getGpuMgr(GpuMgrName::L0));
+    return dynamic_cast<l0::L0Manager*>(getGpuMgr(GpuMgrPlatform::L0));
   }
-  GpuMgr* getGpuMgr(GpuMgrName name) const;
+  GpuMgr* getGpuMgr(GpuMgrPlatform name) const;
   GpuMgr* getGpuMgr() const { return gpuMgrContext_; }
 
   // database_id, table_id, column_id, fragment_id
@@ -246,7 +246,7 @@ class DataMgr {
 
   std::vector<std::vector<AbstractBufferMgr*>> bufferMgrs_;
   GpuMgr* gpuMgrContext_;
-  std::map<GpuMgrName, std::unique_ptr<GpuMgr>> gpuMgrs_;
+  std::map<GpuMgrPlatform, std::unique_ptr<GpuMgr>> gpuMgrs_;
   bool hasGpus_;
   size_t reservedGpuMem_;
   std::unique_ptr<DataMgrBufferProvider> buffer_provider_;

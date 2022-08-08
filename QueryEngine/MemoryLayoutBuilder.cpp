@@ -662,14 +662,21 @@ std::unique_ptr<QueryMemoryDescriptor> MemoryLayoutBuilder::build(
   return query_mem_desc;
 }
 
-size_t MemoryLayoutBuilder::cudaSharedMemorySize(
+size_t MemoryLayoutBuilder::gpuSharedMemorySize(
     QueryMemoryDescriptor* query_mem_desc,
-    const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+    const GpuMgr* gpu_mgr,
     Executor* executor,
     const ExecutorDeviceType device_type) const {
   if (device_type == ExecutorDeviceType::CPU) {
     return 0;
   }
+
+  if (gpu_mgr->getPlatform() == GpuMgrPlatform::L0) {
+    return 0;
+  }
+
+  CHECK(gpu_mgr->getPlatform() == GpuMgrPlatform::CUDA);
+  const auto cuda_mgr = dynamic_cast<const CudaMgr_Namespace::CudaMgr*>(gpu_mgr);
 
   if (!cuda_mgr) {
     return 0;

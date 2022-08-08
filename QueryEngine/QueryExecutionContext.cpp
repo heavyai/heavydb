@@ -200,7 +200,7 @@ int32_t aggregate_error_codes(const std::vector<int32_t>& error_codes) {
 
 std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const RelAlgExecutionUnit& ra_exe_unit,
-    const GpuCompilationContext* cu_functions,
+    const CudaCompilationContext* cu_functions,
     const bool hoist_literals,
     const std::vector<int8_t>& literal_buff,
     std::vector<std::vector<const int8_t*>> col_buffers,

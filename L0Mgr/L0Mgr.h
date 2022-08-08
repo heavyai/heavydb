@@ -207,7 +207,7 @@ class L0Manager : public GpuMgr {
                     const int device_num) override;
 
   void synchronizeDevices() const override;
-  GpuMgrName getName() const override { return GpuMgrName::L0; }
+  GpuMgrPlatform getPlatform() const override { return GpuMgrPlatform::L0; }
   int getDeviceCount() const override {
     return drivers_.size() ? drivers_[0]->devices().size() : 0;
   }

@@ -48,16 +48,16 @@ CubinResult ptx_to_cubin(const std::string& ptx,
                          const unsigned block_size,
                          const CudaMgr_Namespace::CudaMgr* cuda_mgr);
 
-class GpuDeviceCompilationContext {
+class CudaDeviceCompilationContext {
  public:
-  GpuDeviceCompilationContext(const void* image,
-                              const std::string& kernel_name,
-                              const int device_id,
-                              const void* cuda_mgr,
-                              unsigned int num_options,
-                              CUjit_option* options,
-                              void** option_vals);
-  ~GpuDeviceCompilationContext();
+  CudaDeviceCompilationContext(const void* image,
+                               const std::string& kernel_name,
+                               const int device_id,
+                               const void* cuda_mgr,
+                               unsigned int num_options,
+                               CUjit_option* options,
+                               void** option_vals);
+  ~CudaDeviceCompilationContext();
   CUfunction kernel() { return kernel_; }
   CUmodule module() { return module_; }
 
@@ -70,11 +70,11 @@ class GpuDeviceCompilationContext {
 #endif  // HAVE_CUDA
 };
 
-class GpuCompilationContext : public CompilationContext {
+class CudaCompilationContext : public CompilationContext {
  public:
-  GpuCompilationContext() {}
+  CudaCompilationContext() {}
 
-  void addDeviceCode(std::unique_ptr<GpuDeviceCompilationContext>&& device_context) {
+  void addDeviceCode(std::unique_ptr<CudaDeviceCompilationContext>&& device_context) {
     contexts_per_device_.push_back(std::move(device_context));
   }
 
@@ -95,7 +95,7 @@ class GpuCompilationContext : public CompilationContext {
   }
 
  private:
-  std::vector<std::unique_ptr<GpuDeviceCompilationContext>> contexts_per_device_;
+  std::vector<std::unique_ptr<CudaDeviceCompilationContext>> contexts_per_device_;
 };
 
 #define checkCudaErrors(err) CHECK_EQ(err, CUDA_SUCCESS)

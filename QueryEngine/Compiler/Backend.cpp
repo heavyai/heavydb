@@ -31,8 +31,9 @@ CUDABackend::CUDABackend(
     bool is_gpu_smem_used,
     GPUTarget& gpu_target)
     : exts_(exts), is_gpu_smem_used_(is_gpu_smem_used), gpu_target_(gpu_target) {
-  CHECK(gpu_target_.cuda_mgr);
-  const auto arch = gpu_target_.cuda_mgr->getDeviceArch();
+  CHECK(gpu_target_.gpu_mgr);
+  auto cuda_mgr = dynamic_cast<const CudaMgr_Namespace::CudaMgr*>(gpu_target_.gpu_mgr);
+  const auto arch = cuda_mgr->getDeviceArch();
   nvptx_target_machine_ = CodeGenerator::initializeNVPTXBackend(arch);
 }
 
@@ -41,7 +42,7 @@ std::shared_ptr<CompilationContext> CUDABackend::generateNativeCode(
     llvm::Function* wrapper_func,
     const std::unordered_set<llvm::Function*>& live_funcs,
     const CompilationOptions& co) {
-  return std::dynamic_pointer_cast<GpuCompilationContext>(
+  return std::dynamic_pointer_cast<CudaCompilationContext>(
       CodeGenerator::generateNativeGPUCode(exts_,
                                            func,
                                            wrapper_func,

@@ -95,7 +95,7 @@ class CodeGenerator {
                                       const GPUTarget& gpu_target,
                                       llvm::TargetMachine* nvptx_target_machine);
 
-  static std::shared_ptr<GpuCompilationContext> generateNativeGPUCode(
+  static std::shared_ptr<CudaCompilationContext> generateNativeGPUCode(
       const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts,
       llvm::Function* func,
       llvm::Function* wrapper_func,
@@ -546,7 +546,7 @@ class ScalarCodeGenerator : public CodeGenerator {
   std::unique_ptr<CgenState> own_cgen_state_;
   std::unique_ptr<PlanState> own_plan_state_;
   std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr_;
-  std::shared_ptr<GpuCompilationContext> gpu_compilation_context_;
+  std::shared_ptr<CudaCompilationContext> gpu_compilation_context_;
   std::shared_ptr<CpuCompilationContext> cpu_compilation_context_;
   std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 };

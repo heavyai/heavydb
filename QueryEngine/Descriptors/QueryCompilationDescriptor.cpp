@@ -38,7 +38,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
         ra_exe_unit,
         co,
         eo,
-        executor->getDataMgr()->getCudaMgr(),
+        executor->getDataMgr()->getGpuMgr(),
         executor->getConfig().rs.enable_lazy_fetch &&
             co.allow_lazy_fetch,  // TODO(adb): remove param and just read from CO
         executor->row_set_mem_owner_,
@@ -56,7 +56,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
                                   ra_exe_unit,
                                   co,
                                   eo,
-                                  executor->getDataMgr()->getCudaMgr(),
+                                  executor->getDataMgr()->getGpuMgr(),
                                   false,
                                   executor->row_set_mem_owner_,
                                   max_groups_buffer_entry_guess,

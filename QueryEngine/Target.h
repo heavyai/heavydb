@@ -14,12 +14,12 @@
 
 #pragma once
 
-#include "CudaMgr/CudaMgr.h"
+#include "DataMgr/GpuMgr.h"
 #include "QueryEngine/CgenState.h"
 #include "llvm/Target/TargetMachine.h"
 
 struct GPUTarget {
-  const CudaMgr_Namespace::CudaMgr* cuda_mgr;
+  const GpuMgr* gpu_mgr;
   unsigned block_size;
   CgenState* cgen_state;
   bool row_func_not_inlined;

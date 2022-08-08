@@ -21,6 +21,7 @@
 #include <optional>
 #include <vector>
 
+#include "DataMgr/GpuMgr.h"
 #include "QueryEngine/Descriptors/QueryMemoryDescriptor.h"
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/RelAlgExecutionUnit.h"
@@ -47,10 +48,10 @@ class MemoryLayoutBuilder {
       Executor* executor,
       const ExecutorDeviceType device_type);
 
-  size_t cudaSharedMemorySize(QueryMemoryDescriptor* query_mem_desc,
-                              const CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                              Executor* executor,
-                              const ExecutorDeviceType device_type) const;
+  size_t gpuSharedMemorySize(QueryMemoryDescriptor* query_mem_desc,
+                             const GpuMgr* gpu_mgr,
+                             Executor* executor,
+                             const ExecutorDeviceType device_type) const;
 
  private:
   const RelAlgExecutionUnit& ra_exe_unit_;

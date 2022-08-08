@@ -87,7 +87,7 @@ class CudaMgr : public GpuMgr {
   int getDeviceCount() const override { return device_count_; }
   int getStartGpu() const { return start_gpu_; }
   const omnisci::DeviceGroup& getDeviceGroup() const { return device_group_; }
-  GpuMgrName getName() const override { return GpuMgrName::CUDA; }
+  GpuMgrPlatform getPlatform() const override { return GpuMgrPlatform::CUDA; }
 
   void copyHostToDevice(int8_t* device_ptr,
                         const int8_t* host_ptr,
@@ -206,8 +206,12 @@ class CudaMgr : public GpuMgr {
 
   void printDeviceProperties() const;
 
-  const std::vector<CUcontext>& getDeviceContexts() const { return device_contexts_; }
-  const int getGpuDriverVersion() const { return gpu_driver_version_; }
+  const std::vector<CUcontext>& getDeviceContexts() const {
+    return device_contexts_;
+  }
+  const int getGpuDriverVersion() const {
+    return gpu_driver_version_;
+  }
 
   void loadGpuModuleData(CUmodule* module,
                          const void* image,

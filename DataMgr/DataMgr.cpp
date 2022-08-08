@@ -40,7 +40,7 @@ namespace Data_Namespace {
 
 DataMgr::DataMgr(const Config& config,
                  const SystemParameters& system_parameters,
-                 std::map<GpuMgrName, std::unique_ptr<GpuMgr>>&& gpuMgrs,
+                 std::map<GpuMgrPlatform, std::unique_ptr<GpuMgr>>&& gpuMgrs,
                  const size_t reservedGpuMem,
                  const size_t numReaderThreads)
     : gpuMgrContext_(nullptr)
@@ -50,7 +50,7 @@ DataMgr::DataMgr(const Config& config,
     , data_provider_(std::make_unique<DataMgrDataProvider>(this)) {
   for (auto& pair : gpuMgrs) {
     if (pair.second) {
-      CHECK_EQ(pair.first, pair.second->getName()) << "Inconsistent map was passed";
+      CHECK_EQ(pair.first, pair.second->getPlatform()) << "Inconsistent map was passed";
       gpuMgrs_[pair.first] = std::move(pair.second);
     }
   }
@@ -231,7 +231,7 @@ void DataMgr::populateMgrs(const Config& config,
     // managers and switch to them in `bufferMgrs_` when the gpuMgr context changes
     CHECK_EQ(gpuMgrs_.size(), (size_t)1)
         << "Multiple GPU managers handling is not implemented yet.";
-    GpuMgrName mgrName = getGpuMgr()->getName();
+    GpuMgrPlatform mgrName = getGpuMgr()->getPlatform();
 
     LOG(INFO) << "Reserved GPU memory is " << (float)reservedGpuMem_ / (1024 * 1024)
               << "MB includes render buffer allocation";
@@ -251,10 +251,10 @@ void DataMgr::populateMgrs(const Config& config,
       // TODO: get rid of manager-specific branches by introducing some kind of device
       // properties in GpuMgr
       switch (mgrName) {
-        case GpuMgrName::CUDA:
+        case GpuMgrPlatform::CUDA:
           deviceMemSize = getCudaMgr()->getDeviceProperties(gpuNum)->globalMem;
           break;
-        case GpuMgrName::L0:
+        case GpuMgrPlatform::L0:
           deviceMemSize = 1024 * 4 * 1024;  // 4MB for now
           page_size = 4096UL;
           break;
@@ -370,7 +370,7 @@ bool DataMgr::isBufferOnDevice(const ChunkKey& key,
   return bufferMgrs_[memLevel][deviceId]->isBufferOnDevice(key);
 }
 
-GpuMgr* DataMgr::getGpuMgr(GpuMgrName name) const {
+GpuMgr* DataMgr::getGpuMgr(GpuMgrPlatform name) const {
   if (!hasGpus_) {
     return nullptr;
   }
@@ -382,11 +382,11 @@ GpuMgr* DataMgr::getGpuMgr(GpuMgrName name) const {
     return nullptr;
   }
 
-  CHECK_EQ(res->getName(), name) << "Mapping of GPU managers names is incorrect";
+  CHECK_EQ(res->getPlatform(), name) << "Mapping of GPU managers names is incorrect";
   return res;
 }
 
-void DataMgr::setGpuMgrContext(GpuMgrName name) {
+void DataMgr::setGpuMgrContext(GpuMgrPlatform name) {
   CHECK_LT(gpuMgrs_.size(), (size_t)2)
       << "Switching context with multiple GPU managers is not yet supported";
   GpuMgr* gpuMgr = getGpuMgr(name);

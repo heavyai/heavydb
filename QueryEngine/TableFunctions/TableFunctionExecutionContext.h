@@ -52,7 +52,7 @@ class TableFunctionExecutionContext {
       Executor* executor);
   ResultSetPtr launchGpuCode(
       const TableFunctionExecutionUnit& exe_unit,
-      const std::shared_ptr<GpuCompilationContext>& compilation_context,
+      const std::shared_ptr<CudaCompilationContext>& compilation_context,
       std::vector<const int8_t*>& col_buf_ptrs,
       std::vector<int64_t>& col_sizes,
       const size_t elem_count,

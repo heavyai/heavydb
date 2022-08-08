@@ -18,7 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 
-enum GpuMgrName { CUDA, L0 };
+enum GpuMgrPlatform { CUDA, L0 };
 
 struct GpuMgr {
   virtual ~GpuMgr() = default;
@@ -50,5 +50,5 @@ struct GpuMgr {
   virtual void setContext(const int device_num) const = 0;
   virtual void synchronizeDevices() const = 0;
   virtual int getDeviceCount() const = 0;
-  virtual GpuMgrName getName() const = 0;
+  virtual GpuMgrPlatform getPlatform() const = 0;
 };

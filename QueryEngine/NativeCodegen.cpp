@@ -1120,7 +1120,7 @@ void CodeGenerator::linkModuleWithLibdevice(
 #endif
 }
 
-std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
+std::shared_ptr<CudaCompilationContext> CodeGenerator::generateNativeGPUCode(
     const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts,
     llvm::Function* func,
     llvm::Function* wrapper_func,
@@ -1294,7 +1294,9 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   }
   LOG(PTX) << "PTX for the GPU:\n" << ptx << "\nEnd of PTX";
 
-  auto cubin_result = ptx_to_cubin(ptx, gpu_target.block_size, gpu_target.cuda_mgr);
+  const auto cuda_mgr =
+      dynamic_cast<const CudaMgr_Namespace::CudaMgr*>(gpu_target.gpu_mgr);
+  auto cubin_result = ptx_to_cubin(ptx, gpu_target.block_size, cuda_mgr);
   auto& option_keys = cubin_result.option_keys;
   auto& option_values = cubin_result.option_values;
   auto cubin = cubin_result.cubin;
@@ -1302,17 +1304,16 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   const auto num_options = option_keys.size();
 
   auto func_name = wrapper_func->getName().str();
-  auto gpu_compilation_context = std::make_shared<GpuCompilationContext>();
-  for (int device_id = 0; device_id < gpu_target.cuda_mgr->getDeviceCount();
-       ++device_id) {
+  auto gpu_compilation_context = std::make_shared<CudaCompilationContext>();
+  for (int device_id = 0; device_id < gpu_target.gpu_mgr->getDeviceCount(); ++device_id) {
     gpu_compilation_context->addDeviceCode(
-        std::make_unique<GpuDeviceCompilationContext>(cubin,
-                                                      func_name,
-                                                      device_id,
-                                                      gpu_target.cuda_mgr,
-                                                      num_options,
-                                                      &option_keys[0],
-                                                      &option_values[0]));
+        std::make_unique<CudaDeviceCompilationContext>(cubin,
+                                                       func_name,
+                                                       device_id,
+                                                       cuda_mgr,
+                                                       num_options,
+                                                       &option_keys[0],
+                                                       &option_values[0]));
   }
 
   checkCudaErrors(cuLinkDestroy(link_state));
@@ -1337,10 +1338,10 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
     return cached_code;
   }
 
-  std::shared_ptr<GpuCompilationContext> compilation_context;
+  std::shared_ptr<CudaCompilationContext> compilation_context;
 
   try {
-    compilation_context = std::dynamic_pointer_cast<GpuCompilationContext>(
+    compilation_context = std::dynamic_pointer_cast<CudaCompilationContext>(
         backend->generateNativeCode(query_func, multifrag_query_func, live_funcs, co));
 
   } catch (CudaMgr_Namespace::CudaErrorException& cuda_error) {
@@ -1353,7 +1354,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
       Executor::gpu_code_accessor->evictFractionEntries(
           config_->cache.gpu_fraction_code_cache_to_evict);
 
-      compilation_context = std::dynamic_pointer_cast<GpuCompilationContext>(
+      compilation_context = std::dynamic_pointer_cast<CudaCompilationContext>(
           backend->generateNativeCode(query_func, multifrag_query_func, live_funcs, co));
 
     } else {
@@ -2389,7 +2390,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                           const RelAlgExecutionUnit& ra_exe_unit,
                           const CompilationOptions& co,
                           const ExecutionOptions& eo,
-                          const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                          const GpuMgr* gpu_mgr,
                           const bool allow_lazy_fetch,
                           std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                           const size_t max_groups_buffer_entry_guess,
@@ -2400,8 +2401,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   auto timer = DEBUG_TIMER(__func__);
 
   if (co.device_type == ExecutorDeviceType::GPU) {
-    const auto cuda_mgr = data_mgr_->getCudaMgr();
-    if (!cuda_mgr) {
+    if (!gpu_mgr) {
       throw QueryMustRunOnCpu();
     }
   }
@@ -2438,8 +2438,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       co.device_type);
 
   const bool output_columnar = query_mem_desc->didOutputColumnar();
-  const auto shared_memory_size = mem_layout_builder.cudaSharedMemorySize(
-      query_mem_desc.get(), cuda_mgr, this, co.device_type);
+  const auto shared_memory_size = mem_layout_builder.gpuSharedMemorySize(
+      query_mem_desc.get(), gpu_mgr, this, co.device_type);
   if (shared_memory_size > 0) {
     // disable interleaved bins optimization on the GPU
     query_mem_desc->setHasInterleavedBinsOnGpu(false);
@@ -2760,7 +2760,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
     }
   }
 
-  GPUTarget target{cuda_mgr, blockSize(), cgen_state_.get(), row_func_not_inlined};
+  GPUTarget target{gpu_mgr, blockSize(), cgen_state_.get(), row_func_not_inlined};
   auto backend = compiler::getBackend(co.device_type,
                                       get_extension_modules(),
                                       gpu_smem_context.isSharedMemoryUsed(),
