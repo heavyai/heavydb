@@ -865,7 +865,7 @@ std::vector<int8_t> Executor::serializeLiterals(
 
 int Executor::deviceCount(const ExecutorDeviceType device_type) const {
   if (device_type == ExecutorDeviceType::GPU) {
-    return cudaMgr()->getDeviceCount();
+    return gpuMgr()->getDeviceCount();
   } else {
     return 1;
   }
@@ -3596,35 +3596,37 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
 }
 
 int8_t Executor::warpSize() const {
-  const auto& dev_props = cudaMgr()->getAllDeviceProperties();
-  CHECK(!dev_props.empty());
-  return dev_props.front().warpSize;
+  CHECK(data_mgr_);
+  const auto gpu_mgr = data_mgr_->getGpuMgr();
+  if (!gpu_mgr) {
+    return 0;
+  }
+  return gpu_mgr->getSubGroupSize();
 }
 
 // TODO(adb): should these three functions have consistent symantics if cuda mgr does not
 // exist?
 unsigned Executor::gridSize() const {
   CHECK(data_mgr_);
-  const auto cuda_mgr = data_mgr_->getCudaMgr();
-  if (!cuda_mgr) {
+  const auto gpu_mgr = data_mgr_->getGpuMgr();
+  if (!gpu_mgr) {
     return 0;
   }
-  return grid_size_x_ ? grid_size_x_ : 2 * cuda_mgr->getMinNumMPsForAllDevices();
+  return grid_size_x_ ? grid_size_x_ : gpu_mgr->getGridSize();
 }
 
 unsigned Executor::numBlocksPerMP() const {
-  return grid_size_x_ ? std::ceil(grid_size_x_ / cudaMgr()->getMinNumMPsForAllDevices())
+  return grid_size_x_ ? std::ceil(grid_size_x_ / gpuMgr()->getMinEUNumForAllDevices())
                       : 2;
 }
 
 unsigned Executor::blockSize() const {
   CHECK(data_mgr_);
-  const auto cuda_mgr = data_mgr_->getCudaMgr();
-  if (!cuda_mgr) {
+  const auto gpu_mgr = data_mgr_->getGpuMgr();
+  if (!gpu_mgr) {
     return 0;
   }
-  const auto& dev_props = cuda_mgr->getAllDeviceProperties();
-  return block_size_x_ ? block_size_x_ : dev_props.front().maxThreadsPerBlock;
+  return block_size_x_ ? block_size_x_ : gpu_mgr->getMaxBlockSize();
 }
 
 size_t Executor::maxGpuSlabSize() const {

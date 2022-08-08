@@ -589,6 +589,13 @@ class Executor {
     return cuda_mgr;
   }
 
+  GpuMgr* gpuMgr() const {
+    CHECK(data_mgr_);
+    auto gpu_mgr = data_mgr_->getGpuMgr();
+    CHECK(gpu_mgr);
+    return gpu_mgr;
+  }
+
   bool isArchPascalOrLater(const ExecutorDeviceType dt) const {
     if (dt == ExecutorDeviceType::GPU) {
       return cudaMgr()->isArchPascalOrLater();
@@ -856,7 +863,6 @@ class Executor {
       const RelAlgExecutionUnit& ra_exe_unit,
       const CompilationOptions& co,
       const ExecutionOptions& eo,
-      // const CudaMgr_Namespace::CudaMgr* cuda_mgr,
       const GpuMgr* gpu_mgr,
       const bool allow_lazy_fetch,
       std::shared_ptr<RowSetMemoryOwner>,

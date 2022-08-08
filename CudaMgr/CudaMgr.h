@@ -149,6 +149,19 @@ class CudaMgr : public GpuMgr {
   bool isArchMaxwellOrLaterForAll() const;
   bool isArchVoltaOrGreaterForAll() const;
 
+  unsigned getMaxBlockSize() const override {
+    return getAllDeviceProperties().front().maxThreadsPerBlock;
+  }
+
+  int8_t getSubGroupSize() const override {
+    return getAllDeviceProperties().front().warpSize;
+  }
+
+  unsigned getGridSize() const override { return 2 * getMinNumMPsForAllDevices(); }
+  unsigned getMinEUNumForAllDevices() const override {
+    return getMinNumMPsForAllDevices();
+  };
+
   static std::string deviceArchToSM(const NvidiaDeviceArch arch) {
     // Must match ${CUDA_COMPILATION_ARCH} CMAKE flag
     switch (arch) {
@@ -206,12 +219,8 @@ class CudaMgr : public GpuMgr {
 
   void printDeviceProperties() const;
 
-  const std::vector<CUcontext>& getDeviceContexts() const {
-    return device_contexts_;
-  }
-  const int getGpuDriverVersion() const {
-    return gpu_driver_version_;
-  }
+  const std::vector<CUcontext>& getDeviceContexts() const { return device_contexts_; }
+  const int getGpuDriverVersion() const { return gpu_driver_version_; }
 
   void loadGpuModuleData(CUmodule* module,
                          const void* image,

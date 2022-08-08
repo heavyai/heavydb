@@ -216,6 +216,11 @@ class L0Manager : public GpuMgr {
       // to every manager's method
   };
 
+  virtual unsigned getMaxBlockSize() const override { return 1u; }
+  virtual int8_t getSubGroupSize() const override { return 1; }
+  virtual unsigned getGridSize() const override { return 1u; }
+  virtual unsigned getMinEUNumForAllDevices() const override { return 1u; }
+
   const std::vector<std::shared_ptr<L0Driver>>& drivers() const;
 
  private:
