@@ -511,6 +511,10 @@ class ResultSet {
     return false;
   }
 
+  unsigned getBlockSize() const { return block_size_; }
+
+  unsigned getGridSize() const { return grid_size_; }
+
   /**
    * Geo return type options when accessing geo columns from a result set.
    */

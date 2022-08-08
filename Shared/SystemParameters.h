@@ -25,11 +25,11 @@
 #include <string>
 
 struct SystemParameters {
-  bool cpu_only = false;            // cpu-only execution
-  int num_gpus = -1;                // number of gpus to use
-  int start_gpu = 0;                // first gpu to use
-  size_t cuda_block_size = 0;       // block size for the kernel execution
-  size_t cuda_grid_size = 0;        // grid size for the kernel execution
+  bool cpu_only = false;       // cpu-only execution
+  int num_gpus = -1;           // number of gpus to use
+  int start_gpu = 0;           // first gpu to use
+  size_t cuda_block_size = 0;  // block size for the kernel execution
+  size_t cuda_grid_size = 0;   // grid size multiplier (by # SMs) for the kernel execution
   size_t calcite_max_mem = 1024;    // max memory for calcite jvm in MB
   int omnisci_server_port = 6274;   // default port heavydb runs on
   int calcite_port = 6279;          // default port for calcite server to run on

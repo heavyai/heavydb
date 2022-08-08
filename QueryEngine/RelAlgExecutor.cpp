@@ -3644,6 +3644,68 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       ra_exe_unit.query_hint = *candidate;
     }
   }
+
+  const auto& query_hints = ra_exe_unit.query_hint;
+  ScopeGuard reset_cuda_block_grid_sizes = [&,
+                                            orig_block_size = executor_->blockSize(),
+                                            orig_grid_size = executor_->gridSize()]() {
+    if (cat_.getDataMgr().getCudaMgr()) {
+      if (query_hints.isHintRegistered(QueryHint::kCudaBlockSize)) {
+        if (orig_block_size) {
+          executor_->setBlockSize(orig_block_size);
+        } else {
+          executor_->resetBlockSize();
+        }
+      }
+      if (query_hints.isHintRegistered(QueryHint::kCudaGridSize)) {
+        if (orig_grid_size) {
+          executor_->setGridSize(orig_grid_size);
+        } else {
+          executor_->resetGridSize();
+        }
+      }
+    }
+  };
+
+  if (co.device_type == ExecutorDeviceType::GPU) {
+    if (query_hints.isHintRegistered(QueryHint::kCudaGridSize)) {
+      if (!cat_.getDataMgr().getCudaMgr()) {
+        VLOG(1) << "Skip CUDA grid size query hint: cannot detect CUDA device";
+      } else {
+        const auto default_grid_size = executor_->gridSize();
+        const auto new_grid_size =
+            std::round(default_grid_size * query_hints.cuda_grid_size_multiplier);
+        if (new_grid_size >= 1) {
+          VLOG(1) << "Change CUDA grid size: " << default_grid_size
+                  << " (default_grid_size) -> " << new_grid_size
+                  << " (default_grid_size * " << query_hints.cuda_grid_size_multiplier
+                  << ")";
+          // todo (yoonmin): do we need to check a hard limit?
+          executor_->setGridSize(new_grid_size);
+        } else {
+          VLOG(1) << "Skip CUDA grid size query hint: invalid grid size";
+        }
+      }
+    }
+    if (query_hints.isHintRegistered(QueryHint::kCudaBlockSize)) {
+      if (!cat_.getDataMgr().getCudaMgr()) {
+        VLOG(1) << "Skip CUDA block size query hint: cannot detect CUDA device";
+      } else {
+        int cuda_block_size = query_hints.cuda_block_size;
+        int warp_size = executor_->warpSize();
+        if (cuda_block_size >= warp_size) {
+          cuda_block_size = (cuda_block_size + warp_size - 1) / warp_size * warp_size;
+          VLOG(1) << "Change CUDA block size w.r.t warp size (" << warp_size
+                  << "): " << executor_->blockSize() << " -> " << cuda_block_size;
+        } else {
+          VLOG(1) << "Change CUDA block size: " << executor_->blockSize() << " -> "
+                  << cuda_block_size;
+        }
+        executor_->setBlockSize(cuda_block_size);
+      }
+    }
+  }
+
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
   if (is_window_execution_unit(ra_exe_unit)) {
     CHECK_EQ(table_infos.size(), size_t(1));

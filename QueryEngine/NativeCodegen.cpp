@@ -2681,7 +2681,6 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   auto timer = DEBUG_TIMER(__func__);
 
   if (co.device_type == ExecutorDeviceType::GPU) {
-    const auto cuda_mgr = data_mgr_->getCudaMgr();
     if (!cuda_mgr) {
       throw QueryMustRunOnCpu();
     }

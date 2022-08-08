@@ -825,6 +825,69 @@ TEST(QueryHint, GlobalHint_ResultsetLayoutAndCPUMode) {
   }
 }
 
+TEST(QueryHint, CudaBlockAndGridSizes) {
+  if (QR::get()->gpusPresent()) {
+    const auto unitary_executor = QR::get()->getExecutor();
+    const auto default_grid_size = unitary_executor->gridSize();
+    const auto default_block_size = unitary_executor->blockSize();
+
+    auto query_hint1 = QR::get()->getParsedQueryHint(
+        "SELECT /*+ cuda_block_size(10) */ * FROM SQL_HINT_DUMMY");
+    EXPECT_TRUE(query_hint1.isHintRegistered(QueryHint::kCudaBlockSize));
+    auto res1 =
+        QR::get()->runSQL("SELECT /*+ cuda_block_size(10) */ * FROM SQL_HINT_DUMMY",
+                          ExecutorDeviceType::GPU);
+    CHECK_EQ(res1->getBlockSize(), (unsigned)10);
+    res1 = QR::get()->runSQL("SELECT /*+ cuda_block_size(31) */ * FROM SQL_HINT_DUMMY",
+                             ExecutorDeviceType::GPU);
+    CHECK_EQ(res1->getBlockSize(), (unsigned)31);
+    res1 = QR::get()->runSQL("SELECT /*+ cuda_block_size(32) */ * FROM SQL_HINT_DUMMY",
+                             ExecutorDeviceType::GPU);
+    CHECK_EQ(res1->getBlockSize(), (unsigned)32);
+    res1 = QR::get()->runSQL("SELECT /*+ cuda_block_size(33) */ * FROM SQL_HINT_DUMMY",
+                             ExecutorDeviceType::GPU);
+    CHECK_EQ(res1->getBlockSize(), (unsigned)64);
+    // check whether we use default grid and block sizes if no query hint is provided
+    res1 = QR::get()->runSQL("SELECT * FROM SQL_HINT_DUMMY", ExecutorDeviceType::GPU);
+    CHECK_EQ(res1->getBlockSize(), default_block_size);
+    CHECK_EQ(res1->getGridSize(), default_grid_size);
+
+    auto query_hint2 = QR::get()->getParsedQueryHint(
+        "SELECT /*+ cuda_block_size(-10) */ * FROM SQL_HINT_DUMMY");
+    EXPECT_TRUE(!query_hint2.isHintRegistered(QueryHint::kCudaBlockSize));
+    auto query_hint3 = QR::get()->getParsedQueryHint(
+        "SELECT /*+ cuda_block_size(1.11) */ * FROM SQL_HINT_DUMMY");
+    EXPECT_TRUE(query_hint3.isHintRegistered(QueryHint::kCudaBlockSize));
+    auto res2 =
+        QR::get()->runSQL("SELECT /*+ cuda_block_size(1.11) */ * FROM SQL_HINT_DUMMY",
+                          ExecutorDeviceType::GPU);
+    CHECK_EQ(res2->getBlockSize(), (unsigned)1);
+    auto query_hint4 = QR::get()->getParsedQueryHint(
+        "SELECT /*+ cuda_block_size(0) */ * FROM SQL_HINT_DUMMY");
+    EXPECT_TRUE(!query_hint4.isHintRegistered(QueryHint::kCudaBlockSize));
+    auto query_hint5 = QR::get()->getParsedQueryHint(
+        "SELECT /*+ cuda_block_size(1026) */ * FROM SQL_HINT_DUMMY");
+    EXPECT_TRUE(!query_hint5.isHintRegistered(QueryHint::kCudaBlockSize));
+
+    auto query_hint6 = QR::get()->getParsedQueryHint(
+        "SELECT /*+ cuda_grid_size_multiplier(4.44) */ * FROM SQL_HINT_DUMMY");
+    EXPECT_TRUE(query_hint6.isHintRegistered(QueryHint::kCudaGridSize));
+    auto res3 = QR::get()->runSQL(
+        "SELECT /*+ cuda_grid_size_multiplier(4.44) */ * FROM SQL_HINT_DUMMY",
+        ExecutorDeviceType::GPU);
+    CHECK_NE(res3->getGridSize(), default_grid_size);
+    auto query_hint7 = QR::get()->getParsedQueryHint(
+        "SELECT /*+ cuda_grid_size_multiplier(-4.44) */ * FROM SQL_HINT_DUMMY");
+    EXPECT_TRUE(!query_hint7.isHintRegistered(QueryHint::kCudaGridSize));
+    auto query_hint8 = QR::get()->getParsedQueryHint(
+        "SELECT /*+ cuda_grid_size_multiplier(0) */ * FROM SQL_HINT_DUMMY");
+    EXPECT_TRUE(!query_hint8.isHintRegistered(QueryHint::kCudaGridSize));
+    auto query_hint9 = QR::get()->getParsedQueryHint(
+        "SELECT /*+ cuda_grid_size_multiplier(1026) */ * FROM SQL_HINT_DUMMY");
+    EXPECT_TRUE(!query_hint9.isHintRegistered(QueryHint::kCudaGridSize));
+  }
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
