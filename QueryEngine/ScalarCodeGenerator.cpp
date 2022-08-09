@@ -178,16 +178,18 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
     nvptx_target_machine_ = compiler::CUDABackend::initializeNVPTXBackend(
         CudaMgr_Namespace::NvidiaDeviceArch::Kepler);
   }
-  if (!cuda_mgr_) {
-    cuda_mgr_ = std::make_unique<CudaMgr_Namespace::CudaMgr>(0);
+  if (!gpu_mgr_) {
+#ifdef HAVE_CUDA
+    gpu_mgr_ = std::make_unique<CudaMgr_Namespace::CudaMgr>(0);
+#elif HAVE_L0
+    gpu_mgr_ = std::make_unique<L0Manager>(0);
+#endif
   }
-  const auto& dev_props = cuda_mgr_->getAllDeviceProperties();
-  int block_size = dev_props.front().maxThreadsPerBlock;
-  GPUTarget gpu_target;
-  gpu_target.gpu_mgr = cuda_mgr_.get();
-  gpu_target.block_size = block_size;
-  gpu_target.cgen_state = cgen_state_;
-  gpu_target.row_func_not_inlined = false;
+
+  GPUTarget gpu_target = {.gpu_mgr = gpu_mgr_.get(),
+                          .block_size = gpu_mgr_->getMaxBlockSize(),
+                          .cgen_state = cgen_state_,
+                          .row_func_not_inlined = false};
   gpu_compilation_context_ =
       compiler::CUDABackend::generateNativeGPUCode(executor->get_extension_modules(),
                                                    func,

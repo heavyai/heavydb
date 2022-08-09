@@ -495,7 +495,7 @@ class ScalarCodeGenerator : public CodeGenerator {
                                         const CompiledExpression& compiled_expression,
                                         const CompilationOptions& co);
 
-  CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cuda_mgr_.get(); }
+  GpuMgr* getGpuMgr() const { return gpu_mgr_.get(); }
 
   using ColumnMap =
       std::unordered_map<InputColDescriptor, std::shared_ptr<Analyzer::ColumnVar>>;
@@ -517,7 +517,7 @@ class ScalarCodeGenerator : public CodeGenerator {
   std::unique_ptr<llvm::Module> module_;
   std::unique_ptr<CgenState> own_cgen_state_;
   std::unique_ptr<PlanState> own_plan_state_;
-  std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr_;
+  std::unique_ptr<GpuMgr> gpu_mgr_;
   std::shared_ptr<CudaCompilationContext> gpu_compilation_context_;
   std::shared_ptr<CpuCompilationContext> cpu_compilation_context_;
   std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
