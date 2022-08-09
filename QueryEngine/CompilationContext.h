@@ -33,7 +33,10 @@ class CpuCompilationContext : public CompilationContext {
   void setFunctionPointer(llvm::Function* function) {
     func_ = execution_engine_.getPointerToFunction(function);
     CHECK(func_);
+    // With ORC JIT, Module is deleted on function materialization.
+#ifndef ENABLE_ORCJIT
     execution_engine_.removeModule(function->getParent());
+#endif
   }
 
   void* getPointerToFunction(llvm::Function* function) {

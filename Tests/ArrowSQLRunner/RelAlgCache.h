@@ -28,7 +28,7 @@ class RelAlgCache {
  public:
   RelAlgCache(std::shared_ptr<CalciteJNI> calcite,
               SchemaProviderPtr schema_provider,
-              const Config& config);
+              ConfigPtr config);
   ~RelAlgCache();
 
   std::string process(const std::string& db_name,
@@ -43,6 +43,7 @@ class RelAlgCache {
            const std::string& sql,
            bool legacy_syntax,
            bool is_explain,
+           bool watchdog_enabled,
            const std::string& schema_json,
            const std::string& ra);
 
@@ -55,23 +56,29 @@ class RelAlgCache {
     std::string db_name;
     bool legacy_syntax;
     bool is_explain;
+    bool watchdog_enabled;
 
     bool operator==(const CacheKey& other) const {
       return sql == other.sql && schema_id == other.schema_id &&
              db_name == other.db_name && legacy_syntax == other.legacy_syntax &&
-             is_explain == other.is_explain;
+             is_explain == other.is_explain && watchdog_enabled == other.watchdog_enabled;
     }
   };
 
   struct CacheKeyHash {
     size_t operator()(const CacheKey& key) const {
-      return boost::hash_value(std::tie(
-          key.sql, key.schema_id, key.db_name, key.legacy_syntax, key.is_explain));
+      return boost::hash_value(std::tie(key.sql,
+                                        key.schema_id,
+                                        key.db_name,
+                                        key.legacy_syntax,
+                                        key.is_explain,
+                                        key.watchdog_enabled));
     }
   };
 
   std::shared_ptr<CalciteJNI> calcite_;
   SchemaProviderPtr schema_provider_;
+  ConfigPtr config_;
   std::string build_cache_;
   std::string use_cache_;
   std::unordered_map<std::string, int> schema_ids_;

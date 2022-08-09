@@ -168,6 +168,14 @@ class RexRebindReindexInputsVisitor : public RexRebindInputsVisitor {
 
 }  // namespace
 
+void Rex::print() const {
+  std::cout << toString() << std::endl;
+}
+
+void RelAlgNode::print() const {
+  std::cout << toString() << std::endl;
+}
+
 void RelProject::replaceInput(
     std::shared_ptr<const RelAlgNode> old_input,
     std::shared_ptr<const RelAlgNode> input,
@@ -530,6 +538,7 @@ RelAggregate::RelAggregate(RelAggregate const& rhs)
 
 RelJoin::RelJoin(RelJoin const& rhs)
     : RelAlgNode(rhs)
+    , condition_expr_(rhs.condition_expr_)
     , join_type_(rhs.join_type_)
     , hint_applied_(false)
     , hints_(std::make_unique<Hints>()) {
@@ -1124,6 +1133,10 @@ std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,
         order_keys_arr, db_id, schema_provider, root_dag_builder);
     const auto collation = parse_window_order_collation(order_keys_arr, root_dag_builder);
     const auto kind = parse_window_function_kind(op_name);
+    // Adjust type for SUM window function.
+    if (kind == SqlWindowFunctionKind::SUM_INTERNAL && ti.is_integer()) {
+      ti = SQLTypeInfo(kBIGINT, ti.get_notnull());
+    }
     const auto lower_bound = parse_window_bound(
         field(expr, "lower_bound"), db_id, schema_provider, root_dag_builder);
     const auto upper_bound = parse_window_bound(
@@ -2976,6 +2989,35 @@ class RelAlgDispatcher {
     std::vector<std::unique_ptr<const RexScalar>> table_function_projected_outputs;
     const auto& row_types = field(table_func_ra, "rowType");
     std::vector<TargetMetaInfo> tuple_type = parseTupleType(row_types);
+    // Calcite doesn't always put proper type for the table function result.
+    if (op_name.GetString() == "sort_column_limit"s ||
+        op_name.GetString() == "ct_binding_scalar_multiply"s ||
+        op_name.GetString() == "column_list_safe_row_sum"s ||
+        op_name.GetString() == "ct_named_rowmul_output"s) {
+      CHECK_EQ(tuple_type.size(), 1);
+      tuple_type[0] = TargetMetaInfo(tuple_type[0].get_resname(),
+                                     col_input_exprs[0]->get_type_info());
+    } else if (op_name.GetString() == "ct_scalar_1_arg_runtime_sizing"s) {
+      CHECK_EQ(tuple_type.size(), 1);
+      if (table_func_input_exprs[0]->get_type_info().is_integer()) {
+        tuple_type[0] =
+            TargetMetaInfo(tuple_type[0].get_resname(), SQLTypeInfo(kBIGINT, false));
+      } else {
+        CHECK(table_func_input_exprs[0]->get_type_info().is_fp());
+        tuple_type[0] =
+            TargetMetaInfo(tuple_type[0].get_resname(), SQLTypeInfo(kDOUBLE, false));
+      }
+    } else if (op_name.GetString() == "ct_templated_no_cursor_user_constant_sizer"s) {
+      CHECK_EQ(tuple_type.size(), 1);
+      tuple_type[0] = TargetMetaInfo(tuple_type[0].get_resname(),
+                                     table_func_input_exprs[0]->get_type_info());
+    } else if (op_name.GetString() == "ct_binding_column2"s) {
+      CHECK_EQ(tuple_type.size(), 1);
+      if (col_input_exprs[0]->get_type_info().is_string()) {
+        tuple_type[0] = TargetMetaInfo(tuple_type[0].get_resname(),
+                                       col_input_exprs[0]->get_type_info());
+      }
+    }
     for (size_t i = 0; i < tuple_type.size(); i++) {
       // We don't care about the type information in rowType -- replace each output with
       // a reference to be resolved later in the translator
@@ -3460,6 +3502,10 @@ SQLTypeInfo getColumnType(const RelAlgNode* node, size_t col_idx) {
   const auto values = dynamic_cast<const RelLogicalValues*>(node);
   if (values) {
     CHECK_GT(values->size(), col_idx);
+    if (values->getTupleType()[col_idx].get_type_info().get_type() == kNULLT) {
+      // replace w/ bigint
+      return SQLTypeInfo(kBIGINT, false);
+    }
     return values->getTupleType()[col_idx].get_type_info();
   }
 
@@ -3485,6 +3531,19 @@ SQLTypeInfo getColumnType(const RelAlgNode* node, size_t col_idx) {
       return getColumnType(join->getInput(0), col_idx);
     } else {
       return getColumnType(join->getInput(1), col_idx - join->getInput(0)->size());
+    }
+  }
+
+  const auto deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(node);
+  if (deep_join) {
+    CHECK_GT(deep_join->size(), col_idx);
+    unsigned offs = 0;
+    for (size_t i = 0; i < join->inputCount(); ++i) {
+      auto input = join->getInput(i);
+      if (col_idx - offs < input->size()) {
+        return getColumnType(input, col_idx - offs);
+      }
+      offs += input->size();
     }
   }
 

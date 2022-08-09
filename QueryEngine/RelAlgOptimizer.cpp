@@ -113,7 +113,7 @@ class InputSimpleRenumberVisitor : public DeepCopyVisitor {
   const std::unordered_map<size_t, size_t>& old_to_new_idx_;
 };
 
-class RexRebindInputsVisitor : public RexVisitor<void*> {
+class RexRebindInputsVisitor : public RexVisitor<void*>, public DeepCopyVisitor {
  public:
   RexRebindInputsVisitor(const RelAlgNode* old_input, const RelAlgNode* new_input)
       : old_input_(old_input), new_input_(new_input) {}
@@ -126,24 +126,40 @@ class RexRebindInputsVisitor : public RexVisitor<void*> {
     return nullptr;
   };
 
+  hdk::ir::ExprPtr visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
+    if (col_ref->getNode() == old_input_) {
+      return hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+          col_ref->get_type_info(), new_input_, col_ref->getIndex());
+    }
+    return col_ref->deep_copy();
+  }
+
   void visitNode(const RelAlgNode* node) const {
     if (dynamic_cast<const RelAggregate*>(node) || dynamic_cast<const RelSort*>(node)) {
       return;
     }
     if (auto join = dynamic_cast<const RelJoin*>(node)) {
       if (auto condition = join->getCondition()) {
-        visit(condition);
+        RexVisitor::visit(condition);
+        CHECK(!join->getConditionExpr()) << "NYI";
       }
       return;
     }
-    if (auto project = dynamic_cast<const RelProject*>(node)) {
+    if (auto project = const_cast<RelProject*>(dynamic_cast<const RelProject*>(node))) {
+      auto rex_exprs = project->getExpressionsAndRelease();
+      hdk::ir::ExprPtrVector exprs;
       for (size_t i = 0; i < project->size(); ++i) {
-        visit(project->getProjectAt(i));
+        RexVisitor::visit(rex_exprs[i].get());
+        exprs.push_back(DeepCopyVisitor::visit(project->getExprs()[i].get()));
       }
+      project->setExpressions(std::move(rex_exprs), std::move(exprs));
       return;
     }
-    if (auto filter = dynamic_cast<const RelFilter*>(node)) {
-      visit(filter->getCondition());
+    if (auto filter = const_cast<RelFilter*>(dynamic_cast<const RelFilter*>(node))) {
+      std::unique_ptr<const RexScalar> rex_cond(filter->getAndReleaseCondition());
+      RexVisitor::visit(rex_cond.get());
+      auto cond = DeepCopyVisitor::visit(filter->getConditionExpr());
+      filter->setCondition(rex_cond, std::move(cond));
       return;
     }
     CHECK(false);

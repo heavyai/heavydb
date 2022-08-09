@@ -3258,11 +3258,20 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
 
   RelAlgTranslator translator(
       executor_, input_to_nest_level, join_types, now_, eo.just_explain);
-  const auto target_exprs_owned =
+  const auto orig_target_exprs_owned =
       translate_scalar_sources(project, translator, eo.executor_type);
-  target_exprs_owned_.insert(
-      target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
-  const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
+  std::vector<hdk::ir::Expr*> target_exprs;
+  for (size_t i = 0; i < project->size(); ++i) {
+    auto& expr = project->getExprs()[i];
+    auto target_expr = translate(expr.get(), translator, eo.executor_type);
+    target_exprs_owned_.push_back(target_expr);
+    target_exprs.push_back(target_expr.get());
+
+    auto& orig_target_expr = orig_target_exprs_owned[i];
+    CHECK(*orig_target_expr == *target_expr)
+        << "Project target expr mismatch: orig=" << orig_target_expr->toString()
+        << " new=" << target_expr->toString();
+  }
   auto query_hint = RegisteredQueryHint::fromConfig(config_);
   if (query_dag_) {
     auto candidate = query_dag_->getQueryHint(project);

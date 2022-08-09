@@ -63,7 +63,7 @@ endif()
 # Tests + Microbenchmarks
 add_executable(StringDictionaryBenchmark StringDictionaryBenchmark.cpp)
 
-set(EXECUTE_TEST_LIBS gtest fmt::fmt ArrowQueryRunner ArrowStorage ${MAPD_LIBRARIES} ${Arrow_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+set(EXECUTE_TEST_LIBS gtest fmt::fmt ArrowQueryRunner ArrowStorage ConfigBuilder ${MAPD_LIBRARIES} ${Arrow_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 
 if(ENABLE_L0)
   add_executable(L0MgrExecuteTest L0MgrExecuteTest.cpp)

@@ -17,6 +17,7 @@
 #include "ArrowSQLRunner/ArrowSQLRunner.h"
 #include "TestHelpers.h"
 
+#include "ConfigBuilder/ConfigBuilder.h"
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/RelAlgExecutor.h"
@@ -917,7 +918,11 @@ int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   TestHelpers::init_logger_stderr_only(argc, argv);
 
-  init();
+  ConfigBuilder builder;
+  builder.parseCommandLineArgs(argc, argv, true);
+  auto config = builder.config();
+
+  init(config);
 
   int err{0};
   try {

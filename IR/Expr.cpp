@@ -219,6 +219,18 @@ bool Datum_equal(const SQLTypeInfo& ti, Datum val1, Datum val2) {
 
 }  // namespace
 
+void OrderEntry::print() const {
+  std::cout << toString() << std::endl;
+}
+
+void Expr::print() const {
+  std::cout << toString() << std::endl;
+}
+
+void TargetEntry::print() const {
+  std::cout << toString() << std::endl;
+}
+
 ExprPtr Expr::decompress() {
   if (type_info.get_compression() == kENCODING_NONE) {
     return shared_from_this();

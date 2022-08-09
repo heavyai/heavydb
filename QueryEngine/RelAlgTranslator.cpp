@@ -240,9 +240,9 @@ class NormalizerVisitor : public DeepCopyVisitor {
 
     {
       // TODO: remove check when rex are removed.
-      // We expect column ref type to match physical type from output meta.
-      auto meta_type = in_metainfo[col_idx].get_physical_type_info();
-      auto col_type = col_ref->get_type_info();
+      // We expect logical types of column ref type to match output meta.
+      auto meta_type = col_ti;  // in_metainfo[col_idx].get_physical_type_info();
+      auto col_type = get_logical_type_info(col_ref->get_type_info());
       // Allow diff in nullable flag.
       col_type.set_notnull(meta_type.get_notnull());
       // During DAG build we don't have enough information to properly choose between
@@ -251,13 +251,53 @@ class NormalizerVisitor : public DeepCopyVisitor {
         CHECK(meta_type.is_dict_encoded_string());
         col_type.set_comp_param(meta_type.get_comp_param());
       }
-      CHECK(meta_type == col_type)
-          << "Type mismatch:" << std::endl
-          << "meta_type=" << meta_type.toString() << std::endl
-          << "col_type=" << col_type.toString() << std::endl
-          << "col_ref=" << col_ref->toString() << std::endl
-          << "source=" << source->toString() << std::endl
-          << "getColumnType=" << getColumnType(source, col_ref->getIndex()).toString();
+      // Cast to BIGINT for COUNT aggregates.
+      bool distinct_count = false;
+      if (auto agg_node = dynamic_cast<const RelAggregate*>(source)) {
+        if (col_ref->getIndex() >= agg_node->getGroupByCount()) {
+          auto expr =
+              agg_node
+                  ->getAggregateExprs()[col_ref->getIndex() - agg_node->getGroupByCount()]
+                  .get();
+          if (auto agg = dynamic_cast<const hdk::ir::AggExpr*>(expr)) {
+            if (agg->get_is_distinct()) {
+              distinct_count = true;
+            }
+          }
+        }
+      }
+      if (auto proj_node = dynamic_cast<const RelProject*>(source)) {
+        auto expr = proj_node->getExprs()[col_ref->getIndex()].get();
+        if (auto agg = dynamic_cast<const hdk::ir::AggExpr*>(expr)) {
+          if (agg->get_is_distinct()) {
+            distinct_count = true;
+          }
+        }
+      }
+      if (auto compound_node = dynamic_cast<const RelCompound*>(source)) {
+        auto expr = compound_node->getExprs()[col_ref->getIndex()].get();
+        if (auto agg = dynamic_cast<const hdk::ir::AggExpr*>(expr)) {
+          if (agg->get_is_distinct()) {
+            distinct_count = true;
+          }
+        }
+      }
+      if (distinct_count) {
+        CHECK(col_type.is_integer()) << col_type.toString();
+      } else if (meta_type.is_string()) {
+        CHECK(col_type.is_string()) << "meta_type=" << meta_type.toString() << std::endl
+                                    << "col_type=" << col_type.toString() << std::endl
+                                    << "col_ref=" << col_ref->toString() << std::endl
+                                    << "source=" << source->toString() << std::endl;
+      } else {
+        CHECK(meta_type == col_type)
+            << "Type mismatch:" << std::endl
+            << "meta_type=" << meta_type.toString() << std::endl
+            << "col_type=" << col_type.toString() << std::endl
+            << "col_ref=" << col_ref->toString() << std::endl
+            << "source=" << source->toString() << std::endl
+            << "getColumnType=" << getColumnType(source, col_ref->getIndex()).toString();
+      }
     }
 
     if (join_types_.size() > 0) {

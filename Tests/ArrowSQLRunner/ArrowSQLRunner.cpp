@@ -393,7 +393,7 @@ class ArrowSQLRunnerImpl {
       calcite_->setRuntimeExtensionFunctions(udfs, udtfs, /*is_runtime=*/false);
     }
 
-    rel_alg_cache_ = std::make_shared<RelAlgCache>(calcite_, storage_, *config_);
+    rel_alg_cache_ = std::make_shared<RelAlgCache>(calcite_, storage_, config_);
   }
 
   ConfigPtr config_;

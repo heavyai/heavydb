@@ -47,7 +47,7 @@ class Rex {
  public:
   virtual std::string toString() const = 0;
 
-  void print() const { std::cout << toString() << std::endl; }
+  void print() const;
 
   // return hashed value of string representation of this rex
   virtual size_t toHash() const = 0;
@@ -808,7 +808,7 @@ class RelAlgNode {
 
   virtual std::string toString() const = 0;
 
-  void print() const { std::cout << toString() << std::endl; }
+  void print() const;
 
   // return hashed value of a string representation of this rel node
   virtual size_t toHash() const = 0;
@@ -1016,7 +1016,7 @@ class RelProject : public RelAlgNode {
 
   bool isRenaming() const;
 
-  size_t size() const override { return scalar_exprs_.size(); }
+  size_t size() const override { return exprs_.size(); }
 
   hdk::ir::ExprPtr getExpr(size_t idx) const { return exprs_[idx]; }
 
@@ -1267,6 +1267,7 @@ class RelJoin : public RelAlgNode {
   JoinType getJoinType() const { return join_type_; }
 
   const RexScalar* getCondition() const { return condition_.get(); }
+  const hdk::ir::Expr* getConditionExpr() const { return condition_expr_.get(); }
 
   const RexScalar* getAndReleaseCondition() const { return condition_.release(); }
 
@@ -1335,6 +1336,7 @@ class RelJoin : public RelAlgNode {
 
  private:
   mutable std::unique_ptr<const RexScalar> condition_;
+  hdk::ir::ExprPtr condition_expr_;
   const JoinType join_type_;
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;

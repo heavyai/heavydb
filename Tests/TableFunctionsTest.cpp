@@ -15,6 +15,7 @@
  */
 
 #include "ArrowSQLRunner/ArrowSQLRunner.h"
+#include "ConfigBuilder/ConfigBuilder.h"
 #include "TestHelpers.h"
 
 #include <gtest/gtest.h>
@@ -893,10 +894,14 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
+  ConfigBuilder builder;
+  builder.parseCommandLineArgs(argc, argv, true);
+  auto config = builder.config();
+
   // Table function support must be enabled before initialized the query runner
   // environment
   g_enable_table_functions = true;
-  init();
+  init(config);
 
   int err{0};
   try {

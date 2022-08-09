@@ -129,7 +129,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   }
   virtual bool operator==(const Expr& rhs) const = 0;
   virtual std::string toString() const = 0;
-  virtual void print() const { std::cout << toString() << std::endl; }
+  virtual void print() const;
 
   virtual void add_unique(std::list<const Expr*>& expr_list) const;
   /*
@@ -1558,7 +1558,7 @@ struct OrderEntry {
   OrderEntry(int t, bool d, bool nf) : tle_no(t), is_desc(d), nulls_first(nf){};
   ~OrderEntry() {}
   std::string toString() const;
-  void print() const { std::cout << toString() << std::endl; }
+  void print() const;
   int tle_no;       /* targetlist entry number: 1-based */
   bool is_desc;     /* true if order is DESC */
   bool nulls_first; /* true if nulls are ordered first.  otherwise last. */
@@ -1661,7 +1661,7 @@ class TargetEntry {
   void set_expr(ExprPtr e) { expr = e; }
   bool get_unnest() const { return unnest; }
   std::string toString() const;
-  void print() const { std::cout << toString() << std::endl; }
+  void print() const;
 
  private:
   std::string resname;  // alias name, e.g., SELECT salary + bonus AS compensation,

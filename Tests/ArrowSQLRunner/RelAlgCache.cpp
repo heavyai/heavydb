@@ -29,10 +29,10 @@
 
 RelAlgCache::RelAlgCache(std::shared_ptr<CalciteJNI> calcite,
                          SchemaProviderPtr schema_provider,
-                         const Config& config)
-    : calcite_(calcite), schema_provider_(schema_provider) {
-  build_cache_ = config.debug.build_ra_cache;
-  use_cache_ = config.debug.use_ra_cache;
+                         ConfigPtr config)
+    : calcite_(calcite), schema_provider_(schema_provider), config_(config) {
+  build_cache_ = config_->debug.build_ra_cache;
+  use_cache_ = config_->debug.use_ra_cache;
 
   if (!use_cache_.empty()) {
     load();
@@ -73,6 +73,7 @@ std::string RelAlgCache::process(
       key.db_name = db_name;
       key.legacy_syntax = legacy_syntax;
       key.is_explain = is_explain;
+      key.watchdog_enabled = config_->exec.watchdog.enable;
 
       if (rel_alg_cache_.count(key)) {
         return rel_alg_cache_.at(key);
@@ -94,7 +95,13 @@ std::string RelAlgCache::process(
                               is_view_optimize);
 
   if (!build_cache_.empty()) {
-    put(db_name, sql_string, legacy_syntax, is_explain, schema_json, ra);
+    put(db_name,
+        sql_string,
+        legacy_syntax,
+        is_explain,
+        config_->exec.watchdog.enable,
+        schema_json,
+        ra);
   }
 
   return ra;
@@ -104,6 +111,7 @@ void RelAlgCache::put(const std::string& db_name,
                       const std::string& sql,
                       bool legacy_syntax,
                       bool is_explain,
+                      bool watchdog_enabled,
                       const std::string& schema_json,
                       const std::string& ra) {
   auto schema_it = schema_ids_.find(schema_json);
@@ -118,6 +126,7 @@ void RelAlgCache::put(const std::string& db_name,
   key.db_name = db_name;
   key.legacy_syntax = legacy_syntax;
   key.is_explain = is_explain;
+  key.watchdog_enabled = watchdog_enabled;
   if (rel_alg_cache_.count(key)) {
     if (rel_alg_cache_.at(key) != ra) {
       throw std::runtime_error("RelAlg cache entry mismatch for query: " + sql);
@@ -171,6 +180,7 @@ void RelAlgCache::load() {
         !entry.HasMember("db_name") || !entry["db_name"].IsString() ||
         !entry.HasMember("legacy_syntax") || !entry["legacy_syntax"].IsBool() ||
         !entry.HasMember("is_explain") || !entry["is_explain"].IsBool() ||
+        !entry.HasMember("watchdog_enabled") || !entry["watchdog_enabled"].IsBool() ||
         !entry.HasMember("value") || !entry["value"].IsString()) {
       throw std::runtime_error("Malformed RelAlg cache.");
     }
@@ -180,6 +190,7 @@ void RelAlgCache::load() {
     key.db_name = entry["db_name"].GetString();
     key.legacy_syntax = entry["legacy_syntax"].GetBool();
     key.is_explain = entry["is_explain"].GetBool();
+    key.watchdog_enabled = entry["watchdog_enabled"].GetBool();
     auto insert_res =
         rel_alg_cache_.insert(std::make_pair(key, entry["value"].GetString()));
     if (!insert_res.second) {
@@ -221,6 +232,9 @@ void RelAlgCache::store() const {
                             doc.GetAllocator());
     rel_alg_entry.AddMember("is_explain",
                             rapidjson::Value().SetBool(pr.first.is_explain),
+                            doc.GetAllocator());
+    rel_alg_entry.AddMember("watchdog_enabled",
+                            rapidjson::Value().SetBool(pr.first.watchdog_enabled),
                             doc.GetAllocator());
     rel_alg_entry.AddMember("value",
                             rapidjson::Value().SetString(rapidjson::StringRef(pr.second)),
