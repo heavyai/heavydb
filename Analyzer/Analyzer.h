@@ -1628,7 +1628,7 @@ class StringOper : public Expr {
   void check_operand_types(const size_t min_args,
                            const std::vector<OperandTypeFamily>& expected_type_families,
                            const std::vector<std::string>& arg_names,
-                           const bool dict_encoded_cols_only = true,
+                           const bool dict_encoded_cols_only = false,
                            const bool cols_first_arg_only = true) const;
 
   SqlStringOpKind kind_;
@@ -2003,7 +2003,7 @@ class OverlayStringOper : public StringOper {
             OperandTypeFamily::INT_FAMILY};
   }
   std::vector<std::string> getArgNames() const override {
-    return {"operand", "replacing string", "start posistion", "replacing length"};
+    return {"operand", "replacing string", "start position", "replacing length"};
   }
 };
 
@@ -2294,6 +2294,47 @@ class TryStringCastOper : public StringOper {
     return {OperandTypeFamily::STRING_FAMILY};
   }
   std::vector<std::string> getArgNames() const override { return {"operand"}; }
+};
+
+class PositionStringOper : public StringOper {
+ public:
+  PositionStringOper(const std::shared_ptr<Analyzer::Expr>& search_str,
+                     const std::shared_ptr<Analyzer::Expr>& source_str,
+                     const std::shared_ptr<Analyzer::Expr>& start_offset)
+      : StringOper(SqlStringOpKind::POSITION,
+                   SQLTypeInfo(kBIGINT),
+                   {source_str, search_str, start_offset},
+                   getMinArgs(),
+                   getExpectedTypeFamilies(),
+                   getArgNames()) {}
+
+  PositionStringOper(const std::vector<std::shared_ptr<Analyzer::Expr>>& operands)
+      : StringOper(SqlStringOpKind::POSITION,
+                   SQLTypeInfo(kBIGINT),
+                   PositionStringOper::normalize_operands(operands),
+                   getMinArgs(),
+                   getExpectedTypeFamilies(),
+                   getArgNames()) {}
+
+  PositionStringOper(const std::shared_ptr<Analyzer::StringOper>& string_oper)
+      : StringOper(string_oper) {}
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  size_t getMinArgs() const override { return 2UL; }
+
+  std::vector<OperandTypeFamily> getExpectedTypeFamilies() const override {
+    return {OperandTypeFamily::STRING_FAMILY,
+            OperandTypeFamily::STRING_FAMILY,
+            OperandTypeFamily::INT_FAMILY};
+  }
+  std::vector<std::string> getArgNames() const override {
+    return {"search string", "source string", "start position"};
+  }
+
+ private:
+  static std::vector<std::shared_ptr<Analyzer::Expr>> normalize_operands(
+      const std::vector<std::shared_ptr<Analyzer::Expr>>& operands);
 };
 
 class FunctionOper : public Expr {

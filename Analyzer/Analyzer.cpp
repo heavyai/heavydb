@@ -3583,6 +3583,11 @@ std::shared_ptr<Analyzer::Expr> TryStringCastOper::deep_copy() const {
       std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
 }
 
+std::shared_ptr<Analyzer::Expr> PositionStringOper::deep_copy() const {
+  return makeExpr<Analyzer::PositionStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
 std::shared_ptr<Analyzer::Expr> FunctionOper::deep_copy() const {
   std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
   for (size_t i = 0; i < getArity(); ++i) {
@@ -4106,15 +4111,16 @@ void StringOper::check_operand_types(
 
     if (cols_first_arg_only && !is_arg_constant && arg_idx >= 1UL) {
       oss << "Error instantiating " << ::toString(get_kind()) << " operator. "
-          << "Currently only column inputs allowed for the primary argument, "
-          << "but a column input was received for argument " << arg_idx + 1 << ".";
+          << "Currently only column inputs are allowed for argument '" << arg_names[0]
+          << "', but a column input was received for argument '" << arg_names[arg_idx]
+          << "'.";
       throw std::runtime_error(oss.str());
     }
     switch (expected_type_family) {
       case OperandTypeFamily::STRING_FAMILY: {
         if (!arg_ti.is_string()) {
           oss << "Error instantiating " << ::toString(get_kind()) << " operator. "
-              << "Expected text type for argument " << arg_idx + 1 << " ("
+              << "Expected text type for argument '" << arg_names[arg_idx] << "' ("
               << arg_names[arg_idx] << ").";
           throw std::runtime_error(oss.str());
           break;
@@ -4132,8 +4138,8 @@ void StringOper::check_operand_types(
       case OperandTypeFamily::INT_FAMILY: {
         if (!IS_INTEGER(arg_ti.get_type())) {
           oss << "Error instantiating " << ::toString(get_kind()) << " operator. "
-              << "Expected integer type for argument " << arg_idx + 1 << " ("
-              << arg_names[arg_idx] << ").";
+              << "Expected integer type for argument " << arg_idx + 1 << " ('"
+              << arg_names[arg_idx] << "').";
           throw std::runtime_error(oss.str());
           break;
         }
@@ -4238,6 +4244,19 @@ std::vector<std::shared_ptr<Analyzer::Expr>> TrimStringOper::normalize_operands(
   }
   CHECK_EQ(operands.size(), 3UL);
   return {operands[2], operands[1]};
+}
+
+std::vector<std::shared_ptr<Analyzer::Expr>> PositionStringOper::normalize_operands(
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& operands) {
+  CHECK_GE(operands.size(), 2UL);
+  CHECK_LE(operands.size(), 3UL);
+  std::vector<std::shared_ptr<Analyzer::Expr>> normalized_operands;
+  normalized_operands.emplace_back(operands[1]);
+  normalized_operands.emplace_back(operands[0]);
+  if (operands.size() == 3UL) {
+    normalized_operands.emplace_back(operands[2]);
+  }
+  return normalized_operands;
 }
 
 }  // namespace Analyzer

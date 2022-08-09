@@ -1392,17 +1392,19 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
   }
   const auto string_op_kind = ::name_to_string_op_kind(func_name);
   auto args = translateFunctionArgs(rex_function);
-  // Used by watchdog later to gate queries based on
-  if (!args.empty() && !dynamic_cast<const Analyzer::Constant*>(args[0].get())) {
-    const auto& arg0_ti = args[0]->get_type_info();
-    if (arg0_ti.is_none_encoded_string()) {
-      SQLTypeInfo casted_target_ti = arg0_ti;
-      casted_target_ti.set_type(kTEXT);
-      casted_target_ti.set_compression(kENCODING_DICT);
-      casted_target_ti.set_comp_param(TRANSIENT_DICT_ID);
-      casted_target_ti.set_fixed_size();
-      args[0] = makeExpr<Analyzer::UOper>(
-          casted_target_ti, args[0]->get_contains_agg(), kCAST, args[0]);
+  if (string_op_returns_string(string_op_kind)) {
+    // Used by watchdog later to gate queries on
+    if (!args.empty() && !dynamic_cast<const Analyzer::Constant*>(args[0].get())) {
+      const auto& arg0_ti = args[0]->get_type_info();
+      if (arg0_ti.is_none_encoded_string()) {
+        SQLTypeInfo casted_target_ti = arg0_ti;
+        casted_target_ti.set_type(kTEXT);
+        casted_target_ti.set_compression(kENCODING_DICT);
+        casted_target_ti.set_comp_param(TRANSIENT_DICT_ID);
+        casted_target_ti.set_fixed_size();
+        args[0] = makeExpr<Analyzer::UOper>(
+            casted_target_ti, args[0]->get_contains_agg(), kCAST, args[0]);
+      }
     }
   }
 
@@ -1448,6 +1450,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
       return makeExpr<Analyzer::Base64DecodeStringOper>(args);
     case SqlStringOpKind::TRY_STRING_CAST:
       return makeExpr<Analyzer::TryStringCastOper>(rex_function->getType(), args);
+    case SqlStringOpKind::POSITION:
+      return makeExpr<Analyzer::PositionStringOper>(args);
     default: {
       throw std::runtime_error("Unsupported string function.");
     }
@@ -1684,7 +1688,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "JSON_VALUE"sv,
                    "BASE64_ENCODE"sv,
                    "BASE64_DECODE"sv,
-                   "TRY_CAST"sv)) {
+                   "TRY_CAST"sv,
+                   "POSITION"sv)) {
     return translateStringOper(rex_function);
   }
   if (func_resolve(rex_function->getName(), "CARDINALITY"sv, "ARRAY_LENGTH"sv)) {

@@ -1610,6 +1610,176 @@ TEST_F(StringFunctionTest, TryCastTimeTypes) {
   }
 }
 
+TEST_F(StringFunctionTest, Position) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      // Literal search
+      auto result_set = sql("select position('ell' in 'hello');", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(2)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Literal search with starting position
+      auto result_set = sql("select position('ell' in 'hello' from 2);", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(2)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Literal search with starting position past position index -
+      // returns 0
+      auto result_set = sql("select position('ell' in 'hello' from 3);", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(0)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Literal search with negative "wraparound" starting position
+      auto result_set = sql("select position('ell' in 'hello' from -4);", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(2)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Literal search with negative "wraparound" starting position
+      // past position index - returns 0
+      auto result_set = sql("select position('ell' in 'hello' from -3);", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(0)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // All searches match
+      auto result_set =
+          sql("select id, position('one' in personal_motto) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(1), int64_t(9)},
+          {int64_t(2), int64_t(10)},
+          {int64_t(3), int64_t(22)},
+          {int64_t(4), int64_t(27)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Some searches do not match, non-matches shouldr return 0
+      auto result_set =
+          sql("select id, position('for' in personal_motto) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(1), int64_t(5)},
+          {int64_t(2), int64_t(0)},
+          {int64_t(3), int64_t(0)},
+          {int64_t(4), int64_t(0)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Optional third start operand
+      auto result_set =
+          sql("select id, position('one' in personal_motto from 12) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(1), int64_t(17)},
+          {int64_t(2), int64_t(0)},
+          {int64_t(3), int64_t(22)},
+          {int64_t(4), int64_t(27)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Negative optional third start operand
+      auto result_set =
+          sql("select id, position('one' in personal_motto from -18) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(1), int64_t(17)},
+          {int64_t(2), int64_t(0)},
+          {int64_t(3), int64_t(22)},
+          {int64_t(4), int64_t(0)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Null inputs should output null
+      auto result_set =
+          sql("select id, coalesce(position('94' in zip_plus_4), -1) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(1), int64_t(0)},
+          {int64_t(2), int64_t(1)},
+          {int64_t(3), int64_t(-1)},
+          {int64_t(4), int64_t(-1)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Empty search string should return start position (or 1 if it does
+      // not exist) for all non-null inputs
+      auto result_set =
+          sql("select id, coalesce(position('' in zip_plus_4), -1) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(1), int64_t(1)},
+          {int64_t(2), int64_t(1)},
+          {int64_t(3), int64_t(-1)},
+          {int64_t(4), int64_t(-1)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Empty search string should return start position (or 1 if it does
+      // not exist) for all non-null inputs
+      auto result_set =
+          sql("select id, coalesce(position('' in zip_plus_4 from 3), -1) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(1), int64_t(3)},
+          {int64_t(2), int64_t(3)},
+          {int64_t(3), int64_t(-1)},
+          {int64_t(4), int64_t(-1)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Chained string op
+      auto result_set =
+          sql("select id, position('one' in lower(personal_motto)) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(1), int64_t(9)},
+          {int64_t(2), int64_t(1)},
+          {int64_t(3), int64_t(22)},
+          {int64_t(4), int64_t(27)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Text encoding none search
+      auto result_set =
+          sql("select id, position('it' in last_name) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(1), int64_t(0)},
+          {int64_t(2), int64_t(0)},
+          {int64_t(3), int64_t(0)},
+          {int64_t(4), int64_t(3)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Text encoding none search chained
+      auto result_set =
+          sql("select id, position('it' in lower(last_name)) from "
+              "string_function_test_people order by id;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(1), int64_t(3)},
+          {int64_t(2), int64_t(0)},
+          {int64_t(3), int64_t(0)},
+          {int64_t(4), int64_t(3)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
 TEST_F(StringFunctionTest, StringFunctionEqualsFilterLHS) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
