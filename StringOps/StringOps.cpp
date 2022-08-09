@@ -79,7 +79,7 @@ boost::regex StringOp::generateRegex(const std::string& op_name,
 }
 
 NullableStrType TryStringCast::operator()(const std::string& str) const {
-  CHECK("Invalid string output for TryStringCast");
+  UNREACHABLE() << "Invalid string output for TryStringCast";
   return NullableStrType();
 }
 
@@ -93,6 +93,28 @@ Datum TryStringCast::numericEval(const std::string_view str) const {
     return StringToDatum(str, return_ti);
   } catch (std::runtime_error& e) {
     return NullDatum(return_ti);
+  }
+}
+
+NullableStrType Position::operator()(const std::string& str) const {
+  UNREACHABLE() << "Invalid string output for Position";
+  return {};
+}
+
+Datum Position::numericEval(const std::string_view str) const {
+  if (str.empty()) {
+    return NullDatum(return_ti_);
+  } else {
+    const int64_t str_len = str.size();
+    const int64_t wrapped_start = start_ >= 0 ? start_ : str_len + start_;
+    Datum return_datum;
+    const auto search_index = str.find(search_str_, wrapped_start);
+    if (search_index == std::string::npos) {
+      return_datum.bigintval = 0;
+    } else {
+      return_datum.bigintval = static_cast<int64_t>(search_index) + 1;
+    }
+    return return_datum;
   }
 }
 
@@ -634,8 +656,13 @@ std::string_view StringOps::operator()(const std::string_view sv,
 }
 
 Datum StringOps::numericEval(const std::string_view str) const {
-  NullableStrType modified_str(str);
   const auto num_string_producing_ops = string_ops_.size() - 1;
+  if (num_string_producing_ops == 0UL) {
+    // Short circuit and avoid transformation to string if
+    // only have one string->numeric op
+    return string_ops_.back()->numericEval(str);
+  }
+  NullableStrType modified_str(str);
   for (size_t string_op_idx = 0; string_op_idx < num_string_producing_ops;
        ++string_op_idx) {
     const auto& string_op = string_ops_[string_op_idx];
@@ -821,6 +848,20 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
       CHECK_EQ(num_non_variable_literals, 0UL);
       return std::make_unique<const TryStringCast>(return_ti,
                                                    var_string_optional_literal);
+    }
+    case SqlStringOpKind::POSITION: {
+      CHECK_GE(num_non_variable_literals, 1UL);
+      CHECK_LE(num_non_variable_literals, 2UL);
+      const auto search_literal = string_op_info.getStringLiteral(1);
+      const bool has_start_pos_literal = string_op_info.intLiteralArgAtIdxExists(2);
+      if (has_start_pos_literal) {
+        const auto start_pos_literal = string_op_info.getIntLiteral(2);
+        return std::make_unique<const Position>(
+            var_string_optional_literal, search_literal, start_pos_literal);
+      } else {
+        return std::make_unique<const Position>(var_string_optional_literal,
+                                                search_literal);
+      }
     }
     default: {
       UNREACHABLE();

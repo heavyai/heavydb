@@ -112,7 +112,7 @@ union_translate_string_id_to_other_dict(const int32_t string_id,
   extern "C" RUNTIME_EXPORT ALWAYS_INLINE value_type                                     \
       apply_numeric_string_ops_##value_name(                                             \
           const char* str_ptr, const int32_t str_len, const int64_t string_ops_handle) { \
-    std::string raw_str(str_ptr, str_len);                                               \
+    const std::string_view raw_str(str_ptr, str_len);                                    \
     auto string_ops =                                                                    \
         reinterpret_cast<const StringOps_Namespace::StringOps*>(string_ops_handle);      \
     const auto result_datum = string_ops->numericEval(raw_str);                          \
@@ -199,7 +199,8 @@ llvm::Value* CodeGenerator::codegenPerRowStringOper(const Analyzer::StringOper* 
   const auto primary_arg = remove_cast(expr->getArg(0));
   CHECK(primary_arg->get_type_info().is_none_encoded_string());
 
-  if (g_cluster) {
+  const auto& return_ti = expr->get_type_info();
+  if (g_cluster && return_ti.is_dict_encoded_string()) {
     throw std::runtime_error(
         "Cast from none-encoded string to dictionary-encoded not supported for "
         "distributed queries");
@@ -217,7 +218,6 @@ llvm::Value* CodeGenerator::codegenPerRowStringOper(const Analyzer::StringOper* 
   const int64_t string_ops_handle = reinterpret_cast<int64_t>(string_ops);
   auto string_ops_handle_lv = cgen_state_->llInt(string_ops_handle);
 
-  const auto& return_ti = expr->get_type_info();
   if (!return_ti.is_string()) {
     std::vector<llvm::Value*> string_oper_lvs{
         primary_str_lv[1], primary_str_lv[2], string_ops_handle_lv};

@@ -125,6 +125,33 @@ struct TryStringCast : public StringOp {
   Datum numericEval(const std::string_view str) const override;
 };
 
+struct Position : public StringOp {
+ public:
+  Position(const std::optional<std::string>& var_str_optional_literal,
+           const std::string& search_str)
+      : StringOp(SqlStringOpKind::POSITION,
+                 SQLTypeInfo(kBIGINT),
+                 var_str_optional_literal)
+      , search_str_(search_str)
+      , start_(0) {}
+
+  Position(const std::optional<std::string>& var_str_optional_literal,
+           const std::string& search_str,
+           const int64_t start)
+      : StringOp(SqlStringOpKind::POSITION,
+                 SQLTypeInfo(kBIGINT),
+                 var_str_optional_literal)
+      , search_str_(search_str)
+      , start_(start > 0 ? start - 1 : start) {}
+
+  NullableStrType operator()(const std::string& str) const override;
+  Datum numericEval(const std::string_view str) const override;
+
+ private:
+  const std::string search_str_;
+  const int64_t start_;
+};
+
 struct Lower : public StringOp {
   Lower(const std::optional<std::string>& var_str_optional_literal)
       : StringOp(SqlStringOpKind::LOWER, var_str_optional_literal) {}

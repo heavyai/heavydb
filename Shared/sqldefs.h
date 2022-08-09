@@ -109,7 +109,8 @@ enum class SqlStringOpKind {
   JSON_VALUE,
   BASE64_ENCODE,
   BASE64_DECODE,
-  TRY_STRING_CAST,
+  TRY_STRING_CAST,  // string-to-numeric
+  POSITION,         // string-to-numeric
   INVALID
 };
 
@@ -328,6 +329,8 @@ inline std::ostream& operator<<(std::ostream& os, const SqlStringOpKind kind) {
       return os << "BASE64_DECODE";
     case SqlStringOpKind::TRY_STRING_CAST:
       return os << "TRY_STRING_CAST";
+    case SqlStringOpKind::POSITION:
+      return os << "POSITION";
     case SqlStringOpKind::INVALID:
       return os << "INVALID";
   }
@@ -403,8 +406,21 @@ inline SqlStringOpKind name_to_string_op_kind(const std::string& func_name) {
   if (func_name == "TRY_CAST") {
     return SqlStringOpKind::TRY_STRING_CAST;
   }
+  if (func_name == "POSITION") {
+    return SqlStringOpKind::POSITION;
+  }
   LOG(FATAL) << "Invalid string function " << func_name << ".";
   return SqlStringOpKind::INVALID;
+}
+
+inline bool string_op_returns_string(const SqlStringOpKind kind) {
+  switch (kind) {
+    case SqlStringOpKind::TRY_STRING_CAST:
+    case SqlStringOpKind::POSITION:
+      return false;
+    default:
+      return true;
+  }
 }
 
 inline std::string toString(const SqlWindowFunctionKind& kind) {
