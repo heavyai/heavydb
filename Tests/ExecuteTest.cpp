@@ -4508,6 +4508,10 @@ TEST(Select, Strings) {
     ASSERT_EQ(static_cast<int64_t>(128 * g_num_rows + 42 * g_num_rows / 2),
               v<int64_t>(run_simple_agg(
                   "SELECT SUM(TRY_CAST(num_text AS INT)) FROM test;", dt)));
+
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE POSITION('foo' IN str) > 0;", dt)));
   }
 }
 
