@@ -204,6 +204,9 @@ class ExtensionFunctionSignatureParser {
     if (type_name.endsWith("*")) {
       return pointerType(deserializeType(type_name.substring(0, type_name.length() - 1)));
     }
+    if (type_name.endsWith("&")) {
+      return deserializeType(type_name.substring(0, type_name.length() - 1).trim());
+    }
     if (type_name.equals("Array<bool>")) {
       return ExtensionFunction.ExtArgumentType.ArrayBool;
     }
@@ -231,6 +234,9 @@ class ExtensionFunctionSignatureParser {
     }
     if (type_name.equals("Timestamp")) {
       return ExtensionFunction.ExtArgumentType.Timestamp;
+    }
+    if (type_name.equals("TextEncodingNone")) {
+      return ExtensionFunction.ExtArgumentType.TextEncodingNone;
     }
     if (type_name.equals("Column<int8_t>") || type_name.equals("Column<char>")) {
       return ExtensionFunction.ExtArgumentType.ColumnInt8;
