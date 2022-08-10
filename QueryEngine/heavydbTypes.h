@@ -186,6 +186,9 @@ struct Array {
   DEVICE Array(const int64_t size, const bool is_null = false)
       : size(size), is_null(is_null) {
     if (!is_null) {
+      // Memory must be manually released, otherwise leaks can happen.
+      // On UDFs, if it is the return argument, memory is released with
+      // register_buffer_with_executor_rsm
       ptr = reinterpret_cast<T*>(
           allocate_varlen_buffer(size, static_cast<int64_t>(sizeof(T))));
     } else {
@@ -239,14 +242,24 @@ struct Array {
 struct TextEncodingNone {
   char* ptr_;
   int64_t size_;
+  // padding is required to prevent clang/gcc from expanding arguments
+  // https://stackoverflow.com/questions/27386912/prevent-clang-from-expanding-arguments-that-are-aggregate-types/27387908#27387908
+  int8_t padding;
 
 #ifndef __CUDACC__
   TextEncodingNone() = default;
   TextEncodingNone(const std::string& str) {
-    // Note this will only be valid for the
-    // lifetime of the string
-    ptr_ = const_cast<char*>(str.data());
     size_ = str.length();
+    if (str.empty()) {
+      ptr_ = nullptr;
+    } else {
+      // Memory must be manually released, otherwise leaks can happen.
+      // On UDFs, if it is the return argument, memory is released with
+      // register_buffer_with_executor_rsm
+      ptr_ = reinterpret_cast<char*>(
+          allocate_varlen_buffer((size_ + 1), static_cast<int64_t>(sizeof(char))));
+      strncpy(ptr_, str.c_str(), (size_ + 1));
+    }
   }
   operator std::string() const { return std::string(ptr_, size_); }
   std::string getString() const { return std::string(ptr_, size_); }
