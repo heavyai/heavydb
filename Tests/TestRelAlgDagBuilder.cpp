@@ -130,11 +130,14 @@ RelAlgNodePtr TestRelAlgDagBuilder::addSort(RelAlgNodePtr input,
   return res;
 }
 
-RelAlgNodePtr TestRelAlgDagBuilder::addJoin(RelAlgNodePtr lhs,
-                                            RelAlgNodePtr rhs,
-                                            const JoinType join_type,
-                                            std::unique_ptr<const RexScalar> condition) {
-  auto res = std::make_shared<RelJoin>(lhs, rhs, std::move(condition), join_type);
+RelAlgNodePtr TestRelAlgDagBuilder::addJoin(
+    RelAlgNodePtr lhs,
+    RelAlgNodePtr rhs,
+    const JoinType join_type,
+    std::unique_ptr<const RexScalar> condition_rex,
+    hdk::ir::ExprPtr condition) {
+  auto res = std::make_shared<RelJoin>(
+      lhs, rhs, std::move(condition_rex), std::move(condition), join_type);
   nodes_.push_back(res);
   return res;
 }
@@ -147,9 +150,15 @@ RelAlgNodePtr TestRelAlgDagBuilder::addEquiJoin(RelAlgNodePtr lhs,
   std::vector<std::unique_ptr<const RexScalar>> eq_ops;
   eq_ops.push_back(std::make_unique<RexInput>(lhs.get(), lhs_col_idx));
   eq_ops.push_back(std::make_unique<RexInput>(rhs.get(), rhs_col_idx));
-  auto eq_expr =
+  auto eq_rex =
       std::make_unique<RexOperator>(kEQ, std::move(eq_ops), SQLTypeInfo(kBOOLEAN));
-  return addJoin(lhs, rhs, join_type, std::move(eq_expr));
+  auto lhs_expr = hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+      getColumnType(lhs.get(), lhs_col_idx), lhs.get(), lhs_col_idx);
+  auto rhs_expr = hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+      getColumnType(rhs.get(), rhs_col_idx), rhs.get(), rhs_col_idx);
+  auto eq_expr =
+      hdk::ir::makeExpr<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, lhs_expr, rhs_expr);
+  return addJoin(lhs, rhs, join_type, std::move(eq_rex), std::move(eq_expr));
 }
 
 std::vector<std::string> TestRelAlgDagBuilder::buildFieldNames(size_t count) const {

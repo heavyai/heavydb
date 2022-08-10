@@ -289,9 +289,13 @@ Constant::~Constant() {
 }
 
 ExprPtr Constant::make(const SQLTypeInfo& ti, int64_t val) {
-  CHECK(ti.is_number());
+  CHECK(ti.is_number() || ti.is_boolean());
   Datum datum{0};
   switch (ti.get_type()) {
+    case kBOOLEAN: {
+      datum.boolval = !!val;
+      break;
+    }
     case kTINYINT: {
       datum.tinyintval = static_cast<int8_t>(val);
       break;
@@ -2085,6 +2089,9 @@ std::string BinOper::toString() const {
       break;
     case kARRAY_AT:
       op = "[] ";
+      break;
+    case kBW_EQ:
+      op = "BW_EQ ";
       break;
     default:
       break;

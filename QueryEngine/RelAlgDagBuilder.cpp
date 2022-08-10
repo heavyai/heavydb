@@ -457,6 +457,10 @@ void RelJoin::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
   if (condition_) {
     rebind_inputs.visit(condition_.get());
   }
+  if (condition_expr_) {
+    RebindInputsVisitor visitor(old_input.get(), input.get());
+    condition_expr_ = visitor.visit(condition_expr_.get());
+  }
 }
 
 void RelFilter::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
@@ -1470,7 +1474,8 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept
       CHECK_EQ(size_t(2), join_node->inputCount());
       auto disambiguated_condition =
           disambiguate_rex(join_node->getCondition(), get_node_output(join_node.get()));
-      join_node->setCondition(disambiguated_condition);
+      join_node->setCondition(disambiguated_condition,
+                              join_node->getConditionExprShared());
       continue;
     }
     const auto project_node = std::dynamic_pointer_cast<RelProject>(ra_node);
@@ -2872,14 +2877,21 @@ class RelAlgDispatcher {
     const auto join_type = to_join_type(json_str(field(join_ra, "joinType")));
     auto filter_rex = parse_scalar_expr(
         field(join_ra, "condition"), db_id_, schema_provider_, root_dag_builder);
+    auto ra_outputs = n_outputs(inputs[0].get(), inputs[0]->size());
+    const auto ra_outputs2 = n_outputs(inputs[1].get(), inputs[1]->size());
+    ra_outputs.insert(ra_outputs.end(), ra_outputs2.begin(), ra_outputs2.end());
+    auto condition = parse_expr(field(join_ra, "condition"),
+                                filter_rex.get(),
+                                db_id_,
+                                schema_provider_,
+                                root_dag_builder,
+                                ra_outputs);
+    auto join_node = std::make_shared<RelJoin>(
+        inputs[0], inputs[1], std::move(filter_rex), std::move(condition), join_type);
     if (join_ra.HasMember("hints")) {
-      auto join_node = std::make_shared<RelJoin>(
-          inputs[0], inputs[1], std::move(filter_rex), join_type);
       getRelAlgHints(join_ra, join_node);
-      return join_node;
     }
-    return std::make_shared<RelJoin>(
-        inputs[0], inputs[1], std::move(filter_rex), join_type);
+    return join_node;
   }
 
   std::shared_ptr<RelSort> dispatchSort(const rapidjson::Value& sort_ra) {

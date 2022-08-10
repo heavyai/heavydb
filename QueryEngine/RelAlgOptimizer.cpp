@@ -138,10 +138,13 @@ class RexRebindInputsVisitor : public RexVisitor<void*>, public DeepCopyVisitor 
     if (dynamic_cast<const RelAggregate*>(node) || dynamic_cast<const RelSort*>(node)) {
       return;
     }
-    if (auto join = dynamic_cast<const RelJoin*>(node)) {
-      if (auto condition = join->getCondition()) {
-        RexVisitor::visit(condition);
-        CHECK(!join->getConditionExpr()) << "NYI";
+    if (auto join = const_cast<RelJoin*>(dynamic_cast<const RelJoin*>(node))) {
+      CHECK_EQ(!!join->getConditionExpr(), !!join->getCondition());
+      if (join->getConditionExpr()) {
+        std::unique_ptr<const RexScalar> rex_cond(join->getAndReleaseCondition());
+        RexVisitor::visit(rex_cond.get());
+        auto cond = DeepCopyVisitor::visit(join->getConditionExpr());
+        join->setCondition(rex_cond, std::move(cond));
       }
       return;
     }
@@ -1269,7 +1272,8 @@ void propagate_input_renumbering(
       aggregate->setAggExprs(std::move(new_scalar_exprs), std::move(new_exprs));
     } else if (auto join = dynamic_cast<RelJoin*>(node)) {
       auto new_condition = renumberer.visit(join->getCondition());
-      join->setCondition(new_condition);
+      auto new_condition_expr = visitor.visit(join->getConditionExpr());
+      join->setCondition(new_condition, std::move(new_condition_expr));
     } else if (auto filter = dynamic_cast<RelFilter*>(node)) {
       auto new_condition = renumberer.visit(filter->getCondition());
       auto new_condition_expr = visitor.visit(filter->getConditionExpr());
@@ -1951,6 +1955,7 @@ void hoist_filter_cond_to_cross_join(
         if (src_join == join) {
           std::unique_ptr<const RexScalar> filter_condition(
               modified_filter->getAndReleaseCondition());
+          auto filter_condition_expr = modified_filter->getConditionExprShared();
           std::unique_ptr<const RexScalar> true_condition =
               boost::make_unique<RexLiteral>(true,
                                              kBOOLEAN,
@@ -1960,7 +1965,7 @@ void hoist_filter_cond_to_cross_join(
                                              unsigned(-2147483648),
                                              1);
           modified_filter->setCondition(true_condition, makeConstantExpr(true));
-          join->setCondition(filter_condition);
+          join->setCondition(filter_condition, std::move(filter_condition_expr));
           continue;
         }
         const auto src1_base = src_join->getInput(0)->size();
@@ -1984,11 +1989,11 @@ void hoist_filter_cond_to_cross_join(
         }
 
         JoinTargetRebaser rebaser(join, first_col_idx);
-        // JoinTargetRebaseVisitor visitor(join, first_col_idx);
+        JoinTargetRebaseVisitor visitor(join, first_col_idx);
         if (join_conditions.size() == 1) {
           auto new_join_condition = rebaser.visit(*join_conditions.begin());
-          // auto new_join_condition_expr = visitor.visit(join_condition_exprs.front());
-          join->setCondition(new_join_condition /*, new_join_condition_expr*/);
+          auto new_join_condition_expr = visitor.visit(join_condition_exprs.front());
+          join->setCondition(new_join_condition, new_join_condition_expr);
         } else {
           std::vector<std::unique_ptr<const RexScalar>> operands;
           bool notnull = true;
@@ -2001,26 +2006,19 @@ void hoist_filter_cond_to_cross_join(
           auto new_join_condition = std::unique_ptr<const RexScalar>(
               new RexOperator(kAND, std::move(operands), SQLTypeInfo(kBOOLEAN, notnull)));
 
-          /*
           auto new_join_condition_expr = visitor.visit(join_condition_exprs[0]);
           for (size_t i = 1; i < join_condition_exprs.size(); ++i) {
-            bool notnull = new_join_condition_expr->get_type_info().get_notnull() &&
-                           join_condition_exprs[i]->get_type_info().get_notnull();
+            auto rhs = visitor.visit(join_condition_exprs[i]);
             new_join_condition_expr = hdk::ir::makeExpr<hdk::ir::BinOper>(
-                SQLTypeInfo(kBOOLEAN, notnull),
-                kAND,
-                kONE,
-                new_join_condition_expr,
-                visitor.visit(join_condition_exprs[i]));
+                kBOOLEAN, kAND, kONE, new_join_condition_expr, rhs);
           }
-          */
-          join->setCondition(new_join_condition /*,new_join_condition_expr*/);
+          join->setCondition(new_join_condition, new_join_condition_expr);
         }
 
-        SubConditionRemover remover(join_conditions);
-        auto new_filter_condition = remover.visit(filter->getCondition());
-        SubConditionRemoveVisitor visitor(join_condition_exprs);
-        auto new_filter_expr = visitor.visit(filter->getConditionExpr());
+        SubConditionRemover orig_remover(join_conditions);
+        auto new_filter_condition = orig_remover.visit(filter->getCondition());
+        SubConditionRemoveVisitor remover(join_condition_exprs);
+        auto new_filter_expr = remover.visit(filter->getConditionExpr());
         modified_filter->setCondition(new_filter_condition, new_filter_expr);
       }
     }

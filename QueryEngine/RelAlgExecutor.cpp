@@ -2760,6 +2760,75 @@ std::unique_ptr<const RexOperator> get_bitwise_equals(const RexScalar* scalar) {
   return nullptr;
 }
 
+hdk::ir::ExprPtr get_bitwise_equals(const hdk::ir::Expr* expr) {
+  const auto condition = dynamic_cast<const hdk::ir::BinOper*>(expr);
+  if (!condition || condition->get_optype() != kOR) {
+    return nullptr;
+  }
+  const hdk::ir::BinOper* equi_join_condition = nullptr;
+  const hdk::ir::BinOper* both_are_null_condition = nullptr;
+
+  if (auto bin_oper =
+          dynamic_cast<const hdk::ir::BinOper*>(condition->get_left_operand())) {
+    if (bin_oper->get_optype() == kEQ) {
+      equi_join_condition = bin_oper;
+    } else if (bin_oper->get_optype() == kAND) {
+      both_are_null_condition = bin_oper;
+    }
+  }
+
+  if (auto bin_oper =
+          dynamic_cast<const hdk::ir::BinOper*>(condition->get_right_operand())) {
+    if (bin_oper->get_optype() == kEQ) {
+      equi_join_condition = bin_oper;
+    } else if (bin_oper->get_optype() == kAND) {
+      both_are_null_condition = bin_oper;
+    }
+  }
+
+  if (!equi_join_condition || !both_are_null_condition) {
+    return nullptr;
+  }
+
+  auto lhs_is_null =
+      dynamic_cast<const hdk::ir::UOper*>(both_are_null_condition->get_left_operand());
+  auto rhs_is_null =
+      dynamic_cast<const hdk::ir::UOper*>(both_are_null_condition->get_right_operand());
+  if (!lhs_is_null || !rhs_is_null || lhs_is_null->get_optype() != kISNULL ||
+      rhs_is_null->get_optype() != kISNULL) {
+    return nullptr;
+  }
+
+  auto eq_lhs =
+      dynamic_cast<const hdk::ir::ColumnRef*>(equi_join_condition->get_left_operand());
+  auto eq_rhs =
+      dynamic_cast<const hdk::ir::ColumnRef*>(equi_join_condition->get_right_operand());
+  if (auto cast =
+          dynamic_cast<const hdk::ir::UOper*>(equi_join_condition->get_left_operand())) {
+    eq_lhs = dynamic_cast<const hdk::ir::ColumnRef*>(cast->get_operand());
+  }
+  if (auto cast =
+          dynamic_cast<const hdk::ir::UOper*>(equi_join_condition->get_right_operand())) {
+    eq_rhs = dynamic_cast<const hdk::ir::ColumnRef*>(cast->get_operand());
+  }
+
+  auto is_null_lhs = dynamic_cast<const hdk::ir::ColumnRef*>(lhs_is_null->get_operand());
+  auto is_null_rhs = dynamic_cast<const hdk::ir::ColumnRef*>(rhs_is_null->get_operand());
+  if (!eq_lhs || !eq_rhs || !is_null_lhs || !is_null_rhs) {
+    return nullptr;
+  }
+  if ((*eq_lhs == *is_null_lhs && *eq_rhs == *is_null_rhs) ||
+      (*eq_lhs == *is_null_rhs && *eq_rhs == *is_null_lhs)) {
+    return hdk::ir::makeExpr<hdk::ir::BinOper>(
+        kBOOLEAN,
+        kBW_EQ,
+        kONE,
+        equi_join_condition->get_left_operand()->deep_copy(),
+        equi_join_condition->get_right_operand()->deep_copy());
+  }
+  return nullptr;
+}
+
 std::unique_ptr<const RexOperator> get_bitwise_equals_conjunction(
     const RexScalar* scalar) {
   const auto condition = dynamic_cast<const RexOperator*>(scalar);
@@ -2779,6 +2848,23 @@ std::unique_ptr<const RexOperator> get_bitwise_equals_conjunction(
     return acc;
   }
   return get_bitwise_equals(scalar);
+}
+
+hdk::ir::ExprPtr get_bitwise_equals_conjunction(const hdk::ir::Expr* expr) {
+  const auto condition = dynamic_cast<const hdk::ir::BinOper*>(expr);
+  if (condition && condition->get_optype() == kAND) {
+    auto acc = get_bitwise_equals(condition->get_left_operand());
+    if (!acc) {
+      return nullptr;
+    }
+    return hdk::ir::makeExpr<hdk::ir::BinOper>(
+        kBOOLEAN,
+        kAND,
+        kONE,
+        acc,
+        get_bitwise_equals_conjunction(condition->get_right_operand()));
+  }
+  return get_bitwise_equals(expr);
 }
 
 std::vector<JoinType> left_deep_join_types(const RelLeftDeepInnerJoin* left_deep_join) {
@@ -3054,26 +3140,67 @@ hdk::ir::ExprPtr reverse_logical_distribution(const hdk::ir::ExprPtr& expr) {
 
 std::list<hdk::ir::ExprPtr> RelAlgExecutor::makeJoinQuals(
     const RexScalar* join_condition,
+    const hdk::ir::Expr* join_condition_expr,
     const std::vector<JoinType>& join_types,
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
     const bool just_explain) const {
   RelAlgTranslator translator(
       executor_, input_to_nest_level, join_types, now_, just_explain);
   const auto rex_condition_cf = rex_to_conjunctive_form(join_condition);
-  std::list<hdk::ir::ExprPtr> join_condition_quals;
+  std::list<hdk::ir::ExprPtr> orig_join_condition_quals;
   for (const auto rex_condition_component : rex_condition_cf) {
     const auto bw_equals = get_bitwise_equals_conjunction(rex_condition_component);
     const auto join_condition =
         reverse_logical_distribution(translator.translateScalarRex(
             bw_equals ? bw_equals.get() : rex_condition_component));
     auto join_condition_cf = qual_to_conjunctive_form(join_condition);
-    join_condition_quals.insert(join_condition_quals.end(),
-                                join_condition_cf.quals.begin(),
-                                join_condition_cf.quals.end());
-    join_condition_quals.insert(join_condition_quals.end(),
-                                join_condition_cf.simple_quals.begin(),
-                                join_condition_cf.simple_quals.end());
+    orig_join_condition_quals.insert(orig_join_condition_quals.end(),
+                                     join_condition_cf.quals.begin(),
+                                     join_condition_cf.quals.end());
+    orig_join_condition_quals.insert(orig_join_condition_quals.end(),
+                                     join_condition_cf.simple_quals.begin(),
+                                     join_condition_cf.simple_quals.end());
   }
+
+  std::list<hdk::ir::ExprPtr> join_condition_quals;
+  auto bw_equals = get_bitwise_equals_conjunction(join_condition_expr);
+  auto condition_expr =
+      translator.normalize(bw_equals ? bw_equals.get() : join_condition_expr);
+  condition_expr = reverse_logical_distribution(condition_expr);
+  auto join_condition_cf = qual_to_conjunctive_form(condition_expr);
+  join_condition_quals.insert(join_condition_quals.end(),
+                              join_condition_cf.quals.begin(),
+                              join_condition_cf.quals.end());
+  join_condition_quals.insert(join_condition_quals.end(),
+                              join_condition_cf.simple_quals.begin(),
+                              join_condition_cf.simple_quals.end());
+
+  // The following block is for debug purposes only to make
+  // sure Expr translation gives the same result as Rex.
+  {
+    CHECK_EQ(join_condition_quals.size(), orig_join_condition_quals.size());
+    std::list<hdk::ir::ExprPtr> copy(join_condition_quals.begin(),
+                                     join_condition_quals.end());
+    auto it1 = orig_join_condition_quals.begin();
+    while (it1 != orig_join_condition_quals.end()) {
+      auto it = std::find_if(
+          copy.begin(), copy.end(), [&it1](auto& expr) { return **it1 == *expr; });
+      if (it == copy.end()) {
+        std::cerr << "Join condition mismatch:" << std::endl << "  Orig:" << std::endl;
+        for (auto& expr : orig_join_condition_quals) {
+          std::cerr << (expr == *it1 ? "  + " : "   - ") << expr->toString() << std::endl;
+        }
+        std::cerr << "  New:" << std::endl;
+        for (auto& expr : join_condition_quals) {
+          std::cerr << "   - " << expr->toString() << std::endl;
+        }
+        CHECK(false);
+      }
+      copy.erase(it);
+      ++it1;
+    }
+  }
+
   return combine_equi_join_conditions(join_condition_quals);
 }
 
@@ -3086,16 +3213,23 @@ JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
     const bool just_explain) {
   const auto join_types = left_deep_join_types(join);
-  const auto join_condition_quals = makeJoinQuals(
-      join->getInnerCondition(), join_types, input_to_nest_level, just_explain);
+  const auto join_condition_quals = makeJoinQuals(join->getInnerCondition(),
+                                                  join->getInnerConditionExpr(),
+                                                  join_types,
+                                                  input_to_nest_level,
+                                                  just_explain);
   MaxRangeTableIndexVisitor rte_idx_visitor;
   JoinQualsPerNestingLevel result(input_descs.size() - 1);
   std::unordered_set<hdk::ir::ExprPtr> visited_quals;
   for (size_t rte_idx = 1; rte_idx < input_descs.size(); ++rte_idx) {
     const auto outer_condition = join->getOuterCondition(rte_idx);
+    const auto outer_condition_expr = join->getOuterConditionExpr(rte_idx);
     if (outer_condition) {
-      result[rte_idx - 1].quals =
-          makeJoinQuals(outer_condition, join_types, input_to_nest_level, just_explain);
+      result[rte_idx - 1].quals = makeJoinQuals(outer_condition,
+                                                outer_condition_expr,
+                                                join_types,
+                                                input_to_nest_level,
+                                                just_explain);
       CHECK_LE(rte_idx, join_types.size());
       CHECK(join_types[rte_idx - 1] == JoinType::LEFT);
       result[rte_idx - 1].type = JoinType::LEFT;
