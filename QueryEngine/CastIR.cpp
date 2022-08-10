@@ -51,6 +51,10 @@ llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
     auto len = cgen_state_->ir_builder_.CreateTrunc(
         cgen_state_->ir_builder_.CreateExtractValue(_struct, {1}),
         get_int_type(32, cgen_state_->context_));
+    executor_->cgen_state_->emitExternalCall(
+        "register_buffer_with_executor_rsm",
+        llvm::Type::getVoidTy(executor_->cgen_state_->context_),
+        {executor_->cgen_state_->llInt(reinterpret_cast<int64_t>(executor_)), ptr});
     operand_lv = cgen_state_->emitCall("string_pack", {ptr, len});
   }
   const auto& operand_ti = operand->get_type_info();

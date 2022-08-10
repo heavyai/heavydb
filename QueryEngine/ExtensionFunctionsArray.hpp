@@ -10,7 +10,7 @@
 namespace {
 
 template <typename T>
-DEVICE ALWAYS_INLINE Array<T> array_append_impl(const Array<T> in_arr, T val) {
+DEVICE ALWAYS_INLINE Array<T> array_append_impl(const Array<T>& in_arr, T val) {
   Array<T> out_arr(in_arr.getSize() + 1);
   for (int64_t i = 0; i < in_arr.getSize(); i++) {
     out_arr[i] = in_arr(i);
@@ -21,7 +21,7 @@ DEVICE ALWAYS_INLINE Array<T> array_append_impl(const Array<T> in_arr, T val) {
 
 // while appending boolean value to bool-type array we need to deal with its
 // array storage carefully to correctly represent null sentinel for bool type array
-DEVICE ALWAYS_INLINE Array<bool> barray_append_impl(const Array<bool> in_arr,
+DEVICE ALWAYS_INLINE Array<bool> barray_append_impl(const Array<bool>& in_arr,
                                                     const int8_t val) {
   Array<bool> out_arr(in_arr.getSize() + 1);
   // cast bool array storage to int8_t type to mask null elem correctly
@@ -49,7 +49,7 @@ template struct Array<float>;
 template struct Array<double>;
 #endif
 
-EXTENSION_NOINLINE Array<int64_t> array_append(const Array<int64_t> in_arr,
+EXTENSION_NOINLINE Array<int64_t> array_append(const Array<int64_t>& in_arr,
                                                const int64_t val) {
 #ifndef __CUDACC__
   return array_append_impl(in_arr, val);
@@ -59,7 +59,7 @@ EXTENSION_NOINLINE Array<int64_t> array_append(const Array<int64_t> in_arr,
 #endif
 }
 
-EXTENSION_NOINLINE Array<int32_t> array_append__(const Array<int32_t> in_arr,
+EXTENSION_NOINLINE Array<int32_t> array_append__(const Array<int32_t>& in_arr,
                                                  const int32_t val) {
 #ifndef __CUDACC__
   return array_append_impl(in_arr, val);
@@ -69,7 +69,7 @@ EXTENSION_NOINLINE Array<int32_t> array_append__(const Array<int32_t> in_arr,
 #endif
 }
 
-EXTENSION_NOINLINE Array<int16_t> array_append__1(const Array<int16_t> in_arr,
+EXTENSION_NOINLINE Array<int16_t> array_append__1(const Array<int16_t>& in_arr,
                                                   const int16_t val) {
 #ifndef __CUDACC__
   return array_append_impl(in_arr, val);
@@ -79,7 +79,7 @@ EXTENSION_NOINLINE Array<int16_t> array_append__1(const Array<int16_t> in_arr,
 #endif
 }
 
-EXTENSION_NOINLINE Array<int8_t> array_append__2(const Array<int8_t> in_arr,
+EXTENSION_NOINLINE Array<int8_t> array_append__2(const Array<int8_t>& in_arr,
                                                  const int8_t val) {
 #ifndef __CUDACC__
   return array_append_impl(in_arr, val);
@@ -89,7 +89,7 @@ EXTENSION_NOINLINE Array<int8_t> array_append__2(const Array<int8_t> in_arr,
 #endif
 }
 
-EXTENSION_NOINLINE Array<double> array_append__3(const Array<double> in_arr,
+EXTENSION_NOINLINE Array<double> array_append__3(const Array<double>& in_arr,
                                                  const double val) {
 #ifndef __CUDACC__
   return array_append_impl(in_arr, val);
@@ -99,7 +99,7 @@ EXTENSION_NOINLINE Array<double> array_append__3(const Array<double> in_arr,
 #endif
 }
 
-EXTENSION_NOINLINE Array<float> array_append__4(const Array<float> in_arr,
+EXTENSION_NOINLINE Array<float> array_append__4(const Array<float>& in_arr,
                                                 const float val) {
 #ifndef __CUDACC__
   return array_append_impl(in_arr, val);
@@ -114,7 +114,7 @@ EXTENSION_NOINLINE Array<float> array_append__4(const Array<float> in_arr,
   does not belong to NUMERIC family, hence we need to use different
   name for boolean UDF.
  */
-EXTENSION_NOINLINE Array<bool> barray_append(const Array<bool> in_arr, const bool val) {
+EXTENSION_NOINLINE Array<bool> barray_append(const Array<bool>& in_arr, const bool val) {
 #ifndef __CUDACC__
   // we need to cast 'val' to int8_t type to represent null sentinel correctly
   // i.e., NULL_BOOLEAN = -128

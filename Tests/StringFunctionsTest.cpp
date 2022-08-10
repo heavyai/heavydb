@@ -2972,6 +2972,45 @@ TEST_F(StringFunctionTest, ucase) {
   }
 }
 
+TEST_F(StringFunctionTest, TextEncodingNoneCopyUDF) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set =
+        sql("select text_encoding_none_copy(largest_city) from "
+            "string_function_test_countries;",
+            dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+        {"New York City"}, {"TORONTO"}, {"LONDON"}, {"Berlin"}};
+    compare_result_set(expected_result_set, result_set);
+  }
+}
+
+TEST_F(StringFunctionTest, TextEncodingNoneConcatUDF) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set =
+        sql("select text_encoding_none_concat('city:', largest_city) from "
+            "string_function_test_countries",
+            dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+        {"city: New York City"}, {"city: TORONTO"}, {"city: LONDON"}, {"city: Berlin"}};
+    compare_result_set(expected_result_set, result_set);
+  }
+}
+
+TEST_F(StringFunctionTest, TextEncodingNoneLengthUDF) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set =
+        sql("select text_encoding_none_length(largest_city) from "
+            "string_function_test_countries;",
+            dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+        {int64_t(13)}, {int64_t(7)}, {int64_t(6)}, {int64_t(6)}};
+    compare_result_set(expected_result_set, result_set);
+  }
+}
+
 const char* postgres_osm_names = R"(
     CREATE TABLE postgres_osm_names (
       name TEXT,

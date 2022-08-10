@@ -30,20 +30,15 @@ namespace {
 llvm::StructType* get_buffer_struct_type(CgenState* cgen_state,
                                          const std::string& ext_func_name,
                                          size_t param_num,
-                                         llvm::Type* elem_type,
-                                         bool has_is_null) {
+                                         llvm::Type* elem_type) {
   CHECK(elem_type);
   CHECK(elem_type->isPointerTy());
   llvm::StructType* generated_struct_type =
-      (has_is_null ? llvm::StructType::get(cgen_state->context_,
-                                           {elem_type,
-                                            llvm::Type::getInt64Ty(cgen_state->context_),
-                                            llvm::Type::getInt8Ty(cgen_state->context_)},
-                                           false)
-                   : llvm::StructType::get(
-                         cgen_state->context_,
-                         {elem_type, llvm::Type::getInt64Ty(cgen_state->context_)},
-                         false));
+      llvm::StructType::get(cgen_state->context_,
+                            {elem_type,
+                             llvm::Type::getInt64Ty(cgen_state->context_),
+                             llvm::Type::getInt8Ty(cgen_state->context_)},
+                            false);
   llvm::Function* udf_func = cgen_state->module_->getFunction(ext_func_name);
   if (udf_func) {
     // Compare expected array struct type with type from the function
@@ -361,8 +356,7 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
         cgen_state_,
         function_oper->getName(),
         0,
-        get_llvm_type_from_sql_array_type(ret_ti, cgen_state_->context_),
-        /* has_is_null = */ ret_ti.is_array() || ret_ti.is_bytes());
+        get_llvm_type_from_sql_array_type(ret_ti, cgen_state_->context_));
     buffer_ret = cgen_state_->ir_builder_.CreateAlloca(struct_ty);
     args.insert(args.begin(), buffer_ret);
   }
@@ -412,8 +406,7 @@ CodeGenerator::beginArgsNullcheck(const Analyzer::FunctionOper* function_oper,
           cgen_state_,
           function_oper->getName(),
           0,
-          get_llvm_type_from_sql_array_type(func_ti, cgen_state_->context_),
-          func_ti.is_array() || func_ti.is_bytes());
+          get_llvm_type_from_sql_array_type(func_ti, cgen_state_->context_));
       null_array_alloca = cgen_state_->ir_builder_.CreateAlloca(arr_struct_ty);
     }
     const auto args_notnull_lv = cgen_state_->ir_builder_.CreateNot(
@@ -464,8 +457,7 @@ llvm::Value* CodeGenerator::endArgsNullcheck(
           cgen_state_,
           function_oper->getName(),
           0,
-          get_llvm_type_from_sql_array_type(func_ti, cgen_state_->context_),
-          true);
+          get_llvm_type_from_sql_array_type(func_ti, cgen_state_->context_));
       ext_call_phi =
           cgen_state_->ir_builder_.CreatePHI(llvm::PointerType::get(arr_struct_ty, 0), 2);
 
@@ -690,7 +682,7 @@ void CodeGenerator::codegenBufferArgs(const std::string& ext_func_name,
   CHECK(buffer_size);
 
   auto buffer_abstraction = get_buffer_struct_type(
-      cgen_state_, ext_func_name, param_num, buffer_buf->getType(), !!(buffer_null));
+      cgen_state_, ext_func_name, param_num, buffer_buf->getType());
   auto alloc_mem = cgen_state_->ir_builder_.CreateAlloca(buffer_abstraction);
 
   auto buffer_buf_ptr =
@@ -701,14 +693,12 @@ void CodeGenerator::codegenBufferArgs(const std::string& ext_func_name,
       cgen_state_->ir_builder_.CreateStructGEP(buffer_abstraction, alloc_mem, 1);
   cgen_state_->ir_builder_.CreateStore(buffer_size, buffer_size_ptr);
 
-  if (buffer_null) {
-    auto bool_extended_type = llvm::Type::getInt8Ty(cgen_state_->context_);
-    auto buffer_null_extended =
-        cgen_state_->ir_builder_.CreateZExt(buffer_null, bool_extended_type);
-    auto buffer_is_null_ptr =
-        cgen_state_->ir_builder_.CreateStructGEP(buffer_abstraction, alloc_mem, 2);
-    cgen_state_->ir_builder_.CreateStore(buffer_null_extended, buffer_is_null_ptr);
-  }
+  auto bool_extended_type = llvm::Type::getInt8Ty(cgen_state_->context_);
+  auto buffer_null_extended =
+      cgen_state_->ir_builder_.CreateZExt(buffer_null, bool_extended_type);
+  auto buffer_is_null_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(buffer_abstraction, alloc_mem, 2);
+  cgen_state_->ir_builder_.CreateStore(buffer_null_extended, buffer_is_null_ptr);
   output_args.push_back(alloc_mem);
 }
 
@@ -1375,11 +1365,12 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
           ptr_lv, llvm::Type::getInt8PtrTy(cgen_state_->context_));
       auto string_size_arg =
           builder.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_));
+      auto padding = ll_int<int8_t>(0, cgen_state_->context_);
       codegenBufferArgs(ext_func_sig->getName(),
                         ij + dj,
                         string_buf_arg,
                         string_size_arg,
-                        nullptr,
+                        padding,
                         args);
     } else if (arg_ti.is_array()) {
       bool const_arr = (const_arr_size.count(orig_arg_lvs[k]) > 0);
