@@ -74,6 +74,13 @@ class ExplainedQueryHint {
   // our query AST analyzer translates query hint string to understandable form which we
   // called "ExplainedQueryHint"
  public:
+  // default contructor used for deserialization only
+  ExplainedQueryHint()
+      : hint_{QueryHint::kInvalidHint}
+      , global_hint_{false}
+      , is_marker_{false}
+      , has_kv_type_options_{false} {}
+
   ExplainedQueryHint(QueryHint hint,
                      bool global_hint,
                      bool is_marker,
@@ -117,11 +124,11 @@ class ExplainedQueryHint {
     inherit_paths_ = interit_paths;
   }
 
-  const std::vector<std::string>& getListOptions() { return list_options_; }
+  const std::vector<std::string>& getListOptions() const { return list_options_; }
 
-  const std::vector<int>& getInteritPath() { return inherit_paths_; }
+  const std::vector<int>& getInteritPath() const { return inherit_paths_; }
 
-  const std::unordered_map<std::string, std::string>& getKVOptions() {
+  const std::unordered_map<std::string, std::string>& getKVOptions() const {
     return kv_options_;
   }
 

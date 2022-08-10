@@ -51,7 +51,8 @@ enum SQLOps {
   kFUNCTION,
   kIN,
   kOVERLAPS,
-  kENCODE_TEXT
+  kENCODE_TEXT,
+  kINVALID_OP
 };
 
 #define IS_COMPARISON(X)                                                          \
@@ -78,7 +79,8 @@ enum SQLAgg {
   kAPPROX_COUNT_DISTINCT,
   kAPPROX_QUANTILE,
   kSAMPLE,
-  kSINGLE_VALUE
+  kSINGLE_VALUE,
+  kINVALID_AGG
 };
 
 enum class SqlStringOpKind {
@@ -136,7 +138,9 @@ enum class SqlWindowFunctionKind {
   LEAD_IN_FRAME,
   FIRST_VALUE,
   LAST_VALUE,
-  SUM_INTERNAL  // For deserialization from Calcite only. Gets rewritten to a regular SUM.
+  SUM_INTERNAL,  // For deserialization from Calcite only. Gets rewritten to a regular
+                 // SUM.
+  INVALID
 };
 
 enum class SqlWindowFrameBoundType {
@@ -210,6 +214,8 @@ inline std::string toString(const SQLAgg& kind) {
       return "SAMPLE";
     case kSINGLE_VALUE:
       return "SINGLE_VALUE";
+    case kINVALID_AGG:
+      return "INVALID";
   }
   LOG(FATAL) << "Invalid aggregate kind: " << kind;
   return "";
@@ -269,6 +275,8 @@ inline std::string toString(const SQLOps& op) {
       return "OVERLAPS";
     case kENCODE_TEXT:
       return "ENCODE_TEXT";
+    case kINVALID_OP:
+      return "INVALID_OP";
   }
   LOG(FATAL) << "Invalid operation kind: " << op;
   return "";
@@ -443,6 +451,8 @@ inline std::string toString(const SqlWindowFunctionKind& kind) {
       return "LEAD_IN_FRAME";
     case SqlWindowFunctionKind::LAG_IN_FRAME:
       return "LAG_IN_FRAME";
+    case SqlWindowFunctionKind::INVALID:
+      return "INVALID";
   }
   LOG(FATAL) << "Invalid window function kind.";
   return "";
