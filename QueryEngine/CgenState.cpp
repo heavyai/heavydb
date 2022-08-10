@@ -448,20 +448,6 @@ llvm::Value* CgenState::emitExternalCall(
     arr_arg_builder.addAttribute(llvm::Attribute::StructRet);
     func->addParamAttrs(0, arr_arg_builder);
   }
-  const size_t arg_start = has_struct_return ? 1 : 0;
-//     for (size_t i = arg_start; i < func->arg_size(); i++) {
-//       const auto arg_ti = func_type->getParamType(i);
-//       if (arg_ti->isPointerTy() && arg_ti->getPointerElementType()->isStructTy()) {
-//         auto attr_list = func->getAttributes();
-// #if 14 <= LLVM_VERSION_MAJOR
-//         llvm::AttrBuilder arr_arg_builder(context_, attr_list.getParamAttrs(i));
-// #else
-//         llvm::AttrBuilder arr_arg_builder(attr_list.getParamAttributes(i));
-// #endif
-//         arr_arg_builder.addByValAttr(arg_ti->getPointerElementType());
-//         func->addParamAttrs(i, arr_arg_builder);
-//       }
-//     }
   llvm::Value* result = ir_builder_.CreateCall(func_p, args);
   // check the assumed type
   CHECK_EQ(result->getType(), ret_type);
