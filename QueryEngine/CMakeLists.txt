@@ -70,6 +70,7 @@ set(query_engine_source_files
     JoinHashTable/HashTable.cpp
     JoinHashTable/PerfectJoinHashTable.cpp
     JoinHashTable/Runtime/HashJoinRuntime.cpp
+    L0Kernel.cpp
     LogicalIR.cpp
     LLVMFunctionAttributesUtil.cpp
     LLVMGlobalContext.cpp
@@ -260,6 +261,10 @@ set(QUERY_ENGINE_LIBS
         )
 
 list(APPEND QUERY_ENGINE_LIBS ${llvm_libs} ${ZLIB_LIBRARIES})
+
+if(ENABLE_L0)
+    list(APPEND QUERY_ENGINE_LIBS PkgConfig::LLVMSPIRVLib)
+endif()
 
 target_link_libraries(QueryEngine ${QUERY_ENGINE_LIBS})
 

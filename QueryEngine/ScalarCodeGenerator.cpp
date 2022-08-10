@@ -174,15 +174,17 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
     llvm::Function* func,
     llvm::Function* wrapper_func,
     const CompilationOptions& co) {
+#ifdef HAVE_CUDA
   if (!nvptx_target_machine_) {
     nvptx_target_machine_ = compiler::CUDABackend::initializeNVPTXBackend(
         CudaMgr_Namespace::NvidiaDeviceArch::Kepler);
   }
+#endif
   if (!gpu_mgr_) {
 #ifdef HAVE_CUDA
     gpu_mgr_ = std::make_unique<CudaMgr_Namespace::CudaMgr>(0);
 #elif HAVE_L0
-    gpu_mgr_ = std::make_unique<L0Manager>();
+    gpu_mgr_ = std::make_unique<l0::L0Manager>();
 #endif
   }
 
@@ -190,14 +192,28 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
                           .block_size = gpu_mgr_->getMaxBlockSize(),
                           .cgen_state = cgen_state_,
                           .row_func_not_inlined = false};
-  gpu_compilation_context_ =
-      compiler::CUDABackend::generateNativeGPUCode(executor->get_extension_modules(),
-                                                   func,
-                                                   wrapper_func,
-                                                   {func, wrapper_func},
-                                                   /*is_gpu_smem_used=*/false,
-                                                   co,
-                                                   gpu_target,
-                                                   nvptx_target_machine_.get());
-  return gpu_compilation_context_->getNativeFunctionPointers();
+  switch (gpu_mgr_->getPlatform()) {
+    case GpuMgrPlatform::CUDA: {
+      auto cuda_context =
+          compiler::CUDABackend::generateNativeGPUCode(executor->get_extension_modules(),
+                                                       func,
+                                                       wrapper_func,
+                                                       {func, wrapper_func},
+                                                       /*is_gpu_smem_used=*/false,
+                                                       co,
+                                                       gpu_target,
+                                                       nvptx_target_machine_.get());
+      gpu_compilation_context_ = cuda_context;
+      return cuda_context->getNativeFunctionPointers();
+    }
+    case GpuMgrPlatform::L0: {
+      auto l0_context = compiler::L0Backend::generateNativeGPUCode(
+          func, wrapper_func, {func, wrapper_func}, co, gpu_target);
+      gpu_compilation_context_ = l0_context;
+      return l0_context->getNativeFunctionPointers();
+    }
+    default:
+      CHECK(false) << "Unsupported gpu platform.";
+      return {};
+  }
 }

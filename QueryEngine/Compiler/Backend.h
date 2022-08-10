@@ -18,6 +18,7 @@
 #include <memory>
 
 #include "QueryEngine/ExtensionModules.h"
+#include "QueryEngine/L0Kernel.h"
 #include "QueryEngine/LLVMFunctionAttributesUtil.h"
 #include "QueryEngine/NvidiaKernel.h"
 #include "QueryEngine/Target.h"
@@ -89,6 +90,27 @@ class CUDABackend : public Backend {
   GPUTarget& gpu_target_;
 
   mutable std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
+};
+
+class L0Backend : public Backend {
+ public:
+  L0Backend(GPUTarget& gpu_target) : gpu_target_(gpu_target) {}
+
+  std::shared_ptr<CompilationContext> generateNativeCode(
+      llvm::Function* func,
+      llvm::Function* wrapper_func,
+      const std::unordered_set<llvm::Function*>& live_funcs,
+      const CompilationOptions& co) override;
+
+  static std::shared_ptr<L0CompilationContext> generateNativeGPUCode(
+      llvm::Function* func,
+      llvm::Function* wrapper_func,
+      const std::unordered_set<llvm::Function*>& live_funcs,
+      const CompilationOptions& co,
+      const GPUTarget& gpu_target);
+
+ private:
+  GPUTarget& gpu_target_;
 };
 
 std::shared_ptr<Backend> getBackend(

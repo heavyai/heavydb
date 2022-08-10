@@ -26,6 +26,10 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
+#ifdef HAVE_L0
+#include "LLVMSPIRVLib/LLVMSPIRVLib.h"
+#endif
+
 #ifdef ENABLE_ORCJIT
 #include <llvm/ExecutionEngine/JITSymbol.h>
 #else
@@ -960,6 +964,92 @@ std::shared_ptr<CudaCompilationContext> CUDABackend::generateNativeGPUCode(
 #endif
 }
 
+std::shared_ptr<CompilationContext> L0Backend::generateNativeCode(
+    llvm::Function* func,
+    llvm::Function* wrapper_func,
+    const std::unordered_set<llvm::Function*>& live_funcs,
+    const CompilationOptions& co) {
+  return generateNativeGPUCode(func, wrapper_func, live_funcs, co, gpu_target_);
+}
+
+std::shared_ptr<L0CompilationContext> L0Backend::generateNativeGPUCode(
+    llvm::Function* func,
+    llvm::Function* wrapper_func,
+    const std::unordered_set<llvm::Function*>& live_funcs,
+    const CompilationOptions& co,
+    const GPUTarget& gpu_target) {
+#ifdef HAVE_L0
+  auto module = func->getParent();
+
+  CHECK(module);
+  CHECK(wrapper_func);
+
+  for (auto& Fn : *module) {
+    Fn.setCallingConv(llvm::CallingConv::SPIR_FUNC);
+  }
+  wrapper_func->setCallingConv(llvm::CallingConv::SPIR_KERNEL);
+
+  for (auto& Fn : *module) {
+    for (auto I = llvm::inst_begin(Fn), E = llvm::inst_end(Fn); I != E; ++I) {
+      if (auto* CI = llvm::dyn_cast<llvm::CallInst>(&*I)) {
+        CI->setCallingConv(llvm::CallingConv::SPIR_FUNC);
+      }
+    }
+  }
+
+  auto pass_manager_builder = llvm::PassManagerBuilder();
+  llvm::legacy::PassManager PM;
+  pass_manager_builder.populateModulePassManager(PM);
+  compiler::optimize_ir(func, module, PM, live_funcs, false /*smem_used*/, co);
+
+  module->setTargetTriple("spir64-unknown-unknown");
+
+  llvm::LLVMContext& ctx = module->getContext();
+  // set metadata -- pretend we're opencl (see
+  // https://github.com/KhronosGroup/SPIRV-LLVM-Translator/blob/master/docs/SPIRVRepresentationInLLVM.rst#spir-v-instructions-mapped-to-llvm-metadata)
+  llvm::Metadata* spirv_src_ops[] = {
+      llvm::ConstantAsMetadata::get(
+          llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 3 /*OpenCL_C*/)),
+      llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
+                                                           102000 /*OpenCL ver 1.2*/))};
+  llvm::NamedMDNode* spirv_src = module->getOrInsertNamedMetadata("spirv.Source");
+  spirv_src->addOperand(llvm::MDNode::get(ctx, spirv_src_ops));
+
+  SPIRV::TranslatorOpts opts;
+  opts.enableAllExtensions();
+  opts.setDesiredBIsRepresentation(SPIRV::BIsRepresentation::OpenCL12);
+  opts.setDebugInfoEIS(SPIRV::DebugInfoEIS::OpenCL_DebugInfo_100);
+
+  // FIXME
+  llvm::errs() << "func: " << (func ? func->getName() : "null") << "\n";
+  llvm::errs() << "wrapper func: " << (wrapper_func ? wrapper_func->getName() : "null")
+               << "\n";
+
+  std::ostringstream ss;
+  std::string err;
+  auto success = writeSpirv(module, opts, ss, err);
+  CHECK(success) << "Spirv translation failed with error: " << err << "\n";
+
+  const auto func_name = wrapper_func->getName().str();
+  L0BinResult bin_result;
+  const auto l0_mgr = dynamic_cast<const l0::L0Manager*>(gpu_target.gpu_mgr);
+  try {
+    bin_result = spv_to_bin(ss.str(), func_name, 1 /*todo block size*/, l0_mgr);
+  } catch (l0::L0Exception& e) {
+    llvm::errs() << e.what() << "\n";
+    return {};
+  }
+
+  auto compilation_ctx = std::make_shared<L0CompilationContext>();
+  auto device_compilation_ctx = std::make_unique<L0DeviceCompilationContext>(
+      bin_result.device, bin_result.kernel, bin_result.module, l0_mgr, 0, 1);
+  compilation_ctx->addDeviceCode(move(device_compilation_ctx));
+  return compilation_ctx;
+#else
+  return {};
+#endif  // HAVE_L0
+}
+
 std::shared_ptr<Backend> getBackend(
     ExecutorDeviceType dt,
     const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& exts,
@@ -969,7 +1059,10 @@ std::shared_ptr<Backend> getBackend(
     case ExecutorDeviceType::CPU:
       return std::make_shared<CPUBackend>();
     case ExecutorDeviceType::GPU:
-      return std::make_shared<CUDABackend>(exts, is_gpu_smem_used_, gpu_target);
+      if (gpu_target.gpu_mgr->getPlatform() == GpuMgrPlatform::CUDA)
+        return std::make_shared<CUDABackend>(exts, is_gpu_smem_used_, gpu_target);
+      if (gpu_target.gpu_mgr->getPlatform() == GpuMgrPlatform::L0)
+        return std::make_shared<L0Backend>(gpu_target);
     default:
       CHECK(false);
       return {};

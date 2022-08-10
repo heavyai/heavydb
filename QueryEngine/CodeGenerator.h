@@ -518,7 +518,7 @@ class ScalarCodeGenerator : public CodeGenerator {
   std::unique_ptr<CgenState> own_cgen_state_;
   std::unique_ptr<PlanState> own_plan_state_;
   std::unique_ptr<GpuMgr> gpu_mgr_;
-  std::shared_ptr<CudaCompilationContext> gpu_compilation_context_;
+  std::shared_ptr<CompilationContext> gpu_compilation_context_;
   std::shared_ptr<CpuCompilationContext> cpu_compilation_context_;
   std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 };
