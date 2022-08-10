@@ -182,7 +182,7 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
 #ifdef HAVE_CUDA
     gpu_mgr_ = std::make_unique<CudaMgr_Namespace::CudaMgr>(0);
 #elif HAVE_L0
-    gpu_mgr_ = std::make_unique<L0Manager>(0);
+    gpu_mgr_ = std::make_unique<L0Manager>();
 #endif
   }
 

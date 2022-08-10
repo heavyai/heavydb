@@ -31,6 +31,22 @@
 #include "QueryEngine/LLVMGlobalContext.h"
 #include "TestHelpers.h"
 
+namespace {
+#ifdef HAVE_CUDA
+using DevicePtr = CUdeviceptr;
+using DeviceFuncPtr = CUfunction;
+void run_test_kernel(DeviceFuncPtr func, void** params) {
+  cuLaunchKernel(func, 1, 1, 1, 1, 1, 1, 0, nullptr, params, nullptr);
+}
+#elif HAVE_L0
+using DevicePtr = int8_t*;
+using DeviceFuncPtr = void*;
+void run_test_kernel(DeviceFuncPtr func, void** params) {
+  // todo
+}
+#endif
+}  // namespace
+
 TEST(CodeGeneratorTest, IntegerConstant) {
   auto executor =
       Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get();
@@ -143,11 +159,11 @@ TEST(CodeGeneratorTest, IntegerExpr) {
   ASSERT_EQ(out, 100);
 }
 
-#ifdef HAVE_CUDA
+#if defined(HAVE_CUDA) || defined(HAVE_L0)
 void free_param_pointers(const std::vector<void*>& param_ptrs, GpuMgr* gpu_mgr) {
   for (const auto param_ptr : param_ptrs) {
     const auto device_ptr =
-        reinterpret_cast<int8_t*>(*reinterpret_cast<CUdeviceptr*>(param_ptr));
+        reinterpret_cast<int8_t*>(*reinterpret_cast<DevicePtr*>(param_ptr));
     gpu_mgr->freeDeviceMem(device_ptr);
   }
 }
@@ -172,16 +188,16 @@ TEST(CodeGeneratorTest, IntegerConstantGPU) {
 
   for (size_t gpu_idx = 0; gpu_idx < native_function_pointers.size(); ++gpu_idx) {
     const auto native_function_pointer = native_function_pointers[gpu_idx];
-    auto func_ptr = reinterpret_cast<CUfunction>(native_function_pointer);
+    auto func_ptr = reinterpret_cast<DeviceFuncPtr>(native_function_pointer);
 
     std::vector<void*> param_ptrs;
-    CUdeviceptr err = reinterpret_cast<CUdeviceptr>(
+    DevicePtr err = reinterpret_cast<DevicePtr>(
         code_generator.getGpuMgr()->allocateDeviceMem(4, gpu_idx));
-    CUdeviceptr out = reinterpret_cast<CUdeviceptr>(
+    DevicePtr out = reinterpret_cast<DevicePtr>(
         code_generator.getGpuMgr()->allocateDeviceMem(4, gpu_idx));
     param_ptrs.push_back(&err);
     param_ptrs.push_back(&out);
-    cuLaunchKernel(func_ptr, 1, 1, 1, 1, 1, 1, 0, nullptr, &param_ptrs[0], nullptr);
+    run_test_kernel(func_ptr, &param_ptrs[0]);
     int32_t host_err;
     int32_t host_out;
     code_generator.getGpuMgr()->copyDeviceToHost(reinterpret_cast<int8_t*>(&host_err),
@@ -221,16 +237,16 @@ TEST(CodeGeneratorTest, IntegerAddGPU) {
 
   for (size_t gpu_idx = 0; gpu_idx < native_function_pointers.size(); ++gpu_idx) {
     const auto native_function_pointer = native_function_pointers[gpu_idx];
-    auto func_ptr = reinterpret_cast<CUfunction>(native_function_pointer);
+    auto func_ptr = reinterpret_cast<DeviceFuncPtr>(native_function_pointer);
 
     std::vector<void*> param_ptrs;
-    CUdeviceptr err = reinterpret_cast<CUdeviceptr>(
+    DevicePtr err = reinterpret_cast<DevicePtr>(
         code_generator.getGpuMgr()->allocateDeviceMem(4, gpu_idx));
-    CUdeviceptr out = reinterpret_cast<CUdeviceptr>(
+    DevicePtr out = reinterpret_cast<DevicePtr>(
         code_generator.getGpuMgr()->allocateDeviceMem(4, gpu_idx));
     param_ptrs.push_back(&err);
     param_ptrs.push_back(&out);
-    cuLaunchKernel(func_ptr, 1, 1, 1, 1, 1, 1, 0, nullptr, &param_ptrs[0], nullptr);
+    run_test_kernel(func_ptr, &param_ptrs[0]);
     int32_t host_err;
     int32_t host_out;
     code_generator.getGpuMgr()->copyDeviceToHost(reinterpret_cast<int8_t*>(&host_err),
@@ -271,14 +287,14 @@ TEST(CodeGeneratorTest, IntegerColumnGPU) {
 
   for (size_t gpu_idx = 0; gpu_idx < native_function_pointers.size(); ++gpu_idx) {
     const auto native_function_pointer = native_function_pointers[gpu_idx];
-    auto func_ptr = reinterpret_cast<CUfunction>(native_function_pointer);
+    auto func_ptr = reinterpret_cast<DeviceFuncPtr>(native_function_pointer);
 
     std::vector<void*> param_ptrs;
-    CUdeviceptr err = reinterpret_cast<CUdeviceptr>(
+    DevicePtr err = reinterpret_cast<DevicePtr>(
         code_generator.getGpuMgr()->allocateDeviceMem(4, gpu_idx));
-    CUdeviceptr out = reinterpret_cast<CUdeviceptr>(
+    DevicePtr out = reinterpret_cast<DevicePtr>(
         code_generator.getGpuMgr()->allocateDeviceMem(4, gpu_idx));
-    CUdeviceptr in = reinterpret_cast<CUdeviceptr>(
+    DevicePtr in = reinterpret_cast<DevicePtr>(
         code_generator.getGpuMgr()->allocateDeviceMem(4, gpu_idx));
     int host_in = 17;
     code_generator.getGpuMgr()->copyHostToDevice(
@@ -289,7 +305,7 @@ TEST(CodeGeneratorTest, IntegerColumnGPU) {
     param_ptrs.push_back(&err);
     param_ptrs.push_back(&out);
     param_ptrs.push_back(&in);
-    cuLaunchKernel(func_ptr, 1, 1, 1, 1, 1, 1, 0, nullptr, &param_ptrs[0], nullptr);
+    run_test_kernel(func_ptr, &param_ptrs[0]);
     int32_t host_err;
     int32_t host_out;
     code_generator.getGpuMgr()->copyDeviceToHost(reinterpret_cast<int8_t*>(&host_err),
@@ -334,14 +350,14 @@ TEST(CodeGeneratorTest, IntegerExprGPU) {
 
   for (size_t gpu_idx = 0; gpu_idx < native_function_pointers.size(); ++gpu_idx) {
     const auto native_function_pointer = native_function_pointers[gpu_idx];
-    auto func_ptr = reinterpret_cast<CUfunction>(native_function_pointer);
+    auto func_ptr = reinterpret_cast<DeviceFuncPtr>(native_function_pointer);
 
     std::vector<void*> param_ptrs;
-    CUdeviceptr err = reinterpret_cast<CUdeviceptr>(
+    DevicePtr err = reinterpret_cast<DevicePtr>(
         code_generator.getGpuMgr()->allocateDeviceMem(4, gpu_idx));
-    CUdeviceptr out = reinterpret_cast<CUdeviceptr>(
+    DevicePtr out = reinterpret_cast<DevicePtr>(
         code_generator.getGpuMgr()->allocateDeviceMem(4, gpu_idx));
-    CUdeviceptr in = reinterpret_cast<CUdeviceptr>(
+    DevicePtr in = reinterpret_cast<DevicePtr>(
         code_generator.getGpuMgr()->allocateDeviceMem(4, gpu_idx));
     int host_in = 58;
     code_generator.getGpuMgr()->copyHostToDevice(
@@ -352,7 +368,7 @@ TEST(CodeGeneratorTest, IntegerExprGPU) {
     param_ptrs.push_back(&err);
     param_ptrs.push_back(&out);
     param_ptrs.push_back(&in);
-    cuLaunchKernel(func_ptr, 1, 1, 1, 1, 1, 1, 0, nullptr, &param_ptrs[0], nullptr);
+    run_test_kernel(func_ptr, &param_ptrs[0]);
     int32_t host_err;
     int32_t host_out;
     code_generator.getGpuMgr()->copyDeviceToHost(reinterpret_cast<int8_t*>(&host_err),
@@ -369,7 +385,7 @@ TEST(CodeGeneratorTest, IntegerExprGPU) {
     free_param_pointers(param_ptrs, code_generator.getGpuMgr());
   }
 }
-#endif  // HAVE_CUDA
+#endif  // HAVE_CUDA || HAVE_L0
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
