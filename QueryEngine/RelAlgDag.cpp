@@ -557,7 +557,8 @@ RelProject::RelProject(RelProject const& rhs)
     , ModifyManipulationTarget(rhs)
     , fields_(rhs.fields_)
     , hint_applied_(false)
-    , hints_(std::make_unique<Hints>()) {
+    , hints_(std::make_unique<Hints>())
+    , has_pushed_down_window_expr_(rhs.has_pushed_down_window_expr_) {
   RexDeepCopyVisitor copier;
   for (auto const& expr : rhs.scalar_exprs_) {
     scalar_exprs_.push_back(copier.visit(expr.get()));
@@ -704,6 +705,37 @@ int32_t RelTableFunction::countRexLiteralArgs() const {
   return literal_args;
 }
 
+namespace {
+
+void reset_table_function_inputs(
+    std::vector<const Rex*>& column_inputs,
+    const std::vector<std::unique_ptr<const RexScalar>>& old_table_func_inputs,
+    const std::vector<std::unique_ptr<const RexScalar>>& new_table_func_inputs) {
+  CHECK_EQ(old_table_func_inputs.size(), new_table_func_inputs.size());
+  std::unordered_map<const Rex*, const Rex*> old_to_new_input;
+  for (size_t i = 0; i < old_table_func_inputs.size(); ++i) {
+    old_to_new_input.emplace(old_table_func_inputs[i].get(),
+                             new_table_func_inputs[i].get());
+  }
+  for (auto& target : column_inputs) {
+    auto target_it = old_to_new_input.find(target);
+    CHECK(target_it != old_to_new_input.end());
+    target = target_it->second;
+  }
+}
+
+}  // namespace
+
+void RelTableFunction::setTableFuncInputs(
+    std::vector<std::unique_ptr<const RexScalar>>&& exprs) {
+  // this should only be called in the event of disambiguating inputs, which means the
+  // RexScalar types in the exprs argument should be the exact same as those previously.
+  // So we can then assume all col_inputs_ would be in the same place. So just re-adjust
+  // the pointers.
+  reset_table_function_inputs(col_inputs_, table_func_inputs_, exprs);
+  table_func_inputs_ = std::move(exprs);
+}
+
 RelTableFunction::RelTableFunction(RelTableFunction const& rhs)
     : RelAlgNode(rhs)
     , function_name_(rhs.function_name_)
@@ -711,16 +743,7 @@ RelTableFunction::RelTableFunction(RelTableFunction const& rhs)
     , col_inputs_(rhs.col_inputs_)
     , table_func_inputs_(copyRexScalars(rhs.table_func_inputs_))
     , target_exprs_(copyRexScalars(rhs.target_exprs_)) {
-  std::unordered_map<const Rex*, const Rex*> old_to_new_input;
-  for (size_t i = 0; i < table_func_inputs_.size(); ++i) {
-    old_to_new_input.emplace(rhs.table_func_inputs_[i].get(),
-                             table_func_inputs_[i].get());
-  }
-  for (auto& target : col_inputs_) {
-    auto target_it = old_to_new_input.find(target);
-    CHECK(target_it != old_to_new_input.end());
-    target = target_it->second;
-  }
+  reset_table_function_inputs(col_inputs_, rhs.table_func_inputs_, table_func_inputs_);
 }
 
 namespace std {
@@ -1419,7 +1442,7 @@ void bind_table_func_to_input(RelTableFunction* table_func_node,
       disambiguated_exprs.emplace_back(disambiguate_rex(target_expr, input));
     }
   }
-  table_func_node->setTableFuncInputs(disambiguated_exprs);
+  table_func_node->setTableFuncInputs(std::move(disambiguated_exprs));
 }
 
 void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
