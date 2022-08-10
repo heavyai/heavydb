@@ -488,7 +488,7 @@ class DBHandler : public HeavyIf {
   void start_query(TPendingQuery& _return,
                    const TSessionId& leaf_session,
                    const TSessionId& parent_session,
-                   const std::string& query_ra,
+                   const std::string& serialized_rel_alg_dag,
                    const std::string& start_time_str,
                    const bool just_explain,
                    const std::vector<int64_t>& outer_fragment_indices) override;

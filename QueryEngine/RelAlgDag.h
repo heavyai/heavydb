@@ -60,6 +60,8 @@ class Rex {
 
  protected:
   mutable std::optional<size_t> hash_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 class RexScalar : public Rex {};
@@ -67,6 +69,9 @@ class RexScalar : public Rex {};
 // interpretation will not have any references to 'RexAbstractInput' objects.
 class RexAbstractInput : public RexScalar {
  public:
+  // default constructor used for deserialization only
+  RexAbstractInput() : in_index_{0} {};
+
   RexAbstractInput(const unsigned in_index) : in_index_(in_index) {}
 
   unsigned getIndex() const { return in_index_; }
@@ -88,10 +93,16 @@ class RexAbstractInput : public RexScalar {
 
  private:
   mutable unsigned in_index_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 class RexLiteral : public RexScalar {
  public:
+  // default constructor used for deserialization only
+  RexLiteral()
+      : literal_(), scale_{0}, precision_{0}, target_scale_{0}, target_precision_{0} {}
+
   RexLiteral(const int64_t val,
              const SQLTypes type,
              const SQLTypes target_type,
@@ -163,7 +174,7 @@ class RexLiteral : public RexScalar {
   }
 
   RexLiteral(const SQLTypes target_type)
-      : literal_(nullptr)
+      : literal_()
       , type_(kNULLT)
       , target_type_(target_type)
       , scale_(0)
@@ -202,7 +213,16 @@ class RexLiteral : public RexScalar {
   size_t toHash() const override {
     if (!hash_) {
       hash_ = typeid(RexLiteral).hash_code();
-      boost::hash_combine(*hash_, literal_);
+      boost::apply_visitor(
+          [this](auto&& current_val) {
+            using T = std::decay_t<decltype(current_val)>;
+            if constexpr (!std::is_same_v<boost::blank, T>) {
+              static_assert(std::is_same_v<int64_t, T> || std::is_same_v<double, T> ||
+                            std::is_same_v<std::string, T> || std::is_same_v<bool, T>);
+              boost::hash_combine(*hash_, current_val);
+            }
+          },
+          literal_);
       boost::hash_combine(*hash_, type_);
       boost::hash_combine(*hash_, target_type_);
       boost::hash_combine(*hash_, scale_);
@@ -218,13 +238,15 @@ class RexLiteral : public RexScalar {
   }
 
  private:
-  const boost::variant<int64_t, double, std::string, bool, void*> literal_;
-  const SQLTypes type_;
-  const SQLTypes target_type_;
-  const unsigned scale_;
-  const unsigned precision_;
-  const unsigned target_scale_;
-  const unsigned target_precision_;
+  boost::variant<boost::blank, int64_t, double, std::string, bool> literal_;
+  SQLTypes type_;
+  SQLTypes target_type_;
+  unsigned scale_;
+  unsigned precision_;
+  unsigned target_scale_;
+  unsigned target_precision_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 using RexLiteralArray = std::vector<RexLiteral>;
@@ -232,6 +254,9 @@ using TupleContentsArray = std::vector<RexLiteralArray>;
 
 class RexOperator : public RexScalar {
  public:
+  // default constructor for deserialization only
+  RexOperator() : op_{SQLOps::kINVALID_OP} {}
+
   RexOperator(const SQLOps op,
               std::vector<std::unique_ptr<const RexScalar>>& operands,
               const SQLTypeInfo& type)
@@ -280,9 +305,11 @@ class RexOperator : public RexScalar {
   }
 
  protected:
-  const SQLOps op_;
+  SQLOps op_;
   mutable std::vector<std::unique_ptr<const RexScalar>> operands_;
-  const SQLTypeInfo type_;
+  SQLTypeInfo type_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 class RelAlgNode;
@@ -292,14 +319,20 @@ class ExecutionResult;
 
 class RexSubQuery : public RexScalar {
  public:
+  using ExecutionResultShPtr = std::shared_ptr<const ExecutionResult>;
+
+  // default constructor used for deserialization only
+  // NOTE: the result_ member needs to be pointing to a shared_ptr
+  RexSubQuery() : result_(new ExecutionResultShPtr(nullptr)) {}
+
   RexSubQuery(const std::shared_ptr<const RelAlgNode> ra)
       : type_(new SQLTypeInfo(kNULLT, false))
-      , result_(new std::shared_ptr<const ExecutionResult>(nullptr))
+      , result_(new ExecutionResultShPtr(nullptr))
       , ra_(ra) {}
 
   // for deep copy
   RexSubQuery(std::shared_ptr<SQLTypeInfo> type,
-              std::shared_ptr<std::shared_ptr<const ExecutionResult>> result,
+              std::shared_ptr<ExecutionResultShPtr> result,
               const std::shared_ptr<const RelAlgNode> ra)
       : type_(type), result_(result), ra_(ra) {}
 
@@ -316,7 +349,7 @@ class RexSubQuery : public RexScalar {
     return *(type_.get());
   }
 
-  std::shared_ptr<const ExecutionResult> getExecutionResult() const {
+  ExecutionResultShPtr getExecutionResult() const {
     CHECK(result_);
     CHECK(result_.get());
     return *(result_.get());
@@ -333,18 +366,23 @@ class RexSubQuery : public RexScalar {
 
   std::unique_ptr<RexSubQuery> deepCopy() const;
 
-  void setExecutionResult(const std::shared_ptr<const ExecutionResult> result);
+  void setExecutionResult(const ExecutionResultShPtr result);
 
  private:
   std::shared_ptr<SQLTypeInfo> type_;
-  std::shared_ptr<std::shared_ptr<const ExecutionResult>> result_;
-  const std::shared_ptr<const RelAlgNode> ra_;
+  std::shared_ptr<ExecutionResultShPtr> result_;
+  std::shared_ptr<const RelAlgNode> ra_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 // The actual input node understood by the Executor.
 // The in_index_ is relative to the output of node_.
 class RexInput : public RexAbstractInput {
  public:
+  // default constructor used for deserialization only
+  RexInput() : node_{nullptr} {}
+
   RexInput(const RelAlgNode* node, const unsigned in_index)
       : RexAbstractInput(in_index), node_(node) {}
 
@@ -370,6 +408,8 @@ class RexInput : public RexAbstractInput {
 
  private:
   mutable const RelAlgNode* node_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 namespace std {
@@ -385,6 +425,9 @@ struct hash<RexInput> {
 // Analyzer.
 class RexCase : public RexScalar {
  public:
+  // default constructor used for deserialization only
+  RexCase() = default;
+
   RexCase(std::vector<std::pair<std::unique_ptr<const RexScalar>,
                                 std::unique_ptr<const RexScalar>>>& expr_pair_list,
           std::unique_ptr<const RexScalar>& else_expr)
@@ -431,12 +474,17 @@ class RexCase : public RexScalar {
       std::pair<std::unique_ptr<const RexScalar>, std::unique_ptr<const RexScalar>>>
       expr_pair_list_;
   std::unique_ptr<const RexScalar> else_expr_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 class RexFunctionOperator : public RexOperator {
  public:
   using ConstRexScalarPtr = std::unique_ptr<const RexScalar>;
   using ConstRexScalarPtrVector = std::vector<ConstRexScalarPtr>;
+
+  // default constructor used for deserialization only
+  RexFunctionOperator() = default;
 
   RexFunctionOperator(const std::string& name,
                       ConstRexScalarPtrVector& operands,
@@ -474,7 +522,9 @@ class RexFunctionOperator : public RexOperator {
   }
 
  private:
-  const std::string name_;
+  std::string name_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 enum class SortDirection { Ascending, Descending };
@@ -518,20 +568,20 @@ class SortField {
   }
 
  private:
-  const size_t field_;
-  const SortDirection sort_dir_;
-  const NullSortedPosition nulls_pos_;
+  size_t field_;
+  SortDirection sort_dir_;
+  NullSortedPosition nulls_pos_;
 };
 
 class RexWindowFunctionOperator : public RexFunctionOperator {
  public:
   struct RexWindowBound {
-    bool unbounded;
-    bool preceding;
-    bool following;
-    bool is_current_row;
+    bool unbounded{false};
+    bool preceding{false};
+    bool following{false};
+    bool is_current_row{false};
     std::shared_ptr<const RexScalar> bound_expr;
-    int order_key;
+    int order_key{0};
 
     bool isUnboundedPreceding() const { return unbounded && preceding && !bound_expr; }
 
@@ -549,6 +599,10 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
       return !unbounded && !preceding && !following && !is_current_row && !bound_expr;
     }
   };
+
+  // default constructor used for deserialization only
+  RexWindowFunctionOperator()
+      : RexFunctionOperator(), kind_{SqlWindowFunctionKind::INVALID}, is_rows_{false} {}
 
   RexWindowFunctionOperator(const SqlWindowFunctionKind kind,
                             ConstRexScalarPtrVector& operands,
@@ -675,19 +729,24 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
   }
 
  private:
-  const SqlWindowFunctionKind kind_;
+  SqlWindowFunctionKind kind_;
   mutable ConstRexScalarPtrVector partition_keys_;
   mutable ConstRexScalarPtrVector order_keys_;
-  const std::vector<SortField> collation_;
-  const RexWindowBound frame_start_bound_;
-  const RexWindowBound frame_end_bound_;
-  const bool is_rows_;
+  std::vector<SortField> collation_;
+  RexWindowBound frame_start_bound_;
+  RexWindowBound frame_end_bound_;
+  bool is_rows_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 // Not a real node created by Calcite. Created by us because targets of a query
 // should reference the group by expressions instead of creating completely new one.
 class RexRef : public RexScalar {
  public:
+  // default constructor used for deserialization only
+  RexRef() : index_{0} {}
+
   RexRef(const size_t index) : index_(index) {}
 
   size_t getIndex() const { return index_; }
@@ -708,11 +767,16 @@ class RexRef : public RexScalar {
   std::unique_ptr<RexRef> deepCopy() const { return std::make_unique<RexRef>(index_); }
 
  private:
-  const size_t index_;
+  size_t index_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 class RexAgg : public Rex {
  public:
+  // default constructor, used for deserialization only
+  RexAgg() : agg_(SQLAgg::kINVALID_AGG), distinct_(false) {}
+
   RexAgg(const SQLAgg agg,
          const bool distinct,
          const SQLTypeInfo& type,
@@ -761,10 +825,12 @@ class RexAgg : public Rex {
   }
 
  private:
-  const SQLAgg agg_;
-  const bool distinct_;
-  const SQLTypeInfo type_;
-  const std::vector<size_t> operands_;
+  SQLAgg agg_;
+  bool distinct_;
+  SQLTypeInfo type_;
+  std::vector<size_t> operands_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 class RaExecutionDesc;
@@ -884,7 +950,7 @@ class RelAlgNode {
 
  protected:
   RelAlgInputs inputs_;
-  const unsigned id_;
+  unsigned id_;
   mutable std::optional<size_t> id_in_plan_tree_;
   mutable std::optional<size_t> hash_;
 
@@ -896,10 +962,15 @@ class RelAlgNode {
   mutable size_t dag_node_id_;
   mutable std::string query_plan_dag_;
   mutable size_t query_plan_dag_hash_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 class RelScan : public RelAlgNode {
  public:
+  // constructor used for deserialization only
+  RelScan(const TableDescriptor* td) : td_{td}, hint_applied_{false} {}
+
   RelScan(const TableDescriptor* td, const std::vector<std::string>& field_names)
       : td_(td)
       , field_names_(field_names)
@@ -966,9 +1037,11 @@ class RelScan : public RelAlgNode {
 
  private:
   const TableDescriptor* td_;
-  const std::vector<std::string> field_names_;
+  std::vector<std::string> field_names_;
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 class ModifyManipulationTarget {
@@ -992,6 +1065,7 @@ class ModifyManipulationTarget {
   void forceRowwiseOutput() const { force_rowwise_output_ = true; }
 
   TableDescriptor const* getModifiedTableDescriptor() const { return table_descriptor_; }
+  TableDescriptor const* getTableDescriptor() const { return table_descriptor_; }
   void setModifiedTableDescriptor(TableDescriptor const* td) const {
     table_descriptor_ = td;
   }
@@ -1028,6 +1102,8 @@ class ModifyManipulationTarget {
   mutable TableDescriptor const* table_descriptor_ = nullptr;
   mutable ColumnNameList target_columns_;
   mutable bool force_rowwise_output_ = false;
+
+  friend struct RelAlgDagSerializer;
 };
 
 class RelProject : public RelAlgNode, public ModifyManipulationTarget {
@@ -1035,6 +1111,12 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   friend class RelModify;
   using ConstRexScalarPtr = std::unique_ptr<const RexScalar>;
   using ConstRexScalarPtrVector = std::vector<ConstRexScalarPtr>;
+
+  // constructor used for deserialization only
+  RelProject(const TableDescriptor* td)
+      : ModifyManipulationTarget(false, false, false, td)
+      , hint_applied_{false}
+      , has_pushed_down_window_expr_{false} {}
 
   // Takes memory ownership of the expressions.
   RelProject(std::vector<std::unique_ptr<const RexScalar>>& scalar_exprs,
@@ -1213,10 +1295,15 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;
   bool has_pushed_down_window_expr_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 class RelAggregate : public RelAlgNode {
  public:
+  // default constructor, for deserialization only
+  RelAggregate() : groupby_count_{0}, hint_applied_{false} {}
+
   // Takes ownership of the aggregate expressions.
   RelAggregate(const size_t groupby_count,
                std::vector<std::unique_ptr<const RexAgg>>& agg_exprs,
@@ -1334,15 +1421,20 @@ class RelAggregate : public RelAlgNode {
   Hints* getDeliveredHints() { return hints_.get(); }
 
  private:
-  const size_t groupby_count_;
+  size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
   std::vector<std::string> fields_;
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 class RelJoin : public RelAlgNode {
  public:
+  // default constructor used for deserialization only
+  RelJoin() : join_type_(JoinType::INVALID), hint_applied_(false) {}
+
   RelJoin(std::shared_ptr<const RelAlgNode> lhs,
           std::shared_ptr<const RelAlgNode> rhs,
           std::unique_ptr<const RexScalar>& condition,
@@ -1438,9 +1530,11 @@ class RelJoin : public RelAlgNode {
 
  private:
   mutable std::unique_ptr<const RexScalar> condition_;
-  const JoinType join_type_;
+  JoinType join_type_;
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 // a helper node that contains detailed information of each level of join qual
@@ -1564,6 +1658,9 @@ class RelTranslatedJoin : public RelAlgNode {
 
 class RelFilter : public RelAlgNode {
  public:
+  // default constructor, used for deserialization only
+  RelFilter() = default;
+
   RelFilter(std::unique_ptr<const RexScalar>& filter,
             std::shared_ptr<const RelAlgNode> input)
       : filter_(std::move(filter)) {
@@ -1628,11 +1725,16 @@ class RelFilter : public RelAlgNode {
 
  private:
   std::unique_ptr<const RexScalar> filter_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 // Synthetic node to assist execution of left-deep join relational algebra.
 class RelLeftDeepInnerJoin : public RelAlgNode {
  public:
+  // default constructor used for deserialization only
+  RelLeftDeepInnerJoin() = default;
+
   RelLeftDeepInnerJoin(const std::shared_ptr<RelFilter>& filter,
                        RelAlgInputs inputs,
                        std::vector<std::shared_ptr<const RelJoin>>& original_joins);
@@ -1661,8 +1763,10 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
  private:
   std::unique_ptr<const RexScalar> condition_;
   std::vector<std::unique_ptr<const RexScalar>> outer_conditions_per_level_;
-  const std::shared_ptr<RelFilter> original_filter_;
-  const std::vector<std::shared_ptr<const RelJoin>> original_joins_;
+  std::shared_ptr<RelFilter> original_filter_;
+  std::vector<std::shared_ptr<const RelJoin>> original_joins_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 // The 'RelCompound' node combines filter and on the fly aggregate computation.
@@ -1671,6 +1775,13 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
 // which can be efficiently executed with no intermediate buffers.
 class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
  public:
+  // constructor used for deserialization only
+  RelCompound(const TableDescriptor* td)
+      : ModifyManipulationTarget(false, false, false, td)
+      , groupby_count_{0}
+      , is_agg_{false}
+      , hint_applied_{false} {}
+
   // 'target_exprs_' are either scalar expressions owned by 'scalar_sources_'
   // or aggregate expressions owned by 'agg_exprs_', with the arguments
   // owned by 'scalar_sources_'.
@@ -1781,20 +1892,25 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
 
  private:
   std::unique_ptr<const RexScalar> filter_expr_;
-  const size_t groupby_count_;
+  size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
   std::vector<std::string> fields_;
-  const bool is_agg_;
+  bool is_agg_;
   std::vector<std::unique_ptr<const RexScalar>>
-      scalar_sources_;  // building blocks for group_indices_ and agg_exprs_; not actually
-                        // projected, just owned
-  const std::vector<const Rex*> target_exprs_;
+      scalar_sources_;  // building blocks for group_indices_ and agg_exprs_; not
+                        // actually projected, just owned
+  std::vector<const Rex*> target_exprs_;
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 class RelSort : public RelAlgNode {
  public:
+  // default constructor used for deserialization only
+  RelSort() : limit_{0}, offset_{0}, empty_result_{false}, limit_delivered_{false} {}
+
   RelSort(const std::vector<SortField>& collation,
           const size_t limit,
           const size_t offset,
@@ -1889,12 +2005,14 @@ class RelSort : public RelAlgNode {
 
  private:
   std::vector<SortField> collation_;
-  const size_t limit_;
-  const size_t offset_;
+  size_t limit_;
+  size_t offset_;
   bool empty_result_;
   bool limit_delivered_;
 
   bool hasEquivCollationOf(const RelSort& that) const;
+
+  friend struct RelAlgDagSerializer;
 };
 
 class RelModify : public RelAlgNode {
@@ -1929,6 +2047,13 @@ class RelModify : public RelAlgNode {
     throw std::runtime_error(
         std::string("Unsupported logical modify operation encountered " + op_string));
   }
+
+  // constructor used for deserialization only
+  RelModify(Catalog_Namespace::Catalog const& cat, TableDescriptor const* const td)
+      : catalog_{cat}
+      , table_descriptor_{td}
+      , flattened_{false}
+      , operation_{ModifyOperation::Insert} {}
 
   RelModify(Catalog_Namespace::Catalog const& cat,
             TableDescriptor const* const td,
@@ -2092,10 +2217,15 @@ class RelModify : public RelAlgNode {
   bool flattened_;
   ModifyOperation operation_;
   TargetColumnList target_column_list_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 class RelTableFunction : public RelAlgNode {
  public:
+  // default constructor used for deserialization only
+  RelTableFunction() = default;
+
   RelTableFunction(const std::string& function_name,
                    RelAlgInputs inputs,
                    std::vector<std::string>& fields,
@@ -2138,13 +2268,19 @@ class RelTableFunction : public RelAlgNode {
   }
 
   const RexScalar* getTableFuncInputAtAndRelease(const size_t idx) {
+    // NOTE: as of 08/06/22, this appears to only be called by the bind_inputs free
+    // function in RelAlgDag.cpp to disambituate inputs. If you follow the bind_inputs
+    // path, it eventually could call this method in a bind_table_func_to_input lambda
+    // According to that lambda, the released pointer released here is be immediately be
+    // placed in a new vector of RexScalar unique_ptrs which is then ultimatey used as an
+    // argument for the setTableFuncInputs method below. As such, if a table_func_input_
+    // is released here that is being pointed to by one of the col_inputs_, then we can
+    // keep that col_inputs_ pointer as that table_func_input_ should be returned back.
     CHECK_LT(idx, table_func_inputs_.size());
     return table_func_inputs_[idx].release();
   }
 
-  void setTableFuncInputs(std::vector<std::unique_ptr<const RexScalar>>& exprs) {
-    table_func_inputs_ = std::move(exprs);
-  }
+  void setTableFuncInputs(std::vector<std::unique_ptr<const RexScalar>>&& exprs);
 
   std::string getFieldName(const size_t idx) const {
     CHECK_LT(idx, fields_.size());
@@ -2211,19 +2347,24 @@ class RelTableFunction : public RelAlgNode {
   std::string function_name_;
   std::vector<std::string> fields_;
 
-  std::vector<const Rex*>
-      col_inputs_;  // owned by `table_func_inputs_`, but allows picking out the specific
-                    // input columns vs other table function inputs (e.g. literals)
+  std::vector<const Rex*> col_inputs_;  // owned by `table_func_inputs_`, but allows
+                                        // picking out the specific input columns vs
+                                        // other table function inputs (e.g. literals)
   std::vector<std::unique_ptr<const RexScalar>> table_func_inputs_;
 
   std::vector<std::unique_ptr<const RexScalar>>
-      target_exprs_;  // Note: these should all be RexRef but are stored as RexScalar for
-                      // consistency
+      target_exprs_;  // Note: these should all be RexRef but are stored as RexScalar
+                      // for consistency
+
+  friend struct RelAlgDagSerializer;
 };
 
 class RelLogicalValues : public RelAlgNode {
  public:
   using RowValues = std::vector<std::unique_ptr<const RexScalar>>;
+
+  // default constructor used for deserialization only
+  RelLogicalValues() = default;
 
   RelLogicalValues(const std::vector<TargetMetaInfo>& tuple_type,
                    std::vector<RowValues>& values)
@@ -2281,12 +2422,17 @@ class RelLogicalValues : public RelAlgNode {
   }
 
  private:
-  const std::vector<TargetMetaInfo> tuple_type_;
-  const std::vector<RowValues> values_;
+  std::vector<TargetMetaInfo> tuple_type_;
+  std::vector<RowValues> values_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 class RelLogicalUnion : public RelAlgNode {
  public:
+  // default constructor used for deserialization only
+  RelLogicalUnion() : is_all_{false} {}
+
   RelLogicalUnion(RelAlgInputs, bool is_all);
   std::shared_ptr<RelAlgNode> deepCopy() const override {
     return std::make_shared<RelLogicalUnion>(*this);
@@ -2307,7 +2453,9 @@ class RelLogicalUnion : public RelAlgNode {
   mutable std::vector<std::shared_ptr<const RexScalar>> scalar_exprs_;
 
  private:
-  bool const is_all_;
+  bool is_all_;
+
+  friend struct RelAlgDagSerializer;
 };
 
 class QueryNotSupported : public std::runtime_error {
@@ -2643,6 +2791,7 @@ class RelAlgDag : public boost::noncopyable {
 
   std::vector<std::shared_ptr<RelAlgNode>> nodes_;
   std::vector<std::shared_ptr<RexSubQuery>> subqueries_;
+
   // node hash --> {node id --> registered hint}
   // we additionally consider node id to recognize corresponding hint correctly
   // i.e., to recognize the correct hint when two subqueries are identical
@@ -2650,6 +2799,7 @@ class RelAlgDag : public boost::noncopyable {
       query_hint_;
   RegisteredQueryHint global_hints_;
 
+  friend struct RelAlgDagSerializer;
   friend struct RelAlgDagModifier;
 };
 

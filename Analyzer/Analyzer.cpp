@@ -2887,6 +2887,9 @@ std::string AggExpr::toString() const {
     case kSAMPLE:
       agg = "SAMPLE";
       break;
+    case kINVALID_AGG:
+      UNREACHABLE();
+      break;
   }
   std::string str{"(" + agg};
   if (is_distinct) {
