@@ -353,6 +353,33 @@ hdk::ir::ExprPtrVector getNodeColumnRefs(const RelAlgNode* node) {
   return {};
 }
 
+hdk::ir::ExprPtr getNodeColumnRef(const RelAlgNode* node, unsigned index) {
+  if (is_one_of<RelScan,
+                RelProject,
+                RelAggregate,
+                RelCompound,
+                RelTableFunction,
+                RelLogicalUnion,
+                RelLogicalValues,
+                RelFilter,
+                RelSort>(node)) {
+    CHECK_LT(index, node->size());
+    return hdk::ir::makeExpr<hdk::ir::ColumnRef>(getColumnType(node, index), node, index);
+  }
+
+  if (is_one_of<RelJoin>(node)) {
+    CHECK_EQ(size_t(2), node->inputCount());
+    auto lhs_size = node->getInput(0)->size();
+    if (index < lhs_size) {
+      return getNodeColumnRef(node->getInput(0), index);
+    }
+    return getNodeColumnRef(node->getInput(1), index - lhs_size);
+  }
+
+  LOG(FATAL) << "Unhandled node type: " << ::toString(node);
+  return nullptr;
+}
+
 bool RelProject::isIdentity() const {
   if (!isSimple()) {
     return false;
@@ -1455,7 +1482,8 @@ void bind_table_func_to_input(RelTableFunction* table_func_node,
       disambiguated_exprs.emplace_back(disambiguate_rex(target_expr, input));
     }
   }
-  table_func_node->setTableFuncInputs(disambiguated_exprs);
+  table_func_node->setTableFuncInputs(disambiguated_exprs,
+                                      table_func_node->getTableFuncInputExprs());
 }
 
 void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
@@ -2973,8 +3001,9 @@ class RelAlgDispatcher {
               col_inputs.emplace_back(table_func_inputs.back().get());
 
               unsigned col_idx = static_cast<unsigned>(inputs[pos]->size() - i);
-              col_input_exprs.emplace_back(hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+              table_func_input_exprs.emplace_back(hdk::ir::makeExpr<hdk::ir::ColumnRef>(
                   getColumnType(inputs[pos].get(), col_idx), inputs[pos].get(), col_idx));
+              col_input_exprs.push_back(table_func_input_exprs.back());
             }
             continue;
           }

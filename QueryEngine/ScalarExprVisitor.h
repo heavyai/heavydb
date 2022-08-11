@@ -351,8 +351,10 @@ class ScalarExprVisitor {
   }
 
   virtual T visitAggExpr(const hdk::ir::AggExpr* agg) const {
-    T result = defaultResult();
-    return aggregateResult(result, visit(agg->get_arg()));
+    if (agg->get_arg()) {
+      return visit(agg->get_arg());
+    }
+    return defaultResult();
   }
 
  protected:

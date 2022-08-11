@@ -1420,8 +1420,11 @@ class RelTranslatedJoin : public RelAlgNode {
   const RelAlgNode* getLHS() const { return lhs_; }
   const RelAlgNode* getRHS() const { return rhs_; }
   size_t getFilterCondSize() const { return filter_ops_.size(); }
-  const std::vector<hdk::ir::ExprPtr> getFilterCond() const { return filter_ops_; }
+  const std::vector<hdk::ir::ExprPtr>& getFilterCond() const { return filter_ops_; }
   const RexScalar* getOuterJoinCond() const { return outer_join_cond_; }
+  const hdk::ir::Expr* getOuterJoinCondExpr() const {
+    return outer_join_cond_expr_.get();
+  }
   std::string getOpType() const { return op_type_; }
   std::string getQualifier() const { return qualifier_; }
   std::string getOpTypeInfo() const { return op_typeinfo_; }
@@ -1460,6 +1463,7 @@ class RelTranslatedJoin : public RelAlgNode {
   const std::vector<const hdk::ir::ColumnVar*> rhs_join_cols_;
   const std::vector<hdk::ir::ExprPtr> filter_ops_;
   const RexScalar* outer_join_cond_;
+  hdk::ir::ExprPtr outer_join_cond_expr_;
   const bool nested_loop_;
   const JoinType join_type_;
   const std::string op_type_;
@@ -1802,7 +1806,8 @@ class RelTableFunction : public RelAlgNode {
                    hdk::ir::ExprPtrVector table_func_input_exprs,
                    std::vector<std::unique_ptr<const RexScalar>>& target_exprs,
                    std::vector<TargetMetaInfo> tuple_type)
-      : function_name_(function_name)
+      : RelAlgNode(std::move(inputs))
+      , function_name_(function_name)
       , fields_(fields)
       , col_inputs_(col_inputs)
       , col_input_exprs_(col_input_exprs)
@@ -1810,9 +1815,8 @@ class RelTableFunction : public RelAlgNode {
       , table_func_input_exprs_(table_func_input_exprs)
       , target_exprs_(std::move(target_exprs))
       , tuple_type_(std::move(tuple_type)) {
-    for (const auto& input : inputs) {
-      inputs_.emplace_back(input);
-    }
+    CHECK_EQ(col_inputs_.size(), col_input_exprs_.size());
+    CHECK_EQ(table_func_inputs_.size(), table_func_input_exprs_.size());
   }
 
   RelTableFunction(RelTableFunction const&);
@@ -1842,13 +1846,24 @@ class RelTableFunction : public RelAlgNode {
     return table_func_inputs_[idx].get();
   }
 
+  const hdk::ir::Expr* getTableFuncInputExprAt(size_t idx) const {
+    CHECK_LT(idx, table_func_inputs_.size());
+    return table_func_input_exprs_[idx].get();
+  }
+
+  const hdk::ir::ExprPtrVector& getTableFuncInputExprs() const {
+    return table_func_input_exprs_;
+  }
+
   const RexScalar* getTableFuncInputAtAndRelease(const size_t idx) {
     CHECK_LT(idx, table_func_inputs_.size());
     return table_func_inputs_[idx].release();
   }
 
-  void setTableFuncInputs(std::vector<std::unique_ptr<const RexScalar>>& exprs) {
+  void setTableFuncInputs(std::vector<std::unique_ptr<const RexScalar>>& exprs,
+                          hdk::ir::ExprPtrVector new_inputs) {
     table_func_inputs_ = std::move(exprs);
+    table_func_input_exprs_ = std::move(new_inputs);
   }
 
   std::string getFieldName(const size_t idx) const {
@@ -1953,6 +1968,10 @@ class RelLogicalValues : public RelAlgNode {
     const auto& row = values_[row_idx];
     CHECK_LT(col_idx, row.size());
     return row[col_idx].get();
+  }
+
+  const hdk::ir::Expr* getValueExprAt(const size_t row_idx, const size_t col_idx) const {
+    return nullptr;
   }
 
   size_t getRowsSize() const {
@@ -2133,6 +2152,7 @@ inline InputColDescriptor column_var_to_descriptor(const hdk::ir::ColumnVar* var
 
 SQLTypeInfo getColumnType(const RelAlgNode* node, size_t col_idx);
 
+hdk::ir::ExprPtr getNodeColumnRef(const RelAlgNode* node, unsigned index);
 hdk::ir::ExprPtrVector getNodeColumnRefs(const RelAlgNode* node);
 
 hdk::ir::ExprPtrVector getInputExprsForAgg(const RelAlgNode* node);
