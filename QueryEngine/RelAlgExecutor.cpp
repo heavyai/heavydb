@@ -3634,16 +3634,27 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
         table_function_impl.getOutputRowSizeParameter(table_function_type_infos);
     CHECK_GT(parameter_index, size_t(0));
     if (rel_table_func->countRexLiteralArgs() == table_function_impl.countScalarArgs()) {
-      const auto parameter_expr =
+      const auto orig_parameter_expr =
           rel_table_func->getTableFuncInputAt(parameter_index - 1);
-      const auto parameter_expr_literal = dynamic_cast<const RexLiteral*>(parameter_expr);
-      if (!parameter_expr_literal) {
+      const auto orig_parameter_expr_literal =
+          dynamic_cast<const RexLiteral*>(orig_parameter_expr);
+
+      auto param_expr = rel_table_func->getTableFuncInputExprAt(parameter_index - 1);
+      auto param_const = dynamic_cast<const hdk::ir::Constant*>(param_expr);
+      CHECK_EQ(!!orig_parameter_expr_literal, !!param_const);
+      if (!param_const) {
         throw std::runtime_error(
             "Provided output buffer sizing parameter is not a literal. Only literal "
             "values are supported with output buffer sizing configured table "
             "functions.");
       }
-      int64_t literal_val = parameter_expr_literal->getVal<int64_t>();
+      if (!param_const->get_type_info().is_integer()) {
+        throw std::runtime_error(
+            "Output buffer sizing parameter should have integer type.");
+      }
+      int64_t orig_literal_val = orig_parameter_expr_literal->getVal<int64_t>();
+      int64_t literal_val = param_const->intVal();
+      CHECK_EQ(orig_literal_val, literal_val);
       if (literal_val < 0) {
         throw std::runtime_error("Provided output sizing parameter " +
                                  std::to_string(literal_val) +

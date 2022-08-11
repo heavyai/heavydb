@@ -400,6 +400,8 @@ class Constant : public Expr {
   bool get_is_null() const { return is_null; }
   Datum get_constval() const { return constval; }
   void set_constval(Datum d) { constval = d; }
+  int64_t intVal() const { extract_int_type_from_datum(constval, type_info); }
+  double fpVal() const { extract_fp_type_from_datum(constval, type_info); }
   const ExprPtrList& get_value_list() const { return value_list; }
   ExprPtr deep_copy() const override;
   ExprPtr add_cast(const SQLTypeInfo& new_type_info) override;
