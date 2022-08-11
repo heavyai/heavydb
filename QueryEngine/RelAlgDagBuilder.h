@@ -1890,6 +1890,8 @@ class RelTableFunction : public RelAlgNode {
                ", col_inputs=...",
                ", table_func_inputs=",
                ::toString(table_func_inputs_),
+               ", table_func_input_exprs=",
+               ::toString(table_func_input_exprs_),
                ", target_exprs=",
                ::toString(target_exprs_),
                ")");

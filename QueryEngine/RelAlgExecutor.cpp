@@ -3582,8 +3582,23 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       get_input_desc(rel_table_func, input_to_nest_level, {});
   const auto query_infos = get_table_infos(input_descs, executor_);
   RelAlgTranslator translator(executor_, input_to_nest_level, {}, now_, just_explain);
-  const auto input_exprs_owned = translate_scalar_sources(
+
+  const auto orig_input_exprs_owned = translate_scalar_sources(
       rel_table_func, translator, ::ExecutorType::TableFunctions);
+
+  hdk::ir::ExprPtrVector input_exprs_owned;
+  for (auto& expr : rel_table_func->getTableFuncInputExprs()) {
+    input_exprs_owned.push_back(
+        translate(expr.get(), translator, ::ExecutorType::TableFunctions));
+
+    CHECK(*input_exprs_owned.back() ==
+          *orig_input_exprs_owned[input_exprs_owned.size() - 1])
+        << "Table function input mismatch:" << std::endl
+        << " orig=" << orig_input_exprs_owned[input_exprs_owned.size() - 1]->toString()
+        << std::endl
+        << " new=" << input_exprs_owned.back()->toString() << std::endl;
+  }
+
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), input_exprs_owned.begin(), input_exprs_owned.end());
   auto input_exprs = get_exprs_not_owned(input_exprs_owned);

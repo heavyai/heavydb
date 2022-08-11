@@ -665,6 +665,10 @@ void RelTableFunction::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
   for (const auto& func_input : table_func_inputs_) {
     rebind_inputs.visit(func_input.get());
   }
+  RebindInputsVisitor visitor(old_input.get(), input.get());
+  for (size_t i = 0; i < table_func_input_exprs_.size(); ++i) {
+    table_func_input_exprs_[i] = visitor.visit(table_func_input_exprs_[i].get());
+  }
 }
 
 int32_t RelTableFunction::countRexLiteralArgs() const {

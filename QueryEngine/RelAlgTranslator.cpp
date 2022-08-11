@@ -215,7 +215,6 @@ class NormalizerVisitor : public DeepCopyVisitor {
     auto col_idx = col_ref->getIndex();
     const auto it_rte_idx = input_to_nest_level_.find(source);
     const int rte_idx = it_rte_idx == input_to_nest_level_.end() ? 0 : it_rte_idx->second;
-    CHECK_LE(static_cast<size_t>(rte_idx), join_types_.size());
     const auto scan_source = dynamic_cast<const RelScan*>(source);
     const auto& in_metainfo = source->getOutputMetainfo();
     if (scan_source) {
@@ -227,6 +226,7 @@ class NormalizerVisitor : public DeepCopyVisitor {
       if (col_ti.is_string()) {
         col_ti.set_type(kTEXT);
       }
+      CHECK_LE(static_cast<size_t>(rte_idx), join_types_.size());
       if (rte_idx > 0 && join_types_[rte_idx - 1] == JoinType::LEFT) {
         col_ti.set_notnull(false);
       }
@@ -301,6 +301,7 @@ class NormalizerVisitor : public DeepCopyVisitor {
     }
 
     if (join_types_.size() > 0) {
+      CHECK_LE(static_cast<size_t>(rte_idx), join_types_.size());
       if (rte_idx > 0 && join_types_[rte_idx - 1] == JoinType::LEFT) {
         col_ti.set_notnull(false);
       }
