@@ -1486,19 +1486,15 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   const auto agg_slot_count = ra_exe_unit.estimator ? size_t(1) : agg_fnames.size();
 
-  const bool is_group_by{query_mem_desc->isGroupBy()};
-  auto [query_func, row_func_call] = is_group_by
-                                         ? query_group_by_template(cgen_state_->module_,
-                                                                   co.hoist_literals,
-                                                                   *query_mem_desc,
-                                                                   co.device_type,
-                                                                   ra_exe_unit.scan_limit,
-                                                                   gpu_smem_context)
-                                         : query_template(cgen_state_->module_,
-                                                          agg_slot_count,
-                                                          co.hoist_literals,
-                                                          !!ra_exe_unit.estimator,
-                                                          gpu_smem_context);
+  auto [query_func, row_func_call] = query_template(cgen_state_->module_,
+                                                    agg_slot_count,
+                                                    !!ra_exe_unit.estimator,
+                                                    co.hoist_literals,
+                                                    *query_mem_desc,
+                                                    co.device_type,
+                                                    ra_exe_unit.scan_limit,
+                                                    gpu_smem_context);
+
   bind_pos_placeholders("pos_start", true, query_func, cgen_state_->module_);
   bind_pos_placeholders("group_buff_idx", false, query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", false, query_func, cgen_state_->module_);
@@ -1519,6 +1515,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                               cgen_state_->context_);
   CHECK_EQ(ra_exe_unit.input_col_descs.size(), col_heads.size());
 
+  const bool is_group_by{query_mem_desc->isGroupBy()};
   cgen_state_->row_func_ = create_row_function(ra_exe_unit.input_col_descs.size(),
                                                is_group_by ? 0 : agg_slot_count,
                                                co.hoist_literals,
