@@ -3264,6 +3264,9 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   }
   auto& catalog = session.getCatalog();
 
+  // Until we create the table we don't have a table descriptor to lock and guarantee
+  // exclusive use of.  Because of that we need a global write lock to make sure we have
+  // exclusive access to the system for now.
   const auto execute_write_lock =
       heavyai::unique_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
           *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(
@@ -4419,6 +4422,9 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   if (read_only_mode) {
     throw std::runtime_error("DROP TABLE invalid in read only mode.");
   }
+  // Because we are able to acquire a unique_lock on the table descriptor to be dropped we
+  // can get away with only using a shared_lock on the executor, as anything that will
+  // touch the table being dropped with block, but other transactions are ok.
   const auto execute_read_lock =
       heavyai::shared_lock<legacylockmgr::WrapperType<heavyai::shared_mutex>>(
           *legacylockmgr::LockMgr<heavyai::shared_mutex, bool>::getMutex(

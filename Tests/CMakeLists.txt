@@ -640,6 +640,16 @@ endif()
 
 ##########
 
+if(NOT MSVC)
+  add_executable(LoadBalancerTest LoadBalancerTest.cpp)
+  target_link_libraries(LoadBalancerTest gtest ${MAPD_LIBRARIES})
+  add_dependencies(LoadBalancerTest thrift_gen)
+  add_dependencies(LoadBalancerTest heavydb) # test invokes heavydb bin directly
+  add_dependencies(LoadBalancerTest mapd_java_components)
+endif()
+
+##########
+
 add_executable(GeospatialBenchmark GeospatialBenchmark.cpp)
 target_link_libraries(GeospatialBenchmark benchmark ${EXECUTE_TEST_LIBS})
 

@@ -299,6 +299,83 @@ class DBHandlerTestFixture : public testing::Test {
     CHECK(false);
     return "";
   }
+  // TODO(Misiu): Move all the visitor stuff to TestHelpers.h.  No need for it to be tied
+  // to DBHandler.
+  static void assertResultSetEqual(
+      const std::vector<std::vector<NullableTargetValue>>& expected_result_set,
+      const TQueryResult actual_result) {
+    auto& row_set = actual_result.row_set;
+    auto row_count = getRowCount(row_set);
+    ASSERT_EQ(expected_result_set.size(), row_count)
+        << "Returned result set does not have the expected number of rows";
+
+    if (row_count == 0) {
+      return;
+    }
+
+    auto expected_column_count = expected_result_set[0].size();
+    size_t column_count = getColumnCount(row_set);
+    ASSERT_EQ(expected_column_count, column_count)
+        << "Returned result set does not have the expected number of columns";
+
+    for (size_t r = 0; r < row_count; r++) {
+      auto row = getRow(row_set, r);
+      for (size_t c = 0; c < column_count; c++) {
+        auto column_value = row[c];
+        auto expected_column_value = expected_result_set[r][c];
+        boost::apply_visitor(
+            AssertValueEqualsOrIsNullVisitor{column_value, row_set.row_desc[c], r, c},
+            expected_column_value);
+      }
+    }
+  }
+
+  static void assertExceptionMessage(const TDBException& e,
+                                     const std::string& error_message,
+                                     bool i_case = false) {
+    std::string actual_err = e.error_msg;
+    std::string expected_err = error_message;
+    if (i_case) {
+      boost::algorithm::to_lower(actual_err);
+      boost::algorithm::to_lower(expected_err);
+    }
+
+    if (isDistributedMode()) {
+      // In distributed mode, exception messages may be wrapped within
+      // another thrift exception. In this case, do a substring check.
+      if (actual_err.find(expected_err) == std::string::npos) {
+        std::cerr << "recieved message: " << e.error_msg << "\n";
+        std::cerr << "expected message: " << error_message << "\n";
+      }
+      ASSERT_TRUE(actual_err.find(expected_err) != std::string::npos);
+    } else {
+      ASSERT_EQ(expected_err, actual_err);
+    }
+  }
+
+  static void assertExceptionMessage(const std::runtime_error& e,
+                                     const std::string& error_message,
+                                     bool i_case = false) {
+    std::string actual_err = e.what();
+    std::string expected_err = error_message;
+    if (i_case) {
+      boost::algorithm::to_lower(actual_err);
+      boost::algorithm::to_lower(expected_err);
+    }
+    ASSERT_EQ(expected_err, actual_err);
+  }
+
+  static void assertExceptionMessage(const std::exception& e,
+                                     const std::string& error_message,
+                                     bool i_case = false) {
+    std::string actual_err = e.what();
+    std::string expected_err = error_message;
+    if (i_case) {
+      boost::algorithm::to_lower(actual_err);
+      boost::algorithm::to_lower(expected_err);
+    }
+    ASSERT_EQ(expected_err, actual_err);
+  }
 
  protected:
   friend class DBHandlerTestEnvironment;
@@ -510,53 +587,6 @@ class DBHandlerTestFixture : public testing::Test {
     }
   }
 
-  void assertExceptionMessage(const TDBException& e,
-                              const std::string& error_message,
-                              bool i_case = false) {
-    std::string actual_err = e.error_msg;
-    std::string expected_err = error_message;
-    if (i_case) {
-      boost::algorithm::to_lower(actual_err);
-      boost::algorithm::to_lower(expected_err);
-    }
-
-    if (isDistributedMode()) {
-      // In distributed mode, exception messages may be wrapped within
-      // another thrift exception. In this case, do a substring check.
-      if (actual_err.find(expected_err) == std::string::npos) {
-        std::cerr << "recieved message: " << e.error_msg << "\n";
-        std::cerr << "expected message: " << error_message << "\n";
-      }
-      ASSERT_TRUE(actual_err.find(expected_err) != std::string::npos);
-    } else {
-      ASSERT_EQ(expected_err, actual_err);
-    }
-  }
-
-  void assertExceptionMessage(const std::runtime_error& e,
-                              const std::string& error_message,
-                              bool i_case = false) {
-    std::string actual_err = e.what();
-    std::string expected_err = error_message;
-    if (i_case) {
-      boost::algorithm::to_lower(actual_err);
-      boost::algorithm::to_lower(expected_err);
-    }
-    ASSERT_EQ(expected_err, actual_err);
-  }
-
-  void assertExceptionMessage(const std::exception& e,
-                              const std::string& error_message,
-                              bool i_case = false) {
-    std::string actual_err = e.what();
-    std::string expected_err = error_message;
-    if (i_case) {
-      boost::algorithm::to_lower(actual_err);
-      boost::algorithm::to_lower(expected_err);
-    }
-    ASSERT_EQ(expected_err, actual_err);
-  }
-
   // sometime error message have non deterministic portions
   // used to check a meaningful portion of an error message
   template <typename Lambda>
@@ -603,35 +633,6 @@ class DBHandlerTestFixture : public testing::Test {
     executeLambdaAndAssertPartialException([&] { sql(sql_statement); }, error_message);
   }
 
-  void assertResultSetEqual(
-      const std::vector<std::vector<NullableTargetValue>>& expected_result_set,
-      const TQueryResult actual_result) {
-    auto& row_set = actual_result.row_set;
-    auto row_count = getRowCount(row_set);
-    ASSERT_EQ(expected_result_set.size(), row_count)
-        << "Returned result set does not have the expected number of rows";
-
-    if (row_count == 0) {
-      return;
-    }
-
-    auto expected_column_count = expected_result_set[0].size();
-    size_t column_count = getColumnCount(row_set);
-    ASSERT_EQ(expected_column_count, column_count)
-        << "Returned result set does not have the expected number of columns";
-
-    for (size_t r = 0; r < row_count; r++) {
-      auto row = getRow(row_set, r);
-      for (size_t c = 0; c < column_count; c++) {
-        auto column_value = row[c];
-        auto expected_column_value = expected_result_set[r][c];
-        boost::apply_visitor(
-            AssertValueEqualsOrIsNullVisitor{column_value, row_set.row_desc[c], r, c},
-            expected_column_value);
-      }
-    }
-  }
-
   void sqlAndCompareResult(
       const std::string& sql_statement,
       const std::vector<std::vector<NullableTargetValue>>& expected_result_set) {
@@ -673,7 +674,7 @@ class DBHandlerTestFixture : public testing::Test {
   size_t getRowCount(const TQueryResult& result) { return getRowCount(result.row_set); }
 
  private:
-  size_t getRowCount(const TRowSet& row_set) {
+  static size_t getRowCount(const TRowSet& row_set) {
     size_t row_count;
     if (row_set.is_columnar) {
       row_count = row_set.columns.empty() ? 0 : row_set.columns[0].nulls.size();
@@ -683,7 +684,7 @@ class DBHandlerTestFixture : public testing::Test {
     return row_count;
   }
 
-  size_t getColumnCount(const TRowSet& row_set) {
+  static size_t getColumnCount(const TRowSet& row_set) {
     size_t column_count;
     if (row_set.is_columnar) {
       column_count = row_set.columns.size();
@@ -693,7 +694,7 @@ class DBHandlerTestFixture : public testing::Test {
     return column_count;
   }
 
-  void setDatumArray(std::vector<TDatum>& datum_array, const TColumn& column) {
+  static void setDatumArray(std::vector<TDatum>& datum_array, const TColumn& column) {
     const auto& column_data = column.data;
     if (!column_data.int_col.empty()) {
       for (auto& item : column_data.int_col) {
@@ -724,10 +725,10 @@ class DBHandlerTestFixture : public testing::Test {
     }
   }
 
-  void setDatum(TDatum& datum,
-                const TColumnData& column_data,
-                const size_t index,
-                const bool is_null) {
+  static void setDatum(TDatum& datum,
+                       const TColumnData& column_data,
+                       const size_t index,
+                       const bool is_null) {
     if (!column_data.int_col.empty()) {
       datum.val.int_val = column_data.int_col[index];
     } else if (!column_data.real_col.empty()) {
@@ -745,7 +746,7 @@ class DBHandlerTestFixture : public testing::Test {
     }
   }
 
-  std::vector<TDatum> getRow(const TRowSet& row_set, const size_t index) {
+  static std::vector<TDatum> getRow(const TRowSet& row_set, const size_t index) {
     if (row_set.is_columnar) {
       std::vector<TDatum> row{};
       for (auto& column : row_set.columns) {
