@@ -659,9 +659,6 @@ void RelTableFunction::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                                     std::shared_ptr<const RelAlgNode> input) {
   RelAlgNode::replaceInput(old_input, input);
   RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
-  for (const auto& target_expr : target_exprs_) {
-    rebind_inputs.visit(target_expr.get());
-  }
   for (const auto& func_input : table_func_inputs_) {
     rebind_inputs.visit(func_input.get());
   }
@@ -689,8 +686,7 @@ RelTableFunction::RelTableFunction(RelTableFunction const& rhs)
     , col_inputs_(rhs.col_inputs_)
     , col_input_exprs_(rhs.col_input_exprs_)
     , table_func_inputs_(copyRexScalars(rhs.table_func_inputs_))
-    , table_func_input_exprs_(rhs.table_func_input_exprs_)
-    , target_exprs_(copyRexScalars(rhs.target_exprs_)) {
+    , table_func_input_exprs_(rhs.table_func_input_exprs_) {
   std::unordered_map<const Rex*, const Rex*> old_to_new_input;
   for (size_t i = 0; i < table_func_inputs_.size(); ++i) {
     old_to_new_input.emplace(rhs.table_func_inputs_[i].get(),

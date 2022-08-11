@@ -1813,7 +1813,6 @@ class RelTableFunction : public RelAlgNode {
       , col_input_exprs_(col_input_exprs)
       , table_func_inputs_(std::move(table_func_inputs))
       , table_func_input_exprs_(table_func_input_exprs)
-      , target_exprs_(std::move(target_exprs))
       , tuple_type_(std::move(tuple_type)) {
     CHECK_EQ(col_inputs_.size(), col_input_exprs_.size());
     CHECK_EQ(table_func_inputs_.size(), table_func_input_exprs_.size());
@@ -1826,12 +1825,7 @@ class RelTableFunction : public RelAlgNode {
 
   std::string getFunctionName() const { return function_name_; }
 
-  size_t size() const override { return target_exprs_.size(); }
-
-  // const RexScalar* getTargetExpr(size_t idx) const {
-  //  CHECK_LT(idx, target_exprs_.size());
-  //  return target_exprs_[idx].get();
-  //}
+  size_t size() const override { return tuple_type_.size(); }
 
   const std::vector<TargetMetaInfo>& getTupleType() const { return tuple_type_; }
 
@@ -1892,8 +1886,6 @@ class RelTableFunction : public RelAlgNode {
                ::toString(table_func_inputs_),
                ", table_func_input_exprs=",
                ::toString(table_func_input_exprs_),
-               ", target_exprs=",
-               ::toString(target_exprs_),
                ")");
   }
 
@@ -1902,9 +1894,6 @@ class RelTableFunction : public RelAlgNode {
       hash_ = typeid(RelTableFunction).hash_code();
       for (auto& table_func_input : table_func_inputs_) {
         boost::hash_combine(*hash_, table_func_input->toHash());
-      }
-      for (auto& target_expr : target_exprs_) {
-        boost::hash_combine(*hash_, target_expr->toHash());
       }
       boost::hash_combine(*hash_, function_name_);
       boost::hash_combine(*hash_, ::toString(fields_));
@@ -1926,9 +1915,6 @@ class RelTableFunction : public RelAlgNode {
   std::vector<std::unique_ptr<const RexScalar>> table_func_inputs_;
   hdk::ir::ExprPtrVector table_func_input_exprs_;
 
-  std::vector<std::unique_ptr<const RexScalar>>
-      target_exprs_;  // Note: these should all be RexRef but are stored as RexScalar for
-                      // consistency
   const std::vector<TargetMetaInfo> tuple_type_;
 };
 
