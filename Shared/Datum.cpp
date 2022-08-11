@@ -371,6 +371,55 @@ bool DatumEqual(const Datum a, const Datum b, const SQLTypeInfo& ti) {
   return false;
 }
 
+size_t hash(Datum datum, const SQLTypeInfo& ti) {
+  size_t res = 0;
+  switch (ti.get_type()) {
+    case kBOOLEAN:
+      boost::hash_combine(res, datum.boolval);
+      break;
+    case kBIGINT:
+    case kNUMERIC:
+    case kDECIMAL:
+      boost::hash_combine(res, datum.bigintval);
+      break;
+    case kINT:
+      boost::hash_combine(res, datum.intval);
+      break;
+    case kSMALLINT:
+      boost::hash_combine(res, datum.smallintval);
+      break;
+    case kTINYINT:
+      boost::hash_combine(res, datum.tinyintval);
+      break;
+    case kFLOAT:
+      boost::hash_combine(res, datum.floatval);
+      break;
+    case kDOUBLE:
+      boost::hash_combine(res, datum.doubleval);
+      break;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH:
+      boost::hash_combine(res, datum.bigintval);
+      break;
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
+      if (ti.get_compression() == kENCODING_DICT) {
+        boost::hash_combine(res, datum.intval);
+      } else if (datum.stringval) {
+        boost::hash_combine(res, *datum.stringval);
+      }
+      break;
+    default:
+      throw std::runtime_error("Internal error: unsupported Datum type: " +
+                               ti.get_type_name());
+  }
+  return res;
+}
+
 /*
  * @brief convert datum to string
  */

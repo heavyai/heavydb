@@ -17,6 +17,8 @@
 #include "Shared/sqltypes.h"
 #include "Shared/toString.h"
 
+#include <boost/functional/hash.hpp>
+
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -35,6 +37,14 @@ struct ColumnRef {
   }
 
   std::string toString() const;
+
+  size_t hash() const {
+    size_t res = 0;
+    boost::hash_combine(res, db_id);
+    boost::hash_combine(res, table_id);
+    boost::hash_combine(res, column_id);
+    return res;
+  }
 };
 
 using ColumnRefSet = std::unordered_set<ColumnRef>;

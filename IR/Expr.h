@@ -154,9 +154,12 @@ class Expr : public std::enable_shared_from_this<Expr> {
    */
   virtual void get_domain(DomainSet& domain_set) const { domain_set.clear(); }
 
+  virtual size_t hash() const;
+
  protected:
   SQLTypeInfo type_info;  // SQLTypeInfo of the return result of this expression
   bool contains_agg;
+  mutable std::optional<size_t> hash_;
 };
 
 /*
@@ -181,6 +184,8 @@ class ColumnRef : public Expr {
   const RelAlgNode* getNode() const { return node_; }
 
   unsigned getIndex() const { return idx_; }
+
+  size_t hash() const override;
 
  protected:
   const RelAlgNode* node_;
@@ -207,6 +212,8 @@ class GroupColumnRef : public Expr {
   }
 
   unsigned getIndex() const { return idx_; }
+
+  size_t hash() const override;
 
  protected:
   unsigned idx_;
@@ -282,6 +289,8 @@ class ColumnVar : public Expr {
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
 
+  size_t hash() const override;
+
  protected:
   int rte_idx;  // 0-based range table index, used for table ordering in multi-joins
   ColumnInfoPtr col_info_;
@@ -304,6 +313,8 @@ class ExpressionTuple : public Expr {
 
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
+
+  size_t hash() const override;
 
  private:
   const ExprPtrVector tuple_;
@@ -346,6 +357,8 @@ class Var : public ColumnVar {
   }
   ExprPtr rewrite_agg_to_var(
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override;
+
+  size_t hash() const override;
 
  private:
   WhichRow which_row;  // indicate which row this Var should project from.  It can be from
@@ -392,6 +405,8 @@ class Constant : public Expr {
   ExprPtr add_cast(const SQLTypeInfo& new_type_info) override;
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
+
+  size_t hash() const override;
 
   static ExprPtr make(const SQLTypeInfo& ti, int64_t val);
 
@@ -457,6 +472,8 @@ class UOper : public Expr {
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
   ExprPtr add_cast(const SQLTypeInfo& new_type_info) override;
+
+  size_t hash() const override;
 
  protected:
   SQLOps optype;    // operator type, e.g., kUMINUS, kISNULL, kEXISTS
@@ -542,6 +559,8 @@ class BinOper : public Expr {
   static bool simple_predicate_has_simple_cast(const ExprPtr cast_operand,
                                                const ExprPtr const_operand);
 
+  size_t hash() const override;
+
  private:
   SQLOps optype;           // operator type, e.g., kLT, kAND, kPLUS, etc.
   SQLQualifier qualifier;  // qualifier kANY, kALL or kONE.  Only relevant with
@@ -586,6 +605,8 @@ class RangeOper : public Expr {
     right_operand_->collect_column_var(colvar_set, include_agg);
   }
 
+  size_t hash() const override;
+
  private:
   // build a range between these two operands
   bool left_inclusive_;
@@ -611,6 +632,8 @@ class ScalarSubquery : public Expr {
   std::string toString() const override;
 
   const RelAlgNode* getNode() const { return node_.get(); }
+
+  size_t hash() const override;
 
  private:
   std::shared_ptr<const RelAlgNode> node_;
@@ -651,6 +674,8 @@ class InValues : public Expr {
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
 
+  size_t hash() const override;
+
  private:
   ExprPtr arg;                   // the argument left of IN
   const ExprPtrList value_list;  // the list of values right of IN
@@ -679,6 +704,8 @@ class InIntegerSet : public Expr {
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
 
+  size_t hash() const override;
+
  private:
   const std::shared_ptr<const Expr> arg;  // the argument left of IN
   const std::vector<int64_t> value_list;  // the list of values right of IN
@@ -706,6 +733,8 @@ class InSubquery : public Expr {
 
   const RelAlgNode* getNode() const { return node_.get(); }
   std::shared_ptr<const RelAlgNode> getNodeShared() const { return node_; }
+
+  size_t hash() const override;
 
  private:
   hdk::ir::ExprPtr arg_;
@@ -756,6 +785,8 @@ class CharLengthExpr : public Expr {
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
 
+  size_t hash() const override;
+
  private:
   ExprPtr arg;
   bool calc_encoded_length;
@@ -801,6 +832,8 @@ class KeyForStringExpr : public Expr {
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
 
+  size_t hash() const override;
+
  private:
   ExprPtr arg;
 };
@@ -844,6 +877,8 @@ class SampleRatioExpr : public Expr {
   std::string toString() const override;
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
+
+  size_t hash() const override;
 
  private:
   ExprPtr arg;
@@ -901,6 +936,8 @@ class LowerExpr : public Expr {
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
 
+  size_t hash() const override;
+
  private:
   ExprPtr arg;
 };
@@ -944,6 +981,8 @@ class CardinalityExpr : public Expr {
   std::string toString() const override;
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
+
+  size_t hash() const override;
 
  private:
   ExprPtr arg;
@@ -1011,6 +1050,8 @@ class LikeExpr : public Expr {
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
 
+  size_t hash() const override;
+
  private:
   ExprPtr arg;          // the argument to the left of LIKE
   ExprPtr like_expr;    // expression that evaluates to like string
@@ -1071,6 +1112,8 @@ class RegexpExpr : public Expr {
   std::string toString() const override;
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
+
+  size_t hash() const override;
 
  private:
   ExprPtr arg;           // the argument to the left of REGEXP
@@ -1175,6 +1218,8 @@ class WidthBucketExpr : public Expr {
   void set_constant_expr() const { constant_expr_ = true; }
   bool is_constant_expr() const { return constant_expr_; }
 
+  size_t hash() const override;
+
  private:
   ExprPtr target_value_;     // target value expression
   ExprPtr lower_bound_;      // lower_bound
@@ -1228,6 +1273,8 @@ class LikelihoodExpr : public Expr {
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
 
+  size_t hash() const override;
+
  private:
   ExprPtr arg;  // the argument to LIKELY, UNLIKELY
   float likelihood;
@@ -1280,6 +1327,8 @@ class AggExpr : public Expr {
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
 
+  size_t hash() const override;
+
  private:
   SQLAgg aggtype;    // aggregate type: kAVG, kMIN, kMAX, kSUM, kCOUNT
   ExprPtr arg;       // argument to aggregate
@@ -1326,6 +1375,8 @@ class CaseExpr : public Expr {
   ExprPtr add_cast(const SQLTypeInfo& new_type_info) override;
   void get_domain(DomainSet& domain_set) const override;
 
+  size_t hash() const override;
+
  private:
   std::list<std::pair<ExprPtr, ExprPtr>>
       expr_pair_list;  // a pair of expressions for each WHEN expr1 THEN expr2.  expr1
@@ -1366,6 +1417,8 @@ class ExtractExpr : public Expr {
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
 
+  size_t hash() const override;
+
  private:
   ExtractField field_;
   ExprPtr from_expr_;
@@ -1405,6 +1458,8 @@ class DateaddExpr : public Expr {
   std::string toString() const override;
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
+
+  size_t hash() const override;
 
  private:
   const DateaddField field_;
@@ -1447,6 +1502,8 @@ class DatediffExpr : public Expr {
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
 
+  size_t hash() const override;
+
  private:
   const DatetruncField field_;
   const ExprPtr start_;
@@ -1485,6 +1542,8 @@ class DatetruncExpr : public Expr {
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
 
+  size_t hash() const override;
+
  private:
   DatetruncField field_;
   ExprPtr from_expr_;
@@ -1518,6 +1577,8 @@ class FunctionOper : public Expr {
 
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
+
+  size_t hash() const override;
 
  private:
   const std::string name_;
@@ -1557,8 +1618,18 @@ class OffsetInFragment : public Expr {
 struct OrderEntry {
   OrderEntry(int t, bool d, bool nf) : tle_no(t), is_desc(d), nulls_first(nf){};
   ~OrderEntry() {}
+
   std::string toString() const;
   void print() const;
+
+  size_t hash() const {
+    size_t res = 0;
+    boost::hash_combine(res, tle_no);
+    boost::hash_combine(res, is_desc);
+    boost::hash_combine(res, nulls_first);
+    return res;
+  }
+
   int tle_no;       /* targetlist entry number: 1-based */
   bool is_desc;     /* true if order is DESC */
   bool nulls_first; /* true if nulls are ordered first.  otherwise last. */
@@ -1597,6 +1668,8 @@ class WindowFunction : public Expr {
   const ExprPtrVector& getOrderKeys() const { return order_keys_; }
 
   const std::vector<OrderEntry>& getCollation() const { return collation_; }
+
+  size_t hash() const override;
 
  private:
   const SqlWindowFunctionKind kind_;
@@ -1640,6 +1713,8 @@ class ArrayExpr : public Expr {
           colvar_set,
       bool include_agg) const override;
 
+  size_t hash() const override;
+
  private:
   ExprPtrVector contained_expressions_;
   bool local_alloc_;
@@ -1662,6 +1737,8 @@ class TargetEntry {
   bool get_unnest() const { return unnest; }
   std::string toString() const;
   void print() const;
+
+  size_t hash() const;
 
  private:
   std::string resname;  // alias name, e.g., SELECT salary + bonus AS compensation,

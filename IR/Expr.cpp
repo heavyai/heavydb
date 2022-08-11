@@ -2881,4 +2881,341 @@ bool expr_list_match(const std::vector<ExprPtr>& lhs, const std::vector<ExprPtr>
   return true;
 }
 
+size_t Expr::hash() const {
+  if (!hash_) {
+    hash_ = typeid(*this).hash_code();
+    boost::hash_combine(*hash_, type_info.hash());
+    boost::hash_combine(*hash_, contains_agg);
+  }
+  return *hash_;
+}
+
+size_t ColumnRef::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, node_->toHash());
+    boost::hash_combine(*hash_, idx_);
+  }
+  return *hash_;
+}
+
+size_t GroupColumnRef::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, idx_);
+  }
+  return *hash_;
+}
+
+size_t ColumnVar::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, rte_idx);
+    boost::hash_combine(*hash_, col_info_->hash());
+  }
+  return *hash_;
+}
+
+size_t ExpressionTuple::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    for (auto& expr : tuple_) {
+      boost::hash_combine(*hash_, expr->hash());
+    }
+  }
+  return *hash_;
+}
+
+size_t Var::hash() const {
+  if (!hash_) {
+    hash_ = ColumnVar::hash();
+    boost::hash_combine(*hash_, which_row);
+    boost::hash_combine(*hash_, varno);
+  }
+  return *hash_;
+}
+
+size_t Constant::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, is_null);
+    boost::hash_combine(*hash_, ::hash(constval, type_info));
+    for (auto& expr : value_list) {
+      boost::hash_combine(*hash_, expr->hash());
+    }
+  }
+  return *hash_;
+}
+
+size_t UOper::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, optype);
+    boost::hash_combine(*hash_, operand->hash());
+  }
+  return *hash_;
+}
+
+size_t BinOper::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, optype);
+    boost::hash_combine(*hash_, qualifier);
+    boost::hash_combine(*hash_, left_operand->hash());
+    boost::hash_combine(*hash_, right_operand->hash());
+  }
+  return *hash_;
+}
+
+size_t RangeOper::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, left_inclusive_);
+    boost::hash_combine(*hash_, right_inclusive_);
+    boost::hash_combine(*hash_, left_operand_->hash());
+    boost::hash_combine(*hash_, right_operand_->hash());
+  }
+  return *hash_;
+}
+
+size_t ScalarSubquery::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, node_->toHash());
+  }
+  return *hash_;
+}
+
+size_t InValues::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, arg->hash());
+    for (auto& expr : value_list) {
+      boost::hash_combine(*hash_, expr->hash());
+    }
+  }
+  return *hash_;
+}
+
+size_t InIntegerSet::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, arg->hash());
+    boost::hash_combine(*hash_, value_list);
+  }
+  return *hash_;
+}
+
+size_t InSubquery::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, arg_->hash());
+    boost::hash_combine(*hash_, node_->toHash());
+  }
+  return *hash_;
+}
+
+size_t CharLengthExpr::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, arg->hash());
+    boost::hash_combine(*hash_, calc_encoded_length);
+  }
+  return *hash_;
+}
+
+size_t KeyForStringExpr::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, arg->hash());
+  }
+  return *hash_;
+}
+
+size_t SampleRatioExpr::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, arg->hash());
+  }
+  return *hash_;
+}
+
+size_t LowerExpr::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, arg->hash());
+  }
+  return *hash_;
+}
+
+size_t CardinalityExpr::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, arg->hash());
+  }
+  return *hash_;
+}
+
+size_t LikeExpr::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, arg->hash());
+    boost::hash_combine(*hash_, like_expr->hash());
+    boost::hash_combine(*hash_, escape_expr->hash());
+    boost::hash_combine(*hash_, is_ilike);
+    boost::hash_combine(*hash_, is_simple);
+  }
+  return *hash_;
+}
+
+size_t RegexpExpr::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, arg->hash());
+    boost::hash_combine(*hash_, pattern_expr->hash());
+    boost::hash_combine(*hash_, escape_expr->hash());
+  }
+  return *hash_;
+}
+
+size_t WidthBucketExpr::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, target_value_->hash());
+    boost::hash_combine(*hash_, lower_bound_->hash());
+    boost::hash_combine(*hash_, upper_bound_->hash());
+    boost::hash_combine(*hash_, partition_count_->hash());
+    boost::hash_combine(*hash_, constant_expr_);
+    boost::hash_combine(*hash_, skip_out_of_bound_check_);
+  }
+  return *hash_;
+}
+
+size_t LikelihoodExpr::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, arg->hash());
+    boost::hash_combine(*hash_, likelihood);
+  }
+  return *hash_;
+}
+
+size_t AggExpr::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, aggtype);
+    if (arg) {
+      boost::hash_combine(*hash_, arg->hash());
+    }
+    boost::hash_combine(*hash_, is_distinct);
+    if (arg1) {
+      boost::hash_combine(*hash_, arg1->hash());
+    }
+  }
+  return *hash_;
+}
+
+size_t CaseExpr::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    for (auto& pr : expr_pair_list) {
+      boost::hash_combine(*hash_, pr.first->hash());
+      boost::hash_combine(*hash_, pr.second->hash());
+    }
+    if (else_expr) {
+      boost::hash_combine(*hash_, else_expr->hash());
+    }
+  }
+  return *hash_;
+}
+
+size_t ExtractExpr::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, field_);
+    boost::hash_combine(*hash_, from_expr_->hash());
+  }
+  return *hash_;
+}
+
+size_t DateaddExpr::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, field_);
+    boost::hash_combine(*hash_, number_->hash());
+    boost::hash_combine(*hash_, datetime_->hash());
+  }
+  return *hash_;
+}
+
+size_t DatediffExpr::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, field_);
+    boost::hash_combine(*hash_, start_->hash());
+    boost::hash_combine(*hash_, end_->hash());
+  }
+  return *hash_;
+}
+
+size_t DatetruncExpr::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, field_);
+    boost::hash_combine(*hash_, from_expr_->hash());
+  }
+  return *hash_;
+}
+
+size_t FunctionOper::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, name_);
+    for (auto& expr : args_) {
+      boost::hash_combine(*hash_, expr->hash());
+    }
+  }
+  return *hash_;
+}
+
+size_t WindowFunction::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    boost::hash_combine(*hash_, kind_);
+    for (auto& expr : args_) {
+      boost::hash_combine(*hash_, expr->hash());
+    }
+    for (auto& expr : partition_keys_) {
+      boost::hash_combine(*hash_, expr->hash());
+    }
+    for (auto& expr : order_keys_) {
+      boost::hash_combine(*hash_, expr->hash());
+    }
+    for (auto& collation : collation_) {
+      boost::hash_combine(*hash_, collation.hash());
+    }
+  }
+  return *hash_;
+}
+
+size_t ArrayExpr::hash() const {
+  if (!hash_) {
+    hash_ = Expr::hash();
+    for (auto& expr : contained_expressions_) {
+      boost::hash_combine(*hash_, expr->hash());
+    }
+    boost::hash_combine(*hash_, local_alloc_);
+    boost::hash_combine(*hash_, is_null_);
+  }
+  return *hash_;
+}
+
+size_t TargetEntry::hash() const {
+  size_t res = 0;
+  boost::hash_combine(res, resname);
+  boost::hash_combine(res, expr->hash());
+  boost::hash_combine(res, unnest);
+  return res;
+}
+
 }  // namespace hdk::ir

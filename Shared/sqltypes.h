@@ -26,6 +26,8 @@
 #include "StringTransform.h"
 #include "funcannotations.h"
 
+#include <boost/functional/hash.hpp>
+
 #include <cassert>
 #include <cfloat>
 #include <cmath>
@@ -794,6 +796,20 @@ class SQLTypeInfo {
 
   inline bool is_timestamp() const { return type == kTIMESTAMP; }
 
+  inline size_t hash() const {
+    size_t res = 0;
+    boost::hash_combine(res, type);
+    boost::hash_combine(res, subtype);
+    boost::hash_combine(res, dimension);
+    boost::hash_combine(res, scale);
+    boost::hash_combine(res, notnull);
+    boost::hash_combine(res, compression);
+    boost::hash_combine(res, comp_param);
+    boost::hash_combine(res, size);
+    boost::hash_combine(res, dict_intersection);
+    return res;
+  }
+
  private:
   SQLTypes type;     // type id
   SQLTypes subtype;  // element type of arrays or columns
@@ -961,6 +977,7 @@ bool DatumEqual(const Datum, const Datum, const SQLTypeInfo& ti);
 int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
                                        const SQLTypeInfo& type_info,
                                        const SQLTypeInfo& new_type_info);
+size_t hash(Datum datum, const SQLTypeInfo& ti);
 
 #include "../QueryEngine/DateAdd.h"
 #include "../QueryEngine/DateTruncate.h"
