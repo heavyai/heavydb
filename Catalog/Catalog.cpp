@@ -1107,7 +1107,7 @@ void Catalog::reloadTableMetadataUnlocked(int table_id) {
       it1 != tableDescriptorMapById_.end()) {
     original_td = it1->second;
     tableDescriptorMapById_.erase(it1);
-    if (auto it2 = tableDescriptorMap_.find(original_td->tableName);
+    if (auto it2 = tableDescriptorMap_.find(to_upper(original_td->tableName));
         it2 != tableDescriptorMap_.end()) {
       CHECK_EQ(original_td, it2->second);
       tableDescriptorMap_.erase(it2);
