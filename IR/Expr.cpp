@@ -276,6 +276,9 @@ ExprPtr Expr::add_cast(const SQLTypeInfo& new_type_info) {
   return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
 }
 
+ColumnRef::ColumnRef(const RelAlgNode* node, unsigned idx)
+    : ColumnRef(getColumnType(node, idx), node, idx) {}
+
 std::string ColumnRef::toString() const {
   std::stringstream ss;
   ss << "(ColumnRef " << node_->getIdString() << ":" << idx_ << ")";

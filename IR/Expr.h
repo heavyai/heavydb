@@ -169,6 +169,7 @@ class ColumnRef : public Expr {
  public:
   ColumnRef(const SQLTypeInfo& ti, const RelAlgNode* node, unsigned idx)
       : Expr(ti), node_(node), idx_(idx) {}
+  ColumnRef(const RelAlgNode* node, unsigned idx);
 
   ExprPtr deep_copy() const override {
     return makeExpr<ColumnRef>(type_info, node_, idx_);
