@@ -2537,7 +2537,12 @@ class RelAlgDag : public boost::noncopyable {
           break;
         }
         case QueryHint::kOverlapsBucketThreshold: {
-          CHECK(target.getListOptions().size() == 1);
+          if (target.getListOptions().size() != 1) {
+            VLOG(1) << "Skip the given query hint \"overlaps_bucket_threshold\" ("
+                    << target.getListOptions()[0]
+                    << ") : invalid # hint options are given";
+            break;
+          }
           double overlaps_bucket_threshold = std::stod(target.getListOptions()[0]);
           if (overlaps_bucket_threshold >= 0.0 && overlaps_bucket_threshold <= 90.0) {
             query_hint.registerHint(QueryHint::kOverlapsBucketThreshold);
@@ -2554,7 +2559,12 @@ class RelAlgDag : public boost::noncopyable {
           break;
         }
         case QueryHint::kOverlapsMaxSize: {
-          CHECK(target.getListOptions().size() == 1);
+          if (target.getListOptions().size() != 1) {
+            VLOG(1) << "Skip the given query hint \"overlaps_max_size\" ("
+                    << target.getListOptions()[0]
+                    << ") : invalid # hint options are given";
+            break;
+          }
           std::stringstream ss(target.getListOptions()[0]);
           int overlaps_max_size;
           ss >> overlaps_max_size;
@@ -2591,7 +2601,12 @@ class RelAlgDag : public boost::noncopyable {
           break;
         }
         case QueryHint::kOverlapsKeysPerBin: {
-          CHECK(target.getListOptions().size() == 1);
+          if (target.getListOptions().size() != 1) {
+            VLOG(1) << "Skip the given query hint \"overlaps_keys_per_bin\" ("
+                    << target.getListOptions()[0]
+                    << ") : invalid # hint options are given";
+            break;
+          }
           double overlaps_keys_per_bin = std::stod(target.getListOptions()[0]);
           if (overlaps_keys_per_bin > 0.0 &&
               overlaps_keys_per_bin < std::numeric_limits<double>::max()) {
@@ -2635,7 +2650,12 @@ class RelAlgDag : public boost::noncopyable {
           break;
         }
         case QueryHint::kAggregateTreeFanout: {
-          CHECK_EQ(1u, target.getListOptions().size());
+          if (target.getListOptions().size() != 1u) {
+            VLOG(1) << "Skip the given query hint \"aggregate_tree_fanout\" ("
+                    << target.getListOptions()[0]
+                    << ") : invalid # hint options are given";
+            break;
+          }
           int aggregate_tree_fanout = std::stoi(target.getListOptions()[0]);
           if (aggregate_tree_fanout < 0) {
             VLOG(1) << "A fan-out of an aggregate tree should be larger than zero";
@@ -2684,6 +2704,89 @@ class RelAlgDag : public boost::noncopyable {
               global_query_hint.registerHint(QueryHint::kCudaGridSize);
               global_query_hint.cuda_grid_size_multiplier = cuda_grid_size_multiplier;
             }
+          }
+          break;
+        }
+        case QueryHint::kWatchdog: {
+          if (g_enable_watchdog) {
+            VLOG(1) << "Skip the given query hint \"watchdog\": already enabled";
+          } else {
+            query_hint.registerHint(QueryHint::kWatchdog);
+            query_hint.watchdog = true;
+            if (target.isGlobalHint()) {
+              global_query_hint.registerHint(QueryHint::kWatchdog);
+              global_query_hint.watchdog = true;
+            }
+          }
+          break;
+        }
+        case QueryHint::kWatchdogOff: {
+          if (!g_enable_watchdog) {
+            VLOG(1) << "Skip the given query hint \"watchdog_off\": already disabled";
+          } else {
+            query_hint.registerHint(QueryHint::kWatchdogOff);
+            query_hint.watchdog = false;
+            if (target.isGlobalHint()) {
+              global_query_hint.registerHint(QueryHint::kWatchdogOff);
+              global_query_hint.watchdog = false;
+            }
+          }
+
+          break;
+        }
+        case QueryHint::kDynamicWatchdog: {
+          if (g_enable_dynamic_watchdog) {
+            VLOG(1) << "Skip the given query hint \"dynamic_watchdog\": already enabled";
+          } else {
+            query_hint.registerHint(QueryHint::kDynamicWatchdog);
+            query_hint.dynamic_watchdog = true;
+            if (target.isGlobalHint()) {
+              global_query_hint.registerHint(QueryHint::kDynamicWatchdog);
+              global_query_hint.dynamic_watchdog = true;
+            }
+          }
+          break;
+        }
+        case QueryHint::kDynamicWatchdogOff: {
+          if (!g_enable_dynamic_watchdog) {
+            VLOG(1)
+                << "Skip the given query hint \"dynamic_watchdog_off\": already disabled";
+          } else {
+            query_hint.registerHint(QueryHint::kDynamicWatchdogOff);
+            query_hint.dynamic_watchdog = false;
+            if (target.isGlobalHint()) {
+              global_query_hint.registerHint(QueryHint::kDynamicWatchdogOff);
+              global_query_hint.dynamic_watchdog = false;
+            }
+          }
+          break;
+        }
+        case QueryHint::kQueryTimeLimit: {
+          if (hints_delivered->find(QueryHint::kDynamicWatchdogOff) !=
+              hints_delivered->end()) {
+            VLOG(1) << "Skip the given query hint \"query_time_limit\" ("
+                    << target.getListOptions()[0]
+                    << ") : cannot use it with \"dynamic_watchdog_off\" hint";
+            break;
+          }
+          if (target.getListOptions().size() != 1) {
+            VLOG(1) << "Skip the given query hint \"query_time_limit\" ("
+                    << target.getListOptions()[0]
+                    << ") : invalid # hint options are given";
+            break;
+          }
+          double query_time_limit = std::stoi(target.getListOptions()[0]);
+          if (query_time_limit <= 0) {
+            VLOG(1) << "Skip the given query hint \"query_time_limit\" ("
+                    << target.getListOptions()[0]
+                    << ") : the hint value should be larger than zero";
+            break;
+          }
+          query_hint.registerHint(QueryHint::kQueryTimeLimit);
+          query_hint.query_time_limit = query_time_limit;
+          if (target.isGlobalHint()) {
+            global_query_hint.registerHint(QueryHint::kQueryTimeLimit);
+            global_query_hint.query_time_limit = query_time_limit;
           }
           break;
         }

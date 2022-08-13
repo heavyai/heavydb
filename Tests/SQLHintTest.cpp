@@ -22,6 +22,7 @@
 #include "Catalog/DBObject.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/QueryHint.h"
+#include "QueryEngine/RelAlgDagSerializer/Serializer.h"
 #include "QueryRunner/QueryRunner.h"
 
 namespace po = boost::program_options;
@@ -61,6 +62,56 @@ inline void run_ddl_statement(const std::string& create_table_stmt) {
 std::shared_ptr<ResultSet> run_query(const std::string& query_str,
                                      const ExecutorDeviceType device_type) {
   return QR::get()->runSQL(query_str, device_type, true, true);
+}
+
+bool is_hint_registered(
+    std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>& hints,
+    QueryHint expected_hint) {
+  for (const auto& kv : hints) {
+    for (auto& kv2 : kv.second) {
+      if (kv2.second.isHintRegistered(expected_hint)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool is_hint_globally_registered(const RegisteredQueryHint& hints,
+                                 QueryHint expected_hint) {
+  return hints.isHintRegistered(expected_hint);
+}
+
+struct QueryHintInfo {
+  QueryHint hint;
+  bool is_global;
+};
+
+bool is_all_hints_are_registered(RelAlgDag* rel_alg_dag,
+                                 const std::vector<QueryHintInfo>& expected_hints) {
+  return std::all_of(expected_hints.begin(),
+                     expected_hints.end(),
+                     [&rel_alg_dag](const QueryHintInfo& hint_info) {
+                       if (hint_info.is_global) {
+                         return is_hint_globally_registered(rel_alg_dag->getGlobalHints(),
+                                                            hint_info.hint);
+                       } else {
+                         return is_hint_registered(rel_alg_dag->getQueryHints(),
+                                                   hint_info.hint);
+                       }
+                     });
+}
+
+bool check_serialized_rel_alg_dag(const std::string& query_str,
+                                  const std::vector<QueryHintInfo>& expected_hints) {
+  auto rel_alg_dag = QR::get()->getRelAlgDag(query_str);
+  CHECK(rel_alg_dag);
+  CHECK(is_all_hints_are_registered(rel_alg_dag.get(), expected_hints));
+  const auto serialized_dag = Serializer::serializeRelAlgDag(*rel_alg_dag);
+  auto restored_rel_alg_dag =
+      Serializer::deserializeRelAlgDag(*QR::get()->getCatalog(), serialized_dag);
+  CHECK(restored_rel_alg_dag);
+  return is_all_hints_are_registered(restored_rel_alg_dag.get(), expected_hints);
 }
 
 std::pair<std::shared_ptr<HashTable>, std::optional<RegisteredQueryHint>>
@@ -143,7 +194,7 @@ void dropTable() {
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS complex_windowing;");
 }
 
-TEST(kCpuMode, ForceToCPUMode) {
+TEST(QueryHint, ForceToCPUMode) {
   const auto query_with_cpu_mode_hint = "SELECT /*+ cpu_mode */ * FROM SQL_HINT_DUMMY";
   const auto query_without_cpu_mode_hint = "SELECT * FROM SQL_HINT_DUMMY";
   if (QR::get()->gpusPresent()) {
@@ -153,6 +204,8 @@ TEST(kCpuMode, ForceToCPUMode) {
     query_hints = QR::get()->getParsedQueryHint(query_without_cpu_mode_hint);
     EXPECT_FALSE(query_hints.isAnyQueryHintDelivered());
   }
+  EXPECT_TRUE(check_serialized_rel_alg_dag(query_with_cpu_mode_hint,
+                                           {{QueryHint::kCpuMode, false}}));
 }
 
 TEST(QueryHint, QueryHintForOverlapsJoin) {
@@ -170,6 +223,8 @@ TEST(QueryHint, QueryHintForOverlapsJoin) {
     auto q1_hints = QR::get()->getParsedQueryHint(q1);
     EXPECT_TRUE(q1_hints.isHintRegistered(QueryHint::kOverlapsBucketThreshold));
     EXPECT_NEAR(0.718, q1_hints.overlaps_bucket_threshold, EPS * 0.718);
+    EXPECT_TRUE(
+        check_serialized_rel_alg_dag(q1, {{QueryHint::kOverlapsBucketThreshold, false}}));
   }
   {
     const auto q2 =
@@ -178,6 +233,7 @@ TEST(QueryHint, QueryHintForOverlapsJoin) {
     auto q2_hints = QR::get()->getParsedQueryHint(q2);
     EXPECT_TRUE(q2_hints.isHintRegistered(QueryHint::kOverlapsMaxSize) &&
                 q2_hints.overlaps_max_size == 2021);
+    EXPECT_TRUE(check_serialized_rel_alg_dag(q2, {{QueryHint::kOverlapsMaxSize, false}}));
   }
 
   {
@@ -192,6 +248,10 @@ TEST(QueryHint, QueryHintForOverlapsJoin) {
                 q3_hints.isHintRegistered(QueryHint::kOverlapsMaxSize) &&
                 q3_hints.overlaps_max_size == 2021);
     EXPECT_NEAR(0.718, q3_hints.overlaps_bucket_threshold, EPS * 0.718);
+    EXPECT_TRUE(
+        check_serialized_rel_alg_dag(q3,
+                                     {{QueryHint::kOverlapsBucketThreshold, false},
+                                      {QueryHint::kOverlapsMaxSize, false}}));
   }
 
   {
@@ -200,6 +260,8 @@ TEST(QueryHint, QueryHintForOverlapsJoin) {
     const auto hints = QR::get()->getParsedQueryHint(query);
     EXPECT_TRUE(hints.isHintRegistered(QueryHint::kOverlapsAllowGpuBuild));
     EXPECT_TRUE(hints.overlaps_allow_gpu_build);
+    EXPECT_TRUE(check_serialized_rel_alg_dag(
+        query, {{QueryHint::kOverlapsAllowGpuBuild, false}}));
   }
   {
     const auto q4 =
@@ -218,6 +280,8 @@ TEST(QueryHint, QueryHintForOverlapsJoin) {
     auto q5_hints = QR::get()->getParsedQueryHint(q5);
     EXPECT_TRUE(q5_hints.isHintRegistered(QueryHint::kOverlapsKeysPerBin));
     EXPECT_NEAR(0.1, q5_hints.overlaps_keys_per_bin, EPS * 0.1);
+    EXPECT_TRUE(
+        check_serialized_rel_alg_dag(q5, {{QueryHint::kOverlapsKeysPerBin, false}}));
   }
   {
     const auto q6 =
@@ -307,6 +371,7 @@ TEST(QueryHint, QueryLayoutHintWithEnablingColumnarOutput) {
     auto query_hints = QR::get()->getParsedQueryHint(q2);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kRowwiseOutput);
     EXPECT_TRUE(hint_enabled);
+    EXPECT_TRUE(check_serialized_rel_alg_dag(q2, {{QueryHint::kRowwiseOutput, false}}));
   }
 
   {
@@ -331,6 +396,7 @@ TEST(QueryHint, QueryLayoutHintWithEnablingColumnarOutput) {
     auto query_hints = QR::get()->getParsedQueryHint(q6);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kRowwiseOutput);
     EXPECT_TRUE(hint_enabled);
+    EXPECT_TRUE(check_serialized_rel_alg_dag(q6, {{QueryHint::kRowwiseOutput, false}}));
   }
 
   {
@@ -359,6 +425,7 @@ TEST(QueryHint, QueryLayoutHintWithoutEnablingColumnarOutput) {
     auto query_hints = QR::get()->getParsedQueryHint(q1);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
     EXPECT_TRUE(hint_enabled);
+    EXPECT_TRUE(check_serialized_rel_alg_dag(q1, {{QueryHint::kColumnarOutput, false}}));
   }
 
   {
@@ -395,6 +462,7 @@ TEST(QueryHint, QueryLayoutHintWithoutEnablingColumnarOutput) {
     auto query_hints = QR::get()->getParsedQueryHint(q7);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
     EXPECT_TRUE(hint_enabled);
+    EXPECT_TRUE(check_serialized_rel_alg_dag(q7, {{QueryHint::kColumnarOutput, false}}));
   }
 }
 
@@ -416,6 +484,7 @@ TEST(QueryHint, UDF) {
     EXPECT_EQ(query_hints->size(), static_cast<size_t>(1));
     EXPECT_TRUE(query_hints->begin()->second.begin()->second.isHintRegistered(
         QueryHint::kColumnarOutput));
+    EXPECT_TRUE(check_serialized_rel_alg_dag(q1, {{QueryHint::kColumnarOutput, false}}));
   }
   {
     auto query_hints = QR::get()->getParsedQueryHints(q2);
@@ -425,6 +494,8 @@ TEST(QueryHint, UDF) {
         QueryHint::kColumnarOutput));
     EXPECT_TRUE(query_hints->begin()->second.begin()->second.isHintRegistered(
         QueryHint::kCpuMode));
+    EXPECT_TRUE(check_serialized_rel_alg_dag(
+        q2, {{QueryHint::kCpuMode, false}, {QueryHint::kColumnarOutput, false}}));
   }
 }
 
@@ -498,6 +569,7 @@ TEST(QueryHint, WindowFunction) {
         EXPECT_TRUE(query_hint.isHintRegistered(QueryHint::kColumnarOutput));
       }
     }
+    EXPECT_TRUE(check_serialized_rel_alg_dag(q1, {{QueryHint::kColumnarOutput, false}}));
   }
   const auto q2 =
       "SELECT /*+ columnar_output */ count(1) FROM (SELECT /*+ columnar_output */ str1, "
@@ -513,6 +585,7 @@ TEST(QueryHint, WindowFunction) {
         EXPECT_TRUE(query_hint.isHintRegistered(QueryHint::kColumnarOutput));
       }
     }
+    EXPECT_TRUE(check_serialized_rel_alg_dag(q2, {{QueryHint::kColumnarOutput, false}}));
   }
   const auto q3 =
       "select /*+ columnar_output */ *, 1 * v1 / (v2 + 0.01) as v3 from (select /*+ "
@@ -561,6 +634,7 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
     auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
         QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
     EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(0));
+    EXPECT_TRUE(check_serialized_rel_alg_dag(q1, {{QueryHint::kOverlapsNoCache, true}}));
   }
 
   if (QR::get()->gpusPresent()) {
@@ -572,6 +646,8 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
     auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
         QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
     EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(0));
+    EXPECT_TRUE(
+        check_serialized_rel_alg_dag(q2, {{QueryHint::kOverlapsAllowGpuBuild, true}}));
   }
 
   // q3 and q4: two (e.g., multiple) subqueries and we disallow to put hashtable to cache
@@ -597,6 +673,8 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
     EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(1));
     QR::get()->clearCpuMemory();
     visited_hashtable_key.clear();
+    EXPECT_TRUE(check_serialized_rel_alg_dag(
+        q3, {{QueryHint::kOverlapsNoCache, false}, {QueryHint::kOverlapsMaxSize, true}}));
   }
 
   if (QR::get()->gpusPresent()) {
@@ -618,6 +696,10 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
     EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(1));
     QR::get()->clearCpuMemory();
     visited_hashtable_key.clear();
+    EXPECT_TRUE(
+        check_serialized_rel_alg_dag(q4,
+                                     {{QueryHint::kOverlapsAllowGpuBuild, false},
+                                      {QueryHint::kOverlapsBucketThreshold, true}}));
   }
 
   // q5, q6 and q7: a subquery block which is allowed to interact with hashtable cache
@@ -642,6 +724,10 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
     EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(1));
     QR::get()->clearCpuMemory();
     visited_hashtable_key.clear();
+    EXPECT_TRUE(check_serialized_rel_alg_dag(q5,
+                                             {{QueryHint::kOverlapsNoCache, false},
+                                              {QueryHint::kOverlapsKeysPerBin, true},
+                                              {QueryHint::kOverlapsMaxSize, false}}));
   }
 
   const auto q6 =
@@ -664,6 +750,11 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
     EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(1));
     QR::get()->clearCpuMemory();
     visited_hashtable_key.clear();
+    EXPECT_TRUE(
+        check_serialized_rel_alg_dag(q6,
+                                     {{QueryHint::kOverlapsNoCache, false},
+                                      {QueryHint::kOverlapsKeysPerBin, true},
+                                      {QueryHint::kOverlapsBucketThreshold, true}}));
   }
 
   const auto q7 =
@@ -686,6 +777,10 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
     EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(1));
     QR::get()->clearCpuMemory();
     visited_hashtable_key.clear();
+    EXPECT_TRUE(check_serialized_rel_alg_dag(q7,
+                                             {{QueryHint::kOverlapsNoCache, false},
+                                              {QueryHint::kOverlapsKeysPerBin, false},
+                                              {QueryHint::kOverlapsMaxSize, true}}));
   }
 }
 
@@ -703,6 +798,7 @@ TEST(QueryHint, GlobalHint_ResultsetLayoutAndCPUMode) {
     auto global_query_hints = QR::get()->getParsedGlobalQueryHints(q1);
     CHECK(global_query_hints);
     EXPECT_TRUE(global_query_hints->isHintRegistered(QueryHint::kCpuMode));
+    EXPECT_TRUE(check_serialized_rel_alg_dag(q1, {{QueryHint::kCpuMode, true}}));
   }
 
   // check whether inner query has enabled cpu hint
@@ -713,6 +809,7 @@ TEST(QueryHint, GlobalHint_ResultsetLayoutAndCPUMode) {
     auto global_query_hints = QR::get()->getParsedGlobalQueryHints(q2);
     EXPECT_TRUE(global_query_hints);
     EXPECT_TRUE(global_query_hints->isHintRegistered(QueryHint::kCpuMode));
+    EXPECT_TRUE(check_serialized_rel_alg_dag(q2, {{QueryHint::kCpuMode, true}}));
   }
 
   // check whether we can see not only cpu mode hint but also global columnar output hint
@@ -737,6 +834,8 @@ TEST(QueryHint, GlobalHint_ResultsetLayoutAndCPUMode) {
     auto global_query_hints = QR::get()->getParsedGlobalQueryHints(q3);
     EXPECT_TRUE(global_query_hints);
     EXPECT_TRUE(global_query_hints->isHintRegistered(QueryHint::kColumnarOutput));
+    EXPECT_TRUE(check_serialized_rel_alg_dag(
+        q3, {{QueryHint::kCpuMode, false}, {QueryHint::kColumnarOutput, true}}));
   }
 
   const auto q4 =
@@ -761,6 +860,7 @@ TEST(QueryHint, GlobalHint_ResultsetLayoutAndCPUMode) {
     auto global_query_hints = QR::get()->getParsedGlobalQueryHints(q4);
     EXPECT_TRUE(global_query_hints);
     EXPECT_FALSE(global_query_hints->isHintRegistered(QueryHint::kRowwiseOutput));
+    EXPECT_TRUE(check_serialized_rel_alg_dag(q4, {{QueryHint::kColumnarOutput, false}}));
   }
 
   // we disable columnar output so rowwise global hint is ignored too
@@ -793,6 +893,7 @@ TEST(QueryHint, GlobalHint_ResultsetLayoutAndCPUMode) {
     EXPECT_TRUE(global_query_hints);
     EXPECT_TRUE(global_query_hints->isHintRegistered(QueryHint::kColumnarOutput));
     EXPECT_FALSE(global_query_hints->isHintRegistered(QueryHint::kRowwiseOutput));
+    EXPECT_TRUE(check_serialized_rel_alg_dag(q5, {{QueryHint::kColumnarOutput, true}}));
   }
 
   ScopeGuard reset_resultset_recycler_state =
@@ -812,6 +913,8 @@ TEST(QueryHint, GlobalHint_ResultsetLayoutAndCPUMode) {
     auto global_query_hints = QR::get()->getParsedGlobalQueryHints(q6);
     EXPECT_TRUE(global_query_hints);
     EXPECT_TRUE(global_query_hints->isHintRegistered(QueryHint::kKeepTableFuncResult));
+    EXPECT_TRUE(
+        check_serialized_rel_alg_dag(q6, {{QueryHint::kKeepTableFuncResult, true}}));
   }
 
   // check the resultset hint for table function
@@ -822,6 +925,8 @@ TEST(QueryHint, GlobalHint_ResultsetLayoutAndCPUMode) {
     auto global_query_hints = QR::get()->getParsedGlobalQueryHints(q7);
     EXPECT_TRUE(global_query_hints);
     EXPECT_TRUE(global_query_hints->isHintRegistered(QueryHint::kKeepTableFuncResult));
+    EXPECT_TRUE(
+        check_serialized_rel_alg_dag(q7, {{QueryHint::kKeepTableFuncResult, true}}));
   }
 }
 
@@ -830,61 +935,142 @@ TEST(QueryHint, CudaBlockAndGridSizes) {
     const auto unitary_executor = QR::get()->getExecutor();
     const auto default_grid_size = unitary_executor->gridSize();
     const auto default_block_size = unitary_executor->blockSize();
+    auto query_gen = [](bool is_block_size_hint, std::string val) {
+      std::string hint_name =
+          is_block_size_hint ? "cuda_block_size" : "cuda_grid_size_multiplier";
+      auto hint = hint_name + "(" + val + ")";
+      return "SELECT /*+ " + hint + " */ COUNT(1) FROM SQL_HINT_DUMMY";
+    };
 
-    auto query_hint1 = QR::get()->getParsedQueryHint(
-        "SELECT /*+ cuda_block_size(10) */ * FROM SQL_HINT_DUMMY");
+    auto query_hint1 = QR::get()->getParsedQueryHint(query_gen(true, "10"));
     EXPECT_TRUE(query_hint1.isHintRegistered(QueryHint::kCudaBlockSize));
-    auto res1 =
-        QR::get()->runSQL("SELECT /*+ cuda_block_size(10) */ * FROM SQL_HINT_DUMMY",
-                          ExecutorDeviceType::GPU);
+    EXPECT_TRUE(check_serialized_rel_alg_dag(query_gen(true, "10"),
+                                             {{QueryHint::kCudaBlockSize, false}}));
+    auto res1 = QR::get()->runSQL(query_gen(true, "10"), ExecutorDeviceType::GPU);
     CHECK_EQ(res1->getBlockSize(), (unsigned)10);
-    res1 = QR::get()->runSQL("SELECT /*+ cuda_block_size(31) */ * FROM SQL_HINT_DUMMY",
-                             ExecutorDeviceType::GPU);
+    res1 = QR::get()->runSQL(query_gen(true, "31"), ExecutorDeviceType::GPU);
     CHECK_EQ(res1->getBlockSize(), (unsigned)31);
-    res1 = QR::get()->runSQL("SELECT /*+ cuda_block_size(32) */ * FROM SQL_HINT_DUMMY",
-                             ExecutorDeviceType::GPU);
+    res1 = QR::get()->runSQL(query_gen(true, "32"), ExecutorDeviceType::GPU);
     CHECK_EQ(res1->getBlockSize(), (unsigned)32);
-    res1 = QR::get()->runSQL("SELECT /*+ cuda_block_size(33) */ * FROM SQL_HINT_DUMMY",
-                             ExecutorDeviceType::GPU);
+    res1 = QR::get()->runSQL(query_gen(true, "33"), ExecutorDeviceType::GPU);
     CHECK_EQ(res1->getBlockSize(), (unsigned)64);
     // check whether we use default grid and block sizes if no query hint is provided
     res1 = QR::get()->runSQL("SELECT * FROM SQL_HINT_DUMMY", ExecutorDeviceType::GPU);
     CHECK_EQ(res1->getBlockSize(), default_block_size);
     CHECK_EQ(res1->getGridSize(), default_grid_size);
 
-    auto query_hint2 = QR::get()->getParsedQueryHint(
-        "SELECT /*+ cuda_block_size(-10) */ * FROM SQL_HINT_DUMMY");
+    auto query_hint2 = QR::get()->getParsedQueryHint(query_gen(true, "-10"));
     EXPECT_TRUE(!query_hint2.isHintRegistered(QueryHint::kCudaBlockSize));
-    auto query_hint3 = QR::get()->getParsedQueryHint(
-        "SELECT /*+ cuda_block_size(1.11) */ * FROM SQL_HINT_DUMMY");
+    auto query_hint3 = QR::get()->getParsedQueryHint(query_gen(true, "1.11"));
     EXPECT_TRUE(query_hint3.isHintRegistered(QueryHint::kCudaBlockSize));
-    auto res2 =
-        QR::get()->runSQL("SELECT /*+ cuda_block_size(1.11) */ * FROM SQL_HINT_DUMMY",
-                          ExecutorDeviceType::GPU);
+    auto res2 = QR::get()->runSQL(query_gen(true, "1.11"), ExecutorDeviceType::GPU);
     CHECK_EQ(res2->getBlockSize(), (unsigned)1);
-    auto query_hint4 = QR::get()->getParsedQueryHint(
-        "SELECT /*+ cuda_block_size(0) */ * FROM SQL_HINT_DUMMY");
+    auto query_hint4 = QR::get()->getParsedQueryHint(query_gen(true, "0"));
     EXPECT_TRUE(!query_hint4.isHintRegistered(QueryHint::kCudaBlockSize));
-    auto query_hint5 = QR::get()->getParsedQueryHint(
-        "SELECT /*+ cuda_block_size(1026) */ * FROM SQL_HINT_DUMMY");
+    auto query_hint5 = QR::get()->getParsedQueryHint(query_gen(true, "1026"));
     EXPECT_TRUE(!query_hint5.isHintRegistered(QueryHint::kCudaBlockSize));
 
-    auto query_hint6 = QR::get()->getParsedQueryHint(
-        "SELECT /*+ cuda_grid_size_multiplier(4.44) */ * FROM SQL_HINT_DUMMY");
+    auto query_hint6 = QR::get()->getParsedQueryHint(query_gen(false, "4.44"));
     EXPECT_TRUE(query_hint6.isHintRegistered(QueryHint::kCudaGridSize));
-    auto res3 = QR::get()->runSQL(
-        "SELECT /*+ cuda_grid_size_multiplier(4.44) */ * FROM SQL_HINT_DUMMY",
-        ExecutorDeviceType::GPU);
+    EXPECT_TRUE(check_serialized_rel_alg_dag(query_gen(false, "4.44"),
+                                             {{QueryHint::kCudaGridSize, false}}));
+    auto res3 = QR::get()->runSQL(query_gen(false, "4.44"), ExecutorDeviceType::GPU);
     CHECK_NE(res3->getGridSize(), default_grid_size);
-    auto query_hint7 = QR::get()->getParsedQueryHint(
-        "SELECT /*+ cuda_grid_size_multiplier(-4.44) */ * FROM SQL_HINT_DUMMY");
+    auto query_hint7 = QR::get()->getParsedQueryHint(query_gen(false, "-4.44"));
     EXPECT_TRUE(!query_hint7.isHintRegistered(QueryHint::kCudaGridSize));
-    auto query_hint8 = QR::get()->getParsedQueryHint(
-        "SELECT /*+ cuda_grid_size_multiplier(0) */ * FROM SQL_HINT_DUMMY");
+    auto query_hint8 = QR::get()->getParsedQueryHint(query_gen(false, "0"));
     EXPECT_TRUE(!query_hint8.isHintRegistered(QueryHint::kCudaGridSize));
-    auto query_hint9 = QR::get()->getParsedQueryHint(
-        "SELECT /*+ cuda_grid_size_multiplier(1026) */ * FROM SQL_HINT_DUMMY");
+    auto query_hint9 = QR::get()->getParsedQueryHint(query_gen(false, "1026"));
     EXPECT_TRUE(!query_hint9.isHintRegistered(QueryHint::kCudaGridSize));
+  }
+}
+
+TEST(QueryHint, Watchdog) {
+  ScopeGuard reset_flag = [orig = g_enable_watchdog] { g_enable_watchdog = orig; };
+  const auto watchdog_on_query = "SELECT /*+ watchdog */ * FROM SQL_HINT_DUMMY";
+  const auto watchdog_off_query = "SELECT /*+ watchdog_off */ * FROM SQL_HINT_DUMMY";
+  {
+    g_enable_watchdog = false;
+    auto watchdog_on = QR::get()->getParsedQueryHint(watchdog_on_query);
+    EXPECT_TRUE(watchdog_on.isHintRegistered(QueryHint::kWatchdog));
+    EXPECT_TRUE(
+        check_serialized_rel_alg_dag(watchdog_on_query, {{QueryHint::kWatchdog, false}}));
+    auto watchdog_off = QR::get()->getParsedQueryHint(watchdog_off_query);
+    EXPECT_TRUE(!watchdog_off.isHintRegistered(QueryHint::kWatchdogOff));
+  }
+  {
+    g_enable_watchdog = true;
+    auto watchdog_on = QR::get()->getParsedQueryHint(watchdog_on_query);
+    EXPECT_TRUE(!watchdog_on.isHintRegistered(QueryHint::kWatchdog));
+    auto watchdog_off = QR::get()->getParsedQueryHint(watchdog_off_query);
+    EXPECT_TRUE(watchdog_off.isHintRegistered(QueryHint::kWatchdogOff));
+    EXPECT_TRUE(check_serialized_rel_alg_dag(watchdog_off_query,
+                                             {{QueryHint::kWatchdogOff, false}}));
+  }
+}
+
+TEST(QueryHint, DynamicWatchdog) {
+  ScopeGuard reset_flag = [orig_flag = g_enable_dynamic_watchdog,
+                           orig_val = g_dynamic_watchdog_time_limit] {
+    g_enable_dynamic_watchdog = orig_flag;
+    g_dynamic_watchdog_time_limit = orig_val;
+  };
+  const auto dynamic_watchdog_on_query =
+      "SELECT /*+ dynamic_watchdog */ * FROM SQL_HINT_DUMMY";
+  const auto dynamic_watchdog_on_with_timelimit_query =
+      "SELECT /*+ dynamic_watchdog, query_time_limit(1000) */ * FROM SQL_HINT_DUMMY";
+  const auto dynamic_watchdog_off_query =
+      "SELECT /*+ dynamic_watchdog_off */ * FROM SQL_HINT_DUMMY";
+  const auto timelimit_query =
+      "SELECT /*+ query_time_limit(1000) */ * FROM SQL_HINT_DUMMY";
+  const auto wrong_timelimit_query =
+      "SELECT /*+ query_time_limit(-1000) */ * FROM SQL_HINT_DUMMY";
+  const auto wrong_timelimit_query2 =
+      "SELECT /*+ query_time_limit(0) */ * FROM SQL_HINT_DUMMY";
+  {
+    g_enable_dynamic_watchdog = false;
+    auto watchdog_on = QR::get()->getParsedQueryHint(dynamic_watchdog_on_query);
+    EXPECT_TRUE(watchdog_on.isHintRegistered(QueryHint::kDynamicWatchdog));
+    EXPECT_TRUE(check_serialized_rel_alg_dag(dynamic_watchdog_on_query,
+                                             {{QueryHint::kDynamicWatchdog, false}}));
+    auto watchdog_off = QR::get()->getParsedQueryHint(dynamic_watchdog_off_query);
+    EXPECT_TRUE(!watchdog_off.isHintRegistered(QueryHint::kDynamicWatchdogOff));
+    auto dynamic_watchdog_on_with_timelimit =
+        QR::get()->getParsedQueryHint(dynamic_watchdog_on_with_timelimit_query);
+    EXPECT_TRUE(
+        dynamic_watchdog_on_with_timelimit.isHintRegistered(QueryHint::kDynamicWatchdog));
+    EXPECT_TRUE(
+        dynamic_watchdog_on_with_timelimit.isHintRegistered(QueryHint::kQueryTimeLimit));
+    EXPECT_TRUE(check_serialized_rel_alg_dag(
+        dynamic_watchdog_on_with_timelimit_query,
+        {{QueryHint::kDynamicWatchdog, false}, {QueryHint::kQueryTimeLimit, false}}));
+    auto timelimit = QR::get()->getParsedQueryHint(timelimit_query);
+    EXPECT_TRUE(timelimit.isHintRegistered(QueryHint::kQueryTimeLimit));
+    auto wrong_timelimit1 = QR::get()->getParsedQueryHint(wrong_timelimit_query);
+    EXPECT_TRUE(!wrong_timelimit1.isHintRegistered(QueryHint::kQueryTimeLimit));
+    auto wrong_timelimit2 = QR::get()->getParsedQueryHint(wrong_timelimit_query2);
+    EXPECT_TRUE(!wrong_timelimit2.isHintRegistered(QueryHint::kQueryTimeLimit));
+  }
+  {
+    g_enable_dynamic_watchdog = true;
+    auto watchdog_on = QR::get()->getParsedQueryHint(dynamic_watchdog_on_query);
+    EXPECT_TRUE(!watchdog_on.isHintRegistered(QueryHint::kDynamicWatchdog));
+    auto watchdog_off = QR::get()->getParsedQueryHint(dynamic_watchdog_off_query);
+    EXPECT_TRUE(watchdog_off.isHintRegistered(QueryHint::kDynamicWatchdogOff));
+    EXPECT_TRUE(check_serialized_rel_alg_dag(dynamic_watchdog_off_query,
+                                             {{QueryHint::kDynamicWatchdogOff, false}}));
+    auto dynamic_watchdog_on_with_timelimit =
+        QR::get()->getParsedQueryHint(dynamic_watchdog_on_with_timelimit_query);
+    EXPECT_TRUE(!dynamic_watchdog_on_with_timelimit.isHintRegistered(
+        QueryHint::kDynamicWatchdog));
+    EXPECT_TRUE(
+        dynamic_watchdog_on_with_timelimit.isHintRegistered(QueryHint::kQueryTimeLimit));
+    auto timelimit = QR::get()->getParsedQueryHint(timelimit_query);
+    EXPECT_TRUE(timelimit.isHintRegistered(QueryHint::kQueryTimeLimit));
+    auto wrong_timelimit1 = QR::get()->getParsedQueryHint(wrong_timelimit_query);
+    EXPECT_TRUE(!wrong_timelimit1.isHintRegistered(QueryHint::kQueryTimeLimit));
+    auto wrong_timelimit2 = QR::get()->getParsedQueryHint(wrong_timelimit_query2);
+    EXPECT_TRUE(!wrong_timelimit2.isHintRegistered(QueryHint::kQueryTimeLimit));
   }
 }
 

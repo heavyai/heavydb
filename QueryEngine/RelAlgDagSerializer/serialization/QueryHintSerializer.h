@@ -31,6 +31,9 @@ void serialize(Archive& ar, RegisteredQueryHint& query_hint, const unsigned int 
   (ar & query_hint.rowwise_output);
   (ar & query_hint.keep_result);
   (ar & query_hint.keep_table_function_result);
+  (ar & query_hint.watchdog);
+  (ar & query_hint.dynamic_watchdog);
+  (ar & query_hint.query_time_limit);
   (ar & query_hint.cuda_block_size);
   (ar & query_hint.cuda_grid_size_multiplier);
   (ar & query_hint.aggregate_tree_fanout);
