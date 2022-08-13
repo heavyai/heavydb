@@ -1115,6 +1115,42 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
           eo_hint_applied.keep_result = true;
         }
       }
+      if (query_hints->isHintRegistered(QueryHint::kWatchdog)) {
+        if (!eo_hint_applied.with_watchdog) {
+          VLOG(1) << "A user enables watchdog for this query";
+          eo_hint_applied.with_watchdog = true;
+        }
+      }
+      if (query_hints->isHintRegistered(QueryHint::kWatchdogOff)) {
+        if (eo_hint_applied.with_watchdog) {
+          VLOG(1) << "A user disables watchdog for this query";
+          eo_hint_applied.with_watchdog = false;
+        }
+      }
+      if (query_hints->isHintRegistered(QueryHint::kDynamicWatchdog)) {
+        if (!eo_hint_applied.with_dynamic_watchdog) {
+          VLOG(1) << "A user enables dynamic watchdog for this query";
+          eo_hint_applied.with_watchdog = true;
+        }
+      }
+      if (query_hints->isHintRegistered(QueryHint::kDynamicWatchdogOff)) {
+        if (eo_hint_applied.with_dynamic_watchdog) {
+          VLOG(1) << "A user disables dynamic watchdog for this query";
+          eo_hint_applied.with_watchdog = false;
+        }
+      }
+      if (query_hints->isHintRegistered(QueryHint::kQueryTimeLimit)) {
+        std::ostringstream oss;
+        oss << "A user sets query time limit to " << query_hints->query_time_limit
+            << " ms";
+        eo_hint_applied.dynamic_watchdog_time_limit = query_hints->query_time_limit;
+        if (!eo_hint_applied.with_dynamic_watchdog) {
+          eo_hint_applied.with_dynamic_watchdog = true;
+          oss << " (and system automatically enables dynamic watchdog to activate the "
+                 "given \"query_time_limit\" hint)";
+        }
+        VLOG(1) << oss.str();
+      }
       if (query_hints->isHintRegistered(QueryHint::kColumnarOutput)) {
         VLOG(1) << "A user forces the query to run with columnar output";
         columnar_output_hint_enabled = true;

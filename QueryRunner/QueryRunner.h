@@ -291,6 +291,8 @@ class QueryRunner {
 
   ExtractedQueryPlanDag extractQueryPlanDag(const std::string&);
 
+  std::unique_ptr<RelAlgDag> getRelAlgDag(const std::string&);
+
   QueryRunner(std::unique_ptr<Catalog_Namespace::SessionInfo> session);
 
   virtual ~QueryRunner() = default;
