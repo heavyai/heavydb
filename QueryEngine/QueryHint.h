@@ -40,6 +40,11 @@ enum QueryHint {
   kAggregateTreeFanout,
   kCudaBlockSize,
   kCudaGridSize,
+  kWatchdog,
+  kDynamicWatchdog,
+  kWatchdogOff,
+  kDynamicWatchdogOff,
+  kQueryTimeLimit,
   kHintCount,   // should be at the last elem before INVALID enum value to count #
                 // supported hints correctly
   kInvalidHint  // this should be the last elem of this enum
@@ -59,7 +64,11 @@ static const std::unordered_map<std::string, QueryHint> SupportedQueryHints = {
     {"aggregate_tree_fanout", QueryHint::kAggregateTreeFanout},
     {"cuda_block_size", QueryHint::kCudaBlockSize},
     {"cuda_grid_size_multiplier", QueryHint::kCudaGridSize},
-};
+    {"watchdog", QueryHint::kWatchdog},
+    {"dynamic_watchdog", QueryHint::kDynamicWatchdog},
+    {"watchdog_off", QueryHint::kWatchdogOff},
+    {"dynamic_watchdog_off", QueryHint::kDynamicWatchdogOff},
+    {"query_time_limit", QueryHint::kQueryTimeLimit}};
 
 struct HintIdentifier {
   bool global_hint;
@@ -161,12 +170,17 @@ struct RegisteredQueryHint {
   // and we get all necessary info from it and organize it into "RegisteredQueryHint"
   // so by using "RegisteredQueryHint", we can know and access which query hint is
   // registered and its detailed info such as the hint's parameter values given by user
+  // NOTE: after changing query hint fields, we "SHOULD" also update the corresponding
+  // "QueryHintSerializer" accordingly
   RegisteredQueryHint()
       : cpu_mode(false)
       , columnar_output(false)
       , rowwise_output(false)
       , keep_result(false)
       , keep_table_function_result(false)
+      , watchdog(std::nullopt)
+      , dynamic_watchdog(std::nullopt)
+      , query_time_limit(0)
       , cuda_block_size(0)
       , cuda_grid_size_multiplier(0.0)
       , aggregate_tree_fanout(8)
@@ -183,67 +197,84 @@ struct RegisteredQueryHint {
     // we prioritize global hint when both side of hints are enabled simultaneously
     RegisteredQueryHint updated_query_hints(*this);
 
-    int num_hints = static_cast<int>(QueryHint::kHintCount);
+    constexpr int num_hints = static_cast<int>(QueryHint::kHintCount);
     for (int i = 0; i < num_hints; ++i) {
       if (global_hints.registered_hint.at(i)) {
-        updated_query_hints.registered_hint.at(i) = global_hints.registered_hint[i];
-        switch (i) {
-          case static_cast<int>(QueryHint::kCpuMode): {
+        updated_query_hints.registered_hint.at(i) = true;
+        switch (static_cast<QueryHint>(i)) {
+          case QueryHint::kCpuMode: {
             updated_query_hints.cpu_mode = true;
             break;
           }
-          case static_cast<int>(QueryHint::kColumnarOutput): {
+          case QueryHint::kColumnarOutput: {
             updated_query_hints.columnar_output = true;
             break;
           }
-          case static_cast<int>(QueryHint::kRowwiseOutput): {
+          case QueryHint::kRowwiseOutput: {
             updated_query_hints.rowwise_output = true;
             break;
           }
-          case static_cast<int>(QueryHint::kCudaBlockSize): {
+          case QueryHint::kCudaBlockSize: {
             updated_query_hints.cuda_block_size = global_hints.cuda_block_size;
             break;
           }
-          case static_cast<int>(QueryHint::kCudaGridSize): {
+          case QueryHint::kCudaGridSize: {
             updated_query_hints.cuda_grid_size_multiplier =
                 global_hints.cuda_grid_size_multiplier;
             break;
           }
-          case static_cast<int>(QueryHint::kOverlapsBucketThreshold): {
+          case QueryHint::kOverlapsBucketThreshold: {
             updated_query_hints.overlaps_bucket_threshold =
                 global_hints.overlaps_bucket_threshold;
             break;
           }
-          case static_cast<int>(QueryHint::kOverlapsMaxSize): {
+          case QueryHint::kOverlapsMaxSize: {
             updated_query_hints.overlaps_max_size = global_hints.overlaps_max_size;
             break;
           }
-          case static_cast<int>(QueryHint::kOverlapsAllowGpuBuild): {
+          case QueryHint::kOverlapsAllowGpuBuild: {
             updated_query_hints.overlaps_allow_gpu_build = true;
             break;
           }
-          case static_cast<int>(QueryHint::kOverlapsNoCache): {
+          case QueryHint::kOverlapsNoCache: {
             updated_query_hints.overlaps_no_cache = true;
             break;
           }
-          case static_cast<int>(QueryHint::kOverlapsKeysPerBin): {
+          case QueryHint::kOverlapsKeysPerBin: {
             updated_query_hints.overlaps_keys_per_bin =
                 global_hints.overlaps_keys_per_bin;
             break;
           }
-          case static_cast<int>(QueryHint::kKeepResult): {
+          case QueryHint::kKeepResult: {
             updated_query_hints.keep_result = global_hints.keep_result;
             break;
           }
-          case static_cast<int>(QueryHint::kKeepTableFuncResult): {
+          case QueryHint::kKeepTableFuncResult: {
             updated_query_hints.keep_table_function_result =
                 global_hints.keep_table_function_result;
             break;
           }
-          case static_cast<int>(QueryHint::kAggregateTreeFanout): {
+          case QueryHint::kAggregateTreeFanout: {
             updated_query_hints.aggregate_tree_fanout =
                 global_hints.aggregate_tree_fanout;
+            break;
           }
+          case QueryHint::kWatchdog:
+          case QueryHint::kWatchdogOff: {
+            updated_query_hints.watchdog = global_hints.watchdog;
+            break;
+          }
+          case QueryHint::kDynamicWatchdog:
+          case QueryHint::kDynamicWatchdogOff: {
+            updated_query_hints.dynamic_watchdog = global_hints.dynamic_watchdog;
+            break;
+          }
+          case QueryHint::kQueryTimeLimit: {
+            updated_query_hints.query_time_limit = global_hints.query_time_limit;
+            break;
+          }
+          default:
+            UNREACHABLE();
         }
       }
     }
@@ -256,6 +287,9 @@ struct RegisteredQueryHint {
   bool rowwise_output;
   bool keep_result;
   bool keep_table_function_result;
+  std::optional<bool> watchdog;
+  std::optional<bool> dynamic_watchdog;
+  size_t query_time_limit;
 
   // control CUDA behavior
   size_t cuda_block_size;

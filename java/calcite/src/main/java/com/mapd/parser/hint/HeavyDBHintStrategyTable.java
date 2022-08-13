@@ -27,6 +27,11 @@ public class HeavyDBHintStrategyTable {
     supportedHints.add("aggregate_tree_fanout");
     supportedHints.add("cuda_block_size");
     supportedHints.add("cuda_grid_size_multiplier");
+    supportedHints.add("watchdog");
+    supportedHints.add("dynamic_watchdog");
+    supportedHints.add("watchdog_off");
+    supportedHints.add("dynamic_watchdog_off");
+    supportedHints.add("query_time_limit");
 
     for (String hint_name : supportedHints) {
       // add local / global hints, e.., cpu_mode / g_cpu_mode

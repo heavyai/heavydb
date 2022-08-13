@@ -976,6 +976,43 @@ ExtractedQueryPlanDag QueryRunner::extractQueryPlanDag(const std::string& query_
   return extracted_dag_info;
 }
 
+std::unique_ptr<RelAlgDag> QueryRunner::getRelAlgDag(const std::string& query_str) {
+  CHECK(session_info_);
+  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
+  auto query_state = create_query_state(session_info_, query_str);
+  auto stdlog = STDLOG(query_state);
+  auto& cat = session_info_->getCatalog();
+
+  std::unique_ptr<RelAlgDag> rel_alg_dag;
+  auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
+      [&cat, &query_str, explain_type = this->explain_type_, &query_state, &rel_alg_dag](
+          const size_t worker_id) {
+        auto executor = Executor::getExecutor(worker_id);
+        auto co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
+        co.explain_type = explain_type;
+        auto eo = ExecutionOptions::defaults();
+        auto calcite_mgr = cat.getCalciteMgr();
+        const auto calciteQueryParsingOption =
+            calcite_mgr->getCalciteQueryParsingOption(true, false, true);
+        const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+            g_enable_calcite_view_optimize, g_enable_watchdog, {}, false);
+        const auto query_ra = calcite_mgr
+                                  ->process(query_state->createQueryStateProxy(),
+                                            pg_shim(query_str),
+                                            calciteQueryParsingOption,
+                                            calciteOptimizationOption)
+                                  .plan_result;
+        auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
+        rel_alg_dag = ra_executor.getOwnedRelAlgDag();
+      });
+  CHECK(dispatch_queue_);
+  dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);
+  auto result_future = query_launch_task->get_future();
+  result_future.get();
+  CHECK(rel_alg_dag);
+  return std::move(rel_alg_dag);
+}
+
 // this function exists to test data recycler
 // specifically, it is tricky to get a hashtable cache key when we only know
 // a target query sql in test code
