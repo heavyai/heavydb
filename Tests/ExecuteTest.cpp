@@ -4067,10 +4067,10 @@ TEST(Select, Case) {
     c(R"(SELECT CASE WHEN x = 8 THEN 'b' WHEN x = 7 THEN str END AS case_group, COUNT(*) AS n FROM test WHERE CASE WHEN x = 7 THEN str WHEN x = 8 THEN fixed_str ELSE 'bar' END = str GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
       dt);
 
-    EXPECT_ANY_THROW(
-        c(R"(SELECT CASE WHEN x = 8 THEN str ELSE (str = fixed_str) END AS case_group,
+    // Sqlite outputs booleans as 1/0, not "true"/"false", so convert to integer first
+    c(R"(SELECT CASE WHEN x = 8 THEN str ELSE (CAST(str = fixed_str AS INT)) END AS case_group,
      COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
-          dt));  // Cast from BOOLEAN to TEXT not supported
+      dt);
 
     {
       const auto watchdog_state = g_enable_watchdog;
@@ -4512,6 +4512,11 @@ TEST(Select, Strings) {
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE POSITION('foo' IN str) > 0;", dt)));
+
+    THROW_ON_AGGREGATOR(
+        ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
+                  v<int64_t>(run_simple_agg(
+                      "SELECT COUNT(*) FROM test WHERE CAST(x AS TEXT) = '8';", dt))));
   }
 }
 
@@ -7384,15 +7389,15 @@ TEST(Select, BooleanColumn) {
   }
 }
 
-TEST(Select, UnsupportedCast) {
+TEST(Select, UnsupportedCasts) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    EXPECT_THROW(run_multiple_agg("SELECT CAST(x AS VARCHAR) FROM test;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT CAST(f AS VARCHAR) FROM test;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT CAST(d AS VARCHAR) FROM test;", dt),
-                 std::runtime_error);
+    THROW_ON_AGGREGATOR(c("SELECT CAST(x AS VARCHAR) FROM test ORDER BY x;", dt));
+    // Take first three characters due to extra zeros in HeavyDB casted float/double
+    THROW_ON_AGGREGATOR(
+        c("SELECT SUBSTRING(CAST(f AS VARCHAR), 1, 3) FROM test ORDER BY f;", dt));
+    THROW_ON_AGGREGATOR(
+        c("SELECT SUBSTRING(CAST(d AS VARCHAR), 1, 3) FROM test ORDER BY d;", dt));
     EXPECT_THROW(run_multiple_agg("SELECT CAST(f AS DECIMAL) FROM test;", dt),
                  std::runtime_error);
   }

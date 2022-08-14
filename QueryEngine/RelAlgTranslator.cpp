@@ -1392,21 +1392,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
   }
   const auto string_op_kind = ::name_to_string_op_kind(func_name);
   auto args = translateFunctionArgs(rex_function);
-  if (string_op_returns_string(string_op_kind)) {
-    // Used by watchdog later to gate queries on
-    if (!args.empty() && !dynamic_cast<const Analyzer::Constant*>(args[0].get())) {
-      const auto& arg0_ti = args[0]->get_type_info();
-      if (arg0_ti.is_none_encoded_string()) {
-        SQLTypeInfo casted_target_ti = arg0_ti;
-        casted_target_ti.set_type(kTEXT);
-        casted_target_ti.set_compression(kENCODING_DICT);
-        casted_target_ti.set_comp_param(TRANSIENT_DICT_ID);
-        casted_target_ti.set_fixed_size();
-        args[0] = makeExpr<Analyzer::UOper>(
-            casted_target_ti, args[0]->get_contains_agg(), kCAST, args[0]);
-      }
-    }
-  }
 
   switch (string_op_kind) {
     case SqlStringOpKind::LOWER:

@@ -632,6 +632,9 @@ NullableStrType Base64Decode::operator()(const std::string& str) const {
 
 std::string StringOps::operator()(const std::string& str) const {
   NullableStrType modified_str(str);
+  if (modified_str.is_null) {
+    return "";  // How we currently represent dictionary-encoded nulls
+  }
   for (const auto& string_op : string_ops_) {
     modified_str = string_op->operator()(modified_str.str);
     if (modified_str.is_null) {

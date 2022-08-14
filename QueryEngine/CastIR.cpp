@@ -81,12 +81,16 @@ llvm::Value* CodeGenerator::codegenCast(llvm::Value* operand_lv,
     return cgen_state_->ir_builder_.CreatePointerCast(operand_lv,
                                                       byte_array_type->getPointerTo());
   }
+  if (!operand_ti.is_string() && ti.is_text_encoding_dict()) {
+    return codegenCastNonStringToString(operand_lv, operand_ti, ti, operand_is_const, co);
+  }
   if (operand_lv->getType()->isIntegerTy()) {
     if (operand_ti.is_string()) {
       return codegenCastFromString(operand_lv, operand_ti, ti, operand_is_const, co);
     }
     CHECK(operand_ti.is_integer() || operand_ti.is_decimal() || operand_ti.is_time() ||
           operand_ti.is_boolean());
+
     if (operand_ti.is_boolean()) {
       // cast boolean to int8
       CHECK(operand_lv->getType()->isIntegerTy(1) ||
@@ -342,6 +346,83 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
   CHECK(operand_is_const);
   CHECK_EQ(kENCODING_DICT, ti.get_compression());
   return operand_lv;
+}
+
+llvm::Value* CodeGenerator::codegenCastNonStringToString(llvm::Value* operand_lv,
+                                                         const SQLTypeInfo& operand_ti,
+                                                         const SQLTypeInfo& ti,
+                                                         const bool operand_is_const,
+                                                         const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
+  CHECK(!operand_ti.is_string());
+  if (ti.get_compression() == kENCODING_NONE) {
+    throw std::runtime_error("Cast to none-encoded strings currently unsupported.");
+  }
+  if (g_cluster) {
+    throw std::runtime_error(
+        "Cast to dictionary-encoded string type not supported for "
+        "distributed queries");
+  }
+  if (co.device_type == ExecutorDeviceType::GPU) {
+    throw QueryMustRunOnCpu();
+  }
+  std::string fn_call{"convert_to_string_and_encode_"};
+  const auto operand_type = operand_ti.get_type();
+  std::vector operand_lvs{operand_lv};
+  switch (operand_type) {
+    case kBOOLEAN:
+      fn_call += "bool";
+      break;
+    case kTINYINT:
+    case kSMALLINT:
+    case kINT:
+    case kBIGINT:
+    case kFLOAT:
+    case kDOUBLE:
+      fn_call += to_lower(toString(operand_type));
+      break;
+    case kNUMERIC:
+    case kDECIMAL:
+      fn_call += "decimal";
+      operand_lvs.emplace_back(llvm::ConstantInt::get(
+          get_int_type(32, cgen_state_->context_), operand_ti.get_precision()));
+      operand_lvs.emplace_back(llvm::ConstantInt::get(
+          get_int_type(32, cgen_state_->context_), operand_ti.get_scale()));
+      break;
+    case kTIME:
+      fn_call += "time";
+      break;
+    case kTIMESTAMP:
+      fn_call += "timestamp";
+      operand_lvs.emplace_back(llvm::ConstantInt::get(
+          get_int_type(32, cgen_state_->context_), operand_ti.get_dimension()));
+      break;
+    case kDATE:
+      fn_call += "date";
+      break;
+    default:
+      throw std::runtime_error("Unimplemented type for string cast");
+  }
+  operand_lvs.emplace_back(
+      cgen_state_->llInt(int64_t(executor()->getStringDictionaryProxy(
+          ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true))));
+
+  auto ret = cgen_state_->emitExternalCall(
+      fn_call, get_int_type(32, cgen_state_->context_), operand_lvs);
+
+  std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
+  const bool is_nullable = !operand_ti.get_notnull();
+  if (is_nullable) {
+    nullcheck_codegen =
+        std::make_unique<NullCheckCodegen>(cgen_state_,
+                                           executor(),
+                                           operand_lvs.front(),
+                                           operand_ti,
+                                           "cast_non_string_to_string_nullcheck");
+    CHECK(nullcheck_codegen);
+    ret = nullcheck_codegen->finalize(cgen_state_->inlineNull(ti), ret);
+  }
+  return ret;
 }
 
 llvm::Value* CodeGenerator::codegenCastBetweenIntTypes(llvm::Value* operand_lv,

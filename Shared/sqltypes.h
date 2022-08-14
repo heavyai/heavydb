@@ -702,7 +702,7 @@ class SQLTypeInfo {
     } else if (is_string() && !new_type_info.is_string()) {
       return false;
     } else if (!is_string() && new_type_info.is_string()) {
-      return false;
+      return true;
       // can cast between numbers
     } else if (is_number() && new_type_info.is_number()) {
       return true;

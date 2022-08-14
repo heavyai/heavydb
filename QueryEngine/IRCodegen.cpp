@@ -1412,7 +1412,8 @@ CodeGenerator::NullCheckCodegen::NullCheckCodegen(CgenState* cgen_state,
   if (nullable_ti.is_fp()) {
     is_null_lv = cgen_state->ir_builder_.CreateFCmp(
         llvm::FCmpInst::FCMP_OEQ, nullable_lv, cgen_state->inlineFpNull(nullable_ti));
-  } else if (nullable_ti.is_boolean()) {
+  } else if (nullable_ti.is_boolean() &&
+             nullable_lv->getType()->getIntegerBitWidth() == 1) {
     is_null_lv = cgen_state->ir_builder_.CreateICmp(
         llvm::ICmpInst::ICMP_EQ, nullable_lv, cgen_state->llBool(true));
   } else {

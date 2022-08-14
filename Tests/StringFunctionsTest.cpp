@@ -165,6 +165,35 @@ void compare_result_set(
     }
   }
 }
+
+void compare_result_sets(const std::shared_ptr<ResultSet>& result_set_1,
+                         const std::shared_ptr<ResultSet>& result_set_2) {
+  auto row_count_1 = result_set_1->rowCount(false);
+  auto row_count_2 = result_set_2->rowCount(false);
+  ASSERT_EQ(row_count_1, row_count_2)
+      << "Returned result sets have different number of rows";
+
+  auto column_count_1 = result_set_1->colCount();
+  auto column_count_2 = result_set_2->colCount();
+  ASSERT_EQ(column_count_1, column_count_2)
+      << "Returned result sets have differing numbers of columns";
+  ;
+
+  if (row_count_1 == 0) {
+    return;
+  }
+
+  for (size_t r = 0; r < row_count_1; ++r) {
+    auto row_1 = result_set_1->getNextRow(true, true);
+    auto row_2 = result_set_2->getNextRow(true, true);
+    for (size_t c = 0; c < column_count_1; c++) {
+      auto column_value_1 = boost::get<ScalarTargetValue>(row_1[c]);
+      auto column_value_2 = boost::get<ScalarTargetValue>(row_2[c]);
+      assert_value_equals(column_value_1, column_value_2, r, c);
+    }
+  }
+}
+
 }  // namespace
 
 // begin string function tests
@@ -190,6 +219,11 @@ class StringFunctionTest : public testing::Test {
           insert into string_function_test_countries values(2, 'ca', '>>CA<<', 'Canada', 'Canada', 'Ottawa', 'TORONTO', 'EN', '{"capital": "Toronto", "pop": 38010000, "independence_day": "07/01/1867", "exchange_rate_usd": "0.78125", "has_prime_minister": true, "prime_minister": "Justin Trudeau", "factoids": {"gdp_per_cap_2015_2020": [43596, 42316, 45129, 46454, 46327, 43242], "Last 3 leaders": ["Paul Martin", "Stephen Harper", "Justin Trudeau"], "most valuable crop": "wheat"}}');
           insert into string_function_test_countries values(3, 'Gb', '>>GB<<', 'United Kingdom', 'UK', 'London', 'LONDON', 'en', '{"capital": "London", "pop": 67220000, "independence_day": "N/A", "exchange_rate_usd": 1.21875, "prime_minister": "Boris Johnson", "has_prime_minister": true, "factoids": {"gdp_per_cap_2015_2020": [45039, 41048, 40306, 42996, 42354, 40285], "most valuable crop": "wheat"}}');
           insert into string_function_test_countries values(4, 'dE', '>>DE<<', 'Germany', 'Germany', 'Berlin', 'Berlin', 'de', '{"capital":"Berlin", "independence_day": "1990-10-03", "exchange_rate_usd": 1.015625, "has_prime_minister": false, "prime_minister": null, "factoids": {"gdp_per_cap_2015_2020": [41103, 42136, 44453, 47811, 46468, 45724], "most valuable crop": "wheat"}}');
+          drop table if exists numeric_to_string_test;
+          create table numeric_to_string_test(b boolean, ti tinyint, si smallint, i int, bi bigint, flt float, dbl double, dec_5_2 decimal(5, 2), dec_18_10 decimal(18, 10), dt date, ts_0 timestamp(0), ts_3 timestamp(3), tm time, b_str text, ti_str text, si_str text, i_str text, bi_str text, flt_str text, dbl_str text, dec_5_2_str text, dec_18_10_str text, dt_str text, ts_0_str text, ts_3_str text, tm_str text) with (fragment_size=2);
+          insert into numeric_to_string_test values (true, 21, 21, 21, 21, 1.25, 1.25, 1.25, 1.25, '2013-09-10', '2013-09-10 12:43:23', '2013-09-10 12:43:23.123', '12:43:23', 'true', '21', '21', '21', '21', '1.250000', '1.250000', ' 1.25', '      1.2500000000', '2013-09-10', '2013-09-10 12:43:23', '2013-09-10 12:43:23.123', '12:43:23');
+          insert into numeric_to_string_test values (false, 127, 32627, 2147483647, 9223372036854775807,  0.78125, 0.78125, 123.45, 12345678.90123456789, '2013-09-11', '2013-09-11 12:43:23', '2013-09-11 12:43:23.123', '00:43:23', 'false', '127', '32627', '2147483647', '9223372036854775807', '0.781250', '0.781250', '123.45', '12345678.9012345672', '2013-09-11', '2013-09-11 12:43:23', '2013-09-11 12:43:23.123', '00:43:23');
+          insert into numeric_to_string_test values (null, null, null, null,  null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         )"));
       StringFunctionTest::test_data_loaded = true;
     }
@@ -1659,7 +1693,7 @@ TEST_F(StringFunctionTest, Position) {
       compare_result_set(expected_result_set, result_set);
     }
     {
-      // Some searches do not match, non-matches shouldr return 0
+      // Some searches do not match, non-matches should return 0
       auto result_set =
           sql("select id, position('for' in personal_motto) from "
               "string_function_test_people order by id;",
@@ -1776,6 +1810,122 @@ TEST_F(StringFunctionTest, Position) {
           {int64_t(3), int64_t(0)},
           {int64_t(4), int64_t(3)}};
       compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, ExplicitCastToNumeric) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      auto result_set = sql(
+          "select cast(age as text) from string_function_test_people order by id asc;",
+          dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"25"}, {"30"}, {"20"}, {"25"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      auto result_set = sql(
+          "select cast(age as text) || ' years'  from string_function_test_people order "
+          "by id asc;",
+          dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"25 years"}, {"30 years"}, {"20 years"}, {"25 years"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      auto result_set = sql(
+          "select cast(age as text) || ' years' as age_years, count(*) as n "
+          "from string_function_test_people group by age_years order by age_years asc;",
+          dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"20 years", int64_t(1)}, {"25 years", int64_t(2)}, {"30 years", int64_t(1)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, ImplictCastToNumeric) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      auto result_set =
+          sql("select age || ' years'  from string_function_test_people order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"25 years"}, {"30 years"}, {"20 years"}, {"25 years"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      auto result_set = sql(
+          "select age || ' years' as age_years, count(*) as n "
+          "from string_function_test_people group by age_years order by age_years asc;",
+          dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"20 years", int64_t(1)}, {"25 years", int64_t(2)}, {"30 years", int64_t(1)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, CastTypesToString) {
+  const std::vector col_type_strings = {"ti",
+                                        "si",
+                                        "i",
+                                        "bi",
+                                        "flt",
+                                        "dbl",
+                                        "dec_5_2",
+                                        "dec_18_10",
+                                        "dt",
+                                        "ts_0",
+                                        "ts_3",
+                                        "tm"};
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      // Explicit cast
+      for (auto col_type : col_type_strings) {
+        auto result_set = sql(
+            "select cast(" + std::string(col_type) +
+                " as text) || ' years' from numeric_to_string_test order by rowid asc;",
+            dt);
+        auto expected_result_set =
+            sql("select " + std::string(col_type) +
+                    "_str || ' years' from numeric_to_string_test order by rowid asc;",
+                dt);
+        compare_result_sets(result_set, expected_result_set);
+      }
+    }
+    {
+      // Implicit cast
+      for (auto col_type : col_type_strings) {
+        auto result_set =
+            sql("select " + std::string(col_type) +
+                    " || ' years' from numeric_to_string_test order by rowid asc;",
+                dt);
+        auto expected_result_set =
+            sql("select " + std::string(col_type) +
+                    "_str || ' years' from numeric_to_string_test order by rowid asc;",
+                dt);
+        compare_result_sets(result_set, expected_result_set);
+      }
+    }
+    {
+      // Direct equals
+      for (auto col_type : col_type_strings) {
+        auto result_set =
+            sql("select coalesce(cast(cast(" + std::string(col_type) +
+                    " as text) || ' years' = " + std::string(col_type) +
+                    "_str || ' years' as int), -1) from numeric_to_string_test "
+                    "order by rowid asc;",
+                dt);
+        // Last value is false/0 since in SQL null != null
+        std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+            {int64_t(1)}, {int64_t(1)}, {int64_t(-1)}};
+        compare_result_set(expected_result_set, result_set);
+      }
     }
   }
 }
@@ -1992,26 +2142,28 @@ TEST_F(StringFunctionTest, CaseStatement) {
     }
     // Single column, string ops on inputs and outputs, with additional literal
     {
-      auto result_set = sql(
-          "select case when split_part(us_phone_number, '-', 2) = '614' then "
-          "split_part(us_phone_number, '-', 3) "
-          "when split_part(us_phone_number, '-', 3) = '2144' then "
-          "substring(us_phone_number from 1 for 3) else "
-          "'Surprise' end as case_stmt from string_function_test_people order by id asc;",
-          dt);
+      auto result_set =
+          sql("select case when split_part(us_phone_number, '-', 2) = '614' then "
+              "split_part(us_phone_number, '-', 3) "
+              "when split_part(us_phone_number, '-', 3) = '2144' then "
+              "substring(us_phone_number from 1 for 3) else "
+              "'Surprise' end as case_stmt from string_function_test_people order by "
+              "id asc;",
+              dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
           {"555"}, {"Surprise"}, {"9814"}, {"2282"}};
     }
     // Multi-column, string ops on inputs and outputs, with null and additional literal
     {
-      auto result_set = sql(
-          "select case when split_part(us_phone_number, '-', 2) = trim('614 ') then null "
-          "when split_part(us_phone_number, '-', 3) = '214' || '4' then "
-          "regexp_substr(zip_plus_4, "
-          "'^[[:digit:]]+') else upper(country_code) end as case_stmt from "
-          "string_function_test_people "
-          "order by id asc;",
-          dt);
+      auto result_set =
+          sql("select case when split_part(us_phone_number, '-', 2) = trim('614 ') "
+              "then null "
+              "when split_part(us_phone_number, '-', 3) = '214' || '4' then "
+              "regexp_substr(zip_plus_4, "
+              "'^[[:digit:]]+') else upper(country_code) end as case_stmt from "
+              "string_function_test_people "
+              "order by id asc;",
+              dt);
 
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
           {"90210"}, {"US"}, {""}, {""}};
@@ -2040,11 +2192,12 @@ TEST_F(StringFunctionTest, GroupBy) {
       compare_result_set(expected_result_set, result_set);
     }
     {
-      auto result_set = sql(
-          "select regexp_substr(raw_email, "
-          "'([[:alnum:]._-]+)@([[:alnum:]]+).([[:alnum:]]+)', 1, 1, 'ie', 3) as tld, "
-          "count(*) as n from string_function_test_people group by tld order by tld asc;",
-          dt);
+      auto result_set =
+          sql("select regexp_substr(raw_email, "
+              "'([[:alnum:]._-]+)@([[:alnum:]]+).([[:alnum:]]+)', 1, 1, 'ie', 3) as tld, "
+              "count(*) as n from string_function_test_people group by tld order by tld "
+              "asc;",
+              dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
           {"com", int64_t(3)}, {"net", int64_t(1)}};
       compare_result_set(expected_result_set, result_set);
@@ -2282,11 +2435,12 @@ TEST_F(StringFunctionTest, NoneEncodedGroupByStringOps) {
 
     // String ops with filter
     {
-      auto result_set = sql(
-          "select initcap(last_name) as g, count(*) as n from "
-          "string_function_test_people where encode_text(last_name) <> upper(last_name) "
-          "group by g order by g asc;",
-          dt);
+      auto result_set =
+          sql("select initcap(last_name) as g, count(*) as n from "
+              "string_function_test_people where encode_text(last_name) <> "
+              "upper(last_name) "
+              "group by g order by g asc;",
+              dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
           {"Banks", int64_t(1)}, {"Smith", int64_t(1)}, {"Wilson", int64_t(1)}};
     }
@@ -2334,20 +2488,22 @@ TEST_F(StringFunctionTest, NoneEncodedEncodedEquality) {
 
     // None encoded = encoded, string ops both sides
     {
-      auto result_set = sql(
-          "select upper(last_name) from string_function_test_people where "
-          "initcap(last_name) = split_part(initcap(full_name), ' ', 2) order by id asc;",
-          dt);
+      auto result_set =
+          sql("select upper(last_name) from string_function_test_people where "
+              "initcap(last_name) = split_part(initcap(full_name), ' ', 2) order by id "
+              "asc;",
+              dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
           {"SMITH"}, {"BANKS"}, {"WILSON"}, {"SMITH"}};
       compare_result_set(expected_result_set, result_set);
     }
     // Encoded = none encoded, string ops both sides
     {
-      auto result_set = sql(
-          "select upper(last_name) from string_function_test_people where "
-          "split_part(initcap(full_name), ' ', 2) = initcap(last_name) order by id asc;",
-          dt);
+      auto result_set =
+          sql("select upper(last_name) from string_function_test_people where "
+              "split_part(initcap(full_name), ' ', 2) = initcap(last_name) order by id "
+              "asc;",
+              dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
           {"SMITH"}, {"BANKS"}, {"WILSON"}, {"SMITH"}};
       compare_result_set(expected_result_set, result_set);
@@ -2400,10 +2556,11 @@ TEST_F(StringFunctionTest, NoneEncodedCaseStatementsNoStringOps) {
 
     // None-encoded + none-encoded + literal
     {
-      auto result_set = sql(
-          "select id, case when id = 1 then 'USA' when id <= 3 then short_name else lang "
-          "end from string_function_test_countries order by id asc;",
-          dt);
+      auto result_set =
+          sql("select id, case when id = 1 then 'USA' when id <= 3 then short_name "
+              "else lang "
+              "end from string_function_test_countries order by id asc;",
+              dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
           {int64_t(1), "USA"},
           {int64_t(2), "Canada"},
@@ -2480,12 +2637,13 @@ TEST_F(StringFunctionTest, NoneEncodedCaseStatementsStringOps) {
     // Group by
     // Dict-encoded + none-encoded + literal
     {
-      auto result_set = sql(
-          "select case when lang = 'en' then upper(lang) when code = 'ca' then 'en' else "
-          "'Z' || trim(leading 'd' from repeat(code, 2)) end "
-          "as g, count(*) as n from string_function_test_countries group by g order "
-          "by g asc;",
-          dt);
+      auto result_set =
+          sql("select case when lang = 'en' then upper(lang) when code = 'ca' then 'en' "
+              "else "
+              "'Z' || trim(leading 'd' from repeat(code, 2)) end "
+              "as g, count(*) as n from string_function_test_countries group by g order "
+              "by g asc;",
+              dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
           {"EN", int64_t(2)}, {"ZEdE", int64_t(1)}, {"en", int64_t(1)}};
       compare_result_set(expected_result_set, result_set);
@@ -2493,24 +2651,9 @@ TEST_F(StringFunctionTest, NoneEncodedCaseStatementsStringOps) {
   }
 }
 
-TEST_F(StringFunctionTest, LowercaseNonTextColumn) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    try {
-      sql("select lower(age) from string_function_test_people;", dt);
-      FAIL() << "An exception should have been thrown for this test case";
-    } catch (const std::exception& e) {
-      ASSERT_STREQ(
-          "Cannot CAST from INTEGER to TEXT",
-          //"Error instantiating LOWER operator. Expected text type for argument 1 "
-          //"(operand).",
-          e.what());
-    }
-  }
-}
-
 TEST_F(StringFunctionTest, LowercaseNullColumn) {
-  sql("insert into string_function_test_people values(5, null, 'Empty', null, 25, 'US', "
+  sql("insert into string_function_test_people values(5, null, 'Empty', null, 25, "
+      "'US', "
       "'555-123-4567', '12345-8765', 'One.', 'null@nullbin.org');");
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -3301,9 +3444,9 @@ TEST_F(PostgresStringFunctionTest, InitCap) {
                           PostgresStringFunctionTest::orig_none_encoded_string_col_}) {
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
       SKIP_NO_GPU();
-      // Postgres seems to have different rules for INITCAP than the ones we use following
-      // Snowflake, such as capitalizing letters after apostrophes (i.e. Smith'S), so
-      // so exclude these differences via additional SQL filters
+      // Postgres seems to have different rules for INITCAP than the ones we use
+      // following Snowflake, such as capitalizing letters after apostrophes (i.e.
+      // Smith'S), so so exclude these differences via additional SQL filters
       EXPECT_EQ(
           0L,
           v<int64_t>(run_simple_agg(

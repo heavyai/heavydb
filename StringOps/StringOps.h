@@ -37,8 +37,8 @@
 namespace StringOps_Namespace {
 
 struct NullableStrType {
-  NullableStrType(const std::string& str) : str(str), is_null(false) {}
-  NullableStrType(const std::string_view sv) : str(sv), is_null(false) {}
+  NullableStrType(const std::string& str) : str(str), is_null(str.empty()) {}
+  NullableStrType(const std::string_view sv) : str(sv), is_null(sv.empty()) {}
   NullableStrType() : is_null(true) {}
 
   std::pair<std::string, bool> toPair() const { return {str, is_null}; }
