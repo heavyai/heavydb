@@ -679,6 +679,9 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   const auto native_code = compilation_context->getNativeCode(device_id);
   auto cu_func = static_cast<CUfunction>(native_code.first);
   auto qe_cuda_stream = getQueryEngineCudaStreamForDevice(device_id);
+  VLOG(1) << "Launch GPU table function kernel compiled with the following block and "
+             "grid sizes: "
+          << block_size_x << " and " << grid_size_x;
   checkCudaErrors(cuLaunchKernel(cu_func,
                                  grid_size_x,
                                  grid_size_y,

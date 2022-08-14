@@ -95,7 +95,6 @@ class CodeGenerator {
   struct GPUTarget {
     llvm::TargetMachine* nvptx_target_machine;
     const CudaMgr_Namespace::CudaMgr* cuda_mgr;
-    unsigned block_size;
     CgenState* cgen_state;
     bool row_func_not_inlined;
   };

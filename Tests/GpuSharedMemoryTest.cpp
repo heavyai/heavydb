@@ -173,7 +173,6 @@ std::unique_ptr<GpuDeviceCompilationContext> compile_and_link_gpu_code(
     llvm::Module* module,
     CudaMgr_Namespace::CudaMgr* cuda_mgr,
     const std::string& kernel_name,
-    const size_t gpu_block_size = 1024,
     const size_t gpu_device_idx = 0) {
   CHECK(module);
   CHECK(cuda_mgr);
@@ -183,7 +182,7 @@ std::unique_ptr<GpuDeviceCompilationContext> compile_and_link_gpu_code(
   const auto ptx =
       CodeGenerator::generatePTX(cuda_llir, nvptx_target_machine.get(), context);
 
-  auto cubin_result = ptx_to_cubin(ptx, gpu_block_size, cuda_mgr);
+  auto cubin_result = ptx_to_cubin(ptx, cuda_mgr);
   auto& option_keys = cubin_result.option_keys;
   auto& option_values = cubin_result.option_values;
   auto cubin = cubin_result.cubin;

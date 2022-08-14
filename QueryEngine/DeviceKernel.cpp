@@ -60,6 +60,8 @@ class NvidiaKernel : public DeviceKernel {
               unsigned int sharedMemBytes,
               void** kernelParams) override {
     auto qe_cuda_stream = getQueryEngineCudaStreamForDevice(device_id);
+    VLOG(1) << "Launch GPU kernel compiled with the following block and grid sizes: "
+            << blockDimX << " and " << gridDimX;
     checkCudaErrors(cuLaunchKernel(function_ptr,
                                    gridDimX,
                                    gridDimY,

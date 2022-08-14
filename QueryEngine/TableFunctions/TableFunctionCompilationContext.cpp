@@ -883,11 +883,8 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
     CHECK(executor_);
     executor_->initializeNVPTXBackend();
 
-    CodeGenerator::GPUTarget gpu_target{executor_->nvptx_target_machine_.get(),
-                                        executor_->cudaMgr(),
-                                        executor_->blockSize(),
-                                        cgen_state,
-                                        false};
+    CodeGenerator::GPUTarget gpu_target{
+        executor_->nvptx_target_machine_.get(), executor_->cudaMgr(), cgen_state, false};
     code = CodeGenerator::generateNativeGPUCode(executor_,
                                                 entry_point_func_,
                                                 kernel_func_,
