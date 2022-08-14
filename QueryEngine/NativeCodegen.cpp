@@ -1304,7 +1304,7 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   }
   LOG(PTX) << "PTX for the GPU:\n" << ptx << "\nEnd of PTX";
 
-  auto cubin_result = ptx_to_cubin(ptx, gpu_target.block_size, gpu_target.cuda_mgr);
+  auto cubin_result = ptx_to_cubin(ptx, gpu_target.cuda_mgr);
   auto& option_keys = cubin_result.option_keys;
   auto& option_values = cubin_result.option_values;
   auto cubin = cubin_result.cubin;
@@ -1376,11 +1376,8 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
   }
 
   initializeNVPTXBackend();
-  CodeGenerator::GPUTarget gpu_target{nvptx_target_machine_.get(),
-                                      cuda_mgr,
-                                      blockSize(),
-                                      cgen_state_.get(),
-                                      row_func_not_inlined};
+  CodeGenerator::GPUTarget gpu_target{
+      nvptx_target_machine_.get(), cuda_mgr, cgen_state_.get(), row_func_not_inlined};
   std::shared_ptr<GpuCompilationContext> compilation_context;
 
   try {

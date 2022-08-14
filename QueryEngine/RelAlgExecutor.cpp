@@ -3708,14 +3708,14 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       if (!cat_.getDataMgr().getCudaMgr()) {
         VLOG(1) << "Skip CUDA grid size query hint: cannot detect CUDA device";
       } else {
-        const auto default_grid_size = executor_->gridSize();
+        const auto num_sms = executor_->cudaMgr()->getMinNumMPsForAllDevices();
         const auto new_grid_size =
-            std::round(default_grid_size * query_hints.cuda_grid_size_multiplier);
-        if (new_grid_size >= 1) {
+            std::round(num_sms * query_hints.cuda_grid_size_multiplier);
+        const auto default_grid_size = executor_->gridSize();
+        if (new_grid_size != default_grid_size) {
           VLOG(1) << "Change CUDA grid size: " << default_grid_size
-                  << " (default_grid_size) -> " << new_grid_size
-                  << " (default_grid_size * " << query_hints.cuda_grid_size_multiplier
-                  << ")";
+                  << " (default_grid_size) -> " << new_grid_size << " (# SMs * "
+                  << query_hints.cuda_grid_size_multiplier << ")";
           // todo (yoonmin): do we need to check a hard limit?
           executor_->setGridSize(new_grid_size);
         } else {

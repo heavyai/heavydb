@@ -45,7 +45,6 @@ void nvidia_jit_warmup();
  * device linker to create executable GPU device code.
  */
 CubinResult ptx_to_cubin(const std::string& ptx,
-                         const unsigned block_size,
                          const CudaMgr_Namespace::CudaMgr* cuda_mgr);
 
 class GpuDeviceCompilationContext {

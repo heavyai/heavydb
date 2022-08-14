@@ -31,12 +31,14 @@ namespace {
 void fill_options(std::vector<CUjit_option>& option_keys,
                   std::vector<void*>& option_values,
                   char* info_log,
-                  char* error_log,
-                  const unsigned block_size_x) {
+                  char* error_log) {
   option_keys.push_back(CU_JIT_LOG_VERBOSE);
   option_values.push_back(reinterpret_cast<void*>(1));
   option_keys.push_back(CU_JIT_THREADS_PER_BLOCK);
-  option_values.push_back(reinterpret_cast<void*>(block_size_x));
+  // fix the minimum # threads per block to the hardware-limit maximum num threads
+  // to avoid recompiling jit module even if we manipulate it via query hint
+  // (and allowed `CU_JIT_THREADS_PER_BLOCK` range is between 1 and 1024 by query hint)
+  option_values.push_back(reinterpret_cast<void*>(1024));
   option_keys.push_back(CU_JIT_WALL_TIME);
   option_values.push_back(reinterpret_cast<void*>(0));
   option_keys.push_back(CU_JIT_INFO_LOG_BUFFER);
@@ -79,7 +81,7 @@ void nvidia_jit_warmup() {
   std::vector<void*> option_values;
   char info_log[JIT_LOG_SIZE];
   char error_log[JIT_LOG_SIZE];
-  fill_options(option_keys, option_values, info_log, error_log, /*block_size=*/1024);
+  fill_options(option_keys, option_values, info_log, error_log);
   CHECK_EQ(option_values.size(), option_keys.size());
   unsigned num_options = option_keys.size();
   CUlinkState link_state;
@@ -123,7 +125,6 @@ std::string add_line_numbers(const std::string& text) {
 }
 
 CubinResult ptx_to_cubin(const std::string& ptx,
-                         const unsigned block_size,
                          const CudaMgr_Namespace::CudaMgr* cuda_mgr) {
   auto timer = DEBUG_TIMER(__func__);
   CHECK(!ptx.empty());
@@ -133,7 +134,7 @@ CubinResult ptx_to_cubin(const std::string& ptx,
   std::vector<void*> option_values;
   char info_log[JIT_LOG_SIZE];
   char error_log[JIT_LOG_SIZE];
-  fill_options(option_keys, option_values, info_log, error_log, block_size);
+  fill_options(option_keys, option_values, info_log, error_log);
   CHECK_EQ(option_values.size(), option_keys.size());
   unsigned num_options = option_keys.size();
   CUlinkState link_state;

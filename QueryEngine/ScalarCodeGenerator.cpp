@@ -184,12 +184,9 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
   if (!cuda_mgr_) {
     cuda_mgr_ = std::make_unique<CudaMgr_Namespace::CudaMgr>(0);
   }
-  const auto& dev_props = cuda_mgr_->getAllDeviceProperties();
-  int block_size = dev_props.front().maxThreadsPerBlock;
   GPUTarget gpu_target;
   gpu_target.nvptx_target_machine = nvptx_target_machine_.get();
   gpu_target.cuda_mgr = cuda_mgr_.get();
-  gpu_target.block_size = block_size;
   gpu_target.cgen_state = cgen_state_;
   gpu_target.row_func_not_inlined = false;
   gpu_compilation_context_ =
