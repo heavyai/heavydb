@@ -129,6 +129,77 @@ DEF_APPLY_NUMERIC_STRING_OPS(double, double)
 
 #undef DEF_APPLY_NUMERIC_STRING_OPS
 
+inline int32_t write_string_to_proxy(const std::string& str,
+                                     const int64_t string_dict_handle) {
+  if (str.empty()) {
+    return inline_int_null_value<int32_t>();
+  }
+  auto string_dict_proxy = reinterpret_cast<StringDictionaryProxy*>(string_dict_handle);
+  return string_dict_proxy->getOrAddTransient(str);
+}
+
+#define DEF_CONVERT_TO_STRING_AND_ENCODE(value_type, value_name)                    \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t                                   \
+      convert_to_string_and_encode_##value_name(const value_type operand,           \
+                                                const int64_t string_dict_handle) { \
+    return write_string_to_proxy(std::to_string(operand), string_dict_handle);      \
+  }
+
+DEF_CONVERT_TO_STRING_AND_ENCODE(int8_t, tinyint)
+DEF_CONVERT_TO_STRING_AND_ENCODE(int16_t, smallint)
+DEF_CONVERT_TO_STRING_AND_ENCODE(int32_t, int)
+DEF_CONVERT_TO_STRING_AND_ENCODE(int64_t, bigint)
+DEF_CONVERT_TO_STRING_AND_ENCODE(float, float)
+DEF_CONVERT_TO_STRING_AND_ENCODE(double, double)
+
+#undef DEF_CONVERT_TO_STRING_AND_ENCODE
+
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t
+convert_to_string_and_encode_bool(const int8_t operand,
+                                  const int64_t string_dict_handle) {
+  return write_string_to_proxy(operand == 1 ? "true" : "false", string_dict_handle);
+}
+
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t
+convert_to_string_and_encode_decimal(const int64_t operand,
+                                     const int32_t precision,
+                                     const int32_t scale,
+                                     const int64_t string_dict_handle) {
+  constexpr size_t buf_size = 64;
+  char buf[buf_size];  // Hold "2000-03-01 12:34:56.123456789" and large years.
+  const double v = static_cast<double>(operand) * shared::power10inv(scale);
+  snprintf(buf, buf_size, "%*.*f", precision, scale, v);
+  return write_string_to_proxy(buf, string_dict_handle);
+}
+
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t
+convert_to_string_and_encode_time(const int64_t operand,
+                                  const int64_t string_dict_handle) {
+  constexpr size_t buf_size = 64;
+  char buf[buf_size];
+  shared::formatHMS(buf, buf_size, operand);
+  return write_string_to_proxy(buf, string_dict_handle);
+}
+
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t
+convert_to_string_and_encode_timestamp(const int64_t operand,
+                                       const int32_t dimension,
+                                       const int64_t string_dict_handle) {
+  constexpr size_t buf_size = 64;
+  char buf[buf_size];  // Hold "2000-03-01 12:34:56.123456789" and large years.
+  shared::formatDateTime(buf, buf_size, operand, dimension);
+  return write_string_to_proxy(buf, string_dict_handle);
+}
+
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t
+convert_to_string_and_encode_date(const int64_t operand,
+                                  const int64_t string_dict_handle) {
+  constexpr size_t buf_size = 64;
+  char buf[buf_size];  // Hold "2000-03-01 12:34:56.123456789" and large years.
+  shared::formatDate(buf, buf_size, operand);
+  return write_string_to_proxy(buf, string_dict_handle);
+}
+
 llvm::Value* CodeGenerator::codegen(const Analyzer::CharLengthExpr* expr,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
@@ -194,10 +265,8 @@ llvm::Value* CodeGenerator::codegenPerRowStringOper(const Analyzer::StringOper* 
   AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK_GE(expr->getArity(), 1UL);
 
-  const auto& expr_ti = expr->get_type_info();
-  // Should probably CHECK we have a UOper cast to dict encoded to be consistent
-  const auto primary_arg = remove_cast(expr->getArg(0));
-  CHECK(primary_arg->get_type_info().is_none_encoded_string());
+  const auto& arg_ti = expr->getArg(0)->get_type_info();
+  CHECK(!arg_ti.is_dict_encoded_string() || arg_ti.get_comp_param() == TRANSIENT_DICT_ID);
 
   const auto& return_ti = expr->get_type_info();
   if (g_cluster && return_ti.is_dict_encoded_string()) {
@@ -208,7 +277,38 @@ llvm::Value* CodeGenerator::codegenPerRowStringOper(const Analyzer::StringOper* 
   if (co.device_type == ExecutorDeviceType::GPU) {
     throw QueryMustRunOnCpu();
   }
-  auto primary_str_lv = codegen(primary_arg, true, co);
+  auto primary_str_lv = codegen(expr->getArg(0), true, co);
+  std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
+  if (primary_str_lv.size() != 3) {
+    // If this is the case we should have a transient dictionary from a previous op
+    // We can't use the dictionary values without decoding as this op occurs directly
+    // inline on top of whatever operation created the transient dictionary
+    CHECK_EQ(size_t(1), primary_str_lv.size());
+    CHECK(arg_ti.is_dict_encoded_string() &&
+          arg_ti.get_comp_param() == TRANSIENT_DICT_ID);
+    const bool is_nullable = !arg_ti.get_notnull();
+    if (is_nullable) {
+      const auto decoded_input_ti = SQLTypeInfo(kTEXT, is_nullable, kENCODING_DICT);
+      nullcheck_codegen = std::make_unique<CodeGenerator::NullCheckCodegen>(
+          cgen_state_,
+          executor_,
+          primary_str_lv[0],
+          decoded_input_ti,
+          "transient_dict_per_row_nullcheck");
+    }
+    const int64_t string_dictionary_ptr = reinterpret_cast<int64_t>(
+        executor()->getRowSetMemoryOwner()->getLiteralStringDictProxy());
+    const auto decompressed_str_lv = cgen_state_->emitExternalCall(
+        "string_decompress",
+        get_int_type(64, cgen_state_->context_),
+        {primary_str_lv[0], cgen_state_->llInt(string_dictionary_ptr)});
+
+    primary_str_lv.push_back(
+        cgen_state_->emitCall("extract_str_ptr", {decompressed_str_lv}));
+    primary_str_lv.push_back(
+        cgen_state_->emitCall("extract_str_len", {decompressed_str_lv}));
+  }
+
   CHECK_EQ(size_t(3), primary_str_lv.size());
   const auto string_op_infos = getStringOpInfos(expr);
   CHECK(string_op_infos.size());
@@ -253,23 +353,31 @@ llvm::Value* CodeGenerator::codegenPerRowStringOper(const Analyzer::StringOper* 
     auto llvm_return_type = return_ti.is_fp()
                                 ? get_fp_type(logical_size, cgen_state_->context_)
                                 : get_int_type(logical_size, cgen_state_->context_);
-    return cgen_state_->emitExternalCall(fn_call, llvm_return_type, string_oper_lvs);
+    auto ret = cgen_state_->emitExternalCall(fn_call, llvm_return_type, string_oper_lvs);
+    if (nullcheck_codegen) {
+      ret = nullcheck_codegen->finalize(cgen_state_->inlineNull(return_ti), ret);
+    }
+    return ret;
   }
 
   // If here we are outputing a string dictionary column
-
+  CHECK(return_ti.is_dict_encoded_string());
   const int64_t dest_string_proxy_handle =
       reinterpret_cast<int64_t>(executor()->getStringDictionaryProxy(
-          expr_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
+          return_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
   auto dest_string_proxy_handle_lv = cgen_state_->llInt(dest_string_proxy_handle);
   std::vector<llvm::Value*> string_oper_lvs{primary_str_lv[1],
                                             primary_str_lv[2],
                                             string_ops_handle_lv,
                                             dest_string_proxy_handle_lv};
 
-  return cgen_state_->emitExternalCall("apply_string_ops_and_encode",
-                                       get_int_type(32, cgen_state_->context_),
-                                       string_oper_lvs);
+  auto ret = cgen_state_->emitExternalCall("apply_string_ops_and_encode",
+                                           get_int_type(32, cgen_state_->context_),
+                                           string_oper_lvs);
+  if (nullcheck_codegen) {
+    ret = nullcheck_codegen->finalize(cgen_state_->inlineNull(return_ti), ret);
+  }
+  return ret;
 }
 
 std::unique_ptr<StringDictionaryTranslationMgr> translate_dict_strings(

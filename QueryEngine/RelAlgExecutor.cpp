@@ -275,7 +275,10 @@ class TextEncodingCastCountVisitor : public ScalarExprVisitor<TextEncodingCastCo
     }
     const auto& operand_ti = u_oper->get_operand()->get_type_info();
     const auto& casted_ti = u_oper->get_type_info();
-    if (!operand_ti.is_string() || !casted_ti.is_string()) {
+    if (!operand_ti.is_string() && casted_ti.is_dict_encoded_string()) {
+      return aggregateResult(result, TextEncodingCastCounts(0UL, 1UL));
+    }
+    if (!casted_ti.is_string()) {
       return result;
     }
     const bool literals_only = u_oper->get_operand()->get_num_column_vars(true) == 0UL;
@@ -291,6 +294,19 @@ class TextEncodingCastCountVisitor : public ScalarExprVisitor<TextEncodingCastCo
       } else {
         return result;
       }
+    }
+    return result;
+  }
+
+  TextEncodingCastCounts visitStringOper(
+      const Analyzer::StringOper* string_oper) const override {
+    TextEncodingCastCounts result = defaultResult();
+    if (string_oper->getArity() > 0) {
+      result = aggregateResult(result, visit(string_oper->getArg(0)));
+    }
+    if (string_op_returns_string(string_oper->get_kind()) &&
+        string_oper->hasNoneEncodedTextArg()) {
+      result = aggregateResult(result, TextEncodingCastCounts(0UL, 1UL));
     }
     return result;
   }

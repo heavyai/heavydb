@@ -684,7 +684,6 @@ ExpressionRange getExpressionRange(const Analyzer::StringOper* string_oper_expr,
     // dictionary yet. Just throw an invalid range.
     return ExpressionRange::makeInvalidRange();
   }
-  CHECK(string_oper_col_var_ti.is_dict_encoded_string());
 
   const auto expr_ti = string_oper_expr->get_type_info();
   if (expr_ti.is_string()) {

@@ -348,6 +348,12 @@ class CodeGenerator {
                                      const bool operand_is_const,
                                      const CompilationOptions& co);
 
+  llvm::Value* codegenCastNonStringToString(llvm::Value* operand_lv,
+                                            const SQLTypeInfo& operand_ti,
+                                            const SQLTypeInfo& ti,
+                                            const bool operand_is_const,
+                                            const CompilationOptions& co);
+
   llvm::Value* codegenCastToFp(llvm::Value* operand_lv,
                                const SQLTypeInfo& operand_ti,
                                const SQLTypeInfo& ti);

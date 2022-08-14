@@ -760,6 +760,15 @@ std::shared_ptr<Analyzer::Expr> Expr::add_cast(const SQLTypeInfo& new_type_info)
         "Internal error: Cannot apply transient dictionary encoding "
         "to non-literal expression.");
   }
+  if (!type_info.is_string() && new_type_info.is_string() &&
+      !new_type_info.is_text_encoding_dict()) {
+    SQLTypeInfo casted_new_type_info = new_type_info;
+    casted_new_type_info.set_type(kTEXT);
+    casted_new_type_info.set_compression(kENCODING_DICT);
+    casted_new_type_info.set_comp_param(TRANSIENT_DICT_ID);
+    casted_new_type_info.set_fixed_size();
+    return makeExpr<UOper>(casted_new_type_info, contains_agg, kCAST, shared_from_this());
+  }
   return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
 }
 
@@ -4106,8 +4115,7 @@ void StringOper::check_operand_types(
     // handle this (we haven't validated any of the casts that calcite has given us at
     // the point of RelAlgTranslation)
     if (arg_ti != decasted_arg_ti &&
-        ((arg_ti.is_string() && !decasted_arg_ti.is_string()) ||
-         (arg_ti.is_integer() && decasted_arg_ti.is_string()))) {
+        (arg_ti.is_integer() && decasted_arg_ti.is_string())) {
       arg_ti = decasted_arg_ti;
     }
 
@@ -4122,8 +4130,7 @@ void StringOper::check_operand_types(
       case OperandTypeFamily::STRING_FAMILY: {
         if (!arg_ti.is_string()) {
           oss << "Error instantiating " << ::toString(get_kind()) << " operator. "
-              << "Expected text type for argument '" << arg_names[arg_idx] << "' ("
-              << arg_names[arg_idx] << ").";
+              << "Expected text type for argument '" << arg_names[arg_idx] << "'";
           throw std::runtime_error(oss.str());
           break;
         }
