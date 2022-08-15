@@ -5064,11 +5064,10 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   const auto query_infos = get_table_infos(input_descs, executor_);
   RelAlgTranslator translator(
       cat_, query_state_, executor_, input_to_nest_level, {}, now_, just_explain);
-  const auto input_exprs_owned = translate_scalar_sources(
+  auto input_exprs_owned = translate_scalar_sources(
       rel_table_func, translator, ::ExecutorType::TableFunctions);
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), input_exprs_owned.begin(), input_exprs_owned.end());
-  auto input_exprs = get_raw_pointers(input_exprs_owned);
 
   const auto table_function_impl_and_type_infos = [=]() {
     if (is_gpu) {
@@ -5093,7 +5092,6 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   }();
   const auto& table_function_impl = std::get<0>(table_function_impl_and_type_infos);
   const auto& table_function_type_infos = std::get<1>(table_function_impl_and_type_infos);
-
   size_t output_row_sizing_param = 0;
   if (table_function_impl
           .hasUserSpecifiedOutputSizeParameter()) {  // constant and row multiplier
@@ -5121,11 +5119,11 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       // RowMultiplier not specified in the SQL query. Set it to 1
       output_row_sizing_param = 1;  // default value for RowMultiplier
       static Datum d = {DEFAULT_ROW_MULTIPLIER_VALUE};
-      static auto DEFAULT_ROW_MULTIPLIER_EXPR =
+      static Analyzer::ExpressionPtr DEFAULT_ROW_MULTIPLIER_EXPR =
           makeExpr<Analyzer::Constant>(kINT, false, d);
       // Push the constant 1 to input_exprs
-      input_exprs.insert(input_exprs.begin() + parameter_index - 1,
-                         DEFAULT_ROW_MULTIPLIER_EXPR.get());
+      input_exprs_owned.insert(input_exprs_owned.begin() + parameter_index - 1,
+                               DEFAULT_ROW_MULTIPLIER_EXPR);
     }
   } else if (table_function_impl.hasNonUserSpecifiedOutputSize()) {
     output_row_sizing_param = table_function_impl.getOutputRowSizeParameter();
@@ -5141,8 +5139,8 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   for (const auto& ti : table_function_type_infos) {
     if (ti.is_column_list()) {
       for (int i = 0; i < ti.get_dimension(); i++) {
-        auto& input_expr = input_exprs[input_index];
-        auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr);
+        auto& input_expr = input_exprs_owned[input_index];
+        auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr.get());
         CHECK(col_var);
 
         // avoid setting type info to ti here since ti doesn't have all the
@@ -5162,8 +5160,8 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
         input_index++;
       }
     } else if (ti.is_column()) {
-      auto& input_expr = input_exprs[input_index];
-      auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr);
+      auto& input_expr = input_exprs_owned[input_index];
+      auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr.get());
       CHECK(col_var);
       // same here! avoid setting type info to ti since it doesn't have all the
       // properties correctly set
@@ -5179,10 +5177,10 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       input_col_exprs.push_back(col_var);
       input_index++;
     } else {
-      auto input_expr = input_exprs[input_index];
+      auto input_expr = input_exprs_owned[input_index];
       auto ext_func_arg_ti = ext_arg_type_to_type_info(table_func_args[arg_index]);
       if (ext_func_arg_ti != input_expr->get_type_info()) {
-        input_exprs[input_index] = input_expr->add_cast(ext_func_arg_ti).get();
+        input_exprs_owned[input_index] = input_expr->add_cast(ext_func_arg_ti);
       }
       input_index++;
     }
@@ -5209,7 +5207,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
         }
         input_pos = offset + p.second;
 
-        CHECK_LT(input_pos, input_exprs.size());
+        CHECK_LT(input_pos, input_exprs_owned.size());
         int32_t comp_param =
             input_exprs_owned[input_pos]->get_type_info().get_comp_param();
         ti.set_comp_param(comp_param);
@@ -5218,6 +5216,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
     target_exprs_owned_.push_back(std::make_shared<Analyzer::ColumnVar>(ti, 0, i, -1));
     table_func_outputs.push_back(target_exprs_owned_.back().get());
   }
+  auto input_exprs = get_raw_pointers(input_exprs_owned);
   const TableFunctionExecutionUnit exe_unit = {
       input_descs,
       input_col_descs,

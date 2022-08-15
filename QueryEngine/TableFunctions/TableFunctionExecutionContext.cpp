@@ -232,7 +232,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
           default:
             UNREACHABLE();
         }
-      } else if (ti.is_integer() || ti.is_timestamp()) {
+      } else if (ti.is_integer() || ti.is_timestamp() || ti.is_timeinterval()) {
         switch (get_bit_width(ti)) {
           case 8:
             col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.tinyintval,
@@ -275,6 +275,10 @@ ResultSetPtr TableFunctionExecutionContext::execute(
         throw TableFunctionError("Literal value " + constant_val->toString() +
                                  " is not yet supported.");
       }
+    } else {
+      throw TableFunctionError(
+          "Unsupported expression as input to table function: " + input_expr->toString() +
+          "\n Only literal constants and columns are supported!");
     }
   }
   CHECK_EQ(col_buf_ptrs.size(), exe_unit.input_exprs.size());

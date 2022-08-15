@@ -636,6 +636,10 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.ColumnListArrayBool;
       case ColumnListArrayTextEncodingDict:
         return ExtensionFunction.ExtArgumentType.ColumnListArrayTextEncodingDict;
+      case DayTimeInterval:
+        return ExtensionFunction.ExtArgumentType.DayTimeInterval;
+      case YearMonthTimeInterval:
+        return ExtensionFunction.ExtArgumentType.YearMonthTimeInterval;
       default:
         HEAVYDBLOGGER.error("toExtArgumentType: unknown type " + type);
         return null;

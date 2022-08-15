@@ -506,6 +506,10 @@ inline ExtArgumentType from_thrift(const TExtArgumentType::type& t) {
       return ExtArgumentType::ColumnListArrayTextEncodingNone;
     case TExtArgumentType::ColumnListArrayTextEncodingDict:
       return ExtArgumentType::ColumnListArrayTextEncodingDict;
+    case TExtArgumentType::DayTimeInterval:
+      return ExtArgumentType::DayTimeInterval;
+    case TExtArgumentType::YearMonthTimeInterval:
+      return ExtArgumentType::YearMonthTimeInterval;
   }
   UNREACHABLE();
   return ExtArgumentType{};
@@ -655,6 +659,10 @@ inline TExtArgumentType::type to_thrift(const ExtArgumentType& t) {
       return TExtArgumentType::ColumnListArrayTextEncodingDict;
     case ExtArgumentType::ColumnListArrayTextEncodingNone:
       return TExtArgumentType::ColumnListArrayTextEncodingNone;
+    case ExtArgumentType::DayTimeInterval:
+      return TExtArgumentType::DayTimeInterval;
+    case ExtArgumentType::YearMonthTimeInterval:
+      return TExtArgumentType::YearMonthTimeInterval;
   }
   UNREACHABLE();
   return TExtArgumentType::type{};

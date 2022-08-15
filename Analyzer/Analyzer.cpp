@@ -1197,6 +1197,8 @@ inline bool is_null_value(const SQLTypeInfo& ti, const Datum& constval) {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH:
       return constval.bigintval == NULL_BIGINT;
     case kVARCHAR:
     case kCHAR:

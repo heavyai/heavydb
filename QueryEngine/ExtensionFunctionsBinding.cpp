@@ -448,19 +448,28 @@ static int match_arguments(const SQLTypeInfo& arg_type,
       }
     case kTIMESTAMP:
       if (sig_type == ExtArgumentType::Timestamp) {
-        if (arg_type.get_precision() != 9) {
-          return -1;
-        }
         penalty_score += 1000;
         return 1;
       }
       break;
+    case kINTERVAL_DAY_TIME:
+      if (sig_type == ExtArgumentType::DayTimeInterval) {
+        penalty_score += 1000;
+        return 1;
+      }
+      break;
+
+    case kINTERVAL_YEAR_MONTH:
+      if (sig_type == ExtArgumentType::YearMonthTimeInterval) {
+        penalty_score += 1000;
+        return 1;
+      }
+      break;
+
       /* Not implemented types:
          kCHAR
          kTIME
          kDATE
-         kINTERVAL_DAY_TIME
-         kINTERVAL_YEAR_MONTH
          kGEOMETRY
          kGEOGRAPHY
          kEVAL_CONTEXT_TYPE

@@ -577,7 +577,8 @@ void TableFunctionCompilationContext::generateEntryPoint(
           "input_scalar_fp." + std::to_string(func_arg_index));
       func_args.push_back(scalar_fp);
       CHECK_EQ(col_index, -1);
-    } else if (ti.is_integer() || ti.is_boolean() || ti.is_timestamp()) {
+    } else if (ti.is_integer() || ti.is_boolean() || ti.is_timestamp() ||
+               ti.is_timeinterval()) {
       auto r = cgen_state->ir_builder_.CreateBitCast(
           col_heads[i], get_int_ptr_type(get_bit_width(ti), ctx));
       llvm::LoadInst* scalar_int = cgen_state->ir_builder_.CreateLoad(

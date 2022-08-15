@@ -97,7 +97,9 @@ public class ExtensionFunction {
     ArrayTextEncodingDict,
     ColumnArrayTextEncodingDict,
     ColumnListArrayTextEncodingDict,
-    GeoMultiPoint
+    GeoMultiPoint,
+    DayTimeInterval,
+    YearMonthTimeInterval,
   }
   ;
 
@@ -361,6 +363,10 @@ public class ExtensionFunction {
         return "ColumnList<Array<bool>>";
       case ColumnListArrayTextEncodingDict:
         return "ColumnList<Array<TextEncodingDict>>";
+      case DayTimeInterval:
+        return "DayTimeInterval";
+      case YearMonthTimeInterval:
+        return "YearMonthTimeInterval";
     }
     HEAVYDBLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
     assert false;
@@ -619,6 +625,10 @@ public class ExtensionFunction {
       case ColumnListArrayTextEncodingDict:
       case ColumnListTextEncodingDict:
         return SqlTypeName.COLUMN_LIST;
+      case DayTimeInterval:
+        return SqlTypeName.INTERVAL_DAY_HOUR;
+      case YearMonthTimeInterval:
+        return SqlTypeName.INTERVAL_YEAR_MONTH;
       case Void:
         // some extension functions return void. these functions should be defined in
         // HeavyDBSqlOperatorTable and never have their definition set from the AST file
