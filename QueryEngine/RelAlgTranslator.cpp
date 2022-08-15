@@ -1447,7 +1447,11 @@ hdk::ir::ExprPtr RelAlgTranslator::translateSign(
   const auto operand = translateScalarRex(rex_function->getOperand(0));
   const auto& operand_ti = operand->get_type_info();
   CHECK(operand_ti.is_number());
-  const auto zero = hdk::ir::Constant::make(operand_ti, 0);
+  // For some reason, Rex based DAG checker marks SIGN as non-cacheable.
+  // To duplicate this behavior with no Rex, non-cacheable zero constant
+  // is used here.
+  // TODO: revise this part in checker and probably remove this flag here.
+  const auto zero = hdk::ir::Constant::make(operand_ti, 0, false);
   const auto lt_zero =
       hdk::ir::makeExpr<hdk::ir::BinOper>(kBOOLEAN, kLT, kONE, operand, zero);
   expr_list.emplace_back(lt_zero, hdk::ir::Constant::make(operand_ti, -1));

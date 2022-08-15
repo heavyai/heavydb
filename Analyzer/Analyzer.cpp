@@ -1003,13 +1003,13 @@ hdk::ir::ExprPtr getRegexpExpr(hdk::ir::ExprPtr arg_expr,
 hdk::ir::ExprPtr getUserLiteral(const std::string& user) {
   Datum d;
   d.stringval = new std::string(user);
-  return hdk::ir::makeExpr<hdk::ir::Constant>(kTEXT, false, d);
+  return hdk::ir::makeExpr<hdk::ir::Constant>(kTEXT, false, d, false);
 }
 
 hdk::ir::ExprPtr getTimestampLiteral(const int64_t timestampval) {
   Datum d;
   d.bigintval = timestampval;
-  return hdk::ir::makeExpr<hdk::ir::Constant>(kTIMESTAMP, false, d);
+  return hdk::ir::makeExpr<hdk::ir::Constant>(kTIMESTAMP, false, d, false);
 }
 
 }  // namespace Analyzer

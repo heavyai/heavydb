@@ -374,31 +374,35 @@ class Var : public ColumnVar {
  */
 class Constant : public Expr {
  public:
-  Constant(SQLTypes t, bool n) : Expr(t, !n), is_null(n) {
+  Constant(SQLTypes t, bool n, bool cacheable = true)
+      : Expr(t, !n), is_null(n), cacheable_(cacheable) {
     if (n) {
       set_null_value();
     } else {
       type_info.set_notnull(true);
     }
   }
-  Constant(SQLTypes t, bool n, Datum v) : Expr(t, !n), is_null(n), constval(v) {
+  Constant(SQLTypes t, bool n, Datum v, bool cacheable = true)
+      : Expr(t, !n), is_null(n), cacheable_(cacheable), constval(v) {
     if (n) {
       set_null_value();
     } else {
       type_info.set_notnull(true);
     }
   }
-  Constant(const SQLTypeInfo& ti, bool n, Datum v) : Expr(ti), is_null(n), constval(v) {
+  Constant(const SQLTypeInfo& ti, bool n, Datum v, bool cacheable = true)
+      : Expr(ti), is_null(n), cacheable_(cacheable), constval(v) {
     if (n) {
       set_null_value();
     } else {
       type_info.set_notnull(true);
     }
   }
-  Constant(const SQLTypeInfo& ti, bool n, const ExprPtrList& l)
-      : Expr(ti), is_null(n), constval(Datum{0}), value_list(l) {}
+  Constant(const SQLTypeInfo& ti, bool n, const ExprPtrList& l, bool cacheable = true)
+      : Expr(ti), is_null(n), cacheable_(cacheable), constval(Datum{0}), value_list(l) {}
   ~Constant() override;
   bool get_is_null() const { return is_null; }
+  bool cacheable() const { return cacheable_; }
   Datum get_constval() const { return constval; }
   void set_constval(Datum d) { constval = d; }
   int64_t intVal() const { extract_int_type_from_datum(constval, type_info); }
@@ -411,10 +415,14 @@ class Constant : public Expr {
 
   size_t hash() const override;
 
-  static ExprPtr make(const SQLTypeInfo& ti, int64_t val);
+  static ExprPtr make(const SQLTypeInfo& ti, int64_t val, bool cacheable = true);
 
  protected:
-  bool is_null;    // constant is NULL
+  // Constant is NULL
+  bool is_null;
+  // A hint for DAG caches. Cache hit is unlikely, when set to true
+  // (e.g. constant expression represents NOW datetime).
+  bool cacheable_;
   Datum constval;  // the constant value
   const ExprPtrList value_list;
   void cast_number(const SQLTypeInfo& new_type_info);

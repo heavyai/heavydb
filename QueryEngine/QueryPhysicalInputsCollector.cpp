@@ -20,7 +20,6 @@
 #include "RelAlgDagBuilder.h"
 #include "RelAlgVisitor.h"
 #include "RexVisitor.h"
-#include "Visitors/RelRexDagVisitor.h"
 
 #include "SchemaMgr/ColumnInfo.h"
 

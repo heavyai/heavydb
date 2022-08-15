@@ -16,57 +16,39 @@
 
 #pragma once
 
+#include "QueryEngine/ExprDagVisitor.h"
 #include "QueryEngine/RelAlgDagBuilder.h"
 #include "QueryEngine/RelAlgTranslator.h"
-#include "RelRexDagVisitor.h"
 
-#include <unordered_set>
-
-class QueryPlanDagChecker final : public RelRexDagVisitor {
+class QueryPlanDagChecker final : public ExprDagVisitor {
  public:
   QueryPlanDagChecker(const RelAlgTranslator& rel_alg_translator)
       : detect_non_supported_node_(false)
       , non_supported_node_tag_("")
-      , rel_alg_translator_(rel_alg_translator)
-      , non_supported_functions_(getNonSupportedFunctionsList()) {
-    non_supported_function_tag_ = boost::join(non_supported_functions_, "/");
-  }
-  static std::unordered_set<std::string> getNonSupportedFunctionsList() {
-    std::unordered_set<std::string> non_supported_functions;
-    non_supported_functions.emplace("CURRENT_USER");
-    non_supported_functions.emplace("CARDINALITY");
-    non_supported_functions.emplace("ARRAY_LENGTH");
-    non_supported_functions.emplace("ITEM");
-    non_supported_functions.emplace("NOW");
-    non_supported_functions.emplace("SIGN");
-    non_supported_functions.emplace("OFFSET_IN_FRAGMENT");
-    non_supported_functions.emplace("DATETIME");
-    return non_supported_functions;
-  }
+      , rel_alg_translator_(rel_alg_translator) {}
 
   static std::pair<bool, std::string> hasNonSupportedNodeInDag(
       const RelAlgNode* rel_alg_node,
       const RelAlgTranslator& rel_alg_translator);
   void check(const RelAlgNode*);
-  void detectNonSupportedNode(const std::string& node_tag);
+  void detectNonSupportedNode(const std::string& node_tag) const;
   void reset();
   bool getCheckResult() const;
   std::string const& getNonSupportedNodeTag() const;
 
  private:
-  void visit(const RelLogicalValues*) override;
-  void visit(const RelTableFunction*) override;
-  void visit(const RelProject*) override;
-  void visit(const RelScan*) override;
-  void visit(const RelCompound*) override;
-  void visit(const RelLogicalUnion*) override;
+  void visitLogicalValues(const RelLogicalValues*) override;
+  void visitTableFunction(const RelTableFunction*) override;
+  void visitCompound(const RelCompound*) override;
+  void visitLogicalUnion(const RelLogicalUnion*) override;
 
-  void visit(const RexFunctionOperator*) override;
-  void visit(const RexOperator*) override;
+  void* visitCardinality(const hdk::ir::CardinalityExpr* cardinality) const override;
+  void* visitConstant(const hdk::ir::Constant* constant) const override;
+  void* visitBinOper(const hdk::ir::BinOper* bin_oper) const override;
+  void* visitOffsetInFragment(const hdk::ir::OffsetInFragment*) const override;
 
-  bool detect_non_supported_node_;
-  std::string non_supported_node_tag_;
-  std::string non_supported_function_tag_;
+  mutable bool detect_non_supported_node_;
+  mutable std::string non_supported_node_tag_;
   const RelAlgTranslator& rel_alg_translator_;
-  const std::unordered_set<std::string> non_supported_functions_;
+  mutable int deep_or_ = 0;
 };

@@ -291,7 +291,7 @@ Constant::~Constant() {
   }
 }
 
-ExprPtr Constant::make(const SQLTypeInfo& ti, int64_t val) {
+ExprPtr Constant::make(const SQLTypeInfo& ti, int64_t val, bool cacheable) {
   CHECK(ti.is_number() || ti.is_boolean());
   Datum datum{0};
   switch (ti.get_type()) {
@@ -331,7 +331,7 @@ ExprPtr Constant::make(const SQLTypeInfo& ti, int64_t val) {
     default:
       CHECK(false);
   }
-  return makeExpr<Constant>(ti, false, datum);
+  return makeExpr<Constant>(ti, false, datum, cacheable);
 }
 
 ExprPtr ColumnVar::deep_copy() const {
@@ -365,9 +365,9 @@ ExprPtr Constant::deep_copy() const {
     d.stringval = new std::string(*constval.stringval);
   }
   if (type_info.get_type() == kARRAY) {
-    return makeExpr<Constant>(type_info, is_null, value_list);
+    return makeExpr<Constant>(type_info, is_null, value_list, cacheable_);
   }
-  return makeExpr<Constant>(type_info, is_null, d);
+  return makeExpr<Constant>(type_info, is_null, d, cacheable_);
 }
 
 ExprPtr UOper::deep_copy() const {

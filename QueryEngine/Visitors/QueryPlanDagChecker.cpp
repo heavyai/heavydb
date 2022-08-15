@@ -20,7 +20,7 @@ bool QueryPlanDagChecker::getCheckResult() const {
   return detect_non_supported_node_;
 }
 
-void QueryPlanDagChecker::detectNonSupportedNode(const std::string& node_tag) {
+void QueryPlanDagChecker::detectNonSupportedNode(const std::string& node_tag) const {
   detect_non_supported_node_ = true;
   non_supported_node_tag_ = node_tag;
 }
@@ -34,24 +34,20 @@ std::pair<bool, std::string> QueryPlanDagChecker::hasNonSupportedNodeInDag(
 }
 
 void QueryPlanDagChecker::check(const RelAlgNode* rel_alg_node) {
-  RelRexDagVisitor::visit(rel_alg_node);
+  ExprDagVisitor::visit(rel_alg_node);
 }
 
-void QueryPlanDagChecker::visit(const RelLogicalValues* rel_alg_node) {
+void QueryPlanDagChecker::visitLogicalValues(const RelLogicalValues* rel_alg_node) {
   detectNonSupportedNode("Detect RelLogicalValues node");
   return;
 }
 
-void QueryPlanDagChecker::visit(const RelTableFunction* rel_alg_node) {
+void QueryPlanDagChecker::visitTableFunction(const RelTableFunction* rel_alg_node) {
   detectNonSupportedNode("Detect RelTableFunction node");
   return;
 }
 
-void QueryPlanDagChecker::visit(const RelProject* rel_alg_node) {
-  RelRexDagVisitor::visit(rel_alg_node);
-}
-
-void QueryPlanDagChecker::visit(const RelCompound* rel_alg_node) {
+void QueryPlanDagChecker::visitCompound(const RelCompound* rel_alg_node) {
   // SINGLE_VALUE / SAMPLE query
   if (rel_alg_node->isAggregate() && rel_alg_node->size() > 0) {
     for (size_t i = 0; i < rel_alg_node->size(); ++i) {
@@ -67,53 +63,50 @@ void QueryPlanDagChecker::visit(const RelCompound* rel_alg_node) {
       }
     }
   }
-  RelRexDagVisitor::visit(rel_alg_node);
+  ExprDagVisitor::visitCompound(rel_alg_node);
 }
 
-void QueryPlanDagChecker::visit(const RelLogicalUnion* rel_alg_node) {
+void QueryPlanDagChecker::visitLogicalUnion(const RelLogicalUnion* rel_alg_node) {
   detectNonSupportedNode("Detect RelLogicalUnion node");
-  return;
 }
 
-void QueryPlanDagChecker::visit(const RelScan* rel_alg_node) {
-  RelRexDagVisitor::visit(rel_alg_node);
+void* QueryPlanDagChecker::visitCardinality(const hdk::ir::CardinalityExpr*) const {
+  detectNonSupportedNode("Detect cardinality expression");
+  return nullptr;
 }
 
-void QueryPlanDagChecker::visit(RexOperator const* rex_node) {
-  // prevent too heavy IN clause containing more than 20 values to check
-  if (rex_node->getOperator() == SQLOps::kOR && rex_node->size() > 20) {
-    detectNonSupportedNode("Detect heavy IN-clause having more than 20 values");
-    return;
+void* QueryPlanDagChecker::visitConstant(const hdk::ir::Constant* constant) const {
+  if (!constant->cacheable()) {
+    detectNonSupportedNode("Detect non-cacheable constant");
   }
-  for (size_t i = 0; i < rex_node->size(); ++i) {
-    if (rex_node->getOperand(i)) {
-      RelRexDagVisitor::visit(rex_node->getOperand(i));
-    }
-  }
+  return nullptr;
 }
 
-void QueryPlanDagChecker::visit(RexFunctionOperator const* rex_node) {
-  if (non_supported_functions_.count(rex_node->getName())) {
-    detectNonSupportedNode("Detect non-supported function: " +
-                           non_supported_function_tag_);
-    if (rex_node->getName() == "DATETIME") {
-      const auto arg = rel_alg_translator_.translateScalarRex(rex_node->getOperand(0));
-      const auto arg_lit = std::dynamic_pointer_cast<hdk::ir::Constant>(arg);
-      if (arg_lit && !arg_lit->get_is_null() && arg_lit->get_type_info().is_string()) {
-        if (*arg_lit->get_constval().stringval != "NOW"sv) {
-          reset();
-        }
-      }
+void* QueryPlanDagChecker::visitBinOper(const hdk::ir::BinOper* bin_oper) const {
+  if (bin_oper->get_optype() == kARRAY_AT) {
+    detectNonSupportedNode("Detect ARRAY_AT operation");
+    return nullptr;
+  }
+
+  // Detect heavy IN-clause pattern as a deep OR tree.
+  if (bin_oper->get_optype() == kOR) {
+    if (deep_or_ >= 19) {
+      detectNonSupportedNode("Detect heavy IN-clause having more than 20 values");
+      return nullptr;
     }
+    ++deep_or_;
   }
-  if (getCheckResult()) {
-    return;
+
+  ExprDagVisitor::visitBinOper(bin_oper);
+  if (bin_oper->get_optype() == kOR) {
+    --deep_or_;
   }
-  for (size_t i = 0; i < rex_node->size(); ++i) {
-    if (rex_node->getOperand(i)) {
-      RelRexDagVisitor::visit(rex_node->getOperand(i));
-    }
-  }
+  return nullptr;
+}
+
+void* QueryPlanDagChecker::visitOffsetInFragment(const hdk::ir::OffsetInFragment*) const {
+  detectNonSupportedNode("Detect OFFSET_IN_FRAGMENT operation");
+  return nullptr;
 }
 
 void QueryPlanDagChecker::reset() {
