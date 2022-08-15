@@ -1918,6 +1918,7 @@ const Column<int32_t>& input_arg2, const int32_t arg1, const int32_t arg2,
   UDTF: ct_timestamp_test_columns_and_scalars__cpu(Column<Timestamp>, int64_t, RowMultiplier, Column<Timestamp>) -> Column<Timestamp>
   UDTF: ct_timestamp_column_list_input(TableFunctionManager, ColumnList<int64_t>, Column<Timestamp>) -> Column<Timestamp>
   UDTF: ct_timestamp_truncate(TableFunctionManager, Column<Timestamp>) -> Column<Timestamp> y, Column<Timestamp> mo, Column<Timestamp> d, Column<Timestamp> h, Column<Timestamp> m, Column<Timestamp> s, Column<Timestamp> ms, Column<Timestamp> us
+  UDTF: ct_timestamp_add_interval__template(TableFunctionManager, Column<Timestamp>, T) -> Column<Timestamp>, T=[YearMonthTimeInterval, DayTimeInterval]
 */
 // clang-format on
 
@@ -1991,7 +1992,7 @@ ct_timestamp_test_columns_and_scalars__cpu(const Column<Timestamp>& input,
     if (input.isNull(i)) {
       out.setNull(i);
     } else {
-      out[i] = input[i] + input2[i] + dummy;
+      out[i] = input[i] + input2[i] + Timestamp(dummy);
     }
   }
   return size;
@@ -2031,6 +2032,20 @@ EXTENSION_NOINLINE_HOST int32_t ct_timestamp_truncate(TableFunctionManager& mgr,
     us[i] = input[i].truncateToMicroseconds();
   }
 
+  return size;
+}
+
+template <typename T>
+NEVER_INLINE HOST int32_t
+ct_timestamp_add_interval__template(TableFunctionManager& mgr,
+                                    const Column<Timestamp>& input,
+                                    const T inter,
+                                    Column<Timestamp>& out) {
+  int size = input.size();
+  mgr.set_output_row_size(size);
+  for (int i = 0; i < size; ++i) {
+    out[i] = inter + input[i];
+  }
   return size;
 }
 
@@ -2286,20 +2301,25 @@ NEVER_INLINE HOST int32_t tf_metadata_getter__cpu_template(TableFunctionManager&
   float f{};
   double d{};
   bool b{};
-  mgr.get_metadata("test_int8_t", i8);
-  mgr.get_metadata("test_int16_t", i16);
-  mgr.get_metadata("test_int32_t", i32);
-  mgr.get_metadata("test_int64_t", i64);
-  mgr.get_metadata("test_float", f);
-  mgr.get_metadata("test_double", d);
-  mgr.get_metadata("test_bool", b);
+
+  try {
+    mgr.get_metadata("test_int8_t", i8);
+    mgr.get_metadata("test_int16_t", i16);
+    mgr.get_metadata("test_int32_t", i32);
+    mgr.get_metadata("test_int64_t", i64);
+    mgr.get_metadata("test_float", f);
+    mgr.get_metadata("test_double", d);
+    mgr.get_metadata("test_bool", b);
+  } catch (const std::runtime_error& ex) {
+    return mgr.ERROR_MESSAGE(ex.what());
+  }
 
   // return value indicates values were correct
   // types are implicitly correct by this point, or the above would have thrown
   bool result = (i8 == 1) && (i16 == 2) && (i32 == 3) && (i64 == 4) && (f == 5.0f) &&
                 (d == 6.0) && b;
   if (!result) {
-    throw std::runtime_error("Metadata return values are incorrect");
+    return mgr.ERROR_MESSAGE("Metadata return values are incorrect");
   }
 
   mgr.set_output_row_size(1);
@@ -2319,7 +2339,11 @@ NEVER_INLINE HOST int32_t tf_metadata_getter_bad__cpu_template(TableFunctionMana
   // get one back as the wrong type
   // this should throw
   float f{};
-  mgr.get_metadata("test_double", f);
+  try {
+    mgr.get_metadata("test_double", f);
+  } catch (const std::runtime_error& ex) {
+    return mgr.ERROR_MESSAGE(ex.what());
+  }
 
   mgr.set_output_row_size(1);
   success[0] = true;

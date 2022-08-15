@@ -20,34 +20,29 @@
 
 #ifndef __CUDACC__
 
-EXTENSION_NOINLINE_HOST
-int32_t generate_series_parallel(const int64_t start,
-                                 const int64_t stop,
-                                 const int64_t step,
-                                 Column<int64_t>& series_output);
-
 // Note that "start" is a reserved keyword in SQL, so to allow usage as a named
 // parameter without quoting we added the "series_" prefix to all args
 
 // clang-format off
 /*
-  UDTF: generate_series__cpu_1(TableFunctionManager, int64_t series_start, int64_t series_stop, int64_t series_step | require="series_step != 0") -> Column<int64_t> generate_series
-  UDTF: generate_series__cpu_2(TableFunctionManager, int64_t series_start, int64_t series_stop) -> Column<int64_t> generate_series
+  UDTF: generate_series__cpu_template(TableFunctionManager, int64_t series_start, int64_t series_stop, int64_t series_step | require="series_step != 0") -> Column<int64_t> generate_series
+  UDTF: generate_series__cpu_template(TableFunctionManager, T series_start, T series_stop) -> Column<T> generate_series, T=[int64_t]
+  UDTF: generate_series__cpu_template(TableFunctionManager, Timestamp series_start, Timestamp series_stop, T series_step | require="series_step != 0") -> Column<Timestamp> generate_series, T=[DayTimeInterval, YearMonthTimeInterval]
 */
 // clang-format on
 
-EXTENSION_NOINLINE_HOST
-int32_t generate_series__cpu_1(TableFunctionManager& mgr,
-                               const int64_t start,
-                               const int64_t stop,
-                               const int64_t step,
-                               Column<int64_t>& series_output);
+template <typename T, typename K>
+NEVER_INLINE HOST int32_t generate_series__cpu_template(TableFunctionManager& mgr,
+                                                        const T start,
+                                                        const T stop,
+                                                        const K step,
+                                                        Column<T>& series_output);
 
-EXTENSION_NOINLINE_HOST
-int32_t generate_series__cpu_2(TableFunctionManager& mgr,
-                               const int64_t start,
-                               const int64_t stop,
-                               Column<int64_t>& series_output);
+template <typename T>
+NEVER_INLINE HOST int32_t generate_series__cpu_template(TableFunctionManager& mgr,
+                                                        const T start,
+                                                        const T stop,
+                                                        Column<T>& series_output);
 
 // clang-format off
 /*
