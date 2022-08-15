@@ -985,11 +985,8 @@ std::unique_ptr<RelAlgDag> QueryRunner::getRelAlgDag(const std::string& query_st
 
   std::unique_ptr<RelAlgDag> rel_alg_dag;
   auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
-      [&cat, &query_str, explain_type = this->explain_type_, &query_state, &rel_alg_dag](
-          const size_t worker_id) {
+      [&cat, &query_str, &query_state, &rel_alg_dag](const size_t worker_id) {
         auto executor = Executor::getExecutor(worker_id);
-        auto co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
-        co.explain_type = explain_type;
         auto eo = ExecutionOptions::defaults();
         auto calcite_mgr = cat.getCalciteMgr();
         const auto calciteQueryParsingOption =
@@ -1010,7 +1007,7 @@ std::unique_ptr<RelAlgDag> QueryRunner::getRelAlgDag(const std::string& query_st
   auto result_future = query_launch_task->get_future();
   result_future.get();
   CHECK(rel_alg_dag);
-  return std::move(rel_alg_dag);
+  return rel_alg_dag;
 }
 
 // this function exists to test data recycler
