@@ -105,7 +105,9 @@ enum class ExtArgumentType {
   ArrayTextEncodingDict,
   ColumnArrayTextEncodingDict,
   ColumnListArrayTextEncodingDict,
-  GeoMultiPoint
+  GeoMultiPoint,
+  DayTimeInterval,
+  YearMonthTimeInterval,
 };
 
 SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type);

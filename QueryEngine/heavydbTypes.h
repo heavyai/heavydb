@@ -26,6 +26,8 @@
 #include "TableFunctionMetadataType.h"
 #include "Utils/FlatBuffer.h"
 
+#include "DateAdd.h"
+
 #if !(defined(__CUDACC__) || defined(NO_BOOST))
 #include "../Shared/DateTimeParser.h"
 #endif
@@ -289,12 +291,17 @@ struct TextEncodingNone {
   DEVICE ALWAYS_INLINE bool isNull() const { return size_ == 0; }
 };
 
+struct DayTimeInterval;
+struct YearMonthTimeInterval;
 struct Timestamp {
   int64_t time;
 
   Timestamp() = default;
 
   DEVICE Timestamp(int64_t timeval) : time(timeval) {}
+
+  DEVICE ALWAYS_INLINE Timestamp operator+(const DayTimeInterval& interval) const;
+  DEVICE ALWAYS_INLINE Timestamp operator+(const YearMonthTimeInterval& interval) const;
 
 #if !(defined(__CUDACC__) || defined(NO_BOOST))
   DEVICE Timestamp(std::string_view const str) {
@@ -343,10 +350,9 @@ struct Timestamp {
 
   DEVICE ALWAYS_INLINE const Timestamp operator*(const int64_t multiplier) const {
 #ifndef __CUDACC__
-    uint64_t overflow_test =
-        static_cast<uint64_t>(time) * static_cast<uint64_t>(multiplier);
-    if (time != 0 && overflow_test / time != static_cast<uint64_t>(multiplier)) {
-      throw std::runtime_error("Overflow in Timestamp multiplication!");
+    int64_t overflow_test = static_cast<int64_t>(time) * static_cast<int64_t>(multiplier);
+    if (time != 0 && overflow_test / time != static_cast<int64_t>(multiplier)) {
+      throw std::overflow_error("Overflow in Timestamp multiplication!");
     }
 #endif
     return Timestamp(time * multiplier);
@@ -376,7 +382,6 @@ struct Timestamp {
     return Timestamp((time / kNanoSecsPerSec) * kNanoSecsPerSec);
   }
 
-#ifndef __CUDACC__
   DEVICE ALWAYS_INLINE Timestamp truncateToMinutes() const {
     return Timestamp(DateTruncate(dtMINUTE, (time / kNanoSecsPerSec)) * kNanoSecsPerSec);
   }
@@ -429,15 +434,112 @@ struct Timestamp {
   }
 #ifdef HAVE_TOSTRING
   std::string toString() const {
-    return ::typeName(this) + "(time=" + ::toString(time) + ")";
+    Datum d;
+    d.bigintval = time;
+    return ::typeName(this) + "(time=" + ::toString(time) + ")" +
+           ", (formatted= " + DatumToString(d, SQLTypeInfo(kTIMESTAMP, 9, 0, false)) +
+           ")";
   }
-#endif
 #endif
 };
 
 template <>
 DEVICE inline Timestamp inline_null_value() {
   return Timestamp(inline_int_null_value<int64_t>());
+}
+
+struct DayTimeInterval {
+  int64_t timeval;
+
+  DEVICE DayTimeInterval(int64_t init) : timeval(init) {}
+
+  DEVICE ALWAYS_INLINE bool operator==(const DayTimeInterval& other) const {
+    return timeval == other.timeval;
+  }
+
+  DEVICE ALWAYS_INLINE bool operator!=(const DayTimeInterval& other) const {
+    return !operator==(other);
+  }
+
+  DEVICE ALWAYS_INLINE Timestamp operator+(const Timestamp& t) const {
+    return Timestamp(DateAddHighPrecisionNullable(
+        daMILLISECOND, timeval, t.time, 9, inline_int_null_value<int64_t>()));
+  }
+
+  DEVICE ALWAYS_INLINE DayTimeInterval operator*(const int64_t multiplier) const {
+    return DayTimeInterval(timeval * multiplier);
+  }
+
+  DEVICE ALWAYS_INLINE int64_t numStepsBetween(const Timestamp& begin,
+                                               const Timestamp& end) const {
+#ifndef __CUDACC__
+    if (timeval == 0) {
+      throw std::runtime_error("Timestamp division by zero!");
+    }
+#endif
+
+    if ((timeval > 0 && end.time < begin.time) ||
+        (timeval < 0 && end.time > begin.time)) {
+      return -1;
+    }
+
+    Timestamp diff = end.time - begin.time;
+    int64_t asNanoSecs =
+        static_cast<int64_t>(timeval) * static_cast<int64_t>(kMicroSecsPerSec);
+#ifndef __CUDACC__
+    if (timeval != 0 && asNanoSecs / timeval != static_cast<int64_t>(kMicroSecsPerSec)) {
+      throw std::overflow_error("Overflow in INTERVAL precision conversion!");
+    }
+#endif
+
+    return diff / asNanoSecs;
+  }
+};
+
+struct YearMonthTimeInterval {
+  int64_t timeval;
+
+  DEVICE YearMonthTimeInterval(int64_t init) : timeval(init) {}
+
+  DEVICE ALWAYS_INLINE bool operator==(const YearMonthTimeInterval& other) const {
+    return timeval == other.timeval;
+  }
+
+  DEVICE ALWAYS_INLINE bool operator!=(const YearMonthTimeInterval& other) const {
+    return !operator==(other);
+  }
+
+  DEVICE ALWAYS_INLINE Timestamp operator+(const Timestamp& t) const {
+    return Timestamp(DateAddHighPrecisionNullable(
+        daMONTH, timeval, t.time, 9, inline_int_null_value<int64_t>()));
+  }
+
+  DEVICE ALWAYS_INLINE YearMonthTimeInterval operator*(const int64_t multiplier) const {
+    return YearMonthTimeInterval(timeval * multiplier);
+  }
+
+  DEVICE ALWAYS_INLINE int64_t numStepsBetween(const Timestamp& begin,
+                                               const Timestamp& end) const {
+    if ((timeval > 0 && end.time < begin.time) ||
+        (timeval < 0 && end.time > begin.time)) {
+      return -1;
+    }
+
+    int64_t ret = ((end.getYear() * 12 + end.getMonth()) -
+                   (begin.getYear() * 12 + begin.getMonth())) /
+                  timeval;
+    return ret;
+  }
+};
+
+DEVICE ALWAYS_INLINE inline Timestamp Timestamp::operator+(
+    const DayTimeInterval& interval) const {
+  return interval + *this;
+}
+
+DEVICE ALWAYS_INLINE inline Timestamp Timestamp::operator+(
+    const YearMonthTimeInterval& interval) const {
+  return interval + *this;
 }
 
 struct GeoPoint {

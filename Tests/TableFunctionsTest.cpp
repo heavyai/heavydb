@@ -1999,7 +1999,7 @@ TEST_F(TableFunctions, TimestampTests) {
     {
       const auto result = run_multiple_agg(
           "SELECT out0 FROM TABLE(ct_timestamp_add_offset(cursor(SELECT t1 FROM "
-          "time_test), CAST ('1970-01-01 00:00:00.000000001' AS TIMESTAMP(9))));",
+          "time_test), TIMESTAMP(9) '1970-01-01 00:00:00.000000001'));",
           dt);
       ASSERT_EQ(result->rowCount(), size_t(3));
       std::vector<std::string> expected_result_set({"1971-01-01 01:01:01.001001002",
@@ -2757,9 +2757,8 @@ TEST_F(TableFunctions, CalciteOverloading) {
     }
     {
       const auto result = run_multiple_agg(
-          "SELECT out0 from table(ct_overload_scalar_test(CAST('1970-01-01 "
-          "00:00:00.000000000' AS TIMESTAMP(9)))) WHERE out0 = '1970-01-01 "
-          "00:00:00.000000000';",
+          "SELECT out0 from table(ct_overload_scalar_test(TIMESTAMP(9) '1970-01-01 "
+          "00:00:00.000000000')) WHERE out0 = '1970-01-01 00:00:00.000000000';",
           dt);
       ASSERT_EQ(result->rowCount(), size_t(1));
       auto result_row = result->getNextRow(false, false);
@@ -3028,13 +3027,13 @@ TEST_F(TableFunctions, MetadataSetGet) {
   EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(tf_metadata_getter(CURSOR(SELECT "
                                 "* FROM TABLE(tf_metadata_setter_size_mismatch()))));",
                                 ExecutorDeviceType::CPU),
-               std::runtime_error);
+               UserTableFunctionError);
 
   EXPECT_THROW(
       run_multiple_agg("SELECT * FROM TABLE(tf_metadata_getter_bad(CURSOR(SELECT "
                        "* FROM TABLE(tf_metadata_setter()))));",
                        ExecutorDeviceType::CPU),
-      std::runtime_error);
+      UserTableFunctionError);
 }
 
 TEST_F(TableFunctions, ColumnArray20KLimit) {

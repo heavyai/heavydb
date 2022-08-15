@@ -25,6 +25,7 @@
 #include <vector>
 
 #include <cmath>
+#include "../Shared/DateTimeParser.h"
 #include "../Shared/math_consts.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/TableFunctions/TableFunctionManager.h"
@@ -233,6 +234,291 @@ TEST_F(SystemTFs, GenerateSeries) {
               "FROM (SELECT * FROM TABLE(generate_series(0, 2000000000, 1)));",
               dt),
           UserTableFunctionError);
+    }
+    {
+      // Step of 0 days is not permitted
+      EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(generate_series("
+                                    "TIMESTAMP(9) '1970-01-01 00:00:00.000000010',"
+                                    "TIMESTAMP(9) '1970-01-01 00:00:00.000000020',"
+                                    "INTERVAL '0' day));",
+                                    dt),
+                   UserTableFunctionError);
+    }
+
+    {
+      // Step of 0 months is not permitted
+      EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(generate_series("
+                                    "TIMESTAMP(9) '1970-01-01 00:00:00.000000010',"
+                                    "TIMESTAMP(9) '1970-01-01 00:00:00.000000020',"
+                                    "INTERVAL '0' month));",
+                                    dt),
+                   UserTableFunctionError);
+    }
+
+    // 3-arg version, test with step of 1 second
+    // Test non-named and named arg versions
+    {
+      const std::string non_named_arg_query =
+          "SELECT generate_series FROM TABLE(generate_series("
+          "TIMESTAMP(9) '1970-01-01 00:00:03.000000000',"
+          "TIMESTAMP(9) '1970-01-01 00:00:07.000000000',"
+          "INTERVAL '1' second))"
+          "ORDER BY generate_series ASC;";
+      const std::string named_arg_query =
+          "SELECT generate_series FROM TABLE(generate_series("
+          "series_start=>TIMESTAMP(9) '1970-01-01 00:00:03.000000000',"
+          "series_stop=>TIMESTAMP(9) '1970-01-01 00:00:07.000000000',"
+          "series_step=>INTERVAL '1' second))"
+          "ORDER BY generate_series ASC;";
+      for (auto query : {non_named_arg_query, named_arg_query}) {
+        const auto rows = run_multiple_agg(query, dt);
+        EXPECT_EQ(rows->rowCount(), size_t(5));
+        EXPECT_EQ(rows->colCount(), size_t(1));
+        for (int64_t val = 3; val <= 7; val += 1) {
+          std::string expected_str =
+              "1970-01-01 00:00:0" + std::to_string(val) + ".000000000";
+          int64_t expected_val = dateTimeParse<kTIMESTAMP>(
+              boost::lexical_cast<std::string>(expected_str), 9);
+          auto crt_row = rows->getNextRow(false, false);
+          EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), expected_val);
+        }
+      }
+    }
+
+    // 3-arg version - test step of 2 minutes
+    // Test non-namned and named arg versions
+    {
+      const std::string non_named_arg_query =
+          "SELECT generate_series FROM TABLE(generate_series("
+          "TIMESTAMP(9) '1970-01-01 00:01:00.000000000',"
+          "TIMESTAMP(9) '1970-01-01 00:10:00.000000000',"
+          "INTERVAL '2' minute))"
+          "ORDER BY generate_series ASC;";
+      const std::string named_arg_query =
+          "SELECT generate_series FROM TABLE(generate_series("
+          "series_start=>TIMESTAMP(9) '1970-01-01 00:01:00.000000000',"
+          "series_stop=>TIMESTAMP(9) '1970-01-01 00:10:00.000000000',"
+          "series_step=>INTERVAL '2' minute))"
+          "ORDER BY generate_series ASC;";
+      for (auto query : {non_named_arg_query, named_arg_query}) {
+        const auto rows = run_multiple_agg(query, dt);
+        EXPECT_EQ(rows->rowCount(), size_t(5));
+        EXPECT_EQ(rows->colCount(), size_t(1));
+        for (int64_t val = 1; val <= 10; val += 2) {
+          std::string expected_str =
+              "1970-01-01 00:0" + std::to_string(val) + "00.000000000";
+          int64_t expected_val = dateTimeParse<kTIMESTAMP>(
+              boost::lexical_cast<std::string>(expected_str), 9);
+          auto crt_row = rows->getNextRow(false, false);
+          EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), expected_val);
+        }
+      }
+    }
+
+    // 3-arg version - test month time intervals
+    // Test non-namned and named arg versions
+    {
+      const std::string non_named_arg_query =
+          "SELECT generate_series FROM TABLE(generate_series("
+          "TIMESTAMP(9) '1970-01-01 00:00:00.000000000',"
+          "TIMESTAMP(9) '1970-09-01 00:00:00.000000000',"
+          "INTERVAL '1' month))"
+          "ORDER BY generate_series ASC;";
+      const std::string named_arg_query =
+          "SELECT generate_series FROM TABLE(generate_series("
+          "series_start=>TIMESTAMP(9) '1970-01-01 00:00:00.000000000',"
+          "series_stop=>TIMESTAMP(9) '1970-09-01 00:00:00.000000000',"
+          "series_step=>INTERVAL '1' month))"
+          "ORDER BY generate_series ASC;";
+      for (auto query : {non_named_arg_query, named_arg_query}) {
+        const auto rows = run_multiple_agg(query, dt);
+        EXPECT_EQ(rows->rowCount(), size_t(9));
+        EXPECT_EQ(rows->colCount(), size_t(1));
+        for (int64_t val = 1; val <= 9; val += 1) {
+          std::string expected_str =
+              "1970-0" + std::to_string(val) + "-01 00:000.000000000";
+          int64_t expected_val = dateTimeParse<kTIMESTAMP>(
+              boost::lexical_cast<std::string>(expected_str), 9);
+          auto crt_row = rows->getNextRow(false, false);
+          EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), expected_val);
+        }
+      }
+    }
+
+    // 3-arg version - test year time intervals
+    // Test non-namned and named arg versions
+    {
+      const std::string non_named_arg_query =
+          "SELECT generate_series FROM TABLE(generate_series("
+          "TIMESTAMP(9) '1970-01-01 00:00:00.000000000',"
+          "TIMESTAMP(9) '1979-01-01 00:00:00.000000000',"
+          "INTERVAL '2' year))"
+          "ORDER BY generate_series ASC;";
+      const std::string named_arg_query =
+          "SELECT generate_series FROM TABLE(generate_series("
+          "series_start=>TIMESTAMP(9) '1970-01-01 00:00:00.000000000',"
+          "series_stop=>TIMESTAMP(9) '1979-01-01 00:00:00.000000000',"
+          "series_step=>INTERVAL '2' year))"
+          "ORDER BY generate_series ASC;";
+      for (auto query : {non_named_arg_query, named_arg_query}) {
+        const auto rows = run_multiple_agg(query, dt);
+        EXPECT_EQ(rows->rowCount(), size_t(5));
+        EXPECT_EQ(rows->colCount(), size_t(1));
+        for (int64_t val = 0; val <= 8; val += 2) {
+          std::string expected_str =
+              "197" + std::to_string(val) + "-01-01 00:000.000000000";
+          int64_t expected_val = dateTimeParse<kTIMESTAMP>(
+              boost::lexical_cast<std::string>(expected_str), 9);
+          auto crt_row = rows->getNextRow(false, false);
+          EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), expected_val);
+        }
+      }
+    }
+
+    // Series should be inclusive of stop value
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT generate_series FROM TABLE(generate_series("
+          "TIMESTAMP(9) '2000-04-04 01:00:00.000000000',"
+          "TIMESTAMP(9) '2000-04-04 09:00:00.000000000',"
+          "INTERVAL '2' hour))"
+          "ORDER BY generate_series ASC;",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(5));
+      EXPECT_EQ(rows->colCount(), size_t(1));
+      for (int64_t val = 1; val <= 9; val += 2) {
+        std::string expected_str =
+            "2000-04-04 0" + std::to_string(val) + ":00:00.000000000";
+        int64_t expected_val =
+            dateTimeParse<kTIMESTAMP>(boost::lexical_cast<std::string>(expected_str), 9);
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), expected_val);
+      }
+    }
+
+    // Negative step
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT generate_series FROM TABLE(generate_series("
+          "TIMESTAMP(9) '1999-09-04 09:00:00.000000000',"
+          "TIMESTAMP(9) '1999-09-04 01:00:00.000000000',"
+          "INTERVAL '-1' hour))"
+          "ORDER BY generate_series DESC;",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(9));
+      EXPECT_EQ(rows->colCount(), size_t(1));
+      for (int64_t val = 9; val >= 1; val -= 1) {
+        std::string expected_str =
+            "1999-09-04 0" + std::to_string(val) + ":00:00.000000000";
+        int64_t expected_val =
+            dateTimeParse<kTIMESTAMP>(boost::lexical_cast<std::string>(expected_str), 9);
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), expected_val);
+      }
+    }
+
+    // Negative month step
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT generate_series FROM TABLE(generate_series("
+          "TIMESTAMP(9) '1999-09-04 09:00:00.000000000',"
+          "TIMESTAMP(9) '1999-01-04 09:00:00.000000000',"
+          "INTERVAL '-1' MONTH))"
+          "ORDER BY generate_series DESC;",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(9));
+      EXPECT_EQ(rows->colCount(), size_t(1));
+      for (int64_t val = 9; val >= 1; val -= 1) {
+        std::string expected_str =
+            "1999-0" + std::to_string(val) + "-04 09:00:00.000000000";
+        int64_t expected_val =
+            dateTimeParse<kTIMESTAMP>(boost::lexical_cast<std::string>(expected_str), 9);
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), expected_val);
+      }
+    }
+
+    // Negative year step
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT generate_series FROM TABLE(generate_series("
+          "TIMESTAMP(9) '1999-09-04 09:00:00.000000000',"
+          "TIMESTAMP(9) '1991-09-04 09:00:00.000000000',"
+          "INTERVAL '-1' YEAR))"
+          "ORDER BY generate_series DESC;",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(9));
+      EXPECT_EQ(rows->colCount(), size_t(1));
+      for (int64_t val = 9; val >= 1; val -= 1) {
+        std::string expected_str =
+            "199" + std::to_string(val) + "-09-04 09:00:00.000000000";
+        int64_t expected_val =
+            dateTimeParse<kTIMESTAMP>(boost::lexical_cast<std::string>(expected_str), 9);
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), expected_val);
+      }
+    }
+
+    // Negative step and stop > start should return 0 rows
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(generate_series("
+          "TIMESTAMP(9) '1970-01-01 00:00:02.000000000',"
+          "TIMESTAMP(9) '1970-01-01 00:00:05.000000000',"
+          "INTERVAL '-1' second))"
+          "ORDER BY generate_series ASC;",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(0));
+      EXPECT_EQ(rows->colCount(), size_t(1));
+    }
+
+    // Positive step and stop < start should return 0 rows
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(generate_series("
+          "TIMESTAMP(9) '1970-01-01 00:00:05.000000000',"
+          "TIMESTAMP(9) '1970-01-01 00:00:02.000000000',"
+          "INTERVAL '1' second))"
+          "ORDER BY generate_series ASC;",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(0));
+      EXPECT_EQ(rows->colCount(), size_t(1));
+    }
+
+    // Negative step and stop == start should return 1 row (start)
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(generate_series("
+          "TIMESTAMP(9) '1970-01-01 00:00:02.000000000',"
+          "TIMESTAMP(9) '1970-01-01 00:00:02.000000000',"
+          "INTERVAL '-1' second))"
+          "ORDER BY generate_series ASC;",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(1));
+      EXPECT_EQ(rows->colCount(), size_t(1));
+      auto crt_row = rows->getNextRow(false, false);
+      std::string expected_str = "1970-01-01 00:00:02.000000000";
+      int64_t expected_val =
+          dateTimeParse<kTIMESTAMP>(boost::lexical_cast<std::string>(expected_str), 9);
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), expected_val);
+    }
+
+    // Positive step and stop == start should return 1 row (start)
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(generate_series("
+          "TIMESTAMP(9) '1970-01-01 00:00:02.000000000',"
+          "TIMESTAMP(9) '1970-01-01 00:00:02.000000000',"
+          "INTERVAL '1' second))"
+          "ORDER BY generate_series ASC;",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(1));
+      EXPECT_EQ(rows->colCount(), size_t(1));
+      auto crt_row = rows->getNextRow(false, false);
+      std::string expected_str = "1970-01-01 00:00:02.000000000";
+      int64_t expected_val =
+          dateTimeParse<kTIMESTAMP>(boost::lexical_cast<std::string>(expected_str), 9);
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), expected_val);
     }
   }
 }

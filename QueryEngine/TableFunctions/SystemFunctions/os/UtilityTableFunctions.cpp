@@ -26,17 +26,21 @@
 #include "Shared/ThreadInfo.h"
 #include "UtilityTableFunctions.h"
 
-EXTENSION_NOINLINE_HOST
-#ifdef _WIN32
-#pragma comment(linker "/INCLUDE:generate_series_parallel")
-#else
-__attribute__((__used__))
-#endif
-int32_t generate_series_parallel(const int64_t start,
-                                 const int64_t stop,
-                                 const int64_t step,
-                                 Column<int64_t>& series_output) {
-  const int64_t num_rows = ((stop - start) / step) + 1;
+int64_t numStepsBetween(int64_t start, int64_t stop, int64_t step) {
+  return (stop - start) / step;
+}
+
+template <typename T>
+int64_t numStepsBetween(Timestamp start, Timestamp stop, T step) {
+  return step.numStepsBetween(start, stop);
+}
+
+template <typename T, typename K>
+int32_t generate_series_parallel(const T start,
+                                 const T stop,
+                                 const K step,
+                                 Column<T>& series_output) {
+  const int64_t num_rows = numStepsBetween(start, stop, step) + 1;
 
   tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_rows),
                     [&](const tbb::blocked_range<int64_t>& r) {
@@ -44,26 +48,21 @@ int32_t generate_series_parallel(const int64_t start,
                       const int64_t end_out_idx = r.end();
                       for (int64_t out_idx = start_out_idx; out_idx != end_out_idx;
                            ++out_idx) {
-                        series_output[out_idx] = start + out_idx * step;
+                        series_output[out_idx] = start + (step * out_idx);
                       }
                     });
   return num_rows;
 }
 
-EXTENSION_NOINLINE_HOST
-#ifdef _WIN32
-#pragma comment(linker "/INCLUDE:generate_series__cpu_1")
-#else
-__attribute__((__used__))
-#endif
-int32_t generate_series__cpu_1(TableFunctionManager& mgr,
-                               const int64_t start,
-                               const int64_t stop,
-                               const int64_t step,
-                               Column<int64_t>& series_output) {
+template <typename T, typename K>
+NEVER_INLINE HOST int32_t generate_series__cpu_template(TableFunctionManager& mgr,
+                                                        const T start,
+                                                        const T stop,
+                                                        const K step,
+                                                        Column<T>& series_output) {
   const int64_t MAX_ROWS{1L << 30};
   const int64_t PARALLEL_THRESHOLD{10000L};
-  const int64_t num_rows = ((stop - start) / step) + 1;
+  const int64_t num_rows = numStepsBetween(start, stop, step) + 1;
   if (num_rows <= 0) {
     mgr.set_output_row_size(0);
     return 0;
@@ -83,22 +82,18 @@ int32_t generate_series__cpu_1(TableFunctionManager& mgr,
 #endif
 
   for (int64_t out_idx = 0; out_idx != num_rows; ++out_idx) {
-    series_output[out_idx] = start + out_idx * step;
+    series_output[out_idx] = start + (step * out_idx);
   }
   return num_rows;
 }
 
-EXTENSION_NOINLINE_HOST
-#ifdef _WIN32
-#pragma comment(linker "/INCLUDE:generate_series__cpu_2")
-#else
-__attribute__((__used__))
-#endif
-int32_t generate_series__cpu_2(TableFunctionManager& mgr,
-                               const int64_t start,
-                               const int64_t stop,
-                               Column<int64_t>& series_output) {
-  return generate_series__cpu_1(mgr, start, stop, 1, series_output);
+template <typename T>
+NEVER_INLINE HOST int32_t generate_series__cpu_template(TableFunctionManager& mgr,
+                                                        const T start,
+                                                        const T stop,
+                                                        Column<T>& series_output) {
+  return generate_series__cpu_template(
+      mgr, start, stop, static_cast<int64_t>(1), series_output);
 }
 
 #include <chrono>
@@ -189,5 +184,45 @@ int32_t generate_random_strings__cpu_(TableFunctionManager& mgr,
   }
   return num_strings;
 }
+
+// Explicit template instantiations
+
+// wrappers for step calculation
+template int64_t numStepsBetween(Timestamp, Timestamp, DayTimeInterval);
+template int64_t numStepsBetween(Timestamp, Timestamp, YearMonthTimeInterval);
+
+// parallel implementations
+template int32_t generate_series_parallel(int64_t, int64_t, int64_t, Column<int64_t>&);
+template int32_t generate_series_parallel(Timestamp,
+                                          Timestamp,
+                                          DayTimeInterval,
+                                          Column<Timestamp>&);
+template int32_t generate_series_parallel(Timestamp,
+                                          Timestamp,
+                                          YearMonthTimeInterval,
+                                          Column<Timestamp>&);
+
+// non-default step implementations
+template int32_t generate_series__cpu_template(TableFunctionManager&,
+                                               int64_t,
+                                               int64_t,
+                                               int64_t,
+                                               Column<int64_t>&);
+template int32_t generate_series__cpu_template(TableFunctionManager&,
+                                               Timestamp,
+                                               Timestamp,
+                                               DayTimeInterval,
+                                               Column<Timestamp>&);
+template int32_t generate_series__cpu_template(TableFunctionManager&,
+                                               Timestamp,
+                                               Timestamp,
+                                               YearMonthTimeInterval,
+                                               Column<Timestamp>&);
+
+// default step implementations
+template int32_t generate_series__cpu_template(TableFunctionManager&,
+                                               int64_t,
+                                               int64_t,
+                                               Column<int64_t>&);
 
 #endif  //__CUDACC__

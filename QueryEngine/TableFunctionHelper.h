@@ -220,6 +220,8 @@ inline bool is_ext_arg_type_scalar(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::Bool:
     case ExtArgumentType::TextEncodingNone:
     case ExtArgumentType::Timestamp:
+    case ExtArgumentType::DayTimeInterval:
+    case ExtArgumentType::YearMonthTimeInterval:
       return true;
 
     default:
@@ -234,6 +236,8 @@ inline bool is_ext_arg_type_scalar_integer(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::Int32:
     case ExtArgumentType::Int64:
     case ExtArgumentType::Timestamp:
+    case ExtArgumentType::DayTimeInterval:
+    case ExtArgumentType::YearMonthTimeInterval:
       return true;
     default:
       return false;

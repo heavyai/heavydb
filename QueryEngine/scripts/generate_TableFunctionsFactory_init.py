@@ -307,6 +307,10 @@ class Bracket:
             ctype = name
         elif name == 'Timestamp':
             ctype = name
+        elif name == 'DayTimeInterval':
+            ctype = name
+        elif name == 'YearMonthTimeInterval':
+            ctype = name
         else:
             raise NotImplementedError(self)
         if clsname is None:

@@ -233,13 +233,13 @@ std::string serialize_type(const ExtArgumentType type,
     case ExtArgumentType::ColumnTextEncodingDict:
       return (declare ? (byval ? "{i32*, i64}" : "i8*") : "Column<TextEncodingDict>");
     case ExtArgumentType::ColumnTimestamp:
-      return (declare ? (byval ? "{i64*, i64}" : "i8*") : "Column<timestamp>");
+      return (declare ? (byval ? "{i64*, i64}" : "i8*") : "Column<Timestamp>");
     case ExtArgumentType::TextEncodingNone:
       return (declare ? (byval ? "{i8*, i64}" : "i8*") : "TextEncodingNone");
     case ExtArgumentType::TextEncodingDict:
       return (declare ? "{i8*, i32}*" : "TextEncodingDict");
     case ExtArgumentType::Timestamp:
-      return (declare ? "{ i64 }" : "timestamp");
+      return (declare ? "{ i64 }" : "Timestamp");
     case ExtArgumentType::ColumnListInt8:
       return (declare ? "{i8**, i64, i64}*" : "ColumnList<i8>");
     case ExtArgumentType::ColumnListInt16:
@@ -288,6 +288,10 @@ std::string serialize_type(const ExtArgumentType type,
       return (declare ? "{i8**, i64, i64}*" : "ColumnListArray<bool>");
     case ExtArgumentType::ColumnListArrayTextEncodingDict:
       return (declare ? "{i8**, i64, i64}" : "ColumnList<Array<TextEncodingDict>>");
+    case ExtArgumentType::DayTimeInterval:
+      return (declare ? "{ i64 }" : "DayTimeInterval");
+    case ExtArgumentType::YearMonthTimeInterval:
+      return (declare ? "{ i64 }" : "YearMonthTimeInterval");
     default:
       CHECK(false);
   }
@@ -367,6 +371,12 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
       subtype = kTIMESTAMP;
       c = kENCODING_NONE;
       d = 9;
+      break;
+    case ExtArgumentType::DayTimeInterval:
+      type = kINTERVAL_DAY_TIME;
+      break;
+    case ExtArgumentType::YearMonthTimeInterval:
+      type = kINTERVAL_YEAR_MONTH;
       break;
     default:
       LOG(FATAL) << "ExtArgumentType `" << serialize_type(ext_arg_type)
@@ -563,6 +573,10 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "COLUMNLIST<ARRAY<BOOLEAN>>";
     case ExtArgumentType::ColumnListArrayTextEncodingDict:
       return "COLUMNLIST<ARRAY<TEXT ENCODING DICT>>";
+    case ExtArgumentType::DayTimeInterval:
+      return "DAY TIME INTERVAL";
+    case ExtArgumentType::YearMonthTimeInterval:
+      return "YEAR MONTH INTERVAL";
     default:
       UNREACHABLE();
   }
@@ -766,7 +780,7 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   if (type_name == "Column<TextEncodingDict>") {
     return ExtArgumentType::ColumnTextEncodingDict;
   }
-  if (type_name == "Column<timestamp>") {
+  if (type_name == "Column<Timestamp>") {
     return ExtArgumentType::ColumnTimestamp;
   }
   if (type_name == "TextEncodingNone") {
@@ -849,6 +863,12 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "ColumnList<Array<TextEncodingDict>>") {
     return ExtArgumentType::ColumnListArrayTextEncodingDict;
+  }
+  if (type_name == "DayTimeInterval") {
+    return ExtArgumentType::DayTimeInterval;
+  }
+  if (type_name == "YearMonthTimeInterval") {
+    return ExtArgumentType::YearMonthTimeInterval;
   }
   CHECK(false);
   return ExtArgumentType::Int16;

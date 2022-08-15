@@ -60,4 +60,11 @@ enum DateaddField {
   daINVALID
 };
 
+extern "C" RUNTIME_EXPORT DEVICE int64_t
+DateAddHighPrecisionNullable(const DateaddField field,
+                             const int64_t number,
+                             const int64_t timeval,
+                             const int32_t dim,
+                             const int64_t null_val);
+
 #endif  // QUERYENGINE_DATEADD_H
