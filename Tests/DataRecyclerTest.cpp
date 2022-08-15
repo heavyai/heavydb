@@ -15,6 +15,7 @@
  */
 
 #include "ArrowSQLRunner/ArrowSQLRunner.h"
+#include "InExprDetector.h"
 #include "TestHelpers.h"
 
 #include "DataMgr/DataMgrBufferProvider.h"
@@ -25,7 +26,6 @@
 #include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
 #include "QueryEngine/QueryPlanDagCache.h"
 #include "QueryEngine/QueryPlanDagExtractor.h"
-#include "QueryEngine/Visitors/SQLOperatorDetector.h"
 
 #include <gtest/gtest.h>
 #include <boost/algorithm/string/join.hpp>
@@ -1136,7 +1136,7 @@ TEST(DataRecycler, Hashtable_For_Dict_Encoded_Column) {
   auto check_query = [](const std::string& query, bool expected) {
     auto ra_executor = makeRelAlgExecutor(query);
     auto root_node = ra_executor->getRootRelAlgNodeShPtr();
-    auto has_in_expr = SQLOperatorDetector::detect(root_node.get(), SQLOps::kIN);
+    auto has_in_expr = InExprDetector::detect(root_node.get());
     EXPECT_EQ(has_in_expr, expected);
   };
 

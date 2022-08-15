@@ -15,13 +15,13 @@
  */
 
 #include "ArrowSQLRunner/ArrowSQLRunner.h"
+#include "InExprDetector.h"
 #include "TestHelpers.h"
 
 #include "ConfigBuilder/ConfigBuilder.h"
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/RelAlgExecutor.h"
-#include "QueryEngine/Visitors/SQLOperatorDetector.h"
 #include "Shared/file_delete.h"
 #include "Shared/scope.h"
 
@@ -836,7 +836,7 @@ TEST(Select, InExpr_As_Child_Operand_Of_OR_Operator) {
   auto check_query = [](const std::string& query, bool expected) {
     auto ra_executor = makeRelAlgExecutor(query);
     auto root_node = ra_executor->getRootRelAlgNodeShPtr();
-    auto has_in_expr = SQLOperatorDetector::detect(root_node.get(), SQLOps::kIN);
+    auto has_in_expr = InExprDetector::detect(root_node.get());
     EXPECT_EQ(has_in_expr, expected);
   };
 
@@ -870,7 +870,7 @@ TEST(Select, Disable_INExpr_Decorrelation_Under_Watchdog) {
   auto check_query = [](const std::string& query, bool expected) {
     auto ra_executor = makeRelAlgExecutor(query);
     auto root_node = ra_executor->getRootRelAlgNodeShPtr();
-    auto has_in_expr = SQLOperatorDetector::detect(root_node.get(), SQLOps::kIN);
+    auto has_in_expr = InExprDetector::detect(root_node.get());
     EXPECT_EQ(has_in_expr, expected);
   };
 

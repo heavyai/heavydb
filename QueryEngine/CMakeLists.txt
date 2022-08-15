@@ -134,7 +134,6 @@ set(query_engine_source_files
     DataRecycler/HashtableRecycler.cpp
     DataRecycler/HashingSchemeRecycler.cpp
     Visitors/QueryPlanDagChecker.cpp
-    Visitors/SQLOperatorDetector.cpp
 
     Codec.h
     Execute.h
