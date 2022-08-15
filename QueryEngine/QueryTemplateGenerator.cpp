@@ -292,19 +292,13 @@ class QueryTemplateGenerator {
         /*Params=*/query_args,
         /*isVarArg=*/false);
 
-    // TODO: why not have just one template name here?
-    const bool is_group_by = query_mem_desc.isGroupBy();
-    const std::string query_template_name =
-        is_group_by ? "query_group_by_template" : "query_template";
+    const std::string query_template_name{"query_template"};
     // Check to ensure no query template function leaked into the current module
     auto query_func_ptr_null = mod->getFunction(query_template_name);
     CHECK(!query_func_ptr_null);
 
     query_func_ptr = llvm::Function::Create(
-        /*Type=*/query_func_type,
-        /*Linkage=*/llvm::GlobalValue::ExternalLinkage,
-        /*Name=*/query_template_name,
-        mod);
+        query_func_type, llvm::GlobalValue::ExternalLinkage, query_template_name, mod);
 
     query_func_ptr->setCallingConv(llvm::CallingConv::C);
 
