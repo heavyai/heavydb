@@ -112,6 +112,12 @@ int main(int argc, char** argv) {
       po::value<bool>(&g_cpu_only)->default_value(g_cpu_only)->implicit_value(true),
       "Force CPU only execution for all queries.");
 
+  bool just_explain{false};
+  desc.add_options()(
+      "just-explain",
+      po::value<bool>(&just_explain)->default_value(just_explain)->implicit_value(true),
+      "Run LLVM IR explain.");
+
   logger::LogOptions log_options(argv[0]);
   log_options.severity_ = logger::Severity::FATAL;
   log_options.set_options();  // update default values
@@ -138,32 +144,49 @@ int main(int argc, char** argv) {
     createAndPopulateTable();
 
     {
-      const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
-      auto eo = ArrowSQLRunner::getExecutionOptions(/*allow_loop_joins=*/false,
-                                                    /*just_explain=*/false);
+      const ExecutorDeviceType dt =
+          g_cpu_only ? ExecutorDeviceType::CPU : ExecutorDeviceType::GPU;
+      const auto device_type_str = dt == ExecutorDeviceType::CPU ? " CPU: " : " GPU: ";
+      auto eo =
+          ArrowSQLRunner::getExecutionOptions(/*allow_loop_joins=*/false, just_explain);
       auto co = ArrowSQLRunner::getCompilationOptions(dt);
       auto res = ArrowSQLRunner::runSqlQuery(
-          R"(SELECT AVG(dd) / (SELECT STDDEV(dd) FROM test) FROM test;)", co, eo);
-      auto rows = res.getRows();
-      CHECK_EQ(rows->rowCount(), size_t(1));
-      auto row = rows->getNextRow(/*translate_strings=*/true, /*decimal_to_double=*/true);
-      CHECK_EQ(row.size(), size_t(1));
-      std::cout << "Result for CPU: " << v<double>(row[0]) << std::endl;
+          R"(SELECT COUNT(*), AVG(x), SUM(y), SUM(w), AVG(t) FROM test;)", co, eo);
+      if (just_explain) {
+        std::cout << "Explanation for " << device_type_str << res.getExplanation()
+                  << std::endl;
+      } else {
+        auto rows = res.getRows();
+        CHECK_EQ(rows->rowCount(), size_t(1));
+        auto row =
+            rows->getNextRow(/*translate_strings=*/true, /*decimal_to_double=*/true);
+        CHECK_EQ(row.size(), size_t(3));
+        std::cout << "Result for " << device_type_str << v<int64_t>(row[0]) << " : "
+                  << v<double>(row[1]) << " : " << v<int64_t>(row[2]) << std::endl;
+      }
     }
     {
       const ExecutorDeviceType dt =
           g_cpu_only ? ExecutorDeviceType::CPU : ExecutorDeviceType::GPU;
-      auto eo = ArrowSQLRunner::getExecutionOptions(/*allow_loop_joins=*/false,
-                                                    /*just_explain=*/false);
+      const auto device_type_str = dt == ExecutorDeviceType::CPU ? " CPU: " : " GPU: ";
+      auto eo =
+          ArrowSQLRunner::getExecutionOptions(/*allow_loop_joins=*/false, just_explain);
       auto co = ArrowSQLRunner::getCompilationOptions(dt);
       auto res = ArrowSQLRunner::runSqlQuery(
-          R"(SELECT AVG(dd) / (SELECT STDDEV(dd) FROM test) FROM test;)", co, eo);
-      auto rows = res.getRows();
-      CHECK_EQ(rows->rowCount(), size_t(1));
-      auto row = rows->getNextRow(/*translate_strings=*/true, /*decimal_to_double=*/true);
-      CHECK_EQ(row.size(), size_t(1));
-      const auto device_type_str = dt == ExecutorDeviceType::CPU ? " CPU: " : " GPU: ";
-      std::cout << "Result for " << device_type_str << v<double>(row[0]) << std::endl;
+          R"(SELECT COUNT(*), AVG(x), SUM(y), t FROM test GROUP BY t;)", co, eo);
+      if (just_explain) {
+        std::cout << "Explanation for " << device_type_str << res.getExplanation()
+                  << std::endl;
+      } else {
+        auto rows = res.getRows();
+        CHECK_GE(rows->rowCount(), size_t(1));
+        auto row =
+            rows->getNextRow(/*translate_strings=*/true, /*decimal_to_double=*/true);
+        CHECK_EQ(row.size(), size_t(4));
+        std::cout << "Result for " << device_type_str << v<int64_t>(row[0]) << " : "
+                  << v<double>(row[1]) << " : " << v<int64_t>(row[2]) << " : "
+                  << v<int64_t>(row[3]) << std::endl;
+      }
     }
 
   } catch (const std::exception& e) {
