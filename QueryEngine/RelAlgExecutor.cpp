@@ -1162,10 +1162,6 @@ const RexScalar* scalar_at(const size_t i, const RelProject* project) {
   return project->getProjectAt(i);
 }
 
-const RexScalar* scalar_at(const size_t i, const RelTableFunction* table_func) {
-  return table_func->getTableFuncInputAt(i);
-}
-
 hdk::ir::ExprPtr set_transient_dict(const hdk::ir::ExprPtr expr) {
   const auto& ti = expr->get_type_info();
   if (!ti.is_string() || ti.get_compression() != kENCODING_NONE) {
@@ -3510,20 +3506,10 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   const auto query_infos = get_table_infos(input_descs, executor_);
   RelAlgTranslator translator(executor_, input_to_nest_level, {}, now_, just_explain);
 
-  const auto orig_input_exprs_owned = translate_scalar_sources(
-      rel_table_func, translator, ::ExecutorType::TableFunctions);
-
   hdk::ir::ExprPtrVector input_exprs_owned;
   for (auto& expr : rel_table_func->getTableFuncInputExprs()) {
     input_exprs_owned.push_back(
         translate(expr.get(), translator, ::ExecutorType::TableFunctions));
-
-    CHECK(*input_exprs_owned.back() ==
-          *orig_input_exprs_owned[input_exprs_owned.size() - 1])
-        << "Table function input mismatch:" << std::endl
-        << " orig=" << orig_input_exprs_owned[input_exprs_owned.size() - 1]->toString()
-        << std::endl
-        << " new=" << input_exprs_owned.back()->toString() << std::endl;
   }
 
   target_exprs_owned_.insert(
@@ -3560,15 +3546,9 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
     const auto parameter_index =
         table_function_impl.getOutputRowSizeParameter(table_function_type_infos);
     CHECK_GT(parameter_index, size_t(0));
-    if (rel_table_func->countRexLiteralArgs() == table_function_impl.countScalarArgs()) {
-      const auto orig_parameter_expr =
-          rel_table_func->getTableFuncInputAt(parameter_index - 1);
-      const auto orig_parameter_expr_literal =
-          dynamic_cast<const RexLiteral*>(orig_parameter_expr);
-
+    if (rel_table_func->countConstantArgs() == table_function_impl.countScalarArgs()) {
       auto param_expr = rel_table_func->getTableFuncInputExprAt(parameter_index - 1);
       auto param_const = dynamic_cast<const hdk::ir::Constant*>(param_expr);
-      CHECK_EQ(!!orig_parameter_expr_literal, !!param_const);
       if (!param_const) {
         throw std::runtime_error(
             "Provided output buffer sizing parameter is not a literal. Only literal "
@@ -3579,9 +3559,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
         throw std::runtime_error(
             "Output buffer sizing parameter should have integer type.");
       }
-      int64_t orig_literal_val = orig_parameter_expr_literal->getVal<int64_t>();
       int64_t literal_val = param_const->intVal();
-      CHECK_EQ(orig_literal_val, literal_val);
       if (literal_val < 0) {
         throw std::runtime_error("Provided output sizing parameter " +
                                  std::to_string(literal_val) +

@@ -1800,23 +1800,15 @@ class RelTableFunction : public RelAlgNode {
   RelTableFunction(const std::string& function_name,
                    RelAlgInputs inputs,
                    std::vector<std::string>& fields,
-                   std::vector<const Rex*> col_inputs,
                    hdk::ir::ExprPtrVector col_input_exprs,
-                   std::vector<std::unique_ptr<const RexScalar>>& table_func_inputs,
                    hdk::ir::ExprPtrVector table_func_input_exprs,
-                   std::vector<std::unique_ptr<const RexScalar>>& target_exprs,
                    std::vector<TargetMetaInfo> tuple_type)
       : RelAlgNode(std::move(inputs))
       , function_name_(function_name)
       , fields_(fields)
-      , col_inputs_(col_inputs)
       , col_input_exprs_(col_input_exprs)
-      , table_func_inputs_(std::move(table_func_inputs))
       , table_func_input_exprs_(table_func_input_exprs)
-      , tuple_type_(std::move(tuple_type)) {
-    CHECK_EQ(col_inputs_.size(), col_input_exprs_.size());
-    CHECK_EQ(table_func_inputs_.size(), table_func_input_exprs_.size());
-  }
+      , tuple_type_(std::move(tuple_type)) {}
 
   RelTableFunction(RelTableFunction const&);
 
@@ -1829,19 +1821,14 @@ class RelTableFunction : public RelAlgNode {
 
   const std::vector<TargetMetaInfo>& getTupleType() const { return tuple_type_; }
 
-  size_t getTableFuncInputsSize() const { return table_func_inputs_.size(); }
+  size_t getTableFuncInputsSize() const { return table_func_input_exprs_.size(); }
 
-  size_t getColInputsSize() const { return col_inputs_.size(); }
+  size_t getColInputsSize() const { return col_input_exprs_.size(); }
 
-  int32_t countRexLiteralArgs() const;
-
-  const RexScalar* getTableFuncInputAt(const size_t idx) const {
-    CHECK_LT(idx, table_func_inputs_.size());
-    return table_func_inputs_[idx].get();
-  }
+  int32_t countConstantArgs() const;
 
   const hdk::ir::Expr* getTableFuncInputExprAt(size_t idx) const {
-    CHECK_LT(idx, table_func_inputs_.size());
+    CHECK_LT(idx, table_func_input_exprs_.size());
     return table_func_input_exprs_[idx].get();
   }
 
@@ -1849,14 +1836,7 @@ class RelTableFunction : public RelAlgNode {
     return table_func_input_exprs_;
   }
 
-  const RexScalar* getTableFuncInputAtAndRelease(const size_t idx) {
-    CHECK_LT(idx, table_func_inputs_.size());
-    return table_func_inputs_[idx].release();
-  }
-
-  void setTableFuncInputs(std::vector<std::unique_ptr<const RexScalar>>& exprs,
-                          hdk::ir::ExprPtrVector new_inputs) {
-    table_func_inputs_ = std::move(exprs);
+  void setTableFuncInputs(hdk::ir::ExprPtrVector new_inputs) {
     table_func_input_exprs_ = std::move(new_inputs);
   }
 
@@ -1881,9 +1861,6 @@ class RelTableFunction : public RelAlgNode {
                inputsToString(inputs_),
                ", fields=",
                ::toString(fields_),
-               ", col_inputs=...",
-               ", table_func_inputs=",
-               ::toString(table_func_inputs_),
                ", table_func_input_exprs=",
                ::toString(table_func_input_exprs_),
                ")");
@@ -1892,8 +1869,8 @@ class RelTableFunction : public RelAlgNode {
   size_t toHash() const override {
     if (!hash_) {
       hash_ = typeid(RelTableFunction).hash_code();
-      for (auto& table_func_input : table_func_inputs_) {
-        boost::hash_combine(*hash_, table_func_input->toHash());
+      for (auto& table_func_input : table_func_input_exprs_) {
+        boost::hash_combine(*hash_, table_func_input->hash());
       }
       boost::hash_combine(*hash_, function_name_);
       boost::hash_combine(*hash_, ::toString(fields_));
@@ -1908,11 +1885,7 @@ class RelTableFunction : public RelAlgNode {
   std::string function_name_;
   std::vector<std::string> fields_;
 
-  std::vector<const Rex*>
-      col_inputs_;  // owned by `table_func_inputs_`, but allows picking out the specific
-                    // input columns vs other table function inputs (e.g. literals)
   hdk::ir::ExprPtrVector col_input_exprs_;
-  std::vector<std::unique_ptr<const RexScalar>> table_func_inputs_;
   hdk::ir::ExprPtrVector table_func_input_exprs_;
 
   const std::vector<TargetMetaInfo> tuple_type_;

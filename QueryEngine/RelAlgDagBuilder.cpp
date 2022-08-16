@@ -658,21 +658,16 @@ RelCompound::RelCompound(RelCompound const& rhs)
 void RelTableFunction::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                                     std::shared_ptr<const RelAlgNode> input) {
   RelAlgNode::replaceInput(old_input, input);
-  RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
-  for (const auto& func_input : table_func_inputs_) {
-    rebind_inputs.visit(func_input.get());
-  }
   RebindInputsVisitor visitor(old_input.get(), input.get());
   for (size_t i = 0; i < table_func_input_exprs_.size(); ++i) {
     table_func_input_exprs_[i] = visitor.visit(table_func_input_exprs_[i].get());
   }
 }
 
-int32_t RelTableFunction::countRexLiteralArgs() const {
+int32_t RelTableFunction::countConstantArgs() const {
   int32_t literal_args = 0;
-  for (const auto& arg : table_func_inputs_) {
-    const auto rex_literal = dynamic_cast<const RexLiteral*>(arg.get());
-    if (rex_literal) {
+  for (const auto& arg : table_func_input_exprs_) {
+    if (hdk::ir::expr_is<hdk::ir::Constant>(arg)) {
       literal_args += 1;
     }
   }
@@ -683,21 +678,8 @@ RelTableFunction::RelTableFunction(RelTableFunction const& rhs)
     : RelAlgNode(rhs)
     , function_name_(rhs.function_name_)
     , fields_(rhs.fields_)
-    , col_inputs_(rhs.col_inputs_)
     , col_input_exprs_(rhs.col_input_exprs_)
-    , table_func_inputs_(copyRexScalars(rhs.table_func_inputs_))
-    , table_func_input_exprs_(rhs.table_func_input_exprs_) {
-  std::unordered_map<const Rex*, const Rex*> old_to_new_input;
-  for (size_t i = 0; i < table_func_inputs_.size(); ++i) {
-    old_to_new_input.emplace(rhs.table_func_inputs_[i].get(),
-                             table_func_inputs_[i].get());
-  }
-  for (auto& target : col_inputs_) {
-    auto target_it = old_to_new_input.find(target);
-    CHECK(target_it != old_to_new_input.end());
-    target = target_it->second;
-  }
-}
+    , table_func_input_exprs_(rhs.table_func_input_exprs_) {}
 
 namespace std {
 template <>
@@ -1471,21 +1453,6 @@ void bind_project_to_input(RelProject* project_node, const RANodeOutput& input) 
   project_node->setExpressions(std::move(disambiguated_exprs), std::move(exprs));
 }
 
-void bind_table_func_to_input(RelTableFunction* table_func_node,
-                              const RANodeOutput& input) noexcept {
-  std::vector<std::unique_ptr<const RexScalar>> disambiguated_exprs;
-  for (size_t i = 0; i < table_func_node->getTableFuncInputsSize(); ++i) {
-    const auto target_expr = table_func_node->getTableFuncInputAt(i);
-    if (dynamic_cast<const RexSubQuery*>(target_expr)) {
-      disambiguated_exprs.emplace_back(table_func_node->getTableFuncInputAtAndRelease(i));
-    } else {
-      disambiguated_exprs.emplace_back(disambiguate_rex(target_expr, input));
-    }
-  }
-  table_func_node->setTableFuncInputs(disambiguated_exprs,
-                                      table_func_node->getTableFuncInputExprs());
-}
-
 void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   for (auto ra_node : nodes) {
     const auto filter_node = std::dynamic_pointer_cast<RelFilter>(ra_node);
@@ -1511,20 +1478,6 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept
       bind_project_to_input(project_node.get(),
                             get_node_output(project_node->getInput(0)));
       continue;
-    }
-    const auto table_func_node = std::dynamic_pointer_cast<RelTableFunction>(ra_node);
-    if (table_func_node) {
-      /*
-        Collect all inputs from table function input (non-literal)
-        arguments.
-      */
-      RANodeOutput input;
-      input.reserve(table_func_node->inputCount());
-      for (size_t i = 0; i < table_func_node->inputCount(); i++) {
-        auto node_output = get_node_output(table_func_node->getInput(i));
-        input.insert(input.end(), node_output.begin(), node_output.end());
-      }
-      bind_table_func_to_input(table_func_node.get(), input);
     }
   }
 }
@@ -2968,9 +2921,7 @@ class RelAlgDispatcher {
     CHECK(operands.IsArray());
     CHECK_GE(operands.Size(), unsigned(0));
 
-    std::vector<const Rex*> col_inputs;
     hdk::ir::ExprPtrVector col_input_exprs;
-    std::vector<std::unique_ptr<const RexScalar>> table_func_inputs;
     hdk::ir::ExprPtrVector table_func_input_exprs;
     std::vector<std::string> fields;
 
@@ -2996,10 +2947,6 @@ class RelAlgDispatcher {
             auto pos = field(expr_operands[0], "input").GetInt();
             CHECK_LT(pos, inputs.size());
             for (size_t i = inputs[pos]->size(); i > 0; i--) {
-              table_func_inputs.emplace_back(
-                  std::make_unique<RexAbstractInput>(col_inputs.size()));
-              col_inputs.emplace_back(table_func_inputs.back().get());
-
               unsigned col_idx = static_cast<unsigned>(inputs[pos]->size() - i);
               table_func_input_exprs.emplace_back(hdk::ir::makeExpr<hdk::ir::ColumnRef>(
                   getColumnType(inputs[pos].get(), col_idx), inputs[pos].get(), col_idx));
@@ -3009,15 +2956,15 @@ class RelAlgDispatcher {
           }
         }
       }
-      table_func_inputs.emplace_back(
-          parse_scalar_expr(*exprs_json_it, db_id_, schema_provider_, root_dag_builder));
+      auto rex =
+          parse_scalar_expr(*exprs_json_it, db_id_, schema_provider_, root_dag_builder);
       RANodeOutput ra_output;
       for (auto& node : inputs) {
         auto node_output = get_node_output(node.get());
         ra_output.insert(ra_output.end(), node_output.begin(), node_output.end());
       }
       table_func_input_exprs.emplace_back(parse_expr(*exprs_json_it,
-                                                     table_func_inputs.back().get(),
+                                                     rex.get(),
                                                      db_id_,
                                                      schema_provider_,
                                                      root_dag_builder,
@@ -3027,7 +2974,6 @@ class RelAlgDispatcher {
     const auto& op_name = field(invocation, "op");
     CHECK(op_name.IsString());
 
-    std::vector<std::unique_ptr<const RexScalar>> table_function_projected_outputs;
     const auto& row_types = field(table_func_ra, "rowType");
     std::vector<TargetMetaInfo> tuple_type = parseTupleType(row_types);
     // Calcite doesn't always put proper type for the table function result.
@@ -3060,19 +3006,13 @@ class RelAlgDispatcher {
       }
     }
     for (size_t i = 0; i < tuple_type.size(); i++) {
-      // We don't care about the type information in rowType -- replace each output with
-      // a reference to be resolved later in the translator
-      table_function_projected_outputs.emplace_back(std::make_unique<RexRef>(i));
       fields.emplace_back("");
     }
     return std::make_shared<RelTableFunction>(op_name.GetString(),
                                               inputs,
                                               fields,
-                                              col_inputs,
                                               std::move(col_input_exprs),
-                                              table_func_inputs,
                                               std::move(table_func_input_exprs),
-                                              table_function_projected_outputs,
                                               std::move(tuple_type));
   }
 
