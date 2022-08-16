@@ -42,7 +42,7 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
       , base_column_buffer_(nullptr)
       , coords_column_buffer_(nullptr)
       , bounds_column_buffer_(nullptr)
-      , ring_sizes_column_buffer_(nullptr)
+      , ring_or_line_sizes_column_buffer_(nullptr)
       , poly_rings_column_buffer_(nullptr)
       , render_group_column_buffer_(nullptr) {
     CHECK(geo_column_descriptor_->columnType.is_geometry());
@@ -66,10 +66,11 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
     }
 
     // initialize ring sizes column & render group column
-    if (hasRingSizesColumn()) {
-      ring_sizes_column_buffer_ = dynamic_cast<TypedParquetStorageBuffer<ArrayDatum>*>(
-          getBuffer(chunks, geo_column_type, RING_SIZES));
-      CHECK(ring_sizes_column_buffer_);
+    if (hasRingOrLineSizesColumn()) {
+      ring_or_line_sizes_column_buffer_ =
+          dynamic_cast<TypedParquetStorageBuffer<ArrayDatum>*>(
+              getBuffer(chunks, geo_column_type, RING_OR_LINE_SIZES));
+      CHECK(ring_or_line_sizes_column_buffer_);
     }
     if (hasRenderGroupColumn()) {
       render_group_column_buffer_ = getBuffer(chunks, geo_column_type, RENDER_GROUP);
@@ -105,8 +106,8 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
     if (hasBoundsColumn()) {
       bounds_column_buffer_->eraseInvalidData(invalid_indices);
     }
-    if (hasRingSizesColumn()) {
-      ring_sizes_column_buffer_->eraseInvalidData(invalid_indices);
+    if (hasRingOrLineSizesColumn()) {
+      ring_or_line_sizes_column_buffer_->eraseInvalidData(invalid_indices);
     }
     if (hasPolyRingsColumn()) {
       poly_rings_column_buffer_->eraseInvalidData(invalid_indices);
@@ -178,7 +179,8 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
   void appendArrayDatumsToBuffer() {
     appendArrayDatumsIfApplicable(coords_column_buffer_, coords_datum_buffer_);
     appendArrayDatumsIfApplicable(bounds_column_buffer_, bounds_datum_buffer_);
-    appendArrayDatumsIfApplicable(ring_sizes_column_buffer_, ring_sizes_datum_buffer_);
+    appendArrayDatumsIfApplicable(ring_or_line_sizes_column_buffer_,
+                                  ring_or_line_sizes_datum_buffer_);
     appendArrayDatumsIfApplicable(poly_rings_column_buffer_, poly_rings_datum_buffer_);
   }
 
@@ -205,7 +207,7 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
   TypedParquetStorageBuffer<std::string>* base_column_buffer_;
   TypedParquetStorageBuffer<ArrayDatum>* coords_column_buffer_;
   TypedParquetStorageBuffer<ArrayDatum>* bounds_column_buffer_;
-  TypedParquetStorageBuffer<ArrayDatum>* ring_sizes_column_buffer_;
+  TypedParquetStorageBuffer<ArrayDatum>* ring_or_line_sizes_column_buffer_;
   TypedParquetStorageBuffer<ArrayDatum>* poly_rings_column_buffer_;
   AbstractBuffer* render_group_column_buffer_;
 };
