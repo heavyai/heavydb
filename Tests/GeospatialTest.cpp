@@ -128,7 +128,7 @@ void import_geospatial_test(const bool use_temporary_tables) {
   const std::string geospatial_test("DROP TABLE IF EXISTS geospatial_test;");
   run_ddl_statement(geospatial_test);
   const auto create_ddl = build_create_table_statement(
-      R"(id INT, p POINT, mp MULTIPOINT, l LINESTRING, ml MULTILINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gp GEOMETRY(POINT), gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), gp4326none GEOMETRY(POINT,4326) ENCODING NONE, gp900913 GEOMETRY(POINT,900913), gmp4326 GEOMETRY(MULTIPOINT,4326), gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, gml4326 GEOMETRY(MULTILINESTRING,4326), gpoly4326 GEOMETRY(POLYGON,4326), gpoly900913 GEOMETRY(POLYGON,900913))",
+      R"(id INT, p POINT, p_null POINT, mp MULTIPOINT, mp_null MULTIPOINT, l LINESTRING, l_null LINESTRING, ml MULTILINESTRING, ml2 MULTILINESTRING, ml_null MULTILINESTRING, poly POLYGON, poly_null POLYGON, mpoly MULTIPOLYGON, mpoly2 MULTIPOLYGON, mpoly_null MULTIPOLYGON, gp GEOMETRY(POINT), gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), gp4326none GEOMETRY(POINT,4326) ENCODING NONE, gp900913 GEOMETRY(POINT,900913), gmp4326 GEOMETRY(MULTIPOINT,4326), gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, gml4326 GEOMETRY(MULTILINESTRING,4326), gpoly4326 GEOMETRY(POLYGON,4326), gpoly900913 GEOMETRY(POLYGON,900913))",
       "geospatial_test",
       {"", 0},
       {},
@@ -141,35 +141,63 @@ void import_geospatial_test(const bool use_temporary_tables) {
   for (size_t i = 0; i < g_num_rows; ++i) {
     const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) +
                             ")'"};
+    const std::string point_null{"'NULL'"};
     const std::string multipoint{
         "'MULTIPOINT(" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " +
         std::to_string(2 * i) +
         ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1))
                  : "") +
         ")'"};
+    const std::string multipoint_null{"'NULL'"};
     const std::string linestring{
         "'LINESTRING(" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " +
         std::to_string(2 * i) +
         ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1))
                  : "") +
         ")'"};
+    const std::string linestring_null{"'NULL'"};
     const std::string multilinestring{
         "'MULTILINESTRING((" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " +
         std::to_string(2 * i) +
         ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1))
                  : "") +
         "))'"};
+    const std::string multilinestring2{
+        "'MULTILINESTRING((" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " +
+        std::to_string(2 * i) +
+        ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1))
+                 : "") +
+        "), (" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " +
+        std::to_string(2 * i) +
+        ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1))
+                 : "") +
+        "))'"};
+    const std::string multilinestring_null{"'NULL'"};
     const std::string poly{"'POLYGON((0 0, " + std::to_string(i + 1) + " 0, 0 " +
                            std::to_string(i + 1) + ", 0 0))'"};
+    const std::string poly_null{"'NULL'"};
     const std::string mpoly{"'MULTIPOLYGON(((0 0, " + std::to_string(i + 1) + " 0, 0 " +
                             std::to_string(i + 1) + ", 0 0)))'"};
+    const std::string mpoly2{"'MULTIPOLYGON(((0 0, " + std::to_string(i + 1) + " 0, 0 " +
+                             std::to_string(i + 1) + ", 0 0)), ((0 0, " +
+                             std::to_string(i + 1) + " 0, 0 " + std::to_string(i + 1) +
+                             ", 0 0)))'"};
+    const std::string mpoly_null{"'NULL'"};
     run_multiple_agg(gen(i,
                          point,
+                         point_null,
                          multipoint,
+                         multipoint_null,
                          linestring,
+                         linestring_null,
                          multilinestring,
+                         multilinestring2,
+                         multilinestring_null,
                          poly,
+                         poly_null,
                          mpoly,
+                         mpoly2,
+                         mpoly_null,
                          point,
                          point,
                          point,
@@ -474,7 +502,7 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
       const auto rows =
           run_multiple_agg("SELECT * FROM geospatial_test WHERE id = 1", dt);
       const auto row = rows->getNextRow(false, false);
-      ASSERT_EQ(row.size(), size_t(16));
+      ASSERT_EQ(row.size(), size_t(24));
     }
 
     // Projection (return GeoTargetValue)
@@ -1021,6 +1049,13 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
     ASSERT_EQ(static_cast<int64_t>(1),
               v<int64_t>(run_simple_agg(
                   "SELECT ST_NRings(mpoly) from geospatial_test limit 1;", dt)));
+    // null
+    ASSERT_EQ(inline_int_null_value<int>(),
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_NRings(poly_null) from geospatial_test limit 1;", dt)));
+    ASSERT_EQ(inline_int_null_value<int>(),
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_NRings(mpoly_null) from geospatial_test limit 1;", dt)));
 
     // ST_NPoints
     ASSERT_EQ(static_cast<int64_t>(1),
@@ -1043,6 +1078,27 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
               v<int64_t>(run_simple_agg("SELECT ST_NPoints(mpoly) FROM geospatial_test "
                                         "ORDER BY ST_NPoints(l) DESC LIMIT 1;",
                                         dt)));
+    // null
+    // for a POINT, this still returns 1 even if the point value is NULL
+    // @TODO check the required behavior here and fix separately if required
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_NPoints(p_null) from geospatial_test limit 1", dt)));
+    ASSERT_EQ(inline_int_null_value<int>(),
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_NPoints(mp_null) from geospatial_test limit 1", dt)));
+    ASSERT_EQ(inline_int_null_value<int>(),
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_NPoints(l_null) from geospatial_test limit 1", dt)));
+    ASSERT_EQ(inline_int_null_value<int>(),
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_NPoints(ml_null) from geospatial_test limit 1", dt)));
+    ASSERT_EQ(inline_int_null_value<int>(),
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_NPoints(poly_null) from geospatial_test limit 1", dt)));
+    ASSERT_EQ(inline_int_null_value<int>(),
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_NPoints(mpoly_null) from geospatial_test limit 1", dt)));
 
     // ST_SRID, ST_SetSRID
     ASSERT_EQ(static_cast<int64_t>(0),
@@ -1165,6 +1221,71 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
         run_multiple_agg("SELECT ST_OVERLAPS(l, id) FROM geospatial_test", dt));
     EXPECT_ANY_THROW(
         run_multiple_agg("SELECT ST_OVERLAPS(id, l) FROM geospatial_test", dt));
+
+    // ST_NumGeometries
+    // pass (actual count)
+    ASSERT_EQ(
+        static_cast<int64_t>(3),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_NumGeometries(mp) FROM geospatial_test WHERE id = 1;)", dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(2),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_NumGeometries(ml2) FROM geospatial_test WHERE id = 1;)", dt)));
+    ASSERT_EQ(static_cast<int64_t>(2),
+              v<int64_t>(run_simple_agg(
+                  R"(SELECT ST_NumGeometries(mpoly2) FROM geospatial_test WHERE id = 1;)",
+                  dt)));
+    // pass (non-MULTI geo, return 1, per PostGIS)
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_NumGeometries(p) FROM geospatial_test WHERE id = 1;)", dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_NumGeometries(l) FROM geospatial_test WHERE id = 1;)", dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_NumGeometries(poly) FROM geospatial_test WHERE id = 1;)", dt)));
+    // pass (null)
+    // @TODO investigate why a NULL POINT does not report as NULL
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT ST_NumGeometries(p_null) from geospatial_test WHERE id = 1", dt)));
+    ASSERT_EQ(
+        inline_int_null_value<int>(),
+        v<int64_t>(run_simple_agg(
+            "SELECT ST_NumGeometries(mp_null) from geospatial_test WHERE id = 1", dt)));
+    ASSERT_EQ(
+        inline_int_null_value<int>(),
+        v<int64_t>(run_simple_agg(
+            "SELECT ST_NumGeometries(l_null) from geospatial_test WHERE id = 1", dt)));
+    ASSERT_EQ(
+        inline_int_null_value<int>(),
+        v<int64_t>(run_simple_agg(
+            "SELECT ST_NumGeometries(ml_null) from geospatial_test WHERE id = 1", dt)));
+    ASSERT_EQ(
+        inline_int_null_value<int>(),
+        v<int64_t>(run_simple_agg(
+            "SELECT ST_NumGeometries(poly_null) from geospatial_test WHERE id = 1", dt)));
+    ASSERT_EQ(inline_int_null_value<int>(),
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_NumGeometries(mpoly_null) from geospatial_test WHERE id = 1",
+                  dt)));
+    // fail (invalid input)
+    EXPECT_ANY_THROW(run_multiple_agg(
+        "SELECT ST_NumGeometries(id) FROM geospatial_test WHERE id = 1;", dt));
+    EXPECT_ANY_THROW(run_multiple_agg(
+        "SELECT ST_NumGeometries(42) FROM geospatial_test WHERE id = 1;", dt));
+    // fail for now
+    // @TODO add support for literals
+    EXPECT_ANY_THROW(
+        run_multiple_agg("SELECT ST_NumGeometries('POLYGON((0 0, 1 0, 1 1, 0 1))') FROM "
+                         "geospatial_test WHERE id = 1;",
+                         dt));
   }
 }
 

@@ -302,7 +302,8 @@ inline std::string toString(const EncodingType& type) {
 #define IS_DECIMAL(T) ((T) == kNUMERIC || (T) == kDECIMAL)
 #define IS_GEO_POLY(T) (((T) == kPOLYGON) || ((T) == kMULTIPOLYGON))
 #define IS_GEO_LINE(T) (((T) == kLINESTRING) || ((T) == kMULTILINESTRING))
-#define IS_GEO_MULTI(T) (((T) == kMULTIPOLYGON) || ((T) == kMULTILINESTRING)) || ((T) == kMULTIPOINT))
+#define IS_GEO_MULTI(T) \
+  (((T) == kMULTIPOLYGON) || ((T) == kMULTILINESTRING) || ((T) == kMULTIPOINT))
 
 #include "InlineNullValues.h"
 

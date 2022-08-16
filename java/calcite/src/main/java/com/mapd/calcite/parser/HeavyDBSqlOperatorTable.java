@@ -258,6 +258,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new ST_Area());
     addOperator(new ST_NPoints());
     addOperator(new ST_NRings());
+    addOperator(new ST_NumGeometries());
     addOperator(new ST_SRID());
     addOperator(new ST_SetSRID());
     addOperator(new ST_Point());
@@ -2129,6 +2130,26 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   static class ST_NRings extends SqlFunction {
     ST_NRings() {
       super("ST_NRings",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.ANY),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createTypeWithNullability(
+              typeFactory.createSqlType(SqlTypeName.INTEGER),
+              opBinding.getOperandType(0).isNullable());
+    }
+  }
+
+  static class ST_NumGeometries extends SqlFunction {
+    ST_NumGeometries() {
+      super("ST_NumGeometries",
               SqlKind.OTHER_FUNCTION,
               null,
               null,
