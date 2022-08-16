@@ -413,9 +413,9 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
         boost::algorithm::any_of(current_level_join_conditions.quals, IsEquivBinOp{});
     const bool nested_loop = !found_eq_join_qual;
 
-    RexScalar const* const outer_join_cond =
+    auto outer_join_cond =
         current_level_join_conditions.type == JoinType::LEFT
-            ? rel_left_deep_join->getOuterCondition(level_idx + 1)
+            ? rel_left_deep_join->getOuterConditionExprShared(level_idx + 1)
             : nullptr;
 
     // collect join col, filter ops, and detailed info of join operation, i.e., op_type,
@@ -512,10 +512,10 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
     auto cur_translated_join_node =
         std::make_shared<RelTranslatedJoin>(lhs,
                                             rhs,
-                                            inner_join_cols,
-                                            outer_join_cols,
-                                            filter_ops,
-                                            outer_join_cond,
+                                            std::move(inner_join_cols),
+                                            std::move(outer_join_cols),
+                                            std::move(filter_ops),
+                                            std::move(outer_join_cond),
                                             nested_loop,
                                             current_level_join_conditions.type,
                                             op_info.type_,

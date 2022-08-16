@@ -110,7 +110,7 @@ class ExprDagVisitor : public ScalarExprVisitor<void*> {
     for (auto& expr : translated_join->getFilterCond()) {
       visit(expr.get());
     }
-    if (auto* outer_join_condition = translated_join->getOuterJoinCondExpr()) {
+    if (auto* outer_join_condition = translated_join->getOuterJoinCond()) {
       visit(outer_join_condition);
     }
   }

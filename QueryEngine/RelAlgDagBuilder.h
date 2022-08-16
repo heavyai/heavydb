@@ -1353,10 +1353,10 @@ class RelTranslatedJoin : public RelAlgNode {
  public:
   RelTranslatedJoin(const RelAlgNode* lhs,
                     const RelAlgNode* rhs,
-                    const std::vector<const hdk::ir::ColumnVar*> lhs_join_cols,
-                    const std::vector<const hdk::ir::ColumnVar*> rhs_join_cols,
-                    const std::vector<hdk::ir::ExprPtr> filter_ops,
-                    const RexScalar* outer_join_cond,
+                    std::vector<const hdk::ir::ColumnVar*> lhs_join_cols,
+                    std::vector<const hdk::ir::ColumnVar*> rhs_join_cols,
+                    hdk::ir::ExprPtrVector filter_ops,
+                    hdk::ir::ExprPtr outer_join_cond,
                     const bool nested_loop,
                     const JoinType join_type,
                     const std::string& op_type,
@@ -1364,10 +1364,10 @@ class RelTranslatedJoin : public RelAlgNode {
                     const std::string& op_typeinfo)
       : lhs_(lhs)
       , rhs_(rhs)
-      , lhs_join_cols_(lhs_join_cols)
-      , rhs_join_cols_(rhs_join_cols)
-      , filter_ops_(filter_ops)
-      , outer_join_cond_(outer_join_cond)
+      , lhs_join_cols_(std::move(lhs_join_cols))
+      , rhs_join_cols_(std::move(rhs_join_cols))
+      , filter_ops_(std::move(filter_ops))
+      , outer_join_cond_(std::move(outer_join_cond))
       , nested_loop_(nested_loop)
       , join_type_(join_type)
       , op_type_(op_type)
@@ -1405,7 +1405,7 @@ class RelTranslatedJoin : public RelAlgNode {
       boost::hash_combine(*hash_, lhs_->toHash());
       boost::hash_combine(*hash_, rhs_->toHash());
       boost::hash_combine(
-          *hash_, outer_join_cond_ ? outer_join_cond_->toHash() : boost::hash_value("n"));
+          *hash_, outer_join_cond_ ? outer_join_cond_->hash() : boost::hash_value("n"));
       boost::hash_combine(*hash_, nested_loop_);
       boost::hash_combine(*hash_, ::toString(join_type_));
       boost::hash_combine(*hash_, op_type_);
@@ -1421,10 +1421,7 @@ class RelTranslatedJoin : public RelAlgNode {
   const RelAlgNode* getRHS() const { return rhs_; }
   size_t getFilterCondSize() const { return filter_ops_.size(); }
   const std::vector<hdk::ir::ExprPtr>& getFilterCond() const { return filter_ops_; }
-  const RexScalar* getOuterJoinCond() const { return outer_join_cond_; }
-  const hdk::ir::Expr* getOuterJoinCondExpr() const {
-    return outer_join_cond_expr_.get();
-  }
+  const hdk::ir::Expr* getOuterJoinCond() const { return outer_join_cond_.get(); }
   std::string getOpType() const { return op_type_; }
   std::string getQualifier() const { return qualifier_; }
   std::string getOpTypeInfo() const { return op_typeinfo_; }
@@ -1462,8 +1459,7 @@ class RelTranslatedJoin : public RelAlgNode {
   const std::vector<const hdk::ir::ColumnVar*> lhs_join_cols_;
   const std::vector<const hdk::ir::ColumnVar*> rhs_join_cols_;
   const std::vector<hdk::ir::ExprPtr> filter_ops_;
-  const RexScalar* outer_join_cond_;
-  hdk::ir::ExprPtr outer_join_cond_expr_;
+  hdk::ir::ExprPtr outer_join_cond_;
   const bool nested_loop_;
   const JoinType join_type_;
   const std::string op_type_;

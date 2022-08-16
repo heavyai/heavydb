@@ -3064,7 +3064,9 @@ size_t LikeExpr::hash() const {
     hash_ = Expr::hash();
     boost::hash_combine(*hash_, arg->hash());
     boost::hash_combine(*hash_, like_expr->hash());
-    boost::hash_combine(*hash_, escape_expr->hash());
+    if (escape_expr) {
+      boost::hash_combine(*hash_, escape_expr->hash());
+    }
     boost::hash_combine(*hash_, is_ilike);
     boost::hash_combine(*hash_, is_simple);
   }
