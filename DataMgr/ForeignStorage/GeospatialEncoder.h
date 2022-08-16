@@ -50,13 +50,13 @@ class GeospatialEncoder {
       , base_column_encoder_(nullptr)
       , coords_column_encoder_(nullptr)
       , bounds_column_encoder_(nullptr)
-      , ring_sizes_column_encoder_(nullptr)
+      , ring_or_line_sizes_column_encoder_(nullptr)
       , poly_rings_column_encoder_(nullptr)
       , render_group_column_encoder_(nullptr)
       , base_column_metadata_(nullptr)
       , coords_column_metadata_(nullptr)
       , bounds_column_metadata_(nullptr)
-      , ring_sizes_column_metadata_(nullptr)
+      , ring_or_line_sizes_column_metadata_(nullptr)
       , poly_rings_column_metadata_(nullptr)
       , render_group_column_metadata_(nullptr)
       , render_group_analyzer_map_{render_group_analyzer_map} {
@@ -73,9 +73,9 @@ class GeospatialEncoder {
     }
 
     // initialize ring sizes column & render group column
-    if (hasRingSizesColumn()) {
-      ring_sizes_column_descriptor_ =
-          getColumnDescriptor(chunks, geo_column_type, RING_SIZES);
+    if (hasRingOrLineSizesColumn()) {
+      ring_or_line_sizes_column_descriptor_ =
+          getColumnDescriptor(chunks, geo_column_type, RING_OR_LINE_SIZES);
     }
     if (hasRenderGroupColumn()) {
       render_group_column_descriptor_ =
@@ -96,13 +96,13 @@ class GeospatialEncoder {
       , base_column_encoder_(nullptr)
       , coords_column_encoder_(nullptr)
       , bounds_column_encoder_(nullptr)
-      , ring_sizes_column_encoder_(nullptr)
+      , ring_or_line_sizes_column_encoder_(nullptr)
       , poly_rings_column_encoder_(nullptr)
       , render_group_column_encoder_(nullptr)
       , base_column_metadata_(nullptr)
       , coords_column_metadata_(nullptr)
       , bounds_column_metadata_(nullptr)
-      , ring_sizes_column_metadata_(nullptr)
+      , ring_or_line_sizes_column_metadata_(nullptr)
       , poly_rings_column_metadata_(nullptr)
       , render_group_column_metadata_(nullptr)
       , render_group_analyzer_map_{render_group_analyzer_map} {
@@ -135,12 +135,12 @@ class GeospatialEncoder {
     }
 
     // initialize ring sizes column & render group column
-    if (hasRingSizesColumn()) {
-      std::tie(ring_sizes_column_encoder_,
-               ring_sizes_column_metadata_,
-               ring_sizes_column_descriptor_) =
+    if (hasRingOrLineSizesColumn()) {
+      std::tie(ring_or_line_sizes_column_encoder_,
+               ring_or_line_sizes_column_metadata_,
+               ring_or_line_sizes_column_descriptor_) =
           initEncoderAndGetEncoderAndMetadata(
-              chunks, chunk_metadata, geo_column_type, RING_SIZES);
+              chunks, chunk_metadata, geo_column_type, RING_OR_LINE_SIZES);
     }
     if (hasRenderGroupColumn()) {
       std::tie(render_group_column_encoder_,
@@ -178,8 +178,10 @@ class GeospatialEncoder {
     const auto geo_column_type = geo_column_descriptor_->columnType.get_type();
     if (geo_column_type == kPOINT) {
       CHECK(chunks.size() == 2);
-    } else if (geo_column_type == kLINESTRING) {
+    } else if (geo_column_type == kLINESTRING || geo_column_type == kMULTIPOINT) {
       CHECK(chunks.size() == 3);
+    } else if (geo_column_type == kMULTILINESTRING) {
+      CHECK(chunks.size() == 4);
     } else if (geo_column_type == kPOLYGON) {
       CHECK(chunks.size() == 5);
     } else if (geo_column_type == kMULTIPOLYGON) {
@@ -192,8 +194,10 @@ class GeospatialEncoder {
     const auto geo_column_type = geo_column_descriptor_->columnType.get_type();
     if (geo_column_type == kPOINT) {
       CHECK(chunk_metadata.size() == 2);
-    } else if (geo_column_type == kLINESTRING) {
+    } else if (geo_column_type == kLINESTRING || geo_column_type == kMULTIPOINT) {
       CHECK(chunk_metadata.size() == 3);
+    } else if (geo_column_type == kMULTILINESTRING) {
+      CHECK(chunk_metadata.size() == 4);
     } else if (geo_column_type == kPOLYGON) {
       CHECK(chunk_metadata.size() == 5);
     } else if (geo_column_type == kMULTIPOLYGON) {
@@ -206,9 +210,9 @@ class GeospatialEncoder {
         coords_datum_buffer_, coords_column_encoder_, coords_column_metadata_);
     appendToArrayEncoderAndUpdateMetadata(
         bounds_datum_buffer_, bounds_column_encoder_, bounds_column_metadata_);
-    appendToArrayEncoderAndUpdateMetadata(ring_sizes_datum_buffer_,
-                                          ring_sizes_column_encoder_,
-                                          ring_sizes_column_metadata_);
+    appendToArrayEncoderAndUpdateMetadata(ring_or_line_sizes_datum_buffer_,
+                                          ring_or_line_sizes_column_encoder_,
+                                          ring_or_line_sizes_column_metadata_);
     appendToArrayEncoderAndUpdateMetadata(poly_rings_datum_buffer_,
                                           poly_rings_column_encoder_,
                                           poly_rings_column_metadata_);
@@ -242,7 +246,7 @@ class GeospatialEncoder {
                                                     import_ti,
                                                     coords_parse_buffer_,
                                                     bounds_parse_buffer_,
-                                                    ring_sizes_parse_buffer_,
+                                                    ring_or_line_sizes_parse_buffer_,
                                                     poly_rings_parse_buffer_,
                                                     PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
       throwMalformedGeoElement(geo_column_descriptor_->columnName);
@@ -268,9 +272,9 @@ class GeospatialEncoder {
     }
 
     // append ring sizes
-    if (hasRingSizesColumn()) {
-      ring_sizes_datum_buffer_.emplace_back(
-          encode_as_array_datum(ring_sizes_parse_buffer_));
+    if (hasRingOrLineSizesColumn()) {
+      ring_or_line_sizes_datum_buffer_.emplace_back(
+          encode_as_array_datum(ring_or_line_sizes_parse_buffer_));
     }
 
     // append poly rings
@@ -303,7 +307,7 @@ class GeospatialEncoder {
     Geospatial::GeoTypesFactory::getNullGeoColumns(import_ti,
                                                    coords_parse_buffer_,
                                                    bounds_parse_buffer_,
-                                                   ring_sizes_parse_buffer_,
+                                                   ring_or_line_sizes_parse_buffer_,
                                                    poly_rings_parse_buffer_,
                                                    PROMOTE_POLYGON_TO_MULTIPOLYGON);
     // POINT columns are represented using fixed length arrays and need
@@ -320,10 +324,10 @@ class GeospatialEncoder {
       bounds_datum_buffer_.emplace_back(import_export::ImporterUtils::composeNullArray(
           bounds_column_descriptor_->columnType));
     }
-    if (hasRingSizesColumn()) {
-      ring_sizes_datum_buffer_.emplace_back(
+    if (hasRingOrLineSizesColumn()) {
+      ring_or_line_sizes_datum_buffer_.emplace_back(
           import_export::ImporterUtils::composeNullArray(
-              ring_sizes_column_descriptor_->columnType));
+              ring_or_line_sizes_column_descriptor_->columnType));
     }
     if (hasPolyRingsColumn()) {
       poly_rings_datum_buffer_.emplace_back(
@@ -339,19 +343,19 @@ class GeospatialEncoder {
   void clearParseBuffers() {
     coords_parse_buffer_.clear();
     bounds_parse_buffer_.clear();
-    ring_sizes_parse_buffer_.clear();
+    ring_or_line_sizes_parse_buffer_.clear();
     poly_rings_parse_buffer_.clear();
   }
 
   void clearDatumBuffers() {
     coords_datum_buffer_.clear();
     bounds_datum_buffer_.clear();
-    ring_sizes_datum_buffer_.clear();
+    ring_or_line_sizes_datum_buffer_.clear();
     poly_rings_datum_buffer_.clear();
     render_group_value_buffer_.clear();
   }
 
-  enum GeoColumnType { COORDS, BOUNDS, RING_SIZES, POLY_RINGS, RENDER_GROUP };
+  enum GeoColumnType { COORDS, BOUNDS, RING_OR_LINE_SIZES, POLY_RINGS, RENDER_GROUP };
 
   template <typename T>
   typename std::list<T>::iterator getIteratorForGeoColumnType(
@@ -367,8 +371,23 @@ class GeospatialEncoder {
         }
         UNREACHABLE();
       }
+      case kMULTIPOINT:
       case kLINESTRING: {
         if (geo_column == COORDS) {
+          return list_iter;
+        }
+        list_iter++;
+        if (geo_column == BOUNDS) {
+          return list_iter;
+        }
+        UNREACHABLE();
+      }
+      case kMULTILINESTRING: {
+        if (geo_column == COORDS) {
+          return list_iter;
+        }
+        list_iter++;
+        if (geo_column == RING_OR_LINE_SIZES) {
           return list_iter;
         }
         list_iter++;
@@ -382,7 +401,7 @@ class GeospatialEncoder {
           return list_iter;
         }
         list_iter++;
-        if (geo_column == RING_SIZES) {
+        if (geo_column == RING_OR_LINE_SIZES) {
           return list_iter;
         }
         list_iter++;
@@ -400,7 +419,7 @@ class GeospatialEncoder {
           return list_iter;
         }
         list_iter++;
-        if (geo_column == RING_SIZES) {
+        if (geo_column == RING_OR_LINE_SIZES) {
           return list_iter;
         }
         list_iter++;
@@ -461,13 +480,15 @@ class GeospatialEncoder {
 
   bool hasBoundsColumn() const {
     const auto geo_column_type = geo_column_descriptor_->columnType.get_type();
-    return geo_column_type == kLINESTRING || geo_column_type == kPOLYGON ||
+    return geo_column_type == kMULTIPOINT || geo_column_type == kLINESTRING ||
+           geo_column_type == kMULTILINESTRING || geo_column_type == kPOLYGON ||
            geo_column_type == kMULTIPOLYGON;
   }
 
-  bool hasRingSizesColumn() const {
+  bool hasRingOrLineSizesColumn() const {
     const auto geo_column_type = geo_column_descriptor_->columnType.get_type();
-    return geo_column_type == kPOLYGON || geo_column_type == kMULTIPOLYGON;
+    return geo_column_type == kPOLYGON || geo_column_type == kMULTIPOLYGON ||
+           geo_column_type == kMULTILINESTRING;
   }
 
   bool hasRenderGroupColumn() const {
@@ -487,20 +508,20 @@ class GeospatialEncoder {
   StringNoneEncoder* base_column_encoder_;
   Encoder* coords_column_encoder_;
   Encoder* bounds_column_encoder_;
-  Encoder* ring_sizes_column_encoder_;
+  Encoder* ring_or_line_sizes_column_encoder_;
   Encoder* poly_rings_column_encoder_;
   Encoder* render_group_column_encoder_;
 
   ChunkMetadata* base_column_metadata_;
   ChunkMetadata* coords_column_metadata_;
   ChunkMetadata* bounds_column_metadata_;
-  ChunkMetadata* ring_sizes_column_metadata_;
+  ChunkMetadata* ring_or_line_sizes_column_metadata_;
   ChunkMetadata* poly_rings_column_metadata_;
   ChunkMetadata* render_group_column_metadata_;
 
   const ColumnDescriptor* coords_column_descriptor_;
   const ColumnDescriptor* bounds_column_descriptor_;
-  const ColumnDescriptor* ring_sizes_column_descriptor_;
+  const ColumnDescriptor* ring_or_line_sizes_column_descriptor_;
   const ColumnDescriptor* poly_rings_column_descriptor_;
   const ColumnDescriptor* render_group_column_descriptor_;
 
@@ -510,13 +531,13 @@ class GeospatialEncoder {
   // deallocation/reallocation costs
   std::vector<double> coords_parse_buffer_;
   std::vector<double> bounds_parse_buffer_;
-  std::vector<int> ring_sizes_parse_buffer_;
+  std::vector<int> ring_or_line_sizes_parse_buffer_;
   std::vector<int> poly_rings_parse_buffer_;
 
   // Used to buffer array appends in memory for a batch
   std::vector<ArrayDatum> coords_datum_buffer_;
   std::vector<ArrayDatum> bounds_datum_buffer_;
-  std::vector<ArrayDatum> ring_sizes_datum_buffer_;
+  std::vector<ArrayDatum> ring_or_line_sizes_datum_buffer_;
   std::vector<ArrayDatum> poly_rings_datum_buffer_;
   std::vector<int32_t> render_group_value_buffer_;
 

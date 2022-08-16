@@ -5281,18 +5281,13 @@ std::vector<Importer::GeoFileLayerInfo> Importer::gdalGetLayersInGeoFile(
         const OGRwkbGeometryType geometry_type = geometry->getGeometryType();
         switch (wkbFlatten(geometry_type)) {
           case wkbPoint:
+          case wkbMultiPoint:
           case wkbLineString:
           case wkbMultiLineString:
           case wkbPolygon:
           case wkbMultiPolygon:
             // layer has supported geo
             contents = GeoFileLayerContents::GEO;
-            break;
-          case wkbMultiPoint:
-            // supported if geo_explode_collections is specified
-            contents = copy_params.geo_explode_collections
-                           ? GeoFileLayerContents::GEO
-                           : GeoFileLayerContents::UNSUPPORTED_GEO;
             break;
           default:
             // layer has unsupported geometry

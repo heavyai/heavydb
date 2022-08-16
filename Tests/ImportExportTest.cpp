@@ -2396,6 +2396,26 @@ TEST_F(ImportTest, One_parquet_file_with_geo_point) {
       "../../Tests/Import/datafiles/trip_data_with_point.parquet/"
       "part-00000-6dbefb0c-abbd-4c39-93e7-0026e36b7b7c-c000.snappy.parquet.");
 }
+TEST_F(ImportTest, One_parquet_file_with_geo_multipoint) {
+  EXPECT_NO_THROW(sql("DROP TABLE IF EXISTS parquet_multipoint;"));
+  EXPECT_NO_THROW(sql("CREATE TABLE parquet_multipoint (geom MULTIPOINT);"));
+  EXPECT_NO_THROW(
+      sql("COPY parquet_multipoint FROM "
+          "'../../Tests/Import/datafiles/multipoint/multipoint.parquet' WITH "
+          "(source_type='parquet_file');"));
+  EXPECT_NO_THROW(
+      sqlAndCompareResult("SELECT COUNT(*) FROM parquet_multipoint;", {{2L}}));
+}
+TEST_F(ImportTest, One_parquet_file_with_geo_multilinestring) {
+  EXPECT_NO_THROW(sql("DROP TABLE IF EXISTS parquet_multilinestring;"));
+  EXPECT_NO_THROW(sql("CREATE TABLE parquet_multilinestring (geom MULTILINESTRING);"));
+  EXPECT_NO_THROW(
+      sql("COPY parquet_multilinestring FROM "
+          "'../../Tests/Import/datafiles/multilinestring/multilinestring.parquet' WITH "
+          "(source_type='parquet_file');"));
+  EXPECT_NO_THROW(
+      sqlAndCompareResult("SELECT COUNT(*) FROM parquet_multilinestring;", {{2L}}));
+}
 TEST_F(ImportTest, OneParquetFileWithUniqueRowGroups) {
   executeLambdaAndAssertException(
       [&]() {
@@ -3388,6 +3408,25 @@ TEST_F(ImportTestGDAL, Geojson_Point_Import_Sort) {
   // this test does not run on distributed, so safe to use "rowid"
   EXPECT_NO_THROW(
       sqlAndCompareResult("SELECT trip FROM geospatial WHERE rowid=0", {{20.0}}));
+}
+
+TEST_F(ImportTestGDAL, GeoJSON_MultiPoint_Import) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const auto file_path = boost::filesystem::path("multipoint/multipoint.geojson.gz");
+  importTestGeofileImporter(file_path.string(), "geospatial", false, false);
+  checkGeoNumRows(Geospatial::kGeoColumnName, 5);
+  EXPECT_NO_THROW(sqlAndCompareResult(
+      "SELECT ST_NPoints(geom) FROM geospatial WHERE rowid=0", {{i(1000)}}));
+}
+
+TEST_F(ImportTestGDAL, GeoJSON_MultiLineString_Import) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const auto file_path =
+      boost::filesystem::path("multilinestring/multilinestring.geojson.gz");
+  importTestGeofileImporter(file_path.string(), "geospatial", false, false);
+  checkGeoNumRows(Geospatial::kGeoColumnName, 98);
+  EXPECT_NO_THROW(sqlAndCompareResult(
+      "SELECT ST_NPoints(geom) FROM geospatial WHERE rowid=0", {{i(76)}}));
 }
 
 #ifdef HAVE_AWS_S3
