@@ -60,8 +60,8 @@ ParseBufferRequest::ParseBufferRequest(
 }
 
 std::map<int, DataBlockPtr> TextFileBufferParser::convertImportBuffersToDataBlocks(
-    const std::vector<std::unique_ptr<import_export::TypedImportBuffer>>&
-        import_buffers) {
+    const std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
+    const bool skip_dict_encoding) {
   std::map<int, DataBlockPtr> result;
   std::vector<std::pair<const size_t, std::future<int8_t*>>>
       encoded_data_block_ptrs_futures;
@@ -83,13 +83,15 @@ std::map<int, DataBlockPtr> TextFileBufferParser::convertImportBuffersToDataBloc
         CHECK_EQ(kENCODING_DICT, import_buffer->getTypeInfo().get_compression());
         p.numbersPtr = nullptr;
 
-        auto column_id = import_buffer->getColumnDesc()->columnId;
-        encoded_data_block_ptrs_futures.emplace_back(std::make_pair(
-            column_id,
-            std::async(std::launch::async, [&import_buffer, string_payload_ptr] {
-              import_buffer->addDictEncodedString(*string_payload_ptr);
-              return import_buffer->getStringDictBuffer();
-            })));
+        if (!skip_dict_encoding) {
+          auto column_id = import_buffer->getColumnDesc()->columnId;
+          encoded_data_block_ptrs_futures.emplace_back(std::make_pair(
+              column_id,
+              std::async(std::launch::async, [&import_buffer, string_payload_ptr] {
+                import_buffer->addDictEncodedString(*string_payload_ptr);
+                return import_buffer->getStringDictBuffer();
+              })));
+        }
       }
     } else if (import_buffer->getTypeInfo().is_geometry()) {
       auto geo_payload_ptr = import_buffer->getGeoStringBuffer();
@@ -107,9 +109,14 @@ std::map<int, DataBlockPtr> TextFileBufferParser::convertImportBuffersToDataBloc
     result[import_buffer->getColumnDesc()->columnId] = p;
   }
 
-  // wait for the async requests we made for string dictionary
-  for (auto& encoded_ptr_future : encoded_data_block_ptrs_futures) {
-    result[encoded_ptr_future.first].numbersPtr = encoded_ptr_future.second.get();
+  if (!skip_dict_encoding) {
+    // wait for the async requests we made for string dictionary
+    for (auto& encoded_ptr_future : encoded_data_block_ptrs_futures) {
+      encoded_ptr_future.second.wait();
+    }
+    for (auto& encoded_ptr_future : encoded_data_block_ptrs_futures) {
+      result[encoded_ptr_future.first].numbersPtr = encoded_ptr_future.second.get();
+    }
   }
   return result;
 }
