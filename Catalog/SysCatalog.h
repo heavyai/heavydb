@@ -421,6 +421,8 @@ class SysCatalog : private CommonFileOperations {
                                 std::string& name,
                                 UserMetadata& user);
 
+  void checkDuplicateCaseInsensitiveDbNames() const;
+
   struct UpdateQuery {
     std::string query;
     std::vector<std::string> text_params;
