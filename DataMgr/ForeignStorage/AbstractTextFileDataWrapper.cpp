@@ -676,6 +676,29 @@ void append_data_block_to_chunk(
   }
 }
 
+/**
+ * Partition data blocks such that dictionary encoded columns are disjoint of
+ * other columns
+ *
+ * @return a pair of DataBlockPtr maps with the first being columns that are
+ * string dictionary encoded and the second being the complement
+ */
+std::pair<std::map<int, DataBlockPtr>, std::map<int, DataBlockPtr>> partition_data_blocks(
+    const std::map<int, const ColumnDescriptor*>& column_by_id,
+    const std::map<int, DataBlockPtr>& data_blocks) {
+  std::map<int, DataBlockPtr> dict_encoded_data_blocks;
+  std::map<int, DataBlockPtr> none_dict_encoded_data_blocks;
+  for (auto& [column_id, data_block] : data_blocks) {
+    const auto column = shared::get_from_map(column_by_id, column_id);
+    if (column->columnType.is_dict_encoded_string()) {
+      dict_encoded_data_blocks[column_id] = data_block;
+    } else {
+      none_dict_encoded_data_blocks[column_id] = data_block;
+    }
+  }
+  return {dict_encoded_data_blocks, none_dict_encoded_data_blocks};
+}
+
 void populate_chunks_using_data_blocks(
     MetadataScanMultiThreadingParams& multi_threading_params,
     int fragment_id,
@@ -693,37 +716,83 @@ void populate_chunks_using_data_blocks(
                   request.getFilePath());
   CHECK_EQ(fragment_id, file_scan_param.fragment_id);
 
-  for (auto& [column_id, data_block] : result.column_id_to_data_blocks_map) {
-    ChunkKey chunk_key{request.db_id, request.getTableId(), column_id, fragment_id};
-    const auto column = column_by_id[column_id];
-    if (column->columnType.is_varlen_indeed()) {
-      chunk_key.emplace_back(1);
+  // start string encoding asynchronously
+  std::vector<std::pair<const size_t, std::future<int8_t*>>>
+      encoded_data_block_ptrs_futures;
+
+  for (const auto& import_buffer : request.import_buffers) {
+    if (import_buffer == nullptr) {
+      continue;
     }
-    if (multi_threading_params.chunk_encoder_buffers.find(chunk_key) ==
-        multi_threading_params.chunk_encoder_buffers.end()) {
-      multi_threading_params.chunk_encoder_buffers[chunk_key] =
-          std::make_unique<ForeignStorageBuffer>();
-      multi_threading_params.chunk_encoder_buffers[chunk_key]->initEncoder(
-          column->columnType);
+
+    if (import_buffer->getTypeInfo().is_dict_encoded_string()) {
+      auto string_payload_ptr = import_buffer->getStringBuffer();
+      CHECK_EQ(kENCODING_DICT, import_buffer->getTypeInfo().get_compression());
+
+      auto column_id = import_buffer->getColumnDesc()->columnId;
+      encoded_data_block_ptrs_futures.emplace_back(std::make_pair(
+          column_id, std::async(std::launch::async, [&import_buffer, string_payload_ptr] {
+            import_buffer->addDictEncodedString(*string_payload_ptr);
+            return import_buffer->getStringDictBuffer();
+          })));
     }
-    size_t current_element_count =
-        multi_threading_params.chunk_encoder_buffers[chunk_key]
-            ->getEncoder()
-            ->getNumElems();
-    size_t num_elements = current_element_count + result.row_count;
-    multi_threading_params.chunk_encoder_buffers[chunk_key]->getEncoder()->setNumElems(
-        num_elements);
-    lock.unlock();  // unlock the fragment based lock in order to achieve better
-                    // performance
-    append_data_block_to_chunk(file_scan_param,
-                               data_block,
-                               result.row_count,
-                               chunk_key,
-                               column,
-                               result.rejected_rows,
-                               current_element_count);
-    lock.lock();
   }
+
+  auto process_subset_of_data_blocks =
+      [&](const std::map<int, DataBlockPtr>& data_blocks) {
+        for (auto& [column_id, data_block] : data_blocks) {
+          ChunkKey chunk_key{request.db_id, request.getTableId(), column_id, fragment_id};
+          const auto column = column_by_id[column_id];
+
+          if (column->columnType.is_varlen_indeed()) {
+            chunk_key.emplace_back(1);
+          }
+          if (multi_threading_params.chunk_encoder_buffers.find(chunk_key) ==
+              multi_threading_params.chunk_encoder_buffers.end()) {
+            multi_threading_params.chunk_encoder_buffers[chunk_key] =
+                std::make_unique<ForeignStorageBuffer>();
+            multi_threading_params.chunk_encoder_buffers[chunk_key]->initEncoder(
+                column->columnType);
+          }
+          size_t current_element_count =
+              multi_threading_params.chunk_encoder_buffers[chunk_key]
+                  ->getEncoder()
+                  ->getNumElems();
+          size_t num_elements = current_element_count + result.row_count;
+          multi_threading_params.chunk_encoder_buffers[chunk_key]
+              ->getEncoder()
+              ->setNumElems(num_elements);
+          lock.unlock();  // unlock the fragment based lock in order to achieve better
+          // performance
+          append_data_block_to_chunk(file_scan_param,
+                                     data_block,
+                                     result.row_count,
+                                     chunk_key,
+                                     column,
+                                     result.rejected_rows,
+                                     current_element_count);
+          lock.lock();
+        }
+      };
+
+  auto [dict_encoded_data_blocks, none_dict_encoded_data_blocks] =
+      partition_data_blocks(column_by_id, result.column_id_to_data_blocks_map);
+
+  process_subset_of_data_blocks(
+      none_dict_encoded_data_blocks);  // skip dict string columns
+
+  // wait for the async requests we made for string dictionary
+  for (auto& encoded_ptr_future : encoded_data_block_ptrs_futures) {
+    encoded_ptr_future.second.wait();
+  }
+  for (auto& encoded_ptr_future : encoded_data_block_ptrs_futures) {
+    CHECK_GT(dict_encoded_data_blocks.count(encoded_ptr_future.first), 0UL);
+    dict_encoded_data_blocks[encoded_ptr_future.first].numbersPtr =
+        encoded_ptr_future.second.get();
+  }
+
+  process_subset_of_data_blocks(
+      dict_encoded_data_blocks);  // process only dict string columns
 }
 
 /**
@@ -954,7 +1023,7 @@ void populate_chunks(MetadataScanMultiThreadingParams& multi_threading_params,
             import_buffer->clear();
           }
         }
-        auto result = parser.parseBuffer(request, true);
+        auto result = parser.parseBuffer(request, true, false, true);
         populate_chunks_using_data_blocks(multi_threading_params,
                                           fragment_id,
                                           request,

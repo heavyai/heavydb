@@ -157,10 +157,10 @@ RegexFileBufferParser::RegexFileBufferParser(const ForeignTable* foreign_table)
  * Parses a given file buffer and returns data blocks for each column in the
  * file along with metadata related to rows and row offsets within the buffer.
  */
-ParseBufferResult RegexFileBufferParser::parseBuffer(
-    ParseBufferRequest& request,
-    bool convert_data_blocks,
-    bool columns_are_pre_filtered) const {
+ParseBufferResult RegexFileBufferParser::parseBuffer(ParseBufferRequest& request,
+                                                     bool convert_data_blocks,
+                                                     bool columns_are_pre_filtered,
+                                                     bool skip_dict_encoding) const {
   CHECK(request.buffer);
   char* buffer_start = request.buffer.get() + request.begin_pos;
   const char* buffer_end = request.buffer.get() + request.end_pos;
@@ -323,7 +323,7 @@ ParseBufferResult RegexFileBufferParser::parseBuffer(
   result.row_count = row_count;
   if (convert_data_blocks) {
     result.column_id_to_data_blocks_map =
-        convertImportBuffersToDataBlocks(request.import_buffers);
+        convertImportBuffersToDataBlocks(request.import_buffers, skip_dict_encoding);
   }
   return result;
 }

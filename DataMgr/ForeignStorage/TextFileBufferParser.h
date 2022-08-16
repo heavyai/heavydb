@@ -102,10 +102,13 @@ class TextFileBufferParser {
    *  @param convert_data_blocks      - convert import buffers to data blocks
    *  @param columns_are_pre_filtered - file buffer passed into parse_buffer only has the
    * necessary columns that are being requested, not all columns.
+   *  @param skip_dict_encoding       - skip dictionary encoding for encoded
+   *  strings; the encoding will be required to happen later in processing
    */
   virtual ParseBufferResult parseBuffer(ParseBufferRequest& request,
                                         bool convert_data_blocks,
-                                        bool columns_are_pre_filtered = false) const = 0;
+                                        bool columns_are_pre_filtered = false,
+                                        bool skip_dict_encoding = false) const = 0;
   /**
    * Validates foreign table parse options and returns a CopyParams object upon
    * successful validation. An exception is thrown if validation fails.
@@ -136,7 +139,8 @@ class TextFileBufferParser {
 
   static std::map<int, DataBlockPtr> convertImportBuffersToDataBlocks(
       const std::vector<std::unique_ptr<import_export::TypedImportBuffer>>&
-          import_buffers);
+          import_buffers,
+      const bool skip_dict_encoding = false);
 
   static bool isCoordinateScalar(const std::string_view datum);
 

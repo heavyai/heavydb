@@ -121,7 +121,8 @@ std::optional<bool> validate_and_get_bool_value(const ForeignTable* foreign_tabl
  */
 ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
                                                    bool convert_data_blocks,
-                                                   bool columns_are_pre_filtered) const {
+                                                   bool columns_are_pre_filtered,
+                                                   bool skip_dict_encoding) const {
   CHECK(request.buffer);
   size_t begin = import_export::delimited_parser::find_beginning(
       request.buffer.get(), request.begin_pos, request.end_pos, request.copy_params);
@@ -300,7 +301,7 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
   result.row_count = row_count;
   if (convert_data_blocks) {
     result.column_id_to_data_blocks_map =
-        convertImportBuffersToDataBlocks(request.import_buffers);
+        convertImportBuffersToDataBlocks(request.import_buffers, skip_dict_encoding);
   }
   return result;
 }
