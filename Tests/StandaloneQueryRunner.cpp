@@ -160,9 +160,10 @@ int main(int argc, char** argv) {
         CHECK_EQ(rows->rowCount(), size_t(1));
         auto row =
             rows->getNextRow(/*translate_strings=*/true, /*decimal_to_double=*/true);
-        CHECK_EQ(row.size(), size_t(3));
+        CHECK_EQ(row.size(), size_t(5));
         std::cout << "Result for " << device_type_str << v<int64_t>(row[0]) << " : "
-                  << v<double>(row[1]) << " : " << v<int64_t>(row[2]) << std::endl;
+                  << v<double>(row[1]) << " : " << v<int64_t>(row[2]) << " : "
+                  << v<int64_t>(row[3]) << " : " << v<double>(row[4]) << std::endl;
       }
     }
     {
