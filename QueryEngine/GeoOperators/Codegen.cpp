@@ -24,6 +24,8 @@ std::unique_ptr<Codegen> Codegen::init(const Analyzer::GeoOperator* geo_operator
   const auto operator_name = geo_operator->getName();
   if (operator_name == "ST_NRings") {
     return std::make_unique<NRings>(geo_operator, catalog);
+  } else if (operator_name == "ST_NumGeometries") {
+    return std::make_unique<NumGeometries>(geo_operator, catalog);
   } else if (operator_name == "ST_NPoints") {
     return std::make_unique<NPoints>(geo_operator, catalog);
   } else if (operator_name == "ST_PointN") {

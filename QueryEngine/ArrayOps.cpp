@@ -48,6 +48,16 @@ extern "C" DEVICE RUNTIME_EXPORT int32_t array_size_nullable(int8_t* chunk_iter_
   return ad.is_null ? null_val : ad.length >> elem_log_sz;
 }
 
+extern "C" DEVICE RUNTIME_EXPORT int32_t array_size_1_nullable(int8_t* chunk_iter_,
+                                                               const uint64_t row_pos,
+                                                               const int32_t null_val) {
+  ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
+  ArrayDatum ad;
+  bool is_end;
+  ChunkIter_get_nth(chunk_iter, row_pos, &ad, &is_end);
+  return ad.is_null ? null_val : 1;
+}
+
 extern "C" DEVICE RUNTIME_EXPORT bool array_is_null(int8_t* chunk_iter_,
                                                     const uint64_t row_pos) {
   ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
