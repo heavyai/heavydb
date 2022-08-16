@@ -18,7 +18,7 @@
 #include "DeepCopyVisitor.h"
 #include "Logger/Logger.h"
 #include "RexVisitor.h"
-#include "Visitors/RexSubQueryIdCollector.h"
+#include "Visitors/SubQueryCollector.h"
 
 #include <boost/make_unique.hpp>
 #include <numeric>
@@ -1382,27 +1382,14 @@ void eliminate_dead_subqueries(
                           std::shared_ptr<hdk::ir::ScalarSubquery>>>& subqueries,
     RelAlgNode const* root) {
   if (!subqueries.empty()) {
-    auto live_ids = RexSubQueryIdCollector::getLiveRexSubQueryIds(root);
-    auto sort_live_ids_first = [&live_ids](auto& a, auto& b) {
-      return live_ids.count(a.first->getId()) && !live_ids.count(b.first->getId());
-    };
-    std::stable_sort(subqueries.begin(), subqueries.end(), sort_live_ids_first);
-    size_t n_dead_subqueries;
-    if (live_ids.count(subqueries.front().first->getId())) {
-      auto first_dead_itr = std::upper_bound(subqueries.cbegin(),
-                                             subqueries.cend(),
-                                             subqueries.front(),
-                                             sort_live_ids_first);
-      n_dead_subqueries = subqueries.cend() - first_dead_itr;
-    } else {
-      n_dead_subqueries = subqueries.size();
+    auto live_subqueries = SubQueryCollector::getLiveSubQueries(root);
+    int live_count = 0;
+    for (size_t i = 0; i < subqueries.size(); ++i) {
+      if (live_subqueries.count(subqueries[i].second->getNode())) {
+        subqueries[live_count++] = std::move(subqueries[i]);
+      }
     }
-    if (n_dead_subqueries) {
-      VLOG(1) << "Eliminating " << n_dead_subqueries
-              << (n_dead_subqueries == 1 ? " subquery." : " subqueries.");
-      subqueries.resize(subqueries.size() - n_dead_subqueries);
-      subqueries.shrink_to_fit();
-    }
+    subqueries.resize(live_count);
   }
 }
 

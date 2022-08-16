@@ -14,16 +14,22 @@
  * limitations under the License.
  */
 
-#include "RexSubQueryIdCollector.h"
+#include "SubQueryCollector.h"
 
-RexSubQueryIdCollector::Ids RexSubQueryIdCollector::getLiveRexSubQueryIds(
+std::unordered_set<const RelAlgNode*> SubQueryCollector::getLiveSubQueries(
     RelAlgNode const* rel_alg_node) {
-  RexSubQueryIdCollector rex_sub_query_id_collector;
-  rex_sub_query_id_collector.visit(rel_alg_node);
-  return std::move(rex_sub_query_id_collector.ids_);
+  SubQueryCollector collector;
+  collector.visit(rel_alg_node);
+  return std::move(collector.subqueries_);
 }
 
-void RexSubQueryIdCollector::visit(RexSubQuery const* rex_sub_query) {
-  ids_.insert(rex_sub_query->getId());
-  RelRexDagVisitor::visit(rex_sub_query);
+void* SubQueryCollector::visitScalarSubquery(
+    const hdk::ir::ScalarSubquery* subquery) const {
+  subqueries_.insert(subquery->getNode());
+  return ExprDagVisitor::visitScalarSubquery(subquery);
+}
+
+void* SubQueryCollector::visitInSubquery(const hdk::ir::InSubquery* in_subquery) const {
+  subqueries_.insert(in_subquery->getNode());
+  return ExprDagVisitor::visitInSubquery(in_subquery);
 }

@@ -15,26 +15,23 @@
  */
 
 /*
- * @description RexSubQueryIdCollector is a visitor class that collects all
- * RexSubQuery::getId() values for all RexSubQuery nodes. This uses sorted arrays of
- * (hash_code, handler) pairs for tree navigation.
+ * @description SubQueryCollector is a visitor class that collects all
+ * ScalarSubquery and InSubquery target nodes.
  */
 
 #pragma once
 
-#include "RelRexDagVisitor.h"
+#include "QueryEngine/ExprDagVisitor.h"
 
 #include <unordered_set>
 
-class RexSubQueryIdCollector final : public RelRexDagVisitor {
+class SubQueryCollector final : public ExprDagVisitor {
  public:
-  using RelRexDagVisitor::visit;
-
-  using Ids = std::unordered_set<unsigned>;
-  static Ids getLiveRexSubQueryIds(RelAlgNode const*);
+  static std::unordered_set<const RelAlgNode*> getLiveSubQueries(RelAlgNode const*);
 
  private:
-  void visit(RexSubQuery const*) override;
+  void* visitScalarSubquery(const hdk::ir::ScalarSubquery* subquery) const override;
+  void* visitInSubquery(const hdk::ir::InSubquery* in_subquery) const override;
 
-  Ids ids_;
+  mutable std::unordered_set<const RelAlgNode*> subqueries_;
 };
