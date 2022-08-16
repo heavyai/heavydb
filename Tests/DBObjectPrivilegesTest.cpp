@@ -4681,6 +4681,148 @@ TEST_F(CreateDropDatabaseTest, LegacyOrphanedDB) {
                        {"orphan_db", "<DELETED>"}});
 }
 
+class DatabaseCaseSensitiveTest : public DBHandlerTestFixture {
+ protected:
+  static void SetUpTestSuite() {
+    switchToAdmin();
+    sql("CREATE USER test_user (password = 'test_pass');");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  }
+
+  static void TearDownTestSuite() {
+    switchToAdmin();
+    sql("DROP USER IF EXISTS test_user;");
+  }
+
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    switchToAdmin();
+    sql("DROP DATABASE IF EXISTS test_db;");
+    sql("CREATE DATABASE test_db;");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db");
+    sql("CREATE TABLE test_db_table (test_db_table_col INTEGER);");
+    sql("GRANT ACCESS ON DATABASE test_db TO test_user;");
+    switchToAdmin();
+  }
+
+  void TearDown() override {
+    switchToAdmin();
+    sql("DROP DATABASE IF EXISTS test_db;");
+    sql("DROP DATABASE IF EXISTS test_db_2;");
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void assertDatabaseExists(const std::string& db_name) {
+    auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
+    Catalog_Namespace::DBMetadata db_metadata;
+    ASSERT_TRUE(sys_catalog.getMetadataForDB(db_name, db_metadata));
+  }
+
+  void assertDatabaseDoesNotExist(const std::string& db_name) {
+    auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
+    Catalog_Namespace::DBMetadata db_metadata;
+    ASSERT_FALSE(sys_catalog.getMetadataForDB(db_name, db_metadata));
+  }
+
+  void assertDatabaseOwner(const std::string& db_name, const std::string& owner) {
+    auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
+    Catalog_Namespace::UserMetadata user_metadata;
+    ASSERT_TRUE(sys_catalog.getMetadataForUser(owner, user_metadata));
+
+    Catalog_Namespace::DBMetadata db_metadata;
+    ASSERT_TRUE(sys_catalog.getMetadataForDB(db_name, db_metadata));
+
+    ASSERT_EQ(user_metadata.userId, db_metadata.dbOwner);
+  }
+};
+
+TEST_F(DatabaseCaseSensitiveTest, Create) {
+  queryAndAssertException("CREATE DATABASE TEST_db;", "Database TEST_db already exists.");
+}
+
+TEST_F(DatabaseCaseSensitiveTest, Drop) {
+  sql("DROP DATABASE test_DB;");
+  assertDatabaseDoesNotExist("test_db");
+}
+
+TEST_F(DatabaseCaseSensitiveTest, Rename) {
+  sql("ALTER DATABASE TEST_DB RENAME TO test_DB_2;");
+  assertDatabaseDoesNotExist("TEST_DB");
+  assertDatabaseExists("test_db_2");
+}
+
+TEST_F(DatabaseCaseSensitiveTest, ChangeOwner) {
+  sql("ALTER DATABASE TEST_db OWNER TO test_user;");
+  assertDatabaseOwner("test_db", "test_user");
+}
+
+TEST_F(DatabaseCaseSensitiveTest, Grant) {
+  login("test_user", "test_pass", "TEST_dB");
+  queryAndAssertException(
+      "CREATE TABLE test_table (i INTEGER);",
+      "Table test_table will not be created. User has no create privileges.");
+
+  switchToAdmin();
+  sql("GRANT CREATE TABLE ON DATABASE test_DB TO test_user;");
+
+  login("test_user", "test_pass", "TEST_dB");
+  sql("CREATE TABLE test_table (i INTEGER);");
+}
+
+TEST_F(DatabaseCaseSensitiveTest, Revoke) {
+  sql("GRANT CREATE TABLE ON DATABASE test_db TO test_user;");
+
+  login("test_user", "test_pass", "test_DB");
+  sql("CREATE TABLE test_table (i INTEGER);");
+
+  switchToAdmin();
+  sql("REVOKE CREATE TABLE ON DATABASE TEST_db FROM test_user;");
+
+  login("test_user", "test_pass", "test_DB");
+  queryAndAssertException(
+      "CREATE TABLE test_table_2 (i INTEGER);",
+      "Table test_table_2 will not be created. User has no create privileges.");
+}
+
+TEST_F(DatabaseCaseSensitiveTest, SwitchDatabase) {
+  login("test_user", "test_pass");
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  TSessionInfo session_info;
+  db_handler->get_session_info(session_info, session_id);
+  ASSERT_EQ(session_info.database, shared::kDefaultDbName);
+
+  db_handler->switch_database(session_id, "TEST_db");
+
+  db_handler->get_session_info(session_info, session_id);
+  ASSERT_EQ(session_info.database, "test_db");
+}
+
+TEST_F(DatabaseCaseSensitiveTest, GetTablesForDatabase) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  std::vector<std::string> table_names;
+  db_handler->get_tables_for_database(table_names, session_id, "TEST_db");
+  ASSERT_EQ(table_names, std::vector<std::string>{"test_db_table"});
+}
+
+TEST_F(DatabaseCaseSensitiveTest, GetTableDetailsForDatabase) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  TTableDetails table_details;
+  db_handler->get_table_details_for_database(
+      table_details, session_id, "test_db_table", "TEST_db");
+  ASSERT_EQ(table_details.row_desc.size(), size_t(1));
+  ASSERT_EQ(table_details.row_desc[0].col_name, "test_db_table_col");
+}
+
+TEST_F(DatabaseCaseSensitiveTest, GetInternalTableDetailsForDatabase) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  TTableDetails table_details;
+  db_handler->get_internal_table_details_for_database(
+      table_details, session_id, "test_db_table", "TEST_DB");
+  ASSERT_EQ(table_details.row_desc.size(), size_t(2));
+  ASSERT_EQ(table_details.row_desc[0].col_name, "test_db_table_col");
+  ASSERT_EQ(table_details.row_desc[1].col_name, "rowid");
+}
+
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
 

@@ -1463,7 +1463,7 @@ void Catalog::buildColumnsMapUnlocked() {
               [](const size_t a, const size_t b) -> bool { return a < b; });
   }
 }
- 
+
 void Catalog::updateViewUnlocked(TableDescriptor& td) {
   std::string viewQuery("SELECT sql FROM mapd_views where tableid = " +
                         std::to_string(td.tableId));

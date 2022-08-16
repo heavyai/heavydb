@@ -330,6 +330,7 @@ void SysCatalog::checkAndExecuteMigrations() {
   updateBlankPasswordsToRandom();  // must come after updatePasswordsToHashes()
   updateSupportUserDeactivation();
   addAdminUserRole();
+  checkDuplicateCaseInsensitiveDbNames();
 }
 
 void SysCatalog::updateUserSchema() {
@@ -860,6 +861,29 @@ void SysCatalog::migratePrivileged_old() {
   sqliteConnector_->query("END TRANSACTION");
 }
 
+void SysCatalog::checkDuplicateCaseInsensitiveDbNames() const {
+  static const string duplicate_check_migration{
+      "check_duplicate_case_insensitive_db_names"};
+  if (hasExecutedMigration(duplicate_check_migration)) {
+    return;
+  }
+  sys_sqlite_lock sqlite_lock(this);
+  sqliteConnector_->query(
+      "SELECT UPPER(name) AS db_name, COUNT(*) AS name_count "
+      "FROM mapd_databases GROUP BY db_name HAVING name_count > 1");
+  auto num_rows = sqliteConnector_->getNumRows();
+  if (num_rows > 0) {
+    std::stringstream error_message;
+    error_message << "Duplicate case insensitive database names encountered:\n";
+    for (size_t row = 0; row < num_rows; row++) {
+      error_message << sqliteConnector_->getData<string>(row, 0) << " ("
+                    << sqliteConnector_->getData<int>(row, 1) << ")\n";
+    }
+    throw std::runtime_error{error_message.str()};
+  }
+  recordExecutedMigration(duplicate_check_migration);
+}
+
 std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
                                            std::string& username,
                                            const std::string& password,
@@ -1348,14 +1372,14 @@ void SysCatalog::changeDatabaseOwner(std::string const& dbname,
 
   bool original_owner_exists = getMetadataForUserById(db.dbOwner, original_owner);
   auto cat = getCatalog(db, true);
-  DBObject db_object(dbname, DBObjectType::DatabaseDBObjectType);
+  DBObject db_object(db.dbName, DBObjectType::DatabaseDBObjectType);
   runUpdateQueriesAndChangeOwnership(
       user,
       original_owner,
       db_object,
       *cat,
       UpdateQueries{{"UPDATE mapd_databases SET owner=?1 WHERE name=?2;",
-                     {std::to_string(user.userId), dbname}}},
+                     {std::to_string(user.userId), db.dbName}}},
       original_owner_exists);
 }
 
@@ -1382,7 +1406,7 @@ void SysCatalog::renameDatabase(std::string const& old_name,
 
   std::string old_catalog_path, new_catalog_path;
   std::tie(old_catalog_path, new_catalog_path) =
-      duplicateAndRenameCatalog(old_name, new_name);
+      duplicateAndRenameCatalog(old_db.dbName, new_name);
 
   auto transaction_streamer = yieldTransactionStreamer();
   auto failure_handler = [this, new_catalog_path] {
@@ -1392,11 +1416,12 @@ void SysCatalog::renameDatabase(std::string const& old_name,
     removeCatalogByFullPath(old_catalog_path);
   };
 
-  auto q1 = {"UPDATE mapd_databases SET name=?1 WHERE name=?2;"s, new_name, old_name};
+  auto q1 = {
+      "UPDATE mapd_databases SET name=?1 WHERE name=?2;"s, new_name, old_db.dbName};
   auto q2 = {
       "UPDATE mapd_object_permissions SET objectName=?1 WHERE objectNAME=?2 and (objectPermissionsType=?3 or objectId = -1) and dbId=?4;"s,
       new_name,
-      old_name,
+      old_db.dbName,
       std::to_string(static_cast<int>(DBObjectType::DatabaseDBObjectType)),
       std::to_string(old_db.dbId)};
 
@@ -1762,7 +1787,8 @@ bool SysCatalog::getMetadataForDB(const string& name, DBMetadata& db) {
   sys_read_lock read_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
-      "SELECT dbid, name, owner FROM mapd_databases WHERE name = ?", name);
+      "SELECT dbid, name, owner FROM mapd_databases WHERE UPPER(name) = ?",
+      to_upper(name));
   int numRows = sqliteConnector_->getNumRows();
   if (numRows == 0) {
     return false;
@@ -2951,7 +2977,7 @@ SysCatalog::getGranteesOfSharedDashboards(const std::vector<std::string>& dashbo
 
 std::shared_ptr<Catalog> SysCatalog::getCatalog(const std::string& dbName) {
   dbid_to_cat_map::const_accessor cata;
-  if (cat_map_.find(cata, dbName)) {
+  if (cat_map_.find(cata, to_upper(dbName))) {
     return cata->second;
   } else {
     Catalog_Namespace::DBMetadata db_meta;
@@ -2975,9 +3001,10 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(const int32_t db_id) {
 }
 
 std::shared_ptr<Catalog> SysCatalog::getCatalog(const DBMetadata& curDB, bool is_new_db) {
+  const auto key = to_upper(curDB.dbName);
   {
     dbid_to_cat_map::const_accessor cata;
-    if (cat_map_.find(cata, curDB.dbName)) {
+    if (cat_map_.find(cata, key)) {
       return cata->second;
     }
   }
@@ -2989,18 +3016,18 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(const DBMetadata& curDB, bool is
 
   dbid_to_cat_map::accessor cata;
 
-  if (cat_map_.find(cata, curDB.dbName)) {
+  if (cat_map_.find(cata, key)) {
     return cata->second;
   }
 
-  cat_map_.insert(cata, curDB.dbName);
+  cat_map_.insert(cata, key);
   cata->second = cat;
 
   return cat;
 }
 
 void SysCatalog::removeCatalog(const std::string& dbName) {
-  cat_map_.erase(dbName);
+  cat_map_.erase(to_upper(dbName));
 }
 
 void SysCatalog::reassignObjectOwners(

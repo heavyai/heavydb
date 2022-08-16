@@ -197,6 +197,7 @@ void DBObject::loadKey() {
     }
     objectKey_.dbId = db.dbId;
     ownerId_ = db.dbOwner;
+    objectName_ = db.dbName;
   } else {
     objectKey_.dbId = 0;  // very special case only used for initialisation of a role
   }
