@@ -26,7 +26,8 @@ class RegexFileBufferParser : public TextFileBufferParser {
 
   ParseBufferResult parseBuffer(ParseBufferRequest& request,
                                 bool convert_data_blocks,
-                                bool columns_are_pre_filtered = false) const override;
+                                bool columns_are_pre_filtered = false,
+                                bool skip_dict_encoding = false) const override;
 
   import_export::CopyParams validateAndGetCopyParams(
       const ForeignTable* foreign_table) const override;
