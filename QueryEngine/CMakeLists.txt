@@ -124,7 +124,6 @@ set(query_engine_source_files
     StringFunctions.cpp
     StringOpsIR.cpp
     RegexpFunctions.cpp
-    Visitors/RelRexDagVisitor.cpp
     Visitors/SubQueryCollector.cpp
     WindowContext.cpp
     WindowExpressionRewrite.cpp
