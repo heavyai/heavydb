@@ -21,6 +21,7 @@
 #include "QueryEngine/GeoOperators/Distance.h"
 #include "QueryEngine/GeoOperators/NPoints.h"
 #include "QueryEngine/GeoOperators/NRings.h"
+#include "QueryEngine/GeoOperators/NumGeometries.h"
 #include "QueryEngine/GeoOperators/PointAccessors.h"
 #include "QueryEngine/GeoOperators/PointConstructor.h"
 #include "QueryEngine/GeoOperators/PointN.h"

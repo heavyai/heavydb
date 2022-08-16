@@ -1779,6 +1779,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "ST_XMax"sv,
                    "ST_YMax"sv,
                    "ST_NRings"sv,
+                   "ST_NumGeometries"sv,
                    "ST_NPoints"sv,
                    "ST_Length"sv,
                    "ST_Perimeter"sv,

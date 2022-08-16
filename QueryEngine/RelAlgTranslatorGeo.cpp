@@ -848,6 +848,16 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
   if (rex_literal) {
     if (use_geo_expressions) {
       const auto translated_literal = translateLiteral(rex_literal);
+      auto const translated_literal_type = translated_literal->get_type_info().get_type();
+      if (!IS_STRING(translated_literal_type) && !IS_GEO(translated_literal_type)) {
+        // This stops crashes in the createGeoType call below due to datum.stringval
+        // being uninitialized when the datum isn't even a string, let alone a geo string
+        // There needs to be specific handling for ST_NumGeometries in the code above
+        // but I don't know what category it would fall over (it's not GEOS, and it
+        // returns an INT, not a BOOL or other geo)
+        // simon.eves 8/15/22
+        throw QueryNotSupported("Geospatial function requires geo literal.");
+      }
       const auto constant_expr =
           dynamic_cast<const Analyzer::Constant*>(translated_literal.get());
       CHECK(constant_expr);
@@ -1142,6 +1152,24 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     if (!IS_GEO_POLY(arg_ti.get_type())) {
       throw QueryNotSupported(rex_function->getName() +
                               " expects a POLYGON or MULTIPOLYGON");
+    }
+    CHECK_EQ(geoargs.size(), size_t(1));
+    arg_ti = rex_function->getType();  // TODO: remove
+    return makeExpr<Analyzer::GeoOperator>(
+        rex_function->getType(),
+        rex_function->getName(),
+        std::vector<std::shared_ptr<Analyzer::Expr>>{geoargs.front()});
+  } else if (rex_function->getName() == "ST_NumGeometries"sv) {
+    SQLTypeInfo arg_ti;
+    auto geoargs = translateGeoFunctionArg(rex_function->getOperand(0),
+                                           arg_ti,
+                                           /*with_bounds=*/false,
+                                           /*with_render_group=*/false,
+                                           /*expand_geo_col=*/true,
+                                           /*is_projection=*/false,
+                                           /*use_geo_expressions=*/true);
+    if (!IS_GEO(arg_ti.get_type())) {
+      throw QueryNotSupported(rex_function->getName() + " expects a geo parameter");
     }
     CHECK_EQ(geoargs.size(), size_t(1));
     arg_ti = rex_function->getType();  // TODO: remove
