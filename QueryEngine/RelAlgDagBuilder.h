@@ -1541,12 +1541,11 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
                        RelAlgInputs inputs,
                        std::vector<std::shared_ptr<const RelJoin>>& original_joins);
 
-  const hdk::ir::Expr* getInnerConditionExpr() const;
-  hdk::ir::ExprPtr getInnerConditionExprShared() const;
+  const hdk::ir::Expr* getInnerCondition() const;
+  hdk::ir::ExprPtr getInnerConditionShared() const;
 
-  const RexScalar* getOuterCondition(const size_t nesting_level) const;
-  const hdk::ir::Expr* getOuterConditionExpr(const size_t nesting_level) const;
-  hdk::ir::ExprPtr getOuterConditionExprShared(const size_t nesting_level) const;
+  const hdk::ir::Expr* getOuterCondition(const size_t nesting_level) const;
+  hdk::ir::ExprPtr getOuterConditionShared(const size_t nesting_level) const;
 
   const JoinType getJoinType(const size_t nesting_level) const;
 
@@ -1565,10 +1564,8 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
   std::vector<std::shared_ptr<const RelJoin>> getOriginalJoins() const;
 
  private:
-  std::unique_ptr<const RexScalar> condition_;
-  hdk::ir::ExprPtr condition_expr_;
-  std::vector<std::unique_ptr<const RexScalar>> outer_conditions_per_level_;
-  std::vector<hdk::ir::ExprPtr> outer_condition_exprs_per_level_;
+  hdk::ir::ExprPtr condition_;
+  std::vector<hdk::ir::ExprPtr> outer_conditions_per_level_;
   const std::shared_ptr<RelFilter> original_filter_;
   const std::vector<std::shared_ptr<const RelJoin>> original_joins_;
 };

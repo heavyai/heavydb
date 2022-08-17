@@ -70,14 +70,14 @@ class PhysicalInputsNodeVisitor : public RelAlgVisitor<ResultType> {
   ResultType visitLeftDeepInnerJoin(
       const RelLeftDeepInnerJoin* left_deep_inner_join) const override {
     ResultType result;
-    auto condition = left_deep_inner_join->getInnerConditionExpr();
+    auto condition = left_deep_inner_join->getInnerCondition();
     ExprVisitor visitor;
     if (condition) {
       result = visitor.visit(condition);
     }
     for (size_t nesting_level = 1; nesting_level < left_deep_inner_join->inputCount();
          ++nesting_level) {
-      auto outer_condition = left_deep_inner_join->getOuterConditionExpr(nesting_level);
+      auto outer_condition = left_deep_inner_join->getOuterCondition(nesting_level);
       if (outer_condition) {
         auto outer_result = visitor.visit(outer_condition);
         result.insert(outer_result.begin(), outer_result.end());

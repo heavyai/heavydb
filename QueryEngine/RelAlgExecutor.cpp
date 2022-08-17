@@ -1043,10 +1043,10 @@ ColumnRefSet get_join_source_used_inputs(const RelAlgNode* ra_node) {
   if (auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(data_sink_node)) {
     CHECK_GE(left_deep_join->inputCount(), 2u);
     UsedInputsVisitor visitor;
-    auto res = visitor.visit(left_deep_join->getInnerConditionExpr());
+    auto res = visitor.visit(left_deep_join->getInnerCondition());
     for (size_t nesting_level = 1; nesting_level <= left_deep_join->inputCount() - 1;
          ++nesting_level) {
-      const auto outer_condition = left_deep_join->getOuterConditionExpr(nesting_level);
+      const auto outer_condition = left_deep_join->getOuterCondition(nesting_level);
       if (outer_condition) {
         const auto used_inputs = visitor.visit(outer_condition);
         res.insert(used_inputs.begin(), used_inputs.end());
@@ -3096,12 +3096,12 @@ JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
     const bool just_explain) {
   const auto join_types = left_deep_join_types(join);
   const auto join_condition_quals = makeJoinQuals(
-      join->getInnerConditionExpr(), join_types, input_to_nest_level, just_explain);
+      join->getInnerCondition(), join_types, input_to_nest_level, just_explain);
   MaxRangeTableIndexVisitor rte_idx_visitor;
   JoinQualsPerNestingLevel result(input_descs.size() - 1);
   std::unordered_set<hdk::ir::ExprPtr> visited_quals;
   for (size_t rte_idx = 1; rte_idx < input_descs.size(); ++rte_idx) {
-    const auto outer_condition = join->getOuterConditionExpr(rte_idx);
+    const auto outer_condition = join->getOuterCondition(rte_idx);
     if (outer_condition) {
       result[rte_idx - 1].quals =
           makeJoinQuals(outer_condition, join_types, input_to_nest_level, just_explain);

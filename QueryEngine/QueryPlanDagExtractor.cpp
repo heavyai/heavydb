@@ -227,7 +227,7 @@ void QueryPlanDagExtractor::visit(const RelAlgNode* parent_node,
       clearInternaStatus();
       return;
     }
-    const auto inner_cond = left_deep_joins->getInnerConditionExprShared();
+    const auto inner_cond = left_deep_joins->getInnerConditionShared();
     // we analyze left-deep join tree as per-join qual level, so
     // when visiting RelLeftDeepInnerJoin we decompose it into individual join node
     // (RelTranslatedJoin).
@@ -417,7 +417,7 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
 
     auto outer_join_cond =
         current_level_join_conditions.type == JoinType::LEFT
-            ? rel_left_deep_join->getOuterConditionExprShared(level_idx + 1)
+            ? rel_left_deep_join->getOuterConditionShared(level_idx + 1)
             : nullptr;
 
     // collect join col, filter ops, and detailed info of join operation, i.e., op_type,

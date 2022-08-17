@@ -70,9 +70,9 @@ class ExprDagVisitor : public ScalarExprVisitor<void*> {
   virtual void visitJoin(const RelJoin* join) { visit(join->getConditionExpr()); }
 
   virtual void visitLeftDeepInnerJoin(const RelLeftDeepInnerJoin* join) {
-    visit(join->getInnerConditionExpr());
+    visit(join->getInnerCondition());
     for (size_t level = 1; level < join->inputCount(); ++level) {
-      if (auto* outer_condition = join->getOuterConditionExpr(level)) {
+      if (auto* outer_condition = join->getOuterCondition(level)) {
         visit(outer_condition);
       }
     }

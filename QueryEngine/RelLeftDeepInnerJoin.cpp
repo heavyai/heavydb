@@ -151,8 +151,7 @@ RelLeftDeepInnerJoin::RelLeftDeepInnerJoin(
     std::vector<std::shared_ptr<const RelAlgNode>> inputs,
     std::vector<std::shared_ptr<const RelJoin>>& original_joins)
     : RelAlgNode(inputs)
-    , condition_(filter ? filter->getAndReleaseCondition() : nullptr)
-    , condition_expr_(filter ? filter->getConditionExprShared() : nullptr)
+    , condition_(filter ? filter->getConditionExprShared() : nullptr)
     , original_filter_(filter)
     , original_joins_(original_joins) {
   std::vector<std::unique_ptr<const RexScalar>> operands;
@@ -160,20 +159,14 @@ RelLeftDeepInnerJoin::RelLeftDeepInnerJoin(
   // Accumulate join conditions from the (explicit) joins themselves and
   // from the filter node at the root of the left-deep tree pattern.
   outer_conditions_per_level_.resize(original_joins.size());
-  outer_condition_exprs_per_level_.resize(original_joins.size());
   for (size_t nesting_level = 0; nesting_level < original_joins.size(); ++nesting_level) {
     const auto& original_join = original_joins[nesting_level];
-    const auto orig_condition_true =
-        dynamic_cast<const RexLiteral*>(original_join->getCondition());
     const auto condition_true =
         dynamic_cast<const hdk::ir::Constant*>(original_join->getConditionExpr());
 
-    bool orig_cond_is_not_const_true =
-        !orig_condition_true || !orig_condition_true->getVal<bool>();
     bool cond_is_not_const_true = !condition_true ||
                                   !condition_true->get_type_info().is_boolean() ||
                                   !condition_true->get_constval().boolval;
-    CHECK_EQ(orig_cond_is_not_const_true, cond_is_not_const_true);
     if (cond_is_not_const_true) {
       is_notnull =
           is_notnull && original_join->getConditionExpr()->get_type_info().get_notnull();
@@ -185,14 +178,14 @@ RelLeftDeepInnerJoin::RelLeftDeepInnerJoin(
             CHECK(original_join->getConditionExpr());
             operands.emplace_back(original_join->getAndReleaseCondition());
 
-            if (!condition_expr_) {
-              condition_expr_ = original_join->getConditionExprShared();
+            if (!condition_) {
+              condition_ = original_join->getConditionExprShared();
             } else {
-              condition_expr_ = hdk::ir::makeExpr<hdk::ir::BinOper>(
+              condition_ = hdk::ir::makeExpr<hdk::ir::BinOper>(
                   kBOOLEAN,
                   kAND,
                   kONE,
-                  condition_expr_,
+                  condition_,
                   original_join->getConditionExprShared());
             }
           }
@@ -201,9 +194,7 @@ RelLeftDeepInnerJoin::RelLeftDeepInnerJoin(
         case JoinType::LEFT: {
           if (original_join->getCondition()) {
             CHECK(original_join->getConditionExpr());
-            outer_conditions_per_level_[nesting_level].reset(
-                original_join->getAndReleaseCondition());
-            outer_condition_exprs_per_level_[nesting_level] =
+            outer_conditions_per_level_[nesting_level] =
                 rebind_inputs_from_left_deep_join(original_join->getConditionExpr(),
                                                   this);
           }
@@ -214,41 +205,22 @@ RelLeftDeepInnerJoin::RelLeftDeepInnerJoin(
       }
     }
   }
-  if (!operands.empty()) {
-    if (condition_) {
-      CHECK(dynamic_cast<const RexOperator*>(condition_.get()));
-      is_notnull =
-          is_notnull &&
-          static_cast<const RexOperator*>(condition_.get())->getType().get_notnull();
-      operands.emplace_back(std::move(condition_));
-    }
-    if (operands.size() > 1) {
-      condition_.reset(
-          new RexOperator(kAND, std::move(operands), SQLTypeInfo(kBOOLEAN, is_notnull)));
-    } else {
-      condition_ = std::move(operands.front());
-    }
-  }
-  CHECK_EQ(!!condition_, !!condition_expr_);
-  if (!condition_) {
-    condition_.reset(new RexLiteral(true, kBOOLEAN, kBOOLEAN, 0, 0, 0, 0));
-  }
 
-  if (condition_expr_) {
-    condition_expr_ = rebind_inputs_from_left_deep_join(condition_expr_.get(), this);
+  if (condition_) {
+    condition_ = rebind_inputs_from_left_deep_join(condition_.get(), this);
   } else {
-    condition_expr_ = hdk::ir::Constant::make(kBOOLEAN, true);
+    condition_ = hdk::ir::Constant::make(kBOOLEAN, true);
   }
 }
 
-const hdk::ir::Expr* RelLeftDeepInnerJoin::getInnerConditionExpr() const {
-  return condition_expr_.get();
+const hdk::ir::Expr* RelLeftDeepInnerJoin::getInnerCondition() const {
+  return condition_.get();
 }
-hdk::ir::ExprPtr RelLeftDeepInnerJoin::getInnerConditionExprShared() const {
-  return condition_expr_;
+hdk::ir::ExprPtr RelLeftDeepInnerJoin::getInnerConditionShared() const {
+  return condition_;
 }
 
-const RexScalar* RelLeftDeepInnerJoin::getOuterCondition(
+const hdk::ir::Expr* RelLeftDeepInnerJoin::getOuterCondition(
     const size_t nesting_level) const {
   CHECK_GE(nesting_level, size_t(1));
   CHECK_LE(nesting_level, outer_conditions_per_level_.size());
@@ -257,25 +229,13 @@ const RexScalar* RelLeftDeepInnerJoin::getOuterCondition(
   return outer_conditions_per_level_[outer_conditions_per_level_.size() - nesting_level]
       .get();
 }
-
-const hdk::ir::Expr* RelLeftDeepInnerJoin::getOuterConditionExpr(
+hdk::ir::ExprPtr RelLeftDeepInnerJoin::getOuterConditionShared(
     const size_t nesting_level) const {
   CHECK_GE(nesting_level, size_t(1));
   CHECK_LE(nesting_level, outer_conditions_per_level_.size());
   // Outer join conditions are collected depth-first while the returned condition
   // must be consistent with the order of the loops (which is reverse depth-first).
-  return outer_condition_exprs_per_level_[outer_conditions_per_level_.size() -
-                                          nesting_level]
-      .get();
-}
-hdk::ir::ExprPtr RelLeftDeepInnerJoin::getOuterConditionExprShared(
-    const size_t nesting_level) const {
-  CHECK_GE(nesting_level, size_t(1));
-  CHECK_LE(nesting_level, outer_conditions_per_level_.size());
-  // Outer join conditions are collected depth-first while the returned condition
-  // must be consistent with the order of the loops (which is reverse depth-first).
-  return outer_condition_exprs_per_level_[outer_conditions_per_level_.size() -
-                                          nesting_level];
+  return outer_conditions_per_level_[outer_conditions_per_level_.size() - nesting_level];
 }
 
 const JoinType RelLeftDeepInnerJoin::getJoinType(const size_t nesting_level) const {
@@ -285,10 +245,8 @@ const JoinType RelLeftDeepInnerJoin::getJoinType(const size_t nesting_level) con
 
 std::string RelLeftDeepInnerJoin::toString() const {
   std::stringstream ss;
-  ss << ::typeName(this) << getIdString() << "(cond_rex=" << ::toString(condition_)
-     << ", cond=" << ::toString(condition_expr_)
-     << ", outer_rex=" << ::toString(outer_conditions_per_level_)
-     << ", outer=" << ::toString(outer_condition_exprs_per_level_)
+  ss << ::typeName(this) << getIdString() << "(cond=" << ::toString(condition_)
+     << ", outer=" << ::toString(outer_conditions_per_level_)
      << ", input=" << inputsToString(inputs_) << ")";
   return ss.str();
 }
@@ -296,8 +254,7 @@ std::string RelLeftDeepInnerJoin::toString() const {
 size_t RelLeftDeepInnerJoin::toHash() const {
   if (!hash_) {
     hash_ = typeid(RelLeftDeepInnerJoin).hash_code();
-    boost::hash_combine(*hash_,
-                        condition_ ? condition_->toHash() : boost::hash_value("n"));
+    boost::hash_combine(*hash_, condition_ ? condition_->hash() : boost::hash_value("n"));
     for (auto& node : inputs_) {
       boost::hash_combine(*hash_, node->toHash());
     }
@@ -390,13 +347,6 @@ void create_left_deep_join(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
       continue;
     }
     CHECK_GE(left_deep_join->inputCount(), size_t(2));
-    for (size_t nesting_level = 1; nesting_level <= left_deep_join->inputCount() - 1;
-         ++nesting_level) {
-      const auto outer_condition = left_deep_join->getOuterCondition(nesting_level);
-      if (outer_condition) {
-        rebind_inputs_from_left_deep_join(outer_condition, left_deep_join.get());
-      }
-    }
     for (auto& node : nodes) {
       if (node && node->hasInput(old_root.get())) {
         node->replaceInput(left_deep_join_candidate, left_deep_join);
