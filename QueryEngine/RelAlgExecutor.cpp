@@ -3063,33 +3063,17 @@ hdk::ir::ExprPtr reverse_logical_distribution(const hdk::ir::ExprPtr& expr) {
 }  // namespace
 
 std::list<hdk::ir::ExprPtr> RelAlgExecutor::makeJoinQuals(
-    const RexScalar* join_condition,
-    const hdk::ir::Expr* join_condition_expr,
+    const hdk::ir::Expr* join_condition,
     const std::vector<JoinType>& join_types,
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
     const bool just_explain) const {
   RelAlgTranslator translator(
       executor_, input_to_nest_level, join_types, now_, just_explain);
-  const auto rex_condition_cf = rex_to_conjunctive_form(join_condition);
-  std::list<hdk::ir::ExprPtr> orig_join_condition_quals;
-  for (const auto rex_condition_component : rex_condition_cf) {
-    const auto bw_equals = get_bitwise_equals_conjunction(rex_condition_component);
-    const auto join_condition =
-        reverse_logical_distribution(translator.translateScalarRex(
-            bw_equals ? bw_equals.get() : rex_condition_component));
-    auto join_condition_cf = qual_to_conjunctive_form(join_condition);
-    orig_join_condition_quals.insert(orig_join_condition_quals.end(),
-                                     join_condition_cf.quals.begin(),
-                                     join_condition_cf.quals.end());
-    orig_join_condition_quals.insert(orig_join_condition_quals.end(),
-                                     join_condition_cf.simple_quals.begin(),
-                                     join_condition_cf.simple_quals.end());
-  }
 
   std::list<hdk::ir::ExprPtr> join_condition_quals;
-  auto bw_equals = get_bitwise_equals_conjunction(join_condition_expr);
+  auto bw_equals = get_bitwise_equals_conjunction(join_condition);
   auto condition_expr =
-      translator.normalize(bw_equals ? bw_equals.get() : join_condition_expr);
+      translator.normalize(bw_equals ? bw_equals.get() : join_condition);
   condition_expr = reverse_logical_distribution(condition_expr);
   auto join_condition_cf = qual_to_conjunctive_form(condition_expr);
   join_condition_quals.insert(join_condition_quals.end(),
@@ -3098,32 +3082,6 @@ std::list<hdk::ir::ExprPtr> RelAlgExecutor::makeJoinQuals(
   join_condition_quals.insert(join_condition_quals.end(),
                               join_condition_cf.simple_quals.begin(),
                               join_condition_cf.simple_quals.end());
-
-  // The following block is for debug purposes only to make
-  // sure Expr translation gives the same result as Rex.
-  {
-    CHECK_EQ(join_condition_quals.size(), orig_join_condition_quals.size());
-    std::list<hdk::ir::ExprPtr> copy(join_condition_quals.begin(),
-                                     join_condition_quals.end());
-    auto it1 = orig_join_condition_quals.begin();
-    while (it1 != orig_join_condition_quals.end()) {
-      auto it = std::find_if(
-          copy.begin(), copy.end(), [&it1](auto& expr) { return **it1 == *expr; });
-      if (it == copy.end()) {
-        std::cerr << "Join condition mismatch:" << std::endl << "  Orig:" << std::endl;
-        for (auto& expr : orig_join_condition_quals) {
-          std::cerr << (expr == *it1 ? "  + " : "   - ") << expr->toString() << std::endl;
-        }
-        std::cerr << "  New:" << std::endl;
-        for (auto& expr : join_condition_quals) {
-          std::cerr << "   - " << expr->toString() << std::endl;
-        }
-        CHECK(false);
-      }
-      copy.erase(it);
-      ++it1;
-    }
-  }
 
   return combine_equi_join_conditions(join_condition_quals);
 }
@@ -3137,23 +3095,16 @@ JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
     const bool just_explain) {
   const auto join_types = left_deep_join_types(join);
-  const auto join_condition_quals = makeJoinQuals(join->getInnerCondition(),
-                                                  join->getInnerConditionExpr(),
-                                                  join_types,
-                                                  input_to_nest_level,
-                                                  just_explain);
+  const auto join_condition_quals = makeJoinQuals(
+      join->getInnerConditionExpr(), join_types, input_to_nest_level, just_explain);
   MaxRangeTableIndexVisitor rte_idx_visitor;
   JoinQualsPerNestingLevel result(input_descs.size() - 1);
   std::unordered_set<hdk::ir::ExprPtr> visited_quals;
   for (size_t rte_idx = 1; rte_idx < input_descs.size(); ++rte_idx) {
-    const auto outer_condition = join->getOuterCondition(rte_idx);
-    const auto outer_condition_expr = join->getOuterConditionExpr(rte_idx);
+    const auto outer_condition = join->getOuterConditionExpr(rte_idx);
     if (outer_condition) {
-      result[rte_idx - 1].quals = makeJoinQuals(outer_condition,
-                                                outer_condition_expr,
-                                                join_types,
-                                                input_to_nest_level,
-                                                just_explain);
+      result[rte_idx - 1].quals =
+          makeJoinQuals(outer_condition, join_types, input_to_nest_level, just_explain);
       CHECK_LE(rte_idx, join_types.size());
       CHECK(join_types[rte_idx - 1] == JoinType::LEFT);
       result[rte_idx - 1].type = JoinType::LEFT;

@@ -3078,7 +3078,9 @@ size_t RegexpExpr::hash() const {
     hash_ = Expr::hash();
     boost::hash_combine(*hash_, arg->hash());
     boost::hash_combine(*hash_, pattern_expr->hash());
-    boost::hash_combine(*hash_, escape_expr->hash());
+    if (escape_expr) {
+      boost::hash_combine(*hash_, escape_expr->hash());
+    }
   }
   return *hash_;
 }

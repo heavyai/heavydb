@@ -38,6 +38,26 @@ bool expr_is(const ExprPtr& expr) {
   return std::dynamic_pointer_cast<T>(expr) != nullptr;
 }
 
+template <typename T>
+bool isOneOf(const ExprPtr& expr) {
+  return std::dynamic_pointer_cast<T>(expr) != nullptr;
+}
+
+template <typename T1, typename T2, typename... Ts>
+bool isOneOf(const ExprPtr& expr) {
+  return std::dynamic_pointer_cast<T1>(expr) != nullptr || isOneOf<T2, Ts...>(expr);
+}
+
+template <typename T>
+bool isOneOf(const Expr* expr) {
+  return dynamic_cast<const T*>(expr);
+}
+
+template <typename T1, typename T2, typename... Ts>
+bool isOneOf(const Expr* expr) {
+  return dynamic_cast<const T1*>(expr) || isOneOf<T2, Ts...>(expr);
+}
+
 class ColumnVar;
 class TargetEntry;
 using DomainSet = std::list<const Expr*>;

@@ -333,7 +333,6 @@ class RelAlgExecutor {
   // Transform the provided `join_condition` to conjunctive form, find composite
   // key opportunities and finally translate it to an Analyzer expression.
   std::list<hdk::ir::ExprPtr> makeJoinQuals(
-      const RexScalar* join_condition,
       const hdk::ir::Expr* join_condition_expr,
       const std::vector<JoinType>& join_types,
       const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,

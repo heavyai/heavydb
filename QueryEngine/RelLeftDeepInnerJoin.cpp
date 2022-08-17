@@ -241,10 +241,6 @@ RelLeftDeepInnerJoin::RelLeftDeepInnerJoin(
   }
 }
 
-const RexScalar* RelLeftDeepInnerJoin::getInnerCondition() const {
-  return condition_.get();
-}
-
 const hdk::ir::Expr* RelLeftDeepInnerJoin::getInnerConditionExpr() const {
   return condition_expr_.get();
 }
@@ -401,8 +397,6 @@ void create_left_deep_join(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
         rebind_inputs_from_left_deep_join(outer_condition, left_deep_join.get());
       }
     }
-    rebind_inputs_from_left_deep_join(left_deep_join->getInnerCondition(),
-                                      left_deep_join.get());
     for (auto& node : nodes) {
       if (node && node->hasInput(old_root.get())) {
         node->replaceInput(left_deep_join_candidate, left_deep_join);

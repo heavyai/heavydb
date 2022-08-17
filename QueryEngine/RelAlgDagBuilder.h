@@ -1479,8 +1479,8 @@ class RelFilter : public RelAlgNode {
   }
 
   // for dummy filter node for data recycler
-  RelFilter(std::unique_ptr<const RexScalar>& filter) : filter_(std::move(filter)) {
-    CHECK(filter_);
+  RelFilter(hdk::ir::ExprPtr filter) : filter_expr_(std::move(filter)) {
+    CHECK(filter_expr_);
   }
 
   RelFilter(RelFilter const&);
@@ -1516,7 +1516,8 @@ class RelFilter : public RelAlgNode {
   size_t toHash() const override {
     if (!hash_) {
       hash_ = typeid(RelFilter).hash_code();
-      boost::hash_combine(*hash_, filter_ ? filter_->toHash() : boost::hash_value("n"));
+      boost::hash_combine(*hash_,
+                          filter_expr_ ? filter_expr_->hash() : boost::hash_value("n"));
       for (auto& node : inputs_) {
         boost::hash_combine(*hash_, node->toHash());
       }
@@ -1540,7 +1541,6 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
                        RelAlgInputs inputs,
                        std::vector<std::shared_ptr<const RelJoin>>& original_joins);
 
-  const RexScalar* getInnerCondition() const;
   const hdk::ir::Expr* getInnerConditionExpr() const;
   hdk::ir::ExprPtr getInnerConditionExprShared() const;
 

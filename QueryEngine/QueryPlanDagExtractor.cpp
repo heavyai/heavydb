@@ -227,17 +227,19 @@ void QueryPlanDagExtractor::visit(const RelAlgNode* parent_node,
       clearInternaStatus();
       return;
     }
-    const auto inner_cond = left_deep_joins->getInnerCondition();
+    const auto inner_cond = left_deep_joins->getInnerConditionExprShared();
     // we analyze left-deep join tree as per-join qual level, so
     // when visiting RelLeftDeepInnerJoin we decompose it into individual join node
     // (RelTranslatedJoin).
     // Thus, this RelLeftDeepInnerJoin object itself is useless when recycling data
     // but sometimes it has inner condition that has to consider so we add an extra
     // RelFilter node containing the condition to keep query semantic correctly
-    if (auto cond = dynamic_cast<const RexOperator*>(inner_cond)) {
-      RexDeepCopyVisitor copier;
-      auto copied_inner_cond = copier.visit(cond);
-      auto dummy_filter = std::make_shared<RelFilter>(copied_inner_cond);
+    if (hdk::ir::isOneOf<hdk::ir::UOper,
+                         hdk::ir::BinOper,
+                         hdk::ir::InValues,
+                         hdk::ir::InIntegerSet,
+                         hdk::ir::InSubquery>(inner_cond)) {
+      auto dummy_filter = std::make_shared<RelFilter>(inner_cond);
       register_and_visit(parent_node, dummy_filter.get());
       handleLeftDeepJoinTree(dummy_filter.get(), left_deep_joins);
     } else {
