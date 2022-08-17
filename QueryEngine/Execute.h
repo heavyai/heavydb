@@ -1269,6 +1269,14 @@ class Executor {
     }
   }
 
+  static size_t getBaselineThreshold(bool for_count_distinct,
+                                     ExecutorDeviceType device_type) {
+    return for_count_distinct ? (device_type == ExecutorDeviceType::GPU
+                                     ? (Executor::baseline_threshold / 4)
+                                     : Executor::baseline_threshold)
+                              : Executor::baseline_threshold;
+  }
+
  private:
   std::vector<int8_t> serializeLiterals(
       const std::unordered_map<int, CgenState::LiteralValues>& literals,
