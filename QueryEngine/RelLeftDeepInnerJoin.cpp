@@ -154,7 +154,6 @@ RelLeftDeepInnerJoin::RelLeftDeepInnerJoin(
     , condition_(filter ? filter->getConditionExprShared() : nullptr)
     , original_filter_(filter)
     , original_joins_(original_joins) {
-  std::vector<std::unique_ptr<const RexScalar>> operands;
   bool is_notnull = true;
   // Accumulate join conditions from the (explicit) joins themselves and
   // from the filter node at the root of the left-deep tree pattern.
@@ -162,40 +161,36 @@ RelLeftDeepInnerJoin::RelLeftDeepInnerJoin(
   for (size_t nesting_level = 0; nesting_level < original_joins.size(); ++nesting_level) {
     const auto& original_join = original_joins[nesting_level];
     const auto condition_true =
-        dynamic_cast<const hdk::ir::Constant*>(original_join->getConditionExpr());
+        dynamic_cast<const hdk::ir::Constant*>(original_join->getCondition());
 
     bool cond_is_not_const_true = !condition_true ||
                                   !condition_true->get_type_info().is_boolean() ||
                                   !condition_true->get_constval().boolval;
     if (cond_is_not_const_true) {
       is_notnull =
-          is_notnull && original_join->getConditionExpr()->get_type_info().get_notnull();
+          is_notnull && original_join->getCondition()->get_type_info().get_notnull();
       switch (original_join->getJoinType()) {
         case JoinType::INNER:
         case JoinType::SEMI:
         case JoinType::ANTI: {
           if (original_join->getCondition()) {
-            CHECK(original_join->getConditionExpr());
-            operands.emplace_back(original_join->getAndReleaseCondition());
-
             if (!condition_) {
-              condition_ = original_join->getConditionExprShared();
+              condition_ = original_join->getConditionShared();
             } else {
               condition_ = hdk::ir::makeExpr<hdk::ir::BinOper>(
                   kBOOLEAN,
                   kAND,
                   kONE,
                   condition_,
-                  original_join->getConditionExprShared());
+                  original_join->getConditionShared());
             }
           }
           break;
         }
         case JoinType::LEFT: {
           if (original_join->getCondition()) {
-            CHECK(original_join->getConditionExpr());
             outer_conditions_per_level_[nesting_level] =
-                rebind_inputs_from_left_deep_join(original_join->getConditionExpr(),
+                rebind_inputs_from_left_deep_join(original_join->getCondition(),
                                                   this);
           }
           break;

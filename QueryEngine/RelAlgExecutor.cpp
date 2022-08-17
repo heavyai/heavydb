@@ -1035,7 +1035,7 @@ ColumnRefSet get_join_source_used_inputs(const RelAlgNode* ra_node) {
   const auto data_sink_node = get_data_sink(ra_node);
   if (auto join = dynamic_cast<const RelJoin*>(data_sink_node)) {
     CHECK_EQ(join->inputCount(), 2u);
-    const auto condition = join->getConditionExpr();
+    const auto condition = join->getCondition();
     UsedInputsVisitor visitor;
     return visitor.visit(condition);
   }

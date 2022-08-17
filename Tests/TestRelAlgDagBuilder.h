@@ -92,7 +92,6 @@ class TestRelAlgDagBuilder : public RelAlgDag {
   RelAlgNodePtr addJoin(RelAlgNodePtr lhs,
                         RelAlgNodePtr rhs,
                         const JoinType join_type,
-                        std::unique_ptr<const RexScalar> condition_rex,
                         hdk::ir::ExprPtr condition);
 
   RelAlgNodePtr addEquiJoin(RelAlgNodePtr lhs,

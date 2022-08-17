@@ -67,7 +67,7 @@ class ExprDagVisitor : public ScalarExprVisitor<void*> {
 
   virtual void visitFilter(const RelFilter* filter) { visit(filter->getConditionExpr()); }
 
-  virtual void visitJoin(const RelJoin* join) { visit(join->getConditionExpr()); }
+  virtual void visitJoin(const RelJoin* join) { visit(join->getCondition()); }
 
   virtual void visitLeftDeepInnerJoin(const RelLeftDeepInnerJoin* join) {
     visit(join->getInnerCondition());

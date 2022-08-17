@@ -482,11 +482,8 @@ void RelJoin::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
   RelAlgNode::replaceInput(old_input, input);
   RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
   if (condition_) {
-    rebind_inputs.visit(condition_.get());
-  }
-  if (condition_expr_) {
     RebindInputsVisitor visitor(old_input.get(), input.get());
-    condition_expr_ = visitor.visit(condition_expr_.get());
+    condition_ = visitor.visit(condition_.get());
   }
 }
 
@@ -569,12 +566,10 @@ RelAggregate::RelAggregate(RelAggregate const& rhs)
 
 RelJoin::RelJoin(RelJoin const& rhs)
     : RelAlgNode(rhs)
-    , condition_expr_(rhs.condition_expr_)
+    , condition_(rhs.condition_)
     , join_type_(rhs.join_type_)
     , hint_applied_(false)
     , hints_(std::make_unique<Hints>()) {
-  RexDeepCopyVisitor copier;
-  condition_ = copier.visit(rhs.condition_.get());
   if (rhs.hint_applied_) {
     for (auto const& kv : *rhs.hints_) {
       addHint(kv.second);
@@ -1462,15 +1457,6 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept
           filter_node->getCondition(), get_node_output(filter_node->getInput(0)));
       filter_node->setCondition(disambiguated_condition,
                                 filter_node->getConditionExprShared());
-      continue;
-    }
-    const auto join_node = std::dynamic_pointer_cast<RelJoin>(ra_node);
-    if (join_node) {
-      CHECK_EQ(size_t(2), join_node->inputCount());
-      auto disambiguated_condition =
-          disambiguate_rex(join_node->getCondition(), get_node_output(join_node.get()));
-      join_node->setCondition(disambiguated_condition,
-                              join_node->getConditionExprShared());
       continue;
     }
     const auto project_node = std::dynamic_pointer_cast<RelProject>(ra_node);
@@ -2867,8 +2853,8 @@ class RelAlgDispatcher {
                                 schema_provider_,
                                 root_dag_builder,
                                 ra_outputs);
-    auto join_node = std::make_shared<RelJoin>(
-        inputs[0], inputs[1], std::move(filter_rex), std::move(condition), join_type);
+    auto join_node =
+        std::make_shared<RelJoin>(inputs[0], inputs[1], std::move(condition), join_type);
     if (join_ra.HasMember("hints")) {
       getRelAlgHints(join_ra, join_node);
     }

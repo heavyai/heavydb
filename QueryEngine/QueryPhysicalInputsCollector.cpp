@@ -59,7 +59,7 @@ class PhysicalInputsNodeVisitor : public RelAlgVisitor<ResultType> {
   }
 
   ResultType visitJoin(const RelJoin* join) const override {
-    auto condition = join->getConditionExpr();
+    auto condition = join->getCondition();
     if (!condition) {
       return ResultType{};
     }
