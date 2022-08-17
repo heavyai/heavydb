@@ -420,55 +420,22 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int8_t bit_is_set(const int64_t bitset,
              : 0;
 }
 
-#define DEF_COMPUTE_LOWER_BOUND(value_type)                                           \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t compute_##value_type##_lower_bound( \
-      const int64_t entry_cnt,                                                        \
-      const value_type target_value,                                                  \
-      const value_type* col_buf) {                                                    \
-    int64_t l = 0;                                                                    \
-    int64_t h = entry_cnt - 1;                                                        \
-    while (l < h) {                                                                   \
-      int64_t mid = l + (h - l) / 2;                                                  \
-      if (target_value < col_buf[mid]) {                                              \
-        h = mid;                                                                      \
-      } else {                                                                        \
-        l = mid + 1;                                                                  \
-      }                                                                               \
-    }                                                                                 \
-    return l;                                                                         \
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t
+compute_int64_t_lower_bound(const int64_t entry_cnt,
+                            const int64_t target_value,
+                            const int64_t* col_buf) {
+  int64_t l = 0;
+  int64_t h = entry_cnt - 1;
+  while (l < h) {
+    int64_t mid = l + (h - l) / 2;
+    if (target_value < col_buf[mid]) {
+      h = mid;
+    } else {
+      l = mid + 1;
+    }
   }
-DEF_COMPUTE_LOWER_BOUND(int8_t)
-DEF_COMPUTE_LOWER_BOUND(int16_t)
-DEF_COMPUTE_LOWER_BOUND(int32_t)
-DEF_COMPUTE_LOWER_BOUND(int64_t)
-DEF_COMPUTE_LOWER_BOUND(float)
-DEF_COMPUTE_LOWER_BOUND(double)
-#undef DEF_COMPUTE_LOWER_BOUND
-
-#define DEF_COMPUTE_UPPER_BOUND(value_type)                                           \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t compute_##value_type##_upper_bound( \
-      const int64_t entry_cnt,                                                        \
-      const value_type target_value,                                                  \
-      const value_type* col_buf) {                                                    \
-    int64_t l = 0;                                                                    \
-    int64_t h = entry_cnt - 1;                                                        \
-    while (l < h) {                                                                   \
-      int64_t mid = l + (h - l) / 2;                                                  \
-      if (target_value >= col_buf[mid]) {                                             \
-        h = mid;                                                                      \
-      } else {                                                                        \
-        l = mid + 1;                                                                  \
-      }                                                                               \
-    }                                                                                 \
-    return l;                                                                         \
-  }
-DEF_COMPUTE_UPPER_BOUND(int8_t)
-DEF_COMPUTE_UPPER_BOUND(int16_t)
-DEF_COMPUTE_UPPER_BOUND(int32_t)
-DEF_COMPUTE_UPPER_BOUND(int64_t)
-DEF_COMPUTE_UPPER_BOUND(float)
-DEF_COMPUTE_UPPER_BOUND(double)
-#undef DEF_COMPUTE_UPPER_BOUND
+  return l;
+}
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t
 get_valid_buf_start_pos(const int64_t null_start_pos, const int64_t null_end_pos) {
@@ -482,43 +449,61 @@ get_valid_buf_end_pos(const int64_t num_elems,
   return null_end_pos == num_elems ? null_start_pos : num_elems;
 }
 
-#define DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(value_type)                         \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t                                \
-      compute_##value_type##_current_row_idx_in_frame(                           \
-          const int64_t num_elems,                                               \
-          const int64_t cur_row_idx,                                             \
-          const value_type* col_buf,                                             \
-          const int32_t* partition_rowid_buf,                                    \
-          const int64_t* ordered_index_buf,                                      \
-          const value_type null_val,                                             \
-          const int64_t null_start_pos,                                          \
-          const int64_t null_end_pos) {                                          \
-    const auto target_value = col_buf[cur_row_idx];                              \
-    if (target_value == null_val) {                                              \
-      for (int64_t target_offset = null_start_pos; target_offset < null_end_pos; \
-           target_offset++) {                                                    \
-        const auto candidate_offset =                                            \
-            partition_rowid_buf[ordered_index_buf[target_offset]];               \
-        if (candidate_offset == cur_row_idx) {                                   \
-          return target_offset;                                                  \
-        }                                                                        \
-      }                                                                          \
-    }                                                                            \
-    int64_t l = get_valid_buf_start_pos(null_start_pos, null_end_pos);           \
-    int64_t h = get_valid_buf_end_pos(num_elems, null_start_pos, null_end_pos);  \
-    while (l <= h) {                                                             \
-      int64_t mid = l + (h - l) / 2;                                             \
-      auto row_idx_in_frame = partition_rowid_buf[ordered_index_buf[mid]];       \
-      auto cur_value = col_buf[row_idx_in_frame];                                \
-      if (cur_value == target_value) {                                           \
-        return mid;                                                              \
-      } else if (cur_value < target_value) {                                     \
-        l = mid + 1;                                                             \
-      } else {                                                                   \
-        h = mid - 1;                                                             \
-      }                                                                          \
-    }                                                                            \
-    return -1;                                                                   \
+template <typename T>
+inline int64_t compute_current_row_idx_in_frame(const int64_t num_elems,
+                                                const int64_t cur_row_idx,
+                                                const T* col_buf,
+                                                const int32_t* partition_rowid_buf,
+                                                const int64_t* ordered_index_buf,
+                                                const T null_val,
+                                                const int64_t null_start_pos,
+                                                const int64_t null_end_pos) {
+  const auto target_value = col_buf[cur_row_idx];
+  if (target_value == null_val) {
+    for (int64_t target_offset = null_start_pos; target_offset < null_end_pos;
+         target_offset++) {
+      const auto candidate_offset = partition_rowid_buf[ordered_index_buf[target_offset]];
+      if (candidate_offset == cur_row_idx) {
+        return target_offset;
+      }
+    }
+  }
+  int64_t l = get_valid_buf_start_pos(null_start_pos, null_end_pos);
+  int64_t h = get_valid_buf_end_pos(num_elems, null_start_pos, null_end_pos);
+  while (l <= h) {
+    int64_t mid = l + (h - l) / 2;
+    auto row_idx_in_frame = partition_rowid_buf[ordered_index_buf[mid]];
+    auto cur_value = col_buf[row_idx_in_frame];
+    if (cur_value == target_value) {
+      return mid;
+    } else if (cur_value < target_value) {
+      l = mid + 1;
+    } else {
+      h = mid - 1;
+    }
+  }
+  return -1;
+}
+
+#define DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(value_type)                     \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t                            \
+      compute_##value_type##_current_row_idx_in_frame(                       \
+          const int64_t num_elems,                                           \
+          const int64_t cur_row_idx,                                         \
+          const value_type* col_buf,                                         \
+          const int32_t* partition_rowid_buf,                                \
+          const int64_t* ordered_index_buf,                                  \
+          const value_type null_val,                                         \
+          const int64_t null_start_pos,                                      \
+          const int64_t null_end_pos) {                                      \
+    return compute_current_row_idx_in_frame<value_type>(num_elems,           \
+                                                        cur_row_idx,         \
+                                                        col_buf,             \
+                                                        partition_rowid_buf, \
+                                                        ordered_index_buf,   \
+                                                        null_val,            \
+                                                        null_start_pos,      \
+                                                        null_end_pos);       \
   }
 DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(int8_t)
 DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(int16_t)
@@ -528,158 +513,201 @@ DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(float)
 DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME(double)
 #undef DEF_COMPUTE_CURRENT_ROW_IDX_IN_FRAME
 
-#define DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX(value_type)                    \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t                                 \
-      compute_##value_type##_lower_bound_from_ordered_index(                      \
-          const int64_t num_elems,                                                \
-          const value_type target_value,                                          \
-          const value_type* col_buf,                                              \
-          const int32_t* partition_rowid_buf,                                     \
-          const int64_t* ordered_index_buf,                                       \
-          const value_type null_val,                                              \
-          const int64_t null_start_pos,                                           \
-          const int64_t null_end_pos) {                                           \
-    if (target_value == null_val) {                                               \
-      return null_start_pos;                                                      \
-    }                                                                             \
-    int64_t l = get_valid_buf_start_pos(null_start_pos, null_end_pos);            \
-    int64_t h = get_valid_buf_end_pos(num_elems, null_start_pos, null_end_pos);   \
-    while (l < h) {                                                               \
-      int64_t mid = l + (h - l) / 2;                                              \
-      if (target_value <= col_buf[partition_rowid_buf[ordered_index_buf[mid]]]) { \
-        h = mid;                                                                  \
-      } else {                                                                    \
-        l = mid + 1;                                                              \
-      }                                                                           \
-    }                                                                             \
-    return h;                                                                     \
+template <typename TARGET_VAL_TYPE, typename COL_TYPE, typename NULL_TYPE>
+inline int64_t compute_lower_bound_from_ordered_partition_index(
+    const int64_t num_elems,
+    const TARGET_VAL_TYPE target_val,
+    const COL_TYPE* col_buf,
+    const int32_t* partition_rowid_buf,
+    const int64_t* ordered_index_buf,
+    const NULL_TYPE null_val,
+    const int64_t null_start_offset,
+    const int64_t null_end_offset) {
+  if (target_val == null_val) {
+    return null_start_offset;
   }
-DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX(int8_t)
-DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX(int16_t)
-DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX(int32_t)
-DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX(int64_t)
-DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX(float)
-DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX(double)
-#undef DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX
-
-#define DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(value_type)   \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t                                 \
-      compute_##value_type##_lower_bound_from_ordered_index_for_timeinterval(     \
-          const int64_t num_elems,                                                \
-          const int64_t target_value,                                             \
-          const value_type* col_buf,                                              \
-          const int32_t* partition_rowid_buf,                                     \
-          const int64_t* ordered_index_buf,                                       \
-          const int64_t null_val,                                                 \
-          const int64_t null_start_pos,                                           \
-          const int64_t null_end_pos) {                                           \
-    if (target_value == null_val) {                                               \
-      return null_start_pos;                                                      \
-    }                                                                             \
-    int64_t l = get_valid_buf_start_pos(null_start_pos, null_end_pos);            \
-    int64_t h = get_valid_buf_end_pos(num_elems, null_start_pos, null_end_pos);   \
-    while (l < h) {                                                               \
-      int64_t mid = l + (h - l) / 2;                                              \
-      if (target_value <= col_buf[partition_rowid_buf[ordered_index_buf[mid]]]) { \
-        h = mid;                                                                  \
-      } else {                                                                    \
-        l = mid + 1;                                                              \
-      }                                                                           \
-    }                                                                             \
-    return h;                                                                     \
+  int64_t l = get_valid_buf_start_pos(null_start_offset, null_end_offset);
+  int64_t h = get_valid_buf_end_pos(num_elems, null_start_offset, null_end_offset);
+  while (l < h) {
+    int64_t mid = l + (h - l) / 2;
+    if (target_val <= col_buf[partition_rowid_buf[ordered_index_buf[mid]]]) {
+      h = mid;
+    } else {
+      l = mid + 1;
+    }
   }
-DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(int16_t)
-DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(int32_t)
-DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(int64_t)
-#undef DEF_COMPUTE_LOWER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL
+  return l;
+}
 
-#define DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX(value_type)                    \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t                                 \
-      compute_##value_type##_upper_bound_from_ordered_index(                      \
-          const int64_t num_elems,                                                \
-          const value_type target_value,                                          \
-          const value_type* col_buf,                                              \
-          const int32_t* partition_rowid_buf,                                     \
-          const int64_t* ordered_index_buf,                                       \
-          const value_type null_val,                                              \
-          const int64_t null_start_pos,                                           \
-          const int64_t null_end_pos) {                                           \
-    if (target_value == null_val) {                                               \
-      return null_end_pos;                                                        \
-    }                                                                             \
-    int64_t l = get_valid_buf_start_pos(null_start_pos, null_end_pos);            \
-    int64_t h = get_valid_buf_end_pos(num_elems, null_start_pos, null_end_pos);   \
-    while (l < h) {                                                               \
-      int64_t mid = l + (h - l) / 2;                                              \
-      if (target_value >= col_buf[partition_rowid_buf[ordered_index_buf[mid]]]) { \
-        l = mid + 1;                                                              \
-      } else {                                                                    \
-        h = mid;                                                                  \
-      }                                                                           \
-    }                                                                             \
-    return l;                                                                     \
+#define DEF_RANGE_MODE_FRAME_LOWER_BOUND(                                                     \
+    target_val_type, col_type, null_type, opname, opsym)                                      \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t                                             \
+      range_mode_##target_val_type##_##col_type##_##null_type##_##opname##_frame_lower_bound( \
+          const int64_t num_elems,                                                            \
+          const target_val_type target_value,                                                 \
+          const col_type* col_buf,                                                            \
+          const int32_t* partition_rowid_buf,                                                 \
+          const int64_t* ordered_index_buf,                                                   \
+          const int64_t frame_bound_val,                                                      \
+          const null_type null_val,                                                           \
+          const int64_t null_start_pos,                                                       \
+          const int64_t null_end_pos) {                                                       \
+    if (target_value == null_val) {                                                           \
+      return null_start_pos;                                                                  \
+    }                                                                                         \
+    target_val_type new_val = target_value opsym frame_bound_val;                             \
+    return compute_lower_bound_from_ordered_partition_index<target_val_type,                  \
+                                                            col_type,                         \
+                                                            null_type>(                       \
+        num_elems,                                                                            \
+        new_val,                                                                              \
+        col_buf,                                                                              \
+        partition_rowid_buf,                                                                  \
+        ordered_index_buf,                                                                    \
+        null_val,                                                                             \
+        null_start_pos,                                                                       \
+        null_end_pos);                                                                        \
   }
-DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX(int8_t)
-DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX(int16_t)
-DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX(int32_t)
-DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX(int64_t)
-DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX(float)
-DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX(double)
-#undef DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(int8_t, int8_t, int8_t, add, +)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(int8_t, int8_t, int8_t, sub, -)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(int16_t, int16_t, int16_t, add, +)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(int16_t, int16_t, int16_t, sub, -)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(int16_t, int16_t, int64_t, add, +)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(int16_t, int16_t, int64_t, sub, -)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(int32_t, int32_t, int32_t, add, +)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(int32_t, int32_t, int32_t, sub, -)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(int32_t, int32_t, int64_t, add, +)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(int32_t, int32_t, int64_t, sub, -)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(int64_t, int16_t, int64_t, add, +)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(int64_t, int16_t, int64_t, sub, -)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(int64_t, int32_t, int64_t, add, +)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(int64_t, int32_t, int64_t, sub, -)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(int64_t, int64_t, int64_t, add, +)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(int64_t, int64_t, int64_t, sub, -)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(float, float, float, add, +)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(float, float, float, sub, -)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(double, double, double, add, +)
+DEF_RANGE_MODE_FRAME_LOWER_BOUND(double, double, double, sub, -)
+#undef DEF_RANGE_MODE_FRAME_LOWER_BOUND
 
-#define DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(value_type)   \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t                                 \
-      compute_##value_type##_upper_bound_from_ordered_index_for_timeinterval(     \
-          const int64_t num_elems,                                                \
-          const int64_t target_value,                                             \
-          const value_type* col_buf,                                              \
-          const int32_t* partition_rowid_buf,                                     \
-          const int64_t* ordered_index_buf,                                       \
-          const int64_t null_val,                                                 \
-          const int64_t null_start_pos,                                           \
-          const int64_t null_end_pos) {                                           \
-    if (target_value == null_val) {                                               \
-      return null_end_pos;                                                        \
-    }                                                                             \
-    int64_t l = get_valid_buf_start_pos(null_start_pos, null_end_pos);            \
-    int64_t h = get_valid_buf_end_pos(num_elems, null_start_pos, null_end_pos);   \
-    while (l < h) {                                                               \
-      int64_t mid = l + (h - l) / 2;                                              \
-      if (target_value >= col_buf[partition_rowid_buf[ordered_index_buf[mid]]]) { \
-        l = mid + 1;                                                              \
-      } else {                                                                    \
-        h = mid;                                                                  \
-      }                                                                           \
-    }                                                                             \
-    return l;                                                                     \
+template <typename TARGET_VAL_TYPE, typename COL_TYPE, typename NULL_TYPE>
+inline int64_t compute_upper_bound_from_ordered_partition_index(
+    const int64_t num_elems,
+    const TARGET_VAL_TYPE target_val,
+    const COL_TYPE* col_buf,
+    const int32_t* partition_rowid_buf,
+    const int64_t* ordered_index_buf,
+    const NULL_TYPE null_val,
+    const int64_t null_start_offset,
+    const int64_t null_end_offset) {
+  if (target_val == null_val) {
+    return null_end_offset;
   }
-DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(int16_t)
-DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(int32_t)
-DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL(int64_t)
-#undef DEF_COMPUTE_UPPER_BOUND_FROM_ORDERED_INDEX_FOR_TIMEINTERVAL
+  int64_t l = get_valid_buf_start_pos(null_start_offset, null_end_offset);
+  int64_t h = get_valid_buf_end_pos(num_elems, null_start_offset, null_end_offset);
+  while (l < h) {
+    int64_t mid = l + (h - l) / 2;
+    if (target_val >= col_buf[partition_rowid_buf[ordered_index_buf[mid]]]) {
+      l = mid + 1;
+    } else {
+      h = mid;
+    }
+  }
+  return l;
+}
 
-#define DEF_GET_VALUE_IN_FRAME(value_type, logical_type)                 \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE logical_type                   \
-      get_##value_type##_value_##logical_type##_type_in_frame(           \
-          const int64_t target_row_idx_in_frame,                         \
-          const int64_t frame_start_offset,                              \
-          const int64_t frame_end_offset,                                \
-          const value_type* col_buf,                                     \
-          const int32_t* partition_rowid_buf,                            \
-          const int64_t* ordered_index_buf,                              \
-          const logical_type logical_null_val,                           \
-          const logical_type col_null_val) {                             \
-    if (target_row_idx_in_frame < frame_start_offset ||                  \
-        target_row_idx_in_frame >= frame_end_offset) {                   \
-      return logical_null_val;                                           \
-    }                                                                    \
-    const auto target_offset =                                           \
-        partition_rowid_buf[ordered_index_buf[target_row_idx_in_frame]]; \
-    logical_type target_val = col_buf[target_offset];                    \
-    if (target_val == col_null_val) {                                    \
-      target_val = logical_null_val;                                     \
-    }                                                                    \
-    return target_val;                                                   \
+#define DEF_RANGE_MODE_FRAME_UPPER_BOUND(                                                     \
+    target_val_type, col_type, null_type, opname, opsym)                                      \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t                                             \
+      range_mode_##target_val_type##_##col_type##_##null_type##_##opname##_frame_upper_bound( \
+          const int64_t num_elems,                                                            \
+          const target_val_type target_value,                                                 \
+          const col_type* col_buf,                                                            \
+          const int32_t* partition_rowid_buf,                                                 \
+          const int64_t* ordered_index_buf,                                                   \
+          const int64_t frame_bound_val,                                                      \
+          const null_type null_val,                                                           \
+          const int64_t null_start_pos,                                                       \
+          const int64_t null_end_pos) {                                                       \
+    if (target_value == null_val) {                                                           \
+      return null_end_pos;                                                                    \
+    }                                                                                         \
+    target_val_type new_val = target_value opsym frame_bound_val;                             \
+    return compute_upper_bound_from_ordered_partition_index<target_val_type,                  \
+                                                            col_type,                         \
+                                                            null_type>(                       \
+        num_elems,                                                                            \
+        new_val,                                                                              \
+        col_buf,                                                                              \
+        partition_rowid_buf,                                                                  \
+        ordered_index_buf,                                                                    \
+        null_val,                                                                             \
+        null_start_pos,                                                                       \
+        null_end_pos);                                                                        \
+  }
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(int8_t, int8_t, int8_t, add, +)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(int8_t, int8_t, int8_t, sub, -)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(int16_t, int16_t, int16_t, add, +)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(int16_t, int16_t, int16_t, sub, -)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(int16_t, int16_t, int64_t, add, +)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(int16_t, int16_t, int64_t, sub, -)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(int32_t, int32_t, int32_t, add, +)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(int32_t, int32_t, int32_t, sub, -)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(int32_t, int32_t, int64_t, add, +)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(int32_t, int32_t, int64_t, sub, -)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(int64_t, int16_t, int64_t, add, +)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(int64_t, int16_t, int64_t, sub, -)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(int64_t, int32_t, int64_t, add, +)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(int64_t, int32_t, int64_t, sub, -)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(int64_t, int64_t, int64_t, add, +)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(int64_t, int64_t, int64_t, sub, -)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(float, float, float, add, +)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(float, float, float, sub, -)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(double, double, double, add, +)
+DEF_RANGE_MODE_FRAME_UPPER_BOUND(double, double, double, sub, -)
+#undef DEF_RANGE_MODE_FRAME_UPPER_BOUND
+
+template <typename COL_TYPE, typename LOGICAL_TYPE>
+inline LOGICAL_TYPE get_value_in_window_frame(const int64_t target_row_idx_in_frame,
+                                              const int64_t frame_start_offset,
+                                              const int64_t frame_end_offset,
+                                              const COL_TYPE* col_buf,
+                                              const int32_t* partition_rowid_buf,
+                                              const int64_t* ordered_index_buf,
+                                              const LOGICAL_TYPE logical_null_val,
+                                              const LOGICAL_TYPE col_null_val) {
+  if (target_row_idx_in_frame < frame_start_offset ||
+      target_row_idx_in_frame >= frame_end_offset) {
+    return logical_null_val;
+  }
+  const auto target_offset =
+      partition_rowid_buf[ordered_index_buf[target_row_idx_in_frame]];
+  LOGICAL_TYPE target_val = col_buf[target_offset];
+  if (target_val == col_null_val) {
+    return logical_null_val;
+  }
+  return target_val;
+}
+
+#define DEF_GET_VALUE_IN_FRAME(col_type, logical_type)                                \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE logical_type                                \
+      get_##col_type##_value_##logical_type##_type_in_frame(                          \
+          const int64_t target_row_idx_in_frame,                                      \
+          const int64_t frame_start_offset,                                           \
+          const int64_t frame_end_offset,                                             \
+          const col_type* col_buf,                                                    \
+          const int32_t* partition_rowid_buf,                                         \
+          const int64_t* ordered_index_buf,                                           \
+          const logical_type logical_null_val,                                        \
+          const logical_type col_null_val) {                                          \
+    return get_value_in_window_frame<col_type, logical_type>(target_row_idx_in_frame, \
+                                                             frame_start_offset,      \
+                                                             frame_end_offset,        \
+                                                             col_buf,                 \
+                                                             partition_rowid_buf,     \
+                                                             ordered_index_buf,       \
+                                                             logical_null_val,        \
+                                                             col_null_val);           \
   }
 DEF_GET_VALUE_IN_FRAME(int8_t, int8_t)
 DEF_GET_VALUE_IN_FRAME(int8_t, int16_t)
@@ -735,86 +763,6 @@ compute_row_mode_end_index_add(int64_t candidate_index,
   return index >= num_current_partition_elem ? num_current_partition_elem : index + 1;
 }
 
-#define DEF_RANGE_MODE_FRAME_LOWER_BOUND(value_type, opname, opsym)                     \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t                                       \
-      range_mode_##value_type##_##opname##_frame_lower_bound(                           \
-          const int64_t num_elems,                                                      \
-          const value_type target_value,                                                \
-          const value_type* col_buf,                                                    \
-          const int32_t* partition_rowid_buf,                                           \
-          const int64_t* ordered_index_buf,                                             \
-          const int64_t frame_bound_val,                                                \
-          const value_type null_val,                                                    \
-          const int64_t null_start_pos,                                                 \
-          const int64_t null_end_pos) {                                                 \
-    if (target_value == null_val) {                                                     \
-      return null_start_pos;                                                            \
-    } else {                                                                            \
-      value_type new_val = target_value opsym frame_bound_val;                          \
-      return compute_##value_type##_lower_bound_from_ordered_index(num_elems,           \
-                                                                   new_val,             \
-                                                                   col_buf,             \
-                                                                   partition_rowid_buf, \
-                                                                   ordered_index_buf,   \
-                                                                   null_val,            \
-                                                                   null_start_pos,      \
-                                                                   null_end_pos);       \
-    }                                                                                   \
-  }
-DEF_RANGE_MODE_FRAME_LOWER_BOUND(int8_t, add, +)
-DEF_RANGE_MODE_FRAME_LOWER_BOUND(int8_t, sub, -)
-DEF_RANGE_MODE_FRAME_LOWER_BOUND(int16_t, add, +)
-DEF_RANGE_MODE_FRAME_LOWER_BOUND(int16_t, sub, -)
-DEF_RANGE_MODE_FRAME_LOWER_BOUND(int32_t, add, +)
-DEF_RANGE_MODE_FRAME_LOWER_BOUND(int32_t, sub, -)
-DEF_RANGE_MODE_FRAME_LOWER_BOUND(int64_t, add, +)
-DEF_RANGE_MODE_FRAME_LOWER_BOUND(int64_t, sub, -)
-DEF_RANGE_MODE_FRAME_LOWER_BOUND(float, add, +)
-DEF_RANGE_MODE_FRAME_LOWER_BOUND(float, sub, -)
-DEF_RANGE_MODE_FRAME_LOWER_BOUND(double, add, +)
-DEF_RANGE_MODE_FRAME_LOWER_BOUND(double, sub, -)
-#undef DEF_RANGE_MODE_FRAME_LOWER_BOUND
-
-#define DEF_RANGE_MODE_FRAME_UPPER_BOUND(value_type, opname, opsym)                     \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t                                       \
-      range_mode_##value_type##_##opname##_frame_upper_bound(                           \
-          const int64_t num_elems,                                                      \
-          const value_type target_value,                                                \
-          const value_type* col_buf,                                                    \
-          const int32_t* partition_rowid_buf,                                           \
-          const int64_t* ordered_index_buf,                                             \
-          const int64_t frame_bound_val,                                                \
-          const value_type null_val,                                                    \
-          const int64_t null_start_pos,                                                 \
-          const int64_t null_end_pos) {                                                 \
-    if (target_value == null_val) {                                                     \
-      return null_end_pos;                                                              \
-    } else {                                                                            \
-      value_type new_val = target_value opsym frame_bound_val;                          \
-      return compute_##value_type##_upper_bound_from_ordered_index(num_elems,           \
-                                                                   new_val,             \
-                                                                   col_buf,             \
-                                                                   partition_rowid_buf, \
-                                                                   ordered_index_buf,   \
-                                                                   null_val,            \
-                                                                   null_start_pos,      \
-                                                                   null_end_pos);       \
-    }                                                                                   \
-  }
-DEF_RANGE_MODE_FRAME_UPPER_BOUND(int8_t, add, +)
-DEF_RANGE_MODE_FRAME_UPPER_BOUND(int8_t, sub, -)
-DEF_RANGE_MODE_FRAME_UPPER_BOUND(int16_t, add, +)
-DEF_RANGE_MODE_FRAME_UPPER_BOUND(int16_t, sub, -)
-DEF_RANGE_MODE_FRAME_UPPER_BOUND(int32_t, add, +)
-DEF_RANGE_MODE_FRAME_UPPER_BOUND(int32_t, sub, -)
-DEF_RANGE_MODE_FRAME_UPPER_BOUND(int64_t, add, +)
-DEF_RANGE_MODE_FRAME_UPPER_BOUND(int64_t, sub, -)
-DEF_RANGE_MODE_FRAME_UPPER_BOUND(float, add, +)
-DEF_RANGE_MODE_FRAME_UPPER_BOUND(float, sub, -)
-DEF_RANGE_MODE_FRAME_UPPER_BOUND(double, add, +)
-DEF_RANGE_MODE_FRAME_UPPER_BOUND(double, sub, -)
-#undef DEF_RANGE_MODE_FRAME_UPPER_BOUND
-
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t* get_integer_aggregation_tree(
     int64_t** aggregation_trees,
     size_t partition_idx) {
@@ -850,255 +798,75 @@ getStartOffsetForSegmentTreeTraversal(size_t level, size_t tree_fanout) {
   }
   return offset;
 }
+namespace {
+enum class AggFuncType { MIN, MAX, SUM };
 
-#define DEF_COMPUTE_FRAME_MIN(agg_value_type)                           \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE agg_value_type                \
-      compute_##agg_value_type##_frame_min(                             \
-          agg_value_type* aggregation_tree_for_partition,               \
-          size_t query_range_start_idx,                                 \
-          size_t query_range_end_idx,                                   \
-          size_t leaf_level,                                            \
-          size_t tree_fanout,                                           \
-          agg_value_type invalid_val,                                   \
-          agg_value_type null_val) {                                    \
-    size_t leaf_start_idx =                                             \
-        getStartOffsetForSegmentTreeTraversal(leaf_level, tree_fanout); \
-    size_t begin = leaf_start_idx + query_range_start_idx;              \
-    size_t end = leaf_start_idx + query_range_end_idx;                  \
-    agg_value_type res = std::numeric_limits<agg_value_type>::max();    \
-    bool all_nulls = true;                                              \
-    for (size_t level = leaf_level; level >= 0; level--) {              \
-      size_t parentBegin = begin / tree_fanout;                         \
-      size_t parentEnd = (end - 1) / tree_fanout;                       \
-      if (parentBegin == parentEnd) {                                   \
-        for (size_t pos = begin; pos < end; pos++) {                    \
-          if (aggregation_tree_for_partition[pos] != null_val) {        \
-            all_nulls = false;                                          \
-            res = std::min(res, aggregation_tree_for_partition[pos]);   \
-          }                                                             \
-        }                                                               \
-        return all_nulls ? null_val : res;                              \
-      } else if (parentBegin > parentEnd) {                             \
-        return null_val;                                                \
-      }                                                                 \
-      size_t group_begin = (parentBegin * tree_fanout) + 1;             \
-      if (begin != group_begin) {                                       \
-        size_t limit = (parentBegin * tree_fanout) + tree_fanout + 1;   \
-        for (size_t pos = begin; pos < limit; pos++) {                  \
-          if (aggregation_tree_for_partition[pos] != null_val) {        \
-            all_nulls = false;                                          \
-            res = std::min(res, aggregation_tree_for_partition[pos]);   \
-          }                                                             \
-        }                                                               \
-        parentBegin++;                                                  \
-      }                                                                 \
-      size_t group_end = (parentEnd * tree_fanout) + 1;                 \
-      if (end != group_end) {                                           \
-        for (size_t pos = group_end; pos < end; pos++) {                \
-          if (aggregation_tree_for_partition[pos] != null_val) {        \
-            all_nulls = false;                                          \
-            res = std::min(res, aggregation_tree_for_partition[pos]);   \
-          }                                                             \
-        }                                                               \
-      }                                                                 \
-      begin = parentBegin;                                              \
-      end = parentEnd;                                                  \
-    }                                                                   \
-    return invalid_val;                                                 \
+template <AggFuncType AGG_FUNC_TYPE, typename AGG_TYPE>
+inline AGG_TYPE agg_func(AGG_TYPE const lhs, AGG_TYPE const rhs) {
+  if constexpr (AGG_FUNC_TYPE == AggFuncType::MIN) {
+    return std::min(lhs, rhs);
+  } else if constexpr (AGG_FUNC_TYPE == AggFuncType::MAX) {
+    return std::max(lhs, rhs);
+  } else {
+    return lhs + rhs;
   }
-DEF_COMPUTE_FRAME_MIN(int64_t)
-DEF_COMPUTE_FRAME_MIN(double)
-#undef DEF_COMPUTE_FRAME_MIN
+}
+}  // namespace
 
-#define DEF_COMPUTE_FRAME_MAX(agg_value_type)                           \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE agg_value_type                \
-      compute_##agg_value_type##_frame_max(                             \
-          agg_value_type* aggregation_tree_for_partition,               \
-          size_t query_range_start_idx,                                 \
-          size_t query_range_end_idx,                                   \
-          size_t leaf_level,                                            \
-          size_t tree_fanout,                                           \
-          agg_value_type invalid_val,                                   \
-          agg_value_type null_val) {                                    \
-    size_t leaf_start_idx =                                             \
-        getStartOffsetForSegmentTreeTraversal(leaf_level, tree_fanout); \
-    size_t begin = leaf_start_idx + query_range_start_idx;              \
-    size_t end = leaf_start_idx + query_range_end_idx;                  \
-    agg_value_type res = std::numeric_limits<agg_value_type>::lowest(); \
-    bool all_nulls = true;                                              \
-    for (size_t level = leaf_level; level >= 0; level--) {              \
-      size_t parentBegin = begin / tree_fanout;                         \
-      size_t parentEnd = (end - 1) / tree_fanout;                       \
-      if (parentBegin == parentEnd) {                                   \
-        for (size_t pos = begin; pos < end; pos++) {                    \
-          if (aggregation_tree_for_partition[pos] != null_val) {        \
-            all_nulls = false;                                          \
-            res = std::max(res, aggregation_tree_for_partition[pos]);   \
-          }                                                             \
-        }                                                               \
-        return all_nulls ? null_val : res;                              \
-      } else if (parentBegin > parentEnd) {                             \
-        return null_val;                                                \
-      }                                                                 \
-      size_t group_begin = (parentBegin * tree_fanout) + 1;             \
-      if (begin != group_begin) {                                       \
-        size_t limit = (parentBegin * tree_fanout) + tree_fanout + 1;   \
-        for (size_t pos = begin; pos < limit; pos++) {                  \
-          if (aggregation_tree_for_partition[pos] != null_val) {        \
-            all_nulls = false;                                          \
-            res = std::max(res, aggregation_tree_for_partition[pos]);   \
-          }                                                             \
-        }                                                               \
-        parentBegin++;                                                  \
-      }                                                                 \
-      size_t group_end = (parentEnd * tree_fanout) + 1;                 \
-      if (end != group_end) {                                           \
-        for (size_t pos = group_end; pos < end; pos++) {                \
-          if (aggregation_tree_for_partition[pos] != null_val) {        \
-            all_nulls = false;                                          \
-            res = std::max(res, aggregation_tree_for_partition[pos]);   \
-          }                                                             \
-        }                                                               \
-      }                                                                 \
-      begin = parentBegin;                                              \
-      end = parentEnd;                                                  \
-    }                                                                   \
-    return invalid_val;                                                 \
+template <AggFuncType AGG_FUNC_TYPE, typename AGG_TYPE>
+inline AGG_TYPE compute_window_func_via_aggregation_tree(
+    AGG_TYPE* aggregation_tree_for_partition,
+    size_t query_range_start_idx,
+    size_t query_range_end_idx,
+    size_t leaf_level,
+    size_t tree_fanout,
+    AGG_TYPE init_val,
+    AGG_TYPE invalid_val,
+    AGG_TYPE null_val) {
+  size_t leaf_start_idx = getStartOffsetForSegmentTreeTraversal(leaf_level, tree_fanout);
+  size_t begin = leaf_start_idx + query_range_start_idx;
+  size_t end = leaf_start_idx + query_range_end_idx;
+  AGG_TYPE res = init_val;
+  bool all_nulls = true;
+  for (int level = leaf_level; level >= 0; level--) {
+    size_t parentBegin = begin / tree_fanout;
+    size_t parentEnd = (end - 1) / tree_fanout;
+    if (parentBegin == parentEnd) {
+      for (size_t pos = begin; pos < end; pos++) {
+        if (aggregation_tree_for_partition[pos] != null_val) {
+          all_nulls = false;
+          res = agg_func<AGG_FUNC_TYPE>(res, aggregation_tree_for_partition[pos]);
+        }
+      }
+      return all_nulls ? null_val : res;
+    } else if (parentBegin > parentEnd) {
+      return null_val;
+    }
+    size_t group_begin = (parentBegin * tree_fanout) + 1;
+    if (begin != group_begin) {
+      size_t limit = (parentBegin * tree_fanout) + tree_fanout + 1;
+      for (size_t pos = begin; pos < limit; pos++) {
+        if (aggregation_tree_for_partition[pos] != null_val) {
+          all_nulls = false;
+          res = agg_func<AGG_FUNC_TYPE>(res, aggregation_tree_for_partition[pos]);
+        }
+      }
+      parentBegin++;
+    }
+    size_t group_end = (parentEnd * tree_fanout) + 1;
+    if (end != group_end) {
+      for (size_t pos = group_end; pos < end; pos++) {
+        if (aggregation_tree_for_partition[pos] != null_val) {
+          all_nulls = false;
+          res = agg_func<AGG_FUNC_TYPE>(res, aggregation_tree_for_partition[pos]);
+        }
+      }
+    }
+    begin = parentBegin;
+    end = parentEnd;
   }
-DEF_COMPUTE_FRAME_MAX(int64_t)
-DEF_COMPUTE_FRAME_MAX(double)
-#undef DEF_COMPUTE_FRAME_MAX
-
-#define DEF_COMPUTE_FRAME_SUM(agg_value_type)                           \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE agg_value_type                \
-      compute_##agg_value_type##_frame_sum(                             \
-          agg_value_type* aggregation_tree_for_partition,               \
-          size_t query_range_start_idx,                                 \
-          size_t query_range_end_idx,                                   \
-          size_t leaf_level,                                            \
-          size_t tree_fanout,                                           \
-          agg_value_type invalid_val,                                   \
-          agg_value_type null_val) {                                    \
-    size_t leaf_start_idx =                                             \
-        getStartOffsetForSegmentTreeTraversal(leaf_level, tree_fanout); \
-    size_t begin = leaf_start_idx + query_range_start_idx;              \
-    size_t end = leaf_start_idx + query_range_end_idx;                  \
-    agg_value_type res = 0;                                             \
-    bool all_nulls = true;                                              \
-    for (size_t level = leaf_level; level >= 0; level--) {              \
-      size_t parentBegin = begin / tree_fanout;                         \
-      size_t parentEnd = (end - 1) / tree_fanout;                       \
-      if (parentBegin == parentEnd) {                                   \
-        for (size_t pos = begin; pos < end; pos++) {                    \
-          if (aggregation_tree_for_partition[pos] != null_val) {        \
-            all_nulls = false;                                          \
-            res += aggregation_tree_for_partition[pos];                 \
-          }                                                             \
-        }                                                               \
-        return all_nulls ? null_val : res;                              \
-      } else if (parentBegin > parentEnd) {                             \
-        return null_val;                                                \
-      }                                                                 \
-      size_t group_begin = (parentBegin * tree_fanout) + 1;             \
-      if (begin != group_begin) {                                       \
-        size_t limit = (parentBegin * tree_fanout) + tree_fanout + 1;   \
-        for (size_t pos = begin; pos < limit; pos++) {                  \
-          if (aggregation_tree_for_partition[pos] != null_val) {        \
-            all_nulls = false;                                          \
-            res += aggregation_tree_for_partition[pos];                 \
-          }                                                             \
-        }                                                               \
-        parentBegin++;                                                  \
-      } else if (parentBegin > parentEnd) {                             \
-        return null_val;                                                \
-      }                                                                 \
-      size_t group_end = (parentEnd * tree_fanout) + 1;                 \
-      if (end != group_end) {                                           \
-        for (size_t pos = group_end; pos < end; pos++) {                \
-          if (aggregation_tree_for_partition[pos] != null_val) {        \
-            all_nulls = false;                                          \
-            res += aggregation_tree_for_partition[pos];                 \
-          }                                                             \
-        }                                                               \
-      }                                                                 \
-      begin = parentBegin;                                              \
-      end = parentEnd;                                                  \
-    }                                                                   \
-    return invalid_val;                                                 \
-  }
-DEF_COMPUTE_FRAME_SUM(int64_t)
-DEF_COMPUTE_FRAME_SUM(double)
-#undef DEF_COMPUTE_FRAME_SUM
-
-#define DEF_COMPUTE_SUM_AND_COUNT_FRAME_AGGREGATES(agg_value_type)         \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void                             \
-      compute_##agg_value_type##_sum_and_count_frame_aggregates(           \
-          SumAndCountPair<agg_value_type>* aggregation_tree_for_partition, \
-          SumAndCountPair<agg_value_type>& res,                            \
-          size_t query_range_start_idx,                                    \
-          size_t query_range_end_idx,                                      \
-          size_t leaf_level,                                               \
-          size_t tree_fanout,                                              \
-          agg_value_type invalid_val,                                      \
-          agg_value_type null_val) {                                       \
-    size_t leaf_start_idx =                                                \
-        getStartOffsetForSegmentTreeTraversal(leaf_level, tree_fanout);    \
-    size_t begin = leaf_start_idx + query_range_start_idx;                 \
-    size_t end = leaf_start_idx + query_range_end_idx;                     \
-    bool all_nulls = true;                                                 \
-    for (size_t level = leaf_level; level >= 0; level--) {                 \
-      size_t parentBegin = begin / tree_fanout;                            \
-      size_t parentEnd = (end - 1) / tree_fanout;                          \
-      if (parentBegin == parentEnd) {                                      \
-        for (size_t pos = begin; pos < end; pos++) {                       \
-          if (aggregation_tree_for_partition[pos].sum != null_val) {       \
-            all_nulls = false;                                             \
-            res.sum += aggregation_tree_for_partition[pos].sum;            \
-            res.count += aggregation_tree_for_partition[pos].count;        \
-          }                                                                \
-        }                                                                  \
-        if (all_nulls) {                                                   \
-          res.sum = null_val;                                              \
-          res.count = 0;                                                   \
-        }                                                                  \
-        return;                                                            \
-      } else if (parentBegin > parentEnd) {                                \
-        res.sum = null_val;                                                \
-        res.count = 0;                                                     \
-        return;                                                            \
-      }                                                                    \
-      size_t group_begin = (parentBegin * tree_fanout) + 1;                \
-      if (begin != group_begin) {                                          \
-        size_t limit = (parentBegin * tree_fanout) + tree_fanout + 1;      \
-        for (size_t pos = begin; pos < limit; pos++) {                     \
-          if (aggregation_tree_for_partition[pos].sum != null_val) {       \
-            all_nulls = false;                                             \
-            res.sum += aggregation_tree_for_partition[pos].sum;            \
-            res.count += aggregation_tree_for_partition[pos].count;        \
-          }                                                                \
-        }                                                                  \
-        parentBegin++;                                                     \
-      }                                                                    \
-      size_t group_end = (parentEnd * tree_fanout) + 1;                    \
-      if (end != group_end) {                                              \
-        for (size_t pos = group_end; pos < end; pos++) {                   \
-          if (aggregation_tree_for_partition[pos].sum != null_val) {       \
-            all_nulls = false;                                             \
-            res.sum += aggregation_tree_for_partition[pos].sum;            \
-            res.count += aggregation_tree_for_partition[pos].count;        \
-          }                                                                \
-        }                                                                  \
-      }                                                                    \
-      begin = parentBegin;                                                 \
-      end = parentEnd;                                                     \
-    }                                                                      \
-    res.sum = invalid_val;                                                 \
-    res.count = 0;                                                         \
-    return;                                                                \
-  }
-DEF_COMPUTE_SUM_AND_COUNT_FRAME_AGGREGATES(int64_t)
-DEF_COMPUTE_SUM_AND_COUNT_FRAME_AGGREGATES(double)
-#undef DEF_COMPUTE_SUM_AND_COUNT_FRAME_AGGREGATES
+  return invalid_val;
+}
 
 #define DEF_SEARCH_AGGREGATION_TREE(agg_value_type)                                      \
   extern "C" RUNTIME_EXPORT ALWAYS_INLINE agg_value_type                                 \
@@ -1118,31 +886,37 @@ DEF_COMPUTE_SUM_AND_COUNT_FRAME_AGGREGATES(double)
     }                                                                                    \
     switch (agg_type) {                                                                  \
       case 1: {                                                                          \
-        return compute_##agg_value_type##_frame_min(aggregated_tree_for_partition,       \
-                                                    query_range_start_idx,               \
-                                                    query_range_end_idx,                 \
-                                                    leaf_level,                          \
-                                                    tree_fanout,                         \
-                                                    invalid_val,                         \
-                                                    null_val);                           \
+        return compute_window_func_via_aggregation_tree<AggFuncType::MIN>(               \
+            aggregated_tree_for_partition,                                               \
+            query_range_start_idx,                                                       \
+            query_range_end_idx,                                                         \
+            leaf_level,                                                                  \
+            tree_fanout,                                                                 \
+            std::numeric_limits<agg_value_type>::max(),                                  \
+            invalid_val,                                                                 \
+            null_val);                                                                   \
       }                                                                                  \
       case 2: {                                                                          \
-        return compute_##agg_value_type##_frame_max(aggregated_tree_for_partition,       \
-                                                    query_range_start_idx,               \
-                                                    query_range_end_idx,                 \
-                                                    leaf_level,                          \
-                                                    tree_fanout,                         \
-                                                    invalid_val,                         \
-                                                    null_val);                           \
+        return compute_window_func_via_aggregation_tree<AggFuncType::MAX>(               \
+            aggregated_tree_for_partition,                                               \
+            query_range_start_idx,                                                       \
+            query_range_end_idx,                                                         \
+            leaf_level,                                                                  \
+            tree_fanout,                                                                 \
+            std::numeric_limits<agg_value_type>::lowest(),                               \
+            invalid_val,                                                                 \
+            null_val);                                                                   \
       }                                                                                  \
       default: {                                                                         \
-        return compute_##agg_value_type##_frame_sum(aggregated_tree_for_partition,       \
-                                                    query_range_start_idx,               \
-                                                    query_range_end_idx,                 \
-                                                    leaf_level,                          \
-                                                    tree_fanout,                         \
-                                                    invalid_val,                         \
-                                                    null_val);                           \
+        return compute_window_func_via_aggregation_tree<AggFuncType::SUM>(               \
+            aggregated_tree_for_partition,                                               \
+            query_range_start_idx,                                                       \
+            query_range_end_idx,                                                         \
+            leaf_level,                                                                  \
+            tree_fanout,                                                                 \
+            static_cast<agg_value_type>(0),                                              \
+            invalid_val,                                                                 \
+            null_val);                                                                   \
       }                                                                                  \
     }                                                                                    \
   }
@@ -1150,6 +924,70 @@ DEF_COMPUTE_SUM_AND_COUNT_FRAME_AGGREGATES(double)
 DEF_SEARCH_AGGREGATION_TREE(int64_t)
 DEF_SEARCH_AGGREGATION_TREE(double)
 #undef DEF_SEARCH_AGGREGATION_TREE
+
+template <typename AGG_VALUE_TYPE>
+inline void compute_derived_aggregates(
+    SumAndCountPair<AGG_VALUE_TYPE>* aggregation_tree_for_partition,
+    SumAndCountPair<AGG_VALUE_TYPE>& res,
+    size_t query_range_start_idx,
+    size_t query_range_end_idx,
+    size_t leaf_level,
+    size_t tree_fanout,
+    AGG_VALUE_TYPE invalid_val,
+    AGG_VALUE_TYPE null_val) {
+  size_t leaf_start_idx = getStartOffsetForSegmentTreeTraversal(leaf_level, tree_fanout);
+  size_t begin = leaf_start_idx + query_range_start_idx;
+  size_t end = leaf_start_idx + query_range_end_idx;
+  SumAndCountPair<AGG_VALUE_TYPE> null_res{null_val, 0};
+  SumAndCountPair<AGG_VALUE_TYPE> invalid_res{invalid_val, 0};
+  bool all_nulls = true;
+  for (int level = leaf_level; level >= 0; level--) {
+    size_t parentBegin = begin / tree_fanout;
+    size_t parentEnd = (end - 1) / tree_fanout;
+    if (parentBegin == parentEnd) {
+      for (size_t pos = begin; pos < end; pos++) {
+        if (aggregation_tree_for_partition[pos].sum != null_val) {
+          all_nulls = false;
+          res.sum += aggregation_tree_for_partition[pos].sum;
+          res.count += aggregation_tree_for_partition[pos].count;
+        }
+      }
+      if (all_nulls) {
+        res = null_res;
+      }
+      return;
+    } else if (parentBegin > parentEnd) {
+      res = null_res;
+      return;
+    }
+    size_t group_begin = (parentBegin * tree_fanout) + 1;
+    if (begin != group_begin) {
+      size_t limit = (parentBegin * tree_fanout) + tree_fanout + 1;
+      for (size_t pos = begin; pos < limit; pos++) {
+        if (aggregation_tree_for_partition[pos].sum != null_val) {
+          all_nulls = false;
+          res.sum += aggregation_tree_for_partition[pos].sum;
+          res.count += aggregation_tree_for_partition[pos].count;
+        }
+      }
+      parentBegin++;
+    }
+    size_t group_end = (parentEnd * tree_fanout) + 1;
+    if (end != group_end) {
+      for (size_t pos = group_end; pos < end; pos++) {
+        if (aggregation_tree_for_partition[pos].sum != null_val) {
+          all_nulls = false;
+          res.sum += aggregation_tree_for_partition[pos].sum;
+          res.count += aggregation_tree_for_partition[pos].count;
+        }
+      }
+    }
+    begin = parentBegin;
+    end = parentEnd;
+  }
+  res = invalid_res;
+  return;
+}
 
 #define DEF_SEARCH_DERIVED_AGGREGATION_TREE(agg_value_type)                              \
   extern "C" RUNTIME_EXPORT ALWAYS_INLINE double                                         \
@@ -1168,15 +1006,14 @@ DEF_SEARCH_AGGREGATION_TREE(double)
       return null_val;                                                                   \
     }                                                                                    \
     SumAndCountPair<agg_value_type> res{0, 0};                                           \
-    compute_##agg_value_type##_sum_and_count_frame_aggregates(                           \
-        aggregated_tree_for_partition,                                                   \
-        res,                                                                             \
-        query_range_start_idx,                                                           \
-        query_range_end_idx,                                                             \
-        leaf_level,                                                                      \
-        tree_fanout,                                                                     \
-        invalid_val,                                                                     \
-        null_val);                                                                       \
+    compute_derived_aggregates<agg_value_type>(aggregated_tree_for_partition,            \
+                                               res,                                      \
+                                               query_range_start_idx,                    \
+                                               query_range_end_idx,                      \
+                                               leaf_level,                               \
+                                               tree_fanout,                              \
+                                               invalid_val,                              \
+                                               null_val);                                \
     if (res.sum == null_val) {                                                           \
       return null_val;                                                                   \
     } else if (res.count > 0) {                                                          \

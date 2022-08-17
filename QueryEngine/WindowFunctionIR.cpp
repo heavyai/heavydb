@@ -342,15 +342,8 @@ llvm::Value* Executor::codegenWindowFunctionOnFrame(const CompilationOptions& co
   const auto offset_lv =
       cgen_state_->castToTypeIn(code_generator.codegen(args[1].get(), true, co)[0], 64);
 
-  // codegen frame bound expr if necessary
-  const auto frame_start_bound = window_func->getFrameStartBound();
-  const auto frame_end_bound = window_func->getFrameEndBound();
-  auto frame_start_bound_expr_lv =
-      codegenFrameBoundExpr(window_func, frame_start_bound, code_generator, co);
-  auto frame_end_bound_expr_lv =
-      codegenFrameBoundExpr(window_func, frame_end_bound, code_generator, co);
-  CHECK(frame_start_bound_expr_lv);
-  CHECK(frame_end_bound_expr_lv);
+  auto [frame_start_bound_expr_lv, frame_end_bound_expr_lv] =
+      codegenFrameBoundRange(window_func, code_generator, co);
 
   auto current_row_pos_lv = code_generator.posArg(nullptr);
   auto partition_index_lv =
@@ -361,10 +354,6 @@ llvm::Value* Executor::codegenWindowFunctionOnFrame(const CompilationOptions& co
   // todo (yonnmin): remove this when supporting more window functions on frame
   CHECK(window_func_kind == SqlWindowFunctionKind::LEAD_IN_FRAME ||
         window_func_kind == SqlWindowFunctionKind::LAG_IN_FRAME);
-  const auto pi32_type =
-      llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
-  const auto pi64_type =
-      llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
   bool is_lag_in_frame = window_func_kind == SqlWindowFunctionKind::LAG_IN_FRAME;
 
   // ordering column buffer
@@ -393,135 +382,54 @@ llvm::Value* Executor::codegenWindowFunctionOnFrame(const CompilationOptions& co
   auto target_col_buf_lv =
       cgen_state_->ir_builder_.CreateIntToPtr(target_col_buf_ptr_lv, col_buf_type);
 
-  // partial sum of # elems of partitions
-  auto partition_start_offset_buf_lv = cgen_state_->llInt(
-      reinterpret_cast<int64_t>(window_func_context->partitionStartOffset()));
-  auto partition_start_offset_ptr_lv =
-      cgen_state_->ir_builder_.CreateIntToPtr(partition_start_offset_buf_lv, pi64_type);
-
-  // get start offset of the current partition
-  auto current_partition_start_offset_ptr_lv =
-      cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
-                                         partition_start_offset_ptr_lv,
-                                         partition_index_lv);
-  auto current_partition_start_offset_lv = cgen_state_->ir_builder_.CreateLoad(
-      current_partition_start_offset_ptr_lv->getType()->getPointerElementType(),
-      current_partition_start_offset_ptr_lv);
-
-  // row_id buf of the current partition
-  const auto partition_rowid_buf_lv =
-      cgen_state_->llInt(reinterpret_cast<int64_t>(window_func_context->payload()));
-  const auto partition_rowid_ptr_lv =
-      cgen_state_->ir_builder_.CreateIntToPtr(partition_rowid_buf_lv, pi32_type);
-  auto target_partition_rowid_ptr_lv =
-      cgen_state_->ir_builder_.CreateGEP(get_int_type(32, cgen_state_->context_),
-                                         partition_rowid_ptr_lv,
-                                         current_partition_start_offset_lv);
-
-  // row_id buf of ordered current partition
-  const auto sorted_rowid_lv = cgen_state_->llInt(
-      reinterpret_cast<int64_t>(window_func_context->sortedPartition()));
-  const auto sorted_rowid_ptr_lv =
-      cgen_state_->ir_builder_.CreateIntToPtr(sorted_rowid_lv, pi64_type);
-  auto target_partition_sorted_rowid_ptr_lv =
-      cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
-                                         sorted_rowid_ptr_lv,
-                                         current_partition_start_offset_lv);
-
-  // # elems per partition
-  const auto partition_count_buf =
-      cgen_state_->llInt(reinterpret_cast<int64_t>(window_func_context->counts()));
-  auto partition_count_buf_ptr_lv =
-      cgen_state_->ir_builder_.CreateIntToPtr(partition_count_buf, pi32_type);
-
-  // # elems of the given partition
-  const auto num_elem_current_partition_ptr =
-      cgen_state_->ir_builder_.CreateGEP(get_int_type(32, cgen_state_->context_),
-                                         partition_count_buf_ptr_lv,
-                                         partition_index_lv);
-  auto num_elem_current_partition_lv = cgen_state_->castToTypeIn(
-      cgen_state_->ir_builder_.CreateLoad(
-          num_elem_current_partition_ptr->getType()->getPointerElementType(),
-          num_elem_current_partition_ptr),
-      64);
-
-  const auto order_key_ti = window_func->getOrderKeys().front()->get_type_info();
-  const auto order_key_size = order_key_ti.get_size();
-  const auto order_col_type_name = get_col_type_name_by_size(
-      order_key_size,
-      window_func_context->getOrderKeyColumnBufferTypes().front().is_fp());
-  size_t order_key_size_in_byte = order_key_size * 8;
-
-  const auto order_key_buf_type = llvm::PointerType::get(
-      get_int_type(order_key_size_in_byte, cgen_state_->context_), 0);
-  const auto order_key_buf = cgen_state_->llInt(
-      reinterpret_cast<int64_t>(window_func_context->getOrderKeyColumnBuffers().front()));
-  auto order_key_buf_ptr_lv =
-      cgen_state_->ir_builder_.CreateIntToPtr(order_key_buf, order_key_buf_type);
+  const auto partition_buf_ptrs =
+      codegenLoadPartitionBuffers(window_func_context, partition_index_lv);
 
   // null value of the ordering column
   const auto order_key_buf_ti =
       window_func_context->getOrderKeyColumnBufferTypes().front();
   auto order_key_col_null_val_lv =
       get_null_value_by_size_with_encoding(cgen_state_.get(), order_key_buf_ti);
-
-  // null range of the aggregate tree
-  const auto null_start_pos_buf = cgen_state_->llInt(
-      reinterpret_cast<int64_t>(window_func_context->getNullValueStartPos()));
-  const auto null_start_pos_buf_ptr =
-      cgen_state_->ir_builder_.CreateIntToPtr(null_start_pos_buf, pi64_type);
-  const auto null_start_pos_ptr =
-      cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
-                                         null_start_pos_buf_ptr,
-                                         partition_index_lv);
-  auto null_start_pos_lv = cgen_state_->ir_builder_.CreateLoad(
-      null_start_pos_ptr->getType()->getPointerElementType(),
-      null_start_pos_ptr,
-      "null_start_pos");
-  const auto null_end_pos_buf = cgen_state_->llInt(
-      reinterpret_cast<int64_t>(window_func_context->getNullValueEndPos()));
-  const auto null_end_pos_buf_ptr =
-      cgen_state_->ir_builder_.CreateIntToPtr(null_end_pos_buf, pi64_type);
-  const auto null_end_pos_ptr = cgen_state_->ir_builder_.CreateGEP(
-      get_int_type(64, cgen_state_->context_), null_end_pos_buf_ptr, partition_index_lv);
-  auto null_end_pos_lv = cgen_state_->ir_builder_.CreateLoad(
-      null_end_pos_ptr->getType()->getPointerElementType(),
-      null_end_pos_ptr,
-      "null_end_pos");
+  auto [order_col_type_name, order_key_buf_ptr_lv] =
+      codegenLoadOrderKeyBufPtr(window_func_context);
+  auto [null_start_pos_lv, null_end_pos_lv] =
+      codegenFrameNullRange(window_func_context, partition_index_lv);
 
   std::string compute_row_idx_on_frame_func_name = "compute_";
   compute_row_idx_on_frame_func_name += order_col_type_name + "_current_row_idx_in_frame";
   auto cur_row_idx_in_frame_lv =
       cgen_state_->emitCall(compute_row_idx_on_frame_func_name,
-                            {num_elem_current_partition_lv,
+                            {partition_buf_ptrs.num_elem_current_partition_lv,
                              current_row_pos_lv,
                              order_key_buf_ptr_lv,
-                             target_partition_rowid_ptr_lv,
-                             target_partition_sorted_rowid_ptr_lv,
+                             partition_buf_ptrs.target_partition_rowid_ptr_lv,
+                             partition_buf_ptrs.target_partition_sorted_rowid_ptr_lv,
                              order_key_col_null_val_lv,
                              null_start_pos_lv,
                              null_end_pos_lv});
 
-  llvm::Value* frame_start_bound_lv{nullptr};
-  llvm::Value* frame_end_bound_lv{nullptr};
-  std::tie(frame_start_bound_lv, frame_end_bound_lv) =
-      codegenWindowFrameBound(window_func_context,
-                              frame_start_bound,
-                              frame_end_bound,
-                              cur_row_idx_in_frame_lv,
-                              cgen_state_->llInt((int64_t)0),
-                              order_key_buf_ptr_lv,
-                              order_key_col_null_val_lv,
-                              frame_start_bound_expr_lv,
-                              frame_end_bound_expr_lv,
-                              num_elem_current_partition_lv,
-                              target_partition_rowid_ptr_lv,
-                              target_partition_sorted_rowid_ptr_lv,
-                              null_start_pos_lv,
-                              null_end_pos_lv,
-                              code_generator);
-  CHECK(frame_start_bound_lv);
-  CHECK(frame_end_bound_lv);
+  llvm::Value* int64_t_zero_val_lv = cgen_state_->llInt((int64_t)0);
+  WindowFrameBoundFuncArgs WindowFrameBoundFuncArgs{
+      frame_start_bound_expr_lv,
+      frame_end_bound_expr_lv,
+      cur_row_idx_in_frame_lv,
+      nullptr,
+      partition_buf_ptrs.current_partition_start_offset_lv,
+      int64_t_zero_val_lv,
+      partition_buf_ptrs.num_elem_current_partition_lv,
+      order_key_buf_ptr_lv,
+      "",
+      partition_buf_ptrs.target_partition_rowid_ptr_lv,
+      partition_buf_ptrs.target_partition_sorted_rowid_ptr_lv,
+      null_start_pos_lv,
+      null_end_pos_lv};
+  auto [frame_start_bound_lv, frame_end_bound_lv] =
+      codegenWindowFrameBounds(window_func_context,
+                               window_func->getFrameStartBound(),
+                               window_func->getFrameEndBound(),
+                               order_key_col_null_val_lv,
+                               WindowFrameBoundFuncArgs,
+                               code_generator);
 
   llvm::Value* modified_cur_row_idx_in_frame_lv{nullptr};
   if (is_lag_in_frame) {
@@ -542,8 +450,8 @@ llvm::Value* Executor::codegenWindowFunctionOnFrame(const CompilationOptions& co
                                   frame_start_bound_lv,
                                   frame_end_bound_lv,
                                   target_col_buf_lv,
-                                  target_partition_rowid_ptr_lv,
-                                  target_partition_sorted_rowid_ptr_lv,
+                                  partition_buf_ptrs.target_partition_rowid_ptr_lv,
+                                  partition_buf_ptrs.target_partition_sorted_rowid_ptr_lv,
                                   logical_null_val_lv,
                                   target_col_null_val_lv});
   if (target_col_ti.get_compression() == kENCODING_DATE_IN_DAYS) {
@@ -600,6 +508,78 @@ llvm::Value* Executor::codegenFrameBoundExpr(const Analyzer::WindowFunction* win
   return bound_expr_lv;
 }
 
+llvm::Value* Executor::codegenFrameBound(bool for_start_bound,
+                                         bool for_range_mode,
+                                         const Analyzer::WindowFrame* frame_bound,
+                                         bool is_timestamp_type_frame,
+                                         llvm::Value* order_key_null_val,
+                                         const WindowFrameBoundFuncArgs& args) {
+  const auto bound_type = frame_bound->getBoundType();
+  if (bound_type == SqlWindowFrameBoundType::UNBOUNDED_PRECEDING) {
+    CHECK(for_start_bound) << "frame end cannot be UNBOUNDED PRECEDING";
+    return args.int64_t_zero_val_lv;
+  } else if (bound_type == SqlWindowFrameBoundType::UNBOUNDED_FOLLOWING) {
+    CHECK(!for_start_bound) << "frame start cannot be UNBOUNDED FOLLOWING";
+    return args.num_elem_current_partition_lv;
+  }
+  std::string func_name;
+  std::vector<llvm::Value*> func_args;
+  std::string op_name =
+      bound_type == SqlWindowFrameBoundType::EXPR_FOLLOWING ? "add" : "sub";
+  if (!for_range_mode) {
+    std::string func_class = for_start_bound ? "start" : "end";
+    func_name = "compute_row_mode_" + func_class + "_index_" + op_name;
+    func_args = prepareRowModeFuncArgs(for_start_bound, bound_type, args);
+  } else {
+    std::string func_class = for_start_bound ? "lower" : "upper";
+    func_name = getFramingFuncName(
+        func_class,
+        args.order_type_col_name,
+        op_name,
+        bound_type != SqlWindowFrameBoundType::CURRENT_ROW && is_timestamp_type_frame);
+    func_args = prepareRangeModeFuncArgs(
+        for_start_bound, frame_bound, is_timestamp_type_frame, order_key_null_val, args);
+  }
+  return cgen_state_->emitCall(func_name, func_args);
+}
+
+const SQLTypeInfo Executor::getFirstOrderColTypeInfo(
+    WindowFunctionContext* window_func_context) const {
+  const auto window_func = window_func_context->getWindowFunction();
+  return window_func->getOrderKeys().front()->get_type_info();
+}
+
+size_t Executor::getOrderKeySize(WindowFunctionContext* window_func_context) const {
+  const auto order_key_size = getFirstOrderColTypeInfo(window_func_context).get_size();
+  return order_key_size;
+}
+
+const std::string Executor::getOrderKeyTypeName(
+    WindowFunctionContext* window_func_context) const {
+  const auto order_key_size = getOrderKeySize(window_func_context);
+  return get_col_type_name_by_size(
+      order_key_size,
+      window_func_context->getOrderKeyColumnBufferTypes().front().is_fp());
+}
+
+llvm::Value* Executor::codegenLoadCurrentValueFromColBuf(
+    WindowFunctionContext* window_func_context,
+    CodeGenerator& code_generator,
+    llvm::Value* cur_row_pos_lv,
+    llvm::Value* order_key_buf_ptr_lv) const {
+  auto rowid_in_partition_lv =
+      code_generator.codegenWindowPosition(window_func_context, cur_row_pos_lv);
+  const auto order_key_size_in_byte = getOrderKeySize(window_func_context) * 8;
+  auto current_col_value_ptr_lv = cgen_state_->ir_builder_.CreateGEP(
+      get_int_type(order_key_size_in_byte, cgen_state_->context_),
+      order_key_buf_ptr_lv,
+      rowid_in_partition_lv);
+  return cgen_state_->ir_builder_.CreateLoad(
+      current_col_value_ptr_lv->getType()->getPointerElementType(),
+      current_col_value_ptr_lv,
+      "current_col_value");
+}
+
 llvm::Value* Executor::codegenCurrentPartitionIndex(
     const WindowFunctionContext* window_func_context,
     llvm::Value* current_row_pos_lv) {
@@ -616,285 +596,233 @@ llvm::Value* Executor::codegenCurrentPartitionIndex(
       {partition_count_lv, current_row_pos_lv, partition_num_count_ptr_lv});
 }
 
-std::pair<llvm::Value*, llvm::Value*> Executor::codegenWindowFrameBound(
+std::string Executor::getFramingFuncName(const std::string& bound_type,
+                                         const std::string& order_col_type,
+                                         const std::string& op_type,
+                                         bool for_timestamp_type) const {
+  auto target_val_type = for_timestamp_type ? "int64_t" : order_col_type;
+  auto null_type = for_timestamp_type ? "int64_t" : order_col_type;
+  return "range_mode_" + target_val_type + "_" + order_col_type + "_" + null_type + "_" +
+         op_type + "_frame_" + bound_type + "_bound";
+}
+
+std::vector<llvm::Value*> Executor::prepareRowModeFuncArgs(
+    bool for_start_bound,
+    SqlWindowFrameBoundType bound_type,
+    const WindowFrameBoundFuncArgs& args) const {
+  std::vector<llvm::Value*> frame_args{args.current_row_pos_lv,
+                                       args.current_partition_start_offset_lv};
+  if (bound_type == SqlWindowFrameBoundType::CURRENT_ROW) {
+    frame_args.push_back(args.int64_t_zero_val_lv);
+  } else {
+    frame_args.push_back(for_start_bound ? args.frame_start_bound_expr_lv
+                                         : args.frame_end_bound_expr_lv);
+    if (bound_type == SqlWindowFrameBoundType::EXPR_FOLLOWING) {
+      frame_args.push_back(args.num_elem_current_partition_lv);
+    }
+  }
+  return frame_args;
+}
+
+std::vector<llvm::Value*> Executor::prepareRangeModeFuncArgs(
+    bool for_start_bound,
+    const Analyzer::WindowFrame* frame_bound,
+    bool is_timestamp_type_frame,
+    llvm::Value* order_key_null_val,
+    const WindowFrameBoundFuncArgs& args) const {
+  llvm::Value* bound_expr_lv =
+      for_start_bound ? args.frame_start_bound_expr_lv : args.frame_end_bound_expr_lv;
+  llvm::Value* target_val_lv =
+      frame_bound->isCurrentRowBound() || !is_timestamp_type_frame
+          ? args.current_col_value_lv
+          : bound_expr_lv;
+  llvm::Value* frame_bound_val_lv =
+      frame_bound->isCurrentRowBound() || is_timestamp_type_frame
+          ? args.int64_t_zero_val_lv
+          : bound_expr_lv;
+  std::vector<llvm::Value*> frame_args{args.num_elem_current_partition_lv,
+                                       target_val_lv,
+                                       args.order_key_buf_ptr_lv,
+                                       args.target_partition_rowid_ptr_lv,
+                                       args.target_partition_sorted_rowid_ptr_lv,
+                                       frame_bound_val_lv,
+                                       order_key_null_val,
+                                       args.null_start_pos_lv,
+                                       args.null_end_pos_lv};
+  return frame_args;
+}
+
+std::pair<llvm::Value*, llvm::Value*> Executor::codegenFrameNullRange(
+    WindowFunctionContext* window_func_context,
+    llvm::Value* partition_index_lv) const {
+  const auto pi64_type =
+      llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
+  const auto null_start_pos_buf = cgen_state_->llInt(
+      reinterpret_cast<int64_t>(window_func_context->getNullValueStartPos()));
+  const auto null_start_pos_buf_ptr =
+      cgen_state_->ir_builder_.CreateIntToPtr(null_start_pos_buf, pi64_type);
+  const auto null_start_pos_ptr =
+      cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
+                                         null_start_pos_buf_ptr,
+                                         partition_index_lv);
+  auto null_start_pos_lv = cgen_state_->ir_builder_.CreateLoad(
+      null_start_pos_ptr->getType()->getPointerElementType(),
+      null_start_pos_ptr,
+      "null_start_pos");
+  const auto null_end_pos_buf = cgen_state_->llInt(
+      reinterpret_cast<int64_t>(window_func_context->getNullValueEndPos()));
+  const auto null_end_pos_buf_ptr =
+      cgen_state_->ir_builder_.CreateIntToPtr(null_end_pos_buf, pi64_type);
+  const auto null_end_pos_ptr = cgen_state_->ir_builder_.CreateGEP(
+      get_int_type(64, cgen_state_->context_), null_end_pos_buf_ptr, partition_index_lv);
+  auto null_end_pos_lv = cgen_state_->ir_builder_.CreateLoad(
+      null_end_pos_ptr->getType()->getPointerElementType(),
+      null_end_pos_ptr,
+      "null_end_pos");
+  return std::make_pair(null_start_pos_lv, null_end_pos_lv);
+}
+
+std::pair<std::string, llvm::Value*> Executor::codegenLoadOrderKeyBufPtr(
+    WindowFunctionContext* window_func_context) const {
+  const auto order_key_ti =
+      window_func_context->getWindowFunction()->getOrderKeys().front()->get_type_info();
+  const auto order_key_size = order_key_ti.get_size();
+  const auto order_col_type_name = get_col_type_name_by_size(
+      order_key_size,
+      window_func_context->getOrderKeyColumnBufferTypes().front().is_fp());
+  size_t order_key_size_in_byte = order_key_size * 8;
+
+  const auto order_key_buf_type = llvm::PointerType::get(
+      get_int_type(order_key_size_in_byte, cgen_state_->context_), 0);
+  const auto order_key_buf = cgen_state_->llInt(
+      reinterpret_cast<int64_t>(window_func_context->getOrderKeyColumnBuffers().front()));
+  auto order_key_buf_ptr_lv =
+      cgen_state_->ir_builder_.CreateIntToPtr(order_key_buf, order_key_buf_type);
+
+  return std::make_pair(order_col_type_name, order_key_buf_ptr_lv);
+}
+
+WindowPartitionBufferPtrs Executor::codegenLoadPartitionBuffers(
+    WindowFunctionContext* window_func_context,
+    llvm::Value* partition_index_lv) const {
+  WindowPartitionBufferPtrs bufferPtrs;
+  const auto pi64_type =
+      llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
+  const auto pi32_type =
+      llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
+
+  // partial sum of # elems of partitions
+  auto partition_start_offset_buf_lv = cgen_state_->llInt(
+      reinterpret_cast<int64_t>(window_func_context->partitionStartOffset()));
+  auto partition_start_offset_ptr_lv =
+      cgen_state_->ir_builder_.CreateIntToPtr(partition_start_offset_buf_lv, pi64_type);
+
+  // get start offset of the current partition
+  auto current_partition_start_offset_ptr_lv =
+      cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
+                                         partition_start_offset_ptr_lv,
+                                         partition_index_lv);
+  bufferPtrs.current_partition_start_offset_lv = cgen_state_->ir_builder_.CreateLoad(
+      current_partition_start_offset_ptr_lv->getType()->getPointerElementType(),
+      current_partition_start_offset_ptr_lv);
+
+  // row_id buf of the current partition
+  const auto partition_rowid_buf_lv =
+      cgen_state_->llInt(reinterpret_cast<int64_t>(window_func_context->payload()));
+  const auto partition_rowid_ptr_lv =
+      cgen_state_->ir_builder_.CreateIntToPtr(partition_rowid_buf_lv, pi32_type);
+  bufferPtrs.target_partition_rowid_ptr_lv =
+      cgen_state_->ir_builder_.CreateGEP(get_int_type(32, cgen_state_->context_),
+                                         partition_rowid_ptr_lv,
+                                         bufferPtrs.current_partition_start_offset_lv);
+
+  // row_id buf of ordered current partition
+  const auto sorted_rowid_lv = cgen_state_->llInt(
+      reinterpret_cast<int64_t>(window_func_context->sortedPartition()));
+  const auto sorted_rowid_ptr_lv =
+      cgen_state_->ir_builder_.CreateIntToPtr(sorted_rowid_lv, pi64_type);
+  bufferPtrs.target_partition_sorted_rowid_ptr_lv =
+      cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
+                                         sorted_rowid_ptr_lv,
+                                         bufferPtrs.current_partition_start_offset_lv);
+
+  // # elems per partition
+  const auto partition_count_buf =
+      cgen_state_->llInt(reinterpret_cast<int64_t>(window_func_context->counts()));
+  auto partition_count_buf_ptr_lv =
+      cgen_state_->ir_builder_.CreateIntToPtr(partition_count_buf, pi32_type);
+
+  // # elems of the given partition
+  const auto num_elem_current_partition_ptr =
+      cgen_state_->ir_builder_.CreateGEP(get_int_type(32, cgen_state_->context_),
+                                         partition_count_buf_ptr_lv,
+                                         partition_index_lv);
+  bufferPtrs.num_elem_current_partition_lv = cgen_state_->castToTypeIn(
+      cgen_state_->ir_builder_.CreateLoad(
+          num_elem_current_partition_ptr->getType()->getPointerElementType(),
+          num_elem_current_partition_ptr),
+      64);
+  return bufferPtrs;
+}
+
+std::pair<llvm::Value*, llvm::Value*> Executor::codegenFrameBoundRange(
+    const Analyzer::WindowFunction* window_func,
+    CodeGenerator& code_generator,
+    const CompilationOptions& co) {
+  const auto frame_start_bound = window_func->getFrameStartBound();
+  const auto frame_end_bound = window_func->getFrameEndBound();
+  auto frame_start_bound_expr_lv =
+      codegenFrameBoundExpr(window_func, frame_start_bound, code_generator, co);
+  auto frame_end_bound_expr_lv =
+      codegenFrameBoundExpr(window_func, frame_end_bound, code_generator, co);
+  CHECK(frame_start_bound_expr_lv);
+  CHECK(frame_end_bound_expr_lv);
+  return std::make_pair(frame_start_bound_expr_lv, frame_end_bound_expr_lv);
+}
+
+std::pair<llvm::Value*, llvm::Value*> Executor::codegenWindowFrameBounds(
     WindowFunctionContext* window_func_context,
     const Analyzer::WindowFrame* frame_start_bound,
     const Analyzer::WindowFrame* frame_end_bound,
-    llvm::Value* current_row_pos_lv,
-    llvm::Value* current_partition_start_offset_lv,
-    llvm::Value* order_key_buf_ptr_lv,
     llvm::Value* order_key_col_null_val_lv,
-    llvm::Value* frame_start_bound_expr_lv,
-    llvm::Value* frame_end_bound_expr_lv,
-    llvm::Value* num_elem_current_partition_lv,
-    llvm::Value* target_partition_rowid_ptr_lv,
-    llvm::Value* target_partition_sorted_rowid_ptr_lv,
-    llvm::Value* null_start_pos_lv,
-    llvm::Value* null_end_pos_lv,
+    WindowFrameBoundFuncArgs& args,
     CodeGenerator& code_generator) {
   const auto window_func = window_func_context->getWindowFunction();
   CHECK(window_func);
-  std::string order_col_type_name{""};
-  llvm::Value* current_col_value_lv{nullptr};
-  llvm::Value* frame_start_bound_lv{nullptr};
-  llvm::Value* frame_end_bound_lv{nullptr};
+  const auto is_timestamp_type_frame = frame_start_bound->hasTimestampTypeFrameBound() ||
+                                       frame_end_bound->hasTimestampTypeFrameBound();
 
   if (window_func->hasRangeModeFraming()) {
     CHECK(window_func_context->getOrderKeyColumnBuffers().size() == 1);
     CHECK(window_func->getOrderKeys().size() == 1UL);
     CHECK(window_func_context->getOrderKeyColumnBuffers().size() == 1UL);
-    const auto order_key_ti = window_func->getOrderKeys().front()->get_type_info();
-    const auto order_key_size = order_key_ti.get_size();
-    size_t order_key_size_in_byte = order_key_size * 8;
-    order_col_type_name = get_col_type_name_by_size(
-        order_key_size,
-        window_func_context->getOrderKeyColumnBufferTypes().front().is_fp());
-
-    // load column value of the current row (of ordering column)
-    auto rowid_in_partition_lv =
-        code_generator.codegenWindowPosition(window_func_context, current_row_pos_lv);
-    auto current_col_value_ptr_lv = cgen_state_->ir_builder_.CreateGEP(
-        get_int_type(order_key_size_in_byte, cgen_state_->context_),
-        order_key_buf_ptr_lv,
-        rowid_in_partition_lv);
-    current_col_value_lv = cgen_state_->ir_builder_.CreateLoad(
-        current_col_value_ptr_lv->getType()->getPointerElementType(),
-        current_col_value_ptr_lv,
-        "current_col_value");
+    args.order_type_col_name = getOrderKeyTypeName(window_func_context);
+    args.current_col_value_lv =
+        codegenLoadCurrentValueFromColBuf(window_func_context,
+                                          code_generator,
+                                          args.current_row_pos_lv,
+                                          args.order_key_buf_ptr_lv);
   }
 
-  // compute frame start depending on the bound type
-  if (frame_start_bound->getBoundType() == SqlWindowFrameBoundType::UNBOUNDED_PRECEDING) {
-    // frame starts at the first row of the partition
-    frame_start_bound_lv = cgen_state_->llInt((int64_t)0);
-  } else if (frame_start_bound->getBoundType() ==
-             SqlWindowFrameBoundType::EXPR_PRECEDING) {
-    // frame starts at the position before X rows of the current row
-    CHECK(frame_start_bound_expr_lv);
-    if (window_func->hasRowModeFraming()) {
-      frame_start_bound_lv = cgen_state_->emitCall("compute_row_mode_start_index_sub",
-                                                   {current_row_pos_lv,
-                                                    current_partition_start_offset_lv,
-                                                    frame_start_bound_expr_lv});
-    } else {
-      CHECK(window_func->hasRangeModeFraming());
-      if (frame_start_bound->getBoundExpr()->get_type_info().is_date() ||
-          frame_start_bound->getBoundExpr()->get_type_info().is_timestamp()) {
-        std::string lower_bound_func_name{"compute_"};
-        lower_bound_func_name.append(order_col_type_name);
-        lower_bound_func_name.append("_lower_bound_from_ordered_index_for_timeinterval");
-        frame_start_bound_lv = cgen_state_->emitCall(
-            lower_bound_func_name,
-            {num_elem_current_partition_lv,
-             frame_start_bound_expr_lv,
-             order_key_buf_ptr_lv,
-             target_partition_rowid_ptr_lv,
-             target_partition_sorted_rowid_ptr_lv,
-             cgen_state_->castToTypeIn(order_key_col_null_val_lv, 64),
-             null_start_pos_lv,
-             null_end_pos_lv});
-      } else {
-        std::string lower_bound_func_name{"range_mode_"};
-        lower_bound_func_name.append(order_col_type_name);
-        lower_bound_func_name.append("_sub_frame_lower_bound");
-        frame_start_bound_lv =
-            cgen_state_->emitCall(lower_bound_func_name,
-                                  {num_elem_current_partition_lv,
-                                   current_col_value_lv,
-                                   order_key_buf_ptr_lv,
-                                   target_partition_rowid_ptr_lv,
-                                   target_partition_sorted_rowid_ptr_lv,
-                                   frame_start_bound_expr_lv,
-                                   order_key_col_null_val_lv,
-                                   null_start_pos_lv,
-                                   null_end_pos_lv});
-      }
-    }
-  } else if (frame_start_bound->getBoundType() == SqlWindowFrameBoundType::CURRENT_ROW) {
-    // frame start at the current row
-    if (window_func->hasRowModeFraming()) {
-      frame_start_bound_lv = cgen_state_->emitCall("compute_row_mode_start_index_sub",
-                                                   {current_row_pos_lv,
-                                                    current_partition_start_offset_lv,
-                                                    cgen_state_->llInt(((int64_t)0))});
-    } else {
-      CHECK(window_func->hasRangeModeFraming());
-      std::string lower_bound_func_name{"compute_"};
-      lower_bound_func_name.append(order_col_type_name);
-      lower_bound_func_name.append("_lower_bound_from_ordered_index");
-      frame_start_bound_lv = cgen_state_->emitCall(lower_bound_func_name,
-                                                   {num_elem_current_partition_lv,
-                                                    current_col_value_lv,
-                                                    order_key_buf_ptr_lv,
-                                                    target_partition_rowid_ptr_lv,
-                                                    target_partition_sorted_rowid_ptr_lv,
-                                                    order_key_col_null_val_lv,
-                                                    null_start_pos_lv,
-                                                    null_end_pos_lv});
-    }
-  } else if (frame_start_bound->getBoundType() ==
-             SqlWindowFrameBoundType::EXPR_FOLLOWING) {
-    // frame start at the position after X rows of the current row
-    CHECK(frame_start_bound_expr_lv);
-    if (window_func->hasRowModeFraming()) {
-      frame_start_bound_lv = cgen_state_->emitCall("compute_row_mode_start_index_add",
-                                                   {current_row_pos_lv,
-                                                    current_partition_start_offset_lv,
-                                                    frame_start_bound_expr_lv,
-                                                    num_elem_current_partition_lv});
-    } else {
-      CHECK(window_func->hasRangeModeFraming());
-      if (frame_start_bound->getBoundExpr()->get_type_info().is_date() ||
-          frame_start_bound->getBoundExpr()->get_type_info().is_timestamp()) {
-        std::string lower_bound_func_name{"compute_"};
-        lower_bound_func_name.append(order_col_type_name);
-        lower_bound_func_name.append("_lower_bound_from_ordered_index_for_timeinterval");
-        frame_start_bound_lv = cgen_state_->emitCall(
-            lower_bound_func_name,
-            {num_elem_current_partition_lv,
-             frame_start_bound_expr_lv,
-             order_key_buf_ptr_lv,
-             target_partition_rowid_ptr_lv,
-             target_partition_sorted_rowid_ptr_lv,
-             cgen_state_->castToTypeIn(order_key_col_null_val_lv, 64),
-             null_start_pos_lv,
-             null_end_pos_lv});
-      } else {
-        std::string lower_bound_func_name{"range_mode_"};
-        lower_bound_func_name.append(order_col_type_name);
-        lower_bound_func_name.append("_add_frame_lower_bound");
-        frame_start_bound_lv =
-            cgen_state_->emitCall(lower_bound_func_name,
-                                  {num_elem_current_partition_lv,
-                                   current_col_value_lv,
-                                   order_key_buf_ptr_lv,
-                                   target_partition_rowid_ptr_lv,
-                                   target_partition_sorted_rowid_ptr_lv,
-                                   frame_start_bound_expr_lv,
-                                   order_key_col_null_val_lv,
-                                   null_start_pos_lv,
-                                   null_end_pos_lv});
-      }
-    }
-  } else {
-    CHECK(false) << "frame start cannot be UNBOUNDED FOLLOWING";
-  }
-
-  // compute frame end
-  if (frame_end_bound->getBoundType() == SqlWindowFrameBoundType::UNBOUNDED_PRECEDING) {
-    // frame ends at the first row of the partition
-    CHECK(false) << "frame end cannot be UNBOUNDED PRECEDING";
-  } else if (frame_end_bound->getBoundType() == SqlWindowFrameBoundType::EXPR_PRECEDING) {
-    // frame ends at the position X rows before the current row
-    CHECK(frame_end_bound_expr_lv);
-    if (window_func->hasRowModeFraming()) {
-      frame_end_bound_lv = cgen_state_->emitCall("compute_row_mode_end_index_sub",
-                                                 {current_row_pos_lv,
-                                                  current_partition_start_offset_lv,
-                                                  frame_end_bound_expr_lv});
-    } else {
-      CHECK(window_func->hasRangeModeFraming());
-      if (frame_end_bound->getBoundExpr()->get_type_info().is_date() ||
-          frame_end_bound->getBoundExpr()->get_type_info().is_timestamp()) {
-        std::string upper_bound_func_name{"compute_"};
-        upper_bound_func_name.append(order_col_type_name);
-        upper_bound_func_name.append("_upper_bound_from_ordered_index_for_timeinterval");
-        frame_end_bound_lv = cgen_state_->emitCall(
-            upper_bound_func_name,
-            {num_elem_current_partition_lv,
-             frame_end_bound_expr_lv,
-             order_key_buf_ptr_lv,
-             target_partition_rowid_ptr_lv,
-             target_partition_sorted_rowid_ptr_lv,
-             cgen_state_->castToTypeIn(order_key_col_null_val_lv, 64),
-             null_start_pos_lv,
-             null_end_pos_lv});
-      } else {
-        std::string upper_bound_func_name{"range_mode_"};
-        upper_bound_func_name.append(order_col_type_name);
-        upper_bound_func_name.append("_sub_frame_upper_bound");
-        frame_end_bound_lv = cgen_state_->emitCall(upper_bound_func_name,
-                                                   {num_elem_current_partition_lv,
-                                                    current_col_value_lv,
-                                                    order_key_buf_ptr_lv,
-                                                    target_partition_rowid_ptr_lv,
-                                                    target_partition_sorted_rowid_ptr_lv,
-                                                    frame_end_bound_expr_lv,
-                                                    order_key_col_null_val_lv,
-                                                    null_start_pos_lv,
-                                                    null_end_pos_lv});
-      }
-    }
-  } else if (frame_end_bound->getBoundType() == SqlWindowFrameBoundType::CURRENT_ROW) {
-    // frame ends at the current row
-    if (window_func->hasRowModeFraming()) {
-      frame_end_bound_lv = cgen_state_->emitCall("compute_row_mode_end_index_sub",
-                                                 {current_row_pos_lv,
-                                                  current_partition_start_offset_lv,
-                                                  cgen_state_->llInt((int64_t)0)});
-    } else {
-      CHECK(window_func->hasRangeModeFraming());
-      std::string upper_bound_func_name{"compute_"};
-      upper_bound_func_name.append(order_col_type_name);
-      upper_bound_func_name.append("_upper_bound_from_ordered_index");
-      frame_end_bound_lv = cgen_state_->emitCall(upper_bound_func_name,
-                                                 {num_elem_current_partition_lv,
-                                                  current_col_value_lv,
-                                                  order_key_buf_ptr_lv,
-                                                  target_partition_rowid_ptr_lv,
-                                                  target_partition_sorted_rowid_ptr_lv,
-                                                  order_key_col_null_val_lv,
-                                                  null_start_pos_lv,
-                                                  null_end_pos_lv});
-    }
-  } else if (frame_end_bound->getBoundType() == SqlWindowFrameBoundType::EXPR_FOLLOWING) {
-    // frame ends at the position X rows after the current row
-    CHECK(frame_end_bound_expr_lv);
-    if (window_func->hasRowModeFraming()) {
-      frame_end_bound_lv = cgen_state_->emitCall("compute_row_mode_end_index_add",
-                                                 {current_row_pos_lv,
-                                                  current_partition_start_offset_lv,
-                                                  frame_end_bound_expr_lv,
-                                                  num_elem_current_partition_lv});
-    } else {
-      CHECK(window_func->hasRangeModeFraming());
-      if (frame_end_bound->getBoundExpr()->get_type_info().is_date() ||
-          frame_end_bound->getBoundExpr()->get_type_info().is_timestamp()) {
-        std::string upper_bound_func_name{"compute_"};
-        upper_bound_func_name.append(order_col_type_name);
-        upper_bound_func_name.append("_upper_bound_from_ordered_index_for_timeinterval");
-        frame_end_bound_lv = cgen_state_->emitCall(
-            upper_bound_func_name,
-            {num_elem_current_partition_lv,
-             frame_end_bound_expr_lv,
-             order_key_buf_ptr_lv,
-             target_partition_rowid_ptr_lv,
-             target_partition_sorted_rowid_ptr_lv,
-             cgen_state_->castToTypeIn(order_key_col_null_val_lv, 64),
-             null_start_pos_lv,
-             null_end_pos_lv});
-      } else {
-        std::string upper_bound_func_name{"range_mode_"};
-        upper_bound_func_name.append(order_col_type_name);
-        upper_bound_func_name.append("_add_frame_upper_bound");
-        frame_end_bound_lv = cgen_state_->emitCall(upper_bound_func_name,
-                                                   {num_elem_current_partition_lv,
-                                                    current_col_value_lv,
-                                                    order_key_buf_ptr_lv,
-                                                    target_partition_rowid_ptr_lv,
-                                                    target_partition_sorted_rowid_ptr_lv,
-                                                    frame_end_bound_expr_lv,
-                                                    order_key_col_null_val_lv,
-                                                    null_start_pos_lv,
-                                                    null_end_pos_lv});
-      }
-    }
-  } else {
-    // frame ends at the last row of the partition
-    CHECK(frame_end_bound->getBoundType() ==
-          SqlWindowFrameBoundType::UNBOUNDED_FOLLOWING);
-    frame_end_bound_lv = num_elem_current_partition_lv;
-  }
+  auto get_order_key_null_val = [is_timestamp_type_frame,
+                                 &order_key_col_null_val_lv,
+                                 this](const Analyzer::WindowFrame* frame_bound) {
+    return is_timestamp_type_frame && !frame_bound->isCurrentRowBound()
+               ? cgen_state_->castToTypeIn(order_key_col_null_val_lv, 64)
+               : order_key_col_null_val_lv;
+  };
+  auto frame_start_bound_lv = codegenFrameBound(true,
+                                                window_func->hasRangeModeFraming(),
+                                                frame_start_bound,
+                                                is_timestamp_type_frame,
+                                                get_order_key_null_val(frame_start_bound),
+                                                args);
+  auto frame_end_bound_lv = codegenFrameBound(false,
+                                              window_func->hasRangeModeFraming(),
+                                              frame_end_bound,
+                                              is_timestamp_type_frame,
+                                              get_order_key_null_val(frame_end_bound),
+                                              args);
   CHECK(frame_start_bound_lv);
   CHECK(frame_end_bound_lv);
   return std::make_pair(frame_start_bound_lv, frame_end_bound_lv);
@@ -931,26 +859,15 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
   }
   if (window_func_context->needsToBuildAggregateTree()) {
     // compute an aggregated value for each row of the window frame by using segment tree
-    // when constructing a window context, we build a necessary segment tree for it
-    // and use the tree array (so called `aggregate tree`) to query the aggregated value
-    // of the specific window frame
-    // we fall back to the non-framing window func evaluation logic if an input
-    // of the window function can be an empty one
+    // when constructing a window context, we build a necessary segment tree (so called
+    // `aggregate tree`) to query the aggregated value of the specific window frame
     const auto pi64_type =
         llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
-    const auto ppi64_type = llvm::PointerType::get(pi64_type, 0);
-    const auto pi32_type =
-        llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
+    const auto ppi64_type = llvm::PointerType::get(
+        llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0), 0);
 
-    // codegen frame bound expr if necessary
-    const auto frame_start_bound = window_func->getFrameStartBound();
-    const auto frame_end_bound = window_func->getFrameEndBound();
-    auto frame_start_bound_expr_lv =
-        codegenFrameBoundExpr(window_func, frame_start_bound, code_generator, co);
-    auto frame_end_bound_expr_lv =
-        codegenFrameBoundExpr(window_func, frame_end_bound, code_generator, co);
-    CHECK(frame_start_bound_expr_lv);
-    CHECK(frame_end_bound_expr_lv);
+    auto [frame_start_bound_expr_lv, frame_end_bound_expr_lv] =
+        codegenFrameBoundRange(window_func, code_generator, co);
 
     // compute aggregated value over the computed frame range
     auto current_row_pos_lv = code_generator.posArg(nullptr);
@@ -963,71 +880,11 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
     const auto col_type_name =
         get_col_type_name_by_size(target_col_size, target_col_ti.is_fp());
 
-    // partial sum of # elems of partitions
-    auto partition_start_offset_buf_lv = cgen_state_->llInt(
-        reinterpret_cast<int64_t>(window_func_context->partitionStartOffset()));
-    auto partition_start_offset_ptr_lv =
-        cgen_state_->ir_builder_.CreateIntToPtr(partition_start_offset_buf_lv, pi64_type);
+    const auto partition_buf_ptrs =
+        codegenLoadPartitionBuffers(window_func_context, partition_index_lv);
 
-    // get start offset of the current partition
-    auto current_partition_start_offset_ptr_lv =
-        cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
-                                           partition_start_offset_ptr_lv,
-                                           partition_index_lv);
-    auto current_partition_start_offset_lv = cgen_state_->ir_builder_.CreateLoad(
-        current_partition_start_offset_ptr_lv->getType()->getPointerElementType(),
-        current_partition_start_offset_ptr_lv);
-
-    // row_id buf of the current partition
-    const auto partition_rowid_buf_lv =
-        cgen_state_->llInt(reinterpret_cast<int64_t>(window_func_context->payload()));
-    const auto partition_rowid_ptr_lv =
-        cgen_state_->ir_builder_.CreateIntToPtr(partition_rowid_buf_lv, pi32_type);
-    auto target_partition_rowid_ptr_lv =
-        cgen_state_->ir_builder_.CreateGEP(get_int_type(32, cgen_state_->context_),
-                                           partition_rowid_ptr_lv,
-                                           current_partition_start_offset_lv);
-
-    // row_id buf of ordered current partition
-    const auto sorted_rowid_lv = cgen_state_->llInt(
-        reinterpret_cast<int64_t>(window_func_context->sortedPartition()));
-    const auto sorted_rowid_ptr_lv =
-        cgen_state_->ir_builder_.CreateIntToPtr(sorted_rowid_lv, pi64_type);
-    auto target_partition_sorted_rowid_ptr_lv =
-        cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
-                                           sorted_rowid_ptr_lv,
-                                           current_partition_start_offset_lv);
-
-    // # elems per partition
-    const auto partition_count_buf =
-        cgen_state_->llInt(reinterpret_cast<int64_t>(window_func_context->counts()));
-    auto partition_count_buf_ptr_lv =
-        cgen_state_->ir_builder_.CreateIntToPtr(partition_count_buf, pi32_type);
-
-    // # elems of the given partition
-    const auto num_elem_current_partition_ptr =
-        cgen_state_->ir_builder_.CreateGEP(get_int_type(32, cgen_state_->context_),
-                                           partition_count_buf_ptr_lv,
-                                           partition_index_lv);
-    auto num_elem_current_partition_lv = cgen_state_->castToTypeIn(
-        cgen_state_->ir_builder_.CreateLoad(
-            num_elem_current_partition_ptr->getType()->getPointerElementType(),
-            num_elem_current_partition_ptr),
-        64);
-
-    const auto order_key_ti = window_func->getOrderKeys().front()->get_type_info();
-    const auto order_key_size = order_key_ti.get_size();
-    const auto order_col_type_name = get_col_type_name_by_size(
-        order_key_size,
-        window_func_context->getOrderKeyColumnBufferTypes().front().is_fp());
-    size_t order_key_size_in_byte = order_key_size * 8;
-
-    const auto order_key_buf_type = llvm::PointerType::get(
-        get_int_type(order_key_size_in_byte, cgen_state_->context_), 0);
-    const auto order_key_buf = cgen_state_->llInt(reinterpret_cast<int64_t>(
-        window_func_context->getOrderKeyColumnBuffers().front()));
-    auto order_key_buf_ptr_lv =
-        cgen_state_->ir_builder_.CreateIntToPtr(order_key_buf, order_key_buf_type);
+    auto [order_col_type_name, order_key_buf_ptr_lv] =
+        codegenLoadOrderKeyBufPtr(window_func_context);
 
     // null value of the ordering column
     const auto order_key_buf_ti =
@@ -1069,52 +926,31 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
       }
     }
 
-    // null range of the aggregate tree
-    const auto null_start_pos_buf = cgen_state_->llInt(
-        reinterpret_cast<int64_t>(window_func_context->getNullValueStartPos()));
-    const auto null_start_pos_buf_ptr =
-        cgen_state_->ir_builder_.CreateIntToPtr(null_start_pos_buf, pi64_type);
-    const auto null_start_pos_ptr =
-        cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
-                                           null_start_pos_buf_ptr,
-                                           partition_index_lv);
-    auto null_start_pos_lv = cgen_state_->ir_builder_.CreateLoad(
-        null_start_pos_ptr->getType()->getPointerElementType(),
-        null_start_pos_ptr,
-        "null_start_pos");
-    const auto null_end_pos_buf = cgen_state_->llInt(
-        reinterpret_cast<int64_t>(window_func_context->getNullValueEndPos()));
-    const auto null_end_pos_buf_ptr =
-        cgen_state_->ir_builder_.CreateIntToPtr(null_end_pos_buf, pi64_type);
-    const auto null_end_pos_ptr =
-        cgen_state_->ir_builder_.CreateGEP(get_int_type(64, cgen_state_->context_),
-                                           null_end_pos_buf_ptr,
-                                           partition_index_lv);
-    auto null_end_pos_lv = cgen_state_->ir_builder_.CreateLoad(
-        null_end_pos_ptr->getType()->getPointerElementType(),
-        null_end_pos_ptr,
-        "null_end_pos");
+    auto [null_start_pos_lv, null_end_pos_lv] =
+        codegenFrameNullRange(window_func_context, partition_index_lv);
 
-    llvm::Value* frame_start_bound_lv{nullptr};
-    llvm::Value* frame_end_bound_lv{nullptr};
-    std::tie(frame_start_bound_lv, frame_end_bound_lv) =
-        codegenWindowFrameBound(window_func_context,
-                                frame_start_bound,
-                                frame_end_bound,
-                                current_row_pos_lv,
-                                current_partition_start_offset_lv,
-                                order_key_buf_ptr_lv,
-                                order_key_col_null_val_lv,
-                                frame_start_bound_expr_lv,
-                                frame_end_bound_expr_lv,
-                                num_elem_current_partition_lv,
-                                target_partition_rowid_ptr_lv,
-                                target_partition_sorted_rowid_ptr_lv,
-                                null_start_pos_lv,
-                                null_end_pos_lv,
-                                code_generator);
-    CHECK(frame_start_bound_lv);
-    CHECK(frame_end_bound_lv);
+    llvm::Value* int64_t_zero_val_lv = cgen_state_->llInt((int64_t)0);
+    WindowFrameBoundFuncArgs WindowFrameBoundFuncArgs{
+        frame_start_bound_expr_lv,
+        frame_end_bound_expr_lv,
+        current_row_pos_lv,
+        nullptr,
+        partition_buf_ptrs.current_partition_start_offset_lv,
+        int64_t_zero_val_lv,
+        partition_buf_ptrs.num_elem_current_partition_lv,
+        order_key_buf_ptr_lv,
+        "",
+        partition_buf_ptrs.target_partition_rowid_ptr_lv,
+        partition_buf_ptrs.target_partition_sorted_rowid_ptr_lv,
+        null_start_pos_lv,
+        null_end_pos_lv};
+    auto [frame_start_bound_lv, frame_end_bound_lv] =
+        codegenWindowFrameBounds(window_func_context,
+                                 window_func->getFrameStartBound(),
+                                 window_func->getFrameEndBound(),
+                                 order_key_col_null_val_lv,
+                                 WindowFrameBoundFuncArgs,
+                                 code_generator);
 
     // codegen to send a query with frame bound to aggregate tree searcher
     llvm::Value* aggregation_trees_lv{nullptr};

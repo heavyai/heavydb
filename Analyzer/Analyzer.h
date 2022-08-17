@@ -2431,6 +2431,18 @@ class WindowFrame : public Expr {
     return bound_expr_.get();
   }
 
+  bool hasTimestampTypeFrameBound() const {
+    if (bound_expr_) {
+      const auto bound_ti = bound_expr_->get_type_info();
+      return bound_ti.is_date() || bound_ti.is_timestamp();
+    }
+    return false;
+  }
+
+  bool isCurrentRowBound() const {
+    return bound_type_ == SqlWindowFrameBoundType::CURRENT_ROW;
+  }
+
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
 
   bool operator==(const Expr& rhs) const override;
