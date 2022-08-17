@@ -249,6 +249,17 @@ add_custom_target(sanity_tests
     DEPENDS ${TEST_PROGRAMS}
     USES_TERMINAL)
 
+cmake_host_system_information(RESULT CPU_NUM QUERY NUMBER_OF_PHYSICAL_CORES)
+add_custom_target(sanity_tests_par
+    COMMAND mkdir -p tmp
+    COMMAND touch tmp/DictPayload
+    COMMAND env AWS_REGION=${AWS_REGION}
+                AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                ${CMAKE_CTEST_COMMAND} --verbose --label-regex sanity -j ${CPU_NUM}
+    DEPENDS ${TEST_PROGRAMS}
+    USES_TERMINAL)
+
 add_custom_target(all_tests
     COMMAND mkdir -p tmp
     COMMAND touch tmp/DictPayload

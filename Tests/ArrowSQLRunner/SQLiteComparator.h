@@ -26,8 +26,8 @@ constexpr double EPS = 1.25e-5;
 
 class SQLiteComparator {
  public:
-  SQLiteComparator(bool use_row_iterator = true)
-      : connector_("sqliteTestDB", ""), use_row_iterator_(use_row_iterator) {}
+  SQLiteComparator(bool use_row_iterator = true);
+  ~SQLiteComparator();
 
   void query(const std::string& query_string) { connector_.query(query_string); }
 
@@ -50,6 +50,7 @@ class SQLiteComparator {
                                const ExecutorDeviceType device_type);
 
  private:
+  std::string sqlite_db_dir_;
   SqliteConnector connector_;
   bool use_row_iterator_;
 };

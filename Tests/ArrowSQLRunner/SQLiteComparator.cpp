@@ -19,10 +19,15 @@
 #include "Shared/DateTimeParser.h"
 
 #include <gtest/gtest.h>
+#include <boost/filesystem.hpp>
+
+#include <filesystem>
 
 #ifdef _WIN32
 #define timegm _mkgmtime
 #endif
+
+using namespace std::string_literals;
 
 namespace TestHelpers {
 
@@ -241,6 +246,16 @@ void compare_impl(SqliteConnector& connector,
 }
 
 }  // namespace
+
+SQLiteComparator::SQLiteComparator(bool use_row_iterator)
+    : sqlite_db_dir_("sqliteTestDB-"s + boost::filesystem::unique_path().string())
+    , connector_(sqlite_db_dir_, "")
+    , use_row_iterator_(use_row_iterator) {}
+
+SQLiteComparator::~SQLiteComparator() {
+  std::error_code err;
+  std::filesystem::remove_all(sqlite_db_dir_, err);
+}
 
 void SQLiteComparator::compare(ResultSetPtr omnisci_results,
                                const std::string& query_string,

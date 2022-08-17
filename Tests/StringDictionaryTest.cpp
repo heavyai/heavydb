@@ -18,6 +18,9 @@
 
 #include "StringDictionary/StringDictionaryProxy.h"
 
+#include <boost/filesystem.hpp>
+
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
@@ -27,15 +30,26 @@
 #include <string_view>
 #include <unordered_set>
 
-#ifndef BASE_PATH1
-#define BASE_PATH1 "./tmp/dict1"
-#endif
+using namespace std::string_literals;
 
-#ifndef BASE_PATH2
-#define BASE_PATH2 "./tmp/dict2"
-#endif
+static const std::string BASE_PATH1 =
+    BASE_PATH + "/"s + boost::filesystem::unique_path().string();
+static const std::string BASE_PATH2 =
+    BASE_PATH + "/"s + boost::filesystem::unique_path().string();
 
 extern bool g_cache_string_hash;
+
+namespace {
+
+void create_directory_if_not_exists(const std::string& path) {
+  // Up to caller to catch any exceptions
+  std::filesystem::path fs_path(path);
+  if (!(std::filesystem::exists(path))) {
+    std::filesystem::create_directories(path);
+  }
+}
+
+}  // namespace
 
 TEST(StringDictionary, AddAndGet) {
   const DictRef dict_ref(-1, 1);
@@ -815,8 +829,8 @@ TEST(StringDictionary, TransientUnion) {
   mkdir(sd_lhs_path.c_str());
   mkdir(sd_rhs_path.c_str());
 #else
-  mkdir(sd_lhs_path.c_str(), 0755);
-  mkdir(sd_rhs_path.c_str(), 0755);
+  create_directory_if_not_exists(sd_lhs_path);
+  create_directory_if_not_exists(sd_rhs_path);
 #endif
 
   dict_ref_t const dict_ref_lhs(100, 10);
@@ -911,14 +925,6 @@ TEST(StringDictionary, TransientUnion) {
     ASSERT_EQ(4, sdp_lhs.getIdOfString("g"));
     ASSERT_EQ(5, sdp_lhs.getIdOfString("h"));
     ASSERT_EQ(6, sdp_lhs.getIdOfString("i"));
-  }
-}
-
-void create_directory_if_not_exists(const std::string& path) {
-  // Up to caller to catch any exceptions
-  std::filesystem::path fs_path(path);
-  if (!(std::filesystem::exists(path))) {
-    std::filesystem::create_directory(path);
   }
 }
 
