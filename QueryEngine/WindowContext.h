@@ -66,6 +66,29 @@ struct AggregateTreeForWindowFraming {
   std::vector<SumAndCountPair<double>*> derived_aggregate_tree_for_double_type_;
 };
 
+struct WindowFrameBoundFuncArgs {
+  llvm::Value* frame_start_bound_expr_lv;
+  llvm::Value* frame_end_bound_expr_lv;
+  llvm::Value* current_row_pos_lv;
+  llvm::Value* current_col_value_lv;
+  llvm::Value* current_partition_start_offset_lv;
+  llvm::Value* int64_t_zero_val_lv;
+  llvm::Value* num_elem_current_partition_lv;
+  llvm::Value* order_key_buf_ptr_lv;
+  std::string order_type_col_name;
+  llvm::Value* target_partition_rowid_ptr_lv;
+  llvm::Value* target_partition_sorted_rowid_ptr_lv;
+  llvm::Value* null_start_pos_lv;
+  llvm::Value* null_end_pos_lv;
+};
+
+struct WindowPartitionBufferPtrs {
+  llvm::Value* current_partition_start_offset_lv;
+  llvm::Value* num_elem_current_partition_lv;
+  llvm::Value* target_partition_rowid_ptr_lv;
+  llvm::Value* target_partition_sorted_rowid_ptr_lv;
+};
+
 // Per-window function context which encapsulates the logic for computing the various
 // window function kinds and keeps ownership of buffers which contain the results. For
 // rank functions, the code generated for the projection simply reads the values and
