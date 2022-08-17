@@ -1315,38 +1315,6 @@ std::vector<hdk::ir::Expr*> translate_targets(
     bool bigint_count) {
   std::vector<hdk::ir::Expr*> target_exprs;
   for (size_t i = 0; i < compound->size(); ++i) {
-    const auto target_rex = compound->getTargetExpr(i);
-    const auto target_rex_agg = dynamic_cast<const RexAgg*>(target_rex);
-    hdk::ir::ExprPtr orig_target_expr;
-    if (target_rex_agg) {
-      orig_target_expr = RelAlgTranslator::translateAggregateRex(
-          target_rex_agg, scalar_sources, bigint_count);
-    } else {
-      const auto target_rex_scalar = dynamic_cast<const RexScalar*>(target_rex);
-      const auto target_rex_ref = dynamic_cast<const RexRef*>(target_rex_scalar);
-      if (target_rex_ref) {
-        const auto ref_idx = target_rex_ref->getIndex();
-        CHECK_GE(ref_idx, size_t(1));
-        CHECK_LE(ref_idx, groupby_exprs.size());
-        const auto groupby_expr = *std::next(groupby_exprs.begin(), ref_idx - 1);
-        orig_target_expr = var_ref(groupby_expr.get(), hdk::ir::Var::kGROUPBY, ref_idx);
-      } else {
-        orig_target_expr = translator.translateScalarRex(target_rex_scalar);
-        auto rewritten_expr = rewrite_expr(orig_target_expr.get());
-        orig_target_expr = fold_expr(rewritten_expr.get());
-        if (executor_type == ExecutorType::Native) {
-          try {
-            orig_target_expr = set_transient_dict(orig_target_expr);
-          } catch (...) {
-            // noop
-          }
-        } else {
-          orig_target_expr = cast_dict_to_none(orig_target_expr);
-        }
-      }
-    }
-    CHECK(orig_target_expr);
-
     const auto* expr = compound->getExprs()[i].get();
     hdk::ir::ExprPtr target_expr;
     if (auto* group_ref = dynamic_cast<const hdk::ir::GroupColumnRef*>(expr)) {
@@ -1358,10 +1326,6 @@ std::vector<hdk::ir::Expr*> translate_targets(
     } else {
       target_expr = translate(expr, translator, executor_type);
     }
-
-    CHECK(*orig_target_expr == *target_expr)
-        << "Target expr mismatch: orig=" << orig_target_expr->toString()
-        << " new=" << target_expr->toString();
 
     target_exprs_owned.push_back(target_expr);
     target_exprs.push_back(target_expr.get());

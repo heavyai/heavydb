@@ -51,11 +51,11 @@ void QueryPlanDagChecker::visitCompound(const RelCompound* rel_alg_node) {
   // SINGLE_VALUE / SAMPLE query
   if (rel_alg_node->isAggregate() && rel_alg_node->size() > 0) {
     for (size_t i = 0; i < rel_alg_node->size(); ++i) {
-      auto target_expr = rel_alg_node->getTargetExpr(i);
-      auto agg_expr = dynamic_cast<const RexAgg*>(target_expr);
-      if (agg_expr && (agg_expr->getKind() == SQLAgg::kSINGLE_VALUE ||
-                       agg_expr->getKind() == SQLAgg::kSAMPLE ||
-                       agg_expr->getKind() == SQLAgg::kAPPROX_QUANTILE)) {
+      auto target_expr = rel_alg_node->getExpr(i);
+      auto agg_expr = dynamic_cast<const hdk::ir::AggExpr*>(target_expr.get());
+      if (agg_expr && (agg_expr->get_aggtype() == SQLAgg::kSINGLE_VALUE ||
+                       agg_expr->get_aggtype() == SQLAgg::kSAMPLE ||
+                       agg_expr->get_aggtype() == SQLAgg::kAPPROX_QUANTILE)) {
         detectNonSupportedNode(
             "Detect non-supported aggregation function: "
             "SINGLE_VALUE/SAMPLE/APPROX_QUANTILE");

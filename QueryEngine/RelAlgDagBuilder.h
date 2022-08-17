@@ -1600,13 +1600,14 @@ class RelCompound : public RelAlgNode {
   void replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                     std::shared_ptr<const RelAlgNode> input) override;
 
-  size_t size() const override { return target_exprs_.size(); }
+  size_t size() const override {
+    CHECK_EQ(target_exprs_.size(), exprs_.size());
+    return exprs_.size();
+  }
 
   hdk::ir::ExprPtr getFilter() const { return filter_; }
 
   void setFilterExpr(hdk::ir::ExprPtr new_filter) { filter_ = new_filter; }
-
-  const Rex* getTargetExpr(const size_t i) const { return target_exprs_[i]; }
 
   hdk::ir::ExprPtrVector getGroupByExprs() const { return groupby_exprs_; }
   hdk::ir::ExprPtr getGroupByExpr(size_t i) const { return groupby_exprs_[i]; }
