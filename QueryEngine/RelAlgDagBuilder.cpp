@@ -499,10 +499,6 @@ void RelFilter::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
 void RelCompound::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                                std::shared_ptr<const RelAlgNode> input) {
   RelAlgNode::replaceInput(old_input, input);
-  RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
-  for (const auto& scalar_source : scalar_sources_) {
-    rebind_inputs.visit(scalar_source.get());
-  }
   RebindInputsVisitor visitor(old_input.get(), input.get());
   if (filter_) {
     filter_ = visitor.visit(filter_.get());
@@ -574,66 +570,12 @@ RelJoin::RelJoin(RelJoin const& rhs)
   }
 }
 
-namespace {
-
-std::vector<std::unique_ptr<const RexAgg>> copyAggExprs(
-    std::vector<std::unique_ptr<const RexAgg>> const& agg_exprs) {
-  std::vector<std::unique_ptr<const RexAgg>> agg_exprs_copy;
-  agg_exprs_copy.reserve(agg_exprs.size());
-  for (auto const& agg_expr : agg_exprs) {
-    agg_exprs_copy.push_back(agg_expr->deepCopy());
-  }
-  return agg_exprs_copy;
-}
-
-std::vector<std::unique_ptr<const RexScalar>> copyRexScalars(
-    std::vector<std::unique_ptr<const RexScalar>> const& scalar_sources) {
-  std::vector<std::unique_ptr<const RexScalar>> scalar_sources_copy;
-  scalar_sources_copy.reserve(scalar_sources.size());
-  RexDeepCopyVisitor copier;
-  for (auto const& scalar_source : scalar_sources) {
-    scalar_sources_copy.push_back(copier.visit(scalar_source.get()));
-  }
-  return scalar_sources_copy;
-}
-
-std::vector<const Rex*> remapTargetPointers(
-    std::vector<std::unique_ptr<const RexAgg>> const& agg_exprs_new,
-    std::vector<std::unique_ptr<const RexScalar>> const& scalar_sources_new,
-    std::vector<std::unique_ptr<const RexAgg>> const& agg_exprs_old,
-    std::vector<std::unique_ptr<const RexScalar>> const& scalar_sources_old,
-    std::vector<const Rex*> const& target_exprs_old) {
-  std::vector<const Rex*> target_exprs(target_exprs_old);
-  std::unordered_map<const Rex*, const Rex*> old_to_new_target(target_exprs.size());
-  for (size_t i = 0; i < agg_exprs_new.size(); ++i) {
-    old_to_new_target.emplace(agg_exprs_old[i].get(), agg_exprs_new[i].get());
-  }
-  for (size_t i = 0; i < scalar_sources_new.size(); ++i) {
-    old_to_new_target.emplace(scalar_sources_old[i].get(), scalar_sources_new[i].get());
-  }
-  for (auto& target : target_exprs) {
-    auto target_it = old_to_new_target.find(target);
-    CHECK(target_it != old_to_new_target.end());
-    target = target_it->second;
-  }
-  return target_exprs;
-}
-
-}  // namespace
-
 RelCompound::RelCompound(RelCompound const& rhs)
     : RelAlgNode(rhs)
     , filter_(rhs.filter_)
     , groupby_count_(rhs.groupby_count_)
-    , agg_exprs_(copyAggExprs(rhs.agg_exprs_))
     , fields_(rhs.fields_)
     , is_agg_(rhs.is_agg_)
-    , scalar_sources_(copyRexScalars(rhs.scalar_sources_))
-    , target_exprs_(remapTargetPointers(agg_exprs_,
-                                        scalar_sources_,
-                                        rhs.agg_exprs_,
-                                        rhs.scalar_sources_,
-                                        rhs.target_exprs_))
     , groupby_exprs_(rhs.groupby_exprs_)
     , exprs_(rhs.exprs_)
     , hint_applied_(false)
@@ -1509,19 +1451,6 @@ void mark_nops(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   }
 }
 
-std::vector<const Rex*> reproject_targets(
-    const RelProject* simple_project,
-    const std::vector<const Rex*>& target_exprs) noexcept {
-  std::vector<const Rex*> result;
-  for (size_t i = 0; i < simple_project->size(); ++i) {
-    const auto input_rex = dynamic_cast<const RexInput*>(simple_project->getProjectAt(i));
-    CHECK(input_rex);
-    CHECK_LT(static_cast<size_t>(input_rex->getIndex()), target_exprs.size());
-    result.push_back(target_exprs[input_rex->getIndex()]);
-  }
-  return result;
-}
-
 hdk::ir::ExprPtrVector reprojectExprs(const RelProject* simple_project,
                                       const hdk::ir::ExprPtrVector& exprs) noexcept {
   hdk::ir::ExprPtrVector result;
@@ -1600,10 +1529,8 @@ void create_compound(
   CHECK_LE(pattern.size(), size_t(4));
 
   hdk::ir::ExprPtr filter_expr;
-  std::vector<std::unique_ptr<const RexScalar>> scalar_sources;
   size_t groupby_count{0};
   std::vector<std::string> fields;
-  std::vector<const RexAgg*> agg_exprs;
   std::vector<const Rex*> target_exprs;
   hdk::ir::ExprPtrVector exprs;
   hdk::ir::ExprPtrVector groupby_exprs;
@@ -1644,36 +1571,19 @@ void create_compound(
           ra_project->replaceInput(ra_project->getAndOwnInput(0),
                                    filter_input->getAndOwnInput(0));
         }
-        scalar_sources = ra_project->getExpressionsAndRelease();
-        for (const auto& scalar_expr : scalar_sources) {
-          target_exprs.push_back(scalar_expr.get());
-        }
         for (auto& expr : ra_project->getExprs()) {
           exprs.push_back(expr);
         }
         first_project = false;
       } else {
         if (ra_project->isSimple()) {
-          target_exprs = reproject_targets(ra_project.get(), target_exprs);
           exprs = reprojectExprs(ra_project.get(), exprs);
         } else {
           // TODO(adb): This is essentially a more general case of simple project, we
           // could likely merge the two
-          std::vector<const Rex*> result;
           hdk::ir::ExprPtrVector new_exprs;
-          RexInputReplacementVisitor rex_visitor(last_node, scalar_sources);
           InputReplacementVisitor visitor(last_node, exprs, &groupby_exprs);
           for (size_t i = 0; i < ra_project->size(); ++i) {
-            const auto rex = ra_project->getProjectAt(i);
-            if (auto rex_input = dynamic_cast<const RexInput*>(rex)) {
-              const auto index = rex_input->getIndex();
-              CHECK_LT(index, target_exprs.size());
-              result.push_back(target_exprs[index]);
-            } else {
-              scalar_sources.push_back(rex_visitor.visit(rex));
-              result.push_back(scalar_sources.back().get());
-            }
-
             auto expr = ra_project->getExpr(i);
             if (auto col_ref = dynamic_cast<const hdk::ir::ColumnRef*>(expr.get())) {
               const auto index = col_ref->getIndex();
@@ -1683,7 +1593,6 @@ void create_compound(
               new_exprs.push_back(visitor.visit(expr.get()));
             }
           }
-          target_exprs = result;
           exprs = std::move(new_exprs);
         }
       }
@@ -1694,23 +1603,13 @@ void create_compound(
     if (ra_aggregate) {
       is_agg = true;
       fields = ra_aggregate->getFields();
-      agg_exprs = ra_aggregate->getAggregatesAndRelease();
       groupby_count = ra_aggregate->getGroupByCount();
-      decltype(target_exprs){}.swap(target_exprs);
       groupby_exprs.swap(exprs);
-      CHECK_LE(groupby_count, scalar_sources.size());
       CHECK_LE(groupby_count, groupby_exprs.size());
       InputReplacementVisitor visitor(last_node, groupby_exprs);
       for (size_t group_idx = 0; group_idx < groupby_count; ++group_idx) {
-        const auto rex_ref = new RexRef(group_idx + 1);
-        target_exprs.push_back(rex_ref);
-        scalar_sources.emplace_back(rex_ref);
-
         exprs.push_back(hdk::ir::makeExpr<hdk::ir::GroupColumnRef>(
             groupby_exprs[group_idx]->get_type_info(), group_idx + 1));
-      }
-      for (const auto rex_agg : agg_exprs) {
-        target_exprs.push_back(rex_agg);
       }
       for (auto& expr : ra_aggregate->getAggregateExprs()) {
         exprs.push_back(visitor.visit(expr.get()));
@@ -1721,13 +1620,10 @@ void create_compound(
   }
 
   auto compound_node = std::make_shared<RelCompound>(filter_expr,
-                                                     target_exprs,
                                                      std::move(exprs),
                                                      groupby_count,
                                                      std::move(groupby_exprs),
-                                                     agg_exprs,
                                                      fields,
-                                                     scalar_sources,
                                                      is_agg);
   auto old_node = nodes[pattern.back()];
   nodes[pattern.back()] = compound_node;
@@ -3381,16 +3277,10 @@ std::string RelCompound::toString() const {
              getIdString(),
              "(filter=",
              (filter_ ? filter_->toString() : "null"),
-             ", target_exprs=",
-             ::toString(target_exprs_),
              ", ",
              std::to_string(groupby_count_),
-             ", agg_exps=",
-             ::toString(agg_exprs_),
              ", fields=",
              ::toString(fields_),
-             ", scalar_sources=",
-             ::toString(scalar_sources_),
              ", groupby_exprs=",
              ::toString(groupby_exprs_),
              ", exprs=",
@@ -3407,16 +3297,11 @@ size_t RelCompound::toHash() const {
     hash_ = typeid(RelCompound).hash_code();
     boost::hash_combine(*hash_, filter_ ? filter_->hash() : boost::hash_value("n"));
     boost::hash_combine(*hash_, is_agg_);
-    for (auto& target_expr : target_exprs_) {
-      if (auto rex_scalar = dynamic_cast<const RexScalar*>(target_expr)) {
-        boost::hash_combine(*hash_, rex_scalar->toHash());
-      }
+    for (auto& expr : exprs_) {
+      boost::hash_combine(*hash_, expr->hash());
     }
-    for (auto& agg_expr : agg_exprs_) {
-      boost::hash_combine(*hash_, agg_expr->toHash());
-    }
-    for (auto& scalar_source : scalar_sources_) {
-      boost::hash_combine(*hash_, scalar_source->toHash());
+    for (auto& expr : groupby_exprs_) {
+      boost::hash_combine(*hash_, expr->hash());
     }
     boost::hash_combine(*hash_, groupby_count_);
     boost::hash_combine(*hash_, ::toString(fields_));

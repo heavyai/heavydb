@@ -1567,32 +1567,21 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
 // which can be efficiently executed with no intermediate buffers.
 class RelCompound : public RelAlgNode {
  public:
-  // 'target_exprs_' are either scalar expressions owned by 'scalar_sources_'
-  // or aggregate expressions owned by 'agg_exprs_', with the arguments
-  // owned by 'scalar_sources_'.
   RelCompound(hdk::ir::ExprPtr filter,
-              const std::vector<const Rex*>& target_exprs,
               hdk::ir::ExprPtrVector exprs,
               const size_t groupby_count,
               hdk::ir::ExprPtrVector groupby_exprs,
-              const std::vector<const RexAgg*>& agg_exprs,
               const std::vector<std::string>& fields,
-              std::vector<std::unique_ptr<const RexScalar>>& scalar_sources,
               const bool is_agg)
       : filter_(std::move(filter))
       , groupby_count_(groupby_count)
       , fields_(fields)
       , is_agg_(is_agg)
-      , scalar_sources_(std::move(scalar_sources))
-      , target_exprs_(target_exprs)
-      , groupby_exprs_(groupby_exprs)
+      , groupby_exprs_(std::move(groupby_exprs))
       , exprs_(std::move(exprs))
       , hint_applied_(false)
       , hints_(std::make_unique<Hints>()) {
-    CHECK_EQ(fields.size(), target_exprs.size());
-    for (auto agg_expr : agg_exprs) {
-      agg_exprs_.emplace_back(agg_expr);
-    }
+    CHECK_EQ(fields.size(), exprs_.size());
   }
 
   RelCompound(RelCompound const&);
@@ -1600,10 +1589,7 @@ class RelCompound : public RelAlgNode {
   void replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                     std::shared_ptr<const RelAlgNode> input) override;
 
-  size_t size() const override {
-    CHECK_EQ(target_exprs_.size(), exprs_.size());
-    return exprs_.size();
-  }
+  size_t size() const override { return exprs_.size(); }
 
   hdk::ir::ExprPtr getFilter() const { return filter_; }
 
@@ -1621,24 +1607,9 @@ class RelCompound : public RelAlgNode {
 
   void setFields(std::vector<std::string>&& fields) { fields_ = std::move(fields); }
 
-  const size_t getScalarSourcesSize() const { return scalar_sources_.size(); }
-
-  const RexScalar* getScalarSource(const size_t i) const {
-    return scalar_sources_[i].get();
-  }
-
-  void setScalarSources(std::vector<std::unique_ptr<const RexScalar>>& new_sources) {
-    CHECK_EQ(new_sources.size(), scalar_sources_.size());
-    scalar_sources_ = std::move(new_sources);
-  }
-
   const size_t getGroupByCount() const { return groupby_count_; }
 
   bool isAggregate() const { return is_agg_; }
-
-  size_t getAggExprSize() const { return agg_exprs_.size(); }
-
-  const RexAgg* getAggExpr(size_t i) const { return agg_exprs_[i].get(); }
 
   std::string toString() const override;
 
@@ -1676,13 +1647,8 @@ class RelCompound : public RelAlgNode {
  private:
   hdk::ir::ExprPtr filter_;
   const size_t groupby_count_;
-  std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
   std::vector<std::string> fields_;
   const bool is_agg_;
-  std::vector<std::unique_ptr<const RexScalar>>
-      scalar_sources_;  // building blocks for group_indices_ and agg_exprs_; not actually
-                        // projected, just owned
-  const std::vector<const Rex*> target_exprs_;
   hdk::ir::ExprPtrVector groupby_exprs_;
   hdk::ir::ExprPtrVector exprs_;
   bool hint_applied_;

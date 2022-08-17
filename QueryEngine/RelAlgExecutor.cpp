@@ -1142,20 +1142,8 @@ get_input_desc(const RA* ra_node,
                                                                input_col_descs.end())};
 }
 
-size_t get_scalar_sources_size(const RelCompound* compound) {
-  return compound->getScalarSourcesSize();
-}
-
 size_t get_scalar_sources_size(const RelProject* project) {
   return project->size();
-}
-
-size_t get_scalar_sources_size(const RelTableFunction* table_func) {
-  return table_func->getTableFuncInputsSize();
-}
-
-const RexScalar* scalar_at(const size_t i, const RelCompound* compound) {
-  return compound->getScalarSource(i);
 }
 
 const RexScalar* scalar_at(const size_t i, const RelProject* project) {
@@ -1262,24 +1250,16 @@ hdk::ir::ExprPtr translate(const hdk::ir::Expr* expr,
   return res;
 }
 
-std::list<hdk::ir::ExprPtr> translate_groupby_exprs(
-    const RelCompound* compound,
-    const RelAlgTranslator& translator,
-    const std::vector<hdk::ir::ExprPtr>& scalar_sources,
-    ::ExecutorType executor_type) {
+std::list<hdk::ir::ExprPtr> translate_groupby_exprs(const RelCompound* compound,
+                                                    const RelAlgTranslator& translator,
+                                                    ::ExecutorType executor_type) {
   if (!compound->isAggregate()) {
     return {nullptr};
   }
   std::list<hdk::ir::ExprPtr> groupby_exprs;
   for (size_t group_idx = 0; group_idx < compound->getGroupByCount(); ++group_idx) {
-    auto orig_expr = set_transient_dict(scalar_sources[group_idx]);
-
     auto expr = compound->getGroupByExpr(group_idx);
     expr = translate(expr.get(), translator, executor_type);
-
-    CHECK(*orig_expr == *expr) << "Groupby expr mismatch: orig=" << orig_expr->toString()
-                               << " new=" << expr->toString();
-
     groupby_exprs.push_back(expr);
   }
   return groupby_exprs;
@@ -1307,7 +1287,6 @@ QualsConjunctiveForm translate_quals(const RelCompound* compound,
 
 std::vector<hdk::ir::Expr*> translate_targets(
     std::vector<hdk::ir::ExprPtr>& target_exprs_owned,
-    const std::vector<hdk::ir::ExprPtr>& scalar_sources,
     const std::list<hdk::ir::ExprPtr>& groupby_exprs,
     const RelCompound* compound,
     const RelAlgTranslator& translator,
@@ -2850,13 +2829,10 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
   }
   RelAlgTranslator translator(
       executor_, input_to_nest_level, join_types, now_, eo.just_explain);
-  const auto scalar_sources =
-      translate_scalar_sources(compound, translator, eo.executor_type);
   const auto groupby_exprs =
-      translate_groupby_exprs(compound, translator, scalar_sources, eo.executor_type);
+      translate_groupby_exprs(compound, translator, eo.executor_type);
   const auto quals_cf = translate_quals(compound, translator);
   const auto target_exprs = translate_targets(target_exprs_owned_,
-                                              scalar_sources,
                                               groupby_exprs,
                                               compound,
                                               translator,

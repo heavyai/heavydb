@@ -230,6 +230,14 @@ class NormalizerVisitor : public DeepCopyVisitor {
       if (rte_idx > 0 && join_types_[rte_idx - 1] == JoinType::LEFT) {
         col_ti.set_notnull(false);
       }
+      if (col_ti != col_info->type) {
+        col_info = std::make_shared<ColumnInfo>(col_info->db_id,
+                                                col_info->table_id,
+                                                col_info->column_id,
+                                                col_info->name,
+                                                col_ti,
+                                                col_info->is_rowid);
+      }
       return std::make_shared<hdk::ir::ColumnVar>(col_info, rte_idx);
     }
     CHECK_GE(rte_idx, 0);
