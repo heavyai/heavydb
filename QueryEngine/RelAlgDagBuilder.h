@@ -1570,8 +1570,7 @@ class RelCompound : public RelAlgNode {
   // 'target_exprs_' are either scalar expressions owned by 'scalar_sources_'
   // or aggregate expressions owned by 'agg_exprs_', with the arguments
   // owned by 'scalar_sources_'.
-  RelCompound(std::unique_ptr<const RexScalar>& filter_expr,
-              hdk::ir::ExprPtr filter,
+  RelCompound(hdk::ir::ExprPtr filter,
               const std::vector<const Rex*>& target_exprs,
               hdk::ir::ExprPtrVector exprs,
               const size_t groupby_count,
@@ -1580,8 +1579,7 @@ class RelCompound : public RelAlgNode {
               const std::vector<std::string>& fields,
               std::vector<std::unique_ptr<const RexScalar>>& scalar_sources,
               const bool is_agg)
-      : filter_expr_(std::move(filter_expr))
-      , filter_(std::move(filter))
+      : filter_(std::move(filter))
       , groupby_count_(groupby_count)
       , fields_(fields)
       , is_agg_(is_agg)
@@ -1604,15 +1602,9 @@ class RelCompound : public RelAlgNode {
 
   size_t size() const override { return target_exprs_.size(); }
 
-  const RexScalar* getFilterExpr() const { return filter_expr_.get(); }
-
   hdk::ir::ExprPtr getFilter() const { return filter_; }
 
-  void setFilterExpr(std::unique_ptr<const RexScalar>& new_expr,
-                     hdk::ir::ExprPtr new_filter) {
-    filter_expr_ = std::move(new_expr);
-    filter_ = new_filter;
-  }
+  void setFilterExpr(hdk::ir::ExprPtr new_filter) { filter_ = new_filter; }
 
   const Rex* getTargetExpr(const size_t i) const { return target_exprs_[i]; }
 
@@ -1681,7 +1673,6 @@ class RelCompound : public RelAlgNode {
   Hints* getDeliveredHints() { return hints_.get(); }
 
  private:
-  std::unique_ptr<const RexScalar> filter_expr_;
   hdk::ir::ExprPtr filter_;
   const size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;

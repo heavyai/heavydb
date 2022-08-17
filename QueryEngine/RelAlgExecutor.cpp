@@ -1297,17 +1297,9 @@ std::list<hdk::ir::ExprPtr> translate_groupby_exprs(
 
 QualsConjunctiveForm translate_quals(const RelCompound* compound,
                                      const RelAlgTranslator& translator) {
-  const auto filter_rex = compound->getFilterExpr();
-  if (filter_rex) {
-    auto filter_expr = translator.translateScalarRex(filter_rex);
-    auto orig_filter_expr = fold_expr(filter_expr.get());
-
-    filter_expr = translator.normalize(compound->getFilter().get());
+  if (auto filter = compound->getFilter()) {
+    auto filter_expr = translator.normalize(filter.get());
     filter_expr = fold_expr(filter_expr.get());
-
-    CHECK(*orig_filter_expr == *filter_expr)
-        << "Compound filter expr mismatch: orig=" << orig_filter_expr->toString()
-        << " new=" << filter_expr->toString();
     return qual_to_conjunctive_form(filter_expr);
   }
   return {};

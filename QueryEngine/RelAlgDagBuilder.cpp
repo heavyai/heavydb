@@ -503,9 +503,6 @@ void RelCompound::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
   for (const auto& scalar_source : scalar_sources_) {
     rebind_inputs.visit(scalar_source.get());
   }
-  if (filter_expr_) {
-    rebind_inputs.visit(filter_expr_.get());
-  }
   RebindInputsVisitor visitor(old_input.get(), input.get());
   if (filter_) {
     filter_ = visitor.visit(filter_.get());
@@ -626,6 +623,7 @@ std::vector<const Rex*> remapTargetPointers(
 
 RelCompound::RelCompound(RelCompound const& rhs)
     : RelAlgNode(rhs)
+    , filter_(rhs.filter_)
     , groupby_count_(rhs.groupby_count_)
     , agg_exprs_(copyAggExprs(rhs.agg_exprs_))
     , fields_(rhs.fields_)
@@ -640,9 +638,6 @@ RelCompound::RelCompound(RelCompound const& rhs)
     , exprs_(rhs.exprs_)
     , hint_applied_(false)
     , hints_(std::make_unique<Hints>()) {
-  RexDeepCopyVisitor copier;
-  filter_expr_ = rhs.filter_expr_ ? copier.visit(rhs.filter_expr_.get()) : nullptr;
-  filter_ = rhs.filter_ ? rhs.filter_->deep_copy() : nullptr;
   if (rhs.hint_applied_) {
     for (auto const& kv : *rhs.hints_) {
       addHint(kv.second);
@@ -1604,7 +1599,6 @@ void create_compound(
   CHECK_GE(pattern.size(), size_t(2));
   CHECK_LE(pattern.size(), size_t(4));
 
-  std::unique_ptr<const RexScalar> filter_rex;
   hdk::ir::ExprPtr filter_expr;
   std::vector<std::unique_ptr<const RexScalar>> scalar_sources;
   size_t groupby_count{0};
@@ -1628,10 +1622,9 @@ void create_compound(
     }
     const auto ra_filter = std::dynamic_pointer_cast<RelFilter>(ra_node);
     if (ra_filter) {
-      CHECK(!filter_rex);
-      filter_rex.reset(ra_filter->getAndReleaseCondition());
-      CHECK(filter_rex);
+      CHECK(!filter_expr);
       filter_expr = ra_filter->getConditionExprShared();
+      CHECK(filter_expr);
       last_node = ra_node.get();
       continue;
     }
@@ -1646,7 +1639,7 @@ void create_compound(
         // intermediate buffer. There are cases when filter is not a part of
         // the pattern, detect it by simply cehcking current filter rex.
         const auto filter_input = dynamic_cast<const RelFilter*>(ra_project->getInput(0));
-        if (filter_input && filter_rex) {
+        if (filter_input && filter_expr) {
           CHECK_EQ(size_t(1), filter_input->inputCount());
           ra_project->replaceInput(ra_project->getAndOwnInput(0),
                                    filter_input->getAndOwnInput(0));
@@ -1727,8 +1720,7 @@ void create_compound(
     }
   }
 
-  auto compound_node = std::make_shared<RelCompound>(filter_rex,
-                                                     filter_expr,
+  auto compound_node = std::make_shared<RelCompound>(filter_expr,
                                                      target_exprs,
                                                      std::move(exprs),
                                                      groupby_count,
@@ -3387,9 +3379,7 @@ size_t RexInput::toHash() const {
 std::string RelCompound::toString() const {
   return cat(::typeName(this),
              getIdString(),
-             "(filter_rex=",
-             (filter_expr_ ? filter_expr_->toString() : "null"),
-             ", filter=",
+             "(filter=",
              (filter_ ? filter_->toString() : "null"),
              ", target_exprs=",
              ::toString(target_exprs_),
@@ -3415,8 +3405,7 @@ std::string RelCompound::toString() const {
 size_t RelCompound::toHash() const {
   if (!hash_) {
     hash_ = typeid(RelCompound).hash_code();
-    boost::hash_combine(*hash_,
-                        filter_expr_ ? filter_expr_->toHash() : boost::hash_value("n"));
+    boost::hash_combine(*hash_, filter_ ? filter_->hash() : boost::hash_value("n"));
     boost::hash_combine(*hash_, is_agg_);
     for (auto& target_expr : target_exprs_) {
       if (auto rex_scalar = dynamic_cast<const RexScalar*>(target_expr)) {
