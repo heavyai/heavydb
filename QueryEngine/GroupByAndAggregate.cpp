@@ -219,10 +219,7 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   // can expect this to be true anyway for grouped queries since the precise version
   // uses significantly more memory.
   const int64_t baseline_threshold =
-      has_count_distinct(ra_exe_unit_)
-          ? (device_type_ == ExecutorDeviceType::GPU ? (Executor::baseline_threshold / 4)
-                                                     : Executor::baseline_threshold)
-          : Executor::baseline_threshold;
+      Executor::getBaselineThreshold(has_count_distinct(ra_exe_unit_), device_type_);
   if (ra_exe_unit_.groupby_exprs.size() != 1) {
     try {
       checked_int64_t cardinality{1};
@@ -353,7 +350,11 @@ int64_t get_bucketed_cardinality_without_nulls(const ColRangeInfo& col_range_inf
     if (col_range_info.bucket) {
       size /= col_range_info.bucket;
     }
-    CHECK_LT(size, std::numeric_limits<int64_t>::max());
+    if (size >= static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
+      // try to use unordered_set instead of crashing due to CHECK failure
+      // i.e., CHECK_LT(size, std::numeric_limits<int64_t>::max());
+      return 0;
+    }
     return static_cast<int64_t>(size + 1);
   } else {
     return 0;
@@ -617,9 +618,19 @@ KeylessInfo get_keyless_info(const RelAlgExecutionUnit& ra_exe_unit,
 CountDistinctDescriptors init_count_distinct_descriptors(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos,
+    const ColRangeInfo& group_by_range_info,
     const ExecutorDeviceType device_type,
     Executor* executor) {
   CountDistinctDescriptors count_distinct_descriptors;
+  auto compute_bytes_per_group =
+      [](size_t bitmap_sz, size_t sub_bitmap_count, ExecutorDeviceType device_type) {
+        size_t effective_size_bytes = (bitmap_sz + 7) / 8;
+        const auto padded_size =
+            (device_type == ExecutorDeviceType::GPU || sub_bitmap_count > 1)
+                ? align_to_int64(effective_size_bytes)
+                : effective_size_bytes;
+        return padded_size * sub_bitmap_count;
+      };
   for (size_t i = 0; i < ra_exe_unit.target_exprs.size(); i++) {
     const auto target_expr = ra_exe_unit.target_exprs[i];
     auto agg_info = get_target_info(target_expr, g_bigint_count);
@@ -699,6 +710,8 @@ CountDistinctDescriptors init_count_distinct_descriptors(
                                     1});
         continue;
       }
+      const auto sub_bitmap_count =
+          get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit, device_type);
       if (arg_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
           !(arg_ti.is_buffer() || arg_ti.is_geometry())) {  // TODO(alex): allow bitmap
                                                             // implementation for arrays
@@ -707,6 +720,79 @@ CountDistinctDescriptors init_count_distinct_descriptors(
           bitmap_sz_bits = get_bucketed_cardinality_without_nulls(arg_range_info);
           if (bitmap_sz_bits <= 0 || g_bitmap_memory_limit <= bitmap_sz_bits) {
             count_distinct_impl_type = CountDistinctImplType::UnorderedSet;
+          }
+          // check a potential OOM when using bitmap-based approach
+          const auto total_bytes_per_entry =
+              compute_bytes_per_group(bitmap_sz_bits, sub_bitmap_count, device_type);
+          const auto maximum_num_groups =
+              group_by_range_info.max - group_by_range_info.min + 1;
+          const auto total_bitmap_bytes_for_groups =
+              total_bytes_per_entry * maximum_num_groups;
+          // we can estimate a potential OOM of bitmap-based count-distinct operator
+          // by using the logic "check_total_bitmap_memory"
+          if (total_bitmap_bytes_for_groups >=
+              static_cast<size_t>(g_bitmap_memory_limit)) {
+            const auto agg_expr_max_entry_count =
+                arg_range_info.max - arg_range_info.min + 1;
+            int64_t max_agg_expr_table_cardinality{0};
+            std::set<const Analyzer::ColumnVar*,
+                     bool (*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)>
+                colvar_set(Analyzer::ColumnVar::colvar_comp);
+            agg_expr->collect_column_var(colvar_set, true);
+            for (const auto cv : colvar_set) {
+              auto it =
+                  std::find_if(query_infos.begin(),
+                               query_infos.end(),
+                               [&](const auto& input_table_info) {
+                                 return input_table_info.table_id == cv->get_table_id();
+                               });
+              int64_t cur_table_cardinality =
+                  it != query_infos.end()
+                      ? static_cast<int64_t>(it->info.getNumTuplesUpperBound())
+                      : -1;
+              max_agg_expr_table_cardinality =
+                  std::max(max_agg_expr_table_cardinality, cur_table_cardinality);
+            }
+            auto has_valid_stat = [agg_expr_max_entry_count,
+                                   max_agg_expr_table_cardinality,
+                                   maximum_num_groups]() {
+              // todo (yoonmin): dist mode transfers the resultset from each leaf node to
+              // agg node which prevents us to collect following cardinality infos
+              // so we get the same OOM
+              return agg_expr_max_entry_count > 0 && max_agg_expr_table_cardinality > 0 &&
+                     maximum_num_groups > 0;
+            };
+            if (has_valid_stat()) {
+              // a threshold related to a ratio of a range of agg expr (let's say R)
+              // and table cardinality (C), i.e., use unordered_set if the # bits to build
+              // a bitmap based on R is four times larger than that of C
+              const size_t unordered_set_threshold{2};
+              // When we detect OOM of bitmap-based approach we selectively switch it to
+              // hash set-based processing logic if one of the followings is satisfied:
+              // 1) the column range is too wide compared with the table cardinality, or
+              // 2) the column range is too wide compared with the avg of # unique values
+              // per group by entry
+              const auto bits_for_agg_entry = std::ceil(log(agg_expr_max_entry_count));
+              const auto bits_for_agg_table =
+                  std::ceil(log(max_agg_expr_table_cardinality));
+              const auto avg_num_unique_entries_per_group =
+                  std::ceil(max_agg_expr_table_cardinality / maximum_num_groups);
+              // case a) given a range of entry count of agg_expr and the maximum
+              // cardinality among source tables of the agg_expr , we try to detect the
+              // misleading case of too sparse column range , i.e., agg_expr has 1M column
+              // range but only has two tuples {1 and 1M} / case b) check whether
+              // using bitmap is really beneficial when considering uniform distribution
+              // of (unique) keys.
+              if ((bits_for_agg_entry - bits_for_agg_table) >= unordered_set_threshold ||
+                  agg_expr_max_entry_count >= avg_num_unique_entries_per_group) {
+                count_distinct_impl_type = CountDistinctImplType::UnorderedSet;
+              } else {
+                throw std::runtime_error(
+                    "Consider using approx_count_distinct operator instead of "
+                    "count_distinct operator to lower the memory "
+                    "requirements");
+              }
+            }
           }
         }
       }
@@ -720,8 +806,6 @@ CountDistinctDescriptors init_count_distinct_descriptors(
           count_distinct_impl_type == CountDistinctImplType::UnorderedSet) {
         throw WatchdogException("Cannot use a fast path for COUNT distinct");
       }
-      const auto sub_bitmap_count =
-          get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit, device_type);
       count_distinct_descriptors.emplace_back(
           CountDistinctDescriptor{count_distinct_impl_type,
                                   arg_range_info.min,
@@ -789,9 +873,6 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
     RenderInfo* render_info,
     const bool must_use_baseline_sort,
     const bool output_columnar_hint) {
-  const auto count_distinct_descriptors = init_count_distinct_descriptors(
-      ra_exe_unit_, query_infos_, device_type_, executor_);
-
   const bool is_group_by{!ra_exe_unit_.groupby_exprs.empty()};
 
   auto col_range_info_nosharding = getColRangeInfo();
@@ -826,6 +907,9 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
             130000000))) {
     throw WatchdogException("Query would use too much memory");
   }
+
+  const auto count_distinct_descriptors = init_count_distinct_descriptors(
+      ra_exe_unit_, query_infos_, col_range_info, device_type_, executor_);
   try {
     return QueryMemoryDescriptor::init(executor_,
                                        ra_exe_unit_,

@@ -3138,17 +3138,18 @@ TEST(Select, CountDistinct) {
   std::string dt_tbl_ddl_sqlite{
       "CREATE TABLE dt_cd_test_tbl (dt DATE, dte16 DATE, dte32 DATE);"};
   const auto drop_dt_tbl_stmt = "DROP TABLE IF EXISTS dt_cd_test_tbl";
-  const auto drop_cd_test_tables_ddl = [&ts_tbl_name_ddl_prefix_pair]() {
+  const auto drop_cd_test_tables_ddl = [&ts_tbl_name_ddl_prefix_pair,
+                                        &drop_dt_tbl_stmt]() {
     for (const auto& p : ts_tbl_name_ddl_prefix_pair) {
       const auto ddl_stmt = "DROP TABLE IF EXISTS " + p.first;
       run_ddl_statement(ddl_stmt);
       g_sqlite_comparator.query(ddl_stmt);
     }
-  };
-  ScopeGuard drop_cd_test_tables = [&drop_cd_test_tables_ddl, &drop_dt_tbl_stmt] {
-    drop_cd_test_tables_ddl();
     run_ddl_statement(drop_dt_tbl_stmt);
     g_sqlite_comparator.query(drop_dt_tbl_stmt);
+  };
+  ScopeGuard drop_cd_test_tables = [drop_cd_test_tables_ddl] {
+    drop_cd_test_tables_ddl();
   };
   drop_cd_test_tables_ddl();
   for (const auto& p : ts_tbl_name_ddl_prefix_pair) {
@@ -3178,6 +3179,7 @@ TEST(Select, CountDistinct) {
       g_sqlite_comparator.query(insert_stmt);
     }
   }
+
   for (int month = 1; month < 10; month++) {
     for (int day = 10; day < 31; day++) {
       std::ostringstream oss, oss1;
@@ -3189,6 +3191,20 @@ TEST(Select, CountDistinct) {
       g_sqlite_comparator.query(insert_dml);
     }
   }
+  std::vector<std::string> sparse_count_distinct_test_ddl{
+      "DROP TABLE IF EXISTS sparse_cd_test;",
+      "CREATE TABLE sparse_cd_test (c1 INT, c2 INT, c3 INT, c4 INT);",
+      "INSERT INTO sparse_cd_test VALUES (1, 1, 1, 1);",
+      "INSERT INTO sparse_cd_test VALUES (25, 150, 50, 1000000);"};
+  ScopeGuard drop_sparse_count_distinct_test_table = [&sparse_count_distinct_test_ddl]() {
+    run_ddl_statement(sparse_count_distinct_test_ddl.front());
+    g_sqlite_comparator.query(sparse_count_distinct_test_ddl.front());
+  };
+  for (const auto& ddl : sparse_count_distinct_test_ddl) {
+    run_ddl_statement(ddl);
+    g_sqlite_comparator.query(ddl);
+  }
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(distinct x) FROM test;", dt);
@@ -3222,6 +3238,20 @@ TEST(Select, CountDistinct) {
     SKIP_ON_AGGREGATOR(c("SELECT COUNT(distinct ENCODE_TEXT(real_str)) FROM test;",
                          "SELECT COUNT(distinct real_str) FROM test;",
                          dt));
+    {
+      ScopeGuard keep_watchdog_flag = [orig = g_enable_watchdog]() {
+        g_enable_watchdog = orig;
+      };
+      g_enable_watchdog = false;
+      const auto query =
+          "SELECT c1, c2, c3, COUNT(distinct c4) FROM sparse_cd_test GROUP BY c1, c2, "
+          "c3;";
+      if (g_aggregator) {
+        THROW_ON_AGGREGATOR(c(query, dt));
+      } else {
+        c(query, dt);
+      }
+    }
     for (const std::string col_name : {"ti", "tie", "tm0", "tm0e", "tm3", "tm6", "tm9"}) {
       c("SELECT COUNT(DISTINCT " + col_name + ") FROM ts_cd_test;", dt);
       c("SELECT COUNT(DISTINCT " + col_name + ") FROM ts_cd_test_frag;", dt);
