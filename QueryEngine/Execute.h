@@ -682,23 +682,66 @@ class Executor {
                                      CodeGenerator& code_generator,
                                      const CompilationOptions& co);
 
-  // Generate code for computing window frame bounds
-  std::pair<llvm::Value*, llvm::Value*> codegenWindowFrameBound(
+  // Generate code for a given frame bound
+  llvm::Value* codegenFrameBound(bool for_start_bound,
+                                 bool for_range_mode,
+                                 const Analyzer::WindowFrame* frame_bound,
+                                 bool is_timestamp_type_frame,
+                                 llvm::Value* order_key_null_val,
+                                 const WindowFrameBoundFuncArgs& args);
+
+  std::pair<std::string, llvm::Value*> codegenLoadOrderKeyBufPtr(
+      WindowFunctionContext* window_func_context) const;
+
+  // Generate code to load null range of the window partition
+  std::pair<llvm::Value*, llvm::Value*> codegenFrameNullRange(
+      WindowFunctionContext* window_func_context,
+      llvm::Value* partition_index_lv) const;
+
+  // Generate codes for loading various buffers of window partitions
+  WindowPartitionBufferPtrs codegenLoadPartitionBuffers(
+      WindowFunctionContext* window_func_context,
+      llvm::Value* partition_index_lv) const;
+
+  // Generate code for computing a window frame bound
+  std::pair<llvm::Value*, llvm::Value*> codegenWindowFrameBounds(
       WindowFunctionContext* window_func_context,
       const Analyzer::WindowFrame* frame_start_bound,
       const Analyzer::WindowFrame* frame_end_bound,
-      llvm::Value* current_row_pos_lv,
-      llvm::Value* current_partition_start_offset_lv,
-      llvm::Value* order_key_buf_ptr_lv,
       llvm::Value* order_key_col_null_val_lv,
-      llvm::Value* frame_start_bound_expr_lv,
-      llvm::Value* frame_end_bound_expr_lv,
-      llvm::Value* num_elem_current_partition_lv,
-      llvm::Value* target_partition_rowid_ptr_lv,
-      llvm::Value* target_partition_sorted_rowid_ptr_lv,
-      llvm::Value* null_start_pos_lv,
-      llvm::Value* null_end_pos_lv,
+      WindowFrameBoundFuncArgs& args,
       CodeGenerator& code_generator);
+
+  // Generate codes for computing a pair of window frame bounds
+  std::pair<llvm::Value*, llvm::Value*> codegenFrameBoundRange(
+      const Analyzer::WindowFunction* window_func,
+      CodeGenerator& code_generator,
+      const CompilationOptions& co);
+
+  // frequently used utility functions to generate code for window framing
+  std::vector<llvm::Value*> prepareRowModeFuncArgs(
+      bool for_start_bound,
+      SqlWindowFrameBoundType bound_type,
+      const WindowFrameBoundFuncArgs& args) const;
+  std::vector<llvm::Value*> prepareRangeModeFuncArgs(
+      bool for_start_bound,
+      const Analyzer::WindowFrame* frame_bound,
+      bool is_timestamp_type_frame,
+      llvm::Value* order_key_null_val,
+      const WindowFrameBoundFuncArgs& frame_args) const;
+  const std::string getOrderKeyTypeName(WindowFunctionContext* window_func_context) const;
+  llvm::Value* codegenLoadCurrentValueFromColBuf(
+      WindowFunctionContext* window_func_context,
+      CodeGenerator& code_generator,
+      llvm::Value* cur_row_pos_lv,
+      llvm::Value* order_key_buf_ptr_lv) const;
+  size_t getOrderKeySize(WindowFunctionContext* window_func_context) const;
+  const SQLTypeInfo getFirstOrderColTypeInfo(
+      WindowFunctionContext* window_func_context) const;
+  std::string getFramingFuncName(const std::string& bound_type,
+                                 const std::string& order_col_type,
+                                 const std::string& op_type,
+                                 bool for_timestamp_type) const;
 
   // The AVG window function requires some post-processing: the sum is divided by count
   // and the result is stored back for the current row.
