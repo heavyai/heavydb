@@ -1640,7 +1640,7 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
   // from rest of type determination logic, as it will
   // be casted to the output dictionary type if all output
   // types are either dictionary encoded or none-encoded
-  // literals, or kept as none-encoded if all sub-expression
+  // literals, or a transient encoded dictionary if all
   // types are none-encoded (column or literal)
   SQLTypeInfo none_encoded_literal_ti;
 
@@ -1723,8 +1723,9 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
   if (ti.get_type() == kNULLT && none_encoded_literal_ti.get_type() != kNULLT) {
     // If we haven't set a type so far it's because
     // every case sub-expression has a none-encoded
-    // literal output. Make this our output type
-    ti = none_encoded_literal_ti;
+    // literal output. Output a transient-encoded dictionary
+    // so we can use the output downstream
+    ti = SQLTypeInfo(kTEXT, kENCODING_DICT, TRANSIENT_DICT_ID, kNULLT);
   }
 
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>

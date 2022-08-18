@@ -3982,6 +3982,13 @@ TEST(Select, Case) {
       "'eight' ELSE 'ooops' END c FROM "
       "test ORDER BY c ASC;",
       dt);
+    // Test that output is dictionary encoded and that we can run KEY_FOR_STRING on it
+    EXPECT_NO_THROW(run_multiple_agg(
+        "SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN "
+        "'eight' ELSE 'ooops' END c FROM "
+        "test ORDER BY KEY_FOR_STRING(c) ASC;",
+        dt,
+        false));
     c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN "
       "real_str ELSE 'ooops' END AS g "
       "FROM test ORDER BY g ASC;",
