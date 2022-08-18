@@ -141,6 +141,13 @@ class RelAlgExecutor : private StorageIOFacility {
     return std::move(query_dag_);
   }
 
+  RelAlgDag* getRelAlgDag() {
+    if (!query_dag_) {
+      query_dag_ = std::make_unique<RelAlgDag>();
+    }
+    return query_dag_.get();
+  }
+
   const RelAlgNode& getRootRelAlgNode() const {
     CHECK(query_dag_);
     return query_dag_->getRootNode();
