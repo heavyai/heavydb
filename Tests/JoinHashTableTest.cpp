@@ -50,6 +50,8 @@ namespace {
 ExecutorDeviceType g_device_type;
 }
 
+class MultiFragmentTest : public TestHelpers::TsanTbbPrivateServerKiller {};
+
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
   return device_type == ExecutorDeviceType::GPU && !(QR::get()->gpusPresent());
@@ -721,7 +723,7 @@ TEST(Build, GeoOneToMany2) {
   }
 }
 
-TEST(MultiFragment, PerfectOneToOne) {
+TEST_F(MultiFragmentTest, PerfectOneToOne) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     g_device_type = dt;
@@ -792,7 +794,7 @@ TEST(MultiFragment, PerfectOneToOne) {
   }
 }
 
-TEST(MultiFragment, PerfectOneToMany) {
+TEST_F(MultiFragmentTest, PerfectOneToMany) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     g_device_type = dt;
@@ -866,15 +868,7 @@ TEST(MultiFragment, PerfectOneToMany) {
   }
 }
 
-NEVER_INLINE
-std::set<DecodedJoinHashBufferEntry> tsan_safe_to_set(
-    std::shared_ptr<HashJoin> const& hash_table,
-    const ExecutorDeviceType device_type,
-    const int device_id) {
-  return hash_table->toSet(device_type, device_id);
-}
-
-TEST(MultiFragment, KeyedOneToOne) {
+TEST_F(MultiFragmentTest, KeyedOneToOne) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
@@ -949,9 +943,8 @@ TEST(MultiFragment, KeyedOneToOne) {
     auto hash_table2 = buildKeyed(op);
     EXPECT_EQ(hash_table2->getHashType(), HashType::OneToOne);
 
-    // QE-348 Suppress false tsan warnings
-    auto s1 = tsan_safe_to_set(hash_table1, g_device_type, 0);
-    auto s2 = tsan_safe_to_set(hash_table2, g_device_type, 0);
+    auto const s1 = hash_table1->toSet(g_device_type, 0);
+    auto const s2 = hash_table2->toSet(g_device_type, 0);
 
     EXPECT_EQ(s1, s2);
 
@@ -964,7 +957,7 @@ TEST(MultiFragment, KeyedOneToOne) {
   }
 }
 
-TEST(MultiFragment, KeyedOneToMany) {
+TEST_F(MultiFragmentTest, KeyedOneToMany) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
