@@ -188,10 +188,10 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
 #endif
   }
 
-  GPUTarget gpu_target = {.gpu_mgr = gpu_mgr_.get(),
-                          .block_size = gpu_mgr_->getMaxBlockSize(),
-                          .cgen_state = cgen_state_,
-                          .row_func_not_inlined = false};
+  GPUTarget gpu_target = {/*.gpu_mgr=*/gpu_mgr_.get(),
+                          /*.block_size=*/gpu_mgr_->getMaxBlockSize(),
+                          /*.cgen_state=*/cgen_state_,
+                          /*.row_func_not_inlined=*/false};
   switch (gpu_mgr_->getPlatform()) {
     case GpuMgrPlatform::CUDA: {
       auto cuda_context =
