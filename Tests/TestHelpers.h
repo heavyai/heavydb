@@ -17,17 +17,55 @@
 #ifndef TEST_HELPERS_H_
 #define TEST_HELPERS_H_
 
-#include "../QueryEngine/TargetValue.h"
-#include "Logger/Logger.h"
-
 #include "LeafHostInfo.h"
+#include "Logger/Logger.h"
+#include "QueryEngine/TargetValue.h"
 
 #include <gtest/gtest.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/program_options.hpp>
 #include <boost/variant.hpp>
 
+#define PRINT_TBB_TASK_SCHEDULER_HANDLE_DIAGNOSTICS 0
+
+#ifdef TBB_PREVIEW_WAITING_FOR_WORKERS
+#include <tbb/global_control.h>
+#if PRINT_TBB_TASK_SCHEDULER_HANDLE_DIAGNOSTICS
+#include <iostream>
+#endif
+#endif
+
 namespace TestHelpers {
+
+class TsanTbbPrivateServerKiller : public ::testing::Test {
+#ifdef TBB_PREVIEW_WAITING_FOR_WORKERS  // set when ENABLE_TSAN
+ protected:
+#if PRINT_TBB_TASK_SCHEDULER_HANDLE_DIAGNOSTICS
+  void SetUp() override {
+    auto handle = tbb::detail::d1::task_scheduler_handle::get();
+    bool const handle_as_bool = static_cast<bool>(handle);
+    bool const finalized = tbb::detail::d1::finalize(handle, std::nothrow_t{});
+    std::cout << __FILE__ << " +" << __LINE__ << ' ' << __func__
+              << " handle_as_bool=" << handle_as_bool << " finalized=" << finalized
+              << std::endl;
+  }
+#endif
+  void TearDown() override {
+    // Expected to kill tbb::detail::r1::rml::private_server after each test,
+    // which can otherwise trigger false positive tsan data race warnings.
+    auto handle = tbb::detail::d1::task_scheduler_handle::get();
+#if PRINT_TBB_TASK_SCHEDULER_HANDLE_DIAGNOSTICS
+    bool const handle_as_bool = static_cast<bool>(handle);
+    bool const finalized = tbb::detail::d1::finalize(handle, std::nothrow_t{});
+    std::cout << __FILE__ << " +" << __LINE__ << ' ' << __func__
+              << " handle_as_bool=" << handle_as_bool << " finalized=" << finalized
+              << std::endl;
+#else
+    tbb::detail::d1::finalize(handle, std::nothrow_t{});  // Returns false on error.
+#endif
+  }
+#endif
+};
 
 template <class T>
 void compare_array(const TargetValue& r,

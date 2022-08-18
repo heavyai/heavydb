@@ -1,11 +1,10 @@
 
-#include <functional>
-#define TBB_PREVIEW_TASK_GROUP_EXTENSIONS 1
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
 #include <tbb/task_arena.h>
 #include <tbb/task_group.h>
+#include <functional>
 
 namespace threading_tbb {
 

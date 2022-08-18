@@ -539,6 +539,7 @@ if(ENABLE_ASAN)
   add_definitions("-DWITH_DECODERS_BOUNDS_CHECKING")
 elseif(ENABLE_TSAN)
   add_definitions("-DHAVE_TSAN")
+  add_definitions("-DTBB_PREVIEW_WAITING_FOR_WORKERS") # might not be required in later versions
   # Copy the config directory to the build dir for TSAN suppressions
   file(COPY config DESTINATION ${CMAKE_BINARY_DIR})
 
@@ -789,6 +790,7 @@ find_package(TBB)
 if(TBB_FOUND)
   message(STATUS "TBB library is found with ${TBB_DIR}")
   add_definitions("-DHAVE_TBB")
+  add_definitions("-DTBB_PREVIEW_TASK_GROUP_EXTENSIONS")
   list(APPEND TBB_LIBS ${TBB_LIBRARIES})
   if(ENABLE_TBB)
     add_definitions("-DENABLE_TBB")
