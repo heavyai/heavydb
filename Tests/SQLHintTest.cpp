@@ -137,6 +137,7 @@ void createTable() {
   QR::get()->runDDLStatement(
       "CREATE TABLE complex_windowing(str text encoding dict(32), ts timestamp(0), lat "
       "float, lon float);");
+  QR::get()->runDDLStatement("CREATE TABLE subquery_test (x int, y int)");
 }
 
 void populateTable() {
@@ -185,6 +186,8 @@ void populateTable() {
     const auto data_str = "INSERT INTO complex_windowing VALUES(" + data + ");";
     run_query(data_str, ExecutorDeviceType::CPU);
   }
+
+  run_query("INSERT INTO subquery_test VALUES (1, 1)", ExecutorDeviceType::CPU);
 }
 
 void dropTable() {
@@ -192,6 +195,7 @@ void dropTable() {
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS geospatial_test;");
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS geospatial_inner_join_test;");
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS complex_windowing;");
+  QR::get()->runDDLStatement("DROP TABLE IF EXISTS subquery_test");
 }
 
 TEST(QueryHint, ForceToCPUMode) {
@@ -1071,6 +1075,33 @@ TEST(QueryHint, DynamicWatchdog) {
     EXPECT_TRUE(!wrong_timelimit1.isHintRegistered(QueryHint::kQueryTimeLimit));
     auto wrong_timelimit2 = QR::get()->getParsedQueryHint(wrong_timelimit_query2);
     EXPECT_TRUE(!wrong_timelimit2.isHintRegistered(QueryHint::kQueryTimeLimit));
+  }
+}
+
+TEST(QueryHint, Subquery) {
+  {
+    std::string q1 =
+        "select /*+ g_cpu_mode */ count(1) from subquery_test where x in (select x from "
+        "subquery_test "
+        "where y = (select y from subquery_test where rowid = 1));";
+    const auto rel_alg_dag = QR::get()->getRelAlgDag(q1);
+    EXPECT_TRUE(rel_alg_dag->getGlobalHints().isAnyQueryHintDelivered());
+  }
+  {
+    std::string q2 =
+        "select count(1) from subquery_test where x in (select /*+ g_cpu_mode */ x from "
+        "subquery_test "
+        "where y = (select y from subquery_test where rowid = 1));";
+    const auto rel_alg_dag = QR::get()->getRelAlgDag(q2);
+    EXPECT_TRUE(rel_alg_dag->getGlobalHints().isAnyQueryHintDelivered());
+  }
+  {
+    std::string q3 =
+        "select count(1) from subquery_test where x in (select x from subquery_test "
+        "where y = (select /*+ "
+        "g_cpu_mode */ y from subquery_test where rowid = 1));";
+    const auto rel_alg_dag = QR::get()->getRelAlgDag(q3);
+    EXPECT_TRUE(rel_alg_dag->getGlobalHints().isAnyQueryHintDelivered());
   }
 }
 

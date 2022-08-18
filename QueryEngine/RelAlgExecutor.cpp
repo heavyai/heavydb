@@ -744,6 +744,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   timer_setup.stop();
 
   // Dispatch the subqueries first
+  const auto global_hints = getGlobalQueryHint();
   for (auto subquery : getSubqueries()) {
     const auto subquery_ra = subquery->getRelAlg();
     CHECK(subquery_ra);
@@ -751,9 +752,20 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
       continue;
     }
     // Execute the subquery and cache the result.
-    RelAlgExecutor ra_executor(executor_, cat_, query_state_);
+    RelAlgExecutor subquery_executor(executor_, cat_, query_state_);
+    // Propagate global and local query hint if necessary
+    const auto local_hints = getParsedQueryHint(subquery_ra);
+    if (global_hints || local_hints) {
+      const auto subquery_rel_alg_dag = subquery_executor.getRelAlgDag();
+      if (global_hints) {
+        subquery_rel_alg_dag->setGlobalQueryHints(*global_hints);
+      }
+      if (local_hints) {
+        subquery_rel_alg_dag->registerQueryHint(subquery_ra, *local_hints);
+      }
+    }
     RaExecutionSequence subquery_seq(subquery_ra, executor_);
-    auto result = ra_executor.executeRelAlgSeq(subquery_seq, co, eo, nullptr, 0);
+    auto result = subquery_executor.executeRelAlgSeq(subquery_seq, co, eo, nullptr, 0);
     subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
   }
   return executeRelAlgSeq(ed_seq, co, eo, render_info, queue_time_ms);

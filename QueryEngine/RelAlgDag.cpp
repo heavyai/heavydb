@@ -1180,8 +1180,22 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
   const auto& subquery_ast = field(expr, "subquery");
 
   auto subquery_dag = RelAlgDagBuilder::buildDagForSubquery(root_dag, subquery_ast, cat);
-  auto subquery = std::make_shared<RexSubQuery>(subquery_dag->getRootNodeShPtr());
+  const auto subquery_root_node = subquery_dag->getRootNodeShPtr();
+  auto subquery = std::make_shared<RexSubQuery>(subquery_root_node);
+  auto query_hint = subquery_dag->getQueryHint(subquery_dag->getRootNodeShPtr().get());
   root_dag.registerSubquery(subquery);
+  const auto subquery_global_hint = subquery_dag->getGlobalHints();
+  if (subquery_global_hint.isAnyQueryHintDelivered()) {
+    // we need to propagate global query hint found in this subquery to its parent
+    const auto new_global_hint = root_dag.getGlobalHints() || subquery_global_hint;
+    root_dag.setGlobalQueryHints(new_global_hint);
+  }
+  const auto subquery_local_hint = subquery_dag->getQueryHint(subquery_root_node.get());
+  if (subquery_local_hint) {
+    // register local query hint of this subquery to its parent to correctly
+    // enables them when executing this subquery
+    root_dag.registerQueryHint(subquery_root_node.get(), *subquery_local_hint);
+  }
   return subquery->deepCopy();
 }
 
@@ -1516,7 +1530,12 @@ void handle_query_hint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
       rel_alg_dag.registerQueryHints(node, hint_delivered, global_query_hint);
     }
   }
-  rel_alg_dag.setGlobalQueryHints(global_query_hint);
+  // the current rel_alg_dag may contain global query hints from the subquery
+  // so we combine the current global hint we collected with the original one together
+  // to propagate global query hints correctly
+  const auto existing_global_query_hints = rel_alg_dag.getGlobalHints();
+  const auto new_global_query_hints = existing_global_query_hints || global_query_hint;
+  rel_alg_dag.setGlobalQueryHints(new_global_query_hints);
 }
 
 void compute_node_hash(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
