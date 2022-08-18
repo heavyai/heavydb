@@ -48,7 +48,7 @@ class ExprDagVisitor : public ScalarExprVisitor<void*> {
 
  protected:
   virtual void visitAggregate(const RelAggregate* agg) {
-    for (auto& expr : agg->getAggregateExprs()) {
+    for (auto& expr : agg->getAggs()) {
       visit(expr.get());
     }
   }

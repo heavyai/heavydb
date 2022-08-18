@@ -472,8 +472,8 @@ void RelAggregate::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                                 std::shared_ptr<const RelAlgNode> input) {
   RelAlgNode::replaceInput(old_input, input);
   RebindInputsVisitor visitor(old_input.get(), input.get());
-  for (size_t i = 0; i < aggregate_exprs_.size(); ++i) {
-    aggregate_exprs_[i] = visitor.visit(aggregate_exprs_[i].get());
+  for (size_t i = 0; i < aggs_.size(); ++i) {
+    aggs_[i] = visitor.visit(aggs_[i].get());
   }
 }
 
@@ -542,14 +542,10 @@ RelFilter::RelFilter(RelFilter const& rhs)
 RelAggregate::RelAggregate(RelAggregate const& rhs)
     : RelAlgNode(rhs)
     , groupby_count_(rhs.groupby_count_)
-    , aggregate_exprs_(rhs.aggregate_exprs_)
+    , aggs_(rhs.aggs_)
     , fields_(rhs.fields_)
     , hint_applied_(false)
     , hints_(std::make_unique<Hints>()) {
-  agg_exprs_.reserve(rhs.agg_exprs_.size());
-  for (auto const& agg : rhs.agg_exprs_) {
-    agg_exprs_.push_back(agg->deepCopy());
-  }
   if (rhs.hint_applied_) {
     for (auto const& kv : *rhs.hints_) {
       addHint(kv.second);
@@ -1439,12 +1435,12 @@ void handleQueryHint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
 void mark_nops(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   for (auto node : nodes) {
     const auto agg_node = std::dynamic_pointer_cast<RelAggregate>(node);
-    if (!agg_node || agg_node->getAggExprsCount()) {
+    if (!agg_node || agg_node->getAggsCount()) {
       continue;
     }
     CHECK_EQ(size_t(1), node->inputCount());
     const auto agg_input_node = dynamic_cast<const RelAggregate*>(node->getInput(0));
-    if (agg_input_node && !agg_input_node->getAggExprsCount() &&
+    if (agg_input_node && !agg_input_node->getAggsCount() &&
         agg_node->getGroupByCount() == agg_input_node->getGroupByCount()) {
       agg_node->markAsNop();
     }
@@ -1611,7 +1607,7 @@ void create_compound(
         exprs.push_back(hdk::ir::makeExpr<hdk::ir::GroupColumnRef>(
             groupby_exprs[group_idx]->get_type_info(), group_idx + 1));
       }
-      for (auto& expr : ra_aggregate->getAggregateExprs()) {
+      for (auto& expr : ra_aggregate->getAggs()) {
         exprs.push_back(visitor.visit(expr.get()));
       }
       last_node = ra_node.get();
@@ -2706,19 +2702,18 @@ class RelAlgDispatcher {
     }
     const auto& aggs_json_arr = field(agg_ra, "aggs");
     CHECK(aggs_json_arr.IsArray());
-    std::vector<std::unique_ptr<const RexAgg>> aggs;
     hdk::ir::ExprPtrVector input_exprs = getInputExprsForAgg(inputs[0].get());
-    hdk::ir::ExprPtrVector exprs;
+    hdk::ir::ExprPtrVector aggs;
     bool bigint_count = root_dag_builder.config().exec.group_by.bigint_count;
     for (auto aggs_json_arr_it = aggs_json_arr.Begin();
          aggs_json_arr_it != aggs_json_arr.End();
          ++aggs_json_arr_it) {
-      aggs.emplace_back(parse_aggregate_expr(*aggs_json_arr_it));
-      exprs.push_back(RelAlgTranslator::translateAggregateRex(
-          aggs.back().get(), input_exprs, bigint_count));
+      auto rex = parse_aggregate_expr(*aggs_json_arr_it);
+      aggs.push_back(
+          RelAlgTranslator::translateAggregateRex(rex.get(), input_exprs, bigint_count));
     }
     auto agg_node = std::make_shared<RelAggregate>(
-        group.size(), std::move(aggs), std::move(exprs), fields, inputs.front());
+        group.size(), std::move(aggs), fields, inputs.front());
     if (agg_ra.HasMember("hints")) {
       getRelAlgHints(agg_ra, agg_node);
     }
@@ -3335,7 +3330,7 @@ SQLTypeInfo getColumnType(const RelAlgNode* node, size_t col_idx) {
     if (col_idx < agg->getGroupByCount()) {
       return getColumnType(agg->getInput(0), col_idx);
     } else {
-      return agg->getAggregateExprs()[col_idx - agg->getGroupByCount()]->get_type_info();
+      return agg->getAggs()[col_idx - agg->getGroupByCount()]->get_type_info();
     }
   }
 

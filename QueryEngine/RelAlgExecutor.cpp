@@ -933,7 +933,7 @@ ColumnRefSet get_used_inputs(const RelAggregate* aggregate) {
   for (unsigned i = 0; i < static_cast<unsigned>(group_count); ++i) {
     res.insert({source, i});
   }
-  for (const auto& expr : aggregate->getAggregateExprs()) {
+  for (const auto& expr : aggregate->getAggs()) {
     auto agg_expr = dynamic_cast<const hdk::ir::AggExpr*>(expr.get());
     CHECK(agg_expr);
     if (agg_expr->get_arg()) {
@@ -1328,21 +1328,11 @@ std::vector<hdk::ir::Expr*> translate_targets(
     target_exprs.push_back(target_expr.get());
   }
 
-  size_t i = 0;
-  for (const auto& agg : aggregate->getAggregateExprs()) {
+  for (const auto& agg : aggregate->getAggs()) {
     auto target_expr = translator.normalize(agg.get());
     target_expr = fold_expr(target_expr.get());
     target_exprs.emplace_back(target_expr.get());
     target_exprs_owned.emplace_back(std::move(target_expr));
-
-    // TODO: remove this check
-    auto orig_target_expr = RelAlgTranslator::translateAggregateRex(
-        aggregate->getAggExprs()[i++].get(), scalar_sources, bigint_count);
-    CHECK(orig_target_expr);
-    orig_target_expr = fold_expr(orig_target_expr.get());
-    CHECK(*orig_target_expr == *target_exprs.back())
-        << "Aggregate expr mismatch: orig=" << target_exprs.back()->toString()
-        << " new=" << target_expr->toString();
   }
   return target_exprs;
 }

@@ -576,7 +576,7 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) n
   for (auto node : nodes) {
     auto aggregate = std::dynamic_pointer_cast<const RelAggregate>(node);
     if (!aggregate || aggregate == sink ||
-        !(aggregate->getGroupByCount() == 1 && aggregate->getAggExprsCount() == 0)) {
+        !(aggregate->getGroupByCount() == 1 && aggregate->getAggsCount() == 0)) {
       continue;
     }
     auto project =
@@ -778,7 +778,7 @@ std::vector<std::unordered_set<size_t>> get_live_ins(
   if (auto aggregate = dynamic_cast<const RelAggregate*>(node)) {
     CHECK_EQ(size_t(1), aggregate->inputCount());
     const auto group_key_count = static_cast<size_t>(aggregate->getGroupByCount());
-    const auto agg_expr_count = static_cast<size_t>(aggregate->getAggExprsCount());
+    const auto agg_expr_count = static_cast<size_t>(aggregate->getAggsCount());
     std::unordered_set<size_t> live_in;
     for (size_t i = 0; i < group_key_count; ++i) {
       live_in.insert(i);
@@ -790,13 +790,18 @@ std::vector<std::unordered_set<size_t>> get_live_ins(
       }
       const auto agg_idx = idx - group_key_count;
       CHECK_LT(agg_idx, agg_expr_count);
-      const auto& cur_agg_expr = aggregate->getAggExprs()[agg_idx];
-      const auto n_operands = cur_agg_expr->size();
-      for (size_t i = 0; i < n_operands; ++i) {
-        live_in.insert(static_cast<size_t>(cur_agg_expr->getOperand(i)));
-      }
-      if (n_operands == 0) {
+      auto agg_expr =
+          dynamic_cast<const hdk::ir::AggExpr*>(aggregate->getAgg(agg_idx).get());
+      CHECK(agg_expr);
+
+      if (!agg_expr->get_arg()) {
         has_count_star_only = true;
+      } else {
+        auto inputs = collector.visit(agg_expr);
+        for (auto& pr : inputs) {
+          CHECK_EQ(aggregate->getInput(0), pr.first);
+          live_in.insert(pr.second);
+        }
       }
     }
     if (has_count_star_only && !group_key_count) {
@@ -1220,22 +1225,19 @@ sweep_dead_columns(
     add_new_indices_for(
         node.get(), liveouts_renumbering, old_live_outs, intact_nodes, orig_node_sizes);
     if (auto aggregate = std::dynamic_pointer_cast<RelAggregate>(node)) {
-      auto old_exprs = aggregate->getAggExprsAndRelease();
-      std::vector<std::unique_ptr<const RexAgg>> new_scalar_exprs;
       hdk::ir::ExprPtrVector new_exprs;
       auto key_name_it = aggregate->getFields().begin();
       std::vector<std::string> new_fields(key_name_it,
                                           key_name_it + aggregate->getGroupByCount());
       for (size_t i = aggregate->getGroupByCount(), j = 0;
-           i < aggregate->getFields().size() && j < old_exprs.size();
+           i < aggregate->getFields().size() && j < aggregate->getAggsCount();
            ++i, ++j) {
         if (old_live_outs.count(i)) {
-          new_scalar_exprs.push_back(std::move(old_exprs[j]));
-          new_exprs.push_back(aggregate->getAggregateExpr(j));
+          new_exprs.push_back(aggregate->getAgg(j));
           new_fields.push_back(aggregate->getFieldName(i));
         }
       }
-      aggregate->setAggExprs(std::move(new_scalar_exprs), std::move(new_exprs));
+      aggregate->setAggExprs(std::move(new_exprs));
       aggregate->setFields(std::move(new_fields));
     } else if (auto project = std::dynamic_pointer_cast<RelProject>(node)) {
       auto old_scalar_exprs = project->getExpressionsAndRelease();
@@ -1299,15 +1301,13 @@ void propagate_input_renumbering(
     } else if (auto aggregate = dynamic_cast<RelAggregate*>(node)) {
       auto src_it = liveout_renumbering.find(node->getInput(0));
       CHECK(src_it != liveout_renumbering.end());
-      auto old_scalar_exprs = aggregate->getAggExprsAndRelease();
-      auto new_scalar_exprs = renumber_rex_aggs(old_scalar_exprs, src_it->second);
       InputSimpleRenumberVisitor<true> visitor(src_it->second);
       hdk::ir::ExprPtrVector new_exprs;
-      new_exprs.reserve(aggregate->getAggExprsCount());
-      for (auto& expr : aggregate->getAggregateExprs()) {
+      new_exprs.reserve(aggregate->getAggsCount());
+      for (auto& expr : aggregate->getAggs()) {
         new_exprs.emplace_back(visitor.visit(expr.get()));
       }
-      aggregate->setAggExprs(std::move(new_scalar_exprs), std::move(new_exprs));
+      aggregate->setAggExprs(std::move(new_exprs));
     } else if (auto join = dynamic_cast<RelJoin*>(node)) {
       auto new_condition = visitor.visit(join->getCondition());
       join->setCondition(std::move(new_condition));

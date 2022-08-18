@@ -1121,13 +1121,11 @@ class RelAggregate : public RelAlgNode {
  public:
   // Takes ownership of the aggregate expressions.
   RelAggregate(const size_t groupby_count,
-               std::vector<std::unique_ptr<const RexAgg>> agg_exprs,
-               hdk::ir::ExprPtrVector aggregate_exprs,
+               hdk::ir::ExprPtrVector aggs,
                const std::vector<std::string>& fields,
                std::shared_ptr<const RelAlgNode> input)
       : groupby_count_(groupby_count)
-      , agg_exprs_(std::move(agg_exprs))
-      , aggregate_exprs_(aggregate_exprs)
+      , aggs_(aggs)
       , fields_(fields)
       , hint_applied_(false)
       , hints_(std::make_unique<Hints>()) {
@@ -1136,11 +1134,11 @@ class RelAggregate : public RelAlgNode {
 
   RelAggregate(RelAggregate const&);
 
-  size_t size() const override { return groupby_count_ + agg_exprs_.size(); }
+  size_t size() const override { return groupby_count_ + aggs_.size(); }
 
   const size_t getGroupByCount() const { return groupby_count_; }
 
-  const size_t getAggExprsCount() const { return agg_exprs_.size(); }
+  const size_t getAggsCount() const { return aggs_.size(); }
 
   const std::vector<std::string>& getFields() const { return fields_; }
   void setFields(std::vector<std::string>&& new_fields) {
@@ -1149,31 +1147,11 @@ class RelAggregate : public RelAlgNode {
 
   const std::string getFieldName(const size_t i) const { return fields_[i]; }
 
-  std::vector<const RexAgg*> getAggregatesAndRelease() {
-    std::vector<const RexAgg*> result;
-    for (auto& agg_expr : agg_exprs_) {
-      result.push_back(agg_expr.release());
-    }
-    return result;
-  }
-
-  std::vector<std::unique_ptr<const RexAgg>> getAggExprsAndRelease() {
-    return std::move(agg_exprs_);
-  }
-
-  const std::vector<std::unique_ptr<const RexAgg>>& getAggExprs() const {
-    return agg_exprs_;
-  }
-
   // TODO: rename to getAggExprs when Rex version is removed.
-  const hdk::ir::ExprPtrVector& getAggregateExprs() const { return aggregate_exprs_; }
-  hdk::ir::ExprPtr getAggregateExpr(size_t i) const { return aggregate_exprs_[i]; }
+  const hdk::ir::ExprPtrVector& getAggs() const { return aggs_; }
+  hdk::ir::ExprPtr getAgg(size_t i) const { return aggs_[i]; }
 
-  void setAggExprs(std::vector<std::unique_ptr<const RexAgg>> agg_exprs,
-                   hdk::ir::ExprPtrVector aggregate_exprs) {
-    agg_exprs_ = std::move(agg_exprs);
-    aggregate_exprs_ = std::move(aggregate_exprs);
-  }
+  void setAggExprs(hdk::ir::ExprPtrVector new_aggs) { aggs_ = std::move(new_aggs); }
 
   void replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                     std::shared_ptr<const RelAlgNode> input) override;
@@ -1183,10 +1161,8 @@ class RelAggregate : public RelAlgNode {
                getIdString(),
                "(",
                std::to_string(groupby_count_),
-               ", agg_exprs=",
-               ::toString(agg_exprs_),
-               ", aggregate_exprs=",
-               ::toString(aggregate_exprs_),
+               ", aggs=",
+               ::toString(aggs_),
                ", fields=",
                ::toString(fields_),
                ", inputs=",
@@ -1198,8 +1174,8 @@ class RelAggregate : public RelAlgNode {
     if (!hash_) {
       hash_ = typeid(RelAggregate).hash_code();
       boost::hash_combine(*hash_, groupby_count_);
-      for (auto& agg_expr : agg_exprs_) {
-        boost::hash_combine(*hash_, agg_expr->toHash());
+      for (auto& agg : aggs_) {
+        boost::hash_combine(*hash_, agg->hash());
       }
       for (auto& node : inputs_) {
         boost::hash_combine(*hash_, node->toHash());
@@ -1240,9 +1216,7 @@ class RelAggregate : public RelAlgNode {
 
  private:
   const size_t groupby_count_;
-  std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
-  // TODO: rename to agg_exprs_ when Rex version is removed;
-  hdk::ir::ExprPtrVector aggregate_exprs_;
+  hdk::ir::ExprPtrVector aggs_;
   std::vector<std::string> fields_;
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;

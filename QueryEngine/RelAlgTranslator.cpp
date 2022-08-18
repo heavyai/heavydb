@@ -264,8 +264,7 @@ class NormalizerVisitor : public DeepCopyVisitor {
       if (auto agg_node = dynamic_cast<const RelAggregate*>(source)) {
         if (col_ref->getIndex() >= agg_node->getGroupByCount()) {
           auto expr =
-              agg_node
-                  ->getAggregateExprs()[col_ref->getIndex() - agg_node->getGroupByCount()]
+              agg_node->getAggs()[col_ref->getIndex() - agg_node->getGroupByCount()]
                   .get();
           if (auto agg = dynamic_cast<const hdk::ir::AggExpr*>(expr)) {
             if (agg->get_is_distinct()) {

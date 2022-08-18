@@ -88,8 +88,7 @@ RelAlgNodePtr TestRelAlgDagBuilder::addAgg(
     exprs.push_back(
         RelAlgTranslator::translateAggregateRex(rex.get(), input_exprs, false));
   }
-  auto res = std::make_shared<RelAggregate>(
-      group_size, std::move(aggs), std::move(exprs), fields, input);
+  auto res = std::make_shared<RelAggregate>(group_size, std::move(exprs), fields, input);
   nodes_.push_back(res);
   return res;
 }
