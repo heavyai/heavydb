@@ -2839,6 +2839,10 @@ class RelAlgDag : public boost::noncopyable {
         }
       }
     }
+    registerQueryHint(node.get(), query_hint);
+  }
+
+  void registerQueryHint(const RelAlgNode* node, const RegisteredQueryHint& query_hint) {
     auto node_key = node->toHash();
     auto it = query_hint_.find(node_key);
     if (it == query_hint_.end()) {
