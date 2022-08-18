@@ -490,10 +490,8 @@ void RelJoin::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
 void RelFilter::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                              std::shared_ptr<const RelAlgNode> input) {
   RelAlgNode::replaceInput(old_input, input);
-  RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
-  rebind_inputs.visit(filter_.get());
   RebindInputsVisitor visitor(old_input.get(), input.get());
-  filter_expr_ = visitor.visit(filter_expr_.get());
+  condition_ = visitor.visit(condition_.get());
 }
 
 void RelCompound::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
@@ -534,10 +532,7 @@ RelLogicalValues::RelLogicalValues(RelLogicalValues const& rhs)
     , values_(RexDeepCopyVisitor::copy(rhs.values_)) {}
 
 RelFilter::RelFilter(RelFilter const& rhs)
-    : RelAlgNode(rhs), filter_expr_(rhs.filter_expr_) {
-  RexDeepCopyVisitor copier;
-  filter_ = copier.visit(rhs.filter_.get());
-}
+    : RelAlgNode(rhs), condition_(rhs.condition_) {}
 
 RelAggregate::RelAggregate(RelAggregate const& rhs)
     : RelAlgNode(rhs)
@@ -1386,10 +1381,7 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept
     const auto filter_node = std::dynamic_pointer_cast<RelFilter>(ra_node);
     if (filter_node) {
       CHECK_EQ(size_t(1), filter_node->inputCount());
-      auto disambiguated_condition = disambiguate_rex(
-          filter_node->getCondition(), get_node_output(filter_node->getInput(0)));
-      filter_node->setCondition(disambiguated_condition,
-                                filter_node->getConditionExprShared());
+      filter_node->setCondition(filter_node->getConditionExprShared());
       continue;
     }
     const auto project_node = std::dynamic_pointer_cast<RelProject>(ra_node);
@@ -2684,8 +2676,7 @@ class RelAlgDispatcher {
                                      schema_provider_,
                                      root_dag_builder,
                                      get_node_output(inputs[0].get()));
-    return std::make_shared<RelFilter>(
-        condition, std::move(condition_expr), inputs.front());
+    return std::make_shared<RelFilter>(std::move(condition_expr), inputs.front());
   }
 
   std::shared_ptr<RelAggregate> dispatchAggregate(const rapidjson::Value& agg_ra,

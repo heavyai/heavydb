@@ -1434,34 +1434,25 @@ class RelTranslatedJoin : public RelAlgNode {
 
 class RelFilter : public RelAlgNode {
  public:
-  RelFilter(std::unique_ptr<const RexScalar>& filter,
-            hdk::ir::ExprPtr filter_expr,
-            std::shared_ptr<const RelAlgNode> input)
-      : filter_(std::move(filter)), filter_expr_(std::move(filter_expr)) {
-    CHECK(filter_);
-    CHECK(filter_expr_);
+  RelFilter(hdk::ir::ExprPtr condition, std::shared_ptr<const RelAlgNode> input)
+      : condition_(std::move(condition)) {
+    CHECK(condition_);
     inputs_.push_back(input);
   }
 
   // for dummy filter node for data recycler
-  RelFilter(hdk::ir::ExprPtr filter) : filter_expr_(std::move(filter)) {
-    CHECK(filter_expr_);
+  RelFilter(hdk::ir::ExprPtr condition) : condition_(std::move(condition)) {
+    CHECK(condition_);
   }
 
   RelFilter(RelFilter const&);
 
-  const RexScalar* getCondition() const { return filter_.get(); }
-  const hdk::ir::Expr* getConditionExpr() const { return filter_expr_.get(); }
-  hdk::ir::ExprPtr getConditionExprShared() const { return filter_expr_; }
+  const hdk::ir::Expr* getConditionExpr() const { return condition_.get(); }
+  hdk::ir::ExprPtr getConditionExprShared() const { return condition_; }
 
-  const RexScalar* getAndReleaseCondition() { return filter_.release(); }
-
-  void setCondition(std::unique_ptr<const RexScalar>& condition,
-                    hdk::ir::ExprPtr filter_expr) {
-    CHECK(condition);
-    filter_ = std::move(condition);
-    CHECK(filter_expr);
-    filter_expr_ = std::move(filter_expr);
+  void setCondition(hdk::ir::ExprPtr new_condition) {
+    CHECK(new_condition);
+    condition_ = std::move(new_condition);
   }
 
   size_t size() const override { return inputs_[0]->size(); }
@@ -1473,7 +1464,7 @@ class RelFilter : public RelAlgNode {
     return cat(::typeName(this),
                getIdString(),
                "(",
-               (filter_ ? filter_->toString() : "null"),
+               condition_->toString(),
                ", ",
                ::inputsToString(inputs_) + ")");
   }
@@ -1481,8 +1472,7 @@ class RelFilter : public RelAlgNode {
   size_t toHash() const override {
     if (!hash_) {
       hash_ = typeid(RelFilter).hash_code();
-      boost::hash_combine(*hash_,
-                          filter_expr_ ? filter_expr_->hash() : boost::hash_value("n"));
+      boost::hash_combine(*hash_, condition_->hash());
       for (auto& node : inputs_) {
         boost::hash_combine(*hash_, node->toHash());
       }
@@ -1495,8 +1485,7 @@ class RelFilter : public RelAlgNode {
   }
 
  private:
-  std::unique_ptr<const RexScalar> filter_;
-  hdk::ir::ExprPtr filter_expr_;
+  hdk::ir::ExprPtr condition_;
 };
 
 // Synthetic node to assist execution of left-deep join relational algebra.
