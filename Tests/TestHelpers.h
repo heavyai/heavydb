@@ -42,9 +42,9 @@ class TsanTbbPrivateServerKiller : public ::testing::Test {
  protected:
 #if PRINT_TBB_TASK_SCHEDULER_HANDLE_DIAGNOSTICS
   void SetUp() override {
-    auto handle = tbb::detail::d1::task_scheduler_handle::get();
+    auto handle = tbb::task_scheduler_handle::get();
     bool const handle_as_bool = static_cast<bool>(handle);
-    bool const finalized = tbb::detail::d1::finalize(handle, std::nothrow_t{});
+    bool const finalized = tbb::finalize(handle, std::nothrow_t{});
     std::cout << __FILE__ << " +" << __LINE__ << ' ' << __func__
               << " handle_as_bool=" << handle_as_bool << " finalized=" << finalized
               << std::endl;
@@ -53,15 +53,15 @@ class TsanTbbPrivateServerKiller : public ::testing::Test {
   void TearDown() override {
     // Expected to kill tbb::detail::r1::rml::private_server after each test,
     // which can otherwise trigger false positive tsan data race warnings.
-    auto handle = tbb::detail::d1::task_scheduler_handle::get();
+    auto handle = tbb::task_scheduler_handle::get();
 #if PRINT_TBB_TASK_SCHEDULER_HANDLE_DIAGNOSTICS
     bool const handle_as_bool = static_cast<bool>(handle);
-    bool const finalized = tbb::detail::d1::finalize(handle, std::nothrow_t{});
+    bool const finalized = tbb::finalize(handle, std::nothrow_t{});
     std::cout << __FILE__ << " +" << __LINE__ << ' ' << __func__
               << " handle_as_bool=" << handle_as_bool << " finalized=" << finalized
               << std::endl;
 #else
-    tbb::detail::d1::finalize(handle, std::nothrow_t{});  // Returns false on error.
+    tbb::finalize(handle, std::nothrow_t{});  // Returns false on error.
 #endif
   }
 #endif
