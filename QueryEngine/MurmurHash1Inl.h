@@ -3,7 +3,7 @@
 
 #include "../Shared/funcannotations.h"
 
-FORCE_INLINE DEVICE uint32_t MurmurHash1Impl(const void* key,
+FORCE_INLINE DEVICE uint32_t MurmurHash1Impl(GENERIC_ADDR_SPACE const void* key,
                                              int len,
                                              const uint32_t seed) {
   const unsigned int m = 0xc6a4a793;
@@ -14,10 +14,11 @@ FORCE_INLINE DEVICE uint32_t MurmurHash1Impl(const void* key,
 
   //----------
 
-  const unsigned char* data = (const unsigned char*)key;
+  GENERIC_ADDR_SPACE const unsigned char* data =
+      (GENERIC_ADDR_SPACE const unsigned char*)key;
 
   while (len >= 4) {
-    unsigned int k = *(unsigned int*)data;
+    unsigned int k = *(GENERIC_ADDR_SPACE unsigned int*)data;
 
     h += k;
     h *= m;
@@ -50,14 +51,16 @@ FORCE_INLINE DEVICE uint32_t MurmurHash1Impl(const void* key,
   return h;
 }
 
-FORCE_INLINE DEVICE uint64_t MurmurHash64AImpl(const void* key, int len, uint64_t seed) {
+FORCE_INLINE DEVICE uint64_t MurmurHash64AImpl(GENERIC_ADDR_SPACE const void* key,
+                                               int len,
+                                               uint64_t seed) {
   const uint64_t m = 0xc6a4a7935bd1e995LLU;
   const int r = 47;
 
   uint64_t h = seed ^ (len * m);
 
-  const uint64_t* data = (const uint64_t*)key;
-  const uint64_t* end = data + (len / 8);
+  GENERIC_ADDR_SPACE const uint64_t* data = (GENERIC_ADDR_SPACE const uint64_t*)key;
+  GENERIC_ADDR_SPACE const uint64_t* end = data + (len / 8);
 
   while (data != end) {
     uint64_t k = *data++;
@@ -70,7 +73,8 @@ FORCE_INLINE DEVICE uint64_t MurmurHash64AImpl(const void* key, int len, uint64_
     h *= m;
   }
 
-  const unsigned char* data2 = (const unsigned char*)data;
+  GENERIC_ADDR_SPACE const unsigned char* data2 =
+      (GENERIC_ADDR_SPACE const unsigned char*)data;
 
   switch (len & 7) {
     case 7:

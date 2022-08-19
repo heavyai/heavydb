@@ -60,6 +60,14 @@
 #define ALWAYS_INLINE __attribute__((always_inline))
 #endif
 
+#ifdef L0_RUNTIME_ENABLED
+#define GENERIC_ADDR_SPACE __attribute__((opencl_generic))
+#define GLOBAL_ADDR_SPACE __attribute__((opencl_global))
+#else
+#define GENERIC_ADDR_SPACE
+#define GLOBAL_ADDR_SPACE
+#endif
+
 #ifdef __CUDACC__
 #define NEVER_INLINE
 #elif defined(_WIN32)

@@ -8,8 +8,10 @@ FORCE_INLINE DEVICE uint32_t rotl32(uint32_t x, int8_t r) {
 
 #define ROTL32(x, y) rotl32(x, y)
 
-FORCE_INLINE DEVICE uint32_t MurmurHash3Impl(const void* key, int len, uint32_t seed) {
-  const uint8_t* data = (const uint8_t*)key;
+FORCE_INLINE DEVICE uint32_t MurmurHash3Impl(GENERIC_ADDR_SPACE const void* key,
+                                             int len,
+                                             uint32_t seed) {
+  GENERIC_ADDR_SPACE const uint8_t* data = (GENERIC_ADDR_SPACE const uint8_t*)key;
   const int nblocks = len / 4;
 
   uint32_t h1 = seed;
@@ -20,7 +22,8 @@ FORCE_INLINE DEVICE uint32_t MurmurHash3Impl(const void* key, int len, uint32_t 
   //----------
   // body
 
-  const uint32_t* blocks = (const uint32_t*)(data + nblocks * 4);
+  GENERIC_ADDR_SPACE const uint32_t* blocks =
+      (GENERIC_ADDR_SPACE const uint32_t*)(data + nblocks * 4);
 
   for (int i = -nblocks; i; i++) {
     uint32_t k1 = blocks[i];
@@ -37,7 +40,8 @@ FORCE_INLINE DEVICE uint32_t MurmurHash3Impl(const void* key, int len, uint32_t 
   //----------
   // tail
 
-  const uint8_t* tail = (const uint8_t*)(data + nblocks * 4);
+  GENERIC_ADDR_SPACE const uint8_t* tail =
+      (GENERIC_ADDR_SPACE const uint8_t*)(data + nblocks * 4);
 
   uint32_t k1 = 0;
 

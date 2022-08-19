@@ -21,8 +21,8 @@
 #include "QueryEngine/CompareKeysInl.h"
 #include "QueryEngine/MurmurHash.h"
 
-DEVICE bool compare_to_key(const int8_t* entry,
-                           const int8_t* key,
+DEVICE bool compare_to_key(GENERIC_ADDR_SPACE const int8_t* entry,
+                           GENERIC_ADDR_SPACE const int8_t* key,
                            const size_t key_bytes) {
   for (size_t i = 0; i < key_bytes; ++i) {
     if (entry[i] != key[i]) {
@@ -40,15 +40,15 @@ const int kNotPresent = -2;
 }  // namespace
 
 template <class T>
-DEVICE int64_t get_matching_slot(const int8_t* hash_buff,
+DEVICE int64_t get_matching_slot(GENERIC_ADDR_SPACE const int8_t* hash_buff,
                                  const uint32_t h,
-                                 const int8_t* key,
+                                 GENERIC_ADDR_SPACE const int8_t* key,
                                  const size_t key_bytes) {
   const auto lookup_result_ptr = hash_buff + h * (key_bytes + sizeof(T));
   if (compare_to_key(lookup_result_ptr, key, key_bytes)) {
-    return *reinterpret_cast<const T*>(lookup_result_ptr + key_bytes);
+    return *reinterpret_cast<GENERIC_ADDR_SPACE const T*>(lookup_result_ptr + key_bytes);
   }
-  if (*reinterpret_cast<const T*>(lookup_result_ptr) ==
+  if (*reinterpret_cast<GENERIC_ADDR_SPACE const T*>(lookup_result_ptr) ==
       SUFFIX(get_invalid_key) < T > ()) {
     return kNotPresent;
   }
@@ -56,10 +56,11 @@ DEVICE int64_t get_matching_slot(const int8_t* hash_buff,
 }
 
 template <class T>
-FORCE_INLINE DEVICE int64_t baseline_hash_join_idx_impl(const int8_t* hash_buff,
-                                                        const int8_t* key,
-                                                        const size_t key_bytes,
-                                                        const size_t entry_count) {
+FORCE_INLINE DEVICE int64_t
+baseline_hash_join_idx_impl(GENERIC_ADDR_SPACE const int8_t* hash_buff,
+                            GENERIC_ADDR_SPACE const int8_t* key,
+                            const size_t key_bytes,
+                            const size_t entry_count) {
   if (!entry_count) {
     return kNoMatch;
   }
@@ -80,16 +81,16 @@ FORCE_INLINE DEVICE int64_t baseline_hash_join_idx_impl(const int8_t* hash_buff,
 }
 
 extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t
-baseline_hash_join_idx_32(const int8_t* hash_buff,
-                          const int8_t* key,
+baseline_hash_join_idx_32(GENERIC_ADDR_SPACE const int8_t* hash_buff,
+                          GENERIC_ADDR_SPACE const int8_t* key,
                           const size_t key_bytes,
                           const size_t entry_count) {
   return baseline_hash_join_idx_impl<int32_t>(hash_buff, key, key_bytes, entry_count);
 }
 
 extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t
-baseline_hash_join_idx_64(const int8_t* hash_buff,
-                          const int8_t* key,
+baseline_hash_join_idx_64(GENERIC_ADDR_SPACE const int8_t* hash_buff,
+                          GENERIC_ADDR_SPACE const int8_t* key,
                           const size_t key_bytes,
                           const size_t entry_count) {
   return baseline_hash_join_idx_impl<int64_t>(hash_buff, key, key_bytes, entry_count);
@@ -102,15 +103,15 @@ FORCE_INLINE DEVICE int64_t get_bucket_key_for_value_impl(const T value,
 }
 
 extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t
-get_bucket_key_for_range_double(const int8_t* range_bytes,
+get_bucket_key_for_range_double(GENERIC_ADDR_SPACE const int8_t* range_bytes,
                                 const size_t range_component_index,
                                 const double bucket_size) {
-  const auto range = reinterpret_cast<const double*>(range_bytes);
+  const auto range = reinterpret_cast<GENERIC_ADDR_SPACE const double*>(range_bytes);
   return get_bucket_key_for_value_impl(range[range_component_index], bucket_size);
 }
 
 FORCE_INLINE DEVICE int64_t
-get_bucket_key_for_range_compressed_impl(const int8_t* range,
+get_bucket_key_for_range_compressed_impl(GENERIC_ADDR_SPACE const int8_t* range,
                                          const size_t range_component_index,
                                          const double bucket_size) {
   assert(false);
@@ -118,7 +119,7 @@ get_bucket_key_for_range_compressed_impl(const int8_t* range,
 }
 
 extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t
-get_bucket_key_for_range_compressed(const int8_t* range,
+get_bucket_key_for_range_compressed(GENERIC_ADDR_SPACE const int8_t* range,
                                     const size_t range_component_index,
                                     const double bucket_size) {
   return get_bucket_key_for_range_compressed_impl(
@@ -150,26 +151,25 @@ FORCE_INLINE DEVICE int64_t get_composite_key_index_impl(const T* key,
 }
 
 extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t
-get_composite_key_index_32(const int32_t* key,
+get_composite_key_index_32(GENERIC_ADDR_SPACE const int32_t* key,
                            const size_t key_component_count,
-                           const int32_t* composite_key_dict,
+                           GENERIC_ADDR_SPACE const int32_t* composite_key_dict,
                            const size_t entry_count) {
   return get_composite_key_index_impl(
       key, key_component_count, composite_key_dict, entry_count);
 }
 
 extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t
-get_composite_key_index_64(const int64_t* key,
+get_composite_key_index_64(GENERIC_ADDR_SPACE const int64_t* key,
                            const size_t key_component_count,
-                           const int64_t* composite_key_dict,
+                           GENERIC_ADDR_SPACE const int64_t* composite_key_dict,
                            const size_t entry_count) {
   return get_composite_key_index_impl(
       key, key_component_count, composite_key_dict, entry_count);
 }
 
-extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t insert_sorted(int32_t* arr,
-                                                                    size_t elem_count,
-                                                                    int32_t elem) {
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t
+insert_sorted(GENERIC_ADDR_SPACE int32_t* arr, size_t elem_count, int32_t elem) {
   for (size_t i = 0; i < elem_count; i++) {
     if (elem == arr[i]) {
       return 0;
@@ -196,19 +196,19 @@ overlaps_hash_join_idx(int64_t hash_buff,
                        const int64_t min_key,
                        const int64_t max_key) {
   if (key >= min_key && key <= max_key) {
-    return *(reinterpret_cast<int32_t*>(hash_buff) + (key - min_key));
+    return *(reinterpret_cast<GENERIC_ADDR_SPACE int32_t*>(hash_buff) + (key - min_key));
   }
   return -1;
 }
 
 struct BufferRange {
-  const int32_t* buffer = nullptr;
+  GENERIC_ADDR_SPACE const int32_t* buffer = nullptr;
   const int64_t element_count = 0;
 };
 
 ALWAYS_INLINE DEVICE BufferRange
-get_row_id_buffer_ptr(int64_t* hash_table_ptr,
-                      const int64_t* key,
+get_row_id_buffer_ptr(GENERIC_ADDR_SPACE int64_t* hash_table_ptr,
+                      GENERIC_ADDR_SPACE const int64_t* key,
                       const int64_t key_component_count,
                       const int64_t entry_count,
                       const int64_t offset_buffer_ptr_offset,
@@ -223,7 +223,8 @@ get_row_id_buffer_ptr(int64_t* hash_table_ptr,
     return BufferRange{nullptr, 0};
   }
 
-  int8_t* one_to_many_ptr = reinterpret_cast<int8_t*>(hash_table_ptr);
+  GENERIC_ADDR_SPACE int8_t* one_to_many_ptr =
+      reinterpret_cast<GENERIC_ADDR_SPACE int8_t*>(hash_table_ptr);
   one_to_many_ptr += offset_buffer_ptr_offset;
 
   // Returns an index used to fetch row count and row ids.
@@ -234,13 +235,14 @@ get_row_id_buffer_ptr(int64_t* hash_table_ptr,
   }
 
   // Offset into the row count section of buffer
-  int8_t* count_ptr = one_to_many_ptr + sub_buff_size;
+  GENERIC_ADDR_SPACE int8_t* count_ptr = one_to_many_ptr + sub_buff_size;
 
   const int64_t matched_row_count = overlaps_hash_join_idx(
       reinterpret_cast<int64_t>(count_ptr), key_idx, min_key, max_key);
 
   // Offset into payload section, containing an array of row ids
-  int32_t* rowid_buffer = (int32_t*)(one_to_many_ptr + 2 * sub_buff_size);
+  GENERIC_ADDR_SPACE int32_t* rowid_buffer =
+      (GENERIC_ADDR_SPACE int32_t*)(one_to_many_ptr + 2 * sub_buff_size);
   const auto rowidoff_ptr = &rowid_buffer[slot];
 
   return BufferRange{rowidoff_ptr, matched_row_count};
@@ -278,19 +280,19 @@ struct Bounds {
 /// in as out_arr.
 /// The number of row ids in this array is returned.
 extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t
-get_candidate_rows(int32_t* out_arr,
+get_candidate_rows(GENERIC_ADDR_SPACE int32_t* out_arr,
                    const uint32_t max_arr_size,
-                   const int8_t* range_bytes,
+                   GENERIC_ADDR_SPACE const int8_t* range_bytes,
                    const int32_t range_component_index,
                    const double bucket_size_x,
                    const double bucket_size_y,
                    const int32_t keys_count,
                    const int64_t key_component_count,
-                   int64_t* hash_table_ptr,
+                   GENERIC_ADDR_SPACE int64_t* hash_table_ptr,
                    const int64_t entry_count,
                    const int64_t offset_buffer_ptr_offset,
                    const int64_t sub_buff_size) {
-  const auto range = reinterpret_cast<const double*>(range_bytes);
+  const auto range = reinterpret_cast<GENERIC_ADDR_SPACE const double*>(range_bytes);
 
   size_t elem_count = 0;
 
@@ -328,11 +330,11 @@ get_candidate_rows(int32_t* out_arr,
 // /// return the number of buckets the bounding box
 // /// will be split into.
 extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t
-get_num_buckets_for_bounds(const int8_t* range_bytes,
+get_num_buckets_for_bounds(GENERIC_ADDR_SPACE const int8_t* range_bytes,
                            const int32_t range_component_index,
                            const double bucket_size_x,
                            const double bucket_size_y) {
-  const auto range = reinterpret_cast<const double*>(range_bytes);
+  const auto range = reinterpret_cast<GENERIC_ADDR_SPACE const double*>(range_bytes);
 
   const auto bounds_min_x = range[0];
   const auto bounds_min_y = range[1];

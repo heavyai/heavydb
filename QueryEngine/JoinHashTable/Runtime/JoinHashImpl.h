@@ -43,7 +43,7 @@
 
 extern "C" ALWAYS_INLINE DEVICE int SUFFIX(fill_one_to_one_hashtable)(
     size_t idx,
-    int32_t* entry_ptr,
+    GENERIC_ADDR_SPACE int32_t* entry_ptr,
     const int32_t invalid_slot_val) {
   if (insert_key_cas(entry_ptr, invalid_slot_val, idx) != invalid_slot_val) {
     return -1;
@@ -53,7 +53,7 @@ extern "C" ALWAYS_INLINE DEVICE int SUFFIX(fill_one_to_one_hashtable)(
 
 extern "C" ALWAYS_INLINE DEVICE int SUFFIX(fill_hashtable_for_semi_join)(
     size_t idx,
-    int32_t* entry_ptr,
+    GENERIC_ADDR_SPACE int32_t* entry_ptr,
     const int32_t invalid_slot_val) {
   // just mark the existence of value to the corresponding hash slot
   // regardless of hashtable collision
@@ -63,17 +63,18 @@ extern "C" ALWAYS_INLINE DEVICE int SUFFIX(fill_hashtable_for_semi_join)(
 
 #undef insert_key_cas
 
-extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_bucketized_hash_slot)(
-    int32_t* buff,
-    const int64_t key,
-    const int64_t min_key,
-    const int64_t bucket_normalization) {
+extern "C" ALWAYS_INLINE DEVICE GENERIC_ADDR_SPACE int32_t* SUFFIX(
+    get_bucketized_hash_slot)(GENERIC_ADDR_SPACE int32_t* buff,
+                              const int64_t key,
+                              const int64_t min_key,
+                              const int64_t bucket_normalization) {
   return buff + (key - min_key) / bucket_normalization;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_hash_slot)(int32_t* buff,
-                                                               const int64_t key,
-                                                               const int64_t min_key) {
+extern "C" ALWAYS_INLINE DEVICE GENERIC_ADDR_SPACE int32_t* SUFFIX(get_hash_slot)(
+    GENERIC_ADDR_SPACE int32_t* buff,
+    const int64_t key,
+    const int64_t min_key) {
   return buff + (key - min_key);
 }
 

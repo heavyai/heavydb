@@ -355,14 +355,18 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int8_t logical_or(const int8_t lhs,
 
 // aggregator implementations
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint64_t agg_count(uint64_t* agg, const int64_t) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint64_t
+agg_count(GENERIC_ADDR_SPACE uint64_t* agg, const int64_t) {
   return (*agg)++;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE void
-agg_count_distinct_bitmap(int64_t* agg, const int64_t val, const int64_t min_val) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_count_distinct_bitmap(
+    GENERIC_ADDR_SPACE int64_t* agg,
+    const int64_t val,
+    const int64_t min_val) {
   const uint64_t bitmap_idx = val - min_val;
-  reinterpret_cast<int8_t*>(*agg)[bitmap_idx >> 3] |= (1 << (bitmap_idx & 7));
+  reinterpret_cast<GENERIC_ADDR_SPACE int8_t*>(*agg)[bitmap_idx >> 3] |=
+      (1 << (bitmap_idx & 7));
 }
 
 #ifdef _MSC_VER
@@ -371,7 +375,7 @@ agg_count_distinct_bitmap(int64_t* agg, const int64_t val, const int64_t min_val
 #define GPU_RT_STUB NEVER_INLINE __attribute__((optnone))
 #endif
 
-extern "C" GPU_RT_STUB void agg_count_distinct_bitmap_gpu(int64_t*,
+extern "C" GPU_RT_STUB void agg_count_distinct_bitmap_gpu(GENERIC_ADDR_SPACE int64_t*,
                                                           const int64_t,
                                                           const int64_t,
                                                           const int64_t,
@@ -379,20 +383,23 @@ extern "C" GPU_RT_STUB void agg_count_distinct_bitmap_gpu(int64_t*,
                                                           const uint64_t,
                                                           const uint64_t) {}
 
-extern "C" RUNTIME_EXPORT NEVER_INLINE void
-agg_approximate_count_distinct(int64_t* agg, const int64_t key, const uint32_t b) {
+extern "C" RUNTIME_EXPORT NEVER_INLINE void agg_approximate_count_distinct(
+    GENERIC_ADDR_SPACE int64_t* agg,
+    const int64_t key,
+    const uint32_t b) {
   const uint64_t hash = MurmurHash64A(&key, sizeof(key), 0);
   const uint32_t index = hash >> (64 - b);
   const uint8_t rank = get_rank(hash << b, 64 - b);
-  uint8_t* M = reinterpret_cast<uint8_t*>(*agg);
-  M[index] = std::max(M[index], rank);
+  GENERIC_ADDR_SPACE uint8_t* M = reinterpret_cast<GENERIC_ADDR_SPACE uint8_t*>(*agg);
+  M[index] = std::max(static_cast<uint8_t>(M[index]), rank);
 }
 
-extern "C" GPU_RT_STUB void agg_approximate_count_distinct_gpu(int64_t*,
-                                                               const int64_t,
-                                                               const uint32_t,
-                                                               const int64_t,
-                                                               const int64_t) {}
+extern "C" GPU_RT_STUB void agg_approximate_count_distinct_gpu(
+    GENERIC_ADDR_SPACE int64_t*,
+    const int64_t,
+    const uint32_t,
+    const int64_t,
+    const int64_t) {}
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int8_t bit_is_set(const int64_t bitset,
                                                           const int64_t val,
@@ -410,34 +417,39 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int8_t bit_is_set(const int64_t bitset,
     return 0;
   }
   const uint64_t bitmap_idx = val - min_val;
-  return (reinterpret_cast<const int8_t*>(bitset))[bitmap_idx >> 3] &
+  return (reinterpret_cast<GENERIC_ADDR_SPACE const int8_t*>(bitset))[bitmap_idx >> 3] &
                  (1 << (bitmap_idx & 7))
              ? 1
              : 0;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t agg_sum(int64_t* agg, const int64_t val) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t agg_sum(GENERIC_ADDR_SPACE int64_t* agg,
+                                                        const int64_t val) {
   const auto old = *agg;
   *agg += val;
   return old;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_max(int64_t* agg, const int64_t val) {
-  *agg = std::max(*agg, val);
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_max(GENERIC_ADDR_SPACE int64_t* agg,
+                                                     const int64_t val) {
+  *agg = std::max(static_cast<int64_t>(*agg), val);
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_min(int64_t* agg, const int64_t val) {
-  *agg = std::min(*agg, val);
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_min(GENERIC_ADDR_SPACE int64_t* agg,
+                                                     const int64_t val) {
+  *agg = std::min(static_cast<int64_t>(*agg), val);
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_id(int64_t* agg, const int64_t val) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_id(GENERIC_ADDR_SPACE int64_t* agg,
+                                                    const int64_t val) {
   *agg = val;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE int8_t* agg_id_varlen(int8_t* varlen_buffer,
-                                                              const int64_t offset,
-                                                              const int8_t* value,
-                                                              const int64_t size_bytes) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE GENERIC_ADDR_SPACE int8_t* agg_id_varlen(
+    GENERIC_ADDR_SPACE int8_t* varlen_buffer,
+    const int64_t offset,
+    GENERIC_ADDR_SPACE const int8_t* value,
+    const int64_t size_bytes) {
   for (auto i = 0; i < size_bytes; i++) {
     varlen_buffer[offset + i] = value[i];
   }
@@ -445,7 +457,9 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int8_t* agg_id_varlen(int8_t* varlen_buf
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t
-checked_single_agg_id(int64_t* agg, const int64_t val, const int64_t null_val) {
+checked_single_agg_id(GENERIC_ADDR_SPACE int64_t* agg,
+                      const int64_t val,
+                      const int64_t null_val) {
   if (val == null_val) {
     return 0;
   }
@@ -462,7 +476,7 @@ checked_single_agg_id(int64_t* agg, const int64_t val, const int64_t null_val) {
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_count_distinct_bitmap_skip_val(
-    int64_t* agg,
+    GENERIC_ADDR_SPACE int64_t* agg,
     const int64_t val,
     const int64_t min_val,
     const int64_t skip_val) {
@@ -471,31 +485,32 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_count_distinct_bitmap_skip_val(
   }
 }
 
-extern "C" GPU_RT_STUB void agg_count_distinct_bitmap_skip_val_gpu(int64_t*,
-                                                                   const int64_t,
-                                                                   const int64_t,
-                                                                   const int64_t,
-                                                                   const int64_t,
-                                                                   const int64_t,
-                                                                   const uint64_t,
-                                                                   const uint64_t) {}
+extern "C" GPU_RT_STUB void agg_count_distinct_bitmap_skip_val_gpu(
+    GENERIC_ADDR_SPACE int64_t*,
+    const int64_t,
+    const int64_t,
+    const int64_t,
+    const int64_t,
+    const int64_t,
+    const uint64_t,
+    const uint64_t) {}
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint32_t agg_count_int32(uint32_t* agg,
-                                                                 const int32_t) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint32_t
+agg_count_int32(GENERIC_ADDR_SPACE uint32_t* agg, const int32_t) {
   return (*agg)++;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t agg_sum_int32(int32_t* agg,
-                                                              const int32_t val) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t
+agg_sum_int32(GENERIC_ADDR_SPACE int32_t* agg, const int32_t val) {
   const auto old = *agg;
   *agg += val;
   return old;
 }
 
-#define DEF_AGG_MAX_INT(n)                                                            \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_max_int##n(int##n##_t* agg,        \
-                                                              const int##n##_t val) { \
-    *agg = std::max(*agg, val);                                                       \
+#define DEF_AGG_MAX_INT(n)                                        \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_max_int##n(    \
+      GENERIC_ADDR_SPACE int##n##_t* agg, const int##n##_t val) { \
+    *agg = std::max(static_cast<int##n##_t>(*agg), val);          \
   }
 
 DEF_AGG_MAX_INT(32)
@@ -503,10 +518,10 @@ DEF_AGG_MAX_INT(16)
 DEF_AGG_MAX_INT(8)
 #undef DEF_AGG_MAX_INT
 
-#define DEF_AGG_MIN_INT(n)                                                            \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_min_int##n(int##n##_t* agg,        \
-                                                              const int##n##_t val) { \
-    *agg = std::min(*agg, val);                                                       \
+#define DEF_AGG_MIN_INT(n)                                        \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_min_int##n(    \
+      GENERIC_ADDR_SPACE int##n##_t* agg, const int##n##_t val) { \
+    *agg = std::min(static_cast<int##n##_t>(*agg), val);          \
   }
 
 DEF_AGG_MIN_INT(32)
@@ -514,15 +529,17 @@ DEF_AGG_MIN_INT(16)
 DEF_AGG_MIN_INT(8)
 #undef DEF_AGG_MIN_INT
 
-#define DEF_AGG_ID_INT(n)                                                            \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_id_int##n(int##n##_t* agg,        \
-                                                             const int##n##_t val) { \
-    *agg = val;                                                                      \
+#define DEF_AGG_ID_INT(n)                                         \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_id_int##n(     \
+      GENERIC_ADDR_SPACE int##n##_t* agg, const int##n##_t val) { \
+    *agg = val;                                                   \
   }
 
 #define DEF_CHECKED_SINGLE_AGG_ID_INT(n)                                        \
   extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t checked_single_agg_id_int##n( \
-      int##n##_t* agg, const int##n##_t val, const int##n##_t null_val) {       \
+      GENERIC_ADDR_SPACE int##n##_t* agg,                                       \
+      const int##n##_t val,                                                     \
+      const int##n##_t null_val) {                                              \
     if (val == null_val) {                                                      \
       return 0;                                                                 \
     }                                                                           \
@@ -548,21 +565,24 @@ DEF_CHECKED_SINGLE_AGG_ID_INT(8)
 #undef DEF_AGG_ID_INT
 #undef DEF_CHECKED_SINGLE_AGG_ID_INT
 
-#define DEF_WRITE_PROJECTION_INT(n)                                     \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void write_projection_int##n( \
-      int8_t* slot_ptr, const int##n##_t val, const int64_t init_val) { \
-    if (val != init_val) {                                              \
-      *reinterpret_cast<int##n##_t*>(slot_ptr) = val;                   \
-    }                                                                   \
+#define DEF_WRITE_PROJECTION_INT(n)                                      \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void write_projection_int##n(  \
+      GENERIC_ADDR_SPACE int8_t* slot_ptr,                               \
+      const int##n##_t val,                                              \
+      const int64_t init_val) {                                          \
+    if (val != init_val) {                                               \
+      *reinterpret_cast<GENERIC_ADDR_SPACE int##n##_t*>(slot_ptr) = val; \
+    }                                                                    \
   }
 
 DEF_WRITE_PROJECTION_INT(64)
 DEF_WRITE_PROJECTION_INT(32)
 #undef DEF_WRITE_PROJECTION_INT
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t agg_sum_skip_val(int64_t* agg,
-                                                                 const int64_t val,
-                                                                 const int64_t skip_val) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t
+agg_sum_skip_val(GENERIC_ADDR_SPACE int64_t* agg,
+                 const int64_t val,
+                 const int64_t skip_val) {
   const auto old = *agg;
   if (val != skip_val) {
     if (old != skip_val) {
@@ -575,7 +595,9 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t agg_sum_skip_val(int64_t* agg,
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t
-agg_sum_int32_skip_val(int32_t* agg, const int32_t val, const int32_t skip_val) {
+agg_sum_int32_skip_val(GENERIC_ADDR_SPACE int32_t* agg,
+                       const int32_t val,
+                       const int32_t skip_val) {
   const auto old = *agg;
   if (val != skip_val) {
     if (old != skip_val) {
@@ -588,7 +610,9 @@ agg_sum_int32_skip_val(int32_t* agg, const int32_t val, const int32_t skip_val) 
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint64_t
-agg_count_skip_val(uint64_t* agg, const int64_t val, const int64_t skip_val) {
+agg_count_skip_val(GENERIC_ADDR_SPACE uint64_t* agg,
+                   const int64_t val,
+                   const int64_t skip_val) {
   if (val != skip_val) {
     return agg_count(agg, val);
   }
@@ -596,32 +620,34 @@ agg_count_skip_val(uint64_t* agg, const int64_t val, const int64_t skip_val) {
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint32_t
-agg_count_int32_skip_val(uint32_t* agg, const int32_t val, const int32_t skip_val) {
+agg_count_int32_skip_val(GENERIC_ADDR_SPACE uint32_t* agg,
+                         const int32_t val,
+                         const int32_t skip_val) {
   if (val != skip_val) {
     return agg_count_int32(agg, val);
   }
   return *agg;
 }
 
-#define DEF_SKIP_AGG_ADD(base_agg_func)                                  \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void base_agg_func##_skip_val( \
-      DATA_T* agg, const DATA_T val, const DATA_T skip_val) {            \
-    if (val != skip_val) {                                               \
-      base_agg_func(agg, val);                                           \
-    }                                                                    \
+#define DEF_SKIP_AGG_ADD(base_agg_func)                                          \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void base_agg_func##_skip_val(         \
+      GENERIC_ADDR_SPACE DATA_T* agg, const DATA_T val, const DATA_T skip_val) { \
+    if (val != skip_val) {                                                       \
+      base_agg_func(agg, val);                                                   \
+    }                                                                            \
   }
 
-#define DEF_SKIP_AGG(base_agg_func)                                      \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void base_agg_func##_skip_val( \
-      DATA_T* agg, const DATA_T val, const DATA_T skip_val) {            \
-    if (val != skip_val) {                                               \
-      const DATA_T old_agg = *agg;                                       \
-      if (old_agg != skip_val) {                                         \
-        base_agg_func(agg, val);                                         \
-      } else {                                                           \
-        *agg = val;                                                      \
-      }                                                                  \
-    }                                                                    \
+#define DEF_SKIP_AGG(base_agg_func)                                              \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void base_agg_func##_skip_val(         \
+      GENERIC_ADDR_SPACE DATA_T* agg, const DATA_T val, const DATA_T skip_val) { \
+    if (val != skip_val) {                                                       \
+      const DATA_T old_agg = *agg;                                               \
+      if (old_agg != skip_val) {                                                 \
+        base_agg_func(agg, val);                                                 \
+      } else {                                                                   \
+        *agg = val;                                                              \
+      }                                                                          \
+    }                                                                            \
   }
 
 #define DATA_T int64_t
@@ -649,44 +675,56 @@ DEF_SKIP_AGG(agg_min_int8)
 
 // TODO(alex): fix signature
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint64_t agg_count_double(uint64_t* agg,
-                                                                  const double val) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint64_t
+agg_count_double(GENERIC_ADDR_SPACE uint64_t* agg, const double val) {
   return (*agg)++;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_sum_double(int64_t* agg,
-                                                            const double val) {
-  const auto r = *reinterpret_cast<const double*>(agg) + val;
-  *agg = *reinterpret_cast<const int64_t*>(may_alias_ptr(&r));
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_sum_double(
+    GENERIC_ADDR_SPACE int64_t* agg,
+    const double val) {
+  const auto r = *reinterpret_cast<GENERIC_ADDR_SPACE const double*>(agg) + val;
+  *agg = *reinterpret_cast<GENERIC_ADDR_SPACE const int64_t*>(may_alias_ptr(&r));
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_max_double(int64_t* agg,
-                                                            const double val) {
-  const auto r = std::max(*reinterpret_cast<const double*>(agg), val);
-  *agg = *(reinterpret_cast<const int64_t*>(may_alias_ptr(&r)));
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_max_double(
+    GENERIC_ADDR_SPACE int64_t* agg,
+    const double val) {
+  const auto r = std::max(
+      static_cast<const double>(*reinterpret_cast<GENERIC_ADDR_SPACE const double*>(agg)),
+      val);
+  *agg = *(reinterpret_cast<GENERIC_ADDR_SPACE const int64_t*>(may_alias_ptr(&r)));
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_min_double(int64_t* agg,
-                                                            const double val) {
-  const auto r = std::min(*reinterpret_cast<const double*>(agg), val);
-  *agg = *(reinterpret_cast<const int64_t*>(may_alias_ptr(&r)));
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_min_double(
+    GENERIC_ADDR_SPACE int64_t* agg,
+    const double val) {
+  const auto r = std::min(
+      static_cast<const double>(*reinterpret_cast<GENERIC_ADDR_SPACE const double*>(agg)),
+      val);
+  *agg = *(reinterpret_cast<GENERIC_ADDR_SPACE const int64_t*>(may_alias_ptr(&r)));
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_id_double(int64_t* agg,
-                                                           const double val) {
-  *agg = *(reinterpret_cast<const int64_t*>(may_alias_ptr(&val)));
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_id_double(
+    GENERIC_ADDR_SPACE int64_t* agg,
+    const double val) {
+  *agg = *(reinterpret_cast<GENERIC_ADDR_SPACE const int64_t*>(may_alias_ptr(&val)));
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t
-checked_single_agg_id_double(int64_t* agg, const double val, const double null_val) {
+checked_single_agg_id_double(GENERIC_ADDR_SPACE int64_t* agg,
+                             const double val,
+                             const double null_val) {
   if (val == null_val) {
     return 0;
   }
 
-  if (*agg == *(reinterpret_cast<const int64_t*>(may_alias_ptr(&val)))) {
+  if (*agg ==
+      *(reinterpret_cast<GENERIC_ADDR_SPACE const int64_t*>(may_alias_ptr(&val)))) {
     return 0;
-  } else if (*agg == *(reinterpret_cast<const int64_t*>(may_alias_ptr(&null_val)))) {
-    *agg = *(reinterpret_cast<const int64_t*>(may_alias_ptr(&val)));
+  } else if (*agg == *(reinterpret_cast<GENERIC_ADDR_SPACE const int64_t*>(
+                         may_alias_ptr(&null_val)))) {
+    *agg = *(reinterpret_cast<GENERIC_ADDR_SPACE const int64_t*>(may_alias_ptr(&val)));
     return 0;
   } else {
     // see Execute::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES
@@ -694,43 +732,55 @@ checked_single_agg_id_double(int64_t* agg, const double val, const double null_v
   }
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint32_t agg_count_float(uint32_t* agg,
-                                                                 const float val) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint32_t
+agg_count_float(GENERIC_ADDR_SPACE uint32_t* agg, const float val) {
   return (*agg)++;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_sum_float(int32_t* agg,
-                                                           const float val) {
-  const auto r = *reinterpret_cast<const float*>(agg) + val;
-  *agg = *reinterpret_cast<const int32_t*>(may_alias_ptr(&r));
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_sum_float(
+    GENERIC_ADDR_SPACE int32_t* agg,
+    const float val) {
+  const auto r = *reinterpret_cast<GENERIC_ADDR_SPACE const float*>(agg) + val;
+  *agg = *reinterpret_cast<GENERIC_ADDR_SPACE const int32_t*>(may_alias_ptr(&r));
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_max_float(int32_t* agg,
-                                                           const float val) {
-  const auto r = std::max(*reinterpret_cast<const float*>(agg), val);
-  *agg = *(reinterpret_cast<const int32_t*>(may_alias_ptr(&r)));
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_max_float(
+    GENERIC_ADDR_SPACE int32_t* agg,
+    const float val) {
+  const auto r = std::max(
+      static_cast<const float>(*reinterpret_cast<GENERIC_ADDR_SPACE const float*>(agg)),
+      val);
+  *agg = *(reinterpret_cast<GENERIC_ADDR_SPACE const int32_t*>(may_alias_ptr(&r)));
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_min_float(int32_t* agg,
-                                                           const float val) {
-  const auto r = std::min(*reinterpret_cast<const float*>(agg), val);
-  *agg = *(reinterpret_cast<const int32_t*>(may_alias_ptr(&r)));
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_min_float(
+    GENERIC_ADDR_SPACE int32_t* agg,
+    const float val) {
+  const auto r = std::min(
+      static_cast<const float>(*reinterpret_cast<GENERIC_ADDR_SPACE const float*>(agg)),
+      val);
+  *agg = *(reinterpret_cast<GENERIC_ADDR_SPACE const int32_t*>(may_alias_ptr(&r)));
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_id_float(int32_t* agg, const float val) {
-  *agg = *(reinterpret_cast<const int32_t*>(may_alias_ptr(&val)));
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_id_float(GENERIC_ADDR_SPACE int32_t* agg,
+                                                          const float val) {
+  *agg = *(reinterpret_cast<GENERIC_ADDR_SPACE const int32_t*>(may_alias_ptr(&val)));
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t
-checked_single_agg_id_float(int32_t* agg, const float val, const float null_val) {
+checked_single_agg_id_float(GENERIC_ADDR_SPACE int32_t* agg,
+                            const float val,
+                            const float null_val) {
   if (val == null_val) {
     return 0;
   }
 
-  if (*agg == *(reinterpret_cast<const int32_t*>(may_alias_ptr(&val)))) {
+  if (*agg ==
+      *(reinterpret_cast<GENERIC_ADDR_SPACE const int32_t*>(may_alias_ptr(&val)))) {
     return 0;
-  } else if (*agg == *(reinterpret_cast<const int32_t*>(may_alias_ptr(&null_val)))) {
-    *agg = *(reinterpret_cast<const int32_t*>(may_alias_ptr(&val)));
+  } else if (*agg == *(reinterpret_cast<GENERIC_ADDR_SPACE const int32_t*>(
+                         may_alias_ptr(&null_val)))) {
+    *agg = *(reinterpret_cast<GENERIC_ADDR_SPACE const int32_t*>(may_alias_ptr(&val)));
     return 0;
   } else {
     // see Execute::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES
@@ -739,7 +789,9 @@ checked_single_agg_id_float(int32_t* agg, const float val, const float null_val)
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint64_t
-agg_count_double_skip_val(uint64_t* agg, const double val, const double skip_val) {
+agg_count_double_skip_val(GENERIC_ADDR_SPACE uint64_t* agg,
+                          const double val,
+                          const double skip_val) {
   if (val != skip_val) {
     return agg_count_double(agg, val);
   }
@@ -747,32 +799,35 @@ agg_count_double_skip_val(uint64_t* agg, const double val, const double skip_val
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint32_t
-agg_count_float_skip_val(uint32_t* agg, const float val, const float skip_val) {
+agg_count_float_skip_val(GENERIC_ADDR_SPACE uint32_t* agg,
+                         const float val,
+                         const float skip_val) {
   if (val != skip_val) {
     return agg_count_float(agg, val);
   }
   return *agg;
 }
 
-#define DEF_SKIP_AGG_ADD(base_agg_func)                                  \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void base_agg_func##_skip_val( \
-      ADDR_T* agg, const DATA_T val, const DATA_T skip_val) {            \
-    if (val != skip_val) {                                               \
-      base_agg_func(agg, val);                                           \
-    }                                                                    \
+#define DEF_SKIP_AGG_ADD(base_agg_func)                                          \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void base_agg_func##_skip_val(         \
+      GENERIC_ADDR_SPACE ADDR_T* agg, const DATA_T val, const DATA_T skip_val) { \
+    if (val != skip_val) {                                                       \
+      base_agg_func(agg, val);                                                   \
+    }                                                                            \
   }
 
-#define DEF_SKIP_AGG(base_agg_func)                                                \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void base_agg_func##_skip_val(           \
-      ADDR_T* agg, const DATA_T val, const DATA_T skip_val) {                      \
-    if (val != skip_val) {                                                         \
-      const ADDR_T old_agg = *agg;                                                 \
-      if (old_agg != *reinterpret_cast<const ADDR_T*>(may_alias_ptr(&skip_val))) { \
-        base_agg_func(agg, val);                                                   \
-      } else {                                                                     \
-        *agg = *reinterpret_cast<const ADDR_T*>(may_alias_ptr(&val));              \
-      }                                                                            \
-    }                                                                              \
+#define DEF_SKIP_AGG(base_agg_func)                                                      \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void base_agg_func##_skip_val(                 \
+      GENERIC_ADDR_SPACE ADDR_T* agg, const DATA_T val, const DATA_T skip_val) {         \
+    if (val != skip_val) {                                                               \
+      const ADDR_T old_agg = *agg;                                                       \
+      if (old_agg != *reinterpret_cast<GENERIC_ADDR_SPACE const ADDR_T*>(                \
+                         may_alias_ptr(&skip_val))) {                                    \
+        base_agg_func(agg, val);                                                         \
+      } else {                                                                           \
+        *agg = *reinterpret_cast<GENERIC_ADDR_SPACE const ADDR_T*>(may_alias_ptr(&val)); \
+      }                                                                                  \
+    }                                                                                    \
   }
 
 #define DATA_T double
@@ -812,165 +867,178 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t decimal_ceil(const int64_t x,
 
 // Shared memory aggregators. Should never be called,
 // real implementations are in cuda_mapd_rt.cu.
-#define DEF_SHARED_AGG_RET_STUBS(base_agg_func)                                     \
-  extern "C" GPU_RT_STUB uint64_t base_agg_func##_shared(uint64_t* agg,             \
-                                                         const int64_t val) {       \
-    return 0;                                                                       \
-  }                                                                                 \
-                                                                                    \
-  extern "C" GPU_RT_STUB uint64_t base_agg_func##_skip_val_shared(                  \
-      uint64_t* agg, const int64_t val, const int64_t skip_val) {                   \
-    return 0;                                                                       \
-  }                                                                                 \
-  extern "C" GPU_RT_STUB uint32_t base_agg_func##_int32_shared(uint32_t* agg,       \
-                                                               const int32_t val) { \
-    return 0;                                                                       \
-  }                                                                                 \
-                                                                                    \
-  extern "C" GPU_RT_STUB uint32_t base_agg_func##_int32_skip_val_shared(            \
-      uint32_t* agg, const int32_t val, const int32_t skip_val) {                   \
-    return 0;                                                                       \
-  }                                                                                 \
-                                                                                    \
-  extern "C" GPU_RT_STUB uint64_t base_agg_func##_double_shared(uint64_t* agg,      \
-                                                                const double val) { \
-    return 0;                                                                       \
-  }                                                                                 \
-                                                                                    \
-  extern "C" GPU_RT_STUB uint64_t base_agg_func##_double_skip_val_shared(           \
-      uint64_t* agg, const double val, const double skip_val) {                     \
-    return 0;                                                                       \
-  }                                                                                 \
-  extern "C" GPU_RT_STUB uint32_t base_agg_func##_float_shared(uint32_t* agg,       \
-                                                               const float val) {   \
-    return 0;                                                                       \
-  }                                                                                 \
-                                                                                    \
-  extern "C" GPU_RT_STUB uint32_t base_agg_func##_float_skip_val_shared(            \
-      uint32_t* agg, const float val, const float skip_val) {                       \
-    return 0;                                                                       \
+#define DEF_SHARED_AGG_RET_STUBS(base_agg_func)                                      \
+  extern "C" GPU_RT_STUB uint64_t base_agg_func##_shared(                            \
+      GENERIC_ADDR_SPACE uint64_t* agg, const int64_t val) {                         \
+    return 0;                                                                        \
+  }                                                                                  \
+                                                                                     \
+  extern "C" GPU_RT_STUB uint64_t base_agg_func##_skip_val_shared(                   \
+      GENERIC_ADDR_SPACE uint64_t* agg, const int64_t val, const int64_t skip_val) { \
+    return 0;                                                                        \
+  }                                                                                  \
+  extern "C" GPU_RT_STUB uint32_t base_agg_func##_int32_shared(                      \
+      GENERIC_ADDR_SPACE uint32_t* agg, const int32_t val) {                         \
+    return 0;                                                                        \
+  }                                                                                  \
+                                                                                     \
+  extern "C" GPU_RT_STUB uint32_t base_agg_func##_int32_skip_val_shared(             \
+      GENERIC_ADDR_SPACE uint32_t* agg, const int32_t val, const int32_t skip_val) { \
+    return 0;                                                                        \
+  }                                                                                  \
+                                                                                     \
+  extern "C" GPU_RT_STUB uint64_t base_agg_func##_double_shared(                     \
+      GENERIC_ADDR_SPACE uint64_t* agg, const double val) {                          \
+    return 0;                                                                        \
+  }                                                                                  \
+                                                                                     \
+  extern "C" GPU_RT_STUB uint64_t base_agg_func##_double_skip_val_shared(            \
+      GENERIC_ADDR_SPACE uint64_t* agg, const double val, const double skip_val) {   \
+    return 0;                                                                        \
+  }                                                                                  \
+  extern "C" GPU_RT_STUB uint32_t base_agg_func##_float_shared(                      \
+      GENERIC_ADDR_SPACE uint32_t* agg, const float val) {                           \
+    return 0;                                                                        \
+  }                                                                                  \
+                                                                                     \
+  extern "C" GPU_RT_STUB uint32_t base_agg_func##_float_skip_val_shared(             \
+      GENERIC_ADDR_SPACE uint32_t* agg, const float val, const float skip_val) {     \
+    return 0;                                                                        \
   }
 
-#define DEF_SHARED_AGG_STUBS(base_agg_func)                                              \
-  extern "C" GPU_RT_STUB void base_agg_func##_shared(int64_t* agg, const int64_t val) {} \
-                                                                                         \
-  extern "C" GPU_RT_STUB void base_agg_func##_skip_val_shared(                           \
-      int64_t* agg, const int64_t val, const int64_t skip_val) {}                        \
-  extern "C" GPU_RT_STUB void base_agg_func##_int32_shared(int32_t* agg,                 \
-                                                           const int32_t val) {}         \
-  extern "C" GPU_RT_STUB void base_agg_func##_int16_shared(int16_t* agg,                 \
-                                                           const int16_t val) {}         \
-  extern "C" GPU_RT_STUB void base_agg_func##_int8_shared(int8_t* agg,                   \
-                                                          const int8_t val) {}           \
-                                                                                         \
-  extern "C" GPU_RT_STUB void base_agg_func##_int32_skip_val_shared(                     \
-      int32_t* agg, const int32_t val, const int32_t skip_val) {}                        \
-                                                                                         \
-  extern "C" GPU_RT_STUB void base_agg_func##_double_shared(int64_t* agg,                \
-                                                            const double val) {}         \
-                                                                                         \
-  extern "C" GPU_RT_STUB void base_agg_func##_double_skip_val_shared(                    \
-      int64_t* agg, const double val, const double skip_val) {}                          \
-  extern "C" GPU_RT_STUB void base_agg_func##_float_shared(int32_t* agg,                 \
-                                                           const float val) {}           \
-                                                                                         \
-  extern "C" GPU_RT_STUB void base_agg_func##_float_skip_val_shared(                     \
-      int32_t* agg, const float val, const float skip_val) {}
+#define DEF_SHARED_AGG_STUBS(base_agg_func)                                           \
+  extern "C" GPU_RT_STUB void base_agg_func##_shared(GENERIC_ADDR_SPACE int64_t* agg, \
+                                                     const int64_t val) {}            \
+                                                                                      \
+  extern "C" GPU_RT_STUB void base_agg_func##_skip_val_shared(                        \
+      GENERIC_ADDR_SPACE int64_t* agg, const int64_t val, const int64_t skip_val) {}  \
+  extern "C" GPU_RT_STUB void base_agg_func##_int32_shared(                           \
+      GENERIC_ADDR_SPACE int32_t* agg, const int32_t val) {}                          \
+  extern "C" GPU_RT_STUB void base_agg_func##_int16_shared(                           \
+      GENERIC_ADDR_SPACE int16_t* agg, const int16_t val) {}                          \
+  extern "C" GPU_RT_STUB void base_agg_func##_int8_shared(                            \
+      GENERIC_ADDR_SPACE int8_t* agg, const int8_t val) {}                            \
+                                                                                      \
+  extern "C" GPU_RT_STUB void base_agg_func##_int32_skip_val_shared(                  \
+      GENERIC_ADDR_SPACE int32_t* agg, const int32_t val, const int32_t skip_val) {}  \
+                                                                                      \
+  extern "C" GPU_RT_STUB void base_agg_func##_double_shared(                          \
+      GENERIC_ADDR_SPACE int64_t* agg, const double val) {}                           \
+                                                                                      \
+  extern "C" GPU_RT_STUB void base_agg_func##_double_skip_val_shared(                 \
+      GENERIC_ADDR_SPACE int64_t* agg, const double val, const double skip_val) {}    \
+  extern "C" GPU_RT_STUB void base_agg_func##_float_shared(                           \
+      GENERIC_ADDR_SPACE int32_t* agg, const float val) {}                            \
+                                                                                      \
+  extern "C" GPU_RT_STUB void base_agg_func##_float_skip_val_shared(                  \
+      GENERIC_ADDR_SPACE int32_t* agg, const float val, const float skip_val) {}
 
 DEF_SHARED_AGG_RET_STUBS(agg_count)
 DEF_SHARED_AGG_STUBS(agg_max)
 DEF_SHARED_AGG_STUBS(agg_min)
 DEF_SHARED_AGG_STUBS(agg_id)
 
-extern "C" GPU_RT_STUB int8_t* agg_id_varlen_shared(int8_t* varlen_buffer,
-                                                    const int64_t offset,
-                                                    const int8_t* value,
-                                                    const int64_t size_bytes) {
+extern "C" GPU_RT_STUB GENERIC_ADDR_SPACE int8_t* agg_id_varlen_shared(
+    GENERIC_ADDR_SPACE int8_t* varlen_buffer,
+    const int64_t offset,
+    GENERIC_ADDR_SPACE const int8_t* value,
+    const int64_t size_bytes) {
   return nullptr;
 }
 
-extern "C" GPU_RT_STUB int32_t checked_single_agg_id_shared(int64_t* agg,
-                                                            const int64_t val,
-                                                            const int64_t null_val) {
+extern "C" GPU_RT_STUB int32_t
+checked_single_agg_id_shared(GENERIC_ADDR_SPACE int64_t* agg,
+                             const int64_t val,
+                             const int64_t null_val) {
   return 0;
 }
 
 extern "C" GPU_RT_STUB int32_t
-checked_single_agg_id_int32_shared(int32_t* agg,
+checked_single_agg_id_int32_shared(GENERIC_ADDR_SPACE int32_t* agg,
                                    const int32_t val,
                                    const int32_t null_val) {
   return 0;
 }
 extern "C" GPU_RT_STUB int32_t
-checked_single_agg_id_int16_shared(int16_t* agg,
+checked_single_agg_id_int16_shared(GENERIC_ADDR_SPACE int16_t* agg,
                                    const int16_t val,
                                    const int16_t null_val) {
   return 0;
 }
-extern "C" GPU_RT_STUB int32_t checked_single_agg_id_int8_shared(int8_t* agg,
-                                                                 const int8_t val,
-                                                                 const int8_t null_val) {
+extern "C" GPU_RT_STUB int32_t
+checked_single_agg_id_int8_shared(GENERIC_ADDR_SPACE int8_t* agg,
+                                  const int8_t val,
+                                  const int8_t null_val) {
   return 0;
 }
 
 extern "C" GPU_RT_STUB int32_t
-checked_single_agg_id_double_shared(int64_t* agg,
+checked_single_agg_id_double_shared(GENERIC_ADDR_SPACE int64_t* agg,
                                     const double val,
                                     const double null_val) {
   return 0;
 }
 
-extern "C" GPU_RT_STUB int32_t checked_single_agg_id_float_shared(int32_t* agg,
-                                                                  const float val,
-                                                                  const float null_val) {
+extern "C" GPU_RT_STUB int32_t
+checked_single_agg_id_float_shared(GENERIC_ADDR_SPACE int32_t* agg,
+                                   const float val,
+                                   const float null_val) {
   return 0;
 }
 
-extern "C" GPU_RT_STUB void agg_max_int16_skip_val_shared(int16_t* agg,
+extern "C" GPU_RT_STUB void agg_max_int16_skip_val_shared(GENERIC_ADDR_SPACE int16_t* agg,
                                                           const int16_t val,
                                                           const int16_t skip_val) {}
 
-extern "C" GPU_RT_STUB void agg_max_int8_skip_val_shared(int8_t* agg,
+extern "C" GPU_RT_STUB void agg_max_int8_skip_val_shared(GENERIC_ADDR_SPACE int8_t* agg,
                                                          const int8_t val,
                                                          const int8_t skip_val) {}
 
-extern "C" GPU_RT_STUB void agg_min_int16_skip_val_shared(int16_t* agg,
+extern "C" GPU_RT_STUB void agg_min_int16_skip_val_shared(GENERIC_ADDR_SPACE int16_t* agg,
                                                           const int16_t val,
                                                           const int16_t skip_val) {}
 
-extern "C" GPU_RT_STUB void agg_min_int8_skip_val_shared(int8_t* agg,
+extern "C" GPU_RT_STUB void agg_min_int8_skip_val_shared(GENERIC_ADDR_SPACE int8_t* agg,
                                                          const int8_t val,
                                                          const int8_t skip_val) {}
 
-extern "C" GPU_RT_STUB void agg_id_double_shared_slow(int64_t* agg, const double* val) {}
+extern "C" GPU_RT_STUB void agg_id_double_shared_slow(
+    GENERIC_ADDR_SPACE int64_t* agg,
+    GENERIC_ADDR_SPACE const double* val) {}
 
-extern "C" GPU_RT_STUB int64_t agg_sum_shared(int64_t* agg, const int64_t val) {
+extern "C" GPU_RT_STUB int64_t agg_sum_shared(GENERIC_ADDR_SPACE int64_t* agg,
+                                              const int64_t val) {
   return 0;
 }
 
-extern "C" GPU_RT_STUB int64_t agg_sum_skip_val_shared(int64_t* agg,
+extern "C" GPU_RT_STUB int64_t agg_sum_skip_val_shared(GENERIC_ADDR_SPACE int64_t* agg,
                                                        const int64_t val,
                                                        const int64_t skip_val) {
   return 0;
 }
-extern "C" GPU_RT_STUB int32_t agg_sum_int32_shared(int32_t* agg, const int32_t val) {
+extern "C" GPU_RT_STUB int32_t agg_sum_int32_shared(GENERIC_ADDR_SPACE int32_t* agg,
+                                                    const int32_t val) {
   return 0;
 }
 
-extern "C" GPU_RT_STUB int32_t agg_sum_int32_skip_val_shared(int32_t* agg,
-                                                             const int32_t val,
-                                                             const int32_t skip_val) {
+extern "C" GPU_RT_STUB int32_t
+agg_sum_int32_skip_val_shared(GENERIC_ADDR_SPACE int32_t* agg,
+                              const int32_t val,
+                              const int32_t skip_val) {
   return 0;
 }
 
-extern "C" GPU_RT_STUB void agg_sum_double_shared(int64_t* agg, const double val) {}
+extern "C" GPU_RT_STUB void agg_sum_double_shared(GENERIC_ADDR_SPACE int64_t* agg,
+                                                  const double val) {}
 
-extern "C" GPU_RT_STUB void agg_sum_double_skip_val_shared(int64_t* agg,
-                                                           const double val,
-                                                           const double skip_val) {}
-extern "C" GPU_RT_STUB void agg_sum_float_shared(int32_t* agg, const float val) {}
+extern "C" GPU_RT_STUB void agg_sum_double_skip_val_shared(
+    GENERIC_ADDR_SPACE int64_t* agg,
+    const double val,
+    const double skip_val) {}
+extern "C" GPU_RT_STUB void agg_sum_float_shared(GENERIC_ADDR_SPACE int32_t* agg,
+                                                 const float val) {}
 
-extern "C" GPU_RT_STUB void agg_sum_float_skip_val_shared(int32_t* agg,
+extern "C" GPU_RT_STUB void agg_sum_float_skip_val_shared(GENERIC_ADDR_SPACE int32_t* agg,
                                                           const float val,
                                                           const float skip_val) {}
 
@@ -980,12 +1048,14 @@ extern "C" GPU_RT_STUB void sync_warp() {}
 extern "C" GPU_RT_STUB void sync_warp_protected(int64_t thread_pos, int64_t row_count) {}
 extern "C" GPU_RT_STUB void sync_threadblock() {}
 
-extern "C" GPU_RT_STUB void write_back_non_grouped_agg(int64_t* input_buffer,
-                                                       int64_t* output_buffer,
-                                                       const int32_t num_agg_cols){};
+extern "C" GPU_RT_STUB void write_back_non_grouped_agg(
+    GENERIC_ADDR_SPACE int64_t* input_buffer,
+    GENERIC_ADDR_SPACE int64_t* output_buffer,
+    const int32_t num_agg_cols){};
 // x64 stride functions
 
-extern "C" RUNTIME_EXPORT NEVER_INLINE int32_t pos_start_impl(int32_t* error_code) {
+extern "C" RUNTIME_EXPORT NEVER_INLINE int32_t
+pos_start_impl(GENERIC_ADDR_SPACE int32_t* error_code) {
   int32_t row_index_resume{0};
   if (error_code) {
     row_index_resume = error_code[0];
@@ -1010,7 +1080,7 @@ extern "C" GPU_RT_STUB int64_t get_thread_index() {
   return 0;
 }
 
-extern "C" GPU_RT_STUB int64_t* declare_dynamic_shared_memory() {
+extern "C" GPU_RT_STUB GENERIC_ADDR_SPACE int64_t* declare_dynamic_shared_memory() {
   return nullptr;
 }
 
@@ -1020,8 +1090,9 @@ extern "C" GPU_RT_STUB int64_t get_block_index() {
 
 #undef GPU_RT_STUB
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE void record_error_code(const int32_t err_code,
-                                                               int32_t* error_codes) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE void record_error_code(
+    const int32_t err_code,
+    GLOBAL_ADDR_SPACE int32_t* error_codes) {
   // NB: never override persistent error codes (with code greater than zero).
   // On GPU, a projection query with a limit can run out of slots without it
   // being an actual error if the limit has been hit. If a persistent error
@@ -1033,35 +1104,38 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE void record_error_code(const int32_t err
   }
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t get_error_code(int32_t* error_codes) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t
+get_error_code(GLOBAL_ADDR_SPACE int32_t* error_codes) {
   return error_codes[pos_start_impl(nullptr)];
 }
 
 // group by helpers
 
-extern "C" RUNTIME_EXPORT NEVER_INLINE const int64_t* init_shared_mem_nop(
-    const int64_t* groups_buffer,
-    const int32_t groups_buffer_size) {
+extern "C" RUNTIME_EXPORT NEVER_INLINE GENERIC_ADDR_SPACE const int64_t*
+init_shared_mem_nop(GENERIC_ADDR_SPACE const int64_t* groups_buffer,
+                    const int32_t groups_buffer_size) {
   return groups_buffer;
 }
 
-extern "C" RUNTIME_EXPORT NEVER_INLINE void write_back_nop(int64_t* dest,
-                                                           int64_t* src,
-                                                           const int32_t sz) {
+extern "C" RUNTIME_EXPORT NEVER_INLINE void write_back_nop(
+    GENERIC_ADDR_SPACE int64_t* dest,
+    GENERIC_ADDR_SPACE int64_t* src,
+    const int32_t sz) {
 #ifndef _WIN32
   // the body is not really needed, just make sure the call is not optimized away
   assert(dest);
 #endif
 }
 
-extern "C" RUNTIME_EXPORT int64_t* init_shared_mem(const int64_t* global_groups_buffer,
-                                                   const int32_t groups_buffer_size) {
+extern "C" RUNTIME_EXPORT int64_t* init_shared_mem(
+    GENERIC_ADDR_SPACE const int64_t* global_groups_buffer,
+    const int32_t groups_buffer_size) {
   return nullptr;
 }
 
 extern "C" RUNTIME_EXPORT NEVER_INLINE void init_group_by_buffer_gpu(
-    int64_t* groups_buffer,
-    const int64_t* init_vals,
+    GENERIC_ADDR_SPACE int64_t* groups_buffer,
+    GENERIC_ADDR_SPACE const int64_t* init_vals,
     const uint32_t groups_buffer_entry_count,
     const uint32_t key_qw_count,
     const uint32_t agg_col_count,
@@ -1074,8 +1148,8 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void init_group_by_buffer_gpu(
 }
 
 extern "C" RUNTIME_EXPORT NEVER_INLINE void init_columnar_group_by_buffer_gpu(
-    int64_t* groups_buffer,
-    const int64_t* init_vals,
+    GENERIC_ADDR_SPACE int64_t* groups_buffer,
+    GENERIC_ADDR_SPACE const int64_t* init_vals,
     const uint32_t groups_buffer_entry_count,
     const uint32_t key_qw_count,
     const uint32_t agg_col_count,
@@ -1089,8 +1163,8 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void init_columnar_group_by_buffer_gpu(
 }
 
 extern "C" RUNTIME_EXPORT NEVER_INLINE void init_group_by_buffer_impl(
-    int64_t* groups_buffer,
-    const int64_t* init_vals,
+    GENERIC_ADDR_SPACE int64_t* groups_buffer,
+    GENERIC_ADDR_SPACE const int64_t* init_vals,
     const uint32_t groups_buffer_entry_count,
     const uint32_t key_qw_count,
     const uint32_t agg_col_count,
@@ -1103,39 +1177,41 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void init_group_by_buffer_impl(
 }
 
 template <typename T>
-ALWAYS_INLINE int64_t* get_matching_group_value(int64_t* groups_buffer,
-                                                const uint32_t h,
-                                                const T* key,
-                                                const uint32_t key_count,
-                                                const uint32_t row_size_quad) {
+ALWAYS_INLINE GENERIC_ADDR_SPACE int64_t* get_matching_group_value(
+    GENERIC_ADDR_SPACE int64_t* groups_buffer,
+    const uint32_t h,
+    const T* key,
+    const uint32_t key_count,
+    const uint32_t row_size_quad) {
   auto off = h * row_size_quad;
   auto row_ptr = reinterpret_cast<T*>(groups_buffer + off);
   if (*row_ptr == get_empty_key<T>()) {
     memcpy(row_ptr, key, key_count * sizeof(T));
-    auto row_ptr_i8 = reinterpret_cast<int8_t*>(row_ptr + key_count);
-    return reinterpret_cast<int64_t*>(align_to_int64(row_ptr_i8));
+    auto row_ptr_i8 = reinterpret_cast<GENERIC_ADDR_SPACE int8_t*>(row_ptr + key_count);
+    return reinterpret_cast<GENERIC_ADDR_SPACE int64_t*>(align_to_int64(row_ptr_i8));
   }
   if (memcmp(row_ptr, key, key_count * sizeof(T)) == 0) {
-    auto row_ptr_i8 = reinterpret_cast<int8_t*>(row_ptr + key_count);
-    return reinterpret_cast<int64_t*>(align_to_int64(row_ptr_i8));
+    auto row_ptr_i8 = reinterpret_cast<GENERIC_ADDR_SPACE int8_t*>(row_ptr + key_count);
+    return reinterpret_cast<GENERIC_ADDR_SPACE int64_t*>(align_to_int64(row_ptr_i8));
   }
   return nullptr;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t* get_matching_group_value(
-    int64_t* groups_buffer,
-    const uint32_t h,
-    const int64_t* key,
-    const uint32_t key_count,
-    const uint32_t key_width,
-    const uint32_t row_size_quad) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE GENERIC_ADDR_SPACE int64_t*
+get_matching_group_value(GENERIC_ADDR_SPACE int64_t* groups_buffer,
+                         const uint32_t h,
+                         GENERIC_ADDR_SPACE const int64_t* key,
+                         const uint32_t key_count,
+                         const uint32_t key_width,
+                         const uint32_t row_size_quad) {
   switch (key_width) {
     case 4:
-      return get_matching_group_value(groups_buffer,
-                                      h,
-                                      reinterpret_cast<const int32_t*>(key),
-                                      key_count,
-                                      row_size_quad);
+      return get_matching_group_value(
+          groups_buffer,
+          h,
+          reinterpret_cast<GENERIC_ADDR_SPACE const int32_t*>(key),
+          key_count,
+          row_size_quad);
     case 8:
       return get_matching_group_value(groups_buffer, h, key, key_count, row_size_quad);
     default:;
@@ -1144,11 +1220,12 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t* get_matching_group_value(
 }
 
 template <typename T>
-ALWAYS_INLINE int32_t get_matching_group_value_columnar_slot(int64_t* groups_buffer,
-                                                             const uint32_t entry_count,
-                                                             const uint32_t h,
-                                                             const T* key,
-                                                             const uint32_t key_count) {
+ALWAYS_INLINE int32_t
+get_matching_group_value_columnar_slot(GENERIC_ADDR_SPACE int64_t* groups_buffer,
+                                       const uint32_t entry_count,
+                                       const uint32_t h,
+                                       const T* key,
+                                       const uint32_t key_count) {
   auto off = h;
   auto key_buffer = reinterpret_cast<T*>(groups_buffer);
   if (key_buffer[off] == get_empty_key<T>()) {
@@ -1169,19 +1246,20 @@ ALWAYS_INLINE int32_t get_matching_group_value_columnar_slot(int64_t* groups_buf
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t
-get_matching_group_value_columnar_slot(int64_t* groups_buffer,
+get_matching_group_value_columnar_slot(GENERIC_ADDR_SPACE int64_t* groups_buffer,
                                        const uint32_t entry_count,
                                        const uint32_t h,
-                                       const int64_t* key,
+                                       GENERIC_ADDR_SPACE const int64_t* key,
                                        const uint32_t key_count,
                                        const uint32_t key_width) {
   switch (key_width) {
     case 4:
-      return get_matching_group_value_columnar_slot(groups_buffer,
-                                                    entry_count,
-                                                    h,
-                                                    reinterpret_cast<const int32_t*>(key),
-                                                    key_count);
+      return get_matching_group_value_columnar_slot(
+          groups_buffer,
+          entry_count,
+          h,
+          reinterpret_cast<GENERIC_ADDR_SPACE const int32_t*>(key),
+          key_count);
     case 8:
       return get_matching_group_value_columnar_slot(
           groups_buffer, entry_count, h, key, key_count);
@@ -1191,12 +1269,12 @@ get_matching_group_value_columnar_slot(int64_t* groups_buffer,
   return -1;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t* get_matching_group_value_columnar(
-    int64_t* groups_buffer,
-    const uint32_t h,
-    const int64_t* key,
-    const uint32_t key_qw_count,
-    const size_t entry_count) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE GENERIC_ADDR_SPACE int64_t*
+get_matching_group_value_columnar(GENERIC_ADDR_SPACE int64_t* groups_buffer,
+                                  const uint32_t h,
+                                  GENERIC_ADDR_SPACE const int64_t* key,
+                                  const uint32_t key_qw_count,
+                                  const size_t entry_count) {
   auto off = h;
   if (groups_buffer[off] == EMPTY_KEY_64) {
     for (size_t i = 0; i < key_qw_count; ++i) {
@@ -1226,12 +1304,12 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t* get_matching_group_value_column
  *
  * | prepended group columns (64-bit each) | agg columns |
  */
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t* get_matching_group_value_perfect_hash(
-    int64_t* groups_buffer,
-    const uint32_t hashed_index,
-    const int64_t* key,
-    const uint32_t key_count,
-    const uint32_t row_size_quad) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE GENERIC_ADDR_SPACE int64_t*
+get_matching_group_value_perfect_hash(GENERIC_ADDR_SPACE int64_t* groups_buffer,
+                                      const uint32_t hashed_index,
+                                      GENERIC_ADDR_SPACE const int64_t* key,
+                                      const uint32_t key_count,
+                                      const uint32_t row_size_quad) {
   uint32_t off = hashed_index * row_size_quad;
   if (groups_buffer[off] == EMPTY_KEY_64) {
     for (uint32_t i = 0; i < key_count; ++i) {
@@ -1247,8 +1325,8 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t* get_matching_group_value_perfec
  * Since it is intended for keyless hash use, it assumes there is no group columns
  * prepending the output buffer.
  */
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t*
-get_matching_group_value_perfect_hash_keyless(int64_t* groups_buffer,
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE GENERIC_ADDR_SPACE int64_t*
+get_matching_group_value_perfect_hash_keyless(GENERIC_ADDR_SPACE int64_t* groups_buffer,
                                               const uint32_t hashed_index,
                                               const uint32_t row_size_quad) {
   return groups_buffer + row_size_quad * hashed_index;
@@ -1259,9 +1337,9 @@ get_matching_group_value_perfect_hash_keyless(int64_t* groups_buffer,
  * columns corresponding to a key. It is assumed that all group columns are 64-bit wide.
  */
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE void
-set_matching_group_value_perfect_hash_columnar(int64_t* groups_buffer,
+set_matching_group_value_perfect_hash_columnar(GENERIC_ADDR_SPACE int64_t* groups_buffer,
                                                const uint32_t hashed_index,
-                                               const int64_t* key,
+                                               GENERIC_ADDR_SPACE const int64_t* key,
                                                const uint32_t key_count,
                                                const uint32_t entry_count) {
   if (groups_buffer[hashed_index] == EMPTY_KEY_64) {
@@ -1274,29 +1352,29 @@ set_matching_group_value_perfect_hash_columnar(int64_t* groups_buffer,
 #include "GroupByRuntime.cpp"
 #include "JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp"
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t* get_group_value_fast_keyless(
-    int64_t* groups_buffer,
-    const int64_t key,
-    const int64_t min_key,
-    const int64_t /* bucket */,
-    const uint32_t row_size_quad) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE GENERIC_ADDR_SPACE int64_t*
+get_group_value_fast_keyless(GENERIC_ADDR_SPACE int64_t* groups_buffer,
+                             const int64_t key,
+                             const int64_t min_key,
+                             const int64_t /* bucket */,
+                             const uint32_t row_size_quad) {
   return groups_buffer + row_size_quad * (key - min_key);
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t* get_group_value_fast_keyless_semiprivate(
-    int64_t* groups_buffer,
-    const int64_t key,
-    const int64_t min_key,
-    const int64_t /* bucket */,
-    const uint32_t row_size_quad,
-    const uint8_t thread_warp_idx,
-    const uint8_t warp_size) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE GENERIC_ADDR_SPACE int64_t*
+get_group_value_fast_keyless_semiprivate(GENERIC_ADDR_SPACE int64_t* groups_buffer,
+                                         const int64_t key,
+                                         const int64_t min_key,
+                                         const int64_t /* bucket */,
+                                         const uint32_t row_size_quad,
+                                         const uint8_t thread_warp_idx,
+                                         const uint8_t warp_size) {
   return groups_buffer + row_size_quad * (warp_size * (key - min_key) + thread_warp_idx);
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE int8_t* extract_str_ptr(
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE GENERIC_ADDR_SPACE int8_t* extract_str_ptr(
     const uint64_t str_and_len) {
-  return reinterpret_cast<int8_t*>(str_and_len & 0xffffffffffff);
+  return reinterpret_cast<GENERIC_ADDR_SPACE int8_t*>(str_and_len & 0xffffffffffff);
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t
@@ -1304,8 +1382,8 @@ extract_str_len(const uint64_t str_and_len) {
   return static_cast<int64_t>(str_and_len) >> 48;
 }
 
-extern "C" RUNTIME_EXPORT NEVER_INLINE int8_t* extract_str_ptr_noinline(
-    const uint64_t str_and_len) {
+extern "C" RUNTIME_EXPORT NEVER_INLINE GENERIC_ADDR_SPACE int8_t*
+extract_str_ptr_noinline(const uint64_t str_and_len) {
   return extract_str_ptr(str_and_len);
 }
 
@@ -1314,27 +1392,29 @@ extract_str_len_noinline(const uint64_t str_and_len) {
   return extract_str_len(str_and_len);
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint64_t string_pack(const int8_t* ptr,
-                                                             const int32_t len) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint64_t
+string_pack(GENERIC_ADDR_SPACE const int8_t* ptr, const int32_t len) {
   return (reinterpret_cast<const uint64_t>(ptr) & 0xffffffffffff) |
          (static_cast<const uint64_t>(len) << 48);
 }
 
-#ifdef __clang__
+#if defined(__clang__) && !defined(L0_RUNTIME_ENABLED)
 #include "../Utils/StringLike.cpp"
 #endif
 
-#ifndef __CUDACC__
+#if !defined(__CUDACC__) && !defined(L0_RUNTIME_ENABLED)
 #include "TopKRuntime.cpp"
 #endif
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int32_t
-char_length(const char* str, const int32_t str_len) {
+char_length(GENERIC_ADDR_SPACE const char* str, const int32_t str_len) {
   return str_len;
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int32_t
-char_length_nullable(const char* str, const int32_t str_len, const int32_t int_null) {
+char_length_nullable(GENERIC_ADDR_SPACE const char* str,
+                     const int32_t str_len,
+                     const int32_t int_null) {
   if (!str) {
     return int_null;
   }
@@ -1350,8 +1430,8 @@ extern "C" ALWAYS_INLINE DEVICE int32_t
 map_string_dict_id(const int32_t string_id,
                    const int64_t translation_map_handle,
                    const int32_t min_source_id) {
-  const int32_t* translation_map =
-      reinterpret_cast<const int32_t*>(translation_map_handle);
+  GENERIC_ADDR_SPACE const int32_t* translation_map =
+      reinterpret_cast<GENERIC_ADDR_SPACE const int32_t*>(translation_map_handle);
   return translation_map[string_id - min_source_id];
 }
 
@@ -1485,73 +1565,83 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE double width_bucket_expr_no_oob_c
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t
 row_number_window_func(const int64_t output_buff, const int64_t pos) {
-  return reinterpret_cast<const int64_t*>(output_buff)[pos];
+  return reinterpret_cast<GENERIC_ADDR_SPACE const int64_t*>(output_buff)[pos];
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE double percent_window_func(
     const int64_t output_buff,
     const int64_t pos) {
-  return reinterpret_cast<const double*>(output_buff)[pos];
+  return reinterpret_cast<GENERIC_ADDR_SPACE const double*>(output_buff)[pos];
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE double load_double(const int64_t* agg) {
-  return *reinterpret_cast<const double*>(may_alias_ptr(agg));
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE double load_double(
+    GENERIC_ADDR_SPACE const int64_t* agg) {
+  return *reinterpret_cast<GENERIC_ADDR_SPACE const double*>(may_alias_ptr(agg));
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE float load_float(const int32_t* agg) {
-  return *reinterpret_cast<const float*>(may_alias_ptr(agg));
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE float load_float(
+    GENERIC_ADDR_SPACE const int32_t* agg) {
+  return *reinterpret_cast<GENERIC_ADDR_SPACE const float*>(may_alias_ptr(agg));
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE double load_avg_int(const int64_t* sum,
-                                                            const int64_t* count,
-                                                            const double null_val) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE double load_avg_int(
+    GENERIC_ADDR_SPACE const int64_t* sum,
+    GENERIC_ADDR_SPACE const int64_t* count,
+    const double null_val) {
   return *count != 0 ? static_cast<double>(*sum) / *count : null_val;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE double load_avg_decimal(const int64_t* sum,
-                                                                const int64_t* count,
-                                                                const double null_val,
-                                                                const uint32_t scale) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE double load_avg_decimal(
+    GENERIC_ADDR_SPACE const int64_t* sum,
+    GENERIC_ADDR_SPACE const int64_t* count,
+    const double null_val,
+    const uint32_t scale) {
   return *count != 0 ? (static_cast<double>(*sum) / pow(10, scale)) / *count : null_val;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE double load_avg_double(const int64_t* agg,
-                                                               const int64_t* count,
-                                                               const double null_val) {
-  return *count != 0 ? *reinterpret_cast<const double*>(may_alias_ptr(agg)) / *count
-                     : null_val;
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE double load_avg_double(
+    GENERIC_ADDR_SPACE const int64_t* agg,
+    GENERIC_ADDR_SPACE const int64_t* count,
+    const double null_val) {
+  return *count != 0
+             ? *reinterpret_cast<GENERIC_ADDR_SPACE const double*>(may_alias_ptr(agg)) /
+                   *count
+             : null_val;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE double load_avg_float(const int32_t* agg,
-                                                              const int32_t* count,
-                                                              const double null_val) {
-  return *count != 0 ? *reinterpret_cast<const float*>(may_alias_ptr(agg)) / *count
-                     : null_val;
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE double load_avg_float(
+    GENERIC_ADDR_SPACE const int32_t* agg,
+    GENERIC_ADDR_SPACE const int32_t* count,
+    const double null_val) {
+  return *count != 0
+             ? *reinterpret_cast<GENERIC_ADDR_SPACE const float*>(may_alias_ptr(agg)) /
+                   *count
+             : null_val;
 }
 
 extern "C" RUNTIME_EXPORT NEVER_INLINE void linear_probabilistic_count(
-    uint8_t* bitmap,
+    GENERIC_ADDR_SPACE uint8_t* bitmap,
     const uint32_t bitmap_bytes,
-    const uint8_t* key_bytes,
+    GENERIC_ADDR_SPACE const uint8_t* key_bytes,
     const uint32_t key_len) {
   const uint32_t bit_pos = MurmurHash3(key_bytes, key_len, 0) % (bitmap_bytes * 8);
   const uint32_t word_idx = bit_pos / 32;
   const uint32_t bit_idx = bit_pos % 32;
-  reinterpret_cast<uint32_t*>(bitmap)[word_idx] |= 1 << bit_idx;
+  reinterpret_cast<GENERIC_ADDR_SPACE uint32_t*>(bitmap)[word_idx] |= 1 << bit_idx;
 }
 
 extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub_hoisted_literals(
-    const int8_t** col_buffers,
-    const int8_t* literals,
-    const int64_t* num_rows,
-    const uint64_t* frag_row_offsets,
-    const int32_t* max_matched,
-    const int64_t* init_agg_value,
-    int64_t** out,
+    const int8_t GENERIC_ADDR_SPACE* GENERIC_ADDR_SPACE* col_buffers,
+    GENERIC_ADDR_SPACE const int8_t* literals,
+    GENERIC_ADDR_SPACE const int64_t* num_rows,
+    GENERIC_ADDR_SPACE const uint64_t* frag_row_offsets,
+    GENERIC_ADDR_SPACE const int32_t* max_matched,
+    GENERIC_ADDR_SPACE const int64_t* init_agg_value,
+    int64_t GENERIC_ADDR_SPACE* GENERIC_ADDR_SPACE* out,
     uint32_t frag_idx,
-    const int64_t* join_hash_tables,
-    int32_t* error_code,
-    int32_t* total_matched) {
+    GENERIC_ADDR_SPACE const int64_t* join_hash_tables,
+    GENERIC_ADDR_SPACE int32_t* error_code,
+    GENERIC_ADDR_SPACE int32_t* total_matched) {
 #ifndef _WIN32
   assert(col_buffers || literals || num_rows || frag_row_offsets || max_matched ||
          init_agg_value || out || frag_idx || error_code || join_hash_tables ||
@@ -1560,43 +1650,48 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub_hoisted_literals(
 }
 
 extern "C" RUNTIME_EXPORT void multifrag_query_hoisted_literals(
-    const int8_t*** col_buffers,
-    const uint64_t* __restrict__ num_fragments,
-    const int8_t* literals,
-    const int64_t* num_rows,
-    const uint64_t* frag_row_offsets,
-    const int32_t* max_matched,
-    int32_t* total_matched,
-    const int64_t* init_agg_value,
-    int64_t** out,
-    int32_t* error_code,
-    const uint32_t* __restrict__ num_tables_ptr,
-    const int64_t* join_hash_tables) {
+    const int8_t GLOBAL_ADDR_SPACE* GLOBAL_ADDR_SPACE* GLOBAL_ADDR_SPACE* col_buffers,
+    GLOBAL_ADDR_SPACE const uint64_t* __restrict__ num_fragments,
+    GLOBAL_ADDR_SPACE const int8_t* literals,
+    GLOBAL_ADDR_SPACE const int64_t* num_rows,
+    GLOBAL_ADDR_SPACE const uint64_t* frag_row_offsets,
+    GLOBAL_ADDR_SPACE const int32_t* max_matched,
+    GLOBAL_ADDR_SPACE int32_t* total_matched,
+    GLOBAL_ADDR_SPACE const int64_t* init_agg_value,
+    int64_t GLOBAL_ADDR_SPACE* GLOBAL_ADDR_SPACE* out,
+    GLOBAL_ADDR_SPACE int32_t* error_code,
+    GLOBAL_ADDR_SPACE const uint32_t* __restrict__ num_tables_ptr,
+    GLOBAL_ADDR_SPACE const int64_t* join_hash_tables) {
   for (uint32_t i = 0; i < *num_fragments; ++i) {
-    query_stub_hoisted_literals(col_buffers ? col_buffers[i] : nullptr,
-                                literals,
-                                &num_rows[i * (*num_tables_ptr)],
-                                &frag_row_offsets[i * (*num_tables_ptr)],
-                                max_matched,
-                                init_agg_value,
-                                out,
-                                i,
-                                join_hash_tables,
-                                total_matched,
-                                error_code);
+    query_stub_hoisted_literals(
+        col_buffers
+            ? ((const int8_t GENERIC_ADDR_SPACE* GENERIC_ADDR_SPACE* GENERIC_ADDR_SPACE*)
+                   col_buffers)[i]
+            : nullptr,
+        literals,
+        &num_rows[i * (*num_tables_ptr)],
+        &frag_row_offsets[i * (*num_tables_ptr)],
+        max_matched,
+        init_agg_value,
+        (int64_t GENERIC_ADDR_SPACE * GENERIC_ADDR_SPACE*)out,
+        i,
+        join_hash_tables,
+        total_matched,
+        error_code);
   }
 }
 
-extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub(const int8_t** col_buffers,
-                                                       const int64_t* num_rows,
-                                                       const uint64_t* frag_row_offsets,
-                                                       const int32_t* max_matched,
-                                                       const int64_t* init_agg_value,
-                                                       int64_t** out,
-                                                       uint32_t frag_idx,
-                                                       const int64_t* join_hash_tables,
-                                                       int32_t* error_code,
-                                                       int32_t* total_matched) {
+extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub(
+    const int8_t GENERIC_ADDR_SPACE* GENERIC_ADDR_SPACE* col_buffers,
+    GENERIC_ADDR_SPACE const int64_t* num_rows,
+    GENERIC_ADDR_SPACE const uint64_t* frag_row_offsets,
+    GENERIC_ADDR_SPACE const int32_t* max_matched,
+    GENERIC_ADDR_SPACE const int64_t* init_agg_value,
+    int64_t GENERIC_ADDR_SPACE* GENERIC_ADDR_SPACE* out,
+    uint32_t frag_idx,
+    GENERIC_ADDR_SPACE const int64_t* join_hash_tables,
+    GENERIC_ADDR_SPACE int32_t* error_code,
+    GENERIC_ADDR_SPACE int32_t* total_matched) {
 #ifndef _WIN32
   assert(col_buffers || num_rows || frag_row_offsets || max_matched || init_agg_value ||
          out || frag_idx || error_code || join_hash_tables || total_matched);
@@ -1604,28 +1699,32 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub(const int8_t** col_buffer
 }
 
 extern "C" RUNTIME_EXPORT void multifrag_query(
-    const int8_t*** col_buffers,
-    const uint64_t* __restrict__ num_fragments,
-    const int64_t* num_rows,
-    const uint64_t* frag_row_offsets,
-    const int32_t* max_matched,
-    int32_t* total_matched,
-    const int64_t* init_agg_value,
-    int64_t** out,
-    int32_t* error_code,
-    const uint32_t* __restrict__ num_tables_ptr,
-    const int64_t* join_hash_tables) {
+    const int8_t GLOBAL_ADDR_SPACE* GLOBAL_ADDR_SPACE* GLOBAL_ADDR_SPACE* col_buffers,
+    GLOBAL_ADDR_SPACE const uint64_t* __restrict__ num_fragments,
+    GLOBAL_ADDR_SPACE const int64_t* num_rows,
+    GLOBAL_ADDR_SPACE const uint64_t* frag_row_offsets,
+    GLOBAL_ADDR_SPACE const int32_t* max_matched,
+    GLOBAL_ADDR_SPACE int32_t* total_matched,
+    GLOBAL_ADDR_SPACE const int64_t* init_agg_value,
+    int64_t GLOBAL_ADDR_SPACE* GLOBAL_ADDR_SPACE* out,
+    GLOBAL_ADDR_SPACE int32_t* error_code,
+    GLOBAL_ADDR_SPACE const uint32_t* __restrict__ num_tables_ptr,
+    GLOBAL_ADDR_SPACE const int64_t* join_hash_tables) {
   for (uint32_t i = 0; i < *num_fragments; ++i) {
-    query_stub(col_buffers ? col_buffers[i] : nullptr,
-               &num_rows[i * (*num_tables_ptr)],
-               &frag_row_offsets[i * (*num_tables_ptr)],
-               max_matched,
-               init_agg_value,
-               out,
-               i,
-               join_hash_tables,
-               total_matched,
-               error_code);
+    query_stub(
+        col_buffers
+            ? ((const int8_t GENERIC_ADDR_SPACE* GENERIC_ADDR_SPACE* GENERIC_ADDR_SPACE*)
+                   col_buffers)[i]
+            : nullptr,
+        &num_rows[i * (*num_tables_ptr)],
+        &frag_row_offsets[i * (*num_tables_ptr)],
+        max_matched,
+        init_agg_value,
+        (int64_t GENERIC_ADDR_SPACE * GENERIC_ADDR_SPACE*)out,
+        i,
+        join_hash_tables,
+        total_matched,
+        error_code);
   }
 }
 
