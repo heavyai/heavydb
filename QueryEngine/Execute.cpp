@@ -3843,8 +3843,8 @@ unsigned Executor::gridSize() const {
 }
 
 unsigned Executor::numBlocksPerMP() const {
-  return grid_size_x_ ? std::ceil(grid_size_x_ / cudaMgr()->getMinNumMPsForAllDevices())
-                      : 2;
+  return std::max((unsigned)2,
+                  shared::ceil_div(grid_size_x_, cudaMgr()->getMinNumMPsForAllDevices()));
 }
 
 unsigned Executor::blockSize() const {

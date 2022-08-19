@@ -986,6 +986,13 @@ TEST(QueryHint, CudaBlockAndGridSizes) {
     EXPECT_TRUE(!query_hint8.isHintRegistered(QueryHint::kCudaGridSize));
     auto query_hint9 = QR::get()->getParsedQueryHint(query_gen(false, "1026"));
     EXPECT_TRUE(!query_hint9.isHintRegistered(QueryHint::kCudaGridSize));
+
+    // grid_size should be greater or equal to one regardless of query hint value
+    auto res4 = QR::get()->runSQL(query_gen(false, "0.000001"), ExecutorDeviceType::GPU);
+    EXPECT_EQ(res4->getGridSize(), (unsigned)1);
+    auto num_sms =
+        QR::get()->getCatalog()->getDataMgr().getCudaMgr()->getMinNumMPsForAllDevices();
+    EXPECT_GE(std::ceil(res4->getGridSize() / (double)num_sms), (unsigned)1);
   }
 }
 
