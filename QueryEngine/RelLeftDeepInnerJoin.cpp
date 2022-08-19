@@ -178,11 +178,7 @@ RelLeftDeepInnerJoin::RelLeftDeepInnerJoin(
               condition_ = original_join->getConditionShared();
             } else {
               condition_ = hdk::ir::makeExpr<hdk::ir::BinOper>(
-                  kBOOLEAN,
-                  kAND,
-                  kONE,
-                  condition_,
-                  original_join->getConditionShared());
+                  kBOOLEAN, kAND, kONE, condition_, original_join->getConditionShared());
             }
           }
           break;
@@ -190,8 +186,7 @@ RelLeftDeepInnerJoin::RelLeftDeepInnerJoin(
         case JoinType::LEFT: {
           if (original_join->getCondition()) {
             outer_conditions_per_level_[nesting_level] =
-                rebind_inputs_from_left_deep_join(original_join->getCondition(),
-                                                  this);
+                rebind_inputs_from_left_deep_join(original_join->getCondition(), this);
           }
           break;
         }

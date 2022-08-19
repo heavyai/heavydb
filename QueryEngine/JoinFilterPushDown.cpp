@@ -174,7 +174,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
                                        eo.pending_query_interrupt_freq};
 
     // Dispatch the subqueries first
-    for (auto &subquery : subqueries) {
+    for (auto& subquery : subqueries) {
       // Execute the subquery and cache the result.
       RelAlgExecutor ra_executor(executor_, schema_provider_, data_provider_);
       const auto subquery_ra = subquery->getNode();
