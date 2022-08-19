@@ -1959,6 +1959,9 @@ class RelAlgDagBuilder : public RelAlgDag, public boost::noncopyable {
 
   const Config& config() const { return *config_; }
 
+  std::unordered_map<const rapidjson::Value*, std::shared_ptr<hdk::ir::ScalarSubquery>>
+      subquery_cache;
+
  private:
   void build(const rapidjson::Value& query_ast, RelAlgDagBuilder& root_dag_builder);
 

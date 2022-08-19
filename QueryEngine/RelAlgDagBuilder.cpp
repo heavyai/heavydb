@@ -801,6 +801,11 @@ std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr,
                                                    int db_id,
                                                    SchemaProviderPtr schema_provider,
                                                    RelAlgDagBuilder& root_dag_builder);
+hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
+                            int db_id,
+                            SchemaProviderPtr schema_provider,
+                            RelAlgDagBuilder& root_dag_builder,
+                            const RANodeOutput& ra_output);
 
 SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
   if (type_obj.IsArray()) {
@@ -948,6 +953,11 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
                                                   int db_id,
                                                   SchemaProviderPtr schema_provider,
                                                   RelAlgDagBuilder& root_dag_builder) {
+  if (root_dag_builder.subquery_cache.count(&expr)) {
+    return std::make_unique<RexSubQuery>(
+        root_dag_builder.subquery_cache.at(&expr)->getNodeShared());
+  }
+
   const auto& operands = field(expr, "operands");
   CHECK(operands.IsArray());
   CHECK_GE(operands.Size(), unsigned(0));
@@ -957,8 +967,31 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
   auto node = subquery_dag.getRootNodeShPtr();
   auto subquery =
       hdk::ir::makeExpr<hdk::ir::ScalarSubquery>(getColumnType(node.get(), 0), node);
+  root_dag_builder.subquery_cache[&expr] = subquery;
   root_dag_builder.registerSubquery(std::move(subquery));
   return std::make_unique<RexSubQuery>(node);
+}
+
+hdk::ir::ExprPtr parse_subquery_expr(const rapidjson::Value& expr,
+                                     int db_id,
+                                     SchemaProviderPtr schema_provider,
+                                     RelAlgDagBuilder& root_dag_builder) {
+  if (root_dag_builder.subquery_cache.count(&expr)) {
+    return root_dag_builder.subquery_cache.at(&expr);
+  }
+
+  const auto& operands = field(expr, "operands");
+  CHECK(operands.IsArray());
+  CHECK_GE(operands.Size(), unsigned(0));
+  const auto& subquery_ast = field(expr, "subquery");
+
+  RelAlgDagBuilder subquery_dag(root_dag_builder, subquery_ast, db_id, schema_provider);
+  auto node = subquery_dag.getRootNodeShPtr();
+  auto subquery =
+      hdk::ir::makeExpr<hdk::ir::ScalarSubquery>(getColumnType(node.get(), 0), node);
+  root_dag_builder.registerSubquery(subquery);
+  root_dag_builder.subquery_cache[&expr] = subquery;
+  return subquery;
 }
 
 std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,
@@ -1131,10 +1164,23 @@ hdk::ir::ExprPtr parse_case_expr(const rapidjson::Value& expr,
                                  SchemaProviderPtr schema_provider,
                                  RelAlgDagBuilder& root_dag_builder,
                                  const RANodeOutput& ra_output) {
-  auto rex = parse_case(expr, db_id, schema_provider, root_dag_builder);
-  auto dis_rex = disambiguate_rex(rex.get(), ra_output);
-  RelAlgTranslator translator(root_dag_builder.config(), root_dag_builder.now(), false);
-  return translator.translateScalarRex(dis_rex.get());
+  const auto& operands = field(expr, "operands");
+  CHECK(operands.IsArray());
+  CHECK_GE(operands.Size(), unsigned(2));
+  std::list<std::pair<hdk::ir::ExprPtr, hdk::ir::ExprPtr>> expr_list;
+  hdk::ir::ExprPtr else_expr;
+  for (auto operands_it = operands.Begin(); operands_it != operands.End();) {
+    auto when_expr =
+        parse_expr(*operands_it++, db_id, schema_provider, root_dag_builder, ra_output);
+    if (operands_it == operands.End()) {
+      else_expr = std::move(when_expr);
+      break;
+    }
+    auto then_expr =
+        parse_expr(*operands_it++, db_id, schema_provider, root_dag_builder, ra_output);
+    expr_list.emplace_back(std::move(when_expr), std::move(then_expr));
+  }
+  return Analyzer::normalizeCaseExpr(expr_list, else_expr, nullptr);
 }
 
 hdk::ir::ExprPtr parse_operator_expr(const rapidjson::Value& expr,
@@ -1149,7 +1195,7 @@ hdk::ir::ExprPtr parse_operator_expr(const rapidjson::Value& expr,
 }
 
 hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
-                            const RexScalar* rex,
+                            // const RexScalar* rex,
                             int db_id,
                             SchemaProviderPtr schema_provider,
                             RelAlgDagBuilder& root_dag_builder,
@@ -1162,22 +1208,30 @@ hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
     return parse_literal_expr(expr);
   }
   if (expr.IsObject() && expr.HasMember("op")) {
-    /*
+    auto rex = parse_scalar_expr(expr, db_id, schema_provider, root_dag_builder);
+    auto dis_rex = disambiguate_rex(rex.get(), ra_output);
+    RelAlgTranslator translator(root_dag_builder.config(), root_dag_builder.now(), false);
+    auto orig_res = translator.translateScalarRex(dis_rex.get());
+
+    hdk::ir::ExprPtr res;
+
     const auto op_str = json_str(field(expr, "op"));
     if (op_str == std::string("CASE")) {
-      return parse_case_expr(expr, db_id, schema_provider, root_dag_builder, ra_output);
+      res = parse_case_expr(expr, db_id, schema_provider, root_dag_builder, ra_output);
+    } else if (op_str == std::string("$SCALAR_QUERY")) {
+      res = parse_subquery_expr(expr, db_id, schema_provider, root_dag_builder);
+    } else {
+      // res =
+      //    parse_operator_expr(expr, db_id, schema_provider, root_dag_builder,
+      //    ra_output);
     }
-    if (op_str == std::string("$SCALAR_QUERY")) {
-      throw QueryNotSupported("Expression node " + json_node_to_string(expr) +
-                              " not supported");
-      // return std::unique_ptr<const RexScalar>(
-      //    parse_subquery(expr, db_id, schema_provider, root_dag_builder));
+
+    if (res) {
+      CHECK(*orig_res == *res) << "Translation mismatch: orig=" << orig_res->toString()
+                               << " new=" << res->toString();
     }
-    return parse_operator_expr(expr, db_id, schema_provider, root_dag_builder, ra_output);
-    */
-    auto dis_rex = disambiguate_rex(rex, ra_output);
-    RelAlgTranslator translator(root_dag_builder.config(), root_dag_builder.now(), false);
-    return translator.translateScalarRex(dis_rex.get());
+
+    return orig_res;
   }
   throw QueryNotSupported("Expression node " + json_node_to_string(expr) +
                           " not supported");
@@ -2283,14 +2337,10 @@ class RelAlgDispatcher {
     CHECK_EQ(size_t(1), inputs.size());
     const auto& exprs_json = field(proj_ra, "exprs");
     CHECK(exprs_json.IsArray());
-    std::vector<std::unique_ptr<const RexScalar>> scalar_exprs;
     hdk::ir::ExprPtrVector exprs;
     for (auto exprs_json_it = exprs_json.Begin(); exprs_json_it != exprs_json.End();
          ++exprs_json_it) {
-      scalar_exprs.emplace_back(
-          parse_scalar_expr(*exprs_json_it, db_id_, schema_provider_, root_dag_builder));
       exprs.emplace_back(parse_expr(*exprs_json_it,
-                                    scalar_exprs.back().get(),
                                     db_id_,
                                     schema_provider_,
                                     root_dag_builder,
@@ -2313,10 +2363,7 @@ class RelAlgDispatcher {
     CHECK_EQ(size_t(1), inputs.size());
     const auto id = node_id(filter_ra);
     CHECK(id);
-    auto condition = parse_scalar_expr(
-        field(filter_ra, "condition"), db_id_, schema_provider_, root_dag_builder);
     auto condition_expr = parse_expr(field(filter_ra, "condition"),
-                                     condition.get(),
                                      db_id_,
                                      schema_provider_,
                                      root_dag_builder,
@@ -2361,13 +2408,10 @@ class RelAlgDispatcher {
     const auto inputs = getRelAlgInputs(join_ra);
     CHECK_EQ(size_t(2), inputs.size());
     const auto join_type = to_join_type(json_str(field(join_ra, "joinType")));
-    auto filter_rex = parse_scalar_expr(
-        field(join_ra, "condition"), db_id_, schema_provider_, root_dag_builder);
     auto ra_outputs = n_outputs(inputs[0].get(), inputs[0]->size());
     const auto ra_outputs2 = n_outputs(inputs[1].get(), inputs[1]->size());
     ra_outputs.insert(ra_outputs.end(), ra_outputs2.begin(), ra_outputs2.end());
     auto condition = parse_expr(field(join_ra, "condition"),
-                                filter_rex.get(),
                                 db_id_,
                                 schema_provider_,
                                 root_dag_builder,
@@ -2461,19 +2505,13 @@ class RelAlgDispatcher {
           }
         }
       }
-      auto rex =
-          parse_scalar_expr(*exprs_json_it, db_id_, schema_provider_, root_dag_builder);
       RANodeOutput ra_output;
       for (auto& node : inputs) {
         auto node_output = get_node_output(node.get());
         ra_output.insert(ra_output.end(), node_output.begin(), node_output.end());
       }
-      table_func_input_exprs.emplace_back(parse_expr(*exprs_json_it,
-                                                     rex.get(),
-                                                     db_id_,
-                                                     schema_provider_,
-                                                     root_dag_builder,
-                                                     ra_output));
+      table_func_input_exprs.emplace_back(parse_expr(
+          *exprs_json_it, db_id_, schema_provider_, root_dag_builder, ra_output));
     }
 
     const auto& op_name = field(invocation, "op");
