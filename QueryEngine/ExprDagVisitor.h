@@ -83,8 +83,7 @@ class ExprDagVisitor : public ScalarExprVisitor<void*> {
   virtual void visitLogicalValues(const RelLogicalValues* logical_values) {
     for (size_t row_idx = 0; row_idx < logical_values->getNumRows(); ++row_idx) {
       for (size_t col_idx = 0; col_idx < logical_values->getRowsSize(); ++col_idx) {
-        CHECK_EQ(logical_values->getValueExprAt(row_idx, col_idx), nullptr) << "NYI";
-        // visit(logical_values->getValueExprAt(row_idx, col_idx));
+        visit(logical_values->getValue(row_idx, col_idx));
       }
     }
   }

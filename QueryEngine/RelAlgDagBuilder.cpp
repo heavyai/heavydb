@@ -462,9 +462,7 @@ RelProject::RelProject(RelProject const& rhs)
 }
 
 RelLogicalValues::RelLogicalValues(RelLogicalValues const& rhs)
-    : RelAlgNode(rhs)
-    , tuple_type_(rhs.tuple_type_)
-    , values_(RexDeepCopyVisitor::copy(rhs.values_)) {}
+    : RelAlgNode(rhs), tuple_type_(rhs.tuple_type_), values_(rhs.values_) {}
 
 RelFilter::RelFilter(RelFilter const& rhs)
     : RelAlgNode(rhs), condition_(rhs.condition_) {}
@@ -2715,7 +2713,7 @@ class RelAlgDispatcher {
       throw QueryNotSupported("Inputs not supported in logical values yet.");
     }
 
-    std::vector<RelLogicalValues::RowValues> values;
+    std::vector<hdk::ir::ExprPtrVector> values;
     if (tuples_arr.Size()) {
       for (const auto& row : tuples_arr.GetArray()) {
         CHECK(row.IsArray());
@@ -2723,16 +2721,16 @@ class RelAlgDispatcher {
         if (!values.empty()) {
           CHECK_EQ(values[0].size(), values_json.Size());
         }
-        values.emplace_back(RelLogicalValues::RowValues{});
+        values.emplace_back(hdk::ir::ExprPtrVector{});
         for (const auto& value : values_json) {
           CHECK(value.IsObject());
           CHECK(value.HasMember("literal"));
-          values.back().emplace_back(parse_literal(value));
+          values.back().emplace_back(parse_literal_expr(value));
         }
       }
     }
 
-    return std::make_shared<RelLogicalValues>(tuple_type, values);
+    return std::make_shared<RelLogicalValues>(tuple_type, std::move(values));
   }
 
   std::shared_ptr<RelLogicalUnion> dispatchUnion(

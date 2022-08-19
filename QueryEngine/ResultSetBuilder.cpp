@@ -109,11 +109,8 @@ ResultSet* ResultSetLogicalValuesBuilder::build() {
       int8_t* ptr = buff + i * query_mem_desc.getRowSize();
 
       for (size_t j = 0; j < logical_values->getRowsSize(); j++) {
-        auto rex_literal =
-            dynamic_cast<const RexLiteral*>(logical_values->getValueAt(i, j));
-        CHECK(rex_literal);
-        const auto expr = RelAlgTranslator::translateLiteral(rex_literal);
-        const auto constant = std::dynamic_pointer_cast<hdk::ir::Constant>(expr);
+        const auto expr = logical_values->getValue(i, j);
+        const auto constant = dynamic_cast<const hdk::ir::Constant*>(expr);
         CHECK(constant);
 
         if (constant->get_is_null()) {
@@ -158,7 +155,7 @@ ResultSet* ResultSetLogicalValuesBuilder::build() {
 // static
 ResultSet* ResultSetLogicalValuesBuilder::create(
     std::vector<TargetMetaInfo>& label_infos,
-    std::vector<RelLogicalValues::RowValues>& logical_values) {
+    std::vector<hdk::ir::ExprPtrVector> logical_values) {
   // check to see if number of columns matches (at least the first row)
   size_t numCols =
       logical_values.size() ? logical_values.front().size() : label_infos.size();
@@ -181,7 +178,7 @@ ResultSet* ResultSetLogicalValuesBuilder::create(
   }
 
   std::shared_ptr<RelLogicalValues> rel_logical_values =
-      std::make_shared<RelLogicalValues>(label_infos, logical_values);
+      std::make_shared<RelLogicalValues>(label_infos, std::move(logical_values));
 
   const auto row_set_mem_owner =
       std::make_shared<RowSetMemoryOwner>(nullptr, Executor::getArenaBlockSize());

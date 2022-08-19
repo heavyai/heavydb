@@ -1774,7 +1774,7 @@ class RelLogicalValues : public RelAlgNode {
   using RowValues = std::vector<std::unique_ptr<const RexScalar>>;
 
   RelLogicalValues(const std::vector<TargetMetaInfo>& tuple_type,
-                   std::vector<RowValues>& values)
+                   std::vector<hdk::ir::ExprPtrVector> values)
       : tuple_type_(tuple_type), values_(std::move(values)) {}
 
   RelLogicalValues(RelLogicalValues const&);
@@ -1802,15 +1802,11 @@ class RelLogicalValues : public RelAlgNode {
     return *hash_;
   }
 
-  const RexScalar* getValueAt(const size_t row_idx, const size_t col_idx) const {
+  const hdk::ir::Expr* getValue(const size_t row_idx, const size_t col_idx) const {
     CHECK_LT(row_idx, values_.size());
     const auto& row = values_[row_idx];
     CHECK_LT(col_idx, row.size());
     return row[col_idx].get();
-  }
-
-  const hdk::ir::Expr* getValueExprAt(const size_t row_idx, const size_t col_idx) const {
-    return nullptr;
   }
 
   size_t getRowsSize() const {
@@ -1832,8 +1828,8 @@ class RelLogicalValues : public RelAlgNode {
   }
 
  private:
-  const std::vector<TargetMetaInfo> tuple_type_;
-  const std::vector<RowValues> values_;
+  std::vector<TargetMetaInfo> tuple_type_;
+  std::vector<hdk::ir::ExprPtrVector> values_;
 };
 
 class RelLogicalUnion : public RelAlgNode {

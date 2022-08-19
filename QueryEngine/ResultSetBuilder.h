@@ -93,7 +93,7 @@ class ResultSetLogicalValuesBuilder : public ResultSetBuilder {
   //     QueryMemoryDescriptor is "Projection"
   //     RowSetMemoryOwner is default
   static ResultSet* create(std::vector<TargetMetaInfo>& label_infos,
-                           std::vector<RelLogicalValues::RowValues>& logical_values);
+                           std::vector<hdk::ir::ExprPtrVector> logical_values);
 };
 
 #endif  // QUERYENGINE_RESULTSETBUILDER_H
