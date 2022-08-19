@@ -208,6 +208,23 @@ add_custom_command(
         -I ${CMAKE_CURRENT_SOURCE_DIR}/../
         ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
 
+add_custom_command(
+        DEPENDS RuntimeFunctions.h RuntimeFunctions.cpp DecodersImpl.h JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsL0.bc
+        COMMAND ${llvm_clangpp_cmd}
+        ARGS -std=c++17 ${RT_OPT_FLAGS} -c -emit-llvm -o ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsL0.bc
+        ${CLANG_SDK_INC}
+        ${CLANG_CRT_INC}
+        ${MAPD_DEFINITIONS}
+        -DL0_RUNTIME_ENABLED
+        -I ${CMAKE_CURRENT_SOURCE_DIR}/../
+        ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp
+        VERBATIM)
+
+if(ENABLE_L0)
+    add_custom_target(QueryEngineL0Targets ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsL0.bc)
+endif()
+
 find_package(PythonInterp REQUIRED)
 
 add_custom_command(
