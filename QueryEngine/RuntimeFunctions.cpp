@@ -1710,15 +1710,15 @@ extern "C" RUNTIME_EXPORT void multifrag_query_hoisted_literals(
   for (uint32_t i = 0; i < *num_fragments; ++i) {
     query_stub_hoisted_literals(
         col_buffers
-            ? ((const int8_t GENERIC_ADDR_SPACE* GENERIC_ADDR_SPACE* GENERIC_ADDR_SPACE*)
-                   col_buffers)[i]
+            ? reinterpret_cast<const int8_t GENERIC_ADDR_SPACE * GENERIC_ADDR_SPACE *
+                               GENERIC_ADDR_SPACE*>(col_buffers)[i]
             : nullptr,
         literals,
         &num_rows[i * (*num_tables_ptr)],
         &frag_row_offsets[i * (*num_tables_ptr)],
         max_matched,
         init_agg_value,
-        (int64_t GENERIC_ADDR_SPACE * GENERIC_ADDR_SPACE*)out,
+        reinterpret_cast<int64_t GENERIC_ADDR_SPACE * GENERIC_ADDR_SPACE*>(out),
         i,
         join_hash_tables,
         total_matched,
@@ -1756,20 +1756,19 @@ extern "C" RUNTIME_EXPORT void multifrag_query(
     GLOBAL_ADDR_SPACE const uint32_t* __restrict__ num_tables_ptr,
     GLOBAL_ADDR_SPACE const int64_t* join_hash_tables) {
   for (uint32_t i = 0; i < *num_fragments; ++i) {
-    query_stub(
-        col_buffers
-            ? ((const int8_t GENERIC_ADDR_SPACE* GENERIC_ADDR_SPACE* GENERIC_ADDR_SPACE*)
-                   col_buffers)[i]
-            : nullptr,
-        &num_rows[i * (*num_tables_ptr)],
-        &frag_row_offsets[i * (*num_tables_ptr)],
-        max_matched,
-        init_agg_value,
-        (int64_t GENERIC_ADDR_SPACE * GENERIC_ADDR_SPACE*)out,
-        i,
-        join_hash_tables,
-        total_matched,
-        error_code);
+    query_stub(col_buffers ? reinterpret_cast<const int8_t GENERIC_ADDR_SPACE *
+                                              GENERIC_ADDR_SPACE * GENERIC_ADDR_SPACE*>(
+                                 col_buffers)[i]
+                           : nullptr,
+               &num_rows[i * (*num_tables_ptr)],
+               &frag_row_offsets[i * (*num_tables_ptr)],
+               max_matched,
+               init_agg_value,
+               reinterpret_cast<int64_t GENERIC_ADDR_SPACE * GENERIC_ADDR_SPACE*>(out),
+               i,
+               join_hash_tables,
+               total_matched,
+               error_code);
   }
 }
 

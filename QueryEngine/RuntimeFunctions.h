@@ -271,10 +271,13 @@ template <class T>
 struct remove_addr_space {
   typedef T type;
 };
+
+#ifdef L0_RUNTIME_ENABLED
 template <class T>
 struct remove_addr_space<GENERIC_ADDR_SPACE T> {
   typedef T type;
 };
+#endif
 
 template <typename T = int64_t>
 inline T get_empty_key() {
