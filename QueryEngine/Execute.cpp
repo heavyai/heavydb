@@ -479,8 +479,6 @@ std::shared_ptr<Executor> Executor::getExecutor(
     const std::string& debug_dir,
     const std::string& debug_file,
     const SystemParameters& system_parameters) {
-  INJECT_TIMER(getExecutor);
-
   heavyai::unique_lock<heavyai::shared_mutex> write_lock(executors_cache_mutex_);
   auto it = executors_.find(executor_id);
   if (it != executors_.end()) {
