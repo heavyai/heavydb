@@ -1847,10 +1847,6 @@ class RelLogicalUnion : public RelAlgNode {
   inline bool isAll() const { return is_all_; }
   // Will throw a std::runtime_error if MetaInfo types don't match.
   void checkForMatchingMetaInfoTypes() const;
-  RexScalar const* copyAndRedirectSource(RexScalar const*, size_t input_idx) const;
-
-  // Not unique_ptr to allow for an easy deepCopy() implementation.
-  mutable std::vector<std::shared_ptr<const RexScalar>> scalar_exprs_;
 
  private:
   bool const is_all_;

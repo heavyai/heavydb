@@ -692,18 +692,6 @@ void RelLogicalUnion::checkForMatchingMetaInfoTypes() const {
   }
 }
 
-// Rest of code requires a raw pointer, but RexInput object needs to live somewhere.
-RexScalar const* RelLogicalUnion::copyAndRedirectSource(RexScalar const* rex_scalar,
-                                                        size_t input_idx) const {
-  if (auto const* rex_input_ptr = dynamic_cast<RexInput const*>(rex_scalar)) {
-    RexInput rex_input(*rex_input_ptr);
-    rex_input.setSourceNode(getInput(input_idx));
-    scalar_exprs_.emplace_back(std::make_shared<RexInput const>(std::move(rex_input)));
-    return scalar_exprs_.back().get();
-  }
-  return rex_scalar;
-}
-
 namespace {
 
 unsigned node_id(const rapidjson::Value& ra_node) noexcept {
