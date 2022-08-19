@@ -49,7 +49,7 @@ DEVICE int64_t get_matching_slot(GENERIC_ADDR_SPACE const int8_t* hash_buff,
     return *reinterpret_cast<GENERIC_ADDR_SPACE const T*>(lookup_result_ptr + key_bytes);
   }
   if (*reinterpret_cast<GENERIC_ADDR_SPACE const T*>(lookup_result_ptr) ==
-      SUFFIX(get_invalid_key) < typename remove_addr_space<T>::type > ()) {
+      SUFFIX(get_invalid_key) < T > ()) {
     return kNotPresent;
   }
   return kNoMatch;
@@ -142,8 +142,7 @@ FORCE_INLINE DEVICE int64_t get_composite_key_index_impl(const T* key,
     if (keys_are_equal(&composite_key_dict[off], key, key_component_count)) {
       return h_probe;
     }
-    if (composite_key_dict[off] ==
-        SUFFIX(get_invalid_key) < typename remove_addr_space<T>::type > ()) {
+    if (composite_key_dict[off] == SUFFIX(get_invalid_key) < T > ()) {
       return -1;
     }
     h_probe = (h_probe + 1) % entry_count;

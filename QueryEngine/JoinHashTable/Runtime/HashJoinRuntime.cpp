@@ -340,7 +340,7 @@ DEVICE void SUFFIX(init_baseline_hash_join_buff)(int8_t* hash_buff,
   const int32_t step = 1;
 #endif
   auto hash_entry_size = (key_component_count + (with_val_slot ? 1 : 0)) * sizeof(T);
-  const T empty_key = SUFFIX(get_invalid_key)<typename remove_addr_space<T>::type>();
+  const T empty_key = SUFFIX(get_invalid_key)<T>();
   for (int64_t h = start; h < end; h += step) {
     int64_t off = h * hash_entry_size;
     auto row_ptr = reinterpret_cast<T*>(hash_buff + off);
@@ -395,7 +395,7 @@ __device__ T* get_matching_baseline_hash_slot_at(int8_t* hash_buff,
                                                  const int64_t hash_entry_size) {
   uint32_t off = h * hash_entry_size;
   auto row_ptr = reinterpret_cast<T*>(hash_buff + off);
-  const T empty_key = SUFFIX(get_invalid_key)<typename remove_addr_space<T>::type>();
+  const T empty_key = SUFFIX(get_invalid_key)<T>();
   {
     const T old = atomicCAS(row_ptr, empty_key, *key);
     if (empty_key == old && key_component_count > 1) {
