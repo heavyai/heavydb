@@ -3737,8 +3737,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
         VLOG(1) << "Skip CUDA grid size query hint: cannot detect CUDA device";
       } else {
         const auto num_sms = executor_->cudaMgr()->getMinNumMPsForAllDevices();
-        const auto new_grid_size =
-            std::round(num_sms * query_hints.cuda_grid_size_multiplier);
+        const auto new_grid_size = static_cast<unsigned>(
+            std::max(1.0, std::round(num_sms * query_hints.cuda_grid_size_multiplier)));
         const auto default_grid_size = executor_->gridSize();
         if (new_grid_size != default_grid_size) {
           VLOG(1) << "Change CUDA grid size: " << default_grid_size
