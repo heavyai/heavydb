@@ -660,8 +660,8 @@ GroupValueInfo get_matching_group_value_reduction(
     const size_t that_entry_count,
     const uint32_t row_size_quad) {
   auto off = h * row_size_quad;
-  T empty_key = get_empty_key<T>();
-  T write_pending = get_empty_key<T>() - 1;
+  T empty_key = get_empty_key<typename remove_addr_space<T>::type>();
+  T write_pending = get_empty_key<typename remove_addr_space<T>::type>() - 1;
   auto row_ptr = reinterpret_cast<T*>(groups_buffer + off);
   const auto slot_off_quad = get_slot_off_quad(query_mem_desc);
   const bool success = cas_cst(row_ptr, &empty_key, write_pending);
@@ -969,7 +969,7 @@ void ResultSetStorage::moveOneEntryToBuffer(const size_t entry_index,
           ? key_offset_colwise(entry_index, 0, query_mem_desc_.getEntryCount())
           : row_qw_count * entry_index;
   const auto key_ptr = reinterpret_cast<const KeyType*>(&src_buff[key_off]);
-  if (*key_ptr == get_empty_key<KeyType>()) {
+  if (*key_ptr == get_empty_key<typename remove_addr_space<KeyType>::type>()) {
     return;
   }
   int64_t* new_entries_ptr{nullptr};

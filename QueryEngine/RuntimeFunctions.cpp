@@ -1228,7 +1228,7 @@ ALWAYS_INLINE GENERIC_ADDR_SPACE int64_t* get_matching_group_value(
     const uint32_t row_size_quad) {
   auto off = h * row_size_quad;
   auto row_ptr = reinterpret_cast<T*>(groups_buffer + off);
-  if (*row_ptr == get_empty_key<T>()) {
+  if (*row_ptr == get_empty_key<typename remove_addr_space<T>::type>()) {
     memcpy(reinterpret_cast<GENERIC_ADDR_SPACE void*>(row_ptr),
            reinterpret_cast<GENERIC_ADDR_SPACE const void*>(key),
            key_count * sizeof(T));
@@ -1273,7 +1273,7 @@ get_matching_group_value_columnar_slot(GENERIC_ADDR_SPACE int64_t* groups_buffer
                                        const uint32_t key_count) {
   auto off = h;
   auto key_buffer = reinterpret_cast<T*>(groups_buffer);
-  if (key_buffer[off] == get_empty_key<T>()) {
+  if (key_buffer[off] == get_empty_key<typename remove_addr_space<T>::type>()) {
     for (size_t i = 0; i < key_count; ++i) {
       key_buffer[off] = key[i];
       off += entry_count;

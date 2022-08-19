@@ -267,6 +267,15 @@ extern "C" RUNTIME_EXPORT GENERIC_ADDR_SPACE int8_t* extract_str_ptr_noinline(
 
 extern "C" RUNTIME_EXPORT int32_t extract_str_len_noinline(const uint64_t str_and_len);
 
+template <class T>
+struct remove_addr_space {
+  typedef T type;
+};
+template <class T>
+struct remove_addr_space<GENERIC_ADDR_SPACE T> {
+  typedef T type;
+};
+
 template <typename T = int64_t>
 inline T get_empty_key() {
   static_assert(std::is_same<T, int64_t>::value,

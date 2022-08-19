@@ -340,7 +340,7 @@ DEVICE void SUFFIX(init_baseline_hash_join_buff)(int8_t* hash_buff,
   const int32_t step = 1;
 #endif
   auto hash_entry_size = (key_component_count + (with_val_slot ? 1 : 0)) * sizeof(T);
-  const T empty_key = SUFFIX(get_invalid_key)<T>();
+  const T empty_key = SUFFIX(get_invalid_key)<typename remove_addr_space<T>::type>();
   for (int64_t h = start; h < end; h += step) {
     int64_t off = h * hash_entry_size;
     auto row_ptr = reinterpret_cast<T*>(hash_buff + off);
@@ -364,7 +364,7 @@ DEVICE void SUFFIX(init_baseline_hash_join_buff_tbb)(int8_t* hash_buff,
                                                      const int32_t invalid_slot_val) {
   const auto hash_entry_size =
       (key_component_count + (with_val_slot ? 1 : 0)) * sizeof(T);
-  const T empty_key = SUFFIX(get_invalid_key)<T>();
+  const T empty_key = SUFFIX(get_invalid_key)<typename remove_addr_space<T>::type>();
   tbb::parallel_for(tbb::blocked_range<int64_t>(0, entry_count),
                     [=](const tbb::blocked_range<int64_t>& r) {
                       const auto start_idx = r.begin();
@@ -395,7 +395,7 @@ __device__ T* get_matching_baseline_hash_slot_at(int8_t* hash_buff,
                                                  const int64_t hash_entry_size) {
   uint32_t off = h * hash_entry_size;
   auto row_ptr = reinterpret_cast<T*>(hash_buff + off);
-  const T empty_key = SUFFIX(get_invalid_key)<T>();
+  const T empty_key = SUFFIX(get_invalid_key)<typename remove_addr_space<T>::type>();
   {
     const T old = atomicCAS(row_ptr, empty_key, *key);
     if (empty_key == old && key_component_count > 1) {
@@ -451,8 +451,8 @@ T* get_matching_baseline_hash_slot_at(int8_t* hash_buff,
                                       const int64_t hash_entry_size) {
   uint32_t off = h * hash_entry_size;
   auto row_ptr = reinterpret_cast<T*>(hash_buff + off);
-  T empty_key = SUFFIX(get_invalid_key)<T>();
-  T write_pending = SUFFIX(get_invalid_key)<T>() - 1;
+  T empty_key = SUFFIX(get_invalid_key)<typename remove_addr_space<T>::type>();
+  T write_pending = SUFFIX(get_invalid_key)<typename remove_addr_space<T>::type>() - 1;
   if (UNLIKELY(*key == write_pending)) {
     // Address the singularity case where the first column contains the pending
     // write special value. Should never happen, but avoid doing wrong things.

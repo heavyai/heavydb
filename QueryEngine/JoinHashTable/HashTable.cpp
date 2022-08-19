@@ -80,7 +80,7 @@ void to_set_one_to_one(const int8_t* ptr1,
                        size_t entry_count,
                        size_t key_component_count,
                        DecodedJoinHashBufferSet& s) {
-  auto empty = get_empty_key<T>();
+  auto empty = get_empty_key<typename remove_addr_space<T>::type>();
   auto ptr = reinterpret_cast<const T*>(ptr1);
   for (size_t e = 0; e < entry_count; ++e, ptr += key_component_count) {
     if (*ptr == empty) {
@@ -108,7 +108,7 @@ void to_set_one_to_many(const int8_t* ptr1,
                         size_t entry_count,
                         size_t key_component_count,
                         DecodedJoinHashBufferSet& s) {
-  auto empty = get_empty_key<T>();
+  auto empty = get_empty_key<typename remove_addr_space<T>::type>();
   auto ptr = reinterpret_cast<const T*>(ptr1);
   for (size_t e = 0; e < entry_count; ++e, ptr += key_component_count) {
     if (*ptr == empty) {
@@ -200,7 +200,7 @@ void inner_to_string(const int8_t* ptr1,
                      size_t key_component_count,
                      bool raw,
                      std::string& txt) {
-  auto empty = get_empty_key<T>();
+  auto empty = get_empty_key<typename remove_addr_space<T>::type>();
   auto ptr = reinterpret_cast<const T*>(ptr1);
   for (size_t e = 0; e < entry_count; ++e, ptr += key_component_count) {
     if (e != 0) {
