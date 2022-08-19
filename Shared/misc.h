@@ -302,6 +302,10 @@ OUTPUT transform(INPUT const& input, FUNC const& func) {
   return output;
 }
 
+inline unsigned ceil_div(unsigned const dividend, unsigned const divisor) {
+  return (dividend + (divisor - 1)) / divisor;
+}
+
 }  // namespace shared
 
 ////////// std::endian //////////
