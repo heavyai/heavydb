@@ -2942,9 +2942,14 @@ size_t Constant::hash() const {
   if (!hash_) {
     hash_ = Expr::hash();
     boost::hash_combine(*hash_, is_null);
-    boost::hash_combine(*hash_, ::hash(constval, type_info));
-    for (auto& expr : value_list) {
-      boost::hash_combine(*hash_, expr->hash());
+    if (!is_null) {
+      if (type_info.get_type() == kARRAY) {
+        for (auto& expr : value_list) {
+          boost::hash_combine(*hash_, expr->hash());
+        }
+      } else {
+        boost::hash_combine(*hash_, ::hash(constval, type_info));
+      }
     }
   }
   return *hash_;

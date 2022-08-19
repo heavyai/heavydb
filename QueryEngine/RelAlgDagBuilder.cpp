@@ -64,31 +64,6 @@ unsigned RexSubQuery::getId() const {
 
 namespace {
 
-class RexRebindInputsVisitor : public RexVisitor<void*> {
- public:
-  RexRebindInputsVisitor(const RelAlgNode* old_input, const RelAlgNode* new_input)
-      : old_input_(old_input), new_input_(new_input) {}
-
-  virtual ~RexRebindInputsVisitor() = default;
-
-  void* visitInput(const RexInput* rex_input) const override {
-    const auto old_source = rex_input->getSourceNode();
-    if (old_source == old_input_) {
-      const auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(new_input_);
-      if (left_deep_join) {
-        rebind_inputs_from_left_deep_join(rex_input, left_deep_join);
-        return nullptr;
-      }
-      rex_input->setSourceNode(new_input_);
-    }
-    return nullptr;
-  };
-
- private:
-  const RelAlgNode* old_input_;
-  const RelAlgNode* new_input_;
-};
-
 class RebindInputsVisitor : public DeepCopyVisitor {
  public:
   RebindInputsVisitor(const RelAlgNode* old_input, const RelAlgNode* new_input)
@@ -146,26 +121,6 @@ std::vector<RexInput> n_outputs(const RelAlgNode* node, const size_t n) {
   return outputs;
 }
 
-class RexRebindReindexInputsVisitor : public RexRebindInputsVisitor {
- public:
-  RexRebindReindexInputsVisitor(
-      const RelAlgNode* old_input,
-      const RelAlgNode* new_input,
-      std::unordered_map<unsigned, unsigned> old_to_new_index_map)
-      : RexRebindInputsVisitor(old_input, new_input), mapping_(old_to_new_index_map) {}
-
-  void* visitInput(const RexInput* rex_input) const override {
-    RexRebindInputsVisitor::visitInput(rex_input);
-    auto mapping_itr = mapping_.find(rex_input->getIndex());
-    CHECK(mapping_itr != mapping_.end());
-    rex_input->setIndex(mapping_itr->second);
-    return nullptr;
-  }
-
- private:
-  const std::unordered_map<unsigned, unsigned> mapping_;
-};
-
 }  // namespace
 
 void Rex::print() const {
@@ -181,29 +136,14 @@ void RelProject::replaceInput(
     std::shared_ptr<const RelAlgNode> input,
     std::optional<std::unordered_map<unsigned, unsigned>> old_to_new_index_map) {
   RelAlgNode::replaceInput(old_input, input);
-  std::unique_ptr<RexRebindInputsVisitor> rebind_inputs;
   RebindReindexInputsVisitor visitor(old_input.get(), input.get(), old_to_new_index_map);
-  if (old_to_new_index_map) {
-    rebind_inputs = std::make_unique<RexRebindReindexInputsVisitor>(
-        old_input.get(), input.get(), *old_to_new_index_map);
-  } else {
-    rebind_inputs =
-        std::make_unique<RexRebindInputsVisitor>(old_input.get(), input.get());
-  }
-  CHECK(rebind_inputs);
-  for (const auto& scalar_expr : scalar_exprs_) {
-    rebind_inputs->visit(scalar_expr.get());
-  }
   for (size_t i = 0; i < exprs_.size(); ++i) {
     exprs_[i] = visitor.visit(exprs_[i].get());
   }
 }
 
-void RelProject::appendInput(std::string new_field_name,
-                             std::unique_ptr<const RexScalar> new_input,
-                             hdk::ir::ExprPtr expr) {
+void RelProject::appendInput(std::string new_field_name, hdk::ir::ExprPtr expr) {
   fields_.emplace_back(std::move(new_field_name));
-  scalar_exprs_.emplace_back(std::move(new_input));
   exprs_.emplace_back(std::move(expr));
 }
 
@@ -389,19 +329,19 @@ bool RelProject::isIdentity() const {
   if (dynamic_cast<const RelJoin*>(source)) {
     return false;
   }
-  const auto source_shape = get_node_output(source);
-  if (source_shape.size() != scalar_exprs_.size()) {
+  const auto source_shape = getNodeColumnRefs(source);
+  if (source_shape.size() != exprs_.size()) {
     return false;
   }
-  for (size_t i = 0; i < scalar_exprs_.size(); ++i) {
-    const auto& scalar_expr = scalar_exprs_[i];
-    const auto input = dynamic_cast<const RexInput*>(scalar_expr.get());
-    CHECK(input);
-    CHECK_EQ(source, input->getSourceNode());
+  for (size_t i = 0; i < exprs_.size(); ++i) {
+    const auto col_ref = dynamic_cast<const hdk::ir::ColumnRef*>(exprs_[i].get());
+    CHECK(col_ref);
+    CHECK_EQ(source, col_ref->getNode());
     // We should add the additional check that input->getIndex() !=
     // source_shape[i].getIndex(), but Calcite doesn't generate the right
     // Sort-Project-Sort sequence when joins are involved.
-    if (input->getSourceNode() != source_shape[i].getSourceNode()) {
+    if (col_ref->getNode() !=
+        dynamic_cast<const hdk::ir::ColumnRef*>(source_shape[i].get())->getNode()) {
       return false;
     }
   }
@@ -457,11 +397,11 @@ bool RelProject::isRenaming() const {
   if (!isSimple()) {
     return false;
   }
-  CHECK_EQ(scalar_exprs_.size(), fields_.size());
+  CHECK_EQ(exprs_.size(), fields_.size());
   for (size_t i = 0; i < fields_.size(); ++i) {
-    auto rex_in = dynamic_cast<const RexInput*>(scalar_exprs_[i].get());
-    CHECK(rex_in);
-    if (isRenamedInput(rex_in->getSourceNode(), rex_in->getIndex(), fields_[i])) {
+    auto col_ref = dynamic_cast<const hdk::ir::ColumnRef*>(exprs_[i].get());
+    CHECK(col_ref);
+    if (isRenamedInput(col_ref->getNode(), col_ref->getIndex(), fields_[i])) {
       return true;
     }
   }
@@ -480,7 +420,6 @@ void RelAggregate::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
 void RelJoin::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                            std::shared_ptr<const RelAlgNode> input) {
   RelAlgNode::replaceInput(old_input, input);
-  RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
   if (condition_) {
     RebindInputsVisitor visitor(old_input.get(), input.get());
     condition_ = visitor.visit(condition_.get());
@@ -515,10 +454,6 @@ RelProject::RelProject(RelProject const& rhs)
     , fields_(rhs.fields_)
     , hint_applied_(false)
     , hints_(std::make_unique<Hints>()) {
-  RexDeepCopyVisitor copier;
-  for (auto const& expr : rhs.scalar_exprs_) {
-    scalar_exprs_.push_back(copier.visit(expr.get()));
-  }
   if (rhs.hint_applied_) {
     for (auto const& kv : *rhs.hints_) {
       addHint(kv.second);
@@ -629,17 +564,18 @@ std::set<std::pair<const RelAlgNode*, int>> get_equiv_cols(const RelAlgNode* nod
     CHECK_EQ(size_t(1), walker->inputCount());
     auto only_source = walker->getInput(0);
     if (auto project = dynamic_cast<const RelProject*>(walker)) {
-      if (auto input = dynamic_cast<const RexInput*>(project->getProjectAt(curr_col))) {
+      if (auto col_ref =
+              dynamic_cast<const hdk::ir::ColumnRef*>(project->getExpr(curr_col).get())) {
         const auto join_source = dynamic_cast<const RelJoin*>(only_source);
         if (join_source) {
           CHECK_EQ(size_t(2), join_source->inputCount());
           auto lhs = join_source->getInput(0);
-          CHECK((input->getIndex() < lhs->size() && lhs == input->getSourceNode()) ||
-                join_source->getInput(1) == input->getSourceNode());
+          CHECK((col_ref->getIndex() < lhs->size() && lhs == col_ref->getNode()) ||
+                join_source->getInput(1) == col_ref->getNode());
         } else {
-          CHECK_EQ(input->getSourceNode(), only_source);
+          CHECK_EQ(col_ref->getNode(), only_source);
         }
-        curr_col = input->getIndex();
+        curr_col = col_ref->getIndex();
       } else {
         break;
       }
@@ -1361,38 +1297,6 @@ std::unique_ptr<const RexScalar> disambiguate_rex(const RexScalar* rex_scalar,
   }
 }
 
-void bind_project_to_input(RelProject* project_node, const RANodeOutput& input) noexcept {
-  CHECK_EQ(size_t(1), project_node->inputCount());
-  std::vector<std::unique_ptr<const RexScalar>> disambiguated_exprs;
-  hdk::ir::ExprPtrVector exprs = project_node->getExprs();
-  for (size_t i = 0; i < project_node->size(); ++i) {
-    const auto projected_expr = project_node->getProjectAt(i);
-    if (dynamic_cast<const RexSubQuery*>(projected_expr)) {
-      disambiguated_exprs.emplace_back(project_node->getProjectAtAndRelease(i));
-    } else {
-      disambiguated_exprs.emplace_back(disambiguate_rex(projected_expr, input));
-    }
-  }
-  project_node->setExpressions(std::move(disambiguated_exprs), std::move(exprs));
-}
-
-void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
-  for (auto ra_node : nodes) {
-    const auto filter_node = std::dynamic_pointer_cast<RelFilter>(ra_node);
-    if (filter_node) {
-      CHECK_EQ(size_t(1), filter_node->inputCount());
-      filter_node->setCondition(filter_node->getConditionExprShared());
-      continue;
-    }
-    const auto project_node = std::dynamic_pointer_cast<RelProject>(ra_node);
-    if (project_node) {
-      bind_project_to_input(project_node.get(),
-                            get_node_output(project_node->getInput(0)));
-      continue;
-    }
-  }
-}
-
 void handleQueryHint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
                      RelAlgDagBuilder* dag_builder) noexcept {
   // query hint is delivered by the above three nodes
@@ -1737,20 +1641,20 @@ bool input_can_be_coalesced(const RelAlgNode* parent_node,
  * given input and determines whether or not the input is a candidate for coalescing
  * into the parent RA node. Intended for use only on the inputs of a RelProject node.
  */
-class CoalesceSecondaryProjectVisitor : public RexVisitor<bool> {
+class CoalesceSecondaryProjectVisitor : public ScalarExprVisitor<bool> {
  public:
-  bool visitInput(const RexInput* input) const final {
+  bool visitColumnRef(const hdk::ir::ColumnRef* col_ref) const final {
     // The top level expression node is checked before we apply the visitor. If we get
     // here, this input rex is a child of another rex node, and we handle the can be
     // coalesced check slightly differently
-    return input_can_be_coalesced(input->getSourceNode(), input->getIndex(), false);
+    return input_can_be_coalesced(col_ref->getNode(), col_ref->getIndex(), false);
   }
 
-  bool visitLiteral(const RexLiteral*) const final { return false; }
+  bool visitConstant(const hdk::ir::Constant*) const final { return false; }
 
-  bool visitSubQuery(const RexSubQuery*) const final { return false; }
+  bool visitInSubquery(const hdk::ir::InSubquery*) const final { return false; }
 
-  bool visitRef(const RexRef*) const final { return false; }
+  bool visitScalarSubquery(const hdk::ir::ScalarSubquery*) const final { return false; }
 
  protected:
   bool aggregateResult(const bool& aggregate, const bool& next_result) const final {
@@ -1929,19 +1833,18 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
           if (!project_node->hasWindowFunctionExpr()) {
             // TODO(adb): overloading the simple project terminology again here
             bool is_simple_project{true};
-            for (size_t i = 0; i < project_node->size(); i++) {
-              const auto scalar_rex = project_node->getProjectAt(i);
+            for (auto& expr : project_node->getExprs()) {
               // If the top level scalar rex is an input node, we can bypass the visitor
-              if (auto input_rex = dynamic_cast<const RexInput*>(scalar_rex)) {
+              if (auto col_ref = dynamic_cast<const hdk::ir::ColumnRef*>(expr.get())) {
                 if (!input_can_be_coalesced(
-                        input_rex->getSourceNode(), input_rex->getIndex(), true)) {
+                        col_ref->getNode(), col_ref->getIndex(), true)) {
                   is_simple_project = false;
                   break;
                 }
                 continue;
               }
               CoalesceSecondaryProjectVisitor visitor;
-              if (!visitor.visit(project_node->getProjectAt(i))) {
+              if (!visitor.visit(expr.get())) {
                 is_simple_project = false;
                 break;
               }
@@ -2134,33 +2037,6 @@ class ReplacementExprVisitor : public DeepCopyVisitor {
   std::unordered_map<const hdk::ir::Expr*, hdk::ir::ExprPtr> replacements_;
 };
 
-class InputBackpropagationVisitor : public DeepCopyVisitor {
- public:
-  InputBackpropagationVisitor() {}
-
-  void addReplacement(const RexInput* from, const RexInput* to) {
-    replacements_[std::make_pair(from->getSourceNode(), from->getIndex())] =
-        std::make_pair(to->getSourceNode(), to->getIndex());
-  }
-
-  hdk::ir::ExprPtr visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
-    auto it = replacements_.find(std::make_pair(col_ref->getNode(), col_ref->getIndex()));
-    if (it != replacements_.end()) {
-      return hdk::ir::makeExpr<hdk::ir::ColumnRef>(
-          col_ref->get_type_info(), it->second.first, it->second.second);
-    }
-    return col_ref->deep_copy();
-  }
-
- protected:
-  using InputReplacements =
-      std::unordered_map<std::pair<const RelAlgNode*, unsigned>,
-                         std::pair<const RelAlgNode*, unsigned>,
-                         boost::hash<std::pair<const RelAlgNode*, unsigned>>>;
-
-  InputReplacements replacements_;
-};
-
 /**
  * Propagate an input backwards in the RA tree. With the exception of joins, all inputs
  * must be carried through the RA tree. This visitor takes as a parameter a source
@@ -2170,46 +2046,40 @@ class InputBackpropagationVisitor : public DeepCopyVisitor {
  * references the input on the source RA node, thereby carrying the input through the
  * intermediate query step.
  */
-class RexInputBackpropagationVisitor : public RexDeepCopyVisitor {
+class InputBackpropagationVisitor : public DeepCopyVisitor {
  public:
-  RexInputBackpropagationVisitor(RelProject* node, InputBackpropagationVisitor& visitor)
-      : node_(node), visitor_(visitor) {
-    CHECK(node_);
-  }
+  InputBackpropagationVisitor(RelProject* node) : node_(node) {}
 
- protected:
-  RetType visitInput(const RexInput* rex_input) const final {
-    if (rex_input->getSourceNode() != node_) {
-      const auto cur_index = rex_input->getIndex();
-      auto cur_source_node = rex_input->getSourceNode();
+  hdk::ir::ExprPtr visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
+    if (col_ref->getNode() != node_) {
+      auto cur_index = col_ref->getIndex();
+      auto cur_source_node = col_ref->getNode();
       auto it = replacements_.find(std::make_pair(cur_source_node, cur_index));
       if (it != replacements_.end()) {
-        return it->second->deepCopy();
+        return it->second;
       } else {
         std::string field_name = "";
         if (auto cur_project_node = dynamic_cast<const RelProject*>(cur_source_node)) {
           field_name = cur_project_node->getFieldName(cur_index);
         }
-        auto expr = hdk::ir::makeExpr<hdk::ir::ColumnRef>(
-            getColumnType(cur_source_node, cur_index), cur_source_node, cur_index);
-        node_->appendInput(field_name, rex_input->deepCopy(), expr);
-        auto res = std::make_unique<RexInput>(node_, node_->size() - 1);
-        visitor_.addReplacement(rex_input, res.get());
-        replacements_[std::make_pair(cur_source_node, cur_index)] = res.get();
-        return res;
+        node_->appendInput(field_name, col_ref->deep_copy());
+        auto expr = hdk::ir::makeExpr<hdk::ir::ColumnRef>(node_, node_->size() - 1);
+        replacements_[std::make_pair(cur_source_node, cur_index)] = expr;
+        return expr;
       }
     } else {
-      return rex_input->deepCopy();
+      return DeepCopyVisitor::visitColumnRef(col_ref);
     }
   }
 
- private:
+ protected:
+  using InputReplacements =
+      std::unordered_map<std::pair<const RelAlgNode*, unsigned>,
+                         hdk::ir::ExprPtr,
+                         boost::hash<std::pair<const RelAlgNode*, unsigned>>>;
+
   mutable RelProject* node_;
-  InputBackpropagationVisitor& visitor_;
-  mutable std::unordered_map<std::pair<const RelAlgNode*, unsigned>,
-                             const RexInput*,
-                             boost::hash<std::pair<const RelAlgNode*, unsigned>>>
-      replacements_;
+  mutable InputReplacements replacements_;
 };
 
 void propagate_hints_to_new_project(
@@ -2258,7 +2128,6 @@ void separate_window_function_expressions(
     }
 
     // map scalar expression index in the project node to window function ptr
-    std::unordered_map<size_t, const RexScalar*> embedded_window_function_expressions;
     std::unordered_map<size_t, hdk::ir::ExprPtr> embedded_window_function_exprs;
 
     // Iterate the target exprs of the project node and check for window function
@@ -2266,23 +2135,15 @@ void separate_window_function_expressions(
     // embedded_window_function_expressions map and split the expression into a window
     // function expression and a parent expression in a subsequent project node
     for (size_t i = 0; i < window_func_project_node->size(); i++) {
-      const auto scalar_rex = window_func_project_node->getProjectAt(i);
       auto expr = window_func_project_node->getExpr(i);
-      CHECK_EQ(is_window_function_expr(expr.get()),
-               is_window_function_operator(scalar_rex));
       if (is_window_function_expr(expr.get())) {
         // top level window function exprs are fine
         continue;
       }
 
-      auto window_func_rex = visitor.visit(scalar_rex);
       std::list<const hdk::ir::Expr*> window_function_exprs;
       expr->find_expr(is_window_function_expr, window_function_exprs);
-      CHECK_EQ(!window_func_rex, window_function_exprs.empty());
       if (!window_function_exprs.empty()) {
-        const auto ret1 = embedded_window_function_expressions.insert(
-            std::make_pair(i, window_func_rex));
-        CHECK(ret1.second);
         const auto ret = embedded_window_function_exprs.insert(std::make_pair(
             i,
             const_cast<hdk::ir::Expr*>(window_function_exprs.front())->get_shared_ptr()));
@@ -2290,95 +2151,65 @@ void separate_window_function_expressions(
       }
     }
 
-    if (!embedded_window_function_expressions.empty()) {
+    if (!embedded_window_function_exprs.empty()) {
       std::vector<std::unique_ptr<const RexScalar>> new_scalar_exprs;
       hdk::ir::ExprPtrVector new_exprs;
 
-      auto window_func_scalar_exprs =
-          window_func_project_node->getExpressionsAndRelease();
       auto window_func_exprs = window_func_project_node->getExprs();
-      for (size_t rex_idx = 0; rex_idx < window_func_scalar_exprs.size(); ++rex_idx) {
-        const auto embedded_window_func_rex_pair =
-            embedded_window_function_expressions.find(rex_idx);
+      for (size_t rex_idx = 0; rex_idx < window_func_exprs.size(); ++rex_idx) {
         const auto embedded_window_func_expr_pair =
             embedded_window_function_exprs.find(rex_idx);
-        CHECK_EQ(
-            embedded_window_func_expr_pair == embedded_window_function_exprs.end(),
-            embedded_window_func_rex_pair == embedded_window_function_expressions.end());
         if (embedded_window_func_expr_pair == embedded_window_function_exprs.end()) {
-          new_scalar_exprs.emplace_back(
-              std::make_unique<const RexInput>(window_func_project_node.get(), rex_idx));
           new_exprs.emplace_back(hdk::ir::makeExpr<hdk::ir::ColumnRef>(
               window_func_project_node->getExpr(rex_idx)->get_type_info(),
               window_func_project_node.get(),
               rex_idx));
         } else {
-          const auto window_func_rex_idx = embedded_window_func_rex_pair->first;
-          CHECK_LT(window_func_rex_idx, window_func_scalar_exprs.size());
+          const auto window_func_expr_idx = embedded_window_func_expr_pair->first;
+          CHECK_LT(window_func_expr_idx, window_func_exprs.size());
 
-          const auto& window_func_rex = embedded_window_func_rex_pair->second;
           const auto& window_func_expr = embedded_window_func_expr_pair->second;
+          auto window_func_parent_expr = window_func_exprs[window_func_expr_idx].get();
 
-          RexDeepCopyVisitor copier;
-          auto window_func_rex_copy = copier.visit(window_func_rex);
-          // TODO: remove copy?
-          auto window_func_expr_copy = window_func_expr->deep_copy();
-
-          auto window_func_parent_scalar_expr =
-              window_func_scalar_exprs[window_func_rex_idx].get();
-          auto window_func_parent_expr = window_func_exprs[window_func_rex_idx].get();
-
-          // Replace window func rex with an input rex
-          auto window_func_result_input = std::make_unique<const RexInput>(
-              window_func_project_node.get(), window_func_rex_idx);
-          RexWindowFuncReplacementVisitor replacer(std::move(window_func_result_input));
-          auto new_parent_rex = replacer.visit(window_func_parent_scalar_expr);
+          // Replace window func expr with ColumnRef
           auto window_func_result_input_expr =
               hdk::ir::makeExpr<hdk::ir::ColumnRef>(window_func_expr->get_type_info(),
                                                     window_func_project_node.get(),
-                                                    window_func_rex_idx);
+                                                    window_func_expr_idx);
           std::unordered_map<const hdk::ir::Expr*, hdk::ir::ExprPtr> replacements;
           replacements[window_func_expr.get()] = window_func_result_input_expr;
           ReplacementExprVisitor visitor(std::move(replacements));
           auto new_parent_expr = visitor.visit(window_func_parent_expr);
 
           // Put the parent expr in the new scalar exprs
-          new_scalar_exprs.emplace_back(std::move(new_parent_rex));
           new_exprs.emplace_back(std::move(new_parent_expr));
 
           // Put the window func expr in cur scalar exprs
-          window_func_scalar_exprs[window_func_rex_idx] = std::move(window_func_rex_copy);
-          window_func_exprs[window_func_rex_idx] = std::move(window_func_expr_copy);
+          window_func_exprs[window_func_expr_idx] = window_func_expr;
         }
       }
 
-      CHECK_EQ(window_func_scalar_exprs.size(), new_scalar_exprs.size());
       CHECK_EQ(window_func_exprs.size(), new_exprs.size());
-      window_func_project_node->setExpressions(std::move(window_func_scalar_exprs),
-                                               std::move(window_func_exprs));
+      window_func_project_node->setExpressions(std::move(window_func_exprs));
 
       // Ensure any inputs from the node containing the expression (the "new" node)
       // exist on the window function project node, e.g. if we had a binary operation
       // involving an aggregate value or column not included in the top level
       // projection list.
-      InputBackpropagationVisitor visitor;
-      RexInputBackpropagationVisitor input_visitor(window_func_project_node.get(),
-                                                   visitor);
-      for (size_t i = 0; i < new_scalar_exprs.size(); i++) {
-        if (dynamic_cast<const RexInput*>(new_scalar_exprs[i].get())) {
+      InputBackpropagationVisitor visitor(window_func_project_node.get());
+      for (size_t i = 0; i < new_exprs.size(); i++) {
+        if (dynamic_cast<const hdk::ir::ColumnRef*>(new_exprs[i].get())) {
           // ignore top level inputs, these were copied directly from the previous
           // node
           continue;
         }
-        new_scalar_exprs[i] = input_visitor.visit(new_scalar_exprs[i].get());
         new_exprs[i] = visitor.visit(new_exprs[i].get());
       }
 
       // Build the new project node and insert it into the list after the project node
       // containing the window function
       auto new_project =
-          std::make_shared<RelProject>(std::move(new_scalar_exprs),
-                                       std::move(new_exprs),
+          std::make_shared<RelProject>(std::move(new_exprs),
                                        window_func_project_node->getFields(),
                                        window_func_project_node);
       propagate_hints_to_new_project(window_func_project_node, new_project, query_hints);
@@ -2394,17 +2225,20 @@ void separate_window_function_expressions(
   nodes.assign(node_list.begin(), node_list.end());
 }
 
-using RexInputSet = std::unordered_set<RexInput>;
+using InputSet = std::unordered_set<std::pair<const RelAlgNode*, unsigned>,
+                                    boost::hash<std::pair<const RelAlgNode*, unsigned>>>;
 
-class RexInputCollector : public RexVisitor<RexInputSet> {
+class InputCollector : public ScalarExprVisitor<InputSet> {
  public:
-  RexInputSet visitInput(const RexInput* input) const override {
-    return RexInputSet{*input};
+  InputSet visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
+    InputSet result;
+    result.emplace(col_ref->getNode(), col_ref->getIndex());
+    return result;
   }
 
  protected:
-  RexInputSet aggregateResult(const RexInputSet& aggregate,
-                              const RexInputSet& next_result) const override {
+  InputSet aggregateResult(const InputSet& aggregate,
+                           const InputSet& next_result) const override {
     auto result = aggregate;
     result.insert(next_result.begin(), next_result.end());
     return result;
@@ -2478,39 +2312,35 @@ void add_window_function_pre_project(
       continue;
     }
 
-    RexInputSet inputs;
-    RexInputCollector input_collector;
+    InputSet inputs;
+    InputCollector input_collector;
     for (size_t i = 0; i < window_func_project_node->size(); i++) {
-      auto new_inputs = input_collector.visit(window_func_project_node->getProjectAt(i));
+      auto new_inputs = input_collector.visit(window_func_project_node->getExpr(i).get());
       inputs.insert(new_inputs.begin(), new_inputs.end());
     }
 
     // Note: Technically not required since we are mapping old inputs to new input
     // indices, but makes the re-mapping of inputs easier to follow.
-    std::vector<RexInput> sorted_inputs(inputs.begin(), inputs.end());
+    std::vector<std::pair<const RelAlgNode*, unsigned>> sorted_inputs(inputs.begin(),
+                                                                      inputs.end());
     std::sort(sorted_inputs.begin(),
               sorted_inputs.end(),
-              [](const auto& a, const auto& b) { return a.getIndex() < b.getIndex(); });
+              [](const auto& a, const auto& b) { return a.second < b.second; });
 
-    std::vector<std::unique_ptr<const RexScalar>> scalar_exprs;
     hdk::ir::ExprPtrVector exprs;
     std::vector<std::string> fields;
     std::unordered_map<unsigned, unsigned> old_index_to_new_index;
     for (auto& input : sorted_inputs) {
-      CHECK_EQ(input.getSourceNode(), prev_node.get());
-      CHECK(old_index_to_new_index
-                .insert(std::make_pair(input.getIndex(), scalar_exprs.size()))
-                .second);
-      scalar_exprs.emplace_back(input.deepCopy());
+      CHECK_EQ(input.first, prev_node.get());
+      auto res =
+          old_index_to_new_index.insert(std::make_pair(input.second, exprs.size()));
+      CHECK(res.second);
       exprs.emplace_back(hdk::ir::makeExpr<hdk::ir::ColumnRef>(
-          getColumnType(input.getSourceNode(), input.getIndex()),
-          input.getSourceNode(),
-          input.getIndex()));
+          getColumnType(input.first, input.second), input.first, input.second));
       fields.emplace_back("");
     }
 
-    auto new_project = std::make_shared<RelProject>(
-        std::move(scalar_exprs), std::move(exprs), fields, prev_node);
+    auto new_project = std::make_shared<RelProject>(std::move(exprs), fields, prev_node);
     propagate_hints_to_new_project(window_func_project_node, new_project, query_hints);
     node_list.insert(node_itr, new_project);
     window_func_project_node->replaceInput(
@@ -2558,8 +2388,8 @@ std::vector<std::string> getFieldNamesFromScanNode(const rapidjson::Value& scan_
 }  // namespace
 
 bool RelProject::hasWindowFunctionExpr() const {
-  for (const auto& expr : scalar_exprs_) {
-    if (is_window_function_operator(expr.get())) {
+  for (const auto& expr : exprs_) {
+    if (is_window_function_expr(expr.get())) {
       return true;
     }
   }
@@ -2649,17 +2479,13 @@ class RelAlgDispatcher {
     }
     const auto& fields = field(proj_ra, "fields");
     if (proj_ra.HasMember("hints")) {
-      auto project_node = std::make_shared<RelProject>(std::move(scalar_exprs),
-                                                       std::move(exprs),
-                                                       strings_from_json_array(fields),
-                                                       inputs.front());
+      auto project_node = std::make_shared<RelProject>(
+          std::move(exprs), strings_from_json_array(fields), inputs.front());
       getRelAlgHints(proj_ra, project_node);
       return project_node;
     }
-    return std::make_shared<RelProject>(std::move(scalar_exprs),
-                                        std::move(exprs),
-                                        strings_from_json_array(fields),
-                                        inputs.front());
+    return std::make_shared<RelProject>(
+        std::move(exprs), strings_from_json_array(fields), inputs.front());
   }
 
   std::shared_ptr<RelFilter> dispatchFilter(const rapidjson::Value& filter_ra,
@@ -3174,7 +3000,6 @@ void RelAlgDagBuilder::build(const rapidjson::Value& query_ast,
     throw;
   }
   CHECK(!nodes_.empty());
-  bind_inputs(nodes_);
 
   handleQueryHint(nodes_, this);
   mark_nops(nodes_);

@@ -1142,14 +1142,6 @@ get_input_desc(const RA* ra_node,
                                                                input_col_descs.end())};
 }
 
-size_t get_scalar_sources_size(const RelProject* project) {
-  return project->size();
-}
-
-const RexScalar* scalar_at(const size_t i, const RelProject* project) {
-  return project->getProjectAt(i);
-}
-
 hdk::ir::ExprPtr set_transient_dict(const hdk::ir::ExprPtr expr) {
   const auto& ti = expr->get_type_info();
   if (!ti.is_string() || ti.get_compression() != kENCODING_NONE) {
@@ -1185,38 +1177,6 @@ hdk::ir::ExprPtr cast_dict_to_none(const hdk::ir::ExprPtr& input) {
     return input->add_cast(SQLTypeInfo(kTEXT, input_ti.get_notnull()));
   }
   return input;
-}
-
-template <class RA>
-std::vector<hdk::ir::ExprPtr> translate_scalar_sources(
-    const RA* ra_node,
-    const RelAlgTranslator& translator,
-    const ::ExecutorType executor_type) {
-  std::vector<hdk::ir::ExprPtr> scalar_sources;
-  const size_t scalar_sources_size = get_scalar_sources_size(ra_node);
-  VLOG(3) << "get_scalar_sources_size(" << ra_node->toString()
-          << ") = " << scalar_sources_size;
-  for (size_t i = 0; i < scalar_sources_size; ++i) {
-    const auto scalar_rex = scalar_at(i, ra_node);
-    if (dynamic_cast<const RexRef*>(scalar_rex)) {
-      // RexRef are synthetic scalars we append at the end of the real ones
-      // for the sake of taking memory ownership, no real work needed here.
-      continue;
-    }
-
-    const auto scalar_expr =
-        rewrite_array_elements(translator.translateScalarRex(scalar_rex).get());
-    const auto rewritten_expr = rewrite_expr(scalar_expr.get());
-    if (executor_type == ExecutorType::Native) {
-      set_transient_dict_maybe(scalar_sources, rewritten_expr);
-    } else if (executor_type == ExecutorType::TableFunctions) {
-      scalar_sources.push_back(fold_expr(rewritten_expr.get()));
-    } else {
-      scalar_sources.push_back(cast_dict_to_none(fold_expr(rewritten_expr.get())));
-    }
-  }
-
-  return scalar_sources;
 }
 
 hdk::ir::ExprPtr translate(const hdk::ir::Expr* expr,
@@ -3188,19 +3148,11 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
 
   RelAlgTranslator translator(
       executor_, input_to_nest_level, join_types, now_, eo.just_explain);
-  const auto orig_target_exprs_owned =
-      translate_scalar_sources(project, translator, eo.executor_type);
   std::vector<hdk::ir::Expr*> target_exprs;
-  for (size_t i = 0; i < project->size(); ++i) {
-    auto& expr = project->getExprs()[i];
+  for (auto& expr : project->getExprs()) {
     auto target_expr = translate(expr.get(), translator, eo.executor_type);
-    target_exprs_owned_.push_back(target_expr);
     target_exprs.push_back(target_expr.get());
-
-    auto& orig_target_expr = orig_target_exprs_owned[i];
-    CHECK(*orig_target_expr == *target_expr)
-        << "Project target expr mismatch: orig=" << orig_target_expr->toString()
-        << " new=" << target_expr->toString();
+    target_exprs_owned_.emplace_back(std::move(target_expr));
   }
   auto query_hint = RegisteredQueryHint::fromConfig(config_);
   if (query_dag_) {

@@ -29,35 +29,6 @@ extern size_t g_max_log_length;
 
 namespace {
 
-class RexProjectInputRedirector : public RexDeepCopyVisitor {
- public:
-  RexProjectInputRedirector(const std::unordered_set<const RelProject*>& crt_inputs)
-      : crt_projects_(crt_inputs) {}
-
-  RetType visitInput(const RexInput* input) const override {
-    auto source = dynamic_cast<const RelProject*>(input->getSourceNode());
-    if (!source || !crt_projects_.count(source)) {
-      return input->deepCopy();
-    }
-    auto new_source = source->getInput(0);
-    auto new_input =
-        dynamic_cast<const RexInput*>(source->getProjectAt(input->getIndex()));
-    if (!new_input) {
-      return input->deepCopy();
-    }
-    if (auto join = dynamic_cast<const RelJoin*>(new_source)) {
-      CHECK(new_input->getSourceNode() == join->getInput(0) ||
-            new_input->getSourceNode() == join->getInput(1));
-    } else {
-      CHECK_EQ(new_input->getSourceNode(), new_source);
-    }
-    return new_input->deepCopy();
-  }
-
- private:
-  const std::unordered_set<const RelProject*>& crt_projects_;
-};
-
 class ProjectInputRedirector : public DeepCopyVisitor {
  public:
   ProjectInputRedirector(const std::unordered_set<const RelProject*>& crt_inputs)
@@ -146,13 +117,11 @@ class RexRebindInputsVisitor : public RexVisitor<void*>, public DeepCopyVisitor 
       return;
     }
     if (auto project = const_cast<RelProject*>(dynamic_cast<const RelProject*>(node))) {
-      auto rex_exprs = project->getExpressionsAndRelease();
-      hdk::ir::ExprPtrVector exprs;
-      for (size_t i = 0; i < project->size(); ++i) {
-        RexVisitor::visit(rex_exprs[i].get());
-        exprs.push_back(DeepCopyVisitor::visit(project->getExprs()[i].get()));
+      hdk::ir::ExprPtrVector new_exprs;
+      for (auto& expr : project->getExprs()) {
+        new_exprs.push_back(DeepCopyVisitor::visit(expr.get()));
       }
-      project->setExpressions(std::move(rex_exprs), std::move(exprs));
+      project->setExpressions(std::move(new_exprs));
       return;
     }
     if (auto filter = const_cast<RelFilter*>(dynamic_cast<const RelFilter*>(node))) {
@@ -241,7 +210,7 @@ bool is_identical_copy(
 
   bool identical = true;
   for (size_t i = 0; i < project->size(); ++i) {
-    auto target = dynamic_cast<const RexInput*>(project->getProjectAt(i));
+    auto target = dynamic_cast<const hdk::ir::ColumnRef*>(project->getExpr(i).get());
     CHECK(target);
     if (i != target->getIndex()) {
       identical = false;
@@ -271,18 +240,17 @@ void propagate_rex_input_renumber(
   const auto indirect_join_src = dynamic_cast<const RelJoin*>(src_project->getInput(0));
   std::unordered_map<size_t, size_t> old_to_new_idx;
   for (size_t i = 0; i < src_project->size(); ++i) {
-    auto rex_in = dynamic_cast<const RexInput*>(src_project->getProjectAt(i));
-    CHECK(rex_in);
+    auto col_ref = dynamic_cast<const hdk::ir::ColumnRef*>(src_project->getExpr(i).get());
+    CHECK(col_ref);
     size_t src_base = 0;
     if (indirect_join_src != nullptr &&
-        indirect_join_src->getInput(1) == rex_in->getSourceNode()) {
+        indirect_join_src->getInput(1) == col_ref->getNode()) {
       src_base = indirect_join_src->getInput(0)->size();
     }
-    old_to_new_idx.insert(std::make_pair(i, src_base + rex_in->getIndex()));
-    old_to_new_idx.insert(std::make_pair(i, rex_in->getIndex()));
+    old_to_new_idx.insert(std::make_pair(i, src_base + col_ref->getIndex()));
+    old_to_new_idx.insert(std::make_pair(i, col_ref->getIndex()));
   }
   CHECK(old_to_new_idx.size());
-  RexInputRenumber<false> renumber(old_to_new_idx);
   InputSimpleRenumberVisitor<false> visitor(old_to_new_idx);
   auto usrs_it = du_web.find(excluded_root);
   CHECK(usrs_it != du_web.end());
@@ -303,10 +271,9 @@ void propagate_rex_input_renumber(
       std::vector<std::unique_ptr<const RexScalar>> new_scalar_exprs;
       hdk::ir::ExprPtrVector new_exprs;
       for (size_t i = 0; i < project->size(); ++i) {
-        new_scalar_exprs.push_back(renumber.visit(project->getProjectAt(i)));
         new_exprs.push_back(visitor.visit(project->getExpr(i).get()));
       }
-      project->setExpressions(std::move(new_scalar_exprs), std::move(new_exprs));
+      project->setExpressions(std::move(new_exprs));
       continue;
     }
     CHECK(false);
@@ -361,15 +328,12 @@ void redirect_inputs_of(
   }
   if (auto project = std::dynamic_pointer_cast<RelProject>(node)) {
     project->RelAlgNode::replaceInput(src_project, src_project->getAndOwnInput(0));
-    RexProjectInputRedirector redirector(projects);
     ProjectInputRedirector visitor(projects);
-    std::vector<std::unique_ptr<const RexScalar>> new_scalar_exprs;
     hdk::ir::ExprPtrVector new_exprs;
-    for (size_t i = 0; i < project->size(); ++i) {
-      new_scalar_exprs.push_back(redirector.visit(project->getProjectAt(i)));
-      new_exprs.push_back(visitor.visit(project->getExpr(i).get()));
+    for (auto& expr : project->getExprs()) {
+      new_exprs.push_back(visitor.visit(expr.get()));
     }
-    project->setExpressions(std::move(new_scalar_exprs), std::move(new_exprs));
+    project->setExpressions(std::move(new_exprs));
     return;
   }
   if (auto filter = std::dynamic_pointer_cast<RelFilter>(node)) {
@@ -476,7 +440,8 @@ bool is_distinct(const size_t input_idx, const RelAlgNode* node) {
   }
   if (auto project = dynamic_cast<const RelProject*>(node)) {
     CHECK_LT(input_idx, project->size());
-    if (auto input = dynamic_cast<const RexInput*>(project->getProjectAt(input_idx))) {
+    if (auto input =
+            dynamic_cast<const hdk::ir::ColumnRef*>(project->getExpr(input_idx).get())) {
       CHECK_EQ(size_t(1), node->inputCount());
       return is_distinct(input->getIndex(), project->getInput(0));
     }
@@ -637,42 +602,6 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) n
 
 namespace {
 
-class RexInputCollector : public RexVisitor<std::unordered_set<RexInput>> {
- private:
-  const RelAlgNode* node_;
-
- protected:
-  using RetType = std::unordered_set<RexInput>;
-  RetType aggregateResult(const RetType& aggregate,
-                          const RetType& next_result) const override {
-    RetType result(aggregate.begin(), aggregate.end());
-    result.insert(next_result.begin(), next_result.end());
-    return result;
-  }
-
- public:
-  RexInputCollector(const RelAlgNode* node) : node_(node) {}
-
-  RetType visitInput(const RexInput* input) const override {
-    RetType result;
-    if (node_->inputCount() == 1) {
-      auto src = node_->getInput(0);
-      if (auto join = dynamic_cast<const RelJoin*>(src)) {
-        CHECK_EQ(join->inputCount(), size_t(2));
-        const auto src2_in_offset = join->getInput(0)->size();
-        if (input->getSourceNode() == join->getInput(1)) {
-          result.emplace(src, input->getIndex() + src2_in_offset);
-        } else {
-          result.emplace(src, input->getIndex());
-        }
-        return result;
-      }
-    }
-    result.insert(*input);
-    return result;
-  }
-};
-
 using InputSet = std::unordered_set<std::pair<const RelAlgNode*, unsigned>,
                                     boost::hash<std::pair<const RelAlgNode*, unsigned>>>;
 
@@ -714,7 +643,6 @@ class InputCollector : public ScalarExprVisitor<InputSet> {
 
 size_t pick_always_live_col_idx(const RelAlgNode* node) {
   CHECK(node->size());
-  RexInputCollector rex_collector(node);
   InputCollector collector(node);
   if (auto filter = dynamic_cast<const RelFilter*>(node)) {
     auto rex_ins = collector.visit(filter->getConditionExpr());
@@ -748,7 +676,6 @@ std::vector<std::unordered_set<size_t>> get_live_ins(
   if (!node || dynamic_cast<const RelScan*>(node)) {
     return {};
   }
-  RexInputCollector rex_collector(node);
   InputCollector collector(node);
   auto it = live_outs.find(node);
   CHECK(it != live_outs.end());
@@ -758,13 +685,13 @@ std::vector<std::unordered_set<size_t>> get_live_ins(
     std::unordered_set<size_t> live_in;
     for (const auto& idx : live_out) {
       CHECK_LT(idx, project->size());
-      auto partial_in = rex_collector.visit(project->getProjectAt(idx));
+      auto partial_in = collector.visit(project->getExpr(idx).get());
       for (auto rex_in : partial_in) {
-        live_in.insert(rex_in.getIndex());
+        live_in.insert(rex_in.second);
       }
     }
     if (project->size() == 1 &&
-        dynamic_cast<const RexLiteral*>(project->getProjectAt(0))) {
+        dynamic_cast<const hdk::ir::Constant*>(project->getExpr(0).get())) {
       CHECK(live_in.empty());
       live_in.insert(pick_always_live_col_idx(project->getInput(0)));
     }
@@ -977,29 +904,6 @@ void add_new_indices_for(
   }
 }
 
-class RexInputRenumberVisitor : public RexDeepCopyVisitor {
- public:
-  RexInputRenumberVisitor(
-      const std::unordered_map<const RelAlgNode*, std::unordered_map<size_t, size_t>>&
-          new_numbering)
-      : node_to_input_renum_(new_numbering) {}
-  RetType visitInput(const RexInput* input) const override {
-    auto source = input->getSourceNode();
-    auto node_it = node_to_input_renum_.find(source);
-    if (node_it != node_to_input_renum_.end()) {
-      auto old_to_new_num = node_it->second;
-      auto renum_it = old_to_new_num.find(input->getIndex());
-      CHECK(renum_it != old_to_new_num.end());
-      return boost::make_unique<RexInput>(source, renum_it->second);
-    }
-    return input->deepCopy();
-  }
-
- private:
-  const std::unordered_map<const RelAlgNode*, std::unordered_map<size_t, size_t>>&
-      node_to_input_renum_;
-};
-
 class InputRenumberVisitor : public DeepCopyVisitor {
  public:
   InputRenumberVisitor(
@@ -1170,8 +1074,7 @@ void try_insert_coalesceable_proj(
           getColumnType(filter, i), filter, static_cast<unsigned>(i)));
       fields.push_back(get_field_name(filter, i));
     }
-    auto project_owner = std::make_shared<RelProject>(
-        std::move(scalar_exprs), std::move(exprs), fields, node);
+    auto project_owner = std::make_shared<RelProject>(std::move(exprs), fields, node);
     auto project = project_owner.get();
 
     only_usr->replaceInput(node, project_owner);
@@ -1235,19 +1138,15 @@ sweep_dead_columns(
       aggregate->setAggExprs(std::move(new_exprs));
       aggregate->setFields(std::move(new_fields));
     } else if (auto project = std::dynamic_pointer_cast<RelProject>(node)) {
-      auto old_scalar_exprs = project->getExpressionsAndRelease();
-      auto old_exprs = project->getExprs();
-      std::vector<std::unique_ptr<const RexScalar>> new_scalar_exprs;
       hdk::ir::ExprPtrVector new_exprs;
       std::vector<std::string> new_fields;
-      for (size_t i = 0; i < old_scalar_exprs.size(); ++i) {
+      for (size_t i = 0; i < project->size(); ++i) {
         if (old_live_outs.count(i)) {
-          new_scalar_exprs.push_back(std::move(old_scalar_exprs[i]));
-          new_exprs.push_back(old_exprs[i]);
+          new_exprs.push_back(project->getExpr(i));
           new_fields.push_back(project->getFieldName(i));
         }
       }
-      project->setExpressions(std::move(new_scalar_exprs), std::move(new_exprs));
+      project->setExpressions(std::move(new_exprs));
       project->setFields(std::move(new_fields));
     } else {
       CHECK(false);
@@ -1272,7 +1171,6 @@ void propagate_input_renumbering(
     const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>&
         du_web,
     const std::unordered_map<const RelAlgNode*, size_t>& orig_node_sizes) {
-  RexInputRenumberVisitor renumberer(liveout_renumbering);
   InputRenumberVisitor visitor(liveout_renumbering);
   AvailabilityChecker checker(liveout_renumbering, intact_nodes);
   std::deque<const RelAlgNode*> work_set(ready_nodes.begin(), ready_nodes.end());
@@ -1282,17 +1180,12 @@ void propagate_input_renumbering(
     CHECK(!dynamic_cast<const RelScan*>(walker));
     auto node = const_cast<RelAlgNode*>(walker);
     if (auto project = dynamic_cast<RelProject*>(node)) {
-      auto old_scalar_exprs = project->getExpressionsAndRelease();
-      std::vector<std::unique_ptr<const RexScalar>> new_scalar_exprs;
-      for (auto& expr : old_scalar_exprs) {
-        new_scalar_exprs.push_back(renumberer.visit(expr.get()));
-      }
       hdk::ir::ExprPtrVector new_exprs;
       new_exprs.reserve(project->size());
       for (auto& expr : project->getExprs()) {
         new_exprs.emplace_back(visitor.visit(expr.get()));
       }
-      project->setExpressions(std::move(new_scalar_exprs), std::move(new_exprs));
+      project->setExpressions(std::move(new_exprs));
     } else if (auto aggregate = dynamic_cast<RelAggregate*>(node)) {
       auto src_it = liveout_renumbering.find(node->getInput(0));
       CHECK(src_it != liveout_renumbering.end());
@@ -1528,23 +1421,16 @@ void sink_projected_boolean_expr_to_join(
     std::unordered_set<size_t> boolean_expr_indicies;
     bool discarded = false;
     for (size_t i = 0; i < project->size(); ++i) {
-      auto oper = dynamic_cast<const RexOperator*>(project->getProjectAt(i));
       auto expr = project->getExpr(i);
       if (expr->get_type_info().is_boolean() &&
           (hdk::ir::expr_is<hdk::ir::UOper>(expr) ||
            hdk::ir::expr_is<hdk::ir::BinOper>(expr))) {
-        CHECK(oper && oper->getType().get_type() == kBOOLEAN);
         boolean_expr_indicies.insert(i);
       } else {
-        CHECK(!oper || oper->getType().get_type() != kBOOLEAN);
         // TODO(miyu): relax?
         if (auto col_ref = dynamic_cast<const hdk::ir::ColumnRef*>(expr.get())) {
-          auto input = dynamic_cast<const RexInput*>(project->getProjectAt(i));
-          CHECK(input);
-          CHECK_EQ(input->getIndex(), col_ref->getIndex());
           in_to_out_index.insert(std::make_pair(col_ref->getIndex(), i));
         } else {
-          CHECK(!dynamic_cast<const RexInput*>(project->getProjectAt(i)));
           discarded = true;
         }
       }
@@ -1564,23 +1450,12 @@ void sink_projected_boolean_expr_to_join(
     if (discarded) {
       continue;
     }
-    RexInputCollector orig_collector(project.get());
     InputCollector collector(project.get());
     std::vector<size_t> unloaded_input_indices;
-    std::unordered_map<size_t, std::unique_ptr<const RexScalar>>
-        orig_in_idx_to_new_subcond;
     std::unordered_map<size_t, hdk::ir::ExprPtr> in_idx_to_new_subcond;
     // Given all are dead right after join, safe to sink
     for (auto i : boolean_expr_indicies) {
-      auto rex_ins = orig_collector.visit(project->getProjectAt(i));
       auto inputs = collector.visit(project->getExpr(i).get());
-
-      CHECK_EQ(rex_ins.size(), inputs.size());
-      for (auto& in : rex_ins) {
-        auto pr = std::make_pair(in.getSourceNode(), in.getIndex());
-        CHECK(inputs.count(pr));
-      }
-
       for (auto& in : inputs) {
         CHECK_EQ(in.first, project->getInput(0));
         if (!in_to_out_index.count(in.second)) {
@@ -1588,10 +1463,7 @@ void sink_projected_boolean_expr_to_join(
           in_to_out_index.insert(std::make_pair(in.second, curr_out_index));
           unloaded_input_indices.push_back(in.second);
         }
-        RexInputSinker orig_sinker(in_to_out_index, project.get());
         InputSinker sinker(in_to_out_index, project.get());
-        orig_in_idx_to_new_subcond.insert(
-            std::make_pair(i, orig_sinker.visit(project->getProjectAt(i))));
         in_idx_to_new_subcond.insert(
             std::make_pair(i, sinker.visit(project->getExpr(i).get())));
       }
@@ -1599,30 +1471,22 @@ void sink_projected_boolean_expr_to_join(
     if (in_idx_to_new_subcond.empty()) {
       continue;
     }
-    std::vector<std::unique_ptr<const RexScalar>> new_projection_rex;
     hdk::ir::ExprPtrVector new_proj_exprs;
     for (size_t i = 0; i < project->size(); ++i) {
       if (boolean_expr_indicies.count(i)) {
-        new_projection_rex.push_back(
-            boost::make_unique<RexInput>(project->getInput(0), 0));
         new_proj_exprs.emplace_back(
             hdk::ir::makeExpr<hdk::ir::ColumnRef>(project->getInput(0), 0));
       } else {
-        auto rex_input = dynamic_cast<const RexInput*>(project->getProjectAt(i));
-        CHECK(rex_input != nullptr);
-        new_projection_rex.push_back(rex_input->deepCopy());
-
         auto col_ref = dynamic_cast<const hdk::ir::ColumnRef*>(project->getExpr(i).get());
         CHECK(col_ref != nullptr);
         new_proj_exprs.push_back(col_ref->deep_copy());
       }
     }
     for (auto i : unloaded_input_indices) {
-      new_projection_rex.push_back(boost::make_unique<RexInput>(project->getInput(0), i));
       new_proj_exprs.emplace_back(
           hdk::ir::makeExpr<hdk::ir::ColumnRef>(project->getInput(0), i));
     }
-    project->setExpressions(std::move(new_projection_rex), std::move(new_proj_exprs));
+    project->setExpressions(std::move(new_proj_exprs));
 
     ConditionReplacer replacer(in_idx_to_new_subcond);
     auto new_condition = replacer.visit(join->getCondition());

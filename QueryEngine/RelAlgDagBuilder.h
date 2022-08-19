@@ -978,34 +978,26 @@ class RelProject : public RelAlgNode {
   using ConstRexScalarPtrVector = std::vector<ConstRexScalarPtr>;
 
   // Takes memory ownership of the expressions.
-  RelProject(std::vector<std::unique_ptr<const RexScalar>> scalar_exprs,
-             hdk::ir::ExprPtrVector exprs,
+  RelProject(hdk::ir::ExprPtrVector exprs,
              const std::vector<std::string>& fields,
              std::shared_ptr<const RelAlgNode> input)
-      : scalar_exprs_(std::move(scalar_exprs))
-      , exprs_(std::move(exprs))
+      : exprs_(std::move(exprs))
       , fields_(fields)
       , hint_applied_(false)
       , hints_(std::make_unique<Hints>()) {
     inputs_.push_back(input);
-    CHECK_EQ(scalar_exprs_.size(), exprs_.size());
   }
 
   RelProject(RelProject const&);
 
-  void setExpressions(std::vector<std::unique_ptr<const RexScalar>>&& scalar_exprs,
-                      hdk::ir::ExprPtrVector&& exprs) const {
-    scalar_exprs_ = std::move(scalar_exprs);
-    exprs_ = std::move(exprs);
-    CHECK_EQ(scalar_exprs_.size(), exprs_.size());
-  }
+  void setExpressions(hdk::ir::ExprPtrVector exprs) const { exprs_ = std::move(exprs); }
 
   // True iff all the projected expressions are inputs. If true,
   // this node can be elided and merged into the previous node
   // since it's just a subset and / or permutation of its outputs.
   bool isSimple() const {
-    for (const auto& expr : scalar_exprs_) {
-      if (!dynamic_cast<const RexInput*>(expr.get())) {
+    for (const auto& expr : exprs_) {
+      if (!dynamic_cast<const hdk::ir::ColumnRef*>(expr.get())) {
         return false;
       }
     }
@@ -1022,20 +1014,6 @@ class RelProject : public RelAlgNode {
 
   const hdk::ir::ExprPtrVector& getExprs() const { return exprs_; }
 
-  const RexScalar* getProjectAt(const size_t idx) const {
-    CHECK(idx < scalar_exprs_.size());
-    return scalar_exprs_[idx].get();
-  }
-
-  const RexScalar* getProjectAtAndRelease(const size_t idx) const {
-    CHECK(idx < scalar_exprs_.size());
-    return scalar_exprs_[idx].release();
-  }
-
-  std::vector<std::unique_ptr<const RexScalar>> getExpressionsAndRelease() {
-    return std::move(scalar_exprs_);
-  }
-
   const std::vector<std::string>& getFields() const { return fields_; }
   void setFields(std::vector<std::string>&& fields) { fields_ = std::move(fields); }
 
@@ -1051,16 +1029,12 @@ class RelProject : public RelAlgNode {
       std::shared_ptr<const RelAlgNode> input,
       std::optional<std::unordered_map<unsigned, unsigned>> old_to_new_index_map);
 
-  void appendInput(std::string new_field_name,
-                   std::unique_ptr<const RexScalar> new_input,
-                   hdk::ir::ExprPtr expr);
+  void appendInput(std::string new_field_name, hdk::ir::ExprPtr expr);
 
   std::string toString() const override {
     return cat(::typeName(this),
                getIdString(),
                "(",
-               ::toString(scalar_exprs_),
-               ", exprs=",
                ::toString(exprs_),
                ", ",
                ::toString(fields_),
@@ -1070,8 +1044,8 @@ class RelProject : public RelAlgNode {
   size_t toHash() const override {
     if (!hash_) {
       hash_ = typeid(RelProject).hash_code();
-      for (auto& target_expr : scalar_exprs_) {
-        boost::hash_combine(*hash_, target_expr->toHash());
+      for (auto& expr : exprs_) {
+        boost::hash_combine(*hash_, expr->hash());
       }
       boost::hash_combine(*hash_, ::toString(fields_));
     }
@@ -1110,7 +1084,6 @@ class RelProject : public RelAlgNode {
   Hints* getDeliveredHints() { return hints_.get(); }
 
  private:
-  mutable std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_;
   mutable hdk::ir::ExprPtrVector exprs_;
   mutable std::vector<std::string> fields_;
   bool hint_applied_;

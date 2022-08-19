@@ -147,7 +147,6 @@ std::shared_ptr<CpuCompilationContext> CPUBackend::generateNativeCPUCode(
     const CompilationOptions& co) {
   auto timer = DEBUG_TIMER(__func__);
   llvm::Module* llvm_module = func->getParent();
-
   // run optimizations
 #ifndef WITH_JIT_DEBUG
   llvm::legacy::PassManager pass_manager;

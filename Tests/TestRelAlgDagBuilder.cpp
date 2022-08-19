@@ -38,27 +38,20 @@ RelAlgNodePtr TestRelAlgDagBuilder::addScan(TableInfoPtr table_info) {
 RelAlgNodePtr TestRelAlgDagBuilder::addProject(RelAlgNodePtr input,
                                                const std::vector<std::string>& fields,
                                                const std::vector<int>& cols) {
-  std::vector<std::unique_ptr<const RexScalar>> scalar_exprs;
   hdk::ir::ExprPtrVector exprs;
   auto input_cols = get_node_output(input.get());
   for (auto col_idx : cols) {
     CHECK_LT((size_t)col_idx, input_cols.size());
-    scalar_exprs.push_back(input_cols[col_idx].deepCopy());
-    SQLTypeInfo ti = getColumnType(input_cols[col_idx].getSourceNode(),
-                                   input_cols[col_idx].getIndex());
     exprs.push_back(hdk::ir::makeExpr<hdk::ir::ColumnRef>(
-        ti, input_cols[col_idx].getSourceNode(), input_cols[col_idx].getIndex()));
+        input_cols[col_idx].getSourceNode(), input_cols[col_idx].getIndex()));
   }
-  return addProject(input, fields, std::move(scalar_exprs), std::move(exprs));
+  return addProject(input, fields, std::move(exprs));
 }
 
-RelAlgNodePtr TestRelAlgDagBuilder::addProject(
-    RelAlgNodePtr input,
-    const std::vector<std::string>& fields,
-    std::vector<std::unique_ptr<const RexScalar>> scalar_exprs,
-    hdk::ir::ExprPtrVector exprs) {
-  auto res = std::make_shared<RelProject>(
-      std::move(scalar_exprs), std::move(exprs), fields, input);
+RelAlgNodePtr TestRelAlgDagBuilder::addProject(RelAlgNodePtr input,
+                                               const std::vector<std::string>& fields,
+                                               hdk::ir::ExprPtrVector exprs) {
+  auto res = std::make_shared<RelProject>(std::move(exprs), fields, input);
   nodes_.push_back(res);
   return res;
 }
@@ -69,12 +62,10 @@ RelAlgNodePtr TestRelAlgDagBuilder::addProject(RelAlgNodePtr input,
   return addProject(input, fields, std::move(cols));
 }
 
-RelAlgNodePtr TestRelAlgDagBuilder::addProject(
-    RelAlgNodePtr input,
-    std::vector<std::unique_ptr<const RexScalar>> scalar_exprs,
-    hdk::ir::ExprPtrVector exprs) {
-  auto fields = buildFieldNames(scalar_exprs.size());
-  return addProject(input, fields, std::move(scalar_exprs), std::move(exprs));
+RelAlgNodePtr TestRelAlgDagBuilder::addProject(RelAlgNodePtr input,
+                                               hdk::ir::ExprPtrVector exprs) {
+  auto fields = buildFieldNames(exprs.size());
+  return addProject(input, fields, std::move(exprs));
 }
 
 RelAlgNodePtr TestRelAlgDagBuilder::addAgg(
