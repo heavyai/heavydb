@@ -956,11 +956,10 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
 
   RelAlgDagBuilder subquery_dag(root_dag_builder, subquery_ast, db_id, schema_provider);
   auto node = subquery_dag.getRootNodeShPtr();
-  auto subquery = std::make_shared<RexSubQuery>(node);
-  auto subquery_expr =
+  auto subquery =
       hdk::ir::makeExpr<hdk::ir::ScalarSubquery>(getColumnType(node.get(), 0), node);
-  root_dag_builder.registerSubquery(subquery, subquery_expr);
-  return subquery->deepCopy();
+  root_dag_builder.registerSubquery(std::move(subquery));
+  return std::make_unique<RexSubQuery>(node);
 }
 
 std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,

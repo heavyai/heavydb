@@ -174,16 +174,14 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
                                        eo.pending_query_interrupt_freq};
 
     // Dispatch the subqueries first
-    for (auto subquery_pr : subqueries) {
+    for (auto &subquery : subqueries) {
       // Execute the subquery and cache the result.
-      auto& subquery = subquery_pr.first;
       RelAlgExecutor ra_executor(executor_, schema_provider_, data_provider_);
-      const auto subquery_ra = subquery->getRelAlg();
+      const auto subquery_ra = subquery->getNode();
       CHECK(subquery_ra);
       RaExecutionSequence subquery_seq(subquery_ra);
       auto result = ra_executor.executeRelAlgSeq(subquery_seq, co, eo_modified, 0);
       auto shared_result = std::make_shared<ExecutionResult>(std::move(result));
-      subquery->setExecutionResult(shared_result);
       subquery_ra->setResult(shared_result);
     }
     return executeRelAlgSeq(seq, co, eo_modified, queue_time_ms);

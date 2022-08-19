@@ -448,7 +448,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
       ss << "Subqueries: "
          << "\n";
       for (const auto& subquery : subqueries) {
-        const auto ra = subquery.first->getRelAlg();
+        const auto ra = subquery->getNode();
         ss << "\t" << ra->toString() << "\n";
       }
     }
@@ -464,9 +464,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   timer_setup.stop();
 
   // Dispatch the subqueries first
-  for (auto& subquery_pr : getSubqueries()) {
-    auto& subquery = subquery_pr.first;
-    auto subquery_ra = subquery->getRelAlg();
+  for (auto& subquery : getSubqueries()) {
+    auto subquery_ra = subquery->getNode();
     CHECK(subquery_ra);
     if (subquery_ra->hasContextData()) {
       continue;
@@ -476,7 +475,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     RaExecutionSequence subquery_seq(subquery_ra);
     auto result = ra_executor.executeRelAlgSeq(subquery_seq, co, eo, 0);
     auto shared_result = std::make_shared<ExecutionResult>(std::move(result));
-    subquery->setExecutionResult(shared_result);
     subquery_ra->setResult(shared_result);
   }
   return executeRelAlgSeq(ed_seq, co, eo, queue_time_ms);

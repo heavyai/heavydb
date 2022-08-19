@@ -1302,14 +1302,13 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
 }
 
 void eliminate_dead_subqueries(
-    std::vector<std::pair<std::shared_ptr<RexSubQuery>,
-                          std::shared_ptr<hdk::ir::ScalarSubquery>>>& subqueries,
+    std::vector<std::shared_ptr<hdk::ir::ScalarSubquery>>& subqueries,
     RelAlgNode const* root) {
   if (!subqueries.empty()) {
     auto live_subqueries = SubQueryCollector::getLiveSubQueries(root);
     int live_count = 0;
     for (size_t i = 0; i < subqueries.size(); ++i) {
-      if (live_subqueries.count(subqueries[i].second->getNode())) {
+      if (live_subqueries.count(subqueries[i]->getNode())) {
         subqueries[live_count++] = std::move(subqueries[i]);
       }
     }
