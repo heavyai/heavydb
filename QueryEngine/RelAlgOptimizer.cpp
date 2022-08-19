@@ -17,7 +17,6 @@
 #include "RelAlgOptimizer.h"
 #include "DeepCopyVisitor.h"
 #include "Logger/Logger.h"
-#include "RexVisitor.h"
 #include "Visitors/SubQueryCollector.h"
 
 #include <boost/make_unique.hpp>
@@ -84,18 +83,10 @@ class InputSimpleRenumberVisitor : public DeepCopyVisitor {
   const std::unordered_map<size_t, size_t>& old_to_new_idx_;
 };
 
-class RexRebindInputsVisitor : public RexVisitor<void*>, public DeepCopyVisitor {
+class RebindInputsVisitor : public DeepCopyVisitor {
  public:
-  RexRebindInputsVisitor(const RelAlgNode* old_input, const RelAlgNode* new_input)
+  RebindInputsVisitor(const RelAlgNode* old_input, const RelAlgNode* new_input)
       : old_input_(old_input), new_input_(new_input) {}
-
-  void* visitInput(const RexInput* rex_input) const override {
-    const auto old_source = rex_input->getSourceNode();
-    if (old_source == old_input_) {
-      rex_input->setSourceNode(new_input_);
-    }
-    return nullptr;
-  };
 
   hdk::ir::ExprPtr visitColumnRef(const hdk::ir::ColumnRef* col_ref) const override {
     if (col_ref->getNode() == old_input_) {
@@ -309,7 +300,7 @@ void redirect_inputs_of(
             ? std::dynamic_pointer_cast<const RelProject>(node->getAndOwnInput(1))
             : std::dynamic_pointer_cast<const RelProject>(node->getAndOwnInput(0));
     join->replaceInput(src_project, src_project->getAndOwnInput(0));
-    RexRebindInputsVisitor rebinder(src_project.get(), src_project->getInput(0));
+    RebindInputsVisitor rebinder(src_project.get(), src_project->getInput(0));
     auto usrs_it = du_web.find(join.get());
     CHECK(usrs_it != du_web.end());
     for (auto usr : usrs_it->second) {
@@ -318,8 +309,7 @@ void redirect_inputs_of(
 
     if (other_project && projects.count(other_project.get())) {
       join->replaceInput(other_project, other_project->getAndOwnInput(0));
-      RexRebindInputsVisitor other_rebinder(other_project.get(),
-                                            other_project->getInput(0));
+      RebindInputsVisitor other_rebinder(other_project.get(), other_project->getInput(0));
       for (auto usr : usrs_it->second) {
         other_rebinder.visitNode(usr);
       }
@@ -928,30 +918,6 @@ class InputRenumberVisitor : public DeepCopyVisitor {
       node_to_input_renum_;
 };
 
-std::vector<std::unique_ptr<const RexAgg>> renumber_rex_aggs(
-    std::vector<std::unique_ptr<const RexAgg>>& agg_exprs,
-    const std::unordered_map<size_t, size_t>& new_numbering) {
-  std::vector<std::unique_ptr<const RexAgg>> new_exprs;
-  for (auto& expr : agg_exprs) {
-    if (expr->size() >= 1) {
-      auto old_idx = expr->getOperand(0);
-      auto idx_it = new_numbering.find(old_idx);
-      if (idx_it != new_numbering.end()) {
-        std::vector<size_t> operands;
-        operands.push_back(idx_it->second);
-        if (expr->size() == 2) {
-          operands.push_back(expr->getOperand(1));
-        }
-        new_exprs.push_back(boost::make_unique<RexAgg>(
-            expr->getKind(), expr->isDistinct(), expr->getType(), operands));
-        continue;
-      }
-    }
-    new_exprs.push_back(std::move(expr));
-  }
-  return new_exprs;
-}
-
 SortField renumber_sort_field(const SortField& old_field,
                               const std::unordered_map<size_t, size_t>& new_numbering) {
   auto field_idx = old_field.getField();
@@ -1079,7 +1045,7 @@ void try_insert_coalesceable_proj(
 
     only_usr->replaceInput(node, project_owner);
     if (dynamic_cast<const RelJoin*>(only_usr)) {
-      RexRebindInputsVisitor visitor(filter, project);
+      RebindInputsVisitor visitor(filter, project);
       for (auto usr : du_web[only_usr]) {
         visitor.visitNode(usr);
       }
@@ -1318,25 +1284,6 @@ void eliminate_dead_subqueries(
 
 namespace {
 
-class RexInputSinker : public RexDeepCopyVisitor {
- public:
-  RexInputSinker(const std::unordered_map<size_t, size_t>& old_to_new_idx,
-                 const RelAlgNode* new_src)
-      : old_to_new_in_idx_(old_to_new_idx), target_(new_src) {}
-
-  RetType visitInput(const RexInput* input) const override {
-    CHECK_EQ(target_->inputCount(), size_t(1));
-    CHECK_EQ(target_->getInput(0), input->getSourceNode());
-    auto idx_it = old_to_new_in_idx_.find(input->getIndex());
-    CHECK(idx_it != old_to_new_in_idx_.end());
-    return boost::make_unique<RexInput>(target_, idx_it->second);
-  }
-
- private:
-  const std::unordered_map<size_t, size_t>& old_to_new_in_idx_;
-  const RelAlgNode* target_;
-};
-
 class InputSinker : public DeepCopyVisitor {
  public:
   InputSinker(const std::unordered_map<size_t, size_t>& old_to_new_idx,
@@ -1354,23 +1301,6 @@ class InputSinker : public DeepCopyVisitor {
  private:
   const std::unordered_map<size_t, size_t>& old_to_new_in_idx_;
   const RelAlgNode* target_;
-};
-
-class SubConditionReplacer : public RexDeepCopyVisitor {
- public:
-  SubConditionReplacer(const std::unordered_map<size_t, std::unique_ptr<const RexScalar>>&
-                           idx_to_sub_condition)
-      : idx_to_subcond_(idx_to_sub_condition) {}
-  RetType visitInput(const RexInput* input) const override {
-    auto subcond_it = idx_to_subcond_.find(input->getIndex());
-    if (subcond_it != idx_to_subcond_.end()) {
-      return RexDeepCopyVisitor::visit(subcond_it->second.get());
-    }
-    return RexDeepCopyVisitor::visitInput(input);
-  }
-
- private:
-  const std::unordered_map<size_t, std::unique_ptr<const RexScalar>>& idx_to_subcond_;
 };
 
 class ConditionReplacer : public DeepCopyVisitor {
@@ -1495,34 +1425,6 @@ void sink_projected_boolean_expr_to_join(
 
 namespace {
 
-class RexInputRedirector : public RexDeepCopyVisitor {
- public:
-  RexInputRedirector(const RelAlgNode* old_src, const RelAlgNode* new_src)
-      : old_src_(old_src), new_src_(new_src) {}
-
-  RetType visitInput(const RexInput* input) const override {
-    CHECK_EQ(old_src_, input->getSourceNode());
-    CHECK_NE(old_src_, new_src_);
-    auto actual_new_src = new_src_;
-    if (auto join = dynamic_cast<const RelJoin*>(new_src_)) {
-      actual_new_src = join->getInput(0);
-      CHECK_EQ(join->inputCount(), size_t(2));
-      auto src2_input_base = actual_new_src->size();
-      if (input->getIndex() >= src2_input_base) {
-        actual_new_src = join->getInput(1);
-        return boost::make_unique<RexInput>(actual_new_src,
-                                            input->getIndex() - src2_input_base);
-      }
-    }
-
-    return boost::make_unique<RexInput>(actual_new_src, input->getIndex());
-  }
-
- private:
-  const RelAlgNode* old_src_;
-  const RelAlgNode* new_src_;
-};
-
 class InputRedirector : public DeepCopyVisitor {
  public:
   InputRedirector(const RelAlgNode* old_src, const RelAlgNode* new_src)
@@ -1559,7 +1461,6 @@ void replace_all_usages(
     std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>&
         du_web) {
   auto usrs_it = du_web.find(old_def_node.get());
-  RexInputRedirector redirector(new_def_node.get(), old_def_node.get());
   CHECK(usrs_it != du_web.end());
   for (auto usr : usrs_it->second) {
     auto usr_it = deconst_mapping.find(usr);
@@ -1736,32 +1637,6 @@ std::vector<const hdk::ir::Expr*> find_hoistable_conditions(
   return {};
 }
 
-class JoinTargetRebaser : public RexDeepCopyVisitor {
- public:
-  JoinTargetRebaser(const RelJoin* join, const unsigned old_base)
-      : join_(join)
-      , old_base_(old_base)
-      , src1_base_(join->getInput(0)->size())
-      , target_count_(join->size()) {}
-  RetType visitInput(const RexInput* input) const override {
-    auto curr_idx = input->getIndex();
-    CHECK_GE(curr_idx, old_base_);
-    CHECK_LT(static_cast<size_t>(curr_idx), target_count_);
-    curr_idx -= old_base_;
-    if (curr_idx >= src1_base_) {
-      return boost::make_unique<RexInput>(join_->getInput(1), curr_idx - src1_base_);
-    } else {
-      return boost::make_unique<RexInput>(join_->getInput(0), curr_idx);
-    }
-  }
-
- private:
-  const RelJoin* join_;
-  const unsigned old_base_;
-  const size_t src1_base_;
-  const size_t target_count_;
-};
-
 class JoinTargetRebaseVisitor : public DeepCopyVisitor {
  public:
   JoinTargetRebaseVisitor(const RelJoin* join, const unsigned old_base)
@@ -1783,22 +1658,6 @@ class JoinTargetRebaseVisitor : public DeepCopyVisitor {
   const RelJoin* join_;
   const unsigned old_base_;
   const size_t inp0_size_;
-};
-
-class SubConditionRemover : public RexDeepCopyVisitor {
- public:
-  SubConditionRemover(const std::vector<const RexScalar*> sub_conds)
-      : sub_conditions_(sub_conds.begin(), sub_conds.end()) {}
-  RetType visitOperator(const RexOperator* rex_operator) const override {
-    if (sub_conditions_.count(rex_operator)) {
-      return boost::make_unique<RexLiteral>(
-          true, kBOOLEAN, kBOOLEAN, unsigned(-2147483648), 1, unsigned(-2147483648), 1);
-    }
-    return RexDeepCopyVisitor::visitOperator(rex_operator);
-  }
-
- private:
-  std::unordered_set<const RexScalar*> sub_conditions_;
 };
 
 hdk::ir::ExprPtr makeConstantExpr(bool val) {
@@ -1899,7 +1758,6 @@ void hoist_filter_cond_to_cross_join(
           continue;
         }
 
-        JoinTargetRebaser rebaser(join, first_col_idx);
         JoinTargetRebaseVisitor visitor(join, first_col_idx);
         if (join_conditions.size() == 1) {
           auto new_join_condition = visitor.visit(join_conditions.front());

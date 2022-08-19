@@ -21,7 +21,6 @@
 #include "JsonAccessors.h"
 #include "RelAlgOptimizer.h"
 #include "RelLeftDeepInnerJoin.h"
-#include "RexVisitor.h"
 #include "Shared/sqldefs.h"
 
 #include <rapidjson/error/en.h>
@@ -1342,33 +1341,10 @@ hdk::ir::ExprPtrVector reprojectExprs(const RelProject* simple_project,
 }
 
 /**
- * The RexInputReplacement visitor visits each node in a given relational algebra
+ * The InputReplacementVisitor visitor visits each node in a given relational algebra
  * expression and replaces the inputs to that expression with inputs from a different
  * node in the RA tree. Used for coalescing nodes with complex expressions.
  */
-class RexInputReplacementVisitor : public RexDeepCopyVisitor {
- public:
-  RexInputReplacementVisitor(
-      const RelAlgNode* node_to_keep,
-      const std::vector<std::unique_ptr<const RexScalar>>& scalar_sources)
-      : node_to_keep_(node_to_keep), scalar_sources_(scalar_sources) {}
-
-  // Reproject the RexInput from its current RA Node to the RA Node we intend to keep
-  RetType visitInput(const RexInput* input) const final {
-    if (input->getSourceNode() == node_to_keep_) {
-      const auto index = input->getIndex();
-      CHECK_LT(index, scalar_sources_.size());
-      return visit(scalar_sources_[index].get());
-    } else {
-      return input->deepCopy();
-    }
-  }
-
- private:
-  const RelAlgNode* node_to_keep_;
-  const std::vector<std::unique_ptr<const RexScalar>>& scalar_sources_;
-};
-
 class InputReplacementVisitor : public DeepCopyVisitor {
  public:
   InputReplacementVisitor(const RelAlgNode* node_to_keep,
@@ -1857,147 +1833,6 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
   }
 }
 
-/**
- * WindowFunctionDetectionVisitor detects the presence of embedded Window Function Rex
- * Operators and returns a pointer to the WindowFunctionOperator. Only the first
- * detected operator will be returned (e.g. a binary operator that is WindowFunc1 &
- * WindowFunc2 would return a pointer to WindowFunc1). Neither the window function
- * operator nor its parent expression are modified.
- */
-class WindowFunctionDetectionVisitor : public RexVisitor<const RexScalar*> {
- protected:
-  // Detect embedded window function expressions in operators
-  const RexScalar* visitOperator(const RexOperator* rex_operator) const final {
-    if (is_window_function_operator(rex_operator)) {
-      return rex_operator;
-    }
-
-    const size_t operand_count = rex_operator->size();
-    for (size_t i = 0; i < operand_count; ++i) {
-      const auto operand = rex_operator->getOperand(i);
-      if (is_window_function_operator(operand)) {
-        // Handle both RexWindowFunctionOperators and window functions built up from
-        // multiple RexScalar objects (e.g. AVG)
-        return operand;
-      }
-      const auto operandResult = visit(operand);
-      if (operandResult) {
-        return operandResult;
-      }
-    }
-
-    return defaultResult();
-  }
-
-  // Detect embedded window function expressions in case statements. Note that this may
-  // manifest as a nested case statement inside a top level case statement, as some
-  // window functions (sum, avg) are represented as a case statement. Use the
-  // is_window_function_operator helper to detect complete window function expressions.
-  const RexScalar* visitCase(const RexCase* rex_case) const final {
-    if (is_window_function_operator(rex_case)) {
-      return rex_case;
-    }
-
-    auto result = defaultResult();
-    for (size_t i = 0; i < rex_case->branchCount(); ++i) {
-      const auto when = rex_case->getWhen(i);
-      result = is_window_function_operator(when) ? when : visit(when);
-      if (result) {
-        return result;
-      }
-      const auto then = rex_case->getThen(i);
-      result = is_window_function_operator(then) ? then : visit(then);
-      if (result) {
-        return result;
-      }
-    }
-    if (rex_case->getElse()) {
-      auto else_expr = rex_case->getElse();
-      result = is_window_function_operator(else_expr) ? else_expr : visit(else_expr);
-    }
-    return result;
-  }
-
-  const RexScalar* aggregateResult(const RexScalar* const& aggregate,
-                                   const RexScalar* const& next_result) const final {
-    // all methods calling aggregate result should be overriden
-    UNREACHABLE();
-    return nullptr;
-  }
-
-  const RexScalar* defaultResult() const final { return nullptr; }
-};
-
-/** Replaces the first occurrence of a WindowFunctionOperator rex with the provided
- * `replacement_rex`. Typically used for splitting a complex rex into two simpler
- * rexes, and forwarding one of the rexes to a later node. The forwarded rex
- * is then replaced with a RexInput using this visitor.
- * Note that for window function replacement, the overloads in this visitor must match
- * the overloads in the detection visitor above, to ensure a detected window function
- * expression is properly replaced.
- */
-class RexWindowFuncReplacementVisitor : public RexDeepCopyVisitor {
- public:
-  RexWindowFuncReplacementVisitor(std::unique_ptr<const RexScalar> replacement_rex)
-      : replacement_rex_(std::move(replacement_rex)) {}
-
-  ~RexWindowFuncReplacementVisitor() { CHECK(replacement_rex_ == nullptr); }
-
- protected:
-  RetType visitOperator(const RexOperator* rex_operator) const final {
-    if (should_replace_operand(rex_operator)) {
-      return std::move(replacement_rex_);
-    }
-
-    const auto rex_window_function_operator =
-        dynamic_cast<const RexWindowFunctionOperator*>(rex_operator);
-    if (rex_window_function_operator) {
-      // Deep copy the embedded window function operator
-      return visitWindowFunctionOperator(rex_window_function_operator);
-    }
-
-    const size_t operand_count = rex_operator->size();
-    std::vector<RetType> new_opnds;
-    for (size_t i = 0; i < operand_count; ++i) {
-      const auto operand = rex_operator->getOperand(i);
-      if (should_replace_operand(operand)) {
-        new_opnds.push_back(std::move(replacement_rex_));
-      } else {
-        new_opnds.emplace_back(visit(rex_operator->getOperand(i)));
-      }
-    }
-    return rex_operator->getDisambiguated(new_opnds);
-  }
-
-  RetType visitCase(const RexCase* rex_case) const final {
-    if (should_replace_operand(rex_case)) {
-      return std::move(replacement_rex_);
-    }
-
-    std::vector<std::pair<RetType, RetType>> new_pair_list;
-    for (size_t i = 0; i < rex_case->branchCount(); ++i) {
-      auto when_operand = rex_case->getWhen(i);
-      auto then_operand = rex_case->getThen(i);
-      new_pair_list.emplace_back(
-          should_replace_operand(when_operand) ? std::move(replacement_rex_)
-                                               : visit(when_operand),
-          should_replace_operand(then_operand) ? std::move(replacement_rex_)
-                                               : visit(then_operand));
-    }
-    auto new_else = should_replace_operand(rex_case->getElse())
-                        ? std::move(replacement_rex_)
-                        : visit(rex_case->getElse());
-    return std::make_unique<RexCase>(new_pair_list, new_else);
-  }
-
- private:
-  bool should_replace_operand(const RexScalar* rex) const {
-    return replacement_rex_ && is_window_function_operator(rex);
-  }
-
-  mutable std::unique_ptr<const RexScalar> replacement_rex_;
-};
-
 class ReplacementExprVisitor : public DeepCopyVisitor {
  public:
   ReplacementExprVisitor() {}
@@ -2104,7 +1939,6 @@ void separate_window_function_expressions(
     std::unordered_map<size_t, RegisteredQueryHint>& query_hints) {
   std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
 
-  WindowFunctionDetectionVisitor visitor;
   for (auto node_itr = node_list.begin(); node_itr != node_list.end(); ++node_itr) {
     const auto node = *node_itr;
     auto window_func_project_node = std::dynamic_pointer_cast<RelProject>(node);

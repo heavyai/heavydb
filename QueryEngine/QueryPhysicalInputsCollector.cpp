@@ -19,7 +19,6 @@
 #include "ExprDagVisitor.h"
 #include "RelAlgDagBuilder.h"
 #include "RelAlgVisitor.h"
-#include "RexVisitor.h"
 
 #include "SchemaMgr/ColumnInfo.h"
 

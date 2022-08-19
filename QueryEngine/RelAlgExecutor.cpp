@@ -32,7 +32,6 @@
 #include "QueryEngine/RelAlgTranslator.h"
 #include "QueryEngine/RelAlgVisitor.h"
 #include "QueryEngine/ResultSetBuilder.h"
-#include "QueryEngine/RexVisitor.h"
 #include "QueryEngine/WindowContext.h"
 #include "SessionInfo.h"
 #include "Shared/TypedDataAccessors.h"
@@ -1150,15 +1149,6 @@ hdk::ir::ExprPtr set_transient_dict(const hdk::ir::ExprPtr expr) {
   transient_dict_ti.set_comp_param(TRANSIENT_DICT_ID);
   transient_dict_ti.set_fixed_size();
   return expr->add_cast(transient_dict_ti);
-}
-
-void set_transient_dict_maybe(std::vector<hdk::ir::ExprPtr>& scalar_sources,
-                              const hdk::ir::ExprPtr& expr) {
-  try {
-    scalar_sources.push_back(set_transient_dict(fold_expr(expr.get())));
-  } catch (...) {
-    scalar_sources.push_back(fold_expr(expr.get()));
-  }
 }
 
 hdk::ir::ExprPtr set_transient_dict_maybe(hdk::ir::ExprPtr expr) {
@@ -2520,53 +2510,6 @@ JoinType get_join_type(const RelAlgNode* ra) {
   return JoinType::INVALID;
 }
 
-std::unique_ptr<const RexOperator> get_bitwise_equals(const RexScalar* scalar) {
-  const auto condition = dynamic_cast<const RexOperator*>(scalar);
-  if (!condition || condition->getOperator() != kOR || condition->size() != 2) {
-    return nullptr;
-  }
-  const auto equi_join_condition =
-      dynamic_cast<const RexOperator*>(condition->getOperand(0));
-  if (!equi_join_condition || equi_join_condition->getOperator() != kEQ) {
-    return nullptr;
-  }
-  const auto both_are_null_condition =
-      dynamic_cast<const RexOperator*>(condition->getOperand(1));
-  if (!both_are_null_condition || both_are_null_condition->getOperator() != kAND ||
-      both_are_null_condition->size() != 2) {
-    return nullptr;
-  }
-  const auto lhs_is_null =
-      dynamic_cast<const RexOperator*>(both_are_null_condition->getOperand(0));
-  const auto rhs_is_null =
-      dynamic_cast<const RexOperator*>(both_are_null_condition->getOperand(1));
-  if (!lhs_is_null || !rhs_is_null || lhs_is_null->getOperator() != kISNULL ||
-      rhs_is_null->getOperator() != kISNULL) {
-    return nullptr;
-  }
-  CHECK_EQ(size_t(1), lhs_is_null->size());
-  CHECK_EQ(size_t(1), rhs_is_null->size());
-  CHECK_EQ(size_t(2), equi_join_condition->size());
-  const auto eq_lhs = dynamic_cast<const RexInput*>(equi_join_condition->getOperand(0));
-  const auto eq_rhs = dynamic_cast<const RexInput*>(equi_join_condition->getOperand(1));
-  const auto is_null_lhs = dynamic_cast<const RexInput*>(lhs_is_null->getOperand(0));
-  const auto is_null_rhs = dynamic_cast<const RexInput*>(rhs_is_null->getOperand(0));
-  if (!eq_lhs || !eq_rhs || !is_null_lhs || !is_null_rhs) {
-    return nullptr;
-  }
-  std::vector<std::unique_ptr<const RexScalar>> eq_operands;
-  if (*eq_lhs == *is_null_lhs && *eq_rhs == *is_null_rhs) {
-    RexDeepCopyVisitor deep_copy_visitor;
-    auto lhs_op_copy = deep_copy_visitor.visit(equi_join_condition->getOperand(0));
-    auto rhs_op_copy = deep_copy_visitor.visit(equi_join_condition->getOperand(1));
-    eq_operands.emplace_back(lhs_op_copy.release());
-    eq_operands.emplace_back(rhs_op_copy.release());
-    return boost::make_unique<const RexOperator>(
-        kBW_EQ, std::move(eq_operands), equi_join_condition->getType());
-  }
-  return nullptr;
-}
-
 hdk::ir::ExprPtr get_bitwise_equals(const hdk::ir::Expr* expr) {
   const auto condition = dynamic_cast<const hdk::ir::BinOper*>(expr);
   if (!condition || condition->get_optype() != kOR) {
@@ -2634,27 +2577,6 @@ hdk::ir::ExprPtr get_bitwise_equals(const hdk::ir::Expr* expr) {
         equi_join_condition->get_right_operand()->deep_copy());
   }
   return nullptr;
-}
-
-std::unique_ptr<const RexOperator> get_bitwise_equals_conjunction(
-    const RexScalar* scalar) {
-  const auto condition = dynamic_cast<const RexOperator*>(scalar);
-  if (condition && condition->getOperator() == kAND) {
-    CHECK_GE(condition->size(), size_t(2));
-    auto acc = get_bitwise_equals(condition->getOperand(0));
-    if (!acc) {
-      return nullptr;
-    }
-    for (size_t i = 1; i < condition->size(); ++i) {
-      std::vector<std::unique_ptr<const RexScalar>> and_operands;
-      and_operands.emplace_back(std::move(acc));
-      and_operands.emplace_back(get_bitwise_equals_conjunction(condition->getOperand(i)));
-      acc = boost::make_unique<const RexOperator>(
-          kAND, std::move(and_operands), condition->getType());
-    }
-    return acc;
-  }
-  return get_bitwise_equals(scalar);
 }
 
 hdk::ir::ExprPtr get_bitwise_equals_conjunction(const hdk::ir::Expr* expr) {

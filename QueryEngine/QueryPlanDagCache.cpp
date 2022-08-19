@@ -15,7 +15,6 @@
  */
 
 #include "QueryPlanDagCache.h"
-#include "RexVisitor.h"
 
 #include <unordered_set>
 

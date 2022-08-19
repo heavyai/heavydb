@@ -15,7 +15,6 @@
  */
 
 #include "QueryPlanDagExtractor.h"
-#include "RexVisitor.h"
 #include "Visitors/QueryPlanDagChecker.h"
 
 #include <boost/algorithm/cxx11/any_of.hpp>

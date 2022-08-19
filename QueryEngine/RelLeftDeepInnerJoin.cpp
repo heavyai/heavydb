@@ -18,7 +18,6 @@
 #include "DeepCopyVisitor.h"
 #include "Logger/Logger.h"
 #include "RelAlgDagBuilder.h"
-#include "RexVisitor.h"
 
 #include <numeric>
 
@@ -61,46 +60,6 @@ create_left_deep_join(const std::shared_ptr<RelAlgNode>& left_deep_join_root) {
               left_deep_join_filter, inputs, original_joins),
           old_root};
 }
-
-class RebindRexInputsFromLeftDeepJoin : public RexVisitor<void*> {
- public:
-  RebindRexInputsFromLeftDeepJoin(const RelLeftDeepInnerJoin* left_deep_join)
-      : left_deep_join_(left_deep_join) {
-    std::vector<size_t> input_sizes;
-    CHECK_GT(left_deep_join->inputCount(), size_t(1));
-    for (size_t i = 0; i < left_deep_join->inputCount(); ++i) {
-      input_sizes.push_back(left_deep_join->getInput(i)->size());
-    }
-    input_size_prefix_sums_.resize(input_sizes.size());
-    std::partial_sum(
-        input_sizes.begin(), input_sizes.end(), input_size_prefix_sums_.begin());
-  }
-
-  void* visitInput(const RexInput* rex_input) const override {
-    const auto source_node = rex_input->getSourceNode();
-    if (left_deep_join_->coversOriginalNode(source_node)) {
-      const auto it = std::lower_bound(input_size_prefix_sums_.begin(),
-                                       input_size_prefix_sums_.end(),
-                                       rex_input->getIndex(),
-                                       std::less_equal<size_t>());
-      CHECK(it != input_size_prefix_sums_.end());
-      const auto input_node =
-          left_deep_join_->getInput(std::distance(input_size_prefix_sums_.begin(), it));
-      if (it != input_size_prefix_sums_.begin()) {
-        const auto prev_input_count = *(it - 1);
-        CHECK_LE(prev_input_count, rex_input->getIndex());
-        const auto input_index = rex_input->getIndex() - prev_input_count;
-        rex_input->setIndex(input_index);
-      }
-      rex_input->setSourceNode(input_node);
-    }
-    return nullptr;
-  };
-
- private:
-  std::vector<size_t> input_size_prefix_sums_;
-  const RelLeftDeepInnerJoin* left_deep_join_;
-};
 
 class RebindInputsFromLeftDeepJoinVisitor : public DeepCopyVisitor {
  public:
@@ -312,12 +271,6 @@ std::shared_ptr<const RelAlgNode> get_left_deep_join_root(
     return nullptr;
   }
   return node->getAndOwnInput(0);
-}
-
-void rebind_inputs_from_left_deep_join(const RexScalar* rex,
-                                       const RelLeftDeepInnerJoin* left_deep_join) {
-  RebindRexInputsFromLeftDeepJoin rebind_rex_inputs_from_left_deep_join(left_deep_join);
-  rebind_rex_inputs_from_left_deep_join.visit(rex);
 }
 
 hdk::ir::ExprPtr rebind_inputs_from_left_deep_join(
