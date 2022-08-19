@@ -403,7 +403,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     executor_->resetInterrupt();
   }
 
-  auto acquire_execute_mutex = [](Executor * executor) -> auto{
+  auto acquire_execute_mutex = [](Executor * executor) -> auto {
     auto ret = executor->acquireExecuteMutex();
     return ret;
   };
