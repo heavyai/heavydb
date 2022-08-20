@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+# Internal tool used during builds with: -DENABLE_IWYU=on
+# Needed to redirect output from include-what-you-use to a file.
+
+set -e
+
+TARGET=${@: -3:1}
+
+if [ "${TARGET}" != "" ]; then
+
+  #echo "========== do-iwyu: $*" >${TARGET}.iwyu
+  CMD="$*"
+  ${CMD} &>${TARGET}.iwyu
+
+else
+
+  echo "========== do-iwyu: unexpected problem: $*"
+  echo "========== do-iwyu: unexpected problem: $*" >>errors.iwyu
+
+fi
+

@@ -49,6 +49,35 @@ endif()
 
 project(heavyai)
 
+# ENABLE_IWYU: Generates .iwyu files suitable for input into include-what-you-use's fix_includes.py tool.
+option(ENABLE_IWYU "Enable include-what-you-use advice (.iwyu files for fix_includes.py)" OFF)
+if(ENABLE_IWYU)
+ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+   find_program(IWYU_EXE include-what-you-use)
+   if(IWYU_EXE)
+     set(CMAKE_CXX_INCLUDE_WHAT_YOU_USE "${CMAKE_SOURCE_DIR}/scripts/do-iwyu;${IWYU_EXE};-Xiwyu --cxx17ns")
+   else()
+     message(FATAL_ERROR "ENABLE_IWYU failed to find the include-what-you-use binary")
+   endif()
+ else()
+   message(FATAL_ERROR "ENABLE_IWYU may only be used with the clang compiler (need to set CMAKE_CXX_COMPILER)")
+  endif()
+endif()
+
+# ENABLE_TIME_TRACE: Generates .json files with build timings viewable in a chrome://tracing/ flame graph.
+option(ENABLE_TIME_TRACE "Enable build time tracing (.json files for chrome://tracing/)" OFF)
+if(ENABLE_TIME_TRACE)
+  if(("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 9.0))
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-ftime-trace>")
+    # Adding -ftime-trace to clang++ for linking seems to have no effect.
+    # Leaving the commented-out setting here for further investigation.
+    #add_link_options("$<$<LINK_LANGUAGE:CXX>:-ftime-trace>")  # For after we upgrade to: cmake 3.18+
+    #add_link_options("-ftime-trace")
+  else()
+    message(FATAL_ERROR "ENABLE_TIME_TRACE may only be used with the clang compiler 9.0+ (need to set CMAKE_CXX_COMPILER)")
+  endif()
+endif()
+ 
 if(NOT EXISTS "${CMAKE_SOURCE_DIR}/Rendering")
   set(MAPD_EDITION "OS")
 elseif(NOT DEFINED MAPD_EDITION)
@@ -1298,3 +1327,4 @@ list(APPEND HEAVY_TARGETS heavydb initheavy heavysql)
 add_dependencies(initheavy mapd_java_components)
 add_dependencies(heavydb mapd_java_components)
 add_custom_target(heavy ALL DEPENDS ${HEAVY_TARGETS})
+
