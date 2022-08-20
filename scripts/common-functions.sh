@@ -334,9 +334,31 @@ function install_folly() {
   popd
 }
 
+IWYU_VERSION=0.13
+LLVM_VERSION_USED_FOR_IWYU=9.0.1
+if [ "$LLVM_VERSION" != "$LLVM_VERSION_USED_FOR_IWYU" ]; then
+  # NOTE: If you get this error, somebody upgraded LLVM, but they need to go
+  # to https://include-what-you-use.org/ then scroll down, figure out which
+  # iwyu version goes with the new LLVM_VERSION we're now using, then update
+  # IWYU_VERSION and LLVM_VERSION_USED_FOR_IWYU above, appropriately.
+  echo "ERROR: IWYU_VERSION of $IWYU_VERSION must be updated because LLVM_VERSION of $LLVM_VERSION_USED_FOR_IWYU was changed to $LLVM_VERSION"
+  exit 1
+fi
+function install_iwyu() {
+  download https://include-what-you-use.org/downloads/include-what-you-use-${IWYU_VERSION}.src.tar.gz
+  extract include-what-you-use-${IWYU_VERSION}.src.tar.gz
+  BUILD_DIR=include-what-you-use/build
+  mkdir -p $BUILD_DIR
+  pushd $BUILD_DIR
+  cmake -G "Unix Makefiles" \
+        -DCMAKE_PREFIX_PATH=${PREFIX}/lib \
+        -DCMAKE_INSTALL_PREFIX=${PREFIX} \
+        ..
+  cmake_build_and_install
+  popd
+}
 
 RDKAFKA_VERSION=1.1.0
-
 function install_rdkafka() {
     if [ "$1" == "static" ]; then
       STATIC="ON"
