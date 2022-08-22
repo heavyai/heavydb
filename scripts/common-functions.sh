@@ -421,7 +421,7 @@ function install_maven() {
 function patch_old_thrust_tbb() {
   NVCC_VERSION=$(nvcc --version | grep release | grep -o '[0-9][0-9]\.[0-9]' | head -n1)
 
-  if [ "${NVCC_VERSION}" == "11.0" ] || [ "${NVCC_VERSION}" == "11.1"  ]; then
+  if [ "${NVCC_VERSION}" == "11.0" ] || [ "${NVCC_VERSION}" == "11.1" ]; then
     pushd $(dirname $(which nvcc))/../include/
 		cat > /tmp/cuda-11.0-tbb-thrust.patch << EOF
 diff -ru thrust-old/system/tbb/detail/reduce_by_key.inl thrust/system/tbb/detail/reduce_by_key.inl
@@ -575,7 +575,7 @@ PDAL_VERSION=2.4.2
 function install_pdal() {
   download_make_install http://download.osgeo.org/libtiff/tiff-4.4.0.tar.gz
   source /etc/os-release
-  if [ "$ID" == "ubuntu"  ] ; then
+  if [ "$ID" == "ubuntu" ] ; then
     download_make_install https://github.com/OSGeo/libgeotiff/releases/download/1.7.1/libgeotiff-1.7.1.tar.gz "" "--with-proj=/usr/local/mapd-deps/ --with-libtiff=/usr/local/mapd-deps/"
   else
     download_make_install https://github.com/OSGeo/libgeotiff/releases/download/1.7.1/libgeotiff-1.7.1.tar.gz
@@ -583,7 +583,7 @@ function install_pdal() {
   download https://github.com/PDAL/PDAL/releases/download/${PDAL_VERSION}/PDAL-${PDAL_VERSION}-src.tar.bz2
   extract PDAL-${PDAL_VERSION}-src.tar.bz2
   pushd PDAL-${PDAL_VERSION}-src
-  if [ "$ID" -ne "ubuntu"  ] ; then
+  if [ "$ID" != "ubuntu" ] ; then
     patch -p1 < $SCRIPTS_DIR/pdal-2.4.2-static-linking.patch
   fi
   mkdir build
