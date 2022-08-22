@@ -15,6 +15,7 @@
  */
 
 #pragma once
+#ifndef __CUDACC__
 
 #include <cstring>  // std::memcpy
 #include <iostream>
@@ -25,8 +26,6 @@
 
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
-
-#ifndef __CUDACC__
 
 struct CacheDataTf {
   int8_t* data_buffer;
