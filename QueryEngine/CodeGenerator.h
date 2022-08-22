@@ -627,6 +627,12 @@ class CodeGenerator {
                                               const std::string& null_check_suffix,
                                               const SQLTypeInfo& ti);
 
+  std::pair<std::vector<llvm::Value*>, std::unique_ptr<CodeGenerator::NullCheckCodegen>>
+  codegenStringFetchAndEncode(const Analyzer::StringOper* expr,
+                              const CompilationOptions& co,
+                              const size_t arg_idx,
+                              const bool codegen_nullcheck);
+
   Executor* executor_;
 
  protected:

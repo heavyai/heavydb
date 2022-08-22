@@ -172,6 +172,11 @@ NullableStrType Concat::operator()(const std::string& str) const {
   return reverse_order_ ? str_literal_ + str : str + str_literal_;
 }
 
+NullableStrType Concat::operator()(const std::string& str1,
+                                   const std::string& str2) const {
+  return str1 + str2;
+}
+
 NullableStrType Pad::operator()(const std::string& str) const {
   return pad_mode_ == Pad::PadMode::LEFT ? lpad(str) : rpad(str);
 }
@@ -644,6 +649,22 @@ std::string StringOps::operator()(const std::string& str) const {
   return modified_str.str;
 }
 
+std::string StringOps::multi_input_eval(const std::string_view str1,
+                                        const std::string_view str2) const {
+  NullableStrType modified_str1(str1);
+  NullableStrType modified_str2(str2);
+  if (modified_str1.is_null || modified_str2.is_null) {
+    return "";  // How we currently represent dictionary-encoded nulls
+  }
+  for (const auto& string_op : string_ops_) {
+    modified_str1 = string_op->operator()(modified_str1.str, modified_str2.str);
+    if (modified_str1.is_null) {
+      return "";  // How we currently represent dictionary-encoded nulls
+    }
+  }
+  return modified_str1.str;
+}
+
 std::string_view StringOps::operator()(const std::string_view sv,
                                        std::string& sv_storage) const {
   sv_storage = sv;
@@ -731,11 +752,17 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
     }
     case SqlStringOpKind::CONCAT:
     case SqlStringOpKind::RCONCAT: {
-      CHECK_EQ(num_non_variable_literals, 1UL);
-      const auto str_literal = string_op_info.getStringLiteral(1);
-      // Handle lhs literals by having RCONCAT operator set a flag
-      return std::make_unique<const Concat>(
-          var_string_optional_literal, str_literal, op_kind == SqlStringOpKind::RCONCAT);
+      CHECK_GE(num_non_variable_literals, 0UL);
+      CHECK_LE(num_non_variable_literals, 1UL);
+      if (num_non_variable_literals == 1UL) {
+        const auto str_literal = string_op_info.getStringLiteral(1);
+        // Handle lhs literals by having RCONCAT operator set a flag
+        return std::make_unique<const Concat>(var_string_optional_literal,
+                                              str_literal,
+                                              op_kind == SqlStringOpKind::RCONCAT);
+      } else {
+        return std::make_unique<const Concat>(var_string_optional_literal);
+      }
     }
     case SqlStringOpKind::LPAD:
     case SqlStringOpKind::RPAD: {

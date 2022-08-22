@@ -72,6 +72,13 @@ struct StringOp {
 
   virtual NullableStrType operator()(std::string const&) const = 0;
 
+  virtual NullableStrType operator()(const std::string& str1,
+                                     const std::string& str2) const {
+    UNREACHABLE() << "operator(str1, str2) not allowed for this method";
+    // Make compiler happy
+    return NullableStrType();
+  }
+
   virtual NullableStrType operator()() const {
     CHECK(hasVarStringLiteral());
     if (var_str_literal_.is_null) {
@@ -217,7 +224,13 @@ struct Concat : public StringOp {
       , str_literal_(str_literal)
       , reverse_order_(reverse_order) {}
 
+  Concat(const std::optional<std::string>& var_str_optional_literal)
+      : StringOp(SqlStringOpKind::CONCAT, var_str_optional_literal)
+      , reverse_order_(false) {}
+
   NullableStrType operator()(const std::string& str) const override;
+
+  NullableStrType operator()(const std::string& str1, const std::string& str2) const;
 
   const std::string str_literal_;
   const bool reverse_order_;
@@ -544,6 +557,9 @@ class StringOps {
       , num_ops_(string_op_infos.size()) {}
 
   std::string operator()(const std::string& str) const;
+
+  std::string multi_input_eval(const std::string_view str1,
+                               const std::string_view str2) const;
 
   std::string_view operator()(const std::string_view sv, std::string& sv_storage) const;
 

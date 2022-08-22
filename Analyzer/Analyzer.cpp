@@ -4056,20 +4056,35 @@ SQLTypeInfo StringOper::get_return_type(
     const std::vector<std::shared_ptr<Analyzer::Expr>>& args) {
   CHECK_NE(kind, SqlStringOpKind::TRY_STRING_CAST)
       << "get_return_type for TRY_STRING_CAST disallowed.";
-  if (args.empty()) {
-    return SQLTypeInfo(kNULLT);
-  } else if (dynamic_cast<const Analyzer::Constant*>(args[0].get())) {
-    // Constant literal first argument
-    return args[0]->get_type_info();
-  } else if (args[0]->get_type_info().is_none_encoded_string()) {
-    // None-encoded text column argument
-    // Note that whether or not this is allowed is decided separately
-    // in check_operand_types
-    // If here, we have a dict-encoded column arg
-    return SQLTypeInfo(kTEXT, kENCODING_DICT, 0, kNULLT);
-  } else {
-    return SQLTypeInfo(args[0]->get_type_info());  // nullable by default
+  SQLTypeInfo return_ti(kNULLT);
+  size_t num_var_string_inputs{0};
+  for (const auto& arg : args) {
+    const auto raw_arg = arg.get();
+    const auto& arg_ti = arg->get_type_info();
+    if (dynamic_cast<const Analyzer::CaseExpr*>(remove_cast(raw_arg))) {
+      // Currently we disallow case statement inputs to string functions
+      // pending a full resolution to QE-359, but the error is thrown
+      // downstream in StringOper::check_operand_types
+      return SQLTypeInfo(kTEXT, kENCODING_DICT, 0, kNULLT);
+    } else if (arg_ti.is_string() && dynamic_cast<const Analyzer::Constant*>(raw_arg)) {
+      if (return_ti == SQLTypeInfo(kNULLT)) {
+        return_ti = arg_ti;
+      }
+    } else if (arg_ti.is_none_encoded_string()) {
+      return SQLTypeInfo(kTEXT, kENCODING_DICT, 0, kNULLT);
+    } else if (arg_ti.is_dict_encoded_string()) {
+      if (arg_ti.get_comp_param() == TRANSIENT_DICT_ID) {
+        return SQLTypeInfo(kTEXT, kENCODING_DICT, 0, kNULLT);
+      } else {
+        num_var_string_inputs++;
+        return_ti = arg_ti;
+      }
+    }
   }
+  if (num_var_string_inputs > 1UL) {
+    return SQLTypeInfo(kTEXT, kENCODING_DICT, 0, kNULLT);
+  }
+  return return_ti;
 }
 
 void StringOper::check_operand_types(
@@ -4097,18 +4112,16 @@ void StringOper::check_operand_types(
     // support.
     auto arg_ti = args_[arg_idx]->get_type_info();
     const auto decasted_arg = remove_cast(args_[arg_idx]);
-    const bool is_arg_constant =
-        dynamic_cast<const Analyzer::Constant*>(decasted_arg.get()) != nullptr;
-    const bool is_arg_column_var =
-        dynamic_cast<const Analyzer::ColumnVar*>(decasted_arg.get()) != nullptr;
-    const bool is_arg_string_oper =
-        dynamic_cast<const Analyzer::StringOper*>(decasted_arg.get()) != nullptr;
-    if (!(is_arg_constant || is_arg_column_var || is_arg_string_oper)) {
+    const bool is_arg_case =
+        dynamic_cast<const Analyzer::CaseExpr*>(decasted_arg.get()) != nullptr;
+    if (is_arg_case) {
       oss << "Error instantiating " << ::toString(get_kind()) << " operator. "
-          << "Currently only constant, column, or other string operator arguments "
-          << "are allowed as inputs.";
+          << "Currently string operations cannot be run on output of a case "
+          << "statement.";
       throw std::runtime_error(oss.str());
     }
+    const bool is_arg_constant =
+        dynamic_cast<const Analyzer::Constant*>(decasted_arg.get()) != nullptr;
     auto decasted_arg_ti = decasted_arg->get_type_info();
     // We need to prevent any non-string type from being casted to a string, but can
     // permit non-integer types being casted to integers Todo: Find a cleaner way to
@@ -4173,8 +4186,11 @@ SqlStringOpKind ConcatStringOper::get_concat_ordered_kind(
         << ".";
     throw std::runtime_error(oss.str());
   }
-  if (operands[1].get()->get_type_info().is_dict_encoded_string() &&
-      !(operands[0].get()->get_type_info().is_dict_encoded_string())) {
+  const auto operand0_is_literal =
+      dynamic_cast<const Analyzer::Constant*>(operands[0].get());
+  const auto operand1_is_literal =
+      dynamic_cast<const Analyzer::Constant*>(operands[1].get());
+  if (operand0_is_literal && !operand1_is_literal) {
     return SqlStringOpKind::RCONCAT;
   }
   return SqlStringOpKind::CONCAT;

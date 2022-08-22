@@ -691,11 +691,11 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     // inputs as well.
     const auto original_args = string_oper->getOwnArgs();
     std::vector<std::shared_ptr<Analyzer::Expr>> rewritten_args;
-    const bool parent_in_string_op_chain = in_string_op_chain_;
-    if (!parent_in_string_op_chain) {
-      chained_string_op_exprs_.clear();
-      in_string_op_chain_ = true;
-    }
+    const auto non_literal_arity = string_oper->getNonLiteralsArity();
+    const auto parent_in_string_op_chain = in_string_op_chain_;
+    const auto in_string_op_chain = non_literal_arity <= 1UL;
+    in_string_op_chain_ = in_string_op_chain;
+
     size_t rewritten_arg_literal_arity = 0;
     for (auto original_arg : original_args) {
       rewritten_args.emplace_back(visit(original_arg.get()));
@@ -703,9 +703,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
         rewritten_arg_literal_arity++;
       }
     }
-    if (!parent_in_string_op_chain) {
-      in_string_op_chain_ = false;
-    }
+    in_string_op_chain_ = parent_in_string_op_chain;
     const auto kind = string_oper->get_kind();
     const auto& return_ti = string_oper->get_type_info();
 
@@ -731,16 +729,14 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     }
     chained_string_op_exprs_.emplace_back(
         makeExpr<Analyzer::StringOper>(kind, return_ti, rewritten_args));
-    if (parent_in_string_op_chain) {
-      CHECK(in_string_op_chain_);
+    if (parent_in_string_op_chain && in_string_op_chain) {
       CHECK(rewritten_args[0]->get_type_info().is_string());
-      CHECK(
-          dynamic_cast<const Analyzer::ColumnVar*>(remove_cast(rewritten_args[0].get())));
       return rewritten_args[0]->deep_copy();
     } else {
-      CHECK(!in_string_op_chain_);
-      return makeExpr<Analyzer::StringOper>(
+      auto new_string_oper = makeExpr<Analyzer::StringOper>(
           kind, return_ti, rewritten_args, chained_string_op_exprs_);
+      chained_string_op_exprs_.clear();
+      return new_string_oper;
     }
   }
 

@@ -4556,6 +4556,16 @@ TEST(Select, Strings) {
         ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
                   v<int64_t>(run_simple_agg(
                       "SELECT COUNT(*) FROM test WHERE CAST(x AS TEXT) = '8';", dt))));
+
+    THROW_ON_AGGREGATOR(ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test WHERE str || fixed_str = 'foofoo';", dt))));
+    THROW_ON_AGGREGATOR(ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test WHERE str || ' ' || real_str = 'foo real_foo';",
+            dt))));
   }
 }
 
