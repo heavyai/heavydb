@@ -183,13 +183,13 @@ download_make_install https://github.com/libevent/libevent/releases/download/rel
 
 install_folly
 
-install_iwyu
-
 # llvm
 # http://thrysoee.dk/editline/libedit-20170329-3.1.tar.gz
 download_make_install ${HTTP_DEPS}/libedit-20170329-3.1.tar.gz
 # (see common-functions.sh)
 install_llvm
+
+install_iwyu
 
 VERS=7.75.0
 # https://curl.haxx.se/download/curl-$VERS.tar.xz
