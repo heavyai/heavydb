@@ -12,6 +12,7 @@
 
 #include <list>
 #include <memory>
+#include <set>
 #include <vector>
 
 class RelAlgNode;
