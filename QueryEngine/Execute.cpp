@@ -185,7 +185,7 @@ void Executor::initialize_extension_module_sources() {
       Executor::extension_module_sources.end()) {
     auto root_path = omnisci::get_root_abs_path();
     auto template_path = root_path + "/QueryEngine/RuntimeFunctions.bc";
-    CHECK(boost::filesystem::exists(template_path));
+    CHECK(boost::filesystem::exists(template_path)) << template_path;
     Executor::extension_module_sources[ExtModuleKinds::template_module] = template_path;
 #ifdef HAVE_CUDA
     auto rt_libdevice_path = get_cuda_home() + "/nvvm/libdevice/libdevice.10.bc";
