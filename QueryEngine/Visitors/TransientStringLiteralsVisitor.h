@@ -94,6 +94,9 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
     if (!string_oper_ti.is_string() || !str_operand_ti.is_string()) {
       return defaultResult();
     }
+    if (string_oper->getNonLiteralsArity() >= 2UL) {
+      return defaultResult();
+    }
     const bool parent_feeds_sdp_already_set = parent_feeds_sdp_;
     const bool outputs_target_sdp = string_oper_ti.get_comp_param() == sdp_->getDictId();
     if (string_oper_ti.is_dict_encoded_string() &&

@@ -77,6 +77,25 @@ apply_string_ops_and_encode(const char* str_ptr,
 }
 
 extern "C" RUNTIME_EXPORT int32_t
+apply_multi_input_string_ops_and_encode(const char* str1_ptr,
+                                        const int32_t str1_len,
+                                        const char* str2_ptr,
+                                        const int32_t str2_len,
+                                        const int64_t string_ops_handle,
+                                        const int64_t string_dict_handle) {
+  std::string_view raw_str1(str1_ptr, str1_len);
+  std::string_view raw_str2(str2_ptr, str2_len);
+  auto string_ops =
+      reinterpret_cast<const StringOps_Namespace::StringOps*>(string_ops_handle);
+  auto string_dict_proxy = reinterpret_cast<StringDictionaryProxy*>(string_dict_handle);
+  const auto result_str = string_ops->multi_input_eval(raw_str1, raw_str2);
+  if (result_str.empty()) {
+    return inline_int_null_value<int32_t>();
+  }
+  return string_dict_proxy->getOrAddTransient(result_str);
+}
+
+extern "C" RUNTIME_EXPORT int32_t
 intersect_translate_string_id_to_other_dict(const int32_t string_id,
                                             const int64_t source_string_dict_handle,
                                             const int64_t dest_string_dict_handle) {
@@ -260,14 +279,55 @@ std::vector<StringOps_Namespace::StringOpInfo> getStringOpInfos(
   return string_op_infos;
 }
 
+std::pair<std::vector<llvm::Value*>, std::unique_ptr<CodeGenerator::NullCheckCodegen>>
+CodeGenerator::codegenStringFetchAndEncode(const Analyzer::StringOper* expr,
+                                           const CompilationOptions& co,
+                                           const size_t arg_idx,
+                                           const bool codegen_nullcheck) {
+  CHECK_LT(arg_idx, expr->getArity());
+  const auto& arg_ti = expr->getArg(arg_idx)->get_type_info();
+
+  auto primary_str_lv = codegen(expr->getArg(arg_idx), true, co);
+  std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
+  if (primary_str_lv.size() != 3) {
+    // If this is the case we should have a transient dictionary from a previous op
+    // We can't use the dictionary values without decoding as this op occurs directly
+    // inline on top of whatever operation created the transient dictionary
+    CHECK_EQ(size_t(1), primary_str_lv.size());
+    CHECK(arg_ti.is_dict_encoded_string());
+    const bool is_nullable = !arg_ti.get_notnull();
+    if (codegen_nullcheck && is_nullable) {
+      const auto decoded_input_ti = SQLTypeInfo(kTEXT, is_nullable, kENCODING_DICT);
+      nullcheck_codegen = std::make_unique<CodeGenerator::NullCheckCodegen>(
+          cgen_state_,
+          executor_,
+          primary_str_lv[0],
+          decoded_input_ti,
+          "transient_dict_per_row_nullcheck");
+    }
+    const auto sdp_ptr = reinterpret_cast<int64_t>(executor()->getStringDictionaryProxy(
+        arg_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
+    const auto decompressed_str_lv =
+        cgen_state_->emitExternalCall("string_decompress",
+                                      get_int_type(64, cgen_state_->context_),
+                                      {primary_str_lv[0], cgen_state_->llInt(sdp_ptr)});
+
+    primary_str_lv.push_back(
+        cgen_state_->emitCall("extract_str_ptr", {decompressed_str_lv}));
+    primary_str_lv.push_back(
+        cgen_state_->emitCall("extract_str_len", {decompressed_str_lv}));
+  }
+  CHECK_EQ(size_t(3), primary_str_lv.size());
+  return std::make_pair(primary_str_lv, std::move(nullcheck_codegen));
+}
+
 llvm::Value* CodeGenerator::codegenPerRowStringOper(const Analyzer::StringOper* expr,
                                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK_GE(expr->getArity(), 1UL);
-
-  const auto& arg_ti = expr->getArg(0)->get_type_info();
-  CHECK(!arg_ti.is_dict_encoded_string() || arg_ti.get_comp_param() == TRANSIENT_DICT_ID);
-
+  const auto non_literals_arity = expr->getNonLiteralsArity();
+  CHECK_GE(non_literals_arity, 1UL);
+  CHECK_LE(non_literals_arity, 2UL);
   const auto& return_ti = expr->get_type_info();
   if (g_cluster && return_ti.is_dict_encoded_string()) {
     throw std::runtime_error(
@@ -277,39 +337,10 @@ llvm::Value* CodeGenerator::codegenPerRowStringOper(const Analyzer::StringOper* 
   if (co.device_type == ExecutorDeviceType::GPU) {
     throw QueryMustRunOnCpu();
   }
-  auto primary_str_lv = codegen(expr->getArg(0), true, co);
-  std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
-  if (primary_str_lv.size() != 3) {
-    // If this is the case we should have a transient dictionary from a previous op
-    // We can't use the dictionary values without decoding as this op occurs directly
-    // inline on top of whatever operation created the transient dictionary
-    CHECK_EQ(size_t(1), primary_str_lv.size());
-    CHECK(arg_ti.is_dict_encoded_string() &&
-          arg_ti.get_comp_param() == TRANSIENT_DICT_ID);
-    const bool is_nullable = !arg_ti.get_notnull();
-    if (is_nullable) {
-      const auto decoded_input_ti = SQLTypeInfo(kTEXT, is_nullable, kENCODING_DICT);
-      nullcheck_codegen = std::make_unique<CodeGenerator::NullCheckCodegen>(
-          cgen_state_,
-          executor_,
-          primary_str_lv[0],
-          decoded_input_ti,
-          "transient_dict_per_row_nullcheck");
-    }
-    const int64_t string_dictionary_ptr = reinterpret_cast<int64_t>(
-        executor()->getRowSetMemoryOwner()->getLiteralStringDictProxy());
-    const auto decompressed_str_lv = cgen_state_->emitExternalCall(
-        "string_decompress",
-        get_int_type(64, cgen_state_->context_),
-        {primary_str_lv[0], cgen_state_->llInt(string_dictionary_ptr)});
-
-    primary_str_lv.push_back(
-        cgen_state_->emitCall("extract_str_ptr", {decompressed_str_lv}));
-    primary_str_lv.push_back(
-        cgen_state_->emitCall("extract_str_len", {decompressed_str_lv}));
-  }
-
+  const auto [primary_str_lv, nullcheck_codegen] =
+      codegenStringFetchAndEncode(expr, co, 0UL, false);
   CHECK_EQ(size_t(3), primary_str_lv.size());
+
   const auto string_op_infos = getStringOpInfos(expr);
   CHECK(string_op_infos.size());
 
@@ -319,6 +350,7 @@ llvm::Value* CodeGenerator::codegenPerRowStringOper(const Analyzer::StringOper* 
   auto string_ops_handle_lv = cgen_state_->llInt(string_ops_handle);
 
   if (!return_ti.is_string()) {
+    CHECK_EQ(non_literals_arity, 1UL);
     std::vector<llvm::Value*> string_oper_lvs{
         primary_str_lv[1], primary_str_lv[2], string_ops_handle_lv};
     const auto return_type = return_ti.get_type();
@@ -366,18 +398,52 @@ llvm::Value* CodeGenerator::codegenPerRowStringOper(const Analyzer::StringOper* 
       reinterpret_cast<int64_t>(executor()->getStringDictionaryProxy(
           return_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
   auto dest_string_proxy_handle_lv = cgen_state_->llInt(dest_string_proxy_handle);
-  std::vector<llvm::Value*> string_oper_lvs{primary_str_lv[1],
-                                            primary_str_lv[2],
-                                            string_ops_handle_lv,
-                                            dest_string_proxy_handle_lv};
+  if (non_literals_arity == 1UL) {
+    std::vector<llvm::Value*> string_oper_lvs{primary_str_lv[1],
+                                              primary_str_lv[2],
+                                              string_ops_handle_lv,
+                                              dest_string_proxy_handle_lv};
 
-  auto ret = cgen_state_->emitExternalCall("apply_string_ops_and_encode",
-                                           get_int_type(32, cgen_state_->context_),
-                                           string_oper_lvs);
-  if (nullcheck_codegen) {
-    ret = nullcheck_codegen->finalize(cgen_state_->inlineNull(return_ti), ret);
+    auto ret = cgen_state_->emitExternalCall("apply_string_ops_and_encode",
+                                             get_int_type(32, cgen_state_->context_),
+                                             string_oper_lvs);
+    if (nullcheck_codegen) {
+      ret = nullcheck_codegen->finalize(cgen_state_->inlineNull(return_ti), ret);
+    }
+    return ret;
+  } else {
+    // For now only CONCAT is supported, which takes up to 2 non-literal string
+    // arguments. In the future (likely when we can codegen the StringOps to enable
+    // generic, multi-branch execution rather than linear chains of functors as we do
+    // today), we will generalize this to functions that take
+    // any number of string and numeric non-literal arguments, in which case
+    // we will need to make apply_multi_input_string_ops_and_encode take
+    // a vector of arguments. For now, however, expecting exactly 2 arguments
+    // suffices.
+    CHECK_EQ(non_literals_arity, 2UL);
+    CHECK(expr->get_kind() == SqlStringOpKind::CONCAT ||
+          expr->get_kind() == SqlStringOpKind::RCONCAT);
+    const auto [secondary_str_lv, secondary_nullcheck_codegen] =
+        codegenStringFetchAndEncode(expr, co, 1UL, false);
+    CHECK_EQ(size_t(3), secondary_str_lv.size());
+    std::vector<llvm::Value*> string_oper_lvs{primary_str_lv[1],
+                                              primary_str_lv[2],
+                                              secondary_str_lv[1],
+                                              secondary_str_lv[2],
+                                              string_ops_handle_lv,
+                                              dest_string_proxy_handle_lv};
+    auto ret = cgen_state_->emitExternalCall("apply_multi_input_string_ops_and_encode",
+                                             get_int_type(32, cgen_state_->context_),
+                                             string_oper_lvs);
+    if (secondary_nullcheck_codegen) {
+      ret =
+          secondary_nullcheck_codegen->finalize(cgen_state_->inlineNull(return_ti), ret);
+    }
+    if (nullcheck_codegen) {
+      ret = nullcheck_codegen->finalize(cgen_state_->inlineNull(return_ti), ret);
+    }
+    return ret;
   }
-  return ret;
 }
 
 std::unique_ptr<StringDictionaryTranslationMgr> translate_dict_strings(
@@ -426,17 +492,18 @@ std::unique_ptr<StringDictionaryTranslationMgr> translate_dict_strings(
 llvm::Value* CodeGenerator::codegen(const Analyzer::StringOper* expr,
                                     const CompilationOptions& co) {
   CHECK_GE(expr->getArity(), 1UL);
-  if (expr->hasNoneEncodedTextArg()) {
+  if (expr->requiresPerRowTranslation()) {
     return codegenPerRowStringOper(expr, co);
   }
+
   AUTOMATIC_IR_METADATA(cgen_state_);
 
-  const auto& expr_ti = expr->get_type_info();
   auto string_dictionary_translation_mgr =
       translate_dict_strings(expr, co.device_type, executor());
 
   auto str_id_lv = codegen(expr->getArg(0), true, co);
   CHECK_EQ(size_t(1), str_id_lv.size());
+  const auto& expr_ti = expr->get_type_info();
 
   return cgen_state_
       ->moveStringDictionaryTranslationMgr(std::move(string_dictionary_translation_mgr))

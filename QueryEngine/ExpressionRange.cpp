@@ -672,24 +672,14 @@ ExpressionRange getExpressionRange(const Analyzer::StringOper* string_oper_expr,
     string_op_infos.emplace_back(string_op_info);
   }
 
-  const auto string_oper_col_var_expr = remove_cast(string_oper_expr->getArg(0));
-  CHECK(string_oper_col_var_expr);
-  const auto string_oper_col_var =
-      dynamic_cast<const Analyzer::ColumnVar*>(string_oper_col_var_expr);
-  CHECK(string_oper_col_var);
-  const auto string_oper_col_var_ti = string_oper_col_var->get_type_info();
-  if (string_oper_col_var_ti.is_none_encoded_string()) {
-    // If here the translation is done on the fly so unless this
-    // was the result of a previous step, we won't have the translated
-    // dictionary yet. Just throw an invalid range.
-    return ExpressionRange::makeInvalidRange();
-  }
-
   const auto expr_ti = string_oper_expr->get_type_info();
-  if (expr_ti.is_string()) {
+  if (expr_ti.is_string() && !string_oper_expr->requiresPerRowTranslation()) {
+    // We can only statically know the range if dictionary translation occured (which
+    // means the output type is a dictionary-encoded text col and is not transient, as
+    // transient dictionaries are used as targets for on-the-fly translation
     CHECK(expr_ti.is_dict_encoded_string());
     const auto dict_id = expr_ti.get_comp_param();
-
+    CHECK_NE(dict_id, TRANSIENT_DICT_ID);
     const auto translation_map = executor->getStringProxyTranslationMap(
         dict_id,
         dict_id,
@@ -705,7 +695,9 @@ ExpressionRange getExpressionRange(const Analyzer::StringOper* string_oper_expr,
                                          true /* assume has nulls */);
 
   } else {
-    // Todo: Get min/max range stats
+    // Todo(todd): Get min/max range stats
+    // Below works fine, we just can't take advantage of low-cardinality
+    // group by optimizations
     return ExpressionRange::makeInvalidRange();
   }
 }
