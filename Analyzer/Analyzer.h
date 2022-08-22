@@ -1341,10 +1341,16 @@ class DateaddExpr : public Expr {
               const DateaddField f,
               const std::shared_ptr<Analyzer::Expr> number,
               const std::shared_ptr<Analyzer::Expr> datetime)
-      : Expr(ti, false), field_(f), number_(number), datetime_(datetime) {}
+      : Expr(ti, false)
+      , field_(f)
+      , number_(number)
+      , datetime_(datetime)
+      , use_fixed_encoding_null_val_(false) {}
   DateaddField get_field() const { return field_; }
   const Expr* get_number_expr() const { return number_.get(); }
   const Expr* get_datetime_expr() const { return datetime_.get(); }
+  void set_fixed_encoding_null_val() const { use_fixed_encoding_null_val_ = true; }
+  bool use_fixed_encoding_null_val() const { return use_fixed_encoding_null_val_; }
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
   void check_group_by(
       const std::list<std::shared_ptr<Analyzer::Expr>>& groupby) const override;
@@ -1371,6 +1377,10 @@ class DateaddExpr : public Expr {
   const DateaddField field_;
   const std::shared_ptr<Analyzer::Expr> number_;
   const std::shared_ptr<Analyzer::Expr> datetime_;
+  // if expr (i.e., column_var) of datetime has fixed encoding but is not casted
+  // to nullable int64_t type before generating a code for this dateAdd expr,
+  // we manually set this to deal with such case during the codegen
+  mutable bool use_fixed_encoding_null_val_;
 };
 
 /*
