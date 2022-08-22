@@ -27,6 +27,7 @@
 #define BASE_PATH2 "./tmp/dict2"
 #endif
 
+#include <algorithm>
 #include <filesystem>
 #include <random>
 #include <string>
@@ -88,11 +89,25 @@ void global_setup() {
   append_strings_10M_1M_10 = generate_random_strs(10000000, 1000000, 10, 2);
   append_strings_10M_10M_10 = generate_random_strs(10000000, 10000000, 10, 3);
   append_strings_10M_1M_10_randomized = append_strings_10M_1M_10;
+#ifdef _MSC_VER
+  // TODO: random shuffle removed in c++ 17, need to check gcc/clang versions for
+  // std::shuffle availability
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::shuffle(append_strings_10M_1M_10_randomized.begin(),
+               append_strings_10M_1M_10_randomized.end(),
+               g);
+  append_strings_10M_10M_10_randomized = append_strings_10M_10M_10;
+  std::shuffle(append_strings_10M_10M_10_randomized.begin(),
+               append_strings_10M_10M_10_randomized.end(),
+               g);
+#else
   std::random_shuffle(append_strings_10M_1M_10_randomized.begin(),
                       append_strings_10M_1M_10_randomized.end());
   append_strings_10M_10M_10_randomized = append_strings_10M_10M_10;
   std::random_shuffle(append_strings_10M_10M_10_randomized.begin(),
                       append_strings_10M_10M_10_randomized.end());
+#endif
 }
 
 class StringDictionaryFixture : public benchmark::Fixture {
