@@ -994,6 +994,9 @@ class SQLTypeInfo {
   }
 
   inline bool is_timestamp() const { return type == kTIMESTAMP; }
+  inline bool is_encoded_timestamp() const {
+    return is_timestamp() && compression == kENCODING_FIXED;
+  }
 
  private:
   SQLTypes type;     // type id

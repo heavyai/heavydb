@@ -3165,12 +3165,14 @@ TEST(Select, CountDistinct) {
       " VALUES (1, \'01:00:01\', \'01:00:01\', "
       "\'2022-06-01 01:00:02\', \'2022-06-01 01:00:02\', \'2022-06-01 01:00:00.002\', "
       "\'2022-06-01 01:00:00.000002\', \'2022-06-01 01:00:00.000200000\');",
-      " VALUES (2, \'01:00:02\', \'01:00:02\', "
+      " VALUES (2, NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
+      " VALUES (3, \'01:00:02\', \'01:00:02\', "
       "\'2022-06-01 01:00:03\', \'2022-06-01 01:00:03\', \'2022-06-01 01:00:00.003\', "
       "\'2022-06-01 01:00:00.000003\', \'2022-06-01 01:00:00.000300000\');",
-      " VALUES (3, \'01:00:03\', \'01:00:03\', "
+      " VALUES (4, \'01:00:03\', \'01:00:03\', "
       "\'2022-06-01 01:00:04\', \'2022-06-01 01:00:04\', \'2022-06-01 01:00:00.004\', "
       "\'2022-06-01 01:00:00.000004\', \'2022-06-01 01:00:00.000400000\');",
+      " VALUES (5, NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
   };
   for (const auto& p : ts_tbl_name_ddl_prefix_pair) {
     for (const auto& v : ts_cd_table_rows) {
@@ -22908,8 +22910,8 @@ TEST(Select, WindowFunctionFramingWithDateAndTimeColumn) {
   };
   std::string columns_definition{
       "(rid INT, pc INT, ti TIME, tie TIME ENCODING FIXED(32), d32 DATE ENCODING "
-      "DAYS(32), d16 DATE ENCODING DAYS(16), tm0 TIMESTAMP(0) ENCODING FIXED(32), tm0e "
-      "TIMESTAMP, tm3 "
+      "DAYS(32), d16 DATE ENCODING DAYS(16), tm0 TIMESTAMP(0), tm0e TIMESTAMP ENCODING "
+      "FIXED(32), tm3 "
       "TIMESTAMP(3), tm6 TIMESTAMP(6), tm9 TIMESTAMP(9), tm3_ms "
       "TIMESTAMP(3), tm6_us TIMESTAMP(6), tm6_ms TIMESTAMP(6), tm9_ns TIMESTAMP(9), "
       "tm9_us TIMESTAMP(9), tm9_ms TIMESTAMP(9))"};
