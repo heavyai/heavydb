@@ -500,7 +500,7 @@ extern "C" RUNTIME_EXPORT uint8_t check_watchdog_rt(const size_t sample_seed) {
   return false;
 }
 
-extern "C" uint8_t check_interrupt_rt(const size_t sample_seed) {
+extern "C" RUNTIME_EXPORT uint8_t check_interrupt_rt(const size_t sample_seed) {
   // this func is called iff we enable runtime query interrupt
   if (UNLIKELY((sample_seed & 0xFFFF) == 0 && check_interrupt())) {
     return true;
