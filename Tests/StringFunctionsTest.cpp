@@ -385,6 +385,179 @@ TEST_F(StringFunctionTest, ConcatLiteral) {
   }
 }
 
+TEST_F(StringFunctionTest, ConcatTwoVarArg) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    {
+      // Dict-encoded || none-encoded
+      SKIP_NO_GPU();
+      auto result_set =
+          sql("select first_name || last_name from string_function_test_people order by "
+              "id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"JOHNSMITH"}, {"JohnBanks"}, {"JOHNWilson"}, {"SueSmith"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // None-encoded || dict-encoded
+      SKIP_NO_GPU();
+      auto result_set =
+          sql("select last_name || first_name from string_function_test_people order by "
+              "id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"SMITHJOHN"}, {"BanksJohn"}, {"WilsonJOHN"}, {"SmithSue"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Dict-encoded || literal || none-encoded
+      SKIP_NO_GPU();
+      auto result_set =
+          sql("select first_name || ' ' || last_name from string_function_test_people "
+              "order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"JOHN SMITH"}, {"John Banks"}, {"JOHN Wilson"}, {"Sue Smith"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // None-encoded || literal || dict-encoded
+      SKIP_NO_GPU();
+      auto result_set =
+          sql("select last_name || ', ' || first_name from string_function_test_people "
+              "order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"SMITH, JOHN"}, {"Banks, John"}, {"Wilson, JOHN"}, {"Smith, Sue"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // StringOp(Dict-encoded) || literal || StringOp(none-encoded)
+      SKIP_NO_GPU();
+      auto result_set =
+          sql("select UPPER(first_name) || ' ' || UPPER(last_name) from "
+              "string_function_test_people order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"JOHN SMITH"}, {"JOHN BANKS"}, {"JOHN WILSON"}, {"SUE SMITH"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // StringOp(None-encoded) || literal || StringOp(dict-encoded)
+      SKIP_NO_GPU();
+      auto result_set =
+          sql("select UPPER(last_name) || ', ' || UPPER(first_name) from "
+              "string_function_test_people order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"SMITH, JOHN"}, {"BANKS, JOHN"}, {"WILSON, JOHN"}, {"SMITH, SUE"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      SKIP_NO_GPU();
+      // StringOp(dict-encoded || literal || none-encoded)
+      auto result_set =
+          sql("select INITCAP(first_name || ' ' || last_name) from "
+              "string_function_test_people order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"John Smith"}, {"John Banks"}, {"John Wilson"}, {"Sue Smith"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // StringOp(none-encoded || literal || dict-encoded)
+      SKIP_NO_GPU();
+      auto result_set =
+          sql("select INITCAP(last_name || ', ' || first_name) from "
+              "string_function_test_people order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"Smith, John"}, {"Banks, John"}, {"Wilson, John"}, {"Smith, Sue"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // dict_encoded || literal || none-encoded || literal || cast(numeric to text) ||
+      // literal
+      SKIP_NO_GPU();
+      auto result_set =
+          sql("select first_name || ' ' || last_name || ' (' || age || ')' from "
+              "string_function_test_people order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"JOHN SMITH (25)"},
+          {"John Banks (30)"},
+          {"JOHN Wilson (20)"},
+          {"Sue Smith (25)"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Concat two dictionary encoded text columns
+      SKIP_NO_GPU();
+      auto result_set =
+          sql("select full_name || ' (' || us_phone_number || ')' from "
+              "string_function_test_people order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"John SMITH (555-803-2144)"},
+          {"John BANKS (555-803-8244)"},
+          {"John WILSON (555-614-9814)"},
+          {"Sue SMITH (555-614-2282)"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Concat two dictionary encoded text columns with string op
+      SKIP_NO_GPU();
+      auto result_set =
+          sql("select UPPER(full_name) || ' (' || REPLACE(us_phone_number, '-', '.') || "
+              "')' from string_function_test_people order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"JOHN SMITH (555.803.2144)"},
+          {"JOHN BANKS (555.803.8244)"},
+          {"JOHN WILSON (555.614.9814)"},
+          {"SUE SMITH (555.614.2282)"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Outer string op on concatenation of two dictionary encoded text columns
+      SKIP_NO_GPU();
+      auto result_set =
+          sql("select INITCAP(full_name || ' (' || REPLACE(us_phone_number, '-', '.') || "
+              "')') from string_function_test_people order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"John Smith (555.803.2144)"},
+          {"John Banks (555.803.8244)"},
+          {"John Wilson (555.614.9814)"},
+          {"Sue Smith (555.614.2282)"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Concat two dictionary encoded text columns with nulls
+      SKIP_NO_GPU();
+      auto result_set =
+          sql("select COALESCE(first_name || ' ' || zip_plus_4, 'null') from "
+              "string_function_test_people order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"JOHN 90210-7743"}, {"John 94104-8123"}, {"null"}, {"null"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Group by
+      SKIP_NO_GPU();
+      auto result_set =
+          sql("select lower(first_name) || ' ' || lower(country_code) as t, count(*) as "
+              "n from "
+              "string_function_test_people group by t order by t asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"john ca", int64_t(1)}, {"john us", int64_t(2)}, {"sue ca", int64_t(1)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
 TEST_F(StringFunctionTest, LPad) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

@@ -1492,7 +1492,12 @@ class StringOper : public Expr {
              const std::vector<OperandTypeFamily>& expected_type_families,
              const std::vector<std::string>& arg_names)
       : Expr(StringOper::get_return_type(kind, args)), kind_(kind), args_(args) {
-    check_operand_types(min_args, expected_type_families, arg_names);
+    check_operand_types(min_args,
+                        expected_type_families,
+                        arg_names,
+                        false /* dict_encoded_cols_only */,
+                        !(kind == SqlStringOpKind::CONCAT ||
+                          kind == SqlStringOpKind::RCONCAT) /* cols_first_arg_only */);
   }
 
   StringOper(const SqlStringOpKind kind,
@@ -1502,7 +1507,12 @@ class StringOper : public Expr {
              const std::vector<OperandTypeFamily>& expected_type_families,
              const std::vector<std::string>& arg_names)
       : Expr(return_ti), kind_(kind), args_(args) {
-    check_operand_types(min_args, expected_type_families, arg_names);
+    check_operand_types(min_args,
+                        expected_type_families,
+                        arg_names,
+                        false /* dict_encoded_cols_only */,
+                        !(kind == SqlStringOpKind::CONCAT ||
+                          kind == SqlStringOpKind::RCONCAT) /* cols_first_arg_only */);
   }
 
   StringOper(const SqlStringOpKind kind,
@@ -1542,6 +1552,8 @@ class StringOper : public Expr {
     return num_literals;
   }
 
+  size_t getNonLiteralsArity() const { return getArity() - getLiteralsArity(); }
+
   const Expr* getArg(const size_t i) const {
     CHECK_LT(i, args_.size());
     return args_[i].get();
@@ -1556,6 +1568,38 @@ class StringOper : public Expr {
 
   std::vector<std::shared_ptr<Analyzer::Expr>> getChainedStringOpExprs() const {
     return chained_string_op_exprs_;
+  }
+
+  bool requiresPerRowTranslation() const {
+    const auto& return_ti = get_type_info();
+    if (return_ti.is_none_encoded_string() ||
+        (return_ti.is_dict_encoded_string() &&
+         return_ti.get_comp_param() == TRANSIENT_DICT_ID)) {
+      return true;
+    }
+
+    // Anything that returns the transient dictionary by definition
+    // (see StringOper::get_return_type) requires per-row translation,
+    // but there is also a path with string->numeric functions (the output is
+    // not a string) where we need to see if any of the inputs are none-encoded
+    // or transient dictionary encoded, in which case we also need to do per-row
+    // translation. The handling of that condition follows below.
+
+    size_t num_var_str_args{0};
+    for (const auto& arg : args_) {
+      const auto arg_is_const = dynamic_cast<const Analyzer::Constant*>(arg.get());
+      if (arg_is_const) {
+        continue;
+      }
+      const auto& arg_ti = arg->get_type_info();
+      if (arg_ti.is_none_encoded_string() ||
+          (arg_ti.is_dict_encoded_string() &&
+           arg_ti.get_comp_param() == TRANSIENT_DICT_ID)) {
+        return true;
+      }
+      num_var_str_args++;
+    }
+    return num_var_str_args > 1UL;
   }
 
   void collect_rte_idx(std::set<int>& rte_idx_set) const override;
