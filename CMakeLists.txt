@@ -399,8 +399,8 @@ option(ENABLE_SYSTEM_TFS "Enable system table functions" ON)
 option(ENABLE_ML_ONEDAL_TFS "Enable Intel oneDal ML system table functions" OFF)
 option(ENABLE_ML_MLPACK_TFS "Enable MLPack ML system table functions" OFF)
 
-option(ENABLE_POINT_CLOUD_TFS "Enable point cloud table functions" OFF)
-option(ENABLE_PDAL "Enable PDAL support" OFF)
+option(ENABLE_PDAL "Enable PDAL support" ON)
+option(ENABLE_POINT_CLOUD_TFS "Enable point cloud table functions" ON)
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
   # Clang will not complile these tests quickly enough to avoid timeout
@@ -410,7 +410,7 @@ else()
 endif()
 
 if (ENABLE_PDAL)
-  find_package(PDAL REQUIRED)
+  find_package(PDAL)
   if(PDAL_FOUND)
     include_directories(${PDAL_INCLUDE_DIRS})
     add_definitions( ${PDAL_DEFINITIONS} )
@@ -981,8 +981,9 @@ if(ENABLE_FOLLY)
 endif()
 
 if(ENABLE_PDAL)
+  # Correct link issue in test programs
+  list(APPEND GDAL_LIBRARIES ${CURL_LIBRARIES})
   list(APPEND MAPD_LIBRARIES ${PDAL_LIBRARIES} ${GDAL_LIBRARIES} ${GDALExtra_LIBRARIES})
-
 endif()
 
 if(ENABLE_LICENSING_AWS)
