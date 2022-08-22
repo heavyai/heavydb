@@ -30,6 +30,7 @@
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/TableFunctions/TableFunctionManager.h"
 #include "QueryRunner/QueryRunner.h"
+#include "Utils/DdlUtils.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
