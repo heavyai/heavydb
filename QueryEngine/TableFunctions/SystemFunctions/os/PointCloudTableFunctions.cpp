@@ -11,6 +11,7 @@
 #include "QueryEngine/TableFunctions/SystemFunctions/os/Shared/Loaders/PdalLoader.h"
 #include "QueryEngine/TableFunctions/SystemFunctions/os/Shared/TableFunctionsCommon.hpp"
 #include "QueryEngine/TableFunctions/SystemFunctions/os/Shared/TableFunctionsDataCache.h"
+#include "Utils/DdlUtils.h"
 
 #include "PointCloudTableFunctions.h"
 
@@ -51,6 +52,12 @@ __attribute__((__used__)) int32_t tf_point_cloud_metadata__cpu_(
     Column<double>& transformed_z_min,
     Column<double>& transformed_z_max) {
   auto timer = DEBUG_TIMER(__func__);
+  // try {
+  //  ddl_utils::validate_allowed_file_path(
+  //      path, ddl_utils::DataTransferType::IMPORT, true);
+  //} catch (const std::runtime_error& e) {
+  //  return mgr.ERROR_MESSAGE("File path is not whitelisted");
+  //}
 
   if (x_min >= x_max) {
     return mgr.ERROR_MESSAGE("x_min must be less than x_max");
@@ -63,6 +70,15 @@ __attribute__((__used__)) int32_t tf_point_cloud_metadata__cpu_(
   const std::string las_path(path.getString());
   const std::vector<std::filesystem::path> file_paths =
       FileUtilities::get_fs_paths(las_path);
+  for (const auto& file_path : file_paths) {
+    try {
+      ddl_utils::validate_allowed_file_path(
+          file_path, ddl_utils::DataTransferType::IMPORT, true);
+    } catch (const std::runtime_error& e) {
+      const auto error_msg{"File path " + std::string(file_path) + " is not whitelisted"};
+      return mgr.ERROR_MESSAGE(error_msg);
+    }
+  }
   const std::string out_srs("EPSG:4326");
   const auto& lidar_file_info = PdalLoader::get_metadata_for_files(file_paths, out_srs);
   const auto& filtered_lidar_file_info =
@@ -223,6 +239,15 @@ __attribute__((__used__)) int32_t tf_load_point_cloud__cpu_(
 
   const std::vector<std::filesystem::path> file_paths =
       FileUtilities::get_fs_paths(las_path);
+  for (const auto& file_path : file_paths) {
+    try {
+      ddl_utils::validate_allowed_file_path(
+          file_path, ddl_utils::DataTransferType::IMPORT, true);
+    } catch (const std::runtime_error& e) {
+      const auto error_msg{"File path " + std::string(file_path) + " is not whitelisted"};
+      return mgr.ERROR_MESSAGE(error_msg);
+    }
+  }
   const auto& lidar_file_info =
       PdalLoader::get_metadata_for_files(file_paths, las_out_srs);
   const auto& filtered_lidar_file_info =
