@@ -166,9 +166,12 @@ llvm::Value* get_null_value_by_size(CgenState* cgen_state, SQLTypeInfo col_ti) {
         return cgen_state->llInt((int16_t)inline_int_null_value<int16_t>());
       case kINT:
         return cgen_state->llInt((int32_t)inline_int_null_value<int32_t>());
-      case kBIGINT:
-      case kTIMESTAMP:
       case kTIME:
+      case kTIMESTAMP:
+        if (col_ti.get_compression() == kENCODING_FIXED) {
+          return cgen_state->llInt((int64_t)(inline_fixed_encoding_null_val(col_ti)));
+        }
+      case kBIGINT:
       case kDATE:
       case kINTERVAL_DAY_TIME:
       case kINTERVAL_YEAR_MONTH:
@@ -489,7 +492,13 @@ llvm::Value* Executor::codegenFrameBoundExpr(const Analyzer::WindowFunction* win
   };
   llvm::Value* bound_expr_lv{nullptr};
   if (needs_bound_expr_codegen(frame_bound)) {
-    auto bound_expr_lvs = code_generator.codegen(frame_bound->getBoundExpr(), true, co);
+    auto bound_expr = frame_bound->getBoundExpr();
+    if (auto dateadd_expr = dynamic_cast<const Analyzer::DateaddExpr*>(bound_expr)) {
+      if (dateadd_expr->get_datetime_expr()->get_type_info().is_encoded_timestamp()) {
+        dateadd_expr->set_fixed_encoding_null_val();
+      }
+    }
+    auto bound_expr_lvs = code_generator.codegen(bound_expr, true, co);
     bound_expr_lv = bound_expr_lvs.front();
     if (order_col_ti.is_date() && window_func->hasRangeModeFraming()) {
       if (g_cluster) {
@@ -892,33 +901,14 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
     llvm::Value* order_key_col_null_val_lv{nullptr};
     switch (order_key_buf_ti.get_type()) {
       case kDATE:
-      case kTIME:
-      case kTIMESTAMP: {
-        switch (order_key_buf_ti.get_size()) {
-          case 1: {
-            order_key_col_null_val_lv =
-                cgen_state_->inlineNull(SQLTypeInfo(SQLTypes::kTINYINT));
-            break;
-          }
-          case 2: {
-            order_key_col_null_val_lv =
-                cgen_state_->inlineNull(SQLTypeInfo(SQLTypes::kSMALLINT));
-            break;
-          }
-          case 4: {
-            order_key_col_null_val_lv =
-                cgen_state_->inlineNull(SQLTypeInfo(SQLTypes::kINT));
-            break;
-          }
-          case 8: {
-            order_key_col_null_val_lv =
-                cgen_state_->inlineNull(SQLTypeInfo(SQLTypes::kBIGINT));
-            break;
-          }
-          default:
-            break;
+      case kTIMESTAMP:
+      case kTIME: {
+        if (order_key_buf_ti.get_compression() == kENCODING_FIXED ||
+            order_key_buf_ti.get_compression() == kENCODING_DATE_IN_DAYS) {
+          auto null_val = inline_fixed_encoding_null_val(order_key_buf_ti);
+          order_key_col_null_val_lv = cgen_state_->llInt((int32_t)null_val);
+          break;
         }
-        break;
       }
       default: {
         order_key_col_null_val_lv = cgen_state_->inlineNull(order_key_buf_ti);

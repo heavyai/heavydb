@@ -420,26 +420,18 @@ llvm::Value* CodeGenerator::codgenAdjustFixedEncNull(llvm::Value* val,
         "cast_" + from_typename + "_to_" + numeric_type_name(col_ti) + "_nullable",
         {adjusted, from_null, cgen_state_->inlineIntNull(col_ti)});
   }
-  SQLTypeInfo col_from_phys_ti(get_phys_int_type(col_ti.get_size()),
-                               col_ti.get_dimension(),
-                               col_ti.get_scale(),
-                               false,
-                               kENCODING_NONE,
-                               0,
-                               col_ti.get_subtype());
-  SQLTypeInfo col_to_phys_ti(col_ti.get_type(),
-                             col_ti.get_dimension(),
-                             col_ti.get_scale(),
-                             col_ti.get_notnull(),
-                             kENCODING_NONE,
-                             0,
-                             col_ti.get_subtype());
-  const auto to_typename = numeric_type_name(col_to_phys_ti);
+  SQLTypeInfo col_phys_ti(get_phys_int_type(col_ti.get_size()),
+                          col_ti.get_dimension(),
+                          col_ti.get_scale(),
+                          false,
+                          kENCODING_NONE,
+                          0,
+                          col_ti.get_subtype());
   return cgen_state_->emitCall(
-      "cast_" + from_typename + "_to_" + to_typename + "_nullable",
+      "cast_" + from_typename + "_to_" + numeric_type_name(col_ti) + "_nullable",
       {adjusted,
-       cgen_state_->inlineIntNull(col_from_phys_ti),
-       cgen_state_->inlineIntNull(col_to_phys_ti)});
+       cgen_state_->inlineIntNull(col_phys_ti),
+       cgen_state_->inlineIntNull(col_ti)});
 }
 
 llvm::Value* CodeGenerator::foundOuterJoinMatch(const size_t nesting_level) const {

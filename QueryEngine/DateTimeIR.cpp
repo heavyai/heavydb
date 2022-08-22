@@ -182,7 +182,10 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::DateaddExpr* dateadd_expr,
         cgen_state_->llInt(static_cast<int32_t>(datetime_ti.get_dimension())));
   }
   if (!datetime_ti.get_notnull()) {
-    dateadd_args.push_back(cgen_state_->inlineIntNull(datetime_ti));
+    auto null_val = dateadd_expr->use_fixed_encoding_null_val()
+                        ? inline_fixed_encoding_null_val(datetime_ti)
+                        : inline_int_null_val(datetime_ti);
+    dateadd_args.push_back(cgen_state_->llInt((int64_t)null_val));
     dateadd_fname += "Nullable";
   }
   return cgen_state_->emitExternalCall(dateadd_fname,
