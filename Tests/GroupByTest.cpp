@@ -87,13 +87,15 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
   auto group_expr = hdk::ir::makeExpr<hdk::ir::ColumnVar>(colStrInfo, 0);
   auto filter_col_expr = hdk::ir::makeExpr<hdk::ir::ColumnVar>(colXInfo, 0);
   Datum d{int64_t(1)};
-  auto filter_val_expr = hdk::ir::makeExpr<hdk::ir::Constant>(SQLTypeInfo(kINT, false), false, d);
-  auto simple_filter_expr = hdk::ir::makeExpr<hdk::ir::BinOper>(SQLTypeInfo(kBOOLEAN, false),
-                                                       false,
-                                                       SQLOps::kEQ,
-                                                       SQLQualifier::kONE,
-                                                       filter_col_expr,
-                                                       filter_val_expr);
+  auto filter_val_expr =
+      hdk::ir::makeExpr<hdk::ir::Constant>(SQLTypeInfo(kINT, false), false, d);
+  auto simple_filter_expr =
+      hdk::ir::makeExpr<hdk::ir::BinOper>(SQLTypeInfo(kBOOLEAN, false),
+                                          false,
+                                          SQLOps::kEQ,
+                                          SQLQualifier::kONE,
+                                          filter_col_expr,
+                                          filter_val_expr);
   RelAlgExecutionUnit ra_exe_unit{input_descs,
                                   input_col_descs,
                                   {simple_filter_expr},
@@ -184,13 +186,15 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
   auto group_expr = hdk::ir::makeExpr<hdk::ir::ColumnVar>(colStrInfo, 0);
   auto filter_col_expr = hdk::ir::makeExpr<hdk::ir::ColumnVar>(colXInfo, 0);
   Datum d{int64_t(1)};
-  auto filter_val_expr = hdk::ir::makeExpr<hdk::ir::Constant>(SQLTypeInfo(kINT, false), false, d);
-  auto simple_filter_expr = hdk::ir::makeExpr<hdk::ir::BinOper>(SQLTypeInfo(kBOOLEAN, false),
-                                                       false,
-                                                       SQLOps::kEQ,
-                                                       SQLQualifier::kONE,
-                                                       filter_col_expr,
-                                                       filter_val_expr);
+  auto filter_val_expr =
+      hdk::ir::makeExpr<hdk::ir::Constant>(SQLTypeInfo(kINT, false), false, d);
+  auto simple_filter_expr =
+      hdk::ir::makeExpr<hdk::ir::BinOper>(SQLTypeInfo(kBOOLEAN, false),
+                                          false,
+                                          SQLOps::kEQ,
+                                          SQLQualifier::kONE,
+                                          filter_col_expr,
+                                          filter_val_expr);
   RelAlgExecutionUnit ra_exe_unit{input_descs,
                                   input_col_descs,
                                   {simple_filter_expr},

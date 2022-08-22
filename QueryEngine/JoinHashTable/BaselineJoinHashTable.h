@@ -26,8 +26,8 @@
 #include <unordered_set>
 #include <vector>
 
-#include "IR/Expr.h"
 #include "DataMgr/MemoryLevel.h"
+#include "IR/Expr.h"
 #include "QueryEngine/ColumnarResults.h"
 #include "QueryEngine/DataRecycler/HashingSchemeRecycler.h"
 #include "QueryEngine/DataRecycler/HashtableRecycler.h"

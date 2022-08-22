@@ -21,9 +21,9 @@
 #include <set>
 #include <string>
 
-#include "IR/Expr.h"
 #include "DataMgr/Allocators/ThrustAllocator.h"
 #include "DataProvider/DataProvider.h"
+#include "IR/Expr.h"
 #include "QueryEngine/ColumnarResults.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
@@ -314,7 +314,7 @@ std::ostream& operator<<(std::ostream& os, const DecodedJoinHashBufferEntry& e);
 std::ostream& operator<<(std::ostream& os, const DecodedJoinHashBufferSet& s);
 
 std::shared_ptr<hdk::ir::ColumnVar> getSyntheticColumnVar(int db_id,
-                                                           std::string_view table,
-                                                           std::string_view column,
-                                                           int rte_idx,
-                                                           Executor* executor);
+                                                          std::string_view table,
+                                                          std::string_view column,
+                                                          int rte_idx,
+                                                          Executor* executor);

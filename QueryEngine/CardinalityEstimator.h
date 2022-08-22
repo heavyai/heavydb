@@ -91,12 +91,9 @@ class Estimator : public hdk::ir::Expr {
  */
 class NDVEstimator : public Analyzer::Estimator {
  public:
-  NDVEstimator(const hdk::ir::ExprPtrList& expr_tuple)
-      : expr_tuple_(expr_tuple) {}
+  NDVEstimator(const hdk::ir::ExprPtrList& expr_tuple) : expr_tuple_(expr_tuple) {}
 
-  const hdk::ir::ExprPtrList& getArgument() const override {
-    return expr_tuple_;
-  }
+  const hdk::ir::ExprPtrList& getArgument() const override { return expr_tuple_; }
 
   size_t getBufferSize() const override { return 1024 * 1024; }
 
@@ -110,8 +107,7 @@ class NDVEstimator : public Analyzer::Estimator {
 
 class LargeNDVEstimator : public NDVEstimator {
  public:
-  LargeNDVEstimator(const hdk::ir::ExprPtrList& expr_tuple)
-      : NDVEstimator(expr_tuple) {}
+  LargeNDVEstimator(const hdk::ir::ExprPtrList& expr_tuple) : NDVEstimator(expr_tuple) {}
 
   size_t getBufferSize() const final;
 };
