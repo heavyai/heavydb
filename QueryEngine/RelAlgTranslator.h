@@ -47,11 +47,6 @@ class RelAlgTranslator {
                    const bool just_explain);
   RelAlgTranslator(const Config& config, const time_t now, const bool just_explain);
 
-  static hdk::ir::ExprPtr translateAggregateRex(
-      const RexAgg* rex,
-      const std::vector<hdk::ir::ExprPtr>& scalar_sources,
-      bool bigint_count);
-
   hdk::ir::ExprPtr normalize(const hdk::ir::Expr* expr) const;
 
   hdk::ir::ExprPtr translateInSubquery(

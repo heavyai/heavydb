@@ -15,24 +15,15 @@
  */
 
 #include "RelAlgTranslator.h"
-#include "CalciteDeserializerUtils.h"
-#include "DateTimePlusRewrite.h"
-#include "DateTimeTranslator.h"
 #include "DeepCopyVisitor.h"
 #include "ExpressionRewrite.h"
-#include "ExtensionFunctionsBinding.h"
-#include "ExtensionFunctionsWhitelist.h"
 #include "RelAlgDagBuilder.h"
-#include "WindowContext.h"
 
 #include "Analyzer/Analyzer.h"
 #include "Descriptors/RelAlgExecutionDescriptor.h"
 #include "QueryEngine/SessionInfo.h"
 #include "Shared/SqlTypesLayout.h"
 #include "Shared/likely.h"
-#include "Shared/thread_count.h"
-
-#include <future>
 
 namespace {
 
@@ -307,70 +298,6 @@ RelAlgTranslator::RelAlgTranslator(const Config& config,
     , now_(now)
     , just_explain_(just_explain)
     , for_dag_builder_(true) {}
-
-namespace {
-
-bool is_agg_supported_for_type(const SQLAgg& agg_kind, const SQLTypeInfo& arg_ti) {
-  if ((agg_kind == kMIN || agg_kind == kMAX || agg_kind == kSUM || agg_kind == kAVG) &&
-      !(arg_ti.is_number() || arg_ti.is_boolean() || arg_ti.is_time())) {
-    return false;
-  }
-
-  return true;
-}
-
-}  // namespace
-
-hdk::ir::ExprPtr RelAlgTranslator::translateAggregateRex(
-    const RexAgg* rex,
-    const std::vector<hdk::ir::ExprPtr>& scalar_sources,
-    bool bigint_count) {
-  SQLAgg agg_kind = rex->getKind();
-  const bool is_distinct = rex->isDistinct();
-  const bool takes_arg{rex->size() > 0};
-  hdk::ir::ExprPtr arg_expr;
-  std::shared_ptr<hdk::ir::Constant> arg1;  // 2nd aggregate parameter
-  if (takes_arg) {
-    const auto operand = rex->getOperand(0);
-    CHECK_LT(operand, scalar_sources.size());
-    CHECK_LE(rex->size(), 2u);
-    arg_expr = scalar_sources[operand];
-    if (agg_kind == kAPPROX_COUNT_DISTINCT && rex->size() == 2) {
-      arg1 = std::dynamic_pointer_cast<hdk::ir::Constant>(
-          scalar_sources[rex->getOperand(1)]);
-      if (!arg1 || arg1->get_type_info().get_type() != kINT ||
-          arg1->get_constval().intval < 1 || arg1->get_constval().intval > 100) {
-        throw std::runtime_error(
-            "APPROX_COUNT_DISTINCT's second parameter should be SMALLINT literal between "
-            "1 and 100");
-      }
-    } else if (agg_kind == kAPPROX_QUANTILE) {
-      // If second parameter is not given then APPROX_MEDIAN is assumed.
-      if (rex->size() == 2) {
-        arg1 = std::dynamic_pointer_cast<hdk::ir::Constant>(
-            std::dynamic_pointer_cast<hdk::ir::Constant>(
-                scalar_sources[rex->getOperand(1)])
-                ->add_cast(SQLTypeInfo(kDOUBLE)));
-      } else {
-#ifdef _WIN32
-        Datum median;
-        median.doubleval = 0.5;
-#else
-        constexpr Datum median{.doubleval = 0.5};
-#endif
-        arg1 = std::make_shared<hdk::ir::Constant>(kDOUBLE, false, median);
-      }
-    }
-    const auto& arg_ti = arg_expr->get_type_info();
-    if (!is_agg_supported_for_type(agg_kind, arg_ti)) {
-      throw std::runtime_error("Aggregate on " + arg_ti.get_type_name() +
-                               " is not supported yet.");
-    }
-  }
-  const auto agg_ti = get_agg_type(agg_kind, arg_expr.get(), bigint_count);
-  return hdk::ir::makeExpr<hdk::ir::AggExpr>(
-      agg_ti, agg_kind, arg_expr, is_distinct, arg1);
-}
 
 hdk::ir::ExprPtr RelAlgTranslator::normalize(const hdk::ir::Expr* expr) const {
   NormalizerVisitor visitor(*this, input_to_nest_level_, join_types_, executor_);

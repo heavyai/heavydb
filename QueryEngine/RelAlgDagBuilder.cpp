@@ -3420,13 +3420,7 @@ class RelAlgDispatcher {
     for (auto aggs_json_arr_it = aggs_json_arr.Begin();
          aggs_json_arr_it != aggs_json_arr.End();
          ++aggs_json_arr_it) {
-      auto rex = parse_aggregate_expr(*aggs_json_arr_it);
-      auto orig_agg =
-          RelAlgTranslator::translateAggregateRex(rex.get(), input_exprs, bigint_count);
       auto agg = parseAggregateExpr(*aggs_json_arr_it, root_dag_builder, input_exprs);
-
-      CHECK(*orig_agg == *agg) << "Aggregate mismatch";
-
       aggs.push_back(agg);
     }
     auto agg_node = std::make_shared<RelAggregate>(
