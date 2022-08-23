@@ -3009,6 +3009,33 @@ TEST_F(TableFunctions, ColumnArrayAsArray) {
   }
 }
 
+TEST_F(TableFunctions, ColumnArraySplit) {
+  for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
+    SKIP_NO_GPU();
+#define COLUMNARRAYSPLIT(COLNAME, CTYPE)                                      \
+  {                                                                           \
+    const auto result_rows =                                                  \
+        run_multiple_agg("SELECT array_first_half(" #COLNAME                  \
+                         "), array_second_half(" #COLNAME ") FROM arr_test;", \
+                         dt);                                                 \
+    const auto rows = run_multiple_agg(                                       \
+        "SELECT out0, out1 FROM TABLE(array_split(cursor(SELECT " #COLNAME    \
+        " FROM arr_test)));",                                                 \
+        dt);                                                                  \
+    assert_equal<CTYPE>(rows, result_rows);                                   \
+  }
+    COLUMNARRAYSPLIT(barr, bool);
+    COLUMNARRAYSPLIT(carr, int8_t);
+    COLUMNARRAYSPLIT(sarr, int16_t);
+    COLUMNARRAYSPLIT(iarr, int32_t);
+    COLUMNARRAYSPLIT(larr, int64_t);
+    COLUMNARRAYSPLIT(farr, float);
+    COLUMNARRAYSPLIT(darr, double);
+    // UDFs with Array<TextEncodingDict> argument is not supported yet:
+    // COLUMNARRAYSPLIT(tarr, int32_t);
+  }
+}
+
 TEST_F(TableFunctions, MetadataSetGet) {
   // this should work
   EXPECT_NO_THROW(
