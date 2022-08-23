@@ -804,10 +804,6 @@ std::unique_ptr<RexLiteral> parse_literal(const rapidjson::Value& expr) {
   return nullptr;
 }
 
-std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr,
-                                                   int db_id,
-                                                   SchemaProviderPtr schema_provider,
-                                                   RelAlgDagBuilder& root_dag_builder);
 hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
                             int db_id,
                             SchemaProviderPtr schema_provider,
@@ -831,18 +827,6 @@ SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
   ti.set_precision(precision);
   ti.set_scale(scale);
   return ti;
-}
-
-std::vector<std::unique_ptr<const RexScalar>> parse_expr_array(
-    const rapidjson::Value& arr,
-    int db_id,
-    SchemaProviderPtr schema_provider,
-    RelAlgDagBuilder& root_dag_builder) {
-  std::vector<std::unique_ptr<const RexScalar>> exprs;
-  for (auto it = arr.Begin(); it != arr.End(); ++it) {
-    exprs.emplace_back(parse_scalar_expr(*it, db_id, schema_provider, root_dag_builder));
-  }
-  return exprs;
 }
 
 SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
@@ -897,19 +881,6 @@ SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
   throw std::runtime_error("Unsupported window function: " + name);
 }
 
-std::vector<std::unique_ptr<const RexScalar>> parse_window_order_exprs(
-    const rapidjson::Value& arr,
-    int db_id,
-    SchemaProviderPtr schema_provider,
-    RelAlgDagBuilder& root_dag_builder) {
-  std::vector<std::unique_ptr<const RexScalar>> exprs;
-  for (auto it = arr.Begin(); it != arr.End(); ++it) {
-    exprs.emplace_back(
-        parse_scalar_expr(field(*it, "field"), db_id, schema_provider, root_dag_builder));
-  }
-  return exprs;
-}
-
 SortDirection parse_sort_direction(const rapidjson::Value& collation) {
   return json_str(field(collation, "direction")) == std::string("DESCENDING")
              ? SortDirection::Descending
@@ -947,13 +918,22 @@ std::vector<hdk::ir::OrderEntry> parseWindowOrderCollation(const rapidjson::Valu
   return collation;
 }
 
-RexWindowFunctionOperator::RexWindowBound parse_window_bound(
-    const rapidjson::Value& window_bound_obj,
-    int db_id,
-    SchemaProviderPtr schema_provider,
-    RelAlgDagBuilder& root_dag_builder) {
+struct WindowBound {
+  bool unbounded;
+  bool preceding;
+  bool following;
+  bool is_current_row;
+  hdk::ir::ExprPtr offset;
+  int order_key;
+};
+
+WindowBound parse_window_bound(const rapidjson::Value& window_bound_obj,
+                               int db_id,
+                               SchemaProviderPtr schema_provider,
+                               RelAlgDagBuilder& root_dag_builder,
+                               const RANodeOutput& ra_output) {
   CHECK(window_bound_obj.IsObject());
-  RexWindowFunctionOperator::RexWindowBound window_bound;
+  WindowBound window_bound;
   window_bound.unbounded = json_bool(field(window_bound_obj, "unbounded"));
   window_bound.preceding = json_bool(field(window_bound_obj, "preceding"));
   window_bound.following = json_bool(field(window_bound_obj, "following"));
@@ -961,35 +941,12 @@ RexWindowFunctionOperator::RexWindowBound parse_window_bound(
   const auto& offset_field = field(window_bound_obj, "offset");
   if (offset_field.IsObject()) {
     window_bound.offset =
-        parse_scalar_expr(offset_field, db_id, schema_provider, root_dag_builder);
+        parse_expr(offset_field, db_id, schema_provider, root_dag_builder, ra_output);
   } else {
     CHECK(offset_field.IsNull());
   }
   window_bound.order_key = json_i64(field(window_bound_obj, "order_key"));
   return window_bound;
-}
-
-std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
-                                                  int db_id,
-                                                  SchemaProviderPtr schema_provider,
-                                                  RelAlgDagBuilder& root_dag_builder) {
-  if (root_dag_builder.subquery_cache.count(&expr)) {
-    return std::make_unique<RexSubQuery>(
-        root_dag_builder.subquery_cache.at(&expr)->getNodeShared());
-  }
-
-  const auto& operands = field(expr, "operands");
-  CHECK(operands.IsArray());
-  CHECK_GE(operands.Size(), unsigned(0));
-  const auto& subquery_ast = field(expr, "subquery");
-
-  RelAlgDagBuilder subquery_dag(root_dag_builder, subquery_ast, db_id, schema_provider);
-  auto node = subquery_dag.getRootNodeShPtr();
-  auto subquery =
-      hdk::ir::makeExpr<hdk::ir::ScalarSubquery>(getColumnType(node.get(), 0), node);
-  root_dag_builder.subquery_cache[&expr] = subquery;
-  root_dag_builder.registerSubquery(std::move(subquery));
-  return std::make_unique<RexSubQuery>(node);
 }
 
 hdk::ir::ExprPtr parse_subquery_expr(const rapidjson::Value& expr,
@@ -1012,84 +969,6 @@ hdk::ir::ExprPtr parse_subquery_expr(const rapidjson::Value& expr,
   root_dag_builder.registerSubquery(subquery);
   root_dag_builder.subquery_cache[&expr] = subquery;
   return subquery;
-}
-
-std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,
-                                            int db_id,
-                                            SchemaProviderPtr schema_provider,
-                                            RelAlgDagBuilder& root_dag_builder) {
-  const auto op_name = json_str(field(expr, "op"));
-  const bool is_quantifier =
-      op_name == std::string("PG_ANY") || op_name == std::string("PG_ALL");
-  const auto op = is_quantifier ? kFUNCTION : to_sql_op(op_name);
-  const auto& operators_json_arr = field(expr, "operands");
-  CHECK(operators_json_arr.IsArray());
-  auto operands =
-      parse_expr_array(operators_json_arr, db_id, schema_provider, root_dag_builder);
-  const auto type_it = expr.FindMember("type");
-  CHECK(type_it != expr.MemberEnd());
-  auto ti = parse_type(type_it->value);
-  if (op == kIN && expr.HasMember("subquery")) {
-    auto subquery = parse_subquery(expr, db_id, schema_provider, root_dag_builder);
-    operands.emplace_back(std::move(subquery));
-  }
-  if (expr.FindMember("partition_keys") != expr.MemberEnd()) {
-    const auto& partition_keys_arr = field(expr, "partition_keys");
-    auto partition_keys =
-        parse_expr_array(partition_keys_arr, db_id, schema_provider, root_dag_builder);
-    const auto& order_keys_arr = field(expr, "order_keys");
-    auto order_keys = parse_window_order_exprs(
-        order_keys_arr, db_id, schema_provider, root_dag_builder);
-    const auto collation = parse_window_order_collation(order_keys_arr, root_dag_builder);
-    const auto kind = parse_window_function_kind(op_name);
-    // Adjust type for SUM window function.
-    if (kind == SqlWindowFunctionKind::SUM_INTERNAL && ti.is_integer()) {
-      ti = SQLTypeInfo(kBIGINT, ti.get_notnull());
-    }
-    const auto lower_bound = parse_window_bound(
-        field(expr, "lower_bound"), db_id, schema_provider, root_dag_builder);
-    const auto upper_bound = parse_window_bound(
-        field(expr, "upper_bound"), db_id, schema_provider, root_dag_builder);
-    bool is_rows = json_bool(field(expr, "is_rows"));
-    ti.set_notnull(false);
-    return std::make_unique<RexWindowFunctionOperator>(kind,
-                                                       operands,
-                                                       partition_keys,
-                                                       order_keys,
-                                                       collation,
-                                                       lower_bound,
-                                                       upper_bound,
-                                                       is_rows,
-                                                       ti);
-  }
-  return std::unique_ptr<RexOperator>(op == kFUNCTION
-                                          ? new RexFunctionOperator(op_name, operands, ti)
-                                          : new RexOperator(op, std::move(operands), ti));
-}
-
-std::unique_ptr<RexCase> parse_case(const rapidjson::Value& expr,
-                                    int db_id,
-                                    SchemaProviderPtr schema_provider,
-                                    RelAlgDagBuilder& root_dag_builder) {
-  const auto& operands = field(expr, "operands");
-  CHECK(operands.IsArray());
-  CHECK_GE(operands.Size(), unsigned(2));
-  std::unique_ptr<const RexScalar> else_expr;
-  std::vector<
-      std::pair<std::unique_ptr<const RexScalar>, std::unique_ptr<const RexScalar>>>
-      expr_pair_list;
-  for (auto operands_it = operands.Begin(); operands_it != operands.End();) {
-    auto when_expr =
-        parse_scalar_expr(*operands_it++, db_id, schema_provider, root_dag_builder);
-    if (operands_it == operands.End()) {
-      else_expr = std::move(when_expr);
-      break;
-    }
-    auto then_expr =
-        parse_scalar_expr(*operands_it++, db_id, schema_provider, root_dag_builder);
-    expr_pair_list.emplace_back(std::move(when_expr), std::move(then_expr));
-  }
-  return std::unique_ptr<RexCase>(new RexCase(expr_pair_list, else_expr));
 }
 
 std::vector<std::string> strings_from_json_array(
@@ -1116,52 +995,6 @@ std::vector<size_t> indices_from_json_array(
   }
   return indices;
 }
-
-std::unique_ptr<const RexAgg> parse_aggregate_expr(const rapidjson::Value& expr) {
-  const auto agg_str = json_str(field(expr, "agg"));
-  if (agg_str == "APPROX_QUANTILE") {
-    LOG(INFO) << "APPROX_QUANTILE is deprecated. Please use APPROX_PERCENTILE instead.";
-  }
-  const auto agg = to_agg_kind(agg_str);
-  const auto distinct = json_bool(field(expr, "distinct"));
-  const auto agg_ti = parse_type(field(expr, "type"));
-  const auto operands = indices_from_json_array(field(expr, "operands"));
-  if (operands.size() > 1 && (operands.size() != 2 || (agg != kAPPROX_COUNT_DISTINCT &&
-                                                       agg != kAPPROX_QUANTILE))) {
-    throw QueryNotSupported("Multiple arguments for aggregates aren't supported");
-  }
-  return std::unique_ptr<const RexAgg>(new RexAgg(agg, distinct, agg_ti, operands));
-}
-
-std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr,
-                                                   int db_id,
-                                                   SchemaProviderPtr schema_provider,
-                                                   RelAlgDagBuilder& root_dag_builder) {
-  CHECK(expr.IsObject());
-  if (expr.IsObject() && expr.HasMember("input")) {
-    return std::unique_ptr<const RexScalar>(parse_abstract_input(expr));
-  }
-  if (expr.IsObject() && expr.HasMember("literal")) {
-    return std::unique_ptr<const RexScalar>(parse_literal(expr));
-  }
-  if (expr.IsObject() && expr.HasMember("op")) {
-    const auto op_str = json_str(field(expr, "op"));
-    if (op_str == std::string("CASE")) {
-      return std::unique_ptr<const RexScalar>(
-          parse_case(expr, db_id, schema_provider, root_dag_builder));
-    }
-    if (op_str == std::string("$SCALAR_QUERY")) {
-      return std::unique_ptr<const RexScalar>(
-          parse_subquery(expr, db_id, schema_provider, root_dag_builder));
-    }
-    return std::unique_ptr<const RexScalar>(
-        parse_operator(expr, db_id, schema_provider, root_dag_builder));
-  }
-  throw QueryNotSupported("Expression node " + json_node_to_string(expr) +
-                          " not supported");
-}
-
-std::unique_ptr<const RexScalar> disambiguate_rex(const RexScalar*, const RANodeOutput&);
 
 hdk::ir::ExprPtr parse_input_expr(const rapidjson::Value& expr,
                                   const RANodeOutput& ra_output) {
@@ -1473,13 +1306,13 @@ std::pair<hdk::ir::ExprPtr, SQLQualifier> getQuantifiedBinOperRhs(
   return getQuantifiedBinOperRhs(expr, expr);
 }
 
-bool supportedLowerBound(const RexWindowFunctionOperator::RexWindowBound& window_bound) {
+bool supportedLowerBound(const WindowBound& window_bound) {
   return window_bound.unbounded && window_bound.preceding && !window_bound.following &&
          !window_bound.is_current_row && !window_bound.offset &&
          window_bound.order_key == 0;
 }
 
-bool supportedUpperBound(const RexWindowFunctionOperator::RexWindowBound& window_bound,
+bool supportedUpperBound(const WindowBound& window_bound,
                          SqlWindowFunctionKind kind,
                          const hdk::ir::ExprPtrVector& order_keys) {
   const bool to_current_row = !window_bound.unbounded && !window_bound.preceding &&
@@ -1522,10 +1355,16 @@ hdk::ir::ExprPtr parseWindowFunction(const rapidjson::Value& json_expr,
   if (kind == SqlWindowFunctionKind::SUM_INTERNAL && ti.is_integer()) {
     ti = SQLTypeInfo(kBIGINT, ti.get_notnull());
   }
-  const auto lower_bound = parse_window_bound(
-      field(json_expr, "lower_bound"), db_id, schema_provider, root_dag_builder);
-  const auto upper_bound = parse_window_bound(
-      field(json_expr, "upper_bound"), db_id, schema_provider, root_dag_builder);
+  const auto lower_bound = parse_window_bound(field(json_expr, "lower_bound"),
+                                              db_id,
+                                              schema_provider,
+                                              root_dag_builder,
+                                              ra_output);
+  const auto upper_bound = parse_window_bound(field(json_expr, "upper_bound"),
+                                              db_id,
+                                              schema_provider,
+                                              root_dag_builder,
+                                              ra_output);
   bool is_rows = json_bool(field(json_expr, "is_rows"));
   ti.set_notnull(false);
 
@@ -2282,88 +2121,6 @@ JoinType to_join_type(const std::string& join_type_name) {
   throw QueryNotSupported("Join type (" + join_type_name + ") not supported");
 }
 
-std::unique_ptr<const RexOperator> disambiguate_operator(
-    const RexOperator* rex_operator,
-    const RANodeOutput& ra_output) noexcept {
-  std::vector<std::unique_ptr<const RexScalar>> disambiguated_operands;
-  for (size_t i = 0; i < rex_operator->size(); ++i) {
-    auto operand = rex_operator->getOperand(i);
-    // if (dynamic_cast<const RexSubQuery*>(operand)) {
-    // disambiguated_operands.emplace_back(rex_operator->getOperandAndRelease(i));
-    //} else {
-    disambiguated_operands.emplace_back(disambiguate_rex(operand, ra_output));
-    //}
-  }
-  const auto rex_window_function_operator =
-      dynamic_cast<const RexWindowFunctionOperator*>(rex_operator);
-  if (rex_window_function_operator) {
-    const auto& partition_keys = rex_window_function_operator->getPartitionKeys();
-    std::vector<std::unique_ptr<const RexScalar>> disambiguated_partition_keys;
-    for (const auto& partition_key : partition_keys) {
-      disambiguated_partition_keys.emplace_back(
-          disambiguate_rex(partition_key.get(), ra_output));
-    }
-    std::vector<std::unique_ptr<const RexScalar>> disambiguated_order_keys;
-    const auto& order_keys = rex_window_function_operator->getOrderKeys();
-    for (const auto& order_key : order_keys) {
-      disambiguated_order_keys.emplace_back(disambiguate_rex(order_key.get(), ra_output));
-    }
-    return rex_window_function_operator->disambiguatedOperands(
-        disambiguated_operands,
-        disambiguated_partition_keys,
-        disambiguated_order_keys,
-        rex_window_function_operator->getCollation());
-  }
-  return rex_operator->getDisambiguated(disambiguated_operands);
-}
-
-std::unique_ptr<const RexCase> disambiguate_case(const RexCase* rex_case,
-                                                 const RANodeOutput& ra_output) {
-  std::vector<
-      std::pair<std::unique_ptr<const RexScalar>, std::unique_ptr<const RexScalar>>>
-      disambiguated_expr_pair_list;
-  for (size_t i = 0; i < rex_case->branchCount(); ++i) {
-    auto disambiguated_when = disambiguate_rex(rex_case->getWhen(i), ra_output);
-    auto disambiguated_then = disambiguate_rex(rex_case->getThen(i), ra_output);
-    disambiguated_expr_pair_list.emplace_back(std::move(disambiguated_when),
-                                              std::move(disambiguated_then));
-  }
-  std::unique_ptr<const RexScalar> disambiguated_else{
-      disambiguate_rex(rex_case->getElse(), ra_output)};
-  return std::unique_ptr<const RexCase>(
-      new RexCase(disambiguated_expr_pair_list, disambiguated_else));
-}
-
-// The inputs used by scalar expressions are given as indices in the serialized
-// representation of the query. This is hard to navigate; make the relationship
-// explicit by creating RexInput expressions which hold a pointer to the source
-// relational algebra node and the index relative to the output of that node.
-std::unique_ptr<const RexScalar> disambiguate_rex(const RexScalar* rex_scalar,
-                                                  const RANodeOutput& ra_output) {
-  const auto rex_abstract_input = dynamic_cast<const RexAbstractInput*>(rex_scalar);
-  if (rex_abstract_input) {
-    CHECK_LT(static_cast<size_t>(rex_abstract_input->getIndex()), ra_output.size());
-    return std::unique_ptr<const RexInput>(
-        new RexInput(ra_output[rex_abstract_input->getIndex()]));
-  }
-  const auto rex_operator = dynamic_cast<const RexOperator*>(rex_scalar);
-  if (rex_operator) {
-    return disambiguate_operator(rex_operator, ra_output);
-  }
-  const auto rex_case = dynamic_cast<const RexCase*>(rex_scalar);
-  if (rex_case) {
-    return disambiguate_case(rex_case, ra_output);
-  }
-  if (auto const rex_literal = dynamic_cast<const RexLiteral*>(rex_scalar)) {
-    return rex_literal->deepCopy();
-  } else if (auto const rex_subquery = dynamic_cast<const RexSubQuery*>(rex_scalar)) {
-    return rex_subquery->deepCopy();
-  } else {
-    throw QueryNotSupported("Unable to disambiguate expression of type " +
-                            std::string(typeid(*rex_scalar).name()));
-  }
-}
-
 void handleQueryHint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
                      RelAlgDagBuilder* dag_builder) noexcept {
   // query hint is delivered by the above three nodes
@@ -2467,7 +2224,6 @@ void create_compound(
   hdk::ir::ExprPtr filter_expr;
   size_t groupby_count{0};
   std::vector<std::string> fields;
-  std::vector<const Rex*> target_exprs;
   hdk::ir::ExprPtrVector exprs;
   hdk::ir::ExprPtrVector groupby_exprs;
   bool first_project{true};
