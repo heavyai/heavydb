@@ -1183,6 +1183,7 @@ class CreateForeignTableTest : public CreateAndDropTableDdlTest {
     loginAdmin();
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
     sql("DROP SERVER IF EXISTS test_server;");
+    sql("DROP SERVER IF EXISTS test_server_ce;");
     dropTestUser();
     CreateAndDropTableDdlTest::TearDown();
   }
