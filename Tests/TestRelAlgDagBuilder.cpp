@@ -68,18 +68,11 @@ RelAlgNodePtr TestRelAlgDagBuilder::addProject(RelAlgNodePtr input,
   return addProject(input, fields, std::move(exprs));
 }
 
-RelAlgNodePtr TestRelAlgDagBuilder::addAgg(
-    RelAlgNodePtr input,
-    const std::vector<std::string>& fields,
-    size_t group_size,
-    std::vector<std::unique_ptr<const RexAgg>> aggs) {
-  hdk::ir::ExprPtrVector input_exprs = getInputExprsForAgg(input.get());
-  hdk::ir::ExprPtrVector exprs;
-  for (auto& rex : aggs) {
-    exprs.push_back(
-        RelAlgTranslator::translateAggregateRex(rex.get(), input_exprs, false));
-  }
-  auto res = std::make_shared<RelAggregate>(group_size, std::move(exprs), fields, input);
+RelAlgNodePtr TestRelAlgDagBuilder::addAgg(RelAlgNodePtr input,
+                                           const std::vector<std::string>& fields,
+                                           size_t group_size,
+                                           hdk::ir::ExprPtrVector aggs) {
+  auto res = std::make_shared<RelAggregate>(group_size, std::move(aggs), fields, input);
   nodes_.push_back(res);
   return res;
 }
@@ -88,18 +81,22 @@ RelAlgNodePtr TestRelAlgDagBuilder::addAgg(RelAlgNodePtr input,
                                            const std::vector<std::string>& fields,
                                            size_t group_size,
                                            std::vector<AggDesc> aggs) {
-  std::vector<std::unique_ptr<const RexAgg>> rex_aggs;
+  hdk::ir::ExprPtrVector agg_exprs;
   for (auto& agg : aggs) {
-    rex_aggs.push_back(
-        std::make_unique<RexAgg>(agg.agg, agg.distinct, agg.type, agg.operands));
+    hdk::ir::ExprPtr arg_expr;
+    CHECK_LE(agg.operands.size(), size_t(1));
+    if (agg.operands.size()) {
+      arg_expr = hdk::ir::makeExpr<hdk::ir::ColumnRef>(input.get(), agg.operands[0]);
+    }
+    agg_exprs.push_back(hdk::ir::makeExpr<hdk::ir::AggExpr>(
+        agg.type, agg.agg, arg_expr, agg.distinct, nullptr));
   }
-  return addAgg(input, fields, group_size, std::move(rex_aggs));
+  return addAgg(input, fields, group_size, std::move(agg_exprs));
 }
 
-RelAlgNodePtr TestRelAlgDagBuilder::addAgg(
-    RelAlgNodePtr input,
-    size_t group_size,
-    std::vector<std::unique_ptr<const RexAgg>> aggs) {
+RelAlgNodePtr TestRelAlgDagBuilder::addAgg(RelAlgNodePtr input,
+                                           size_t group_size,
+                                           hdk::ir::ExprPtrVector aggs) {
   auto fields = buildFieldNames(group_size + aggs.size());
   return addAgg(input, fields, group_size, std::move(aggs));
 }

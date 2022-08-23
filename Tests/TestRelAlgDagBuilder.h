@@ -70,7 +70,7 @@ class TestRelAlgDagBuilder : public RelAlgDag {
   RelAlgNodePtr addAgg(RelAlgNodePtr input,
                        const std::vector<std::string>& fields,
                        size_t group_size,
-                       std::vector<std::unique_ptr<const RexAgg>> aggs);
+                       hdk::ir::ExprPtrVector aggs);
   RelAlgNodePtr addAgg(RelAlgNodePtr input,
                        const std::vector<std::string>& fields,
                        size_t group_size,
@@ -78,7 +78,7 @@ class TestRelAlgDagBuilder : public RelAlgDag {
 
   RelAlgNodePtr addAgg(RelAlgNodePtr input,
                        size_t group_size,
-                       std::vector<std::unique_ptr<const RexAgg>> aggs);
+                       hdk::ir::ExprPtrVector aggs);
   RelAlgNodePtr addAgg(RelAlgNodePtr input, size_t group_size, std::vector<AggDesc> aggs);
 
   RelAlgNodePtr addSort(RelAlgNodePtr input,

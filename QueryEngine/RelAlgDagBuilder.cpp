@@ -2112,6 +2112,71 @@ hdk::ir::ExprPtr parseFunctionOperator(const std::string& fn_name,
   return hdk::ir::makeExpr<hdk::ir::FunctionOper>(ret_ti, fn_name, std::move(args));
 }
 
+bool isAggSupportedForType(const SQLAgg& agg_kind, const SQLTypeInfo& arg_ti) {
+  if ((agg_kind == kMIN || agg_kind == kMAX || agg_kind == kSUM || agg_kind == kAVG) &&
+      !(arg_ti.is_number() || arg_ti.is_boolean() || arg_ti.is_time())) {
+    return false;
+  }
+
+  return true;
+}
+
+hdk::ir::ExprPtr parseAggregateExpr(const rapidjson::Value& json_expr,
+                                    RelAlgDagBuilder& root_dag_builder,
+                                    const hdk::ir::ExprPtrVector& sources) {
+  auto agg_str = json_str(field(json_expr, "agg"));
+  if (agg_str == "APPROX_QUANTILE") {
+    LOG(INFO) << "APPROX_QUANTILE is deprecated. Please use APPROX_PERCENTILE instead.";
+  }
+  auto agg_kind = to_agg_kind(agg_str);
+  auto is_distinct = json_bool(field(json_expr, "distinct"));
+  auto operands = indices_from_json_array(field(json_expr, "operands"));
+  if (operands.size() > 1 &&
+      (operands.size() != 2 ||
+       (agg_kind != kAPPROX_COUNT_DISTINCT && agg_kind != kAPPROX_QUANTILE))) {
+    throw QueryNotSupported("Multiple arguments for aggregates aren't supported");
+  }
+
+  hdk::ir::ExprPtr arg_expr;
+  std::shared_ptr<hdk::ir::Constant> arg1;  // 2nd aggregate parameter
+  if (operands.size() > 0) {
+    const auto operand = operands[0];
+    CHECK_LT(operand, sources.size());
+    CHECK_LE(operands.size(), 2u);
+    arg_expr = sources[operand];
+
+    if (agg_kind == kAPPROX_COUNT_DISTINCT && operands.size() == 2) {
+      arg1 = std::dynamic_pointer_cast<hdk::ir::Constant>(sources[operands[1]]);
+      if (!arg1 || arg1->get_type_info().get_type() != kINT ||
+          arg1->get_constval().intval < 1 || arg1->get_constval().intval > 100) {
+        throw std::runtime_error(
+            "APPROX_COUNT_DISTINCT's second parameter should be SMALLINT literal between "
+            "1 and 100");
+      }
+    } else if (agg_kind == kAPPROX_QUANTILE) {
+      // If second parameter is not given then APPROX_MEDIAN is assumed.
+      if (operands.size() == 2) {
+        arg1 = std::dynamic_pointer_cast<hdk::ir::Constant>(
+            std::dynamic_pointer_cast<hdk::ir::Constant>(sources[operands[1]])
+                ->add_cast(SQLTypeInfo(kDOUBLE)));
+      } else {
+        Datum median;
+        median.doubleval = 0.5;
+        arg1 = std::make_shared<hdk::ir::Constant>(kDOUBLE, false, median);
+      }
+    }
+    auto& arg_ti = arg_expr->get_type_info();
+    if (!isAggSupportedForType(agg_kind, arg_ti)) {
+      throw std::runtime_error("Aggregate on " + arg_ti.get_type_name() +
+                               " is not supported yet.");
+    }
+  }
+  auto agg_ti = get_agg_type(
+      agg_kind, arg_expr.get(), root_dag_builder.config().exec.group_by.bigint_count);
+  return hdk::ir::makeExpr<hdk::ir::AggExpr>(
+      agg_ti, agg_kind, arg_expr, is_distinct, arg1);
+}
+
 hdk::ir::ExprPtr parse_operator_expr(const rapidjson::Value& json_expr,
                                      int db_id,
                                      SchemaProviderPtr schema_provider,
@@ -3356,8 +3421,13 @@ class RelAlgDispatcher {
          aggs_json_arr_it != aggs_json_arr.End();
          ++aggs_json_arr_it) {
       auto rex = parse_aggregate_expr(*aggs_json_arr_it);
-      aggs.push_back(
-          RelAlgTranslator::translateAggregateRex(rex.get(), input_exprs, bigint_count));
+      auto orig_agg =
+          RelAlgTranslator::translateAggregateRex(rex.get(), input_exprs, bigint_count);
+      auto agg = parseAggregateExpr(*aggs_json_arr_it, root_dag_builder, input_exprs);
+
+      CHECK(*orig_agg == *agg) << "Aggregate mismatch";
+
+      aggs.push_back(agg);
     }
     auto agg_node = std::make_shared<RelAggregate>(
         group.size(), std::move(aggs), fields, inputs.front());
