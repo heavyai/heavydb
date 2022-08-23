@@ -24,6 +24,30 @@
 #include "QueryEngine/Target.h"
 
 namespace compiler {
+
+class CodegenTraits {
+  explicit CodegenTraits(unsigned local_addr_space, unsigned global_addr_space)
+      : local_addr_space_(local_addr_space), global_addr_space_(global_addr_space) {}
+
+  const unsigned local_addr_space_;
+  const unsigned global_addr_space_;
+
+ public:
+  CodegenTraits(const CodegenTraits&) = delete;
+  CodegenTraits& operator=(const CodegenTraits&) = delete;
+
+  static CodegenTraits get(unsigned local_addr_space, unsigned global_addr_space) {
+    return CodegenTraits(local_addr_space, global_addr_space);
+  }
+
+  llvm::PointerType* localPointerType(llvm::Type* ElementType) const {
+    return llvm::PointerType::get(ElementType, local_addr_space_);
+  }
+  llvm::PointerType* globalPointerType(llvm::Type* ElementType) const {
+    return llvm::PointerType::get(ElementType, global_addr_space_);
+  }
+};
+
 class Backend {
  public:
   virtual ~Backend(){};
@@ -32,6 +56,7 @@ class Backend {
       llvm::Function* wrapper_func,
       const std::unordered_set<llvm::Function*>& live_funcs,
       const CompilationOptions& co) = 0;
+  virtual CodegenTraits traits() const = 0;
 };
 
 class CPUBackend : public Backend {
@@ -42,6 +67,8 @@ class CPUBackend : public Backend {
       llvm::Function* wrapper_func /*ignored*/,
       const std::unordered_set<llvm::Function*>& live_funcs,
       const CompilationOptions& co) override;
+
+  CodegenTraits traits() const { return CodegenTraits::get(0, 0); };
 
   static std::shared_ptr<CpuCompilationContext> generateNativeCPUCode(
       llvm::Function* func,
@@ -60,6 +87,8 @@ class CUDABackend : public Backend {
       llvm::Function* wrapper_func,
       const std::unordered_set<llvm::Function*>& live_funcs,
       const CompilationOptions& co) override;
+
+  CodegenTraits traits() const { return CodegenTraits::get(0, 0); };
 
   static std::string generatePTX(const std::string& cuda_llir,
                                  llvm::TargetMachine* nvptx_target_machine,
@@ -101,6 +130,8 @@ class L0Backend : public Backend {
       llvm::Function* wrapper_func,
       const std::unordered_set<llvm::Function*>& live_funcs,
       const CompilationOptions& co) override;
+
+  CodegenTraits traits() const { return CodegenTraits::get(4, 1); };
 
   static std::shared_ptr<L0CompilationContext> generateNativeGPUCode(
       llvm::Function* func,

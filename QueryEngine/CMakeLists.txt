@@ -209,7 +209,7 @@ add_custom_command(
         ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
 
 add_custom_command(
-        DEPENDS RuntimeFunctions.h RuntimeFunctions.cpp DecodersImpl.h JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
+        DEPENDS RuntimeFunctions.h RuntimeFunctions.cpp DecodersImpl.h l0_mapd_rt.cpp JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsL0.bc
         COMMAND ${llvm_clangpp_cmd}
         ARGS -std=c++17 ${RT_OPT_FLAGS} -c -emit-llvm -o ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsL0.bc
@@ -218,7 +218,7 @@ add_custom_command(
         ${MAPD_DEFINITIONS}
         -DL0_RUNTIME_ENABLED
         -I ${CMAKE_CURRENT_SOURCE_DIR}/../
-        ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/l0_mapd_rt.cpp
         VERBATIM)
 
 if(ENABLE_L0)

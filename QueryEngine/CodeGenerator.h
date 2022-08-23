@@ -486,7 +486,8 @@ class ScalarCodeGenerator : public CodeGenerator {
   // needed to provide inputs to the generated function.
   CompiledExpression compile(const hdk::ir::Expr* expr,
                              const bool fetch_columns,
-                             const CompilationOptions& co);
+                             const CompilationOptions& co,
+                             const compiler::CodegenTraits& traits);
 
   // Generates the native function pointers for each device.
   // NB: this is separated from the compile method to allow building higher level code

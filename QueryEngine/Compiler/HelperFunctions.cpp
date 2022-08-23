@@ -58,7 +58,7 @@ void verify_function_ir(const llvm::Function* func) {
   }
 }
 
-#if defined(HAVE_CUDA) || !defined(WITH_JIT_DEBUG)
+#if defined(HAVE_CUDA) || defined(HAVE_L0) || !defined(WITH_JIT_DEBUG)
 void eliminate_dead_self_recursive_funcs(
     llvm::Module& M,
     const std::unordered_set<llvm::Function*>& live_funcs) {

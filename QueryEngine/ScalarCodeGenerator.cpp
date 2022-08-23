@@ -70,7 +70,8 @@ ScalarCodeGenerator::ColumnMap ScalarCodeGenerator::prepare(const hdk::ir::Expr*
 ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
     const hdk::ir::Expr* expr,
     const bool fetch_columns,
-    const CompilationOptions& co) {
+    const CompilationOptions& co,
+    const compiler::CodegenTraits& traits) {
   own_plan_state_ =
       std::make_unique<PlanState>(false, std::vector<InputTableInfo>{}, nullptr);
   plan_state_ = own_plan_state_.get();
@@ -87,8 +88,7 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
     const auto& ti = col_expr->get_type_info();
     arg_types[arg_idx + 1] = llvm_type_from_sql(ti, ctx);
   }
-  arg_types[0] =
-      llvm::PointerType::get(llvm_type_from_sql(expr->get_type_info(), ctx), 0);
+  arg_types[0] = traits.globalPointerType(llvm_type_from_sql(expr->get_type_info(), ctx));
   auto ft = llvm::FunctionType::get(get_int_type(32, ctx), arg_types, false);
   auto scalar_expr_func = llvm::Function::Create(
       ft, llvm::Function::ExternalLinkage, "scalar_expr", module_.get());
@@ -106,10 +106,10 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
   cgen_state_->ir_builder_.CreateRet(ll_int<int32_t>(0, ctx));
   if (co.device_type == ExecutorDeviceType::GPU) {
     std::vector<llvm::Type*> wrapper_arg_types(arg_types.size() + 1);
-    wrapper_arg_types[0] = llvm::PointerType::get(get_int_type(32, ctx), 0);
+    wrapper_arg_types[0] = traits.globalPointerType(get_int_type(32, ctx));
     wrapper_arg_types[1] = arg_types[0];
     for (size_t i = 1; i < arg_types.size(); ++i) {
-      wrapper_arg_types[i + 1] = llvm::PointerType::get(arg_types[i], 0);
+      wrapper_arg_types[i + 1] = traits.globalPointerType(arg_types[i]);
     }
     auto wrapper_ft =
         llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), wrapper_arg_types, false);
