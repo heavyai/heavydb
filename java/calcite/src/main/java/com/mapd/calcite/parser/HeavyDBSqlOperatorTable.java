@@ -2781,7 +2781,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
         ret.append(paramName).append(" => ");
 
         final String t = type.toString().toUpperCase(Locale.ROOT);
-        ret.append("<").append(t).append(">");
+        ret.append("<").append(t);
         if (type == SqlTypeFamily.CURSOR) {
           List<ExtensionFunction.ExtArgumentType> field_types =
                   cursor_field_types.get(paramName);
@@ -2803,6 +2803,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
           }
           ret.append("]");
         }
+        ret.append(">");
       }
       ret.append(")'");
 
