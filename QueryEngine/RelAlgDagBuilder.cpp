@@ -2183,28 +2183,6 @@ hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
     return parseLiteral(expr);
   }
   if (expr.IsObject() && expr.HasMember("op")) {
-    auto rex = parse_scalar_expr(expr, db_id, schema_provider, root_dag_builder);
-    bool all_or_any = false;
-    const auto rex_operator = dynamic_cast<const RexOperator*>(rex.get());
-    if (rex_operator && rex_operator->getOperator() == kCAST) {
-      const auto rex_function =
-          dynamic_cast<const RexFunctionOperator*>(rex_operator->getOperand(0));
-      all_or_any = rex_function && (rex_function->getName() == "PG_ANY" ||
-                                    rex_function->getName() == "PG_ALL");
-    }
-    const auto rex_function = dynamic_cast<const RexFunctionOperator*>(rex.get());
-    if (rex_function) {
-      all_or_any = rex_function && (rex_function->getName() == "PG_ANY" ||
-                                    rex_function->getName() == "PG_ALL");
-    }
-    hdk::ir::ExprPtr orig_res;
-    if (!all_or_any) {
-      auto dis_rex = disambiguate_rex(rex.get(), ra_output);
-      RelAlgTranslator translator(
-          root_dag_builder.config(), root_dag_builder.now(), false);
-      orig_res = translator.translateScalarRex(dis_rex.get());
-    }
-
     hdk::ir::ExprPtr res;
     const auto op_str = json_str(field(expr, "op"));
     if (op_str == std::string("CASE")) {
@@ -2216,11 +2194,6 @@ hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
           parse_operator_expr(expr, db_id, schema_provider, root_dag_builder, ra_output);
     }
     CHECK(res);
-
-    if (res && orig_res) {
-      CHECK(*orig_res == *res) << "Translation mismatch: orig=" << orig_res->toString()
-                               << " new=" << res->toString();
-    }
 
     return res;
   }

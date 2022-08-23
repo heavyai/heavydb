@@ -47,8 +47,6 @@ class RelAlgTranslator {
                    const bool just_explain);
   RelAlgTranslator(const Config& config, const time_t now, const bool just_explain);
 
-  hdk::ir::ExprPtr translateScalarRex(const RexScalar* rex) const;
-
   static hdk::ir::ExprPtr translateAggregateRex(
       const RexAgg* rex,
       const std::vector<hdk::ir::ExprPtr>& scalar_sources,
@@ -56,88 +54,13 @@ class RelAlgTranslator {
 
   hdk::ir::ExprPtr normalize(const hdk::ir::Expr* expr) const;
 
-  static hdk::ir::ExprPtr translateLiteral(const RexLiteral*);
-
   hdk::ir::ExprPtr translateInSubquery(
       hdk::ir::ExprPtr lhs,
       std::shared_ptr<const ExecutionResult> result) const;
 
  private:
-  hdk::ir::ExprPtr translateScalarSubquery(const RexSubQuery*) const;
-
-  hdk::ir::ExprPtr translateInput(const RexInput*) const;
-
-  hdk::ir::ExprPtr translateUoper(const RexOperator*) const;
-
-  hdk::ir::ExprPtr translateInOper(const RexOperator*) const;
-
   hdk::ir::ExprPtr getInIntegerSetExpr(hdk::ir::ExprPtr arg,
                                        const ResultSet& val_set) const;
-
-  hdk::ir::ExprPtr translateOper(const RexOperator*) const;
-
-  hdk::ir::ExprPtr translateOverlapsOper(const RexOperator*) const;
-
-  hdk::ir::ExprPtr translateCase(const RexCase*) const;
-
-  hdk::ir::ExprPtr translateWidthBucket(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateLike(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateRegexp(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateLikely(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateUnlikely(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateExtract(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateDateadd(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateDatePlusMinus(const RexOperator*) const;
-
-  hdk::ir::ExprPtr translateDatediff(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateDatepart(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateLength(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateKeyForString(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateSampleRatio(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateCurrentUser(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateLower(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateCardinality(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateItem(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateCurrentDate() const;
-
-  hdk::ir::ExprPtr translateCurrentTime() const;
-
-  hdk::ir::ExprPtr translateCurrentTimestamp() const;
-
-  hdk::ir::ExprPtr translateDatetime(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateHPTLiteral(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateAbs(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateSign(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateOffsetInFragment() const;
-
-  hdk::ir::ExprPtr translateArrayFunction(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateFunction(const RexFunctionOperator*) const;
-
-  hdk::ir::ExprPtr translateWindowFunction(const RexWindowFunctionOperator*) const;
-
-  hdk::ir::ExprPtrVector translateFunctionArgs(const RexFunctionOperator*) const;
-
   const Executor* executor_;
   const Config& config_;
   const std::unordered_map<const RelAlgNode*, int> input_to_nest_level_;
@@ -155,11 +78,5 @@ struct QualsConjunctiveForm {
 QualsConjunctiveForm qual_to_conjunctive_form(const hdk::ir::ExprPtr qual_expr);
 
 std::vector<hdk::ir::ExprPtr> qual_to_disjunctive_form(const hdk::ir::ExprPtr& qual_expr);
-
-inline auto func_resolve = [](auto funcname, auto&&... strlist) {
-  return ((funcname == strlist) || ...);
-};
-
-using namespace std::literals;
 
 #endif  // QUERYENGINE_RELALGTRANSLATOR_H
