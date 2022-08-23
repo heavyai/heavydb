@@ -2228,6 +2228,53 @@ NEVER_INLINE HOST int32_t array_asarray__cpu_template(TableFunctionManager& mgr,
 
 // clang-format off
 /*
+  UDTF: array_split__cpu_template(TableFunctionManager mgr, Column<Array<T>> input) ->
+          Column<Array<T>> | input_id=args<0>, Column<Array<T>> | input_id=args<0>,
+          T=[float, double, int8_t, int16_t, int32_t, int64_t, bool, TextEncodingDict]
+*/
+// clang-format on
+template <typename T>
+NEVER_INLINE HOST int32_t array_split__cpu_template(TableFunctionManager& mgr,
+                                                    const Column<Array<T>>& input,
+                                                    Column<Array<T>>& first,
+                                                    Column<Array<T>>& second) {
+  int size = input.size();
+  int first_values_size = 0;
+  int second_values_size = 0;
+  for (int i = 0; i < size; i++) {
+    if (!input.isNull(i)) {
+      int64_t sz = input[i].getSize();
+      first_values_size += sz / 2;
+      second_values_size += sz - sz / 2;
+    }
+  }
+  mgr.set_output_array_values_total_number(0, first_values_size);
+  mgr.set_output_array_values_total_number(1, second_values_size);
+  mgr.set_output_row_size(size);
+
+  for (int i = 0; i < size; i++) {
+    if (input.isNull(i)) {
+      first.setNull(i);
+      second.setNull(i);
+    } else {
+      Array<T> arr = input[i];
+      int64_t sz = arr.getSize();
+      Array<T> arr1 = first.getItem(i, sz / 2);
+      Array<T> arr2 = second.getItem(i, sz - sz / 2);
+      for (int64_t j = 0; j < sz; j++) {
+        if (j < sz / 2) {
+          arr1[j] = arr[j];
+        } else {
+          arr2[j - sz / 2] = arr[j];
+        }
+      }
+    }
+  }
+  return size;
+}
+
+// clang-format off
+/*
   UDTF: tf_metadata_setter__cpu_template(TableFunctionManager) -> Column<bool> success
 */
 // clang-format on

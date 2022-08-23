@@ -33,6 +33,26 @@ DEVICE ALWAYS_INLINE Array<bool> barray_append_impl(const Array<bool>& in_arr,
   return out_arr;
 }
 
+template <typename T>
+DEVICE ALWAYS_INLINE Array<T> array_first_half_impl(const Array<T>& in_arr) {
+  auto sz = in_arr.getSize();
+  Array<T> out_arr(sz / 2, in_arr.isNull());
+  for (int64_t i = 0; i < sz / 2; i++) {
+    out_arr[i] = in_arr(i);
+  }
+  return out_arr;
+}
+
+template <typename T>
+DEVICE ALWAYS_INLINE Array<T> array_second_half_impl(const Array<T>& in_arr) {
+  auto sz = in_arr.getSize();
+  Array<T> out_arr(sz - sz / 2, in_arr.isNull());
+  for (int64_t i = sz / 2; i < sz; i++) {
+    out_arr[i - sz / 2] = in_arr(i);
+  }
+  return out_arr;
+}
+
 }  // namespace
 
 #endif
@@ -124,6 +144,159 @@ EXTENSION_NOINLINE Array<bool> barray_append(const Array<bool>& in_arr, const bo
   return Array<bool>(0, true);
 #endif
 }
+
+EXTENSION_NOINLINE Array<bool> array_first_half__b8(const Array<bool>& in_arr) {
+#ifndef __CUDACC__
+  return array_first_half_impl(in_arr);
+#else
+  assert(false);
+  return Array<bool>(0, true);
+#endif
+}
+
+EXTENSION_NOINLINE Array<bool> array_second_half__b8(const Array<bool>& in_arr) {
+#ifndef __CUDACC__
+  return array_second_half_impl(in_arr);
+#else
+  assert(false);
+  return Array<bool>(0, true);
+#endif
+}
+
+EXTENSION_NOINLINE Array<int8_t> array_first_half__i8(const Array<int8_t>& in_arr) {
+#ifndef __CUDACC__
+  return array_first_half_impl(in_arr);
+#else
+  assert(false);
+  return Array<int8_t>(0, true);
+#endif
+}
+
+EXTENSION_NOINLINE Array<int8_t> array_second_half__i8(const Array<int8_t>& in_arr) {
+#ifndef __CUDACC__
+  return array_second_half_impl(in_arr);
+#else
+  assert(false);
+  return Array<int8_t>(0, true);
+#endif
+}
+
+EXTENSION_NOINLINE Array<int16_t> array_first_half__i16(const Array<int16_t>& in_arr) {
+#ifndef __CUDACC__
+  return array_first_half_impl(in_arr);
+#else
+  assert(false);
+  return Array<int16_t>(0, true);
+#endif
+}
+
+EXTENSION_NOINLINE Array<int16_t> array_second_half__i16(const Array<int16_t>& in_arr) {
+#ifndef __CUDACC__
+  return array_second_half_impl(in_arr);
+#else
+  assert(false);
+  return Array<int16_t>(0, true);
+#endif
+}
+
+EXTENSION_NOINLINE Array<int32_t> array_first_half__i32(const Array<int32_t>& in_arr) {
+#ifndef __CUDACC__
+  return array_first_half_impl(in_arr);
+#else
+  assert(false);
+  return Array<int32_t>(0, true);
+#endif
+}
+
+EXTENSION_NOINLINE Array<int32_t> array_second_half__i32(const Array<int32_t>& in_arr) {
+#ifndef __CUDACC__
+  return array_second_half_impl(in_arr);
+#else
+  assert(false);
+  return Array<int32_t>(0, true);
+#endif
+}
+
+EXTENSION_NOINLINE Array<int64_t> array_first_half__i64(const Array<int64_t>& in_arr) {
+#ifndef __CUDACC__
+  return array_first_half_impl(in_arr);
+#else
+  assert(false);
+  return Array<int64_t>(0, true);
+#endif
+}
+
+EXTENSION_NOINLINE Array<int64_t> array_second_half__i64(const Array<int64_t>& in_arr) {
+#ifndef __CUDACC__
+  return array_second_half_impl(in_arr);
+#else
+  assert(false);
+  return Array<int64_t>(0, true);
+#endif
+}
+
+EXTENSION_NOINLINE Array<float> array_first_half__f32(const Array<float>& in_arr) {
+#ifndef __CUDACC__
+  return array_first_half_impl(in_arr);
+#else
+  assert(false);
+  return Array<float>(0, true);
+#endif
+}
+
+EXTENSION_NOINLINE Array<float> array_second_half__f32(const Array<float>& in_arr) {
+#ifndef __CUDACC__
+  return array_second_half_impl(in_arr);
+#else
+  assert(false);
+  return Array<float>(0, true);
+#endif
+}
+
+EXTENSION_NOINLINE Array<double> array_first_half__f64(const Array<double>& in_arr) {
+#ifndef __CUDACC__
+  return array_first_half_impl(in_arr);
+#else
+  assert(false);
+  return Array<double>(0, true);
+#endif
+}
+
+EXTENSION_NOINLINE Array<double> array_second_half__f64(const Array<double>& in_arr) {
+#ifndef __CUDACC__
+  return array_second_half_impl(in_arr);
+#else
+  assert(false);
+  return Array<double>(0, true);
+#endif
+}
+
+// UDFs with Array<TextEncodingDict> argument is not supported yet:
+/*
+#ifdef _WIN32
+template struct Array<TextEncodingDict>;
+#endif
+
+EXTENSION_NOINLINE Array<TextEncodingDict> array_first_half__t32(
+    const Array<TextEncodingDict>& in_arr) {
+#ifndef __CUDACC__
+  return array_first_half_impl(in_arr);
+#else
+  assert(false);
+  return Array<TextEncodingDict>(0, true);
+#endif
+}
+
+EXTENSION_NOINLINE Array<TextEncodingDict> array_second_half__t32(
+    const Array<TextEncodingDict>& in_arr) {
+#ifndef __CUDACC__
+  return array_second_half_impl(in_arr);
+#else
+  assert(false);
+  return Array<TextEncodingDict>(0, true);
+#endif
+}
+*/
 
 #if defined(__clang__)
 #pragma clang diagnostic pop

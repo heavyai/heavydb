@@ -892,8 +892,21 @@ size_t QueryMemoryDescriptor::getColOffInBytes(const size_t col_idx) const {
     if (!keyless_hash_) {
       offset += getPrependedGroupBufferSizeInBytes();
     }
-    for (size_t index = 0; index < col_idx; ++index) {
-      offset += align_to_int64(getPaddedSlotWidthBytes(index) * entry_count_);
+    if (is_table_function_) {
+      for (size_t index = 0; index < col_idx; ++index) {
+        int8_t column_width = getPaddedSlotWidthBytes(index);
+        if (column_width > 0) {
+          offset += align_to_int64(column_width * entry_count_);
+        } else {
+          int64_t flatbuffer_size = getFlatBufferSize(index);
+          CHECK_GT(flatbuffer_size, 0);
+          offset += align_to_int64(flatbuffer_size);
+        }
+      }
+    } else {
+      for (size_t index = 0; index < col_idx; ++index) {
+        offset += align_to_int64(getPaddedSlotWidthBytes(index) * entry_count_);
+      }
     }
     return offset;
   }
