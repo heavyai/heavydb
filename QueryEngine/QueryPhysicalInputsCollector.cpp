@@ -202,6 +202,10 @@ class RelAlgPhysicalTableInputsVisitor : public RelRexDagVisitor {
   void visit(RelScan const* scan) override {
     table_ids_.insert(scan->getTableDescriptor()->tableId);
   }
+
+  // Only RelScan nodes have physical table ids, so we may prune any nodes that can never
+  // have a RelScan node as a descendant.
+  void visit(RelLogicalValues const*) override {}
 };
 
 }  // namespace

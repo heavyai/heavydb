@@ -1566,7 +1566,7 @@ std::unordered_map<const RelAlgNode*, int> get_input_nest_levels(
     size_t const idx = dynamic_cast<const RelLogicalUnion*>(ra_node) ? 0 : input_idx;
     const auto it_ok = input_to_nest_level.emplace(input_ra, idx);
     CHECK(it_ok.second);
-    LOG_IF(INFO, !input_permutation.empty())
+    LOG_IF(DEBUG1, !input_permutation.empty())
         << "Assigned input " << input_ra->toString(RelRexToStringConfig::defaults())
         << " to nest level " << input_idx;
   }
