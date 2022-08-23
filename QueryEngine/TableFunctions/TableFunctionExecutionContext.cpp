@@ -404,6 +404,89 @@ void TableFunctionExecutionContext::launchPreCodeOnCpu(
   }
 }
 
+// clang-format off
+/*
+  Managing the output buffers from table functions
+  ------------------------------------------------
+
+  In general, the results of a query (a list of columns) is hold by a
+  ResultSet instance. While ResultSet is a rather complicated
+  structure, its most important members are
+
+    std::vector<TargetInfo> targets_ that holds the type of output
+      columns (recall: `struct TargetInfo {..., SQLTypeInfo sql_type,
+      ...};`)
+
+    std::unique_ptr<ResultSetStorage> storage_ that stores the
+      underlying buffer for a result set (recall: `struct
+      ResultSetStorage {..., int8_t* buff_, ...};`)
+
+    QueryMemoryDescriptor query_mem_desc_ that describes the format of
+      the storage for a result set.
+
+  QueryMemoryDescriptor structure contains the following relevant
+  members:
+
+    QueryDescriptionType query_desc_type_ is equal to one of
+      GroupByPerfectHash, GroupByBaselineHash, Projection,
+      TableFunction, NonGroupedAggregate, Estimator. In the following,
+      we assume query_desc_type_ == TableFunction.
+
+    bool output_columnar_ is always true for table function result
+      sets.
+
+    size_t entry_count_ is the number of entries in the storage
+      buffer. This typically corresponds to the number of output rows.
+
+    ColSlotContext col_slot_context_ describes the internal structure
+      of the storage buffer using the following members:
+
+        std::vector<SlotSize> slot_sizes_ where we have `struct SlotSize
+          { int8_t padded_size; int8_t logical_size; };`
+
+        std::vector<std::vector<size_t>> col_to_slot_map_ describes the
+          mapping of a column to possibly multiple slots.
+
+        std::unordered_map<SlotIndex, ArraySize> varlen_output_slot_map_
+
+  In the case of table function result sets, the QueryMemoryDescriptor
+  instance is created in TableFunctionManager::allocate_output_buffers
+  method and we have query_desc_type_ == TableFunction.
+
+  Depending on the target info of an output column, the internal
+  structure of the storage buffer has two variants:
+
+    - traditional where the buffer size of a particular column is
+      described by entry_count_ and
+      col_slot_context_.slot_sizes_. This variant is used for output
+      columns of fixed-width scalar types such as integers, floats,
+      boolean, text encoded dicts, etc. For the corresponding column
+      with col_idx, we have
+
+        col_to_slot_map_[col_idx] == {slot_idx}
+        slot_sizes_[slot_idx] == {column_width, column_width}
+
+      where column_width is targets_[col_idx].sql_type.get_size().
+
+    - flatbuffer where the buffer size of a particular column is
+      described by varlen_output_slot_map_. This variant is used for
+      output columns of variable length composite types such as arrays
+      of ints, floats, etc. For the corresponding column with col_idx,
+      we have
+
+        col_to_slot_map_[col_idx] == {slot_idx}
+        slot_sizes_[slot_idx] == {0, 0}
+        varlen_output_slot_map_ contains an item col_idx:flatbuffer_size
+
+  Only table functions produce result sets that may contain both
+  variants. The variants can be distinguished via
+  `getPaddedSlotWidthBytes(slot_idx) == 0` test.
+
+  In the case of table function result sets, col_idx == slot_idx holds.
+
+*/
+// clang-format on
+
 ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
     const TableFunctionExecutionUnit& exe_unit,
     const std::shared_ptr<CpuCompilationContext>& compilation_context,
