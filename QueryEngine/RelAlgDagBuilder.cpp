@@ -1174,9 +1174,103 @@ hdk::ir::ExprPtr parse_input_expr(const rapidjson::Value& expr,
       getColumnType(source, col_idx), source, col_idx);
 }
 
-hdk::ir::ExprPtr parse_literal_expr(const rapidjson::Value& expr) {
-  auto rex = parse_literal(expr);
-  return RelAlgTranslator::translateLiteral(rex.get());
+SQLTypeInfo build_type_info(const SQLTypes sql_type,
+                            const int scale,
+                            const int precision) {
+  SQLTypeInfo ti(sql_type, 0, 0, true);
+  if (ti.is_decimal()) {
+    ti.set_scale(scale);
+    ti.set_precision(precision);
+  }
+  return ti;
+}
+
+hdk::ir::ExprPtr parseLiteral(const rapidjson::Value& expr) {
+  CHECK(expr.IsObject());
+  const auto& literal = field(expr, "literal");
+  const auto type = to_sql_type(json_str(field(expr, "type")));
+  const auto target_type = to_sql_type(json_str(field(expr, "target_type")));
+  const auto scale = json_i64(field(expr, "scale"));
+  const auto precision = json_i64(field(expr, "precision"));
+  const auto type_scale = json_i64(field(expr, "type_scale"));
+  const auto type_precision = json_i64(field(expr, "type_precision"));
+  if (literal.IsNull()) {
+    return hdk::ir::makeExpr<hdk::ir::Constant>(target_type, true, Datum{0});
+  }
+
+  auto lit_ti = build_type_info(type, scale, precision);
+  auto target_ti = build_type_info(target_type, type_scale, type_precision);
+  switch (type) {
+    case kINT:
+    case kBIGINT: {
+      Datum d;
+      d.bigintval = json_i64(literal);
+      return hdk::ir::makeExpr<hdk::ir::Constant>(type, false, d);
+    }
+    case kDECIMAL: {
+      int64_t val = json_i64(literal);
+      if (target_ti.is_fp() && !scale) {
+        return make_fp_constant(val, target_ti);
+      }
+      auto lit_expr = scale ? Analyzer::analyzeFixedPtValue(val, scale, precision)
+                            : Analyzer::analyzeIntValue(val);
+      return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
+    }
+    case kTEXT: {
+      return Analyzer::analyzeStringValue(json_str(literal));
+    }
+    case kBOOLEAN: {
+      Datum d;
+      d.boolval = json_bool(literal);
+      return hdk::ir::makeExpr<hdk::ir::Constant>(kBOOLEAN, false, d);
+    }
+    case kDOUBLE: {
+      Datum d;
+      if (literal.IsDouble()) {
+        d.doubleval = json_double(literal);
+      } else if (literal.IsInt64()) {
+        d.doubleval = static_cast<double>(literal.GetInt64());
+      } else if (literal.IsUint64()) {
+        d.doubleval = static_cast<double>(literal.GetUint64());
+      } else {
+        UNREACHABLE() << "Unhandled type: " << literal.GetType();
+      }
+      auto lit_expr = hdk::ir::makeExpr<hdk::ir::Constant>(kDOUBLE, false, d);
+      return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
+    }
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH: {
+      Datum d;
+      d.bigintval = json_i64(literal);
+      return hdk::ir::makeExpr<hdk::ir::Constant>(type, false, d);
+    }
+    case kTIME:
+    case kTIMESTAMP: {
+      Datum d;
+      d.bigintval = type == kTIMESTAMP && precision > 0 ? json_i64(literal)
+                                                        : json_i64(literal) / 1000;
+      return hdk::ir::makeExpr<hdk::ir::Constant>(
+          SQLTypeInfo(type, precision, 0, false), false, d);
+    }
+    case kDATE: {
+      Datum d;
+      d.bigintval = json_i64(literal) * 24 * 3600;
+      return hdk::ir::makeExpr<hdk::ir::Constant>(type, false, d);
+    }
+    case kNULLT: {
+      if (target_ti.is_array()) {
+        hdk::ir::ExprPtrVector args;
+        // defaulting to valid sub-type for convenience
+        target_ti.set_subtype(kBOOLEAN);
+        return hdk::ir::makeExpr<hdk::ir::ArrayExpr>(target_ti, args, true);
+      }
+      return hdk::ir::makeExpr<hdk::ir::Constant>(target_type, true, Datum{0});
+    }
+    default: {
+      LOG(FATAL) << "Unexpected literal type " << lit_ti.get_type_name();
+    }
+  }
+  return nullptr;
 }
 
 hdk::ir::ExprPtr parse_case_expr(const rapidjson::Value& expr,
@@ -2086,7 +2180,7 @@ hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
     return parse_input_expr(expr, ra_output);
   }
   if (expr.IsObject() && expr.HasMember("literal")) {
-    return parse_literal_expr(expr);
+    return parseLiteral(expr);
   }
   if (expr.IsObject() && expr.HasMember("op")) {
     auto rex = parse_scalar_expr(expr, db_id, schema_provider, root_dag_builder);
@@ -2112,7 +2206,6 @@ hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
     }
 
     hdk::ir::ExprPtr res;
-
     const auto op_str = json_str(field(expr, "op"));
     if (op_str == std::string("CASE")) {
       res = parse_case_expr(expr, db_id, schema_provider, root_dag_builder, ra_output);
@@ -2122,13 +2215,14 @@ hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
       res =
           parse_operator_expr(expr, db_id, schema_provider, root_dag_builder, ra_output);
     }
+    CHECK(res);
 
     if (res && orig_res) {
       CHECK(*orig_res == *res) << "Translation mismatch: orig=" << orig_res->toString()
                                << " new=" << res->toString();
     }
 
-    return res ? res : orig_res;
+    return res;
   }
   throw QueryNotSupported("Expression node " + json_node_to_string(expr) +
                           " not supported");
@@ -3481,7 +3575,7 @@ class RelAlgDispatcher {
         for (const auto& value : values_json) {
           CHECK(value.IsObject());
           CHECK(value.HasMember("literal"));
-          values.back().emplace_back(parse_literal_expr(value));
+          values.back().emplace_back(parseLiteral(value));
         }
       }
     }
