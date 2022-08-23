@@ -1586,7 +1586,7 @@ class FunctionOper : public Expr {
   FunctionOper(const SQLTypeInfo& ti, const std::string& name, const ExprPtrVector& args)
       : Expr(ti, false), name_(name), args_(args) {}
 
-  std::string getName() const { return name_; }
+  const std::string& getName() const { return name_; }
 
   size_t getArity() const { return args_.size(); }
 

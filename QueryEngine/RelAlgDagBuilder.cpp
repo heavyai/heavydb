@@ -16,8 +16,10 @@
 
 #include "RelAlgDagBuilder.h"
 #include "CalciteDeserializerUtils.h"
+#include "DateTimePlusRewrite.h"
 #include "DeepCopyVisitor.h"
 #include "Descriptors/RelAlgExecutionDescriptor.h"
+#include "ExpressionRewrite.h"
 #include "JsonAccessors.h"
 #include "RelAlgOptimizer.h"
 #include "RelLeftDeepInnerJoin.h"
@@ -927,6 +929,19 @@ std::vector<SortField> parse_window_order_collation(const rapidjson::Value& arr,
   return collation;
 }
 
+std::vector<hdk::ir::OrderEntry> parseWindowOrderCollation(const rapidjson::Value& arr) {
+  std::vector<hdk::ir::OrderEntry> collation;
+  size_t field_idx = 0;
+  for (auto it = arr.Begin(); it != arr.End(); ++it, ++field_idx) {
+    const auto sort_dir = parse_sort_direction(*it);
+    const auto null_pos = parse_nulls_position(*it);
+    collation.emplace_back(field_idx,
+                           sort_dir == SortDirection::Descending,
+                           null_pos == NullSortedPosition::First);
+  }
+  return collation;
+}
+
 RexWindowFunctionOperator::RexWindowBound parse_window_bound(
     const rapidjson::Value& window_bound_obj,
     int db_id,
@@ -1183,19 +1198,315 @@ hdk::ir::ExprPtr parse_case_expr(const rapidjson::Value& expr,
   return Analyzer::normalizeCaseExpr(expr_list, else_expr, nullptr);
 }
 
-hdk::ir::ExprPtr parse_operator_expr(const rapidjson::Value& expr,
+hdk::ir::ExprPtrVector parseExprArray(const rapidjson::Value& arr,
+                                      int db_id,
+                                      SchemaProviderPtr schema_provider,
+                                      RelAlgDagBuilder& root_dag_builder,
+                                      const RANodeOutput& ra_output) {
+  hdk::ir::ExprPtrVector exprs;
+  for (auto it = arr.Begin(); it != arr.End(); ++it) {
+    exprs.emplace_back(
+        parse_expr(*it, db_id, schema_provider, root_dag_builder, ra_output));
+  }
+  return exprs;
+}
+
+hdk::ir::ExprPtrVector parseWindowOrderExprs(const rapidjson::Value& arr,
+                                             int db_id,
+                                             SchemaProviderPtr schema_provider,
+                                             RelAlgDagBuilder& root_dag_builder,
+                                             const RANodeOutput& ra_output) {
+  hdk::ir::ExprPtrVector exprs;
+  for (auto it = arr.Begin(); it != arr.End(); ++it) {
+    exprs.emplace_back(parse_expr(
+        field(*it, "field"), db_id, schema_provider, root_dag_builder, ra_output));
+  }
+  return exprs;
+}
+
+hdk::ir::ExprPtr makeUOper(SQLOps op, hdk::ir::ExprPtr arg, const SQLTypeInfo& ti) {
+  switch (op) {
+    case kCAST: {
+      CHECK_NE(kNULLT, ti.get_type());
+      const auto& arg_ti = arg->get_type_info();
+      if (arg_ti.is_string() && ti.is_string()) {
+        return arg;
+      }
+      if (ti.is_time() || arg_ti.is_string()) {
+        // TODO(alex): check and unify with the rest of the cases
+        // Do not propogate encoding on small dates
+        return ti.is_date_in_days() ? arg->add_cast(SQLTypeInfo(kDATE, false))
+                                    : arg->add_cast(ti);
+      }
+      if (!arg_ti.is_string() && ti.is_string()) {
+        return arg->add_cast(ti);
+      }
+      return std::make_shared<hdk::ir::UOper>(ti, false, op, arg);
+    }
+    case kNOT:
+    case kISNULL: {
+      return std::make_shared<hdk::ir::UOper>(kBOOLEAN, op, arg);
+    }
+    case kISNOTNULL: {
+      auto is_null = std::make_shared<hdk::ir::UOper>(kBOOLEAN, kISNULL, arg);
+      return std::make_shared<hdk::ir::UOper>(kBOOLEAN, kNOT, is_null);
+    }
+    case kMINUS: {
+      return std::make_shared<hdk::ir::UOper>(arg->get_type_info(), false, kUMINUS, arg);
+    }
+    case kUNNEST: {
+      const auto& arg_ti = arg->get_type_info();
+      CHECK(arg_ti.is_array());
+      return hdk::ir::makeExpr<hdk::ir::UOper>(
+          arg_ti.get_elem_type(), false, kUNNEST, arg);
+    }
+    default:
+      CHECK(false);
+  }
+  return nullptr;
+}
+
+hdk::ir::ExprPtr maybeMakeDateExpr(SQLOps op,
+                                   const hdk::ir::ExprPtrVector& operands,
+                                   const SQLTypeInfo& ti) {
+  if (op != kPLUS && op != kMINUS) {
+    return nullptr;
+  }
+  if (operands.size() != 2) {
+    return nullptr;
+  }
+
+  auto& lhs = operands[0];
+  auto& rhs = operands[1];
+  auto& lhs_ti = lhs->get_type_info();
+  auto& rhs_ti = rhs->get_type_info();
+  if (!lhs_ti.is_timestamp() && !lhs_ti.is_date()) {
+    if (lhs_ti.get_type() == kTIME) {
+      throw std::runtime_error("DateTime addition/subtraction not supported for TIME.");
+    }
+    return nullptr;
+  }
+  if (rhs_ti.get_type() == kTIMESTAMP || rhs_ti.get_type() == kDATE) {
+    if (lhs_ti.is_high_precision_timestamp() || rhs_ti.is_high_precision_timestamp()) {
+      throw std::runtime_error(
+          "High Precision timestamps are not supported for TIMESTAMPDIFF operation. "
+          "Use "
+          "DATEDIFF.");
+    }
+    auto bigint_ti = SQLTypeInfo(kBIGINT, false);
+    const auto datediff_field =
+        (ti.get_type() == kINTERVAL_DAY_TIME) ? dtSECOND : dtMONTH;
+    auto result =
+        hdk::ir::makeExpr<hdk::ir::DatediffExpr>(bigint_ti, datediff_field, rhs, lhs);
+    // multiply 1000 to result since expected result should be in millisecond precision.
+    if (ti.get_type() == kINTERVAL_DAY_TIME) {
+      return hdk::ir::makeExpr<hdk::ir::BinOper>(
+          bigint_ti.get_type(),
+          kMULTIPLY,
+          kONE,
+          result,
+          hdk::ir::Constant::make(bigint_ti, 1000));
+    } else {
+      return result;
+    }
+  }
+  if (op == kPLUS) {
+    auto dt_plus =
+        hdk::ir::makeExpr<hdk::ir::FunctionOper>(lhs_ti, "DATETIME_PLUS", operands);
+    const auto date_trunc = rewrite_to_date_trunc(dt_plus.get());
+    if (date_trunc) {
+      return date_trunc;
+    }
+  }
+  const auto interval = fold_expr(rhs.get());
+  auto interval_ti = interval->get_type_info();
+  auto bigint_ti = SQLTypeInfo(kBIGINT, false);
+  const auto interval_lit = std::dynamic_pointer_cast<hdk::ir::Constant>(interval);
+  if (interval_ti.get_type() == kINTERVAL_DAY_TIME) {
+    hdk::ir::ExprPtr interval_sec;
+    if (interval_lit) {
+      interval_sec = hdk::ir::Constant::make(
+          bigint_ti,
+          (op == kMINUS ? -interval_lit->get_constval().bigintval
+                        : interval_lit->get_constval().bigintval) /
+              1000);
+    } else {
+      interval_sec =
+          hdk::ir::makeExpr<hdk::ir::BinOper>(bigint_ti.get_type(),
+                                              kDIVIDE,
+                                              kONE,
+                                              interval,
+                                              hdk::ir::Constant::make(bigint_ti, 1000));
+      if (op == kMINUS) {
+        interval_sec =
+            std::make_shared<hdk::ir::UOper>(bigint_ti, false, kUMINUS, interval_sec);
+      }
+    }
+    return hdk::ir::makeExpr<hdk::ir::DateaddExpr>(lhs_ti, daSECOND, interval_sec, lhs);
+  }
+  CHECK(interval_ti.get_type() == kINTERVAL_YEAR_MONTH);
+  const auto interval_months =
+      op == kMINUS ? std::make_shared<hdk::ir::UOper>(bigint_ti, false, kUMINUS, interval)
+                   : interval;
+  return hdk::ir::makeExpr<hdk::ir::DateaddExpr>(lhs_ti, daMONTH, interval_months, lhs);
+}
+
+std::pair<hdk::ir::ExprPtr, SQLQualifier> getQuantifiedBinOperRhs(
+    const hdk::ir::ExprPtr& expr,
+    hdk::ir::ExprPtr orig_expr) {
+  if (auto fn_oper = dynamic_cast<const hdk::ir::FunctionOper*>(expr.get())) {
+    auto& fn_name = fn_oper->getName();
+    if (fn_name == "PG_ANY" || fn_name == "PG_ALL") {
+      CHECK_EQ(fn_oper->getArity(), (size_t)1);
+      return std::make_pair(fn_oper->getOwnArg(0), (fn_name == "PG_ANY") ? kANY : kALL);
+    }
+  } else if (auto uoper = dynamic_cast<const hdk::ir::UOper*>(expr.get())) {
+    if (uoper->get_optype() == kCAST) {
+      return getQuantifiedBinOperRhs(uoper->get_own_operand(), orig_expr);
+    }
+  }
+
+  return std::make_pair(orig_expr, kONE);
+}
+
+std::pair<hdk::ir::ExprPtr, SQLQualifier> getQuantifiedBinOperRhs(
+    const hdk::ir::ExprPtr& expr) {
+  return getQuantifiedBinOperRhs(expr, expr);
+}
+
+bool supportedLowerBound(const RexWindowFunctionOperator::RexWindowBound& window_bound) {
+  return window_bound.unbounded && window_bound.preceding && !window_bound.following &&
+         !window_bound.is_current_row && !window_bound.offset &&
+         window_bound.order_key == 0;
+}
+
+bool supportedUpperBound(const RexWindowFunctionOperator::RexWindowBound& window_bound,
+                         SqlWindowFunctionKind kind,
+                         const hdk::ir::ExprPtrVector& order_keys) {
+  const bool to_current_row = !window_bound.unbounded && !window_bound.preceding &&
+                              !window_bound.following && window_bound.is_current_row &&
+                              !window_bound.offset && window_bound.order_key == 1;
+  switch (kind) {
+    case SqlWindowFunctionKind::ROW_NUMBER:
+    case SqlWindowFunctionKind::RANK:
+    case SqlWindowFunctionKind::DENSE_RANK:
+    case SqlWindowFunctionKind::CUME_DIST: {
+      return to_current_row;
+    }
+    default: {
+      return order_keys.empty()
+                 ? (window_bound.unbounded && !window_bound.preceding &&
+                    window_bound.following && !window_bound.is_current_row &&
+                    !window_bound.offset && window_bound.order_key == 2)
+                 : to_current_row;
+    }
+  }
+}
+
+hdk::ir::ExprPtr parseWindowFunction(const rapidjson::Value& json_expr,
+                                     const std::string& op_name,
+                                     const hdk::ir::ExprPtrVector& operands,
+                                     SQLTypeInfo ti,
                                      int db_id,
                                      SchemaProviderPtr schema_provider,
                                      RelAlgDagBuilder& root_dag_builder,
                                      const RANodeOutput& ra_output) {
-  auto rex = parse_operator(expr, db_id, schema_provider, root_dag_builder);
-  auto dis_rex = disambiguate_rex(rex.get(), ra_output);
-  RelAlgTranslator translator(root_dag_builder.config(), root_dag_builder.now(), false);
-  return translator.translateScalarRex(dis_rex.get());
+  const auto& partition_keys_arr = field(json_expr, "partition_keys");
+  auto partition_keys = parseExprArray(
+      partition_keys_arr, db_id, schema_provider, root_dag_builder, ra_output);
+  const auto& order_keys_arr = field(json_expr, "order_keys");
+  auto order_keys = parseWindowOrderExprs(
+      order_keys_arr, db_id, schema_provider, root_dag_builder, ra_output);
+  const auto collation = parseWindowOrderCollation(order_keys_arr);
+  const auto kind = parse_window_function_kind(op_name);
+  // Adjust type for SUM window function.
+  if (kind == SqlWindowFunctionKind::SUM_INTERNAL && ti.is_integer()) {
+    ti = SQLTypeInfo(kBIGINT, ti.get_notnull());
+  }
+  const auto lower_bound = parse_window_bound(
+      field(json_expr, "lower_bound"), db_id, schema_provider, root_dag_builder);
+  const auto upper_bound = parse_window_bound(
+      field(json_expr, "upper_bound"), db_id, schema_provider, root_dag_builder);
+  bool is_rows = json_bool(field(json_expr, "is_rows"));
+  ti.set_notnull(false);
+
+  if (!supportedLowerBound(lower_bound) ||
+      !supportedUpperBound(upper_bound, kind, order_keys) ||
+      ((kind == SqlWindowFunctionKind::ROW_NUMBER) != is_rows)) {
+    throw std::runtime_error("Frame specification not supported");
+  }
+
+  if (window_function_is_value(kind)) {
+    CHECK_GE(operands.size(), 1u);
+    ti = operands[0]->get_type_info();
+  }
+
+  return hdk::ir::makeExpr<hdk::ir::WindowFunction>(
+      ti, kind, operands, partition_keys, order_keys, collation);
+}
+
+hdk::ir::ExprPtr parse_operator_expr(const rapidjson::Value& json_expr,
+                                     int db_id,
+                                     SchemaProviderPtr schema_provider,
+                                     RelAlgDagBuilder& root_dag_builder,
+                                     const RANodeOutput& ra_output) {
+  const auto op_name = json_str(field(json_expr, "op"));
+  const bool is_quantifier =
+      op_name == std::string("PG_ANY") || op_name == std::string("PG_ALL");
+  const auto op = is_quantifier ? kFUNCTION : to_sql_op(op_name);
+  const auto& operators_json_arr = field(json_expr, "operands");
+  CHECK(operators_json_arr.IsArray());
+  auto operands = parseExprArray(
+      operators_json_arr, db_id, schema_provider, root_dag_builder, ra_output);
+  const auto type_it = json_expr.FindMember("type");
+  CHECK(type_it != json_expr.MemberEnd());
+  auto ti = parse_type(type_it->value);
+
+  if (op == kIN && json_expr.HasMember("subquery")) {
+    CHECK_EQ(operands.size(), (size_t)1);
+    auto subquery =
+        parse_subquery_expr(json_expr, db_id, schema_provider, root_dag_builder);
+    SQLTypeInfo ti(kBOOLEAN);
+    return hdk::ir::makeExpr<hdk::ir::InSubquery>(
+        ti,
+        operands[0],
+        dynamic_cast<const hdk::ir::ScalarSubquery*>(subquery.get())->getNodeShared());
+  } else if (json_expr.FindMember("partition_keys") != json_expr.MemberEnd()) {
+    return parseWindowFunction(json_expr,
+                               op_name,
+                               operands,
+                               ti,
+                               db_id,
+                               schema_provider,
+                               root_dag_builder,
+                               ra_output);
+
+  } else if (op == kFUNCTION) {
+    if (is_quantifier) {
+      return hdk::ir::makeExpr<hdk::ir::FunctionOper>(ti, op_name, operands);
+    }
+    return nullptr;
+  } else {
+    CHECK_GE(operands.size(), (size_t)1);
+
+    if (operands.size() == 1) {
+      return makeUOper(op, operands[0], ti);
+    }
+
+    if (auto res = maybeMakeDateExpr(op, operands, ti)) {
+      return res;
+    }
+
+    auto res = operands[0];
+    for (size_t i = 1; i < operands.size(); ++i) {
+      auto [rhs, qual] = getQuantifiedBinOperRhs(operands[i]);
+      res = Analyzer::normalizeOperExpr(op, qual, res, rhs, nullptr);
+    }
+    return res;
+  }
 }
 
 hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
-                            // const RexScalar* rex,
                             int db_id,
                             SchemaProviderPtr schema_provider,
                             RelAlgDagBuilder& root_dag_builder,
@@ -1209,9 +1520,26 @@ hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
   }
   if (expr.IsObject() && expr.HasMember("op")) {
     auto rex = parse_scalar_expr(expr, db_id, schema_provider, root_dag_builder);
-    auto dis_rex = disambiguate_rex(rex.get(), ra_output);
-    RelAlgTranslator translator(root_dag_builder.config(), root_dag_builder.now(), false);
-    auto orig_res = translator.translateScalarRex(dis_rex.get());
+    bool all_or_any = false;
+    const auto rex_operator = dynamic_cast<const RexOperator*>(rex.get());
+    if (rex_operator && rex_operator->getOperator() == kCAST) {
+      const auto rex_function =
+          dynamic_cast<const RexFunctionOperator*>(rex_operator->getOperand(0));
+      all_or_any = rex_function && (rex_function->getName() == "PG_ANY" ||
+                                    rex_function->getName() == "PG_ALL");
+    }
+    const auto rex_function = dynamic_cast<const RexFunctionOperator*>(rex.get());
+    if (rex_function) {
+      all_or_any = rex_function && (rex_function->getName() == "PG_ANY" ||
+                                    rex_function->getName() == "PG_ALL");
+    }
+    hdk::ir::ExprPtr orig_res;
+    if (!all_or_any) {
+      auto dis_rex = disambiguate_rex(rex.get(), ra_output);
+      RelAlgTranslator translator(
+          root_dag_builder.config(), root_dag_builder.now(), false);
+      orig_res = translator.translateScalarRex(dis_rex.get());
+    }
 
     hdk::ir::ExprPtr res;
 
@@ -1221,17 +1549,16 @@ hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
     } else if (op_str == std::string("$SCALAR_QUERY")) {
       res = parse_subquery_expr(expr, db_id, schema_provider, root_dag_builder);
     } else {
-      // res =
-      //    parse_operator_expr(expr, db_id, schema_provider, root_dag_builder,
-      //    ra_output);
+      res =
+          parse_operator_expr(expr, db_id, schema_provider, root_dag_builder, ra_output);
     }
 
-    if (res) {
+    if (res && orig_res) {
       CHECK(*orig_res == *res) << "Translation mismatch: orig=" << orig_res->toString()
                                << " new=" << res->toString();
     }
 
-    return orig_res;
+    return res ? res : orig_res;
   }
   throw QueryNotSupported("Expression node " + json_node_to_string(expr) +
                           " not supported");
