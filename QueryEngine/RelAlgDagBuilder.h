@@ -1969,10 +1969,6 @@ class RelAlgDagBuilder : public RelAlgDag, public boost::noncopyable {
   SchemaProviderPtr schema_provider_;
 };
 
-using RANodeOutput = std::vector<RexInput>;
-
-RANodeOutput get_node_output(const RelAlgNode* ra_node);
-
 std::string tree_string(const RelAlgNode*, const size_t depth = 0);
 
 inline InputColDescriptor column_var_to_descriptor(const hdk::ir::ColumnVar* var) {
@@ -1983,5 +1979,6 @@ SQLTypeInfo getColumnType(const RelAlgNode* node, size_t col_idx);
 
 hdk::ir::ExprPtr getNodeColumnRef(const RelAlgNode* node, unsigned index);
 hdk::ir::ExprPtrVector getNodeColumnRefs(const RelAlgNode* node);
+size_t getNodeColumnCount(const RelAlgNode* node);
 
 hdk::ir::ExprPtrVector getInputExprsForAgg(const RelAlgNode* node);

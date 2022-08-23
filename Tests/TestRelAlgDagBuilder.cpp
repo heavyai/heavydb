@@ -39,11 +39,10 @@ RelAlgNodePtr TestRelAlgDagBuilder::addProject(RelAlgNodePtr input,
                                                const std::vector<std::string>& fields,
                                                const std::vector<int>& cols) {
   hdk::ir::ExprPtrVector exprs;
-  auto input_cols = get_node_output(input.get());
+  auto input_cols = getNodeColumnRefs(input.get());
   for (auto col_idx : cols) {
     CHECK_LT((size_t)col_idx, input_cols.size());
-    exprs.push_back(hdk::ir::makeExpr<hdk::ir::ColumnRef>(
-        input_cols[col_idx].getSourceNode(), input_cols[col_idx].getIndex()));
+    exprs.push_back(input_cols[col_idx]);
   }
   return addProject(input, fields, std::move(exprs));
 }

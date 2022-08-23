@@ -153,75 +153,6 @@ void RelProject::appendInput(std::string new_field_name, hdk::ir::ExprPtr expr) 
   exprs_.emplace_back(std::move(expr));
 }
 
-RANodeOutput get_node_output(const RelAlgNode* ra_node) {
-  const auto scan_node = dynamic_cast<const RelScan*>(ra_node);
-  if (scan_node) {
-    // Scan node has no inputs, output contains all columns in the table.
-    CHECK_EQ(size_t(0), scan_node->inputCount());
-    return n_outputs(scan_node, scan_node->size());
-  }
-  const auto project_node = dynamic_cast<const RelProject*>(ra_node);
-  if (project_node) {
-    // Project output count doesn't depend on the input
-    CHECK_EQ(size_t(1), project_node->inputCount());
-    return n_outputs(project_node, project_node->size());
-  }
-  const auto filter_node = dynamic_cast<const RelFilter*>(ra_node);
-  if (filter_node) {
-    // Filter preserves shape
-    CHECK_EQ(size_t(1), filter_node->inputCount());
-    const auto prev_out = get_node_output(filter_node->getInput(0));
-    return n_outputs(filter_node, prev_out.size());
-  }
-  const auto aggregate_node = dynamic_cast<const RelAggregate*>(ra_node);
-  if (aggregate_node) {
-    // Aggregate output count doesn't depend on the input
-    CHECK_EQ(size_t(1), aggregate_node->inputCount());
-    return n_outputs(aggregate_node, aggregate_node->size());
-  }
-  const auto compound_node = dynamic_cast<const RelCompound*>(ra_node);
-  if (compound_node) {
-    // Compound output count doesn't depend on the input
-    CHECK_EQ(size_t(1), compound_node->inputCount());
-    return n_outputs(compound_node, compound_node->size());
-  }
-  const auto join_node = dynamic_cast<const RelJoin*>(ra_node);
-  if (join_node) {
-    // Join concatenates the outputs from the inputs and the output
-    // directly references the nodes in the input.
-    CHECK_EQ(size_t(2), join_node->inputCount());
-    auto lhs_out =
-        n_outputs(join_node->getInput(0), get_node_output(join_node->getInput(0)).size());
-    const auto rhs_out =
-        n_outputs(join_node->getInput(1), get_node_output(join_node->getInput(1)).size());
-    lhs_out.insert(lhs_out.end(), rhs_out.begin(), rhs_out.end());
-    return lhs_out;
-  }
-  const auto table_func_node = dynamic_cast<const RelTableFunction*>(ra_node);
-  if (table_func_node) {
-    // Table Function output count doesn't depend on the input
-    return n_outputs(table_func_node, table_func_node->size());
-  }
-  const auto sort_node = dynamic_cast<const RelSort*>(ra_node);
-  if (sort_node) {
-    // Sort preserves shape
-    CHECK_EQ(size_t(1), sort_node->inputCount());
-    const auto prev_out = get_node_output(sort_node->getInput(0));
-    return n_outputs(sort_node, prev_out.size());
-  }
-  const auto logical_values_node = dynamic_cast<const RelLogicalValues*>(ra_node);
-  if (logical_values_node) {
-    CHECK_EQ(size_t(0), logical_values_node->inputCount());
-    return n_outputs(logical_values_node, logical_values_node->size());
-  }
-  const auto logical_union_node = dynamic_cast<const RelLogicalUnion*>(ra_node);
-  if (logical_union_node) {
-    return n_outputs(logical_union_node, logical_union_node->size());
-  }
-  LOG(FATAL) << "Unhandled ra_node type: " << ::toString(ra_node);
-  return {};
-}
-
 template <typename T>
 bool is_one_of(const RelAlgNode* node) {
   return dynamic_cast<const T*>(node);
@@ -808,7 +739,7 @@ hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
                             int db_id,
                             SchemaProviderPtr schema_provider,
                             RelAlgDagBuilder& root_dag_builder,
-                            const RANodeOutput& ra_output);
+                            const hdk::ir::ExprPtrVector& ra_output);
 
 SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
   if (type_obj.IsArray()) {
@@ -931,7 +862,7 @@ WindowBound parse_window_bound(const rapidjson::Value& window_bound_obj,
                                int db_id,
                                SchemaProviderPtr schema_provider,
                                RelAlgDagBuilder& root_dag_builder,
-                               const RANodeOutput& ra_output) {
+                               const hdk::ir::ExprPtrVector& ra_output) {
   CHECK(window_bound_obj.IsObject());
   WindowBound window_bound;
   window_bound.unbounded = json_bool(field(window_bound_obj, "unbounded"));
@@ -996,15 +927,11 @@ std::vector<size_t> indices_from_json_array(
   return indices;
 }
 
-hdk::ir::ExprPtr parse_input_expr(const rapidjson::Value& expr,
-                                  const RANodeOutput& ra_output) {
+hdk::ir::ExprPtr parseInput(const rapidjson::Value& expr,
+                            const hdk::ir::ExprPtrVector& ra_output) {
   const auto& input = field(expr, "input");
-  auto& input_rex = ra_output[json_i64(input)];
-  auto source = input_rex.getSourceNode();
-  auto col_idx = input_rex.getIndex();
-
-  return hdk::ir::makeExpr<hdk::ir::ColumnRef>(
-      getColumnType(source, col_idx), source, col_idx);
+  CHECK_LT(json_i64(input), ra_output.size());
+  return ra_output[json_i64(input)];
 }
 
 SQLTypeInfo build_type_info(const SQLTypes sql_type,
@@ -1110,7 +1037,7 @@ hdk::ir::ExprPtr parse_case_expr(const rapidjson::Value& expr,
                                  int db_id,
                                  SchemaProviderPtr schema_provider,
                                  RelAlgDagBuilder& root_dag_builder,
-                                 const RANodeOutput& ra_output) {
+                                 const hdk::ir::ExprPtrVector& ra_output) {
   const auto& operands = field(expr, "operands");
   CHECK(operands.IsArray());
   CHECK_GE(operands.Size(), unsigned(2));
@@ -1134,7 +1061,7 @@ hdk::ir::ExprPtrVector parseExprArray(const rapidjson::Value& arr,
                                       int db_id,
                                       SchemaProviderPtr schema_provider,
                                       RelAlgDagBuilder& root_dag_builder,
-                                      const RANodeOutput& ra_output) {
+                                      const hdk::ir::ExprPtrVector& ra_output) {
   hdk::ir::ExprPtrVector exprs;
   for (auto it = arr.Begin(); it != arr.End(); ++it) {
     exprs.emplace_back(
@@ -1147,7 +1074,7 @@ hdk::ir::ExprPtrVector parseWindowOrderExprs(const rapidjson::Value& arr,
                                              int db_id,
                                              SchemaProviderPtr schema_provider,
                                              RelAlgDagBuilder& root_dag_builder,
-                                             const RANodeOutput& ra_output) {
+                                             const hdk::ir::ExprPtrVector& ra_output) {
   hdk::ir::ExprPtrVector exprs;
   for (auto it = arr.Begin(); it != arr.End(); ++it) {
     exprs.emplace_back(parse_expr(
@@ -1342,7 +1269,7 @@ hdk::ir::ExprPtr parseWindowFunction(const rapidjson::Value& json_expr,
                                      int db_id,
                                      SchemaProviderPtr schema_provider,
                                      RelAlgDagBuilder& root_dag_builder,
-                                     const RANodeOutput& ra_output) {
+                                     const hdk::ir::ExprPtrVector& ra_output) {
   const auto& partition_keys_arr = field(json_expr, "partition_keys");
   auto partition_keys = parseExprArray(
       partition_keys_arr, db_id, schema_provider, root_dag_builder, ra_output);
@@ -2020,7 +1947,7 @@ hdk::ir::ExprPtr parse_operator_expr(const rapidjson::Value& json_expr,
                                      int db_id,
                                      SchemaProviderPtr schema_provider,
                                      RelAlgDagBuilder& root_dag_builder,
-                                     const RANodeOutput& ra_output) {
+                                     const hdk::ir::ExprPtrVector& ra_output) {
   const auto op_name = json_str(field(json_expr, "op"));
   const bool is_quantifier =
       op_name == std::string("PG_ANY") || op_name == std::string("PG_ALL");
@@ -2078,10 +2005,10 @@ hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
                             int db_id,
                             SchemaProviderPtr schema_provider,
                             RelAlgDagBuilder& root_dag_builder,
-                            const RANodeOutput& ra_output) {
+                            const hdk::ir::ExprPtrVector& ra_output) {
   CHECK(expr.IsObject());
   if (expr.IsObject() && expr.HasMember("input")) {
-    return parse_input_expr(expr, ra_output);
+    return parseInput(expr, ra_output);
   }
   if (expr.IsObject() && expr.HasMember("literal")) {
     return parseLiteral(expr);
@@ -3129,7 +3056,7 @@ class RelAlgDispatcher {
                                     db_id_,
                                     schema_provider_,
                                     root_dag_builder,
-                                    get_node_output(inputs[0].get())));
+                                    getNodeColumnRefs(inputs[0].get())));
     }
     const auto& fields = field(proj_ra, "fields");
     if (proj_ra.HasMember("hints")) {
@@ -3152,7 +3079,7 @@ class RelAlgDispatcher {
                                      db_id_,
                                      schema_provider_,
                                      root_dag_builder,
-                                     get_node_output(inputs[0].get()));
+                                     getNodeColumnRefs(inputs[0].get()));
     return std::make_shared<RelFilter>(std::move(condition_expr), inputs.front());
   }
 
@@ -3192,8 +3119,8 @@ class RelAlgDispatcher {
     const auto inputs = getRelAlgInputs(join_ra);
     CHECK_EQ(size_t(2), inputs.size());
     const auto join_type = to_join_type(json_str(field(join_ra, "joinType")));
-    auto ra_outputs = n_outputs(inputs[0].get(), inputs[0]->size());
-    const auto ra_outputs2 = n_outputs(inputs[1].get(), inputs[1]->size());
+    auto ra_outputs = genColumnRefs(inputs[0].get(), inputs[0]->size());
+    const auto ra_outputs2 = genColumnRefs(inputs[1].get(), inputs[1]->size());
     ra_outputs.insert(ra_outputs.end(), ra_outputs2.begin(), ra_outputs2.end());
     auto condition = parse_expr(field(join_ra, "condition"),
                                 db_id_,
@@ -3289,9 +3216,9 @@ class RelAlgDispatcher {
           }
         }
       }
-      RANodeOutput ra_output;
+      hdk::ir::ExprPtrVector ra_output;
       for (auto& node : inputs) {
-        auto node_output = get_node_output(node.get());
+        auto node_output = getNodeColumnRefs(node.get());
         ra_output.insert(ra_output.end(), node_output.begin(), node_output.end());
       }
       table_func_input_exprs.emplace_back(parse_expr(

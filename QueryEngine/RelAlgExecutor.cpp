@@ -2640,8 +2640,8 @@ std::vector<size_t> get_left_deep_join_input_sizes(
     const RelLeftDeepInnerJoin* left_deep_join) {
   std::vector<size_t> input_sizes;
   for (size_t i = 0; i < left_deep_join->inputCount(); ++i) {
-    const auto inputs = get_node_output(left_deep_join->getInput(i));
-    input_sizes.push_back(inputs.size());
+    auto input_size = getNodeColumnCount(left_deep_join->getInput(i));
+    input_sizes.push_back(input_size);
   }
   return input_sizes;
 }
