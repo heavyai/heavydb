@@ -17,9 +17,12 @@
 #include "RelAlgDagBuilder.h"
 #include "CalciteDeserializerUtils.h"
 #include "DateTimePlusRewrite.h"
+#include "DateTimeTranslator.h"
 #include "DeepCopyVisitor.h"
 #include "Descriptors/RelAlgExecutionDescriptor.h"
 #include "ExpressionRewrite.h"
+#include "ExtensionFunctionsBinding.h"
+#include "ExtensionFunctionsWhitelist.h"
 #include "JsonAccessors.h"
 #include "RelAlgOptimizer.h"
 #include "RelLeftDeepInnerJoin.h"
@@ -33,6 +36,8 @@
 
 #include <string>
 #include <unordered_set>
+
+using namespace std::literals;
 
 namespace {
 
@@ -1445,6 +1450,574 @@ hdk::ir::ExprPtr parseWindowFunction(const rapidjson::Value& json_expr,
       ti, kind, operands, partition_keys, order_keys, collation);
 }
 
+hdk::ir::ExprPtr parseLike(const std::string& fn_name,
+                           const hdk::ir::ExprPtrVector& operands) {
+  CHECK(operands.size() == 2 || operands.size() == 3);
+  auto& arg = operands[0];
+  auto& like = operands[1];
+  if (!dynamic_cast<const hdk::ir::Constant*>(like.get())) {
+    throw std::runtime_error("The matching pattern must be a literal.");
+  }
+  auto escape = (operands.size() == 3) ? operands[2] : nullptr;
+  bool is_ilike = fn_name == "PG_ILIKE"sv;
+  return Analyzer::getLikeExpr(arg, like, escape, is_ilike, false);
+}
+
+hdk::ir::ExprPtr parseRegexp(const hdk::ir::ExprPtrVector& operands) {
+  CHECK(operands.size() == 2 || operands.size() == 3);
+  auto& arg = operands[0];
+  auto& pattern = operands[1];
+  if (!dynamic_cast<const hdk::ir::Constant*>(pattern.get())) {
+    throw std::runtime_error("The matching pattern must be a literal.");
+  }
+  const auto escape = (operands.size() == 3) ? operands[2] : nullptr;
+  return Analyzer::getRegexpExpr(arg, pattern, escape, false);
+}
+
+hdk::ir::ExprPtr parseLikely(const hdk::ir::ExprPtrVector& operands) {
+  CHECK(operands.size() == 1);
+  return hdk::ir::makeExpr<hdk::ir::LikelihoodExpr>(operands[0], 0.9375);
+}
+
+hdk::ir::ExprPtr parseUnlikely(const hdk::ir::ExprPtrVector& operands) {
+  CHECK(operands.size() == 1);
+  return hdk::ir::makeExpr<hdk::ir::LikelihoodExpr>(operands[0], 0.0625);
+}
+
+inline void validateDatetimeDatepartArgument(const hdk::ir::Constant* literal_expr) {
+  if (!literal_expr || literal_expr->get_is_null()) {
+    throw std::runtime_error("The 'DatePart' argument must be a not 'null' literal.");
+  }
+}
+
+hdk::ir::ExprPtr parseExtract(const std::string& fn_name,
+                              const hdk::ir::ExprPtrVector& operands) {
+  CHECK_EQ(operands.size(), size_t(2));
+  auto& timeunit = operands[0];
+  auto timeunit_lit = dynamic_cast<const hdk::ir::Constant*>(timeunit.get());
+  validateDatetimeDatepartArgument(timeunit_lit);
+  auto& from_expr = operands[1];
+  if (fn_name == "PG_DATE_TRUNC"sv) {
+    return DateTruncExpr::generate(from_expr, *timeunit_lit->get_constval().stringval);
+  } else {
+    CHECK(fn_name == "PG_EXTRACT"sv);
+    return ExtractExpr::generate(from_expr, *timeunit_lit->get_constval().stringval);
+  }
+}
+
+hdk::ir::ExprPtr parseDateadd(const hdk::ir::ExprPtrVector& operands) {
+  CHECK_EQ(operands.size(), size_t(3));
+  auto& timeunit = operands[0];
+  auto timeunit_lit = dynamic_cast<const hdk::ir::Constant*>(timeunit.get());
+  validateDatetimeDatepartArgument(timeunit_lit);
+  auto& number_units = operands[1];
+  auto number_units_const = dynamic_cast<const hdk::ir::Constant*>(number_units.get());
+  if (number_units_const && number_units_const->get_is_null()) {
+    throw std::runtime_error("The 'Interval' argument literal must not be 'null'.");
+  }
+  auto cast_number_units = number_units->add_cast(SQLTypeInfo(kBIGINT, false));
+  auto& datetime = operands[2];
+  auto& datetime_ti = datetime->get_type_info();
+  if (datetime_ti.get_type() == kTIME) {
+    throw std::runtime_error("DateAdd operation not supported for TIME.");
+  }
+  auto field = to_dateadd_field(*timeunit_lit->get_constval().stringval);
+  int dim = datetime_ti.get_dimension();
+  return hdk::ir::makeExpr<hdk::ir::DateaddExpr>(
+      SQLTypeInfo(kTIMESTAMP, dim, 0, false), field, cast_number_units, datetime);
+}
+
+hdk::ir::ExprPtr parseDatediff(const hdk::ir::ExprPtrVector& operands) {
+  CHECK_EQ(operands.size(), size_t(3));
+  auto& timeunit = operands[0];
+  auto timeunit_lit = dynamic_cast<const hdk::ir::Constant*>(timeunit.get());
+  validateDatetimeDatepartArgument(timeunit_lit);
+  auto& start = operands[1];
+  auto& end = operands[2];
+  auto field = to_datediff_field(*timeunit_lit->get_constval().stringval);
+  return hdk::ir::makeExpr<hdk::ir::DatediffExpr>(
+      SQLTypeInfo(kBIGINT, false), field, start, end);
+}
+
+hdk::ir::ExprPtr parseDatepart(const hdk::ir::ExprPtrVector& operands) {
+  CHECK_EQ(operands.size(), size_t(2));
+  auto& timeunit = operands[0];
+  auto timeunit_lit = dynamic_cast<const hdk::ir::Constant*>(timeunit.get());
+  validateDatetimeDatepartArgument(timeunit_lit);
+  auto& from_expr = operands[1];
+  return ExtractExpr::generate(
+      from_expr, to_datepart_field(*timeunit_lit->get_constval().stringval));
+}
+
+hdk::ir::ExprPtr parseLength(const std::string& fn_name,
+                             const hdk::ir::ExprPtrVector& operands) {
+  CHECK_EQ(operands.size(), size_t(1));
+  auto& str_arg = operands[0];
+  return hdk::ir::makeExpr<hdk::ir::CharLengthExpr>(str_arg->decompress(),
+                                                    fn_name == "CHAR_LENGTH"sv);
+}
+
+hdk::ir::ExprPtr parseKeyForString(const hdk::ir::ExprPtrVector& operands) {
+  CHECK_EQ(operands.size(), size_t(1));
+  auto& arg_ti = operands[0]->get_type_info();
+  if (!arg_ti.is_string() || arg_ti.is_varlen()) {
+    throw std::runtime_error("KEY_FOR_STRING expects a dictionary encoded text column.");
+  }
+  return hdk::ir::makeExpr<hdk::ir::KeyForStringExpr>(operands[0]);
+}
+
+hdk::ir::ExprPtr parseWidthBucket(const hdk::ir::ExprPtrVector& operands) {
+  CHECK_EQ(operands.size(), size_t(4));
+  auto target_value = operands[0];
+  auto lower_bound = operands[1];
+  auto upper_bound = operands[2];
+  auto partition_count = operands[3];
+  if (!partition_count->get_type_info().is_integer()) {
+    throw std::runtime_error(
+        "PARTITION_COUNT expression of width_bucket function expects an integer type.");
+  }
+  auto check_numeric_type =
+      [](const std::string& col_name, const hdk::ir::Expr* expr, bool allow_null_type) {
+        if (expr->get_type_info().get_type() == kNULLT) {
+          if (!allow_null_type) {
+            throw std::runtime_error(
+                col_name + " expression of width_bucket function expects non-null type.");
+          }
+          return;
+        }
+        if (!expr->get_type_info().is_number()) {
+          throw std::runtime_error(
+              col_name + " expression of width_bucket function expects a numeric type.");
+        }
+      };
+  // target value may have null value
+  check_numeric_type("TARGET_VALUE", target_value.get(), true);
+  check_numeric_type("LOWER_BOUND", lower_bound.get(), false);
+  check_numeric_type("UPPER_BOUND", upper_bound.get(), false);
+
+  auto cast_to_double_if_necessary = [](hdk::ir::ExprPtr arg) {
+    const auto& arg_ti = arg->get_type_info();
+    if (arg_ti.get_type() != kDOUBLE) {
+      const auto& double_ti = SQLTypeInfo(kDOUBLE, arg_ti.get_notnull());
+      return arg->add_cast(double_ti);
+    }
+    return arg;
+  };
+  target_value = cast_to_double_if_necessary(target_value);
+  lower_bound = cast_to_double_if_necessary(lower_bound);
+  upper_bound = cast_to_double_if_necessary(upper_bound);
+  return hdk::ir::makeExpr<hdk::ir::WidthBucketExpr>(
+      target_value, lower_bound, upper_bound, partition_count);
+}
+
+hdk::ir::ExprPtr parseSampleRatio(const hdk::ir::ExprPtrVector& operands) {
+  CHECK_EQ(operands.size(), size_t(1));
+  auto arg = operands[0];
+  auto& arg_ti = operands[0]->get_type_info();
+  if (arg_ti.get_type() != kDOUBLE) {
+    const auto& double_ti = SQLTypeInfo(kDOUBLE, arg_ti.get_notnull());
+    arg = arg->add_cast(double_ti);
+  }
+  return hdk::ir::makeExpr<hdk::ir::SampleRatioExpr>(arg);
+}
+
+hdk::ir::ExprPtr parseCurrentUser() {
+  std::string user{"SESSIONLESS_USER"};
+  return Analyzer::getUserLiteral(user);
+}
+
+hdk::ir::ExprPtr parseLower(const hdk::ir::ExprPtrVector& operands) {
+  CHECK_EQ(operands.size(), size_t(1));
+  if (operands[0]->get_type_info().is_dict_encoded_string() ||
+      dynamic_cast<const hdk::ir::Constant*>(operands[0].get())) {
+    return hdk::ir::makeExpr<hdk::ir::LowerExpr>(operands[0]);
+  }
+
+  throw std::runtime_error(
+      "LOWER expects a dictionary encoded text column or a literal.");
+}
+
+hdk::ir::ExprPtr parseCardinality(const std::string& fn_name,
+                                  const hdk::ir::ExprPtrVector& operands,
+                                  const SQLTypeInfo& ti) {
+  CHECK_EQ(operands.size(), size_t(1));
+  auto& arg = operands[0];
+  auto& arg_ti = arg->get_type_info();
+  if (!arg_ti.is_array()) {
+    throw std::runtime_error(fn_name + " expects an array expression.");
+  }
+  if (arg_ti.get_subtype() == kARRAY) {
+    throw std::runtime_error(fn_name + " expects one-dimension array expression.");
+  }
+  auto array_size = arg_ti.get_size();
+  auto array_elem_size = arg_ti.get_elem_type().get_array_context_logical_size();
+
+  if (array_size > 0) {
+    if (array_elem_size <= 0) {
+      throw std::runtime_error(fn_name + ": unexpected array element type.");
+    }
+    // Return cardinality of a fixed length array
+    return hdk::ir::Constant::make(ti, array_size / array_elem_size);
+  }
+  // Variable length array cardinality will be calculated at runtime
+  return hdk::ir::makeExpr<hdk::ir::CardinalityExpr>(arg);
+}
+
+hdk::ir::ExprPtr parseItem(const hdk::ir::ExprPtrVector& operands) {
+  CHECK_EQ(operands.size(), size_t(2));
+  auto& base = operands[0];
+  auto& index = operands[1];
+  return hdk::ir::makeExpr<hdk::ir::BinOper>(
+      base->get_type_info().get_elem_type(), false, kARRAY_AT, kONE, base, index);
+}
+
+hdk::ir::ExprPtr parseCurrentDate(time_t now) {
+  constexpr bool is_null = false;
+  Datum datum;
+  datum.bigintval = now - now % (24 * 60 * 60);  // Assumes 0 < now.
+  return hdk::ir::makeExpr<hdk::ir::Constant>(kDATE, is_null, datum);
+}
+
+hdk::ir::ExprPtr parseCurrentTime(time_t now) {
+  constexpr bool is_null = false;
+  Datum datum;
+  datum.bigintval = now % (24 * 60 * 60);  // Assumes 0 < now.
+  return hdk::ir::makeExpr<hdk::ir::Constant>(kTIME, is_null, datum);
+}
+
+hdk::ir::ExprPtr parseCurrentTimestamp(time_t now) {
+  Datum d;
+  d.bigintval = now;
+  return hdk::ir::makeExpr<hdk::ir::Constant>(kTIMESTAMP, false, d, false);
+}
+
+hdk::ir::ExprPtr parseDatetime(const hdk::ir::ExprPtrVector& operands, time_t now) {
+  CHECK_EQ(operands.size(), size_t(1));
+  auto arg_lit = dynamic_cast<const hdk::ir::Constant*>(operands[0].get());
+  const std::string datetime_err{R"(Only DATETIME('NOW') supported for now.)"};
+  if (!arg_lit || arg_lit->get_is_null()) {
+    throw std::runtime_error(datetime_err);
+  }
+  CHECK(arg_lit->get_type_info().is_string());
+  if (*arg_lit->get_constval().stringval != "NOW"sv) {
+    throw std::runtime_error(datetime_err);
+  }
+  return parseCurrentTimestamp(now);
+}
+
+hdk::ir::ExprPtr parseHPTLiteral(const hdk::ir::ExprPtrVector& operands,
+                                 const SQLTypeInfo& ti) {
+  /* since calcite uses Avatica package called DateTimeUtils to parse timestamp strings.
+     Therefore any string having fractional seconds more 3 places after the decimal
+     (milliseconds) will get truncated to 3 decimal places, therefore we lose precision
+     (us|ns). Issue: [BE-2461] Here we are hijacking literal cast to Timestamp(6|9) from
+     calcite and translating them to generate our own casts.
+  */
+  CHECK_EQ(operands.size(), size_t(1));
+  auto& arg = operands[0];
+  auto& arg_ti = arg->get_type_info();
+  if (!arg_ti.is_string()) {
+    throw std::runtime_error(
+        "High precision timestamp cast argument must be a string. Input type is: " +
+        arg_ti.get_type_name());
+  } else if (!ti.is_high_precision_timestamp()) {
+    throw std::runtime_error(
+        "Cast target type should be high precision timestamp. Input type is: " +
+        ti.get_type_name());
+  } else if (ti.get_dimension() != 6 && ti.get_dimension() != 9) {
+    throw std::runtime_error(
+        "Cast target type should be TIMESTAMP(6|9). Input type is: TIMESTAMP(" +
+        std::to_string(ti.get_dimension()) + ")");
+  }
+
+  return arg->add_cast(ti);
+}
+
+hdk::ir::ExprPtr parseAbs(const hdk::ir::ExprPtrVector& operands) {
+  CHECK_EQ(operands.size(), size_t(1));
+  std::list<std::pair<hdk::ir::ExprPtr, hdk::ir::ExprPtr>> expr_list;
+  auto& arg = operands[0];
+  auto& arg_ti = arg->get_type_info();
+  CHECK(arg_ti.is_number());
+  auto zero = hdk::ir::Constant::make(arg_ti, 0);
+  auto lt_zero = Analyzer::normalizeOperExpr(kLT, kONE, arg, zero);
+  auto uminus_operand = hdk::ir::makeExpr<hdk::ir::UOper>(arg_ti, false, kUMINUS, arg);
+  expr_list.emplace_back(lt_zero, uminus_operand);
+  return Analyzer::normalizeCaseExpr(expr_list, arg, nullptr);
+}
+
+hdk::ir::ExprPtr parseSign(const hdk::ir::ExprPtrVector& operands) {
+  CHECK_EQ(operands.size(), size_t(1));
+  std::list<std::pair<hdk::ir::ExprPtr, hdk::ir::ExprPtr>> expr_list;
+  auto& arg = operands[0];
+  auto& arg_ti = arg->get_type_info();
+  CHECK(arg_ti.is_number());
+  // For some reason, Rex based DAG checker marks SIGN as non-cacheable.
+  // To duplicate this behavior with no Rex, non-cacheable zero constant
+  // is used here.
+  // TODO: revise this part in checker and probably remove this flag here.
+  const auto zero = hdk::ir::Constant::make(arg_ti, 0, false);
+  const auto lt_zero =
+      hdk::ir::makeExpr<hdk::ir::BinOper>(kBOOLEAN, kLT, kONE, arg, zero);
+  expr_list.emplace_back(lt_zero, hdk::ir::Constant::make(arg_ti, -1));
+  const auto eq_zero =
+      hdk::ir::makeExpr<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, arg, zero);
+  expr_list.emplace_back(eq_zero, hdk::ir::Constant::make(arg_ti, 0));
+  const auto gt_zero =
+      hdk::ir::makeExpr<hdk::ir::BinOper>(kBOOLEAN, kGT, kONE, arg, zero);
+  expr_list.emplace_back(gt_zero, hdk::ir::Constant::make(arg_ti, 1));
+  return Analyzer::normalizeCaseExpr(expr_list, nullptr, nullptr);
+}
+
+hdk::ir::ExprPtr parseRound(const std::string& fn_name,
+                            const hdk::ir::ExprPtrVector& operands,
+                            const SQLTypeInfo& ti) {
+  auto args = operands;
+
+  if (args.size() == 1) {
+    // push a 0 constant if 2nd operand is missing.
+    // this needs to be done as calcite returns
+    // only the 1st operand without defaulting the 2nd one
+    // when the user did not specify the 2nd operand.
+    SQLTypes t = kSMALLINT;
+    Datum d;
+    d.smallintval = 0;
+    args.push_back(hdk::ir::makeExpr<hdk::ir::Constant>(t, false, d));
+  }
+
+  // make sure we have only 2 operands
+  CHECK(args.size() == 2);
+
+  if (!args[0]->get_type_info().is_number()) {
+    throw std::runtime_error("Only numeric 1st operands are supported");
+  }
+
+  // the 2nd operand does not need to be a constant
+  // it can happily reference another integer column
+  if (!args[1]->get_type_info().is_integer()) {
+    throw std::runtime_error("Only integer 2nd operands are supported");
+  }
+
+  // Calcite may upcast decimals in a way that is
+  // incompatible with the extension function input. Play it safe and stick with the
+  // argument type instead.
+  const SQLTypeInfo ret_ti =
+      args[0]->get_type_info().is_decimal() ? args[0]->get_type_info() : ti;
+
+  return hdk::ir::makeExpr<hdk::ir::FunctionOperWithCustomTypeHandling>(
+      ret_ti, fn_name, args);
+}
+
+hdk::ir::ExprPtr parseArrayFunction(const hdk::ir::ExprPtrVector& operands,
+                                    const SQLTypeInfo& ti) {
+  if (ti.get_subtype() == kNULLT) {
+    auto res_type = ti;
+    CHECK(res_type.get_type() == kARRAY);
+
+    // FIX-ME:  Deal with NULL arrays
+    if (operands.size() > 0) {
+      const auto first_element_logical_type =
+          get_nullable_logical_type_info(operands[0]->get_type_info());
+
+      auto diff_elem_itr =
+          std::find_if(operands.begin(),
+                       operands.end(),
+                       [first_element_logical_type](const auto expr) {
+                         return first_element_logical_type !=
+                                get_nullable_logical_type_info(expr->get_type_info());
+                       });
+      if (diff_elem_itr != operands.end()) {
+        throw std::runtime_error(
+            "Element " + std::to_string(diff_elem_itr - operands.begin()) +
+            " is not of the same type as other elements of the array. Consider casting "
+            "to force this condition.\nElement Type: " +
+            get_nullable_logical_type_info((*diff_elem_itr)->get_type_info())
+                .to_string() +
+            "\nArray type: " + first_element_logical_type.to_string());
+      }
+
+      if (first_element_logical_type.is_string() &&
+          !first_element_logical_type.is_dict_encoded_string()) {
+        res_type.set_subtype(first_element_logical_type.get_type());
+        res_type.set_compression(kENCODING_FIXED);
+      } else if (first_element_logical_type.is_dict_encoded_string()) {
+        res_type.set_subtype(first_element_logical_type.get_type());
+        res_type.set_comp_param(TRANSIENT_DICT_ID);
+      } else {
+        res_type.set_subtype(first_element_logical_type.get_type());
+        res_type.set_scale(first_element_logical_type.get_scale());
+        res_type.set_precision(first_element_logical_type.get_precision());
+      }
+
+      return hdk::ir::makeExpr<hdk::ir::ArrayExpr>(res_type, operands);
+    } else {
+      // defaulting to valid sub-type for convenience
+      res_type.set_subtype(kBOOLEAN);
+      return hdk::ir::makeExpr<hdk::ir::ArrayExpr>(res_type, operands);
+    }
+  } else {
+    return hdk::ir::makeExpr<hdk::ir::ArrayExpr>(ti, operands);
+  }
+}
+
+hdk::ir::ExprPtr parseFunctionOperator(const std::string& fn_name,
+                                       const hdk::ir::ExprPtrVector operands,
+                                       const SQLTypeInfo& ti,
+                                       RelAlgDagBuilder& root_dag_builder) {
+  if (fn_name == "PG_ANY"sv || fn_name == "PG_ALL"sv) {
+    return hdk::ir::makeExpr<hdk::ir::FunctionOper>(ti, fn_name, operands);
+  }
+  if (fn_name == "LIKE"sv || fn_name == "PG_ILIKE"sv) {
+    return parseLike(fn_name, operands);
+  }
+  if (fn_name == "REGEXP_LIKE"sv) {
+    return parseRegexp(operands);
+  }
+  if (fn_name == "LIKELY"sv) {
+    return parseLikely(operands);
+  }
+  if (fn_name == "UNLIKELY"sv) {
+    return parseUnlikely(operands);
+  }
+  if (fn_name == "PG_EXTRACT"sv || fn_name == "PG_DATE_TRUNC"sv) {
+    return parseExtract(fn_name, operands);
+  }
+  if (fn_name == "DATEADD"sv) {
+    return parseDateadd(operands);
+  }
+  if (fn_name == "DATEDIFF"sv) {
+    return parseDatediff(operands);
+  }
+  if (fn_name == "DATEPART"sv) {
+    return parseDatepart(operands);
+  }
+  if (fn_name == "LENGTH"sv || fn_name == "CHAR_LENGTH"sv) {
+    return parseLength(fn_name, operands);
+  }
+  if (fn_name == "KEY_FOR_STRING"sv) {
+    return parseKeyForString(operands);
+  }
+  if (fn_name == "WIDTH_BUCKET"sv) {
+    return parseWidthBucket(operands);
+  }
+  if (fn_name == "SAMPLE_RATIO"sv) {
+    return parseSampleRatio(operands);
+  }
+  if (fn_name == "CURRENT_USER"sv) {
+    return parseCurrentUser();
+  }
+  if (root_dag_builder.config().exec.enable_experimental_string_functions &&
+      fn_name == "LOWER"sv) {
+    return parseLower(operands);
+  }
+  if (fn_name == "CARDINALITY"sv || fn_name == "ARRAY_LENGTH"sv) {
+    return parseCardinality(fn_name, operands, ti);
+  }
+  if (fn_name == "ITEM"sv) {
+    return parseItem(operands);
+  }
+  if (fn_name == "CURRENT_DATE"sv) {
+    return parseCurrentDate(root_dag_builder.now());
+  }
+  if (fn_name == "CURRENT_TIME"sv) {
+    return parseCurrentTime(root_dag_builder.now());
+  }
+  if (fn_name == "CURRENT_TIMESTAMP"sv) {
+    return parseCurrentTimestamp(root_dag_builder.now());
+  }
+  if (fn_name == "NOW"sv) {
+    return parseCurrentTimestamp(root_dag_builder.now());
+  }
+  if (fn_name == "DATETIME"sv) {
+    return parseDatetime(operands, root_dag_builder.now());
+  }
+  if (fn_name == "usTIMESTAMP"sv || fn_name == "nsTIMESTAMP"sv) {
+    return parseHPTLiteral(operands, ti);
+  }
+  if (fn_name == "ABS"sv) {
+    return parseAbs(operands);
+  }
+  if (fn_name == "SIGN"sv) {
+    return parseSign(operands);
+  }
+  if (fn_name == "CEIL"sv || fn_name == "FLOOR"sv) {
+    return hdk::ir::makeExpr<hdk::ir::FunctionOperWithCustomTypeHandling>(
+        ti, fn_name, operands);
+  }
+  if (fn_name == "ROUND"sv) {
+    return parseRound(fn_name, operands, ti);
+  }
+  if (fn_name == "DATETIME_PLUS"sv) {
+    auto dt_plus = hdk::ir::makeExpr<hdk::ir::FunctionOper>(ti, fn_name, operands);
+    const auto date_trunc = rewrite_to_date_trunc(dt_plus.get());
+    if (date_trunc) {
+      return date_trunc;
+    }
+    return parseDateadd(operands);
+  }
+  if (fn_name == "/INT"sv) {
+    CHECK_EQ(operands.size(), size_t(2));
+    return Analyzer::normalizeOperExpr(kDIVIDE, kONE, operands[0], operands[1]);
+  }
+  if (fn_name == "Reinterpret"sv) {
+    CHECK_EQ(operands.size(), size_t(1));
+    return operands[0];
+  }
+  if (fn_name == "OFFSET_IN_FRAGMENT"sv) {
+    CHECK_EQ(operands.size(), size_t(0));
+    return hdk::ir::makeExpr<hdk::ir::OffsetInFragment>();
+  }
+  if (fn_name == "ARRAY"sv) {
+    // Var args; currently no check.  Possible fix-me -- can array have 0 elements?
+    return parseArrayFunction(operands, ti);
+  }
+
+  if (fn_name == "||"sv || fn_name == "SUBSTRING"sv) {
+    SQLTypeInfo ret_ti(kTEXT, false);
+    return hdk::ir::makeExpr<hdk::ir::FunctionOper>(ret_ti, fn_name, operands);
+  }
+  // Reset possibly wrong return type of rex_function to the return
+  // type of the optimal valid implementation. The return type can be
+  // wrong in the case of multiple implementations of UDF functions
+  // that have different return types but Calcite specifies the return
+  // type according to the first implementation.
+  auto args = operands;
+  SQLTypeInfo ret_ti;
+  try {
+    auto ext_func_sig = bind_function(fn_name, args);
+
+    auto ext_func_args = ext_func_sig.getArgs();
+    CHECK_EQ(args.size(), ext_func_args.size());
+    for (size_t i = 0; i < args.size(); i++) {
+      // fold casts on constants
+      if (auto constant = std::dynamic_pointer_cast<hdk::ir::Constant>(args[i])) {
+        auto ext_func_arg_ti = ext_arg_type_to_type_info(ext_func_args[i]);
+        if (ext_func_arg_ti != args[i]->get_type_info()) {
+          args[i] = constant->add_cast(ext_func_arg_ti);
+        }
+      }
+    }
+
+    ret_ti = ext_arg_type_to_type_info(ext_func_sig.getRet());
+  } catch (ExtensionFunctionBindingError& e) {
+    LOG(WARNING) << "RelAlgTranslator::translateFunction: " << e.what();
+    throw;
+  }
+
+  // By default, the extension function type will not allow nulls. If one of the arguments
+  // is nullable, the extension function must also explicitly allow nulls.
+  bool arguments_not_null = true;
+  for (const auto& arg_expr : args) {
+    if (!arg_expr->get_type_info().get_notnull()) {
+      arguments_not_null = false;
+      break;
+    }
+  }
+  ret_ti.set_notnull(arguments_not_null);
+
+  return hdk::ir::makeExpr<hdk::ir::FunctionOper>(ret_ti, fn_name, std::move(args));
+}
+
 hdk::ir::ExprPtr parse_operator_expr(const rapidjson::Value& json_expr,
                                      int db_id,
                                      SchemaProviderPtr schema_provider,
@@ -1482,10 +2055,7 @@ hdk::ir::ExprPtr parse_operator_expr(const rapidjson::Value& json_expr,
                                ra_output);
 
   } else if (op == kFUNCTION) {
-    if (is_quantifier) {
-      return hdk::ir::makeExpr<hdk::ir::FunctionOper>(ti, op_name, operands);
-    }
-    return nullptr;
+    return parseFunctionOperator(op_name, operands, ti, root_dag_builder);
   } else {
     CHECK_GE(operands.size(), (size_t)1);
 
