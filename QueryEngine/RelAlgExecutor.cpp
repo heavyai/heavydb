@@ -2776,21 +2776,6 @@ std::shared_ptr<RelAlgTranslator> RelAlgExecutor::getRelAlgTranslator(
 
 namespace {
 
-std::vector<const RexScalar*> rex_to_conjunctive_form(const RexScalar* qual_expr) {
-  CHECK(qual_expr);
-  const auto bin_oper = dynamic_cast<const RexOperator*>(qual_expr);
-  if (!bin_oper || bin_oper->getOperator() != kAND) {
-    return {qual_expr};
-  }
-  CHECK_GE(bin_oper->size(), size_t(2));
-  auto lhs_cf = rex_to_conjunctive_form(bin_oper->getOperand(0));
-  for (size_t i = 1; i < bin_oper->size(); ++i) {
-    const auto rhs_cf = rex_to_conjunctive_form(bin_oper->getOperand(i));
-    lhs_cf.insert(lhs_cf.end(), rhs_cf.begin(), rhs_cf.end());
-  }
-  return lhs_cf;
-}
-
 hdk::ir::ExprPtr build_logical_expression(const std::vector<hdk::ir::ExprPtr>& factors,
                                           const SQLOps sql_op) {
   CHECK(!factors.empty());

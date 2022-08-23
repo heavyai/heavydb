@@ -130,9 +130,6 @@ RelAlgNodePtr TestRelAlgDagBuilder::addEquiJoin(RelAlgNodePtr lhs,
                                                 const JoinType join_type,
                                                 size_t lhs_col_idx,
                                                 size_t rhs_col_idx) {
-  std::vector<std::unique_ptr<const RexScalar>> eq_ops;
-  eq_ops.push_back(std::make_unique<RexInput>(lhs.get(), lhs_col_idx));
-  eq_ops.push_back(std::make_unique<RexInput>(rhs.get(), rhs_col_idx));
   auto lhs_expr = hdk::ir::makeExpr<hdk::ir::ColumnRef>(
       getColumnType(lhs.get(), lhs_col_idx), lhs.get(), lhs_col_idx);
   auto rhs_expr = hdk::ir::makeExpr<hdk::ir::ColumnRef>(

@@ -51,23 +51,6 @@ void RelAlgNode::resetRelAlgFirstId() noexcept {
   crt_id_ = FIRST_RA_NODE_ID;
 }
 
-void RexSubQuery::setExecutionResult(
-    const std::shared_ptr<const ExecutionResult> result) {
-  auto row_set = result->getRows();
-  CHECK(row_set);
-  CHECK_EQ(size_t(1), row_set->colCount());
-  *(type_.get()) = row_set->getColType(0);
-  (*(result_.get())) = result;
-}
-
-std::unique_ptr<RexSubQuery> RexSubQuery::deepCopy() const {
-  return std::make_unique<RexSubQuery>(type_, result_, ra_);
-}
-
-unsigned RexSubQuery::getId() const {
-  return ra_->getId();
-}
-
 namespace {
 
 class RebindInputsVisitor : public DeepCopyVisitor {
@@ -117,21 +100,7 @@ class RebindReindexInputsVisitor : public RebindInputsVisitor {
   const std::optional<std::unordered_map<unsigned, unsigned>>& mapping_;
 };
 
-// Creates an output with n columns.
-std::vector<RexInput> n_outputs(const RelAlgNode* node, const size_t n) {
-  std::vector<RexInput> outputs;
-  outputs.reserve(n);
-  for (size_t i = 0; i < n; ++i) {
-    outputs.emplace_back(node, i);
-  }
-  return outputs;
-}
-
 }  // namespace
-
-void Rex::print() const {
-  std::cout << toString() << std::endl;
-}
 
 void RelAlgNode::print() const {
   std::cout << toString() << std::endl;
@@ -643,98 +612,6 @@ std::string json_node_to_string(const rapidjson::Value& node) noexcept {
   return buffer.GetString();
 }
 
-// The parse_* functions below de-serialize expressions as they come from Calcite.
-// RelAlgDagBuilder will take care of making the representation easy to
-// navigate for lower layers, for example by replacing RexAbstractInput with RexInput.
-
-std::unique_ptr<RexAbstractInput> parse_abstract_input(
-    const rapidjson::Value& expr) noexcept {
-  const auto& input = field(expr, "input");
-  return std::unique_ptr<RexAbstractInput>(new RexAbstractInput(json_i64(input)));
-}
-
-std::unique_ptr<RexLiteral> parse_literal(const rapidjson::Value& expr) {
-  CHECK(expr.IsObject());
-  const auto& literal = field(expr, "literal");
-  const auto type = to_sql_type(json_str(field(expr, "type")));
-  const auto target_type = to_sql_type(json_str(field(expr, "target_type")));
-  const auto scale = json_i64(field(expr, "scale"));
-  const auto precision = json_i64(field(expr, "precision"));
-  const auto type_scale = json_i64(field(expr, "type_scale"));
-  const auto type_precision = json_i64(field(expr, "type_precision"));
-  if (literal.IsNull()) {
-    return std::unique_ptr<RexLiteral>(new RexLiteral(target_type));
-  }
-  switch (type) {
-    case kINT:
-    case kBIGINT:
-    case kDECIMAL:
-    case kINTERVAL_DAY_TIME:
-    case kINTERVAL_YEAR_MONTH:
-    case kTIME:
-    case kTIMESTAMP:
-    case kDATE:
-      return std::unique_ptr<RexLiteral>(new RexLiteral(json_i64(literal),
-                                                        type,
-                                                        target_type,
-                                                        scale,
-                                                        precision,
-                                                        type_scale,
-                                                        type_precision));
-    case kDOUBLE: {
-      if (literal.IsDouble()) {
-        return std::unique_ptr<RexLiteral>(new RexLiteral(json_double(literal),
-                                                          type,
-                                                          target_type,
-                                                          scale,
-                                                          precision,
-                                                          type_scale,
-                                                          type_precision));
-      } else if (literal.IsInt64()) {
-        return std::make_unique<RexLiteral>(static_cast<double>(literal.GetInt64()),
-                                            type,
-                                            target_type,
-                                            scale,
-                                            precision,
-                                            type_scale,
-                                            type_precision);
-
-      } else if (literal.IsUint64()) {
-        return std::make_unique<RexLiteral>(static_cast<double>(literal.GetUint64()),
-                                            type,
-                                            target_type,
-                                            scale,
-                                            precision,
-                                            type_scale,
-                                            type_precision);
-      }
-      UNREACHABLE() << "Unhandled type: " << literal.GetType();
-    }
-    case kTEXT:
-      return std::unique_ptr<RexLiteral>(new RexLiteral(json_str(literal),
-                                                        type,
-                                                        target_type,
-                                                        scale,
-                                                        precision,
-                                                        type_scale,
-                                                        type_precision));
-    case kBOOLEAN:
-      return std::unique_ptr<RexLiteral>(new RexLiteral(json_bool(literal),
-                                                        type,
-                                                        target_type,
-                                                        scale,
-                                                        precision,
-                                                        type_scale,
-                                                        type_precision));
-    case kNULLT:
-      return std::unique_ptr<RexLiteral>(new RexLiteral(target_type));
-    default:
-      CHECK(false);
-  }
-  CHECK(false);
-  return nullptr;
-}
-
 hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
                             int db_id,
                             SchemaProviderPtr schema_provider,
@@ -822,18 +699,6 @@ NullSortedPosition parse_nulls_position(const rapidjson::Value& collation) {
   return json_str(field(collation, "nulls")) == std::string("FIRST")
              ? NullSortedPosition::First
              : NullSortedPosition::Last;
-}
-
-std::vector<SortField> parse_window_order_collation(const rapidjson::Value& arr,
-                                                    RelAlgDagBuilder& root_dag_builder) {
-  std::vector<SortField> collation;
-  size_t field_idx = 0;
-  for (auto it = arr.Begin(); it != arr.End(); ++it, ++field_idx) {
-    const auto sort_dir = parse_sort_direction(*it);
-    const auto null_pos = parse_nulls_position(*it);
-    collation.emplace_back(field_idx, sort_dir, null_pos);
-  }
-  return collation;
 }
 
 std::vector<hdk::ir::OrderEntry> parseWindowOrderCollation(const rapidjson::Value& arr) {
@@ -2392,19 +2257,6 @@ class CoalesceSecondaryProjectVisitor : public ScalarExprVisitor<bool> {
 };
 
 // Detect the window function SUM pattern: CASE WHEN COUNT() > 0 THEN SUM ELSE 0
-bool is_window_function_sum(const RexScalar* rex) {
-  const auto case_operator = dynamic_cast<const RexCase*>(rex);
-  if (case_operator && case_operator->branchCount() == 1) {
-    const auto then_window =
-        dynamic_cast<const RexWindowFunctionOperator*>(case_operator->getThen(0));
-    if (then_window && then_window->getKind() == SqlWindowFunctionKind::SUM_INTERNAL) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// Detect the window function SUM pattern: CASE WHEN COUNT() > 0 THEN SUM ELSE 0
 bool is_window_function_sum(const hdk::ir::Expr* expr) {
   const auto case_expr = dynamic_cast<const hdk::ir::CaseExpr*>(expr);
   if (case_expr && case_expr->get_expr_pair_list().size() == 1) {
@@ -2426,40 +2278,6 @@ bool is_window_function_sum(const hdk::ir::Expr* expr) {
 
 // Detect both window function operators and window function operators embedded in case
 // statements (for null handling)
-bool is_window_function_operator(const RexScalar* rex) {
-  if (dynamic_cast<const RexWindowFunctionOperator*>(rex)) {
-    return true;
-  }
-
-  // unwrap from casts, if they exist
-  const auto rex_cast = dynamic_cast<const RexOperator*>(rex);
-  if (rex_cast && rex_cast->getOperator() == kCAST) {
-    CHECK_EQ(rex_cast->size(), size_t(1));
-    return is_window_function_operator(rex_cast->getOperand(0));
-  }
-
-  if (is_window_function_sum(rex)) {
-    return true;
-  }
-  // Check for Window Function AVG:
-  // (CASE WHEN count > 0 THEN sum ELSE 0) / COUNT
-  const RexOperator* divide_operator = dynamic_cast<const RexOperator*>(rex);
-  if (divide_operator && divide_operator->getOperator() == kDIVIDE) {
-    CHECK_EQ(divide_operator->size(), size_t(2));
-    const auto case_operator =
-        dynamic_cast<const RexCase*>(divide_operator->getOperand(0));
-    const auto second_window =
-        dynamic_cast<const RexWindowFunctionOperator*>(divide_operator->getOperand(1));
-    if (case_operator && second_window &&
-        second_window->getKind() == SqlWindowFunctionKind::COUNT) {
-      if (is_window_function_sum(case_operator)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 bool is_window_function_expr(const hdk::ir::Expr* expr) {
   if (dynamic_cast<const hdk::ir::WindowFunction*>(expr) != nullptr) {
     return true;
@@ -2737,7 +2555,6 @@ void separate_window_function_expressions(
     }
 
     if (!embedded_window_function_exprs.empty()) {
-      std::vector<std::unique_ptr<const RexScalar>> new_scalar_exprs;
       hdk::ir::ExprPtrVector new_exprs;
 
       auto window_func_exprs = window_func_project_node->getExprs();
@@ -2942,11 +2759,9 @@ int64_t get_int_literal_field(const rapidjson::Value& obj,
   if (it == obj.MemberEnd()) {
     return default_val;
   }
-  std::unique_ptr<RexLiteral> lit(parse_literal(it->value));
-  CHECK_EQ(kDECIMAL, lit->getType());
-  CHECK_EQ(unsigned(0), lit->getScale());
-  CHECK_EQ(unsigned(0), lit->getTargetScale());
-  return lit->getVal<int64_t>();
+  auto expr = parseLiteral(it->value);
+  CHECK(expr->get_type_info().is_integer());
+  return dynamic_cast<const hdk::ir::Constant*>(expr.get())->intVal();
 }
 
 void check_empty_inputs_field(const rapidjson::Value& node) noexcept {
@@ -3099,7 +2914,6 @@ class RelAlgDispatcher {
     CHECK(aggs_json_arr.IsArray());
     hdk::ir::ExprPtrVector input_exprs = getInputExprsForAgg(inputs[0].get());
     hdk::ir::ExprPtrVector aggs;
-    bool bigint_count = root_dag_builder.config().exec.group_by.bigint_count;
     for (auto aggs_json_arr_it = aggs_json_arr.Begin();
          aggs_json_arr_it != aggs_json_arr.End();
          ++aggs_json_arr_it) {
@@ -3614,43 +3428,6 @@ std::string tree_string(const RelAlgNode* ra, const size_t depth) {
   return result;
 }
 
-std::string RexSubQuery::toString() const {
-  return cat(::typeName(this), "(", ::toString(ra_.get()), ")");
-}
-
-size_t RexSubQuery::toHash() const {
-  if (!hash_) {
-    hash_ = typeid(RexSubQuery).hash_code();
-    boost::hash_combine(*hash_, ra_->toHash());
-  }
-  return *hash_;
-}
-
-std::string RexInput::toString() const {
-  const auto scan_node = dynamic_cast<const RelScan*>(node_);
-  if (scan_node) {
-    auto field_name = scan_node->getFieldName(getIndex());
-    auto table_name = scan_node->getTableInfo()->name;
-    return ::typeName(this) + "(" + table_name + "." + field_name + "[" +
-           node_->getIdString() + ":" + std::to_string(getIndex()) + "])";
-  }
-  return cat(::typeName(this),
-             "(",
-             node_->getIdString(),
-             ", in_index=",
-             std::to_string(getIndex()),
-             ")");
-}
-
-size_t RexInput::toHash() const {
-  if (!hash_) {
-    hash_ = typeid(RexInput).hash_code();
-    boost::hash_combine(*hash_, node_->toHash());
-    boost::hash_combine(*hash_, getIndex());
-  }
-  return *hash_;
-}
-
 std::string RelCompound::toString() const {
   return cat(::typeName(this),
              getIdString(),
@@ -3708,7 +3485,7 @@ SQLTypeInfo getColumnType(const RelAlgNode* node, size_t col_idx) {
   }
 
   // For aggregates we can we can propagate type from group key
-  // or extract type from RexAgg
+  // or extract type from AggExpr
   const auto agg = dynamic_cast<const RelAggregate*>(node);
   if (agg) {
     if (col_idx < agg->getGroupByCount()) {

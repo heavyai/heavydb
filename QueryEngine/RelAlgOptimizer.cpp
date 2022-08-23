@@ -259,7 +259,6 @@ void propagate_rex_input_renumber(
       continue;
     }
     if (auto project = dynamic_cast<RelProject*>(modified_node)) {
-      std::vector<std::unique_ptr<const RexScalar>> new_scalar_exprs;
       hdk::ir::ExprPtrVector new_exprs;
       for (size_t i = 0; i < project->size(); ++i) {
         new_exprs.push_back(visitor.visit(project->getExpr(i).get()));
@@ -1030,12 +1029,9 @@ void try_insert_coalesceable_proj(
     }
     auto only_usr = const_cast<RelAlgNode*>(*usrs.begin());
 
-    std::vector<std::unique_ptr<const RexScalar>> scalar_exprs;
     hdk::ir::ExprPtrVector exprs;
     std::vector<std::string> fields;
     for (size_t i = 0; i < filter->size(); ++i) {
-      scalar_exprs.push_back(
-          boost::make_unique<RexInput>(filter, static_cast<unsigned>(i)));
       exprs.emplace_back(hdk::ir::makeExpr<hdk::ir::ColumnRef>(
           getColumnType(filter, i), filter, static_cast<unsigned>(i)));
       fields.push_back(get_field_name(filter, i));
@@ -1528,62 +1524,6 @@ void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
 }
 
 namespace {
-
-std::vector<const RexScalar*> find_hoistable_conditions(const RexScalar* condition,
-                                                        const RelAlgNode* source,
-                                                        const size_t first_col_idx,
-                                                        const size_t last_col_idx) {
-  if (auto rex_op = dynamic_cast<const RexOperator*>(condition)) {
-    switch (rex_op->getOperator()) {
-      case kAND: {
-        std::vector<const RexScalar*> subconditions;
-        size_t complete_subcond_count = 0;
-        for (size_t i = 0; i < rex_op->size(); ++i) {
-          auto conds = find_hoistable_conditions(
-              rex_op->getOperand(i), source, first_col_idx, last_col_idx);
-          if (conds.size() == size_t(1)) {
-            ++complete_subcond_count;
-          }
-          subconditions.insert(subconditions.end(), conds.begin(), conds.end());
-        }
-        if (complete_subcond_count == rex_op->size()) {
-          return {rex_op};
-        } else {
-          return {subconditions};
-        }
-        break;
-      }
-      case kEQ: {
-        const auto lhs_conds = find_hoistable_conditions(
-            rex_op->getOperand(0), source, first_col_idx, last_col_idx);
-        const auto rhs_conds = find_hoistable_conditions(
-            rex_op->getOperand(1), source, first_col_idx, last_col_idx);
-        const auto lhs_in = lhs_conds.size() == 1
-                                ? dynamic_cast<const RexInput*>(*lhs_conds.begin())
-                                : nullptr;
-        const auto rhs_in = rhs_conds.size() == 1
-                                ? dynamic_cast<const RexInput*>(*rhs_conds.begin())
-                                : nullptr;
-        if (lhs_in && rhs_in) {
-          return {rex_op};
-        }
-        return {};
-        break;
-      }
-      default:
-        break;
-    }
-    return {};
-  }
-  if (auto rex_in = dynamic_cast<const RexInput*>(condition)) {
-    if (rex_in->getSourceNode() == source) {
-      const auto col_idx = rex_in->getIndex();
-      return {col_idx >= first_col_idx && col_idx <= last_col_idx ? condition : nullptr};
-    }
-    return {};
-  }
-  return {};
-}
 
 std::vector<const hdk::ir::Expr*> find_hoistable_conditions(
     const hdk::ir::Expr* condition,
