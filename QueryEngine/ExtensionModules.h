@@ -16,6 +16,7 @@
 
 enum class ExtModuleKinds {
   template_module,     // RuntimeFunctions.bc
+  l0_template_module,  // RuntimeFunctionsL0.bc
   udf_cpu_module,      // Load-time UDFs for CPU execution
   udf_gpu_module,      // Load-time UDFs for GPU execution
   rt_udf_cpu_module,   // Run-time UDF/UDTFs for CPU execution

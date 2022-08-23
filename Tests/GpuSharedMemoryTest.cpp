@@ -334,7 +334,7 @@ void perform_test_and_verify_results(TestInputData input) {
   auto executor = Executor::getExecutor(0, nullptr, nullptr);
   auto& context = executor->getContext();
   auto cgen_state = std::unique_ptr<CgenState>(new CgenState({}, false));
-  cgen_state->set_module_shallow_copy(executor->get_rt_module());
+  cgen_state->set_module_shallow_copy(executor->get_rt_module(/*is_l0=*/false));
   auto module = cgen_state->module_;
   module->setDataLayout(
       "e-p:64:64:64-i1:8:8-i8:8:8-"

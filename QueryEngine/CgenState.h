@@ -415,7 +415,7 @@ struct CgenState {
     return off + alignment;
   }
 
-  void maybeCloneFunctionRecursive(llvm::Function* fn);
+  void maybeCloneFunctionRecursive(llvm::Function* fn, bool is_l0);
 
  private:
   template <class T>

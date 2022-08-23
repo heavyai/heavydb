@@ -198,6 +198,12 @@ void Executor::initialize_extension_module_sources() {
                       "functions might not be available.";
     }
 #endif
+#ifdef HAVE_L0
+    auto l0_template_path = root_path + "/QueryEngine/RuntimeFunctionsL0.bc";
+    CHECK(boost::filesystem::exists(l0_template_path));
+    Executor::extension_module_sources[ExtModuleKinds::l0_template_module] =
+        l0_template_path;
+#endif
   }
 }
 
@@ -232,6 +238,7 @@ void Executor::update_extension_modules(bool update_runtime_modules_only) {
     CHECK(!source.empty());
     switch (module_kind) {
       case ExtModuleKinds::template_module:
+      case ExtModuleKinds::l0_template_module:
       case ExtModuleKinds::rt_libdevice_module: {
         return read_llvm_module_from_bc_file(source, getContext());
       }
@@ -294,6 +301,9 @@ void Executor::update_extension_modules(bool update_runtime_modules_only) {
 #ifdef HAVE_CUDA
     update_module(ExtModuleKinds::udf_gpu_module, true);
     update_module(ExtModuleKinds::rt_libdevice_module);
+#endif
+#ifdef HAVE_L0
+    update_module(ExtModuleKinds::l0_template_module);
 #endif
   }
   // run-time modules, these are optional and erasable:

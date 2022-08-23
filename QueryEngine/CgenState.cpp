@@ -179,14 +179,14 @@ llvm::Value* CgenState::castToTypeIn(llvm::Value* val, const size_t dst_bits) {
   return ir_builder_.CreateFPCast(val, dst_type);
 }
 
-void CgenState::maybeCloneFunctionRecursive(llvm::Function* fn) {
+void CgenState::maybeCloneFunctionRecursive(llvm::Function* fn, bool is_l0) {
   CHECK(fn);
   if (!fn->isDeclaration()) {
     return;
   }
 
   // Get the implementation from the runtime module.
-  auto func_impl = getExecutor()->get_rt_module()->getFunction(fn->getName());
+  auto func_impl = getExecutor()->get_rt_module(is_l0)->getFunction(fn->getName());
   CHECK(func_impl) << fn->getName().str();
 
   if (func_impl->isDeclaration()) {
@@ -210,9 +210,13 @@ void CgenState::maybeCloneFunctionRecursive(llvm::Function* fn) {
   for (auto it = llvm::inst_begin(fn), e = llvm::inst_end(fn); it != e; ++it) {
     if (llvm::isa<llvm::CallInst>(*it)) {
       auto& call = llvm::cast<llvm::CallInst>(*it);
-      maybeCloneFunctionRecursive(call.getCalledFunction());
+      maybeCloneFunctionRecursive(call.getCalledFunction(), is_l0);
     }
   }
+}
+
+bool is_l0_module(const llvm::Module* m) {
+  return m->getTargetTriple().rfind("spir", 0) == 0;
 }
 
 llvm::Value* CgenState::emitCall(const std::string& fname,
@@ -222,7 +226,7 @@ llvm::Value* CgenState::emitCall(const std::string& fname,
   CHECK(func);
   // If the function called isn't external, clone the implementation from the runtime
   // module.
-  maybeCloneFunctionRecursive(func);
+  maybeCloneFunctionRecursive(func, is_l0_module(module_));
 
   return ir_builder_.CreateCall(func, args);
 }

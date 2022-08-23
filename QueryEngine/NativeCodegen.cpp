@@ -1459,13 +1459,15 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
     }
   }
 
+  auto is_gpu = co.device_type == ExecutorDeviceType::GPU;
+  auto is_l0 = is_gpu && gpu_mgr->getPlatform() == GpuMgrPlatform::L0;
+
   // Read the module template and target either CPU or GPU
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
   CHECK(cgen_state_->module_ == nullptr);
-  cgen_state_->set_module_shallow_copy(get_rt_module(), /*always_clone=*/true);
+  cgen_state_->set_module_shallow_copy(get_rt_module(is_l0), /*always_clone=*/true);
 
-  auto is_gpu = co.device_type == ExecutorDeviceType::GPU;
   if (is_gpu) {
     cgen_state_->module_->setDataLayout(compiler::get_gpu_data_layout());
     cgen_state_->module_->setTargetTriple(compiler::get_gpu_target_triple_string());

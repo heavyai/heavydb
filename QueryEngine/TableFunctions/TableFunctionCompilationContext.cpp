@@ -223,7 +223,7 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
   auto cgen_state = executor_->getCgenStatePtr();
   CHECK(cgen_state);
   CHECK(cgen_state->module_ == nullptr);
-  cgen_state->set_module_shallow_copy(executor_->get_rt_module());
+  cgen_state->set_module_shallow_copy(executor_->get_rt_module(/*is_l0=*/false));
 
   entry_point_func_ = generate_entry_point(cgen_state);
 

@@ -207,7 +207,7 @@ StubGenerator::Stub StubGenerator::generateStub(const size_t executor_id,
   // compilation is locked per executor
   Executor::CgenStateManager cgenstate_manager(*executor.get());
   auto cgen_state = executor->getCgenStatePtr();
-  cgen_state->set_module_shallow_copy(executor->get_rt_module());
+  cgen_state->set_module_shallow_copy(executor->get_rt_module(/*is_l0=*/false));
   const auto function = create_stub_function(stub_name, cgen_state);
   CHECK(function);
   auto& ctx = cgen_state->context_;

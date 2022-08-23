@@ -374,8 +374,9 @@ class Executor {
   static void initialize_extension_module_sources();
 
   // Convenience functions for retrieving executor-local extension modules, thread-safe:
-  const std::unique_ptr<llvm::Module>& get_rt_module() const {
-    return get_extension_module(ExtModuleKinds::template_module);
+  const std::unique_ptr<llvm::Module>& get_rt_module(bool is_l0) const {
+    return get_extension_module(is_l0 ? ExtModuleKinds::l0_template_module
+                                      : ExtModuleKinds::template_module);
   }
   const std::unique_ptr<llvm::Module>& get_udf_module(bool is_gpu = false) const {
     return get_extension_module(
@@ -1339,6 +1340,8 @@ inline std::string toString(const ExtModuleKinds& kind) {
   switch (kind) {
     case ExtModuleKinds::template_module:
       return "template_module";
+    case ExtModuleKinds::l0_template_module:
+      return "l0_template_module";
     case ExtModuleKinds::rt_libdevice_module:
       return "rt_libdevice_module";
     case ExtModuleKinds::udf_cpu_module:
