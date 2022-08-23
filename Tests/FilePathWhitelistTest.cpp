@@ -29,6 +29,7 @@
 #include "DataMgr/OmniSciAwsSdk.h"
 #endif  // HAVE_AWS_S3
 #include "Geospatial/ColumnNames.h"
+#include "ImportExport/ForeignDataImporter.h"
 #include "Shared/SysDefinitions.h"
 #include "Tests/DBHandlerTestHelpers.h"
 #include "Tests/TestHelpers.h"
@@ -699,6 +700,8 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   DBHandlerTestFixture::initTestArgs(argc, argv);
+
+  import_export::ForeignDataImporter::setDefaultImportPath(BASE_PATH);
 
   int err{0};
   try {

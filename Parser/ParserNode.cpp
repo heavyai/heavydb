@@ -78,7 +78,7 @@ bool g_test_drop_column_rollback{false};
 extern bool g_enable_string_functions;
 extern bool g_enable_fsi;
 
-bool g_enable_legacy_delimited_import{true};
+bool g_enable_legacy_delimited_import{false};
 #ifdef ENABLE_IMPORT_PARQUET
 bool g_enable_legacy_parquet_import{false};
 #endif
