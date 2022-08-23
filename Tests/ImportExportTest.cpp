@@ -2129,6 +2129,14 @@ const char* create_table_nulls = R"(
     );
   )";
 
+const char* create_table_example_2 = R"(
+    CREATE TABLE example_2 (
+      t           TEXT,
+      i           INTEGER,
+      f           DOUBLE
+    );
+  )";
+
 class ImportTest : public ImportExportTestBase {
  protected:
 #ifdef HAVE_AWS_S3
@@ -2157,6 +2165,8 @@ class ImportTest : public ImportExportTestBase {
     sql(create_table_with_side_spaced_array);
     sql("drop table if exists null_table;");
     sql(create_table_nulls);
+    sql("drop table if exists example_2;");
+    sql(create_table_example_2);
   }
 
   void TearDown() override {
@@ -2171,6 +2181,7 @@ class ImportTest : public ImportExportTestBase {
     sql("drop table if exists with_side_spaces;");
     sql("drop table if exists array_with_side_spaces;");
     sql("drop table if exists null_table;");
+    sql("drop table if exists example_2;");
     ImportExportTestBase::TearDown();
   }
 
@@ -3495,6 +3506,72 @@ TEST_F(ImportTestGeo, S3_GCS_One_geo_file) {
       "S_USA.Experimental_Area_Locations.gdb.zip' "
       "WITH (source_type='geo_file', s3_endpoint='storage.googleapis.com', "
       "s3_region='us-west-1');"));
+}
+
+TEST_F(ImportTest, NonS3_Endpoint_csv) {
+  EXPECT_TRUE(importTestCommon(
+      std::string(
+          "COPY example_2 FROM 's3://omnisci-importtest-data/FsiDataFiles/example_2.csv' "
+          "WITH (header='true', s3_endpoint='storage.googleapis.com', "
+          "s3_region='us-west-1');"),
+      0,
+      2.2250738585072014e-308));
+}
+
+TEST_F(ImportTest, NonS3_Endpoint_regex_parsed) {
+  EXPECT_TRUE(importTestCommon(
+      std::string(
+          "COPY example_2 FROM 's3://omnisci-importtest-data/FsiDataFiles/example_2.csv' "
+          "WITH (header='true', s3_endpoint='storage.googleapis.com', "
+          "source_type='regex_parsed_file', "
+          "line_regex='" +
+          get_line_regex(3) + "', s3_region='us-west-1');"),
+      0,
+      2.2250738585072014e-308));
+}
+
+TEST_F(ImportTest, NonS3_Endpoint_parquet) {
+  EXPECT_TRUE(importTestCommon(
+      std::string("COPY example_2 FROM "
+                  "'s3://omnisci-importtest-data/FsiDataFiles/example_2.parquet' "
+                  "WITH (header='true', s3_endpoint='storage.googleapis.com', "
+                  "source_type='PARQUET_FILE', "
+                  "s3_region='us-west-1');"),
+      0,
+      2.2250738585072014e-308));
+}
+
+TEST_F(ImportTest, S3_Endpoint_csv) {
+  EXPECT_TRUE(importTestCommon(
+      std::string(
+          "COPY example_2 FROM 's3://omnisci-fsi-test-public/FsiDataFiles/example_2.csv' "
+          "WITH (header='true', s3_endpoint='s3.us-west-1.amazonaws.com', "
+          "s3_region='us-west-1');"),
+      0,
+      2.2250738585072014e-308));
+}
+
+TEST_F(ImportTest, S3_Endpoint_regex_parsed) {
+  EXPECT_TRUE(importTestCommon(
+      std::string(
+          "COPY example_2 FROM 's3://omnisci-fsi-test-public/FsiDataFiles/example_2.csv' "
+          "WITH (header='true', s3_endpoint='s3.us-west-1.amazonaws.com', "
+          "source_type='regex_parsed_file', "
+          "line_regex='" +
+          get_line_regex(3) + "', s3_region='us-west-1');"),
+      0,
+      2.2250738585072014e-308));
+}
+
+TEST_F(ImportTest, S3_Endpoint_parquet) {
+  EXPECT_TRUE(importTestCommon(
+      std::string("COPY example_2 FROM "
+                  "'s3://omnisci-fsi-test-public/FsiDataFiles/example_2.parquet' "
+                  "WITH (header='true', s3_endpoint='s3.us-west-1.amazonaws.com', "
+                  "source_type='PARQUET_FILE', "
+                  "s3_region='us-west-1');"),
+      0,
+      2.2250738585072014e-308));
 }
 
 class ImportServerPrivilegeTest : public ImportExportTestBase {
