@@ -1,28 +1,38 @@
 package com.mapd.calcite.parser;
 
+import static org.apache.calcite.runtime.Resources.BaseMessage;
+import static org.apache.calcite.runtime.Resources.ExInst;
+
 import com.mapd.calcite.parser.HeavyDBSqlOperatorTable.ExtTableFunction;
 import com.mapd.parser.server.ExtensionFunction;
 
 import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeField;
+import org.apache.calcite.runtime.CalciteException;
+import org.apache.calcite.runtime.Resources;
 import org.apache.calcite.sql.SqlBasicCall;
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlCallBinding;
 import org.apache.calcite.sql.SqlFunctionCategory;
+import org.apache.calcite.sql.SqlIdentifier;
+import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperandCountRange;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlSyntax;
+import org.apache.calcite.sql.SqlUtil;
 import org.apache.calcite.sql.type.SqlOperandCountRanges;
 import org.apache.calcite.sql.type.SqlOperandTypeChecker;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlNameMatchers;
+import org.apache.calcite.sql.validate.SqlValidator;
+import org.apache.calcite.sql.validate.SqlValidatorException;
+import org.apache.calcite.sql.validate.SqlValidatorScope;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -75,6 +85,18 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
     Set<ExtTableFunction> candidateOverloads = new HashSet<ExtTableFunction>(
             getOperatorOverloads(callBinding.getOperator()));
 
+    for (SqlNode operand : callBinding.getCall().getOperandList()) {
+      if (operand != null && operand.getKind() == SqlKind.ARGUMENT_ASSIGNMENT) {
+        final SqlCall assignmentCall = (SqlCall) operand;
+        final SqlIdentifier id = assignmentCall.operand(1);
+        final String paramName = id.getSimple();
+        if (!candidateOverloads.stream().anyMatch(
+                    tf -> tf.getParamNames().contains(paramName))) {
+          throw newExtTableFunctionNameError(callBinding, operand, id.getSimple());
+        }
+      }
+    }
+
     // Remove all candidates whose number of formal args doesn't match the
     // call's number of real args.
     candidateOverloads.removeIf(
@@ -108,7 +130,7 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
     // If there are no candidates left, the call is invalid.
     if (candidateOverloads.size() == 0) {
       if (throwOnFailure) {
-        throw(callBinding.newValidationSignatureError());
+        throw(newExtTableFunctionSignatureError(callBinding));
       }
       return false;
     }
@@ -210,4 +232,67 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
   public Consistency getConsistency() {
     return Consistency.NONE;
   }
+
+  public CalciteException newExtTableFunctionNameError(
+          SqlCallBinding callBinding, SqlNode operand, String operandName) {
+    return callBinding.getValidator().newValidationError(operand,
+            UDTF_ERRORS.paramNameMismatch(
+                    callBinding.getOperator().getName(), operandName));
+  }
+
+  public CalciteException newExtTableFunctionSignatureError(SqlCallBinding callBinding) {
+    return callBinding.getValidator().newValidationError(callBinding.permutedCall(),
+            UDTF_ERRORS.typeMismatch(callBinding.getOperator().getName(),
+                    getCallSignature(callBinding,
+                            callBinding.getValidator(),
+                            callBinding.getScope()),
+                    System.getProperty("line.separator") + "\t"
+                            + callBinding.getOperator().getAllowedSignatures()));
+  }
+
+  // Returns a call signature with detailed CURSOR type information, to emit better error
+  // messages
+  public String getCallSignature(
+          SqlCallBinding callBinding, SqlValidator validator, SqlValidatorScope scope) {
+    List<String> signatureList = new ArrayList<>();
+    for (final SqlNode operand : callBinding.permutedCall().getOperandList()) {
+      final RelDataType argType = validator.deriveType(scope, operand);
+      if (null == argType) {
+        continue;
+      } else if (argType.getSqlTypeName() == SqlTypeName.CURSOR) {
+        SqlCall cursorCall = (SqlCall) operand;
+        RelDataType cursorType = callBinding.getValidator().deriveType(
+                callBinding.getScope(), cursorCall.operand(0));
+        StringBuilder cursorTypeName = new StringBuilder();
+        cursorTypeName.append("CURSOR[");
+        for (int j = 0; j < cursorType.getFieldList().size(); j++) {
+          if (j > 0) {
+            cursorTypeName.append(",");
+          }
+          cursorTypeName.append(
+                  cursorType.getFieldList().get(j).getType().getSqlTypeName());
+        }
+        cursorTypeName.append("]");
+        signatureList.add(cursorTypeName.toString());
+      } else {
+        signatureList.add(argType.toString());
+      }
+    }
+    return SqlUtil.getOperatorSignature(callBinding.getOperator(), signatureList);
+  }
+
+  public interface ExtTableFunctionErrors {
+    @BaseMessage(
+            "No candidate for User-defined Table Function ''{0}'' with input parameter named ''{1}''")
+    ExInst<SqlValidatorException>
+    paramNameMismatch(String udtf, String wrongParamName);
+
+    @BaseMessage(
+            "Cannot apply User-defined Table Function ''{0}'' to arguments of type {1}. Supported form(s): {2}")
+    ExInst<SqlValidatorException>
+    typeMismatch(String udtf, String call, String overloads);
+  }
+
+  public static final ExtTableFunctionErrors UDTF_ERRORS =
+          Resources.create(ExtTableFunctionErrors.class);
 }
