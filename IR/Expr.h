@@ -10,6 +10,7 @@
 #include "SchemaMgr/ColumnInfo.h"
 #include "Shared/sqltypes.h"
 
+#include <iostream>
 #include <list>
 #include <memory>
 #include <set>
