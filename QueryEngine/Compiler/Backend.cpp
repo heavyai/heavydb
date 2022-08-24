@@ -1020,11 +1020,6 @@ std::shared_ptr<L0CompilationContext> L0Backend::generateNativeGPUCode(
   opts.setDesiredBIsRepresentation(SPIRV::BIsRepresentation::OpenCL12);
   opts.setDebugInfoEIS(SPIRV::DebugInfoEIS::OpenCL_DebugInfo_100);
 
-  // FIXME
-  llvm::errs() << "func: " << (func ? func->getName() : "null") << "\n";
-  llvm::errs() << "wrapper func: " << (wrapper_func ? wrapper_func->getName() : "null")
-               << "\n";
-
   std::ostringstream ss;
   std::string err;
   auto success = writeSpirv(module, opts, ss, err);
