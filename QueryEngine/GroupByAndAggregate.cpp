@@ -724,8 +724,9 @@ CountDistinctDescriptors init_count_distinct_descriptors(
           // check a potential OOM when using bitmap-based approach
           const auto total_bytes_per_entry =
               compute_bytes_per_group(bitmap_sz_bits, sub_bitmap_count, device_type);
+          const auto range_bucket = std::max(group_by_range_info.bucket, (int64_t)1);
           const auto maximum_num_groups =
-              group_by_range_info.max - group_by_range_info.min + 1;
+              (group_by_range_info.max - group_by_range_info.min + 1) / range_bucket;
           const auto total_bitmap_bytes_for_groups =
               total_bytes_per_entry * maximum_num_groups;
           // we can estimate a potential OOM of bitmap-based count-distinct operator
