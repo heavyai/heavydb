@@ -40,6 +40,7 @@ set(query_engine_source_files
     Descriptors/QueryFragmentDescriptor.cpp
     Descriptors/QueryMemoryDescriptor.cpp
     Descriptors/RelAlgExecutionDescriptor.cpp
+    DeviceKernel.cpp
     Dispatchers/DefaultExecutionPolicy.cpp
     Dispatchers/RRExecutionPolicy.cpp
     Dispatchers/ProportionBasedExecutionPolicy.cpp

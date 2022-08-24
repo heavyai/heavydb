@@ -83,6 +83,18 @@ std::vector<std::shared_ptr<L0Driver>> get_drivers() {
 
 L0CommandList::L0CommandList(ze_command_list_handle_t handle) : handle_(handle) {}
 
+void L0CommandList::launch(L0Kernel* kernel, std::vector<int8_t*>& params) {
+  for (unsigned i = 0; i < params.size(); ++i) {
+    L0_SAFE_CALL(zeKernelSetArgumentValue(
+        kernel->handle(), i, sizeof(params[i]), params[i] ? &params[i] : nullptr));
+  }
+
+  L0_SAFE_CALL(zeCommandListAppendLaunchKernel(
+      handle_, kernel->handle(), &kernel->group_size(), nullptr, 0, nullptr));
+
+  L0_SAFE_CALL(zeCommandListAppendBarrier(handle_, nullptr, 0, nullptr));
+}
+
 void L0CommandList::submit(L0CommandQueue& queue) {
   L0_SAFE_CALL(zeCommandListClose(handle_));
   L0_SAFE_CALL(zeCommandQueueExecuteCommandLists(queue.handle(), 1, &handle_, nullptr));

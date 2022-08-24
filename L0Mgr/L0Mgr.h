@@ -165,6 +165,8 @@ class L0CommandList {
 #endif
   }
 
+  void launch(L0Kernel* kernel, std::vector<int8_t*>& params);
+
   void submit(L0CommandQueue& queue);
 
 #ifdef HAVE_L0
