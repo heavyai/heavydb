@@ -713,6 +713,7 @@ class Catalog final {
   void reloadCatalogMetadata(const std::map<int32_t, std::string>& user_name_by_user_id);
   void reloadCatalogMetadataUnlocked(
       const std::map<int32_t, std::string>& user_name_by_user_id);
+  void refreshDictionaryCachesForTableUnlocked(const TableDescriptor& td);
   void buildTablesMapUnlocked();
   void buildColumnsMapUnlocked();
   void updateViewsInMapUnlocked();
