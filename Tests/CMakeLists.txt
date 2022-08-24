@@ -79,6 +79,11 @@ if(ENABLE_L0)
   add_test(DataMgrWithL0Test DataMgrWithL0Test ${TEST_ARGS})
 endif()
 
+if (ENABLE_COST_MODEL) 
+  add_executable(CostModelTest CostModel/CostModelTest.cpp)
+  target_link_libraries(CostModelTest ${EXECUTE_TEST_LIBS})
+endif()
+
 target_link_libraries(ResultSetTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ColumnarResultsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(FromTableReorderingTest ${EXECUTE_TEST_LIBS})

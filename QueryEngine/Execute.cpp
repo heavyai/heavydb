@@ -40,6 +40,7 @@
 #include "QueryEngine/AggregatedColRange.h"
 #include "QueryEngine/CodeGenerator.h"
 #include "QueryEngine/ColumnFetcher.h"
+#include "QueryEngine/CostModel/DummyCostModel.h"
 #include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
 #include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
 #include "QueryEngine/Dispatchers/DefaultExecutionPolicy.h"
@@ -1853,20 +1854,8 @@ TemporaryTable Executor::executeWorkUnitImpl(
     exe_policy = std::make_unique<policy::FragmentIDAssignmentExecutionPolicy>(
         ExecutorDeviceType::CPU);
   } else {
-    if (config_->exec.heterogeneous.enable_heterogeneous_execution) {
-      if (config_->exec.heterogeneous.forced_heterogeneous_distribution) {
-        std::map<ExecutorDeviceType, unsigned> distribution{
-            {ExecutorDeviceType::CPU, config_->exec.heterogeneous.forced_cpu_proportion},
-            {ExecutorDeviceType::GPU, config_->exec.heterogeneous.forced_gpu_proportion}};
-        exe_policy = std::make_unique<policy::ProportionBasedExecutionPolicy>(
-            std::move(distribution));
-      } else {
-        exe_policy = std::make_unique<policy::RoundRobinExecutionPolicy>();
-      }
-    } else {
-      exe_policy =
-          std::make_unique<policy::FragmentIDAssignmentExecutionPolicy>(device_type);
-    }
+    costmodel::DummyCostModel cost_model(device_type, config_->exec.heterogeneous);
+    exe_policy = cost_model.predict(ra_exe_unit);
   }
 
   int8_t crt_min_byte_width{MAX_BYTE_WIDTH_SUPPORTED};
