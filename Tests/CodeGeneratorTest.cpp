@@ -35,14 +35,28 @@ namespace {
 #ifdef HAVE_CUDA
 using DevicePtr = CUdeviceptr;
 using DeviceFuncPtr = CUfunction;
-void run_test_kernel(DeviceFuncPtr func, void** params) {
-  cuLaunchKernel(func, 1, 1, 1, 1, 1, 1, 0, nullptr, params, nullptr);
+void run_test_kernel(DeviceFuncPtr func, std::vector<void*>& params, GpuMgr*) {
+  cuLaunchKernel(func, 1, 1, 1, 1, 1, 1, 0, nullptr, &param_ptrs[0], nullptr);
 }
 #elif HAVE_L0
 using DevicePtr = int8_t*;
-using DeviceFuncPtr = void*;
-void run_test_kernel(DeviceFuncPtr func, void** params) {
-  // todo
+using DeviceFuncPtr = l0::L0Kernel*;
+void run_test_kernel(DeviceFuncPtr func, std::vector<void*>& params, GpuMgr* mgr) {
+  l0::L0Manager* mgr_ = dynamic_cast<l0::L0Manager*>(mgr);
+  auto device = mgr_->drivers()[0]->devices()[0];
+  auto q = device->command_queue();
+  auto q_list = device->create_command_list();
+  func->group_size() = {1, 1, 1};
+  ze_group_count_t dispatchTraits;
+  dispatchTraits.groupCountX = 1u;
+  dispatchTraits.groupCountY = 1u;
+  dispatchTraits.groupCountZ = 1u;
+  for (unsigned i = 0; i < params.size(); ++i) {
+    L0_SAFE_CALL(zeKernelSetArgumentValue(func->handle(), i, sizeof(void*), params[i]));
+  }
+  L0_SAFE_CALL(zeCommandListAppendLaunchKernel(
+      q_list->handle(), func->handle(), &dispatchTraits, nullptr, 0, nullptr));
+  q_list->submit(*q.get());
 }
 #endif
 
@@ -221,7 +235,7 @@ TEST(CodeGeneratorTest, IntegerConstantGPU) {
         code_generator.getGpuMgr()->allocateDeviceMem(4, gpu_idx));
     param_ptrs.push_back(&err);
     param_ptrs.push_back(&out);
-    run_test_kernel(func_ptr, &param_ptrs[0]);
+    run_test_kernel(func_ptr, param_ptrs, code_generator.getGpuMgr());
     int32_t host_err;
     int32_t host_out;
     code_generator.getGpuMgr()->copyDeviceToHost(reinterpret_cast<int8_t*>(&host_err),
@@ -272,7 +286,7 @@ TEST(CodeGeneratorTest, IntegerAddGPU) {
         code_generator.getGpuMgr()->allocateDeviceMem(4, gpu_idx));
     param_ptrs.push_back(&err);
     param_ptrs.push_back(&out);
-    run_test_kernel(func_ptr, &param_ptrs[0]);
+    run_test_kernel(func_ptr, param_ptrs, code_generator.getGpuMgr());
     int32_t host_err;
     int32_t host_out;
     code_generator.getGpuMgr()->copyDeviceToHost(reinterpret_cast<int8_t*>(&host_err),
@@ -333,7 +347,7 @@ TEST(CodeGeneratorTest, IntegerColumnGPU) {
     param_ptrs.push_back(&err);
     param_ptrs.push_back(&out);
     param_ptrs.push_back(&in);
-    run_test_kernel(func_ptr, &param_ptrs[0]);
+    run_test_kernel(func_ptr, param_ptrs, code_generator.getGpuMgr());
     int32_t host_err;
     int32_t host_out;
     code_generator.getGpuMgr()->copyDeviceToHost(reinterpret_cast<int8_t*>(&host_err),
@@ -398,7 +412,7 @@ TEST(CodeGeneratorTest, IntegerExprGPU) {
     param_ptrs.push_back(&err);
     param_ptrs.push_back(&out);
     param_ptrs.push_back(&in);
-    run_test_kernel(func_ptr, &param_ptrs[0]);
+    run_test_kernel(func_ptr, param_ptrs, code_generator.getGpuMgr());
     int32_t host_err;
     int32_t host_out;
     code_generator.getGpuMgr()->copyDeviceToHost(reinterpret_cast<int8_t*>(&host_err),
