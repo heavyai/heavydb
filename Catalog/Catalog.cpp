@@ -3968,15 +3968,39 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
   }
 }
 
+// NOTE(Misiu): Only used by --multi-instance clusters.
+void Catalog::refreshDictionaryCachesForTableUnlocked(const TableDescriptor& td) {
+  for (auto col_id = 0; col_id < td.nColumns; ++col_id) {
+    if (auto it = columnDescriptorMapById_.find({td.tableId, col_id});
+        it != columnDescriptorMapById_.end()) {
+      auto cd = it->second;
+      auto dict_id = cd->columnType.get_comp_param();
+      if (cd->columnType.get_compression() == kENCODING_DICT && dict_id) {
+        DictRef dict_ref(currentDB_.dbId, dict_id);
+        if (auto dict_it = dictDescriptorMapByRef_.find(dict_ref);
+            dict_it != dictDescriptorMapByRef_.end()) {
+          // getMetadataForDict() will only reload if the stringDict is null.
+          dict_it->second->stringDict = nullptr;
+        }
+        getMetadataForDict(dict_id, true);
+      }
+    }
+  }
+}
+
 // NOTE(sy): Only used by --multi-instance clusters.
 void Catalog::invalidateCachesForTable(const int table_id) {
   // When called, exactly one thread has a LockMgr data or insert lock for the table.
   cat_read_lock read_lock(this);
   ChunkKey const table_key{getDatabaseId(), table_id};
   auto td = getMutableMetadataForTableUnlocked(table_id);
+  CHECK(td);
   getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
   getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
   DeleteTriggeredCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
+
+  refreshDictionaryCachesForTableUnlocked(*td);
+
   // TODO(sy): doTruncateTable() says "destroy fragmenter before deleteChunks is called"
   // removeFragmenterForTable(table_key[CHUNK_KEY_TABLE_IDX]);
   if (td->fragmenter != nullptr) {
