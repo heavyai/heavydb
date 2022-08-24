@@ -36,7 +36,7 @@ namespace {
 using DevicePtr = CUdeviceptr;
 using DeviceFuncPtr = CUfunction;
 void run_test_kernel(DeviceFuncPtr func, std::vector<void*>& params, GpuMgr*) {
-  cuLaunchKernel(func, 1, 1, 1, 1, 1, 1, 0, nullptr, &param_ptrs[0], nullptr);
+  cuLaunchKernel(func, 1, 1, 1, 1, 1, 1, 0, nullptr, &params[0], nullptr);
 }
 #elif HAVE_L0
 using DevicePtr = int8_t*;
