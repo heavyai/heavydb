@@ -3276,6 +3276,18 @@ TEST(Select, CountDistinct) {
                         col_name + " BETWEEN date '2022-01-10' AND date '2022-01-30';",
                     dt)));
     }
+    {
+      ScopeGuard keep_watchdog_flag = [orig = g_enable_watchdog]() {
+        g_enable_watchdog = orig;
+      };
+      g_enable_watchdog = true;
+      EXPECT_NO_THROW(
+          run_multiple_agg("SELECT date_trunc(month, CAST(Timestamp_ AS TIMESTAMP(3))) "
+                           "AS key0, APPROX_COUNT_DISTINCT(String_dict) AS val FROM "
+                           "data_types_basic5 GROUP BY key0;",
+                           dt,
+                           false));
+    }
   }
 }
 
