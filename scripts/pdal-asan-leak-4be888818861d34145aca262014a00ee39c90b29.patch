@@ -1,0 +1,49 @@
+From 4be888818861d34145aca262014a00ee39c90b29 Mon Sep 17 00:00:00 2001
+From: Howard Butler <hobu.inc@gmail.com>
+Date: Thu, 14 Jul 2022 09:26:52 -0500
+Subject: [PATCH] fix lazperf usage leak caused by bad #ifdef #3811 (#3814)
+
+* fix lazperf usage leak caused by bad #ifdef #3811
+
+* delete cruft
+---
+ CMakeLists.txt   | 4 ----
+ io/LasReader.cpp | 2 --
+ 2 files changed, 6 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 3f3027803b..9c6589ced7 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -317,9 +317,6 @@ endif()
+ if (NOT PDAL_HAVE_LZMA)
+     set(LZMA_EXCLUDES PATTERN pdal/compression/Lzma* EXCLUDE)
+ endif()
+-if (NOT PDAL_HAVE_LAZPERF)
+-    set(LAZPERF_EXCLUDES PATTERN pdal/compression/LazPerf* EXCLUDE)
+-endif()
+ 
+ install(DIRECTORY ${PDAL_INCLUDE_DIR}/pdal
+     DESTINATION include
+@@ -332,7 +329,6 @@ install(DIRECTORY ${PDAL_INCLUDE_DIR}/pdal
+ #    ${ZSTD_EXCLUDES}
+ #    ${ZLIB_EXCLUDES}
+ #    ${LZMA_EXCLUDES}
+-#    ${LAZPERF_EXCLUDES}
+ )
+ 
+ install(DIRECTORY ${PDAL_KERNELS_DIR}
+diff --git a/io/LasReader.cpp b/io/LasReader.cpp
+index 40f1c6fb05..3a02a2abb0 100644
+--- a/io/LasReader.cpp
++++ b/io/LasReader.cpp
+@@ -102,9 +102,7 @@ LasReader::LasReader() : d(new Private)
+ 
+ LasReader::~LasReader()
+ {
+-#ifdef PDAL_HAVE_LAZPERF
+     delete d->decompressor;
+-#endif
+ }
+ 
+ 
