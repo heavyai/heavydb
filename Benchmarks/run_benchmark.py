@@ -5,11 +5,13 @@ import uuid
 import datetime
 import json
 import numpy
+import pandas as pd
 import pymapd
 import re
 import sys
 from pandas import DataFrame
 from argparse import ArgumentParser
+
 
 # For usage info, run: `./<script_name>.py --help`
 
@@ -200,8 +202,8 @@ def get_gpu_info(**kwargs):
             + "[gpu_driver_ver, run_gpu_name] "
         )
     elif (
-        kwargs["conn_machine_name"] == "localhost"
-        or kwargs["gather_nvml_gpu_info"]
+            kwargs["conn_machine_name"] == "localhost"
+            or kwargs["gather_nvml_gpu_info"]
     ):
         logging.debug(
             "Gathering source database GPU info fields "
@@ -299,7 +301,7 @@ def read_query_files(**kwargs):
             logging.debug("Validating query filename: " + query_filename)
             if validate_query_file(query_filename=query_filename):
                 with open(
-                    kwargs["queries_dir"] + "/" + query_filename, "r"
+                        kwargs["queries_dir"] + "/" + query_filename, "r"
                 ) as query_filepath:
                     logging.debug(
                         "Reading query with filename: " + query_filename
@@ -816,9 +818,9 @@ def run_query(**kwargs):
                     query_result["results_iter_time"], 1
                 )
                 first_total_time = (
-                    first_execution_time
-                    + first_connect_time
-                    + first_results_iter_time
+                        first_execution_time
+                        + first_connect_time
+                        + first_results_iter_time
                 )
                 query_results.update(
                     initial_iteration_results={
@@ -839,8 +841,8 @@ def run_query(**kwargs):
                 if query_cpu_mem_usage != 0.0:
                     logging.error(
                         (
-                            "Noninitial iteration ({0}) of query ({1}) "
-                            + "shows non-zero CPU memory usage: {2}"
+                                "Noninitial iteration ({0}) of query ({1}) "
+                                + "shows non-zero CPU memory usage: {2}"
                         ).format(
                             iteration,
                             kwargs["query"]["name"],
@@ -850,8 +852,8 @@ def run_query(**kwargs):
                 if query_gpu_mem_usage != 0.0:
                     logging.error(
                         (
-                            "Noninitial iteration ({0}) of query ({1}) "
-                            + "shows non-zero GPU memory usage: {2}"
+                                "Noninitial iteration ({0}) of query ({1}) "
+                                + "shows non-zero GPU memory usage: {2}"
                         ).format(
                             iteration,
                             kwargs["query"]["name"],
@@ -880,7 +882,7 @@ def run_query(**kwargs):
 
 def run_setup_teardown_query(**kwargs):
     """
-        Convenience wrapper around `run_query` to run a setup or 
+        Convenience wrapper around `run_query` to run a setup or
         teardown query
 
       Kwargs:
@@ -1022,7 +1024,7 @@ def create_results_dataset(**kwargs):
 
                 # If available, getting the last iteration's component-wise timing information as a json structure
                 if (
-                    query_results["noninitial_iteration_results"][-1]["debug_info"]
+                        query_results["noninitial_iteration_results"][-1]["debug_info"]
                 ):
                     detailed_timing_last_iteration = json.loads(
                         query_results["noninitial_iteration_results"][-1][
@@ -1271,8 +1273,8 @@ def send_results_jenkins_bench(**kwargs):
                 "results": [
                     {
                         "name": result_dataset["query_id"]
-                        + "_"
-                        + kwargs["thresholds_name"],
+                                + "_"
+                                + kwargs["thresholds_name"],
                         "description": "",
                         "unit": "ms",
                         "dblValue": result_dataset[kwargs["thresholds_field"]],
@@ -1285,9 +1287,9 @@ def send_results_jenkins_bench(**kwargs):
             "groups": [
                 {
                     "name": result_dataset["run_table"]
-                    + kwargs["output_tag_jenkins"],
+                            + kwargs["output_tag_jenkins"],
                     "description": "Source table: "
-                    + result_dataset["run_table"],
+                                   + result_dataset["run_table"],
                     "tests": jenkins_bench_results,
                 }
             ]
@@ -1423,30 +1425,30 @@ def process_arguments(input_arguments):
         dest="no_gather_conn_gpu_info",
         action="store_true",
         help="Do not gather source database GPU info fields "
-        + "[run_gpu_count, run_gpu_mem_mb] "
-        + "using pymapd connection info. "
-        + "Use when testing a CPU-only server.",
+             + "[run_gpu_count, run_gpu_mem_mb] "
+             + "using pymapd connection info. "
+             + "Use when testing a CPU-only server.",
     )
     optional.add_argument(
         "--no-gather-nvml-gpu-info",
         dest="no_gather_nvml_gpu_info",
         action="store_true",
         help="Do not gather source database GPU info fields "
-        + "[gpu_driver_ver, run_gpu_name] "
-        + "from local GPU using pynvml. "
-        + 'Defaults to True when source server is not "localhost". '
-        + "Use when testing a CPU-only server.",
+             + "[gpu_driver_ver, run_gpu_name] "
+             + "from local GPU using pynvml. "
+             + 'Defaults to True when source server is not "localhost". '
+             + "Use when testing a CPU-only server.",
     )
     optional.add_argument(
         "--gather-nvml-gpu-info",
         dest="gather_nvml_gpu_info",
         action="store_true",
         help="Gather source database GPU info fields "
-        + "[gpu_driver_ver, run_gpu_name] "
-        + "from local GPU using pynvml. "
-        + 'Defaults to True when source server is "localhost". '
-        + "Only use when benchmarking against same machine that this script "
-        + "is run from.",
+             + "[gpu_driver_ver, run_gpu_name] "
+             + "from local GPU using pynvml. "
+             + 'Defaults to True when source server is "localhost". '
+             + "Only use when benchmarking against same machine that this script "
+             + "is run from.",
     )
     optional.add_argument(
         "-m",
@@ -1466,8 +1468,8 @@ def process_arguments(input_arguments):
         dest="destination",
         default="mapd_db",
         help="Destination type: [mapd_db, file_json, output, jenkins_bench] "
-        + "Multiple values can be input seperated by commas, "
-        + 'ex: "mapd_db,file_json"',
+             + "Multiple values can be input seperated by commas, "
+             + 'ex: "mapd_db,file_json"',
     )
     optional.add_argument(
         "-U",
@@ -1488,7 +1490,7 @@ def process_arguments(input_arguments):
         "--dest-server",
         dest="dest_server",
         help="Destination mapd_db database server hostname"
-        + ' (required if destination = "mapd_db")',
+             + ' (required if destination = "mapd_db")',
     )
     optional.add_argument(
         "-O",
@@ -1518,23 +1520,23 @@ def process_arguments(input_arguments):
         dest="dest_table_schema_file",
         default="results_table_schemas/query-results.sql",
         help="Destination table schema file. This must be an executable "
-        + "CREATE TABLE statement that matches the output of this script. It "
-        + "is required when creating the results table. Default location is "
-        + 'in "./results_table_schemas/query-results.sql"',
+             + "CREATE TABLE statement that matches the output of this script. It "
+             + "is required when creating the results table. Default location is "
+             + 'in "./results_table_schemas/query-results.sql"',
     )
     optional.add_argument(
         "-j",
         "--output-file-json",
         dest="output_file_json",
         help="Absolute path of .json output file "
-        + '(required if destination = "file_json")',
+             + '(required if destination = "file_json")',
     )
     optional.add_argument(
         "-J",
         "--output-file-jenkins",
         dest="output_file_jenkins",
         help="Absolute path of jenkins benchmark .json output file "
-        + '(required if destination = "jenkins_bench")',
+             + '(required if destination = "jenkins_bench")',
     )
     optional.add_argument(
         "-E",
@@ -1542,7 +1544,7 @@ def process_arguments(input_arguments):
         dest="output_tag_jenkins",
         default="",
         help="Jenkins benchmark result tag. "
-        + 'Optional, appended to table name in "group" field',
+             + 'Optional, appended to table name in "group" field',
     )
     optional.add_argument(
         "--setup-teardown-queries-dir",
@@ -1550,29 +1552,29 @@ def process_arguments(input_arguments):
         type=str,
         default=None,
         help='Absolute path to dir with setup & teardown query files. '
-        'Query files with "setup" in the filename will be executed in '
-        'the setup stage, likewise query files with "teardown" in '
-        'the filenname will be executed in the tear-down stage. Queries '
-        'execute in lexical order. [Default: None, meaning this option is '
-        'not used.]',
+             'Query files with "setup" in the filename will be executed in '
+             'the setup stage, likewise query files with "teardown" in '
+             'the filenname will be executed in the tear-down stage. Queries '
+             'execute in lexical order. [Default: None, meaning this option is '
+             'not used.]',
     )
     optional.add_argument(
         "--clear-all-memory-pre-query",
         dest="clear_all_memory_pre_query",
         action="store_true",
         help='Clear gpu & cpu memory before every query.'
-        ' [Default: False]'
+             ' [Default: False]'
     )
     optional.add_argument(
         "--run-setup-teardown-per-query",
         dest="run_setup_teardown_per_query",
         action="store_true",
         help='Run setup & teardown steps per query. '
-        'If set, setup-teardown-queries-dir must be specified. '
-        'If not set, but setup-teardown-queries-dir is specified '
-        'setup & tear-down queries will run globally, that is, '
-        'once per script invocation.'
-        ' [Default: False]'
+             'If set, setup-teardown-queries-dir must be specified. '
+             'If not set, but setup-teardown-queries-dir is specified '
+             'setup & tear-down queries will run globally, that is, '
+             'once per script invocation.'
+             ' [Default: False]'
     )
     optional.add_argument(
         "-F",
@@ -1580,9 +1582,9 @@ def process_arguments(input_arguments):
         dest="foreign_table_filename",
         default=None,
         help="Path to file containing template for import query. "
-        "Path must be relative to the FOREIGN SERVER. "
-        "Occurances of \"##FILE##\" within setup/teardown queries will be"
-        " replaced with this. "
+             "Path must be relative to the FOREIGN SERVER. "
+             "Occurances of \"##FILE##\" within setup/teardown queries will be"
+             " replaced with this. "
     )
     optional.add_argument(
         "--jenkins-thresholds-name",
@@ -1595,6 +1597,30 @@ def process_arguments(input_arguments):
         dest="jenkins_thresholds_field",
         default="query_exec_trimmed_avg",
         help="Field to report as jenkins output value.",
+    )
+    optional.add_argument(
+        "--cuda-block-grid-perf-test",
+        dest="cuda_block_grid_perf_test",
+        action="store_true",
+        help="Performance test while varying cuda block and grid sizes.",
+    )
+    optional.add_argument(
+        "--show-simplified-result",
+        dest="show_simplified_result",
+        action="store_true",
+        help="Show simplified benchmark result per query via stdout.",
+    )
+    optional.add_argument(
+        "--cuda-grid-sizes",
+        dest="cuda_grid_sizes",
+        nargs="+", type=float,
+        help="List of grid size multipliers used to benchmark (valid iff --cuda-block-grid-perf-test is enabled).",
+    )
+    optional.add_argument(
+        "--cuda-block-sizes",
+        dest="cuda_block_sizes",
+        nargs="+", type=int,
+        help="List of block used to benchmark (valid iff --cuda-block-grid-perf-test is enabled).",
     )
     args = parser.parse_args(args=input_arguments)
     return args
@@ -1638,6 +1664,16 @@ def benchmark(input_arguments):
     jenkins_thresholds_name = args.jenkins_thresholds_name
     jenkins_thresholds_field = args.jenkins_thresholds_field
     clear_all_memory_pre_query = args.clear_all_memory_pre_query
+    cuda_block_grid_perf_test = args.cuda_block_grid_perf_test
+    show_simplified_result = args.show_simplified_result
+    if args.cuda_grid_sizes is None:
+        grid_size_range = [2]
+    else:
+        grid_size_range = args.cuda_grid_sizes
+    if args.cuda_block_sizes is None:
+        block_size_range = [1024]
+    else:
+        block_size_range = args.cuda_block_sizes
 
     # Hard-coded vars
     trim = 0.15
@@ -1656,10 +1692,10 @@ def benchmark(input_arguments):
         logging.error("Iterations must be greater than 1")
         exit(1)
     if verify_destinations(
-        destinations=destinations,
-        dest_db_server=dest_db_server,
-        output_file_json=output_file_json,
-        output_file_jenkins=output_file_jenkins,
+            destinations=destinations,
+            dest_db_server=dest_db_server,
+            output_file_json=output_file_json,
+            output_file_jenkins=output_file_jenkins,
     ):
         logging.debug("Destination(s) have been verified.")
     else:
@@ -1703,7 +1739,7 @@ def benchmark(input_arguments):
     if not query_list:
         exit(1)
     # Read setup/teardown queries if they exist
-    setup_query_list, teardown_query_list =\
+    setup_query_list, teardown_query_list = \
         read_setup_teardown_query_files(queries_dir=setup_teardown_queries_dir,
                                         source_table=source_table,
                                         foreign_table_filename=foreign_table_filename)
@@ -1717,6 +1753,28 @@ def benchmark(input_arguments):
     st_qr = run_setup_teardown_query(queries=setup_query_list,
                                      do_run=run_global_setup_queries, trim=trim, con=con)
     queries_results.extend(st_qr)
+    new_query_list = {"query_group": "", "queries": []}
+    new_query_list.update(query_group=query_list["query_group"])
+    if cuda_block_grid_perf_test:
+        for query_info in query_list["queries"]:
+            query = query_info["mapdql"]
+            for block_size in block_size_range:
+                for grid_size in grid_size_range:
+                    query_hint = "SELECT /*+ g_cuda_block_size(" + str(block_size) + "), "
+                    query_hint += "g_cuda_grid_size_multiplier(" + str(grid_size) + ") */ "
+                    query_name = query_info["name"] + "_block_size_" + str(block_size) + "_grid_size_" + str(grid_size)
+                    new_query = re.sub("select", "SELECT", query, re.IGNORECASE)
+                    new_query = new_query.replace("SELECT", query_hint, 1)
+                    new_query_list["queries"].append(
+                        {"name": query_name, "mapdql": new_query})
+            cuda_opt_query_hint = "SELECT /*+ cuda_opt_param */ "
+            cuda_opt_query_name = query_info["name"] + "_block_size_-1_grid_size_-1"
+            cuda_opt_new_query = re.sub("select", "SELECT", query, re.IGNORECASE)
+            cuda_opt_new_query = cuda_opt_new_query.replace("SELECT", cuda_opt_query_hint, 1)
+            new_query_list["queries"].append(
+                {"name": cuda_opt_query_name, "mapdql": cuda_opt_new_query})
+        query_list = new_query_list
+
     # Run queries
     for query in query_list["queries"]:
         # Run setup queries
@@ -1725,7 +1783,8 @@ def benchmark(input_arguments):
         queries_results.extend(st_qr)
         # Run benchmark query
         query_result = run_query(
-            query=query, iterations=iterations, trim=trim, con=con, clear_all_memory_pre_query=clear_all_memory_pre_query
+            query=query, iterations=iterations, trim=trim, con=con,
+            clear_all_memory_pre_query=clear_all_memory_pre_query
         )
         queries_results.append(query_result)
         # Run tear-down queries
@@ -1771,33 +1830,34 @@ def benchmark(input_arguments):
         successful_results_dataset_results.append(
             results_dataset_entry["results"]
         )
+
     # Send results to destination(s)
     sent_destination = True
     if "mapd_db" in destinations:
         if not send_results_db(
-            results_dataset=successful_results_dataset_results,
-            table=dest_table,
-            db_user=dest_db_user,
-            db_passwd=dest_db_passwd,
-            db_server=dest_db_server,
-            db_port=dest_db_port,
-            db_name=dest_db_name,
-            table_schema_file=dest_table_schema_file,
+                results_dataset=successful_results_dataset_results,
+                table=dest_table,
+                db_user=dest_db_user,
+                db_passwd=dest_db_passwd,
+                db_server=dest_db_server,
+                db_port=dest_db_port,
+                db_name=dest_db_name,
+                table_schema_file=dest_table_schema_file,
         ):
             sent_destination = False
     if "file_json" in destinations:
         if not send_results_file_json(
-            results_dataset_json=results_dataset_json,
-            output_file_json=output_file_json,
+                results_dataset_json=results_dataset_json,
+                output_file_json=output_file_json,
         ):
             sent_destination = False
     if "jenkins_bench" in destinations:
         if not send_results_jenkins_bench(
-            results_dataset=successful_results_dataset_results,
-            thresholds_name=jenkins_thresholds_name,
-            thresholds_field=jenkins_thresholds_field,
-            output_tag_jenkins=output_tag_jenkins,
-            output_file_jenkins=output_file_jenkins,
+                results_dataset=successful_results_dataset_results,
+                thresholds_name=jenkins_thresholds_name,
+                thresholds_field=jenkins_thresholds_field,
+                output_tag_jenkins=output_tag_jenkins,
+                output_file_jenkins=output_file_jenkins,
         ):
             sent_destination = False
     if "output" in destinations:
@@ -1810,6 +1870,46 @@ def benchmark(input_arguments):
         logging.info(
             "Succesfully loaded query results info into destination(s)"
         )
+    if show_simplified_result:
+        res_header = ['Query', 'Block', 'Grid', 'First', 'Min', 'Max', 'Avg']
+        for i in range(1, iterations):
+            res_header.append("Run-" + str(i))
+        res_data = []
+        for perf_info in results_dataset:
+            tok = perf_info["name"].split("_")
+            cur_query_perf = [tok[0], tok[3], tok[6], str(perf_info["results"]["query_exec_first"]),
+                              str(perf_info["results"]["query_exec_min"]), str(perf_info["results"]["query_exec_max"]),
+                              str(perf_info["results"]["query_exec_avg"])]
+            for query_time in perf_info["debug"]["query_exec_times"]:
+                cur_query_perf.append(str(query_time))
+            res_data.append(cur_query_perf)
+        res_df = pd.DataFrame(res_data, columns=res_header)
+        res_df['Query'] = res_df['Query'].astype(str)
+        res_df['Block'] = res_df['Block'].astype(int)
+        res_df['Grid'] = res_df['Grid'].astype(float)
+        res_df['Min'] = res_df['Min'].astype(int)
+        res_str = res_df.to_string(header=True, index=False)
+        col_desc = "(Block: cuda block size, Grid: cuda grid size multiplier (cuda grid size = # SMs * multiplier))"
+        print("[Benchmark result in ms.]\n" + col_desc + "\n" + res_str)
+
+        df1 = res_df.groupby(["Query", "Block"]).apply(
+            lambda v: v.sort_values(by=['Min'], ascending=[True])).reset_index(drop=True)
+        df2 = df1.groupby(["Query", "Block"]).head(1)
+        per_block_str = df2[['Query', 'Block', 'Grid', 'Min']].to_string(index=False)
+        per_block_str = per_block_str.replace("-1.00", "opt")
+        per_block_str = per_block_str.replace("-1", "opt")
+        print("[Best performance per block size in ms.]\n" + per_block_str)
+
+        df3 = res_df.groupby(["Query", "Grid"]).apply(
+            lambda v: v.sort_values(by=['Min'], ascending=[True])).reset_index(drop=True)
+        df4 = df3.groupby(["Query", "Grid"]).head(1)
+        per_grid_str = df4[['Query', 'Grid', 'Block', 'Min']].to_string(index=False)
+        per_grid_str = per_grid_str.replace("-1.00", "opt")
+        per_grid_str = per_grid_str.replace("-1", "opt")
+        print("[Best performance per grid size]\n" + per_grid_str)
+
+        overall_best = res_df.sort_values('Min', ascending=True)[['Query', 'Block', 'Grid', 'Min']].head(1)
+        print("[Best performance in all conditions in ms.]\n" + overall_best.to_string(index=False))
 
 
 if __name__ == "__main__":
