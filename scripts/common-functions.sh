@@ -583,6 +583,7 @@ function install_pdal() {
   download https://github.com/PDAL/PDAL/releases/download/${PDAL_VERSION}/PDAL-${PDAL_VERSION}-src.tar.bz2
   extract PDAL-${PDAL_VERSION}-src.tar.bz2
   pushd PDAL-${PDAL_VERSION}-src
+  patch -p1 < $SCRIPTS_DIR/pdal-asan-leak-4be888818861d34145aca262014a00ee39c90b29.patch
   if [ "$ID" != "ubuntu" ] ; then
     patch -p1 < $SCRIPTS_DIR/pdal-2.4.2-static-linking.patch
   fi
