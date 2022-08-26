@@ -942,7 +942,13 @@ ExprPtr Constant::add_cast(const SQLTypeInfo& new_type_info) {
     if (new_type_info.get_compression() != kENCODING_NONE) {
       SQLTypeInfo new_ti = new_type_info;
       if (new_ti.get_compression() != kENCODING_DATE_IN_DAYS) {
-        new_ti.set_compression(kENCODING_NONE);
+        new_ti = SQLTypeInfo(new_ti.get_type(),
+                             new_ti.get_dimension(),
+                             new_ti.get_scale(),
+                             new_ti.get_notnull(),
+                             kENCODING_NONE,
+                             0,
+                             new_ti.get_subtype());
       }
       do_cast(new_ti);
     }
