@@ -749,10 +749,6 @@ hdk::ir::ExprPtr parse_subquery_expr(const rapidjson::Value& expr,
                                      int db_id,
                                      SchemaProviderPtr schema_provider,
                                      RelAlgDagBuilder& root_dag_builder) {
-  if (root_dag_builder.subquery_cache.count(&expr)) {
-    return root_dag_builder.subquery_cache.at(&expr);
-  }
-
   const auto& operands = field(expr, "operands");
   CHECK(operands.IsArray());
   CHECK_GE(operands.Size(), unsigned(0));
@@ -763,7 +759,6 @@ hdk::ir::ExprPtr parse_subquery_expr(const rapidjson::Value& expr,
   auto subquery =
       hdk::ir::makeExpr<hdk::ir::ScalarSubquery>(getColumnType(node.get(), 0), node);
   root_dag_builder.registerSubquery(subquery);
-  root_dag_builder.subquery_cache[&expr] = subquery;
   return subquery;
 }
 
