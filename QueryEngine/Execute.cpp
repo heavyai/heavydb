@@ -2694,8 +2694,10 @@ void Executor::launchKernels(SharedKernelContext& shared_context,
     tg.run([this,
             &kernel,
             &shared_context,
+            query_id = logger::query_id(),
             parent_thread_id = logger::thread_id(),
             crt_kernel_idx = kernel_idx++] {
+      logger::QidScopeGuard qsg = logger::set_thread_local_query_id(query_id);
       DEBUG_TIMER_NEW_THREAD(parent_thread_id);
       const size_t thread_i = crt_kernel_idx % cpu_threads();
       kernel->run(this, thread_i, shared_context);

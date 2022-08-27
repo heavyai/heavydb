@@ -187,6 +187,7 @@ class BaselineJoinHashTable : public HashJoin {
                               const int device_id,
                               const size_t entry_count,
                               const size_t emitted_keys_count,
+                              const logger::QueryId,
                               const logger::ThreadId parent_thread_id);
 
   virtual int initHashTableForDevice(

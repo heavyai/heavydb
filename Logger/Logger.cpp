@@ -468,26 +468,25 @@ Logger::operator bool() const {
   return static_cast<bool>(stream_);
 }
 
-thread_local std::atomic<QueryId> g_query_id{0};
+thread_local QueryId g_query_id{0};
 
 QueryId query_id() {
-  return g_query_id.load();
+  return g_query_id;
 }
 
 QidScopeGuard::~QidScopeGuard() {
-  if (id_) {
-    // Ideally this CHECK would be enabled, but it's too heavy for a destructor.
-    // Would be ok for DEBUG mode.
-    // CHECK(g_query_id.compare_exchange_strong(id_, 0));
-    g_query_id = 0;
+  if (enabled_) {
+#ifndef NDEBUG
+    CHECK_EQ(id_, g_query_id);
+#endif
+    g_query_id = prev_id_;
   }
 }
 
-// Only set g_query_id if its currently 0.
 QidScopeGuard set_thread_local_query_id(QueryId const query_id) {
-  QueryId expected = 0;
-  return g_query_id.compare_exchange_strong(expected, query_id) ? QidScopeGuard(query_id)
-                                                                : QidScopeGuard(0);
+  QueryId const prev_id = g_query_id;
+  g_query_id = query_id;
+  return QidScopeGuard(prev_id, query_id);
 }
 
 boost::log::record_ostream& Logger::stream(char const* file, int line) {

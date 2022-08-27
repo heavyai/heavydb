@@ -150,7 +150,8 @@ class PerfectJoinHashTable : public HashJoin {
                       const ColumnsForDevice& columns_for_device,
                       const HashType layout,
                       const int device_id,
-                      const logger::ThreadId parent_thread_id);
+                      const logger::QueryId,
+                      const logger::ThreadId);
 
   int initHashTableForDevice(const ChunkKey& chunk_key,
                              const JoinColumn& join_column,

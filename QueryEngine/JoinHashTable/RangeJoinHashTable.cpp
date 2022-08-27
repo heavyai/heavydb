@@ -339,6 +339,7 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
                    /* entry_count            */ entry_count,
                    /* emitted_keys_count     */ emitted_keys_count,
                    /* device_id              */ device_id,
+                   /* query_id               */ logger::query_id(),
                    /* parent_thread_id       */ logger::thread_id()));
   }
   for (auto& init_thread : init_threads) {
@@ -354,7 +355,9 @@ void RangeJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_devi
                                         const size_t entry_count,
                                         const size_t emitted_keys_count,
                                         const int device_id,
+                                        const logger::QueryId query_id,
                                         const logger::ThreadId parent_thread_id) {
+  logger::QidScopeGuard qsg = logger::set_thread_local_query_id(query_id);
   DEBUG_TIMER_NEW_THREAD(parent_thread_id);
   CHECK_EQ(getKeyComponentWidth(), size_t(8));
   CHECK(layoutRequiresAdditionalBuffers(layout));

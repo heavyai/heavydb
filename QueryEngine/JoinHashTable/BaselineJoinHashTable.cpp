@@ -500,6 +500,7 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
                                       device_id,
                                       entries_per_device,
                                       emitted_keys_count,
+                                      logger::query_id(),
                                       logger::thread_id()));
   }
   for (auto& init_thread : init_threads) {
@@ -658,7 +659,9 @@ void BaselineJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_d
                                            const int device_id,
                                            const size_t entry_count,
                                            const size_t emitted_keys_count,
+                                           const logger::QueryId query_id,
                                            const logger::ThreadId parent_thread_id) {
+  logger::QidScopeGuard qsg = logger::set_thread_local_query_id(query_id);
   DEBUG_TIMER_NEW_THREAD(parent_thread_id);
   const auto effective_memory_level =
       get_effective_memory_level(memory_level_, needs_dict_translation_);
