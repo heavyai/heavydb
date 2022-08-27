@@ -17,12 +17,12 @@
 #pragma once
 
 #include "DataMgr/Allocators/DeviceAllocator.h"
-
 #include "Descriptors/QueryMemoryDescriptor.h"
 #include "GpuMemUtils.h"
+#include "Rendering/RenderAllocator.h"
 #include "ResultSet.h"
 
-#include "Rendering/RenderAllocator.h"
+#include "ThirdParty/robin_hood/robin_hood.h"
 
 #include <memory>
 
@@ -154,11 +154,13 @@ class QueryMemoryInitializer {
                           const std::vector<int64_t>& init_vals,
                           const Executor* executor);
 
+  using ModeIndexSet = robin_hood::unordered_set<size_t>;
   using QuantileParam = std::optional<double>;
   void initColumnsPerRow(const QueryMemoryDescriptor& query_mem_desc,
                          int8_t* row_ptr,
                          const std::vector<int64_t>& init_vals,
                          const std::vector<int64_t>& bitmap_sizes,
+                         const ModeIndexSet& mode_index_set,
                          const std::vector<QuantileParam>& quantile_params);
 
   void allocateCountDistinctGpuMem(const QueryMemoryDescriptor& query_mem_desc);
@@ -171,6 +173,10 @@ class QueryMemoryInitializer {
   int64_t allocateCountDistinctBitmap(const size_t bitmap_byte_sz);
 
   int64_t allocateCountDistinctSet();
+
+  ModeIndexSet allocateModes(const QueryMemoryDescriptor& query_mem_desc,
+                             const bool deferred,
+                             const Executor* executor);
 
   std::vector<QuantileParam> allocateTDigests(const QueryMemoryDescriptor& query_mem_desc,
                                               const bool deferred,

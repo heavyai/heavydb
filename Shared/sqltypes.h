@@ -569,8 +569,8 @@ class SQLTypeInfo {
     return "";
   }
 #endif
-  template <typename... Types>
-  bool is_any(Types... types) const {
+  template <SQLTypes... types>
+  bool is_any() const {
     return (... || (types == type));
   }
   inline bool is_string() const { return IS_STRING(type); }

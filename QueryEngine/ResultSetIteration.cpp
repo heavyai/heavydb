@@ -487,6 +487,8 @@ InternalTargetValue ResultSet::RowWiseTargetAccessor::getColumnInternal(
       const auto str_len = read_int_from_buff(ptr2, offsets_for_target.compact_sz2);
       CHECK_GE(str_len, 0);
       return result_set_->getVarlenOrderEntry(i1, str_len);
+    } else if (agg_info.is_agg && agg_info.agg_kind == kMODE) {
+      return InternalTargetValue(i1);  // AggMode*
     }
     return InternalTargetValue(
         type_info.is_fp() ? i1 : int_resize_cast(i1, type_info.get_logical_size()));
@@ -1082,6 +1084,56 @@ inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(
 }
 
 }  // namespace
+
+// clang-format off
+// formatted by clang-format 14.0.6
+ScalarTargetValue ResultSet::convertToScalarTargetValue(SQLTypeInfo const& ti,
+                                                        bool const translate_strings,
+                                                        int64_t const val) const {
+  if (ti.is_string()) {
+    CHECK_EQ(kENCODING_DICT, ti.get_compression());
+    return makeStringTargetValue(ti, translate_strings, val);
+  } else {
+    return ti.is_any<kDOUBLE>()  ? ScalarTargetValue(shared::bit_cast<double>(val))
+           : ti.is_any<kFLOAT>() ? ScalarTargetValue(shared::bit_cast<float>(val))
+                                 : ScalarTargetValue(val);
+  }
+}
+
+ScalarTargetValue ResultSet::nullScalarTargetValue(SQLTypeInfo const& ti,
+                                                   bool const translate_strings) {
+  return ti.is_any<kDOUBLE>()  ? ScalarTargetValue(NULL_DOUBLE)
+         : ti.is_any<kFLOAT>() ? ScalarTargetValue(NULL_FLOAT)
+         : ti.is_string()      ? translate_strings
+                                     ? ScalarTargetValue(NullableString(nullptr))
+                                     : ScalarTargetValue(static_cast<int64_t>(NULL_INT))
+                               : ScalarTargetValue(inline_int_null_val(ti));
+}
+
+bool ResultSet::isLessThan(SQLTypeInfo const& ti,
+                           int64_t const lhs,
+                           int64_t const rhs) const {
+  if (ti.is_string()) {
+    CHECK_EQ(kENCODING_DICT, ti.get_compression());
+    return getString(ti, lhs) < getString(ti, rhs);
+  } else {
+    return ti.is_any<kDOUBLE>()
+               ? shared::bit_cast<double>(lhs) < shared::bit_cast<double>(rhs)
+           : ti.is_any<kFLOAT>()
+               ? shared::bit_cast<float>(lhs) < shared::bit_cast<float>(rhs)
+               : lhs < rhs;
+  }
+}
+
+bool ResultSet::isNullIval(SQLTypeInfo const& ti,
+                           bool const translate_strings,
+                           int64_t const ival) {
+  return ti.is_any<kDOUBLE>()  ? shared::bit_cast<double>(ival) == NULL_DOUBLE
+         : ti.is_any<kFLOAT>() ? shared::bit_cast<float>(ival) == NULL_FLOAT
+         : ti.is_string()      ? translate_strings ? ival == 0 : ival == NULL_INT
+                               : ival == inline_int_null_val(ti);
+}
+// clang-format on
 
 const std::vector<const int8_t*>& ResultSet::getColumnFrag(const size_t storage_idx,
                                                            const size_t col_logical_idx,
@@ -1822,6 +1874,34 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
   return TargetValue(nullptr);
 }
 
+std::string ResultSet::getString(SQLTypeInfo const& ti, int64_t const ival) const {
+  StringDictionaryProxy* sdp;
+  if (ti.get_comp_param()) {
+    constexpr bool with_generation = false;
+    sdp = catalog_ ? row_set_mem_owner_->getOrAddStringDictProxy(
+                         ti.get_comp_param(), with_generation, catalog_)
+                   : row_set_mem_owner_->getStringDictProxy(
+                         ti.get_comp_param());  // unit tests bypass the catalog
+  } else {
+    sdp = row_set_mem_owner_->getLiteralStringDictProxy();
+  }
+  return sdp->getString(ival);
+}
+
+ScalarTargetValue ResultSet::makeStringTargetValue(SQLTypeInfo const& chosen_type,
+                                                   bool const translate_strings,
+                                                   int64_t const ival) const {
+  if (translate_strings) {
+    if (static_cast<int32_t>(ival) == NULL_INT) {  // TODO(alex): this isn't nice, fix it
+      return NullableString(nullptr);
+    } else {
+      return NullableString(getString(chosen_type, ival));
+    }
+  } else {
+    return static_cast<int64_t>(static_cast<int32_t>(ival));
+  }
+}
+
 // Reads an integer or a float from ptr based on the type and the byte width.
 TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
                                        const int8_t compact_sz,
@@ -1881,6 +1961,15 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
       }
     }
   }
+  if (target_info.agg_kind == kMODE) {
+    if (!isNullIval(chosen_type, translate_strings, ival)) {
+      auto const* const* const agg_mode = reinterpret_cast<AggMode const* const*>(ptr);
+      if (std::optional<int64_t> const mode = (*agg_mode)->mode()) {
+        return convertToScalarTargetValue(chosen_type, translate_strings, *mode);
+      }
+    }
+    return nullScalarTargetValue(chosen_type, translate_strings);
+  }
   if (chosen_type.is_fp()) {
     if (target_info.agg_kind == kAPPROX_QUANTILE) {
       return *reinterpret_cast<double const*>(ptr) == NULL_DOUBLE
@@ -1917,25 +2006,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
     return ival;
   }
   if (chosen_type.is_string() && chosen_type.get_compression() == kENCODING_DICT) {
-    if (translate_strings) {
-      if (static_cast<int32_t>(ival) ==
-          NULL_INT) {  // TODO(alex): this isn't nice, fix it
-        return NullableString(nullptr);
-      }
-      StringDictionaryProxy* sdp{nullptr};
-      if (!chosen_type.get_comp_param()) {
-        sdp = row_set_mem_owner_->getLiteralStringDictProxy();
-      } else {
-        sdp = catalog_
-                  ? row_set_mem_owner_->getOrAddStringDictProxy(
-                        chosen_type.get_comp_param(), /*with_generation=*/false, catalog_)
-                  : row_set_mem_owner_->getStringDictProxy(
-                        chosen_type.get_comp_param());  // unit tests bypass the catalog
-      }
-      return NullableString(sdp->getString(ival));
-    } else {
-      return static_cast<int64_t>(static_cast<int32_t>(ival));
-    }
+    return makeStringTargetValue(chosen_type, translate_strings, ival);
   }
   if (chosen_type.is_decimal()) {
     if (decimal_to_double) {

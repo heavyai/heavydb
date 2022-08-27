@@ -41,7 +41,11 @@ inline const SQLTypeInfo get_compact_type(const TargetInfo& target) {
   const auto agg_type = target.agg_kind;
   const auto& agg_arg = target.agg_arg_type;
   if (agg_arg.get_type() == kNULLT) {
-    CHECK_EQ(kCOUNT, agg_type);
+#ifdef __CUDACC__
+    CHECK((shared::is_any<kCOUNT, kAPPROX_QUANTILE, kMODE>(agg_type)));
+#else
+    CHECK((shared::is_any<kCOUNT, kAPPROX_QUANTILE, kMODE>(agg_type))) << agg_type;
+#endif
     CHECK(!target.is_distinct);
     return target.sql_type;
   }

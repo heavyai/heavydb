@@ -400,10 +400,30 @@ class ResultSet {
   bool isGeoColOnGpu(const size_t col_idx) const;
   int getDeviceId() const;
 
+  // Materialize string from StringDictionaryProxy
+  std::string getString(SQLTypeInfo const&, int64_t const ival) const;
+
   // Called from the executor because in the new ResultSet we assume the 'padded' field
   // in SlotSize already contains the padding, whereas in the executor it's computed.
   // Once the buffer initialization moves to ResultSet we can remove this method.
   static QueryMemoryDescriptor fixupQueryMemoryDescriptor(const QueryMemoryDescriptor&);
+
+  // Convert int64_t to ScalarTargetValue based on SQLTypeInfo and translate_strings.
+  ScalarTargetValue convertToScalarTargetValue(SQLTypeInfo const&,
+                                               bool const translate_strings,
+                                               int64_t const val) const;
+
+  // Called from ResultSetComparator<>::operator().
+  bool isLessThan(SQLTypeInfo const&, int64_t const lhs, int64_t const rhs) const;
+
+  // Required for sql_validate calls.
+  static bool isNullIval(SQLTypeInfo const&,
+                         bool const translate_strings,
+                         int64_t const ival);
+
+  // Return NULL ScalarTargetValue based on SQLTypeInfo and translate_strings.
+  static ScalarTargetValue nullScalarTargetValue(SQLTypeInfo const&,
+                                                 bool const translate_strings);
 
   void fillOneEntry(const std::vector<int64_t>& entry) {
     CHECK(storage_);
@@ -686,6 +706,10 @@ class ResultSet {
                               const bool decimal_to_double,
                               const size_t entry_buff_idx) const;
 
+  ScalarTargetValue makeStringTargetValue(SQLTypeInfo const& chosen_type,
+                                          bool const translate_strings,
+                                          int64_t const ival) const;
+
   TargetValue makeVarlenTargetValue(const int8_t* ptr1,
                                     const int8_t compact_sz1,
                                     const int8_t* ptr2,
@@ -795,6 +819,7 @@ class ResultSet {
   };
 
   using ApproxQuantileBuffers = std::vector<std::vector<double>>;
+  using ModeBuffers = std::vector<std::vector<int64_t>>;
 
   template <typename BUFFER_ITERATOR_TYPE>
   struct ResultSetComparator {
@@ -811,16 +836,20 @@ class ResultSet {
         , buffer_itr_(result_set)
         , executor_(executor)
         , single_threaded_(single_threaded)
-        , approx_quantile_materialized_buffers_(materializeApproxQuantileColumns()) {
+        , approx_quantile_materialized_buffers_(materializeApproxQuantileColumns())
+        , mode_buffers_(materializeModeColumns()) {
       materializeCountDistinctColumns();
     }
 
     void materializeCountDistinctColumns();
     ApproxQuantileBuffers materializeApproxQuantileColumns() const;
+    ModeBuffers materializeModeColumns() const;
 
     std::vector<int64_t> materializeCountDistinctColumn(
         const Analyzer::OrderEntry& order_entry) const;
     ApproxQuantileBuffers::value_type materializeApproxQuantileColumn(
+        const Analyzer::OrderEntry& order_entry) const;
+    ModeBuffers::value_type materializeModeColumn(
         const Analyzer::OrderEntry& order_entry) const;
 
     bool operator()(const PermutationIdx lhs, const PermutationIdx rhs) const;
@@ -833,6 +862,8 @@ class ResultSet {
     const bool single_threaded_;
     std::vector<std::vector<int64_t>> count_distinct_materialized_buffers_;
     const ApproxQuantileBuffers approx_quantile_materialized_buffers_;
+    const ModeBuffers mode_buffers_;
+    struct ModeScatter;  // Functor for setting mode_buffers_.
   };
 
   Comparator createComparator(const std::list<Analyzer::OrderEntry>& order_entries,

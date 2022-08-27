@@ -253,6 +253,12 @@ DEVICE inline double fastSinh(double const x) {
   // clang-format on
 }
 
+// Return true if value is equal to any of the other (enum) values.
+template <int... values, typename T>
+inline bool is_any(T&& value) {
+  return (... || (values == value));
+}
+
 // Return constexpr std::array<T, N> of {1, a, a^2, a^3, ..., a^(N-1)}.
 template <typename T, size_t N>
 constexpr std::array<T, N> powersOf(T const a) {
@@ -279,12 +285,30 @@ inline double power10inv(unsigned const x) {
   return x < N ? pow10inv[x] : (pow10inv[N - 1] / 10) * power10inv(x - N);
 }
 
-// May be constexpr in C++20.
+// Deprecated - use shared::bit_cast() instead.
+// TODO replace all calls to reinterpret_bits() w/ shared::bit_cast().
 template <typename TO, typename FROM>
 inline TO reinterpret_bits(FROM const from) {
   TO to{0};
   memcpy(&to, &from, sizeof(TO) < sizeof(FROM) ? sizeof(TO) : sizeof(FROM));
   return to;
+}
+
+template <typename TO, typename FROM>
+inline TO bit_cast(FROM&& from) {
+#if 202002L <= __cplusplus  // C++20
+  if constexpr (sizeof(TO) <= sizeof(FROM)) {
+    return std::bit_cast<TO>(std::forward<FROM>(from));
+  } else {
+    TO to{0};  // std::bit_cast() has the undesirable feature of indeterminate bits.
+    memcpy(&to, &from, sizeof(FROM));
+    return to;
+  }
+#else
+  TO to{0};
+  memcpy(&to, &from, sizeof(TO) < sizeof(FROM) ? sizeof(TO) : sizeof(FROM));
+  return to;
+#endif
 }
 
 template <typename... STR>
