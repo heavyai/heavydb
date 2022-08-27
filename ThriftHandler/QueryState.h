@@ -178,8 +178,7 @@ class QueryStateProxy {
   QueryStateProxy(QueryState& query_state, Events::iterator parent)
       : query_state_(query_state), parent_(parent) {}
   Timer createTimer(char const* event_name);
-  QueryState& getQueryState() { return query_state_; }
-  const QueryState& getConstQueryState() const { return query_state_; }
+  QueryState* operator->() const { return &query_state_; }
 };
 
 // At this point it is not clear how long we want to keep completed queries.

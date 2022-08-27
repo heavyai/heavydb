@@ -688,6 +688,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
        &result,
        &running_query_check_freq,
        &pending_query_check_freq](const size_t worker_id) {
+        logger::QidScopeGuard qsg = query_state->setThreadLocalQueryId();
         auto executor = Executor::getExecutor(worker_id);
         CompilationOptions co = CompilationOptions::defaults(device_type);
 
@@ -789,8 +790,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
     const bool just_explain,
     const ExecutorExplainType explain_type,
     const bool with_filter_push_down) {
-  auto const& query_state = query_state_proxy.getQueryState();
-  auto& cat = query_state.getConstSessionInfo()->getCatalog();
+  auto& cat = query_state_proxy->getConstSessionInfo()->getCatalog();
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CompilationOptions co = CompilationOptions::defaults(device_type);
   co.explain_type = explain_type;
@@ -809,7 +809,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
       calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {}, false);
   const auto query_ra = calcite_mgr
                             ->process(query_state_proxy,
-                                      pg_shim(query_state.getQueryStr()),
+                                      pg_shim(query_state_proxy->getQueryStr()),
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
@@ -832,7 +832,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
         false, g_enable_watchdog, filter_push_down_info, false);
     const auto new_query_ra = calcite_mgr
                                   ->process(query_state_proxy,
-                                            pg_shim(query_state.getQueryStr()),
+                                            pg_shim(query_state_proxy->getQueryStr()),
                                             calciteQueryParsingOption,
                                             calciteOptimizationOption)
                                   .plan_result;
@@ -875,6 +875,7 @@ std::shared_ptr<ResultSet> QueryRunner::getCalcitePlan(const std::string& query_
   auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
       [&cat, &query_str, &enable_watchdog, &as_json_str, &query_state, &result](
           const size_t worker_id) {
+        logger::QidScopeGuard qsg = query_state->setThreadLocalQueryId();
         auto executor = Executor::getExecutor(worker_id);
         auto calcite_mgr = cat.getCalciteMgr();
         const auto calciteQueryParsingOption =
@@ -926,6 +927,7 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
                                                   &eo,
                                                   &query_state,
                                                   &result](const size_t worker_id) {
+        logger::QidScopeGuard qsg = query_state->setThreadLocalQueryId();
         auto executor = Executor::getExecutor(worker_id);
         // TODO The next line should be deleted since it overwrites co, but then
         // NycTaxiTest.RunSelectsEncodingDictWhereGreater fails due to co not getting
@@ -986,6 +988,7 @@ std::unique_ptr<RelAlgDag> QueryRunner::getRelAlgDag(const std::string& query_st
   std::unique_ptr<RelAlgDag> rel_alg_dag;
   auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
       [&cat, &query_str, &query_state, &rel_alg_dag](const size_t worker_id) {
+        logger::QidScopeGuard qsg = query_state->setThreadLocalQueryId();
         auto executor = Executor::getExecutor(worker_id);
         auto eo = ExecutionOptions::defaults();
         auto calcite_mgr = cat.getCalciteMgr();

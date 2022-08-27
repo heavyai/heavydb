@@ -1106,6 +1106,7 @@ void DBHandler::sql_execute(TQueryResult& _return,
       use_calcite ? query_str : boost::trim_copy(query_str.substr(exec_ra_prefix.size()));
   auto session_ptr = get_session_ptr(session);
   auto query_state = create_query_state(session_ptr, actual_query);
+  logger::QidScopeGuard qsg = query_state->setThreadLocalQueryId();
   auto stdlog = STDLOG(session_ptr, query_state);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   stdlog.appendNameValuePairs("nonce", nonce);
@@ -1619,8 +1620,8 @@ TQueryResult DBHandler::validate_rel_alg(const std::string& query_ra,
   TQueryResult _return;
   ExecutionResult result;
   auto execute_rel_alg_task = std::make_shared<QueryDispatchQueue::Task>(
-      [this, &result, &query_state_proxy, &query_ra](const size_t executor_index) {
-        auto qid_scope_guard = query_state_proxy.getQueryState().setThreadLocalQueryId();
+      [this, &result, query_state_proxy, &query_ra](const size_t executor_index) {
+        logger::QidScopeGuard qsg = query_state_proxy->setThreadLocalQueryId();
         execute_rel_alg(result,
                         query_state_proxy,
                         query_ra,
@@ -5774,16 +5775,14 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
   VLOG(1) << "Table Schema Locks:\n" << lockmgr::TableSchemaLockMgr::instance();
   VLOG(1) << "Table Data Locks:\n" << lockmgr::TableDataLockMgr::instance();
 
-  auto& cat = query_state_proxy.getQueryState().getConstSessionInfo()->getCatalog();
+  auto& cat = query_state_proxy->getConstSessionInfo()->getCatalog();
   auto executor = Executor::getExecutor(
       executor_index ? *executor_index : Executor::UNITARY_EXECUTOR_ID,
       jit_debug_ ? "/tmp" : "",
       jit_debug_ ? "mapdquery" : "",
       system_parameters_);
-  RelAlgExecutor ra_executor(executor.get(),
-                             cat,
-                             query_ra,
-                             query_state_proxy.getQueryState().shared_from_this());
+  RelAlgExecutor ra_executor(
+      executor.get(), cat, query_ra, query_state_proxy->shared_from_this());
   CompilationOptions co = {executor_device_type,
                            /*hoist_literals=*/true,
                            ExecutorOptLevel::Default,
@@ -5796,26 +5795,24 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                            intel_jit_profile_};
   auto validate_or_explain_query =
       explain_info.isJustExplain() || explain_info.isCalciteExplain() || just_validate;
-  ExecutionOptions eo = {g_enable_columnar_output,
-                         false,
-                         allow_multifrag_,
-                         explain_info.isJustExplain(),
-                         allow_loop_joins_ || just_validate,
-                         g_enable_watchdog,
-                         jit_debug_,
-                         just_validate,
-                         g_enable_dynamic_watchdog,
-                         g_dynamic_watchdog_time_limit,
-                         find_push_down_candidates,
-                         explain_info.isCalciteExplain(),
-                         system_parameters_.gpu_input_mem_limit,
-                         g_enable_runtime_query_interrupt && !validate_or_explain_query &&
-                             !query_state_proxy.getQueryState()
-                                  .getConstSessionInfo()
-                                  ->get_session_id()
-                                  .empty(),
-                         g_running_query_interrupt_freq,
-                         g_pending_query_interrupt_freq};
+  ExecutionOptions eo = {
+      g_enable_columnar_output,
+      false,
+      allow_multifrag_,
+      explain_info.isJustExplain(),
+      allow_loop_joins_ || just_validate,
+      g_enable_watchdog,
+      jit_debug_,
+      just_validate,
+      g_enable_dynamic_watchdog,
+      g_dynamic_watchdog_time_limit,
+      find_push_down_candidates,
+      explain_info.isCalciteExplain(),
+      system_parameters_.gpu_input_mem_limit,
+      g_enable_runtime_query_interrupt && !validate_or_explain_query &&
+          !query_state_proxy->getConstSessionInfo()->get_session_id().empty(),
+      g_running_query_interrupt_freq,
+      g_pending_query_interrupt_freq};
   auto execution_time_ms = _return.getExecutionTime() + measure<>::execution([&]() {
                              _return = ra_executor.executeRelAlgQuery(
                                  co, eo, explain_info.isPlanExplain(), nullptr);
@@ -6029,8 +6026,8 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
   if (leaf_handler_) {
     leaf_handler_->flush_queue();
   }
-  auto const query_str = strip(query_state_proxy.getQueryState().getQueryStr());
-  auto session_ptr = query_state_proxy.getQueryState().getConstSessionInfo();
+  auto const query_str = strip(query_state_proxy->getQueryStr());
+  auto session_ptr = query_state_proxy->getConstSessionInfo();
   // Call to DistributedValidate() below may change cat.
   auto& cat = session_ptr->getCatalog();
 
@@ -6240,13 +6237,13 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
               .first.plan_result;
     }
     std::vector<PushedDownFilterInfo> filter_push_down_requests;
-    auto submitted_time_str = query_state_proxy.getQueryState().getQuerySubmittedTime();
+    auto submitted_time_str = query_state_proxy->getQuerySubmittedTime();
     auto query_session = session_ptr ? session_ptr->get_session_id() : "";
     auto execute_rel_alg_task = std::make_shared<QueryDispatchQueue::Task>(
         [this,
          &filter_push_down_requests,
          &_return,
-         &query_state_proxy,
+         query_state_proxy,
          &explain,
          &query_ra_calcite_explain,
          &query_ra,
@@ -6260,6 +6257,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
           // with a modified query plan (i.e., which has pushdowned filter)
           // otherwise this trial just executes the query and keeps corresponding query
           // resultset in _return object
+          logger::QidScopeGuard qsg = query_state_proxy->setThreadLocalQueryId();
           filter_push_down_requests = execute_rel_alg(
               _return,
               query_state_proxy,
@@ -6366,7 +6364,7 @@ void DBHandler::execute_rel_alg_with_filter_push_down(
   // deriving the new relational algebra plan with respect to the pushed down filters
   _return.addExecutionTime(measure<>::execution([&]() {
     query_ra = parse_to_ra(query_state_proxy,
-                           query_state_proxy.getQueryState().getQueryStr(),
+                           query_state_proxy->getQueryStr(),
                            filter_push_down_info,
                            false,
                            system_parameters_)
@@ -6409,7 +6407,7 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
   TPlanResult result;
   lockmgr::LockedTableDescriptors locks;
   if (pw.is_ddl || (!pw.is_validate && !pw.is_other_explain)) {
-    auto cat = query_state_proxy.getQueryState().getConstSessionInfo()->get_catalog_ptr();
+    auto cat = query_state_proxy->getConstSessionInfo()->get_catalog_ptr();
     // Need to read lock the catalog while determining what table names are used by this
     // query, confirming the tables exist, checking the user's permissions, and finally
     // locking the individual tables. The catalog lock can be released once the query

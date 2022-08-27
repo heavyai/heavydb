@@ -119,6 +119,7 @@ class OverlapsJoinHashTable : public HashJoin {
                       const size_t emitted_keys_count,
                       const bool skip_hashtable_caching,
                       const int device_id,
+                      const logger::QueryId,
                       const logger::ThreadId parent_thread_id);
 
   size_t calculateHashTableSize(size_t number_of_dimensions,

@@ -3396,7 +3396,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                                         bool validate_only = false,
                                         std::vector<size_t> outer_fragment_indices = {},
                                         bool allow_interrupt = false) {
-  auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
+  auto const session = query_state_proxy->getConstSessionInfo();
   auto& catalog = session->getCatalog();
 
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
@@ -3422,10 +3422,8 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                                       calciteQueryParsingOption,
                                       calciteOptimizationOption)
                             .plan_result;
-  RelAlgExecutor ra_executor(executor.get(),
-                             catalog,
-                             query_ra,
-                             query_state_proxy.getQueryState().shared_from_this());
+  RelAlgExecutor ra_executor(
+      executor.get(), catalog, query_ra, query_state_proxy->shared_from_this());
   CompilationOptions co = CompilationOptions::defaults(device_type);
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
@@ -3464,7 +3462,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
 
 size_t LocalQueryConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
                                                   std::string& sql_query_string) {
-  auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
+  auto const session = query_state_proxy->getConstSessionInfo();
   auto& catalog = session->getCatalog();
 
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
@@ -3521,9 +3519,9 @@ AggregatedResult LocalQueryConnector::query(QueryStateProxy query_state_proxy,
 
   std::vector<TargetMetaInfo> target_metainfos;
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-  auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
+  auto const session = query_state_proxy->getConstSessionInfo();
   auto query_session = session ? session->get_session_id() : "";
-  auto query_submitted_time = query_state_proxy.getQueryState().getQuerySubmittedTime();
+  auto query_submitted_time = query_state_proxy->getQuerySubmittedTime();
   if (allow_interrupt && !validate_only && !query_session.empty()) {
     executor->enrollQuerySession(query_session,
                                  sql_query_string,
@@ -3619,7 +3617,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
                                                const TableDescriptor* td,
                                                bool validate_table,
                                                bool for_CTAS) {
-  auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
+  auto const session = query_state_proxy->getConstSessionInfo();
   auto& catalog = session->getCatalog();
   foreign_storage::validate_non_foreign_table_write(td);
   bool populate_table = false;
@@ -3815,7 +3813,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
                                   g_enable_non_kernel_time_query_interrupt);
       total_source_query_time_ms += timer_stop(query_clock_begin);
 
-      auto start_time = query_state_proxy.getQueryState().getQuerySubmittedTime();
+      auto start_time = query_state_proxy->getQuerySubmittedTime();
       auto query_str = "INSERT_DATA for " + work_type_str;
       if (g_enable_non_kernel_time_query_interrupt) {
         // In the clean-up phase of the query execution for collecting aggregated result
