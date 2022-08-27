@@ -317,6 +317,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
 #endif
         arg1 = std::make_shared<Analyzer::Constant>(kDOUBLE, false, median);
       }
+    } else if (agg_kind == kMODE && g_cluster) {
+      throw std::runtime_error("MODE is not supported in distributed mode at this time.");
     }
     const auto& arg_ti = arg_expr->get_type_info();
     if (!is_agg_supported_for_type(agg_kind, arg_ti)) {

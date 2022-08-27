@@ -23,10 +23,10 @@
 #ifndef QUERYENGINE_TARGETINFO_H
 #define QUERYENGINE_TARGETINFO_H
 
+#include "Analyzer/Analyzer.h"
+#include "misc.h"
 #include "sqldefs.h"
 #include "sqltypes.h"
-
-#include "../Analyzer/Analyzer.h"
 
 inline const Analyzer::AggExpr* cast_to_agg_expr(const Analyzer::Expr* target_expr) {
   return dynamic_cast<const Analyzer::AggExpr*>(target_expr);
@@ -76,17 +76,8 @@ struct TargetInfo {
  * Returns true if the aggregate function always returns a value in the domain of the
  * argument. Returns false otherwise.
  */
-inline bool is_agg_domain_range_equivalent(const SQLAgg& agg_kind) {
-  switch (agg_kind) {
-    case kMIN:
-    case kMAX:
-    case kSINGLE_VALUE:
-    case kSAMPLE:
-      return true;
-    default:
-      break;
-  }
-  return false;
+inline bool is_agg_domain_range_equivalent(const SQLAgg agg_kind) {
+  return shared::is_any<kMIN, kMAX, kSINGLE_VALUE, kSAMPLE, kMODE>(agg_kind);
 }
 
 namespace target_info {
@@ -109,11 +100,9 @@ inline bool is_distinct_target(const TargetInfo& target_info) {
 }
 
 inline bool takes_float_argument(const TargetInfo& target_info) {
-  return target_info.is_agg &&
-         (target_info.agg_kind == kAVG || target_info.agg_kind == kSUM ||
-          target_info.agg_kind == kMIN || target_info.agg_kind == kMAX ||
-          target_info.agg_kind == kSINGLE_VALUE) &&
-         target_info.agg_arg_type.get_type() == kFLOAT;
+  return target_info.is_agg && target_info.agg_arg_type.get_type() == kFLOAT &&
+         shared::is_any<kAVG, kSUM, kMIN, kMAX, kSINGLE_VALUE, kMODE>(
+             target_info.agg_kind);
 }
 
 #endif  // QUERYENGINE_TARGETINFO_H

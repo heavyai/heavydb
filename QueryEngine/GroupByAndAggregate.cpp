@@ -37,6 +37,7 @@
 #include "Execute.h"
 #include "QueryTemplateGenerator.h"
 #include "RuntimeFunctions.h"
+#include "Shared/misc.h"
 #include "StreamingTopN.h"
 #include "TopKSort.h"
 #include "WindowContext.h"
@@ -1820,6 +1821,11 @@ extern "C" RUNTIME_EXPORT void agg_approx_quantile(int64_t* agg, const double va
   t_digest->add(val);
 }
 
+extern "C" RUNTIME_EXPORT void agg_mode_func(int64_t* agg, const int64_t val) {
+  auto* mode_map = reinterpret_cast<AggMode*>(*agg);
+  mode_map->add(val);
+}
+
 void GroupByAndAggregate::codegenCountDistinct(
     const size_t target_idx,
     const Analyzer::Expr* target_expr,
@@ -1898,7 +1904,7 @@ void GroupByAndAggregate::codegenApproxQuantile(
   if (device_type == ExecutorDeviceType::GPU) {
     throw QueryMustRunOnCpu();
   }
-  llvm::BasicBlock *calc, *skip;
+  llvm::BasicBlock *calc, *skip{nullptr};
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   auto const arg_ti =
       static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info();
@@ -1923,6 +1929,46 @@ void GroupByAndAggregate::codegenApproxQuantile(
   }
   cs->emitExternalCall(
       "agg_approx_quantile", llvm::Type::getVoidTy(cs->context_), agg_args);
+  if (nullable) {
+    irb.CreateBr(skip);
+    cs->current_func_->getBasicBlockList().push_back(skip);
+    irb.SetInsertPoint(skip);
+  }
+}
+
+void GroupByAndAggregate::codegenMode(const size_t target_idx,
+                                      const Analyzer::Expr* target_expr,
+                                      std::vector<llvm::Value*>& agg_args,
+                                      const QueryMemoryDescriptor& query_mem_desc,
+                                      const ExecutorDeviceType device_type) {
+  if (device_type == ExecutorDeviceType::GPU) {
+    throw QueryMustRunOnCpu();
+  }
+  llvm::BasicBlock *calc, *skip{nullptr};
+  AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
+  auto const arg_ti =
+      static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info();
+  bool const nullable = !arg_ti.get_notnull();
+  bool const is_fp = arg_ti.is_fp();
+  auto* cs = executor_->cgen_state_.get();
+  auto& irb = cs->ir_builder_;
+  if (nullable) {
+    auto* const null_value =
+        is_fp ? cs->inlineNull(arg_ti) : cs->castToTypeIn(cs->inlineNull(arg_ti), 64);
+    auto* const skip_cond = is_fp ? irb.CreateFCmpOEQ(agg_args.back(), null_value)
+                                  : irb.CreateICmpEQ(agg_args.back(), null_value);
+    calc = llvm::BasicBlock::Create(cs->context_, "calc_mode");
+    skip = llvm::BasicBlock::Create(cs->context_, "skip_mode");
+    irb.CreateCondBr(skip_cond, skip, calc);
+    cs->current_func_->getBasicBlockList().push_back(calc);
+    irb.SetInsertPoint(calc);
+  }
+  if (is_fp) {
+    auto* const int_type = get_int_type(8 * arg_ti.get_size(), cs->context_);
+    agg_args.back() = irb.CreateBitCast(agg_args.back(), int_type);
+  }
+  // "agg_mode" collides with existing names, so non-standard suffix "_func" is added.
+  cs->emitExternalCall("agg_mode_func", llvm::Type::getVoidTy(cs->context_), agg_args);
   if (nullable) {
     irb.CreateBr(skip);
     cs->current_func_->getBasicBlockList().push_back(skip);

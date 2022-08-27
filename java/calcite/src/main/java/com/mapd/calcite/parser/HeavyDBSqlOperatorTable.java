@@ -277,6 +277,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new ApproxPercentile());
     addOperator(new ApproxQuantile());
     addOperator(new MapDAvg());
+    addOperator(new Mode());
     addOperator(new Sample());
     addOperator(new LastSample());
     addOperator(new HeavyDB_Geo_PolyBoundsPtr());
@@ -2484,15 +2485,11 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   static class ApproxMedian extends SqlAggFunction {
     ApproxMedian() {
       super("APPROX_MEDIAN",
-              null,
               SqlKind.OTHER_FUNCTION,
               null,
               null,
               OperandTypes.family(SqlTypeFamily.NUMERIC),
-              SqlFunctionCategory.SYSTEM,
-              false,
-              false,
-              Optionality.FORBIDDEN);
+              SqlFunctionCategory.SYSTEM);
     }
 
     @Override
@@ -2505,15 +2502,11 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   static class ApproxPercentile extends SqlAggFunction {
     ApproxPercentile() {
       super("APPROX_PERCENTILE",
-              null,
               SqlKind.OTHER_FUNCTION,
               null,
               null,
               OperandTypes.family(SqlTypeFamily.NUMERIC, SqlTypeFamily.NUMERIC),
-              SqlFunctionCategory.SYSTEM,
-              false,
-              false,
-              Optionality.FORBIDDEN);
+              SqlFunctionCategory.SYSTEM);
     }
 
     @Override
@@ -2526,15 +2519,11 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   static class ApproxQuantile extends SqlAggFunction {
     ApproxQuantile() {
       super("APPROX_QUANTILE",
-              null,
               SqlKind.OTHER_FUNCTION,
               null,
               null,
               OperandTypes.family(SqlTypeFamily.NUMERIC, SqlTypeFamily.NUMERIC),
-              SqlFunctionCategory.SYSTEM,
-              false,
-              false,
-              Optionality.FORBIDDEN);
+              SqlFunctionCategory.SYSTEM);
     }
 
     @Override
@@ -2559,6 +2548,22 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.DOUBLE);
+    }
+  }
+
+  static class Mode extends SqlAggFunction {
+    Mode() {
+      super("MODE",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.ANY,
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
     }
   }
 

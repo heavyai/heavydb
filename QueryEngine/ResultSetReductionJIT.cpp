@@ -24,6 +24,7 @@
 #include "IRCodegenUtils.h"
 #include "LLVMFunctionAttributesUtil.h"
 #include "QueryEngine/QueryEngine.h"
+#include "Shared/StringTransform.h"
 #include "Shared/likely.h"
 #include "Shared/quantile.h"
 
@@ -121,13 +122,14 @@ void emit_aggregate_one_value(const std::string& agg_kind,
 }
 
 // Same as above, but support nullable types as well.
-void emit_aggregate_one_nullable_value(const std::string& agg_kind,
+void emit_aggregate_one_nullable_value(SQLAgg const sql_agg,
                                        Value* val_ptr,
                                        Value* other_ptr,
                                        const int64_t init_val,
                                        const size_t chosen_bytes,
                                        const TargetInfo& agg_info,
                                        Function* ir_reduce_one_entry) {
+  const std::string agg_kind = to_lower(toString(sql_agg));
   const auto dest_name = agg_kind + "_dest";
   if (agg_info.skip_null_val) {
     const auto sql_type = get_compact_type(agg_info);
@@ -465,6 +467,16 @@ extern "C" RUNTIME_EXPORT void approx_quantile_jit_rt(const int64_t new_set_hand
     accumulator->allocate();
     accumulator->mergeTDigest(*incoming);
   }
+}
+
+extern "C" RUNTIME_EXPORT void mode_jit_rt(const int64_t new_set_handle,
+                                           const int64_t old_set_handle,
+                                           const void* that_qmd_handle,
+                                           const void* this_qmd_handle,
+                                           const int64_t target_logical_idx) {
+  auto* accumulator = reinterpret_cast<AggMode*>(old_set_handle);
+  auto* incoming = reinterpret_cast<AggMode*>(new_set_handle);
+  accumulator->reduce(std::move(*incoming));
 }
 
 extern "C" RUNTIME_EXPORT void get_group_value_reduction_rt(
@@ -1126,9 +1138,10 @@ void ResultSetReductionJIT::reduceOneAggregateSlot(Value* this_ptr1,
                                                    const int64_t init_val,
                                                    const int8_t chosen_bytes,
                                                    Function* ir_reduce_one_entry) const {
-  switch (target_info.agg_kind) {
+  auto agg_kind = target_info.agg_kind;
+  switch (agg_kind) {
     case kCOUNT:
-    case kAPPROX_COUNT_DISTINCT: {
+    case kAPPROX_COUNT_DISTINCT:
       if (is_distinct_target(target_info)) {
         CHECK_EQ(static_cast<size_t>(chosen_bytes), sizeof(int64_t));
         reduceOneCountDistinctSlot(
@@ -1138,22 +1151,26 @@ void ResultSetReductionJIT::reduceOneAggregateSlot(Value* this_ptr1,
       CHECK_EQ(int64_t(0), init_val);
       emit_aggregate_one_count(this_ptr1, that_ptr1, chosen_bytes, ir_reduce_one_entry);
       break;
-    }
     case kAPPROX_QUANTILE:
-      CHECK_EQ(chosen_bytes, static_cast<int8_t>(sizeof(int64_t)));
+      CHECK_EQ(sizeof(int64_t), static_cast<size_t>(chosen_bytes));
       reduceOneApproxQuantileSlot(
           this_ptr1, that_ptr1, target_logical_idx, ir_reduce_one_entry);
       break;
-    case kAVG: {
+    case kMODE:
+      reduceOneModeSlot(this_ptr1, that_ptr1, target_logical_idx, ir_reduce_one_entry);
+      break;
+    case kAVG:
       // Ignore float argument compaction for count component for fear of its overflow
       emit_aggregate_one_count(this_ptr2,
                                that_ptr2,
                                query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx),
                                ir_reduce_one_entry);
-    }
+      agg_kind = kSUM;
     // fall thru
-    case kSUM: {
-      emit_aggregate_one_nullable_value("sum",
+    case kSUM:
+    case kMIN:
+    case kMAX:
+      emit_aggregate_one_nullable_value(agg_kind,
                                         this_ptr1,
                                         that_ptr1,
                                         init_val,
@@ -1161,29 +1178,8 @@ void ResultSetReductionJIT::reduceOneAggregateSlot(Value* this_ptr1,
                                         target_info,
                                         ir_reduce_one_entry);
       break;
-    }
-    case kMIN: {
-      emit_aggregate_one_nullable_value("min",
-                                        this_ptr1,
-                                        that_ptr1,
-                                        init_val,
-                                        chosen_bytes,
-                                        target_info,
-                                        ir_reduce_one_entry);
-      break;
-    }
-    case kMAX: {
-      emit_aggregate_one_nullable_value("max",
-                                        this_ptr1,
-                                        that_ptr1,
-                                        init_val,
-                                        chosen_bytes,
-                                        target_info,
-                                        ir_reduce_one_entry);
-      break;
-    }
     default:
-      LOG(FATAL) << "Invalid aggregate type";
+      UNREACHABLE() << "Invalid aggregate type: " << agg_kind;
   }
 }
 
@@ -1221,6 +1217,27 @@ void ResultSetReductionJIT::reduceOneApproxQuantileSlot(
   const auto that_qmd_arg = ir_reduce_one_entry->arg(3);
   ir_reduce_one_entry->add<ExternalCall>(
       "approx_quantile_jit_rt",
+      Type::Void,
+      std::vector<const Value*>{
+          new_set_handle,
+          old_set_handle,
+          that_qmd_arg,
+          this_qmd_arg,
+          ir_reduce_one_entry->addConstant<ConstantInt>(target_logical_idx, Type::Int64)},
+      "");
+}
+
+void ResultSetReductionJIT::reduceOneModeSlot(Value* this_ptr1,
+                                              Value* that_ptr1,
+                                              const size_t target_logical_idx,
+                                              Function* ir_reduce_one_entry) const {
+  CHECK_LT(target_logical_idx, query_mem_desc_.getCountDistinctDescriptorsSize());
+  const auto old_set_handle = emit_load_i64(this_ptr1, ir_reduce_one_entry);
+  const auto new_set_handle = emit_load_i64(that_ptr1, ir_reduce_one_entry);
+  const auto this_qmd_arg = ir_reduce_one_entry->arg(2);
+  const auto that_qmd_arg = ir_reduce_one_entry->arg(3);
+  ir_reduce_one_entry->add<ExternalCall>(
+      "mode_jit_rt",
       Type::Void,
       std::vector<const Value*>{
           new_set_handle,

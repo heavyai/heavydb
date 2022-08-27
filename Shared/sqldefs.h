@@ -80,6 +80,7 @@ enum SQLAgg {
   kAPPROX_QUANTILE,
   kSAMPLE,
   kSINGLE_VALUE,
+  kMODE,
   kINVALID_AGG
 };
 
@@ -215,11 +216,14 @@ inline std::string toString(const SQLAgg& kind) {
       return "SAMPLE";
     case kSINGLE_VALUE:
       return "SINGLE_VALUE";
+    case kMODE:
+      return "MODE";
     case kINVALID_AGG:
       return "INVALID";
+    default:
+      UNREACHABLE() << "Invalid aggregate kind: " << kind;
+      return {};
   }
-  LOG(FATAL) << "Invalid aggregate kind: " << kind;
-  return "";
 }
 
 inline std::string toString(const SQLOps& op) {

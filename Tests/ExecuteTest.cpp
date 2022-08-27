@@ -229,7 +229,7 @@ class SQLiteComparator {
 
   void compare(const std::string& query_string, const ExecutorDeviceType device_type) {
     const auto omnisci_results = run_multiple_agg(query_string, device_type);
-    compare_impl(omnisci_results.get(), query_string, device_type, false);
+    compare_impl(omnisci_results.get(), query_string, query_string, device_type, false);
   }
 
   void compare_arrow_output(const std::string& query_string,
@@ -239,8 +239,12 @@ class SQLiteComparator {
         QR::get()->runSQL(query_string, device_type, g_hoist_literals, true);
     const auto arrow_omnisci_results =
         result_set_arrow_loopback(nullptr, results, device_type);
-    compare_impl(
-        arrow_omnisci_results.get(), sqlite_query_string, device_type, false, true);
+    compare_impl(arrow_omnisci_results.get(),
+                 query_string,
+                 sqlite_query_string,
+                 device_type,
+                 false,
+                 true);
   }
 
   void compare_arrow_output_and_check_dictionaries(
@@ -257,8 +261,12 @@ class SQLiteComparator {
         device_type,
         min_result_size_for_bulk_dictionary_fetch,
         max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch);
-    compare_impl(
-        arrow_omnisci_results.get(), sqlite_query_string, device_type, false, true);
+    compare_impl(arrow_omnisci_results.get(),
+                 query_string,
+                 sqlite_query_string,
+                 device_type,
+                 false,
+                 true);
     // Below we test the newly added sparse dictionary capability,
     // where only entries in a dictionary-encoded arrow column should be in the
     // corresponding dictionary (vs all the entries in the underlying OmniSci dictionary)
@@ -273,26 +281,27 @@ class SQLiteComparator {
                const std::string& sqlite_query_string,
                const ExecutorDeviceType device_type) {
     const auto omnisci_results = run_multiple_agg(query_string, device_type);
-    compare_impl(omnisci_results.get(), sqlite_query_string, device_type, false);
+    compare_impl(
+        omnisci_results.get(), query_string, sqlite_query_string, device_type, false);
   }
 
   // added to deal with time shift for now testing
   void compare_timstamp_approx(const std::string& query_string,
                                const ExecutorDeviceType device_type) {
     const auto omnisci_results = run_multiple_agg(query_string, device_type);
-    compare_impl(omnisci_results.get(), query_string, device_type, true);
+    compare_impl(omnisci_results.get(), query_string, query_string, device_type, true);
   }
 
  private:
   template <class RESULT_SET>
   void compare_impl(const RESULT_SET* omnisci_results,
+                    const std::string& heavyai_query_string,
                     const std::string& sqlite_query_string,
                     const ExecutorDeviceType device_type,
                     const bool timestamp_approx,
                     const bool is_arrow = false) {
-    auto const errmsg = ExecutorDeviceType::CPU == device_type
-                            ? "CPU: " + sqlite_query_string
-                            : "GPU: " + sqlite_query_string;
+    auto const errmsg = (ExecutorDeviceType::CPU == device_type ? "CPU: " : "GPU: ") +
+                        heavyai_query_string;
     connector_.query(sqlite_query_string);
 
     // Below added as a sanity check that the result set rowCount()
@@ -2054,6 +2063,9 @@ TEST(Select, GroupBy) {
       case SQLAgg::kSAMPLE:
         oss << "SAMPLE(" << col_name << ")";
         break;
+      case SQLAgg::kMODE:
+        oss << "MODE(" << col_name << ")";
+        break;
       case SQLAgg::kAPPROX_QUANTILE:
         oss << "APPROX_PERCENTILE(" << col_name << ", 0.5) ";
         break;
@@ -2068,9 +2080,11 @@ TEST(Select, GroupBy) {
                                                        const std::string& col_name,
                                                        ExecutorDeviceType dt) {
     std::string omnisci_cnt_query, sqlite_cnt_query, omnisci_min_query, sqlite_min_query;
-    if (agg_op == SQLAgg::kAPPROX_QUANTILE || agg_op == SQLAgg::kSAMPLE) {
-      if (agg_op == SQLAgg::kAPPROX_QUANTILE && g_aggregator) {
-        LOG(WARNING) << "Skipping ApproxQuantile tests in distributed mode.";
+    if (agg_op == SQLAgg::kAPPROX_QUANTILE || agg_op == SQLAgg::kSAMPLE ||
+        agg_op == SQLAgg::kMODE) {
+      if ((agg_op == SQLAgg::kAPPROX_QUANTILE || agg_op == SQLAgg::kMODE) &&
+          g_aggregator) {
+        LOG(WARNING) << "Skipping ApproxQuantile and Mode tests in distributed mode.";
         return;
       } else {
         omnisci_cnt_query =
@@ -2167,6 +2181,7 @@ TEST(Select, GroupBy) {
     std::vector<SQLAgg> test_agg_ops = {SQLAgg::kMIN,
                                         SQLAgg::kMAX,
                                         SQLAgg::kSAMPLE,
+                                        SQLAgg::kMODE,
                                         SQLAgg::kAVG,
                                         SQLAgg::kAPPROX_QUANTILE};
     for (auto& col_name : runnable_column_names) {
@@ -3645,6 +3660,124 @@ TEST(Select, ApproxPercentileValidate) {
     crt_row = rows->getNextRow(true, true);
     CHECK_EQ(1u, crt_row.size()) << query;
     EXPECT_EQ(NULL_DOUBLE, v<double>(crt_row[0]));
+  }
+}
+
+template <typename T>
+T select_mode(std::string const col, ExecutorDeviceType const dt) {
+  std::string const query = "SELECT MODE(" + col + ") FROM test;";
+  return v<T>(run_simple_agg(query, dt));
+}
+
+TEST(Select, ModeBasic) {
+  if (g_aggregator) {
+    LOG(WARNING) << "Skipping ModeBasic tests in distributed mode.";
+    return;
+  }
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto const x = select_mode<int64_t>("x", dt);
+    EXPECT_EQ(7, x) << dt;
+    auto const w = select_mode<int64_t>("w", dt);
+    EXPECT_TRUE(-8 == w || -7 == w) << w << ' ' << dt;
+    auto const y = select_mode<int64_t>("y", dt);
+    EXPECT_TRUE(42 == y || 43 == y) << y << ' ' << dt;
+    auto const z = select_mode<int64_t>("z", dt);
+    EXPECT_EQ(101, z) << dt;
+    auto const t = select_mode<int64_t>("t", dt);
+    EXPECT_TRUE(1001 == t || 1002 == t) << t << ' ' << dt;
+    // Cannot apply 'MODE' to arguments of type 'MODE(<BOOLEAN>)'.
+    // Supported form(s): 'MODE(<NUMERIC>)'
+    // auto const b = select_mode<int64_t>("b", dt);
+    // EXPECT_EQ(1, b) << dt;
+    auto const f = select_mode<float>("f", dt);
+    EXPECT_EQ(1.1f, f) << dt;
+    auto const ff = select_mode<float>("ff", dt);
+    EXPECT_EQ(1.1f, ff) << dt;
+    auto const fn = select_mode<float>("fn", dt);
+    EXPECT_TRUE(-1000.3f == fn || -101.2f == fn) << fn << ' ' << dt;
+    auto const d = select_mode<double>("d", dt);
+    EXPECT_EQ(2.2, d) << dt;
+    auto const dn = select_mode<double>("dn", dt);
+    EXPECT_TRUE(-2002.4 == dn || -220.6 == dn) << dn << ' ' << dt;
+    auto const str = boost::get<std::string>(select_mode<NullableString>("str", dt));
+    EXPECT_EQ("foo", str) << dt;
+    auto nullable_string = select_mode<NullableString>("null_str", dt);
+    auto* const null_str = boost::get<std::string>(&nullable_string);
+    EXPECT_FALSE(null_str) << *null_str << ' ' << dt;
+    auto const fixed_str =
+        boost::get<std::string>(select_mode<NullableString>("fixed_str", dt));
+    EXPECT_EQ("foo", fixed_str) << dt;
+    nullable_string = select_mode<NullableString>("fixed_null_str", dt);
+    auto* const fixed_null_str = boost::get<std::string>(&nullable_string);
+    EXPECT_FALSE(fixed_null_str) << *fixed_null_str << ' ' << dt;
+    // real_str TEXT ENCODING NONE, unsupported
+    auto const shared_dict =
+        boost::get<std::string>(select_mode<NullableString>("shared_dict", dt));
+    EXPECT_EQ("foo", shared_dict) << dt;
+    std::string query =
+        "SELECT MODE(m) = CAST('2014-12-13 22:23:15' AS TIMESTAMP(0)) FROM test;";
+    EXPECT_EQ(1, v<int64_t>(run_simple_agg(query, dt))) << dt << ": " << query;
+    // me TIMESTAMP(0) ENCODING FIXED(32), crash
+    // query = "SELECT MODE(me) = CAST('2014-12-13 22:23:15' AS TIMESTAMP(0)) FROM test;";
+    query =
+        "SELECT MODE(m_3) = CAST('2014-12-13 22:23:15.323' AS TIMESTAMP(3)) FROM test;";
+    EXPECT_EQ(1, v<int64_t>(run_simple_agg(query, dt))) << dt << ": " << query;
+    query =
+        "SELECT MODE(m_6) = CAST('1999-07-11 14:02:53.874533' AS TIMESTAMP(6)) FROM "
+        "test;";
+    EXPECT_EQ(1, v<int64_t>(run_simple_agg(query, dt))) << dt << ": " << query;
+    query =
+        "SELECT MODE(m_9) = CAST('2006-04-26 03:49:04.607435125' AS TIMESTAMP(9)) FROM "
+        "test;";
+    EXPECT_EQ(1, v<int64_t>(run_simple_agg(query, dt))) << dt << ": " << query;
+    query = "SELECT MODE(n) = CAST('15:13:14' AS TIME) FROM test;";
+    EXPECT_EQ(1, v<int64_t>(run_simple_agg(query, dt))) << dt << ": " << query;
+    // ne TIME ENCODING FIXED(32), crash
+    // query = "SELECT MODE(ne) = CAST('15:13:14' AS TIME) FROM test;";
+    query = "SELECT MODE(o) = CAST('1999-09-09' AS DATE) FROM test;";
+    EXPECT_EQ(1, v<int64_t>(run_simple_agg(query, dt))) << dt << ": " << query;
+    query = "SELECT MODE(o1) = CAST('1999-09-09' AS DATE) FROM test;";
+    EXPECT_EQ(1, v<int64_t>(run_simple_agg(query, dt))) << dt << ": " << query;
+    query = "SELECT MODE(o2) = CAST('1999-09-09' AS DATE) FROM test;";
+    EXPECT_EQ(1, v<int64_t>(run_simple_agg(query, dt))) << dt << ": " << query;
+    auto const fx = select_mode<int64_t>("fx", dt);
+    EXPECT_EQ(9, fx) << dt;
+    query = "SELECT CAST(MODE(dd) AS DOUBLE) FROM test;";
+    EXPECT_EQ(11110 * 0.01, v<double>(run_simple_agg(query, dt))) << dt << ": " << query;
+    query = "SELECT CAST(MODE(dd_notnull) AS DOUBLE) FROM test;";
+    EXPECT_EQ(11110 * 0.01, v<double>(run_simple_agg(query, dt))) << dt << ": " << query;
+    auto const ss = boost::get<std::string>(select_mode<NullableString>("ss", dt));
+    EXPECT_EQ("fish", ss) << dt;
+    query = "SELECT MODE(u) IS NULL FROM test;";
+    EXPECT_EQ(1, v<int64_t>(run_simple_agg(query, dt))) << dt << ": " << query;
+    query = "SELECT MODE(u) IS NULL FROM test;";
+    EXPECT_EQ(1, v<int64_t>(run_simple_agg(query, dt))) << dt << ": " << query;
+    auto const ofd = select_mode<int64_t>("ofd", dt);
+    EXPECT_EQ(2147483647, ofd) << dt;
+    auto const ufd = select_mode<int64_t>("ufd", dt);
+    EXPECT_EQ(-2147483648, ufd) << dt;
+    // auto const ofq = select_mode<int64_t>("ofq", dt);  // Overflow in conversion to
+    // narrower type
+    auto const ufq = select_mode<int64_t>("ufq", dt);
+    EXPECT_TRUE(static_cast<int64_t>(-9223372036854775808ull) == ufq || -1 == ufq)
+        << dt << ": " << ufq;
+    auto const smallint_nulls = select_mode<int64_t>("smallint_nulls", dt);
+    EXPECT_EQ(32767, smallint_nulls) << dt;
+  }
+}
+
+TEST(Select, ModeOrderBy) {
+  if (g_aggregator) {
+    LOG(WARNING) << "Skipping ModeOrderBy tests in distributed mode.";
+    return;
+  }
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    char const* query =
+        "SELECT y FROM "
+        "(SELECT y, MODE(ne) mne FROM test GROUP BY y ORDER BY mne NULLS LAST LIMIT 1);";
+    EXPECT_EQ(42, v<int64_t>(run_simple_agg(query, dt))) << dt;
   }
 }
 

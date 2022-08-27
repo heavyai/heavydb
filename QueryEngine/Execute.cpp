@@ -1255,7 +1255,7 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
       return {agg_result, 0};
     }
     default:
-      CHECK(false);
+      UNREACHABLE() << "Unsupported SQLAgg: " << agg;
   }
   abort();
 }
@@ -3474,10 +3474,12 @@ int32_t Executor::executePlanWithoutGroupBy(
       for (int i = 0; i < num_iterations; i++) {
         int64_t val1;
         const bool float_argument_input = takes_float_argument(agg_info);
-        if (is_distinct_target(agg_info) || agg_info.agg_kind == kAPPROX_QUANTILE) {
-          CHECK(agg_info.agg_kind == kCOUNT ||
-                agg_info.agg_kind == kAPPROX_COUNT_DISTINCT ||
-                agg_info.agg_kind == kAPPROX_QUANTILE);
+        if (is_distinct_target(agg_info) ||
+            shared::is_any<kAPPROX_QUANTILE, kMODE>(agg_info.agg_kind)) {
+          bool const check =
+              shared::is_any<kCOUNT, kAPPROX_COUNT_DISTINCT, kAPPROX_QUANTILE, kMODE>(
+                  agg_info.agg_kind);
+          CHECK(check) << agg_info.agg_kind;
           val1 = out_vec[out_vec_idx][0];
           error_code = 0;
         } else {
@@ -4192,7 +4194,7 @@ std::pair<bool, int64_t> Executor::skipFragment(
     // TODO: Factor out into separate function per canSkipFragmentForFpQual above
 
     if (lhs_col->get_type_info().is_timestamp() &&
-        rhs_const->get_type_info().is_any(kTIME)) {
+        rhs_const->get_type_info().is_any<kTIME>()) {
       // when casting from a timestamp to time
       // is not possible to get a valid range
       // so we can't skip any fragment

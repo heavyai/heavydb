@@ -127,7 +127,7 @@ int64_t get_agg_initial_val(const SQLAgg agg,
                             const SQLTypeInfo& ti,
                             const bool enable_compaction,
                             const unsigned min_byte_width_to_compact) {
-  CHECK(!ti.is_string() || (agg == kSINGLE_VALUE || agg == kSAMPLE));
+  CHECK(!ti.is_string() || (shared::is_any<kSINGLE_VALUE, kSAMPLE, kMODE>(agg))) << agg;
   const auto byte_width =
       enable_compaction
           ? compact_byte_width(static_cast<unsigned>(get_bit_width(ti) >> 3),
@@ -177,7 +177,8 @@ int64_t get_agg_initial_val(const SQLAgg agg,
     case kAPPROX_COUNT_DISTINCT:
       return 0;
     case kAPPROX_QUANTILE:
-      return {};  // Init value is a quantile::TDigest* set elsewhere.
+    case kMODE:
+      return {};  // Init value is a pointer set elsewhere.
     case kMIN: {
       switch (byte_width) {
         case 1: {
@@ -278,9 +279,8 @@ std::vector<int64_t> init_agg_val_vec(
       if (query_mem_desc.getQueryDescriptionType() ==
               QueryDescriptionType::NonGroupedAggregate &&
           target.is_agg &&
-          (target.agg_kind == kMIN || target.agg_kind == kMAX ||
-           target.agg_kind == kSUM || target.agg_kind == kAVG ||
-           target.agg_kind == kAPPROX_QUANTILE)) {
+          shared::is_any<kMIN, kMAX, kSUM, kAVG, kAPPROX_QUANTILE, kMODE>(
+              target.agg_kind)) {
         set_notnull(target, false);
       } else if (constrained_not_null(arg_expr, quals)) {
         set_notnull(target, true);

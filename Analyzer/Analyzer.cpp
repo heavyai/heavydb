@@ -1309,7 +1309,7 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
     // relax nullability
     type_info = new_type_info;
     return;
-  } else if (type_info.is_timestamp() && new_type_info.is_any(kTIME)) {
+  } else if (type_info.is_timestamp() && new_type_info.is_any<kTIME>()) {
     type_info = new_type_info;
     return;
   } else {
@@ -2898,8 +2898,11 @@ std::string AggExpr::toString() const {
     case kSAMPLE:
       agg = "SAMPLE";
       break;
-    case kINVALID_AGG:
-      UNREACHABLE();
+    case kMODE:
+      agg = "MODE";
+      break;
+    default:
+      UNREACHABLE() << "Unhandled aggtype: " << aggtype;
       break;
   }
   std::string str{"(" + agg};

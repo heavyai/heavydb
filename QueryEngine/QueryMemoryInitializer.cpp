@@ -15,19 +15,14 @@
  */
 
 #include "QueryMemoryInitializer.h"
-
-#include "DataMgr/Allocators/DeviceAllocator.h"
 #include "Execute.h"
 #include "GpuInitGroups.h"
-#include "GpuMemUtils.h"
 #include "Logger/Logger.h"
 #include "OutputBufferInitialization.h"
 #include "QueryEngine/QueryEngine.h"
-#include "ResultSet.h"
+#include "Shared/checked_alloc.h"
 #include "StreamingTopN.h"
 #include "Utils/FlatBuffer.h"
-
-#include <Shared/checked_alloc.h>
 
 // 8 GB, the limit of perfect hash group by under normal conditions
 int64_t g_bitmap_memory_limit{8LL * 1000 * 1000 * 1000};
@@ -210,6 +205,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
 
   if (render_allocator_map || !query_mem_desc.isGroupBy()) {
     allocateCountDistinctBuffers(query_mem_desc, false, executor);
+    allocateModes(query_mem_desc, false, executor);
     allocateTDigests(query_mem_desc, false, executor);
     if (render_info && render_info->useCudaBuffers()) {
       return;
@@ -456,6 +452,7 @@ void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_me
   const size_t col_base_off{query_mem_desc.getColOffInBytes(0)};
 
   auto agg_bitmap_size = allocateCountDistinctBuffers(query_mem_desc, true, executor);
+  auto mode_index_set = allocateModes(query_mem_desc, true, executor);
   auto quantile_params = allocateTDigests(query_mem_desc, true, executor);
   auto buffer_ptr = reinterpret_cast<int8_t*>(groups_buffer);
 
@@ -467,13 +464,14 @@ void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_me
   // we fallback to default implementation in that cases
   if (!std::any_of(agg_bitmap_size.begin(), agg_bitmap_size.end(), is_true) &&
       !std::any_of(quantile_params.begin(), quantile_params.end(), is_true) &&
-      g_optimize_row_initialization) {
+      mode_index_set.empty() && g_optimize_row_initialization) {
     std::vector<int8_t> sample_row(row_size - col_base_off);
 
     initColumnsPerRow(query_mem_desc_fixedup,
                       sample_row.data(),
                       init_vals,
                       agg_bitmap_size,
+                      mode_index_set,
                       quantile_params);
 
     if (query_mem_desc.hasKeylessHash()) {
@@ -505,6 +503,7 @@ void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_me
                             &buffer_ptr[col_base_off],
                             init_vals,
                             agg_bitmap_size,
+                            mode_index_set,
                             quantile_params);
         }
       }
@@ -519,6 +518,7 @@ void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_me
                         &buffer_ptr[col_base_off],
                         init_vals,
                         agg_bitmap_size,
+                        mode_index_set,
                         quantile_params);
     }
   }
@@ -607,6 +607,7 @@ void QueryMemoryInitializer::initColumnsPerRow(
     int8_t* row_ptr,
     const std::vector<int64_t>& init_vals,
     const std::vector<int64_t>& bitmap_sizes,
+    const ModeIndexSet& mode_index_set,
     const std::vector<QuantileParam>& quantile_params) {
   int8_t* col_ptr = row_ptr;
   size_t init_vec_idx = 0;
@@ -625,6 +626,9 @@ void QueryMemoryInitializer::initColumnsPerRow(
       auto const q = *quantile_params[col_idx];
       // allocate for APPROX_QUANTILE only when slot is used
       init_val = reinterpret_cast<int64_t>(row_set_mem_owner_->nullTDigest(q));
+      ++init_vec_idx;
+    } else if (query_mem_desc.isGroupBy() && mode_index_set.count(col_idx)) {
+      init_val = reinterpret_cast<int64_t>(row_set_mem_owner_->allocateMode());
       ++init_vec_idx;
     } else {
       if (query_mem_desc.getPaddedSlotWidthBytes(col_idx) > 0) {
@@ -750,24 +754,66 @@ int64_t QueryMemoryInitializer::allocateCountDistinctSet() {
   return reinterpret_cast<int64_t>(count_distinct_set);
 }
 
+namespace {
+
+void eachAggregateTargetIdxOfType(
+    std::vector<Analyzer::Expr*> const& target_exprs,
+    SQLAgg const agg_type,
+    std::function<void(Analyzer::AggExpr const*, size_t)> lambda) {
+  for (size_t target_idx = 0; target_idx < target_exprs.size(); ++target_idx) {
+    auto const target_expr = target_exprs[target_idx];
+    if (auto const* agg_expr = dynamic_cast<Analyzer::AggExpr const*>(target_expr)) {
+      if (agg_expr->get_aggtype() == agg_type) {
+        lambda(agg_expr, target_idx);
+      }
+    }
+  }
+}
+
+}  // namespace
+
+QueryMemoryInitializer::ModeIndexSet QueryMemoryInitializer::allocateModes(
+    const QueryMemoryDescriptor& query_mem_desc,
+    const bool deferred,
+    const Executor* executor) {
+  size_t const slot_count = query_mem_desc.getSlotCount();
+  CHECK_LE(executor->plan_state_->target_exprs_.size(), slot_count);
+  ModeIndexSet mode_index_set;
+
+  eachAggregateTargetIdxOfType(
+      executor->plan_state_->target_exprs_,
+      kMODE,
+      [&](Analyzer::AggExpr const*, size_t const target_idx) {
+        size_t const agg_col_idx =
+            query_mem_desc.getSlotIndexForSingleSlotCol(target_idx);
+        CHECK_LT(agg_col_idx, slot_count);
+        if (deferred) {
+          mode_index_set.emplace(agg_col_idx);
+        } else {
+          AggMode* agg_mode = row_set_mem_owner_->allocateMode();
+          init_agg_vals_[agg_col_idx] = reinterpret_cast<int64_t>(agg_mode);
+        }
+      });
+  return mode_index_set;
+}
+
 std::vector<QueryMemoryInitializer::QuantileParam>
 QueryMemoryInitializer::allocateTDigests(const QueryMemoryDescriptor& query_mem_desc,
                                          const bool deferred,
                                          const Executor* executor) {
   size_t const slot_count = query_mem_desc.getSlotCount();
-  size_t const ntargets = executor->plan_state_->target_exprs_.size();
-  CHECK_GE(slot_count, ntargets);
+  CHECK_LE(executor->plan_state_->target_exprs_.size(), slot_count);
   std::vector<QuantileParam> quantile_params(deferred ? slot_count : 0);
 
-  for (size_t target_idx = 0; target_idx < ntargets; ++target_idx) {
-    auto const target_expr = executor->plan_state_->target_exprs_[target_idx];
-    if (auto const agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
-      if (agg_expr->get_aggtype() == kAPPROX_QUANTILE) {
+  eachAggregateTargetIdxOfType(
+      executor->plan_state_->target_exprs_,
+      kAPPROX_QUANTILE,
+      [&](Analyzer::AggExpr const* const agg_expr, size_t const target_idx) {
         size_t const agg_col_idx =
             query_mem_desc.getSlotIndexForSingleSlotCol(target_idx);
         CHECK_LT(agg_col_idx, slot_count);
-        CHECK_EQ(query_mem_desc.getLogicalSlotWidthBytes(agg_col_idx),
-                 static_cast<int8_t>(sizeof(int64_t)));
+        CHECK_EQ(static_cast<int8_t>(sizeof(int64_t)),
+                 query_mem_desc.getLogicalSlotWidthBytes(agg_col_idx));
         auto const q = agg_expr->get_arg1()->get_constval().doubleval;
         if (deferred) {
           quantile_params[agg_col_idx] = q;
@@ -776,9 +822,7 @@ QueryMemoryInitializer::allocateTDigests(const QueryMemoryDescriptor& query_mem_
           init_agg_vals_[agg_col_idx] =
               reinterpret_cast<int64_t>(row_set_mem_owner_->nullTDigest(q));
         }
-      }
-    }
-  }
+      });
   return quantile_params;
 }
 
