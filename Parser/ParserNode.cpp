@@ -3445,6 +3445,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                          allow_interrupt,
                          g_running_query_interrupt_freq,
                          g_pending_query_interrupt_freq,
+                         std::numeric_limits<size_t>::max(),
                          ExecutorType::Native,
                          outer_fragment_indices};
 

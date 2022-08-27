@@ -90,6 +90,7 @@ struct ExecutionOptions {
   bool allow_runtime_query_interrupt;
   double running_query_interrupt_freq;
   unsigned pending_query_interrupt_freq;
+  size_t max_join_hash_table_size = std::numeric_limits<size_t>::max();
   ExecutorType executor_type = ExecutorType::Native;
   std::vector<size_t> outer_fragment_indices{};
 

@@ -30,6 +30,7 @@ class RangeJoinHashTable final : public OverlapsJoinHashTable {
                      Executor* executor,
                      const std::vector<InnerOuter>& inner_outer_pairs,
                      const int device_count,
+                     const RegisteredQueryHint& query_hints,
                      const HashTableBuildDagMap& hashtable_build_dag_map,
                      const TableIdToNodeMap& table_id_to_node_map)
       : OverlapsJoinHashTable(condition,
@@ -40,6 +41,7 @@ class RangeJoinHashTable final : public OverlapsJoinHashTable {
                               executor,
                               inner_outer_pairs,
                               device_count,
+                              query_hints,
                               hashtable_build_dag_map,
                               table_id_to_node_map)
       , range_expr_(range_expr)
@@ -57,7 +59,7 @@ class RangeJoinHashTable final : public OverlapsJoinHashTable {
       ColumnCacheMap& column_cache,
       Executor* executor,
       const HashTableBuildDagMap& hashtable_build_dag_map,
-      const RegisteredQueryHint& query_hint,
+      const RegisteredQueryHint& query_hints,
       const TableIdToNodeMap& table_id_to_node_map);
 
  protected:
