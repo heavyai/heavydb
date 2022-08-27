@@ -42,6 +42,9 @@ void serialize(Archive& ar, RegisteredQueryHint& query_hint, const unsigned int 
   (ar & query_hint.overlaps_allow_gpu_build);
   (ar & query_hint.overlaps_no_cache);
   (ar & query_hint.overlaps_keys_per_bin);
+  (ar & query_hint.use_loop_join);
+  (ar & query_hint.max_join_hash_table_size);
+  (ar & query_hint.loop_join_inner_table_max_num_rows);
   (ar & query_hint.registered_hint);
 }
 

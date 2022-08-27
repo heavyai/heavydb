@@ -313,7 +313,6 @@ class PerfectJoinHashTableBuilder {
                                            ExecutorDeviceType::CPU,
                                            hash_entry_info.getNormalizedHashEntryCount(),
                                            join_column.num_elems);
-
     auto cpu_hash_table_buff = reinterpret_cast<int32_t*>(hash_table_->getCpuBuffer());
 
     int thread_count = cpu_threads();

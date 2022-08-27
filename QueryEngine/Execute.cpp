@@ -1573,14 +1573,8 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
 
 }  // namespace
 
-bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos,
+size_t get_loop_join_size(const std::vector<InputTableInfo>& query_infos,
                           const RelAlgExecutionUnit& ra_exe_unit) {
-  if (ra_exe_unit.input_descs.size() < 2) {
-    return false;
-  }
-
-  // We only support loop join at the end of folded joins
-  // where ra_exe_unit.input_descs.size() > 2 for now.
   const auto inner_table_id = ra_exe_unit.input_descs.back().getTableId();
 
   std::optional<size_t> inner_table_idx;
@@ -1591,8 +1585,7 @@ bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos,
     }
   }
   CHECK(inner_table_idx);
-  return query_infos[*inner_table_idx].info.getNumTuples() <=
-         g_trivial_loop_join_threshold;
+  return query_infos[*inner_table_idx].info.getNumTuples();
 }
 
 namespace {

@@ -154,6 +154,7 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     ColumnCacheMap& column_cache,
     Executor* executor,
     const HashTableBuildDagMap& hashtable_build_dag_map,
+    const RegisteredQueryHint& query_hints,
     const TableIdToNodeMap& table_id_to_node_map) {
   CHECK(IS_EQUIVALENCE(qual_bin_oper->get_optype()));
   const auto cols_and_string_op_infos =
@@ -226,6 +227,7 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
                                column_cache,
                                executor,
                                device_count,
+                               query_hints,
                                hashtable_build_dag_map,
                                table_id_to_node_map,
                                inner_outer_string_op_infos));
@@ -249,6 +251,8 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     throw HashJoinFail(
         std::string("Ran out of memory while building hash tables for equijoin | ") +
         e.what());
+  } catch (const JoinHashTableTooBig& e) {
+    throw e;
   } catch (const std::exception& e) {
     throw std::runtime_error(
         std::string("Fatal error while attempting to build hash tables for join: ") +
@@ -760,6 +764,15 @@ int PerfectJoinHashTable::initHashTableForDevice(
       hash_type_ = *cached_hashtable_layout_type;
       hashtable_layout = hash_type_;
     }
+  }
+  const auto entry_count = hash_entry_info.getNormalizedHashEntryCount();
+  const auto hash_table_entry_count = hashtable_layout == HashType::OneToOne
+                                          ? entry_count
+                                          : 2 * entry_count + join_column.num_elems;
+  const auto hash_table_size = hash_table_entry_count * sizeof(int32_t);
+  if (query_hints_.isHintRegistered(QueryHint::kMaxJoinHashTableSize) &&
+      join_column.num_elems > query_hints_.max_join_hash_table_size) {
+    throw JoinHashTableTooBig(hash_table_size, query_hints_.max_join_hash_table_size);
   }
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
     CHECK(!chunk_key.empty());

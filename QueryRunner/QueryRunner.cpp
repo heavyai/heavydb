@@ -851,7 +851,8 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
                                        eo.gpu_input_mem_limit_percent,
                                        eo.allow_runtime_query_interrupt,
                                        eo.running_query_interrupt_freq,
-                                       eo.pending_query_interrupt_freq};
+                                       eo.pending_query_interrupt_freq,
+                                       eo.max_join_hash_table_size};
     auto new_ra_executor = RelAlgExecutor(executor.get(), cat, new_query_ra);
     return std::make_shared<ExecutionResult>(
         new_ra_executor.executeRelAlgQuery(co, eo_modified, false, nullptr));

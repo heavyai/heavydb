@@ -138,6 +138,7 @@ void createTable() {
       "CREATE TABLE complex_windowing(str text encoding dict(32), ts timestamp(0), lat "
       "float, lon float);");
   QR::get()->runDDLStatement("CREATE TABLE subquery_test (x int, y int)");
+  QR::get()->runDDLStatement("CREATE TABLE JOIN_HINT_TEST (v INT, v2 INT);");
 }
 
 void populateTable() {
@@ -188,6 +189,12 @@ void populateTable() {
   }
 
   run_query("INSERT INTO subquery_test VALUES (1, 1)", ExecutorDeviceType::CPU);
+
+  for (int i = 1; i < 5; i++) {
+    const auto val = ::toString(1);
+    run_query("INSERT INTO JOIN_HINT_TEST VALUES (" + val + ", " + val + ");",
+              ExecutorDeviceType::CPU);
+  }
 }
 
 void dropTable() {
@@ -196,6 +203,7 @@ void dropTable() {
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS geospatial_inner_join_test;");
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS complex_windowing;");
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS subquery_test");
+  QR::get()->runDDLStatement("DROP TABLE IF EXISTS JOIN_HINT_TEST;");
 }
 
 TEST(QueryHint, ForceToCPUMode) {
@@ -1083,6 +1091,82 @@ TEST(QueryHint, DynamicWatchdog) {
     auto wrong_timelimit2 = QR::get()->getParsedQueryHint(wrong_timelimit_query2);
     EXPECT_TRUE(!wrong_timelimit2.isHintRegistered(QueryHint::kQueryTimeLimit));
   }
+}
+
+TEST(QueryHint, LoopJoin) {
+  ScopeGuard reset_flag = [orig_flag = g_trivial_loop_join_threshold] {
+    g_trivial_loop_join_threshold = orig_flag;
+  };
+  const auto loop_join_on_query =
+      "SELECT /*+ allow_loop_join */ COUNT(1) FROM JOIN_HINT_TEST R, JOIN_HINT_TEST S;";
+  auto loop_join_on = QR::get()->getParsedQueryHint(loop_join_on_query);
+  EXPECT_TRUE(loop_join_on.isHintRegistered(QueryHint::kAllowLoopJoin));
+  EXPECT_NO_THROW(
+      QR::get()->runSQL(loop_join_on_query, ExecutorDeviceType::CPU, false, false));
+
+  const auto loop_join_off_query =
+      "SELECT /*+ disable_loop_join */ COUNT(1) FROM JOIN_HINT_TEST R, JOIN_HINT_TEST S;";
+  auto loop_join_off = QR::get()->getParsedQueryHint(loop_join_off_query);
+  EXPECT_TRUE(loop_join_off.isHintRegistered(QueryHint::kDisableLoopJoin));
+  EXPECT_ANY_THROW(
+      QR::get()->runSQL(loop_join_off_query, ExecutorDeviceType::CPU, false, true));
+
+  const auto loop_join_limit_query =
+      "SELECT /*+ loop_join_inner_table_max_num_rows(3) */ COUNT(1) FROM JOIN_HINT_TEST "
+      "R, JOIN_HINT_TEST S;";
+  auto loop_join_limit = QR::get()->getParsedQueryHint(loop_join_limit_query);
+  EXPECT_TRUE(loop_join_limit.isHintRegistered(QueryHint::kLoopJoinInnerTableMaxNumRows));
+  EXPECT_ANY_THROW(
+      QR::get()->runSQL(loop_join_limit_query, ExecutorDeviceType::CPU, false, true));
+
+  const auto loop_join_limit_query2 =
+      "SELECT /*+ loop_join_inner_table_max_num_rows(999999) */ COUNT(1) FROM "
+      "JOIN_HINT_TEST "
+      "R, JOIN_HINT_TEST S;";
+  auto loop_join_limit2 = QR::get()->getParsedQueryHint(loop_join_limit_query2);
+  EXPECT_TRUE(
+      loop_join_limit2.isHintRegistered(QueryHint::kLoopJoinInnerTableMaxNumRows));
+  EXPECT_NO_THROW(
+      QR::get()->runSQL(loop_join_limit_query2, ExecutorDeviceType::CPU, false, true));
+
+  const auto wrong_query_hint_query =
+      "SELECT /*+ loop_join_inner_table_max_num_rows(-1) */ COUNT(1) FROM JOIN_HINT_TEST "
+      "R, JOIN_HINT_TEST S;";
+  auto wrong_query_hint = QR::get()->getParsedQueryHint(wrong_query_hint_query);
+  EXPECT_TRUE(
+      !wrong_query_hint.isHintRegistered(QueryHint::kLoopJoinInnerTableMaxNumRows));
+}
+
+TEST(QueryHint, JoinHashTableSize) {
+  const auto perfect_hash_limit_query =
+      "SELECT /*+ max_join_hashtable_size(1) */ COUNT(1) FROM JOIN_HINT_TEST R, "
+      "JOIN_HINT_TEST S WHERE R.v = S.v;";
+  auto perfect_hash_limit = QR::get()->getParsedQueryHint(perfect_hash_limit_query);
+  EXPECT_TRUE(perfect_hash_limit.isHintRegistered(QueryHint::kMaxJoinHashTableSize));
+  EXPECT_ANY_THROW(
+      QR::get()->runSQL(perfect_hash_limit_query, ExecutorDeviceType::CPU, false, true));
+
+  const auto baseline_hash_limit_query =
+      "SELECT /*+ max_join_hashtable_size(1) */ COUNT(1) FROM JOIN_HINT_TEST R, "
+      "JOIN_HINT_TEST S WHERE R.v = S.v AND R.v2 = S.v2;";
+  auto baseline_hash_limit = QR::get()->getParsedQueryHint(baseline_hash_limit_query);
+  EXPECT_TRUE(baseline_hash_limit.isHintRegistered(QueryHint::kMaxJoinHashTableSize));
+  EXPECT_ANY_THROW(
+      QR::get()->runSQL(baseline_hash_limit_query, ExecutorDeviceType::CPU, false, true));
+
+  const auto overlaps_join_limit_query =
+      "SELECT /*+ max_join_hashtable_size(1) */ COUNT(1) FROM geospatial_test R, "
+      "geospatial_test S WHERE ST_DISTANCE(R.p, S.p) < 0.1;";
+  auto overlaps_join_limit = QR::get()->getParsedQueryHint(overlaps_join_limit_query);
+  EXPECT_TRUE(overlaps_join_limit.isHintRegistered(QueryHint::kMaxJoinHashTableSize));
+  EXPECT_ANY_THROW(
+      QR::get()->runSQL(overlaps_join_limit_query, ExecutorDeviceType::CPU, false, true));
+
+  const auto wrong_query_hint_query =
+      "SELECT /*+ max_join_hashtable_size(-1) */ COUNT(1) FROM JOIN_HINT_TEST R, "
+      "JOIN_HINT_TEST S WHERE R.v = S.v;";
+  auto wrong_query_hint = QR::get()->getParsedQueryHint(wrong_query_hint_query);
+  EXPECT_TRUE(!wrong_query_hint.isHintRegistered(QueryHint::kMaxJoinHashTableSize));
 }
 
 TEST(QueryHint, Subquery) {

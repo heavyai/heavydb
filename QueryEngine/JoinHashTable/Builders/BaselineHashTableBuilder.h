@@ -267,7 +267,8 @@ class BaselineJoinHashTableBuilder {
                          const HashType layout,
                          const JoinType join_type,
                          const size_t key_component_width,
-                         const size_t key_component_count) {
+                         const size_t key_component_count,
+                         const RegisteredQueryHint& query_hint) {
     auto timer = DEBUG_TIMER(__func__);
     const auto entry_size =
         (key_component_count + (layout == HashType::OneToOne ? 1 : 0)) *
@@ -278,6 +279,11 @@ class BaselineJoinHashTableBuilder {
             : 0;
     const size_t hash_table_size =
         entry_size * keyspace_entry_count + one_to_many_hash_entries * sizeof(int32_t);
+
+    if (query_hint.isHintRegistered(QueryHint::kMaxJoinHashTableSize) &&
+        hash_table_size > query_hint.max_join_hash_table_size) {
+      throw JoinHashTableTooBig(hash_table_size, query_hint.max_join_hash_table_size);
+    }
 
     // We can't allocate more than 2GB contiguous memory on GPU and each entry is 4 bytes.
     if (hash_table_size > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
@@ -483,7 +489,8 @@ class BaselineJoinHashTableBuilder {
                             const size_t keyspace_entry_count,
                             const size_t emitted_keys_count,
                             const int device_id,
-                            const Executor* executor) {
+                            const Executor* executor,
+                            const RegisteredQueryHint& query_hint) {
 #ifdef HAVE_CUDA
     const auto entry_size =
         (key_component_count + (layout == HashType::OneToOne ? 1 : 0)) *
@@ -494,6 +501,11 @@ class BaselineJoinHashTableBuilder {
             : 0;
     const size_t hash_table_size =
         entry_size * keyspace_entry_count + one_to_many_hash_entries * sizeof(int32_t);
+
+    if (query_hint.isHintRegistered(QueryHint::kMaxJoinHashTableSize) &&
+        hash_table_size > query_hint.max_join_hash_table_size) {
+      throw JoinHashTableTooBig(hash_table_size, query_hint.max_join_hash_table_size);
+    }
 
     // We can't allocate more than 2GB contiguous memory on GPU and each entry is 4 bytes.
     if (hash_table_size > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
@@ -528,7 +540,8 @@ class BaselineJoinHashTableBuilder {
                          const size_t keyspace_entry_count,
                          const size_t emitted_keys_count,
                          const int device_id,
-                         const Executor* executor) {
+                         const Executor* executor,
+                         const RegisteredQueryHint& query_hint) {
     auto timer = DEBUG_TIMER(__func__);
     int err = 0;
 #ifdef HAVE_CUDA
@@ -538,7 +551,8 @@ class BaselineJoinHashTableBuilder {
                          keyspace_entry_count,
                          emitted_keys_count,
                          device_id,
-                         executor);
+                         executor,
+                         query_hint);
     if (!keyspace_entry_count) {
       // need to "allocate" the empty hash table first
       CHECK(!emitted_keys_count);

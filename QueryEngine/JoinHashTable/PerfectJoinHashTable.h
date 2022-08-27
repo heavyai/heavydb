@@ -60,6 +60,7 @@ class PerfectJoinHashTable : public HashJoin {
       ColumnCacheMap& column_cache,
       Executor* executor,
       const HashTableBuildDagMap& hashtable_build_dag_map,
+      const RegisteredQueryHint& query_hints,
       const TableIdToNodeMap& table_id_to_node_map);
 
   std::string toString(const ExecutorDeviceType device_type,
@@ -133,6 +134,8 @@ class PerfectJoinHashTable : public HashJoin {
     }
   }
 
+  const RegisteredQueryHint& getRegisteredQueryHint() { return query_hints_; }
+
   virtual ~PerfectJoinHashTable() {}
 
  private:
@@ -176,6 +179,7 @@ class PerfectJoinHashTable : public HashJoin {
                        ColumnCacheMap& column_cache,
                        Executor* executor,
                        const int device_count,
+                       const RegisteredQueryHint& query_hints,
                        const HashTableBuildDagMap& hashtable_build_dag_map,
                        const TableIdToNodeMap& table_id_to_node_map,
                        const InnerOuterStringOpInfos& inner_outer_string_op_infos = {})
@@ -190,6 +194,7 @@ class PerfectJoinHashTable : public HashJoin {
       , executor_(executor)
       , column_cache_(column_cache)
       , device_count_(device_count)
+      , query_hints_(query_hints)
       , needs_dict_translation_(false)
       , hashtable_build_dag_map_(hashtable_build_dag_map)
       , table_id_to_node_map_(table_id_to_node_map)
@@ -276,6 +281,7 @@ class PerfectJoinHashTable : public HashJoin {
   Executor* executor_;
   ColumnCacheMap& column_cache_;
   const int device_count_;
+  RegisteredQueryHint query_hints_;
   mutable bool needs_dict_translation_;
   HashTableBuildDagMap hashtable_build_dag_map_;
   // per-device cache key to cover hash table for sharded table
