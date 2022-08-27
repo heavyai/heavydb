@@ -479,7 +479,7 @@ void Calcite::checkAccessedObjectsPrivileges(
     TPlanResult plan) const {
   AccessPrivileges NOOP;
   // check the individual tables
-  auto const session_ptr = query_state_proxy.getQueryState().getConstSessionInfo();
+  auto const session_ptr = query_state_proxy->getConstSessionInfo();
   checkPermissionForTables(*session_ptr,
                            plan.primary_accessed_objects.tables_selected_from,
                            AccessPrivileges::SELECT_FROM_TABLE,
@@ -539,7 +539,7 @@ TPlanResult Calcite::processImpl(query_state::QueryStateProxy query_state_proxy,
                                  const TOptimizationOption& optimization_option,
                                  const std::string& calcite_session_id) {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
-  const auto& user_session_info = query_state_proxy.getQueryState().getConstSessionInfo();
+  const auto& user_session_info = query_state_proxy->getConstSessionInfo();
   const auto& cat = user_session_info->getCatalog();
   const std::string user = getInternalSessionProxyUserName();
   const std::string catalog = cat.getCurrentDB().dbName;

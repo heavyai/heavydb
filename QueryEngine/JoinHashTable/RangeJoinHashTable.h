@@ -68,6 +68,7 @@ class RangeJoinHashTable final : public OverlapsJoinHashTable {
                       const size_t entry_count,
                       const size_t emitted_keys_count,
                       const int device_id,
+                      const logger::QueryId,
                       const logger::ThreadId parent_thread_id);
 
   std::shared_ptr<BaselineHashTable> initHashTableOnCpu(

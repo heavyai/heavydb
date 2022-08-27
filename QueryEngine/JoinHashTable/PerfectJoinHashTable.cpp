@@ -589,6 +589,7 @@ void PerfectJoinHashTable::reify() {
                                         columns_per_device[device_id],
                                         hash_type_,
                                         device_id,
+                                        logger::query_id(),
                                         logger::thread_id()));
     }
     for (auto& init_thread : init_threads) {
@@ -619,6 +620,7 @@ void PerfectJoinHashTable::reify() {
                                         columns_per_device[device_id],
                                         hash_type_,
                                         device_id,
+                                        logger::query_id(),
                                         logger::thread_id()));
     }
     for (auto& init_thread : init_threads) {
@@ -684,7 +686,9 @@ void PerfectJoinHashTable::reifyForDevice(const ChunkKey& chunk_key,
                                           const ColumnsForDevice& columns_for_device,
                                           const HashType layout,
                                           const int device_id,
+                                          const logger::QueryId query_id,
                                           const logger::ThreadId parent_thread_id) {
+  logger::QidScopeGuard qsg = logger::set_thread_local_query_id(query_id);
   DEBUG_TIMER_NEW_THREAD(parent_thread_id);
   const auto effective_memory_level =
       get_effective_memory_level(memory_level_, needs_dict_translation_);
