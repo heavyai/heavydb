@@ -188,7 +188,7 @@ class CudaMgr {
         case 6:
           return NvidiaDeviceArch::Pascal;
         case 7:
-          if (device_properties.computeMinor == 0) {
+          if (device_properties.computeMinor < 5) {
             return NvidiaDeviceArch::Volta;
           } else {
             return NvidiaDeviceArch::Turing;
