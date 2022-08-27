@@ -437,10 +437,11 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
 }
 
 namespace {
-bool anyOf(std::vector<Analyzer::Expr*> const& target_exprs, SQLAgg const agg_kind) {
-  return boost::algorithm::any_of(target_exprs, [agg_kind](Analyzer::Expr const* expr) {
+template <SQLAgg... agg_types>
+bool any_of(std::vector<Analyzer::Expr*> const& target_exprs) {
+  return boost::algorithm::any_of(target_exprs, [=](Analyzer::Expr const* expr) {
     auto const* const agg = dynamic_cast<Analyzer::AggExpr const*>(expr);
-    return agg && agg->get_aggtype() == agg_kind;
+    return agg && (... || (agg_types == agg->get_aggtype()));
   });
 }
 }  // namespace
@@ -504,7 +505,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
         output_columnar_ = output_columnar_hint &&
                            QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
                                count_distinct_descriptors_) &&
-                           !anyOf(ra_exe_unit.target_exprs, kAPPROX_QUANTILE);
+                           !any_of<kAPPROX_QUANTILE, kMODE>(ra_exe_unit.target_exprs);
         break;
       case QueryDescriptionType::GroupByBaselineHash:
         output_columnar_ = output_columnar_hint;
@@ -513,7 +514,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
         output_columnar_ = output_columnar_hint &&
                            QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
                                count_distinct_descriptors_) &&
-                           !anyOf(ra_exe_unit.target_exprs, kAPPROX_QUANTILE);
+                           !any_of<kAPPROX_QUANTILE, kMODE>(ra_exe_unit.target_exprs);
         break;
       default:
         output_columnar_ = false;

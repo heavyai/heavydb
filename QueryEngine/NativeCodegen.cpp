@@ -1843,8 +1843,11 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
       case kAPPROX_QUANTILE:
         result.emplace_back("agg_approx_quantile");
         break;
+      case kMODE:
+        result.emplace_back("agg_mode_func");
+        break;
       default:
-        CHECK(false);
+        UNREACHABLE() << "Usupported agg_type: " << agg_type;
     }
   }
   return result;

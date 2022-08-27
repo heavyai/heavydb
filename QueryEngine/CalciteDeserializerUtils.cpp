@@ -43,14 +43,14 @@ SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const Analyzer::Expr* arg_expr) 
       if (arg_expr->get_type_info().is_varlen()) {
         throw std::runtime_error("SINGLE_VALUE not supported on '" +
                                  arg_expr->get_type_info().get_type_name() + "' input.");
-      }
+      }  // else fall through
     case kSAMPLE:
+    case kMODE:
       return arg_expr->get_type_info();
     default:
-      CHECK(false);
+      UNREACHABLE() << "Unsupported agg_kind: " << agg_kind;
+      return {};
   }
-  CHECK(false);
-  return SQLTypeInfo();
 }
 
 ExtractField to_datepart_field(const std::string& field) {

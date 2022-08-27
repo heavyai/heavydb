@@ -49,7 +49,7 @@ void QueryPlanDagChecker::visit(const RelModify* rel_alg_node) {
 void QueryPlanDagChecker::visit(const RelProject* rel_alg_node) {
   if (rel_alg_node->isDeleteViaSelect() || rel_alg_node->isUpdateViaSelect() ||
       rel_alg_node->isVarlenUpdateRequired()) {
-    detectNonSupportedNode("Executing UPDATE/MODITY/DELETE query");
+    detectNonSupportedNode("Executing UPDATE/MODIFY/DELETE query");
     return;
   }
   RelRexDagVisitor::visit(rel_alg_node);
@@ -58,7 +58,7 @@ void QueryPlanDagChecker::visit(const RelProject* rel_alg_node) {
 void QueryPlanDagChecker::visit(const RelCompound* rel_alg_node) {
   if (rel_alg_node->isDeleteViaSelect() || rel_alg_node->isUpdateViaSelect() ||
       rel_alg_node->isVarlenUpdateRequired()) {
-    detectNonSupportedNode("Executing UPDATE/MODITY/DELETE query");
+    detectNonSupportedNode("Executing UPDATE/MODIFY/DELETE query");
     return;
   }
   // SINGLE_VALUE / SAMPLE query

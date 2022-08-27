@@ -82,8 +82,10 @@ std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info,
       return {"checked_single_agg_id"};
     case kSAMPLE:
       return {"agg_id"};
+    case kMODE:
+      return {"agg_mode_func"};
     default:
-      UNREACHABLE() << "Unrecognized agg kind: " << std::to_string(target_info.agg_kind);
+      UNREACHABLE() << "Unrecognized agg kind: " << target_info.agg_kind;
   }
   return {};
 }
@@ -536,6 +538,9 @@ void TargetExprCodegen::codegenAggregate(
     } else if (target_info.agg_kind == kAPPROX_QUANTILE) {
       CHECK_EQ(agg_chosen_bytes, sizeof(int64_t));
       group_by_and_agg->codegenApproxQuantile(
+          target_idx, target_expr, agg_args, query_mem_desc, co.device_type);
+    } else if (target_info.agg_kind == kMODE) {
+      group_by_and_agg->codegenMode(
           target_idx, target_expr, agg_args, query_mem_desc, co.device_type);
     } else {
       const auto& arg_ti = target_info.agg_arg_type;

@@ -28,6 +28,7 @@
 #include "DataMgr/Allocators/ArenaAllocator.h"
 #include "DataMgr/DataMgr.h"
 #include "Logger/Logger.h"
+#include "QueryEngine/AggMode.h"
 #include "QueryEngine/CountDistinct.h"
 #include "QueryEngine/StringDictionaryGenerations.h"
 #include "QueryEngine/TableFunctionMetadataType.h"
@@ -333,6 +334,11 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     value_type = itr->second.second;
   }
 
+  AggMode* allocateMode() {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    return &mode_maps_.emplace_back();
+  }
+
  private:
   struct CountDistinctBitmapBuffer {
     int8_t* ptr;
@@ -360,6 +366,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   std::vector<std::unique_ptr<quantile::TDigest>> t_digests_;
   std::map<std::string, std::shared_ptr<StringOps_Namespace::StringOps>>
       string_ops_owned_;
+  std::list<AggMode> mode_maps_;
 
   size_t arena_block_size_;  // for cloning
   std::vector<std::unique_ptr<Arena>> allocators_;

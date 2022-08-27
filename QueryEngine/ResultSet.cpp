@@ -37,6 +37,8 @@
 #include "Shared/thread_count.h"
 #include "Shared/threading.h"
 
+#include <tbb/parallel_for.h>
+
 #include <algorithm>
 #include <atomic>
 #include <bitset>
@@ -954,6 +956,18 @@ void ResultSet::ResultSetComparator<
   }
 }
 
+namespace {
+struct IsAggKind {
+  std::vector<TargetInfo> const& targets_;
+  SQLAgg const agg_kind_;
+  IsAggKind(std::vector<TargetInfo> const& targets, SQLAgg const agg_kind)
+      : targets_(targets), agg_kind_(agg_kind) {}
+  bool operator()(Analyzer::OrderEntry const& order_entry) const {
+    return targets_[order_entry.tle_no - 1].agg_kind == agg_kind_;
+  }
+};
+}  // namespace
+
 template <typename BUFFER_ITERATOR_TYPE>
 ResultSet::ApproxQuantileBuffers ResultSet::ResultSetComparator<
     BUFFER_ITERATOR_TYPE>::materializeApproxQuantileColumns() const {
@@ -965,6 +979,21 @@ ResultSet::ApproxQuantileBuffers ResultSet::ResultSetComparator<
     }
   }
   return approx_quantile_materialized_buffers;
+}
+
+template <typename BUFFER_ITERATOR_TYPE>
+ResultSet::ModeBuffers
+ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeModeColumns() const {
+  ResultSet::ModeBuffers mode_buffers;
+  IsAggKind const is_mode(result_set_->targets_, kMODE);
+  mode_buffers.reserve(
+      std::count_if(order_entries_.begin(), order_entries_.end(), is_mode));
+  for (auto const& order_entry : order_entries_) {
+    if (is_mode(order_entry)) {
+      mode_buffers.emplace_back(materializeModeColumn(order_entry));
+    }
+  }
+  return mode_buffers;
 }
 
 template <typename BUFFER_ITERATOR_TYPE>
@@ -1047,6 +1076,56 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeApproxQuantileC
   return materialized_buffer;
 }
 
+namespace {
+// i1 is from InternalTargetValue
+int64_t materializeMode(int64_t const i1) {
+  if (auto const* const agg_mode = reinterpret_cast<AggMode const*>(i1)) {
+    if (std::optional<int64_t> const mode = agg_mode->mode()) {
+      return *mode;
+    }
+  }
+  return NULL_BIGINT;
+}
+
+using ModeBlockedRange = tbb::blocked_range<size_t>;
+}  // namespace
+
+template <typename BUFFER_ITERATOR_TYPE>
+struct ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::ModeScatter {
+  logger::QueryId const query_id_;
+  ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE> const* const rsc_;
+  Analyzer::OrderEntry const& order_entry_;
+  ResultSet::ModeBuffers::value_type& materialized_buffer_;
+
+  void operator()(ModeBlockedRange const& r) const {
+    auto qid_scope_guard = logger::set_thread_local_query_id(query_id_);
+    for (size_t i = r.begin(); i != r.end(); ++i) {
+      PermutationIdx const permuted_idx = rsc_->permutation_[i];
+      auto const storage_lookup_result = rsc_->result_set_->findStorage(permuted_idx);
+      auto const storage = storage_lookup_result.storage_ptr;
+      auto const off = storage_lookup_result.fixedup_entry_idx;
+      auto const value = rsc_->buffer_itr_.getColumnInternal(
+          storage->buff_, off, order_entry_.tle_no - 1, storage_lookup_result);
+      materialized_buffer_[permuted_idx] = materializeMode(value.i1);
+    }
+  }
+};
+
+template <typename BUFFER_ITERATOR_TYPE>
+ResultSet::ModeBuffers::value_type
+ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeModeColumn(
+    const Analyzer::OrderEntry& order_entry) const {
+  ResultSet::ModeBuffers::value_type materialized_buffer(
+      result_set_->query_mem_desc_.getEntryCount());
+  ModeScatter mode_scatter{logger::query_id(), this, order_entry, materialized_buffer};
+  if (single_threaded_) {
+    mode_scatter(ModeBlockedRange(0, permutation_.size()));
+  } else {
+    tbb::parallel_for(ModeBlockedRange(0, permutation_.size()), mode_scatter);
+  }
+  return materialized_buffer;
+}
+
 template <typename BUFFER_ITERATOR_TYPE>
 bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
     const PermutationIdx lhs,
@@ -1061,6 +1140,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
   const auto fixedup_rhs = rhs_storage_lookup_result.fixedup_entry_idx;
   size_t materialized_count_distinct_buffer_idx{0};
   size_t materialized_approx_quantile_buffer_idx{0};
+  size_t materialized_mode_buffer_idx{0};
 
   for (const auto& order_entry : order_entries_) {
     CHECK_GE(order_entry.tle_no, 1);
@@ -1118,6 +1198,22 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
         }
       }
       return (lhs_value < rhs_value) != order_entry.is_desc;
+    } else if (UNLIKELY(lhs_agg_info.agg_kind == kMODE)) {
+      CHECK_LT(materialized_mode_buffer_idx, mode_buffers_.size());
+      auto const& mode_buffer = mode_buffers_[materialized_mode_buffer_idx++];
+      int64_t const lhs_value = mode_buffer[lhs];
+      int64_t const rhs_value = mode_buffer[rhs];
+      if (lhs_value == rhs_value) {
+        continue;
+        // MODE(x) can only be NULL when the group is empty, since it skips null values.
+      } else if (lhs_value == NULL_BIGINT) {  // NULL_BIGINT from materializeMode()
+        return order_entry.nulls_first;
+      } else if (rhs_value == NULL_BIGINT) {
+        return !order_entry.nulls_first;
+      } else {
+        return result_set_->isLessThan(lhs_entry_ti, lhs_value, rhs_value) !=
+               order_entry.is_desc;
+      }
     }
 
     const auto lhs_v = buffer_itr_.getColumnInternal(lhs_storage->buff_,
@@ -1437,7 +1533,8 @@ std::tuple<std::vector<bool>, size_t> ResultSet::getSupportedSingleSlotTargetBit
   for (size_t target_idx = 0; target_idx < single_slot_targets.size(); target_idx++) {
     const auto& target = targets_[target_idx];
     if (single_slot_targets[target_idx] &&
-        (is_distinct_target(target) || target.agg_kind == kAPPROX_QUANTILE ||
+        (is_distinct_target(target) ||
+         shared::is_any<kAPPROX_QUANTILE, kMODE>(target.agg_kind) ||
          (target.is_agg && target.agg_kind == kSAMPLE && target.sql_type == kFLOAT))) {
       single_slot_targets[target_idx] = false;
       num_single_slot_targets--;

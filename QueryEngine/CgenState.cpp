@@ -217,7 +217,7 @@ llvm::Value* CgenState::emitCall(const std::string& fname,
                                  const std::vector<llvm::Value*>& args) {
   // Get the function reference from the query module.
   auto func = module_->getFunction(fname);
-  CHECK(func);
+  CHECK(func) << fname;
   // If the function called isn't external, clone the implementation from the runtime
   // module.
   maybeCloneFunctionRecursive(func);
