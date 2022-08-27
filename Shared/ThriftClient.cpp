@@ -250,6 +250,9 @@ std::shared_ptr<TTransport> ThriftClientConnection::open_buffered_client_transpo
       socket->setConnTimeout(connect_timeout);
       socket->setRecvTimeout(recv_timeout);
       socket->setSendTimeout(send_timeout);
+#ifdef __APPLE__
+      socket->setLinger(false, 0);
+#endif
     }
 #ifdef HAVE_THRIFT_MESSAGE_LIMIT
     transport = std::make_shared<TBufferedTransport>(socket, shared::default_tconfig());
@@ -263,6 +266,9 @@ std::shared_ptr<TTransport> ThriftClientConnection::open_buffered_client_transpo
       secure_socket->setConnTimeout(connect_timeout);
       secure_socket->setRecvTimeout(recv_timeout);
       secure_socket->setSendTimeout(send_timeout);
+#ifdef __APPLE__
+      secure_socket->setLinger(false, 0);
+#endif
     }
 #ifdef HAVE_THRIFT_MESSAGE_LIMIT
     transport = std::shared_ptr<TTransport>(
