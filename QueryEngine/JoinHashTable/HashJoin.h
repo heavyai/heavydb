@@ -34,6 +34,16 @@
 
 class CodeGenerator;
 
+class JoinHashTableTooBig : public std::runtime_error {
+ public:
+  JoinHashTableTooBig(size_t cur_hash_table_size, size_t query_hint_size)
+      : std::runtime_error(
+            "The size of hash table is larger than a threshold defined in the query hint "
+            "(" +
+            ::toString(cur_hash_table_size) + " > " + ::toString(query_hint_size) + ")") {
+  }
+};
+
 class TooManyHashEntries : public std::runtime_error {
  public:
   TooManyHashEntries()

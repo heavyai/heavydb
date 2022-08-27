@@ -2790,6 +2790,54 @@ class RelAlgDag : public boost::noncopyable {
           }
           break;
         }
+        case QueryHint::kAllowLoopJoin: {
+          query_hint.registerHint(QueryHint::kAllowLoopJoin);
+          query_hint.use_loop_join = true;
+          if (target.isGlobalHint()) {
+            global_query_hint.registerHint(QueryHint::kAllowLoopJoin);
+            global_query_hint.use_loop_join = true;
+          }
+          break;
+        }
+        case QueryHint::kDisableLoopJoin: {
+          query_hint.registerHint(QueryHint::kDisableLoopJoin);
+          query_hint.use_loop_join = false;
+          if (target.isGlobalHint()) {
+            global_query_hint.registerHint(QueryHint::kDisableLoopJoin);
+            global_query_hint.use_loop_join = false;
+          }
+          break;
+        }
+        case QueryHint::kLoopJoinInnerTableMaxNumRows: {
+          CHECK_EQ(1u, target.getListOptions().size());
+          int loop_size_threshold = std::stoi(target.getListOptions()[0]);
+          if (loop_size_threshold <= 0) {
+            VLOG(1) << "The loop size threshold should be larger than zero";
+          } else {
+            query_hint.registerHint(QueryHint::kLoopJoinInnerTableMaxNumRows);
+            query_hint.loop_join_inner_table_max_num_rows = loop_size_threshold;
+            if (target.isGlobalHint()) {
+              global_query_hint.registerHint(QueryHint::kLoopJoinInnerTableMaxNumRows);
+              global_query_hint.loop_join_inner_table_max_num_rows = loop_size_threshold;
+            }
+          }
+          break;
+        }
+        case QueryHint::kMaxJoinHashTableSize: {
+          CHECK_EQ(1u, target.getListOptions().size());
+          int max_join_hash_table_size = std::stoi(target.getListOptions()[0]);
+          if (max_join_hash_table_size <= 0) {
+            VLOG(1) << "The maximum hash table size should be larger than zero";
+          } else {
+            query_hint.registerHint(QueryHint::kMaxJoinHashTableSize);
+            query_hint.max_join_hash_table_size = max_join_hash_table_size;
+            if (target.isGlobalHint()) {
+              global_query_hint.registerHint(QueryHint::kMaxJoinHashTableSize);
+              global_query_hint.max_join_hash_table_size = max_join_hash_table_size;
+            }
+          }
+          break;
+        }
         default:
           break;
       }

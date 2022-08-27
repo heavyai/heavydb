@@ -45,6 +45,10 @@ enum QueryHint {
   kWatchdogOff,
   kDynamicWatchdogOff,
   kQueryTimeLimit,
+  kAllowLoopJoin,
+  kDisableLoopJoin,
+  kLoopJoinInnerTableMaxNumRows,
+  kMaxJoinHashTableSize,
   kHintCount,   // should be at the last elem before INVALID enum value to count #
                 // supported hints correctly
   kInvalidHint  // this should be the last elem of this enum
@@ -68,7 +72,11 @@ static const std::unordered_map<std::string, QueryHint> SupportedQueryHints = {
     {"dynamic_watchdog", QueryHint::kDynamicWatchdog},
     {"watchdog_off", QueryHint::kWatchdogOff},
     {"dynamic_watchdog_off", QueryHint::kDynamicWatchdogOff},
-    {"query_time_limit", QueryHint::kQueryTimeLimit}};
+    {"query_time_limit", QueryHint::kQueryTimeLimit},
+    {"allow_loop_join", QueryHint::kAllowLoopJoin},
+    {"disable_loop_join", QueryHint::kDisableLoopJoin},
+    {"loop_join_inner_table_max_num_rows", QueryHint::kLoopJoinInnerTableMaxNumRows},
+    {"max_join_hashtable_size", QueryHint::kMaxJoinHashTableSize}};
 
 struct HintIdentifier {
   bool global_hint;
@@ -83,7 +91,7 @@ class ExplainedQueryHint {
   // our query AST analyzer translates query hint string to understandable form which we
   // called "ExplainedQueryHint"
  public:
-  // default contructor used for deserialization only
+  // default constructor used for deserialization only
   ExplainedQueryHint()
       : hint_{QueryHint::kInvalidHint}
       , global_hint_{false}
@@ -189,6 +197,9 @@ struct RegisteredQueryHint {
       , overlaps_allow_gpu_build(false)
       , overlaps_no_cache(false)
       , overlaps_keys_per_bin(g_overlaps_target_entries_per_bin)
+      , use_loop_join(std::nullopt)
+      , loop_join_inner_table_max_num_rows(g_trivial_loop_join_threshold)
+      , max_join_hash_table_size(std::numeric_limits<size_t>::max())
       , registered_hint(QueryHint::kHintCount, false) {}
 
   RegisteredQueryHint operator||(const RegisteredQueryHint& global_hints) const {
@@ -202,77 +213,73 @@ struct RegisteredQueryHint {
       if (global_hints.registered_hint.at(i)) {
         updated_query_hints.registered_hint.at(i) = true;
         switch (static_cast<QueryHint>(i)) {
-          case QueryHint::kCpuMode: {
+          case QueryHint::kCpuMode:
             updated_query_hints.cpu_mode = true;
             break;
-          }
-          case QueryHint::kColumnarOutput: {
+          case QueryHint::kColumnarOutput:
             updated_query_hints.columnar_output = true;
             break;
-          }
-          case QueryHint::kRowwiseOutput: {
+          case QueryHint::kRowwiseOutput:
             updated_query_hints.rowwise_output = true;
             break;
-          }
-          case QueryHint::kCudaBlockSize: {
+          case QueryHint::kCudaBlockSize:
             updated_query_hints.cuda_block_size = global_hints.cuda_block_size;
             break;
-          }
-          case QueryHint::kCudaGridSize: {
+          case QueryHint::kCudaGridSize:
             updated_query_hints.cuda_grid_size_multiplier =
                 global_hints.cuda_grid_size_multiplier;
             break;
-          }
-          case QueryHint::kOverlapsBucketThreshold: {
+          case QueryHint::kOverlapsBucketThreshold:
             updated_query_hints.overlaps_bucket_threshold =
                 global_hints.overlaps_bucket_threshold;
             break;
-          }
-          case QueryHint::kOverlapsMaxSize: {
+          case QueryHint::kOverlapsMaxSize:
             updated_query_hints.overlaps_max_size = global_hints.overlaps_max_size;
             break;
-          }
-          case QueryHint::kOverlapsAllowGpuBuild: {
+          case QueryHint::kOverlapsAllowGpuBuild:
             updated_query_hints.overlaps_allow_gpu_build = true;
             break;
-          }
-          case QueryHint::kOverlapsNoCache: {
+          case QueryHint::kOverlapsNoCache:
             updated_query_hints.overlaps_no_cache = true;
             break;
-          }
-          case QueryHint::kOverlapsKeysPerBin: {
+          case QueryHint::kOverlapsKeysPerBin:
             updated_query_hints.overlaps_keys_per_bin =
                 global_hints.overlaps_keys_per_bin;
             break;
-          }
-          case QueryHint::kKeepResult: {
+          case QueryHint::kKeepResult:
             updated_query_hints.keep_result = global_hints.keep_result;
             break;
-          }
-          case QueryHint::kKeepTableFuncResult: {
+          case QueryHint::kKeepTableFuncResult:
             updated_query_hints.keep_table_function_result =
                 global_hints.keep_table_function_result;
             break;
-          }
-          case QueryHint::kAggregateTreeFanout: {
+          case QueryHint::kAggregateTreeFanout:
             updated_query_hints.aggregate_tree_fanout =
                 global_hints.aggregate_tree_fanout;
             break;
-          }
           case QueryHint::kWatchdog:
-          case QueryHint::kWatchdogOff: {
+          case QueryHint::kWatchdogOff:
             updated_query_hints.watchdog = global_hints.watchdog;
             break;
-          }
           case QueryHint::kDynamicWatchdog:
-          case QueryHint::kDynamicWatchdogOff: {
+          case QueryHint::kDynamicWatchdogOff:
             updated_query_hints.dynamic_watchdog = global_hints.dynamic_watchdog;
             break;
-          }
-          case QueryHint::kQueryTimeLimit: {
+          case QueryHint::kQueryTimeLimit:
             updated_query_hints.query_time_limit = global_hints.query_time_limit;
             break;
-          }
+          case QueryHint::kAllowLoopJoin:
+          case QueryHint::kDisableLoopJoin:
+            updated_query_hints.use_loop_join = global_hints.use_loop_join;
+            break;
+          case QueryHint::kLoopJoinInnerTableMaxNumRows:
+            updated_query_hints.loop_join_inner_table_max_num_rows =
+                global_hints.loop_join_inner_table_max_num_rows;
+            break;
+          case QueryHint::kMaxJoinHashTableSize:
+            updated_query_hints.max_join_hash_table_size =
+                global_hints.max_join_hash_table_size;
+            break;
           default:
             UNREACHABLE();
         }
@@ -304,6 +311,11 @@ struct RegisteredQueryHint {
   bool overlaps_allow_gpu_build;
   bool overlaps_no_cache;
   double overlaps_keys_per_bin;
+
+  // generic hash join
+  std::optional<bool> use_loop_join;
+  size_t loop_join_inner_table_max_num_rows;
+  size_t max_join_hash_table_size;
 
   std::vector<bool> registered_hint;
 

@@ -707,7 +707,7 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
       ColumnCacheMap& column_cache,
       Executor* executor,
       const int device_count,
-      const RegisteredQueryHint& query_hint,
+      const RegisteredQueryHint& query_hints,
       const std::vector<OverlapsJoinHashTableMock::ExpectedValues>& expected_values) {
     auto hash_join = std::make_shared<OverlapsJoinHashTableMock>(condition,
                                                                  query_infos,
@@ -715,8 +715,8 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
                                                                  column_cache,
                                                                  executor,
                                                                  device_count,
+                                                                 query_hints,
                                                                  expected_values);
-    hash_join->registerQueryHint(query_hint);
     hash_join->reifyWithLayout(HashType::OneToMany);
     return hash_join;
   }
@@ -727,6 +727,7 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
                             ColumnCacheMap& column_cache,
                             Executor* executor,
                             const int device_count,
+                            const RegisteredQueryHint& query_hints,
                             const std::vector<ExpectedValues>& expected_values)
       : OverlapsJoinHashTable(
             condition,
@@ -740,6 +741,7 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
                                            executor->getTemporaryTables())
                 .first,
             device_count,
+            query_hints,
             {},
             {})
       , expected_values_per_step_(expected_values) {}

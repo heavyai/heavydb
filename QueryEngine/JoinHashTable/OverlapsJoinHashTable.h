@@ -31,6 +31,7 @@ class OverlapsJoinHashTable : public HashJoin {
                         Executor* executor,
                         const std::vector<InnerOuter>& inner_outer_pairs,
                         const int device_count,
+                        const RegisteredQueryHint& query_hints,
                         const HashTableBuildDagMap& hashtable_build_dag_map,
                         const TableIdToNodeMap& table_id_to_node_map)
       : condition_(condition)
@@ -41,11 +42,11 @@ class OverlapsJoinHashTable : public HashJoin {
       , column_cache_(column_cache)
       , inner_outer_pairs_(inner_outer_pairs)
       , device_count_(device_count)
+      , query_hints_(query_hints)
       , hashtable_build_dag_map_(hashtable_build_dag_map)
       , table_id_to_node_map_(table_id_to_node_map) {
     CHECK_GT(device_count_, 0);
     hash_tables_for_device_.resize(std::max(device_count_, 1));
-    query_hint_ = RegisteredQueryHint::defaults();
   }
 
   virtual ~OverlapsJoinHashTable() {}
@@ -211,11 +212,7 @@ class OverlapsJoinHashTable : public HashJoin {
     return nullptr;
   }
 
-  const RegisteredQueryHint& getRegisteredQueryHint() { return query_hint_; }
-
-  void registerQueryHint(const RegisteredQueryHint& query_hint) {
-    query_hint_ = query_hint;
-  }
+  const RegisteredQueryHint& getRegisteredQueryHint() { return query_hints_; }
 
   size_t getEntryCount() const {
     auto hash_table = getHashTableForDevice(0);
@@ -387,6 +384,7 @@ class OverlapsJoinHashTable : public HashJoin {
 
   std::vector<InnerOuter> inner_outer_pairs_;
   const int device_count_;
+  RegisteredQueryHint query_hints_;
 
   std::vector<double> inverse_bucket_sizes_for_dimension_;
   double chosen_overlaps_bucket_threshold_;
@@ -409,7 +407,6 @@ class OverlapsJoinHashTable : public HashJoin {
   // auto tuner cache is maintained separately with hashtable cache
   static std::unique_ptr<OverlapsTuningParamRecycler> auto_tuner_cache_;
 
-  RegisteredQueryHint query_hint_;
   HashTableBuildDagMap hashtable_build_dag_map_;
   QueryPlanDAG query_plan_dag_;
   std::vector<QueryPlanHash> hashtable_cache_key_;

@@ -32,6 +32,10 @@ public class HeavyDBHintStrategyTable {
     supportedHints.add("watchdog_off");
     supportedHints.add("dynamic_watchdog_off");
     supportedHints.add("query_time_limit");
+    supportedHints.add("allow_loop_join");
+    supportedHints.add("disable_loop_join");
+    supportedHints.add("loop_join_inner_table_max_num_rows");
+    supportedHints.add("max_join_hashtable_size");
 
     for (String hint_name : supportedHints) {
       // add local / global hints, e.., cpu_mode / g_cpu_mode

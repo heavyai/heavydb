@@ -48,6 +48,7 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     ColumnCacheMap& column_cache,
     Executor* executor,
     const HashTableBuildDagMap& hashtable_build_dag_map,
+    const RegisteredQueryHint& query_hints,
     const TableIdToNodeMap& table_id_to_node_map) {
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
 
@@ -70,9 +71,9 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
                                 inner_outer_cols,
                                 col_pairs_string_op_infos,
                                 device_count,
+                                query_hints,
                                 hashtable_build_dag_map,
                                 table_id_to_node_map));
-
   try {
     join_hash_table->reify(preferred_hash_type);
   } catch (const TableMustBeReplicated& e) {
@@ -93,6 +94,8 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     throw HashJoinFail(
         std::string("Ran out of memory while building hash tables for equijoin | ") +
         e.what());
+  } catch (const JoinHashTableTooBig& e) {
+    throw e;
   } catch (const std::exception& e) {
     throw std::runtime_error(
         std::string("Fatal error while attempting to build hash tables for join: ") +
@@ -118,6 +121,7 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     const std::vector<InnerOuter>& inner_outer_pairs,
     const std::vector<InnerOuterStringOpInfos>& col_pairs_string_op_infos,
     const int device_count,
+    const RegisteredQueryHint& query_hints,
     const HashTableBuildDagMap& hashtable_build_dag_map,
     const TableIdToNodeMap& table_id_to_node_map)
     : condition_(condition)
@@ -130,6 +134,7 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     , inner_outer_string_op_infos_pairs_(col_pairs_string_op_infos)
     , catalog_(executor->getCatalog())
     , device_count_(device_count)
+    , query_hints_(query_hints)
     , needs_dict_translation_(false)
     , hashtable_build_dag_map_(hashtable_build_dag_map)
     , table_id_to_node_map_(table_id_to_node_map) {
@@ -726,7 +731,8 @@ void BaselineJoinHashTable::copyCpuHashTableToGpu(
                                cpu_hash_table->getEntryCount(),
                                cpu_hash_table->getEmittedKeysCount(),
                                device_id,
-                               executor_);
+                               executor_,
+                               query_hints_);
   auto gpu_target_hash_table = builder.getHashTable();
   CHECK(gpu_target_hash_table);
 
@@ -819,7 +825,8 @@ int BaselineJoinHashTable::initHashTableForDevice(
                                      hashtable_layout,
                                      join_type_,
                                      getKeyComponentWidth(),
-                                     getKeyComponentCount());
+                                     getKeyComponentCount(),
+                                     query_hints_);
     hash_tables_for_device_[device_id] = builder.getHashTable();
     ts2 = std::chrono::steady_clock::now();
     auto hashtable_build_time =
@@ -880,7 +887,8 @@ int BaselineJoinHashTable::initHashTableForDevice(
                                      entry_count,
                                      emitted_keys_count,
                                      device_id,
-                                     executor_);
+                                     executor_,
+                                     query_hints_);
     CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
     hash_tables_for_device_[device_id] = builder.getHashTable();
     if (!err && allow_hashtable_recycling && hash_tables_for_device_[device_id]) {

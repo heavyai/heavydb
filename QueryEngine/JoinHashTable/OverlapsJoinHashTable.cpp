@@ -43,7 +43,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     ColumnCacheMap& column_cache,
     Executor* executor,
     const HashTableBuildDagMap& hashtable_build_dag_map,
-    const RegisteredQueryHint& query_hint,
+    const RegisteredQueryHint& query_hints,
     const TableIdToNodeMap& table_id_to_node_map) {
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
 
@@ -60,7 +60,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
                                            column_cache,
                                            executor,
                                            hashtable_build_dag_map,
-                                           query_hint,
+                                           query_hints,
                                            table_id_to_node_map);
   } else {
     inner_outer_pairs =
@@ -116,11 +116,9 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
                                                                  executor,
                                                                  inner_outer_pairs,
                                                                  device_count,
+                                                                 query_hints,
                                                                  hashtable_build_dag_map,
                                                                  table_id_to_node_map);
-  if (query_hint.isAnyQueryHintDelivered()) {
-    join_hash_table->registerQueryHint(query_hint);
-  }
   try {
     join_hash_table->reify(layout);
   } catch (const HashJoinFail& e) {
@@ -132,6 +130,8 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
                                    "Inner table too big. Attempt manual table reordering "
                                    "or create a single fragment inner table. | ") +
                        e.what());
+  } catch (const JoinHashTableTooBig& e) {
+    throw e;
   } catch (const std::exception& e) {
     throw HashJoinFail(std::string("Failed to build hash tables for overlaps join | ") +
                        e.what());
@@ -547,40 +547,39 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
   auto overlaps_max_table_size_bytes = g_overlaps_max_table_size_bytes;
   std::optional<double> overlaps_threshold_override;
   double overlaps_target_entries_per_bin = g_overlaps_target_entries_per_bin;
-  auto query_hint = getRegisteredQueryHint();
   auto skip_hashtable_caching = false;
-  if (query_hint.isHintRegistered(QueryHint::kOverlapsBucketThreshold)) {
+  if (query_hints_.isHintRegistered(QueryHint::kOverlapsBucketThreshold)) {
     VLOG(1) << "Setting overlaps bucket threshold "
                "\'overlaps_hashjoin_bucket_threshold\' via "
                "query hint: "
-            << query_hint.overlaps_bucket_threshold;
-    overlaps_threshold_override = query_hint.overlaps_bucket_threshold;
+            << query_hints_.overlaps_bucket_threshold;
+    overlaps_threshold_override = query_hints_.overlaps_bucket_threshold;
   }
-  if (query_hint.isHintRegistered(QueryHint::kOverlapsMaxSize)) {
+  if (query_hints_.isHintRegistered(QueryHint::kOverlapsMaxSize)) {
     std::ostringstream oss;
     oss << "User requests to change a threshold \'overlaps_max_table_size_bytes\' via "
            "query hint";
     if (!overlaps_threshold_override.has_value()) {
       oss << ": " << overlaps_max_table_size_bytes << " -> "
-          << query_hint.overlaps_max_size;
-      overlaps_max_table_size_bytes = query_hint.overlaps_max_size;
+          << query_hints_.overlaps_max_size;
+      overlaps_max_table_size_bytes = query_hints_.overlaps_max_size;
     } else {
       oss << ", but is skipped since the query hint also changes the threshold "
              "\'overlaps_hashjoin_bucket_threshold\'";
     }
     VLOG(1) << oss.str();
   }
-  if (query_hint.isHintRegistered(QueryHint::kOverlapsNoCache)) {
+  if (query_hints_.isHintRegistered(QueryHint::kOverlapsNoCache)) {
     VLOG(1) << "User requests to skip caching overlaps join hashtable and its tuned "
                "parameters for this query";
     skip_hashtable_caching = true;
   }
-  if (query_hint.isHintRegistered(QueryHint::kOverlapsKeysPerBin)) {
+  if (query_hints_.isHintRegistered(QueryHint::kOverlapsKeysPerBin)) {
     VLOG(1) << "User requests to change a threshold \'overlaps_keys_per_bin\' via query "
                "hint: "
             << overlaps_target_entries_per_bin << " -> "
-            << query_hint.overlaps_keys_per_bin;
-    overlaps_target_entries_per_bin = query_hint.overlaps_keys_per_bin;
+            << query_hints_.overlaps_keys_per_bin;
+    overlaps_target_entries_per_bin = query_hints_.overlaps_keys_per_bin;
   }
 
   auto data_mgr = executor_->getDataMgr();
@@ -589,8 +588,8 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
   // but user foces to set CPU as execution device type we should not allow to use GPU for
   // building it
   auto allow_gpu_hashtable_build =
-      query_hint_.isHintRegistered(QueryHint::kOverlapsAllowGpuBuild) &&
-      query_hint_.overlaps_allow_gpu_build;
+      query_hints_.isHintRegistered(QueryHint::kOverlapsAllowGpuBuild) &&
+      query_hints_.overlaps_allow_gpu_build;
   if (allow_gpu_hashtable_build) {
     if (data_mgr->gpusPresent() &&
         memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
@@ -1191,6 +1190,8 @@ void OverlapsJoinHashTable::reify(const HashType preferred_layout) {
   try {
     reifyWithLayout(layout);
     return;
+  } catch (const JoinHashTableTooBig& e) {
+    throw e;
   } catch (const std::exception& e) {
     VLOG(1) << "Caught exception while building overlaps baseline hash table: "
             << e.what();
@@ -1353,7 +1354,8 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnCpu(
                                  layout,
                                  join_type_,
                                  getKeyComponentWidth(),
-                                 getKeyComponentCount());
+                                 getKeyComponentCount(),
+                                 query_hints_);
   ts2 = std::chrono::steady_clock::now();
   if (err) {
     throw HashJoinFail(
@@ -1413,7 +1415,8 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnGpu(
                                               entry_count,
                                               emitted_keys_count,
                                               device_id,
-                                              executor_);
+                                              executor_,
+                                              query_hints_);
   if (err) {
     throw HashJoinFail(
         std::string("Unrecognized error when initializing GPU overlaps hash table (") +
@@ -1440,7 +1443,8 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::copyCpuHashTableToGpu(
                                    entry_count,
                                    emitted_keys_count,
                                    device_id,
-                                   executor_);
+                                   executor_,
+                                   query_hints_);
   std::shared_ptr<BaselineHashTable> gpu_hash_table = gpu_builder.getHashTable();
   CHECK(gpu_hash_table);
   auto gpu_buffer_ptr = gpu_hash_table->getGpuBuffer();
@@ -1816,8 +1820,8 @@ std::set<DecodedJoinHashBufferEntry> OverlapsJoinHashTable::toSet(
 
 Data_Namespace::MemoryLevel OverlapsJoinHashTable::getEffectiveMemoryLevel(
     const std::vector<InnerOuter>& inner_outer_pairs) const {
-  if (query_hint_.isHintRegistered(QueryHint::kOverlapsAllowGpuBuild) &&
-      query_hint_.overlaps_allow_gpu_build &&
+  if (query_hints_.isHintRegistered(QueryHint::kOverlapsAllowGpuBuild) &&
+      query_hints_.overlaps_allow_gpu_build &&
       this->executor_->getDataMgr()->gpusPresent() &&
       memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
     return Data_Namespace::MemoryLevel::GPU_LEVEL;
@@ -1879,7 +1883,7 @@ void OverlapsJoinHashTable::putHashTableOnCpuToCache(
   CHECK(hashtable_ptr && !hashtable_ptr->getGpuBuffer());
   HashtableCacheMetaInfo meta_info;
   meta_info.overlaps_meta_info = getOverlapsHashTableMetaInfo();
-  meta_info.registered_query_hint = query_hint_;
+  meta_info.registered_query_hint = query_hints_;
   hash_table_cache_->putItemToCache(
       key,
       hashtable_ptr,

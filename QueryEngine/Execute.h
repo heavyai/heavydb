@@ -1524,7 +1524,7 @@ inline bool is_constructed_point(const Analyzer::Expr* expr) {
   return (arr && arr->isLocalAlloc() && arr->get_type_info().is_fixlen_array());
 }
 
-bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos,
+size_t get_loop_join_size(const std::vector<InputTableInfo>& query_infos,
                           const RelAlgExecutionUnit& ra_exe_unit);
 
 std::unordered_set<int> get_available_gpus(const Catalog_Namespace::Catalog& cat);
