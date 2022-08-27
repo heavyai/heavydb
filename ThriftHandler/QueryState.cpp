@@ -261,8 +261,9 @@ void StdLog::log(logger::Severity severity, char const* label) {
 void StdLog::logCallStack(logger::Severity severity, char const* label) {
   if (logger::fast_logging_check(severity) && query_state_) {
     std::stringstream ss;
-    ss << file_ << ':' << line_ << ' ' << label << ' ' << func_ << ' ' << match_
-       << " total time " << duration<std::chrono::milliseconds>() << " ms";
+    ss << logger::query_id() << ' ' << logger::thread_id() << ' ' << file_ << ':' << line_
+       << ' ' << label << ' ' << func_ << ' ' << match_ << " total time "
+       << duration<std::chrono::milliseconds>() << " ms";
     query_state_->logCallStack(ss);
     BOOST_LOG_SEV(logger::gSeverityLogger::get(), severity) << ss.rdbuf();
   }

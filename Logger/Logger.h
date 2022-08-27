@@ -335,25 +335,28 @@ class DebugTimer {
 using QueryId = uint64_t;
 QueryId query_id();
 
-// ~QidScopeGuard resets the thread_local g_query_id to 0 if the current value = id_.
-// In other words, only the QidScopeGuard instance which resulted from changing
-// g_query_id from zero to non-zero is responsible for resetting it back to zero when it
-// goes out of scope. All other instances have no effect.
+// Usage: QidScopeGuard qsg = set_thread_local_query_id(parent_query_id);
+// This does two things:
+//  * Sets the thread_local g_query_id value to parent_query_id.
+//  * When it goes out of scope, g_query_id is set back to its previous value prev_id_.
 class QidScopeGuard {
+  QueryId prev_id_;
   QueryId id_;
+  bool enabled_;
+
+  QidScopeGuard(QidScopeGuard const&) = default;
+  QidScopeGuard& operator=(QidScopeGuard const&) = default;
 
  public:
-  QidScopeGuard(QueryId const id) : id_{id} {}
-  QidScopeGuard(QidScopeGuard const&) = delete;
-  QidScopeGuard& operator=(QidScopeGuard const&) = delete;
-  QidScopeGuard(QidScopeGuard&& that) : id_(that.id_) { that.id_ = 0; }
-  QidScopeGuard& operator=(QidScopeGuard&& that) {
-    id_ = that.id_;
-    that.id_ = 0;
+  QidScopeGuard(QueryId const prev_id, QueryId const id)
+      : prev_id_(prev_id), id_(id), enabled_(true) {}
+  QidScopeGuard(QidScopeGuard&& rhs) : QidScopeGuard(rhs) { rhs.enabled_ = false; }
+  QidScopeGuard& operator=(QidScopeGuard&& rhs) {
+    *this = rhs;
+    rhs.enabled_ = false;
     return *this;
   }
   ~QidScopeGuard();
-  QueryId id() const { return id_; }
 };
 
 boost::filesystem::path get_log_dir_path();
