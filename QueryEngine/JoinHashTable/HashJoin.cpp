@@ -323,6 +323,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                          column_cache,
                                                          executor,
                                                          hashtable_build_dag_map,
+                                                         query_hint,
                                                          table_id_to_node_map);
   } else {
     try {
@@ -336,7 +337,10 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                           column_cache,
                                                           executor,
                                                           hashtable_build_dag_map,
+                                                          query_hint,
                                                           table_id_to_node_map);
+    } catch (JoinHashTableTooBig& e) {
+      throw e;
     } catch (TooManyHashEntries&) {
       const auto join_quals = coalesce_singleton_equi_join(qual_bin_oper);
       CHECK_EQ(join_quals.size(), size_t(1));
@@ -352,6 +356,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                            column_cache,
                                                            executor,
                                                            hashtable_build_dag_map,
+                                                           query_hint,
                                                            table_id_to_node_map);
     }
   }

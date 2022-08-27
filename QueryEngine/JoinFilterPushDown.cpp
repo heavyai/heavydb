@@ -173,7 +173,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
                                        eo.gpu_input_mem_limit_percent,
                                        eo.allow_runtime_query_interrupt,
                                        eo.running_query_interrupt_freq,
-                                       eo.pending_query_interrupt_freq};
+                                       eo.pending_query_interrupt_freq,
+                                       eo.max_join_hash_table_size};
 
     // Dispatch the subqueries first
     for (auto subquery : subqueries) {

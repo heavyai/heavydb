@@ -78,7 +78,7 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
     ColumnCacheMap& column_cache,
     Executor* executor,
     const HashTableBuildDagMap& hashtable_build_dag_map,
-    const RegisteredQueryHint& query_hint,
+    const RegisteredQueryHint& query_hints,
     const TableIdToNodeMap& table_id_to_node_map) {
   // the hash table is built over the LHS of the range oper. we then use the lhs
   // of the bin oper + the rhs of the range oper for the probe
@@ -131,6 +131,7 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
                                                               executor,
                                                               inner_outer_pairs,
                                                               device_count,
+                                                              query_hints,
                                                               hashtable_build_dag_map,
                                                               table_id_to_node_map);
   HashJoin::checkHashJoinReplicationConstraint(
@@ -144,6 +145,8 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
   } catch (const ColumnarConversionNotSupported& e) {
     throw HashJoinFail(std::string("Could not build hash tables for equijoin | ") +
                        e.what());
+  } catch (const JoinHashTableTooBig& e) {
+    throw e;
   } catch (const std::exception& e) {
     LOG(FATAL) << "Fatal error while attempting to build hash tables for join: "
                << e.what();
@@ -446,7 +449,8 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnGpu(
                                               entry_count,
                                               emitted_keys_count,
                                               device_id,
-                                              executor_);
+                                              executor_,
+                                              query_hints_);
   if (err) {
     throw HashJoinFail(
         std::string("Unrecognized error when initializing GPU range join hash table (") +
@@ -496,7 +500,8 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnCpu(
                                  layout,
                                  join_type_,
                                  getKeyComponentWidth(),
-                                 getKeyComponentCount());
+                                 getKeyComponentCount(),
+                                 query_hints_);
   ts2 = std::chrono::steady_clock::now();
   if (err) {
     throw HashJoinFail(std::string("Unrecognized error when initializing CPU "

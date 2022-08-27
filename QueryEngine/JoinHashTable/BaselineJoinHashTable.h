@@ -59,6 +59,7 @@ class BaselineJoinHashTable : public HashJoin {
       ColumnCacheMap& column_cache,
       Executor* executor,
       const HashTableBuildDagMap& hashtable_build_dag_map,
+      const RegisteredQueryHint& query_hints,
       const TableIdToNodeMap& table_id_to_node_map);
 
   static size_t getShardCountForCondition(
@@ -133,6 +134,8 @@ class BaselineJoinHashTable : public HashJoin {
     return hash_table_layout_cache_.get();
   }
 
+  const RegisteredQueryHint& getRegisteredQueryHint() { return query_hints_; }
+
   virtual ~BaselineJoinHashTable() {}
 
  protected:
@@ -146,6 +149,7 @@ class BaselineJoinHashTable : public HashJoin {
       const std::vector<InnerOuter>& inner_outer_pairs,
       const std::vector<InnerOuterStringOpInfos>& col_pairs_string_op_infos,
       const int device_count,
+      const RegisteredQueryHint& query_hints,
       const HashTableBuildDagMap& hashtable_build_dag_map,
       const TableIdToNodeMap& table_id_to_node_map);
 
@@ -261,6 +265,7 @@ class BaselineJoinHashTable : public HashJoin {
   std::vector<InnerOuterStringOpInfos> inner_outer_string_op_infos_pairs_;
   const Catalog_Namespace::Catalog* catalog_;
   const int device_count_;
+  RegisteredQueryHint query_hints_;
   mutable bool needs_dict_translation_;
   std::optional<HashType>
       layout_override_;  // allows us to use a 1:many hash table for many:many

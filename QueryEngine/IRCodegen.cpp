@@ -486,7 +486,24 @@ void check_if_loop_join_is_allowed(RelAlgExecutionUnit& ra_exe_unit,
                                    const std::vector<InputTableInfo>& query_infos,
                                    const size_t level_idx,
                                    const std::string& fail_reason) {
+  if (ra_exe_unit.input_descs.size() < 2) {
+    // We only support loop join at the end of folded joins
+    // where ra_exe_unit.input_descs.size() > 2 for now.
+    throw std::runtime_error("Hash join failed, reason(s): " + fail_reason +
+                             " | Incorrect # tables for executing loop join");
+  }
+  const auto loop_join_size = get_loop_join_size(query_infos, ra_exe_unit);
+  const bool has_loop_size_hint =
+      ra_exe_unit.query_hint.isHintRegistered(QueryHint::kLoopJoinInnerTableMaxNumRows);
+  const size_t loop_join_size_threshold =
+      has_loop_size_hint ? ra_exe_unit.query_hint.loop_join_inner_table_max_num_rows
+                         : g_trivial_loop_join_threshold;
   if (eo.allow_loop_joins) {
+    if (has_loop_size_hint && loop_join_size_threshold < loop_join_size) {
+      throw std::runtime_error(
+          "Hash join failed, reason(s): " + fail_reason +
+          " | Cannot fall back to loop join for non-trivial inner table size");
+    }
     return;
   }
   if (level_idx + 1 != ra_exe_unit.join_quals.size()) {
@@ -494,10 +511,14 @@ void check_if_loop_join_is_allowed(RelAlgExecutionUnit& ra_exe_unit,
         "Hash join failed, reason(s): " + fail_reason +
         " | Cannot fall back to loop join for intermediate join quals");
   }
-  if (!is_trivial_loop_join(query_infos, ra_exe_unit)) {
+  if (loop_join_size_threshold < loop_join_size) {
     throw std::runtime_error(
         "Hash join failed, reason(s): " + fail_reason +
         " | Cannot fall back to loop join for non-trivial inner table size");
+  }
+  if (ra_exe_unit.query_hint.isHintRegistered(kDisableLoopJoin)) {
+    throw std::runtime_error("Hash join failed, reason(s): " + fail_reason +
+                             " | Loop join is disabled by user");
   }
 }
 

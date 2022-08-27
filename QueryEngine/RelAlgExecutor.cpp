@@ -868,6 +868,7 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
             eo.allow_runtime_query_interrupt,
             eo.running_query_interrupt_freq,
             eo.pending_query_interrupt_freq,
+            eo.max_join_hash_table_size,
             eo.executor_type,
         };
         // Use subseq to avoid clearing existing temporary tables
@@ -1095,6 +1096,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       eo.allow_runtime_query_interrupt,
       eo.running_query_interrupt_freq,
       eo.pending_query_interrupt_freq,
+      eo.max_join_hash_table_size,
       eo.executor_type,
       step_idx == 0 ? eo.outer_fragment_indices : std::vector<size_t>()};
 
@@ -1178,6 +1180,19 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
                  "given \"query_time_limit\" hint)";
         }
         VLOG(1) << oss.str();
+      }
+      if (query_hints->isHintRegistered(QueryHint::kAllowLoopJoin)) {
+        VLOG(1) << "A user enables loop join";
+        eo_hint_applied.allow_loop_joins = true;
+      }
+      if (query_hints->isHintRegistered(QueryHint::kDisableLoopJoin)) {
+        VLOG(1) << "A user disables loop join";
+        eo_hint_applied.allow_loop_joins = false;
+      }
+      if (query_hints->isHintRegistered(QueryHint::kMaxJoinHashTableSize)) {
+        eo_hint_applied.max_join_hash_table_size = query_hints->max_join_hash_table_size;
+        VLOG(1) << "A user forces the maximum size of a join hash table as "
+                << eo_hint_applied.max_join_hash_table_size << " bytes";
       }
       if (query_hints->isHintRegistered(QueryHint::kColumnarOutput)) {
         VLOG(1) << "A user forces the query to run with columnar output";
@@ -3346,6 +3361,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
           eo.allow_runtime_query_interrupt,
           eo.running_query_interrupt_freq,
           eo.pending_query_interrupt_freq,
+          eo.max_join_hash_table_size,
           eo.executor_type,
       };
 
@@ -4101,6 +4117,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                    eo.allow_runtime_query_interrupt,
                                    eo.running_query_interrupt_freq,
                                    eo.pending_query_interrupt_freq,
+                                   eo.max_join_hash_table_size,
                                    eo.executor_type,
                                    eo.outer_fragment_indices};
 
