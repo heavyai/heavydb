@@ -1242,6 +1242,7 @@ void CommandLineOptions::validate() {
       g_enable_fsi_regex_import) {
     g_enable_fsi =
         true;  // a requirement for FSI import code-paths is for FSI to be enabled
+    LOG(INFO) << "FSI has been enabled as a side effect of enabling non-legacy import.";
   }
 
   if (disk_cache_level == "foreign_tables") {
@@ -1489,6 +1490,21 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     g_use_hashtable_cache = use_hashtable_cache;
     g_max_cacheable_hashtable_size_bytes = max_cacheable_hashtable_size_bytes;
     g_hashtable_cache_total_bytes = hashtable_cache_total_bytes;
+
+    if (g_multi_instance) {
+      LOG(INFO) << "Disabling FSI and Disk Cache as they are not currently supported "
+                   "with multi-instance.";
+      // Fsi & disk cache currently unsupported in multi-instance.  The other option
+      // configs are required because they require fsi support.
+      g_enable_fsi = false;
+      g_enable_fsi_regex_import = false;
+      g_enable_system_tables = false;
+      g_enable_legacy_delimited_import = true;
+#ifdef ENABLE_IMPORT_PARQUET
+      g_enable_legacy_parquet_import = true;
+#endif
+      disk_cache_level = "none";
+    }
 
   } catch (po::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
