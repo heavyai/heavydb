@@ -40,6 +40,7 @@
 
 // memory operator implementations
 
+// namespace {
 #ifdef L0_RUNTIME_ENABLED
 /**
  * OCL does not provide memory-related functions due to its static nature.
@@ -80,6 +81,7 @@ int memcmp(GENERIC_ADDR_SPACE const void* lhs,
 }
 
 #endif
+// }  // namespace
 
 // arithmetic operator implementations
 
@@ -1164,7 +1166,7 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void write_back_nop(
     GENERIC_ADDR_SPACE int64_t* dest,
     GENERIC_ADDR_SPACE int64_t* src,
     const int32_t sz) {
-#if !defined(_WIN32) && !defined(HAVE_L0)
+#if !defined(_WIN32) && !defined(L0_RUNTIME_ENABLED)
   // the body is not really needed, just make sure the call is not optimized away
   assert(dest);
 #endif
@@ -1184,7 +1186,7 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void init_group_by_buffer_gpu(
     const uint32_t agg_col_count,
     const bool keyless,
     const int8_t warp_size) {
-#if !defined(_WIN32) && !defined(HAVE_L0)
+#if !defined(_WIN32) && !defined(L0_RUNTIME_ENABLED)
   // the body is not really needed, just make sure the call is not optimized away
   assert(groups_buffer);
 #endif
@@ -1199,7 +1201,7 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void init_columnar_group_by_buffer_gpu(
     const bool keyless,
     const bool blocks_share_memory,
     const int32_t frag_idx) {
-#if !defined(_WIN32) && !defined(HAVE_L0)
+#if !defined(_WIN32) && !defined(L0_RUNTIME_ENABLED)
   // the body is not really needed, just make sure the call is not optimized away
   assert(groups_buffer);
 #endif
@@ -1213,7 +1215,7 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void init_group_by_buffer_impl(
     const uint32_t agg_col_count,
     const bool keyless,
     const int8_t warp_size) {
-#if !defined(_WIN32) && !defined(HAVE_L0)
+#if !defined(_WIN32) && !defined(L0_RUNTIME_ENABLED)
   // the body is not really needed, just make sure the call is not optimized away
   assert(groups_buffer);
 #endif
@@ -1687,7 +1689,7 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub_hoisted_literals(
     GENERIC_ADDR_SPACE const int64_t* join_hash_tables,
     GENERIC_ADDR_SPACE int32_t* error_code,
     GENERIC_ADDR_SPACE int32_t* total_matched) {
-#if !defined(_WIN32) && !defined(HAVE_L0)
+#if !defined(_WIN32) && !defined(L0_RUNTIME_ENABLED)
   assert(col_buffers || literals || num_rows || frag_row_offsets || max_matched ||
          init_agg_value || out || frag_idx || error_code || join_hash_tables ||
          total_matched);
@@ -1737,7 +1739,7 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub(
     GENERIC_ADDR_SPACE const int64_t* join_hash_tables,
     GENERIC_ADDR_SPACE int32_t* error_code,
     GENERIC_ADDR_SPACE int32_t* total_matched) {
-#if !defined(_WIN32) && !defined(HAVE_L0)
+#if !defined(_WIN32) && !defined(L0_RUNTIME_ENABLED)
   assert(col_buffers || num_rows || frag_row_offsets || max_matched || init_agg_value ||
          out || frag_idx || error_code || join_hash_tables || total_matched);
 #endif
