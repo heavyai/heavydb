@@ -18,7 +18,7 @@ static void createTaxiReducedTable() {
                {"passenger_count", SQLTypeInfo(kSMALLINT)},
                {"trip_distance", SQLTypeInfo(kDECIMAL, 14, 2)},
                {"total_amount", SQLTypeInfo(kDECIMAL, 14, 2)},
-               {"cab_type", SQLTypeInfo(kVARCHAR, true, kENCODING_DICT)}},
+               {"cab_type", SQLTypeInfo(kTEXT, true, kENCODING_DICT)}},
               to);
 }
 static void populateTaxiReducedTable() {

@@ -217,15 +217,52 @@ bool Datum_equal(const SQLTypeInfo& ti, Datum val1, Datum val2) {
   return false;
 }
 
+void checkType(SQLTypeInfo old_ti, SQLTypeInfo new_ti) {
+  if (old_ti.get_type() == kNUMERIC) {
+    old_ti.set_type(kDECIMAL);
+  }
+  if (old_ti.get_compression() == kENCODING_DATE_IN_DAYS) {
+    old_ti.set_comp_param(old_ti.get_size() * 8);
+  }
+  CHECK(old_ti == new_ti) << "Type mismatch:" << std::endl
+                          << " old=" << old_ti.toString() << std::endl
+                          << " new=" << new_ti.toString() << std::endl;
+}
+
 }  // namespace
 
 void OrderEntry::print() const {
   std::cout << toString() << std::endl;
 }
 
+static int counter = 0;
+
+Expr::Expr(const Type* type, bool has_agg)
+    : type_(type), type_info(type->toTypeInfo()), contains_agg(has_agg) {}
+
+Expr::Expr(const SQLTypeInfo& ti, bool has_agg)
+    : Expr(default_context_.fromTypeInfo(ti), has_agg) {
+  checkType(ti, type_info);
+}
+
+Expr::Expr(SQLTypes t, bool notnull) : Expr(SQLTypeInfo(t, notnull)) {}
+
+Expr::Expr(SQLTypes t, int d, bool notnull) : Expr(SQLTypeInfo(t, d, 0, notnull)) {}
+
+Expr::Expr(SQLTypes t, int d, int s, bool notnull)
+    : Expr(SQLTypeInfo(t, d, s, notnull)) {}
+
+void Expr::set_type_info(const SQLTypeInfo& ti) {
+  type_ = default_context_.fromTypeInfo(ti);
+  type_info = type_->toTypeInfo();
+  checkType(ti, type_info);
+}
+
 void Expr::print() const {
   std::cout << toString() << std::endl;
 }
+
+hdk::ir::Context Expr::default_context_;
 
 void TargetEntry::print() const {
   std::cout << toString() << std::endl;
@@ -780,7 +817,8 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
     default:
       CHECK(false);
   }
-  type_info = new_type_info;
+  type_ = default_context_.fromTypeInfo(new_type_info);
+  type_info = type_->toTypeInfo();
 }
 
 void Constant::cast_string(const SQLTypeInfo& new_type_info) {
@@ -791,7 +829,8 @@ void Constant::cast_string(const SQLTypeInfo& new_type_info) {
     constval.stringval = new std::string(s->substr(0, new_type_info.get_dimension()));
     delete s;
   }
-  type_info = new_type_info;
+  type_ = default_context_.fromTypeInfo(new_type_info);
+  type_info = type_->toTypeInfo();
 }
 
 void Constant::cast_from_string(const SQLTypeInfo& new_type_info) {
@@ -799,7 +838,8 @@ void Constant::cast_from_string(const SQLTypeInfo& new_type_info) {
   SQLTypeInfo ti = new_type_info;
   constval = StringToDatum(*s, ti);
   delete s;
-  type_info = new_type_info;
+  type_ = default_context_.fromTypeInfo(new_type_info);
+  type_info = type_->toTypeInfo();
 }
 
 void Constant::cast_to_string(const SQLTypeInfo& str_type_info) {
@@ -810,22 +850,25 @@ void Constant::cast_to_string(const SQLTypeInfo& str_type_info) {
     // truncate the string
     *constval.stringval = constval.stringval->substr(0, str_type_info.get_dimension());
   }
-  type_info = str_type_info;
+  type_ = default_context_.fromTypeInfo(str_type_info);
+  type_info = type_->toTypeInfo();
 }
 
-void Constant::do_cast(const SQLTypeInfo& new_type_info) {
+void Constant::do_cast(const Type* new_type) {
+  type_ = new_type;
+  auto new_type_info = type_->toTypeInfo();
   if (type_info == new_type_info) {
     return;
   }
+  bool is_null = false;
   if (is_null && !new_type_info.get_notnull()) {
     type_info = new_type_info;
     set_null_value();
-    return;
-  }
-  if ((new_type_info.is_number() || new_type_info.get_type() == kTIMESTAMP) &&
-      (new_type_info.get_type() != kTIMESTAMP || type_info.get_type() != kTIMESTAMP) &&
-      (type_info.is_number() || type_info.get_type() == kTIMESTAMP ||
-       type_info.get_type() == kBOOLEAN)) {
+  } else if ((new_type_info.is_number() || new_type_info.get_type() == kTIMESTAMP) &&
+             (new_type_info.get_type() != kTIMESTAMP ||
+              type_info.get_type() != kTIMESTAMP) &&
+             (type_info.is_number() || type_info.get_type() == kTIMESTAMP ||
+              type_info.get_type() == kBOOLEAN)) {
     cast_number(new_type_info);
   } else if (new_type_info.is_boolean() && type_info.is_boolean()) {
     type_info = new_type_info;
@@ -867,7 +910,7 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
       if (!c) {
         throw std::runtime_error("Invalid array cast.");
       }
-      c->do_cast(new_sub_ti);
+      c->do_cast(default_context_.fromTypeInfo(new_sub_ti));
     }
     type_info = new_type_info;
   } else if (get_is_null() && (new_type_info.is_number() || new_type_info.is_time() ||
@@ -879,7 +922,6 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
     CHECK(!is_null);
     // relax nullability
     type_info = new_type_info;
-    return;
   } else {
     throw std::runtime_error("Cast from " + type_info.get_type_name() + " to " +
                              new_type_info.get_type_name() + " not supported");
@@ -934,7 +976,8 @@ void Constant::set_null_value() {
 
 ExprPtr Constant::add_cast(const SQLTypeInfo& new_type_info) {
   if (is_null) {
-    type_info = new_type_info;
+    type_ = default_context_.fromTypeInfo(new_type_info);
+    type_info = type_->toTypeInfo();
     set_null_value();
     return shared_from_this();
   }
@@ -950,7 +993,7 @@ ExprPtr Constant::add_cast(const SQLTypeInfo& new_type_info) {
                              0,
                              new_ti.get_subtype());
       }
-      do_cast(new_ti);
+      do_cast(default_context_.fromTypeInfo(new_ti));
     }
     return Expr::add_cast(new_type_info);
   }
@@ -960,7 +1003,7 @@ ExprPtr Constant::add_cast(const SQLTypeInfo& new_type_info) {
     // Let the codegen phase deal with casts from date/time to a number.
     return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
   }
-  do_cast(new_type_info);
+  do_cast(default_context_.fromTypeInfo(new_type_info));
   return shared_from_this();
 }
 
@@ -1004,7 +1047,9 @@ ExprPtr CaseExpr::add_cast(const SQLTypeInfo& new_type_info) {
   // Replace the current WHEN THEN pair list once we are sure all casts have succeeded
   expr_pair_list = new_expr_pair_list;
 
-  type_info = ti;
+  type_ = default_context_.fromTypeInfo(new_type_info);
+  type_info = type_->toTypeInfo();
+
   return shared_from_this();
 }
 

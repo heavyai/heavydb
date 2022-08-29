@@ -634,6 +634,9 @@ SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
   SQLTypeInfo ti(type, !nullable);
   ti.set_precision(precision);
   ti.set_scale(scale);
+  if (ti.get_type() == kTEXT) {
+    ti.set_dimension(0);
+  }
   return ti;
 }
 

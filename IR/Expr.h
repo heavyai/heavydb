@@ -7,6 +7,9 @@
 
 #pragma once
 
+#include "Context.h"
+#include "Type.h"
+
 #include "SchemaMgr/ColumnInfo.h"
 #include "Shared/sqltypes.h"
 
@@ -20,6 +23,7 @@ class RelAlgNode;
 
 namespace hdk::ir {
 
+class Type;
 class Expr;
 
 using ExprPtr = std::shared_ptr<Expr>;
@@ -68,18 +72,16 @@ using DomainSet = std::list<const Expr*>;
  */
 class Expr : public std::enable_shared_from_this<Expr> {
  public:
-  Expr(SQLTypes t, bool notnull) : type_info(t, notnull), contains_agg(false) {}
-  Expr(SQLTypes t, int d, bool notnull)
-      : type_info(t, d, 0, notnull), contains_agg(false) {}
-  Expr(SQLTypes t, int d, int s, bool notnull)
-      : type_info(t, d, s, notnull), contains_agg(false) {}
-  Expr(const SQLTypeInfo& ti, bool has_agg = false)
-      : type_info(ti), contains_agg(has_agg) {}
+  Expr(const Type* type, bool has_agg = false);
+  Expr(const SQLTypeInfo& ti, bool has_agg = false);
+  Expr(SQLTypes t, bool notnull);
+  Expr(SQLTypes t, int d, bool notnull);
+  Expr(SQLTypes t, int d, int s, bool notnull);
   virtual ~Expr() {}
 
   ExprPtr get_shared_ptr() { return shared_from_this(); }
   const SQLTypeInfo& get_type_info() const { return type_info; }
-  virtual void set_type_info(const SQLTypeInfo& ti) { type_info = ti; }
+  virtual void set_type_info(const SQLTypeInfo& ti);
   bool get_contains_agg() const { return contains_agg; }
   void set_contains_agg(bool a) { contains_agg = a; }
   virtual ExprPtr add_cast(const SQLTypeInfo& new_type_info);
@@ -177,9 +179,12 @@ class Expr : public std::enable_shared_from_this<Expr> {
   virtual size_t hash() const;
 
  protected:
+  const Type* type_;
   SQLTypeInfo type_info;  // SQLTypeInfo of the return result of this expression
   bool contains_agg;
   mutable std::optional<size_t> hash_;
+
+  static hdk::ir::Context default_context_;
 };
 
 /*
@@ -279,7 +284,7 @@ class ColumnVar : public Expr {
                                                col_info_->name,
                                                ti,
                                                col_info_->is_rowid);
-      type_info = ti;
+      Expr::set_type_info(ti);
     }
   }
   void check_group_by(const ExprPtrList& groupby) const override;
@@ -449,7 +454,7 @@ class Constant : public Expr {
   void cast_string(const SQLTypeInfo& new_type_info);
   void cast_from_string(const SQLTypeInfo& new_type_info);
   void cast_to_string(const SQLTypeInfo& new_type_info);
-  void do_cast(const SQLTypeInfo& new_type_info);
+  void do_cast(const Type* new_type_info);
   void set_null_value();
 };
 
