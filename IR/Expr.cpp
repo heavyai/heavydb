@@ -235,8 +235,6 @@ void OrderEntry::print() const {
   std::cout << toString() << std::endl;
 }
 
-static int counter = 0;
-
 Expr::Expr(const Type* type, bool has_agg)
     : type_(type), type_info(type->toTypeInfo()), contains_agg(has_agg) {}
 
@@ -269,17 +267,31 @@ void TargetEntry::print() const {
 }
 
 ExprPtr Expr::decompress() {
-  if (type_info.get_compression() == kENCODING_NONE) {
-    return shared_from_this();
+  if (type_->id() == Type::kExtDictionary) {
+    auto new_type = static_cast<const ExtDictionaryType*>(type_)->elemType();
+    return makeExpr<UOper>(new_type, contains_agg, kCAST, shared_from_this());
+  } else if (type_->id() == Type::kDate && type_->size() != 8) {
+    auto date_type = static_cast<const DateType*>(type_);
+    return makeExpr<UOper>(type_->ctx().date64(TimeUnit::kSecond, date_type->nullable()),
+                           contains_agg,
+                           kCAST,
+                           shared_from_this());
+  } else if (type_->id() == Type::kTime && type_->size() != 8) {
+    auto time_type = static_cast<const TimeType*>(type_);
+    return makeExpr<UOper>(type_->ctx().time64(time_type->unit(), time_type->nullable()),
+                           contains_agg,
+                           kCAST,
+                           shared_from_this());
+  } else if (type_->id() == Type::kInterval && type_->size() != 8) {
+    auto interval_type = static_cast<const TimestampType*>(type_);
+    return makeExpr<UOper>(
+        type_->ctx().interval64(interval_type->unit(), interval_type->nullable()),
+        contains_agg,
+        kCAST,
+        shared_from_this());
   }
-  SQLTypeInfo new_type_info(type_info.get_type(),
-                            type_info.get_dimension(),
-                            type_info.get_scale(),
-                            type_info.get_notnull(),
-                            kENCODING_NONE,
-                            0,
-                            type_info.get_subtype());
-  return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
+  CHECK(type_info.get_compression() == kENCODING_NONE);
+  return shared_from_this();
 }
 
 ExprPtr Expr::add_cast(const SQLTypeInfo& new_type_info) {

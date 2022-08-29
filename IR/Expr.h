@@ -465,6 +465,8 @@ class Constant : public Expr {
  */
 class UOper : public Expr {
  public:
+  UOper(const Type* type, bool has_agg, SQLOps o, ExprPtr p)
+      : Expr(type, has_agg), optype(o), operand(p) {}
   UOper(const SQLTypeInfo& ti, bool has_agg, SQLOps o, ExprPtr p)
       : Expr(ti, has_agg), optype(o), operand(p) {}
   UOper(SQLTypes t, SQLOps o, ExprPtr p)
