@@ -1182,6 +1182,12 @@ void Catalog::reloadTableMetadataUnlocked(int table_id) {
   td->is_system_table = sqliteConnector_.getData<bool>(0, 19);
   td->hasDeletedCol = false;
 
+  if (td->isView) {
+    // If we have a view, then we need to refresh the viewSQL from the mapd_views table,
+    // since this value is not contained in the mapd_tables table.
+    updateViewUnlocked(*td);
+  }
+
   if (auto tableDescIt = tableDescriptorMapById_.find(table_id);
       tableDescIt != tableDescriptorMapById_.end()) {
     tableDescIt->second->fragmenter = nullptr;
@@ -1456,7 +1462,17 @@ void Catalog::buildColumnsMapUnlocked() {
               tit.second->columnIdBySpi_.end(),
               [](const size_t a, const size_t b) -> bool { return a < b; });
   }
-}  // namespace Catalog_Namespace
+}
+ 
+void Catalog::updateViewUnlocked(TableDescriptor& td) {
+  std::string viewQuery("SELECT sql FROM mapd_views where tableid = " +
+                        std::to_string(td.tableId));
+  sqliteConnector_.query(viewQuery);
+  auto num_rows = sqliteConnector_.getNumRows();
+  CHECK_EQ(num_rows, 1U) << "Expected single entry in mapd_views for view '"
+                         << td.tableName << "', instead got " << num_rows;
+  td.viewSQL = sqliteConnector_.getData<string>(0, 0);
+}
 
 void Catalog::updateViewsInMapUnlocked() {
   std::string viewQuery("SELECT tableid, sql FROM mapd_views");

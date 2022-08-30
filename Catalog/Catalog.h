@@ -717,6 +717,7 @@ class Catalog final {
   void buildTablesMapUnlocked();
   void buildColumnsMapUnlocked();
   void updateViewsInMapUnlocked();
+  void updateViewUnlocked(TableDescriptor&);
   void buildDashboardsMapUnlocked(
       const std::map<int32_t, std::string>& user_name_by_user_id);
   void buildLinksMapUnlocked();
