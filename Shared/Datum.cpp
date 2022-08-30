@@ -33,6 +33,8 @@
 
 #include "DateConverters.h"
 #include "DateTimeParser.h"
+#include "IR/Context.h"
+#include "IR/Type.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/DateTimeUtils.h"
 #include "StringTransform.h"
@@ -99,13 +101,11 @@ int64_t convert_decimal_value_to_scale_internal(const int64_t decimal_value,
 }
 }  // namespace
 
-int64_t parse_numeric(const std::string_view s, SQLTypeInfo& ti) {
+int64_t parse_numeric(const std::string_view s, const hdk::ir::Type* type) {
   // if we are given a dimension, first parse to the maximum precision of the string
   // and then convert to the correct size
-  if (ti.get_dimension() != 0) {
-    SQLTypeInfo ti_string(kNUMERIC, 0, 0, false);
-    return convert_decimal_value_to_scale(parse_numeric(s, ti_string), ti_string, ti);
-  }
+  auto dtype = type->as<hdk::ir::DecimalType>();
+  CHECK(dtype);
   size_t dot = s.find_first_of('.', 0);
   std::string before_dot;
   std::string after_dot;
@@ -140,16 +140,15 @@ int64_t parse_numeric(const std::string_view s, SQLTypeInfo& ti) {
     fraction += next_digit >= 5 ? 1 : 0;
   }
 
-  // set the type info based on the literal string
-  ti.set_scale(static_cast<int>(after_dot.length()));
-  ti.set_dimension(static_cast<int>(before_dot_digits + ti.get_scale()));
-  ti.set_notnull(false);
-  if (ti.get_scale()) {
-    result = convert_decimal_value_to_scale_internal(result, ti.get_scale());
-  }
+  result = convert_decimal_value_to_scale_internal(result, after_dot.length());
   result += fraction;
-
+  result = convert_decimal_value_to_scale_internal(result,
+                                                   dtype->scale() - after_dot.length());
   return result * sign;
+}
+
+int64_t parse_numeric(const std::string_view s, SQLTypeInfo& ti) {
+  return parse_numeric(s, hdk::ir::Context::defaultCtx().fromTypeInfo(ti));
 }
 
 namespace {
@@ -166,17 +165,13 @@ T maxValue(unsigned const fieldsize) {
   return ~minValue<T>(fieldsize);
 }
 
-std::string toString(SQLTypeInfo const& ti, unsigned const fieldsize) {
-  return ti.get_type_name() + '(' + std::to_string(fieldsize) + ')';
-}
-
 // GCC 10 does not support std::from_chars w/ double, so strtold() is used instead.
 // Convert s to long double then round to integer type T.
 // It's not assumed that long double is any particular size; it is to be nice to
 // users who use floating point values where integers are expected. Some platforms
 // may be more accommodating with larger long doubles than others.
 template <typename T, typename U = long double>
-T parseFloatAsInteger(std::string_view s, SQLTypeInfo const& ti) {
+T parseFloatAsInteger(std::string_view s, const hdk::ir::Type* type) {
   // Use stack memory if s is small enough before resorting to dynamic memory.
   constexpr size_t bufsize = 64;
   char c_str[bufsize];
@@ -194,20 +189,20 @@ T parseFloatAsInteger(std::string_view s, SQLTypeInfo const& ti) {
   U value = strtold(str_begin, &str_end);
   if (str_begin == str_end) {
     throw std::runtime_error("Unable to parse " + std::string(s) + " to " +
-                             ti.get_type_name());
+                             type->toString());
   } else if (str_begin + s.size() != str_end) {
     throw std::runtime_error(std::string("Unexpected character \"") + *str_end +
-                             "\" encountered in " + ti.get_type_name() + " value " +
+                             "\" encountered in " + type->toString() + " value " +
                              std::string(s));
   }
   value = std::round(value);
   if (!std::isfinite(value)) {
     throw std::runtime_error("Invalid conversion from \"" + std::string(s) + "\" to " +
-                             ti.get_type_name());
+                             type->toString());
   } else if (value < static_cast<U>(std::numeric_limits<T>::min()) ||
              static_cast<U>(std::numeric_limits<T>::max()) < value) {
     throw std::runtime_error("Integer " + std::string(s) + " is out of range for " +
-                             ti.get_type_name());
+                             type->toString());
   }
   return static_cast<T>(value);
 }
@@ -218,47 +213,50 @@ inline bool hasCommonSuffix(char const* const ptr, char const* const end) {
 }
 
 template <typename T>
-T parseInteger(std::string_view s, SQLTypeInfo const& ti) {
+T parseInteger(std::string_view s, const hdk::ir::Type* type) {
   T retval{0};
   char const* const end = s.data() + s.size();
   auto [ptr, error_code] = std::from_chars(s.data(), end, retval);
   if (ptr != end) {
     if (error_code != std::errc() || !hasCommonSuffix(ptr, end)) {
-      retval = parseFloatAsInteger<T>(s, ti);
+      retval = parseFloatAsInteger<T>(s, type);
     }
   } else if (error_code != std::errc()) {
     if (error_code == std::errc::result_out_of_range) {
       throw std::runtime_error("Integer " + std::string(s) + " is out of range for " +
-                               ti.get_type_name());
+                               type->toString());
     }
     throw std::runtime_error("Invalid conversion from \"" + std::string(s) + "\" to " +
-                             ti.get_type_name());
+                             type->toString());
   }
   // Bounds checking based on SQLTypeInfo.
-  unsigned const fieldsize =
-      ti.get_compression() == kENCODING_FIXED ? ti.get_comp_param() : 8 * sizeof(T);
+  unsigned const fieldsize = type->size() * 8;
   if (fieldsize < 8 * sizeof(T)) {
     if (maxValue<T>(fieldsize) < retval) {
       throw std::runtime_error("Integer " + std::string(s) +
-                               " exceeds maximum value for " + toString(ti, fieldsize));
-    } else if (ti.get_notnull()) {
+                               " exceeds maximum value for " + type->toString());
+    } else if (!type->nullable()) {
       if (retval < minValue<T>(fieldsize)) {
         throw std::runtime_error("Integer " + std::string(s) +
-                                 " exceeds minimum value for " + toString(ti, fieldsize));
+                                 " exceeds minimum value for " + type->toString());
       }
     } else {
       if (retval <= minValue<T>(fieldsize)) {
         throw std::runtime_error("Integer " + std::string(s) +
                                  " exceeds minimum value for nullable " +
-                                 toString(ti, fieldsize));
+                                 type->toString());
       }
     }
-  } else if (!ti.get_notnull() && retval == std::numeric_limits<T>::min()) {
+  } else if (type->nullable() && retval == std::numeric_limits<T>::min()) {
     throw std::runtime_error("Integer " + std::string(s) +
-                             " exceeds minimum value for nullable " +
-                             toString(ti, fieldsize));
+                             " exceeds minimum value for nullable " + type->toString());
   }
   return retval;
+}
+
+template <typename T>
+T parseInteger(std::string_view s, SQLTypeInfo const& ti) {
+  return parseInteger<T>(s, hdk::ir::Context::defaultCtx().fromTypeInfo(ti));
 }
 
 }  // namespace
@@ -486,42 +484,54 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
   return "";
 }
 
-int64_t extract_int_type_from_datum(const Datum datum, const SQLTypeInfo& ti) {
-  const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
-  switch (type) {
-    case kBOOLEAN:
-      return datum.tinyintval;
-    case kTINYINT:
-      return datum.tinyintval;
-    case kSMALLINT:
-      return datum.smallintval;
-    case kCHAR:
-    case kVARCHAR:
-    case kTEXT:
-      CHECK_EQ(kENCODING_DICT, ti.get_compression());
-    case kINT:
-      return datum.intval;
-    case kBIGINT:
-      return datum.bigintval;
-    case kTIME:
-    case kTIMESTAMP:
-    case kDATE:
+int64_t extract_int_type_from_datum(const Datum datum, const hdk::ir::Type* type) {
+  switch (type->id()) {
+    case hdk::ir::Type::kBoolean:
+      return datum.boolval;
+    case hdk::ir::Type::kInteger:
+    case hdk::ir::Type::kDecimal:
+    case hdk::ir::Type::kExtDictionary:
+      switch (type->size()) {
+        case 1:
+          return datum.tinyintval;
+        case 2:
+          return datum.smallintval;
+        case 4:
+          return datum.intval;
+        case 8:
+          return datum.bigintval;
+        default:
+          abort();
+      }
+    case hdk::ir::Type::kDate:
+    case hdk::ir::Type::kTime:
+    case hdk::ir::Type::kTimestamp:
+    case hdk::ir::Type::kInterval:
       return datum.bigintval;
     default:
       abort();
   }
 }
 
-double extract_fp_type_from_datum(const Datum datum, const SQLTypeInfo& ti) {
-  const auto type = ti.get_type();
-  switch (type) {
-    case kFLOAT:
+int64_t extract_int_type_from_datum(const Datum datum, const SQLTypeInfo& ti) {
+  return extract_int_type_from_datum(datum,
+                                     hdk::ir::Context::defaultCtx().fromTypeInfo(ti));
+}
+
+double extract_fp_type_from_datum(const Datum datum, const hdk::ir::Type* type) {
+  switch (type->as<hdk::ir::FloatingPointType>()->precision()) {
+    case hdk::ir::FloatingPointType::kFloat:
       return datum.floatval;
-    case kDOUBLE:
+    case hdk::ir::FloatingPointType::kDouble:
       return datum.doubleval;
     default:
       abort();
   }
+}
+
+double extract_fp_type_from_datum(const Datum datum, const SQLTypeInfo& ti) {
+  return extract_fp_type_from_datum(datum,
+                                    hdk::ir::Context::defaultCtx().fromTypeInfo(ti));
 }
 
 SQLTypes decimal_to_int_type(const SQLTypeInfo& ti) {
@@ -543,8 +553,18 @@ SQLTypes decimal_to_int_type(const SQLTypeInfo& ti) {
 // Return decimal_value * 10^dscale
 // where dscale = new_type_info.get_scale() - type_info.get_scale()
 int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
+                                       const hdk::ir::Type* type,
+                                       const hdk::ir::Type* new_type) {
+  int const dscale = new_type->as<hdk::ir::DecimalType>()->scale() -
+                     type->as<hdk::ir::DecimalType>()->scale();
+  return convert_decimal_value_to_scale_internal(decimal_value, dscale);
+}
+
+int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
                                        const SQLTypeInfo& type_info,
                                        const SQLTypeInfo& new_type_info) {
-  int const dscale = new_type_info.get_scale() - type_info.get_scale();
-  return convert_decimal_value_to_scale_internal(decimal_value, dscale);
+  return convert_decimal_value_to_scale(
+      decimal_value,
+      hdk::ir::Context::defaultCtx().fromTypeInfo(type_info),
+      hdk::ir::Context::defaultCtx().fromTypeInfo(new_type_info));
 }

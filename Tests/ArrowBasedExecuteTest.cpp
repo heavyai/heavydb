@@ -17754,13 +17754,13 @@ TEST_F(Select, ParseIntegerExceptions) {
   };
   std::vector<TestPair> const tests{
       {"SELECT * FROM test WHERE ''=2147483647;",
-       "Invalid conversion from \"\" to INTEGER"},
+       "Invalid conversion from \"\" to INT32[NN]"},
       {"SELECT * FROM test WHERE ''=2147483648;",
-       "Invalid conversion from \"\" to BIGINT"},
+       "Invalid conversion from \"\" to INT64[NN]"},
       {"SELECT * FROM test WHERE '9223372036854775808'=9223372036854775807;",
-       "Integer 9223372036854775808 is out of range for BIGINT"},
+       "Integer 9223372036854775808 is out of range for INT64[NN]"},
       {"SELECT * FROM test WHERE '1e3.0'=1;",
-       "Unexpected character \".\" encountered in INTEGER value 1e3.0"}};
+       "Unexpected character \".\" encountered in INT32[NN] value 1e3.0"}};
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     for (auto const& test : tests) {

@@ -39,6 +39,10 @@
 #include <type_traits>
 #include <vector>
 
+namespace hdk::ir {
+class Type;
+}
+
 // must not change because these values persist in catalogs.
 enum SQLTypes {
   kNULLT = 0,  // type for null values
@@ -971,12 +975,17 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti);
 #endif
 
 int64_t extract_int_type_from_datum(const Datum datum, const SQLTypeInfo& ti);
+int64_t extract_int_type_from_datum(const Datum datum, const hdk::ir::Type* type);
 double extract_fp_type_from_datum(const Datum datum, const SQLTypeInfo& ti);
+double extract_fp_type_from_datum(const Datum datum, const hdk::ir::Type* type);
 
 bool DatumEqual(const Datum, const Datum, const SQLTypeInfo& ti);
 int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
                                        const SQLTypeInfo& type_info,
                                        const SQLTypeInfo& new_type_info);
+int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
+                                       const hdk::ir::Type* type,
+                                       const hdk::ir::Type* new_type);
 size_t hash(Datum datum, const SQLTypeInfo& ti);
 
 #include "../QueryEngine/DateAdd.h"
