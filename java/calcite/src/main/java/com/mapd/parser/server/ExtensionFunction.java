@@ -176,15 +176,6 @@ public class ExtensionFunction {
     return toSqlTypeName(this.ret);
   }
 
-  public List<SqlTypeName> getSqlOuts() {
-    assert this.isTableUdf();
-    List<SqlTypeName> sql_outs = new ArrayList<SqlTypeName>();
-    for (final ExtArgumentType otype : this.getOuts()) {
-      sql_outs.add(toSqlTypeName(getValueType(otype)));
-    }
-    return sql_outs;
-  }
-
   public Map<String, String> getOptions() {
     if (this.options != null) {
       return new HashMap<String, String>(this.options);
@@ -421,6 +412,14 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ColumnArrayTextEncodingDict;
   }
 
+  public static boolean isArrayType(final ExtArgumentType type) {
+    return type == ExtArgumentType.ArrayInt8 || type == ExtArgumentType.ArrayInt16
+            || type == ExtArgumentType.ArrayInt32 || type == ExtArgumentType.ArrayInt64
+            || type == ExtArgumentType.ArrayFloat || type == ExtArgumentType.ArrayDouble
+            || type == ExtArgumentType.ArrayBool
+            || type == ExtArgumentType.ArrayTextEncodingDict;
+  }
+
   public static boolean isColumnListArrayType(final ExtArgumentType type) {
     return type == ExtArgumentType.ColumnListArrayInt8
             || type == ExtArgumentType.ColumnListArrayInt16
@@ -500,25 +499,27 @@ public class ExtensionFunction {
       case TextEncodingDict:
       case ColumnTextEncodingDict:
       case ColumnListTextEncodingDict:
+      case ArrayTextEncodingDict:
+        return ExtArgumentType.TextEncodingDict;
       case ColumnArrayTextEncodingDict:
       case ColumnListArrayTextEncodingDict:
-        return ExtArgumentType.TextEncodingDict;
+        return ExtArgumentType.ArrayTextEncodingDict;
       case ColumnTimestamp:
         return ExtArgumentType.Timestamp;
       case ColumnArrayInt8:
-        return ExtArgumentType.Int8;
+        return ExtArgumentType.ArrayInt8;
       case ColumnArrayInt16:
-        return ExtArgumentType.Int16;
+        return ExtArgumentType.ArrayInt16;
       case ColumnArrayInt32:
-        return ExtArgumentType.Int32;
+        return ExtArgumentType.ArrayInt32;
       case ColumnArrayInt64:
-        return ExtArgumentType.Int64;
+        return ExtArgumentType.ArrayInt64;
       case ColumnArrayFloat:
-        return ExtArgumentType.Float;
+        return ExtArgumentType.ArrayFloat;
       case ColumnArrayDouble:
-        return ExtArgumentType.Double;
+        return ExtArgumentType.ArrayDouble;
       case ColumnArrayBool:
-        return ExtArgumentType.Bool;
+        return ExtArgumentType.ArrayBool;
       case ColumnListArrayInt8:
         return ExtArgumentType.ArrayInt8;
       case ColumnListArrayInt16:
