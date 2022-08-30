@@ -17,8 +17,8 @@ dependencies:
   - gcc_linux-64   9.*
   - ccache
   - sysroot_linux-64 >=2.14
-  - arrow-cpp  5.0
-  - pyarrow    5.0
+  - arrow-cpp  6.0
+  - pyarrow    6.0
   - pandas     1.3.3
   - llvmdev     12.*
   - openjdk     17.*
@@ -45,6 +45,6 @@ dependencies:
   - ittapi
   - pytest
   # when cuda is enabled, install also
-  #- arrow-cpp=5.0=*cuda
+  # - arrow-cpp=6.0=*cuda
   - binutils
   - llvm-spirv 12.0.*
