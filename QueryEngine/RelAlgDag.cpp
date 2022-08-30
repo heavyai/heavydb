@@ -878,8 +878,39 @@ std::string RelLogicalUnion::getFieldName(const size_t i) const {
   return {};
 }
 
-void RelLogicalUnion::checkForMatchingMetaInfoTypes() const {
-  std::vector<TargetMetaInfo> const& tmis0 = inputs_[0]->getOutputMetainfo();
+namespace {
+std::vector<bool> get_notnulls(std::vector<TargetMetaInfo> const& tmis0) {
+  std::vector<bool> notnulls(tmis0.size());
+  for (size_t j = 0; j < tmis0.size(); ++j) {
+    notnulls[j] = tmis0[j].get_type_info().get_notnull();
+  }
+  return notnulls;
+}
+
+bool same_ignoring_notnull(SQLTypeInfo ti0, SQLTypeInfo ti1) {
+  ti0.set_notnull({});  // Actual value doesn't matter
+  ti1.set_notnull({});  // as long as they are the same.
+  return ti0 == ti1;
+}
+
+void set_notnulls(std::vector<TargetMetaInfo>* tmis0, std::vector<bool> const& notnulls) {
+  for (size_t j = 0; j < tmis0->size(); ++j) {
+    SQLTypeInfo ti = (*tmis0)[j].get_type_info();
+    SQLTypeInfo physical_ti = (*tmis0)[j].get_physical_type_info();
+    ti.set_notnull(notnulls[j]);
+    physical_ti.set_notnull(notnulls[j]);
+    (*tmis0)[j] = TargetMetaInfo((*tmis0)[j].get_resname(), ti, physical_ti);
+  }
+}
+}  // namespace
+
+// The returned std::vector<TargetMetaInfo> is identical to
+// inputs_[0]->getOutputMetainfo() except for its SQLTypeInfo::notnull values, which is
+// the logical AND over each input. In other words, the returned columns are notnull iff
+// all corresponding input columns are notnull.
+std::vector<TargetMetaInfo> RelLogicalUnion::getCompatibleMetainfoTypes() const {
+  std::vector<TargetMetaInfo> tmis0 = inputs_[0]->getOutputMetainfo();
+  std::vector<bool> notnulls = get_notnulls(tmis0);
   for (size_t i = 1; i < inputs_.size(); ++i) {
     std::vector<TargetMetaInfo> const& tmisi = inputs_[i]->getOutputMetainfo();
     if (tmis0.size() != tmisi.size()) {
@@ -888,9 +919,10 @@ void RelLogicalUnion::checkForMatchingMetaInfoTypes() const {
       throw std::runtime_error("Subqueries of a UNION must have matching data types.");
     }
     for (size_t j = 0; j < tmis0.size(); ++j) {
-      if (tmis0[j].get_type_info() != tmisi[j].get_type_info()) {
-        SQLTypeInfo const& ti0 = tmis0[j].get_type_info();
-        SQLTypeInfo const& ti1 = tmisi[j].get_type_info();
+      SQLTypeInfo const& ti0 = tmis0[j].get_type_info();
+      SQLTypeInfo const& ti1 = tmisi[j].get_type_info();
+      // Allow types of different nullability to be UNIONed.
+      if (!same_ignoring_notnull(ti0, ti1)) {
         LOG(INFO) << "Types do not match for UNION:\n  tmis0[" << j
                   << "].get_type_info().to_string() = " << ti0.to_string() << "\n  tmis"
                   << i << '[' << j
@@ -901,8 +933,11 @@ void RelLogicalUnion::checkForMatchingMetaInfoTypes() const {
               "Subqueries of a UNION must have the exact same data types.");
         }
       }
+      notnulls[j] = notnulls[j] && ti1.get_notnull();
     }
   }
+  set_notnulls(&tmis0, notnulls);  // Set each SQLTypeInfo::notnull to compatible values.
+  return tmis0;
 }
 
 // Rest of code requires a raw pointer, but RexInput object needs to live somewhere.

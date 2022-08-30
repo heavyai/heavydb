@@ -2766,8 +2766,7 @@ ExecutionResult RelAlgExecutor::executeUnion(const RelLogicalUnion* logical_unio
     throw std::runtime_error("UNION without ALL is not supported yet.");
   }
   // Will throw a std::runtime_error if types don't match.
-  logical_union->checkForMatchingMetaInfoTypes();
-  logical_union->setOutputMetainfo(logical_union->getInput(0)->getOutputMetainfo());
+  logical_union->setOutputMetainfo(logical_union->getCompatibleMetainfoTypes());
   if (boost::algorithm::any_of(logical_union->getOutputMetainfo(), isGeometry)) {
     throw std::runtime_error("UNION does not support subqueries with geo-columns.");
   }

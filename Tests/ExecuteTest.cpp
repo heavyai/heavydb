@@ -24107,6 +24107,9 @@ TEST(Select, UnionAll) {
       " SELECT SUM(x), y, CAST(NULL AS SMALLINT) FROM test GROUP BY y"
       " ORDER BY y, z NULLS LAST;",
       dt);
+    // Union nullable w/ non-nullable types
+    c("SELECT CAST(1 AS INT) AS y UNION ALL SELECT y FROM test ORDER BY y;", dt);
+    c("SELECT x FROM test UNION ALL SELECT y FROM test ORDER BY x;", dt);
     // Multi-union calcite plan
     ASSERT_EQ(static_cast<int64_t>(60),
               v<int64_t>(run_simple_agg(
