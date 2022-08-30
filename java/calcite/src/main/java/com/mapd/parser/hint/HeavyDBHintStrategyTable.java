@@ -27,6 +27,7 @@ public class HeavyDBHintStrategyTable {
     supportedHints.add("aggregate_tree_fanout");
     supportedHints.add("cuda_block_size");
     supportedHints.add("cuda_grid_size_multiplier");
+    supportedHints.add("cuda_opt_block_and_grid_sizes");
     supportedHints.add("watchdog");
     supportedHints.add("dynamic_watchdog");
     supportedHints.add("watchdog_off");

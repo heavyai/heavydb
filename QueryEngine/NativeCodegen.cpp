@@ -2487,7 +2487,7 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
                                  const RelAlgExecutionUnit& ra_exe_unit,
                                  const CudaMgr_Namespace::CudaMgr* cuda_mgr,
                                  const ExecutorDeviceType device_type,
-                                 const unsigned gpu_blocksize,
+                                 const unsigned cuda_blocksize,
                                  const unsigned num_blocks_per_mp) {
   if (device_type == ExecutorDeviceType::CPU) {
     return false;
@@ -2515,7 +2515,7 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
       g_enable_smem_non_grouped_agg &&
       query_mem_desc_ptr->countDistinctDescriptorsLogicallyEmpty()) {
     // TODO: relax this, if necessary
-    if (gpu_blocksize < query_mem_desc_ptr->getEntryCount()) {
+    if (cuda_blocksize < query_mem_desc_ptr->getEntryCount()) {
       return false;
     }
     // skip shared memory usage when dealing with 1) variable length targets, 2)
@@ -2547,7 +2547,7 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
      * codes such that each thread loops over multiple entries.
      * TODO: relax this if necessary
      */
-    if (gpu_blocksize < query_mem_desc_ptr->getEntryCount()) {
+    if (cuda_blocksize < query_mem_desc_ptr->getEntryCount()) {
       return false;
     }
 

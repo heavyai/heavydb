@@ -158,23 +158,9 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
       return ExecutionResult(std::vector<PushedDownFilterInfo>{},
                              eo.find_push_down_candidates);
     }
-    const ExecutionOptions eo_modified{eo.output_columnar_hint,
-                                       eo.keep_result,
-                                       eo.allow_multifrag,
-                                       eo.just_explain,
-                                       eo.allow_loop_joins,
-                                       eo.with_watchdog,
-                                       eo.jit_debug,
-                                       eo.just_validate,
-                                       eo.with_dynamic_watchdog,
-                                       eo.dynamic_watchdog_time_limit,
-                                       /*find_push_down_candidates=*/false,
-                                       /*just_calcite_explain=*/false,
-                                       eo.gpu_input_mem_limit_percent,
-                                       eo.allow_runtime_query_interrupt,
-                                       eo.running_query_interrupt_freq,
-                                       eo.pending_query_interrupt_freq,
-                                       eo.max_join_hash_table_size};
+    auto eo_modified = eo;
+    eo_modified.find_push_down_candidates = false;
+    eo_modified.just_calcite_explain = false;
 
     // Dispatch the subqueries first
     for (auto subquery : subqueries) {

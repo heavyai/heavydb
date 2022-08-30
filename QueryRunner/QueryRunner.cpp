@@ -651,7 +651,8 @@ ExecutionOptions QueryRunner::defaultExecutionOptionsForRunSQL(bool allow_loop_j
           false,
           g_gpu_mem_limit_percent,
           false,
-          1000};
+          1000,
+          false};
 }
 
 std::shared_ptr<Executor> QueryRunner::getExecutor() const {
@@ -707,7 +708,8 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
                                g_gpu_mem_limit_percent,
                                true,
                                running_query_check_freq,
-                               pending_query_check_freq};
+                               pending_query_check_freq,
+                               false};
         {
           // async query initiation for interrupt test
           // incurs data race warning in TSAN since
@@ -805,7 +807,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, true);
-  const auto calciteOptimizationOption =
+  auto calciteOptimizationOption =
       calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {}, false);
   const auto query_ra = calcite_mgr
                             ->process(query_state_proxy,
@@ -826,33 +828,16 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
       filter_push_down_info_for_request.input_next = req.input_next;
       filter_push_down_info.push_back(filter_push_down_info_for_request);
     }
-    const auto calciteQueryParsingOption =
-        calcite_mgr->getCalciteQueryParsingOption(true, false, true);
-    const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
-        false, g_enable_watchdog, filter_push_down_info, false);
+    calciteOptimizationOption.filter_push_down_info = filter_push_down_info;
     const auto new_query_ra = calcite_mgr
                                   ->process(query_state_proxy,
                                             pg_shim(query_state_proxy->getQueryStr()),
                                             calciteQueryParsingOption,
                                             calciteOptimizationOption)
                                   .plan_result;
-    const ExecutionOptions eo_modified{eo.output_columnar_hint,
-                                       eo.keep_result,
-                                       eo.allow_multifrag,
-                                       eo.just_explain,
-                                       eo.allow_loop_joins,
-                                       eo.with_watchdog,
-                                       eo.jit_debug,
-                                       eo.just_validate,
-                                       eo.with_dynamic_watchdog,
-                                       eo.dynamic_watchdog_time_limit,
-                                       /*find_push_down_candidates=*/false,
-                                       /*just_calcite_explain=*/false,
-                                       eo.gpu_input_mem_limit_percent,
-                                       eo.allow_runtime_query_interrupt,
-                                       eo.running_query_interrupt_freq,
-                                       eo.pending_query_interrupt_freq,
-                                       eo.max_join_hash_table_size};
+    auto eo_modified = eo;
+    eo_modified.find_push_down_candidates = false;
+    eo_modified.just_calcite_explain = false;
     auto new_ra_executor = RelAlgExecutor(executor.get(), cat, new_query_ra);
     return std::make_shared<ExecutionResult>(
         new_ra_executor.executeRelAlgQuery(co, eo_modified, false, nullptr));

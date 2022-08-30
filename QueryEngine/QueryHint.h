@@ -40,6 +40,7 @@ enum QueryHint {
   kAggregateTreeFanout,
   kCudaBlockSize,
   kCudaGridSize,
+  kOptCudaBlockAndGridSizes,
   kWatchdog,
   kDynamicWatchdog,
   kWatchdogOff,
@@ -68,6 +69,7 @@ static const std::unordered_map<std::string, QueryHint> SupportedQueryHints = {
     {"aggregate_tree_fanout", QueryHint::kAggregateTreeFanout},
     {"cuda_block_size", QueryHint::kCudaBlockSize},
     {"cuda_grid_size_multiplier", QueryHint::kCudaGridSize},
+    {"cuda_opt_block_and_grid_sizes", kOptCudaBlockAndGridSizes},
     {"watchdog", QueryHint::kWatchdog},
     {"dynamic_watchdog", QueryHint::kDynamicWatchdog},
     {"watchdog_off", QueryHint::kWatchdogOff},
@@ -191,6 +193,7 @@ struct RegisteredQueryHint {
       , query_time_limit(0)
       , cuda_block_size(0)
       , cuda_grid_size_multiplier(0.0)
+      , opt_cuda_grid_and_block_size(false)
       , aggregate_tree_fanout(8)
       , overlaps_bucket_threshold(std::numeric_limits<double>::max())
       , overlaps_max_size(g_overlaps_max_table_size_bytes)
@@ -228,6 +231,9 @@ struct RegisteredQueryHint {
           case QueryHint::kCudaGridSize:
             updated_query_hints.cuda_grid_size_multiplier =
                 global_hints.cuda_grid_size_multiplier;
+            break;
+          case QueryHint::kOptCudaBlockAndGridSizes:
+            updated_query_hints.opt_cuda_grid_and_block_size = true;
             break;
           case QueryHint::kOverlapsBucketThreshold:
             updated_query_hints.overlaps_bucket_threshold =
@@ -301,6 +307,7 @@ struct RegisteredQueryHint {
   // control CUDA behavior
   size_t cuda_block_size;
   double cuda_grid_size_multiplier;
+  bool opt_cuda_grid_and_block_size;
 
   // window function framing
   size_t aggregate_tree_fanout;

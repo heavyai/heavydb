@@ -3443,6 +3443,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                          allow_interrupt,
                          g_running_query_interrupt_freq,
                          g_pending_query_interrupt_freq,
+                         g_optimize_cuda_block_and_grid_sizes,
                          std::numeric_limits<size_t>::max(),
                          ExecutorType::Native,
                          outer_fragment_indices};
@@ -3506,6 +3507,7 @@ size_t LocalQueryConnector::getOuterFragmentCount(QueryStateProxy query_state_pr
                          false,
                          false,
                          0.9,
+                         false,
                          false};
   return ra_executor.getOuterFragmentCount(co, eo);
 }

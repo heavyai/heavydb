@@ -221,7 +221,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const uint32_t num_tables,
     const bool allow_runtime_interrupt,
     const std::vector<int8_t*>& join_hash_tables,
-    RenderAllocatorMap* render_allocator_map) {
+    RenderAllocatorMap* render_allocator_map,
+    bool optimize_cuda_block_and_grid_sizes) {
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(lauchGpuCode);
   CHECK(gpu_allocator_);
@@ -283,7 +284,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   const unsigned grid_size_z = 1;
   const auto total_thread_count = block_size_x * grid_size_x;
   const auto err_desc = kernel_params[ERROR_CODE];
-
   if (is_group_by) {
     CHECK(!(query_buffers_->getGroupByBuffersSize() == 0) || render_allocator);
     bool can_sort_on_gpu = query_mem_desc_.sortOnGpu();
@@ -325,7 +325,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                      block_size_y,
                      block_size_z,
                      shared_memory_size,
-                     &param_ptrs[0]);
+                     &param_ptrs[0],
+                     optimize_cuda_block_and_grid_sizes);
     } else {
       param_ptrs.erase(param_ptrs.begin() + LITERALS);  // TODO(alex): remove
       kernel->launch(grid_size_x,
@@ -335,7 +336,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                      block_size_y,
                      block_size_z,
                      shared_memory_size,
-                     &param_ptrs[0]);
+                     &param_ptrs[0],
+                     optimize_cuda_block_and_grid_sizes);
     }
     if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
       auto launchTime = launchClock->stop();
@@ -479,7 +481,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                      block_size_y,
                      block_size_z,
                      shared_memory_size,
-                     &param_ptrs[0]);
+                     &param_ptrs[0],
+                     optimize_cuda_block_and_grid_sizes);
     } else {
       param_ptrs.erase(param_ptrs.begin() + LITERALS);  // TODO(alex): remove
       kernel->launch(grid_size_x,
@@ -489,7 +492,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                      block_size_y,
                      block_size_z,
                      shared_memory_size,
-                     &param_ptrs[0]);
+                     &param_ptrs[0],
+                     optimize_cuda_block_and_grid_sizes);
     }
 
     if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {

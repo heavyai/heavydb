@@ -936,6 +936,7 @@ class Executor {
                                  const uint32_t num_tables,
                                  const bool allow_runtime_interrupt,
                                  RenderInfo* render_info,
+                                 const bool optimize_cuda_block_and_grid_sizes,
                                  const int64_t rows_to_process = -1);
   // pass nullptr to results if it shouldn't be extracted from the execution context
   int32_t executePlanWithoutGroupBy(
@@ -955,6 +956,7 @@ class Executor {
       const uint32_t num_tables,
       const bool allow_runtime_interrupt,
       RenderInfo* render_info,
+      const bool optimize_cuda_block_and_grid_sizes,
       const int64_t rows_to_process = -1);
 
  public:  // Temporary, ask saman about this

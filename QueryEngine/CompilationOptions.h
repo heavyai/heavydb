@@ -90,6 +90,7 @@ struct ExecutionOptions {
   bool allow_runtime_query_interrupt;
   double running_query_interrupt_freq;
   unsigned pending_query_interrupt_freq;
+  bool optimize_cuda_block_and_grid_sizes;
   size_t max_join_hash_table_size = std::numeric_limits<size_t>::max();
   ExecutorType executor_type = ExecutorType::Native;
   std::vector<size_t> outer_fragment_indices{};
@@ -110,7 +111,15 @@ struct ExecutionOptions {
                             /*=gpu_input_mem_limit_percent=*/1.0,
                             /*allow_runtime_query_interrupt=*/false,
                             /*running_query_interrupt_freq=*/0.5,
-                            /*pending_query_interrupt_freq=*/1000};
+                            /*pending_query_interrupt_freq=*/1000,
+                            /*optimize_cuda_block_and_grid_sizes*/ false};
+  }
+  void setNoExplainExecutionOptions(bool no_validation = false) {
+    just_explain = false;
+    just_calcite_explain = false;
+    if (no_validation) {
+      just_validate = false;
+    }
   }
 };
 
