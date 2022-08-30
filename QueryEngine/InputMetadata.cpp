@@ -140,16 +140,16 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
 template <typename T>
 void compute_table_function_col_chunk_stats(
     std::shared_ptr<ChunkMetadata>& chunk_metadata,
-    const T* col_buffer,
+    const T* values_buffer,
+    const size_t values_count,
     const T null_val) {
-  const size_t row_count = chunk_metadata->numElements;
   T min_val{std::numeric_limits<T>::max()};
   T max_val{std::numeric_limits<T>::lowest()};
   bool has_nulls{false};
   constexpr size_t parallel_stats_compute_threshold = 20000UL;
-  if (row_count < parallel_stats_compute_threshold) {
-    for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
-      const T cell_val = col_buffer[row_idx];
+  if (values_count < parallel_stats_compute_threshold) {
+    for (size_t row_idx = 0; row_idx < values_count; ++row_idx) {
+      const T cell_val = values_buffer[row_idx];
       if (cell_val == null_val) {
         has_nulls = true;
         continue;
@@ -167,7 +167,7 @@ void compute_table_function_col_chunk_stats(
     const size_t min_grain_size = max_inputs_per_thread / 2;
     const size_t num_threads =
         std::min(max_thread_count,
-                 ((row_count + max_inputs_per_thread - 1) / max_inputs_per_thread));
+                 ((values_count + max_inputs_per_thread - 1) / max_inputs_per_thread));
 
     std::vector<T> threads_local_mins(num_threads, std::numeric_limits<T>::max());
     std::vector<T> threads_local_maxes(num_threads, std::numeric_limits<T>::lowest());
@@ -176,7 +176,7 @@ void compute_table_function_col_chunk_stats(
 
     limited_arena.execute([&] {
       tbb::parallel_for(
-          tbb::blocked_range<size_t>(0, row_count, min_grain_size),
+          tbb::blocked_range<size_t>(0, values_count, min_grain_size),
           [&](const tbb::blocked_range<size_t>& r) {
             const size_t start_idx = r.begin();
             const size_t end_idx = r.end();
@@ -184,7 +184,7 @@ void compute_table_function_col_chunk_stats(
             T local_max_val = std::numeric_limits<T>::lowest();
             bool local_has_nulls = false;
             for (size_t row_idx = start_idx; row_idx < end_idx; ++row_idx) {
-              const T cell_val = col_buffer[row_idx];
+              const T cell_val = values_buffer[row_idx];
               if (cell_val == null_val) {
                 local_has_nulls = true;
                 continue;
@@ -234,66 +234,91 @@ ChunkMetadataMap synthesize_metadata_table_function(const ResultSet* rows) {
   ChunkMetadataMap chunk_metadata_map;
 
   for (size_t col_idx = 0; col_idx < col_count; ++col_idx) {
+    std::shared_ptr<ChunkMetadata> chunk_metadata = std::make_shared<ChunkMetadata>();
     const int8_t* columnar_buffer = const_cast<int8_t*>(rows->getColumnarBuffer(col_idx));
     const auto col_sql_type_info = rows->getColType(col_idx);
-    const auto col_type = col_sql_type_info.get_type();
-    if (col_type != kTEXT) {
-      CHECK(col_sql_type_info.get_compression() == kENCODING_NONE);
-    } else {
-      CHECK(col_sql_type_info.get_compression() == kENCODING_DICT);
-      CHECK_EQ(col_sql_type_info.get_size(), sizeof(int32_t));
-    }
-    std::shared_ptr<ChunkMetadata> chunk_metadata = std::make_shared<ChunkMetadata>();
-    chunk_metadata->sqlType = col_sql_type_info;
-    chunk_metadata->numBytes = row_count * col_sql_type_info.get_size();
+    // Here, min/max of a column of arrays, col, is defined as
+    // min/max(unnest(col)). That is, if is_array is true, the
+    // metadata is supposed to be syntesized for a query like `SELECT
+    // UNNEST(col_of_arrays) ... GROUP BY ...`. How can we verify that
+    // here?
+    bool is_array = col_sql_type_info.is_array();
+    const auto col_type =
+        (is_array ? col_sql_type_info.get_subtype() : col_sql_type_info.get_type());
+    const auto col_type_info =
+        (is_array ? col_sql_type_info.get_elem_type() : col_sql_type_info);
+
+    chunk_metadata->sqlType = col_type_info;
     chunk_metadata->numElements = row_count;
 
-    switch (col_sql_type_info.get_type()) {
+    const int8_t* values_buffer;
+    size_t values_count;
+    if (is_array) {
+      CHECK(FlatBufferManager::isFlatBuffer(columnar_buffer));
+      FlatBufferManager m{const_cast<int8_t*>(columnar_buffer)};
+      chunk_metadata->numBytes = m.flatbufferSize();
+      values_count = m.VarlenArray_nof_values();
+      values_buffer = m.VarlenArray_values();
+    } else {
+      chunk_metadata->numBytes = row_count * col_type_info.get_size();
+      values_count = row_count;
+      values_buffer = columnar_buffer;
+    }
+
+    if (col_type != kTEXT) {
+      CHECK(col_type_info.get_compression() == kENCODING_NONE);
+    } else {
+      CHECK(col_type_info.get_compression() == kENCODING_DICT);
+      CHECK_EQ(col_type_info.get_size(), sizeof(int32_t));
+    }
+
+    switch (col_type) {
       case kBOOLEAN:
       case kTINYINT:
         compute_table_function_col_chunk_stats(
             chunk_metadata,
-            columnar_buffer,
-            static_cast<int8_t>(inline_fixed_encoding_null_val(col_sql_type_info)));
+            values_buffer,
+            values_count,
+            static_cast<int8_t>(inline_fixed_encoding_null_val(col_type_info)));
         break;
       case kSMALLINT:
         compute_table_function_col_chunk_stats(
             chunk_metadata,
-            reinterpret_cast<const int16_t*>(columnar_buffer),
-            static_cast<int16_t>(inline_fixed_encoding_null_val(col_sql_type_info)));
+            reinterpret_cast<const int16_t*>(values_buffer),
+            values_count,
+            static_cast<int16_t>(inline_fixed_encoding_null_val(col_type_info)));
         break;
       case kINT:
+      case kTEXT:
         compute_table_function_col_chunk_stats(
             chunk_metadata,
-            reinterpret_cast<const int32_t*>(columnar_buffer),
-            static_cast<int32_t>(inline_fixed_encoding_null_val(col_sql_type_info)));
+            reinterpret_cast<const int32_t*>(values_buffer),
+            values_count,
+            static_cast<int32_t>(inline_fixed_encoding_null_val(col_type_info)));
         break;
       case kBIGINT:
       case kTIMESTAMP:
         compute_table_function_col_chunk_stats(
             chunk_metadata,
-            reinterpret_cast<const int64_t*>(columnar_buffer),
-            static_cast<int64_t>(inline_fixed_encoding_null_val(col_sql_type_info)));
+            reinterpret_cast<const int64_t*>(values_buffer),
+            values_count,
+            static_cast<int64_t>(inline_fixed_encoding_null_val(col_type_info)));
         break;
       case kFLOAT:
         // For float use the typed null accessor as the generic one converts to double,
         // and do not want to risk loss of precision
         compute_table_function_col_chunk_stats(
             chunk_metadata,
-            reinterpret_cast<const float*>(columnar_buffer),
+            reinterpret_cast<const float*>(values_buffer),
+            values_count,
             inline_fp_null_value<float>());
         break;
       case kDOUBLE:
         compute_table_function_col_chunk_stats(
             chunk_metadata,
-            reinterpret_cast<const double*>(columnar_buffer),
+            reinterpret_cast<const double*>(values_buffer),
+            values_count,
             inline_fp_null_value<double>());
-        break;
-      case kTEXT:
-        compute_table_function_col_chunk_stats(
-            chunk_metadata,
-            reinterpret_cast<const int32_t*>(columnar_buffer),
-            static_cast<int32_t>(inline_fixed_encoding_null_val(col_sql_type_info)));
         break;
       default:
         UNREACHABLE();

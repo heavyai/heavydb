@@ -2690,7 +2690,12 @@ void assert_equal(const ResultSetPtr rows1, const ResultSetPtr rows2) {
   for (size_t r = 0; r < num_rows1; ++r) {
     const auto& row1 = rows1->getRowAtNoTranslations(r);
     const auto& row2 = rows2->getRowAtNoTranslations(r);
+    ASSERT_EQ(row1.size(), row2.size());
     for (size_t c = 0; c < num_cols1; ++c) {
+      if (c >= row1.size()) {
+        ASSERT_EQ(row1.size(), size_t(0));
+        break;
+      }
       const auto ti1 = rows1->getColType(c);
       const auto ti2 = rows2->getColType(c);
       if ((ti1.is_text_encoding_dict() && ti2.is_text_encoding_dict()) &&
@@ -2940,6 +2945,64 @@ TEST_F(TableFunctions, ColumnArrayCopier) {
     COLUMNARRAYCOPIERTEST(farr, float);
     COLUMNARRAYCOPIERTEST(darr, double);
     COLUMNARRAYCOPIERTEST(tarr, int32_t);
+  }
+}
+
+TEST_F(TableFunctions, ColumnArrayAt) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+#define COLUMNARRAYATTEST(COLNAME, CTYPE, SUFFIX)                                  \
+  {                                                                                \
+    const auto rows = run_multiple_agg(                                            \
+        "SELECT (out0)" #SUFFIX " FROM TABLE(array_copier(cursor(SELECT " #COLNAME \
+        " FROM arr_test)));",                                                      \
+        dt);                                                                       \
+    const auto result_rows =                                                       \
+        run_multiple_agg("SELECT (" #COLNAME ")" #SUFFIX " FROM arr_test;", dt);   \
+    assert_equal<CTYPE>(rows, result_rows);                                        \
+  }
+    COLUMNARRAYATTEST(barr, bool, [1]);
+    COLUMNARRAYATTEST(carr, int8_t, [1]);
+    COLUMNARRAYATTEST(sarr, int16_t, [1]);
+    COLUMNARRAYATTEST(iarr, int32_t, [1]);
+    COLUMNARRAYATTEST(larr, int64_t, [1]);
+    COLUMNARRAYATTEST(farr, float, [1]);
+    COLUMNARRAYATTEST(darr, double, [1]);
+    COLUMNARRAYATTEST(tarr, int32_t, [1]);
+
+    COLUMNARRAYATTEST(iarr, int32_t, [2]);
+
+    COLUMNARRAYATTEST(carr, int8_t, [1] + 3);
+    COLUMNARRAYATTEST(sarr, int16_t, [1] + 3);
+    COLUMNARRAYATTEST(iarr, int32_t, [1] + 3);
+    COLUMNARRAYATTEST(larr, int64_t, [1] + 3);
+    COLUMNARRAYATTEST(farr, float, [1] + 3);
+    COLUMNARRAYATTEST(darr, double, [1] + 3);
+  }
+}
+
+TEST_F(TableFunctions, ColumnArrayUnnest) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+#define COLUMNARRAYUNNEST(COLNAME, CTYPE)                                            \
+  {                                                                                  \
+    const auto rows = run_multiple_agg(                                              \
+        "SELECT UNNEST(out0) AS ua  FROM TABLE(array_copier(cursor(SELECT " #COLNAME \
+        " FROM arr_test))) GROUP BY ua;",                                            \
+        dt);                                                                         \
+    const auto result_rows = run_multiple_agg(                                       \
+        "SELECT UNNEST(" #COLNAME ") AS ua  FROM arr_test GROUP BY ua;", dt);        \
+    assert_equal<CTYPE>(rows, result_rows);                                          \
+  }
+
+    COLUMNARRAYUNNEST(barr, bool);
+    COLUMNARRAYUNNEST(carr, int8_t);
+    COLUMNARRAYUNNEST(sarr, int16_t);
+    COLUMNARRAYUNNEST(iarr, int32_t);
+    COLUMNARRAYUNNEST(larr, int64_t);
+    COLUMNARRAYUNNEST(farr, float);
+    COLUMNARRAYUNNEST(darr, double);
+    COLUMNARRAYUNNEST(tarr, int32_t);
   }
 }
 

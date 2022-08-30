@@ -1458,6 +1458,29 @@ inline void initializeVarlenArray(FlatBufferManager& m,
   }
 }
 
+// ChunkIter_get_nth variant for array buffers using FlatBuffer storage schema:
+DEVICE inline void VarlenArray_get_nth(int8_t* buf,
+                                       int n,
+                                       ArrayDatum* result,
+                                       bool* is_end) {
+  FlatBufferManager m{buf};
+  int64_t length;
+  auto status = m.getItem(n, length, result->pointer, result->is_null);
+  if (status == FlatBufferManager::Status::IndexError) {
+    *is_end = true;
+    result->length = 0;
+    result->pointer = NULL;
+    result->is_null = true;
+  } else {
+    *is_end = false;
+#ifndef __CUDACC__
+    CHECK_EQ(status, FlatBufferManager::Status::Success);
+    CHECK_GE(length, 0);
+#endif
+    result->length = length;
+  }
+}
+
 struct SqlLiteralArg {
   size_t index;
   SQLTypeInfo ti;

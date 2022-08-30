@@ -215,6 +215,10 @@ DEVICE void ChunkIter_get_nth(ChunkIter* it,
 
 // @brief get nth element in Chunk.  Does not change ChunkIter state
 DEVICE void ChunkIter_get_nth(ChunkIter* it, int n, ArrayDatum* result, bool* is_end) {
+  if (FlatBufferManager::isFlatBuffer(it)) {
+    VarlenArray_get_nth(reinterpret_cast<int8_t*>(it), n, result, is_end);
+    return;
+  }
   if (static_cast<size_t>(n) >= it->num_elems || n < 0) {
     *is_end = true;
     result->length = 0;
@@ -260,6 +264,10 @@ DEVICE void ChunkIter_get_nth_varlen(ChunkIter* it,
                                      int n,
                                      ArrayDatum* result,
                                      bool* is_end) {
+  if (FlatBufferManager::isFlatBuffer(it)) {
+    VarlenArray_get_nth(reinterpret_cast<int8_t*>(it), n, result, is_end);
+    return;
+  }
   *is_end = (static_cast<size_t>(n) >= it->num_elems || n < 0);
 
   if (!*is_end) {
