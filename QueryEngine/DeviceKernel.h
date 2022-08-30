@@ -37,7 +37,8 @@ class DeviceKernel {
                       unsigned int blockDimY,
                       unsigned int blockDimZ,
                       unsigned int sharedMemBytes,
-                      void** kernelParams) = 0;
+                      void** kernelParams,
+                      bool optimize_block_and_grid_sizes) = 0;
 
   virtual void initializeDynamicWatchdog(bool could_interrupt, uint64_t cycle_budget) = 0;
   virtual void initializeRuntimeInterrupter(const int device_id) = 0;

@@ -58,8 +58,30 @@ class NvidiaKernel : public DeviceKernel {
               unsigned int blockDimY,
               unsigned int blockDimZ,
               unsigned int sharedMemBytes,
-              void** kernelParams) override {
+              void** kernelParams,
+              bool optimize_block_and_grid_sizes) override {
     auto qe_cuda_stream = getQueryEngineCudaStreamForDevice(device_id);
+    if (optimize_block_and_grid_sizes) {
+      int recommended_block_size;
+      int recommended_grid_size;
+      std::ostringstream oss;
+      checkCudaErrors(cuOccupancyMaxPotentialBlockSize(&recommended_grid_size,
+                                                       &recommended_block_size,
+                                                       function_ptr,
+                                                       nullptr,
+                                                       sharedMemBytes,
+                                                       0));
+      if (static_cast<unsigned int>(recommended_block_size) != blockDimX) {
+        VLOG(1) << "Apply a recommended CUDA block size: " << recommended_block_size
+                << " (current: " << blockDimX << ")";
+        blockDimX = recommended_block_size;
+      }
+      if (static_cast<unsigned int>(recommended_grid_size) != gridDimX) {
+        VLOG(1) << "Apply a recommended CUDA grid size: " << recommended_grid_size
+                << " (current: " << gridDimX << ")";
+        gridDimX = recommended_grid_size;
+      }
+    }
     VLOG(1) << "Launch GPU kernel compiled with the following block and grid sizes: "
             << blockDimX << " and " << gridDimX;
     checkCudaErrors(cuLaunchKernel(function_ptr,

@@ -995,6 +995,31 @@ TEST(QueryHint, CudaBlockAndGridSizes) {
     auto query_hint9 = QR::get()->getParsedQueryHint(query_gen(false, "1026"));
     EXPECT_TRUE(!query_hint9.isHintRegistered(QueryHint::kCudaGridSize));
 
+    auto query_hint10 = QR::get()->getParsedQueryHint(
+        "SELECT /*+ cuda_opt_block_and_grid_sizes */ COUNT(1) FROM SQL_HINT_DUMMY");
+    EXPECT_TRUE(query_hint10.isHintRegistered(QueryHint::kOptCudaBlockAndGridSizes));
+    EXPECT_TRUE(check_serialized_rel_alg_dag(
+        "SELECT /*+ cuda_opt_block_and_grid_sizes */ COUNT(1) FROM SQL_HINT_DUMMY",
+        {{QueryHint::kOptCudaBlockAndGridSizes, false}}));
+
+    auto query_hint11 = QR::get()->getParsedGlobalQueryHints(
+        "SELECT /*+ g_cuda_opt_block_and_grid_sizes */ COUNT(1) FROM SQL_HINT_DUMMY");
+    EXPECT_TRUE(query_hint11->isHintRegistered(QueryHint::kOptCudaBlockAndGridSizes));
+    EXPECT_TRUE(check_serialized_rel_alg_dag(
+        "SELECT /*+ g_cuda_opt_block_and_grid_sizes */ COUNT(1) FROM SQL_HINT_DUMMY",
+        {{QueryHint::kOptCudaBlockAndGridSizes, true}}));
+
+    auto query_hint12 = QR::get()->getParsedQueryHint(
+        "SELECT /*+ cuda_opt_block_and_grid_sizes, cuda_block_size(512) */ COUNT(1) FROM "
+        "SQL_HINT_DUMMY");
+    EXPECT_TRUE(query_hint12.isHintRegistered(QueryHint::kOptCudaBlockAndGridSizes));
+    EXPECT_TRUE(query_hint12.isHintRegistered(QueryHint::kCudaBlockSize));
+    EXPECT_TRUE(check_serialized_rel_alg_dag(
+        "SELECT /*+ cuda_opt_block_and_grid_sizes, cuda_block_size(512) */ COUNT(1) FROM "
+        "SQL_HINT_DUMMY",
+        {{QueryHint::kCudaBlockSize, false},
+         {QueryHint::kOptCudaBlockAndGridSizes, false}}));
+
     // grid_size should be greater or equal to one regardless of query hint value
     auto res4 = QR::get()->runSQL(query_gen(false, "0.000001"), ExecutorDeviceType::GPU);
     EXPECT_EQ(res4->getGridSize(), (unsigned)1);

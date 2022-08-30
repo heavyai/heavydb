@@ -5812,7 +5812,8 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
       g_enable_runtime_query_interrupt && !validate_or_explain_query &&
           !query_state_proxy->getConstSessionInfo()->get_session_id().empty(),
       g_running_query_interrupt_freq,
-      g_pending_query_interrupt_freq};
+      g_pending_query_interrupt_freq,
+      g_optimize_cuda_block_and_grid_sizes};
   auto execution_time_ms = _return.getExecutionTime() + measure<>::execution([&]() {
                              _return = ra_executor.executeRelAlgQuery(
                                  co, eo, explain_info.isPlanExplain(), nullptr);

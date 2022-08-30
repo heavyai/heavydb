@@ -135,11 +135,15 @@ void CommandLineOptions::fillOptions() {
   help_desc.add_options()("cuda-block-size",
                           po::value<size_t>(&system_parameters.cuda_block_size)
                               ->default_value(system_parameters.cuda_block_size),
-                          "Size of block to use on GPU.");
+                          "Size of block to use on NVIDIA GPU.");
   help_desc.add_options()("cuda-grid-size",
                           po::value<size_t>(&system_parameters.cuda_grid_size)
                               ->default_value(system_parameters.cuda_grid_size),
-                          "Size of grid to use on GPU.");
+                          "Size of grid to use on NVIDIA GPU.");
+  help_desc.add_options()("optimize-cuda-block-and-grid-sizes",
+                          po::value<bool>(&optimize_cuda_block_and_grid_sizes)
+                              ->default_value(false)
+                              ->implicit_value(true));
   if (!dist_v5_) {
     help_desc.add_options()(
         "data",
@@ -1490,6 +1494,7 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     g_use_hashtable_cache = use_hashtable_cache;
     g_max_cacheable_hashtable_size_bytes = max_cacheable_hashtable_size_bytes;
     g_hashtable_cache_total_bytes = hashtable_cache_total_bytes;
+    g_optimize_cuda_block_and_grid_sizes = optimize_cuda_block_and_grid_sizes;
 
     if (g_multi_instance) {
       LOG(INFO) << "Disabling FSI and Disk Cache as they are not currently supported "

@@ -851,26 +851,8 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
       if (sort->collationCount() || node_is_aggregate(source)) {
         auto temp_seq = RaExecutionSequence(std::make_unique<RaExecutionDesc>(source));
         CHECK_EQ(temp_seq.size(), size_t(1));
-        ExecutionOptions eo_copy = {
-            eo.output_columnar_hint,
-            eo.keep_result,
-            eo.allow_multifrag,
-            eo.just_explain,
-            eo.allow_loop_joins,
-            eo.with_watchdog,
-            eo.jit_debug,
-            eo.just_validate || sort->isEmptyResult(),
-            eo.with_dynamic_watchdog,
-            eo.dynamic_watchdog_time_limit,
-            eo.find_push_down_candidates,
-            eo.just_calcite_explain,
-            eo.gpu_input_mem_limit_percent,
-            eo.allow_runtime_query_interrupt,
-            eo.running_query_interrupt_freq,
-            eo.pending_query_interrupt_freq,
-            eo.max_join_hash_table_size,
-            eo.executor_type,
-        };
+        ExecutionOptions eo_copy = eo;
+        eo_copy.just_validate = eo.just_validate || sort->isEmptyResult();
         // Use subseq to avoid clearing existing temporary tables
         return {
             executeRelAlgSubSeq(temp_seq, std::make_pair(0, 1), co, eo_copy, nullptr, 0),
@@ -1078,27 +1060,11 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     handleNop(exec_desc);
     return;
   }
-
-  const ExecutionOptions eo_work_unit{
-      eo.output_columnar_hint,
-      eo.keep_result,
-      eo.allow_multifrag,
-      eo.just_explain,
-      eo.allow_loop_joins,
-      eo.with_watchdog && (step_idx == 0 || dynamic_cast<const RelProject*>(body)),
-      eo.jit_debug,
-      eo.just_validate,
-      eo.with_dynamic_watchdog,
-      eo.dynamic_watchdog_time_limit,
-      eo.find_push_down_candidates,
-      eo.just_calcite_explain,
-      eo.gpu_input_mem_limit_percent,
-      eo.allow_runtime_query_interrupt,
-      eo.running_query_interrupt_freq,
-      eo.pending_query_interrupt_freq,
-      eo.max_join_hash_table_size,
-      eo.executor_type,
-      step_idx == 0 ? eo.outer_fragment_indices : std::vector<size_t>()};
+  ExecutionOptions eo_work_unit = eo;
+  eo_work_unit.with_watchdog =
+      eo.with_watchdog && (step_idx == 0 || dynamic_cast<const RelProject*>(body));
+  eo_work_unit.outer_fragment_indices =
+      step_idx == 0 ? eo.outer_fragment_indices : std::vector<size_t>();
 
   auto handle_hint = [co,
                       eo_work_unit,
@@ -1193,6 +1159,17 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
         eo_hint_applied.max_join_hash_table_size = query_hints->max_join_hash_table_size;
         VLOG(1) << "A user forces the maximum size of a join hash table as "
                 << eo_hint_applied.max_join_hash_table_size << " bytes";
+      }
+      if (query_hints->isHintRegistered(QueryHint::kOptCudaBlockAndGridSizes)) {
+        if (query_hints->isHintRegistered(QueryHint::kCudaGridSize) ||
+            query_hints->isHintRegistered(QueryHint::kCudaBlockSize)) {
+          VLOG(1) << "Skip query hint \"opt_cuda_grid_and_block_size\" when at least one "
+                     "of the following query hints are given simultaneously: "
+                     "\"cuda_block_size\" and \"cuda_grid_size_multiplier\"";
+        } else {
+          VLOG(1) << "A user enables optimization of cuda block and grid sizes";
+          eo_hint_applied.optimize_cuda_block_and_grid_sizes = true;
+        }
       }
       if (query_hints->isHintRegistered(QueryHint::kColumnarOutput)) {
         VLOG(1) << "A user forces the query to run with columnar output";
@@ -3360,6 +3337,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
           eo.allow_runtime_query_interrupt,
           eo.running_query_interrupt_freq,
           eo.pending_query_interrupt_freq,
+          eo.optimize_cuda_block_and_grid_sizes,
           eo.max_join_hash_table_size,
           eo.executor_type,
       };
@@ -4100,26 +4078,10 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
 
   const auto table_infos = get_table_infos(ra_exe_unit_in, executor_);
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
-  ExecutionOptions eo_no_multifrag{eo.output_columnar_hint,
-                                   eo.keep_result,
-                                   false,
-                                   false,
-                                   eo.allow_loop_joins,
-                                   eo.with_watchdog,
-                                   eo.jit_debug,
-                                   false,
-                                   eo.with_dynamic_watchdog,
-                                   eo.dynamic_watchdog_time_limit,
-                                   false,
-                                   false,
-                                   eo.gpu_input_mem_limit_percent,
-                                   eo.allow_runtime_query_interrupt,
-                                   eo.running_query_interrupt_freq,
-                                   eo.pending_query_interrupt_freq,
-                                   eo.max_join_hash_table_size,
-                                   eo.executor_type,
-                                   eo.outer_fragment_indices};
-
+  auto eo_no_multifrag = eo;
+  eo_no_multifrag.setNoExplainExecutionOptions(true);
+  eo_no_multifrag.allow_multifrag = false;
+  eo_no_multifrag.find_push_down_candidates = false;
   if (was_multifrag_kernel_launch) {
     try {
       // Attempt to retry using the kernel per fragment path. The smaller input size

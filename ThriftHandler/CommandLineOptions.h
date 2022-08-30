@@ -88,6 +88,7 @@ class CommandLineOptions {
   bool use_hashtable_cache = true;
   size_t hashtable_cache_total_bytes = 4294967296;         // 4GB
   size_t max_cacheable_hashtable_size_bytes = 2147483648;  // 2GB
+  bool optimize_cuda_block_and_grid_sizes = false;
 
   /**
    * Number of threads used when loading data
@@ -255,3 +256,4 @@ extern bool g_query_engine_cuda_streams;
 extern bool g_multi_instance;
 extern size_t g_lockfile_lock_extension_milliseconds;
 extern bool g_allow_invalid_literal_buffer_reads;
+extern bool g_optimize_cuda_block_and_grid_sizes;
