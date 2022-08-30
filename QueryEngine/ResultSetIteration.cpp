@@ -1130,7 +1130,7 @@ bool ResultSet::isNullIval(SQLTypeInfo const& ti,
                            int64_t const ival) {
   return ti.is_any<kDOUBLE>()  ? shared::bit_cast<double>(ival) == NULL_DOUBLE
          : ti.is_any<kFLOAT>() ? shared::bit_cast<float>(ival) == NULL_FLOAT
-         : ti.is_string()      ? translate_strings ? ival == 0 : ival == NULL_INT
+         : ti.is_string()      ? translate_strings ? ival == NULL_INT : ival == 0
                                : ival == inline_int_null_val(ti);
 }
 // clang-format on
