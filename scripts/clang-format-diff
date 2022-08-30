@@ -1,0 +1,5 @@
+#!/bin/bash
+
+docker run --rm -v "$(pwd)":/workdir -w /workdir -it docker-internal.mapd.com/mapd/core-build-centos7-cuda11.0:latest /bin/bash -c 'source /etc/profile.d/modules.sh && module load mapd-deps && git diff --name-only HEAD^ | grep -e "\(.cpp\|.h\|.hpp\|.cu\|.java\)$" | grep -v patch | grep -v cmake | grep -v ThirdParty | grep -v build | grep -v ".sh$" | xargs -i clang-format -i {}'
+
+sudo chown -R $(id -u):$(id -g) .
