@@ -2707,6 +2707,15 @@ class RelAlgDag : public boost::noncopyable {
           }
           break;
         }
+        case QueryHint::kOptCudaBlockAndGridSizes: {
+          query_hint.registerHint(QueryHint::kOptCudaBlockAndGridSizes);
+          query_hint.opt_cuda_grid_and_block_size = true;
+          if (target.isGlobalHint()) {
+            global_query_hint.registerHint(QueryHint::kOptCudaBlockAndGridSizes);
+            global_query_hint.opt_cuda_grid_and_block_size = true;
+          }
+          break;
+        }
         case QueryHint::kWatchdog: {
           if (g_enable_watchdog) {
             VLOG(1) << "Skip the given query hint \"watchdog\": already enabled";

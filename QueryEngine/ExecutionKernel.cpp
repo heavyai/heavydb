@@ -377,6 +377,9 @@ void ExecutionKernel::runImpl(Executor* executor,
   QueryExecutionContext* query_exe_context{query_exe_context_owned.get()};
   CHECK(query_exe_context);
   int32_t err{0};
+  bool optimize_cuda_block_and_grid_sizes =
+      chosen_device_type == ExecutorDeviceType::GPU &&
+      eo.optimize_cuda_block_and_grid_sizes;
 
   if (ra_exe_unit_.groupby_exprs.empty()) {
     err = executor->executePlanWithoutGroupBy(ra_exe_unit_,
@@ -394,7 +397,8 @@ void ExecutionKernel::runImpl(Executor* executor,
                                               start_rowid,
                                               ra_exe_unit_.input_descs.size(),
                                               eo.allow_runtime_query_interrupt,
-                                              do_render ? render_info_ : nullptr);
+                                              do_render ? render_info_ : nullptr,
+                                              optimize_cuda_block_and_grid_sizes);
   } else {
     if (ra_exe_unit_.union_all) {
       VLOG(1) << "outer_table_id=" << outer_table_id
@@ -417,7 +421,8 @@ void ExecutionKernel::runImpl(Executor* executor,
                                            start_rowid,
                                            ra_exe_unit_.input_descs.size(),
                                            eo.allow_runtime_query_interrupt,
-                                           do_render ? render_info_ : nullptr);
+                                           do_render ? render_info_ : nullptr,
+                                           optimize_cuda_block_and_grid_sizes);
   }
   if (device_results_) {
     std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks_to_hold;
@@ -515,7 +520,9 @@ void KernelSubtask::runImpl(Executor* executor) {
   QueryExecutionContext* query_exe_context{query_exe_context_owned.get()};
   CHECK(query_exe_context);
   int32_t err{0};
-
+  bool optimize_cuda_block_and_grid_sizes =
+      kernel_.chosen_device_type == ExecutorDeviceType::GPU &&
+      kernel_.eo.optimize_cuda_block_and_grid_sizes;
   if (kernel_.ra_exe_unit_.groupby_exprs.empty()) {
     err = executor->executePlanWithoutGroupBy(kernel_.ra_exe_unit_,
                                               compilation_result,
@@ -533,6 +540,7 @@ void KernelSubtask::runImpl(Executor* executor) {
                                               kernel_.ra_exe_unit_.input_descs.size(),
                                               kernel_.eo.allow_runtime_query_interrupt,
                                               do_render ? kernel_.render_info_ : nullptr,
+                                              optimize_cuda_block_and_grid_sizes,
                                               start_rowid_ + num_rows_to_process_);
   } else {
     err = executor->executePlanWithGroupBy(kernel_.ra_exe_unit_,
@@ -553,6 +561,7 @@ void KernelSubtask::runImpl(Executor* executor) {
                                            kernel_.ra_exe_unit_.input_descs.size(),
                                            kernel_.eo.allow_runtime_query_interrupt,
                                            do_render ? kernel_.render_info_ : nullptr,
+                                           optimize_cuda_block_and_grid_sizes,
                                            start_rowid_ + num_rows_to_process_);
   }
 

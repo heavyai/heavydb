@@ -154,6 +154,7 @@ size_t g_max_cacheable_hashtable_size_bytes{size_t(1) << 31};
 size_t g_query_resultset_cache_total_bytes{size_t(1) << 32};
 size_t g_max_cacheable_query_resultset_size_bytes{size_t(1) << 31};
 size_t g_auto_resultset_caching_threshold{size_t(1) << 20};
+bool g_optimize_cuda_block_and_grid_sizes{false};
 
 size_t g_approx_quantile_buffer{1000};
 size_t g_approx_quantile_centroids{300};
@@ -3336,6 +3337,7 @@ int32_t Executor::executePlanWithoutGroupBy(
     const uint32_t num_tables,
     const bool allow_runtime_interrupt,
     RenderInfo* render_info,
+    const bool optimize_cuda_block_and_grid_sizes,
     const int64_t rows_to_process) {
   INJECT_TIMER(executePlanWithoutGroupBy);
   auto timer = DEBUG_TIMER(__func__);
@@ -3414,7 +3416,8 @@ int32_t Executor::executePlanWithoutGroupBy(
           num_tables,
           allow_runtime_interrupt,
           join_hash_table_ptrs,
-          render_allocator_map_ptr);
+          render_allocator_map_ptr,
+          optimize_cuda_block_and_grid_sizes);
       output_memory_scope.reset(new OutVecOwner(out_vec));
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
@@ -3561,6 +3564,7 @@ int32_t Executor::executePlanWithGroupBy(
     const uint32_t num_tables,
     const bool allow_runtime_interrupt,
     RenderInfo* render_info,
+    const bool optimize_cuda_block_and_grid_sizes,
     const int64_t rows_to_process) {
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(executePlanWithGroupBy);
@@ -3681,7 +3685,8 @@ int32_t Executor::executePlanWithGroupBy(
           num_tables,
           allow_runtime_interrupt,
           join_hash_table_ptrs,
-          render_allocator_map_ptr);
+          render_allocator_map_ptr,
+          optimize_cuda_block_and_grid_sizes);
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
     } catch (const OutOfRenderMemory&) {

@@ -78,7 +78,8 @@ class QueryExecutionContext : boost::noncopyable {
       const uint32_t num_tables,
       const bool allow_runtime_interrupt,
       const std::vector<int8_t*>& join_hash_tables,
-      RenderAllocatorMap* render_allocator_map);
+      RenderAllocatorMap* render_allocator_map,
+      bool optimize_cuda_block_and_grid_sizes);
 
   std::vector<int64_t*> launchCpuCode(
       const RelAlgExecutionUnit& ra_exe_unit,
