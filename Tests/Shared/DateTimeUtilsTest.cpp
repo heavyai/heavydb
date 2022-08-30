@@ -71,7 +71,9 @@ TEST(TIME, LegalParseTimeString) {
       {"22:28"s, 80880}};
 
   for (const auto& [time_str, expected_epoch] : values) {
-    ASSERT_EQ(expected_epoch, dateTimeParse<kTIME>(time_str, 0)) << time_str;
+    ASSERT_EQ(expected_epoch,
+              dateTimeParse<hdk::ir::Type::kTime>(time_str, hdk::ir::TimeUnit::kSecond))
+        << time_str;
   }
 }
 
@@ -81,7 +83,9 @@ TEST(TIME, IllegalParseTimeString) {
       "22-28-48"s, "2228.48"s, "22.28.48"s, "22"s};
 
   for (const auto& val : values) {
-    ASSERT_THROW(dateTimeParse<kTIME>(val, 0), std::runtime_error) << val;
+    ASSERT_THROW(dateTimeParse<hdk::ir::Type::kTime>(val, hdk::ir::TimeUnit::kSecond),
+                 std::runtime_error)
+        << val;
   }
 }
 
@@ -93,10 +97,14 @@ TEST(TIMESTAMPS, OverflowUnderflow) {
       "09/21/1676 00:12:43.145224193"s,
       "09/21/1677 00:00:43.145224193"s};
   for (const auto& value : values) {
-    ASSERT_NO_THROW(dateTimeParse<kTIMESTAMP>(value, 0));
-    ASSERT_NO_THROW(dateTimeParse<kTIMESTAMP>(value, 3));
-    ASSERT_NO_THROW(dateTimeParse<kTIMESTAMP>(value, 6));
-    ASSERT_NO_THROW(dateTimeParse<kTIMESTAMP>(value, 9));
+    ASSERT_NO_THROW(
+        dateTimeParse<hdk::ir::Type::kTimestamp>(value, hdk::ir::TimeUnit::kSecond));
+    ASSERT_NO_THROW(
+        dateTimeParse<hdk::ir::Type::kTimestamp>(value, hdk::ir::TimeUnit::kMilli));
+    ASSERT_NO_THROW(
+        dateTimeParse<hdk::ir::Type::kTimestamp>(value, hdk::ir::TimeUnit::kMicro));
+    ASSERT_NO_THROW(
+        dateTimeParse<hdk::ir::Type::kTimestamp>(value, hdk::ir::TimeUnit::kNano));
   }
 }
 

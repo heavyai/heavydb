@@ -15,31 +15,63 @@
  */
 #pragma once
 
+#include "IR/Type.h"
 #include "sqltypes.h"
 
 #include <optional>
 #include <ostream>
 #include <string_view>
 
-template <SQLTypes SQL_TYPE>
-std::optional<int64_t> dateTimeParseOptional(std::string_view, unsigned const dim);
+template <hdk::ir::Type::Id TYPE>
+std::optional<int64_t> dateTimeParseOptional(std::string_view, hdk::ir::TimeUnit unit);
 
 template <>
-std::optional<int64_t> dateTimeParseOptional<kDATE>(std::string_view, unsigned const dim);
+std::optional<int64_t> dateTimeParseOptional<hdk::ir::Type::kDate>(
+    std::string_view,
+    hdk::ir::TimeUnit unit);
 
 template <>
-std::optional<int64_t> dateTimeParseOptional<kTIME>(std::string_view, unsigned const dim);
+std::optional<int64_t> dateTimeParseOptional<hdk::ir::Type::kTime>(
+    std::string_view,
+    hdk::ir::TimeUnit unit);
 
 template <>
-std::optional<int64_t> dateTimeParseOptional<kTIMESTAMP>(std::string_view,
-                                                         unsigned const dim);
+std::optional<int64_t> dateTimeParseOptional<hdk::ir::Type::kTimestamp>(
+    std::string_view,
+    hdk::ir::TimeUnit unit);
 
-template <SQLTypes SQL_TYPE>
-int64_t dateTimeParse(std::string_view const s, unsigned const dim) {
-  if (auto const time = dateTimeParseOptional<SQL_TYPE>(s, dim)) {
+template <hdk::ir::Type::Id TYPE>
+int64_t dateTimeParse(std::string_view const s, hdk::ir::TimeUnit unit) {
+  if (auto const time = dateTimeParseOptional<TYPE>(s, unit)) {
     return *time;
   } else {
-    throw std::runtime_error(cat("Invalid ", toString(SQL_TYPE), " string (", s, ')'));
+    throw std::runtime_error(cat("Invalid ", toString(TYPE), " string (", s, ')'));
+  }
+}
+
+template <hdk::ir::Type::Id TYPE>
+int64_t dateTimeParse(std::string_view const s, int dim) {
+  hdk::ir::TimeUnit unit;
+  switch (dim) {
+    case 0:
+      unit = hdk::ir::TimeUnit::kSecond;
+      break;
+    case 3:
+      unit = hdk::ir::TimeUnit::kMilli;
+      break;
+    case 6:
+      unit = hdk::ir::TimeUnit::kMicro;
+      break;
+    case 9:
+      unit = hdk::ir::TimeUnit::kNano;
+      break;
+    default:
+      abort();
+  }
+  if (auto const time = dateTimeParseOptional<TYPE>(s, unit)) {
+    return *time;
+  } else {
+    throw std::runtime_error(cat("Invalid ", toString(TYPE), " string (", s, ')'));
   }
 }
 
@@ -53,7 +85,7 @@ int64_t dateTimeParse(std::string_view const s, unsigned const dim) {
 class DateTimeParser {
  public:
   enum class FormatType { Date, Time, Timezone };
-  std::optional<int64_t> parse(std::string_view const, unsigned dim);
+  std::optional<int64_t> parse(std::string_view const, hdk::ir::TimeUnit unit);
   void setFormatType(FormatType);
   std::string_view unparsed() const;
 
@@ -68,7 +100,7 @@ class DateTimeParser {
     int z{0};               // timezone offset in seconds
     std::optional<bool> p;  // true if pm, false if am, nullopt if unspecified
 
-    int64_t getTime(unsigned const dim) const;
+    int64_t getTime(hdk::ir::TimeUnit unit) const;
     friend std::ostream& operator<<(std::ostream&, DateTime const&);
   };
 

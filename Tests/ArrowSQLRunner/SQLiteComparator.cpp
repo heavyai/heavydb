@@ -15,6 +15,8 @@
  */
 
 #include "SQLiteComparator.h"
+#include "IR/Context.h"
+#include "IR/Type.h"
 
 #include "Shared/DateTimeParser.h"
 
@@ -160,20 +162,22 @@ void compare_impl(SqliteConnector& connector,
           CHECK(omnisci_as_int_p);
           const auto omnisci_val = *omnisci_as_int_p;
           time_t nsec = 0;
-          const int dimen = omnisci_ti.get_dimension();
+          auto type = hdk::ir::Context::defaultCtx().fromTypeInfo(omnisci_ti);
+          auto unit = dynamic_cast<const hdk::ir::DateTimeBaseType*>(type)->unit();
           if (ref_is_null) {
             CHECK_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
           } else {
             const auto ref_val = connector.getData<std::string>(row_idx, col_idx);
-            auto temp_val = dateTimeParseOptional<kTIMESTAMP>(ref_val, dimen);
+            auto temp_val =
+                dateTimeParseOptional<hdk::ir::Type::kTimestamp>(ref_val, unit);
             if (!temp_val) {
-              temp_val = dateTimeParseOptional<kDATE>(ref_val, dimen);
+              temp_val = dateTimeParseOptional<hdk::ir::Type::kDate>(ref_val, unit);
             }
             CHECK(temp_val) << ref_val;
             nsec = temp_val.value();
             if (timestamp_approx) {
               // approximate result give 10 second lee way
-              ASSERT_NEAR(*omnisci_as_int_p, nsec, dimen > 0 ? 10 * pow(10, dimen) : 10);
+              ASSERT_NEAR(*omnisci_as_int_p, nsec, hdk::ir::unitsPerSecond(unit) * 10);
             } else {
               struct tm tm_struct {
                 0
@@ -195,7 +199,8 @@ void compare_impl(SqliteConnector& connector,
                       << errmsg;
                 }
               } else {
-                ASSERT_EQ(*omnisci_as_int_p, dimen > 0 ? nsec : timegm(&tm_struct))
+                ASSERT_EQ(*omnisci_as_int_p,
+                          unit > hdk::ir::TimeUnit::kSecond ? nsec : timegm(&tm_struct))
                     << errmsg;
               }
             }

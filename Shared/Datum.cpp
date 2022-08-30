@@ -307,13 +307,13 @@ Datum StringToDatum(std::string_view s, SQLTypeInfo& ti) {
         d.doubleval = std::stod(std::string(s));
         break;
       case kTIME:
-        d.bigintval = dateTimeParse<kTIME>(s, ti.get_dimension());
+        d.bigintval = dateTimeParse<hdk::ir::Type::kTime>(s, ti.get_dimension());
         break;
       case kTIMESTAMP:
-        d.bigintval = dateTimeParse<kTIMESTAMP>(s, ti.get_dimension());
+        d.bigintval = dateTimeParse<hdk::ir::Type::kTimestamp>(s, ti.get_dimension());
         break;
       case kDATE:
-        d.bigintval = dateTimeParse<kDATE>(s, ti.get_dimension());
+        d.bigintval = dateTimeParse<hdk::ir::Type::kDate>(s, ti.get_dimension());
         break;
       default:
         throw std::runtime_error("Internal error: invalid type in StringToDatum: " +

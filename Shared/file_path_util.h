@@ -113,12 +113,12 @@ const std::function<bool(const std::string&, const std::string&)>
   int64_t lhs_t;
   int64_t rhs_t;
   try {
-    lhs_t = dateTimeParse<kDATE>(lhs, 0);
+    lhs_t = dateTimeParse<hdk::ir::Type::kDate>(lhs, hdk::ir::TimeUnit::kSecond);
   } catch (const std::exception& e) {
     lhs_t = 0;
   }
   try {
-    rhs_t = dateTimeParse<kDATE>(rhs, 0);
+    rhs_t = dateTimeParse<hdk::ir::Type::kDate>(rhs, hdk::ir::TimeUnit::kSecond);
   } catch (const std::exception& e) {
     rhs_t = 0;
   }

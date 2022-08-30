@@ -132,21 +132,22 @@ std::optional<int64_t> unixTime(std::string_view const str) {
 // Interpret str according to DateTimeParser::FormatType::Time.
 // Return number of (s,ms,us,ns) since midnight based on dim in (0,3,6,9) resp.
 template <>
-std::optional<int64_t> dateTimeParseOptional<kTIME>(std::string_view str,
-                                                    unsigned const dim) {
+std::optional<int64_t> dateTimeParseOptional<hdk::ir::Type::kTime>(
+    std::string_view str,
+    hdk::ir::TimeUnit unit) {
   if (!str.empty() && str.front() == 'T') {
     str.remove_prefix(1);
   }
   DateTimeParser parser;
   parser.setFormatType(DateTimeParser::FormatType::Time);
-  std::optional<int64_t> time = parser.parse(str, dim);
+  std::optional<int64_t> time = parser.parse(str, unit);
   if (!time) {
     return std::nullopt;
   }
   // Parse optional timezone
   std::string_view timezone = parser.unparsed();
   parser.setFormatType(DateTimeParser::FormatType::Timezone);
-  std::optional<int64_t> tz = parser.parse(timezone, dim);
+  std::optional<int64_t> tz = parser.parse(timezone, unit);
   if (!parser.unparsed().empty()) {
     return std::nullopt;
   }
@@ -156,15 +157,16 @@ std::optional<int64_t> dateTimeParseOptional<kTIME>(std::string_view str,
 // Interpret str according to DateTimeParser::FormatType::Date and Time.
 // Return number of (s,ms,us,ns) since epoch based on dim in (0,3,6,9) resp.
 template <>
-std::optional<int64_t> dateTimeParseOptional<kTIMESTAMP>(std::string_view str,
-                                                         unsigned const dim) {
+std::optional<int64_t> dateTimeParseOptional<hdk::ir::Type::kTimestamp>(
+    std::string_view str,
+    hdk::ir::TimeUnit unit) {
   if (!str.empty() && str.front() == 'T') {
     str.remove_prefix(1);
   }
   DateTimeParser parser;
   // Parse date
   parser.setFormatType(DateTimeParser::FormatType::Date);
-  std::optional<int64_t> date = parser.parse(str, dim);
+  std::optional<int64_t> date = parser.parse(str, unit);
   if (!date) {
     return unixTime(str);
   }
@@ -176,42 +178,65 @@ std::optional<int64_t> dateTimeParseOptional<kTIMESTAMP>(std::string_view str,
     time_of_day.remove_prefix(1);
   }
   parser.setFormatType(DateTimeParser::FormatType::Time);
-  std::optional<int64_t> time = parser.parse(time_of_day, dim);
+  std::optional<int64_t> time = parser.parse(time_of_day, unit);
   // Parse optional timezone
   std::string_view timezone = parser.unparsed();
   parser.setFormatType(DateTimeParser::FormatType::Timezone);
-  std::optional<int64_t> tz = parser.parse(timezone, dim);
+  std::optional<int64_t> tz = parser.parse(timezone, unit);
   return *date + time.value_or(0) + tz.value_or(0);
 }
 
 // Interpret str according to DateTimeParser::FormatType::Date.
 // Return number of (s,ms,us,ns) since epoch based on dim in (0,3,6,9) resp.
 template <>
-std::optional<int64_t> dateTimeParseOptional<kDATE>(std::string_view str,
-                                                    unsigned const dim) {
+std::optional<int64_t> dateTimeParseOptional<hdk::ir::Type::kDate>(
+    std::string_view str,
+    hdk::ir::TimeUnit unit) {
   DateTimeParser parser;
   // Parse date
   parser.setFormatType(DateTimeParser::FormatType::Date);
-  std::optional<int64_t> date = parser.parse(str, dim);
+  std::optional<int64_t> date = parser.parse(str, unit);
   if (!date) {
     return unixTime(str);
   }
   // Parse optional timezone
   std::string_view timezone = parser.unparsed();
   parser.setFormatType(DateTimeParser::FormatType::Timezone);
-  std::optional<int64_t> tz = parser.parse(timezone, dim);
+  std::optional<int64_t> tz = parser.parse(timezone, unit);
   return *date + tz.value_or(0);
 }
 
 // Return number of (s,ms,us,ns) since epoch based on dim in (0,3,6,9) resp.
-int64_t DateTimeParser::DateTime::getTime(unsigned const dim) const {
+int64_t DateTimeParser::DateTime::getTime(hdk::ir::TimeUnit unit) const {
+  unsigned scale;
+  switch (unit) {
+    case hdk::ir::TimeUnit::kSecond:
+      scale = 0;
+      break;
+    case hdk::ir::TimeUnit::kMilli:
+      scale = 3;
+      break;
+    case hdk::ir::TimeUnit::kMicro:
+      scale = 6;
+      break;
+    case hdk::ir::TimeUnit::kNano:
+      scale = 9;
+      break;
+    case hdk::ir::TimeUnit::kDay:
+      // Parsed date is returned in seconds.
+      scale = 0;
+      break;
+    case hdk::ir::TimeUnit::kMonth:
+    default:
+      throw std::runtime_error("Unsupported time unit for parser: " + toString(unit));
+  }
   int64_t const days = daysFromCivil(Y, m, d);
   int const seconds = static_cast<int>(3600 * H + 60 * M + S) - z +
                       (p ? *p && H != 12    ? 12 * 3600
                            : !*p && H == 12 ? -12 * 3600
                                             : 0
                          : 0);
-  return (24 * 3600 * days + seconds) * pow_10[dim] + n / pow_10[9 - dim];
+  return (24 * 3600 * days + seconds) * pow_10[scale] + n / pow_10[9 - scale];
 }
 
 // Return true if successful parse, false otherwise.  Update dt_ and str.
@@ -241,14 +266,15 @@ bool DateTimeParser::parseWithFormat(std::string_view format, std::string_view& 
 // Return number of (s,ms,us,ns) since epoch based on dim in (0,3,6,9) resp.
 // or std::nullopt if no format matches str.
 // In either case, update unparsed_ to the remaining part of str that was not matched.
-std::optional<int64_t> DateTimeParser::parse(std::string_view const str, unsigned dim) {
+std::optional<int64_t> DateTimeParser::parse(std::string_view const str,
+                                             hdk::ir::TimeUnit unit) {
   static std::vector<std::vector<std::string_view>> const& format_views = formatViews();
   auto const& formats = format_views.at(static_cast<int>(format_type_));
   for (std::string_view const format : formats) {
     std::string_view str_unparsed = str;
     if (parseWithFormat(format, str_unparsed)) {
       unparsed_ = str_unparsed;
-      return dt_.getTime(dim);
+      return dt_.getTime(unit);
     }
   }
   unparsed_ = str;

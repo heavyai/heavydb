@@ -107,7 +107,7 @@ else()
 endif()
 
 target_link_libraries(CorrelatedSubqueryTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(DateTimeUtilsTest gtest Logger Shared ${LLVM_LINKER_FLAGS})
+target_link_libraries(DateTimeUtilsTest gtest Logger IR Shared ${LLVM_LINKER_FLAGS})
 target_link_libraries(ThreadingTest gtest Logger Shared ${LLVM_LINKER_FLAGS} ${TBB_LIBRARIES})
 target_link_libraries(ThreadingTestSTD gtest Logger Shared ${LLVM_LINKER_FLAGS})
 target_link_libraries(JoinHashTableTest ${EXECUTE_TEST_LIBS})
