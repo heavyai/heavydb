@@ -9,7 +9,7 @@ RUN tar xvf heavyai-latest-Linux-x86_64-cpu.tar.gz --strip-components=1 && \
 
 # Build final stage
 FROM ubuntu:18.04
-LABEL maintainer "Andrew Seidl <andrew@heavy.ai>"
+LABEL maintainer "HEAVY.AI Support <support@heavy.ai>"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libldap-2.4-2 \
