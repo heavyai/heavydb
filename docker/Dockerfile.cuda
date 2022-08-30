@@ -9,7 +9,7 @@ RUN tar xvf heavyai-latest-Linux-x86_64.tar.gz --strip-components=1 && \
 
 # Build final stage
 FROM nvidia/cudagl:11.4.2-runtime-ubuntu18.04
-LABEL maintainer "Andrew Seidl <andrew@heavy.ai>"
+LABEL maintainer "HEAVY.AI Support <support@heavy.ai>"
 
 ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,graphics
 
