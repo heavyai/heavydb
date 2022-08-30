@@ -264,15 +264,16 @@ T parseInteger(std::string_view s, SQLTypeInfo const& ti) {
 /*
  * @brief convert string to a datum
  */
-Datum StringToDatum(std::string_view s, SQLTypeInfo& ti) {
+Datum StringToDatum(std::string_view s, const hdk::ir::Type* type) {
   Datum d;
   try {
-    switch (ti.get_type()) {
-      case kARRAY:
-      case kCOLUMN:
-      case kCOLUMN_LIST:
+    switch (type->id()) {
+      case hdk::ir::Type::kFixedLenArray:
+      case hdk::ir::Type::kVarLenArray:
+      case hdk::ir::Type::kColumn:
+      case hdk::ir::Type::kColumnList:
         break;
-      case kBOOLEAN:
+      case hdk::ir::Type::kBoolean:
         if (s == "t" || s == "T" || s == "1" || to_upper(std::string(s)) == "TRUE") {
           d.boolval = true;
         } else if (s == "f" || s == "F" || s == "0" ||
@@ -282,48 +283,69 @@ Datum StringToDatum(std::string_view s, SQLTypeInfo& ti) {
           throw std::runtime_error("Invalid string for boolean " + std::string(s));
         }
         break;
-      case kNUMERIC:
-      case kDECIMAL:
-        d.bigintval = parse_numeric(s, ti);
+      case hdk::ir::Type::kInteger:
+        switch (type->size()) {
+          case 1:
+            d.tinyintval = parseInteger<int8_t>(s, type);
+            break;
+          case 2:
+            d.smallintval = parseInteger<int16_t>(s, type);
+            break;
+          case 4:
+            d.intval = parseInteger<int32_t>(s, type);
+            break;
+          case 8:
+            d.bigintval = parseInteger<int64_t>(s, type);
+            break;
+          default:
+            abort();
+        }
         break;
-      case kBIGINT:
-        d.bigintval = parseInteger<int64_t>(s, ti);
+      case hdk::ir::Type::kDecimal:
+        CHECK_EQ(type->size(), 8);
+        d.bigintval = parse_numeric(s, type);
         break;
-      case kINT:
-        d.intval = parseInteger<int32_t>(s, ti);
+      case hdk::ir::Type::kFloatingPoint:
+        switch (type->as<hdk::ir::FloatingPointType>()->precision()) {
+          case hdk::ir::FloatingPointType::kFloat:
+            d.floatval = std::stof(std::string(s));
+            break;
+          case hdk::ir::FloatingPointType::kDouble:
+            d.doubleval = std::stod(std::string(s));
+            break;
+          default:
+            abort();
+        }
         break;
-      case kSMALLINT:
-        d.smallintval = parseInteger<int16_t>(s, ti);
-        break;
-      case kTINYINT:
-        d.tinyintval = parseInteger<int8_t>(s, ti);
-        break;
-      case kFLOAT:
-        d.floatval = std::stof(std::string(s));
-        break;
-      case kDOUBLE:
-        d.doubleval = std::stod(std::string(s));
-        break;
-      case kTIME:
-        d.bigintval = dateTimeParse<hdk::ir::Type::kTime>(s, ti.get_dimension());
-        break;
-      case kTIMESTAMP:
-        d.bigintval = dateTimeParse<hdk::ir::Type::kTimestamp>(s, ti.get_dimension());
-        break;
-      case kDATE:
-        d.bigintval = dateTimeParse<hdk::ir::Type::kDate>(s, ti.get_dimension());
-        break;
+      case hdk::ir::Type::kDate:
+      case hdk::ir::Type::kTime:
+      case hdk::ir::Type::kTimestamp: {
+        auto unit = type->as<hdk::ir::DateTimeBaseType>()->unit();
+        int64_t val;
+        if (type->isDate()) {
+          val = dateTimeParse<hdk::ir::Type::kDate>(s, unit);
+        } else if (type->isTime()) {
+          val = dateTimeParse<hdk::ir::Type::kTime>(s, unit);
+        } else {
+          val = dateTimeParse<hdk::ir::Type::kTimestamp>(s, unit);
+        }
+        d.bigintval = val;
+      } break;
       default:
         throw std::runtime_error("Internal error: invalid type in StringToDatum: " +
-                                 ti.get_type_name());
+                                 type->toString());
     }
   } catch (const std::invalid_argument&) {
-    throw std::runtime_error("Invalid conversion from string to " + ti.get_type_name());
+    throw std::runtime_error("Invalid conversion from string to " + type->toString());
   } catch (const std::out_of_range&) {
     throw std::runtime_error("Got out of range error during conversion from string to " +
-                             ti.get_type_name());
+                             type->toString());
   }
   return d;
+}
+
+Datum StringToDatum(std::string_view s, SQLTypeInfo& ti) {
+  return StringToDatum(s, hdk::ir::Context::defaultCtx().fromTypeInfo(ti));
 }
 
 bool DatumEqual(const Datum a, const Datum b, const SQLTypeInfo& ti) {

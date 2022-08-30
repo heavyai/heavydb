@@ -971,6 +971,7 @@ inline std::ostream& operator<<(std::ostream& os, const SQLTypeInfo& ti) {
 #include <string_view>
 
 Datum StringToDatum(std::string_view s, SQLTypeInfo& ti);
+Datum StringToDatum(std::string_view s, const hdk::ir::Type* type);
 std::string DatumToString(Datum d, const SQLTypeInfo& ti);
 #endif
 
