@@ -16,6 +16,8 @@
 
 package com.mapd.calcite.parser;
 
+import static com.mapd.parser.server.ExtensionFunction.*;
+
 import static org.apache.calcite.util.Static.RESOURCE;
 
 import com.google.common.base.Predicate;
@@ -53,6 +55,7 @@ import org.apache.calcite.sql.SqlWriter;
 import org.apache.calcite.sql.fun.SqlArrayValueConstructor;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParserPos;
+import org.apache.calcite.sql.type.ArraySqlType;
 import org.apache.calcite.sql.type.InferTypes;
 import org.apache.calcite.sql.type.OperandTypes;
 import org.apache.calcite.sql.type.ReturnTypes;
@@ -2643,8 +2646,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
               null,
               new ExtTableFunctionTypeChecker(HeavyDBSqlOperatorTable.this),
               SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
-      arg_types = sig.toSqlSignature();
-      outs = sig.getSqlOuts();
+      arg_types = sig.getArgs();
+      outs = sig.getOuts();
       out_names = sig.getOutNames();
       arg_names = sig.getArgNames();
       // pretty_arg_names will be same as arg_names, except with
@@ -2694,7 +2697,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
           }
 
           public RelDataType getType(RelDataTypeFactory typeFactory) {
-            return arg_types.get(arg_idx).getDefaultConcreteType(typeFactory);
+            SqlTypeFamily type = toSqlTypeName(arg_types.get(arg_idx)).getFamily();
+            return type.getDefaultConcreteType(typeFactory);
           }
 
           public boolean isOptional() {
@@ -2708,9 +2712,21 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public SqlReturnTypeInference getRowTypeInference() {
       return opBinding -> {
-        FieldInfoBuilder ret = opBinding.getTypeFactory().builder();
+        RelDataTypeFactory fact = opBinding.getTypeFactory();
+        FieldInfoBuilder ret = fact.builder();
         for (int out_idx = 0; out_idx < outs.size(); ++out_idx) {
-          ret = ret.add(out_names.get(out_idx), outs.get(out_idx));
+          RelDataType type;
+          if (toSqlTypeName(outs.get(out_idx)) == SqlTypeName.ARRAY) {
+            ExtArgumentType extSubType = getValueType(outs.get(out_idx));
+            if (ExtensionFunction.isColumnArrayType(outs.get(out_idx))) {
+              extSubType = getValueType(extSubType);
+            }
+            RelDataType subtype = fact.createSqlType(toSqlTypeName(extSubType));
+            type = fact.createArrayType(subtype, -1);
+          } else {
+            type = fact.createSqlType(toSqlTypeName(outs.get(out_idx)));
+          }
+          ret = ret.add(out_names.get(out_idx), type);
           ret = ret.nullable(true);
         }
         return ret.build();
@@ -2781,13 +2797,13 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
           ret.append(", ");
         }
 
-        SqlTypeFamily type = arg_types.get(i);
+        ExtArgumentType type = arg_types.get(i);
         String paramName = arg_names.get(i);
         ret.append(paramName).append(" => ");
 
         final String t = type.toString().toUpperCase(Locale.ROOT);
         ret.append("<").append(t);
-        if (type == SqlTypeFamily.CURSOR) {
+        if (type == ExtArgumentType.Cursor) {
           List<ExtensionFunction.ExtArgumentType> field_types =
                   cursor_field_types.get(paramName);
           ret.append("[");
@@ -2795,15 +2811,18 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
             if (j > 0) {
               ret.append(",");
             }
-            ExtensionFunction.ExtArgumentType field_type = field_types.get(j);
-            ret.append(ExtensionFunction.toSqlTypeName(field_type));
-            if (ExtensionFunction.isColumnListType(field_type)) {
-              ExtensionFunction.ExtArgumentType subtype =
-                      ExtensionFunction.getValueType(field_type);
+            ExtArgumentType field_type = field_types.get(j);
+            ret.append(toSqlTypeName(field_type));
+            if (isColumnListType(field_type)) {
+              ExtArgumentType subtype = getValueType(field_type);
               ret.append("[");
-              ret.append(ExtensionFunction.toSqlTypeName(subtype));
+              ret.append(toSqlTypeName(subtype));
               ret.append("]");
-            } else if (ExtensionFunction.isColumnArrayType(field_type)) {
+            } else if (isColumnArrayType(field_type) || isArrayType(field_type)) {
+              ExtArgumentType subtype = getValueType(getValueType(field_type));
+              ret.append("[");
+              ret.append(toSqlTypeName(subtype));
+              ret.append("]");
             }
           }
           ret.append("]");
@@ -2856,16 +2875,15 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
         if (arg_types.get(i) != other.arg_types.get(i)) {
           return false;
         }
-        if (arg_types.get(i) == SqlTypeFamily.CURSOR) {
+        if (arg_types.get(i) == ExtArgumentType.Cursor) {
           String paramName = this.arg_names.get(i);
           String otherParamName = other.getExtendedParamNames().get(i);
           if (!paramName.equals(otherParamName)) {
             return false;
           }
 
-          List<ExtensionFunction.ExtArgumentType> field_types =
-                  this.getCursorFieldTypes().get(paramName);
-          List<ExtensionFunction.ExtArgumentType> other_field_types =
+          List<ExtArgumentType> field_types = this.getCursorFieldTypes().get(paramName);
+          List<ExtArgumentType> other_field_types =
                   other.getCursorFieldTypes().get(paramName);
           if (field_types.size() != other_field_types.size()) {
             return false;
@@ -2890,21 +2908,21 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
               + ")");
     }
 
-    Map<String, List<ExtensionFunction.ExtArgumentType>> getCursorFieldTypes() {
+    Map<String, List<ExtArgumentType>> getCursorFieldTypes() {
       return cursor_field_types;
     }
 
-    List<SqlTypeFamily> getArgTypes() {
+    List<ExtArgumentType> getArgTypes() {
       return arg_types;
     }
 
-    private final List<SqlTypeFamily> arg_types;
-    private final List<SqlTypeName> outs;
+    private final List<ExtArgumentType> arg_types;
+    private final List<ExtArgumentType> outs;
     private final List<String> arg_names;
     private final List<String> pretty_arg_names;
     private final List<String> out_names;
     private final Map<String, String> options;
-    private final Map<String, List<ExtensionFunction.ExtArgumentType>> cursor_field_types;
+    private final Map<String, List<ExtArgumentType>> cursor_field_types;
   }
 
   //

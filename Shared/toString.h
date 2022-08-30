@@ -426,4 +426,8 @@ std::string toString(const std::tuple<Ts...>& t) {
   return "(" + toStringImpl(t, std::index_sequence_for<Ts...>{}) + ")";
 }
 
+#else
+
+#define PRINT(...)
+
 #endif  // ifndef __CUDACC__

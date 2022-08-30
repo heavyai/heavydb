@@ -73,6 +73,8 @@ inline void set_compact_type(TargetInfo& target, const SQLTypeInfo& new_type) {
   target.sql_type = new_type;
 }
 
+// TODO: this function appears to be out of sync with
+// inline_int_null_val in InlineNullValues.h, or vice-versa??
 inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
   auto type = ti.get_type();
   if (ti.is_string()) {

@@ -1424,12 +1424,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
         CHECK(target_info.sql_type.is_array());
         ArrayDatum ad;
         if (FlatBufferManager::isFlatBuffer(col_buf)) {
-          FlatBufferManager m{col_buf};
-          int64_t length;
-          auto status = m.getItem(varlen_ptr, length, ad.pointer, ad.is_null);
-          CHECK_EQ(status, FlatBufferManager::Status::Success);
-          CHECK_GE(length, 0);
-          ad.length = length;
+          VarlenArray_get_nth(col_buf, varlen_ptr, &ad, &is_end);
         } else {
           ChunkIter_get_nth(
               reinterpret_cast<ChunkIter*>(col_buf), varlen_ptr, &ad, &is_end);
