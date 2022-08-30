@@ -51,7 +51,7 @@
 
     | <items count>  | <dtype metadata kind/buffer size> | <max nof values> | <num specified items> | <offsets>    | <varlen array data>                |
     =
-    |<--- 8-bytes -->|<--16-bytes ---------------------->|<-- 8-bytes ----->|<-- 8-bytes ---------->|<--30-bytes-->|<--flatbuffer size minus 96 bytes-->|
+    |<--- 8-bytes -->|<--16-bytes ---------------------->|<-- 8-bytes ----->|<-- 8-bytes ---------->|<--24-bytes-->|<--flatbuffer size minus 96 bytes-->|
     |<------------------------- flatbuffer size minus 24 bytes ---------------------------------------------------------------------------------------->|
 
   where
@@ -130,6 +130,8 @@
 #endif
 #include <string.h>
 
+#include "../../Shared/funcannotations.h"
+
 // Notice that the format value is used to recognize if a memory
 // buffer uses some flat buffer format or not. To minimize chances for
 // false positive test results, use a non-trival integer value when
@@ -181,7 +183,7 @@ struct FlatBufferManager {
   int8_t* buffer;
 
   // Check if a buffer contains FlatBuffer formatted data
-  static bool isFlatBuffer(const void* buffer) {
+  HOST DEVICE static bool isFlatBuffer(const void* buffer) {
     if (buffer) {
       // warning: assume that buffer size is at least 8 bytes
       FlatBufferFormat header_format =
@@ -198,15 +200,24 @@ struct FlatBufferManager {
     return false;
   }
 
+  // Return the allocation size of the the FlatBuffer storage, in bytes
+  static int64_t getBufferSize(const void* buffer) {
+    if (isFlatBuffer(buffer)) {
+      return ((const int64_t*)(buffer))[VarlenArrayHeader::FLATBUFFER_SIZE];
+    } else {
+      return -1;
+    }
+  }
+
   // Return the format of FlatBuffer
-  inline FlatBufferFormat format() const {
+  HOST DEVICE inline FlatBufferFormat format() const {
     return static_cast<FlatBufferFormat>(
         ((int64_t*)buffer)[VarlenArrayHeader::FORMAT_ID]);
   }
 
   // Return the allocation size of the the FlatBuffer storage, in bytes
   inline int64_t flatbufferSize() const {
-    return ((int64_t*)buffer)[VarlenArrayHeader::FLATBUFFER_SIZE];
+    return ((const int64_t*)(buffer))[VarlenArrayHeader::FLATBUFFER_SIZE];
   }
 
   /* DType MetaData support */
@@ -236,7 +247,7 @@ struct FlatBufferManager {
     }
   }
 
-  inline DTypeMetadataKind getDTypeMetadataKind() const {
+  HOST DEVICE inline DTypeMetadataKind getDTypeMetadataKind() const {
     return static_cast<DTypeMetadataKind>(
         ((int64_t*)buffer)[VarlenArrayHeader::DTYPE_METADATA_KIND]);
   }
@@ -245,7 +256,7 @@ struct FlatBufferManager {
     return buffer + ((int64_t*)buffer)[VarlenArrayHeader::DTYPE_METADATA_BUFFER_OFFSET];
   }
 
-  inline const int8_t* getDTypeMetadataBuffer() const {
+  HOST DEVICE inline const int8_t* getDTypeMetadataBuffer() const {
     return buffer +
            ((const int64_t*)buffer)[VarlenArrayHeader::DTYPE_METADATA_BUFFER_OFFSET];
   }
@@ -267,7 +278,7 @@ struct FlatBufferManager {
     }
   }
 
-  int64_t getDTypeMetadataSize() const {
+  HOST DEVICE int64_t getDTypeMetadataSize() const {
     switch (getDTypeMetadataKind()) {
       case DTypeMetadataKind::SIZE: {
         const DTypeMetadataSize* metadata =
@@ -382,7 +393,7 @@ struct FlatBufferManager {
   }
 
   // Return the number of items
-  inline int64_t itemsCount() const {
+  HOST DEVICE inline int64_t itemsCount() const {
     if (format() == FlatBufferFormat::VarlenArray) {
       return ((int64_t*)buffer)[VarlenArrayHeader::ITEMS_COUNT];
     }
@@ -390,11 +401,18 @@ struct FlatBufferManager {
   }
 
   // Return the size of dtype of the item elements, in bytes
-  inline int64_t dtypeSize() const { return getDTypeMetadataSize(); }
+  HOST DEVICE inline int64_t dtypeSize() const { return getDTypeMetadataSize(); }
 
   // Return the upper bound to the total number of values in all items
   inline int64_t VarlenArray_max_nof_values() const {
     return ((int64_t*)buffer)[VarlenArrayHeader::MAX_NOF_VALUES];
+  }
+
+  // Return the total number of values in all specified items
+  inline int64_t VarlenArray_nof_values() const {
+    const int64_t storage_count = VarlenArray_storage_count();
+    const int64_t* compressed_indices = VarlenArray_compressed_indices();
+    return compressed_indices[storage_count];
   }
 
   // Return the size of values buffer in bytes
@@ -407,8 +425,12 @@ struct FlatBufferManager {
     return ((int64_t*)buffer)[VarlenArrayHeader::STORAGE_COUNT];
   }
 
+  inline int64_t& VarlenArray_storage_count() const {
+    return ((int64_t*)buffer)[VarlenArrayHeader::STORAGE_COUNT];
+  }
+
   // Return the pointer to values buffer
-  inline int8_t* VarlenArray_values() {
+  HOST DEVICE inline int8_t* VarlenArray_values() {
     return buffer + ((const int64_t*)buffer)[VarlenArrayHeader::VALUES_OFFSET];
   }
 
@@ -417,7 +439,7 @@ struct FlatBufferManager {
   }
 
   // Return the pointer to compressed indices buffer
-  inline int64_t* VarlenArray_compressed_indices() {
+  HOST DEVICE inline int64_t* VarlenArray_compressed_indices() {
     return reinterpret_cast<int64_t*>(
         buffer + ((const int64_t*)buffer)[VarlenArrayHeader::COMPRESSED_INDICES_OFFSET]);
   }
@@ -427,7 +449,7 @@ struct FlatBufferManager {
   }
 
   // Return the pointer to storage indices buffer
-  inline int64_t* VarlenArray_storage_indices() {
+  HOST DEVICE inline int64_t* VarlenArray_storage_indices() {
     return reinterpret_cast<int64_t*>(
         buffer + ((const int64_t*)buffer)[VarlenArrayHeader::STORAGE_INDICES_OFFSET]);
   }
@@ -592,7 +614,7 @@ struct FlatBufferManager {
   // Get item at index by storing its size (in bytes), values buffer,
   // and nullity information to the corresponding pointer
   // arguments.
-  Status getItem(int64_t index, int64_t& size, int8_t*& dest, bool& is_null) {
+  HOST DEVICE Status getItem(int64_t index, int64_t& size, int8_t*& dest, bool& is_null) {
     if (format() == FlatBufferFormat::VarlenArray) {
       if (index < 0 || index >= itemsCount()) {
         return IndexError;
@@ -632,9 +654,62 @@ struct FlatBufferManager {
     }
     switch (format()) {
       case FlatBufferFormat::VarlenArray: {
+        std::string result = typeName(this) + "(";
+        int64_t numvalues = VarlenArray_nof_values();
+        int64_t numitems = itemsCount();
+        int64_t itemsize = getDTypeMetadataSize();
+
         const int64_t* buf = reinterpret_cast<const int64_t*>(buffer);
-        std::vector<int64_t> v(buf, buf + flatbufferSize() / sizeof(int64_t));
-        return ::typeName(this) + ::toString(v);
+        std::vector<int64_t> header(buf, buf + 11);
+        result += "header=" + ::toString(header);
+
+        const int64_t* metadata_buf =
+            reinterpret_cast<const int64_t*>(getDTypeMetadataBuffer());
+        int64_t metadata_buf_size = getDTypeMetadataBufferSize(getDTypeMetadataKind());
+        std::vector<int64_t> metadata(metadata_buf, metadata_buf + metadata_buf_size);
+        result += ", metadata=" + ::toString(metadata);
+
+        result += ", values=";
+        switch (itemsize) {
+          case 1: {
+            const int8_t* values_buf = VarlenArray_values();
+            std::vector<int8_t> values(values_buf, values_buf + numvalues);
+            result += ::toString(values);
+          } break;
+          case 2: {
+            const int16_t* values_buf =
+                reinterpret_cast<const int16_t*>(VarlenArray_values());
+            std::vector<int16_t> values(values_buf, values_buf + numvalues);
+            result += ::toString(values);
+          } break;
+          case 4: {
+            const int32_t* values_buf =
+                reinterpret_cast<const int32_t*>(VarlenArray_values());
+            std::vector<int32_t> values(values_buf, values_buf + numvalues);
+            result += ::toString(values);
+          } break;
+          case 8: {
+            const int64_t* values_buf =
+                reinterpret_cast<const int64_t*>(VarlenArray_values());
+            std::vector<int64_t> values(values_buf, values_buf + numvalues);
+            result += ::toString(values);
+          } break;
+          default:
+            result += "[UNEXPECTED ITEMSIZE:" + std::to_string(itemsize) + "]";
+        }
+
+        const int64_t* compressed_indices_buf = VarlenArray_compressed_indices();
+        std::vector<int64_t> compressed_indices(compressed_indices_buf,
+                                                compressed_indices_buf + numitems + 1);
+        result += ", compressed_indices=" + ::toString(compressed_indices);
+
+        const int64_t* storage_indices_buf = VarlenArray_storage_indices();
+        std::vector<int64_t> storage_indices(storage_indices_buf,
+                                             storage_indices_buf + numitems);
+        result += ", storage_indices=" + ::toString(storage_indices);
+
+        result += ")";
+        return result;
       }
       default:;
     }

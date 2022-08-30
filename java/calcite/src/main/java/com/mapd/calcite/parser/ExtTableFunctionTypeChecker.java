@@ -1,10 +1,11 @@
 package com.mapd.calcite.parser;
 
+import static com.mapd.parser.server.ExtensionFunction.*;
+
 import static org.apache.calcite.runtime.Resources.BaseMessage;
 import static org.apache.calcite.runtime.Resources.ExInst;
 
 import com.mapd.calcite.parser.HeavyDBSqlOperatorTable.ExtTableFunction;
-import com.mapd.parser.server.ExtensionFunction;
 
 import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.rel.type.RelDataType;
@@ -24,6 +25,7 @@ import org.apache.calcite.sql.SqlSyntax;
 import org.apache.calcite.sql.SqlUtil;
 import org.apache.calcite.sql.type.SqlOperandCountRanges;
 import org.apache.calcite.sql.type.SqlOperandTypeChecker;
+import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlNameMatchers;
 import org.apache.calcite.sql.validate.SqlValidator;
@@ -70,6 +72,8 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
       return false;
     }
     SqlTypeName typeName = type.getSqlTypeName();
+    SqlTypeFamily formalTypeFamily =
+            toSqlTypeName(tf.getArgTypes().get(iFormalOperand)).getFamily();
 
     if (typeName == SqlTypeName.CURSOR) {
       SqlCall cursorCall = (SqlCall) permutedOperand;
@@ -77,7 +81,7 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
               callBinding.getScope(), cursorCall.operand(0));
       return doesCursorOperandTypeMatch(tf, iFormalOperand, cursorType);
     } else {
-      return tf.getArgTypes().get(iFormalOperand).getTypeNames().contains(typeName);
+      return formalTypeFamily.getTypeNames().contains(typeName);
     }
   }
 
@@ -136,7 +140,7 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
     }
 
     // If there are candidates left, and the current bound operator
-    // is not one of them, rewrite the call to use the a better binding.
+    // is not one of them, rewrite the call to use a better binding.
     if (!candidateOverloads.isEmpty()
             && !candidateOverloads.contains(callBinding.getOperator())) {
       ExtTableFunction optimal = candidateOverloads.iterator().next();
@@ -149,7 +153,7 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
   public boolean doesCursorOperandTypeMatch(
           ExtTableFunction tf, int iFormalOperand, RelDataType actualOperand) {
     String formalOperandName = tf.getExtendedParamNames().get(iFormalOperand);
-    List<ExtensionFunction.ExtArgumentType> formalFieldTypes =
+    List<ExtArgumentType> formalFieldTypes =
             tf.getCursorFieldTypes().get(formalOperandName);
     List<RelDataTypeField> actualFieldList = actualOperand.getFieldList();
 
@@ -164,14 +168,13 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
     int iFormal = 0;
     int iActual = 0;
     while (iActual < actualFieldList.size() && iFormal < formalFieldTypes.size()) {
-      ExtensionFunction.ExtArgumentType extType = formalFieldTypes.get(iFormal);
-      SqlTypeName formalType = ExtensionFunction.toSqlTypeName(extType);
+      ExtArgumentType extType = formalFieldTypes.get(iFormal);
+      SqlTypeName formalType = toSqlTypeName(extType);
       SqlTypeName actualType = actualFieldList.get(iActual).getValue().getSqlTypeName();
 
       if (formalType == SqlTypeName.COLUMN_LIST) {
-        ExtensionFunction.ExtArgumentType colListSubtype =
-                ExtensionFunction.getValueType(extType);
-        SqlTypeName colListType = ExtensionFunction.toSqlTypeName(colListSubtype);
+        ExtArgumentType colListSubtype = getValueType(extType);
+        SqlTypeName colListType = toSqlTypeName(colListSubtype);
 
         if (actualType != colListType) {
           return false;
@@ -189,6 +192,16 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
           colListSize++;
         }
         iActual += colListSize - 1;
+      } else if (formalType == SqlTypeName.ARRAY) {
+        SqlTypeName formalArraySubtype =
+                toSqlTypeName(getValueType(getValueType(extType)));
+        SqlTypeName actualArraySubtype = actualFieldList.get(iActual)
+                                                 .getValue()
+                                                 .getComponentType()
+                                                 .getSqlTypeName();
+        if (formalArraySubtype != actualArraySubtype) {
+          return false;
+        }
       } else if (formalType != actualType) {
         return false;
       }

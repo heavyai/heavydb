@@ -993,7 +993,12 @@ const int8_t* ColumnFetcher::transferColumnIfNeeded(
   CHECK_LT(static_cast<size_t>(col_id), col_buffers.size());
   if (memory_level == Data_Namespace::GPU_LEVEL) {
     const auto& col_ti = columnar_results->getColumnType(col_id);
-    const auto num_bytes = columnar_results->size() * col_ti.get_size();
+    size_t num_bytes;
+    if (col_ti.is_array() && FlatBufferManager::isFlatBuffer(col_buffers[col_id])) {
+      num_bytes = FlatBufferManager::getBufferSize(col_buffers[col_id]);
+    } else {
+      num_bytes = columnar_results->size() * col_ti.get_size();
+    }
     CHECK(device_allocator);
     auto gpu_col_buffer = device_allocator->alloc(num_bytes);
     device_allocator->copyToDevice(gpu_col_buffer, col_buffers[col_id], num_bytes);
