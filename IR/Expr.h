@@ -82,9 +82,11 @@ class Expr : public std::enable_shared_from_this<Expr> {
   ExprPtr get_shared_ptr() { return shared_from_this(); }
   const SQLTypeInfo& get_type_info() const { return type_info; }
   virtual void set_type_info(const SQLTypeInfo& ti);
+  const Type* type() const { return type_; }
   bool get_contains_agg() const { return contains_agg; }
   void set_contains_agg(bool a) { contains_agg = a; }
-  virtual ExprPtr add_cast(const SQLTypeInfo& new_type_info);
+  virtual ExprPtr add_cast(const Type* new_type);
+  ExprPtr add_cast(const SQLTypeInfo& new_type_info);
   virtual void check_group_by(const ExprPtrList& groupby) const {};
   virtual ExprPtr deep_copy() const = 0;  // make a deep copy of self
 
@@ -434,7 +436,8 @@ class Constant : public Expr {
   double fpVal() const { return extract_fp_type_from_datum(constval, type_info); }
   const ExprPtrList& get_value_list() const { return value_list; }
   ExprPtr deep_copy() const override;
-  ExprPtr add_cast(const SQLTypeInfo& new_type_info) override;
+  ExprPtr add_cast(const Type* new_type) override;
+  using Expr::add_cast;
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
 
@@ -509,7 +512,7 @@ class UOper : public Expr {
   std::string toString() const override;
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
-  ExprPtr add_cast(const SQLTypeInfo& new_type_info) override;
+  ExprPtr add_cast(const Type* new_type) override;
 
   size_t hash() const override;
 
@@ -1411,7 +1414,7 @@ class CaseExpr : public Expr {
   std::string toString() const override;
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
-  ExprPtr add_cast(const SQLTypeInfo& new_type_info) override;
+  ExprPtr add_cast(const Type* new_type) override;
   void get_domain(DomainSet& domain_set) const override;
 
   size_t hash() const override;

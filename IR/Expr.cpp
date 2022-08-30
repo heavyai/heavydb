@@ -229,6 +229,49 @@ void checkType(SQLTypeInfo old_ti, SQLTypeInfo new_ti) {
                           << " new=" << new_ti.toString() << std::endl;
 }
 
+bool isCastAllowed(const Type* old_type, const Type* new_type) {
+  // can always cast between the same type but different precision/scale/encodings
+  if (old_type->id() == new_type->id()) {
+    return true;
+    // can always cast from or to string
+  } else if (old_type->isString() || new_type->isString()) {
+    return true;
+    // can always cast from or to dict encoded string
+  } else if (old_type->isExtDictionary() || new_type->isExtDictionary()) {
+    return true;
+    // can cast between numbers
+  } else if (old_type->isNumber() && new_type->isNumber()) {
+    return true;
+    // can cast from timestamp or date to number (epoch)
+  } else if ((old_type->isTimestamp() || old_type->isDate()) && new_type->isNumber()) {
+    return true;
+    // can cast from number (epoch) to timestamp, date, or time
+  } else if (old_type->isNumber() && new_type->isDateTime()) {
+    return true;
+    // can cast from date to timestamp
+  } else if (old_type->isDate() && new_type->isTimestamp()) {
+    return true;
+  } else if (old_type->isTimestamp() && new_type->isDate()) {
+    return true;
+  } else if (old_type->isBoolean() && new_type->isNumber()) {
+    return true;
+  } else if (old_type->isArray() && new_type->isArray()) {
+    auto old_elem_type = static_cast<const ArrayBaseType*>(old_type)->elemType();
+    auto new_elem_type = static_cast<const ArrayBaseType*>(new_type)->elemType();
+    return isCastAllowed(old_elem_type, new_elem_type);
+  } else if (old_type->isColumn() && new_type->isColumn()) {
+    auto old_elem_type = static_cast<const ColumnType*>(old_type)->columnType();
+    auto new_elem_type = static_cast<const ColumnType*>(new_type)->columnType();
+    return isCastAllowed(old_elem_type, new_elem_type);
+  } else if (old_type->isColumnList() && new_type->isColumnList()) {
+    auto old_elem_type = static_cast<const ColumnListType*>(old_type)->columnType();
+    auto new_elem_type = static_cast<const ColumnListType*>(new_type)->columnType();
+    return isCastAllowed(old_elem_type, new_elem_type);
+  } else {
+    return false;
+  }
+}
+
 }  // namespace
 
 void OrderEntry::print() const {
@@ -294,26 +337,25 @@ ExprPtr Expr::decompress() {
   return shared_from_this();
 }
 
-ExprPtr Expr::add_cast(const SQLTypeInfo& new_type_info) {
-  if (new_type_info == type_info) {
+ExprPtr Expr::add_cast(const Type* new_type) {
+  if (type_->equal(new_type)) {
     return shared_from_this();
   }
-  if (new_type_info.is_string() && type_info.is_string() &&
-      new_type_info.get_compression() == kENCODING_DICT &&
-      type_info.get_compression() == kENCODING_DICT &&
-      (new_type_info.get_comp_param() == type_info.get_comp_param() ||
-       new_type_info.get_comp_param() == TRANSIENT_DICT(type_info.get_comp_param()))) {
-    return shared_from_this();
+  if (type_->id() == Type::kExtDictionary && new_type->id() == Type::kExtDictionary) {
+    auto dict_id = type_->as<ExtDictionaryType>()->dictId();
+    auto new_dict_id = new_type->as<ExtDictionaryType>()->dictId();
+    if (dict_id == new_dict_id || dict_id == TRANSIENT_DICT(new_dict_id)) {
+      return shared_from_this();
+    }
   }
-  if (!type_info.is_castable(new_type_info)) {
-    throw std::runtime_error("Cannot CAST from " + type_info.get_type_name() + " to " +
-                             new_type_info.get_type_name());
+  if (!isCastAllowed(type_, new_type)) {
+    throw std::runtime_error("Cannot cast from " + type_->toString() + " to " +
+                             new_type->toString());
   }
   // @TODO(wei) temporary restriction until executor can support this.
-  if (typeid(*this) != typeid(Constant) && new_type_info.is_string() &&
-      new_type_info.get_compression() == kENCODING_DICT &&
-      new_type_info.get_comp_param() <= TRANSIENT_DICT_ID) {
-    if (type_info.is_string() && type_info.get_compression() != kENCODING_DICT) {
+  if (typeid(*this) != typeid(Constant) && new_type->isExtDictionary() &&
+      new_type->as<ExtDictionaryType>()->dictId() <= TRANSIENT_DICT_ID) {
+    if (type_->isString()) {
       throw std::runtime_error(
           "Cannot group by string columns which are not dictionary encoded.");
     }
@@ -322,7 +364,11 @@ ExprPtr Expr::add_cast(const SQLTypeInfo& new_type_info) {
         "expression "
         "yet.");
   }
-  return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
+  return makeExpr<UOper>(new_type, contains_agg, kCAST, shared_from_this());
+}
+
+ExprPtr Expr::add_cast(const SQLTypeInfo& new_type_info) {
+  return add_cast(default_context_.fromTypeInfo(new_type_info));
 }
 
 ColumnRef::ColumnRef(const RelAlgNode* node, unsigned idx)
@@ -986,64 +1032,49 @@ void Constant::set_null_value() {
   }
 }
 
-ExprPtr Constant::add_cast(const SQLTypeInfo& new_type_info) {
+ExprPtr Constant::add_cast(const Type* new_type) {
   if (is_null) {
-    type_ = default_context_.fromTypeInfo(new_type_info);
+    type_ = new_type;
     type_info = type_->toTypeInfo();
     set_null_value();
     return shared_from_this();
   }
-  if (new_type_info.get_compression() != type_info.get_compression()) {
-    if (new_type_info.get_compression() != kENCODING_NONE) {
-      SQLTypeInfo new_ti = new_type_info;
-      if (new_ti.get_compression() != kENCODING_DATE_IN_DAYS) {
-        new_ti = SQLTypeInfo(new_ti.get_type(),
-                             new_ti.get_dimension(),
-                             new_ti.get_scale(),
-                             new_ti.get_notnull(),
-                             kENCODING_NONE,
-                             0,
-                             new_ti.get_subtype());
-      }
-      do_cast(default_context_.fromTypeInfo(new_ti));
-    }
-    return Expr::add_cast(new_type_info);
+  if (new_type->isExtDictionary()) {
+    do_cast(new_type->as<ExtDictionaryType>()->elemType());
+    return Expr::add_cast(new_type);
   }
-  const auto is_integral_type =
-      new_type_info.is_integer() || new_type_info.is_decimal() || new_type_info.is_fp();
-  if (is_integral_type && (type_info.is_time() || type_info.is_date())) {
+  if ((type_->isTime() || type_->isDate()) && new_type->isNumber()) {
     // Let the codegen phase deal with casts from date/time to a number.
-    return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
+    return makeExpr<UOper>(new_type, contains_agg, kCAST, shared_from_this());
   }
-  do_cast(default_context_.fromTypeInfo(new_type_info));
+  do_cast(new_type);
   return shared_from_this();
 }
 
-ExprPtr UOper::add_cast(const SQLTypeInfo& new_type_info) {
+ExprPtr UOper::add_cast(const Type* new_type) {
   if (optype != kCAST) {
-    return Expr::add_cast(new_type_info);
+    return Expr::add_cast(new_type);
   }
-  if (type_info.is_string() && new_type_info.is_string() &&
-      new_type_info.get_compression() == kENCODING_DICT &&
-      type_info.get_compression() == kENCODING_NONE) {
-    const SQLTypeInfo oti = operand->get_type_info();
-    if (oti.is_string() && oti.get_compression() == kENCODING_DICT &&
-        (oti.get_comp_param() == new_type_info.get_comp_param() ||
-         oti.get_comp_param() == TRANSIENT_DICT(new_type_info.get_comp_param()))) {
-      auto result = operand;
-      operand = nullptr;
-      return result;
+  if (type_->isString() && new_type->isExtDictionary()) {
+    auto otype = operand->type();
+    if (otype->isExtDictionary()) {
+      int op_dict_id = otype->as<ExtDictionaryType>()->dictId();
+      int new_dict_id = new_type->as<ExtDictionaryType>()->dictId();
+      if (op_dict_id == new_dict_id || op_dict_id == TRANSIENT_DICT(new_dict_id)) {
+        return operand;
+      }
     }
   }
-  return Expr::add_cast(new_type_info);
+  return Expr::add_cast(new_type);
 }
 
-ExprPtr CaseExpr::add_cast(const SQLTypeInfo& new_type_info) {
-  SQLTypeInfo ti = new_type_info;
-  if (new_type_info.is_string() && new_type_info.get_compression() == kENCODING_DICT &&
-      new_type_info.get_comp_param() == TRANSIENT_DICT_ID && type_info.is_string() &&
-      type_info.get_compression() == kENCODING_NONE &&
+ExprPtr CaseExpr::add_cast(const Type* new_type) {
+  SQLTypeInfo ti = new_type->toTypeInfo();
+  if (new_type->isExtDictionary() &&
+      new_type->as<ExtDictionaryType>()->dictId() == TRANSIENT_DICT_ID &&
+      type_info.is_string() && type_info.get_compression() == kENCODING_NONE &&
       type_info.get_comp_param() > TRANSIENT_DICT_ID) {
+    CHECK(false) << type_info.toString();
     ti.set_comp_param(TRANSIENT_DICT(type_info.get_comp_param()));
   }
 
@@ -1059,7 +1090,7 @@ ExprPtr CaseExpr::add_cast(const SQLTypeInfo& new_type_info) {
   // Replace the current WHEN THEN pair list once we are sure all casts have succeeded
   expr_pair_list = new_expr_pair_list;
 
-  type_ = default_context_.fromTypeInfo(new_type_info);
+  type_ = new_type;
   type_info = type_->toTypeInfo();
 
   return shared_from_this();
