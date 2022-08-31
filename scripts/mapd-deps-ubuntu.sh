@@ -125,7 +125,7 @@ sudo update-alternatives \
   --install /usr/bin/gcc gcc /usr/bin/gcc-9 900 \
   --slave /usr/bin/g++ g++ /usr/bin/g++-9
 
-# Needed to find sqlite3, xmltooling, and xml_security_c
+# Needed to find sqlite3, xmltooling, xml_security_c, and LLVM (for iwyu)
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH
 export PATH=$PREFIX/bin:$PATH
 

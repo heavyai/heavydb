@@ -576,7 +576,7 @@ function install_pdal() {
   download_make_install http://download.osgeo.org/libtiff/tiff-4.4.0.tar.gz
   source /etc/os-release
   if [ "$ID" == "ubuntu" ] ; then
-    download_make_install https://github.com/OSGeo/libgeotiff/releases/download/1.7.1/libgeotiff-1.7.1.tar.gz "" "--with-proj=/usr/local/mapd-deps/ --with-libtiff=/usr/local/mapd-deps/"
+    download_make_install https://github.com/OSGeo/libgeotiff/releases/download/1.7.1/libgeotiff-1.7.1.tar.gz "" "--with-proj=$PREFIX/ --with-libtiff=$PREFIX/"
   else
     download_make_install https://github.com/OSGeo/libgeotiff/releases/download/1.7.1/libgeotiff-1.7.1.tar.gz
   fi
