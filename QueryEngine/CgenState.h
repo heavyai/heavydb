@@ -90,7 +90,7 @@ struct CgenState {
       case kVARCHAR:
         if (enc_type == kENCODING_DICT) {
           if (constant->get_is_null()) {
-            return getOrAddLiteral(int32_t(inline_int_null_val(ti)), device_id);
+            return getOrAddLiteral((int32_t)inline_int_null_value<int32_t>(), device_id);
           }
           return getOrAddLiteral(
               std::make_pair(*constant->get_constval().stringval, dict_id), device_id);

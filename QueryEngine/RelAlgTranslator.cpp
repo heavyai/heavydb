@@ -424,7 +424,7 @@ hdk::ir::ExprPtr RelAlgTranslator::translateInSubquery(
       auto ti_none_encoded = ti;
       ti_none_encoded.set_compression(kENCODING_NONE);
       auto none_encoded_string =
-          hdk::ir::makeExpr<hdk::ir::Constant>(ti, is_null_const, d);
+          hdk::ir::makeExpr<hdk::ir::Constant>(ti_none_encoded, is_null_const, d);
       auto dict_encoded_string =
           std::make_shared<hdk::ir::UOper>(ti, false, kCAST, none_encoded_string);
       value_exprs.push_back(dict_encoded_string);
