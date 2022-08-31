@@ -45,10 +45,10 @@ void copy_to_nvidia_gpu(Data_Namespace::DataMgr* data_mgr,
                         const int device_id);
 
 struct GpuGroupByBuffers {
-  CUdeviceptr ptrs;  // ptrs for individual outputs
-  CUdeviceptr data;  // ptr to data allocation
+  int8_t* ptrs;  // ptrs for individual outputs
+  int8_t* data;  // ptr to data allocation
   size_t entry_count;
-  CUdeviceptr varlen_output_buffer;
+  int8_t* varlen_output_buffer;
 };
 
 class QueryMemoryDescriptor;
@@ -74,7 +74,7 @@ GpuGroupByBuffers create_dev_group_by_buffers(
 void copy_group_by_buffers_from_gpu(BufferProvider* buffer_provider,
                                     const std::vector<int64_t*>& group_by_buffers,
                                     const size_t groups_buffer_size,
-                                    const CUdeviceptr group_by_dev_buffers_mem,
+                                    const int8_t* group_by_dev_buffers_mem,
                                     const QueryMemoryDescriptor& query_mem_desc,
                                     const unsigned block_size_x,
                                     const unsigned grid_size_x,
@@ -83,7 +83,7 @@ void copy_group_by_buffers_from_gpu(BufferProvider* buffer_provider,
                                     const bool has_varlen_output);
 
 size_t get_num_allocated_rows_from_gpu(BufferProvider* buffer_provider,
-                                       CUdeviceptr projection_size_gpu,
+                                       int8_t* projection_size_gpu,
                                        const int device_id);
 
 void copy_projection_buffer_from_gpu_columnar(BufferProvider* buffer_provider,

@@ -75,7 +75,6 @@ class NvidiaKernel : public DeviceKernel {
                                    nullptr));
   }
 
-  // todo: time_limit = config.exec.watchdog.time_limit
   void initializeDynamicWatchdog(bool could_interrupt,
                                  uint64_t cycle_budget,
                                  size_t time_limit) override {

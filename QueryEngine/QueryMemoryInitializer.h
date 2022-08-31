@@ -178,7 +178,7 @@ class QueryMemoryInitializer {
 
 #ifdef HAVE_CUDA
   GpuGroupByBuffers prepareTopNHeapsDevBuffer(const QueryMemoryDescriptor& query_mem_desc,
-                                              const CUdeviceptr init_agg_vals_dev_ptr,
+                                              const int8_t* init_agg_vals_dev_ptr,
                                               const size_t n,
                                               const int device_id,
                                               const unsigned block_size_x,
@@ -188,7 +188,7 @@ class QueryMemoryInitializer {
       const RelAlgExecutionUnit& ra_exe_unit,
       const QueryMemoryDescriptor& query_mem_desc,
       const Config& config,
-      const CUdeviceptr init_agg_vals_dev_ptr,
+      const int8_t* init_agg_vals_dev_ptr,
       const int device_id,
       const ExecutorDispatchMode dispatch_mode,
       const unsigned block_size_x,
@@ -234,7 +234,7 @@ class QueryMemoryInitializer {
   std::vector<std::unique_ptr<HashTableDesc>> hash_table_desc_holders_;
 
   std::shared_ptr<VarlenOutputInfo> varlen_output_info_;
-  CUdeviceptr varlen_output_buffer_;
+  int8_t* varlen_output_buffer_;
   int8_t* varlen_output_buffer_host_ptr_;
 
   CUdeviceptr count_distinct_bitmap_mem_;

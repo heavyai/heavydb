@@ -59,7 +59,7 @@ class QueryExecutionContext : boost::noncopyable {
 
   std::vector<int64_t*> launchGpuCode(
       const RelAlgExecutionUnit& ra_exe_unit,
-      const CudaCompilationContext* cu_functions,
+      const CompilationContext* compilation_context,
       const bool hoist_literals,
       const std::vector<int8_t>& literal_buff,
       std::vector<std::vector<const int8_t*>> col_buffers,
@@ -115,7 +115,7 @@ class QueryExecutionContext : boost::noncopyable {
 
   void initializeRuntimeInterrupter(void* native_module, const int device_id) const;
 
-  std::vector<CUdeviceptr> prepareKernelParams(
+  std::vector<int8_t*> prepareKernelParams(
       const std::vector<std::vector<const int8_t*>>& col_buffers,
       const std::vector<int8_t>& literal_buff,
       const std::vector<std::vector<int64_t>>& num_rows,
