@@ -48,3 +48,4 @@ dependencies:
   # - arrow-cpp=6.0=*cuda
   - binutils
   - llvm-spirv 12.0.*
+  - folly 2022.04.25.00
