@@ -178,7 +178,6 @@ ResultSetPtr QueryExecutionContext::groupBufferToResults(const size_t i) const {
   return query_buffers_->getResultSetOwned(i);
 }
 
-#ifdef HAVE_CUDA
 namespace {
 
 int32_t aggregate_error_codes(const std::vector<int32_t>& error_codes) {
@@ -197,7 +196,6 @@ int32_t aggregate_error_codes(const std::vector<int32_t>& error_codes) {
 }
 
 }  // namespace
-#endif
 
 std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const RelAlgExecutionUnit& ra_exe_unit,
@@ -220,7 +218,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const std::vector<int64_t>& join_hash_tables) {
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(lauchGpuCode);
-#ifdef HAVE_CUDA
   CHECK(gpu_allocator_);
   CHECK(query_buffers_);
   const auto& init_agg_vals = query_buffers_->init_agg_vals_;
@@ -524,9 +521,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   }
 
   return out_vec;
-#else
-  return {};
-#endif
 }
 
 std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
@@ -712,8 +706,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
   return out_vec;
 }
 
-#ifdef HAVE_CUDA
-
 std::vector<int8_t*> QueryExecutionContext::prepareKernelParams(
     const std::vector<std::vector<const int8_t*>>& col_buffers,
     const std::vector<int8_t>& literal_buff,
@@ -888,4 +880,3 @@ std::vector<int8_t*> QueryExecutionContext::prepareKernelParams(
   CHECK_EQ(nullptr, params[GROUPBY_BUF]);
   return params;
 }
-#endif
