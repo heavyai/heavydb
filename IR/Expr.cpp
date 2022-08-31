@@ -123,36 +123,51 @@ int64_t safeScale(T from, unsigned const scale) {
 // a null sentinel. In fact, if we bundle Datum with a null boolean ("NullableDatum"),
 // the logic becomes more explicit. There are likely other bugs associated with the
 // current logic -- for example, boolean is set to -128 which is likely UB
-inline bool is_null_value(const SQLTypeInfo& ti, const Datum& constval) {
-  switch (ti.get_type()) {
-    case kBOOLEAN:
-      return constval.tinyintval == NULL_BOOLEAN;
-    case kTINYINT:
-      return constval.tinyintval == NULL_TINYINT;
-    case kINT:
-      return constval.intval == NULL_INT;
-    case kSMALLINT:
-      return constval.smallintval == NULL_SMALLINT;
-    case kBIGINT:
-    case kNUMERIC:
-    case kDECIMAL:
-      return constval.bigintval == NULL_BIGINT;
-    case kTIME:
-    case kTIMESTAMP:
-    case kDATE:
-      return constval.bigintval == NULL_BIGINT;
-    case kVARCHAR:
-    case kCHAR:
-    case kTEXT:
-      return constval.stringval == nullptr;
-    case kFLOAT:
-      return constval.floatval == NULL_FLOAT;
-    case kDOUBLE:
-      return constval.doubleval == NULL_DOUBLE;
-    case kNULLT:
+inline bool is_null_value(const Type* type, const Datum& constval) {
+  switch (type->id()) {
+    case Type::kNull:
       return constval.bigintval == 0;
-    case kARRAY:
+    case Type::kBoolean:
+      return constval.tinyintval == NULL_BOOLEAN;
+    case Type::kInteger:
+    case Type::kDecimal:
+    case Type::kExtDictionary:
+      switch (type->size()) {
+        case 1:
+          return constval.tinyintval == NULL_TINYINT;
+        case 2:
+          return constval.smallintval == NULL_SMALLINT;
+        case 4:
+          return constval.intval == NULL_INT;
+        case 8:
+          return constval.bigintval == NULL_BIGINT;
+        default:
+          UNREACHABLE();
+      }
+      break;
+    case Type::kFloatingPoint:
+      switch (type->as<FloatingPointType>()->precision()) {
+        case FloatingPointType::kFloat:
+          return constval.floatval == NULL_FLOAT;
+        case FloatingPointType::kDouble:
+          return constval.doubleval == NULL_DOUBLE;
+        default:
+          UNREACHABLE();
+      }
+      break;
+    case Type::kVarChar:
+    case Type::kText:
+      return constval.stringval == nullptr;
+    case Type::kDate:
+    case Type::kTime:
+    case Type::kTimestamp:
+    case Type::kInterval:
+      return constval.bigintval == NULL_BIGINT;
+    case Type::kFixedLenArray:
+    case Type::kVarLenArray:
       return constval.arrayval == nullptr;
+    case Type::kColumn:
+    case Type::kColumnList:
     default:
       UNREACHABLE();
   }
@@ -603,386 +618,263 @@ ExprPtr ArrayExpr::deep_copy() const {
       type_info, new_contained_expressions, is_null_, local_alloc_);
 }
 
-void Constant::cast_number(const SQLTypeInfo& new_type_info) {
-  switch (type_info.get_type()) {
-    case kTINYINT:
-      switch (new_type_info.get_type()) {
-        case kTINYINT:
-          break;
-        case kINT:
-          constval.intval = (int32_t)constval.tinyintval;
-          break;
-        case kSMALLINT:
-          constval.smallintval = (int16_t)constval.tinyintval;
-          break;
-        case kBIGINT:
-        case kTIMESTAMP:
-          constval.bigintval = (int64_t)constval.tinyintval;
-          break;
-        case kDOUBLE:
-          constval.doubleval = (double)constval.tinyintval;
-          break;
-        case kFLOAT:
-          constval.floatval = (float)constval.tinyintval;
-          break;
-        case kNUMERIC:
-        case kDECIMAL:
-          constval.bigintval = safeScale(constval.tinyintval, new_type_info.get_scale());
-          break;
-        default:
-          CHECK(false);
+void Constant::cast_number(const Type* new_type) {
+  switch (type_->id()) {
+    case Type::kBoolean:
+    case Type::kInteger:
+    case Type::kTimestamp: {
+      int64_t old_value = extract_int_type_from_datum(constval, type_);
+      if (type_->id() == Type::kBoolean) {
+        old_value = old_value ? 1 : 0;
       }
-      break;
-    case kINT:
-      switch (new_type_info.get_type()) {
-        case kTINYINT:
-          constval.tinyintval = safeNarrow<int8_t>(constval.intval);
+      switch (new_type->id()) {
+        case Type::kInteger:
+          switch (new_type->size()) {
+            case 1:
+              constval.tinyintval = safeNarrow<int8_t>(old_value);
+              break;
+            case 2:
+              constval.smallintval = safeNarrow<int16_t>(old_value);
+              break;
+            case 4:
+              constval.intval = safeNarrow<int32_t>(old_value);
+              break;
+            case 8:
+              constval.bigintval = old_value;
+              break;
+            default:
+              abort();
+          }
           break;
-        case kINT:
+        case Type::kTimestamp:
+          constval.bigintval = old_value;
           break;
-        case kSMALLINT:
-          constval.smallintval = safeNarrow<int16_t>(constval.intval);
+        case Type::kFloatingPoint:
+          switch (new_type->as<FloatingPointType>()->precision()) {
+            case FloatingPointType::kFloat:
+              constval.floatval = (float)old_value;
+              break;
+            case FloatingPointType::kDouble:
+              constval.doubleval = (double)old_value;
+              break;
+            default:
+              UNREACHABLE();
+          }
           break;
-        case kBIGINT:
-        case kTIMESTAMP:
-          constval.bigintval = (int64_t)constval.intval;
-          break;
-        case kDOUBLE:
-          constval.doubleval = (double)constval.intval;
-          break;
-        case kFLOAT:
-          constval.floatval = (float)constval.intval;
-          break;
-        case kNUMERIC:
-        case kDECIMAL:
-          constval.bigintval = safeScale(constval.intval, new_type_info.get_scale());
-          break;
-        default:
-          CHECK(false);
-      }
-      break;
-    case kSMALLINT:
-      switch (new_type_info.get_type()) {
-        case kTINYINT:
-          constval.tinyintval = safeNarrow<int8_t>(constval.smallintval);
-          break;
-        case kINT:
-          constval.intval = (int32_t)constval.smallintval;
-          break;
-        case kSMALLINT:
-          break;
-        case kBIGINT:
-        case kTIMESTAMP:
-          constval.bigintval = (int64_t)constval.smallintval;
-          break;
-        case kDOUBLE:
-          constval.doubleval = (double)constval.smallintval;
-          break;
-        case kFLOAT:
-          constval.floatval = (float)constval.smallintval;
-          break;
-        case kNUMERIC:
-        case kDECIMAL:
-          constval.bigintval = safeScale(constval.smallintval, new_type_info.get_scale());
-          break;
-        default:
-          CHECK(false);
-      }
-      break;
-    case kBIGINT:
-      switch (new_type_info.get_type()) {
-        case kTINYINT:
-          constval.tinyintval = safeNarrow<int8_t>(constval.bigintval);
-          break;
-        case kINT:
-          constval.intval = safeNarrow<int32_t>(constval.bigintval);
-          break;
-        case kSMALLINT:
-          constval.smallintval = safeNarrow<int16_t>(constval.bigintval);
-          break;
-        case kBIGINT:
-        case kTIMESTAMP:
-          break;
-        case kDOUBLE:
-          constval.doubleval = (double)constval.bigintval;
-          break;
-        case kFLOAT:
-          constval.floatval = (float)constval.bigintval;
-          break;
-        case kNUMERIC:
-        case kDECIMAL:
-          constval.bigintval = safeScale(constval.bigintval, new_type_info.get_scale());
-          break;
-        default:
-          CHECK(false);
-      }
-      break;
-    case kDOUBLE:
-      switch (new_type_info.get_type()) {
-        case kTINYINT:
-          constval.tinyintval = safeRound<int8_t>(constval.doubleval);
-          break;
-        case kINT:
-          constval.intval = safeRound<int32_t>(constval.doubleval);
-          break;
-        case kSMALLINT:
-          constval.smallintval = safeRound<int16_t>(constval.doubleval);
-          break;
-        case kBIGINT:
-        case kTIMESTAMP:
-          constval.bigintval = safeRound<int64_t>(constval.doubleval);
-          break;
-        case kDOUBLE:
-          break;
-        case kFLOAT:
-          constval.floatval = (float)constval.doubleval;
-          break;
-        case kNUMERIC:
-        case kDECIMAL:
-          constval.bigintval = safeScale(constval.doubleval, new_type_info.get_scale());
-          break;
-        default:
-          CHECK(false);
-      }
-      break;
-    case kFLOAT:
-      switch (new_type_info.get_type()) {
-        case kTINYINT:
-          constval.tinyintval = safeRound<int8_t>(constval.floatval);
-          break;
-        case kINT:
-          constval.intval = safeRound<int32_t>(constval.floatval);
-          break;
-        case kSMALLINT:
-          constval.smallintval = safeRound<int16_t>(constval.floatval);
-          break;
-        case kBIGINT:
-        case kTIMESTAMP:
-          constval.bigintval = safeRound<int64_t>(constval.floatval);
-          break;
-        case kDOUBLE:
-          constval.doubleval = (double)constval.floatval;
-          break;
-        case kFLOAT:
-          break;
-        case kNUMERIC:
-        case kDECIMAL:
-          constval.bigintval = safeScale(constval.floatval, new_type_info.get_scale());
-          break;
-        default:
-          CHECK(false);
-      }
-      break;
-    case kNUMERIC:
-    case kDECIMAL:
-      switch (new_type_info.get_type()) {
-        case kTINYINT:
-          constval.tinyintval =
-              roundDecimal<int8_t>(constval.bigintval, type_info.get_scale());
-          break;
-        case kINT:
-          constval.intval =
-              roundDecimal<int32_t>(constval.bigintval, type_info.get_scale());
-          break;
-        case kSMALLINT:
-          constval.smallintval =
-              roundDecimal<int16_t>(constval.bigintval, type_info.get_scale());
-          break;
-        case kBIGINT:
-        case kTIMESTAMP:
-          constval.bigintval =
-              roundDecimal<int64_t>(constval.bigintval, type_info.get_scale());
-          break;
-        case kDOUBLE:
-          constval.doubleval =
-              floatFromDecimal<double>(constval.bigintval, type_info.get_scale());
-          break;
-        case kFLOAT:
-          constval.floatval =
-              floatFromDecimal<float>(constval.bigintval, type_info.get_scale());
-          break;
-        case kNUMERIC:
-        case kDECIMAL:
-          constval.bigintval = convert_decimal_value_to_scale(
-              constval.bigintval, type_info, new_type_info);
-          break;
-        default:
-          CHECK(false);
-      }
-      break;
-    case kTIMESTAMP:
-      switch (new_type_info.get_type()) {
-        case kTINYINT:
-          constval.tinyintval = safeNarrow<int8_t>(constval.bigintval);
-          break;
-        case kINT:
-          constval.intval = safeNarrow<int32_t>(constval.bigintval);
-          break;
-        case kSMALLINT:
-          constval.smallintval = safeNarrow<int16_t>(constval.bigintval);
-          break;
-        case kBIGINT:
-        case kTIMESTAMP:
-          break;
-        case kDOUBLE:
-          constval.doubleval = static_cast<double>(constval.bigintval);
-          break;
-        case kFLOAT:
-          constval.floatval = static_cast<float>(constval.bigintval);
-          break;
-        case kNUMERIC:
-        case kDECIMAL:
-          for (int i = 0; i < new_type_info.get_scale(); i++) {
-            constval.bigintval *= 10;
+        case Type::kDecimal:
+          switch (new_type->size()) {
+            case 8:
+              constval.bigintval =
+                  safeScale(old_value, new_type->as<DecimalType>()->scale());
+              break;
+            default:
+              UNREACHABLE();
           }
           break;
         default:
-          CHECK(false);
+          UNREACHABLE();
       }
-      break;
-    case kBOOLEAN:
-      switch (new_type_info.get_type()) {
-        case kTINYINT:
-          constval.tinyintval = constval.boolval ? 1 : 0;
+    } break;
+    case Type::kFloatingPoint: {
+      double old_value = extract_fp_type_from_datum(constval, type_);
+      switch (new_type->id()) {
+        case Type::kInteger:
+          switch (new_type->size()) {
+            case 1:
+              constval.tinyintval = safeRound<int8_t>(old_value);
+              break;
+            case 2:
+              constval.smallintval = safeRound<int16_t>(old_value);
+              break;
+            case 4:
+              constval.intval = safeRound<int32_t>(old_value);
+              break;
+            case 8:
+              constval.bigintval = safeRound<int64_t>(old_value);
+              break;
+            default:
+              abort();
+          }
           break;
-        case kINT:
-          constval.intval = constval.boolval ? 1 : 0;
+        case Type::kTimestamp:
+          constval.bigintval = safeRound<int64_t>(old_value);
           break;
-        case kSMALLINT:
-          constval.smallintval = constval.boolval ? 1 : 0;
+        case Type::kFloatingPoint:
+          switch (new_type->as<FloatingPointType>()->precision()) {
+            case FloatingPointType::kFloat:
+              constval.floatval = (float)old_value;
+              break;
+            case FloatingPointType::kDouble:
+              constval.doubleval = (double)old_value;
+              break;
+            default:
+              UNREACHABLE();
+          }
           break;
-        case kBIGINT:
-        case kTIMESTAMP:
-          constval.bigintval = constval.boolval ? 1 : 0;
-          break;
-        case kDOUBLE:
-          constval.doubleval = constval.boolval ? 1 : 0;
-          break;
-        case kFLOAT:
-          constval.floatval = constval.boolval ? 1 : 0;
-          break;
-        case kNUMERIC:
-        case kDECIMAL:
-          constval.bigintval = constval.boolval ? 1 : 0;
-          for (int i = 0; i < new_type_info.get_scale(); i++) {
-            constval.bigintval *= 10;
+        case Type::kDecimal:
+          switch (new_type->size()) {
+            case 8:
+              constval.bigintval =
+                  safeScale(old_value, new_type->as<DecimalType>()->scale());
+              break;
+            default:
+              UNREACHABLE();
           }
           break;
         default:
-          CHECK(false);
+          UNREACHABLE();
       }
-      break;
+    } break;
+    case Type::kDecimal: {
+      CHECK_EQ(type_->size(), 8);
+      int64_t old_value = constval.bigintval;
+      int64_t old_scale = type_->as<DecimalType>()->scale();
+      switch (new_type->id()) {
+        case Type::kInteger:
+          switch (new_type->size()) {
+            case 1:
+              constval.tinyintval = roundDecimal<int8_t>(old_value, old_scale);
+              break;
+            case 2:
+              constval.smallintval = roundDecimal<int16_t>(old_value, old_scale);
+              break;
+            case 4:
+              constval.intval = roundDecimal<int32_t>(old_value, old_scale);
+              break;
+            case 8:
+              constval.bigintval = roundDecimal<int64_t>(old_value, old_scale);
+              break;
+            default:
+              abort();
+          }
+          break;
+        case Type::kTimestamp:
+          constval.bigintval = roundDecimal<int64_t>(old_value, old_scale);
+          break;
+        case Type::kFloatingPoint:
+          switch (new_type->as<FloatingPointType>()->precision()) {
+            case FloatingPointType::kFloat:
+              constval.floatval = floatFromDecimal<float>(old_value, old_scale);
+              break;
+            case FloatingPointType::kDouble:
+              constval.doubleval = floatFromDecimal<double>(old_value, old_scale);
+              break;
+            default:
+              UNREACHABLE();
+          }
+          break;
+        case Type::kDecimal:
+          switch (new_type->size()) {
+            case 8:
+              constval.bigintval =
+                  convert_decimal_value_to_scale(old_value, type_, new_type);
+              break;
+            default:
+              UNREACHABLE();
+          }
+          break;
+        default:
+          UNREACHABLE();
+      }
+    } break;
     default:
       CHECK(false);
   }
-  type_ = default_context_.fromTypeInfo(new_type_info);
+  type_ = new_type;
   type_info = type_->toTypeInfo();
 }
 
-void Constant::cast_string(const SQLTypeInfo& new_type_info) {
+void Constant::cast_string(const Type* new_type) {
   std::string* s = constval.stringval;
-  if (s != nullptr && new_type_info.get_type() != kTEXT &&
-      static_cast<size_t>(new_type_info.get_dimension()) < s->length()) {
-    // truncate string
-    constval.stringval = new std::string(s->substr(0, new_type_info.get_dimension()));
-    delete s;
+  if (s != nullptr && new_type->isVarChar()) {
+    auto max_length = static_cast<size_t>(new_type->as<VarCharType>()->maxLength());
+    if (max_length < s->length()) {
+      // truncate string
+      constval.stringval = new std::string(s->substr(0, max_length));
+      delete s;
+    }
   }
-  type_ = default_context_.fromTypeInfo(new_type_info);
+  type_ = new_type;
   type_info = type_->toTypeInfo();
 }
 
-void Constant::cast_from_string(const SQLTypeInfo& new_type_info) {
+void Constant::cast_from_string(const Type* new_type) {
   std::string* s = constval.stringval;
-  SQLTypeInfo ti = new_type_info;
-  constval = StringToDatum(*s, ti);
+  constval = StringToDatum(*s, new_type);
   delete s;
-  type_ = default_context_.fromTypeInfo(new_type_info);
+  type_ = new_type;
   type_info = type_->toTypeInfo();
 }
 
-void Constant::cast_to_string(const SQLTypeInfo& str_type_info) {
-  const auto str_val = DatumToString(constval, type_info);
+void Constant::cast_to_string(const Type* str_type) {
+  const auto str_val = DatumToString(constval, type_);
   constval.stringval = new std::string(str_val);
-  if (str_type_info.get_type() != kTEXT &&
-      constval.stringval->length() > static_cast<size_t>(str_type_info.get_dimension())) {
+  if (str_type->isVarChar()) {
     // truncate the string
-    *constval.stringval = constval.stringval->substr(0, str_type_info.get_dimension());
+    auto max_length = str_type->as<hdk::ir::VarCharType>()->maxLength();
+    if (constval.stringval->length() > max_length) {
+      *constval.stringval = constval.stringval->substr(0, max_length);
+    }
   }
-  type_ = default_context_.fromTypeInfo(str_type_info);
+  type_ = str_type;
   type_info = type_->toTypeInfo();
 }
 
 void Constant::do_cast(const Type* new_type) {
-  type_ = new_type;
-  auto new_type_info = type_->toTypeInfo();
-  if (type_info == new_type_info) {
+  if (type_->equal(new_type)) {
     return;
   }
-  bool is_null = false;
-  if (is_null && !new_type_info.get_notnull()) {
-    type_info = new_type_info;
-    set_null_value();
-  } else if ((new_type_info.is_number() || new_type_info.get_type() == kTIMESTAMP) &&
-             (new_type_info.get_type() != kTIMESTAMP ||
-              type_info.get_type() != kTIMESTAMP) &&
-             (type_info.is_number() || type_info.get_type() == kTIMESTAMP ||
-              type_info.get_type() == kBOOLEAN)) {
-    cast_number(new_type_info);
-  } else if (new_type_info.is_boolean() && type_info.is_boolean()) {
-    type_info = new_type_info;
-  } else if (new_type_info.is_string() && type_info.is_string()) {
-    cast_string(new_type_info);
-  } else if (type_info.is_string() || type_info.get_type() == kVARCHAR) {
-    cast_from_string(new_type_info);
-  } else if (new_type_info.is_string()) {
-    cast_to_string(new_type_info);
-  } else if (new_type_info.get_type() == kDATE && type_info.get_type() == kDATE) {
-    type_info = new_type_info;
-  } else if (new_type_info.get_type() == kDATE && type_info.get_type() == kTIMESTAMP) {
+  if (is_null && new_type->nullable()) {
+  } else if ((new_type->isNumber() || new_type->isTimestamp()) &&
+             (!new_type->isTimestamp() || !type_->isTimestamp()) &&
+             (type_->isNumber() || type_->isTimestamp() || type_->isBoolean())) {
+    cast_number(new_type);
+  } else if (new_type->isBoolean() && type_->isBoolean()) {
+  } else if (new_type->isString() && type_->isString()) {
+    cast_string(new_type);
+  } else if (type_->isString()) {
+    cast_from_string(new_type);
+  } else if (new_type->isString()) {
+    cast_to_string(new_type);
+  } else if (new_type->isDate() && type_->isDate()) {
+    CHECK(type_->as<DateType>()->unit() == new_type->as<DateType>()->unit());
+  } else if (new_type->isDate() && type_->isTimestamp()) {
     constval.bigintval =
-        type_info.is_high_precision_timestamp()
+        (type_->isTimestamp() && type_->as<TimestampType>()->unit() > TimeUnit::kSecond)
             ? truncate_high_precision_timestamp_to_date(
                   constval.bigintval,
-                  DateTimeUtils::get_timestamp_precision_scale(type_info.get_dimension()))
+                  hdk::ir::unitsPerSecond(type_->as<TimestampType>()->unit()))
             : DateTruncate(dtDAY, constval.bigintval);
-    type_info = new_type_info;
-  } else if ((type_info.get_type() == kTIMESTAMP || type_info.get_type() == kDATE) &&
-             new_type_info.get_type() == kTIMESTAMP) {
-    const auto dimen = (type_info.get_type() == kDATE) ? 0 : type_info.get_dimension();
-    if (dimen != new_type_info.get_dimension()) {
-      constval.bigintval = dimen < new_type_info.get_dimension()
-                               ? DateTimeUtils::get_datetime_scaled_epoch(
-                                     DateTimeUtils::ScalingType::ScaleUp,
-                                     constval.bigintval,
-                                     new_type_info.get_dimension() - dimen)
-                               : DateTimeUtils::get_datetime_scaled_epoch(
-                                     DateTimeUtils::ScalingType::ScaleDown,
-                                     constval.bigintval,
-                                     dimen - new_type_info.get_dimension());
+  } else if ((type_->isTimestamp() || type_->isDate()) && new_type->isTimestamp()) {
+    auto old_unit = type_->as<DateTimeBaseType>()->unit();
+    auto new_unit = new_type->as<DateTimeBaseType>()->unit();
+    if (old_unit != new_unit) {
+      constval.bigintval = DateTimeUtils::get_datetime_scaled_epoch(
+          constval.bigintval, old_unit, new_unit);
     }
-    type_info = new_type_info;
-  } else if (new_type_info.is_array() && type_info.is_array()) {
-    auto new_sub_ti = new_type_info.get_elem_type();
+  } else if (new_type->isArray() && type_->isArray()) {
+    auto new_elem_type = new_type->as<ArrayBaseType>()->elemType();
     for (auto& v : value_list) {
       auto c = std::dynamic_pointer_cast<Constant>(v);
       if (!c) {
         throw std::runtime_error("Invalid array cast.");
       }
-      c->do_cast(default_context_.fromTypeInfo(new_sub_ti));
+      c->do_cast(new_elem_type);
     }
-    type_info = new_type_info;
-  } else if (get_is_null() && (new_type_info.is_number() || new_type_info.is_time() ||
-                               new_type_info.is_string() || new_type_info.is_boolean())) {
-    type_info = new_type_info;
-    set_null_value();
-  } else if (!is_null_value(type_info, constval) &&
-             get_nullable_type_info(type_info) == new_type_info) {
+  } else if (get_is_null() && (new_type->isNumber() || new_type->isTime() ||
+                               new_type->isString() || new_type->isBoolean())) {
+  } else if (!is_null_value(type_, constval) &&
+             type_->withNullable(true)->equal(new_type)) {
     CHECK(!is_null);
     // relax nullability
-    type_info = new_type_info;
   } else {
-    throw std::runtime_error("Cast from " + type_info.get_type_name() + " to " +
-                             new_type_info.get_type_name() + " not supported");
+    throw std::runtime_error("Cast from " + type_->toString() + " to " +
+                             new_type->toString() + " not supported");
+  }
+  type_ = new_type;
+  type_info = type_->toTypeInfo();
+  if (is_null) {
+    set_null_value();
   }
 }
 
@@ -1069,23 +961,14 @@ ExprPtr UOper::add_cast(const Type* new_type) {
 }
 
 ExprPtr CaseExpr::add_cast(const Type* new_type) {
-  SQLTypeInfo ti = new_type->toTypeInfo();
-  if (new_type->isExtDictionary() &&
-      new_type->as<ExtDictionaryType>()->dictId() == TRANSIENT_DICT_ID &&
-      type_info.is_string() && type_info.get_compression() == kENCODING_NONE &&
-      type_info.get_comp_param() > TRANSIENT_DICT_ID) {
-    CHECK(false) << type_info.toString();
-    ti.set_comp_param(TRANSIENT_DICT(type_info.get_comp_param()));
-  }
-
   std::list<std::pair<ExprPtr, ExprPtr>> new_expr_pair_list;
   for (auto& p : expr_pair_list) {
     new_expr_pair_list.emplace_back(
-        std::make_pair(p.first, p.second->deep_copy()->add_cast(ti)));
+        std::make_pair(p.first, p.second->add_cast(new_type)));
   }
 
   if (else_expr != nullptr) {
-    else_expr = else_expr->add_cast(ti);
+    else_expr = else_expr->add_cast(new_type);
   }
   // Replace the current WHEN THEN pair list once we are sure all casts have succeeded
   expr_pair_list = new_expr_pair_list;

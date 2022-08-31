@@ -19,6 +19,8 @@
 #include "DateAdd.h"
 #include "DateTruncate.h"
 
+#include "IR/Type.h"
+
 #include <cstdint>
 #include <ctime>
 #include <map>
@@ -184,6 +186,36 @@ constexpr inline int64_t get_datetime_scaled_epoch(const ScalingType direction,
       abort();
   }
   return std::numeric_limits<int64_t>::min();
+}
+
+constexpr inline int64_t get_nanosecs_in_unit(hdk::ir::TimeUnit unit) {
+  switch (unit) {
+    case hdk::ir::TimeUnit::kDay:
+      return 86'400'000'000'000;
+    case hdk::ir::TimeUnit::kSecond:
+      return 1'000'000'000;
+    case hdk::ir::TimeUnit::kMilli:
+      return 1'000'000;
+    case hdk::ir::TimeUnit::kMicro:
+      return 1'000;
+    case hdk::ir::TimeUnit::kNano:
+      return 1;
+    default:
+      throw std::runtime_error("Unexpected time unit: " + toString(unit));
+  }
+  return -1;
+}
+
+constexpr inline int64_t get_datetime_scaled_epoch(int64_t epoch,
+                                                   hdk::ir::TimeUnit old_unit,
+                                                   hdk::ir::TimeUnit new_unit) {
+  auto old_scale = get_nanosecs_in_unit(old_unit);
+  auto new_scale = get_nanosecs_in_unit(new_unit);
+  if (old_scale > new_scale) {
+    return epoch * (old_scale / new_scale);
+  } else {
+    return epoch / (new_scale / old_scale);
+  }
 }
 
 }  // namespace DateTimeUtils

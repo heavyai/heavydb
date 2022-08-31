@@ -453,11 +453,11 @@ class Constant : public Expr {
   bool cacheable_;
   Datum constval;  // the constant value
   const ExprPtrList value_list;
-  void cast_number(const SQLTypeInfo& new_type_info);
-  void cast_string(const SQLTypeInfo& new_type_info);
-  void cast_from_string(const SQLTypeInfo& new_type_info);
-  void cast_to_string(const SQLTypeInfo& new_type_info);
-  void do_cast(const Type* new_type_info);
+  void cast_number(const Type* new_type);
+  void cast_string(const Type* new_type);
+  void cast_from_string(const Type* new_type);
+  void cast_to_string(const Type* new_type);
+  void do_cast(const Type* new_type);
   void set_null_value();
 };
 

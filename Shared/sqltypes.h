@@ -973,6 +973,7 @@ inline std::ostream& operator<<(std::ostream& os, const SQLTypeInfo& ti) {
 Datum StringToDatum(std::string_view s, SQLTypeInfo& ti);
 Datum StringToDatum(std::string_view s, const hdk::ir::Type* type);
 std::string DatumToString(Datum d, const SQLTypeInfo& ti);
+std::string DatumToString(Datum d, const hdk::ir::Type* type);
 #endif
 
 int64_t extract_int_type_from_datum(const Datum datum, const SQLTypeInfo& ti);
