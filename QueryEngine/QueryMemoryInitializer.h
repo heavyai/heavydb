@@ -107,7 +107,7 @@ class QueryMemoryInitializer {
     return num_buffers_;
   }
 
-#ifdef HAVE_CUDA
+#if defined(HAVE_CUDA) || defined(HAVE_L0)
   GpuGroupByBuffers setupTableFunctionGpuBuffers(
       const QueryMemoryDescriptor& query_mem_desc,
       const int device_id,
@@ -176,7 +176,6 @@ class QueryMemoryInitializer {
                                               const bool deferred,
                                               const Executor* executor);
 
-#ifdef HAVE_CUDA
   GpuGroupByBuffers prepareTopNHeapsDevBuffer(const QueryMemoryDescriptor& query_mem_desc,
                                               const int8_t* init_agg_vals_dev_ptr,
                                               const size_t n,
@@ -196,7 +195,6 @@ class QueryMemoryInitializer {
       const int8_t warp_size,
       const bool can_sort_on_gpu,
       const bool output_columnar);
-#endif
 
   size_t computeNumberOfBuffers(const QueryMemoryDescriptor& query_mem_desc,
                                 const ExecutorDeviceType device_type,
@@ -237,7 +235,7 @@ class QueryMemoryInitializer {
   int8_t* varlen_output_buffer_;
   int8_t* varlen_output_buffer_host_ptr_;
 
-  CUdeviceptr count_distinct_bitmap_mem_;
+  int8_t* count_distinct_bitmap_mem_;
   size_t count_distinct_bitmap_mem_bytes_;
   int8_t* count_distinct_bitmap_crt_ptr_;
   int8_t* count_distinct_bitmap_host_mem_;

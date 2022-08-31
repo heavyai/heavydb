@@ -898,7 +898,6 @@ QueryMemoryInitializer::allocateTDigests(const QueryMemoryDescriptor& query_mem_
   return quantile_params;
 }
 
-#ifdef HAVE_CUDA
 GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
     const QueryMemoryDescriptor& query_mem_desc,
     const int8_t* init_agg_vals_dev_ptr,
@@ -906,6 +905,7 @@ GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
     const int device_id,
     const unsigned block_size_x,
     const unsigned grid_size_x) {
+#ifdef HAVE_CUDA
   CHECK(device_allocator_);
   const auto thread_count = block_size_x * grid_size_x;
   const auto total_buff_size =
@@ -947,7 +947,37 @@ GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
       grid_size_x);
 
   return {reinterpret_cast<int8_t*>(dev_ptr), dev_buffer};
+#else
+  UNREACHABLE();
+  return {};
+#endif
 }
+
+#ifdef HAVE_L0
+void init_group_by_buffer_on_device(int64_t* groups_buffer,
+                                    const int64_t* init_vals,
+                                    const uint32_t groups_buffer_entry_count,
+                                    const uint32_t key_count,
+                                    const uint32_t key_width,
+                                    const uint32_t row_size_quad,
+                                    const bool keyless,
+                                    const int8_t warp_size,
+                                    const size_t block_size_x,
+                                    const size_t grid_size_x) {
+  /*todo*/
+}
+void init_columnar_group_by_buffer_on_device(int64_t* groups_buffer,
+                                             const int64_t* init_vals,
+                                             const uint32_t groups_buffer_entry_count,
+                                             const uint32_t key_count,
+                                             const uint32_t agg_col_count,
+                                             const int8_t* col_sizes,
+                                             const bool need_padding,
+                                             const bool keyless,
+                                             const int8_t key_size,
+                                             const size_t block_size_x,
+                                             const size_t grid_size_x) {}
+#endif
 
 GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     const RelAlgExecutionUnit& ra_exe_unit,
@@ -961,6 +991,7 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     const int8_t warp_size,
     const bool can_sort_on_gpu,
     const bool output_columnar) {
+#if defined(HAVE_CUDA) || defined(HAVE_L0)
   if (query_mem_desc.useStreamingTopN()) {
     const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
     CHECK(!output_columnar);
@@ -1049,8 +1080,13 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     }
   }
   return dev_group_by_buffers;
+#else
+  UNREACHABLE();
+  return {};
+#endif
 }
 
+#if defined(HAVE_CUDA) || defined(HAVE_L0)
 GpuGroupByBuffers QueryMemoryInitializer::setupTableFunctionGpuBuffers(
     const QueryMemoryDescriptor& query_mem_desc,
     const int device_id,
@@ -1123,7 +1159,6 @@ void QueryMemoryInitializer::copyFromTableFunctionGpuBuffers(
     }
   }
 }
-
 #endif
 
 size_t QueryMemoryInitializer::computeNumberOfBuffers(

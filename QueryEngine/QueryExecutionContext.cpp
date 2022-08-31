@@ -764,7 +764,8 @@ std::vector<int8_t*> QueryExecutionContext::prepareKernelParams(
     CHECK(count_distinct_bitmap_host_mem);
     additional_literal_bytes.push_back(
         reinterpret_cast<int64_t>(count_distinct_bitmap_host_mem));
-    additional_literal_bytes.push_back(static_cast<int64_t>(count_distinct_bitmap_mem));
+    additional_literal_bytes.push_back(static_cast<int64_t>(
+        reinterpret_cast<std::uintptr_t>(count_distinct_bitmap_mem)));
     buffer_provider->copyToDevice(
         reinterpret_cast<int8_t*>(literals_and_addr_mapping),
         reinterpret_cast<const int8_t*>(&additional_literal_bytes[0]),
