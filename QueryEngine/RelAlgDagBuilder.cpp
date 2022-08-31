@@ -618,26 +618,104 @@ hdk::ir::ExprPtr parse_expr(const rapidjson::Value& expr,
                             RelAlgDagBuilder& root_dag_builder,
                             const hdk::ir::ExprPtrVector& ra_output);
 
-SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
+hdk::ir::TimeUnit precisionToTimeUnit(int precision) {
+  switch (precision) {
+    case 0:
+      return hdk::ir::TimeUnit::kSecond;
+    case 3:
+      return hdk::ir::TimeUnit::kMilli;
+    case 6:
+      return hdk::ir::TimeUnit::kMicro;
+    case 9:
+      return hdk::ir::TimeUnit::kNano;
+    default:
+      throw std::runtime_error("Unsupported datetime precision: " +
+                               std::to_string(precision));
+  }
+}
+
+const hdk::ir::Type* buildType(hdk::ir::Context& ctx,
+                               const std::string& type_name,
+                               bool nullable,
+                               int precision,
+                               int scale) {
+  if (type_name == std::string("BIGINT")) {
+    return ctx.int64(nullable);
+  }
+  if (type_name == std::string("INTEGER")) {
+    return ctx.int32(nullable);
+  }
+  if (type_name == std::string("TINYINT")) {
+    return ctx.int8(nullable);
+  }
+  if (type_name == std::string("SMALLINT")) {
+    return ctx.int16(nullable);
+  }
+  if (type_name == std::string("FLOAT")) {
+    return ctx.fp32(nullable);
+  }
+  if (type_name == std::string("REAL")) {
+    return ctx.fp32(nullable);
+  }
+  if (type_name == std::string("DOUBLE")) {
+    return ctx.fp64(nullable);
+  }
+  if (type_name == std::string("DECIMAL")) {
+    return ctx.decimal64(precision, scale, nullable);
+  }
+  if (type_name == std::string("CHAR") || type_name == std::string("VARCHAR")) {
+    return ctx.text(nullable);
+  }
+  if (type_name == std::string("BOOLEAN")) {
+    return ctx.boolean(nullable);
+  }
+  if (type_name == std::string("TIMESTAMP")) {
+    return ctx.timestamp(precisionToTimeUnit(precision), nullable);
+  }
+  if (type_name == std::string("DATE")) {
+    return ctx.date64(hdk::ir::TimeUnit::kSecond, nullable);
+  }
+  if (type_name == std::string("TIME")) {
+    return ctx.time64(precisionToTimeUnit(precision), nullable);
+  }
+  if (type_name == std::string("NULL")) {
+    return ctx.null();
+  }
+  if (type_name == std::string("ARRAY")) {
+    return ctx.arrayVarLen(ctx.null(), 4, nullable);
+  }
+  if (type_name == std::string("INTERVAL_DAY") ||
+      type_name == std::string("INTERVAL_HOUR") ||
+      type_name == std::string("INTERVAL_MINUTE") ||
+      type_name == std::string("INTERVAL_SECOND")) {
+    return ctx.interval64(hdk::ir::TimeUnit::kMilli, nullable);
+  }
+  if (type_name == std::string("INTERVAL_MONTH") ||
+      type_name == std::string("INTERVAL_YEAR")) {
+    return ctx.interval64(hdk::ir::TimeUnit::kMonth, nullable);
+  }
+  if (type_name == std::string("TEXT")) {
+    return ctx.text(nullable);
+  }
+
+  throw std::runtime_error("Unsupported type: " + type_name);
+}
+
+const hdk::ir::Type* parseType(const rapidjson::Value& type_obj) {
   if (type_obj.IsArray()) {
     throw QueryNotSupported("Composite types are not currently supported.");
   }
   CHECK(type_obj.IsObject() && type_obj.MemberCount() >= 2)
       << json_node_to_string(type_obj);
-  const auto type = to_sql_type(json_str(field(type_obj, "type")));
-  const auto nullable = json_bool(field(type_obj, "nullable"));
-  const auto precision_it = type_obj.FindMember("precision");
-  const int precision =
+  auto type_name = json_str(field(type_obj, "type"));
+  auto nullable = json_bool(field(type_obj, "nullable"));
+  auto precision_it = type_obj.FindMember("precision");
+  int precision =
       precision_it != type_obj.MemberEnd() ? json_i64(precision_it->value) : 0;
-  const auto scale_it = type_obj.FindMember("scale");
-  const int scale = scale_it != type_obj.MemberEnd() ? json_i64(scale_it->value) : 0;
-  SQLTypeInfo ti(type, !nullable);
-  ti.set_precision(precision);
-  ti.set_scale(scale);
-  if (ti.get_type() == kTEXT) {
-    ti.set_dimension(0);
-  }
-  return ti;
+  auto scale_it = type_obj.FindMember("scale");
+  int scale = scale_it != type_obj.MemberEnd() ? json_i64(scale_it->value) : 0;
+
+  return buildType(hdk::ir::Context::defaultCtx(), type_name, nullable, precision, scale);
 }
 
 SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
@@ -1821,7 +1899,8 @@ hdk::ir::ExprPtr parse_operator_expr(const rapidjson::Value& json_expr,
       operators_json_arr, db_id, schema_provider, root_dag_builder, ra_output);
   const auto type_it = json_expr.FindMember("type");
   CHECK(type_it != json_expr.MemberEnd());
-  auto ti = parse_type(type_it->value);
+  auto type = parseType(type_it->value);
+  auto ti = type->toTypeInfo();
 
   if (op == kIN && json_expr.HasMember("subquery")) {
     CHECK_EQ(operands.size(), (size_t)1);
@@ -2975,9 +3054,9 @@ class RelAlgDispatcher {
     for (auto tuple_type_arr_it = tuple_type_arr.Begin();
          tuple_type_arr_it != tuple_type_arr.End();
          ++tuple_type_arr_it) {
-      const auto component_type = parse_type(*tuple_type_arr_it);
+      auto component_type = parseType(*tuple_type_arr_it);
       const auto component_name = json_str(field(*tuple_type_arr_it, "name"));
-      tuple_type.emplace_back(component_name, component_type);
+      tuple_type.emplace_back(component_name, component_type->toTypeInfo());
     }
     return tuple_type;
   }
