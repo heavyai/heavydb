@@ -40,7 +40,8 @@ AbstractTextFileDataWrapper::AbstractTextFileDataWrapper()
     , user_mapping_(nullptr)
     , disable_cache_(false)
     , is_first_file_scan_call_(true)
-    , is_file_scan_in_progress_(false) {}
+    , is_file_scan_in_progress_(false)
+    , iterative_scan_last_fragment_id_(-1) {}
 
 AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
     const int db_id,
@@ -51,7 +52,8 @@ AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
     , user_mapping_(nullptr)
     , disable_cache_(false)
     , is_first_file_scan_call_(true)
-    , is_file_scan_in_progress_(false) {}
+    , is_file_scan_in_progress_(false)
+    , iterative_scan_last_fragment_id_(-1) {}
 
 AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
     const int db_id,
@@ -64,7 +66,8 @@ AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
     , user_mapping_(user_mapping)
     , disable_cache_(disable_cache)
     , is_first_file_scan_call_(true)
-    , is_file_scan_in_progress_(false) {}
+    , is_file_scan_in_progress_(false)
+    , iterative_scan_last_fragment_id_(-1) {}
 
 namespace {
 
@@ -916,6 +919,12 @@ ParseBufferRequest get_request_from_pool(
   return request;
 }
 
+bool request_pool_non_empty(MetadataScanMultiThreadingParams& multi_threading_params) {
+  std::unique_lock<std::mutex> request_pool_lock(
+      multi_threading_params.request_pool_mutex);
+  return !multi_threading_params.request_pool.empty();
+}
+
 /*
  * Defer processing a request until next iteration. The use case for this is
  * during an iterative file scan, some requests must defer processing until
@@ -1077,7 +1086,8 @@ void dispatch_scan_requests(
     const foreign_storage::IterativeFileScanParameters* file_scan_param,
     foreign_storage::AbstractTextFileDataWrapper::ResidualBuffer&
         iterative_residual_buffer,
-    const bool is_first_file_scan_call) {
+    const bool is_first_file_scan_call,
+    int& iterative_scan_last_fragment_id) {
   auto& alloc_size = iterative_residual_buffer.alloc_size;
   auto& residual_buffer = iterative_residual_buffer.residual_data;
   auto& residual_buffer_size = iterative_residual_buffer.residual_buffer_size;
@@ -1092,7 +1102,28 @@ void dispatch_scan_requests(
     dispatch_all_deferred_requests(multi_threading_params);
   }
 
-  while (!file_reader.isScanFinished()) {
+  // NOTE: During an interactive scan, it is possible for an entire fragment to
+  // be parsed into requests, which sit in deferred requests; in order to avoid
+  // stalling indefinitely while waiting on an available requests, the check
+  // below determines if this is the case or not.
+  bool current_fragment_fully_read_during_iterative_scan =
+      file_scan_param && file_scan_param->fragment_id < iterative_scan_last_fragment_id;
+
+  // NOTE: The conditional below behaves as follows:
+  //
+  // * for non-iterative scans,
+  // current_fragment_fully_read_during_iterative_scan is false, and therefore
+  // only the first clause of the conditional is relevant
+  //
+  // * for interactive scans, if
+  // current_fragment_fully_read_during_iterative_scan is true, then the
+  // conditional is skipped, unless it is determined there are still available
+  // requests to work with, in which case the loop is entered; this is an
+  // optimization that ensures maximal concurrency of loading while processing
+  // requests
+  while (!file_reader.isScanFinished() &&
+         (request_pool_non_empty(multi_threading_params) ||
+          !current_fragment_fully_read_during_iterative_scan)) {
     {
       std::lock_guard<std::mutex> pending_requests_lock(
           multi_threading_params.pending_requests_mutex);
@@ -1162,6 +1193,7 @@ void dispatch_scan_requests(
       const int32_t last_fragment_index =
           (first_row_index_in_buffer) / table->maxFragRows;
       if (last_fragment_index > file_scan_param->fragment_id) {
+        iterative_scan_last_fragment_id = last_fragment_index;
         break;
       }
     }
@@ -1192,7 +1224,8 @@ void dispatch_scan_requests_with_exception_handling(
     const foreign_storage::IterativeFileScanParameters* file_scan_param,
     foreign_storage::AbstractTextFileDataWrapper::ResidualBuffer&
         iterative_residual_buffer,
-    const bool is_first_file_scan_call) {
+    const bool is_first_file_scan_call,
+    int& iterative_scan_last_fragment_id) {
   try {
     dispatch_scan_requests(table,
                            buffer_size,
@@ -1205,7 +1238,8 @@ void dispatch_scan_requests_with_exception_handling(
                            parser,
                            file_scan_param,
                            iterative_residual_buffer,
-                           is_first_file_scan_call);
+                           is_first_file_scan_call,
+                           iterative_scan_last_fragment_id);
   } catch (...) {
     {
       std::unique_lock<std::mutex> pending_requests_lock(
@@ -1215,6 +1249,36 @@ void dispatch_scan_requests_with_exception_handling(
     multi_threading_params.pending_requests_condition.notify_all();
     throw;
   }
+}
+
+void dispatch_scan_requests_with_exception_handling(
+    const foreign_storage::ForeignTable* table,
+    const size_t& buffer_size,
+    const std::string& file_path,
+    FileReader& file_reader,
+    const import_export::CopyParams& copy_params,
+    MetadataScanMultiThreadingParams& multi_threading_params,
+    size_t& first_row_index_in_buffer,
+    size_t& current_file_offset,
+    const TextFileBufferParser& parser,
+    const foreign_storage::IterativeFileScanParameters* file_scan_param,
+    foreign_storage::AbstractTextFileDataWrapper::ResidualBuffer&
+        iterative_residual_buffer,
+    const bool is_first_file_scan_call) {
+  int dummy;
+  dispatch_scan_requests_with_exception_handling(table,
+                                                 buffer_size,
+                                                 file_path,
+                                                 file_reader,
+                                                 copy_params,
+                                                 multi_threading_params,
+                                                 first_row_index_in_buffer,
+                                                 current_file_offset,
+                                                 parser,
+                                                 file_scan_param,
+                                                 iterative_residual_buffer,
+                                                 is_first_file_scan_call,
+                                                 dummy);
 }
 
 namespace {
@@ -1468,6 +1532,7 @@ void AbstractTextFileDataWrapper::iterativeFileScan(
   auto& server_options = foreign_table_->foreign_server->options;
 
   if (is_first_file_scan_call_) {
+    iterative_scan_last_fragment_id_ = -1;
     initialize_non_append_mode_scan(
         chunk_metadata_map_,
         fragment_id_to_file_regions_map_,
@@ -1549,7 +1614,8 @@ void AbstractTextFileDataWrapper::iterativeFileScan(
                                                    getFileBufferParser(),
                                                    &file_scan_param,
                                                    residual_buffer_,
-                                                   is_first_file_scan_call_);
+                                                   is_first_file_scan_call_,
+                                                   iterative_scan_last_fragment_id_);
 
     for (auto& future : futures) {
       // get() instead of wait() because we need to propagate potential exceptions.

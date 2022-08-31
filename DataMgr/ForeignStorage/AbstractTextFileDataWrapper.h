@@ -192,12 +192,15 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
   bool is_first_file_scan_call_;
   bool is_file_scan_in_progress_;
 
+  // Track the fragment for which the last request currently processed belongs to
+  int iterative_scan_last_fragment_id_;
+
   // declared in three derived classes to avoid
   // polluting ForeignDataWrapper virtual base
   // @TODO refactor to lower class if needed
   RenderGroupAnalyzerMap render_group_analyzer_map_;
 
-  // These parameters may be reused in a reentrant metadata scan
+  // These parameters may be reused in a iterative file scan
   MetadataScanMultiThreadingParams multi_threading_params_;
   size_t buffer_size_;
   size_t thread_count_;

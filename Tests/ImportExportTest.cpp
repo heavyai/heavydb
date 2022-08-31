@@ -1022,7 +1022,9 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
       const bool is_odbc_geo = false,
       const std::optional<int64_t> max_reject = std::nullopt,
       const std::list<std::pair<std::string, std::string>>& odbc_schema_modifications =
-          {}) {
+          {},
+      const std::optional<int> threads = std::nullopt,
+      const std::optional<size_t> buffer_size = std::nullopt) {
     auto& import_type = param_.import_type;
     auto& data_source_type = param_.data_source_type;
     auto& fragment_size = param_.fragment_size;
@@ -1079,12 +1081,16 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
     EXPECT_NO_THROW(sql(query));
 
     TQueryResult copy_from_result;
-    EXPECT_NO_THROW(sql(
-        copy_from_result,
-        "COPY import_test_new FROM " + copy_from_source +
-            getCopyFromOptions(
-                import_type, data_source_type, line_regex, max_reject, odbc_order_by) +
-            ";"));
+    EXPECT_NO_THROW(sql(copy_from_result,
+                        "COPY import_test_new FROM " + copy_from_source +
+                            getCopyFromOptions(import_type,
+                                               data_source_type,
+                                               line_regex,
+                                               max_reject,
+                                               odbc_order_by,
+                                               threads,
+                                               buffer_size) +
+                            ";"));
     copy_from_result_ = get_copy_from_result_str(copy_from_result);
 
     TQueryResult result;
@@ -1129,8 +1135,16 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
                                  const std::string& data_source_type,
                                  const std::string& line_regex,
                                  const std::optional<int64_t> max_reject = {},
-                                 const std::optional<std::string> odbc_order_by = {}) {
+                                 const std::optional<std::string> odbc_order_by = {},
+                                 const std::optional<int> threads = std::nullopt,
+                                 const std::optional<size_t> buffer_size = std::nullopt) {
     std::vector<std::string> options;
+    if (buffer_size.has_value()) {
+      options.emplace_back("buffer_size=" + std::to_string(buffer_size.value()) + "");
+    }
+    if (threads.has_value()) {
+      options.emplace_back("threads=" + std::to_string(threads.value()) + "");
+    }
     if (max_reject.has_value()) {
       options.emplace_back("max_reject=" + std::to_string(max_reject.value()) + "");
     }
@@ -1883,6 +1897,31 @@ TEST_P(LowProxyForeignTableFragmentSizeImportTest, ImportWithSmallProxyFragmentS
   // clang-format on
 
   validateImportStatus(4, 0, false);
+  assertResultSetEqual(expected_values, query);
+}
+
+TEST_P(LowProxyForeignTableFragmentSizeImportTest, LargeNumberOfFragments) {
+  auto query = createTableCopyFromAndSelect(
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
+      "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
+      "txt_2 TEXT ENCODING NONE",
+      "scalar_types_many_rows",
+      "SELECT count(*) FROM import_test_new;",
+      get_line_regex(12),
+      14,
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      /*threads=*/2,
+      /*buffer_size=*/1024);
+
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{{17L}};
+
+  validateImportStatus(17, 0, false);
   assertResultSetEqual(expected_values, query);
 }
 

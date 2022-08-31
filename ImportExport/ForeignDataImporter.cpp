@@ -488,9 +488,8 @@ int32_t get_proxy_foreign_table_fragment_size(
     auto type = column_descriptor->columnType;
     size_t field_byte_length = 0;
     if (type.is_varlen_indeed()) {
-      // use a heuristic of 25% of the maximum string length size, which is likely
-      // conservative
-      field_byte_length = std::max<size_t>(StringDictionary::MAX_STRLEN / 4, 1);
+      // use a heuristic where varlen types are assumed to be 256 bytes in length
+      field_byte_length = 256;
     } else {
       field_byte_length = type.get_size();
     }
