@@ -443,67 +443,89 @@ size_t hash(Datum datum, const SQLTypeInfo& ti) {
 /*
  * @brief convert datum to string
  */
-std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
+std::string DatumToString(Datum d, const hdk::ir::Type* type) {
   constexpr size_t buf_size = 64;
   char buf[buf_size];  // Hold "2000-03-01 12:34:56.123456789" and large years.
-  switch (ti.get_type()) {
-    case kBOOLEAN:
+  switch (type->id()) {
+    case hdk::ir::Type::kBoolean:
       if (d.boolval) {
         return "t";
       }
       return "f";
-    case kNUMERIC:
-    case kDECIMAL: {
-      double v = (double)d.bigintval / pow(10, ti.get_scale());
-      int size = snprintf(buf, buf_size, "%*.*f", ti.get_dimension(), ti.get_scale(), v);
-      CHECK_LE(0, size) << v << ' ' << ti.to_string();
-      CHECK_LT(size_t(size), buf_size) << v << ' ' << ti.to_string();
+    case hdk::ir::Type::kDecimal: {
+      CHECK_EQ(type->size(), 8);
+      auto precision = type->as<hdk::ir::DecimalType>()->precision();
+      auto scale = type->as<hdk::ir::DecimalType>()->scale();
+      double v = (double)d.bigintval / pow(10, scale);
+      int size = snprintf(buf, buf_size, "%*.*f", precision, scale, v);
+      CHECK_LE(0, size) << v << ' ' << type->toString();
+      CHECK_LT(size_t(size), buf_size) << v << ' ' << type->toString();
       return buf;
     }
-    case kINT:
-      return std::to_string(d.intval);
-    case kSMALLINT:
-      return std::to_string(d.smallintval);
-    case kTINYINT:
-      return std::to_string(d.tinyintval);
-    case kBIGINT:
-      return std::to_string(d.bigintval);
-    case kFLOAT:
-      return std::to_string(d.floatval);
-    case kDOUBLE:
-      return std::to_string(d.doubleval);
-    case kTIME: {
+    case hdk::ir::Type::kInteger:
+      switch (type->size()) {
+        case 1:
+          return std::to_string(d.tinyintval);
+        case 2:
+          return std::to_string(d.smallintval);
+        case 4:
+          return std::to_string(d.intval);
+        case 8:
+          return std::to_string(d.bigintval);
+        default:
+          break;
+      }
+      break;
+    case hdk::ir::Type::kFloatingPoint:
+      switch (type->as<hdk::ir::FloatingPointType>()->precision()) {
+        case hdk::ir::FloatingPointType::kFloat:
+          return std::to_string(d.floatval);
+        case hdk::ir::FloatingPointType::kDouble:
+          return std::to_string(d.doubleval);
+        default:
+          break;
+      }
+      break;
+    case hdk::ir::Type::kTime: {
       size_t const len = shared::formatHMS(buf, buf_size, d.bigintval);
       CHECK_EQ(8u, len);  // 8 == strlen("HH:MM:SS")
       return buf;
     }
-    case kTIMESTAMP: {
-      unsigned const dim = ti.get_dimension();  // assumes dim <= 9
-      size_t const len = shared::formatDateTime(buf, buf_size, d.bigintval, dim);
-      CHECK_LE(19u + bool(dim) + dim, len);  // 19 = strlen("YYYY-MM-DD HH:MM:SS")
+    case hdk::ir::Type::kTimestamp: {
+      auto unit = type->as<hdk::ir::TimestampType>()->unit();
+      size_t const len = shared::formatDateTime(buf, buf_size, d.bigintval, unit);
       return buf;
     }
-    case kDATE: {
+    case hdk::ir::Type::kDate: {
       size_t const len = shared::formatDate(buf, buf_size, d.bigintval);
       CHECK_LE(10u, len);  // 10 == strlen("YYYY-MM-DD")
       return buf;
     }
-    case kINTERVAL_DAY_TIME:
-      return std::to_string(d.bigintval) + " ms (day-time interval)";
-    case kINTERVAL_YEAR_MONTH:
-      return std::to_string(d.bigintval) + " month(s) (year-month interval)";
-    case kTEXT:
-    case kVARCHAR:
-    case kCHAR:
+    case hdk::ir::Type::kInterval:
+      switch (type->as<hdk::ir::IntervalType>()->unit()) {
+        case hdk::ir::TimeUnit::kMonth:
+          return std::to_string(d.bigintval) + " month(s) (year-month interval)";
+        case hdk::ir::TimeUnit::kMilli:
+          return std::to_string(d.bigintval) + " ms (day-time interval)";
+        default:
+          break;
+      }
+      break;
+    case hdk::ir::Type::kVarChar:
+    case hdk::ir::Type::kText:
       if (d.stringval == nullptr) {
         return "NULL";
       }
       return *d.stringval;
     default:
-      throw std::runtime_error("Internal error: invalid type " + ti.get_type_name() +
-                               " in DatumToString.");
+      break;
   }
-  return "";
+  throw std::runtime_error("Internal error: invalid type " + type->toString() +
+                           " in DatumToString.");
+}
+
+std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
+  return DatumToString(d, hdk::ir::Context::defaultCtx().fromTypeInfo(ti));
 }
 
 int64_t extract_int_type_from_datum(const Datum datum, const hdk::ir::Type* type) {

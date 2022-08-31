@@ -29,6 +29,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "IR/Type.h"
+
 namespace {
 
 template <typename T>
@@ -150,11 +152,11 @@ size_t formatDate(char* buf, size_t const max, int64_t const unixtime);
 // Same as strftime(buf, max, "%F %T", tm) but guarantees that the year is
 // zero-padded to a minimum length of 4. Return the number of characters
 // written, not including null byte. If max is not large enough, return 0.
-// Requirement: 0 <= dimension <= 9.
+// Requirement: kSecond <= unit <= kNano.
 size_t formatDateTime(char* buf,
                       size_t const max,
                       int64_t const timestamp,
-                      int const dimension);
+                      hdk::ir::TimeUnit unit);
 
 // Write unixtime in seconds since epoch as "HH:MM:SS" format.
 size_t formatHMS(char* buf, size_t const max, int64_t const unixtime);

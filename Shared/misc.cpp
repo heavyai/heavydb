@@ -18,6 +18,7 @@
 
 #include "misc.h"
 
+#include <cmath>
 #include <cstdio>
 
 namespace shared {
@@ -43,10 +44,9 @@ size_t formatDate(char* buf, size_t const max, int64_t const unixtime) {
 size_t formatDateTime(char* buf,
                       size_t const max,
                       int64_t const timestamp,
-                      int const dimension) {
-  constexpr int pow10[10]{
-      1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
-  DivUMod const div_hip = divUMod(timestamp, pow10[dimension]);
+                      hdk::ir::TimeUnit unit) {
+  auto scale = hdk::ir::unitsPerSecond(unit);
+  DivUMod const div_hip = divUMod(timestamp, scale);
   DivUMod const div_day = divUMod(div_hip.quot, 24 * 60 * 60);
   DivUMod const div_era = divUMod(div_day.quot - 11017, 146097);
   unsigned const doe = static_cast<unsigned>(div_era.rem);
@@ -64,9 +64,12 @@ size_t formatDateTime(char* buf,
   int const len =
       snprintf(buf, max, "%04lld-%02u-%02u %02u:%02u:%02u", y, m, d, hh, mm, ss);
   if (0 <= len && static_cast<size_t>(len) < max) {
-    if (dimension) {
-      int const len_frac = snprintf(
-          buf + len, max - len, ".%0*d", dimension, static_cast<int>(div_hip.rem));
+    if (scale > 1) {
+      int const len_frac = snprintf(buf + len,
+                                    max - len,
+                                    ".%0*d",
+                                    (int)std::log10(scale),
+                                    static_cast<int>(div_hip.rem));
       if (0 <= len_frac && static_cast<size_t>(len + len_frac) < max) {
         return static_cast<size_t>(len + len_frac);
       }
