@@ -789,7 +789,7 @@ void QueryMemoryInitializer::allocateCountDistinctGpuMem(
 
   count_distinct_bitmap_mem_bytes_ =
       total_bytes_per_entry * query_mem_desc.getEntryCount();
-  count_distinct_bitmap_mem_ = reinterpret_cast<CUdeviceptr>(
+  count_distinct_bitmap_mem_ = reinterpret_cast<int8_t*>(
       device_allocator_->alloc(count_distinct_bitmap_mem_bytes_));
   device_allocator_->zeroDeviceMem(reinterpret_cast<int8_t*>(count_distinct_bitmap_mem_),
                                    count_distinct_bitmap_mem_bytes_);
@@ -918,7 +918,7 @@ GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
     dev_buffers[i] = dev_buffer;
   }
 
-  auto dev_ptr = device_allocator_->alloc(thread_count * sizeof(CUdeviceptr));
+  auto dev_ptr = device_allocator_->alloc(thread_count * sizeof(int8_t*));
   device_allocator_->copyToDevice(dev_ptr,
                                   reinterpret_cast<int8_t*>(dev_buffers.data()),
                                   thread_count * sizeof(int8_t*));
