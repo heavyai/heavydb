@@ -1161,6 +1161,7 @@ if(MAPD_IMMERSE_DOWNLOAD)
     BUILD_COMMAND ""
     INSTALL_COMMAND ""
     LOG_DOWNLOAD on
+    DOWNLOAD_EXTRACT_TIMESTAMP true
     )
   externalproject_get_property(frontend source_dir)
 
