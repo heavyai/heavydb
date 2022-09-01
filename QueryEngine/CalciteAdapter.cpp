@@ -251,7 +251,7 @@ std::string pg_shim_impl(const std::string& query) {
               precision_map.cbegin(),
               precision_map.cend(),
               [&time_unit_str](const std::pair<std::string_view, size_t>& precision) {
-                return boost::iequals(precision.first, time_unit_str);
+                return time_unit_str.compare(precision.first) == 0;
               });
           if (precision_it != precision_map.end()) {
             std::ostringstream out;
