@@ -202,7 +202,7 @@ JoinColumn ColumnFetcher::makeJoinColumn(
     ++num_chunks;
   }
 
-  int elem_sz = hash_col.get_type_info().get_size();
+  int elem_sz = hash_col.type()->size();
   CHECK_GT(elem_sz, 0);
 
   return {col_chunks_buff,
@@ -238,12 +238,8 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
   auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
   CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
   CHECK(table_id > 0);
-  const auto col_type = col_info->type_info;
-  const bool is_real_string =
-      col_type.is_string() && col_type.get_compression() == kENCODING_NONE;
-  const bool is_varlen =
-      is_real_string ||
-      col_type.is_array();  // TODO: should it be col_type.is_varlen_array() ?
+  // Fixed length arrays are also included here.
+  const bool is_varlen = col_info->type->isString() || col_info->type->isArray();
   {
     ChunkKey chunk_key{
         col_info->db_id, fragment.physicalTableId, col_id, fragment.fragmentId};
@@ -391,8 +387,7 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
   InputDescriptor table_desc(db_id, table_id, 0);
   CHECK(table_desc.getSourceType() == InputSourceType::TABLE);
   CHECK_GT(table_id, 0);
-  bool is_varlen_chunk =
-      col_info->type_info.is_varlen() && !col_info->type_info.is_fixlen_array();
+  bool is_varlen_chunk = col_info->type->isVarLen();
   size_t total_num_tuples = 0;
   size_t total_data_buf_size = 0;
   size_t total_idx_buf_size = 0;
@@ -470,18 +465,18 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
     }
   }
 
-  auto& col_ti = col_info->type_info;
+  auto type = col_info->type;
   MergedChunk res{nullptr, nullptr};
   // Do linearize multi-fragmented column depending on column type
   // We cover array and non-encoded text columns
   {
     std::lock_guard<std::mutex> linearization_guard(linearization_mutex_);
-    if (col_ti.is_array()) {
-      if (col_ti.is_fixlen_array()) {
+    if (type->isArray()) {
+      if (type->isFixedLenArray()) {
         VLOG(2) << "Linearize fixed-length multi-frag array column (col_id: " << col_id
                 << ", col_name: " << col_info->name
                 << ", device_type: " << getMemoryLevelString(memory_level)
-                << ", device_id: " << device_id << "): " << col_ti.to_string();
+                << ", device_id: " << device_id << "): " << type->toString();
         res = linearizeFixedLenArrayColFrags(chunk_holder,
                                              chunk_iter_holder,
                                              local_chunk_holder,
@@ -496,11 +491,11 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
                                              device_allocator,
                                              thread_idx);
       } else {
-        CHECK(col_ti.is_varlen_array());
+        CHECK(type->isVarLenArray());
         VLOG(2) << "Linearize variable-length multi-frag array column (col_id: " << col_id
                 << ", col_name: " << col_info->name
                 << ", device_type: " << getMemoryLevelString(memory_level)
-                << ", device_id: " << device_id << "): " << col_info->type->toString();
+                << ", device_id: " << device_id << "): " << type->toString();
         res = linearizeVarLenArrayColFrags(chunk_holder,
                                            chunk_iter_holder,
                                            local_chunk_holder,
@@ -516,11 +511,11 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
                                            thread_idx);
       }
     }
-    if (col_ti.is_string() && !col_ti.is_dict_encoded_string()) {
+    if (type->isString()) {
       VLOG(2) << "Linearize variable-length multi-frag non-encoded text column (col_id: "
               << col_id << ", col_name: " << col_info->name
               << ", device_type: " << getMemoryLevelString(memory_level)
-              << ", device_id: " << device_id << "): " << col_info->type->toString();
+              << ", device_id: " << device_id << "): " << type->toString();
       res = linearizeVarLenArrayColFrags(chunk_holder,
                                          chunk_iter_holder,
                                          local_chunk_holder,
@@ -537,7 +532,7 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
     }
   }
   CHECK(res.first);  // check merged data buffer
-  if (!col_ti.is_fixlen_array()) {
+  if (!type->isFixedLenArray()) {
     CHECK(res.second);  // check merged index buffer
   }
   auto merged_data_buffer = res.first;
