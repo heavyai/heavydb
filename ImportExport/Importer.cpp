@@ -229,7 +229,11 @@ Importer::~Importer() {
 
 ImportStatus Importer::get_import_status(const std::string& import_id) {
   heavyai::shared_lock<heavyai::shared_mutex> read_lock(status_mutex);
-  return import_status_map.at(import_id);
+  auto it = import_status_map.find(import_id);
+  if (it == import_status_map.end()) {
+    throw std::runtime_error("Import status not found for id: " + import_id);
+  }
+  return it->second;
 }
 
 void Importer::set_import_status(const std::string& import_id, ImportStatus is) {

@@ -5688,6 +5688,17 @@ TEST_F(MetadataColumnsTest, OutOfRangeFLOATTest) {
   testFail("a,float,1.0E100");
 }
 
+class ImportStatusTest : public DBHandlerTestFixture {};
+
+TEST_F(ImportStatusTest, InvalidImportId) {
+  executeLambdaAndAssertException(
+      [] {
+        const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+        TImportStatus import_status;
+        db_handler->import_table_status(import_status, session_id, "invalid_import_id");
+      },
+      "Import status not found for id: invalid_import_id");
+}
 }  // namespace
 
 int main(int argc, char** argv) {
