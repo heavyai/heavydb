@@ -392,16 +392,17 @@ class ExecuteTestBase {
           json_ss << ", ";
         }
         json_ss << "\"" << col_info->name << "\" : ";
-        const auto& ti = col_info->type_info;
-        switch (ti.get_type()) {
-          case kINT:
+        switch (col_info->type->id()) {
+          case hdk::ir::Type::kInteger:
             json_ss << (7 + row_idx);
             break;
-          case kARRAY: {
-            const auto& elem_ti = ti.get_elem_type();
+          case hdk::ir::Type::kFixedLenArray:
+          case hdk::ir::Type::kVarLenArray: {
+            const auto& elem_type =
+                col_info->type->as<hdk::ir::ArrayBaseType>()->elemType();
             std::vector<std::string> array_elems;
-            switch (elem_ti.get_type()) {
-              case kBOOLEAN: {
+            switch (elem_type->id()) {
+              case hdk::ir::Type::kBoolean: {
                 for (size_t i = 0; i < 3; ++i) {
                   if (row_idx % 2) {
                     array_elems.emplace_back("true");
@@ -413,45 +414,58 @@ class ExecuteTestBase {
                 }
                 break;
               }
-              case kTINYINT:
-                for (size_t i = 0; i < 3; ++i) {
-                  array_elems.push_back(std::to_string(row_idx + i + 1));
+              case hdk::ir::Type::kInteger:
+                switch (elem_type->size()) {
+                  case 1:
+                    for (size_t i = 0; i < 3; ++i) {
+                      array_elems.push_back(std::to_string(row_idx + i + 1));
+                    }
+                    break;
+                  case 2:
+                    for (size_t i = 0; i < 3; ++i) {
+                      array_elems.push_back(std::to_string(row_idx + i + 1));
+                    }
+                    break;
+                  case 4:
+                    for (size_t i = 0; i < 3; ++i) {
+                      array_elems.push_back(std::to_string((row_idx + i + 1) * 10));
+                    }
+                    break;
+                  case 8:
+                    for (size_t i = 0; i < 3; ++i) {
+                      array_elems.push_back(std::to_string((row_idx + i + 1) * 100));
+                    }
+                    break;
+                  default:
+                    CHECK(false);
                 }
                 break;
-              case kSMALLINT:
-                for (size_t i = 0; i < 3; ++i) {
-                  array_elems.push_back(std::to_string(row_idx + i + 1));
-                }
-                break;
-              case kINT:
-                for (size_t i = 0; i < 3; ++i) {
-                  array_elems.push_back(std::to_string((row_idx + i + 1) * 10));
-                }
-                break;
-              case kBIGINT:
-                for (size_t i = 0; i < 3; ++i) {
-                  array_elems.push_back(std::to_string((row_idx + i + 1) * 100));
-                }
-                break;
-              case kTEXT:
+              case hdk::ir::Type::kText:
+              case hdk::ir::Type::kExtDictionary:
                 for (size_t i = 0; i < 3; ++i) {
                   std::string val(2, 'a' + row_idx + i);
                   array_elems.push_back("\""s + val + "\""s);
                 }
                 break;
-              case kFLOAT:
-                for (size_t i = 0; i < 3; ++i) {
-                  array_elems.emplace_back(std::to_string(row_idx + i + 1) + "." +
-                                           std::to_string(row_idx + i + 1));
+              case hdk::ir::Type::kFloatingPoint:
+                switch (elem_type->as<hdk::ir::FloatingPointType>()->precision()) {
+                  case hdk::ir::FloatingPointType::kFloat:
+                    for (size_t i = 0; i < 3; ++i) {
+                      array_elems.emplace_back(std::to_string(row_idx + i + 1) + "." +
+                                               std::to_string(row_idx + i + 1));
+                    }
+                    break;
+                  case hdk::ir::FloatingPointType::kDouble:
+                    for (size_t i = 0; i < 3; ++i) {
+                      array_elems.emplace_back(std::to_string(11 * (row_idx + i + 1)) +
+                                               "." + std::to_string(row_idx + i + 1));
+                    }
+                    break;
+                  default:
+                    CHECK(false);
                 }
                 break;
-              case kDOUBLE:
-                for (size_t i = 0; i < 3; ++i) {
-                  array_elems.emplace_back(std::to_string(11 * (row_idx + i + 1)) + "." +
-                                           std::to_string(row_idx + i + 1));
-                }
-                break;
-              case kDECIMAL:
+              case hdk::ir::Type::kDecimal:
                 for (size_t i = 0; i < 3; ++i) {
                   array_elems.emplace_back(std::to_string(11 * (row_idx + i + 1)) + "." +
                                            std::to_string(row_idx + i + 1));
@@ -463,7 +477,7 @@ class ExecuteTestBase {
             json_ss << "[" << boost::algorithm::join(array_elems, ", ") << "]";
             break;
           }
-          case kTEXT:
+          case hdk::ir::Type::kText:
             json_ss << "\"real_str" << row_idx << "\"";
             break;
           default:
