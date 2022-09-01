@@ -78,6 +78,7 @@ class Type {
   bool isString() const { return isVarChar() || isText(); }
   bool isDateTime() const { return isDate() || isTime() || isTimestamp(); }
   bool isArray() const { return isFixedLenArray() || isVarLenArray(); }
+  bool isVarLen() const { return isString() || isVarLenArray(); }
 
   // Return the same type created in a specified context.
   const Type* copyTo(Context& ctx) const;
