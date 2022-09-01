@@ -2208,7 +2208,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
   switch (window_func_kind) {
     case SqlWindowFunctionKind::LEAD_IN_FRAME:
     case SqlWindowFunctionKind::LAG_IN_FRAME: {
-      CHECK(has_framing_clause);
+      if (order_keys.empty()) {
+        throw std::runtime_error(::toString(window_func_kind) +
+                                 " requires an ORDER BY clause");
+      }
+      if (!has_framing_clause) {
+        throw std::runtime_error(::toString(window_func_kind) +
+                                 " requires window frame definition");
+      }
       const auto num_args = args.size();
       const auto func_name = ::toString(window_func_kind);
       if (num_args == 1) {

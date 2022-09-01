@@ -23436,6 +23436,18 @@ TEST(Select, WindowFunctionFrameNavigationFunctions) {
       }
     }
   }
+  for (auto is_lead_test : {true, false}) {
+    std::string func_name_on_frame = is_lead_test ? "LEAD_IN_FRAME" : "LAG_IN_FRAME";
+    const auto query1 = "SELECT oc, " + func_name_on_frame +
+                        "(ti, 1) OVER (PARTITION BY pc ROWS BETWEEN 1 PRECEDING AND 1 "
+                        "FOLLOWING) FROM test_frame_nav";
+    const auto query2 = "SELECT oc, " + func_name_on_frame +
+                        "(ti, 1) OVER (PARTITION BY pc RANGE BETWEEN 1 PRECEDING AND 1 "
+                        "FOLLOWING) FROM test_frame_nav";
+    const auto query3 = "SELECT oc, " + func_name_on_frame +
+                        "(ti, 1) OVER (ORDER BY pc) FROM test_frame_nav";
+    EXPECT_ANY_THROW(run_multiple_agg(query1, dt));
+  }
 }
 
 TEST(Select, FilterNodeCoalesce) {
