@@ -2387,7 +2387,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateIntervalExprForWindow
       return std::make_shared<Analyzer::Constant>(kBIGINT, false, d);
     }
     case kDATE: {
-      DateaddField daField;
+      DateaddField daField = DateaddField::daINVALID;
       if (time_val_expr->get_type_info().is_integer()) {
         switch (time_unit) {
           case kDAY: {
@@ -2419,6 +2419,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateIntervalExprForWindow
             "Window frame bound expression has an invalid type for " +
             order_key_ti.get_type_name() + " type");
       }
+      CHECK_NE(daField, DateaddField::daINVALID);
       prepare_time_value_datum(false);
       const auto cast_number_units = makeExpr<Analyzer::Constant>(kBIGINT, false, d);
       const int dim = order_key_ti.get_dimension();
@@ -2426,10 +2427,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateIntervalExprForWindow
           SQLTypeInfo(kTIMESTAMP, dim, 0, false), daField, cast_number_units, order_key);
     }
     case kTIMESTAMP: {
-      DateaddField daField;
+      DateaddField daField = DateaddField::daINVALID;
       switch (time_unit) {
         case kSECOND: {
-          // classify
           switch (time_val_expr->get_type_info().get_scale()) {
             case 0: {
               daField = to_dateadd_field("second");
@@ -2485,6 +2485,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateIntervalExprForWindow
         }
       }
       if (!invalid_time_unit_type) {
+        CHECK_NE(daField, DateaddField::daINVALID);
         const auto cast_number_units = makeExpr<Analyzer::Constant>(kBIGINT, false, d);
         const int dim = order_key_ti.get_dimension();
         return makeExpr<Analyzer::DateaddExpr>(SQLTypeInfo(kTIMESTAMP, dim, 0, false),
