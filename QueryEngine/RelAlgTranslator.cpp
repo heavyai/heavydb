@@ -179,21 +179,20 @@ class NormalizerVisitor : public DeepCopyVisitor {
       // the name and type information come directly from the catalog.
       CHECK(in_metainfo.empty());
       auto col_info = scan_source->getColumnInfoBySpi(col_idx + 1);
-      auto col_ti = col_info->type_info;
-      if (col_ti.is_string()) {
-        col_ti.set_type(kTEXT);
+      auto col_type = col_info->type;
+      if (col_type->isVarChar()) {
+        col_type = col_type->ctx().text(col_type->nullable());
       }
       CHECK_LE(static_cast<size_t>(rte_idx), join_types_.size());
       if (rte_idx > 0 && join_types_[rte_idx - 1] == JoinType::LEFT) {
-        col_ti.set_notnull(false);
+        col_type = col_type->withNullable(true);
       }
-      if (col_ti != col_info->type_info) {
-        auto new_type = col_info->type->ctx().fromTypeInfo(col_ti);
+      if (!col_type->equal(col_info->type)) {
         col_info = std::make_shared<ColumnInfo>(col_info->db_id,
                                                 col_info->table_id,
                                                 col_info->column_id,
                                                 col_info->name,
-                                                new_type,
+                                                col_type,
                                                 col_info->is_rowid);
       }
       return std::make_shared<hdk::ir::ColumnVar>(col_info, rte_idx);
