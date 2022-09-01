@@ -14,13 +14,15 @@
 
 #pragma once
 
+#include "IR/Context.h"
 #include "SchemaProvider.h"
 
 #include "Shared/mapd_shared_mutex.h"
 
 class SimpleSchemaProvider : public SchemaProvider {
  public:
-  SimpleSchemaProvider(int id, const std::string& name) : id_(id), name_(name) {}
+  SimpleSchemaProvider(hdk::ir::Context& ctx, int id, const std::string& name)
+      : ctx_(ctx), id_(id), name_(name) {}
   ~SimpleSchemaProvider() override = default;
 
   int getId() const override { return id_; }
@@ -158,8 +160,7 @@ class SimpleSchemaProvider : public SchemaProvider {
   ColumnInfoPtr addRowidColumn(int db_id, int table_id) {
     CHECK_EQ(column_index_by_name_.count({db_id, table_id}), (size_t)1);
     int col_id = static_cast<int>(column_index_by_name_[{db_id, table_id}].size() + 1);
-    return addColumnInfo(
-        db_id, table_id, col_id, "rowid", SQLTypeInfo(SQLTypes::kBIGINT), true);
+    return addColumnInfo(db_id, table_id, col_id, "rowid", ctx_.int64(), true);
   }
 
   void dropTable(int db_id, int table_id) {
@@ -177,6 +178,7 @@ class SimpleSchemaProvider : public SchemaProvider {
   using TableByNameMap = std::unordered_map<std::string, TableInfoPtr>;
   using ColumnByNameMap = std::unordered_map<std::string, ColumnInfoPtr>;
 
+  hdk::ir::Context& ctx_;
   int id_;
   std::string name_;
   TableInfoMap table_infos_;

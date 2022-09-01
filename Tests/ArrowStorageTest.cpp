@@ -32,7 +32,7 @@ namespace {
   auto col_infos = storage.listColumns(TEST_DB_ID, table_id);
   for (auto& col_info : col_infos) {
     std::cout << " " << col_info->name << "[" << col_info->column_id << "]("
-              << col_info->type.toString() << ")";
+              << col_info->type->toString() << ")";
   }
   std::cout << std::endl;
 
@@ -142,7 +142,7 @@ void checkColumnInfo(ColumnInfoPtr col_info,
   CHECK_EQ(col_info->table_id, table_id);
   CHECK_EQ(col_info->column_id, col_id);
   CHECK_EQ(col_info->name, name);
-  CHECK_EQ(col_info->type, type);
+  CHECK_EQ(col_info->type_info, type);
   CHECK_EQ(col_info->is_rowid, is_rowid);
 }
 
@@ -257,7 +257,7 @@ void checkChunkData(ArrowStorage& storage,
                       [](T max, T val) -> T {
                         return val == inline_null_value<T>() ? max : std::max(max, val);
                       });
-  auto col_type = storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type;
+  auto col_type = storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type_info;
   if (col_type.get_type() == kDATE) {
     int64_t date_min = min == std::numeric_limits<T>::max()
                            ? std::numeric_limits<int64_t>::max()
@@ -300,7 +300,7 @@ void checkStringColumnData(ArrowStorage& storage,
     chunk_size += vals[i].size();
   }
   checkChunkMeta(chunk_meta_map.at(col_idx + 1),
-                 storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type,
+                 storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type_info,
                  frag_rows,
                  chunk_size,
                  false);
@@ -331,7 +331,7 @@ void checkStringDictColumnData(ArrowStorage& storage,
   size_t frag_rows = end_row - start_row;
 
   auto col_info = storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1);
-  auto& dict = *storage.getDictMetadata(col_info->type.get_comp_param())->stringDict;
+  auto& dict = *storage.getDictMetadata(col_info->type_info.get_comp_param())->stringDict;
 
   std::vector<IndexType> expected_ids(frag_rows);
   for (size_t i = start_row; i < end_row; ++i) {
@@ -339,7 +339,7 @@ void checkStringDictColumnData(ArrowStorage& storage,
   }
 
   checkChunkMeta(chunk_meta_map.at(col_idx + 1),
-                 storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type,
+                 storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type_info,
                  frag_rows,
                  frag_rows * sizeof(IndexType),
                  false,
@@ -369,7 +369,7 @@ void checkChunkData(ArrowStorage& storage,
   T max = std::numeric_limits<T>::max();
   bool has_nulls = false;
   for (size_t i = start_row; i < end_row; ++i) {
-    if (expected[i].empty() || !col_info->type.is_varlen_array() ||
+    if (expected[i].empty() || !col_info->type_info.is_varlen_array() ||
         expected[i].front() != inline_null_array_value<T>()) {
       chunk_elems += expected[i].size();
     }
@@ -384,7 +384,7 @@ void checkChunkData(ArrowStorage& storage,
   }
   size_t chunk_size = chunk_elems * sizeof(T);
   checkChunkMeta(chunk_meta_map.at(col_idx + 1),
-                 storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type,
+                 storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type_info,
                  frag_rows,
                  chunk_size,
                  has_nulls,
@@ -398,7 +398,7 @@ void checkChunkData(ArrowStorage& storage,
     expected_offset[i - start_row] =
         use_negative_offset ? -data_offset * sizeof(T) : data_offset * sizeof(T);
     if (!expected[i].empty() && expected[i].front() == inline_null_array_value<T>() &&
-        col_info->type.is_varlen_array()) {
+        col_info->type_info.is_varlen_array()) {
       use_negative_offset = true;
     } else {
       use_negative_offset = false;
@@ -410,7 +410,7 @@ void checkChunkData(ArrowStorage& storage,
   }
   expected_offset.back() =
       use_negative_offset ? -data_offset * sizeof(T) : data_offset * sizeof(T);
-  if (col_info->type.is_varlen_array()) {
+  if (col_info->type_info.is_varlen_array()) {
     checkFetchedData(storage, table_id, col_idx + 1, frag_idx + 1, expected_offset, {2});
     checkFetchedData(storage, table_id, col_idx + 1, frag_idx + 1, expected_data, {1});
   } else {
@@ -429,7 +429,7 @@ void checkChunkData(ArrowStorage& storage,
                     const std::vector<std::vector<std::string>>& expected) {
   CHECK_EQ(row_count, expected.size());
   auto col_info = storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1);
-  auto& dict = *storage.getDictMetadata(col_info->type.get_comp_param())->stringDict;
+  auto& dict = *storage.getDictMetadata(col_info->type_info.get_comp_param())->stringDict;
 
   size_t start_row = frag_idx * fragment_size;
   size_t end_row = std::min(row_count, start_row + fragment_size);
@@ -440,9 +440,9 @@ void checkChunkData(ArrowStorage& storage,
   bool has_nulls = false;
 
   // varlen string arrays are not yet supported.
-  CHECK(col_info->type.is_fixlen_array());
+  CHECK(col_info->type_info.is_fixlen_array());
   size_t list_size =
-      col_info->type.get_size() / col_info->type.get_elem_type().get_size();
+      col_info->type_info.get_size() / col_info->type_info.get_elem_type().get_size();
   size_t chunk_elems = frag_rows * list_size;
   for (size_t i = start_row; i < end_row; ++i) {
     if (expected[i].empty()) {
@@ -467,7 +467,7 @@ void checkChunkData(ArrowStorage& storage,
 
   size_t chunk_size = chunk_elems * sizeof(int32_t);
   checkChunkMeta(chunk_meta_map.at(col_idx + 1),
-                 storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type,
+                 storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type_info,
                  frag_rows,
                  chunk_size,
                  has_nulls,
@@ -488,8 +488,8 @@ void checkChunkData(ArrowStorage& storage,
                     const std::vector<std::string>& expected) {
   CHECK_EQ(row_count, expected.size());
   auto col_info = storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1);
-  if (col_info->type.is_dict_encoded_string()) {
-    switch (col_info->type.get_size()) {
+  if (col_info->type_info.is_dict_encoded_string()) {
+    switch (col_info->type_info.get_size()) {
       case 1:
         checkStringDictColumnData<int8_t>(storage,
                                           chunk_meta_map,
@@ -688,11 +688,11 @@ TEST_F(ArrowStorageTest, CreateTable_SharedDict) {
                                     {"col4", type_dict1},
                                     {"col5", type_dict2}});
   auto col_infos = storage.listColumns(*tinfo);
-  CHECK_EQ(col_infos[0]->type.get_comp_param(), addSchemaId(1, TEST_SCHEMA_ID));
-  CHECK_EQ(col_infos[1]->type.get_comp_param(), addSchemaId(2, TEST_SCHEMA_ID));
-  CHECK_EQ(col_infos[2]->type.get_comp_param(), addSchemaId(3, TEST_SCHEMA_ID));
-  CHECK_EQ(col_infos[3]->type.get_comp_param(), addSchemaId(2, TEST_SCHEMA_ID));
-  CHECK_EQ(col_infos[4]->type.get_comp_param(), addSchemaId(3, TEST_SCHEMA_ID));
+  CHECK_EQ(col_infos[0]->type_info.get_comp_param(), addSchemaId(1, TEST_SCHEMA_ID));
+  CHECK_EQ(col_infos[1]->type_info.get_comp_param(), addSchemaId(2, TEST_SCHEMA_ID));
+  CHECK_EQ(col_infos[2]->type_info.get_comp_param(), addSchemaId(3, TEST_SCHEMA_ID));
+  CHECK_EQ(col_infos[3]->type_info.get_comp_param(), addSchemaId(2, TEST_SCHEMA_ID));
+  CHECK_EQ(col_infos[4]->type_info.get_comp_param(), addSchemaId(3, TEST_SCHEMA_ID));
   CHECK(storage.getDictMetadata(addSchemaId(1, TEST_SCHEMA_ID)));
   CHECK(storage.getDictMetadata(addSchemaId(2, TEST_SCHEMA_ID)));
   CHECK(storage.getDictMetadata(addSchemaId(2, TEST_SCHEMA_ID)));
@@ -716,8 +716,8 @@ TEST_F(ArrowStorageTest, DropTable) {
   ASSERT_EQ(storage.getTableInfo(*tinfo), nullptr);
   for (auto& col_info : col_infos) {
     ASSERT_EQ(storage.getColumnInfo(*col_info), nullptr);
-    if (col_info->type.is_dict_encoded_string()) {
-      ASSERT_EQ(storage.getDictMetadata(col_info->type.get_comp_param()), nullptr);
+    if (col_info->type_info.is_dict_encoded_string()) {
+      ASSERT_EQ(storage.getDictMetadata(col_info->type_info.get_comp_param()), nullptr);
     }
   }
 }
@@ -729,7 +729,7 @@ TEST_F(ArrowStorageTest, DropTable_SharedDicts) {
   auto col1_info = storage.getColumnInfo(*tinfo1, "col1");
 
   SQLTypeInfo type_dict1(kTEXT, false, kENCODING_DICT);
-  type_dict1.set_comp_param(col1_info->type.get_comp_param());
+  type_dict1.set_comp_param(col1_info->type_info.get_comp_param());
   SQLTypeInfo type_dict2(kTEXT, false, kENCODING_DICT);
   type_dict2.set_comp_param(-1);
   auto tinfo2 = storage.createTable(
@@ -743,8 +743,8 @@ TEST_F(ArrowStorageTest, DropTable_SharedDicts) {
     ASSERT_EQ(storage.getColumnInfo(*col_info), nullptr);
   }
 
-  ASSERT_NE(storage.getDictMetadata(col1_info->type.get_comp_param()), nullptr);
-  ASSERT_EQ(storage.getDictMetadata(col2_info->type.get_comp_param()), nullptr);
+  ASSERT_NE(storage.getDictMetadata(col1_info->type_info.get_comp_param()), nullptr);
+  ASSERT_EQ(storage.getDictMetadata(col2_info->type_info.get_comp_param()), nullptr);
 }
 
 void Test_ImportCsv_Numbers(const std::string& file_name,
@@ -1010,14 +1010,17 @@ void Test_ImportCsv_Dict(bool shared_dict,
 
   if (shared_dict) {
     auto col1_info = storage.getColumnInfo(*tinfo, "col1");
-    auto dict1 = storage.getDictMetadata(col1_info->type.get_comp_param())->stringDict;
+    auto dict1 =
+        storage.getDictMetadata(col1_info->type_info.get_comp_param())->stringDict;
     CHECK_EQ(dict1->storageEntryCount(), (size_t)10);
   } else {
     auto col1_info = storage.getColumnInfo(*tinfo, "col1");
-    auto dict1 = storage.getDictMetadata(col1_info->type.get_comp_param())->stringDict;
+    auto dict1 =
+        storage.getDictMetadata(col1_info->type_info.get_comp_param())->stringDict;
     CHECK_EQ(dict1->storageEntryCount(), (size_t)5);
     auto col2_info = storage.getColumnInfo(*tinfo, "col2");
-    auto dict2 = storage.getDictMetadata(col2_info->type.get_comp_param())->stringDict;
+    auto dict2 =
+        storage.getDictMetadata(col2_info->type_info.get_comp_param())->stringDict;
     CHECK_EQ(dict2->storageEntryCount(), (size_t)5);
   }
 

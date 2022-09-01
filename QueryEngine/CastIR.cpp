@@ -40,7 +40,8 @@ llvm::Value* CodeGenerator::codegenCast(const hdk::ir::UOper* uoper,
     operand_lv = codegen(operand, true, co).front();
   }
   const auto& operand_ti = operand->get_type_info();
-  return codegenCast(operand_lv, operand_ti, ti, operand_as_const, co);
+  return codegenCast(
+      operand_lv, operand_ti, ti, operand_as_const, uoper->is_dict_intersection(), co);
 }
 
 namespace {
@@ -56,6 +57,7 @@ llvm::Value* CodeGenerator::codegenCast(llvm::Value* operand_lv,
                                         const SQLTypeInfo& operand_ti,
                                         const SQLTypeInfo& ti,
                                         const bool operand_is_const,
+                                        bool is_dict_intersection,
                                         const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   if (byte_array_cast(operand_ti, ti)) {
@@ -65,7 +67,8 @@ llvm::Value* CodeGenerator::codegenCast(llvm::Value* operand_lv,
   }
   if (operand_lv->getType()->isIntegerTy()) {
     if (operand_ti.is_string()) {
-      return codegenCastFromString(operand_lv, operand_ti, ti, operand_is_const, co);
+      return codegenCastFromString(
+          operand_lv, operand_ti, ti, operand_is_const, is_dict_intersection, co);
     }
     CHECK(operand_ti.is_integer() || operand_ti.is_decimal() || operand_ti.is_time() ||
           operand_ti.is_boolean());
@@ -189,6 +192,7 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
                                                   const SQLTypeInfo& operand_ti,
                                                   const SQLTypeInfo& ti,
                                                   const bool operand_is_const,
+                                                  bool is_dict_intersection,
                                                   const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   if (!ti.is_string()) {
@@ -209,7 +213,7 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
         std::make_unique<StringDictionaryTranslationMgr>(
             operand_ti.get_comp_param(),
             ti.get_comp_param(),
-            ti.is_dict_intersection(),
+            is_dict_intersection,
             co.device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
                                                       : Data_Namespace::CPU_LEVEL,
             executor()->deviceCount(co.device_type),

@@ -146,6 +146,7 @@ class CodeGenerator {
                            const SQLTypeInfo& operand_ti,
                            const SQLTypeInfo& ti,
                            const bool operand_is_const,
+                           bool is_dict_intersection,
                            const CompilationOptions& co);
 
   llvm::Value* codegen(const hdk::ir::InValues*, const CompilationOptions&);
@@ -265,6 +266,7 @@ class CodeGenerator {
                                      const SQLTypeInfo& operand_ti,
                                      const SQLTypeInfo& ti,
                                      const bool operand_is_const,
+                                     bool is_dict_intersection,
                                      const CompilationOptions& co);
 
   llvm::Value* codegenCastToFp(llvm::Value* operand_lv,

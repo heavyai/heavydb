@@ -309,9 +309,13 @@ Expr::Expr(SQLTypes t, int d, int s, bool notnull)
     : Expr(SQLTypeInfo(t, d, s, notnull)) {}
 
 void Expr::set_type_info(const SQLTypeInfo& ti) {
-  type_ = hdk::ir::Context::defaultCtx().fromTypeInfo(ti);
-  type_info = type_->toTypeInfo();
+  set_type_info(hdk::ir::Context::defaultCtx().fromTypeInfo(ti));
   checkType(ti, type_info);
+}
+
+void Expr::set_type_info(const hdk::ir::Type* new_type) {
+  type_ = new_type;
+  type_info = type_->toTypeInfo();
 }
 
 void Expr::print() const {
@@ -350,7 +354,7 @@ ExprPtr Expr::decompress() {
   return shared_from_this();
 }
 
-ExprPtr Expr::add_cast(const Type* new_type) {
+ExprPtr Expr::add_cast(const Type* new_type, bool is_dict_intersection) {
   if (type_->equal(new_type)) {
     return shared_from_this();
   }
@@ -381,7 +385,8 @@ ExprPtr Expr::add_cast(const Type* new_type) {
 }
 
 ExprPtr Expr::add_cast(const SQLTypeInfo& new_type_info) {
-  return add_cast(hdk::ir::Context::defaultCtx().fromTypeInfo(new_type_info));
+  return add_cast(hdk::ir::Context::defaultCtx().fromTypeInfo(new_type_info),
+                  new_type_info.is_dict_intersection());
 }
 
 std::string ColumnRef::toString() const {
@@ -476,7 +481,8 @@ ExprPtr Constant::deep_copy() const {
 }
 
 ExprPtr UOper::deep_copy() const {
-  return makeExpr<UOper>(type_info, contains_agg, optype, operand->deep_copy());
+  return makeExpr<UOper>(
+      type_info, contains_agg, optype, operand->deep_copy(), is_dict_intersection_);
 }
 
 ExprPtr BinOper::deep_copy() const {
@@ -919,7 +925,8 @@ void Constant::set_null_value() {
   }
 }
 
-ExprPtr Constant::add_cast(const Type* new_type) {
+ExprPtr Constant::add_cast(const Type* new_type, bool is_dict_intersection) {
+  CHECK(!is_dict_intersection);
   if (is_null) {
     type_ = new_type;
     type_info = type_->toTypeInfo();
@@ -938,9 +945,9 @@ ExprPtr Constant::add_cast(const Type* new_type) {
   return shared_from_this();
 }
 
-ExprPtr UOper::add_cast(const Type* new_type) {
+ExprPtr UOper::add_cast(const Type* new_type, bool is_dict_intersection) {
   if (optype != kCAST) {
-    return Expr::add_cast(new_type);
+    return Expr::add_cast(new_type, is_dict_intersection);
   }
   if (type_->isString() && new_type->isExtDictionary()) {
     auto otype = operand->type();
@@ -952,18 +959,18 @@ ExprPtr UOper::add_cast(const Type* new_type) {
       }
     }
   }
-  return Expr::add_cast(new_type);
+  return Expr::add_cast(new_type, is_dict_intersection);
 }
 
-ExprPtr CaseExpr::add_cast(const Type* new_type) {
+ExprPtr CaseExpr::add_cast(const Type* new_type, bool is_dict_intersection) {
   std::list<std::pair<ExprPtr, ExprPtr>> new_expr_pair_list;
   for (auto& p : expr_pair_list) {
     new_expr_pair_list.emplace_back(
-        std::make_pair(p.first, p.second->add_cast(new_type)));
+        std::make_pair(p.first, p.second->add_cast(new_type, is_dict_intersection)));
   }
 
   if (else_expr != nullptr) {
-    else_expr = else_expr->add_cast(new_type);
+    else_expr = else_expr->add_cast(new_type, is_dict_intersection);
   }
   // Replace the current WHEN THEN pair list once we are sure all casts have succeeded
   expr_pair_list = new_expr_pair_list;
@@ -1672,7 +1679,8 @@ bool UOper::operator==(const Expr& rhs) const {
     return false;
   }
   const UOper& rhs_uo = dynamic_cast<const UOper&>(rhs);
-  return optype == rhs_uo.get_optype() && *operand == *rhs_uo.get_operand();
+  return optype == rhs_uo.get_optype() && *operand == *rhs_uo.get_operand() &&
+         is_dict_intersection_ == rhs_uo.is_dict_intersection_;
 }
 
 bool BinOper::operator==(const Expr& rhs) const {
@@ -2017,7 +2025,8 @@ std::string UOper::toString() const {
     default:
       break;
   }
-  return "(" + op + operand->toString() + ") ";
+  std::string dict_int = is_dict_intersection_ ? " DICT_INT" : "";
+  return "(" + op + operand->toString() + dict_int + ") ";
 }
 
 std::string BinOper::toString() const {

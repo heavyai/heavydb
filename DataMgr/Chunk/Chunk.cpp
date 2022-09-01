@@ -43,7 +43,7 @@ bool Chunk::isChunkOnDevice(DataMgr* data_mgr,
                             const ChunkKey& key,
                             const MemoryLevel mem_level,
                             const int device_id) {
-  if (column_info_->type.is_varlen() && !column_info_->type.is_fixlen_array()) {
+  if (column_info_->type_info.is_varlen() && !column_info_->type_info.is_fixlen_array()) {
     ChunkKey subKey = key;
     ChunkKey indexKey(subKey);
     indexKey.push_back(1);
@@ -62,7 +62,7 @@ void Chunk::getChunkBuffer(DataMgr* data_mgr,
                            const int device_id,
                            const size_t num_bytes,
                            const size_t num_elems) {
-  if (column_info_->type.is_varlen() && !column_info_->type.is_fixlen_array()) {
+  if (column_info_->type_info.is_varlen() && !column_info_->type_info.is_fixlen_array()) {
     ChunkKey subKey = key;
     subKey.push_back(1);  // 1 for the main buffer_
     buffer_ = data_mgr->getChunkBuffer(subKey, mem_level, device_id, num_bytes);
@@ -74,7 +74,7 @@ void Chunk::getChunkBuffer(DataMgr* data_mgr,
         device_id,
         (num_elems + 1) * sizeof(StringOffsetT));  // always record n+1 offsets so string
                                                    // length can be calculated
-    switch (column_info_->type.get_type()) {
+    switch (column_info_->type_info.get_type()) {
       case kARRAY: {
         auto array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer_->getEncoder());
         CHECK(array_encoder);
@@ -84,7 +84,7 @@ void Chunk::getChunkBuffer(DataMgr* data_mgr,
       case kTEXT:
       case kVARCHAR:
       case kCHAR: {
-        CHECK_EQ(kENCODING_NONE, column_info_->type.get_compression());
+        CHECK_EQ(kENCODING_NONE, column_info_->type_info.get_compression());
         auto str_encoder = dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
         CHECK(str_encoder);
         str_encoder->setIndexBuffer(index_buf_);
@@ -103,7 +103,7 @@ void Chunk::createChunkBuffer(DataMgr* data_mgr,
                               const MemoryLevel mem_level,
                               const int device_id,
                               const size_t page_size) {
-  if (column_info_->type.is_varlen() && !column_info_->type.is_fixlen_array()) {
+  if (column_info_->type_info.is_varlen() && !column_info_->type_info.is_fixlen_array()) {
     ChunkKey subKey = key;
     subKey.push_back(1);  // 1 for the main buffer_
     buffer_ = data_mgr->createChunkBuffer(subKey, mem_level, device_id, page_size);
@@ -120,10 +120,10 @@ size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
                                             const size_t start_idx,
                                             const size_t byte_limit,
                                             const bool replicating) {
-  CHECK(column_info_->type.is_varlen());
-  switch (column_info_->type.get_type()) {
+  CHECK(column_info_->type_info.is_varlen());
+  switch (column_info_->type_info.get_type()) {
     case kARRAY: {
-      if (column_info_->type.get_size() > 0) {
+      if (column_info_->type_info.get_size() > 0) {
         FixedLengthArrayNoneEncoder* array_encoder =
             dynamic_cast<FixedLengthArrayNoneEncoder*>(buffer_->getEncoder());
         return array_encoder->getNumElemsForBytesInsertData(
@@ -137,7 +137,7 @@ size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
     case kTEXT:
     case kVARCHAR:
     case kCHAR: {
-      CHECK_EQ(kENCODING_NONE, column_info_->type.get_compression());
+      CHECK_EQ(kENCODING_NONE, column_info_->type_info.get_compression());
       StringNoneEncoder* str_encoder =
           dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
       return str_encoder->getNumElemsForBytesInsertData(
@@ -159,9 +159,9 @@ void Chunk::unpinBuffer() {
 }
 
 void Chunk::initEncoder() {
-  buffer_->initEncoder(column_info_->type);
-  if (column_info_->type.is_varlen() && !column_info_->type.is_fixlen_array()) {
-    switch (column_info_->type.get_type()) {
+  buffer_->initEncoder(column_info_->type_info);
+  if (column_info_->type_info.is_varlen() && !column_info_->type_info.is_fixlen_array()) {
+    switch (column_info_->type_info.get_type()) {
       case kARRAY: {
         ArrayNoneEncoder* array_encoder =
             dynamic_cast<ArrayNoneEncoder*>(buffer_->getEncoder());
@@ -171,7 +171,7 @@ void Chunk::initEncoder() {
       case kTEXT:
       case kVARCHAR:
       case kCHAR: {
-        CHECK_EQ(kENCODING_NONE, column_info_->type.get_compression());
+        CHECK_EQ(kENCODING_NONE, column_info_->type_info.get_compression());
         StringNoneEncoder* str_encoder =
             dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
         str_encoder->setIndexBuffer(index_buf_);
@@ -187,9 +187,9 @@ ChunkIter Chunk::begin_iterator(const std::shared_ptr<ChunkMetadata>& chunk_meta
                                 int start_idx,
                                 int skip) const {
   ChunkIter it;
-  it.type_info = column_info_->type;
+  it.type_info = column_info_->type_info;
   it.skip = skip;
-  it.skip_size = column_info_->type.get_size();
+  it.skip_size = column_info_->type_info.get_size();
   if (it.skip_size < 0) {  // if it's variable length
     it.current_pos = it.start_pos =
         index_buf_->getMemoryPtr() + start_idx * sizeof(StringOffsetT);

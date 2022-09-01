@@ -82,7 +82,7 @@ void ArrowStorage::fetchBuffer(const ChunkKey& key,
   auto col_type =
       getColumnInfo(
           key[CHUNK_KEY_DB_IDX], key[CHUNK_KEY_TABLE_IDX], key[CHUNK_KEY_COLUMN_IDX])
-          ->type;
+          ->type_info;
   dest->reserve(num_bytes);
   if (!col_type.is_varlen_indeed()) {
     CHECK_EQ(key.size(), (size_t)4);
@@ -126,7 +126,7 @@ std::unique_ptr<AbstractDataToken> ArrowStorage::getZeroCopyBufferMemory(
   auto col_type =
       getColumnInfo(
           key[CHUNK_KEY_DB_IDX], key[CHUNK_KEY_TABLE_IDX], key[CHUNK_KEY_COLUMN_IDX])
-          ->type;
+          ->type_info;
 
   if (!col_type.is_varlen_indeed()) {
     size_t col_idx = static_cast<size_t>(key[CHUNK_KEY_COLUMN_IDX] - 1);
@@ -361,7 +361,12 @@ TableInfoPtr ArrowStorage::createTable(const std::string& table_name,
           type.set_comp_param(dict_id);
         }
       }
-      addColumnInfo(db_id_, table_id, next_col_id++, col.name, type, false);
+      auto col_info = addColumnInfo(
+          db_id_, table_id, next_col_id++, col.name, ctx_.fromTypeInfo(type), false);
+      if (type.get_type() == kDATE && type.get_compression() == kENCODING_DATE_IN_DAYS &&
+          type.get_comp_param() == 0) {
+        type.set_comp_param(32);
+      }
     }
     addRowidColumn(db_id_, table_id);
   }
@@ -464,7 +469,7 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
   threading::parallel_for(
       threading::blocked_range(0, (int)at->columns().size()), [&](auto range) {
         for (auto col_idx = range.begin(); col_idx != range.end(); col_idx++) {
-          auto& col_type = getColumnInfo(db_id_, table_id, col_idx + 1)->type;
+          auto& col_type = getColumnInfo(db_id_, table_id, col_idx + 1)->type_info;
           auto col_arr = at->column(col_idx);
           StringDictionary* dict = nullptr;
           if (col_type.is_dict_encoded_string() || col_type.is_string_array()) {
@@ -576,7 +581,7 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
       auto& first_frag = fragments.front();
       last_frag.row_count += first_frag.row_count;
       for (size_t col_idx = 0; col_idx < last_frag.metadata.size(); ++col_idx) {
-        auto col_type = getColumnInfo(db_id_, table_id, col_idx + 1)->type;
+        auto col_type = getColumnInfo(db_id_, table_id, col_idx + 1)->type_info;
         last_frag.metadata[col_idx]->numElements +=
             first_frag.metadata[col_idx]->numElements;
         last_frag.metadata[col_idx]->numBytes += first_frag.metadata[col_idx]->numBytes;
@@ -744,8 +749,8 @@ void ArrowStorage::dropTable(int table_id, bool throw_if_not_exist) {
   std::unordered_set<int> dicts_to_remove;
   auto col_infos = listColumnsNoLock(db_id_, table_id);
   for (auto& col_info : col_infos) {
-    if (col_info->type.is_dict_encoded_string()) {
-      dicts_to_remove.insert(col_info->type.get_comp_param());
+    if (col_info->type_info.is_dict_encoded_string()) {
+      dicts_to_remove.insert(col_info->type_info.get_comp_param());
     }
   }
 
@@ -753,8 +758,8 @@ void ArrowStorage::dropTable(int table_id, bool throw_if_not_exist) {
   // TODO: clean-up shared dictionaries without a full scan of
   // existing columns.
   for (auto& pr : column_infos_) {
-    if (pr.second->type.is_dict_encoded_string()) {
-      dicts_to_remove.erase(pr.second->type.get_comp_param());
+    if (pr.second->type_info.is_dict_encoded_string()) {
+      dicts_to_remove.erase(pr.second->type_info.get_comp_param());
     }
   }
 
@@ -945,7 +950,7 @@ std::shared_ptr<arrow::Table> ArrowStorage::parseCsv(
     if (!col_info->is_rowid) {
       arrow_read_options.column_names.push_back(col_info->name);
       arrow_convert_options.column_types.emplace(col_info->name,
-                                                 getArrowImportType(col_info->type));
+                                                 getArrowImportType(col_info->type_info));
     }
   }
 
@@ -984,8 +989,8 @@ std::shared_ptr<arrow::Table> ArrowStorage::parseJson(
     if (!col_info->is_rowid) {
       fields.emplace_back(
           std::make_shared<arrow::Field>(col_info->name,
-                                         getArrowImportType(col_info->type),
-                                         !col_info->type.get_notnull()));
+                                         getArrowImportType(col_info->type_info),
+                                         !col_info->type_info.get_notnull()));
     }
   }
   auto schema = std::make_shared<arrow::Schema>(std::move(fields));

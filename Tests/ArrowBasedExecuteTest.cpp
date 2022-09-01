@@ -129,7 +129,7 @@ class ExecuteTestBase {
   static void createTestTable() {
     auto test_inner = getStorage()->getTableInfo(TEST_DB_ID, "test_inner");
     auto test_inner_str = getStorage()->getColumnInfo(*test_inner, "str");
-    auto test_inner_str_type = test_inner_str->type;
+    auto test_inner_str_type = test_inner_str->type_info;
 
     createTable("test",
                 {{"x", SQLTypeInfo(kINT, true)},
@@ -251,7 +251,7 @@ class ExecuteTestBase {
   static void createTestEmptyTable() {
     auto test_inner = getStorage()->getTableInfo(TEST_DB_ID, "test_inner");
     auto test_inner_str = getStorage()->getColumnInfo(*test_inner, "str");
-    auto test_inner_str_type = test_inner_str->type;
+    auto test_inner_str_type = test_inner_str->type_info;
     createTable("test_empty",
                 {{"x", SQLTypeInfo(kINT, true)},
                  {"w", SQLTypeInfo(kTINYINT)},
@@ -303,7 +303,7 @@ class ExecuteTestBase {
   static void createTestOneRowTable() {
     auto test_inner = getStorage()->getTableInfo(TEST_DB_ID, "test_inner");
     auto test_inner_str = getStorage()->getColumnInfo(*test_inner, "str");
-    auto test_inner_str_type = test_inner_str->type;
+    auto test_inner_str_type = test_inner_str->type_info;
     createTable("test_one_row",
                 {{"x", SQLTypeInfo(kINT, true)},
                  {"w", SQLTypeInfo(kTINYINT)},
@@ -392,7 +392,7 @@ class ExecuteTestBase {
           json_ss << ", ";
         }
         json_ss << "\"" << col_info->name << "\" : ";
-        const auto& ti = col_info->type;
+        const auto& ti = col_info->type_info;
         switch (ti.get_type()) {
           case kINT:
             json_ss << (7 + row_idx);

@@ -1079,10 +1079,10 @@ void collect_used_input_desc(
     if (it != input_to_nest_level.end()) {
       const int nest_level = it->second;
       auto scan = dynamic_cast<const RelScan*>(source);
-      ColumnInfoPtr col_info =
-          scan ? scan->getColumnInfoBySpi(col_id + 1)
-               : std::make_shared<ColumnInfo>(
-                     -1, table_id, col_id, "", getColumnType(source, col_id), false);
+      ColumnInfoPtr col_info = scan
+                                   ? scan->getColumnInfoBySpi(col_id + 1)
+                                   : std::make_shared<ColumnInfo>(
+                                         -1, table_id, col_id, "", col_ref.type(), false);
       input_col_descs_unique.insert(
           std::make_shared<const InputColDescriptor>(col_info, nest_level));
     } else if (!dynamic_cast<const RelLogicalUnion*>(ra_node)) {

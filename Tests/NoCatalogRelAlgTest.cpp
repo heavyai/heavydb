@@ -38,7 +38,8 @@ using ArrowTestHelpers::compare_res_data;
 
 class TestSchemaProvider : public SimpleSchemaProvider {
  public:
-  TestSchemaProvider() : SimpleSchemaProvider(TEST_SCHEMA_ID, "test") {
+  TestSchemaProvider()
+      : SimpleSchemaProvider(hdk::ir::Context::defaultCtx(), TEST_SCHEMA_ID, "test") {
     // Table test1
     addTableInfo(TEST_DB_ID,
                  TEST1_TABLE_ID,
@@ -46,14 +47,10 @@ class TestSchemaProvider : public SimpleSchemaProvider {
                  false,
                  Data_Namespace::MemoryLevel::CPU_LEVEL,
                  1);
-    addColumnInfo(
-        TEST_DB_ID, TEST1_TABLE_ID, 1, "col_bi", SQLTypeInfo(SQLTypes::kBIGINT), false);
-    addColumnInfo(
-        TEST_DB_ID, TEST1_TABLE_ID, 2, "col_i", SQLTypeInfo(SQLTypes::kINT), false);
-    addColumnInfo(
-        TEST_DB_ID, TEST1_TABLE_ID, 3, "col_f", SQLTypeInfo(SQLTypes::kFLOAT), false);
-    addColumnInfo(
-        TEST_DB_ID, TEST1_TABLE_ID, 4, "col_d", SQLTypeInfo(SQLTypes::kDOUBLE), false);
+    addColumnInfo(TEST_DB_ID, TEST1_TABLE_ID, 1, "col_bi", ctx_.int64(), false);
+    addColumnInfo(TEST_DB_ID, TEST1_TABLE_ID, 2, "col_i", ctx_.int32(), false);
+    addColumnInfo(TEST_DB_ID, TEST1_TABLE_ID, 3, "col_f", ctx_.fp32(), false);
+    addColumnInfo(TEST_DB_ID, TEST1_TABLE_ID, 4, "col_d", ctx_.fp64(), false);
     addRowidColumn(TEST_DB_ID, TEST1_TABLE_ID);
 
     // Table test2
@@ -63,14 +60,10 @@ class TestSchemaProvider : public SimpleSchemaProvider {
                  false,
                  Data_Namespace::MemoryLevel::CPU_LEVEL,
                  1);
-    addColumnInfo(
-        TEST_DB_ID, TEST2_TABLE_ID, 1, "col_bi", SQLTypeInfo(SQLTypes::kBIGINT), false);
-    addColumnInfo(
-        TEST_DB_ID, TEST2_TABLE_ID, 2, "col_i", SQLTypeInfo(SQLTypes::kINT), false);
-    addColumnInfo(
-        TEST_DB_ID, TEST2_TABLE_ID, 3, "col_f", SQLTypeInfo(SQLTypes::kFLOAT), false);
-    addColumnInfo(
-        TEST_DB_ID, TEST2_TABLE_ID, 4, "col_d", SQLTypeInfo(SQLTypes::kDOUBLE), false);
+    addColumnInfo(TEST_DB_ID, TEST2_TABLE_ID, 1, "col_bi", ctx_.int64(), false);
+    addColumnInfo(TEST_DB_ID, TEST2_TABLE_ID, 2, "col_i", ctx_.int32(), false);
+    addColumnInfo(TEST_DB_ID, TEST2_TABLE_ID, 3, "col_f", ctx_.fp32(), false);
+    addColumnInfo(TEST_DB_ID, TEST2_TABLE_ID, 4, "col_d", ctx_.fp64(), false);
     addRowidColumn(TEST_DB_ID, TEST2_TABLE_ID);
 
     // Table test2 in db2
@@ -80,10 +73,8 @@ class TestSchemaProvider : public SimpleSchemaProvider {
                  false,
                  Data_Namespace::MemoryLevel::CPU_LEVEL,
                  1);
-    addColumnInfo(
-        TEST_DB2_ID, TEST2_TABLE_ID, 1, "col_bi", SQLTypeInfo(SQLTypes::kBIGINT), false);
-    addColumnInfo(
-        TEST_DB2_ID, TEST2_TABLE_ID, 2, "col_i", SQLTypeInfo(SQLTypes::kINT), false);
+    addColumnInfo(TEST_DB2_ID, TEST2_TABLE_ID, 1, "col_bi", ctx_.int64(), false);
+    addColumnInfo(TEST_DB2_ID, TEST2_TABLE_ID, 2, "col_i", ctx_.int32(), false);
     addRowidColumn(TEST_DB2_ID, TEST2_TABLE_ID);
 
     // Table test_agg
@@ -93,10 +84,8 @@ class TestSchemaProvider : public SimpleSchemaProvider {
                  false,
                  Data_Namespace::MemoryLevel::CPU_LEVEL,
                  1);
-    addColumnInfo(
-        TEST_DB_ID, TEST_AGG_TABLE_ID, 1, "id", SQLTypeInfo(SQLTypes::kINT), false);
-    addColumnInfo(
-        TEST_DB_ID, TEST_AGG_TABLE_ID, 2, "val", SQLTypeInfo(SQLTypes::kINT), false);
+    addColumnInfo(TEST_DB_ID, TEST_AGG_TABLE_ID, 1, "id", ctx_.int32(), false);
+    addColumnInfo(TEST_DB_ID, TEST_AGG_TABLE_ID, 2, "val", ctx_.int32(), false);
     addRowidColumn(TEST_DB_ID, TEST_AGG_TABLE_ID);
 
     // Table test_streaming
@@ -107,14 +96,8 @@ class TestSchemaProvider : public SimpleSchemaProvider {
                  Data_Namespace::MemoryLevel::CPU_LEVEL,
                  1,
                  true);
-    addColumnInfo(
-        TEST_DB_ID, TEST_STREAMING_TABLE_ID, 1, "id", SQLTypeInfo(SQLTypes::kINT), false);
-    addColumnInfo(TEST_DB_ID,
-                  TEST_STREAMING_TABLE_ID,
-                  2,
-                  "val",
-                  SQLTypeInfo(SQLTypes::kINT),
-                  false);
+    addColumnInfo(TEST_DB_ID, TEST_STREAMING_TABLE_ID, 1, "id", ctx_.int32(), false);
+    addColumnInfo(TEST_DB_ID, TEST_STREAMING_TABLE_ID, 2, "val", ctx_.int32(), false);
     addRowidColumn(TEST_DB_ID, TEST_STREAMING_TABLE_ID);
   }
 

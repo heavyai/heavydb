@@ -96,7 +96,7 @@ class InputColDescriptor {
     return col_info_->table_id > 0 ? InputSourceType::TABLE : InputSourceType::RESULT;
   }
 
-  const SQLTypeInfo& getType() const { return col_info_->type; }
+  const SQLTypeInfo& getType() const { return col_info_->type_info; }
 
   bool isVirtual() const { return col_info_->is_rowid; }
 

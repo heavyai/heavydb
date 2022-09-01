@@ -238,7 +238,7 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
   auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
   CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
   CHECK(table_id > 0);
-  const auto col_type = col_info->type;
+  const auto col_type = col_info->type_info;
   const bool is_real_string =
       col_type.is_string() && col_type.get_compression() == kENCODING_NONE;
   const bool is_varlen =
@@ -391,7 +391,8 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
   InputDescriptor table_desc(db_id, table_id, 0);
   CHECK(table_desc.getSourceType() == InputSourceType::TABLE);
   CHECK_GT(table_id, 0);
-  bool is_varlen_chunk = col_info->type.is_varlen() && !col_info->type.is_fixlen_array();
+  bool is_varlen_chunk =
+      col_info->type_info.is_varlen() && !col_info->type_info.is_fixlen_array();
   size_t total_num_tuples = 0;
   size_t total_data_buf_size = 0;
   size_t total_idx_buf_size = 0;
@@ -469,7 +470,7 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
     }
   }
 
-  auto& col_ti = col_info->type;
+  auto& col_ti = col_info->type_info;
   MergedChunk res{nullptr, nullptr};
   // Do linearize multi-fragmented column depending on column type
   // We cover array and non-encoded text columns
@@ -499,7 +500,7 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
         VLOG(2) << "Linearize variable-length multi-frag array column (col_id: " << col_id
                 << ", col_name: " << col_info->name
                 << ", device_type: " << getMemoryLevelString(memory_level)
-                << ", device_id: " << device_id << "): " << col_info->type.to_string();
+                << ", device_id: " << device_id << "): " << col_info->type->toString();
         res = linearizeVarLenArrayColFrags(chunk_holder,
                                            chunk_iter_holder,
                                            local_chunk_holder,
@@ -519,7 +520,7 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
       VLOG(2) << "Linearize variable-length multi-frag non-encoded text column (col_id: "
               << col_id << ", col_name: " << col_info->name
               << ", device_type: " << getMemoryLevelString(memory_level)
-              << ", device_id: " << device_id << "): " << col_info->type.to_string();
+              << ", device_id: " << device_id << "): " << col_info->type->toString();
       res = linearizeVarLenArrayColFrags(chunk_holder,
                                          chunk_iter_holder,
                                          local_chunk_holder,

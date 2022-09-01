@@ -52,7 +52,7 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
   };
 
   ArrowStorage(int schema_id, const std::string& schema_name, int db_id)
-      : SimpleSchemaProvider(schema_id, schema_name)
+      : SimpleSchemaProvider(hdk::ir::Context::defaultCtx(), schema_id, schema_name)
       , db_id_(db_id)
       , schema_id_(getSchemaId(db_id)) {}
 

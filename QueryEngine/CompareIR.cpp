@@ -350,7 +350,7 @@ llvm::Value* CodeGenerator::codegenCmpDecimalConst(const SQLOps optype,
   const auto new_rhs_lit =
       hdk::ir::makeExpr<hdk::ir::Constant>(new_ti, rhs_constant->get_is_null(), d);
   const auto operand_lv = codegen(operand, true, co).front();
-  const auto lhs_lv = codegenCast(operand_lv, operand_ti, new_ti, false, co);
+  const auto lhs_lv = codegenCast(operand_lv, operand_ti, new_ti, false, false, co);
   return codegenCmp(optype, qualifier, {lhs_lv}, new_ti, new_rhs_lit.get(), co);
 }
 

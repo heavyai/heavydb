@@ -271,6 +271,11 @@ class RelScan : public RelAlgNode {
     int col_idx = spi - 1;
 
     CHECK_LT(static_cast<size_t>(col_idx), column_infos_.size());
+    return column_infos_[col_idx]->type_info;
+  }
+
+  const hdk::ir::Type* getColumnType(int col_idx) const {
+    CHECK_LT(static_cast<size_t>(col_idx), column_infos_.size());
     return column_infos_[col_idx]->type;
   }
 

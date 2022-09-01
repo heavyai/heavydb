@@ -227,7 +227,7 @@ inline const SQLTypeInfo get_column_type(const int col_id,
   if (col_info) {
     CHECK_EQ(col_id, col_info->column_id);
     CHECK_EQ(table_id, col_info->table_id);
-    return col_info->type;
+    return col_info->type_info;
   }
   const auto& temp = get_temporary_table(temporary_tables, table_id);
   return temp.getColType(col_id);

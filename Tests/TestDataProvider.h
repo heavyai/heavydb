@@ -51,7 +51,7 @@ class TestTableData {
 
     auto col_infos = schema_provider_->listColumns(ref_);
     for (auto& col_info : col_infos) {
-      col_types_[col_info->column_id] = col_info->type;
+      col_types_[col_info->column_id] = col_info->type_info;
     }
   }
 

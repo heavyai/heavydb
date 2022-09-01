@@ -82,10 +82,11 @@ class Expr : public std::enable_shared_from_this<Expr> {
   ExprPtr get_shared_ptr() { return shared_from_this(); }
   const SQLTypeInfo& get_type_info() const { return type_info; }
   virtual void set_type_info(const SQLTypeInfo& ti);
+  virtual void set_type_info(const hdk::ir::Type* new_type);
   const Type* type() const { return type_; }
   bool get_contains_agg() const { return contains_agg; }
   void set_contains_agg(bool a) { contains_agg = a; }
-  virtual ExprPtr add_cast(const Type* new_type);
+  virtual ExprPtr add_cast(const Type* new_type, bool is_dict_intersection = false);
   ExprPtr add_cast(const SQLTypeInfo& new_type_info);
   virtual void check_group_by(const ExprPtrList& groupby) const {};
   virtual ExprPtr deep_copy() const = 0;  // make a deep copy of self
@@ -257,7 +258,7 @@ class ColumnVar : public Expr {
   ColumnVar(const SQLTypeInfo& ti)
       : Expr(ti)
       , rte_idx(-1)
-      , col_info_(std::make_shared<ColumnInfo>(-1, 0, 0, "", ti, false)) {}
+      , col_info_(std::make_shared<ColumnInfo>(-1, 0, 0, "", type_, false)) {}
   ColumnVar(const SQLTypeInfo& ti,
             int table_id,
             int col_id,
@@ -266,7 +267,7 @@ class ColumnVar : public Expr {
       : Expr(ti)
       , rte_idx(nest_level)
       , col_info_(
-            std::make_shared<ColumnInfo>(-1, table_id, col_id, "", ti, is_virtual)) {}
+            std::make_shared<ColumnInfo>(-1, table_id, col_id, "", type_, is_virtual)) {}
   int get_db_id() const { return col_info_->db_id; }
   int get_table_id() const { return col_info_->table_id; }
   int get_column_id() const { return col_info_->column_id; }
@@ -275,17 +276,18 @@ class ColumnVar : public Expr {
   bool is_virtual() const { return col_info_->is_rowid; }
   EncodingType get_compression() const { return type_info.get_compression(); }
   int get_comp_param() const { return type_info.get_comp_param(); }
-  void set_type_info(const SQLTypeInfo& ti) override {
-    if (type_info != ti) {
+  void set_type_info(const hdk::ir::Type* new_type) override {
+    if (!type_->equal(new_type)) {
       col_info_ = std::make_shared<ColumnInfo>(col_info_->db_id,
                                                col_info_->table_id,
                                                col_info_->column_id,
                                                col_info_->name,
-                                               ti,
+                                               new_type,
                                                col_info_->is_rowid);
-      Expr::set_type_info(ti);
+      Expr::set_type_info(new_type);
     }
   }
+
   void check_group_by(const ExprPtrList& groupby) const override;
   ExprPtr deep_copy() const override;
   void group_predicates(std::list<const Expr*>& scan_predicates,
@@ -433,7 +435,7 @@ class Constant : public Expr {
   double fpVal() const { return extract_fp_type_from_datum(constval, type_info); }
   const ExprPtrList& get_value_list() const { return value_list; }
   ExprPtr deep_copy() const override;
-  ExprPtr add_cast(const Type* new_type) override;
+  ExprPtr add_cast(const Type* new_type, bool is_dict_intersection = false) override;
   using Expr::add_cast;
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
@@ -466,16 +468,25 @@ class Constant : public Expr {
 class UOper : public Expr {
  public:
   UOper(const Type* type, bool has_agg, SQLOps o, ExprPtr p)
-      : Expr(type, has_agg), optype(o), operand(p) {}
-  UOper(const SQLTypeInfo& ti, bool has_agg, SQLOps o, ExprPtr p)
-      : Expr(ti, has_agg), optype(o), operand(p) {}
+      : Expr(type, has_agg), optype(o), operand(p), is_dict_intersection_(false) {}
+  UOper(const SQLTypeInfo& ti,
+        bool has_agg,
+        SQLOps o,
+        ExprPtr p,
+        bool is_dict_intersection = false)
+      : Expr(ti, has_agg)
+      , optype(o)
+      , operand(p)
+      , is_dict_intersection_(is_dict_intersection) {}
   UOper(SQLTypes t, SQLOps o, ExprPtr p)
       : Expr(t, o == kISNULL ? true : p->get_type_info().get_notnull())
       , optype(o)
-      , operand(p) {}
+      , operand(p)
+      , is_dict_intersection_(false) {}
   SQLOps get_optype() const { return optype; }
   const Expr* get_operand() const { return operand.get(); }
   const ExprPtr get_own_operand() const { return operand; }
+  bool is_dict_intersection() const { return is_dict_intersection_; }
   void check_group_by(const ExprPtrList& groupby) const override;
   ExprPtr deep_copy() const override;
   void group_predicates(std::list<const Expr*>& scan_predicates,
@@ -509,13 +520,14 @@ class UOper : public Expr {
   std::string toString() const override;
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
-  ExprPtr add_cast(const Type* new_type) override;
+  ExprPtr add_cast(const Type* new_type, bool is_dict_intersection = false) override;
 
   size_t hash() const override;
 
  protected:
   SQLOps optype;    // operator type, e.g., kUMINUS, kISNULL, kEXISTS
   ExprPtr operand;  // operand expression
+  bool is_dict_intersection_;
 };
 
 /*
@@ -1411,7 +1423,7 @@ class CaseExpr : public Expr {
   std::string toString() const override;
   void find_expr(bool (*f)(const Expr*),
                  std::list<const Expr*>& expr_list) const override;
-  ExprPtr add_cast(const Type* new_type) override;
+  ExprPtr add_cast(const Type* new_type, bool is_dict_intersection) override;
   void get_domain(DomainSet& domain_set) const override;
 
   size_t hash() const override;

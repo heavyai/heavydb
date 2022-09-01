@@ -16,6 +16,7 @@
 
 #include "Shared/sqltypes.h"
 #include "Shared/toString.h"
+#include "IR/Type.h"
 
 #include <boost/functional/hash.hpp>
 
@@ -54,15 +55,17 @@ struct ColumnInfo : public ColumnRef {
              int table_id,
              int column_id,
              const std::string name_,
-             SQLTypeInfo type_,
+             const hdk::ir::Type* type_,
              bool is_rowid_)
       : ColumnRef(db_id, table_id, column_id)
       , name(name_)
       , type(type_)
+      , type_info(type_->toTypeInfo())
       , is_rowid(is_rowid_) {}
 
   std::string name;
-  SQLTypeInfo type;
+  const hdk::ir::Type* type;
+  SQLTypeInfo type_info;
   // Virtual rowid column.
   bool is_rowid;
 

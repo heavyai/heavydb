@@ -47,20 +47,20 @@ std::string schema_to_json(SchemaProviderPtr schema_provider) {
                        doc.GetAllocator());
       column.AddMember(
           "coltype",
-          rapidjson::Value().SetInt(static_cast<int>(col_info->type.get_type())),
+          rapidjson::Value().SetInt(static_cast<int>(col_info->type_info.get_type())),
           doc.GetAllocator());
       column.AddMember(
           "colsubtype",
-          rapidjson::Value().SetInt(static_cast<int>(col_info->type.get_subtype())),
+          rapidjson::Value().SetInt(static_cast<int>(col_info->type_info.get_subtype())),
           doc.GetAllocator());
       column.AddMember("coldim",
-                       rapidjson::Value().SetInt(col_info->type.get_dimension()),
+                       rapidjson::Value().SetInt(col_info->type_info.get_dimension()),
                        doc.GetAllocator());
       column.AddMember("colscale",
-                       rapidjson::Value().SetInt(col_info->type.get_scale()),
+                       rapidjson::Value().SetInt(col_info->type_info.get_scale()),
                        doc.GetAllocator());
       column.AddMember("is_notnull",
-                       rapidjson::Value().SetBool(col_info->type.get_notnull()),
+                       rapidjson::Value().SetBool(col_info->type_info.get_notnull()),
                        doc.GetAllocator());
       column.AddMember("is_systemcol",
                        rapidjson::Value().SetBool(col_info->is_rowid),

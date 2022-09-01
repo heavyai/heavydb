@@ -359,7 +359,7 @@ std::vector<TargetMetaInfo> create_table_schema(const PlanState* plan_state) {
       column_type = table.getColType(column_id);
     } else {
       const auto col_info = schema_provider->getColumnInfo(db_id, table_id, column_id);
-      column_type = col_info->type;
+      column_type = col_info->type_info;
     }
     if (!is_supported_type_for_extern_execution(column_type)) {
       throw std::runtime_error("Type not supported yet for extern execution: " +
