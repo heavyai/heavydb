@@ -22115,28 +22115,6 @@ TEST(Select, WindowFunctionMultiOrderBy) {
   }
 }
 
-TEST(Select, WindowFunctionFirst) {
-  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
-  for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
-    {
-      std::string part1 =
-          "SELECT x, y, FIRST_VALUE(x + 5) OVER (PARTITION BY y ORDER BY x ASC NULLS "
-          "LAST) "
-          "f FROM " +
-          table_name + " ORDER BY x ASC";
-      std::string part2 = ", y ASC NULLS LAST, f ASC;";
-      c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
-    }
-    {
-      std::string part1 =
-          "SELECT x, FIRST_VALUE(y) OVER (PARTITION BY t ORDER BY x ASC) f FROM " +
-          table_name + " ORDER BY x ASC";
-      std::string part2 = ", f ASC NULLS LAST;";
-      c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
-    }
-  }
-}
-
 TEST(Select, WindowFunctionLead) {
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
@@ -22188,25 +22166,42 @@ TEST(Select, WindowFunctionLead) {
   }
 }
 
-TEST(Select, WindowFunctionLast) {
+TEST(Select, WindowFunctionFirstAndLast) {
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
-    {
-      std::string part1 =
-          "SELECT x, y, FIRST_VALUE(x + 5) OVER (PARTITION BY y ORDER BY x ASC) f, "
-          "LAST_VALUE(x) OVER (PARTITION BY y ORDER BY x DESC) l FROM " +
-          table_name + " ORDER BY x ASC";
-      std::string part2 = ", y ASC, f ASC, l ASC;";
-      c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
-    }
-    {
-      std::string part1 =
-          "SELECT x, LAST_VALUE(y) OVER (PARTITION BY t ORDER BY x ASC) f "
-          "FROM " +
-          table_name + " ORDER BY x ASC";
-      std::string part2 = ", f ASC;";
-      c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
-    }
+    // Both postgres and SQLite apply the default frame bound for first_value and
+    // last_value which represents a default (cumulative) window (i.e., rows between
+    // unbounded preceding and current row) the correct behavior is computing the function
+    // over an entire ordered partition unless defining its window frame bound
+    const auto query1_a =
+        "SELECT COUNT(DISTINCT FIRST_V) FROM (SELECT FIRST_VALUE(x) OVER (PARTITION BY y "
+        "ORDER BY x ASC) FIRST_V FROM " +
+        table_name + "  WHERE x > 2);";
+    const auto query1_b =
+        "SELECT SUM(FIRST_V) FROM (SELECT FIRST_VALUE(x) OVER (PARTITION BY y ORDER BY x "
+        "ASC) FIRST_V FROM " +
+        table_name + "  WHERE x > 2);";
+    const auto query1_c =
+        "SELECT FIRST_VALUE(x) OVER (PARTITION BY y ORDER BY x ASC) FIRST_V FROM " +
+        table_name + "  WHERE x > 2 LIMIT 1;";
+    EXPECT_EQ(1, v<int64_t>(run_simple_agg(query1_a, dt)));
+    EXPECT_EQ(21, v<int64_t>(run_simple_agg(query1_b, dt)));
+    EXPECT_EQ(3, v<int64_t>(run_simple_agg(query1_c, dt)));
+
+    const auto query2_a =
+        "SELECT COUNT(DISTINCT LAST_V) FROM (SELECT LAST_VALUE(x) OVER (PARTITION BY y "
+        "ORDER BY x ASC) LAST_V FROM " +
+        table_name + "  WHERE x > 2);";
+    const auto query2_b =
+        "SELECT SUM(LAST_V) FROM (SELECT LAST_VALUE(x) OVER (PARTITION BY y ORDER BY x "
+        "ASC) LAST_V FROM " +
+        table_name + "  WHERE x > 2);";
+    const auto query2_c =
+        "SELECT LAST_VALUE(x) OVER (PARTITION BY y ORDER BY x ASC) LAST_V FROM " +
+        table_name + "  WHERE x > 2 LIMIT 1;";
+    EXPECT_EQ(1, v<int64_t>(run_simple_agg(query2_a, dt)));
+    EXPECT_EQ(70, v<int64_t>(run_simple_agg(query2_b, dt)));
+    EXPECT_EQ(10, v<int64_t>(run_simple_agg(query2_c, dt)));
   }
 }
 
