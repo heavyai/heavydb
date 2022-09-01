@@ -344,6 +344,16 @@ int64_t get_lag_or_lead_argument(const Analyzer::WindowFunction* window_func) {
   return window_func->getKind() == SqlWindowFunctionKind::LAG ? 1 : -1;
 }
 
+size_t get_target_idx_for_first_or_last_value_func(
+    const Analyzer::WindowFunction* window_func,
+    const size_t partition_size) {
+  CHECK(window_func->getKind() == SqlWindowFunctionKind::FIRST_VALUE ||
+        window_func->getKind() == SqlWindowFunctionKind::LAST_VALUE);
+  return window_func->getKind() == SqlWindowFunctionKind::FIRST_VALUE
+             ? 0
+             : partition_size - 1;
+}
+
 // Redistributes the original_indices according to the permutation given by
 // output_for_partition_buff, reusing it as an output buffer.
 void apply_permutation_to_partition(int64_t* output_for_partition_buff,
@@ -381,24 +391,14 @@ void apply_lag_to_partition(const int64_t lag,
   std::copy(lag_original_indices.begin(), lag_original_indices.end(), sorted_indices);
 }
 
-// Computes first value function for the given output_for_partition_buff, reusing it as an
-// output buffer.
-void apply_first_value_to_partition(const int32_t* original_indices,
-                                    int64_t* output_for_partition_buff,
-                                    const size_t partition_size) {
-  const auto first_value_idx = original_indices[output_for_partition_buff[0]];
-  std::fill(output_for_partition_buff,
-            output_for_partition_buff + partition_size,
-            first_value_idx);
-}
-
-// Computes last value function for the given output_for_partition_buff, reusing it as an
-// output buffer.
-void apply_last_value_to_partition(const int32_t* original_indices,
-                                   int64_t* output_for_partition_buff,
-                                   const size_t partition_size) {
-  std::copy(
-      original_indices, original_indices + partition_size, output_for_partition_buff);
+void apply_nth_value_to_partition(const int32_t* original_indices,
+                                  int64_t* output_for_partition_buff,
+                                  const size_t partition_size,
+                                  const size_t target_pos) {
+  CHECK_LT(target_pos, partition_size);
+  const auto target_idx = original_indices[output_for_partition_buff[target_pos]];
+  std::fill(
+      output_for_partition_buff, output_for_partition_buff + partition_size, target_idx);
 }
 
 void index_to_partition_end(
@@ -1227,16 +1227,13 @@ void WindowFunctionContext::computePartitionBuffer(
           lag_or_lead, partition_row_offsets, output_for_partition_buff, partition_size);
       break;
     }
-    case SqlWindowFunctionKind::FIRST_VALUE: {
-      const auto partition_row_offsets = payload() + offset;
-      apply_first_value_to_partition(
-          partition_row_offsets, output_for_partition_buff, partition_size);
-      break;
-    }
+    case SqlWindowFunctionKind::FIRST_VALUE:
     case SqlWindowFunctionKind::LAST_VALUE: {
+      const auto target_idx =
+          get_target_idx_for_first_or_last_value_func(window_func, partition_size);
       const auto partition_row_offsets = payload() + offset;
-      apply_last_value_to_partition(
-          partition_row_offsets, output_for_partition_buff, partition_size);
+      apply_nth_value_to_partition(
+          partition_row_offsets, output_for_partition_buff, partition_size, target_idx);
       break;
     }
     case SqlWindowFunctionKind::AVG:
