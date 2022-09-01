@@ -297,7 +297,7 @@ Expr::Expr(const Type* type, bool has_agg)
     : type_(type), type_info(type->toTypeInfo()), contains_agg(has_agg) {}
 
 Expr::Expr(const SQLTypeInfo& ti, bool has_agg)
-    : Expr(default_context_.fromTypeInfo(ti), has_agg) {
+    : Expr(hdk::ir::Context::defaultCtx().fromTypeInfo(ti), has_agg) {
   checkType(ti, type_info);
 }
 
@@ -309,7 +309,7 @@ Expr::Expr(SQLTypes t, int d, int s, bool notnull)
     : Expr(SQLTypeInfo(t, d, s, notnull)) {}
 
 void Expr::set_type_info(const SQLTypeInfo& ti) {
-  type_ = default_context_.fromTypeInfo(ti);
+  type_ = hdk::ir::Context::defaultCtx().fromTypeInfo(ti);
   type_info = type_->toTypeInfo();
   checkType(ti, type_info);
 }
@@ -317,8 +317,6 @@ void Expr::set_type_info(const SQLTypeInfo& ti) {
 void Expr::print() const {
   std::cout << toString() << std::endl;
 }
-
-hdk::ir::Context Expr::default_context_;
 
 void TargetEntry::print() const {
   std::cout << toString() << std::endl;
@@ -383,7 +381,7 @@ ExprPtr Expr::add_cast(const Type* new_type) {
 }
 
 ExprPtr Expr::add_cast(const SQLTypeInfo& new_type_info) {
-  return add_cast(default_context_.fromTypeInfo(new_type_info));
+  return add_cast(hdk::ir::Context::defaultCtx().fromTypeInfo(new_type_info));
 }
 
 ColumnRef::ColumnRef(const RelAlgNode* node, unsigned idx)

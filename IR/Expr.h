@@ -185,8 +185,6 @@ class Expr : public std::enable_shared_from_this<Expr> {
   SQLTypeInfo type_info;  // SQLTypeInfo of the return result of this expression
   bool contains_agg;
   mutable std::optional<size_t> hash_;
-
-  static hdk::ir::Context default_context_;
 };
 
 /*
