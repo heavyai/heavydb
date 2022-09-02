@@ -282,7 +282,7 @@ void Executor::initialize_extension_module_sources() {
         rt_geos_path;
 #endif
 #ifdef HAVE_CUDA
-    auto rt_libdevice_path = get_cuda_home() + "/nvvm/libdevice/libdevice.10.bc";
+    auto rt_libdevice_path = get_cuda_libdevice_dir() + "/libdevice.10.bc";
     if (boost::filesystem::exists(rt_libdevice_path)) {
       Executor::extension_module_sources[Executor::ExtModuleKinds::rt_libdevice_module] =
           rt_libdevice_path;

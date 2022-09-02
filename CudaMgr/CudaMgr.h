@@ -256,3 +256,4 @@ class CudaMgr {
 }  // Namespace CudaMgr_Namespace
 
 extern std::string get_cuda_home(void);
+extern std::string get_cuda_libdevice_dir(void);
