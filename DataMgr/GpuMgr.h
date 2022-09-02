@@ -20,6 +20,11 @@
 
 enum GpuMgrPlatform { CUDA, L0 };
 
+class DeviceException : public std::runtime_error {
+ public:
+  virtual bool isOutOfMemory() const { return false; }
+};
+
 struct GpuMgr {
   virtual ~GpuMgr() = default;
   virtual void copyHostToDevice(int8_t* device_ptr,

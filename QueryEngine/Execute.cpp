@@ -113,7 +113,7 @@ extern std::unique_ptr<llvm::Module> read_llvm_module_from_ir_string(
 std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> Executor::s_stubs_accessor;
 std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> Executor::s_code_accessor;
 std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> Executor::cpu_code_accessor;
-std::unique_ptr<CodeCacheAccessor<CudaCompilationContext>> Executor::gpu_code_accessor;
+std::unique_ptr<CodeCacheAccessor<CompilationContext>> Executor::gpu_code_accessor;
 size_t Executor::code_cache_size;
 namespace {
 
@@ -126,7 +126,7 @@ void init_code_caches() {
       std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(
           Executor::code_cache_size, "cpu_code_cache");
   Executor::gpu_code_accessor =
-      std::make_unique<CodeCacheAccessor<CudaCompilationContext>>(
+      std::make_unique<CodeCacheAccessor<CompilationContext>>(
           Executor::code_cache_size, "gpu_code_cache");
 }
 
@@ -1344,8 +1344,8 @@ std::unordered_set<int> get_available_gpus(const Data_Namespace::DataMgr* data_m
   CHECK(data_mgr);
   std::unordered_set<int> available_gpus;
   if (data_mgr->gpusPresent()) {
-    CHECK(data_mgr->getCudaMgr());
-    const int gpu_count = data_mgr->getCudaMgr()->getDeviceCount();
+    CHECK(data_mgr->getGpuMgr());
+    const int gpu_count = data_mgr->getGpuMgr()->getDeviceCount();
     CHECK_GT(gpu_count, 0);
     for (int gpu_id = 0; gpu_id < gpu_count; ++gpu_id) {
       available_gpus.insert(gpu_id);
@@ -3233,8 +3233,7 @@ int32_t Executor::executePlan(const RelAlgExecutionUnit& ra_exe_unit,
                                                  rows_to_process);
       output_memory_scope.reset(new OutVecOwner(out_vec));
     } else {
-      CudaCompilationContext* gpu_generated_code =
-          dynamic_cast<CudaCompilationContext*>(compilation_result.generated_code.get());
+      CompilationContext* gpu_generated_code = compilation_result.generated_code.get();
       CHECK(gpu_generated_code);
       try {
         out_vec = query_exe_context->launchGpuCode(
@@ -3411,8 +3410,7 @@ int32_t Executor::executePlan(const RelAlgExecutionUnit& ra_exe_unit,
                                      rows_to_process);
   } else {
     try {
-      CudaCompilationContext* gpu_generated_code =
-          dynamic_cast<CudaCompilationContext*>(compilation_result.generated_code.get());
+      CompilationContext* gpu_generated_code = compilation_result.generated_code.get();
       CHECK(gpu_generated_code);
       query_exe_context->launchGpuCode(
           ra_exe_unit_copy,

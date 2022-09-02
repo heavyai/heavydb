@@ -978,7 +978,7 @@ class Executor {
   static std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> s_stubs_accessor;
   static std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> s_code_accessor;
   static std::unique_ptr<CodeCacheAccessor<CpuCompilationContext>> cpu_code_accessor;
-  static std::unique_ptr<CodeCacheAccessor<CudaCompilationContext>> gpu_code_accessor;
+  static std::unique_ptr<CodeCacheAccessor<CompilationContext>> gpu_code_accessor;
   static size_t code_cache_size;  // for re-initializing code caches
 
   static void

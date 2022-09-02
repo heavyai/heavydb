@@ -382,7 +382,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
     std::shared_ptr<compiler::Backend> backend,
     std::unordered_set<llvm::Function*>& live_funcs,
     const CompilationOptions& co) {
-#ifdef HAVE_CUDA
+#if defined(HAVE_CUDA) || defined(HAVE_L0)
   auto timer = DEBUG_TIMER(__func__);
 
   auto key = get_code_cache_key(query_func, cgen_state_.get());
@@ -391,14 +391,14 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
     return cached_code;
   }
 
-  std::shared_ptr<CudaCompilationContext> compilation_context;
+  std::shared_ptr<CompilationContext> compilation_context;
 
   try {
-    compilation_context = std::dynamic_pointer_cast<CudaCompilationContext>(
-        backend->generateNativeCode(query_func, multifrag_query_func, live_funcs, co));
+    compilation_context =
+        backend->generateNativeCode(query_func, multifrag_query_func, live_funcs, co);
 
-  } catch (CudaMgr_Namespace::CudaErrorException& cuda_error) {
-    if (cuda_error.getStatus() == CUDA_ERROR_OUT_OF_MEMORY) {
+  } catch (DeviceException& e) {
+    if (e.isOutOfMemory()) {
       // Thrown if memory not able to be allocated on gpu
       // Retry once after evicting portion of code cache
       LOG(WARNING) << "Failed to allocate GPU memory for generated code. Evicting "
@@ -407,8 +407,8 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
       Executor::gpu_code_accessor->evictFractionEntries(
           config_->cache.gpu_fraction_code_cache_to_evict);
 
-      compilation_context = std::dynamic_pointer_cast<CudaCompilationContext>(
-          backend->generateNativeCode(query_func, multifrag_query_func, live_funcs, co));
+      compilation_context =
+          backend->generateNativeCode(query_func, multifrag_query_func, live_funcs, co);
 
     } else {
       throw;
@@ -416,7 +416,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
   }
   Executor::gpu_code_accessor->put(key, compilation_context);
 
-  return std::dynamic_pointer_cast<CompilationContext>(compilation_context);
+  return compilation_context;
 #else
   return nullptr;
 #endif
