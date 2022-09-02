@@ -5121,13 +5121,14 @@ TEST_F(RasterImporterTest, GeoTIFFDetectTest) {
 
 TEST_F(RasterImporterTest, GRIB2DetectTest) {
   SKIP_ALL_ON_AGGREGATOR();
-  ASSERT_NO_THROW(runDetectTest(
-      kGRIB,
-      "MaximumCompositeradarreflectivitydB,EchoTopm",
-      "",
-      {{"MaximumCompositeradarreflectivitydB", kDOUBLE}, {"EchoTopm", kDOUBLE}},
-      20,
-      20));
+  ASSERT_NO_THROW(
+      runDetectTest(kGRIB,
+                    "Maximum___Composite_radar_reflectivity__dB_,Echo_Top__m_",
+                    "",
+                    {{"Maximum___Composite_radar_reflectivity__dB_", kDOUBLE},
+                     {"Echo_Top__m_", kDOUBLE}},
+                    20,
+                    20));
 }
 
 TEST_F(RasterImporterTest, DISABLED_ZARRDetectTest) {
@@ -5178,7 +5179,7 @@ TEST_F(RasterImporterTest, GeoTIFFValueTest) {
 TEST_F(RasterImporterTest, GRIB2ValueTest) {
   SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(
-      runValueTest(kGRIB, "TemperatureC", 10, 10, kDOUBLE, 32.112359619140648));
+      runValueTest(kGRIB, "Temperature__C_", 10, 10, kDOUBLE, 32.112359619140648));
 }
 
 TEST_F(RasterImporterTest, NonGeoEnumsTest) {
@@ -5335,8 +5336,9 @@ TEST_F(RasterImportTest, ImportComputeAngleTest) {
 TEST_F(RasterImportTest, ImportSpecifiedBandsTest) {
   ASSERT_NO_THROW(importTestCommon(
       kGRIB,
-      ", raster_import_bands='PressurePa,FrozenRainkgm2,TemperatureC'",
-      "SELECT max(PressurePa), max(FrozenRainkgm2), max(TemperatureC) FROM raster;",
+      ", raster_import_bands='Pressure__Pa_,Frozen_Rain__kg__m_2__,Temperature__C_'",
+      "SELECT max(Pressure__Pa_), max(Frozen_Rain__kg__m_2__), max(Temperature__C_) FROM "
+      "raster;",
       {{86880.0, 0.0, 33.674859619140648}}));
 }
 
@@ -5352,7 +5354,8 @@ TEST_F(RasterImportTest, ImportSpecifiedBandsBadTest) {
 TEST_F(RasterImportTest, ImportSpecifiedBandsRenameTest) {
   ASSERT_NO_THROW(importTestCommon(
       kGRIB,
-      ", raster_import_bands='PressurePa=p,FrozenRainkgm2=r,TemperatureC=t'",
+      ", "
+      "raster_import_bands='Pressure__Pa_=p,Frozen_Rain__kg__m_2__=r,Temperature__C_=t'",
       "SELECT max(p), max(r), max(t) FROM raster;",
       {{86880.0, 0.0, 33.674859619140648}}));
 }
