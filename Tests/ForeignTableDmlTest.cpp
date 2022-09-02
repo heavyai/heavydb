@@ -4306,6 +4306,38 @@ TEST_P(DataWrapperAppendRefreshTest, AppendToLastFileAndRollOff) {
   sqlAndCompareResult(select_query, {{i(2)}, {i(3)}, {i(4)}});
 }
 
+TEST_P(DataWrapperAppendRefreshTest, FileRollOffWithEvictionOnOneLeafNode) {
+  if (!isDistributedMode()) {
+    GTEST_SKIP() << "This test case only applies to distributed mode.";
+  }
+  if (isOdbc(wrapper_type_)) {
+    GTEST_SKIP() << "This test case is not relevant to ODBC.";
+  }
+
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
+  fragment_size_ = 2;
+  sqlCreateTestTableWithRollOffOption();
+
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
+
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
+  renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_file_roll_off_only");
+
+  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
+  sqlAndCompareResult(select_query, {{i(3)}, {i(4)}});
+
+  // Force table eviction on the first node.
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  Catalog_Namespace::SessionInfo session_info{
+      nullptr, {}, ExecutorDeviceType::CPU, session_id};
+  db_handler->leaf_aggregator_.forwardQueryToLeaf(
+      session_info,
+      "REFRESH FOREIGN TABLES " + table_name_ + " WITH (evict = 'true');",
+      0);
+
+  sqlAndCompareResult(select_query, {{i(3)}, {i(4)}});
+}
+
 INSTANTIATE_TEST_SUITE_P(
     DataTypeFragmentSizeAndDataWrapperCsvTests,
     DataTypeFragmentSizeAndDataWrapperTest,

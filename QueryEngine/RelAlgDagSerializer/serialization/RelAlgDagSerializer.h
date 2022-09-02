@@ -501,7 +501,7 @@ inline void load_construct_data(boost::archive::text_iarchive& ar,
   auto& cat = RelAlgDagSerializer::getCatalog();
   const TableDescriptor* td{nullptr};
   if (!table_name.empty()) {
-    td = cat.getMetadataForTable(table_name);
+    td = cat.getMetadataForTable(table_name, false);
   }
   construct_catalog_rel_alg_node(node, cat, td);
 }
