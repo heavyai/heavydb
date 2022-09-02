@@ -89,7 +89,7 @@ void set_parallelism_hints(const RelAlgNode& ra_node,
       parallelism_hints_per_table;
   for (const auto& physical_input : get_physical_inputs(&ra_node)) {
     int table_id = physical_input.table_id;
-    auto table = catalog.getMetadataForTable(table_id, false);
+    auto table = catalog.getMetadataForTable(table_id, true);
     if (table && table->storageType == StorageType::FOREIGN_TABLE &&
         !table->is_in_memory_system_table) {
       int col_id = catalog.getColumnIdBySpi(table_id, physical_input.col_id);
