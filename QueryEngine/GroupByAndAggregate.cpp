@@ -713,6 +713,7 @@ CountDistinctDescriptors init_count_distinct_descriptors(
       }
       const auto sub_bitmap_count =
           get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit, device_type);
+      size_t worst_case_num_groups{1};
       if (arg_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
           !(arg_ti.is_buffer() || arg_ti.is_geometry())) {  // TODO(alex): allow bitmap
                                                             // implementation for arrays
@@ -736,7 +737,7 @@ CountDistinctDescriptors init_count_distinct_descriptors(
               static_cast<size_t>(g_bitmap_memory_limit)) {
             const auto agg_expr_max_entry_count =
                 arg_range_info.max - arg_range_info.min + 1;
-            int64_t max_agg_expr_table_cardinality{0};
+            int64_t max_agg_expr_table_cardinality{1};
             std::set<const Analyzer::ColumnVar*,
                      bool (*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)>
                 colvar_set(Analyzer::ColumnVar::colvar_comp);
@@ -754,16 +755,12 @@ CountDistinctDescriptors init_count_distinct_descriptors(
                       : -1;
               max_agg_expr_table_cardinality =
                   std::max(max_agg_expr_table_cardinality, cur_table_cardinality);
+              worst_case_num_groups *= cur_table_cardinality;
             }
-            auto has_valid_stat = [agg_expr_max_entry_count,
-                                   max_agg_expr_table_cardinality,
-                                   maximum_num_groups]() {
-              // todo (yoonmin): dist mode transfers the resultset from each leaf node to
-              // agg node which prevents us to collect following cardinality infos
-              // so we get the same OOM
-              return agg_expr_max_entry_count > 0 && max_agg_expr_table_cardinality > 0 &&
-                     maximum_num_groups > 0;
+            auto has_valid_stat = [agg_expr_max_entry_count, maximum_num_groups]() {
+              return agg_expr_max_entry_count > 0 && maximum_num_groups > 0;
             };
+            // if we have valid stats regarding input expr, we can try to relax the OOM
             if (has_valid_stat()) {
               // a threshold related to a ratio of a range of agg expr (let's say R)
               // and table cardinality (C), i.e., use unordered_set if the # bits to build
@@ -803,10 +800,13 @@ CountDistinctDescriptors init_count_distinct_descriptors(
           !(arg_ti.is_array() || arg_ti.is_geometry())) {
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
       }
-
+      const size_t too_many_entries{100000000};
       if (g_enable_watchdog && !(arg_range_info.isEmpty()) &&
+          worst_case_num_groups > too_many_entries &&
           count_distinct_impl_type == CountDistinctImplType::UnorderedSet) {
-        throw WatchdogException("Cannot use a fast path for COUNT distinct");
+        throw WatchdogException(
+            "Detect too many input entries for set-based count distinct operator under "
+            "the watchdog");
       }
       count_distinct_descriptors.emplace_back(
           CountDistinctDescriptor{count_distinct_impl_type,
