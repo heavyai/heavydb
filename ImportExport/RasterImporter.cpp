@@ -1008,7 +1008,7 @@ std::string RasterImporter::getBandName(const uint32_t datasource_idx,
   }
 
   // sanitize and return
-  return ImportHelpers::sanitize_name(band_name);
+  return ImportHelpers::sanitize_name(band_name, /*underscore=*/true);
 }
 
 void RasterImporter::checkSpecifiedBandNamesFound() const {
