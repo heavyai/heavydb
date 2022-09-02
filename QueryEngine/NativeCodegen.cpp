@@ -1018,6 +1018,11 @@ std::map<std::string, std::string> get_device_parameters(bool cpu_only) {
       result.insert(std::make_pair("gpu_driver",
                                    "CUDA " + std::to_string(driver_version / 1000) + "." +
                                        std::to_string((driver_version % 1000) / 10)));
+
+      auto rt_libdevice_path = get_cuda_libdevice_dir() + "/libdevice.10.bc";
+      result.insert(
+          std::make_pair("gpu_has_libdevice",
+                         std::to_string(boost::filesystem::exists(rt_libdevice_path))));
     }
   }
 #endif

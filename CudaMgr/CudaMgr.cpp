@@ -490,3 +490,32 @@ std::string get_cuda_home(void) {
 
   return std::string(env);
 }
+
+std::string get_cuda_libdevice_dir(void) {
+  static const char* CUDA_DEFAULT_PATH = "/usr/local/cuda";
+  const char* env = nullptr;
+
+  if (!(env = getenv("CUDA_HOME")) && !(env = getenv("CUDA_DIR"))) {
+    // check if the default CUDA directory exists: /usr/local/cuda
+    if (boost::filesystem::exists(boost::filesystem::path(CUDA_DEFAULT_PATH))) {
+      env = CUDA_DEFAULT_PATH;
+    }
+  }
+
+  if (env == nullptr) {
+    LOG(WARNING) << "Could not find CUDA installation path: environment variables "
+                    "CUDA_HOME or CUDA_DIR are not defined";
+    return "";
+  }
+
+  // check if the CUDA directory is sensible:
+  auto libdevice_dir = env + std::string("/nvvm/libdevice");
+  auto libdevice_bc_file = libdevice_dir + "/libdevice.10.bc";
+  if (!boost::filesystem::exists(boost::filesystem::path(libdevice_bc_file))) {
+    LOG(WARNING) << "`" << libdevice_bc_file << "` does not exist. Discarding `" << env
+                 << "` as CUDA installation path with libdevice.";
+    return "";
+  }
+
+  return libdevice_dir;
+}
