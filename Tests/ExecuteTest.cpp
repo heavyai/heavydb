@@ -3221,15 +3221,16 @@ TEST(Select, CountDistinct) {
     run_ddl_statement(ddl);
     g_sqlite_comparator.query(ddl);
   }
+  // currently, fp-type count-distinct op in dist-mode only available via CPU mode
+  c("SELECT COUNT(distinct f) FROM test;", ExecutorDeviceType::CPU);
+  c("SELECT COUNT(distinct d) FROM test;", ExecutorDeviceType::CPU);
+  c("SELECT z, str, COUNT(distinct f) FROM test GROUP BY z, str ORDER BY str DESC;",
+    ExecutorDeviceType::CPU);
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(distinct x) FROM test;", dt);
     c("SELECT COUNT(distinct b) FROM test;", dt);
-    THROW_ON_AGGREGATOR(c("SELECT COUNT(distinct f) FROM test;",
-                          dt));  // Cannot use a fast path for COUNT distinct
-    THROW_ON_AGGREGATOR(c("SELECT COUNT(distinct d) FROM test;",
-                          dt));  // Cannot use a fast path for COUNT distinct
     c("SELECT COUNT(distinct str) FROM test;", dt);
     c("SELECT COUNT(distinct ss) FROM test;", dt);
     c("SELECT COUNT(distinct x + 1) FROM test;", dt);
@@ -3244,9 +3245,6 @@ TEST(Select, CountDistinct) {
       "str;",
       dt);
     c("SELECT AVG(z), COUNT(distinct x) AS dx FROM test GROUP BY y HAVING dx > 1;", dt);
-    THROW_ON_AGGREGATOR(
-        c("SELECT z, str, COUNT(distinct f) FROM test GROUP BY z, str ORDER BY str DESC;",
-          dt));  // Cannot use a fast path for COUNT distinct
     c("SELECT COUNT(distinct x * (50000 - 1)) FROM test;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(distinct real_str) FROM test;", dt),
                  std::runtime_error);  // Strings must be dictionary-encoded
@@ -3255,20 +3253,6 @@ TEST(Select, CountDistinct) {
     SKIP_ON_AGGREGATOR(c("SELECT COUNT(distinct ENCODE_TEXT(real_str)) FROM test;",
                          "SELECT COUNT(distinct real_str) FROM test;",
                          dt));
-    {
-      ScopeGuard keep_watchdog_flag = [orig = g_enable_watchdog]() {
-        g_enable_watchdog = orig;
-      };
-      g_enable_watchdog = false;
-      const auto query =
-          "SELECT c1, c2, c3, COUNT(distinct c4) FROM sparse_cd_test GROUP BY c1, c2, "
-          "c3;";
-      if (g_aggregator) {
-        THROW_ON_AGGREGATOR(c(query, dt));
-      } else {
-        c(query, dt);
-      }
-    }
     for (const std::string col_name : {"ti", "tie", "tm0", "tm0e", "tm3", "tm6", "tm9"}) {
       c("SELECT COUNT(DISTINCT " + col_name + ") FROM ts_cd_test;", dt);
       c("SELECT COUNT(DISTINCT " + col_name + ") FROM ts_cd_test_frag;", dt);
@@ -3291,18 +3275,33 @@ TEST(Select, CountDistinct) {
                         col_name + " BETWEEN date '2022-01-10' AND date '2022-01-30';",
                     dt)));
     }
-    {
-      ScopeGuard keep_watchdog_flag = [orig = g_enable_watchdog]() {
-        g_enable_watchdog = orig;
-      };
-      g_enable_watchdog = true;
-      EXPECT_NO_THROW(
-          run_multiple_agg("SELECT date_trunc(month, CAST(Timestamp_ AS TIMESTAMP(3))) "
-                           "AS key0, APPROX_COUNT_DISTINCT(String_dict) AS val FROM "
-                           "data_types_basic5 GROUP BY key0;",
-                           dt,
-                           false));
-    }
+  }
+  {
+    ScopeGuard keep_watchdog_flag = [orig = g_enable_watchdog]() {
+      g_enable_watchdog = orig;
+    };
+    g_enable_watchdog = false;
+    const auto query =
+        "SELECT c1, c2, c3, COUNT(distinct c4) FROM sparse_cd_test GROUP BY c1, c2, "
+        "c3;";
+    c(query, ExecutorDeviceType::CPU);
+  }
+  {
+    ScopeGuard keep_watchdog_flag = [orig = g_enable_watchdog]() {
+      g_enable_watchdog = orig;
+    };
+    g_enable_watchdog = true;
+    EXPECT_NO_THROW(
+        run_multiple_agg("SELECT date_trunc(month, CAST(Timestamp_ AS TIMESTAMP(3))) "
+                         "AS key0, APPROX_COUNT_DISTINCT(String_dict) AS val FROM "
+                         "data_types_basic5 GROUP BY key0;",
+                         ExecutorDeviceType::CPU,
+                         false));
+    EXPECT_NO_THROW(
+        run_multiple_agg("SELECT col_big_1 AS key0, APPROX_COUNT_DISTINCT(state_name) "
+                         "FROM data_types_basic3 GROUP BY key0;",
+                         ExecutorDeviceType::CPU,
+                         false));
   }
 }
 
@@ -10218,6 +10217,86 @@ void import_test_table_with_various_data_types() {
   run_ddl_statement(
       "COPY data_types_basic6 FROM "
       "'../../Tests/Import/datafiles/data_types_basic6.csv.gz'");
+
+  run_ddl_statement("DROP TABLE IF EXISTS data_types_basic3;");
+  std::string data_types_basic3_ddl{
+      "CREATE TABLE data_types_basic3 (\n"
+      "  col_dict_text1 TEXT ENCODING DICT(32),\n"
+      "  col_dict_none1 TEXT ENCODING NONE,\n"
+      "  col_ts0_1 TIMESTAMP(0),\n"
+      "  col_ts3_1 TIMESTAMP(3),\n"
+      "  col_ts6_1 TIMESTAMP(6),\n"
+      "  col_ts9_1 TIMESTAMP(9),\n"
+      "  col_date_1 DATE ENCODING DAYS(32),\n"
+      "  col_time_1 TIME,\n"
+      "  col_float_1 FLOAT,\n"
+      "  col_double_1 DOUBLE,\n"
+      "  col_integer_1 INTEGER,\n"
+      "  col_tiny_1 TINYINT,\n"
+      "  col_small_1 SMALLINT,\n"
+      "  col_big_1 BIGINT,\n"
+      "  col_boolean_1 BOOLEAN,\n"
+      "  col_decimal_1 DECIMAL(8,2) ENCODING FIXED(32),\n"
+      "  col_numeric_1 DECIMAL(8,2) ENCODING FIXED(32),\n"
+      "  col_point_1 GEOMETRY(POINT) NOT NULL ENCODING NONE,\n"
+      "  col_linestring_1 GEOMETRY(LINESTRING) NOT NULL ENCODING NONE,\n"
+      "  col_polygon_1 GEOMETRY(POLYGON) NOT NULL ENCODING NONE,\n"
+      "  col_multipolygon_1 GEOMETRY(MULTIPOLYGON) NOT NULL ENCODING NONE,\n"
+      "  col_dict_var_array_1 TEXT[] ENCODING DICT(32),\n"
+      "  col_ts0_var_array_1 TIMESTAMP(0)[],\n"
+      "  col_date_var_array_1 DATE[],\n"
+      "  col_time_var_array_1 TIME[],\n"
+      "  col_float_var_array_1 FLOAT[],\n"
+      "  col_double_var_array_1 DOUBLE[],\n"
+      "  col_integer_var_array_1 INTEGER[],\n"
+      "  col_tiny_var_array_1 TINYINT[],\n"
+      "  col_small_var_array_1 SMALLINT[],\n"
+      "  col_big_var_array_1 BIGINT[],\n"
+      "  col_boolean_var_array_1 BOOLEAN[],\n"
+      "  col_decimal_var_array_1 DECIMAL(8,2)[],\n"
+      "  col_numeric_var_array_1 DECIMAL(8,2)[],\n"
+      "  col_dict_text2 TEXT ENCODING DICT(32),\n"
+      "  col_dict_none2 TEXT ENCODING NONE,\n"
+      "  col_ts0_2 TIMESTAMP(0),\n"
+      "  col_ts3_2 TIMESTAMP(3),\n"
+      "  col_ts6_2 TIMESTAMP(6),\n"
+      "  col_ts9_2 TIMESTAMP(9),\n"
+      "  col_date_2 DATE ENCODING DAYS(32),\n"
+      "  col_time_2 TIME,\n"
+      "  col_float_2 FLOAT,\n"
+      "  col_double_2 DOUBLE,\n"
+      "  col_integer_2 INTEGER,\n"
+      "  col_tiny_2 TINYINT,\n"
+      "  col_small_2 SMALLINT,\n"
+      "  col_big_2 BIGINT,\n"
+      "  col_boolean_2 BOOLEAN,\n"
+      "  col_decimal_2 DECIMAL(8,2) ENCODING FIXED(32),\n"
+      "  col_numeric_2 DECIMAL(8,2) ENCODING FIXED(32),\n"
+      "  col_dict_var_array_2 TEXT[] ENCODING DICT(32),\n"
+      "  col_ts0_var_array_2 TIMESTAMP(0)[],\n"
+      "  col_date_var_array_2 DATE[],\n"
+      "  col_time_var_array_2 TIME[],\n"
+      "  col_float_var_array_2 FLOAT[],\n"
+      "  col_double_var_array_2 DOUBLE[],\n"
+      "  col_integer_var_array_2 INTEGER[],\n"
+      "  col_tiny_var_array_2 TINYINT[],\n"
+      "  col_small_var_array_2 SMALLINT[],\n"
+      "  col_big_var_array_2 BIGINT[],\n"
+      "  col_boolean_var_array_2 BOOLEAN[],\n"
+      "  col_decimal_var_array_2 DECIMAL(8,2)[],\n"
+      "  col_numeric_var_array_2 DECIMAL(8,2)[],\n"
+      "  lat FLOAT,\n"
+      "  lon FLOAT,\n"
+      "  omnisci_geo_point GEOMETRY(POINT, 4326) NOT NULL ENCODING COMPRESSED(32),\n"
+      "  omnisci_geo_linestring GEOMETRY(LINESTRING, 4326) NOT NULL ENCODING "
+      "COMPRESSED(32),\n"
+      "  state_name TEXT ENCODING DICT(32),\n"
+      "  omnisci_geo_multipolygon GEOMETRY(MULTIPOLYGON, 4326) NOT NULL ENCODING "
+      "COMPRESSED(32));"};
+  run_ddl_statement(data_types_basic3_ddl);
+  run_ddl_statement(
+      "COPY data_types_basic3 FROM "
+      "'../../Tests/Import/datafiles/data_types_basic3.tab' WITH (DELIMITER=\'\\t\');");
 }
 
 }  // namespace
