@@ -125,9 +125,8 @@ void init_code_caches() {
   Executor::cpu_code_accessor =
       std::make_unique<CodeCacheAccessor<CpuCompilationContext>>(
           Executor::code_cache_size, "cpu_code_cache");
-  Executor::gpu_code_accessor =
-      std::make_unique<CodeCacheAccessor<CompilationContext>>(
-          Executor::code_cache_size, "gpu_code_cache");
+  Executor::gpu_code_accessor = std::make_unique<CodeCacheAccessor<CompilationContext>>(
+      Executor::code_cache_size, "gpu_code_cache");
 }
 
 }  // namespace
