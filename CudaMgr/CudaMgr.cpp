@@ -29,7 +29,7 @@
 namespace CudaMgr_Namespace {
 
 CudaErrorException::CudaErrorException(CUresult status)
-    : std::runtime_error(errorMessage(status)), status_(status) {
+    : DeviceException(errorMessage(status)), status_(status) {
   // cuda already de-initialized can occur during system shutdown. avoid making calls to
   // the logger to prevent failing during a standard teardown.
   if (status != CUDA_ERROR_DEINITIALIZED) {

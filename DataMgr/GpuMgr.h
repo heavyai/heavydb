@@ -22,6 +22,7 @@ enum GpuMgrPlatform { CUDA, L0 };
 
 class DeviceException : public std::runtime_error {
  public:
+  DeviceException(const std::string& msg) : std::runtime_error(msg) {}
   virtual bool isOutOfMemory() const { return false; }
 };
 

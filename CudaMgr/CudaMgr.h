@@ -44,11 +44,11 @@ enum class NvidiaDeviceArch {
 #ifdef HAVE_CUDA
 std::string errorMessage(CUresult const);
 
-class CudaErrorException : DeviceException {
+class CudaErrorException : public DeviceException {
  public:
   CudaErrorException(CUresult status);
 
-  bool isOutOfMemory() override { status_ == CUDA_ERROR_OUT_OF_MEMORY; }
+  bool isOutOfMemory() const override { return status_ == CUDA_ERROR_OUT_OF_MEMORY; }
 
   CUresult getStatus() const { return status_; }
 
