@@ -647,6 +647,13 @@ struct FlatBufferManager {
     }
   }
 
+  HOST DEVICE Status getItem(int64_t index, size_t& size, int8_t*& dest, bool& is_null) {
+    int64_t sz{0};
+    Status status = getItem(index, sz, dest, is_null);
+    size = sz;
+    return status;
+  }
+
 #ifdef HAVE_TOSTRING
   std::string toString() const {
     if (buffer == nullptr) {
