@@ -2469,6 +2469,21 @@ TEST(GeoSpatial, Projections) {
               boost::get<std::string>(
                   v<NullableString>(run_simple_agg("SELECT ST_Point(2,2);", dt, false))));
 
+    // Projection of a900913 literal transformed to 4326
+    ASSERT_EQ(
+        R"(POLYGON ((-157.552903293424 70.5298902655625,-157.540578542995 70.5298902655625,-157.540578542995 70.5316394430267,-157.552903293424 70.5316394430267,-157.552903293424 70.5298902655625)))",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            R"(SELECT ST_Transform(ST_GeomFromText('POLYGON(( -17538708.976320468 11243413.985557318, -17537336.990984567 11243413.985557318, -17537336.990984567 11243998.200894408, -17538708.976320468 11243998.200894408, -17538708.976320468 11243413.985557318))', 900913), 4326);)",
+            dt,
+            false))));
+    // Projection of a 4326 literal transformed to 900913
+    ASSERT_EQ(
+        R"(POLYGON ((-17538708.9676258 11243413.9770419,-17537336.9826839 11243413.9770419,-17537336.9826839 11243998.1869375,-17538708.9676258 11243998.1869375,-17538708.9676258 11243413.9770419)))",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            R"(SELECT ST_Transform(ST_GeomFromText('POLYGON ((-157.552903293424 70.5298902655625,-157.540578542995 70.5298902655625,-157.540578542995 70.5316394430267,-157.552903293424 70.5316394430267,-157.552903293424 70.5298902655625))', 4326), 900913);)",
+            dt,
+            false))));
+
     // unsupported transform projections
     EXPECT_ANY_THROW(run_multiple_agg(
         R"(SELECT ST_Transform(mpoly, 900913) FROM geospatial_test;)", dt));
