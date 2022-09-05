@@ -25,6 +25,8 @@
 #include "Shared/SystemParameters.h"
 #include "gen-cpp/Heavy.h"
 
+#include "Shared/cleanup_global_namespace.h"
+
 class DBHandler;
 
 namespace Catalog_Namespace {
