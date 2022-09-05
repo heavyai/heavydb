@@ -1,7 +1,8 @@
 set(utils_source_files
-    StringLike.cpp
-    Regexp.cpp
     ChunkIter.cpp
+    CommandLineOptions.cpp
+    Regexp.cpp
+    StringLike.cpp
 )
 
 add_library(Utils ${utils_source_files})

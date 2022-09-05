@@ -696,7 +696,6 @@ add_subdirectory(Shared)
 add_subdirectory(SchemaMgr)
 add_subdirectory(OSDependent)
 add_subdirectory(Utils)
-add_subdirectory(ThriftHandler)
 add_subdirectory(UdfCompiler)
 
 option(ENABLE_ODBC "Build ODBC driver" OFF)

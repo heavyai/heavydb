@@ -137,23 +137,6 @@ install_llvm
 # install AWS core and s3 sdk
 install_awscpp -j $(nproc)
 
-VERS=0.15.0
-wget --continue http://dlcdn.apache.org/thrift/$VERS/thrift-$VERS.tar.gz
-tar xvf thrift-$VERS.tar.gz
-pushd thrift-$VERS
-CFLAGS="-fPIC" CXXFLAGS="-fPIC" JAVA_PREFIX=$PREFIX/lib ./configure \
-    --with-lua=no \
-    --with-python=no \
-    --with-php=no \
-    --with-ruby=no \
-    --with-qt4=no \
-    --with-qt5=no \
-    --with-java=no \
-    --prefix=$PREFIX
-make -j $(nproc)
-make install
-popd
-
 VERS=3.52.15
 CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libiodbc-${VERS}.tar.gz
 

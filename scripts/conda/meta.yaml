@@ -49,7 +49,6 @@ requirements:
     - openldap
     - openssl
     - snappy
-    - thrift-cpp
     - tbb-devel {{ tbb }}
   # no need in run: section when using multiple outputs
 
@@ -112,7 +111,6 @@ outputs:
         - xz
         - zlib
         - arrow-cpp =2.0
-        - libthrift<0.14.0  # ref: modin gh-2840
         - tbb {{ tbb }}
         - {{ pin_subpackage('omniscidb-common', exact=True) }}
       run_constrained:

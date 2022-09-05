@@ -192,33 +192,6 @@ VERS=7.75.0
 # https://curl.haxx.se/download/curl-$VERS.tar.xz
 download_make_install ${HTTP_DEPS}/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps"
 
-# thrift
-VERS=0.15.0
-# http://dlcdn.apache.org/thrift/$VERS/thrift-$VERS.tar.gz
-download ${HTTP_DEPS}/thrift-$VERS.tar.gz
-extract thrift-$VERS.tar.gz
-pushd thrift-$VERS
-if [ "$TSAN" = "false" ]; then
-  THRIFT_CFLAGS="-fPIC"
-  THRIFT_CXXFLAGS="-fPIC"
-elif [ "$TSAN" = "true" ]; then
-  THRIFT_CFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
-  THRIFT_CXXFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
-fi
-CFLAGS="$THRIFT_CFLAGS" CXXFLAGS="$THRIFT_CXXFLAGS" JAVA_PREFIX=$PREFIX/lib ./configure \
-    --prefix=$PREFIX \
-    --with-lua=no \
-    --with-python=no \
-    --with-php=no \
-    --with-ruby=no \
-    --with-qt4=no \
-    --with-qt5=no \
-    --with-java=no \
-    --with-boost-libdir=$PREFIX/lib
-makej
-make install
-popd
-
 # librdkafka
 install_rdkafka static
 

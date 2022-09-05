@@ -1,1 +1,0 @@
-add_library(CommandLineOptions CommandLineOptions.cpp)

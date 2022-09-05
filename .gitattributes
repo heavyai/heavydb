@@ -28,7 +28,6 @@ ThirdParty/* linguist-vendored
 *.conf    text
 *.service text
 *.sql     text
-*.thrift  text
 
 *.csv     text
 *.json    text

@@ -36,7 +36,6 @@ yay -S \
     ninja \
     python-numpy \
     snappy \
-    thrift \
     wget \
     zlib
 

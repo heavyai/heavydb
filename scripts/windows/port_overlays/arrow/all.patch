@@ -110,53 +110,6 @@ index 5784cf592..817cf0c47 100644
  endif()
 
  if(Snappy_ROOT)
-diff --git a/cpp/cmake_modules/FindThrift.cmake b/cpp/cmake_modules/FindThrift.cmake
-index 273d907ed..65f477f54 100644
---- a/cpp/cmake_modules/FindThrift.cmake
-+++ b/cpp/cmake_modules/FindThrift.cmake
-@@ -39,6 +39,12 @@ function(EXTRACT_THRIFT_VERSION)
-   endif()
- endfunction(EXTRACT_THRIFT_VERSION)
-
-+# Avoid the debug build linking to the release library by mistake.
-+# In theory harmless if static linking at this point, but disastrous if done for a shared library.
-+if(CMAKE_BUILD_TYPE STREQUAL "DEBUG")
-+  set(THRIFT_LIB_NAME_DEBUG_SUFFIX d)
-+endif()
-+
- if(MSVC_TOOLCHAIN AND NOT DEFINED THRIFT_MSVC_LIB_SUFFIX)
-   if(NOT ARROW_THRIFT_USE_SHARED)
-     if(ARROW_USE_STATIC_CRT)
-@@ -48,7 +54,7 @@ if(MSVC_TOOLCHAIN AND NOT DEFINED THRIFT_MSVC_LIB_SUFFIX)
-     endif()
-   endif()
- endif()
--set(THRIFT_LIB_NAME_BASE "thrift${THRIFT_MSVC_LIB_SUFFIX}")
-+set(THRIFT_LIB_NAME_BASE "thrift${THRIFT_MSVC_LIB_SUFFIX}${THRIFT_LIB_NAME_DEBUG_SUFFIX}")
-
- if(ARROW_THRIFT_USE_SHARED)
-   set(THRIFT_LIB_NAMES thrift)
-@@ -84,8 +90,8 @@ else()
-   # THRIFT-4760: The pkgconfig files are currently only installed when using autotools.
-   # Starting with 0.13, they are also installed for the CMake-based installations of Thrift.
-   find_package(PkgConfig QUIET)
--  pkg_check_modules(THRIFT_PC thrift)
--  if(THRIFT_PC_FOUND)
-+  #pkg_check_modules(THRIFT_PC thrift)
-+  if(0) # Do not use pkg_check_modules, as it finds the wrong location (an intermediate build dir).
-     set(THRIFT_INCLUDE_DIR "${THRIFT_PC_INCLUDEDIR}")
-
-     list(APPEND THRIFT_PC_LIBRARY_DIRS "${THRIFT_PC_LIBDIR}")
-@@ -101,8 +107,7 @@ else()
-     set(THRIFT_VERSION ${THRIFT_PC_VERSION})
-   else()
-     find_library(THRIFT_LIB
--                 NAMES ${THRIFT_LIB_NAMES}
--                 PATH_SUFFIXES "lib/${CMAKE_LIBRARY_ARCHITECTURE}" "lib")
-+                 NAMES ${THRIFT_LIB_NAMES})
-     find_path(THRIFT_INCLUDE_DIR thrift/Thrift.h PATH_SUFFIXES "include")
-     find_program(THRIFT_COMPILER thrift PATH_SUFFIXES "bin")
-     extract_thrift_version()
 diff --git a/cpp/cmake_modules/Findzstd.cmake b/cpp/cmake_modules/Findzstd.cmake
 index 6659a682d..d8cc4f72d 100644
 --- a/cpp/cmake_modules/Findzstd.cmake
