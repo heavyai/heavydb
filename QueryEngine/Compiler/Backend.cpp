@@ -1019,10 +1019,22 @@ std::shared_ptr<L0CompilationContext> L0Backend::generateNativeGPUCode(
   opts.setDesiredBIsRepresentation(SPIRV::BIsRepresentation::OpenCL12);
   opts.setDebugInfoEIS(SPIRV::DebugInfoEIS::OpenCL_DebugInfo_100);
 
+#if 0
+  std::error_code ec;
+  llvm::raw_fd_ostream os("gen.ll", ec);
+  module->print(os, nullptr);
+#endif
+
   std::ostringstream ss;
   std::string err;
   auto success = writeSpirv(module, opts, ss, err);
   CHECK(success) << "Spirv translation failed with error: " << err << "\n";
+
+#if 0
+  std::string ss_c = ss.str();
+  std::ofstream ospv("gen.spv");
+  ospv << ss_c << std::endl;
+#endif
 
   const auto func_name = wrapper_func->getName().str();
   L0BinResult bin_result;
