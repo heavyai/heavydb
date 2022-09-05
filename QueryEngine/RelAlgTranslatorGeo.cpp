@@ -918,6 +918,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoProjection(
   CHECK(!geoargs.empty());
   if (std::dynamic_pointer_cast<const Analyzer::GeoExpr>(geoargs.front()) &&
       !geoargs.front()->get_type_info().is_array()) {
+    if (rex_function->getName() == "ST_Transform" &&
+        std::dynamic_pointer_cast<const Analyzer::GeoConstant>(geoargs.front())) {
+      return makeExpr<Analyzer::GeoUOper>(
+          Geospatial::GeoBase::GeoOp::kPROJECTION, ti, ti, geoargs);
+    }
     // GeoExpression
     return geoargs.front();
   }
