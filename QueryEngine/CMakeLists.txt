@@ -218,7 +218,7 @@ add_custom_command(
         DEPENDS RuntimeFunctions.h RuntimeFunctions.cpp DecodersImpl.h l0_mapd_rt.cpp JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsL0.bc
         COMMAND ${llvm_clangpp_cmd}
-        ARGS -std=c++17 ${RT_OPT_FLAGS} -c -emit-llvm -o ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsL0.bc
+        ARGS -std=c++17 ${RT_OPT_FLAGS} -c -emit-llvm -Xclang -ffake-address-space-map -o ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsL0.bc
         ${CLANG_SDK_INC}
         ${CLANG_CRT_INC}
         ${MAPD_DEFINITIONS}
