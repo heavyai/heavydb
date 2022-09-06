@@ -825,6 +825,14 @@ TEST_F(ArrowStorageTest, ImportCsv_UnknownSchema_Numbers_NoHeader) {
   Test_ImportCsv_Numbers("numbers_noheader.csv", parse_options, false);
 }
 
+TEST_F(ArrowStorageTest, ImportCsv_DateTime) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  ArrowStorage::TableOptions table_options;
+  ArrowStorage::CsvParseOptions parse_options;
+  TableInfoPtr tinfo = storage.importCsvFile(
+      getFilePath("date_time.csv"), "table1", table_options, parse_options);
+}
+
 TEST_F(ArrowStorageTest, AppendCsvData) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
   TableInfoPtr tinfo = storage.createTable(

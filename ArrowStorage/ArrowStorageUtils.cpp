@@ -201,65 +201,6 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesImpl(
   return std::make_shared<arrow::ChunkedArray>(array);
 }
 
-// With current parser we used timestamp convertor for time type.
-// It sets 1899-12-31 date (-2209075200 secs from epoch) for parsed values
-// and therefore values should be adjusted.
-void copyTimestampToTimeReplacingNulls(int64_t* dst, std::shared_ptr<arrow::Array> arr) {
-  auto src = reinterpret_cast<const int64_t*>(arr->data()->buffers[1]->data());
-  auto null_value = inline_null_value<int64_t>();
-  auto length = arr->length();
-
-  if (arr->null_count() == length) {
-    std::fill(dst, dst + length, null_value);
-  } else if (arr->null_count() == 0) {
-    std::transform(src, src + length, dst, [](int64_t v) { return v + 2209075200; });
-  } else {
-    const uint8_t* bitmap_data = arr->null_bitmap_data();
-
-    size_t end_full_byte = length / 8;
-    size_t tail_bits = length % 8;
-    size_t offs = 0;
-
-    for (size_t bitmap_idx = 0; bitmap_idx < end_full_byte; ++bitmap_idx) {
-      auto inversed_bitmap = ~bitmap_data[bitmap_idx];
-      for (int8_t bitmap_offset = 0; bitmap_offset < 8; ++bitmap_offset) {
-        auto is_null = (inversed_bitmap >> bitmap_offset) & 1;
-        auto val = src[offs] + 2209075200;
-        dst[offs] = is_null ? null_value : val;
-        ++offs;
-      }
-    }
-
-    for (size_t i = 0; i < tail_bits; ++i) {
-      auto is_null = (~bitmap_data[end_full_byte] >> i) & 1;
-      auto val = src[offs] + 2209075200;
-      dst[offs] = is_null ? null_value : val;
-      ++offs;
-    }
-  }
-}
-
-std::shared_ptr<arrow::ChunkedArray> convertTimestampToTimeReplacingNulls(
-    std::shared_ptr<arrow::ChunkedArray> arr) {
-  auto resultBuf = arrow::AllocateBuffer(sizeof(int64_t) * arr->length()).ValueOrDie();
-  auto resultData = reinterpret_cast<int64_t*>(resultBuf->mutable_data());
-
-  tbb::parallel_for(tbb::blocked_range<int>(0, arr->num_chunks()),
-                    [&](const tbb::blocked_range<int>& r) {
-                      for (int c = r.begin(); c != r.end(); ++c) {
-                        size_t offset = 0;
-                        for (int i = 0; i < c; i++) {
-                          offset += arr->chunk(i)->length();
-                        }
-                        copyTimestampToTimeReplacingNulls(resultData + offset,
-                                                          arr->chunk(c));
-                      }
-                    });
-
-  auto array = std::make_shared<arrow::Int64Array>(arr->length(), std::move(resultBuf));
-  return std::make_shared<arrow::ChunkedArray>(array);
-}
-
 template <typename ArrowIntType, typename ResultIntType>
 void copyDateReplacingNulls(ResultIntType* dst, std::shared_ptr<arrow::Array> arr) {
   auto src = reinterpret_cast<const ArrowIntType*>(arr->data()->buffers[1]->data());
@@ -964,7 +905,7 @@ std::shared_ptr<arrow::DataType> getArrowImportType(const SQLTypeInfo type) {
     case kNUMERIC:
       return decimal(type.get_precision(), type.get_scale());
     case kTIME:
-      return timestamp(TimeUnit::SECOND);
+      return time32(TimeUnit::SECOND);
     case kDATE:
       return arrow::date32();
     case kTIMESTAMP:
@@ -997,9 +938,9 @@ std::shared_ptr<arrow::DataType> getArrowImportType(const SQLTypeInfo type) {
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
     default:
-      throw std::runtime_error(type.get_type_name() + " is not supported in Arrow.");
+      break;
   }
-  return nullptr;
+  throw std::runtime_error(type.get_type_name() + " is not supported in Arrow.");
 }
 
 std::shared_ptr<arrow::ChunkedArray> replaceNullValues(
@@ -1011,7 +952,7 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValues(
       throw std::runtime_error("Unsupported time type for Arrow import: "s +
                                type.toString());
     }
-    return convertTimestampToTimeReplacingNulls(arr);
+    return convertDateReplacingNulls<int32_t, int64_t>(arr);
   }
   if (type.get_type() == kDATE) {
     if (type.get_compression() != kENCODING_DATE_IN_DAYS) {
@@ -1127,7 +1068,10 @@ SQLTypeInfo getOmnisciType(const arrow::DataType& type) {
       return SQLTypeInfo(kDECIMAL, decimal_type.precision(), decimal_type.scale(), false);
     }
     case Type::TIME32:
-      return SQLTypeInfo(kTIME, false);
+      if (static_cast<const arrow::Time32Type&>(type).unit() == arrow::TimeUnit::SECOND) {
+        return SQLTypeInfo(kTIME, false);
+      }
+      break;
     case Type::TIMESTAMP:
       switch (static_cast<const arrow::TimestampType&>(type).unit()) {
         case TimeUnit::SECOND:
@@ -1140,8 +1084,9 @@ SQLTypeInfo getOmnisciType(const arrow::DataType& type) {
           return SQLTypeInfo(kTIMESTAMP, 9, 0);
       }
     default:
-      throw std::runtime_error(type.ToString() + " is not yet supported.");
+      break;
   }
+  throw std::runtime_error(type.ToString() + " is not yet supported.");
 }
 
 namespace {
