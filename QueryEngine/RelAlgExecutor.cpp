@@ -930,7 +930,7 @@ ColumnRefSet get_used_inputs(const RelAggregate* aggregate) {
   const auto group_count = aggregate->getGroupByCount();
   CHECK_GE(in_metainfo.size(), group_count);
   for (unsigned i = 0; i < static_cast<unsigned>(group_count); ++i) {
-    res.insert({source, i});
+    res.insert({getColumnType(source, i), source, i});
   }
   for (const auto& expr : aggregate->getAggs()) {
     auto agg_expr = dynamic_cast<const hdk::ir::AggExpr*>(expr.get());
@@ -973,7 +973,7 @@ ColumnRefSet get_used_inputs(const RelFilter* filter) {
     auto input_count =
         scan_source ? scan_source->size() : source->getOutputMetainfo().size();
     for (unsigned i = 0; i < static_cast<unsigned>(input_count); ++i) {
-      res.insert({source, i});
+      res.insert({getColumnType(source, i), source, i});
     }
   }
   return res;
@@ -986,7 +986,7 @@ ColumnRefSet get_used_inputs(const RelLogicalUnion* logical_union) {
   for (size_t nest_level = 0; nest_level < n_inputs; ++nest_level) {
     auto input = logical_union->getInput(nest_level);
     for (unsigned i = 0; i < static_cast<unsigned>(input->size()); ++i) {
-      res.insert({input, i});
+      res.insert({getColumnType(input, i), input, i});
     }
   }
   return res;

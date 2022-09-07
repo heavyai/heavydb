@@ -2544,7 +2544,8 @@ class InputBackpropagationVisitor : public DeepCopyVisitor {
           field_name = cur_project_node->getFieldName(cur_index);
         }
         node_->appendInput(field_name, col_ref->deep_copy());
-        auto expr = hdk::ir::makeExpr<hdk::ir::ColumnRef>(node_, node_->size() - 1);
+        auto expr = hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+            getColumnType(node_, node_->size() - 1), node_, node_->size() - 1);
         replacements_[std::make_pair(cur_source_node, cur_index)] = expr;
         return expr;
       }

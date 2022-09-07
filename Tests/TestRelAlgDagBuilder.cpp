@@ -85,7 +85,8 @@ RelAlgNodePtr TestRelAlgDagBuilder::addAgg(RelAlgNodePtr input,
     hdk::ir::ExprPtr arg_expr;
     CHECK_LE(agg.operands.size(), size_t(1));
     if (agg.operands.size()) {
-      arg_expr = hdk::ir::makeExpr<hdk::ir::ColumnRef>(input.get(), agg.operands[0]);
+      arg_expr = hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+          getColumnType(input.get(), agg.operands[0]), input.get(), agg.operands[0]);
     }
     agg_exprs.push_back(hdk::ir::makeExpr<hdk::ir::AggExpr>(
         agg.type, agg.agg, arg_expr, agg.distinct, nullptr));

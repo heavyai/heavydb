@@ -384,9 +384,6 @@ ExprPtr Expr::add_cast(const SQLTypeInfo& new_type_info) {
   return add_cast(hdk::ir::Context::defaultCtx().fromTypeInfo(new_type_info));
 }
 
-ColumnRef::ColumnRef(const RelAlgNode* node, unsigned idx)
-    : ColumnRef(getColumnType(node, idx), node, idx) {}
-
 std::string ColumnRef::toString() const {
   std::stringstream ss;
   ss << "(ColumnRef " << node_->getIdString() << ":" << idx_ << ")";

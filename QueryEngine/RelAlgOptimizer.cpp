@@ -1291,7 +1291,8 @@ class InputSinker : public DeepCopyVisitor {
     CHECK_EQ(target_->getInput(0), col_ref->getNode());
     auto idx_it = old_to_new_in_idx_.find(col_ref->getIndex());
     CHECK(idx_it != old_to_new_in_idx_.end());
-    return hdk::ir::makeExpr<hdk::ir::ColumnRef>(target_, idx_it->second);
+    return hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+        getColumnType(target_, idx_it->second), target_, idx_it->second);
   }
 
  private:
@@ -1399,8 +1400,8 @@ void sink_projected_boolean_expr_to_join(
     hdk::ir::ExprPtrVector new_proj_exprs;
     for (size_t i = 0; i < project->size(); ++i) {
       if (boolean_expr_indicies.count(i)) {
-        new_proj_exprs.emplace_back(
-            hdk::ir::makeExpr<hdk::ir::ColumnRef>(project->getInput(0), 0));
+        new_proj_exprs.emplace_back(hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+            getColumnType(project->getInput(0), 0), project->getInput(0), 0));
       } else {
         auto col_ref = dynamic_cast<const hdk::ir::ColumnRef*>(project->getExpr(i).get());
         CHECK(col_ref != nullptr);
@@ -1408,8 +1409,8 @@ void sink_projected_boolean_expr_to_join(
       }
     }
     for (auto i : unloaded_input_indices) {
-      new_proj_exprs.emplace_back(
-          hdk::ir::makeExpr<hdk::ir::ColumnRef>(project->getInput(0), i));
+      new_proj_exprs.emplace_back(hdk::ir::makeExpr<hdk::ir::ColumnRef>(
+          getColumnType(project->getInput(0), i), project->getInput(0), i));
     }
     project->setExpressions(std::move(new_proj_exprs));
 
