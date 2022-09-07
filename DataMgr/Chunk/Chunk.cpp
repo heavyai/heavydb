@@ -182,9 +182,9 @@ ChunkIter Chunk::begin_iterator(const std::shared_ptr<ChunkMetadata>& chunk_meta
                                 int start_idx,
                                 int skip) const {
   ChunkIter it;
-  it.type_info = column_info_->type_info;
+  it.type = column_info_->type;
   it.skip = skip;
-  it.skip_size = column_info_->type_info.get_size();
+  it.skip_size = column_info_->type->size();
   if (it.skip_size < 0) {  // if it's variable length
     it.current_pos = it.start_pos =
         index_buf_->getMemoryPtr() + start_idx * sizeof(StringOffsetT);

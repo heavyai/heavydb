@@ -25,9 +25,13 @@
 #include "../Shared/funcannotations.h"
 #include "../Shared/sqltypes.h"
 
+namespace hdk::ir {
+class Type;
+}
+
 class ChunkIter {
  public:
-  SQLTypeInfo type_info;
+  const hdk::ir::Type* type;
   int8_t* second_buf;
   int8_t* current_pos;
   int8_t* start_pos;
@@ -58,8 +62,4 @@ DEVICE void ChunkIter_get_nth_varlen_notnull(ChunkIter* it,
                                              int nth,
                                              ArrayDatum* vd,
                                              bool* is_end);
-DEVICE void ChunkIter_get_nth_point_coords(ChunkIter* it,
-                                           int nth,
-                                           ArrayDatum* vd,
-                                           bool* is_end);
 #endif  // _CHUNK_ITER_H_

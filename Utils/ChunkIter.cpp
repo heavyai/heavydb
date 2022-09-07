@@ -21,123 +21,106 @@
 
 #include "ChunkIter.h"
 
+#include "IR/Type.h"
+
 #include <cstdlib>
 
-DEVICE static void decompress(const SQLTypeInfo& ti,
+HOST DEVICE inline bool isNull(const int8_t* val, const hdk::ir::Type* type) {
+  if (type->id() == hdk::ir::Type::kFloatingPoint) {
+    switch (type->as<hdk::ir::FloatingPointType>()->precision()) {
+      case hdk::ir::FloatingPointType::kFloat:
+        return *(float*)val == inline_null_value<float>();
+      case hdk::ir::FloatingPointType::kDouble:
+        return *(double*)val == inline_null_value<double>();
+      default:
+        assert(false);
+    }
+  }
+  switch (type->size()) {
+    case 0:
+      // For Null type.
+      return true;
+    case 1:
+      return *val == inline_null_value<int8_t>();
+    case 2:
+      return *(int16_t*)val == inline_null_value<int16_t>();
+    case 4:
+      return *(int32_t*)val == inline_null_value<int32_t>();
+    case 8:
+      return *(int64_t*)val == inline_null_value<int64_t>();
+    default:
+      break;
+  }
+  return false;
+}
+
+HOST DEVICE inline bool isNullFixedLenArray(const int8_t* val,
+                                            int array_size,
+                                            const hdk::ir::Type* type) {
+  // Check if fixed length array has a NULL_ARRAY sentinel as the first element
+  if (type->isFixedLenArray() && val && array_size > 0 && array_size == type->size()) {
+    auto elem_type = type->as<hdk::ir::FixedLenArrayType>()->elemType();
+    if (elem_type->id() == hdk::ir::Type::kFloatingPoint) {
+      switch (elem_type->as<hdk::ir::FloatingPointType>()->precision()) {
+        case hdk::ir::FloatingPointType::kFloat:
+          return *(float*)val == inline_null_array_value<float>();
+        case hdk::ir::FloatingPointType::kDouble:
+          return *(double*)val == inline_null_array_value<double>();
+        default:
+          assert(false);
+      }
+    }
+    switch (elem_type->size()) {
+      case 1:
+        return *val == inline_null_array_value<int8_t>();
+      case 2:
+        return *(int16_t*)val == inline_null_array_value<int16_t>();
+      case 4:
+        return *(int32_t*)val == inline_null_array_value<int32_t>();
+      case 8:
+        return *(int64_t*)val == inline_null_array_value<int64_t>();
+      default:
+        return false;
+    }
+  }
+  return false;
+}
+
+DEVICE static bool needDecompression(const hdk::ir::Type* type) {
+  if (type->isDateTime() && type->size() != 8) {
+    return true;
+  }
+  return false;
+}
+
+DEVICE static void decompress(const hdk::ir::Type* type,
                               int8_t* compressed,
                               VarlenDatum* result,
                               Datum* datum) {
-  switch (ti.get_type()) {
-    case kSMALLINT:
-      result->length = sizeof(int16_t);
-      result->pointer = (int8_t*)&datum->smallintval;
-      switch (ti.get_compression()) {
-        case kENCODING_FIXED:
-          assert(ti.get_comp_param() == 8);
-          datum->smallintval = (int16_t) * (int8_t*)compressed;
-          break;
-        case kENCODING_RL:
-        case kENCODING_DIFF:
-        case kENCODING_SPARSE:
-          assert(false);
-          break;
-        default:
-          assert(false);
-      }
-      break;
-    case kINT:
-      result->length = sizeof(int32_t);
-      result->pointer = (int8_t*)&datum->intval;
-      switch (ti.get_compression()) {
-        case kENCODING_FIXED:
-          switch (ti.get_comp_param()) {
-            case 8:
-              datum->intval = (int32_t) * (int8_t*)compressed;
-              break;
-            case 16:
-              datum->intval = (int32_t) * (int16_t*)compressed;
-              break;
-            default:
-              assert(false);
-          }
-          break;
-        case kENCODING_RL:
-        case kENCODING_DIFF:
-        case kENCODING_SPARSE:
-          assert(false);
-          break;
-        default:
-          assert(false);
-      }
-      break;
-    case kBIGINT:
-    case kNUMERIC:
-    case kDECIMAL:
+  switch (type->id()) {
+    case hdk::ir::Type::kDate:
+    case hdk::ir::Type::kTime:
+    case hdk::ir::Type::kTimestamp: {
       result->length = sizeof(int64_t);
       result->pointer = (int8_t*)&datum->bigintval;
-      switch (ti.get_compression()) {
-        case kENCODING_FIXED:
-          switch (ti.get_comp_param()) {
-            case 8:
-              datum->bigintval = (int64_t) * (int8_t*)compressed;
-              break;
-            case 16:
-              datum->bigintval = (int64_t) * (int16_t*)compressed;
-              break;
-            case 32:
-              datum->bigintval = (int64_t) * (int32_t*)compressed;
-              break;
-            default:
-              assert(false);
-          }
+      switch (type->size()) {
+        case 1:
+          datum->bigintval = (int64_t) * (int8_t*)compressed;
           break;
-        case kENCODING_RL:
-        case kENCODING_DIFF:
-        case kENCODING_SPARSE:
-          assert(false);
+        case 2:
+          datum->bigintval = (int64_t) * (int16_t*)compressed;
           break;
-        default:
-          assert(false);
-      }
-      break;
-    case kTIME:
-    case kTIMESTAMP:
-    case kDATE:
-      switch (ti.get_compression()) {
-        case kENCODING_FIXED:
+        case 4:
           datum->bigintval = (int64_t) * (int32_t*)compressed;
           break;
-        case kENCODING_DATE_IN_DAYS:
-          switch (ti.get_comp_param()) {
-            case 0:
-            case 32:
-              datum->bigintval = (int64_t) * (int32_t*)compressed;
-              break;
-            case 16:
-              datum->bigintval = (int64_t) * (int16_t*)compressed;
-              break;
-            default:
-              assert(false);
-              break;
-          }
-          break;
-        case kENCODING_RL:
-        case kENCODING_DIFF:
-        case kENCODING_DICT:
-        case kENCODING_SPARSE:
-        case kENCODING_NONE:
-          assert(false);
-          break;
         default:
           assert(false);
       }
-      result->length = sizeof(int64_t);
-      result->pointer = (int8_t*)&datum->bigintval;
-      break;
+      result->is_null = datum->bigintval == inline_null_value<int64_t>();
+    } break;
     default:
       assert(false);
   }
-  result->is_null = ti.is_null(*datum);
 }
 
 void ChunkIter_reset(ChunkIter* it) {
@@ -159,12 +142,12 @@ DEVICE void ChunkIter_get_next(ChunkIter* it,
 
   if (it->skip_size > 0) {
     // for fixed-size
-    if (uncompress && (it->type_info.get_compression() != kENCODING_NONE)) {
-      decompress(it->type_info, it->current_pos, result, &it->datum);
+    if (uncompress && needDecompression(it->type)) {
+      decompress(it->type, it->current_pos, result, &it->datum);
     } else {
       result->length = static_cast<size_t>(it->skip_size);
       result->pointer = it->current_pos;
-      result->is_null = it->type_info.is_null(result->pointer);
+      result->is_null = isNull(result->pointer, it->type);
     }
     it->current_pos += it->skip * it->skip_size;
   } else {
@@ -195,12 +178,12 @@ DEVICE void ChunkIter_get_nth(ChunkIter* it,
   if (it->skip_size > 0) {
     // for fixed-size
     int8_t* current_pos = it->start_pos + n * it->skip_size;
-    if (uncompress && (it->type_info.get_compression() != kENCODING_NONE)) {
-      decompress(it->type_info, current_pos, result, &it->datum);
+    if (uncompress && needDecompression(it->type)) {
+      decompress(it->type, current_pos, result, &it->datum);
     } else {
       result->length = static_cast<size_t>(it->skip_size);
       result->pointer = current_pos;
-      result->is_null = it->type_info.is_null(result->pointer);
+      result->is_null = isNull(result->pointer, it->type);
     }
   } else {
     int8_t* current_pos = it->start_pos + n * sizeof(StringOffsetT);
@@ -229,9 +212,9 @@ DEVICE void ChunkIter_get_nth(ChunkIter* it, int n, ArrayDatum* result, bool* is
     result->length = static_cast<size_t>(it->skip_size);
     result->pointer = current_pos;
     bool is_null = false;
-    if (!it->type_info.get_notnull()) {
-      // Nulls can only be recognized when iterating over a !notnull-typed chunk
-      is_null = it->type_info.is_null_fixlen_array(result->pointer, result->length);
+    if (it->type->nullable()) {
+      // Nulls can only be recognized when iterating over a nullable-typed chunk
+      is_null = isNullFixedLenArray(result->pointer, result->length, it->type);
     }
     result->is_null = is_null;
   } else {
@@ -299,33 +282,4 @@ DEVICE void ChunkIter_get_nth_varlen_notnull(ChunkIter* it,
   result->length = static_cast<size_t>(next_offset - offset);
   result->pointer = it->second_buf + offset;
   result->is_null = false;
-}
-
-// @brief get nth point coord array in Chunk.  Does not change ChunkIter state
-// Custom iterator for point coord arrays:
-// int8_t[16] representing uncompressed double[2] coords
-// int8_t[8] representing 32-bit compressed int32_t[2] coords
-DEVICE void ChunkIter_get_nth_point_coords(ChunkIter* it,
-                                           int n,
-                                           ArrayDatum* result,
-                                           bool* is_end) {
-  if (static_cast<size_t>(n) >= it->num_elems || n < 0) {
-    *is_end = true;
-    result->length = 0;
-    result->pointer = NULL;
-    result->is_null = true;
-    return;
-  }
-  *is_end = false;
-
-  assert(it->skip_size > 0);
-  int8_t* current_pos = it->start_pos + n * it->skip_size;
-  result->length = static_cast<size_t>(it->skip_size);
-  result->pointer = current_pos;
-  bool is_null = false;
-  if (!it->type_info.get_notnull()) {
-    // Nulls can only be recognized when iterating over a !notnull-typed chunk
-    is_null = it->type_info.is_null_point_coord_array(result->pointer, result->length);
-  }
-  result->is_null = is_null;
 }
