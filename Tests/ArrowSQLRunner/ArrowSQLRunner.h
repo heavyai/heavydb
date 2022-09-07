@@ -17,6 +17,7 @@
 #pragma once
 
 #include "ArrowStorage/ArrowStorage.h"
+#include "IR/Context.h"
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
@@ -125,5 +126,9 @@ std::optional<std::unordered_map<size_t, RegisteredQueryHint>> getParsedQueryHin
     const std::string& query_str);
 
 std::unique_ptr<RelAlgExecutor> makeRelAlgExecutor(const std::string& query_str);
+
+inline hdk::ir::Context& ctx() {
+  return hdk::ir::Context::defaultCtx();
+}
 
 }  // namespace TestHelpers::ArrowSQLRunner

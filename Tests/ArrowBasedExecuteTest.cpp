@@ -56,14 +56,14 @@ class ExecuteTestBase {
 
   static void createEmptyTestTable() {
     createTable("empty_test_table",
-                {{"id", SQLTypeInfo(kINT)},
-                 {"x", SQLTypeInfo(kBIGINT)},
-                 {"y", SQLTypeInfo(kINT)},
-                 {"z", SQLTypeInfo(kSMALLINT)},
-                 {"t", SQLTypeInfo(kTINYINT)},
-                 {"f", SQLTypeInfo(kFLOAT)},
-                 {"d", SQLTypeInfo(kDOUBLE)},
-                 {"b", SQLTypeInfo(kBOOLEAN)}});
+                {{"id", ctx().int32()},
+                 {"x", ctx().int64()},
+                 {"y", ctx().int32()},
+                 {"z", ctx().int16()},
+                 {"t", ctx().int8()},
+                 {"f", ctx().fp32()},
+                 {"d", ctx().fp64()},
+                 {"b", ctx().boolean()}});
     run_sqlite_query("DROP TABLE IF EXISTS empty_test_table;");
     std::string create_statement(
         "CREATE TABLE empty_test_table (id int, x bigint, y int, z smallint, t "
@@ -73,8 +73,7 @@ class ExecuteTestBase {
   }
 
   static void createTestRangesTable() {
-    createTable(
-        "test_ranges", {{"i", SQLTypeInfo(kINT)}, {"b", SQLTypeInfo(kBIGINT)}}, {2});
+    createTable("test_ranges", {{"i", ctx().int32()}, {"b", ctx().int64()}}, {2});
     run_sqlite_query("DROP TABLE IF EXISTS test_ranges;");
     run_sqlite_query("CREATE TABLE test_ranges(i INT, b BIGINT);");
     {
@@ -93,14 +92,14 @@ class ExecuteTestBase {
 
   static void createTestInnerTable() {
     createTable("test_inner",
-                {{"x", SQLTypeInfo(kINT, true)},
-                 {"y", SQLTypeInfo(kINT)},
-                 {"xx", SQLTypeInfo(kSMALLINT)},
-                 {"str", dictType()},
-                 {"dt", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 0, kNULLT)},
-                 {"dt32", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 32, kNULLT)},
-                 {"dt16", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 16, kNULLT)},
-                 {"ts", SQLTypeInfo(kTIMESTAMP)}},
+                {{"x", ctx().int32(false)},
+                 {"y", ctx().int32()},
+                 {"xx", ctx().int16()},
+                 {"str", ctx().extDict(ctx().text(), 0)},
+                 {"dt", ctx().date32(hdk::ir::TimeUnit::kDay)},
+                 {"dt32", ctx().date32(hdk::ir::TimeUnit::kDay)},
+                 {"dt16", ctx().date16(hdk::ir::TimeUnit::kDay)},
+                 {"ts", ctx().timestamp(hdk::ir::TimeUnit::kSecond)}},
                 {2});
     run_sqlite_query("DROP TABLE IF EXISTS test_inner;");
     run_sqlite_query(
@@ -129,45 +128,45 @@ class ExecuteTestBase {
   static void createTestTable() {
     auto test_inner = getStorage()->getTableInfo(TEST_DB_ID, "test_inner");
     auto test_inner_str = getStorage()->getColumnInfo(*test_inner, "str");
-    auto test_inner_str_type = test_inner_str->type_info;
+    auto test_inner_str_type = test_inner_str->type;
 
     createTable("test",
-                {{"x", SQLTypeInfo(kINT, true)},
-                 {"w", SQLTypeInfo(kTINYINT)},
-                 {"y", SQLTypeInfo(kINT)},
-                 {"z", SQLTypeInfo(kSMALLINT)},
-                 {"t", SQLTypeInfo(kBIGINT)},
-                 {"b", SQLTypeInfo(kBOOLEAN)},
-                 {"f", SQLTypeInfo(kFLOAT)},
-                 {"ff", SQLTypeInfo(kFLOAT)},
-                 {"fn", SQLTypeInfo(kFLOAT)},
-                 {"d", SQLTypeInfo(kDOUBLE)},
-                 {"dn", SQLTypeInfo(kDOUBLE)},
+                {{"x", ctx().int32(false)},
+                 {"w", ctx().int8()},
+                 {"y", ctx().int32()},
+                 {"z", ctx().int16()},
+                 {"t", ctx().int64()},
+                 {"b", ctx().boolean()},
+                 {"f", ctx().fp32()},
+                 {"ff", ctx().fp32()},
+                 {"fn", ctx().fp32()},
+                 {"d", ctx().fp64()},
+                 {"dn", ctx().fp64()},
                  {"str", test_inner_str_type},
-                 {"null_str", dictType()},
-                 {"fixed_str", dictType(2)},
-                 {"fixed_null_str", dictType(2)},
-                 {"real_str", SQLTypeInfo(kTEXT)},
+                 {"null_str", ctx().extDict(ctx().text(), 0)},
+                 {"fixed_str", ctx().extDict(ctx().text(), 0, 2)},
+                 {"fixed_null_str", ctx().extDict(ctx().text(), 0, 2)},
+                 {"real_str", ctx().text()},
                  {"shared_dict", test_inner_str_type},
-                 {"m", SQLTypeInfo(kTIMESTAMP, 0, 0)},
-                 {"m_3", SQLTypeInfo(kTIMESTAMP, 3, 0)},
-                 {"m_6", SQLTypeInfo(kTIMESTAMP, 6, 0)},
-                 {"m_9", SQLTypeInfo(kTIMESTAMP, 9, 0)},
-                 {"n", SQLTypeInfo(kTIME)},
-                 {"o", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 0, kNULLT)},
-                 {"o1", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 16, kNULLT)},
-                 {"o2", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 32, kNULLT)},
-                 {"fx", SQLTypeInfo(kSMALLINT)},
-                 {"dd", SQLTypeInfo(kDECIMAL, 10, 2, false)},
-                 {"dd_notnull", SQLTypeInfo(kDECIMAL, 10, 2, true)},
-                 {"ss", dictType()},
-                 {"u", SQLTypeInfo(kINT)},
-                 {"ofd", SQLTypeInfo(kINT)},
-                 {"ufd", SQLTypeInfo(kINT, true)},
-                 {"ofq", SQLTypeInfo(kBIGINT)},
-                 {"ufq", SQLTypeInfo(kBIGINT, true)},
-                 {"smallint_nulls", SQLTypeInfo(kSMALLINT)},
-                 {"bn", SQLTypeInfo(kBOOLEAN, true)}},
+                 {"m", ctx().timestamp(hdk::ir::TimeUnit::kSecond)},
+                 {"m_3", ctx().timestamp(hdk::ir::TimeUnit::kMilli)},
+                 {"m_6", ctx().timestamp(hdk::ir::TimeUnit::kMicro)},
+                 {"m_9", ctx().timestamp(hdk::ir::TimeUnit::kNano)},
+                 {"n", ctx().time64(hdk::ir::TimeUnit::kSecond)},
+                 {"o", ctx().date32(hdk::ir::TimeUnit::kDay)},
+                 {"o1", ctx().date16(hdk::ir::TimeUnit::kDay)},
+                 {"o2", ctx().date32(hdk::ir::TimeUnit::kDay)},
+                 {"fx", ctx().int16()},
+                 {"dd", ctx().decimal64(10, 2)},
+                 {"dd_notnull", ctx().decimal64(10, 2, false)},
+                 {"ss", ctx().extDict(ctx().text(), 0)},
+                 {"u", ctx().int32()},
+                 {"ofd", ctx().int32()},
+                 {"ufd", ctx().int32(false)},
+                 {"ofq", ctx().int64()},
+                 {"ufq", ctx().int64(false)},
+                 {"smallint_nulls", ctx().int16()},
+                 {"bn", ctx().boolean(false)}},
                 {2});
     run_sqlite_query("DROP TABLE IF EXISTS test;");
     run_sqlite_query(
@@ -251,39 +250,39 @@ class ExecuteTestBase {
   static void createTestEmptyTable() {
     auto test_inner = getStorage()->getTableInfo(TEST_DB_ID, "test_inner");
     auto test_inner_str = getStorage()->getColumnInfo(*test_inner, "str");
-    auto test_inner_str_type = test_inner_str->type_info;
+    auto test_inner_str_type = test_inner_str->type;
     createTable("test_empty",
-                {{"x", SQLTypeInfo(kINT, true)},
-                 {"w", SQLTypeInfo(kTINYINT)},
-                 {"y", SQLTypeInfo(kINT)},
-                 {"z", SQLTypeInfo(kSMALLINT)},
-                 {"t", SQLTypeInfo(kBIGINT)},
-                 {"b", SQLTypeInfo(kBOOLEAN)},
-                 {"f", SQLTypeInfo(kFLOAT)},
-                 {"ff", SQLTypeInfo(kFLOAT)},
-                 {"fn", SQLTypeInfo(kFLOAT)},
-                 {"d", SQLTypeInfo(kDOUBLE)},
-                 {"dn", SQLTypeInfo(kDOUBLE)},
+                {{"x", ctx().int32(false)},
+                 {"w", ctx().int8()},
+                 {"y", ctx().int32()},
+                 {"z", ctx().int16()},
+                 {"t", ctx().int64()},
+                 {"b", ctx().boolean()},
+                 {"f", ctx().fp32()},
+                 {"ff", ctx().fp32()},
+                 {"fn", ctx().fp32()},
+                 {"d", ctx().fp64()},
+                 {"dn", ctx().fp64()},
                  {"str", test_inner_str_type},
-                 {"null_str", dictType()},
-                 {"fixed_str", dictType(2)},
-                 {"fixed_null_str", dictType(2)},
-                 {"real_str", SQLTypeInfo(kTEXT)},
+                 {"null_str", ctx().extDict(ctx().text(), 0)},
+                 {"fixed_str", ctx().extDict(ctx().text(), 0, 2)},
+                 {"fixed_null_str", ctx().extDict(ctx().text(), 0, 2)},
+                 {"real_str", ctx().text()},
                  {"shared_dict", test_inner_str_type},
-                 {"m", SQLTypeInfo(kTIMESTAMP, 0, 0)},
-                 {"n", SQLTypeInfo(kTIME)},
-                 {"o", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 0, kNULLT)},
-                 {"o1", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 16, kNULLT)},
-                 {"o2", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 32, kNULLT)},
-                 {"fx", SQLTypeInfo(kSMALLINT)},
-                 {"dd", SQLTypeInfo(kDECIMAL, 10, 2, false)},
-                 {"dd_notnull", SQLTypeInfo(kDECIMAL, 10, 2, true)},
-                 {"ss", dictType()},
-                 {"u", SQLTypeInfo(kINT)},
-                 {"ofd", SQLTypeInfo(kINT)},
-                 {"ufd", SQLTypeInfo(kINT, true)},
-                 {"ofq", SQLTypeInfo(kBIGINT)},
-                 {"ufq", SQLTypeInfo(kBIGINT, true)}},
+                 {"m", ctx().timestamp(hdk::ir::TimeUnit::kSecond)},
+                 {"n", ctx().time64(hdk::ir::TimeUnit::kSecond)},
+                 {"o", ctx().date32(hdk::ir::TimeUnit::kDay)},
+                 {"o1", ctx().date16(hdk::ir::TimeUnit::kDay)},
+                 {"o2", ctx().date32(hdk::ir::TimeUnit::kDay)},
+                 {"fx", ctx().int16()},
+                 {"dd", ctx().decimal64(10, 2)},
+                 {"dd_notnull", ctx().decimal64(10, 2, false)},
+                 {"ss", ctx().extDict(ctx().text(), 0)},
+                 {"u", ctx().int32()},
+                 {"ofd", ctx().int32()},
+                 {"ufd", ctx().int32(false)},
+                 {"ofq", ctx().int64()},
+                 {"ufq", ctx().int64(false)}},
                 {2});
 
     run_sqlite_query("DROP TABLE IF EXISTS test_empty;");
@@ -303,39 +302,39 @@ class ExecuteTestBase {
   static void createTestOneRowTable() {
     auto test_inner = getStorage()->getTableInfo(TEST_DB_ID, "test_inner");
     auto test_inner_str = getStorage()->getColumnInfo(*test_inner, "str");
-    auto test_inner_str_type = test_inner_str->type_info;
+    auto test_inner_str_type = test_inner_str->type;
     createTable("test_one_row",
-                {{"x", SQLTypeInfo(kINT, true)},
-                 {"w", SQLTypeInfo(kTINYINT)},
-                 {"y", SQLTypeInfo(kINT)},
-                 {"z", SQLTypeInfo(kSMALLINT)},
-                 {"t", SQLTypeInfo(kBIGINT)},
-                 {"b", SQLTypeInfo(kBOOLEAN)},
-                 {"f", SQLTypeInfo(kFLOAT)},
-                 {"ff", SQLTypeInfo(kFLOAT)},
-                 {"fn", SQLTypeInfo(kFLOAT)},
-                 {"d", SQLTypeInfo(kDOUBLE)},
-                 {"dn", SQLTypeInfo(kDOUBLE)},
+                {{"x", ctx().int32(false)},
+                 {"w", ctx().int8()},
+                 {"y", ctx().int32()},
+                 {"z", ctx().int16()},
+                 {"t", ctx().int64()},
+                 {"b", ctx().boolean()},
+                 {"f", ctx().fp32()},
+                 {"ff", ctx().fp32()},
+                 {"fn", ctx().fp32()},
+                 {"d", ctx().fp64()},
+                 {"dn", ctx().fp64()},
                  {"str", test_inner_str_type},
-                 {"null_str", dictType()},
-                 {"fixed_str", dictType(2)},
-                 {"fixed_null_str", dictType(2)},
-                 {"real_str", SQLTypeInfo(kTEXT)},
+                 {"null_str", ctx().extDict(ctx().text(), 0)},
+                 {"fixed_str", ctx().extDict(ctx().text(), 0, 2)},
+                 {"fixed_null_str", ctx().extDict(ctx().text(), 0, 2)},
+                 {"real_str", ctx().text()},
                  {"shared_dict", test_inner_str_type},
-                 {"m", SQLTypeInfo(kTIMESTAMP, 0, 0)},
-                 {"n", SQLTypeInfo(kTIME)},
-                 {"o", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 0, kNULLT)},
-                 {"o1", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 16, kNULLT)},
-                 {"o2", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 32, kNULLT)},
-                 {"fx", SQLTypeInfo(kSMALLINT)},
-                 {"dd", SQLTypeInfo(kDECIMAL, 10, 2, false)},
-                 {"dd_notnull", SQLTypeInfo(kDECIMAL, 10, 2, true)},
-                 {"ss", dictType()},
-                 {"u", SQLTypeInfo(kINT)},
-                 {"ofd", SQLTypeInfo(kINT)},
-                 {"ufd", SQLTypeInfo(kINT, true)},
-                 {"ofq", SQLTypeInfo(kBIGINT)},
-                 {"ufq", SQLTypeInfo(kBIGINT, true)}},
+                 {"m", ctx().timestamp(hdk::ir::TimeUnit::kSecond)},
+                 {"n", ctx().time64(hdk::ir::TimeUnit::kSecond)},
+                 {"o", ctx().date32(hdk::ir::TimeUnit::kDay)},
+                 {"o1", ctx().date16(hdk::ir::TimeUnit::kDay)},
+                 {"o2", ctx().date32(hdk::ir::TimeUnit::kDay)},
+                 {"fx", ctx().int16()},
+                 {"dd", ctx().decimal64(10, 2)},
+                 {"dd_notnull", ctx().decimal64(10, 2, false)},
+                 {"ss", ctx().extDict(ctx().text(), 0)},
+                 {"u", ctx().int32()},
+                 {"ofd", ctx().int32()},
+                 {"ufd", ctx().int32(false)},
+                 {"ofq", ctx().int64()},
+                 {"ufq", ctx().int64(false)}},
                 {2});
 
     run_sqlite_query("DROP TABLE IF EXISTS test_one_row;");
@@ -492,38 +491,38 @@ class ExecuteTestBase {
 
   static void createTestArrayTable() {
     createTable("array_test",
-                {{"x", SQLTypeInfo(kINT, true)},
-                 {"arr_i16", arrayType(kSMALLINT)},
-                 {"arr_i32", arrayType(kINT)},
-                 {"arr_i64", arrayType(kBIGINT)},
-                 {"arr_str", arrayType(kTEXT)},
-                 {"arr_float", arrayType(kFLOAT)},
-                 {"arr_double", arrayType(kDOUBLE)},
-                 {"arr_bool", arrayType(kBOOLEAN)},
-                 {"arr_decimal", decimalArrayType(18, 6)},
-                 {"real_str", SQLTypeInfo(kTEXT)},
-                 {"arr3_i8", arrayType(kTINYINT, 3)},
-                 {"arr3_i16", arrayType(kSMALLINT, 3)},
-                 {"arr3_i32", arrayType(kINT, 3)},
-                 {"arr3_i64", arrayType(kBIGINT, 3)},
-                 {"arr3_float", arrayType(kFLOAT, 3)},
-                 {"arr3_double", arrayType(kDOUBLE, 3)},
-                 {"arr6_bool", arrayType(kBOOLEAN, 6)},
-                 {"arr3_decimal", decimalArrayType(18, 6, 3)}});
+                {{"x", ctx().int32(false)},
+                 {"arr_i16", ctx().arrayVarLen(ctx().int16())},
+                 {"arr_i32", ctx().arrayVarLen(ctx().int32())},
+                 {"arr_i64", ctx().arrayVarLen(ctx().int64())},
+                 {"arr_str", ctx().arrayVarLen(ctx().extDict(ctx().text(), 0))},
+                 {"arr_float", ctx().arrayVarLen(ctx().fp32())},
+                 {"arr_double", ctx().arrayVarLen(ctx().fp64())},
+                 {"arr_bool", ctx().arrayVarLen(ctx().boolean())},
+                 {"arr_decimal", ctx().arrayVarLen(ctx().decimal64(18, 6))},
+                 {"real_str", ctx().text()},
+                 {"arr3_i8", ctx().arrayFixed(3, ctx().int8())},
+                 {"arr3_i16", ctx().arrayFixed(3, ctx().int16())},
+                 {"arr3_i32", ctx().arrayFixed(3, ctx().int32())},
+                 {"arr3_i64", ctx().arrayFixed(3, ctx().int64())},
+                 {"arr3_float", ctx().arrayFixed(3, ctx().fp32())},
+                 {"arr3_double", ctx().arrayFixed(3, ctx().fp64())},
+                 {"arr6_bool", ctx().arrayFixed(6, ctx().boolean())},
+                 {"arr3_decimal", ctx().arrayFixed(3, ctx().decimal64(18, 6))}});
     importArrayTest("array_test");
   }
 
   static void importCoalesceColsTestTable(const int id) {
     const std::string table_name = "coalesce_cols_test_" + std::to_string(id);
     createTable(table_name,
-                {{"x", SQLTypeInfo(kINT, true)},
-                 {"y", SQLTypeInfo(kINT)},
-                 {"str", dictType()},
-                 {"dup_str", dictType()},
-                 {"d", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 32, kNULLT)},
-                 {"t", SQLTypeInfo(kTIME)},
-                 {"tz", SQLTypeInfo(kTIMESTAMP)},
-                 {"dn", SQLTypeInfo(kDECIMAL, 5, 0, false)}},
+                {{"x", ctx().int32(false)},
+                 {"y", ctx().int32()},
+                 {"str", ctx().extDict(ctx().text(), 0)},
+                 {"dup_str", ctx().extDict(ctx().text(), 0)},
+                 {"d", ctx().date32(hdk::ir::TimeUnit::kDay)},
+                 {"t", ctx().time64(hdk::ir::TimeUnit::kSecond)},
+                 {"tz", ctx().timestamp(hdk::ir::TimeUnit::kSecond)},
+                 {"dn", ctx().decimal64(5, 0)}},
                 {id == 2 ? 2ULL : 20ULL});
     run_sqlite_query("DROP TABLE IF EXISTS " + table_name + ";");
     run_sqlite_query("CREATE TABLE " + table_name +
@@ -594,7 +593,7 @@ class ExecuteTestBase {
   }
 
   static void createProjTopTable() {
-    createTable("proj_top", {{"str", SQLTypeInfo(kTEXT)}, {"x", SQLTypeInfo(kINT)}});
+    createTable("proj_top", {{"str", ctx().text()}, {"x", ctx().int32()}});
     insertCsvValues("proj_top", "a,7\nb,6\nc,5");
     run_sqlite_query("DROP TABLE IF EXISTS proj_top;");
     run_sqlite_query("CREATE TABLE proj_top(str TEXT, x INT);");
@@ -605,10 +604,10 @@ class ExecuteTestBase {
 
   static void createJoinTestTable() {
     createTable("join_test",
-                {{"x", SQLTypeInfo(kINT, true)},
-                 {"y", SQLTypeInfo(kINT)},
-                 {"str", dictType()},
-                 {"dup_str", dictType()}},
+                {{"x", ctx().int32(false)},
+                 {"y", ctx().int32()},
+                 {"str", ctx().extDict(ctx().text(), 0)},
+                 {"dup_str", ctx().extDict(ctx().text(), 0)}},
                 {2});
     insertCsvValues("join_test", "7,43,foo,foo\n8,,bar,foo\n9,,baz,bar");
     run_sqlite_query("DROP TABLE IF EXISTS join_test;");
@@ -620,8 +619,9 @@ class ExecuteTestBase {
   }
 
   static void createQueryRewriteTestTable() {
-    createTable(
-        "query_rewrite_test", {{"x", SQLTypeInfo(kINT)}, {"str", dictType()}}, {2});
+    createTable("query_rewrite_test",
+                {{"x", ctx().int32()}, {"str", ctx().extDict(ctx().text(), 0)}},
+                {2});
     run_sqlite_query("DROP TABLE IF EXISTS query_rewrite_test;");
     run_sqlite_query("CREATE TABLE query_rewrite_test(x int, str text);");
     std::stringstream ss;
@@ -639,9 +639,9 @@ class ExecuteTestBase {
 
   static void createEmpTable() {
     createTable("emp",
-                {{"empno", SQLTypeInfo(kINT)},
-                 {"ename", dictType()},
-                 {"deptno", SQLTypeInfo(kINT)}},
+                {{"empno", ctx().int32()},
+                 {"ename", ctx().extDict(ctx().text(), 0)},
+                 {"deptno", ctx().int32()}},
                 {2});
     insertCsvValues("emp", "1,Brock,10\n2,Bill,20\n3,Julia,60\n4,David,10");
     run_sqlite_query("DROP TABLE IF EXISTS emp;");
@@ -668,14 +668,14 @@ class ExecuteTestBase {
       create_query += ("x" + std::to_string(i) + " INTEGER, ");
       insert_query1 += (std::to_string(i) + ", ");
       insert_query2 += (std::to_string(10000 + i) + ", ");
-      cols.push_back({"x"s + std::to_string(i), SQLTypeInfo(kINT)});
+      cols.push_back({"x"s + std::to_string(i), ctx().int32()});
       csv1 += std::to_string(i) + ",";
       csv2 += std::to_string(10000 + i) + ",";
     }
     create_query += "real_str TEXT";
     insert_query1 += "'real_foo');";
     insert_query2 += "'real_bar');";
-    cols.push_back({"real_str", SQLTypeInfo(kTEXT)});
+    cols.push_back({"real_str", ctx().text()});
     csv1 += "real_foo";
     csv2 += "real_bar";
 
@@ -689,16 +689,13 @@ class ExecuteTestBase {
   }
 
   static void createTestDateTimeTable() {
-    createTable("test_date_time",
-                {{"dt", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 0, kNULLT)}},
-                {2});
+    createTable("test_date_time", {{"dt", ctx().date32(hdk::ir::TimeUnit::kDay)}}, {2});
     insertCsvValues("test_date_time", "1963-05-07\n1968-04-22\n1970-01-01\n1980-11-28");
   }
 
   static void createBigDecimalRangeTestTable() {
     createTable("big_decimal_range_test",
-                {{"d", SQLTypeInfo(kDECIMAL, 14, 2, false)},
-                 {"d1", SQLTypeInfo(kDECIMAL, 17, 11)}},
+                {{"d", ctx().decimal64(14, 2)}, {"d1", ctx().decimal64(17, 11)}},
                 {2});
     insertCsvValues("big_decimal_range_test",
                     "-40840124.400000,1.3\n59016609.300000,1.3\n-999999999999.99,1.3");
@@ -712,10 +709,10 @@ class ExecuteTestBase {
 
   static void createGpuSortTestTable() {
     createTable("gpu_sort_test",
-                {{"x", SQLTypeInfo(kBIGINT)},
-                 {"y", SQLTypeInfo(kINT)},
-                 {"z", SQLTypeInfo(kSMALLINT)},
-                 {"t", SQLTypeInfo(kTINYINT)}},
+                {{"x", ctx().int64()},
+                 {"y", ctx().int32()},
+                 {"z", ctx().int16()},
+                 {"t", ctx().int8()}},
                 {2});
     run_sqlite_query("DROP TABLE IF EXISTS gpu_sort_test;");
     run_sqlite_query(
@@ -734,18 +731,18 @@ class ExecuteTestBase {
   static void createLogicalSizeTestTable() {
     createTable("logical_size_test",
                 {
-                    {"big_int", SQLTypeInfo(kBIGINT, true)},
-                    {"big_int_null", SQLTypeInfo(kBIGINT)},
-                    {"id", SQLTypeInfo(kINT, true)},
-                    {"id_null", SQLTypeInfo(kINT)},
-                    {"small_int", SQLTypeInfo(kSMALLINT, true)},
-                    {"small_int_null", SQLTypeInfo(kSMALLINT)},
-                    {"tiny_int", SQLTypeInfo(kTINYINT, true)},
-                    {"tiny_int_null", SQLTypeInfo(kTINYINT)},
-                    {"float_not_null", SQLTypeInfo(kFLOAT, true)},
-                    {"float_null", SQLTypeInfo(kFLOAT)},
-                    {"double_not_null", SQLTypeInfo(kDOUBLE, true)},
-                    {"double_null", SQLTypeInfo(kDOUBLE)},
+                    {"big_int", ctx().int64(false)},
+                    {"big_int_null", ctx().int64()},
+                    {"id", ctx().int32(false)},
+                    {"id_null", ctx().int32()},
+                    {"small_int", ctx().int16(false)},
+                    {"small_int_null", ctx().int16()},
+                    {"tiny_int", ctx().int8(false)},
+                    {"tiny_int_null", ctx().int8()},
+                    {"float_not_null", ctx().fp32(false)},
+                    {"float_null", ctx().fp32()},
+                    {"double_not_null", ctx().fp64(false)},
+                    {"double_null", ctx().fp64()},
                 },
                 {4});
     run_sqlite_query("DROP TABLE IF EXISTS logical_size_test;");
@@ -791,11 +788,11 @@ class ExecuteTestBase {
 
   static void createRandomTestTable() {
     createTable("random_test",
-                {{"x1", SQLTypeInfo(kINT)},
-                 {"x2", SQLTypeInfo(kINT)},
-                 {"x3", SQLTypeInfo(kINT)},
-                 {"x4", SQLTypeInfo(kINT)},
-                 {"x5", SQLTypeInfo(kINT)}},
+                {{"x1", ctx().int32()},
+                 {"x2", ctx().int32()},
+                 {"x3", ctx().int32()},
+                 {"x4", ctx().int32()},
+                 {"x5", ctx().int32()}},
                 {256});
     run_sqlite_query("DROP TABLE IF EXISTS random_test;");
     run_sqlite_query(
@@ -821,9 +818,9 @@ class ExecuteTestBase {
 
   static void createImportDecimalCompressionTestTable() {
     createTable("decimal_compression_test",
-                {{"big_dec", SQLTypeInfo(kDECIMAL, 17, 2, false)},
-                 {"med_dec", SQLTypeInfo(kDECIMAL, 9, 2, false)},
-                 {"small_dec", SQLTypeInfo(kDECIMAL, 4, 2, false)}},
+                {{"big_dec", ctx().decimal64(17, 2)},
+                 {"med_dec", ctx().decimal64(9, 2)},
+                 {"small_dec", ctx().decimal64(4, 2)}},
                 {2});
     run_sqlite_query("DROP TABLE IF EXISTS decimal_compression_test;");
     run_sqlite_query(
@@ -855,13 +852,13 @@ class ExecuteTestBase {
 
   static void createEmptytabTable() {
     createTable("emptytab",
-                {{"x", SQLTypeInfo(kINT, true)},
-                 {"y", SQLTypeInfo(kINT)},
-                 {"t", SQLTypeInfo(kBIGINT, true)},
-                 {"f", SQLTypeInfo(kFLOAT, true)},
-                 {"d", SQLTypeInfo(kDOUBLE, true)},
-                 {"dd", SQLTypeInfo(kDECIMAL, 10, 2, true)},
-                 {"ts", SQLTypeInfo(kTIMESTAMP)}});
+                {{"x", ctx().int32(false)},
+                 {"y", ctx().int32()},
+                 {"t", ctx().int64(false)},
+                 {"f", ctx().fp32(false)},
+                 {"d", ctx().fp64(false)},
+                 {"dd", ctx().decimal64(10, 2, false)},
+                 {"ts", ctx().timestamp(hdk::ir::TimeUnit::kSecond)}});
     run_sqlite_query("DROP TABLE IF EXISTS emptytab;");
     run_sqlite_query(
         "CREATE TABLE emptytab(x int not null, y int, t bigint not null, f float not "
@@ -870,7 +867,7 @@ class ExecuteTestBase {
   }
 
   static void createSubqueryTestTable() {
-    createTable("subquery_test", {{"x", SQLTypeInfo(kINT)}}, {2});
+    createTable("subquery_test", {{"x", ctx().int32()}}, {2});
     run_sqlite_query("DROP TABLE IF EXISTS subquery_test;");
     run_sqlite_query("CREATE TABLE subquery_test(x int);");
     CHECK_EQ(g_num_rows % 2, size_t(0));
@@ -889,7 +886,7 @@ class ExecuteTestBase {
   }
 
   static void createTestInBitmaptable() {
-    createTable("test_in_bitmap", {{"str", dictType()}});
+    createTable("test_in_bitmap", {{"str", ctx().extDict(ctx().text(), 0)}});
     insertCsvValues("test_in_bitmap", "a\nb\nc");
     insertJsonValues("test_in_bitmap", "{\"str\": null}");
     run_sqlite_query("DROP TABLE IF EXISTS test_in_bitmap;");
@@ -901,7 +898,9 @@ class ExecuteTestBase {
   }
 
   static void createDeptTable() {
-    createTable("dept", {{"deptno", SQLTypeInfo(kINT)}, {"dname", dictType()}}, {2});
+    createTable("dept",
+                {{"deptno", ctx().int32()}, {"dname", ctx().extDict(ctx().text(), 0)}},
+                {2});
     insertCsvValues("dept", "10,Sales\n20,Dev\n30,Marketing\n40,HR\n50,QA");
     run_sqlite_query("DROP TABLE IF EXISTS dept;");
     run_sqlite_query("CREATE TABLE dept(deptno INT, dname TEXT ENCODING DICT);");
@@ -914,23 +913,23 @@ class ExecuteTestBase {
 
   static void createArrayTestInnerTable() {
     createTable("array_test_inner",
-                {{"x", SQLTypeInfo(kINT, true)},
-                 {"arr_i16", arrayType(kSMALLINT)},
-                 {"arr_i32", arrayType(kINT)},
-                 {"arr_i64", arrayType(kBIGINT)},
-                 {"arr_str", arrayType(kTEXT)},
-                 {"arr_float", arrayType(kFLOAT)},
-                 {"arr_double", arrayType(kDOUBLE)},
-                 {"arr_bool", arrayType(kBOOLEAN)},
-                 {"real_str", SQLTypeInfo(kTEXT)}});
+                {{"x", ctx().int32(false)},
+                 {"arr_i16", ctx().arrayVarLen(ctx().int16())},
+                 {"arr_i32", ctx().arrayVarLen(ctx().int32())},
+                 {"arr_i64", ctx().arrayVarLen(ctx().int64())},
+                 {"arr_str", ctx().arrayVarLen(ctx().extDict(ctx().text(), 0))},
+                 {"arr_float", ctx().arrayVarLen(ctx().fp32())},
+                 {"arr_double", ctx().arrayVarLen(ctx().fp64())},
+                 {"arr_bool", ctx().arrayVarLen(ctx().boolean())},
+                 {"real_str", ctx().text()}});
     importArrayTest("array_test_inner");
   }
 
   static void createHashJoinTestTable() {
     createTable("hash_join_test",
-                {{"x", SQLTypeInfo(kINT, true)},
-                 {"str", dictType()},
-                 {"t", SQLTypeInfo(kBIGINT)}},
+                {{"x", ctx().int32(false)},
+                 {"str", ctx().extDict(ctx().text(), 0)},
+                 {"t", ctx().int64()}},
                 {2});
     insertCsvValues("hash_join_test", "7,foo,1001\n8,bar,5000000000\n9,the,1002");
     run_sqlite_query("DROP TABLE IF EXISTS hash_join_test;");
@@ -941,7 +940,7 @@ class ExecuteTestBase {
   }
 
   static void createBarTable() {
-    createTable("bar", {{"str", dictType()}}, {2});
+    createTable("bar", {{"str", ctx().extDict(ctx().text(), 0)}}, {2});
     insertCsvValues("bar", "bar");
     run_sqlite_query("DROP TABLE IF EXISTS bar;");
     run_sqlite_query("CREATE TABLE bar(str text);");
@@ -949,7 +948,7 @@ class ExecuteTestBase {
   }
 
   static void createSingleRowTestTable() {
-    createTable("single_row_test", {{"x", SQLTypeInfo(kINT)}});
+    createTable("single_row_test", {{"x", ctx().int32()}});
     insertJsonValues("single_row_test", "{\"x\": null}");
     run_sqlite_query("DROP TABLE IF EXISTS single_row_test;");
     run_sqlite_query("CREATE TABLE single_row_test(x int);");
@@ -958,9 +957,9 @@ class ExecuteTestBase {
 
   static void createTestInnerXTable() {
     createTable("test_inner_x",
-                {{"x", SQLTypeInfo(kINT, true)},
-                 {"y", SQLTypeInfo(kINT, false)},
-                 {"str", dictType()}},
+                {{"x", ctx().int32(false)},
+                 {"y", ctx().int32()},
+                 {"str", ctx().extDict(ctx().text(), 0)}},
                 {2});
     insertCsvValues("test_inner_x", "7,43,foo");
     run_sqlite_query("DROP TABLE IF EXISTS test_inner_x;");
@@ -970,34 +969,34 @@ class ExecuteTestBase {
 
   static void createTestXTable() {
     createTable("test_x",
-                {{"x", SQLTypeInfo(kINT, true)},
-                 {"y", SQLTypeInfo(kINT)},
-                 {"z", SQLTypeInfo(kSMALLINT)},
-                 {"t", SQLTypeInfo(kBIGINT)},
-                 {"b", SQLTypeInfo(kBOOLEAN)},
-                 {"f", SQLTypeInfo(kFLOAT)},
-                 {"ff", SQLTypeInfo(kFLOAT)},
-                 {"fn", SQLTypeInfo(kFLOAT)},
-                 {"d", SQLTypeInfo(kDOUBLE)},
-                 {"dn", SQLTypeInfo(kDOUBLE)},
-                 {"str", dictType()},
-                 {"null_str", dictType()},
-                 {"fixed_str", dictType(2)},
-                 {"real_str", SQLTypeInfo(kTEXT)},
-                 {"m", SQLTypeInfo(kTIMESTAMP, 0, 0)},
-                 {"n", SQLTypeInfo(kTIME)},
-                 {"o", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 0, kNULLT)},
-                 {"o1", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 16, kNULLT)},
-                 {"o2", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 32, kNULLT)},
-                 {"fx", SQLTypeInfo(kSMALLINT)},
-                 {"dd", SQLTypeInfo(kDECIMAL, 10, 2, false)},
-                 {"dd_notnull", SQLTypeInfo(kDECIMAL, 10, 2, true)},
-                 {"ss", dictType()},
-                 {"u", SQLTypeInfo(kINT)},
-                 {"ofd", SQLTypeInfo(kINT)},
-                 {"ufd", SQLTypeInfo(kINT, true)},
-                 {"ofq", SQLTypeInfo(kBIGINT)},
-                 {"ufq", SQLTypeInfo(kBIGINT, true)}},
+                {{"x", ctx().int32(false)},
+                 {"y", ctx().int32()},
+                 {"z", ctx().int16()},
+                 {"t", ctx().int64()},
+                 {"b", ctx().boolean()},
+                 {"f", ctx().fp32()},
+                 {"ff", ctx().fp32()},
+                 {"fn", ctx().fp32()},
+                 {"d", ctx().fp64()},
+                 {"dn", ctx().fp64()},
+                 {"str", ctx().extDict(ctx().text(), 0)},
+                 {"null_str", ctx().extDict(ctx().text(), 0)},
+                 {"fixed_str", ctx().extDict(ctx().text(), 0, 2)},
+                 {"real_str", ctx().text()},
+                 {"m", ctx().timestamp(hdk::ir::TimeUnit::kSecond)},
+                 {"n", ctx().time64(hdk::ir::TimeUnit::kSecond)},
+                 {"o", ctx().date32(hdk::ir::TimeUnit::kDay)},
+                 {"o1", ctx().date16(hdk::ir::TimeUnit::kDay)},
+                 {"o2", ctx().date32(hdk::ir::TimeUnit::kDay)},
+                 {"fx", ctx().int16()},
+                 {"dd", ctx().decimal64(10, 2)},
+                 {"dd_notnull", ctx().decimal64(10, 2, false)},
+                 {"ss", ctx().extDict(ctx().text(), 0)},
+                 {"u", ctx().int32()},
+                 {"ofd", ctx().int32()},
+                 {"ufd", ctx().int32(false)},
+                 {"ofq", ctx().int64()},
+                 {"ufq", ctx().int64(false)}},
                 {2});
     run_sqlite_query("DROP TABLE IF EXISTS test_x;");
     run_sqlite_query(
@@ -1050,7 +1049,7 @@ class ExecuteTestBase {
   }
 
   static void createBweqTestTable() {
-    createTable("bweq_test", {{"x", SQLTypeInfo(kINT)}}, {2});
+    createTable("bweq_test", {{"x", ctx().int32()}}, {2});
     run_sqlite_query("DROP TABLE IF EXISTS bweq_test");
     run_sqlite_query("create table bweq_test (x int);");
     for (auto i = 0; i < 15; i++) {
@@ -1064,9 +1063,8 @@ class ExecuteTestBase {
   }
 
   static void createOuterJoinFooTable() {
-    createTable(
-        "outer_join_foo",
-        {{"a", SQLTypeInfo(kINT)}, {"b", SQLTypeInfo(kINT)}, {"c", SQLTypeInfo(kINT)}});
+    createTable("outer_join_foo",
+                {{"a", ctx().int32()}, {"b", ctx().int32()}, {"c", ctx().int32()}});
     insertCsvValues("outer_join_foo", "1,3,2\n2,3,4\n,6,7\n7,,8\n,,10");
     run_sqlite_query("DROP TABLE IF EXISTS outer_join_foo;");
     run_sqlite_query("CREATE TABLE outer_join_foo (a int, b int, c int);");
@@ -1078,9 +1076,8 @@ class ExecuteTestBase {
   }
 
   static void createOuterJoinBarTable() {
-    createTable(
-        "outer_join_bar",
-        {{"d", SQLTypeInfo(kINT)}, {"e", SQLTypeInfo(kINT)}, {"f", SQLTypeInfo(kINT)}});
+    createTable("outer_join_bar",
+                {{"d", ctx().int32()}, {"e", ctx().int32()}, {"f", ctx().int32()}});
     insertCsvValues("outer_join_bar", "1,3,4\n4,3,5\n,9,7\n9,,8\n,,11");
     run_sqlite_query("DROP TABLE IF EXISTS outer_join_bar;");
     run_sqlite_query("CREATE TABLE outer_join_bar (d int, e int, f int);");
@@ -1093,13 +1090,13 @@ class ExecuteTestBase {
 
   static void createOuterJoinBar2Table() {
     createTable("outer_join_bar2",
-                {{"d", SQLTypeInfo(kINT)},
-                 {"e", SQLTypeInfo(kINT)},
-                 {"f", SQLTypeInfo(kINT)},
-                 {"g", SQLTypeInfo(kINT)},
-                 {"h", SQLTypeInfo(kINT)},
-                 {"i", SQLTypeInfo(kINT)},
-                 {"j", SQLTypeInfo(kINT)}});
+                {{"d", ctx().int32()},
+                 {"e", ctx().int32()},
+                 {"f", ctx().int32()},
+                 {"g", ctx().int32()},
+                 {"h", ctx().int32()},
+                 {"i", ctx().int32()},
+                 {"j", ctx().int32()}});
     insertCsvValues(
         "outer_join_bar2",
         "1,3,4,1,1,1,1\n4,3,5,2,2,2,2\n,9,7,2,2,2,2\n9,,8,2,2,2,2\n,,11,2,2,2,2");
@@ -1115,7 +1112,7 @@ class ExecuteTestBase {
   }
 
   static void createUnnestJoinTestTable() {
-    createTable("unnest_join_test", {{"x", dictType()}});
+    createTable("unnest_join_test", {{"x", ctx().extDict(ctx().text(), 0)}});
     insertJsonValues("unnest_join_test", R"___({"x": "aaa"}
 {"x": "bbb"}
 {"x": "ccc"}
@@ -1129,10 +1126,11 @@ class ExecuteTestBase {
   }
 
   static void cretaeTestInnerYTable() {
-    createTable(
-        "test_inner_y",
-        {{"x", SQLTypeInfo(kINT, true)}, {"y", SQLTypeInfo(kINT)}, {"str", dictType()}},
-        {2});
+    createTable("test_inner_y",
+                {{"x", ctx().int32(false)},
+                 {"y", ctx().int32()},
+                 {"str", ctx().extDict(ctx().text(), 0)}},
+                {2});
     insertCsvValues("test_inner_y", "8,43,bar\n7,43,foo");
     run_sqlite_query("DROP TABLE IF EXISTS test_inner_y;");
     run_sqlite_query("CREATE TABLE test_inner_y(x int not null, y int, str text);");
@@ -1142,8 +1140,7 @@ class ExecuteTestBase {
 
   static void createHashJoinDecimalTest() {
     createTable("hash_join_decimal_test",
-                {{"x", SQLTypeInfo(kDECIMAL, 18, 2, false)},
-                 {"y", SQLTypeInfo(kDECIMAL, 18, 3, false)}},
+                {{"x", ctx().decimal64(18, 2)}, {"y", ctx().decimal64(18, 3)}},
                 {2});
     insertCsvValues("hash_join_decimal_test",
                     "1.00,1.000\n2.00,2.000\n3.00,3.000\n4.00,4.001\n10.00,10.000");
@@ -1158,17 +1155,18 @@ class ExecuteTestBase {
   }
 
   static void createTextGroupByTestTable() {
-    createTable(
-        "text_group_by_test",
-        {{"tdef", dictType()}, {"tdict", dictType()}, {"tnone", SQLTypeInfo(kTEXT)}},
-        {200});
+    createTable("text_group_by_test",
+                {{"tdef", ctx().extDict(ctx().text(), 0)},
+                 {"tdict", ctx().extDict(ctx().text(), 0)},
+                 {"tnone", ctx().text()}},
+                {200});
     insertCsvValues("text_group_by_test", "hello,world,:-)");
   }
 
   static void createDatetimeOverflowTable() {
     createTable("ts_overflow_underflow",
-                {{"a", SQLTypeInfo(kTIMESTAMP, 0, 0)},
-                 {"b", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 32, kNULLT)}});
+                {{"a", ctx().timestamp(hdk::ir::TimeUnit::kSecond)},
+                 {"b", ctx().date32(hdk::ir::TimeUnit::kDay)}});
     insertCsvValues(
         "ts_overflow_underflow",
         "2273-01-01 23:12:12,2273-01-01\n2263-01-01 00:00:00,2263-01-01\n1676-09-21 "
@@ -1192,7 +1190,7 @@ class ExecuteTestBase {
   }
 
   static void createCurrentUserTable() {
-    createTable("test_current_user", {{"u", dictType()}});
+    createTable("test_current_user", {{"u", ctx().extDict(ctx().text(), 0)}});
     insertCsvValues("test_current_user", "SESSIONLESS_USER\nsome_user\nsome_other_user");
 
     run_sqlite_query("DROP TABLE IF EXISTS test_current_user;");
@@ -1203,7 +1201,7 @@ class ExecuteTestBase {
   }
 
   static void createCorrInFactsTable() {
-    createTable("corr_in_facts", {{"id", SQLTypeInfo(kINT)}, {"val", SQLTypeInfo(kINT)}});
+    createTable("corr_in_facts", {{"id", ctx().int32()}, {"val", ctx().int32()}});
     insertCsvValues("corr_in_facts", "1,1\n1,2\n1,3\n1,4\n2,1\n2,2\n2,3\n2,4");
 
     run_sqlite_query("DROP TABLE IF EXISTS corr_in_facts;");
@@ -1219,8 +1217,7 @@ class ExecuteTestBase {
   }
 
   static void createCorrInLookup() {
-    createTable("corr_in_lookup",
-                {{"id", SQLTypeInfo(kINT)}, {"val", SQLTypeInfo(kINT)}});
+    createTable("corr_in_lookup", {{"id", ctx().int32()}, {"val", ctx().int32()}});
     insertCsvValues("corr_in_lookup", "1,1\n2,2\n3,3\n4,4");
 
     run_sqlite_query("DROP TABLE IF EXISTS corr_in_lookup;");
@@ -1233,13 +1230,13 @@ class ExecuteTestBase {
 
   static void createRoundingTable() {
     createTable("test_rounding",
-                {{"s16", SQLTypeInfo(kSMALLINT)},
-                 {"s32", SQLTypeInfo(kINT)},
-                 {"s64", SQLTypeInfo(kBIGINT)},
-                 {"f32", SQLTypeInfo(kFLOAT)},
-                 {"f64", SQLTypeInfo(kDOUBLE)},
-                 {"n64", SQLTypeInfo(kDECIMAL, 10, 5, false)},
-                 {"d64", SQLTypeInfo(kDECIMAL, 10, 5, false)}});
+                {{"s16", ctx().int16()},
+                 {"s32", ctx().int32()},
+                 {"s64", ctx().int64()},
+                 {"f32", ctx().fp32()},
+                 {"f64", ctx().fp64()},
+                 {"n64", ctx().decimal64(10, 5)},
+                 {"d64", ctx().decimal64(10, 5)}});
     insertCsvValues("test_rounding",
                     "3456,234567,3456789012,3456.3456,34567.23456,34567.23456,"
                     "34567.23456\n-3456,-234567,-3456789012,-3456.3456,-34567.23456,"
@@ -1264,12 +1261,12 @@ class ExecuteTestBase {
         multi_frag ? "test_window_func_multi_frag" : "test_window_func";
 
     createTable(table_name,
-                {{"x", SQLTypeInfo(kINT)},
-                 {"y", dictType()},
-                 {"t", SQLTypeInfo(kINT)},
-                 {"d", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 32, kNULLT)},
-                 {"f", SQLTypeInfo(kFLOAT)},
-                 {"dd", SQLTypeInfo(kDOUBLE)}},
+                {{"x", ctx().int32()},
+                 {"y", ctx().extDict(ctx().text(), 0)},
+                 {"t", ctx().int32()},
+                 {"d", ctx().date32(hdk::ir::TimeUnit::kDay)},
+                 {"f", ctx().fp32()},
+                 {"dd", ctx().fp64()}},
                 {multi_frag ? 2ULL : 32000000ULL});
 
     run_sqlite_query("DROP TABLE IF EXISTS " + table_name + ";");
@@ -1315,13 +1312,13 @@ class ExecuteTestBase {
         multi_frag ? "test_window_func_large_multi_frag" : "test_window_func_large";
 
     createTable(table_name,
-                {{"i_unique", SQLTypeInfo(kBIGINT)},
-                 {"i_1000", SQLTypeInfo(kINT)},
-                 {"i_20", SQLTypeInfo(kSMALLINT)},
-                 {"d", SQLTypeInfo(kDOUBLE)},
-                 {"f", SQLTypeInfo(kFLOAT)},
-                 {"t", dictType()},
-                 {"t_unique", dictType()}},
+                {{"i_unique", ctx().int64()},
+                 {"i_1000", ctx().int32()},
+                 {"i_20", ctx().int16()},
+                 {"d", ctx().fp64()},
+                 {"f", ctx().fp32()},
+                 {"t", ctx().extDict(ctx().text(), 0)},
+                 {"t_unique", ctx().extDict(ctx().text(), 0)}},
                 {multi_frag ? 100ULL : 32000000ULL});
 
     run_sqlite_query("DROP TABLE IF EXISTS " + table_name + ";");
@@ -1375,16 +1372,16 @@ class ExecuteTestBase {
     std::string sql;
 
     createTable("union_all_a",
-                {{"a0", SQLTypeInfo(kSMALLINT)},
-                 {"a1", SQLTypeInfo(kINT)},
-                 {"a2", SQLTypeInfo(kBIGINT)},
-                 {"a3", SQLTypeInfo(kFLOAT)}},
+                {{"a0", ctx().int16()},
+                 {"a1", ctx().int32()},
+                 {"a2", ctx().int64()},
+                 {"a3", ctx().fp32()}},
                 {2});
     createTable("union_all_b",
-                {{"b0", SQLTypeInfo(kSMALLINT)},
-                 {"b1", SQLTypeInfo(kINT)},
-                 {"b2", SQLTypeInfo(kBIGINT)},
-                 {"b3", SQLTypeInfo(kFLOAT)}},
+                {{"b0", ctx().int16()},
+                 {"b1", ctx().int32()},
+                 {"b2", ctx().int64()},
+                 {"b3", ctx().fp32()}},
                 {3});
 
     run_sqlite_query("DROP TABLE IF EXISTS union_all_a;");
@@ -1427,9 +1424,9 @@ class ExecuteTestBase {
 
   static void createVarlenLazyFetchTable() {
     createTable("varlen_table",
-                {{"t", SQLTypeInfo(kTINYINT)},
-                 {"real_str", SQLTypeInfo(kTEXT)},
-                 {"array_i16", arrayType(kSMALLINT)}},
+                {{"t", ctx().int8()},
+                 {"real_str", ctx().text()},
+                 {"array_i16", ctx().arrayVarLen(ctx().int16())}},
                 {256});
     std::stringstream ss;
     for (int i = 0; i < 255; i++) {
@@ -1634,7 +1631,7 @@ bool skip_tests(const ExecutorDeviceType device_type) {
 class Distributed50 : public ExecuteTestBase, public ::testing::Test {};
 
 TEST_F(Distributed50, FailOver) {
-  createTable("dist5", {{"col1", dictType()}});
+  createTable("dist5", {{"col1", ctx().extDict(ctx().text(), 0)}});
 
   auto dt = ExecutorDeviceType::CPU;
 
@@ -1666,7 +1663,7 @@ class Insert : public ExecuteTestBase, public ::testing::Test {};
 TEST_F(Insert, NullArrayNullEmpty) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    createTable("table_array_empty", {{"val", arrayType(kINT)}});
+    createTable("table_array_empty", {{"val", ctx().arrayVarLen(ctx().int32())}});
     EXPECT_NO_THROW(insertJsonValues("table_array_empty", "{\"val\": []}"));
     EXPECT_NO_THROW(run_simple_agg("SELECT * from table_array_empty;", dt));
     ASSERT_EQ(0,
@@ -1674,7 +1671,8 @@ TEST_F(Insert, NullArrayNullEmpty) {
                   "SELECT CARDINALITY(val) from table_array_empty limit 1;", dt)));
     dropTable("table_array_empty");
 
-    createTable("table_array_fixlen_text", {{"strings", arrayType(kTEXT, 2)}});
+    createTable("table_array_fixlen_text",
+                {{"strings", ctx().arrayFixed(2, ctx().extDict(ctx().text(), 0))}});
     EXPECT_NO_THROW(insertJsonValues("table_array_fixlen_text",
                                      R"___({"strings": null}
 {"strings": []}
@@ -1705,9 +1703,9 @@ TEST_F(Insert, NullArrayNullEmpty) {
     dropTable("table_array_fixlen_text");
 
     createTable("table_array_with_nulls",
-                {{"i", SQLTypeInfo(kSMALLINT)},
-                 {"sia", arrayType(kSMALLINT)},
-                 {"fa2", arrayType(kFLOAT, 2)}});
+                {{"i", ctx().int16()},
+                 {"sia", ctx().arrayVarLen(ctx().int16())},
+                 {"fa2", ctx().arrayFixed(2, ctx().fp32())}});
 
     EXPECT_NO_THROW(insertJsonValues("table_array_with_nulls",
                                      R"___({"i": 1, "sia": [1, 1], "fa2": [1.0, 1.0]}
@@ -1776,7 +1774,7 @@ TEST_F(Insert, NullArrayNullEmpty) {
 TEST_F(Insert, IntArrayInsert) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    createTable("table_int_array", {{"bi", arrayType(kBIGINT)}});
+    createTable("table_int_array", {{"bi", ctx().arrayVarLen(ctx().int64())}});
 
     vector<std::string> vals = {"1", "33000", "650000", "1", "-7", "null", "5000000000"};
     string json;
@@ -1808,7 +1806,8 @@ TEST_F(Insert, IntArrayInsert) {
 TEST_F(Insert, DictBoundary) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    createTable("table_with_small_dict", {{"i", SQLTypeInfo(kINT)}, {"t", dictType(1)}});
+    createTable("table_with_small_dict",
+                {{"i", ctx().int32()}, {"t", ctx().extDict(ctx().text(), 0, 1)}});
 
     string csv;
     for (int cVal = 0; cVal < 280; cVal++) {
@@ -1835,12 +1834,13 @@ class KeyForString : public ExecuteTestBase, public ::testing::Test {};
 TEST_F(KeyForString, KeyForString) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    EXPECT_NO_THROW(createTable("kfs",
-                                {{"ts", dictType(1)},
-                                 {"ss", dictType(2)},
-                                 {"ws", dictType(4)},
-                                 {"ns", dictType(4, true)},
-                                 {"sa", arrayType(kTEXT)}}));
+    EXPECT_NO_THROW(
+        createTable("kfs",
+                    {{"ts", ctx().extDict(ctx().text(), 0, 1)},
+                     {"ss", ctx().extDict(ctx().text(), 0, 2)},
+                     {"ws", ctx().extDict(ctx().text(), 0)},
+                     {"ns", ctx().extDict(ctx().text(false), 0, 4)},
+                     {"sa", ctx().arrayVarLen(ctx().extDict(ctx().text(), 0))}}));
     insertJsonValues("kfs",
                      R"___({"ts": "0", "ss": "0", "ws": "0", "ns": "0", "sa": ["0", "0"]}
 {"ts": "1", "ss": "1", "ws": "1", "ns": "1", "sa": ["1", "1"]}
@@ -1937,11 +1937,10 @@ TEST_F(Select, NullWithAndOr) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    createTable("table_bool_test",
-                {{"id", SQLTypeInfo(kINT)}, {"val", SQLTypeInfo(kBOOLEAN)}});
+    createTable("table_bool_test", {{"id", ctx().int32()}, {"val", ctx().boolean()}});
     insertCsvValues("table_bool_test", "1,true\n2,false\n3,");
 
-    auto BOOLEAN_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kBOOLEAN, false));
+    auto BOOLEAN_NULL_SENTINEL = inline_null_value<bool>();
 
     ASSERT_EQ(
         BOOLEAN_NULL_SENTINEL,
@@ -2012,12 +2011,12 @@ TEST_F(Select, NullWithAndOr) {
 TEST_F(Select, NullGroupBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    createTable("table_null_group_by", {{"val", dictType()}});
+    createTable("table_null_group_by", {{"val", ctx().extDict(ctx().text(), 0)}});
     insertJsonValues("table_null_group_by", "{\"val\": null}");
     run_simple_agg("SELECT val FROM table_null_group_by GROUP BY val;", dt);
     dropTable("table_null_group_by");
 
-    createTable("table_null_group_by", {{"val", SQLTypeInfo(kDOUBLE)}});
+    createTable("table_null_group_by", {{"val", ctx().fp64()}});
     insertJsonValues("table_null_group_by", "{\"val\": null}");
     run_simple_agg("SELECT val FROM table_null_group_by GROUP BY val;", dt);
     dropTable("table_null_group_by");
@@ -2347,7 +2346,7 @@ TEST_F(Select, AggregateOnEmptyDecimalColumn) {
       for (int s = 0; s <= p - 1; ++s) {
         std::string tbl_name = "D" + std::to_string(p) + "_" + std::to_string(s);
 
-        createTable(tbl_name, {{"val", SQLTypeInfo(kDECIMAL, p, s)}});
+        createTable(tbl_name, {{"val", ctx().decimal64(p, s)}});
         std::string decimal_prec =
             "val DECIMAL(" + std::to_string(p) + "," + std::to_string(s) + ")";
         run_sqlite_query("DROP TABLE IF EXISTS " + tbl_name + ";");
@@ -2636,7 +2635,7 @@ TEST_F(Select, FilterAndMultipleAggregation) {
 
 TEST_F(Select, GroupBy) {
   {  // generate dataset to test count distinct rewrite
-    createTable("count_distinct_rewrite", {{"v1", SQLTypeInfo(kINT)}});
+    createTable("count_distinct_rewrite", {{"v1", ctx().int32()}});
     std::string csv_data;
     for (int i = 0; i < 1000000; i++) {
       csv_data += std::to_string(i) + "\n";
@@ -3190,14 +3189,14 @@ TEST_F(Select, Having) {
 
 TEST_F(Select, ConstantWidthBucketExpr) {
   createTable("wb_test",
-              {{"i1", SQLTypeInfo(kTINYINT)},
-               {"i2", SQLTypeInfo(kSMALLINT)},
-               {"i4", SQLTypeInfo(kINT)},
-               {"i8", SQLTypeInfo(kBIGINT)},
-               {"f", SQLTypeInfo(kFLOAT)},
-               {"d", SQLTypeInfo(kDOUBLE)},
-               {"dc", SQLTypeInfo(kDECIMAL, 15, 8, false)},
-               {"n", SQLTypeInfo(kDECIMAL, 15, 8, false)}});
+              {{"i1", ctx().int8()},
+               {"i2", ctx().int16()},
+               {"i4", ctx().int32()},
+               {"i8", ctx().int64()},
+               {"f", ctx().fp32()},
+               {"d", ctx().fp64()},
+               {"dc", ctx().decimal64(15, 8)},
+               {"n", ctx().decimal64(15, 8)}});
   insertCsvValues("wb_test", ",,,,,,,");
   auto drop = "DROP TABLE IF EXISTS wb_test;";
   auto create =
@@ -3286,22 +3285,22 @@ TEST_F(Select, ConstantWidthBucketExpr) {
 
 TEST_F(Select, WidthBucketExpr) {
   createTable("wb_test",
-              {{"i1", SQLTypeInfo(kTINYINT)},
-               {"i2", SQLTypeInfo(kSMALLINT)},
-               {"i4", SQLTypeInfo(kINT)},
-               {"i8", SQLTypeInfo(kBIGINT)},
-               {"f", SQLTypeInfo(kFLOAT)},
-               {"d", SQLTypeInfo(kDOUBLE)},
-               {"dc", SQLTypeInfo(kDECIMAL, 15, 8, false)},
-               {"n", SQLTypeInfo(kDECIMAL, 15, 8, false)},
-               {"i1n", SQLTypeInfo(kTINYINT)},
-               {"i2n", SQLTypeInfo(kSMALLINT)},
-               {"i4n", SQLTypeInfo(kINT)},
-               {"i8n", SQLTypeInfo(kBIGINT)},
-               {"fn", SQLTypeInfo(kFLOAT)},
-               {"dn", SQLTypeInfo(kDOUBLE)},
-               {"dcn", SQLTypeInfo(kDECIMAL, 15, 8, false)},
-               {"nn", SQLTypeInfo(kDECIMAL, 15, 8, false)}});
+              {{"i1", ctx().int8()},
+               {"i2", ctx().int16()},
+               {"i4", ctx().int32()},
+               {"i8", ctx().int64()},
+               {"f", ctx().fp32()},
+               {"d", ctx().fp64()},
+               {"dc", ctx().decimal64(15, 8)},
+               {"n", ctx().decimal64(15, 8)},
+               {"i1n", ctx().int8()},
+               {"i2n", ctx().int16()},
+               {"i4n", ctx().int32()},
+               {"i8n", ctx().int64()},
+               {"fn", ctx().fp32()},
+               {"dn", ctx().fp64()},
+               {"dcn", ctx().decimal64(15, 8)},
+               {"nn", ctx().decimal64(15, 8)}});
   insertCsvValues("wb_test", "1, 1, 1, 1, 1.0, 1.0, 1.0, 1.0,,,,,,,,");
   auto drop = "DROP TABLE IF EXISTS wb_test;";
   auto create_sqlite =
@@ -3402,9 +3401,9 @@ TEST_F(Select, WidthBucketExpr) {
 }
 
 TEST_F(Select, WidthBucketWithGroupBy) {
-  createTable("wb_test_nullable", {{"val", SQLTypeInfo(kINT)}});
-  createTable("wb_test_non_nullable", {{"val", SQLTypeInfo(kINT, true)}});
-  createTable("wb_test", {{"val", SQLTypeInfo(kINT)}});
+  createTable("wb_test_nullable", {{"val", ctx().int32()}});
+  createTable("wb_test_non_nullable", {{"val", ctx().int32(false)}});
+  createTable("wb_test", {{"val", ctx().int32()}});
   insertCsvValues("wb_test_nullable", "1\n2\n3");
   insertJsonValues("wb_test_nullable", "{\"val\": null}");
   insertCsvValues("wb_test_non_nullable", "1\n2\n3");
@@ -3502,7 +3501,7 @@ TEST_F(Select, WidthBucketNullability) {
 }
 
 TEST_F(Select, CountWithLimitAndOffset) {
-  createTable("count_test", {{"val", SQLTypeInfo(kINT)}});
+  createTable("count_test", {{"val", ctx().int32()}});
   insertCsvValues("count_test", "0\n1\n2\n3\n4\n5\n6\n7\n8\n9");
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -3872,7 +3871,7 @@ TEST_F(Select, ApproxMedianLargeInts) {
         "SELECT APPROX_MEDIAN(" + col + ") FROM test_approx_median;";
     return v<double>(run_simple_agg(query, dt));
   };
-  createTable("test_approx_median", {{"b", SQLTypeInfo(kBIGINT)}});
+  createTable("test_approx_median", {{"b", ctx().int64()}});
   insertCsvValues("test_approx_median", "-9223372036854775807\n9223372036854775807");
   EXPECT_EQ(0.0, approx_median("b"));
   dropTable("test_approx_median");
@@ -7552,8 +7551,7 @@ TEST_F(Select, CastFromNull) {
 }
 
 TEST_F(Select, CastFromNull2) {
-  createTable("cast_from_null2",
-              {{"d", SQLTypeInfo(kDOUBLE)}, {"dd", SQLTypeInfo(kDECIMAL, 8, 2, false)}});
+  createTable("cast_from_null2", {{"d", ctx().fp64()}, {"dd", ctx().decimal64(8, 2)}});
   insertCsvValues("cast_from_null2", "1.0,");
   run_sqlite_query("DROP TABLE IF EXISTS cast_from_null2;");
   run_sqlite_query("CREATE TABLE cast_from_null2 (d DOUBLE, dd DECIMAL(8,2));");
@@ -7688,14 +7686,14 @@ TEST_F(Select, CastRoundNullable) {
 TEST_F(Select, ExtensionFunctionsTypeMatching) {
   createTable("extension_func_type_match_test",
               {
-                  {"tinyint_type", SQLTypeInfo(kTINYINT)},
-                  {"smallint_type", SQLTypeInfo(kSMALLINT)},
-                  {"int_type", SQLTypeInfo(kTINYINT)},
-                  {"bigint_type", SQLTypeInfo(kBIGINT)},
-                  {"float_type", SQLTypeInfo(kFLOAT)},
-                  {"double_type", SQLTypeInfo(kDOUBLE)},
-                  {"decimal_7_type", SQLTypeInfo(kDECIMAL, 7, 1, false)},
-                  {"decimal_8_type", SQLTypeInfo(kDECIMAL, 8, 1, false)},
+                  {"tinyint_type", ctx().int8()},
+                  {"smallint_type", ctx().int16()},
+                  {"int_type", ctx().int8()},
+                  {"bigint_type", ctx().int64()},
+                  {"float_type", ctx().fp32()},
+                  {"double_type", ctx().fp64()},
+                  {"decimal_7_type", ctx().decimal64(7, 1)},
+                  {"decimal_8_type", ctx().decimal64(8, 1)},
               });
   insertCsvValues("extension_func_type_match_test", "10,10,10,10,10.0,10.0,10.0,10.0");
   const double float_result = 2.302585124969482;  // log(10) result using the fp32 version
@@ -7790,7 +7788,7 @@ TEST_F(Select, ExtensionFunctionsTypeMatching) {
 
 TEST_F(Select, CastDecimalToDecimal) {
   createTable("decimal_to_decimal_test",
-              {{"id", SQLTypeInfo(kINT)}, {"val", SQLTypeInfo(kDECIMAL, 10, 5, false)}});
+              {{"id", ctx().int32()}, {"val", ctx().decimal64(10, 5)}});
   insertCsvValues("decimal_to_decimal_test",
                   "1,456.78956\n2,456.12345\n-1,-456.78956\n-2,-456.12345");
 
@@ -8250,7 +8248,7 @@ TEST_F(Select, LogicalValues) {
       }
       {
         const auto row = rows->getNextRow(false, false);
-        EXPECT_EQ(inline_int_null_val(SQLTypeInfo(kINT, false)), v<int64_t>(row[0]));
+        EXPECT_EQ(inline_null_value<int32_t>(), v<int64_t>(row[0]));
         EXPECT_EQ(0, v<int64_t>(row[1]));
       }
     }
@@ -9006,7 +9004,7 @@ TEST_F(Select, DecimalCompression) {
 }
 
 TEST_F(Select, BigintGroupByColCompactionTest) {
-  createTable("bigint_groupby_col_compaction_test", {{"c", SQLTypeInfo(kBIGINT)}});
+  createTable("bigint_groupby_col_compaction_test", {{"c", ctx().int64()}});
   insertCsvValues("bigint_groupby_col_compaction_test",
                   "-6312639302689611776\n-6312639302689611776\n-6312639302689611776\n-"
                   "6336283200715718656\n-6312639302689603584");
@@ -9028,13 +9026,13 @@ TEST_F(Select, BigintGroupByColCompactionTest) {
 class Drop : public ExecuteTestBase, public ::testing::Test {};
 
 TEST_F(Drop, AfterDrop) {
-  createTable("droptest", {{"i1", SQLTypeInfo(kINT)}});
+  createTable("droptest", {{"i1", ctx().int32()}});
   insertCsvValues("droptest", "1\n2");
   ASSERT_EQ(int64_t(3),
             v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM droptest;",
                                       ExecutorDeviceType::CPU)));
   dropTable("droptest");
-  createTable("droptest", {{"n1", SQLTypeInfo(kINT)}});
+  createTable("droptest", {{"n1", ctx().int32()}});
   insertCsvValues("droptest", "3\n4");
   ASSERT_EQ(int64_t(7),
             v<int64_t>(run_simple_agg("SELECT SUM(n1) FROM droptest;",
@@ -9322,36 +9320,37 @@ TEST_F(Select, Joins_Arrays) {
 
 TEST_F(Select, Joins_Fixed_Size_Array_Multi_Frag) {
   createTable("mf_f_arr",
-              {{"c2", arrayType(kFLOAT, 2)},
-               {"c3", arrayType(kFLOAT, 3)},
-               {"c4", arrayType(kFLOAT, 4)}},
+              {{"c2", ctx().arrayFixed(2, ctx().fp32())},
+               {"c3", ctx().arrayFixed(3, ctx().fp32())},
+               {"c4", ctx().arrayFixed(4, ctx().fp32())}},
               {2});
   createTable("mf_d_arr",
-              {{"c2", arrayType(kDOUBLE, 2)},
-               {"c3", arrayType(kDOUBLE, 3)},
-               {"c4", arrayType(kDOUBLE, 4)}},
+              {{"c2", ctx().arrayFixed(2, ctx().fp64())},
+               {"c3", ctx().arrayFixed(3, ctx().fp64())},
+               {"c4", ctx().arrayFixed(4, ctx().fp64())}},
               {2});
   createTable("mf_i_arr",
-              {{"c2", arrayType(kINT, 2)},
-               {"c3", arrayType(kINT, 3)},
-               {"c4", arrayType(kINT, 4)}},
+              {{"c2", ctx().arrayFixed(2, ctx().int32())},
+               {"c3", ctx().arrayFixed(3, ctx().int32())},
+               {"c4", ctx().arrayFixed(4, ctx().int32())}},
               {2});
   createTable("mf_bi_arr",
-              {{"c2", arrayType(kBIGINT, 2)},
-               {"c3", arrayType(kBIGINT, 3)},
-               {"c4", arrayType(kBIGINT, 4)}},
+              {{"c2", ctx().arrayFixed(2, ctx().int64())},
+               {"c3", ctx().arrayFixed(3, ctx().int64())},
+               {"c4", ctx().arrayFixed(4, ctx().int64())}},
               {2});
   createTable("mf_ti_arr",
-              {{"c2", arrayType(kTINYINT, 2)},
-               {"c3", arrayType(kTINYINT, 3)},
-               {"c4", arrayType(kTINYINT, 4)}},
+              {{"c2", ctx().arrayFixed(2, ctx().int8())},
+               {"c3", ctx().arrayFixed(3, ctx().int8())},
+               {"c4", ctx().arrayFixed(4, ctx().int8())}},
               {2});
   createTable("mf_si_arr",
-              {{"c2", arrayType(kSMALLINT, 2)},
-               {"c3", arrayType(kSMALLINT, 3)},
-               {"c4", arrayType(kSMALLINT, 4)}},
+              {{"c2", ctx().arrayFixed(2, ctx().int16())},
+               {"c3", ctx().arrayFixed(3, ctx().int16())},
+               {"c4", ctx().arrayFixed(4, ctx().int16())}},
               {2});
-  createTable("mf_t_arr", {{"t2", arrayType(kTEXT, 2)}}, {2});
+  createTable(
+      "mf_t_arr", {{"t2", ctx().arrayFixed(2, ctx().extDict(ctx().text(), 0))}}, {2});
 
   auto insert_values = [&](const std::string& table_name) {
     std::ostringstream oss;
@@ -10531,12 +10530,12 @@ TEST_F(Select, Joins_OuterJoin_OptBy_NullRejection) {
     {
       // [BE-5764] null rejection rule issue v3
       // reported query
-      createTable("BE_5764_a",
-                  {{"text_", SQLTypeInfo(kTEXT)},
-                   {"days_", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 16, kNULLT)}});
-      createTable("BE_5764_b",
-                  {{"text_", SQLTypeInfo(kTEXT)},
-                   {"days_", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 16, kNULLT)}});
+      createTable(
+          "BE_5764_a",
+          {{"text_", ctx().text()}, {"days_", ctx().date16(hdk::ir::TimeUnit::kDay)}});
+      createTable(
+          "BE_5764_b",
+          {{"text_", ctx().text()}, {"days_", ctx().date16(hdk::ir::TimeUnit::kDay)}});
       insertCsvValues("BE_5764_a", "A,2021-01-01");
       auto q1_res = run_multiple_agg(
           "SELECT BE_5764_a.days_ FROM BE_5764_a LEFT JOIN BE_5764_b ON (BE_5764_a.days_ "
@@ -10555,9 +10554,9 @@ TEST_F(Select, Joins_OuterJoin_OptBy_NullRejection) {
     {
       // [BE-6037] null rejection rule issue v4: IS NOT NULL filter epxr connected via
       // OR-logic
-      createTable("BE_6037_a", {{"id", SQLTypeInfo(kINT)}});
-      createTable("BE_6037_b", {{"id", SQLTypeInfo(kINT)}});
-      createTable("BE_6037_c", {{"id", SQLTypeInfo(kINT)}});
+      createTable("BE_6037_a", {{"id", ctx().int32()}});
+      createTable("BE_6037_b", {{"id", ctx().int32()}});
+      createTable("BE_6037_c", {{"id", ctx().int32()}});
       run_sqlite_query("DROP TABLE IF EXISTS BE_6037_a;");
       run_sqlite_query("DROP TABLE IF EXISTS BE_6037_b;");
       run_sqlite_query("DROP TABLE IF EXISTS BE_6037_c;");
@@ -10901,10 +10900,11 @@ class JoinTest : public ExecuteTestBase, public ::testing::Test {
     auto create_test_table = [](const std::string& table_name,
                                 const size_t num_records,
                                 const size_t start_index = 0) {
-      createTable(
-          table_name,
-          {{"x", SQLTypeInfo(kINT, true)}, {"y", SQLTypeInfo(kINT)}, {"str", dictType()}},
-          {50});
+      createTable(table_name,
+                  {{"x", ctx().int32(false)},
+                   {"y", ctx().int32()},
+                   {"str", ctx().extDict(ctx().text(), 0)}},
+                  {50});
 
       TestHelpers::ValuesGenerator gen(table_name);
       const std::vector<std::string> strs{"foo"s, "bar"s, "hello"s, "world"s};
@@ -14202,9 +14202,9 @@ TEST_F(Select, TimestampPrecisionFormat) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     createTable("ts_format",
-                {{"ts_3", SQLTypeInfo(kTIMESTAMP, 3, 0)},
-                 {"ts_6", SQLTypeInfo(kTIMESTAMP, 6, 0)},
-                 {"ts_9", SQLTypeInfo(kTIMESTAMP, 9, 0)}});
+                {{"ts_3", ctx().timestamp(hdk::ir::TimeUnit::kMilli)},
+                 {"ts_6", ctx().timestamp(hdk::ir::TimeUnit::kMicro)},
+                 {"ts_9", ctx().timestamp(hdk::ir::TimeUnit::kNano)}});
     insertCsvValues("ts_format",
                     "2012-05-22 01:02:03,2012-05-22 01:02:03,2012-05-22 01:02:03");
     insertCsvValues("ts_format",
@@ -14389,12 +14389,12 @@ TEST_F(Select, TimestampCastAggregates) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     createTable("timestamp_agg",
-                {{"val", SQLTypeInfo(kINT)},
-                 {"dt", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 32, kNULLT)},
-                 {"ts", SQLTypeInfo(kTIMESTAMP, 0, 0)},
-                 {"ts3", SQLTypeInfo(kTIMESTAMP, 3, 0)},
-                 {"ts6", SQLTypeInfo(kTIMESTAMP, 6, 0)},
-                 {"ts9", SQLTypeInfo(kTIMESTAMP, 9, 0)}});
+                {{"val", ctx().int32()},
+                 {"dt", ctx().date32(hdk::ir::TimeUnit::kDay)},
+                 {"ts", ctx().timestamp(hdk::ir::TimeUnit::kSecond)},
+                 {"ts3", ctx().timestamp(hdk::ir::TimeUnit::kMilli)},
+                 {"ts6", ctx().timestamp(hdk::ir::TimeUnit::kMicro)},
+                 {"ts9", ctx().timestamp(hdk::ir::TimeUnit::kNano)}});
     insertCsvValues(
         "timestamp_agg",
         "100,2014-12-13,2014-12-13 22:23:15,2014-12-13 22:23:15.123,2014-12-13 "
@@ -15656,8 +15656,7 @@ TEST_F(Select, QuotedColumnIdentifier) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    createTable("identifier_test",
-                {{"id", SQLTypeInfo(kINT)}, {"sum", SQLTypeInfo(kBIGINT)}});
+    createTable("identifier_test", {{"id", ctx().int32()}, {"sum", ctx().int64()}});
     insertCsvValues("identifier_test", "1,1\n2,2\n3,3");
 
     EXPECT_ANY_THROW(run_simple_agg("SELECT sum FROM identifier_test;", dt));
@@ -17194,8 +17193,9 @@ TEST_F(Select, GroupEmptyBlank) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    createTable(
-        "blank_test", {{"t1", dictType(4, true)}, {"i1", SQLTypeInfo(kINT)}}, {10});
+    createTable("blank_test",
+                {{"t1", ctx().extDict(ctx().text(false), 0, 4)}, {"i1", ctx().int32()}},
+                {10});
     insertCsvValues("blank_test", ",1\na,2");
 
     run_sqlite_query("DROP TABLE IF EXISTS blank_test;");
@@ -17513,37 +17513,37 @@ TEST_F(Select, LeftJoinDictionaryGenerationIssue463) {
     SKIP_NO_GPU();
 
     createTable("issue463_table1",
-                {{"playerID", dictType()},
-                 {"yearID", SQLTypeInfo(kBIGINT)},
-                 {"stint", SQLTypeInfo(kBIGINT)},
-                 {"teamID", dictType()},
-                 {"lgID", dictType()},
-                 {"G", SQLTypeInfo(kBIGINT)},
-                 {"AB", SQLTypeInfo(kBIGINT)},
-                 {"R", SQLTypeInfo(kBIGINT)},
-                 {"H", SQLTypeInfo(kBIGINT)},
-                 {"X2B", SQLTypeInfo(kBIGINT)},
-                 {"X3B", SQLTypeInfo(kBIGINT)},
-                 {"HR", SQLTypeInfo(kBIGINT)},
-                 {"RBI", SQLTypeInfo(kBIGINT)},
-                 {"SB", SQLTypeInfo(kBIGINT)},
-                 {"CS", SQLTypeInfo(kBIGINT)},
-                 {"BB", SQLTypeInfo(kBIGINT)},
-                 {"SO", SQLTypeInfo(kBIGINT)},
-                 {"IBB", SQLTypeInfo(kBIGINT)},
-                 {"HBP", SQLTypeInfo(kBIGINT)},
-                 {"SH", SQLTypeInfo(kBIGINT)},
-                 {"SF", SQLTypeInfo(kBIGINT)},
-                 {"GIDP", SQLTypeInfo(kBIGINT)}});
+                {{"playerID", ctx().extDict(ctx().text(), 0)},
+                 {"yearID", ctx().int64()},
+                 {"stint", ctx().int64()},
+                 {"teamID", ctx().extDict(ctx().text(), 0)},
+                 {"lgID", ctx().extDict(ctx().text(), 0)},
+                 {"G", ctx().int64()},
+                 {"AB", ctx().int64()},
+                 {"R", ctx().int64()},
+                 {"H", ctx().int64()},
+                 {"X2B", ctx().int64()},
+                 {"X3B", ctx().int64()},
+                 {"HR", ctx().int64()},
+                 {"RBI", ctx().int64()},
+                 {"SB", ctx().int64()},
+                 {"CS", ctx().int64()},
+                 {"BB", ctx().int64()},
+                 {"SO", ctx().int64()},
+                 {"IBB", ctx().int64()},
+                 {"HBP", ctx().int64()},
+                 {"SH", ctx().int64()},
+                 {"SF", ctx().int64()},
+                 {"GIDP", ctx().int64()}});
     insertCsvValues("issue463_table1",
                     "keefeti01,1880,1,TRN,NL,12,43,4,10,3,0,0,3,0,0,1,12,0,0,0,0,0");
     createTable("issue463_table2",
-                {{"playerID", dictType()},
-                 {"awardID", dictType()},
-                 {"yearID", SQLTypeInfo(kBIGINT)},
-                 {"lgID", dictType()},
-                 {"tie", dictType()},
-                 {"notes", dictType()}});
+                {{"playerID", ctx().extDict(ctx().text(), 0)},
+                 {"awardID", ctx().extDict(ctx().text(), 0)},
+                 {"yearID", ctx().int64()},
+                 {"lgID", ctx().extDict(ctx().text(), 0)},
+                 {"tie", ctx().extDict(ctx().text(), 0)},
+                 {"notes", ctx().extDict(ctx().text(), 0)}});
     insertCsvValues("issue463_table2", "keefeti01,Pitching Triple Crown,1888,NL,0,0");
 
     run_sqlite_query("DROP TABLE IF EXISTS issue463_table1;");
@@ -17637,7 +17637,10 @@ TEST_F(Select, StringFromEliminatedColumn) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    createTable("flights", {{"plane_model", dictType()}, {"dest_city", dictType()}}, {2});
+    createTable("flights",
+                {{"plane_model", ctx().extDict(ctx().text(), 0)},
+                 {"dest_city", ctx().extDict(ctx().text(), 0)}},
+                {2});
     run_sqlite_query("DROP TABLE IF EXISTS flights;");
     run_sqlite_query("CREATE TABLE flights (plane_model TEXT, dest_city TEXT);");
     for (std::string plane_model : {"B-1", "B-2", "B-3", "B-4"}) {
@@ -17795,9 +17798,7 @@ class SubqueryTestEnv : public ExecuteTestBase, public ::testing::Test {
   void SetUp() override {
     auto create_test_table = [](const std::string& table_name) {
       createTable(table_name,
-                  {{"r1", SQLTypeInfo(kINT)},
-                   {"r2", SQLTypeInfo(kINT)},
-                   {"r3", SQLTypeInfo(kINT)}});
+                  {{"r1", ctx().int32()}, {"r2", ctx().int32()}, {"r3", ctx().int32()}});
       insertCsvValues(table_name, "1,2,3\n2,3,4\n3,4,5\n4,5,6\n1,3,4");
 
       run_sqlite_query("DROP TABLE IF EXISTS " + table_name + ";");
@@ -17854,9 +17855,7 @@ class ManyRowsTest : public ExecuteTestBase, public ::testing::Test {
  protected:
   void SetUp() override {
     createTable(table_name,
-                {{"t", SQLTypeInfo(kTINYINT)},
-                 {"x", SQLTypeInfo(kINT)},
-                 {"y", SQLTypeInfo(kBIGINT)}});
+                {{"t", ctx().int8()}, {"x", ctx().int32()}, {"y", ctx().int64()}});
 
     // add one additional "duplicate" row at the end
     for (size_t i = 0; i < row_count - 1; i++) {
