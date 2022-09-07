@@ -36,7 +36,6 @@ extern std::string cluster_command_line_arg;
 
 extern bool g_use_table_device_offset;
 extern bool g_cache_string_hash;
-extern bool g_enable_idp_temporary_users;
 extern int64_t g_large_ndv_threshold;
 extern size_t g_large_ndv_multiplier;
 extern int64_t g_bitmap_memory_limit;
@@ -417,13 +416,6 @@ void CommandLineOptions::fillAdvancedOptions() {
       "size of the group by buffer (entry count in Query Memory Descriptor) and "
       "multiplying it by the number of count distinct expression and the size of bitmap "
       "required for each. For approx_count_distinct this is typically 8192 bytes.");
-  developer_desc.add_options()(
-      "enable-idp-temporary-users",
-      po::value<bool>(&g_enable_idp_temporary_users)
-          ->default_value(g_enable_idp_temporary_users)
-          ->implicit_value(true),
-      "Enable temporary users for SAML and LDAP logins on read-only servers. "
-      "Normally should be on but techs might want to disable for troubleshooting.");
   developer_desc.add_options()(
       "enable-calcite-ddl",
       po::value<bool>(&g_enable_calcite_ddl_parser)
