@@ -15,6 +15,7 @@
 #include "ArrowStorage.h"
 #include "ArrowStorageUtils.h"
 
+#include "IR/Type.h"
 #include "Shared/ArrowUtil.h"
 #include "Shared/measure.h"
 #include "Shared/threading.h"
@@ -336,15 +337,21 @@ TableInfoPtr ArrowStorage::createTable(const std::string& table_name,
     int next_col_id = 1;
     std::unordered_map<int, int> dict_ids;
     for (auto& col : columns) {
-      SQLTypeInfo type = col.type;
+      auto type = col.type;
+      auto elem_type =
+          type->isArray() ? type->as<hdk::ir::ArrayBaseType>()->elemType() : type;
       // Positive dictionary id means we use existing dictionary. Other values
       // mean we have to create new dictionaries. Columns with equal negative
       // dict ids will share dictionaries.
-      if (type.is_dict_encoded_type() && type.get_comp_param() <= 0) {
-        int sharing_id = type.get_comp_param();
+      if (elem_type->isExtDictionary()) {
+        auto dict_type = elem_type->as<hdk::ir::ExtDictionaryType>();
+        auto sharing_id = dict_type->dictId();
         if (sharing_id < 0 && dict_ids.count(sharing_id)) {
-          type.set_comp_param(dict_ids.at(sharing_id));
-        } else {
+          elem_type = ctx_.extDict(dict_type->elemType(),
+                                   dict_ids.at(sharing_id),
+                                   dict_type->size(),
+                                   dict_type->nullable());
+        } else if (sharing_id <= 0) {
           if (next_dict_id_ > MAX_DB_ID) {
             throw std::runtime_error("Dictionary count limit exceeded.");
           }
@@ -358,15 +365,24 @@ TableInfoPtr ArrowStorage::createTable(const std::string& table_name,
             dict_ids.emplace(sharing_id, dict_id);
           }
           dicts_.emplace(dict_id, std::move(dict_desc));
-          type.set_comp_param(dict_id);
+          elem_type = ctx_.extDict(
+              dict_type->elemType(), dict_id, dict_type->size(), dict_type->nullable());
+        }
+
+        if (type->isFixedLenArray()) {
+          type = ctx_.arrayFixed(type->as<hdk::ir::FixedLenArrayType>()->numElems(),
+                                 elem_type,
+                                 type->nullable());
+        } else if (type->isVarLenArray()) {
+          type = ctx_.arrayVarLen(elem_type,
+                                  type->as<hdk::ir::VarLenArrayType>()->offsetSize(),
+                                  type->nullable());
+        } else {
+          type = elem_type;
         }
       }
-      auto col_info = addColumnInfo(
-          db_id_, table_id, next_col_id++, col.name, ctx_.fromTypeInfo(type), false);
-      if (type.get_type() == kDATE && type.get_compression() == kENCODING_DATE_IN_DAYS &&
-          type.get_comp_param() == 0) {
-        type.set_comp_param(32);
-      }
+      auto col_info =
+          addColumnInfo(db_id_, table_id, next_col_id++, col.name, type, false);
     }
     addRowidColumn(db_id_, table_id);
   }
@@ -376,7 +392,7 @@ TableInfoPtr ArrowStorage::createTable(const std::string& table_name,
   for (size_t i = 0; i < columns.size(); ++i) {
     auto& name = columns[i].name;
     auto& type = columns[i].type;
-    auto field = arrow::field(name, getArrowImportType(type), !type.get_notnull());
+    auto field = arrow::field(name, getArrowImportType(ctx_, type), type->nullable());
     fields.push_back(field);
   }
   auto schema = arrow::schema(fields);
@@ -406,14 +422,7 @@ TableInfoPtr ArrowStorage::importArrowTable(std::shared_ptr<arrow::Table> at,
                                             const TableOptions& options) {
   std::vector<ColumnDescription> columns;
   for (auto& field : at->schema()->fields()) {
-    ColumnDescription desc{field->name(), getOmnisciType(*field->type())};
-    // getOmnisciType sets comp_param for dictionaries to 32 because Catalog
-    // uses it to compute type size and then replaces it with dictionary id.
-    // Reset comp_param here for dictionaries to avoid unknown dictionary id
-    // error.
-    if (desc.type.is_dict_encoded_string()) {
-      desc.type.set_comp_param(0);
-    }
+    ColumnDescription desc{field->name(), getTargetImportType(ctx_, *field->type())};
     columns.emplace_back(std::move(desc));
   }
   return importArrowTable(at, table_name, columns, options);
@@ -469,40 +478,46 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
   threading::parallel_for(
       threading::blocked_range(0, (int)at->columns().size()), [&](auto range) {
         for (auto col_idx = range.begin(); col_idx != range.end(); col_idx++) {
-          auto& col_type = getColumnInfo(db_id_, table_id, col_idx + 1)->type_info;
+          auto col_info = getColumnInfo(db_id_, table_id, col_idx + 1);
+          auto col_type = col_info->type;
           auto col_arr = at->column(col_idx);
           StringDictionary* dict = nullptr;
-          if (col_type.is_dict_encoded_string() || col_type.is_string_array()) {
-            dict = dicts_.at(col_type.get_comp_param())->stringDict.get();
+          auto elem_type =
+              col_type->isArray()
+                  ? dynamic_cast<const hdk::ir::ArrayBaseType*>(col_type)->elemType()
+                  : col_type;
+          if (elem_type->isExtDictionary()) {
+            dict = dicts_
+                       .at(dynamic_cast<const hdk::ir::ExtDictionaryType*>(elem_type)
+                               ->dictId())
+                       ->stringDict.get();
           }
 
-          if (col_type.get_type() == kDECIMAL || col_type.get_type() == kNUMERIC) {
+          if (col_type->isDecimal()) {
             col_arr = convertDecimalToInteger(col_arr, col_type);
-          } else if (col_type.is_string()) {
-            if (col_type.is_dict_encoded_string()) {
-              switch (col_arr->type()->id()) {
-                case arrow::Type::STRING:
-                  col_arr = createDictionaryEncodedColumn(dict, col_arr, col_type);
-                  break;
-                case arrow::Type::DICTIONARY:
-                  col_arr = convertArrowDictionary(dict, col_arr, col_type);
-                  break;
-                default:
-                  CHECK(false);
-              }
+          } else if (col_type->isExtDictionary()) {
+            switch (col_arr->type()->id()) {
+              case arrow::Type::STRING:
+                col_arr = createDictionaryEncodedColumn(dict, col_arr, col_type);
+                break;
+              case arrow::Type::DICTIONARY:
+                col_arr = convertArrowDictionary(dict, col_arr, col_type);
+                break;
+              default:
+                CHECK(false);
             }
+          } else if (col_type->isString()) {
           } else {
             col_arr = replaceNullValues(col_arr, col_type, dict);
           }
 
           col_data[col_idx] = col_arr;
 
-          bool compute_stats =
-              col_type.get_type() != kTEXT || col_type.is_dict_encoded_string();
+          bool compute_stats = !col_type->isString();
           if (compute_stats) {
             size_t elems_count = 1;
-            if (col_type.is_fixlen_array()) {
-              elems_count = col_type.get_size() / col_type.get_elem_type().get_size();
+            if (col_type->isFixedLenArray()) {
+              elems_count = col_type->size() / elem_type->size();
             }
             // Compute stats for each fragment.
             threading::parallel_for(
@@ -522,15 +537,15 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
                             : first_frag_size;
 
                     auto meta = std::make_shared<ChunkMetadata>();
-                    meta->sqlType = col_type;
+                    meta->sqlType = col_info->type_info;
                     meta->numElements = frag.row_count;
-                    if (col_type.is_fixlen_array()) {
-                      meta->numBytes = frag.row_count * col_type.get_size();
-                    } else if (col_type.is_varlen_array()) {
+                    if (col_type->isFixedLenArray()) {
+                      meta->numBytes = frag.row_count * col_type->size();
+                    } else if (col_type->isVarLenArray()) {
                       meta->numBytes =
                           computeTotalStringsLength(col_arr, frag.offset, frag.row_count);
                     } else {
-                      meta->numBytes = frag.row_count * col_type.get_size();
+                      meta->numBytes = frag.row_count * col_type->size();
                     }
 
                     computeStats(
@@ -550,9 +565,9 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
                                       static_cast<size_t>(at->num_rows()) - frag.offset)
                            : first_frag_size;
               auto meta = std::make_shared<ChunkMetadata>();
-              meta->sqlType = col_type;
+              meta->sqlType = col_info->type_info;
               meta->numElements = frag.row_count;
-              CHECK_EQ(col_type.get_type(), kTEXT);
+              CHECK(col_type->isText());
               meta->numBytes =
                   computeTotalStringsLength(col_arr, frag.offset, frag.row_count);
               meta->chunkStats.has_nulls =
@@ -798,52 +813,30 @@ void ArrowStorage::checkNewTableParams(const std::string& table_name,
       throw std::runtime_error("Duplicated column name: "s + col.name);
     }
 
-    switch (col.type.get_type()) {
-      case kBOOLEAN:
-      case kTINYINT:
-      case kSMALLINT:
-      case kINT:
-      case kBIGINT:
-      case kFLOAT:
-      case kDOUBLE:
+    switch (col.type->id()) {
+      case hdk::ir::Type::kBoolean:
+      case hdk::ir::Type::kInteger:
+      case hdk::ir::Type::kFloatingPoint:
+      case hdk::ir::Type::kVarChar:
+      case hdk::ir::Type::kText:
+      case hdk::ir::Type::kDecimal:
+      case hdk::ir::Type::kTime:
+      case hdk::ir::Type::kDate:
+      case hdk::ir::Type::kTimestamp:
+      case hdk::ir::Type::kFixedLenArray:
+      case hdk::ir::Type::kVarLenArray:
+      case hdk::ir::Type::kInterval:
         break;
-      case kCHAR:
-      case kVARCHAR:
-      case kTEXT:
-        if (col.type.is_dict_encoded_string()) {
-          if (col.type.get_comp_param() > 0 &&
-              dicts_.count(col.type.get_comp_param()) == 0) {
-            throw std::runtime_error("Unknown dictionary ID is referenced in column '"s +
-                                     col.name + "': "s +
-                                     std::to_string(col.type.get_comp_param()));
-          }
+      case hdk::ir::Type::kExtDictionary: {
+        auto dict_id = col.type->as<hdk::ir::ExtDictionaryType>()->dictId();
+        if (dict_id > 0 && dicts_.count(dict_id) == 0) {
+          throw std::runtime_error("Unknown dictionary ID is referenced in column '"s +
+                                   col.name + "': "s + std::to_string(dict_id));
         }
-        break;
-      case kDECIMAL:
-      case kNUMERIC:
-      case kTIME:
-      case kDATE:
-        break;
-      case kTIMESTAMP:
-        switch (col.type.get_precision()) {
-          case 0:
-          case 3:
-          case 6:
-          case 9:
-            break;
-          default:
-            throw std::runtime_error(
-                "Unsupported timestamp precision for Arrow import: " +
-                std::to_string(col.type.get_precision()));
-        }
-        break;
-      case kARRAY:
-        break;
-      case kINTERVAL_DAY_TIME:
-      case kINTERVAL_YEAR_MONTH:
+      } break;
       default:
         throw std::runtime_error("Unsupported type for Arrow import: "s +
-                                 col.type.get_type_name());
+                                 col.type->toString());
     }
 
     col_names.insert(col.name);
@@ -871,35 +864,35 @@ void ArrowStorage::compareSchemas(std::shared_ptr<arrow::Schema> lhs,
 }
 
 void ArrowStorage::computeStats(std::shared_ptr<arrow::ChunkedArray> arr,
-                                SQLTypeInfo type,
+                                const hdk::ir::Type* type,
                                 ChunkStats& stats) {
-  auto elem_type = type.is_array() ? type.get_elem_type() : type;
-  std::unique_ptr<Encoder> encoder(Encoder::Create(nullptr, elem_type));
+  auto elem_type =
+      type->isArray() ? type->as<hdk::ir::ArrayBaseType>()->elemType() : type;
+  std::unique_ptr<Encoder> encoder(Encoder::Create(nullptr, elem_type->toTypeInfo()));
   for (auto& chunk : arr->chunks()) {
-    if (type.is_varlen_array()) {
-      auto elem_size = elem_type.get_size();
+    if (type->isVarLenArray()) {
+      auto elem_size = elem_type->size();
       auto chunk_list = std::dynamic_pointer_cast<arrow::ListArray>(chunk);
       CHECK(chunk_list);
       auto offs = std::abs(chunk_list->value_offset(0)) / elem_size;
       auto len = std::abs(chunk_list->value_offset(chunk->length())) / elem_size - offs;
       auto elems = chunk_list->values();
+      encoder->updateStatsEncoded(elems->data()->GetValues<int8_t>(
+                                      1, (elems->data()->offset + offs) * type->size()),
+                                  len);
+    } else if (type->isFixedLenArray()) {
       encoder->updateStatsEncoded(
-          elems->data()->GetValues<int8_t>(
-              1, (elems->data()->offset + offs) * type.get_size()),
-          len);
-    } else if (type.is_array()) {
-      encoder->updateStatsEncoded(chunk->data()->GetValues<int8_t>(
-                                      1, chunk->data()->offset * elem_type.get_size()),
-                                  chunk->length(),
-                                  true);
+          chunk->data()->GetValues<int8_t>(1, chunk->data()->offset * elem_type->size()),
+          chunk->length(),
+          true);
     } else {
-      encoder->updateStatsEncoded(chunk->data()->GetValues<int8_t>(
-                                      1, chunk->data()->offset * elem_type.get_size()),
-                                  chunk->length());
+      encoder->updateStatsEncoded(
+          chunk->data()->GetValues<int8_t>(1, chunk->data()->offset * elem_type->size()),
+          chunk->length());
     }
   }
 
-  encoder->fillChunkStats(stats, elem_type);
+  encoder->fillChunkStats(stats, elem_type->toTypeInfo());
 }
 
 std::shared_ptr<arrow::Table> ArrowStorage::parseCsvFile(
@@ -949,8 +942,8 @@ std::shared_ptr<arrow::Table> ArrowStorage::parseCsv(
   for (auto& col_info : col_infos) {
     if (!col_info->is_rowid) {
       arrow_read_options.column_names.push_back(col_info->name);
-      arrow_convert_options.column_types.emplace(col_info->name,
-                                                 getArrowImportType(col_info->type_info));
+      arrow_convert_options.column_types.emplace(
+          col_info->name, getArrowImportType(ctx_, col_info->type));
     }
   }
 
@@ -989,7 +982,7 @@ std::shared_ptr<arrow::Table> ArrowStorage::parseJson(
     if (!col_info->is_rowid) {
       fields.emplace_back(
           std::make_shared<arrow::Field>(col_info->name,
-                                         getArrowImportType(col_info->type_info),
+                                         getArrowImportType(ctx_, col_info->type),
                                          !col_info->type_info.get_notnull()));
     }
   }

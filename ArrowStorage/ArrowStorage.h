@@ -21,11 +21,20 @@
 
 #include <arrow/api.h>
 
+namespace hdk::ir {
+class Type;
+}
+
 class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
  public:
   struct ColumnDescription {
+    ColumnDescription(std::string name_, const hdk::ir::Type* type_)
+        : name(name_), type(type_) {}
+    ColumnDescription(std::string name_, SQLTypeInfo type_)
+        : name(name_), type(hdk::ir::Context::defaultCtx().fromTypeInfo(type_)) {}
+
     std::string name;
-    SQLTypeInfo type;
+    const hdk::ir::Type* type;
   };
 
   struct TableOptions {
@@ -162,7 +171,7 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
   void compareSchemas(std::shared_ptr<arrow::Schema> lhs,
                       std::shared_ptr<arrow::Schema> rhs);
   void computeStats(std::shared_ptr<arrow::ChunkedArray> arr,
-                    SQLTypeInfo type,
+                    const hdk::ir::Type* type,
                     ChunkStats& stats);
   std::shared_ptr<arrow::Table> parseCsvFile(const std::string& file_name,
                                              const CsvParseOptions parse_options,

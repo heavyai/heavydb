@@ -14,6 +14,8 @@
 
 #include "ArrowStorageUtils.h"
 
+#include "IR/Context.h"
+
 // TODO: use <Shared/threading.h>
 #include <tbb/parallel_for.h>
 #include <tbb/task_group.h>
@@ -525,16 +527,16 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenStringArrayImpl(
 
 std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenArray(
     std::shared_ptr<arrow::ChunkedArray> arr,
-    const SQLTypeInfo& type,
+    const hdk::ir::Type* type,
     StringDictionary* dict) {
   auto list_type = std::dynamic_pointer_cast<arrow::ListType>(arr->type());
   if (!list_type) {
     throw std::runtime_error("Unsupported large Arrow list:: "s + list_type->ToString());
   }
 
-  auto elem_type = type.get_elem_type();
-  if (elem_type.is_integer() || is_datetime(elem_type.get_type())) {
-    switch (elem_type.get_size()) {
+  auto elem_type = type->as<hdk::ir::ArrayBaseType>()->elemType();
+  if (elem_type->isInteger() || elem_type->isDateTime()) {
+    switch (elem_type->size()) {
       case 1:
         return replaceNullValuesVarlenArrayImpl<int8_t>(arr);
       case 2:
@@ -545,37 +547,37 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenArray(
         return replaceNullValuesVarlenArrayImpl<int64_t>(arr);
       default:
         throw std::runtime_error("Unsupported integer or datetime array: "s +
-                                 type.toString());
+                                 type->toString());
     }
-  } else if (elem_type.is_fp()) {
-    switch (elem_type.get_size()) {
+  } else if (elem_type->isFloatingPoint()) {
+    switch (elem_type->size()) {
       case 4:
         return replaceNullValuesVarlenArrayImpl<float>(arr);
       case 8:
         return replaceNullValuesVarlenArrayImpl<double>(arr);
     }
-  } else if (elem_type.is_boolean()) {
+  } else if (elem_type->isBoolean()) {
     return replaceNullValuesVarlenArrayImpl<bool>(arr);
-  } else if (elem_type.is_dict_encoded_string()) {
-    CHECK_EQ(elem_type.get_size(), 4);
+  } else if (elem_type->isExtDictionary()) {
+    CHECK_EQ(elem_type->size(), 4);
     return replaceNullValuesVarlenStringArrayImpl(arr, dict);
-  } else if (elem_type.is_decimal()) {
+  } else if (elem_type->isDecimal()) {
     // Due to JSON parser limitation in Arrow 5.0 we might need to convert
     // float64 do decimal.
     bool float_conversion = list_type->value_type()->id() == arrow::Type::DOUBLE;
-    switch (elem_type.get_size()) {
+    auto dec_type = elem_type->as<hdk::ir::DecimalType>();
+    switch (elem_type->size()) {
       case 8:
         if (float_conversion) {
           return replaceNullValuesVarlenDecimalArrayImpl<int64_t, true>(
-              arr, int_pow(10, elem_type.get_scale()));
+              arr, int_pow(10, dec_type->scale()));
         } else {
           return replaceNullValuesVarlenDecimalArrayImpl<int64_t, false>(arr);
         }
     }
   }
 
-  throw std::runtime_error("Unsupported varlen array: "s + type.toString());
-  return nullptr;
+  throw std::runtime_error("Unsupported varlen array: "s + type->toString());
 }
 
 template <typename T>
@@ -775,12 +777,12 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesFixedSizeStringArrayImpl(
 
 std::shared_ptr<arrow::ChunkedArray> replaceNullValuesFixedSizeArray(
     std::shared_ptr<arrow::ChunkedArray> arr,
-    const SQLTypeInfo& type,
+    const hdk::ir::Type* type,
     StringDictionary* dict) {
-  auto elem_type = type.get_elem_type();
-  int list_size = type.get_size() / elem_type.get_size();
-  if (elem_type.is_integer() || is_datetime(elem_type.get_type())) {
-    switch (elem_type.get_size()) {
+  auto elem_type = type->as<hdk::ir::FixedLenArrayType>()->elemType();
+  int list_size = type->as<hdk::ir::FixedLenArrayType>()->numElems();
+  if (elem_type->isInteger() || elem_type->isDateTime()) {
+    switch (elem_type->size()) {
       case 1:
         return replaceNullValuesFixedSizeArrayImpl<int8_t>(arr, list_size);
       case 2:
@@ -791,30 +793,31 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesFixedSizeArray(
         return replaceNullValuesFixedSizeArrayImpl<int64_t>(arr, list_size);
       default:
         throw std::runtime_error("Unsupported integer or datetime array: "s +
-                                 type.toString());
+                                 type->toString());
     }
-  } else if (elem_type.is_fp()) {
-    switch (elem_type.get_size()) {
+  } else if (elem_type->isFloatingPoint()) {
+    switch (elem_type->size()) {
       case 4:
         return replaceNullValuesFixedSizeArrayImpl<float>(arr, list_size);
       case 8:
         return replaceNullValuesFixedSizeArrayImpl<double>(arr, list_size);
     }
-  } else if (elem_type.is_boolean()) {
+  } else if (elem_type->isBoolean()) {
     return replaceNullValuesFixedSizeArrayImpl<bool>(arr, list_size);
-  } else if (elem_type.is_dict_encoded_string()) {
-    CHECK_EQ(elem_type.get_size(), 4);
+  } else if (elem_type->isExtDictionary()) {
+    CHECK_EQ(elem_type->size(), 4);
     return replaceNullValuesFixedSizeStringArrayImpl(arr, list_size, dict);
-  } else if (elem_type.is_decimal()) {
+  } else if (elem_type->isDecimal()) {
     // Due to JSON parser limitation in Arrow 5.0 we might need to convert
     // float64 do decimal.
     auto list_type = std::dynamic_pointer_cast<arrow::ListType>(arr->type());
     bool float_conversion = list_type->value_type()->id() == arrow::Type::DOUBLE;
-    switch (elem_type.get_size()) {
+    auto dec_type = elem_type->as<hdk::ir::DecimalType>();
+    switch (elem_type->size()) {
       case 8:
         if (float_conversion) {
           return replaceNullValuesFixedSizeDecimalArrayImpl<int64_t, true>(
-              arr, list_size, int_pow(10, elem_type.get_scale()));
+              arr, list_size, int_pow(10, dec_type->scale()));
         } else {
           return replaceNullValuesFixedSizeDecimalArrayImpl<int64_t, false>(arr,
                                                                             list_size);
@@ -822,8 +825,7 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesFixedSizeArray(
     }
   }
 
-  throw std::runtime_error("Unsupported fixed size array: "s + type.toString());
-  return nullptr;
+  throw std::runtime_error("Unsupported fixed size array: "s + type->toString());
 }
 
 template <typename IntType, typename ChunkType>
@@ -871,96 +873,24 @@ std::shared_ptr<arrow::ChunkedArray> convertDecimalToInteger(
 
 }  // anonymous namespace
 
-// TODO: this overlaps with getArrowType() from ArrowResultSetConverter.cpp but with few
-// differences in kTEXT and kDATE
-std::shared_ptr<arrow::DataType> getArrowImportType(const SQLTypeInfo type) {
-  using namespace arrow;
-  auto ktype = type.get_type();
-  if (IS_INTEGER(ktype)) {
-    switch (type.get_size()) {
-      case 1:
-        return int8();
-      case 2:
-        return int16();
-      case 4:
-        return int32();
-      case 8:
-        return int64();
-      default:
-        CHECK(false);
-    }
-  }
-  switch (ktype) {
-    case kBOOLEAN:
-      return arrow::boolean();
-    case kFLOAT:
-      return float32();
-    case kDOUBLE:
-      return float64();
-    case kCHAR:
-    case kVARCHAR:
-    case kTEXT:
-      return utf8();
-    case kDECIMAL:
-    case kNUMERIC:
-      return decimal(type.get_precision(), type.get_scale());
-    case kTIME:
-      return time32(TimeUnit::SECOND);
-    case kDATE:
-      return arrow::date32();
-    case kTIMESTAMP:
-      switch (type.get_precision()) {
-        case 0:
-          return timestamp(TimeUnit::SECOND);
-        case 3:
-          return timestamp(TimeUnit::MILLI);
-        case 6:
-          return timestamp(TimeUnit::MICRO);
-        case 9:
-          return timestamp(TimeUnit::NANO);
-        default:
-          throw std::runtime_error("Unsupported timestamp precision for Arrow: " +
-                                   std::to_string(type.get_precision()));
-      }
-    case kARRAY:
-      if (IS_DECIMAL(type.get_subtype())) {
-        // Arrow 5.0 JSON parser doesn't support decimals. Use float64 instead
-        // and do the conversion on import. Due to precision problems imported
-        // data might not fully match the source data.
-        // TODO: change it after moving to Arrow 6.0
-        return list(float64());
-      } else {
-        // Arrow JSON parser doesn't support conversion to fixed size lists.
-        // So we use variable length lists in Arrow in all cases and then do
-        // the conversion.
-        return list(getArrowImportType(type.get_elem_type()));
-      }
-    case kINTERVAL_DAY_TIME:
-    case kINTERVAL_YEAR_MONTH:
-    default:
-      break;
-  }
-  throw std::runtime_error(type.get_type_name() + " is not supported in Arrow.");
-}
-
 std::shared_ptr<arrow::ChunkedArray> replaceNullValues(
     std::shared_ptr<arrow::ChunkedArray> arr,
-    const SQLTypeInfo& type,
+    const hdk::ir::Type* type,
     StringDictionary* dict) {
-  if (type.get_type() == kTIME) {
-    if (type.get_size() != 8) {
+  if (type->isTime()) {
+    if (type->size() != 8) {
       throw std::runtime_error("Unsupported time type for Arrow import: "s +
-                               type.toString());
+                               type->toString());
     }
     return convertDateReplacingNulls<int32_t, int64_t>(arr);
   }
-  if (type.get_type() == kDATE) {
-    if (type.get_compression() != kENCODING_DATE_IN_DAYS) {
+  if (type->isDate()) {
+    if (type->as<hdk::ir::DateTimeBaseType>()->unit() != hdk::ir::TimeUnit::kDay) {
       throw std::runtime_error("Unsupported date type for Arrow import: "s +
-                               type.toString());
+                               type->toString());
     }
 
-    switch (type.get_size()) {
+    switch (type->size()) {
       case 2:
         return convertDateReplacingNulls<int32_t, int16_t>(arr);
       case 4:
@@ -969,10 +899,10 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValues(
         return convertDateReplacingNulls<int32_t, int64_t>(arr);
       default:
         throw std::runtime_error("Unsupported date type for Arrow import: "s +
-                                 type.toString());
+                                 type->toString());
     }
-  } else if (type.is_integer() || is_datetime(type.get_type())) {
-    switch (type.get_size()) {
+  } else if (type->isInteger() || type->isTimestamp()) {
+    switch (type->size()) {
       case 1:
         return replaceNullValuesImpl<int8_t>(arr);
       case 2:
@@ -983,31 +913,30 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValues(
         return replaceNullValuesImpl<int64_t>(arr);
       default:
         throw std::runtime_error("Unsupported integer/datetime type for Arrow import: "s +
-                                 type.toString());
+                                 type->toString());
     }
-  } else if (type.is_fp()) {
-    switch (type.get_size()) {
-      case 4:
+  } else if (type->isFloatingPoint()) {
+    switch (type->as<hdk::ir::FloatingPointType>()->precision()) {
+      case hdk::ir::FloatingPointType::kFloat:
         return replaceNullValuesImpl<float>(arr);
-      case 8:
+      case hdk::ir::FloatingPointType::kDouble:
         return replaceNullValuesImpl<double>(arr);
     }
-  } else if (type.is_boolean()) {
+  } else if (type->isBoolean()) {
     return replaceNullValuesImpl<bool>(arr);
-  } else if (type.is_fixlen_array()) {
+  } else if (type->isFixedLenArray()) {
     return replaceNullValuesFixedSizeArray(arr, type, dict);
-  } else if (type.is_varlen_array()) {
+  } else if (type->isVarLenArray()) {
     return replaceNullValuesVarlenArray(arr, type, dict);
   }
-  CHECK(false) << "Unexpected type: " << type.toString();
-  return nullptr;
+  throw std::runtime_error("Unexpected type for Arrow import: "s + type->toString());
 }
 
 std::shared_ptr<arrow::ChunkedArray> convertDecimalToInteger(
     std::shared_ptr<arrow::ChunkedArray> arr,
-    const SQLTypeInfo& type) {
-  CHECK(type.get_type() == kDECIMAL || type.get_type() == kNUMERIC);
-  switch (type.get_size()) {
+    const hdk::ir::Type* type) {
+  CHECK(type->isDecimal());
+  switch (type->size()) {
     case 2:
       return convertDecimalToInteger<int16_t, arrow::Int16Array>(arr);
     case 4:
@@ -1016,77 +945,139 @@ std::shared_ptr<arrow::ChunkedArray> convertDecimalToInteger(
       return convertDecimalToInteger<int64_t, arrow::Int64Array>(arr);
     default:
       // TODO: throw unsupported decimal type exception
-      CHECK(false) << "Unsupported decimal type: " << type.toString();
-      break;
+      throw std::runtime_error("Unsupported decimal type: " + type->toString());
   }
-  return nullptr;
 }
 
-SQLTypeInfo getOmnisciType(const arrow::DataType& type) {
+const hdk::ir::Type* getTargetImportType(hdk::ir::Context& ctx,
+                                         const arrow::DataType& type) {
   using namespace arrow;
   switch (type.id()) {
     case Type::INT8:
-      return SQLTypeInfo(kTINYINT, false);
+      return ctx.int8();
     case Type::INT16:
-      return SQLTypeInfo(kSMALLINT, false);
+      return ctx.int16();
     case Type::INT32:
-      return SQLTypeInfo(kINT, false);
+      return ctx.int32();
     case Type::INT64:
-      return SQLTypeInfo(kBIGINT, false);
+      return ctx.int64();
     case Type::BOOL:
-      return SQLTypeInfo(kBOOLEAN, false);
+      return ctx.boolean();
     case Type::FLOAT:
-      return SQLTypeInfo(kFLOAT, false);
+      return ctx.fp32();
     case Type::DATE32:
-      return SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 32, kNULLT);
+      return ctx.date32();
     case Type::DATE64:
-      return SQLTypeInfo(kTIMESTAMP, 3, 0);
+      return ctx.timestamp(hdk::ir::TimeUnit::kMilli);
     case Type::DOUBLE:
-      return SQLTypeInfo(kDOUBLE, false);
-      // uncomment when arrow 2.0 will be released and modin support for dictionary
-      // types in read_csv would be implemented
-
-      // case Type::DICTIONARY: {
-      //   auto type = SQLTypeInfo(kTEXT, false, kENCODING_DICT);
-      //   // this is needed because createTable forces type.size to be equal to
-      //   // comp_param / 8, no matter what type.size you set here
-      //   type.set_comp_param(sizeof(uint32_t) * 8);
-      //   return type;
-      // }
-      // case Type::STRING:
-      //   return SQLTypeInfo(kTEXT, false, kENCODING_NONE);
-
-    case Type::STRING: {
-      auto type = SQLTypeInfo(kTEXT, false, kENCODING_DICT);
-      // this is needed because createTable forces type.size to be equal to
-      // comp_param / 8, no matter what type.size you set here
-      type.set_comp_param(sizeof(uint32_t) * 8);
-      return type;
-    }
+      return ctx.fp64();
+    case Type::STRING:
+      return ctx.extDict(ctx.text(), 0);
     case Type::DECIMAL: {
       const auto& decimal_type = static_cast<const arrow::DecimalType&>(type);
-      return SQLTypeInfo(kDECIMAL, decimal_type.precision(), decimal_type.scale(), false);
+      return ctx.decimal64(decimal_type.precision(), decimal_type.scale());
     }
     case Type::TIME32:
       if (static_cast<const arrow::Time32Type&>(type).unit() == arrow::TimeUnit::SECOND) {
-        return SQLTypeInfo(kTIME, false);
+        return ctx.time64(hdk::ir::TimeUnit::kSecond);
       }
       break;
     case Type::TIMESTAMP:
       switch (static_cast<const arrow::TimestampType&>(type).unit()) {
         case TimeUnit::SECOND:
-          return SQLTypeInfo(kTIMESTAMP, 0, 0);
+          return ctx.timestamp(hdk::ir::TimeUnit::kSecond);
         case TimeUnit::MILLI:
-          return SQLTypeInfo(kTIMESTAMP, 3, 0);
+          return ctx.timestamp(hdk::ir::TimeUnit::kMilli);
         case TimeUnit::MICRO:
-          return SQLTypeInfo(kTIMESTAMP, 6, 0);
+          return ctx.timestamp(hdk::ir::TimeUnit::kMicro);
         case TimeUnit::NANO:
-          return SQLTypeInfo(kTIMESTAMP, 9, 0);
+          return ctx.timestamp(hdk::ir::TimeUnit::kNano);
+        default:
+          break;
       }
+      break;
     default:
       break;
   }
   throw std::runtime_error(type.ToString() + " is not yet supported.");
+}
+
+std::shared_ptr<arrow::DataType> getArrowImportType(hdk::ir::Context& ctx,
+                                                    const hdk::ir::Type* type) {
+  using namespace arrow;
+  switch (type->id()) {
+    case hdk::ir::Type::kInteger:
+      switch (type->size()) {
+        case 1:
+          return int8();
+        case 2:
+          return int16();
+        case 4:
+          return int32();
+        case 8:
+          return int64();
+        default:
+          break;
+      }
+      break;
+    case hdk::ir::Type::kBoolean:
+      return arrow::boolean();
+    case hdk::ir::Type::kFloatingPoint:
+      switch (type->as<hdk::ir::FloatingPointType>()->precision()) {
+        case hdk::ir::FloatingPointType::kFloat:
+          return float32();
+        case hdk::ir::FloatingPointType::kDouble:
+          return float64();
+        default:
+          break;
+      }
+      break;
+    case hdk::ir::Type::kVarChar:
+    case hdk::ir::Type::kText:
+    case hdk::ir::Type::kExtDictionary:
+      return utf8();
+    case hdk::ir::Type::kDecimal: {
+      auto dec_type = type->as<hdk::ir::DecimalType>();
+      return decimal(dec_type->precision(), dec_type->scale());
+    }
+    case hdk::ir::Type::kTime:
+      return time32(TimeUnit::SECOND);
+    case hdk::ir::Type::kDate:
+      return arrow::date32();
+    case hdk::ir::Type::kTimestamp:
+      switch (type->as<hdk::ir::DateTimeBaseType>()->unit()) {
+        case hdk::ir::TimeUnit::kSecond:
+          return timestamp(TimeUnit::SECOND);
+        case hdk::ir::TimeUnit::kMilli:
+          return timestamp(TimeUnit::MILLI);
+        case hdk::ir::TimeUnit::kMicro:
+          return timestamp(TimeUnit::MICRO);
+        case hdk::ir::TimeUnit::kNano:
+          return timestamp(TimeUnit::NANO);
+        default:
+          break;
+      }
+      break;
+    case hdk::ir::Type::kFixedLenArray:
+    case hdk::ir::Type::kVarLenArray: {
+      auto elem_type = type->as<hdk::ir::ArrayBaseType>()->elemType();
+      if (elem_type->isDecimal()) {
+        // Arrow 5.0 JSON parser doesn't support decimals. Use float64 instead
+        // and do the conversion on import. Due to precision problems imported
+        // data might not fully match the source data.
+        // TODO: change it after moving to Arrow 6.0
+        return list(float64());
+      } else {
+        // Arrow JSON parser doesn't support conversion to fixed size lists.
+        // So we use variable length lists in Arrow in all cases and then do
+        // the conversion.
+        return list(getArrowImportType(ctx, elem_type));
+      }
+    }
+    default:
+      break;
+  }
+  throw std::runtime_error(type->toString() + " is not supported in Arrow import.");
 }
 
 namespace {
@@ -1161,8 +1152,8 @@ std::shared_ptr<arrow::ChunkedArray> createDictionaryEncodedColumn(
 std::shared_ptr<arrow::ChunkedArray> createDictionaryEncodedColumn(
     StringDictionary* dict,
     std::shared_ptr<arrow::ChunkedArray> arr,
-    const SQLTypeInfo& type) {
-  switch (type.get_size()) {
+    const hdk::ir::Type* type) {
+  switch (type->size()) {
     case 4:
       return createDictionaryEncodedColumn<uint32_t>(dict, arr);
     case 2:
@@ -1171,7 +1162,8 @@ std::shared_ptr<arrow::ChunkedArray> createDictionaryEncodedColumn(
       return createDictionaryEncodedColumn<uint8_t>(dict, arr);
     default:
       throw std::runtime_error(
-          "Unsupported OmniSci dictionary for Arrow strings import: "s + type.toString());
+          "Unsupported OmniSci dictionary for Arrow strings import: "s +
+          type->toString());
   }
   return nullptr;
 }
@@ -1179,11 +1171,10 @@ std::shared_ptr<arrow::ChunkedArray> createDictionaryEncodedColumn(
 std::shared_ptr<arrow::ChunkedArray> convertArrowDictionary(
     StringDictionary* dict,
     std::shared_ptr<arrow::ChunkedArray> arr,
-    const SQLTypeInfo& type) {
-  if (type.get_size() != 4) {
-    throw std::runtime_error(
-        "Unsupported OmniSci dictionary for Arrow dictionary import: "s +
-        type.toString());
+    const hdk::ir::Type* type) {
+  if (!type->isExtDictionary() || type->size() != 4) {
+    throw std::runtime_error("Unsupported HDK dictionary for Arrow dictionary import: "s +
+                             type->toString());
   }
   // TODO: allocate one big array and split it by fragments as it is done in
   // createDictionaryEncodedColumn

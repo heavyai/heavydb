@@ -14,30 +14,32 @@
 
 #pragma once
 
-#include "Shared/sqltypes.h"
+#include "IR/Type.h"
 #include "StringDictionary/StringDictionary.h"
 
 #include <arrow/api.h>
 
-std::shared_ptr<arrow::DataType> getArrowImportType(const SQLTypeInfo type);
+const hdk::ir::Type* getTargetImportType(hdk::ir::Context& ctx,
+                                         const arrow::DataType& type);
 
-SQLTypeInfo getOmnisciType(const arrow::DataType& type);
+std::shared_ptr<arrow::DataType> getArrowImportType(hdk::ir::Context& ctx,
+                                                    const hdk::ir::Type* type);
 
 std::shared_ptr<arrow::ChunkedArray> replaceNullValues(
     std::shared_ptr<arrow::ChunkedArray> arr,
-    const SQLTypeInfo& type,
+    const hdk::ir::Type* type,
     StringDictionary* dict = nullptr);
 
 std::shared_ptr<arrow::ChunkedArray> convertDecimalToInteger(
     std::shared_ptr<arrow::ChunkedArray> arr,
-    const SQLTypeInfo& type);
+    const hdk::ir::Type* type);
 
 std::shared_ptr<arrow::ChunkedArray> createDictionaryEncodedColumn(
     StringDictionary* dict,
     std::shared_ptr<arrow::ChunkedArray> arr,
-    const SQLTypeInfo& type);
+    const hdk::ir::Type* type);
 
 std::shared_ptr<arrow::ChunkedArray> convertArrowDictionary(
     StringDictionary* dict,
     std::shared_ptr<arrow::ChunkedArray> arr,
-    const SQLTypeInfo& type);
+    const hdk::ir::Type* type);
