@@ -6,8 +6,9 @@ set(ir_source_files
     Expr.h
     Type.cpp
     Type.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../QueryEngine/DateTruncate.cpp
 )
 
 add_library(IR ${ir_source_files})
 
-target_link_libraries(Analyzer Shared)
+target_link_libraries(IR Shared)
