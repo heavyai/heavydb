@@ -165,10 +165,10 @@ TEST(Build, PerfectOneToOne1) {
                                          {{8}, {8}},
                                          {{9}, {9}}};
 
-    createTable("table1", {{"nums1", SQLTypeInfo(kINT)}});
+    createTable("table1", {{"nums1", ctx().int32()}});
     insertCsvValues("table1", "1\n8");
 
-    createTable("table2", {{"nums2", SQLTypeInfo(kINT)}});
+    createTable("table2", {{"nums2", ctx().int32()}});
     insertCsvValues("table2", "0\n1\n2\n3\n4\n5\n6\n7\n8\n9");
 
     auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2", executor.get());
@@ -202,10 +202,10 @@ TEST(Build, PerfectOneToOne2) {
                                          {{7}, {6}},
                                          {{9}, {7}}};
 
-    createTable("table1", {{"nums1", SQLTypeInfo(kINT)}});
+    createTable("table1", {{"nums1", ctx().int32()}});
     insertCsvValues("table1", "1\n8");
 
-    createTable("table2", {{"nums2", SQLTypeInfo(kINT)}});
+    createTable("table2", {{"nums2", ctx().int32()}});
     insertCsvValues("table2", "0\n1\n2\n4\n5\n6\n7\n9");
 
     auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2", executor.get());
@@ -234,10 +234,10 @@ TEST(Build, PerfectOneToMany1) {
     const DecodedJoinHashBufferSet s1 = {
         {{0}, {0, 5}}, {{1}, {1, 6}}, {{2}, {2, 7}}, {{3}, {3, 8}}, {{4}, {4, 9}}};
 
-    createTable("table1", {{"nums1", SQLTypeInfo(kINT)}});
+    createTable("table1", {{"nums1", ctx().int32()}});
     insertCsvValues("table1", "1\n8");
 
-    createTable("table2", {{"nums2", SQLTypeInfo(kINT)}});
+    createTable("table2", {{"nums2", ctx().int32()}});
     insertCsvValues("table2", "0\n1\n2\n3\n4\n0\n1\n2\n3\n4");
 
     auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2", executor.get());
@@ -266,10 +266,10 @@ TEST(Build, PerfectOneToMany2) {
     const DecodedJoinHashBufferSet s1 = {
         {{0}, {0, 4}}, {{2}, {1, 5}}, {{3}, {2, 6}}, {{4}, {3, 7}}};
 
-    createTable("table1", {{"nums1", SQLTypeInfo(kINT)}});
+    createTable("table1", {{"nums1", ctx().int32()}});
     insertCsvValues("table1", "1\n8");
 
-    createTable("table2", {{"nums2", SQLTypeInfo(kINT)}});
+    createTable("table2", {{"nums2", ctx().int32()}});
     insertCsvValues("table2", "0\n2\n3\n4\n0\n2\n3\n4");
 
     auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2", executor.get());
@@ -301,16 +301,15 @@ TEST(Build, detectProperJoinQual) {
     const DecodedJoinHashBufferSet s1 = {
         {{0}, {0, 5}}, {{1}, {1, 6}}, {{2}, {2, 7}}, {{3}, {3, 8}}, {{4}, {4, 9}}};
 
-    createTable("table1", {{"t11", SQLTypeInfo(kINT)}, {"t12", SQLTypeInfo(kINT)}});
+    createTable("table1", {{"t11", ctx().int32()}, {"t12", ctx().int32()}});
     insertCsvValues("table1", "1,1\n8,1");
 
-    createTable("table2", {{"t21", SQLTypeInfo(kINT)}, {"t22", SQLTypeInfo(kINT)}});
+    createTable("table2", {{"t21", ctx().int32()}, {"t22", ctx().int32()}});
     insertCsvValues("table2", "0,1\n1,1\n2,1\n3,1\n4,1\n0,1\n1,1\n2,1\n3,1\n4,1");
 
     Datum d;
     d.intval = 1;
-    SQLTypeInfo ti(kINT, 0, 0, false);
-    auto c = std::make_shared<hdk::ir::Constant>(ti, false, d);
+    auto c = std::make_shared<hdk::ir::Constant>(ctx().int32(), false, d);
 
     // case 1: t12 = 1 AND t11 = t21
     // case 2: 1 = t12 AND t11 = t21
@@ -382,10 +381,10 @@ TEST(Build, KeyedOneToOne) {
     // | keyed one-to-one | keys * (1,1,1) (3,3,2) (0,0,0) * * |
     const DecodedJoinHashBufferSet s1 = {{{0, 0}, {0}}, {{1, 1}, {1}}, {{3, 3}, {2}}};
 
-    createTable("table1", {{"a1", SQLTypeInfo(kINT)}, {"a2", SQLTypeInfo(kINT)}});
+    createTable("table1", {{"a1", ctx().int32()}, {"a2", ctx().int32()}});
     insertCsvValues("table1", "1,11\n2,12\n3,13\n4,14");
 
-    createTable("table2", {{"b", SQLTypeInfo(kINT)}});
+    createTable("table2", {{"b", ctx().int32()}});
     insertCsvValues("table2", "0\n1\n3");
 
     auto a1 = getSyntheticColumnVar(TEST_DB_ID, "table1", "a1", 0, executor.get());
@@ -427,10 +426,10 @@ TEST(Build, KeyedOneToMany) {
     // 1 2 1 * * | payloads 1 2 3 0 |
     const DecodedJoinHashBufferSet s1 = {{{0}, {0}}, {{1}, {1}}, {{3}, {2, 3}}};
 
-    createTable("table1", {{"a1", SQLTypeInfo(kINT)}, {"a2", SQLTypeInfo(kINT)}});
+    createTable("table1", {{"a1", ctx().int32()}, {"a2", ctx().int32()}});
     insertCsvValues("table1", "1,11\n2,12\n3,13\n4,14");
 
-    createTable("table2", {{"b", SQLTypeInfo(kINT)}});
+    createTable("table2", {{"b", ctx().int32()}});
     insertCsvValues("table2", "0\n1\n3\n3");
 
     auto a1 = getSyntheticColumnVar(TEST_DB_ID, "table1", "a1", 0, executor.get());
@@ -465,16 +464,16 @@ TEST(MultiFragment, PerfectOneToOne) {
 
     JoinHashTableCacheInvalidator::invalidateCaches();
 
-    createTable("table1", {{"nums1", SQLTypeInfo(kINT)}});
+    createTable("table1", {{"nums1", ctx().int32()}});
     insertCsvValues("table1", "1\n7");
 
-    createTable("table2", {{"nums2", SQLTypeInfo(kINT)}});
+    createTable("table2", {{"nums2", ctx().int32()}});
     insertCsvValues("table2", "0\n1\n2\n3\n4\n5\n6\n7\n8\n9");
 
-    createTable("table3", {{"nums3", SQLTypeInfo(kINT)}}, {3});
+    createTable("table3", {{"nums3", ctx().int32()}}, {3});
     insertCsvValues("table3", "1\n7");
 
-    createTable("table4", {{"nums4", SQLTypeInfo(kINT)}}, {3});
+    createTable("table4", {{"nums4", ctx().int32()}}, {3});
     insertCsvValues("table4", "0\n1\n2\n3\n4\n5\n6\n7\n8\n9");
 
     auto hash_table1 = buildPerfect("table1", "nums1", "table2", "nums2", executor.get());
@@ -504,16 +503,16 @@ TEST(MultiFragment, PerfectOneToMany) {
 
     JoinHashTableCacheInvalidator::invalidateCaches();
 
-    createTable("table1", {{"nums1", SQLTypeInfo(kINT)}});
+    createTable("table1", {{"nums1", ctx().int32()}});
     insertCsvValues("table1", "1\n7");
 
-    createTable("table2", {{"nums2", SQLTypeInfo(kINT)}});
+    createTable("table2", {{"nums2", ctx().int32()}});
     insertCsvValues("table2", "0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n9");
 
-    createTable("table3", {{"nums3", SQLTypeInfo(kINT)}}, {3});
+    createTable("table3", {{"nums3", ctx().int32()}}, {3});
     insertCsvValues("table3", "1\n7");
 
-    createTable("table4", {{"nums4", SQLTypeInfo(kINT)}}, {3});
+    createTable("table4", {{"nums4", ctx().int32()}}, {3});
     insertCsvValues("table4", "0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n9");
 
     auto hash_table1 = buildPerfect("table1", "nums1", "table2", "nums2", executor.get());
@@ -547,10 +546,10 @@ TEST(MultiFragment, KeyedOneToOne) {
 
     JoinHashTableCacheInvalidator::invalidateCaches();
 
-    createTable("table1", {{"a1", SQLTypeInfo(kINT)}, {"a2", SQLTypeInfo(kINT)}});
+    createTable("table1", {{"a1", ctx().int32()}, {"a2", ctx().int32()}});
     insertCsvValues("table1", "1,11\n2,12\n3,13\n4,14");
 
-    createTable("table2", {{"b", SQLTypeInfo(kINT)}});
+    createTable("table2", {{"b", ctx().int32()}});
     insertCsvValues("table2", "0\n1\n3");
 
     auto a1 = getSyntheticColumnVar(TEST_DB_ID, "table1", "a1", 0, executor.get());
@@ -568,10 +567,10 @@ TEST(MultiFragment, KeyedOneToOne) {
     CHECK(baseline);
     EXPECT_EQ(hash_table1->getHashType(), HashType::OneToOne);
 
-    createTable("table3", {{"a1", SQLTypeInfo(kINT)}, {"a2", SQLTypeInfo(kINT)}}, {1});
+    createTable("table3", {{"a1", ctx().int32()}, {"a2", ctx().int32()}}, {1});
     insertCsvValues("table3", "1,11\n2,12\n3,13\n4,14");
 
-    createTable("table4", {{"b", SQLTypeInfo(kINT)}}, {1});
+    createTable("table4", {{"b", ctx().int32()}}, {1});
     insertCsvValues("table4", "0\n1\n3");
 
     a1 = getSyntheticColumnVar(TEST_DB_ID, "table3", "a1", 0, executor.get());
@@ -611,10 +610,10 @@ TEST(MultiFragment, KeyedOneToMany) {
 
     JoinHashTableCacheInvalidator::invalidateCaches();
 
-    createTable("table1", {{"a1", SQLTypeInfo(kINT)}, {"a2", SQLTypeInfo(kINT)}});
+    createTable("table1", {{"a1", ctx().int32()}, {"a2", ctx().int32()}});
     insertCsvValues("table1", "1,11\n2,12\n3,13\n4,14");
 
-    createTable("table2", {{"b", SQLTypeInfo(kINT)}});
+    createTable("table2", {{"b", ctx().int32()}});
     insertCsvValues("table2", "0\n1\n3\n3");
 
     auto a1 = getSyntheticColumnVar(TEST_DB_ID, "table1", "a1", 0, executor.get());
@@ -630,10 +629,10 @@ TEST(MultiFragment, KeyedOneToMany) {
     auto hash_table1 = buildKeyed(op, executor.get());
     EXPECT_EQ(hash_table1->getHashType(), HashType::OneToMany);
 
-    createTable("table3", {{"a1", SQLTypeInfo(kINT)}, {"a2", SQLTypeInfo(kINT)}}, {1});
+    createTable("table3", {{"a1", ctx().int32()}, {"a2", ctx().int32()}}, {1});
     insertCsvValues("table3", "1,11\n2,12\n3,13\n4,14");
 
-    createTable("table4", {{"b", SQLTypeInfo(kINT)}}, {1});
+    createTable("table4", {{"b", ctx().int32()}}, {1});
     insertCsvValues("table4", "0\n1\n3\n3");
 
     a1 = getSyntheticColumnVar(TEST_DB_ID, "table3", "a1", 0, executor.get());
@@ -664,15 +663,15 @@ TEST(MultiFragment, KeyedOneToMany) {
 
 TEST(Other, Regression) {
   createTable("table_a",
-              {{"Small_int", SQLTypeInfo(kSMALLINT)},
-               {"dest_state", dictType()},
-               {"str", kTEXT}});
+              {{"Small_int", ctx().int16()},
+               {"dest_state", ctx().extDict(ctx().text(), 0)},
+               {"str", ctx().text()}});
   insertCsvValues("table_a", "1,testa_1,str1\n1,testa_2,str1");
 
   createTable("table_b",
-              {{"Small_int", SQLTypeInfo(kSMALLINT)},
-               {"dest_state", dictType()},
-               {"str", kTEXT}});
+              {{"Small_int", ctx().int16()},
+               {"dest_state", ctx().extDict(ctx().text(), 0)},
+               {"str", ctx().text()}});
   insertCsvValues("table_b", "1,testb_1,str1\n2,testb_2,str1");
 
   EXPECT_THROW(run_multiple_agg(R"(
