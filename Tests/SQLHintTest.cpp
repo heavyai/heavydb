@@ -47,10 +47,10 @@ constexpr double EPS = 1e-10;
 
 void createTable() {
   createTable("SQL_HINT_DUMMY",
-              {{"key", SQLTypeInfo(kINT)},
-               {"ts1", SQLTypeInfo(kTIMESTAMP, 0, 0)},
-               {"ts2", SQLTypeInfo(kTIMESTAMP, 0, 0)},
-               {"str1", dictType(2)}});
+              {{"key", ctx().int32()},
+               {"ts1", ctx().timestamp(hdk::ir::TimeUnit::kSecond)},
+               {"ts2", ctx().timestamp(hdk::ir::TimeUnit::kSecond)},
+               {"str1", ctx().extDict(ctx().text(), 0, 2)}});
 }
 
 void dropTable() {
