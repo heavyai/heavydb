@@ -46,22 +46,22 @@ class ArrayExtOpsEnv : public ::testing::Test {
  protected:
   void SetUp() override {
     createTable("array_ext_ops_test",
-                {{"i64", SQLTypeInfo(kBIGINT)},
-                 {"i32", SQLTypeInfo(kINT)},
-                 {"i16", SQLTypeInfo(kSMALLINT)},
-                 {"i8", SQLTypeInfo(kTINYINT)},
-                 {"d", SQLTypeInfo(kDOUBLE)},
-                 {"f", SQLTypeInfo(kFLOAT)},
-                 {"i1", SQLTypeInfo(kBOOLEAN)},
-                 {"str", dictType()},
-                 {"arri64", arrayType(kBIGINT)},
-                 {"arri32", arrayType(kINT)},
-                 {"arri16", arrayType(kSMALLINT)},
-                 {"arri8", arrayType(kTINYINT)},
-                 {"arrd", arrayType(kDOUBLE)},
-                 {"arrf", arrayType(kFLOAT)},
-                 {"arri1", arrayType(kBOOLEAN)},
-                 {"arrstr", arrayType(kTEXT)}});
+                {{"i64", ctx().int64()},
+                 {"i32", ctx().int32()},
+                 {"i16", ctx().int16()},
+                 {"i8", ctx().int8()},
+                 {"d", ctx().fp64()},
+                 {"f", ctx().fp32()},
+                 {"i1", ctx().boolean()},
+                 {"str", ctx().extDict(ctx().text(), 0)},
+                 {"arri64", ctx().arrayVarLen(ctx().int64())},
+                 {"arri32", ctx().arrayVarLen(ctx().int32())},
+                 {"arri16", ctx().arrayVarLen(ctx().int16())},
+                 {"arri8", ctx().arrayVarLen(ctx().int8())},
+                 {"arrd", ctx().arrayVarLen(ctx().fp64())},
+                 {"arrf", ctx().arrayVarLen(ctx().fp32())},
+                 {"arri1", ctx().arrayVarLen(ctx().boolean())},
+                 {"arrstr", ctx().arrayVarLen(ctx().extDict(ctx().text(), 0))}});
 
     insertJsonValues(
         "array_ext_ops_test",
@@ -234,7 +234,9 @@ TEST_F(ArrayExtOpsEnv, ArrayAppendDowncast) {
 
 class TinyIntArrayImportTest : public ::testing::Test {
  protected:
-  void SetUp() override { createTable("tinyint_arr", {{"ti", arrayType(kTINYINT)}}); }
+  void SetUp() override {
+    createTable("tinyint_arr", {{"ti", ctx().arrayVarLen(ctx().int8())}});
+  }
 
   void TearDown() override { dropTable("tinyint_arr"); }
 };
@@ -271,38 +273,39 @@ class MultiFragArrayJoinTest : public ::testing::Test {
  protected:
   void SetUp() override {
     std::vector<ArrowStorage::ColumnDescription> integer_type_cols{
-        {"tiv", arrayType(kTINYINT)},
-        {"tif", arrayType(kTINYINT, 3)},
-        {"siv", arrayType(kSMALLINT)},
-        {"sif", arrayType(kSMALLINT, 3)},
-        {"intv", arrayType(kINT)},
-        {"intf", arrayType(kINT, 3)},
-        {"biv", arrayType(kBIGINT)},
-        {"bif", arrayType(kBIGINT, 3)}};
+        {"tiv", ctx().arrayVarLen(ctx().int8())},
+        {"tif", ctx().arrayFixed(3, ctx().int8())},
+        {"siv", ctx().arrayVarLen(ctx().int16())},
+        {"sif", ctx().arrayFixed(3, ctx().int16())},
+        {"intv", ctx().arrayVarLen(ctx().int32())},
+        {"intf", ctx().arrayFixed(3, ctx().int32())},
+        {"biv", ctx().arrayVarLen(ctx().int64())},
+        {"bif", ctx().arrayFixed(3, ctx().int64())}};
     std::vector<ArrowStorage::ColumnDescription> floating_type_cols{
-        {"dv", arrayType(kDOUBLE)},
-        {"df", arrayType(kDOUBLE, 3)},
-        {"dcv", decimalArrayType(18, 6)},
-        {"dcf", decimalArrayType(18, 6, 3)},
-        {"fv", arrayType(kFLOAT)},
-        {"ff", arrayType(kFLOAT, 3)}};
+        {"dv", ctx().arrayVarLen(ctx().fp64())},
+        {"df", ctx().arrayFixed(3, ctx().fp64())},
+        {"dcv", ctx().arrayVarLen(ctx().decimal64(18, 6))},
+        {"dcf", ctx().arrayFixed(3, ctx().decimal64(18, 6))},
+        {"fv", ctx().arrayVarLen(ctx().fp32())},
+        {"ff", ctx().arrayFixed(3, ctx().fp32())}};
     std::vector<ArrowStorage::ColumnDescription> date_and_time_type_cols{
-        {"dtv", arrayType(kDATE)},
-        {"dtf", arrayType(kDATE, 3)},
-        {"tv", arrayType(kTIME)},
-        {"tf", arrayType(kTIME, 3)},
-        {"tsv", arrayType(kTIMESTAMP)},
-        {"tsf", arrayType(kTIMESTAMP, 3)}};
+        {"dtv", ctx().arrayVarLen(ctx().date64(hdk::ir::TimeUnit::kSecond))},
+        {"dtf", ctx().arrayFixed(3, ctx().date64(hdk::ir::TimeUnit::kSecond))},
+        {"tv", ctx().arrayVarLen(ctx().time64(hdk::ir::TimeUnit::kSecond))},
+        {"tf", ctx().arrayFixed(3, ctx().time64(hdk::ir::TimeUnit::kSecond))},
+        {"tsv", ctx().arrayVarLen(ctx().timestamp(hdk::ir::TimeUnit::kSecond))},
+        {"tsf", ctx().arrayFixed(3, ctx().timestamp(hdk::ir::TimeUnit::kSecond))}};
     std::vector<ArrowStorage::ColumnDescription> text_type_cols{
-        {"tx", dictType()},
-        {"txe4", dictType(4)},
-        {"txe2", dictType(2)},
-        {"txe1", dictType(1)},
-        {"txn", SQLTypeInfo(kTEXT)},
-        {"txv", arrayType(kTEXT)},
-        {"txve", arrayType(kTEXT)}};
+        {"tx", ctx().extDict(ctx().text(), 0)},
+        {"txe4", ctx().extDict(ctx().text(), 0, 4)},
+        {"txe2", ctx().extDict(ctx().text(), 0, 2)},
+        {"txe1", ctx().extDict(ctx().text(), 0, 1)},
+        {"txn", ctx().text()},
+        {"txv", ctx().arrayVarLen(ctx().extDict(ctx().text(), 0))},
+        {"txve", ctx().arrayVarLen(ctx().extDict(ctx().text(), 0))}};
     std::vector<ArrowStorage::ColumnDescription> boolean_type_cols{
-        {"boolv", arrayType(kBOOLEAN)}, {"boolf", arrayType(kBOOLEAN, 3)}};
+        {"boolv", ctx().arrayVarLen(ctx().boolean())},
+        {"boolf", ctx().arrayFixed(3, ctx().boolean())}};
     // TODO: Enable date and time when JSON parser for corresponding arrays is available
     auto create_table = [&integer_type_cols,
                          &floating_type_cols,
@@ -341,8 +344,8 @@ class MultiFragArrayJoinTest : public ::testing::Test {
           (tbl_name.compare("mfarr") == 0 || tbl_name.compare("sfarr") == 0)) {
         // exclude these cols for multi-frag nullable case to avoid not accepted null
         // value issue (i.e., RelAlgExecutor::2833)
-        cols.push_back({"txf", arrayType(kTEXT, 3)});
-        cols.push_back({"txfe", arrayType(kTEXT, 3)});
+        cols.push_back({"txf", ctx().arrayFixed(3, ctx().extDict(ctx().text(), 0))});
+        cols.push_back({"txfe", ctx().arrayFixed(3, ctx().extDict(ctx().text(), 0))});
       };
 
       createTable(tbl_name, cols, {multi_frag ? 5ULL : 32000000ULL});
@@ -693,20 +696,20 @@ class MultiFragArrayParallelLinearizationTest : public ::testing::Test {
     config().exec.parallel_linearization_threshold = 10;
 
     std::vector<ArrowStorage::ColumnDescription> cols{
-        {"tiv", arrayType(kTINYINT)},
-        {"siv", arrayType(kSMALLINT)},
-        {"intv", arrayType(kINT)},
-        {"biv", arrayType(kBIGINT)},
-        {"dv", arrayType(kDOUBLE)},
-        {"dcv", decimalArrayType(18, 6)},
-        {"fv", arrayType(kFLOAT)},
+        {"tiv", ctx().arrayVarLen(ctx().int8())},
+        {"siv", ctx().arrayVarLen(ctx().int16())},
+        {"intv", ctx().arrayVarLen(ctx().int32())},
+        {"biv", ctx().arrayVarLen(ctx().int64())},
+        {"dv", ctx().arrayVarLen(ctx().fp64())},
+        {"dcv", ctx().arrayVarLen(ctx().decimal64(18, 6))},
+        {"fv", ctx().arrayVarLen(ctx().fp32())},
         // TODO: enable when datetime arrays are supported in JSON parser
         //{"dtv", arrayType(kDATE)},
         //{"tv", arrayType(kTIME)},
         //{"tsv", arrayType(kTIMESTAMP)},
-        {"txv", arrayType(kTEXT)},
-        {"txve", arrayType(kTEXT)},
-        {"boolv", arrayType(kBOOLEAN)}};
+        {"txv", ctx().arrayVarLen(ctx().extDict(ctx().text(), 0))},
+        {"txve", ctx().arrayVarLen(ctx().extDict(ctx().text(), 0))},
+        {"boolv", ctx().arrayVarLen(ctx().boolean())}};
     auto create_table = [&cols](const std::string& tbl_name, const bool multi_frag) {
       createTable(tbl_name, cols, {multi_frag ? 5ULL : 32000000ULL});
     };
