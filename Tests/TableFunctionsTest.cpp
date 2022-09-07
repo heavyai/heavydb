@@ -45,10 +45,10 @@ class TableFunctions : public ::testing::Test {
   void SetUp() override {
     {
       createTable("tf_test",
-                  {{"x", SQLTypeInfo(kINT)},
-                   {"f", SQLTypeInfo(kFLOAT)},
-                   {"d", SQLTypeInfo(kDOUBLE)},
-                   {"d2", SQLTypeInfo(kDOUBLE)}},
+                  {{"x", ctx().int32()},
+                   {"f", ctx().fp32()},
+                   {"d", ctx().fp64()},
+                   {"d2", ctx().fp64()}},
                   {2});
 
       std::stringstream ss;
@@ -59,18 +59,18 @@ class TableFunctions : public ::testing::Test {
       insertCsvValues("tf_test", ss.str());
     }
     {
-      createTable(
-          "sd_test",
-          {{"base", dictType(4, false, -1)}, {"derived", dictType(4, false, -1)}});
+      createTable("sd_test",
+                  {{"base", ctx().extDict(ctx().text(), -1)},
+                   {"derived", ctx().extDict(ctx().text(), -1)}});
       insertCsvValues("sd_test", "hello,world\nfoo,bar\nbar,baz\nworld,foo\nbaz,hello");
     }
     {
       createTable("err_test",
-                  {{"x", SQLTypeInfo(kINT)},
-                   {"y", SQLTypeInfo(kBIGINT)},
-                   {"f", SQLTypeInfo(kFLOAT)},
-                   {"d", SQLTypeInfo(kDOUBLE)},
-                   {"x2", SQLTypeInfo(kINT)}},
+                  {{"x", ctx().int32()},
+                   {"y", ctx().int64()},
+                   {"f", ctx().fp32()},
+                   {"d", ctx().fp64()},
+                   {"x2", ctx().int32()}},
                   {2});
 
       std::stringstream ss;
