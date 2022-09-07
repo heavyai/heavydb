@@ -2922,28 +2922,25 @@ TEST(ResultsetConversion, EnforceParallelColumnarConversion) {
   // whether the large columnar conversion is done correctly
 
   // load 50M rows - single-frag
-  createTable("t_large",
-              {{"x", SQLTypeInfo(kBIGINT, true)},
-               {"y", SQLTypeInfo(kBIGINT, true)},
-               {"z", SQLTypeInfo(kBIGINT, true)}},
-              {100000000});
+  createTable(
+      "t_large",
+      {{"x", ctx().int64(false)}, {"y", ctx().int64(false)}, {"z", ctx().int64(false)}},
+      {100000000});
   getStorage()->appendParquetFile(
       "../../Tests/Import/datafiles/interrupt_table_very_large.parquet", "t_large");
 
   // load 50M rows - two frags (use default frag size)
-  createTable("t_large_multi_frag",
-              {{"x", SQLTypeInfo(kBIGINT, true)},
-               {"y", SQLTypeInfo(kBIGINT, true)},
-               {"z", SQLTypeInfo(kBIGINT, true)}},
-              {32000000});
+  createTable(
+      "t_large_multi_frag",
+      {{"x", ctx().int64(false)}, {"y", ctx().int64(false)}, {"z", ctx().int64(false)}},
+      {32000000});
   getStorage()->appendParquetFile(
       "../../Tests/Import/datafiles/interrupt_table_very_large.parquet",
       "t_large_multi_frag");
 
-  createTable("t_small",
-              {{"x", SQLTypeInfo(kBIGINT, true)},
-               {"y", SQLTypeInfo(kBIGINT, true)},
-               {"z", SQLTypeInfo(kBIGINT, true)}});
+  createTable(
+      "t_small",
+      {{"x", ctx().int64(false)}, {"y", ctx().int64(false)}, {"z", ctx().int64(false)}});
   insertCsvValues("t_small", "1,1,1");
 
   int64_t answer = 9999999;
