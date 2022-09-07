@@ -48,7 +48,8 @@ bool skip_tests(const ExecutorDeviceType device_type) {
 class HighCardinalityStringEnv : public ::testing::Test {
  protected:
   void SetUp() override {
-    createTable("high_cardinality_str", {{"x", SQLTypeInfo(kINT)}, {"str", dictType()}});
+    createTable("high_cardinality_str",
+                {{"x", ctx().int32()}, {"str", ctx().extDict(ctx().text(), 0)}});
     insertCsvValues("high_cardinality_str", "1,hi\n2,bye");
   }
 
@@ -81,20 +82,18 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
 
   std::vector<InputTableInfo> table_infos = get_table_infos(input_descs, executor.get());
 
-  auto count_expr = hdk::ir::makeExpr<hdk::ir::AggExpr>(
-      SQLTypeInfo(kBIGINT, false), kCOUNT, nullptr, false, nullptr);
+  auto count_expr =
+      hdk::ir::makeExpr<hdk::ir::AggExpr>(ctx().int64(), kCOUNT, nullptr, false, nullptr);
   auto group_expr = hdk::ir::makeExpr<hdk::ir::ColumnVar>(colStrInfo, 0);
   auto filter_col_expr = hdk::ir::makeExpr<hdk::ir::ColumnVar>(colXInfo, 0);
   Datum d{int64_t(1)};
-  auto filter_val_expr =
-      hdk::ir::makeExpr<hdk::ir::Constant>(SQLTypeInfo(kINT, false), false, d);
-  auto simple_filter_expr =
-      hdk::ir::makeExpr<hdk::ir::BinOper>(SQLTypeInfo(kBOOLEAN, false),
-                                          false,
-                                          SQLOps::kEQ,
-                                          SQLQualifier::kONE,
-                                          filter_col_expr,
-                                          filter_val_expr);
+  auto filter_val_expr = hdk::ir::makeExpr<hdk::ir::Constant>(ctx().int32(), false, d);
+  auto simple_filter_expr = hdk::ir::makeExpr<hdk::ir::BinOper>(ctx().boolean(),
+                                                                false,
+                                                                SQLOps::kEQ,
+                                                                SQLQualifier::kONE,
+                                                                filter_col_expr,
+                                                                filter_val_expr);
   RelAlgExecutionUnit ra_exe_unit{input_descs,
                                   input_col_descs,
                                   {simple_filter_expr},
@@ -179,20 +178,18 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
 
   std::vector<InputTableInfo> table_infos = get_table_infos(input_descs, executor.get());
 
-  auto count_expr = hdk::ir::makeExpr<hdk::ir::AggExpr>(
-      SQLTypeInfo(kBIGINT, false), kCOUNT, nullptr, false, nullptr);
+  auto count_expr =
+      hdk::ir::makeExpr<hdk::ir::AggExpr>(ctx().int64(), kCOUNT, nullptr, false, nullptr);
   auto group_expr = hdk::ir::makeExpr<hdk::ir::ColumnVar>(colStrInfo, 0);
   auto filter_col_expr = hdk::ir::makeExpr<hdk::ir::ColumnVar>(colXInfo, 0);
   Datum d{int64_t(1)};
-  auto filter_val_expr =
-      hdk::ir::makeExpr<hdk::ir::Constant>(SQLTypeInfo(kINT, false), false, d);
-  auto simple_filter_expr =
-      hdk::ir::makeExpr<hdk::ir::BinOper>(SQLTypeInfo(kBOOLEAN, false),
-                                          false,
-                                          SQLOps::kEQ,
-                                          SQLQualifier::kONE,
-                                          filter_col_expr,
-                                          filter_val_expr);
+  auto filter_val_expr = hdk::ir::makeExpr<hdk::ir::Constant>(ctx().int32(), false, d);
+  auto simple_filter_expr = hdk::ir::makeExpr<hdk::ir::BinOper>(ctx().boolean(),
+                                                                false,
+                                                                SQLOps::kEQ,
+                                                                SQLQualifier::kONE,
+                                                                filter_col_expr,
+                                                                filter_val_expr);
   RelAlgExecutionUnit ra_exe_unit{input_descs,
                                   input_col_descs,
                                   {simple_filter_expr},
@@ -266,8 +263,8 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
 
   std::vector<InputTableInfo> table_infos = get_table_infos(input_descs, executor.get());
 
-  auto count_expr = hdk::ir::makeExpr<hdk::ir::AggExpr>(
-      SQLTypeInfo(kBIGINT, false), kCOUNT, nullptr, false, nullptr);
+  auto count_expr =
+      hdk::ir::makeExpr<hdk::ir::AggExpr>(ctx().int64(), kCOUNT, nullptr, false, nullptr);
   auto group_expr = hdk::ir::makeExpr<hdk::ir::ColumnVar>(colStrInfo, 0);
 
   RelAlgExecutionUnit ra_exe_unit{input_descs,
@@ -313,7 +310,9 @@ class LowCardinalityThresholdTest : public ::testing::Test {
  protected:
   void SetUp() override {
     createTable("low_cardinality",
-                {{"fl", dictType()}, {"ar", dictType()}, {"dep", dictType()}});
+                {{"fl", ctx().extDict(ctx().text(), 0)},
+                 {"ar", ctx().extDict(ctx().text(), 0)},
+                 {"dep", ctx().extDict(ctx().text(), 0)}});
 
     std::stringstream ss;
     for (size_t i = 0; i < config().exec.group_by.big_group_threshold; i++) {
@@ -344,7 +343,9 @@ class BigCardinalityThresholdTest : public ::testing::Test {
         config().exec.group_by.big_group_threshold + 1;
 
     createTable("big_cardinality",
-                {{"fl", dictType()}, {"ar", dictType()}, {"dep", dictType()}});
+                {{"fl", ctx().extDict(ctx().text(), 0)},
+                 {"ar", ctx().extDict(ctx().text(), 0)},
+                 {"dep", ctx().extDict(ctx().text(), 0)}});
 
     std::stringstream ss;
     // add enough groups to trigger the watchdog exception if we use a poor estimate

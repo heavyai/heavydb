@@ -424,6 +424,14 @@ class Constant : public Expr {
       type_info.set_notnull(true);
     }
   }
+  Constant(const Type* type, bool n, Datum v, bool cacheable = true)
+      : Expr(type), is_null(n), cacheable_(cacheable), constval(v) {
+    if (n) {
+      set_null_value();
+    } else {
+      type_info.set_notnull(true);
+    }
+  }
   Constant(const SQLTypeInfo& ti, bool n, const ExprPtrList& l, bool cacheable = true)
       : Expr(ti), is_null(n), cacheable_(cacheable), constval(Datum{0}), value_list(l) {}
   ~Constant() override;
@@ -545,6 +553,8 @@ class BinOper : public Expr {
           ExprPtr l,
           ExprPtr r)
       : Expr(ti, has_agg), optype(o), qualifier(q), left_operand(l), right_operand(r) {}
+  BinOper(const Type* type, bool has_agg, SQLOps o, SQLQualifier q, ExprPtr l, ExprPtr r)
+      : Expr(type, has_agg), optype(o), qualifier(q), left_operand(l), right_operand(r) {}
   BinOper(SQLTypes t, SQLOps o, SQLQualifier q, ExprPtr l, ExprPtr r)
       : Expr(t, l->get_type_info().get_notnull() && r->get_type_info().get_notnull())
       , optype(o)
@@ -1337,6 +1347,8 @@ class LikelihoodExpr : public Expr {
  */
 class AggExpr : public Expr {
  public:
+  AggExpr(const Type* type, SQLAgg a, ExprPtr g, bool d, std::shared_ptr<Constant> e)
+      : Expr(type, true), aggtype(a), arg(g), is_distinct(d), arg1(e) {}
   AggExpr(const SQLTypeInfo& ti, SQLAgg a, ExprPtr g, bool d, std::shared_ptr<Constant> e)
       : Expr(ti, true), aggtype(a), arg(g), is_distinct(d), arg1(e) {}
   AggExpr(SQLTypes t, SQLAgg a, Expr* g, bool d, std::shared_ptr<Constant> e, int idx)
