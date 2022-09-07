@@ -383,10 +383,11 @@ bool check_one_to_one_baseline_hashtable(std::vector<std::vector<int32_t>>& inse
 
 void import_tables_cache_invalidation_for_CPU_one_to_one_join(bool reverse) {
   dropTable("cache_invalid_t1");
-  createTable(
-      "cache_invalid_t1",
-      {{"id1", SQLTypeInfo(kINT)}, {"id2", SQLTypeInfo(kINT)}, {"des", dictType()}},
-      {2000000});
+  createTable("cache_invalid_t1",
+              {{"id1", ctx().int32()},
+               {"id2", ctx().int32()},
+               {"des", ctx().extDict(ctx().text(), 0)}},
+              {2000000});
   if (reverse) {
     insertCsvValues("cache_invalid_t1", "1,1,row-0\n0,0,row-1");
   } else {
@@ -394,20 +395,21 @@ void import_tables_cache_invalidation_for_CPU_one_to_one_join(bool reverse) {
   }
 
   dropTable("cache_invalid_t2");
-  createTable(
-      "cache_invalid_t2",
-      {{"id1", SQLTypeInfo(kINT)}, {"id2", SQLTypeInfo(kINT)}, {"des", dictType()}},
-      {2000000});
+  createTable("cache_invalid_t2",
+              {{"id1", ctx().int32()},
+               {"id2", ctx().int32()},
+               {"des", ctx().extDict(ctx().text(), 0)}},
+              {2000000});
   insertCsvValues("cache_invalid_t2", "1,1,row-0\n1,1,row-1\n1,1,row-2");
 }
 
 void import_tables_cache_invalidation_for_CPU_one_to_many_join(bool reverse) {
   dropTable("cache_invalid_t1");
   createTable("cache_invalid_t1",
-              {{"k1", SQLTypeInfo(kINT)},
-               {"k2", SQLTypeInfo(kINT)},
-               {"v1", SQLTypeInfo(kINT)},
-               {"v2", SQLTypeInfo(kINT)}});
+              {{"k1", ctx().int32()},
+               {"k2", ctx().int32()},
+               {"v1", ctx().int32()},
+               {"v2", ctx().int32()}});
   if (reverse) {
     insertCsvValues("cache_invalid_t1", "1,1,1,2\n0,0,1,2\n0,0,2,1");
   } else {
@@ -415,7 +417,7 @@ void import_tables_cache_invalidation_for_CPU_one_to_many_join(bool reverse) {
   }
 
   dropTable("cache_invalid_t2");
-  createTable("cache_invalid_t2", {{"k1", SQLTypeInfo(kINT)}, {"k2", SQLTypeInfo(kINT)}});
+  createTable("cache_invalid_t2", {{"k1", ctx().int32()}, {"k2", ctx().int32()}});
   insertCsvValues("cache_invalid_t2", "1,1\n1,1\n1,1\n1,1\n1,1\n1,1");
 }
 
@@ -614,11 +616,11 @@ TEST(Truncate, JoinCacheInvalidationTest) {
     SKIP_NO_GPU();
 
     dropTable("cache_invalid_t1");
-    createTable("cache_invalid_t1", {{"k1", dictType()}});
+    createTable("cache_invalid_t1", {{"k1", ctx().extDict(ctx().text(), 0)}});
     insertCsvValues("cache_invalid_t1", "1\n2\n3\n4\n5");
 
     dropTable("cache_invalid_t2");
-    createTable("cache_invalid_t2", {{"k2", dictType()}});
+    createTable("cache_invalid_t2", {{"k2", ctx().extDict(ctx().text(), 0)}});
     insertCsvValues("cache_invalid_t2", "0\n0\n0\n0\n0\n1\n2\n3\n4\n5");
 
     auto res_before_truncate = run_multiple_agg(
@@ -627,7 +629,7 @@ TEST(Truncate, JoinCacheInvalidationTest) {
     CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)1);
 
     dropTable("cache_invalid_t2");
-    createTable("cache_invalid_t2", {{"k2", dictType()}});
+    createTable("cache_invalid_t2", {{"k2", ctx().extDict(ctx().text(), 0)}});
     auto res_after_truncate = run_multiple_agg(
         "select * from cache_invalid_t1, cache_invalid_t2 where k1 = k2;", dt);
     ASSERT_EQ(static_cast<uint32_t>(0), res_after_truncate->rowCount());
@@ -652,11 +654,11 @@ TEST(Delete, JoinCacheInvalidationTest_DropTable) {
     SKIP_NO_GPU();
 
     dropTable("cache_invalid_t1");
-    createTable("cache_invalid_t1", {{"k1", dictType()}});
+    createTable("cache_invalid_t1", {{"k1", ctx().extDict(ctx().text(), 0)}});
     insertCsvValues("cache_invalid_t1", "1\n2\n3\n4\n5");
 
     dropTable("cache_invalid_t2");
-    createTable("cache_invalid_t2", {{"k2", dictType()}});
+    createTable("cache_invalid_t2", {{"k2", ctx().extDict(ctx().text(), 0)}});
     insertCsvValues("cache_invalid_t2", "0\n0\n0\n0\n0\n1\n2\n3\n4\n5");
 
     auto res = run_multiple_agg(
@@ -665,7 +667,7 @@ TEST(Delete, JoinCacheInvalidationTest_DropTable) {
     CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)1);
 
     // add and drop dummy table
-    createTable("cache_invalid_t3", {{"dummy", dictType()}});
+    createTable("cache_invalid_t3", {{"dummy", ctx().extDict(ctx().text(), 0)}});
     dropTable("cache_invalid_t3");
     // we should have no cached hashtable after dropping a table
     CHECK_EQ(getNumberOfCachedPerfectHashTables(), (unsigned long)0);
