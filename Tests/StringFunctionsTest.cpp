@@ -110,17 +110,18 @@ class LowerFunctionTest : public testing::Test {
  public:
   void SetUp() override {
     createTable("lower_function_test_people",
-                {{"first_name", dictType()},
-                 {"last_name", SQLTypeInfo(kTEXT)},
-                 {"age", SQLTypeInfo(kINT)},
-                 {"country_code", dictType()}});
+                {{"first_name", ctx().extDict(ctx().text(), 0)},
+                 {"last_name", ctx().text()},
+                 {"age", ctx().int32()},
+                 {"country_code", ctx().extDict(ctx().text(), 0)}});
     insertCsvValues(
         "lower_function_test_people",
         "JOHN,SMITH,25,us\nJohn,Banks,30,Us\nJOHN,Wilson,20,cA\nSue,Smith,25,CA");
 
-    createTable(
-        "lower_function_test_countries",
-        {{"code", dictType()}, {"name", dictType()}, {"text", SQLTypeInfo(kTEXT)}});
+    createTable("lower_function_test_countries",
+                {{"code", ctx().extDict(ctx().text(), 0)},
+                 {"name", ctx().extDict(ctx().text(), 0)},
+                 {"text", ctx().text()}});
     insertCsvValues("lower_function_test_countries",
                     "US,United States,Washington\nca,Canada,Ottawa\nGb,United "
                     "Kingdom,London\ndE,Germany,Berlin");
