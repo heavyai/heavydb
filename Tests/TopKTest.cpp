@@ -51,17 +51,17 @@ namespace {
 
 void create_and_populate_tables() {
   createTable("tdata",
-              {{"id", SQLTypeInfo(kSMALLINT)},
-               {"b", SQLTypeInfo(kBOOLEAN)},
-               {"i", SQLTypeInfo(kINT)},
-               {"bi", SQLTypeInfo(kBIGINT)},
-               {"n", SQLTypeInfo(kDECIMAL, 10, 2, false)},
-               {"f", SQLTypeInfo(kFLOAT)},
-               {"t", dictType()},
-               {"tt", SQLTypeInfo(kTIME)},
-               {"d", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 32, kNULLT)},
-               {"ts", SQLTypeInfo(kTIMESTAMP, 0, 0)},
-               {"vc", dictType()}});
+              {{"id", ctx().int16()},
+               {"b", ctx().boolean()},
+               {"i", ctx().int32()},
+               {"bi", ctx().int64()},
+               {"n", ctx().decimal64(10, 2)},
+               {"f", ctx().fp32()},
+               {"t", ctx().extDict(ctx().text(), 0)},
+               {"tt", ctx().time64(hdk::ir::TimeUnit::kSecond)},
+               {"d", ctx().date32(hdk::ir::TimeUnit::kDay)},
+               {"ts", ctx().timestamp(hdk::ir::TimeUnit::kSecond)},
+               {"vc", ctx().extDict(ctx().text(), 0)}});
   insertCsvValues(
       "tdata",
       R"___(1,true,23,2349923,111.1,1.1,SFO,15:13:14,1999-09-09,2014-12-13 22:23:15,paris
