@@ -625,6 +625,8 @@ void checkData(ArrowStorage& storage,
   }
 }
 
+auto& ctx = hdk::ir::Context::defaultCtx();
+
 }  // anonymous namespace
 
 class ArrowStorageTest : public ::testing::Test {
@@ -635,12 +637,9 @@ class ArrowStorageTest : public ::testing::Test {
 };
 
 TEST_F(ArrowStorageTest, CreateTable_OK) {
-  auto& ctx = hdk::ir::Context::defaultCtx();
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  auto tinfo = storage.createTable("table1",
-                                   {{"col1", SQLTypeInfo(kINT)},
-                                    {"col2", SQLTypeInfo(kFLOAT)},
-                                    {"col3", SQLTypeInfo(kDOUBLE)}});
+  auto tinfo = storage.createTable(
+      "table1", {{"col1", ctx.int32()}, {"col2", ctx.fp32()}, {"col3", ctx.fp64()}});
   checkTableInfo(tinfo, TEST_DB_ID, tinfo->table_id, "table1", 0);
   auto col_infos = storage.listColumns(*tinfo);
   CHECK_EQ(col_infos.size(), (size_t)4);
@@ -653,14 +652,13 @@ TEST_F(ArrowStorageTest, CreateTable_OK) {
 
 TEST_F(ArrowStorageTest, CreateTable_EmptyTableName) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  ASSERT_THROW(storage.createTable("", {{"col1", SQLTypeInfo(kINT)}}),
-               std::runtime_error);
+  ASSERT_THROW(storage.createTable("", {{"col1", ctx.int32()}}), std::runtime_error);
 }
 
 TEST_F(ArrowStorageTest, CreateTable_DuplicatedTableName) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  ASSERT_NO_THROW(storage.createTable("table1", {{"col1", SQLTypeInfo(kINT)}}));
-  ASSERT_THROW(storage.createTable("table1", {{"col1", SQLTypeInfo(kINT)}}),
+  ASSERT_NO_THROW(storage.createTable("table1", {{"col1", ctx.int32()}}));
+  ASSERT_THROW(storage.createTable("table1", {{"col1", ctx.int32()}}),
                std::runtime_error);
 }
 
@@ -671,31 +669,27 @@ TEST_F(ArrowStorageTest, CreateTable_NoColumns) {
 
 TEST_F(ArrowStorageTest, CreateTable_DuplicatedColumns) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  ASSERT_THROW(storage.createTable(
-                   "table1", {{"col1", SQLTypeInfo(kINT)}, {"col1", SQLTypeInfo(kINT)}}),
-               std::runtime_error);
+  ASSERT_THROW(
+      storage.createTable("table1", {{"col1", ctx.int32()}, {"col1", ctx.int32()}}),
+      std::runtime_error);
 }
 
 TEST_F(ArrowStorageTest, CreateTable_EmptyColumnName) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  ASSERT_THROW(storage.createTable("table1", {{"", SQLTypeInfo(kINT)}}),
-               std::runtime_error);
+  ASSERT_THROW(storage.createTable("table1", {{"", ctx.int32()}}), std::runtime_error);
 }
 
 TEST_F(ArrowStorageTest, CreateTable_ReservedColumnName) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  ASSERT_THROW(storage.createTable("table1", {{"rowid", SQLTypeInfo(kINT)}}),
+  ASSERT_THROW(storage.createTable("table1", {{"rowid", ctx.int32()}}),
                std::runtime_error);
 }
 
 TEST_F(ArrowStorageTest, CreateTable_SharedDict) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  SQLTypeInfo type_dict0(kTEXT, false, kENCODING_DICT);
-  type_dict0.set_comp_param(0);
-  SQLTypeInfo type_dict1(kTEXT, false, kENCODING_DICT);
-  type_dict1.set_comp_param(-1);
-  SQLTypeInfo type_dict2(kTEXT, false, kENCODING_DICT);
-  type_dict2.set_comp_param(-2);
+  auto type_dict0 = ctx.extDict(ctx.text(), 0);
+  auto type_dict1 = ctx.extDict(ctx.text(), -1);
+  auto type_dict2 = ctx.extDict(ctx.text(), -2);
   auto tinfo = storage.createTable("table1",
                                    {{"col1", type_dict0},
                                     {"col2", type_dict1},
@@ -715,17 +709,16 @@ TEST_F(ArrowStorageTest, CreateTable_SharedDict) {
 
 TEST_F(ArrowStorageTest, CreateTable_WrongDictId) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  SQLTypeInfo type(kTEXT, false, kENCODING_DICT);
-  type.set_comp_param(1);
+  auto type = ctx.extDict(ctx.text(), 1);
   ASSERT_THROW(storage.createTable("table1", {{"col1", type}}), std::runtime_error);
 }
 
 TEST_F(ArrowStorageTest, DropTable) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
   auto tinfo = storage.createTable("table1",
-                                   {{"col1", SQLTypeInfo(kINT)},
-                                    {"col2", SQLTypeInfo(kFLOAT)},
-                                    {"col3", SQLTypeInfo(kTEXT, false, kENCODING_DICT)}});
+                                   {{"col1", ctx.int32()},
+                                    {"col2", ctx.fp32()},
+                                    {"col3", ctx.extDict(ctx.text(), 0)}});
   auto col_infos = storage.listColumns(*tinfo);
   storage.dropTable("table1");
   ASSERT_EQ(storage.getTableInfo(*tinfo), nullptr);
@@ -739,14 +732,11 @@ TEST_F(ArrowStorageTest, DropTable) {
 
 TEST_F(ArrowStorageTest, DropTable_SharedDicts) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  auto tinfo1 = storage.createTable(
-      "table1", {{"col1", SQLTypeInfo(kTEXT, false, kENCODING_DICT)}});
+  auto tinfo1 = storage.createTable("table1", {{"col1", ctx.extDict(ctx.text(), 0)}});
   auto col1_info = storage.getColumnInfo(*tinfo1, "col1");
 
-  SQLTypeInfo type_dict1(kTEXT, false, kENCODING_DICT);
-  type_dict1.set_comp_param(getDictId(col1_info->type));
-  SQLTypeInfo type_dict2(kTEXT, false, kENCODING_DICT);
-  type_dict2.set_comp_param(-1);
+  auto type_dict1 = ctx.extDict(ctx.text(), getDictId(col1_info->type));
+  auto type_dict2 = ctx.extDict(ctx.text(), -1);
   auto tinfo2 = storage.createTable(
       "table2", {{"col1", type_dict1}, {"col2", type_dict2}, {"col3", type_dict2}});
   auto col2_info = storage.getColumnInfo(*tinfo2, "col2");
@@ -771,12 +761,11 @@ void Test_ImportCsv_Numbers(const std::string& file_name,
   table_options.fragment_size = fragment_size;
   TableInfoPtr tinfo;
   if (pass_schema) {
-    tinfo = storage.importCsvFile(
-        getFilePath(file_name),
-        "table1",
-        {{"col1", SQLTypeInfo(kINT)}, {"col2", SQLTypeInfo(kFLOAT)}},
-        table_options,
-        parse_options);
+    tinfo = storage.importCsvFile(getFilePath(file_name),
+                                  "table1",
+                                  {{"col1", ctx.int32()}, {"col2", ctx.fp32()}},
+                                  table_options,
+                                  parse_options);
     checkData(storage,
               tinfo->table_id,
               9,
@@ -850,8 +839,8 @@ TEST_F(ArrowStorageTest, ImportCsv_DateTime) {
 
 TEST_F(ArrowStorageTest, AppendCsvData) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  TableInfoPtr tinfo = storage.createTable(
-      "table1", {{"col1", SQLTypeInfo(kINT)}, {"col2", SQLTypeInfo(kFLOAT)}});
+  TableInfoPtr tinfo =
+      storage.createTable("table1", {{"col1", ctx.int32()}, {"col2", ctx.fp32()}});
   ArrowStorage::CsvParseOptions parse_options;
   parse_options.header = false;
   storage.appendCsvData("1,10.0\n2,20.0\n3,30.0\n", tinfo->table_id, parse_options);
@@ -865,12 +854,11 @@ void Test_AppendCsv_Numbers(size_t fragment_size) {
   ArrowStorage::CsvParseOptions parse_options;
   table_options.fragment_size = fragment_size;
   TableInfoPtr tinfo;
-  tinfo =
-      storage.importCsvFile(getFilePath("numbers_header.csv"),
-                            "table1",
-                            {{"col1", SQLTypeInfo(kINT)}, {"col2", SQLTypeInfo(kFLOAT)}},
-                            table_options,
-                            parse_options);
+  tinfo = storage.importCsvFile(getFilePath("numbers_header.csv"),
+                                "table1",
+                                {{"col1", ctx.int32()}, {"col2", ctx.fp32()}},
+                                table_options,
+                                parse_options);
   storage.appendCsvFile(getFilePath("numbers_header2.csv"), "table1");
 
   checkData(storage,
@@ -901,12 +889,11 @@ void Test_ImportCsv_Strings(bool pass_schema,
   table_options.fragment_size = fragment_size;
   TableInfoPtr tinfo;
   if (pass_schema) {
-    tinfo = storage.importCsvFile(
-        getFilePath("strings.csv"),
-        "table1",
-        {{"col1", SQLTypeInfo(kTEXT)}, {"col2", SQLTypeInfo(kTEXT)}},
-        table_options,
-        parse_options);
+    tinfo = storage.importCsvFile(getFilePath("strings.csv"),
+                                  "table1",
+                                  {{"col1", ctx.text()}, {"col2", ctx.text()}},
+                                  table_options,
+                                  parse_options);
   } else {
     tinfo = storage.importCsvFile(
         getFilePath("strings.csv"), "table1", table_options, parse_options);
@@ -1006,14 +993,7 @@ void Test_ImportCsv_Dict(bool shared_dict,
   ArrowStorage::TableOptions table_options;
   table_options.fragment_size = fragment_size;
   TableInfoPtr tinfo;
-  SQLTypeInfo dict1_type(kTEXT, false, kENCODING_DICT);
-  SQLTypeInfo dict2_type(kTEXT, false, kENCODING_DICT);
-  if (shared_dict) {
-    dict1_type.set_comp_param(-1);
-    dict2_type.set_comp_param(-1);
-  }
-  dict1_type.set_size(index_size);
-  dict2_type.set_size(index_size);
+  auto dict1_type = ctx.extDict(ctx.text(), shared_dict ? -1 : 0, index_size);
   tinfo = storage.importCsvFile(getFilePath("strings.csv"),
                                 "table1",
                                 {{"col1", dict1_type}, {"col2", dict1_type}},
@@ -1136,10 +1116,8 @@ TEST_F(ArrowStorageTest, AppendCsv_SharedDict) {
 
 TEST_F(ArrowStorageTest, AppendJsonData) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  TableInfoPtr tinfo = storage.createTable("table1",
-                                           {{"col1", SQLTypeInfo(kINT)},
-                                            {"col2", SQLTypeInfo(kFLOAT)},
-                                            {"col3", SQLTypeInfo(kTEXT)}});
+  TableInfoPtr tinfo = storage.createTable(
+      "table1", {{"col1", ctx.int32()}, {"col2", ctx.fp32()}, {"col3", ctx.text()}});
   storage.appendJsonData(R"___({"col1": 1, "col2": 10.0, "col3": "s1"}
 {"col1": 2, "col2": 20.0, "col3": "s2"}
 {"col1": 3, "col2": 30.0, "col3": "s3"})___",
@@ -1155,10 +1133,8 @@ TEST_F(ArrowStorageTest, AppendJsonData) {
 
 TEST_F(ArrowStorageTest, AppendJsonData_Arrays) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  SQLTypeInfo int_array(kARRAY, false);
-  int_array.set_subtype(kINT);
-  SQLTypeInfo float_array(kARRAY, false);
-  float_array.set_subtype(kFLOAT);
+  auto int_array = ctx.arrayVarLen(ctx.int32());
+  auto float_array = ctx.arrayVarLen(ctx.fp32());
   TableInfoPtr tinfo =
       storage.createTable("table1", {{"col1", int_array}, {"col2", float_array}});
   storage.appendJsonData(R"___({"col1": [1, 2, 3], "col2": [10.0, 20.0, 30.0]}
@@ -1179,10 +1155,8 @@ TEST_F(ArrowStorageTest, AppendJsonData_Arrays) {
 
 TEST_F(ArrowStorageTest, AppendJsonData_ArraysWithNulls) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  SQLTypeInfo int_array(kARRAY, false);
-  int_array.set_subtype(kINT);
-  SQLTypeInfo float_array(kARRAY, false);
-  float_array.set_subtype(kFLOAT);
+  auto int_array = ctx.arrayVarLen(ctx.int32());
+  auto float_array = ctx.arrayVarLen(ctx.fp32());
   TableInfoPtr tinfo =
       storage.createTable("table1", {{"col1", int_array}, {"col2", float_array}});
   storage.appendJsonData(R"___({"col1": [1, 2, 3], "col2": [null, 20.0, 30.0]}
@@ -1205,12 +1179,8 @@ TEST_F(ArrowStorageTest, AppendJsonData_ArraysWithNulls) {
 
 TEST_F(ArrowStorageTest, AppendJsonData_FixedSizeArrays) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  SQLTypeInfo int3_array(kARRAY, false);
-  int3_array.set_subtype(kINT);
-  int3_array.set_size(3 * sizeof(int));
-  SQLTypeInfo float2_array(kARRAY, false);
-  float2_array.set_subtype(kFLOAT);
-  float2_array.set_size(2 * sizeof(float));
+  auto int3_array = ctx.arrayFixed(3, ctx.int32());
+  auto float2_array = ctx.arrayFixed(2, ctx.fp32());
   TableInfoPtr tinfo =
       storage.createTable("table1", {{"col1", int3_array}, {"col2", float2_array}});
   storage.appendJsonData(R"___({"col1": [1, 2], "col2": [null, 20.0]}
@@ -1239,8 +1209,7 @@ TEST_F(ArrowStorageTest, AppendJsonData_FixedSizeArrays) {
 
 TEST_F(ArrowStorageTest, AppendJsonData_StringFixedSizeArrays) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  SQLTypeInfo string3_array_type(kARRAY, kENCODING_DICT, 0, kTEXT);
-  string3_array_type.set_size(3 * sizeof(int32_t));
+  auto string3_array_type = ctx.arrayFixed(3, ctx.extDict(ctx.text(), 0));
   TableInfoPtr tinfo = storage.createTable("table1", {{"col1", string3_array_type}});
   storage.appendJsonData(R"___({"col1": ["str1", "str2"]}
 {"col1": null}
@@ -1260,16 +1229,16 @@ TEST_F(ArrowStorageTest, AppendJsonData_StringFixedSizeArrays) {
 
 TEST_F(ArrowStorageTest, AppendJsonData_DateTime) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  TableInfoPtr tinfo = storage.createTable(
-      "table1",
-      {{"ts_0", SQLTypeInfo(kTIMESTAMP, 0, 0)},
-       {"ts_3", SQLTypeInfo(kTIMESTAMP, 3, 0)},
-       {"ts_6", SQLTypeInfo(kTIMESTAMP, 6, 0)},
-       {"ts_9", SQLTypeInfo(kTIMESTAMP, 9, 0)},
-       {"t", SQLTypeInfo(kTIME)},
-       {"d", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 0, kNULLT)},
-       {"o1", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 16, kNULLT)},
-       {"o2", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 32, kNULLT)}});
+  TableInfoPtr tinfo =
+      storage.createTable("table1",
+                          {{"ts_0", ctx.timestamp(hdk::ir::TimeUnit::kSecond)},
+                           {"ts_3", ctx.timestamp(hdk::ir::TimeUnit::kMilli)},
+                           {"ts_6", ctx.timestamp(hdk::ir::TimeUnit::kMicro)},
+                           {"ts_9", ctx.timestamp(hdk::ir::TimeUnit::kNano)},
+                           {"t", ctx.time64(hdk::ir::TimeUnit::kSecond)},
+                           {"d", ctx.date32(hdk::ir::TimeUnit::kDay)},
+                           {"o1", ctx.date16(hdk::ir::TimeUnit::kDay)},
+                           {"o2", ctx.date32(hdk::ir::TimeUnit::kDay)}});
   ArrowStorage::CsvParseOptions parse_options;
   parse_options.header = false;
   storage.appendCsvData(
@@ -1306,17 +1275,17 @@ TEST_F(ArrowStorageTest, AppendJsonData_DateTime_Multifrag) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
   ArrowStorage::TableOptions table_options;
   table_options.fragment_size = 2;
-  TableInfoPtr tinfo = storage.createTable(
-      "table1",
-      {{"ts_0", SQLTypeInfo(kTIMESTAMP, 0, 0)},
-       {"ts_3", SQLTypeInfo(kTIMESTAMP, 3, 0)},
-       {"ts_6", SQLTypeInfo(kTIMESTAMP, 6, 0)},
-       {"ts_9", SQLTypeInfo(kTIMESTAMP, 9, 0)},
-       {"t", SQLTypeInfo(kTIME)},
-       {"d", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 0, kNULLT)},
-       {"o1", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 16, kNULLT)},
-       {"o2", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 32, kNULLT)}},
-      table_options);
+  TableInfoPtr tinfo =
+      storage.createTable("table1",
+                          {{"ts_0", ctx.timestamp(hdk::ir::TimeUnit::kSecond)},
+                           {"ts_3", ctx.timestamp(hdk::ir::TimeUnit::kMilli)},
+                           {"ts_6", ctx.timestamp(hdk::ir::TimeUnit::kMicro)},
+                           {"ts_9", ctx.timestamp(hdk::ir::TimeUnit::kNano)},
+                           {"t", ctx.time64(hdk::ir::TimeUnit::kSecond)},
+                           {"d", ctx.date32(hdk::ir::TimeUnit::kDay)},
+                           {"o1", ctx.date16(hdk::ir::TimeUnit::kDay)},
+                           {"o2", ctx.date32(hdk::ir::TimeUnit::kDay)}},
+                          table_options);
   ArrowStorage::CsvParseOptions parse_options;
   parse_options.header = false;
   for (int i = 0; i < 4; ++i) {
@@ -1425,10 +1394,8 @@ TEST_F(ArrowStorageTest, AppendCsvData_BoolWithNulls) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
   ArrowStorage::TableOptions table_options;
   table_options.fragment_size = 2;
-  TableInfoPtr tinfo =
-      storage.createTable("table1",
-                          {{"b1", SQLTypeInfo(kBOOLEAN)}, {"b2", SQLTypeInfo(kBOOLEAN)}},
-                          table_options);
+  TableInfoPtr tinfo = storage.createTable(
+      "table1", {{"b1", ctx.boolean()}, {"b2", ctx.boolean()}}, table_options);
   ArrowStorage::CsvParseOptions parse_options;
   parse_options.header = false;
   storage.appendCsvData("true,true", tinfo->table_id, parse_options);
@@ -1451,10 +1418,8 @@ TEST_F(ArrowStorageTest, AppendCsvData_BoolWithNulls_SingleChunk) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
   ArrowStorage::TableOptions table_options;
   table_options.fragment_size = 2;
-  TableInfoPtr tinfo =
-      storage.createTable("table1",
-                          {{"b1", SQLTypeInfo(kBOOLEAN)}, {"b2", SQLTypeInfo(kBOOLEAN)}},
-                          table_options);
+  TableInfoPtr tinfo = storage.createTable(
+      "table1", {{"b1", ctx.boolean()}, {"b2", ctx.boolean()}}, table_options);
   ArrowStorage::CsvParseOptions parse_options;
   parse_options.header = false;
   storage.appendCsvData(
@@ -1478,9 +1443,8 @@ TEST_F(ArrowStorageTest, AppendCsvData_BoolWithNulls_SingleChunk) {
 
 TEST_F(ArrowStorageTest, AppendJsonData_BoolArrays) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  SQLTypeInfo bool_3(kARRAY, kENCODING_NONE, 0, kBOOLEAN);
-  bool_3.set_size(3);
-  SQLTypeInfo bool_any(kARRAY, kENCODING_NONE, 0, kBOOLEAN);
+  auto bool_3 = ctx.arrayFixed(3, ctx.boolean());
+  auto bool_any = ctx.arrayVarLen(ctx.boolean());
   TableInfoPtr tinfo = storage.createTable("table1", {{"b1", bool_3}, {"b2", bool_any}});
   storage.appendJsonData("{\"b1\": [true, true, true], \"b2\": [true, false]}",
                          tinfo->table_id);
@@ -1502,7 +1466,7 @@ TEST_F(ArrowStorageTest, AppendJsonData_BoolArrays) {
 
 TEST_F(ArrowStorageTest, AppendJsonData_IntArrays) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  SQLTypeInfo smallint_any(kARRAY, kENCODING_NONE, 0, kSMALLINT);
+  auto smallint_any = ctx.arrayVarLen(ctx.int16());
   TableInfoPtr tinfo = storage.createTable("table1", {{"siv", smallint_any}});
   storage.appendJsonData("{\"siv\": [1, 2, 3]}", tinfo->table_id);
   storage.appendJsonData("{\"siv\": [2]}", tinfo->table_id);
@@ -1526,9 +1490,8 @@ TEST_F(ArrowStorageTest, AppendCsvData_Decimals) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
   ArrowStorage::CsvParseOptions parse_options;
   parse_options.header = false;
-  TableInfoPtr tinfo = storage.createTable("table1",
-                                           {{"d1", SQLTypeInfo(kDECIMAL, 10, 2, false)},
-                                            {"d2", SQLTypeInfo(kDECIMAL, 10, 4, false)}});
+  TableInfoPtr tinfo = storage.createTable(
+      "table1", {{"d1", ctx.decimal64(10, 2)}, {"d2", ctx.decimal64(10, 4)}});
   storage.appendCsvData("1.1,2.22", tinfo->table_id, parse_options);
   storage.appendCsvData("1.11,2.2222", tinfo->table_id, parse_options);
   storage.appendCsvData("1,2", tinfo->table_id, parse_options);
@@ -1543,9 +1506,8 @@ TEST_F(ArrowStorageTest, AppendCsvData_Decimals) {
 
 TEST_F(ArrowStorageTest, AppendJsonData_DecimalArrays) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-  SQLTypeInfo decimal_3(kARRAY, 10, 2, false, kENCODING_NONE, 0, kDECIMAL);
-  decimal_3.set_size(3 * decimal_3.get_elem_type().get_size());
-  SQLTypeInfo decimal_any(kARRAY, 10, 4, false, kENCODING_NONE, 0, kDECIMAL);
+  auto decimal_3 = ctx.arrayFixed(3, ctx.decimal64(10, 2));
+  auto decimal_any = ctx.arrayVarLen(ctx.decimal64(10, 4));
   TableInfoPtr tinfo =
       storage.createTable("table1", {{"d1", decimal_3}, {"d2", decimal_any}});
   storage.appendJsonData(R"___({"d1": [1.1, 2.2, 3.3], "d2": [1.11, 2.22, 3.33]}
