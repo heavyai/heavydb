@@ -68,13 +68,21 @@ void drop_table() {
 
 void create_and_populate_table() {
   createTable("t1",
-              {{"x", SQLTypeInfo(kINT)}, {"y", SQLTypeInfo(kINT)}, {"z", dictType()}});
+              {{"x", ctx().int32()},
+               {"y", ctx().int32()},
+               {"z", ctx().extDict(ctx().text(), 0)}});
   createTable("t2",
-              {{"x", SQLTypeInfo(kINT)}, {"y", SQLTypeInfo(kINT)}, {"z", dictType()}});
+              {{"x", ctx().int32()},
+               {"y", ctx().int32()},
+               {"z", ctx().extDict(ctx().text(), 0)}});
   createTable("t3",
-              {{"x", SQLTypeInfo(kINT)}, {"y", SQLTypeInfo(kINT)}, {"z", dictType()}});
+              {{"x", ctx().int32()},
+               {"y", ctx().int32()},
+               {"z", ctx().extDict(ctx().text(), 0)}});
   createTable("t4",
-              {{"x", SQLTypeInfo(kINT)}, {"y", SQLTypeInfo(kINT)}, {"z", dictType()}});
+              {{"x", ctx().int32()},
+               {"y", ctx().int32()},
+               {"z", ctx().extDict(ctx().text(), 0)}});
 
   insertCsvValues("t1", "1,1,1\n2,1,2\n3,1,3");
   insertCsvValues("t2", "1,1,1\n2,1,2\n3,1,3\n4,2,4");
@@ -1031,8 +1039,8 @@ TEST(DataRecycler, Hashtable_From_Subqueries) {
 }
 
 TEST(DataRecycler, Empty_Hashtable) {
-  createTable("t5", {{"c1", SQLTypeInfo(kINT)}, {"c2", SQLTypeInfo(kINT)}});
-  createTable("t6", {{"c1", SQLTypeInfo(kINT)}, {"c2", SQLTypeInfo(kINT)}});
+  createTable("t5", {{"c1", ctx().int32()}, {"c2", ctx().int32()}});
+  createTable("t6", {{"c1", ctx().int32()}, {"c2", ctx().int32()}});
   auto executor = getExecutor();
   auto clearCaches = [&executor](ExecutorDeviceType dt) {
     auto memory_level =
@@ -1053,8 +1061,8 @@ TEST(DataRecycler, Empty_Hashtable) {
 }
 
 TEST(DataRecycler, Hashtable_For_Dict_Encoded_Column) {
-  createTable("TT1", {{"c1", dictType()}, {"id1", SQLTypeInfo(kINT)}});
-  createTable("TT2", {{"c2", dictType()}, {"id2", SQLTypeInfo(kINT)}});
+  createTable("TT1", {{"c1", ctx().extDict(ctx().text(), 0)}, {"id1", ctx().int32()}});
+  createTable("TT2", {{"c2", ctx().extDict(ctx().text(), 0)}, {"id2", ctx().int32()}});
   auto data_mgr = getDataMgr();
   auto executor = Executor::getExecutor(data_mgr, data_mgr->getBufferProvider()).get();
   auto clear_caches = [&executor, data_mgr](ExecutorDeviceType dt) {
