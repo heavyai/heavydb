@@ -77,7 +77,7 @@ bool setup() {
 class LowGpuBufferMemory : public ::testing::Test {
  public:
   void SetUp() override {
-    createTable("test", {{"x", SQLTypeInfo(kINT)}, {"y", SQLTypeInfo(kBIGINT)}}, {32});
+    createTable("test", {{"x", ctx().int32()}, {"y", ctx().int64()}}, {32});
 
     // Insert enough data to just barely overflow
     std::stringstream ss;
@@ -132,7 +132,7 @@ constexpr size_t row_count_per_gpu = 64;
 class LowGpuBufferMemoryCpuRetry : public ::testing::Test {
  public:
   void SetUp() override {
-    createTable("test", {{"x", SQLTypeInfo(kINT)}, {"y", SQLTypeInfo(kBIGINT)}}, {32});
+    createTable("test", {{"x", ctx().int32()}, {"y", ctx().int64()}}, {32});
 
     // Insert enough data to just barely overflow
     std::stringstream ss;
@@ -178,7 +178,7 @@ TEST_F(LowGpuBufferMemoryCpuRetry, OOMRetryOnCPU) {
 class MediumGpuBufferMemory : public ::testing::Test {
  public:
   void SetUp() override {
-    createTable("test", {{"x", SQLTypeInfo(kINT)}, {"y", SQLTypeInfo(kBIGINT)}}, {32});
+    createTable("test", {{"x", ctx().int32()}, {"y", ctx().int64()}}, {32});
 
     // Insert enough data to just barely overflow
     std::stringstream ss;
