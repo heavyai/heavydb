@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include "IR/Type.h"
 #include "Shared/sqltypes.h"
 #include "Shared/toString.h"
-#include "IR/Type.h"
 
 #include <boost/functional/hash.hpp>
 
