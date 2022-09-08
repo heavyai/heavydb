@@ -24,10 +24,6 @@
 
 #include <unordered_map>
 
-namespace Catalog_Namespace {
-class Catalog;
-}  // namespace Catalog_Namespace
-
 class Executor;
 
 class TemporaryTable {

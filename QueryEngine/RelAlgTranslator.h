@@ -31,13 +31,6 @@ class Expr;
 
 }  // namespace hdk::ir
 
-namespace Catalog_Namespace {
-
-class Catalog;
-class SessionInfo;
-
-}  // namespace Catalog_Namespace
-
 class RelAlgTranslator {
  public:
   RelAlgTranslator(const Executor* executor,
