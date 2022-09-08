@@ -224,13 +224,15 @@ TEST_F(UDFCompilerTest, UdfQuery) {
   EXPECT_NO_THROW(compiler.compileUdf(getUdfFileName()));
 
   createTable("stocks",
-              {{"symbol", dictType()},
-               {"open_p", SQLTypeInfo(kINT)},
-               {"high_p", SQLTypeInfo(kINT)},
-               {"low_p", SQLTypeInfo(kINT)},
-               {"close_p", SQLTypeInfo(kINT)},
-               {"entry_d", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 0, kNULLT)}});
-  createTable("sal_emp", {{"name", dictType()}, {"pay_by_quarter", arrayType(kINT)}});
+              {{"symbol", ctx().extDict(ctx().text(), 0)},
+               {"open_p", ctx().int32()},
+               {"high_p", ctx().int32()},
+               {"low_p", ctx().int32()},
+               {"close_p", ctx().int32()},
+               {"entry_d", ctx().date32(hdk::ir::TimeUnit::kDay)}});
+  createTable("sal_emp",
+              {{"name", ctx().extDict(ctx().text(), 0)},
+               {"pay_by_quarter", ctx().arrayVarLen(ctx().int32())}});
 
   insertCsvValues("stocks", "NVDA,178,178,171,173,2019-05-07");
   insertCsvValues("stocks", "NVDA,175,181,174,178,2019-05-06");
