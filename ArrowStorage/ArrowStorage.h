@@ -28,11 +28,6 @@ class Type;
 class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
  public:
   struct ColumnDescription {
-    ColumnDescription(std::string name_, const hdk::ir::Type* type_)
-        : name(name_), type(type_) {}
-    ColumnDescription(std::string name_, SQLTypeInfo type_)
-        : name(name_), type(hdk::ir::Context::defaultCtx().fromTypeInfo(type_)) {}
-
     std::string name;
     const hdk::ir::Type* type;
   };
