@@ -285,6 +285,15 @@ bool ExpressionRange::typeSupportsRange(const SQLTypeInfo& ti) {
   }
 }
 
+bool ExpressionRange::typeSupportsRange(const hdk::ir::Type* type) {
+  if (type->isArray()) {
+    return typeSupportsRange(type->as<hdk::ir::ArrayBaseType>()->elemType());
+  } else {
+    return (type->isNumber() || type->isBoolean() || type->isDateTime() ||
+            type->isExtDictionary());
+  }
+}
+
 ExpressionRange getExpressionRange(
     const hdk::ir::BinOper* expr,
     const std::vector<InputTableInfo>& query_infos,

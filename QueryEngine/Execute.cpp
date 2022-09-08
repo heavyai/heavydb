@@ -559,8 +559,7 @@ size_t Executor::getNumBytesForFetchedRow(const std::set<int>& table_ids_to_fetc
     if (table_id < 0) {
       num_bytes += 8;
     } else {
-      const auto& ti = fetched_col.getType();
-      const auto sz = ti.get_size();
+      const auto sz = fetched_col.type()->size();
       if (sz < 0) {
         // for varlen types, only account for the pointer/size for each row, for now
         num_bytes += 16;
@@ -2781,9 +2780,8 @@ bool Executor::needLinearizeAllFragments(
   CHECK_LT(static_cast<size_t>(nest_level), selected_fragments.size());
   CHECK_EQ(table_id, selected_fragments[nest_level].table_id);
   const auto& fragments = selected_fragments[nest_level].fragment_ids;
-  auto need_linearize = inner_col_desc.getType().is_array() ||
-                        (inner_col_desc.getType().is_string() &&
-                         !inner_col_desc.getType().is_dict_encoded_type());
+  auto need_linearize =
+      inner_col_desc.type()->isArray() || inner_col_desc.type()->isString();
   return table_id > 0 && need_linearize && fragments.size() > 1;
 }
 
@@ -3988,7 +3986,7 @@ AggregatedColRange Executor::computeColRangesCache(
         tref.db_id, tref.table_id, getTableInfo(tref.db_id, tref.table_id)});
   }
   for (const auto& col_desc : col_descs) {
-    if (ExpressionRange::typeSupportsRange(col_desc.getType())) {
+    if (ExpressionRange::typeSupportsRange(col_desc.type())) {
       const auto col_var = std::make_unique<hdk::ir::ColumnVar>(col_desc.getColInfo(), 0);
       const auto col_range = getLeafColumnRange(col_var.get(), query_infos, this, false);
       agg_col_range_cache.setColRange({col_desc.getColId(), col_desc.getTableId()},
@@ -4002,11 +4000,11 @@ StringDictionaryGenerations Executor::computeStringDictionaryGenerations(
     const std::unordered_set<InputColDescriptor>& col_descs) {
   StringDictionaryGenerations string_dictionary_generations;
   for (const auto& col_desc : col_descs) {
-    const auto& col_ti = col_desc.getType().is_array()
-                             ? col_desc.getType().get_elem_type()
-                             : col_desc.getType();
-    if (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT) {
-      const int dict_id = col_ti.get_comp_param();
+    auto col_type = col_desc.type()->isArray()
+                        ? col_desc.type()->as<hdk::ir::ArrayBaseType>()->elemType()
+                        : col_desc.type();
+    if (col_type->isExtDictionary()) {
+      const int dict_id = col_type->as<hdk::ir::ExtDictionaryType>()->dictId();
       const auto dd = data_mgr_->getDictMetadata(dict_id);
       CHECK(dd && dd->stringDict);
       string_dictionary_generations.setGeneration(dict_id,

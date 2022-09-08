@@ -96,7 +96,7 @@ class InputColDescriptor {
     return col_info_->table_id > 0 ? InputSourceType::TABLE : InputSourceType::RESULT;
   }
 
-  const SQLTypeInfo& getType() const { return col_info_->type_info; }
+  const hdk::ir::Type* type() const { return col_info_->type; }
 
   bool isVirtual() const { return col_info_->is_rowid; }
 
