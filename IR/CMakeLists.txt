@@ -1,6 +1,7 @@
 set(ir_source_files
     Context.cpp
     Context.h
+    Datum.cpp
     Exception.h
     Expr.cpp
     Expr.h

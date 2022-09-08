@@ -24,7 +24,7 @@
 #include "AbstractBuffer.h"
 #include "Encoder.h"
 
-#include <Shared/DatumFetchers.h>
+#include <IR/DatumFetchers.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
 #include <tuple>

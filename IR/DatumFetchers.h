@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "sqltypes.h"
+#include "Shared/sqltypes.h"
 
 namespace DatumFetcher {
 

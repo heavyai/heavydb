@@ -31,15 +31,15 @@
 #include <stdexcept>
 #include <string>
 
-#include "DateConverters.h"
-#include "DateTimeParser.h"
 #include "IR/Context.h"
 #include "IR/Type.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/DateTimeUtils.h"
-#include "StringTransform.h"
-#include "misc.h"
-#include "sqltypes.h"
+#include "Shared/DateConverters.h"
+#include "Shared/DateTimeParser.h"
+#include "Shared/StringTransform.h"
+#include "Shared/misc.h"
+#include "Shared/sqltypes.h"
 
 std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
                                                      "BOOLEAN",

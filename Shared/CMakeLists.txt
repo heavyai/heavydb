@@ -1,5 +1,4 @@
 set(shared_source_files
-    Datum.cpp
     StringTransform.cpp
     DateTimeParser.cpp
     StackTrace.cpp
@@ -24,7 +23,7 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/funcannotations.h
 
 add_library(Shared ${shared_source_files} "cleanup_global_namespace.h"
                    "boost_stacktrace.hpp")
-target_link_libraries(Shared OSDependent Logger ${Boost_LIBRARIES} TBB::tbb IR)
+target_link_libraries(Shared OSDependent Logger ${Boost_LIBRARIES} TBB::tbb)
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   target_link_libraries(Shared ${OPENSSL_LIBRARIES})
 endif()

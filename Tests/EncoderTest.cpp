@@ -25,7 +25,7 @@
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/Encoder.h"
 #include "DataMgr/MemoryLevel.h"
-#include "Shared/DatumFetchers.h"
+#include "IR/DatumFetchers.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH

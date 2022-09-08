@@ -25,7 +25,7 @@
 #include "Encoder.h"
 #include "Shared/InlineNullValues.h"
 
-#include <Shared/DatumFetchers.h>
+#include <IR/DatumFetchers.h>
 
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
