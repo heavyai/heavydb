@@ -41,15 +41,14 @@ bool skip_tests_on_gpu(const ExecutorDeviceType device_type) {
 #endif
 }
 
-void setupTest(SQLTypeInfo valueType, int factsCount, int lookupCount) {
+void setupTest(const hdk::ir::Type* valueType, int factsCount, int lookupCount) {
   dropTable("test_facts");
   dropTable("test_lookup");
 
-  createTable(
-      "test_facts",
-      {{"id", SQLTypeInfo(kINT)}, {"val", valueType}, {"lookup_id", SQLTypeInfo(kINT)}},
-      {3});
-  createTable("test_lookup", {{"id", SQLTypeInfo(kINT)}, {"val", valueType}});
+  createTable("test_facts",
+              {{"id", ctx().int32()}, {"val", valueType}, {"lookup_id", ctx().int32()}},
+              {3});
+  createTable("test_lookup", {{"id", ctx().int32()}, {"val", valueType}});
 
   // populate facts table
   std::stringstream facts;
@@ -107,7 +106,7 @@ auto getValue(const TargetValue& mapd_variant) {
   throw std::runtime_error("Unexpected variant");
 };
 
-void runSingleValueTestValidation(SQLTypeInfo colType, ExecutorDeviceType dt) {
+void runSingleValueTestValidation(const hdk::ir::Type* colType, ExecutorDeviceType dt) {
   ASSERT_ANY_THROW(run_multiple_agg("SELECT SINGLE_VALUE(id) FROM test_facts;", dt));
   ASSERT_ANY_THROW(
       run_multiple_agg("SELECT SINGLE_VALUE(id) FROM test_facts group by val;", dt));
@@ -135,7 +134,7 @@ void runSingleValueTestValidation(SQLTypeInfo colType, ExecutorDeviceType dt) {
     ASSERT_EQ(1, getValue(select_crt_row[1]));
   }
 
-  if (!colType.is_string()) {
+  if (!colType->isString() && !colType->isExtDictionary()) {
     auto results = run_multiple_agg(
         "SELECT id+1, val FROM (SELECT id, SINGLE_VALUE(val) as val FROM test_facts "
         "GROUP BY id) ORDER BY id;",
@@ -153,7 +152,55 @@ void runSingleValueTestValidation(SQLTypeInfo colType, ExecutorDeviceType dt) {
   }
 }
 
-void runSingleValueTest(SQLTypeInfo colType, ExecutorDeviceType dt) {
+std::string sqlTypeName(const hdk::ir::Type* type) {
+  switch (type->id()) {
+    case hdk::ir::Type::kBoolean:
+      return "BOOLEAN";
+    case hdk::ir::Type::kDecimal: {
+      auto precision = type->as<hdk::ir::DecimalType>()->precision();
+      auto scale = type->as<hdk::ir::DecimalType>()->scale();
+      return "DECIMAL(" + std::to_string(precision) + "," + std::to_string(scale) + ")";
+    }
+    case hdk::ir::Type::kInteger:
+      switch (type->size()) {
+        case 1:
+          return "TINYINT";
+        case 2:
+          return "SMALLINT";
+        case 4:
+          return "INT";
+        case 8:
+          return "BIGINT";
+        default:
+          break;
+      }
+      break;
+    case hdk::ir::Type::kFloatingPoint:
+      switch (type->as<hdk::ir::FloatingPointType>()->precision()) {
+        case hdk::ir::FloatingPointType::kFloat:
+          return "FLOAT";
+        case hdk::ir::FloatingPointType::kDouble:
+          return "DOUBLE";
+        default:
+          break;
+      }
+      break;
+    case hdk::ir::Type::kTime:
+    case hdk::ir::Type::kTimestamp:
+    case hdk::ir::Type::kDate:
+    case hdk::ir::Type::kInterval:
+      break;
+    case hdk::ir::Type::kExtDictionary:
+    case hdk::ir::Type::kVarChar:
+    case hdk::ir::Type::kText:
+      return "TEXT";
+    default:
+      break;
+  }
+  throw std::runtime_error("Unsupported type: " + type->toString());
+}
+
+void runSingleValueTest(const hdk::ir::Type* colType, ExecutorDeviceType dt) {
   if (skip_tests_on_gpu(dt)) {
     return;
   }
@@ -188,7 +235,7 @@ void runSingleValueTest(SQLTypeInfo colType, ExecutorDeviceType dt) {
   {
     auto results = run_multiple_agg(
         "SELECT id, SINGLE_VALUE(val) FROM test_facts WHERE id NOT IN (CAST (1 as  " +
-            colType.get_type_name() +
+            sqlTypeName(colType) +
             " )) GROUP BY id ORDER BY "
             "id;",
         dt);
@@ -204,28 +251,28 @@ void runSingleValueTest(SQLTypeInfo colType, ExecutorDeviceType dt) {
 
 TEST(Select, SingleValue) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    runSingleValueTest(kTINYINT, dt);
-    runSingleValueTest(kSMALLINT, dt);
-    runSingleValueTest(kINT, dt);
-    runSingleValueTest(kBIGINT, dt);
-    runSingleValueTest({kDECIMAL, 10, 2, false}, dt);
-    runSingleValueTest(kFLOAT, dt);
-    runSingleValueTest(kDOUBLE, dt);
-    runSingleValueTest(dictType(), dt);
+    runSingleValueTest(ctx().int8(), dt);
+    runSingleValueTest(ctx().int16(), dt);
+    runSingleValueTest(ctx().int32(), dt);
+    runSingleValueTest(ctx().int64(), dt);
+    runSingleValueTest(ctx().decimal64(10, 2), dt);
+    runSingleValueTest(ctx().fp32(), dt);
+    runSingleValueTest(ctx().fp64(), dt);
+    runSingleValueTest(ctx().extDict(ctx().text(), 0), dt);
   }
 }
 
 TEST(Select, Correlated) {
   int factsCount = 13;
   int lookupCount = 5;
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
   std::string sql =
       "SELECT id, val, (SELECT test_lookup.id FROM test_lookup WHERE "
       "test_lookup.val = test_facts.val) as lookup_id FROM test_facts";
   auto results = run_multiple_agg(sql, ExecutorDeviceType::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = inline_null_value<int32_t>();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -246,14 +293,14 @@ TEST(Select, Correlated) {
 TEST(Select, CorrelatedWithDouble) {
   int factsCount = 13;
   int lookupCount = 5;
-  setupTest(kDOUBLE, factsCount, lookupCount);
+  setupTest(ctx().fp64(), factsCount, lookupCount);
   std::string sql =
       "SELECT id, val, (SELECT test_lookup.id FROM test_lookup WHERE "
       "test_lookup.val = test_facts.val) as lookup_id FROM test_facts";
   auto results = run_multiple_agg(sql, ExecutorDeviceType::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = inline_null_value<int32_t>();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -275,7 +322,7 @@ TEST(Select, CorrelatedWithInnerDuplicatesFails) {
   int factsCount = 13;
   int lookupCount = 5;
 
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
   insertCsvValues("test_lookup", "5,0\n6,1\n7,2\n8,3\n9,4");
 
   std::string sql =
@@ -288,7 +335,7 @@ TEST(Select, CorrelatedWithInnerDuplicatesAndMinId) {
   int factsCount = 13;
   int lookupCount = 5;
 
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
   insertCsvValues("test_lookup", "5,0\n6,1\n7,2\n8,3\n9,4");
 
   std::string sql =
@@ -297,7 +344,7 @@ TEST(Select, CorrelatedWithInnerDuplicatesAndMinId) {
   auto results = run_multiple_agg(sql, ExecutorDeviceType::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = inline_null_value<int32_t>();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -320,7 +367,7 @@ TEST(Select, DISABLED_CorrelatedWithInnerDuplicatesDescIdOrder) {
   int factsCount = 13;
   int lookupCount = 5;
 
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
   insertCsvValues("test_lookup", "5,0\n6,1\n7,2\n8,3\n9,4");
 
   std::string sql =
@@ -330,7 +377,7 @@ TEST(Select, DISABLED_CorrelatedWithInnerDuplicatesDescIdOrder) {
   auto results = run_multiple_agg(sql, ExecutorDeviceType::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = inline_null_value<int32_t>();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -352,7 +399,7 @@ TEST(Select, CorrelatedWithInnerDuplicatesAndMaxId) {
   int factsCount = 13;
   int lookupCount = 5;
 
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
   insertCsvValues("test_lookup", "5,0\n6,1\n7,2\n8,3\n9,4");
 
   std::string sql =
@@ -361,7 +408,7 @@ TEST(Select, CorrelatedWithInnerDuplicatesAndMaxId) {
   auto results = run_multiple_agg(sql, ExecutorDeviceType::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = inline_null_value<int32_t>();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -384,7 +431,7 @@ TEST(Select, DISABLED_CorrelatedWithInnerDuplicatesAndAscIdOrder) {
   int factsCount = 13;
   int lookupCount = 5;
 
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
   insertCsvValues("test_lookup", "5,0\n6,1\n7,2\n8,3\n9,4");
 
   std::string sql =
@@ -395,7 +442,7 @@ TEST(Select, DISABLED_CorrelatedWithInnerDuplicatesAndAscIdOrder) {
   auto results = run_multiple_agg(sql, ExecutorDeviceType::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = inline_null_value<int32_t>();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -416,14 +463,14 @@ TEST(Select, DISABLED_CorrelatedWithInnerDuplicatesAndAscIdOrder) {
 TEST(Select, CorrelatedWithOuterSortAscending) {
   int factsCount = 13;
   int lookupCount = 5;
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
   std::string sql =
       "SELECT id, val, (SELECT test_lookup.id FROM test_lookup WHERE "
       "test_lookup.val = test_facts.val) as lookup_id FROM test_facts ORDER BY id ASC";
   auto results = run_multiple_agg(sql, ExecutorDeviceType::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = inline_null_value<int32_t>();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -445,14 +492,14 @@ TEST(Select, CorrelatedWithOuterSortAscending) {
 TEST(Select, CorrelatedWithOuterSortDescending) {
   int factsCount = 13;
   int lookupCount = 5;
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
   std::string sql =
       "SELECT id, val, (SELECT test_lookup.id FROM test_lookup WHERE "
       "test_lookup.val = test_facts.val) as lookup_id FROM test_facts ORDER BY id DESC";
   auto results = run_multiple_agg(sql, ExecutorDeviceType::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = inline_null_value<int32_t>();
 
   for (int i = factsCount - 1; i >= 0; i--) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -474,7 +521,7 @@ TEST(Select, CorrelatedWithOuterSortDescending) {
 TEST(Select, CorrelatedWithInnerSortDisallowed) {
   int factsCount = 13;
   int lookupCount = 5;
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
   std::string sql =
       "SELECT id, (SELECT test_lookup.id FROM test_lookup WHERE test_lookup.val = "
       "test_facts.val LIMIT 1) as lookup_id FROM test_facts;";
@@ -499,7 +546,7 @@ TEST(Select, CorrelatedWithInnerSortDisallowed) {
 TEST(Select, NonCorrelatedWithInnerSortAllowed) {
   int factsCount = 13;
   int lookupCount = 5;
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
   insertCsvValues("test_lookup", "5,0");
 
   std::string sql =
@@ -526,14 +573,14 @@ TEST(Select, NonCorrelatedWithInnerSortAllowed) {
 TEST(Select, CorrelatedWhere) {
   int factsCount = 13;
   int lookupCount = 5;
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
   std::string sql =
       "SELECT id, val, lookup_id FROM test_facts WHERE (SELECT test_lookup.id "
       "FROM test_lookup WHERE test_lookup.val = test_facts.val) < 100 ORDER BY id ASC";
   auto results = run_multiple_agg(sql, ExecutorDeviceType::CPU);
   ASSERT_EQ(static_cast<uint32_t>(lookupCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = inline_null_value<int32_t>();
 
   for (int i = 0; i < 5; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -549,14 +596,14 @@ TEST(Select, CorrelatedWhere) {
 TEST(Select, CorrelatedWhereNull) {
   int factsCount = 13;
   int lookupCount = 5;
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
   std::string sql =
       "SELECT id, val, lookup_id FROM test_facts WHERE (SELECT test_lookup.id "
       "FROM test_lookup WHERE test_lookup.val = test_facts.val) IS NULL ORDER BY id ASC";
   auto results = run_multiple_agg(sql, ExecutorDeviceType::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount - lookupCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = inline_null_value<int32_t>();
 
   for (int i = lookupCount; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -572,7 +619,7 @@ TEST(Select, CorrelatedWhereNull) {
 TEST(Select, Exists_NoJoinCorrelation) {
   int factsCount = 13;
   int lookupCount = 5;
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
 
   std::string sql =
       "SELECT fact.id, fact.val FROM test_facts fact WHERE EXISTS "
@@ -606,7 +653,7 @@ TEST(Select, Exists_NoJoinCorrelation) {
 TEST(Select, JoinCorrelation) {
   int factsCount = 13;
   int lookupCount = 5;
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
 
   // single join-correlation with filter predicates
   std::string sql =
@@ -696,7 +743,7 @@ TEST(Select, JoinCorrelation) {
 TEST(Select, JoinCorrelation_withMultipleExists) {
   int factsCount = 13;
   int lookupCount = 5;
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
 
   // # EXISTS clause: 2
   std::string sql =
@@ -777,7 +824,7 @@ TEST(Select, JoinCorrelation_withMultipleExists) {
 TEST(Select, JoinCorrelation_InClause) {
   int factsCount = 13;
   int lookupCount = 5;
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
 
   std::string sql =
       "SELECT fact.id, fact.val FROM test_facts fact WHERE fact.val IN (SELECT l.val "
@@ -831,7 +878,7 @@ TEST(Select, JoinCorrelation_InClause) {
 TEST(Select, InExpr_As_Child_Operand_Of_OR_Operator) {
   int factsCount = 13;
   int lookupCount = 5;
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
 
   auto check_query = [](const std::string& query, bool expected) {
     auto ra_executor = makeRelAlgExecutor(query);
@@ -865,7 +912,7 @@ TEST(Select, InExpr_As_Child_Operand_Of_OR_Operator) {
 TEST(Select, Disable_INExpr_Decorrelation_Under_Watchdog) {
   int factsCount = 13;
   int lookupCount = 5;
-  setupTest(kINT, factsCount, lookupCount);
+  setupTest(ctx().int32(), factsCount, lookupCount);
 
   auto check_query = [](const std::string& query, bool expected) {
     auto ra_executor = makeRelAlgExecutor(query);
