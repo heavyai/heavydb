@@ -320,6 +320,15 @@ SQLTypeInfo ResultSet::getColType(const size_t col_idx) const {
                                             : targets_[col_idx].sql_type;
 }
 
+const hdk::ir::Type* ResultSet::colType(const size_t col_idx) const {
+  if (just_explain_) {
+    return hdk::ir::Context::defaultCtx().text();
+  }
+  CHECK_LT(col_idx, targets_.size());
+  return targets_[col_idx].agg_kind == kAVG ? hdk::ir::Context::defaultCtx().fp64()
+                                            : targets_[col_idx].type;
+}
+
 StringDictionaryProxy* ResultSet::getStringDictionaryProxy(int const dict_id) const {
   constexpr bool with_generation = true;
   return row_set_mem_owner_->getOrAddStringDictProxy(dict_id, with_generation);

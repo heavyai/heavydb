@@ -38,7 +38,7 @@ inline const SQLTypeInfo get_compact_type(const TargetInfo& target) {
     return target.sql_type;
   }
   const auto agg_type = target.agg_kind;
-  const auto& agg_arg = target.agg_arg_type;
+  const auto& agg_arg = target.agg_arg_type_info;
   if (agg_arg.get_type() == kNULLT) {
     CHECK_EQ(kCOUNT, agg_type);
     CHECK(!target.is_distinct);
@@ -59,7 +59,7 @@ inline const SQLTypeInfo get_compact_type(const TargetInfo& target) {
 inline void set_compact_type(TargetInfo& target, const SQLTypeInfo& new_type) {
   if (target.is_agg) {
     const auto agg_type = target.agg_kind;
-    auto& agg_arg = target.agg_arg_type;
+    auto& agg_arg = target.agg_arg_type_info;
     if (agg_type != kCOUNT || agg_arg.get_type() != kNULLT) {
       agg_arg = new_type;
       return;

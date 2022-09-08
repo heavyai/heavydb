@@ -1276,8 +1276,8 @@ std::string target_info_key(const TargetInfo& target_info) {
          std::to_string(target_info.agg_kind) + "\n" +
          target_info.sql_type.get_type_name() + "\n" +
          std::to_string(target_info.sql_type.get_notnull()) + "\n" +
-         target_info.agg_arg_type.get_type_name() + "\n" +
-         std::to_string(target_info.agg_arg_type.get_notnull()) + "\n" +
+         target_info.agg_arg_type_info.get_type_name() + "\n" +
+         std::to_string(target_info.agg_arg_type_info.get_notnull()) + "\n" +
          std::to_string(target_info.skip_null_val) + "\n" +
          std::to_string(target_info.is_distinct);
 }

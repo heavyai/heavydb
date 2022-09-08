@@ -59,6 +59,10 @@ SQLTypeInfo TemporaryTable::getColType(const size_t col_idx) const {
   return results_.front()->getColType(col_idx);
 }
 
+const hdk::ir::Type* TemporaryTable::colType(const size_t col_idx) const {
+  return results_.front()->colType(col_idx);
+}
+
 void TemporaryTable::setKernelQueueTime(const int64_t kernel_queue_time) {
   if (empty()) {
     results_.front()->setKernelQueueTime(kernel_queue_time);

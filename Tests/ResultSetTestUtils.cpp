@@ -694,6 +694,8 @@ std::vector<TargetInfo> generate_custom_agg_target_infos(
   for (auto group_size : group_columns) {
     target_infos.push_back(TargetInfo{false,
                                       kMIN,
+                                      hdk::ir::Context::defaultCtx().integer(group_size),
+                                      nullptr,
                                       SQLTypeInfo{find_group_col_type(group_size), false},
                                       SQLTypeInfo{kNULLT, false},
                                       true,
@@ -701,10 +703,13 @@ std::vector<TargetInfo> generate_custom_agg_target_infos(
   }
   // creating proper TargetInfo for aggregate columns:
   for (size_t i = 0; i < num_targets; i++) {
+    auto ti = SQLTypeInfo{agg_types[i], false};
     target_infos.push_back(TargetInfo{true,
                                       sql_aggs[i],
-                                      SQLTypeInfo{agg_types[i], false},
-                                      SQLTypeInfo{arg_types[i], false},
+                                      hdk::ir::Context::defaultCtx().fromTypeInfo(ti),
+                                      hdk::ir::Context::defaultCtx().fromTypeInfo(ti),
+                                      ti,
+                                      ti,
                                       true,
                                       false});
   }

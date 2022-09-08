@@ -15,6 +15,7 @@
  */
 
 #include "RelAlgExecutor.h"
+#include "IR/TypeUtils.h"
 #include "QueryEngine/CalciteDeserializerUtils.h"
 #include "QueryEngine/CardinalityEstimator.h"
 #include "QueryEngine/ColumnFetcher.h"
@@ -1291,6 +1292,17 @@ inline SQLTypeInfo get_logical_type_for_expr(const hdk::ir::Expr& expr) {
   return get_logical_type_info(expr.get_type_info());
 }
 
+inline const hdk::ir::Type* logicalTypeForExpr(const hdk::ir::Expr& expr) {
+  if (is_count_distinct(&expr)) {
+    return expr.type()->ctx().int64();
+  }
+  auto res = hdk::ir::logicalType(expr.type());
+  if (is_agg(&expr)) {
+    res = res->withNullable(true);
+  }
+  return res;
+}
+
 template <class RA>
 std::vector<TargetMetaInfo> get_targets_meta(
     const RA* ra_node,
@@ -1301,8 +1313,7 @@ std::vector<TargetMetaInfo> get_targets_meta(
     CHECK(target_exprs[i]);
     // TODO(alex): remove the count distinct type fixup.
     targets_meta.emplace_back(ra_node->getFieldName(i),
-                              get_logical_type_for_expr(*target_exprs[i]),
-                              target_exprs[i]->get_type_info());
+                              logicalTypeForExpr(*target_exprs[i]));
   }
   return targets_meta;
 }
@@ -1661,8 +1672,8 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
     }
     if (target_meta_info.get_type_info().get_type() == kNULLT) {
       // replace w/ bigint
-      tuple_type[i] =
-          TargetMetaInfo(target_meta_info.get_resname(), SQLTypeInfo(kBIGINT, false));
+      tuple_type[i] = TargetMetaInfo(target_meta_info.get_resname(),
+                                     hdk::ir::Context::defaultCtx().int64());
     }
     query_mem_desc.addColSlotInfo(
         {std::make_tuple(tuple_type[i].get_type_info().get_size(), 8)});
@@ -1673,6 +1684,8 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
   for (const auto& tuple_type_component : tuple_type) {
     target_infos.emplace_back(TargetInfo{false,
                                          kCOUNT,
+                                         tuple_type_component.type(),
+                                         nullptr,
                                          tuple_type_component.get_type_info(),
                                          SQLTypeInfo(kNULLT, false),
                                          false,

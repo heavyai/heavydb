@@ -20,53 +20,54 @@
 #include <arrow/io/memory.h>
 #include <arrow/ipc/api.h>
 
+#include "ArrowStorage/ArrowStorageUtils.h"
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "Shared/ArrowUtil.h"
 
 namespace {
 
-SQLTypeInfo type_from_arrow_field(const arrow::Field& field) {
+const hdk::ir::Type* type_from_arrow_field(hdk::ir::Context& ctx,
+                                           const arrow::Field& field) {
   switch (field.type()->id()) {
     case arrow::Type::INT8:
-      return SQLTypeInfo(kTINYINT, !field.nullable());
+      return ctx.int8(field.nullable());
     case arrow::Type::INT16:
-      return SQLTypeInfo(kSMALLINT, !field.nullable());
+      return ctx.int16(field.nullable());
     case arrow::Type::INT32:
-      return SQLTypeInfo(kINT, !field.nullable());
+      return ctx.int32(field.nullable());
     case arrow::Type::INT64:
-      return SQLTypeInfo(kBIGINT, !field.nullable());
+      return ctx.int64(field.nullable());
     case arrow::Type::FLOAT:
-      return SQLTypeInfo(kFLOAT, !field.nullable());
+      return ctx.fp32(field.nullable());
     case arrow::Type::DOUBLE:
-      return SQLTypeInfo(kDOUBLE, !field.nullable());
+      return ctx.fp64(field.nullable());
     case arrow::Type::DICTIONARY:
-      return SQLTypeInfo(kTEXT, !field.nullable(), kENCODING_DICT);
+      return ctx.extDict(ctx.text(field.nullable()), 0);
     case arrow::Type::TIMESTAMP: {
-      // TODO(Wamsi): go right fold expr in c++17
-      auto get_precision = [&field](auto type) { return field.type()->Equals(type); };
-      if (get_precision(arrow::timestamp(arrow::TimeUnit::SECOND))) {
-        return SQLTypeInfo(kTIMESTAMP, !field.nullable());
-      } else if (get_precision(arrow::timestamp(arrow::TimeUnit::MILLI))) {
-        return SQLTypeInfo(kTIMESTAMP, 3, 0, !field.nullable());
-      } else if (get_precision(arrow::timestamp(arrow::TimeUnit::MICRO))) {
-        return SQLTypeInfo(kTIMESTAMP, 6, 0, !field.nullable());
-      } else if (get_precision(arrow::timestamp(arrow::TimeUnit::NANO))) {
-        return SQLTypeInfo(kTIMESTAMP, 9, 0, !field.nullable());
-      } else {
-        UNREACHABLE();
+      switch (static_cast<const arrow::TimestampType&>(*field.type()).unit()) {
+        case arrow::TimeUnit::SECOND:
+          return ctx.timestamp(hdk::ir::TimeUnit::kSecond, field.nullable());
+        case arrow::TimeUnit::MILLI:
+          return ctx.timestamp(hdk::ir::TimeUnit::kMilli, field.nullable());
+        case arrow::TimeUnit::MICRO:
+          return ctx.timestamp(hdk::ir::TimeUnit::kMicro, field.nullable());
+        case arrow::TimeUnit::NANO:
+          return ctx.timestamp(hdk::ir::TimeUnit::kNano, field.nullable());
+        default:
+          UNREACHABLE();
       }
     }
     case arrow::Type::DATE32:
-      return SQLTypeInfo(kDATE, !field.nullable(), kENCODING_DATE_IN_DAYS);
+      return ctx.date32(hdk::ir::TimeUnit::kDay, field.nullable());
     case arrow::Type::DATE64:
-      return SQLTypeInfo(kDATE, !field.nullable());
+      return ctx.date64(hdk::ir::TimeUnit::kSecond, field.nullable());
     case arrow::Type::TIME32:
-      return SQLTypeInfo(kTIME, !field.nullable());
+      return ctx.time64(hdk::ir::TimeUnit::kSecond, field.nullable());
     default:
       CHECK(false);
   }
   CHECK(false);
-  return SQLTypeInfo();
+  return nullptr;
 }
 
 }  // namespace
@@ -79,8 +80,8 @@ ArrowResultSet::ArrowResultSet(const std::shared_ptr<ResultSet>& rows,
   auto schema = record_batch_->schema();
   for (int i = 0; i < schema->num_fields(); ++i) {
     std::shared_ptr<arrow::Field> field = schema->field(i);
-    SQLTypeInfo type_info = type_from_arrow_field(*schema->field(i));
-    column_metainfo_.emplace_back(field->name(), type_info);
+    auto type = type_from_arrow_field(hdk::ir::Context::defaultCtx(), *schema->field(i));
+    column_metainfo_.emplace_back(field->name(), type);
     columns_.emplace_back(record_batch_->column(i));
   }
 }
@@ -98,8 +99,8 @@ ArrowResultSet::ArrowResultSet(
   auto schema = record_batch_->schema();
   for (int i = 0; i < schema->num_fields(); ++i) {
     std::shared_ptr<arrow::Field> field = schema->field(i);
-    SQLTypeInfo type_info = type_from_arrow_field(*schema->field(i));
-    column_metainfo_.emplace_back(field->name(), type_info);
+    auto type = type_from_arrow_field(hdk::ir::Context::defaultCtx(), *schema->field(i));
+    column_metainfo_.emplace_back(field->name(), type);
     columns_.emplace_back(record_batch_->column(i));
   }
 }

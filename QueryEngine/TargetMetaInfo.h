@@ -19,7 +19,8 @@
 
 #include <string>
 
-#include "../Shared/sqltypes.h"
+#include "IR/Type.h"
+#include "Shared/sqltypes.h"
 
 /*
  * @type TargetMetaInfo
@@ -27,31 +28,27 @@
  */
 class TargetMetaInfo {
  public:
-  TargetMetaInfo(const std::string& resname, const SQLTypeInfo& ti)
-      : resname_(resname), ti_(ti), physical_ti_(ti) {}
-  TargetMetaInfo(const std::string& resname,
-                 const SQLTypeInfo& ti,
-                 const SQLTypeInfo& physical_ti)
-      : resname_(resname), ti_(ti), physical_ti_(physical_ti) {}
+  TargetMetaInfo(const std::string& resname, const hdk::ir::Type* type)
+      : resname_(resname), type_(type), ti_(type_->toTypeInfo()) {}
   const std::string& get_resname() const { return resname_; }
+  const hdk::ir::Type* type() const { return type_; }
   const SQLTypeInfo& get_type_info() const { return ti_; }
-  const SQLTypeInfo& get_physical_type_info() const { return physical_ti_; }
 
   std::string toString() const {
-    return "TargetMetaInfo(" + resname_ + ", " + ti_.to_string() + ", " +
-           physical_ti_.to_string() + ") ";
+    return "TargetMetaInfo(" + resname_ + ", " + ti_.to_string() + ") ";
   }
 
  private:
   std::string resname_;
+  const hdk::ir::Type* type_;
+  const hdk::ir::Type* physical_type_;
   SQLTypeInfo ti_;
   SQLTypeInfo physical_ti_;
 };
 
 inline std::ostream& operator<<(std::ostream& os, TargetMetaInfo const& tmi) {
   return os << "TargetMetaInfo(resname_(" << tmi.get_resname() << ") ti_("
-            << tmi.get_type_info().to_string() << ") physical_ti_("
-            << tmi.get_physical_type_info().to_string() << "))";
+            << tmi.get_type_info().to_string() << "))";
 }
 
 #endif  // QUERYENGINE_TARGETMETAINFO_H

@@ -352,18 +352,18 @@ std::vector<TargetMetaInfo> create_table_schema(const PlanState* plan_state) {
     const int db_id = kv.first.getDatabaseId();
     const int table_id = kv.first.getTableId();
     const int column_id = kv.first.getColId();
-    SQLTypeInfo column_type;
+    const hdk::ir::Type* column_type;
     if (table_id < 0) {
       const auto& table =
           get_temporary_table(plan_state->executor_->getTemporaryTables(), table_id);
-      column_type = table.getColType(column_id);
+      column_type = table.colType(column_id);
     } else {
       const auto col_info = schema_provider->getColumnInfo(db_id, table_id, column_id);
-      column_type = col_info->type_info;
+      column_type = col_info->type;
     }
     if (!is_supported_type_for_extern_execution(column_type)) {
       throw std::runtime_error("Type not supported yet for extern execution: " +
-                               column_type.get_type_name());
+                               column_type->toString());
     }
     const auto column_ref =
         serialize_column_ref(db_id, table_id, column_id, schema_provider);
@@ -531,4 +531,9 @@ std::unique_ptr<ResultSet> run_query_external(
 
 bool is_supported_type_for_extern_execution(const SQLTypeInfo& ti) {
   return ti.is_integer() || ti.is_fp() || ti.is_string();
+}
+
+bool is_supported_type_for_extern_execution(const hdk::ir::Type* type) {
+  return type->isInteger() || type->isFloatingPoint() || type->isString() ||
+         type->isExtDictionary();
 }

@@ -3057,7 +3057,7 @@ class RelAlgDispatcher {
          ++tuple_type_arr_it) {
       auto component_type = parseType(*tuple_type_arr_it);
       const auto component_name = json_str(field(*tuple_type_arr_it, "name"));
-      tuple_type.emplace_back(component_name, component_type->toTypeInfo());
+      tuple_type.emplace_back(component_name, component_type);
     }
     return tuple_type;
   }
@@ -3128,27 +3128,27 @@ class RelAlgDispatcher {
         op_name.GetString() == "column_list_safe_row_sum"s ||
         op_name.GetString() == "ct_named_rowmul_output"s) {
       CHECK_EQ(tuple_type.size(), 1);
-      tuple_type[0] = TargetMetaInfo(tuple_type[0].get_resname(),
-                                     col_input_exprs[0]->get_type_info());
+      tuple_type[0] =
+          TargetMetaInfo(tuple_type[0].get_resname(), col_input_exprs[0]->type());
     } else if (op_name.GetString() == "ct_scalar_1_arg_runtime_sizing"s) {
       CHECK_EQ(tuple_type.size(), 1);
-      if (table_func_input_exprs[0]->get_type_info().is_integer()) {
-        tuple_type[0] =
-            TargetMetaInfo(tuple_type[0].get_resname(), SQLTypeInfo(kBIGINT, false));
+      if (table_func_input_exprs[0]->type()->isInteger()) {
+        tuple_type[0] = TargetMetaInfo(tuple_type[0].get_resname(),
+                                       hdk::ir::Context::defaultCtx().int64());
       } else {
-        CHECK(table_func_input_exprs[0]->get_type_info().is_fp());
-        tuple_type[0] =
-            TargetMetaInfo(tuple_type[0].get_resname(), SQLTypeInfo(kDOUBLE, false));
+        CHECK(table_func_input_exprs[0]->type()->isFloatingPoint());
+        tuple_type[0] = TargetMetaInfo(tuple_type[0].get_resname(),
+                                       hdk::ir::Context::defaultCtx().fp64());
       }
     } else if (op_name.GetString() == "ct_templated_no_cursor_user_constant_sizer"s) {
       CHECK_EQ(tuple_type.size(), 1);
-      tuple_type[0] = TargetMetaInfo(tuple_type[0].get_resname(),
-                                     table_func_input_exprs[0]->get_type_info());
+      tuple_type[0] =
+          TargetMetaInfo(tuple_type[0].get_resname(), table_func_input_exprs[0]->type());
     } else if (op_name.GetString() == "ct_binding_column2"s) {
       CHECK_EQ(tuple_type.size(), 1);
       if (col_input_exprs[0]->get_type_info().is_string()) {
-        tuple_type[0] = TargetMetaInfo(tuple_type[0].get_resname(),
-                                       col_input_exprs[0]->get_type_info());
+        tuple_type[0] =
+            TargetMetaInfo(tuple_type[0].get_resname(), col_input_exprs[0]->type());
       }
     }
     for (size_t i = 0; i < tuple_type.size(); i++) {

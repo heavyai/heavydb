@@ -7,6 +7,8 @@ set(ir_source_files
     Expr.h
     Type.cpp
     Type.h
+    TypeUtils.cpp
+    TypeUtils.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../QueryEngine/DateTruncate.cpp
 )
 

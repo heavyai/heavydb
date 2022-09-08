@@ -943,15 +943,24 @@ std::vector<TargetInfo> generate_test_target_infos() {
   SQLTypeInfo int_ti(kINT, false);
   SQLTypeInfo double_ti(kDOUBLE, false);
   SQLTypeInfo null_ti(kNULLT, false);
-  target_infos.push_back(TargetInfo{false, kMIN, int_ti, null_ti, true, false});
-  target_infos.push_back(TargetInfo{true, kAVG, int_ti, int_ti, true, false});
-  target_infos.push_back(TargetInfo{true, kSUM, int_ti, int_ti, true, false});
-  target_infos.push_back(TargetInfo{false, kMIN, double_ti, null_ti, true, false});
+  auto& ctx = hdk::ir::Context::defaultCtx();
+  auto int_type = ctx.int32();
+  auto double_type = ctx.fp64();
+  target_infos.push_back(
+      TargetInfo{false, kMIN, int_type, nullptr, int_ti, null_ti, true, false});
+  target_infos.push_back(
+      TargetInfo{true, kAVG, int_type, int_type, int_ti, int_ti, true, false});
+  target_infos.push_back(
+      TargetInfo{true, kSUM, int_type, int_type, int_ti, int_ti, true, false});
+  target_infos.push_back(
+      TargetInfo{false, kMIN, double_type, nullptr, double_ti, null_ti, true, false});
   {
     SQLTypeInfo dict_string_ti(kTEXT, false);
     dict_string_ti.set_compression(kENCODING_DICT);
     dict_string_ti.set_comp_param(1);
-    target_infos.push_back(TargetInfo{false, kMIN, dict_string_ti, null_ti, true, false});
+    auto dict_type = ctx.extDict(ctx.text(), 1);
+    target_infos.push_back(TargetInfo{
+        false, kMIN, dict_type, nullptr, dict_string_ti, null_ti, true, false});
   }
   return target_infos;
 }
@@ -960,25 +969,41 @@ std::vector<TargetInfo> generate_random_groups_target_infos() {
   std::vector<TargetInfo> target_infos;
   SQLTypeInfo int_ti(kINT, true);
   SQLTypeInfo double_ti(kDOUBLE, true);
+  auto& ctx = hdk::ir::Context::defaultCtx();
+  auto int_type = ctx.int32();
+  auto double_type = ctx.fp64();
   // SQLTypeInfo null_ti(kNULLT, false);
-  target_infos.push_back(TargetInfo{true, kMIN, int_ti, int_ti, true, false});
-  target_infos.push_back(TargetInfo{true, kMAX, int_ti, int_ti, true, false});
-  target_infos.push_back(TargetInfo{true, kSUM, int_ti, int_ti, true, false});
-  target_infos.push_back(TargetInfo{true, kCOUNT, int_ti, int_ti, true, false});
-  target_infos.push_back(TargetInfo{true, kAVG, int_ti, double_ti, true, false});
+  target_infos.push_back(
+      TargetInfo{true, kMIN, int_type, int_type, int_ti, int_ti, true, false});
+  target_infos.push_back(
+      TargetInfo{true, kMAX, int_type, int_type, int_ti, int_ti, true, false});
+  target_infos.push_back(
+      TargetInfo{true, kSUM, int_type, int_type, int_ti, int_ti, true, false});
+  target_infos.push_back(
+      TargetInfo{true, kCOUNT, int_type, int_type, int_ti, int_ti, true, false});
+  target_infos.push_back(
+      TargetInfo{true, kAVG, int_type, double_type, int_ti, double_ti, true, false});
   return target_infos;
 }
 
 std::vector<TargetInfo> generate_random_groups_nullable_target_infos() {
   std::vector<TargetInfo> target_infos;
   SQLTypeInfo int_ti(kINT, false);
+  auto& ctx = hdk::ir::Context::defaultCtx();
+  auto int_type = ctx.int32();
+  auto double_type = ctx.fp64();
   // SQLTypeInfo null_ti(kNULLT, false);
   SQLTypeInfo double_ti(kDOUBLE, false);
-  target_infos.push_back(TargetInfo{true, kMIN, int_ti, int_ti, true, false});
-  target_infos.push_back(TargetInfo{true, kMAX, int_ti, int_ti, true, false});
-  target_infos.push_back(TargetInfo{true, kSUM, int_ti, int_ti, true, false});
-  target_infos.push_back(TargetInfo{true, kCOUNT, int_ti, int_ti, true, false});
-  target_infos.push_back(TargetInfo{true, kAVG, int_ti, double_ti, true, false});
+  target_infos.push_back(
+      TargetInfo{true, kMIN, int_type, int_type, int_ti, int_ti, true, false});
+  target_infos.push_back(
+      TargetInfo{true, kMAX, int_type, int_type, int_ti, int_ti, true, false});
+  target_infos.push_back(
+      TargetInfo{true, kSUM, int_type, int_type, int_ti, int_ti, true, false});
+  target_infos.push_back(
+      TargetInfo{true, kCOUNT, int_type, int_type, int_ti, int_ti, true, false});
+  target_infos.push_back(
+      TargetInfo{true, kAVG, int_type, double_type, int_ti, double_ti, true, false});
   return target_infos;
 }
 
@@ -1926,8 +1951,11 @@ TEST(MoreReduce, MissingValues) {
   std::vector<TargetInfo> target_infos;
   SQLTypeInfo bigint_ti(kBIGINT, false);
   SQLTypeInfo null_ti(kNULLT, false);
-  target_infos.push_back(TargetInfo{false, kMIN, bigint_ti, null_ti, true, false});
-  target_infos.push_back(TargetInfo{true, kCOUNT, bigint_ti, null_ti, true, false});
+  auto bigint_type = hdk::ir::Context::defaultCtx().int64();
+  target_infos.push_back(
+      TargetInfo{false, kMIN, bigint_type, nullptr, bigint_ti, null_ti, true, false});
+  target_infos.push_back(
+      TargetInfo{true, kCOUNT, bigint_type, nullptr, bigint_ti, null_ti, true, false});
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 7, 9);
   query_mem_desc.setHasKeylessHash(false);
   // for codegen only
@@ -2005,8 +2033,11 @@ TEST(MoreReduce, MissingValuesKeyless) {
   std::vector<TargetInfo> target_infos;
   SQLTypeInfo bigint_ti(kBIGINT, false);
   SQLTypeInfo null_ti(kNULLT, false);
-  target_infos.push_back(TargetInfo{false, kMIN, bigint_ti, null_ti, true, false});
-  target_infos.push_back(TargetInfo{true, kCOUNT, bigint_ti, null_ti, true, false});
+  auto bigint_type = hdk::ir::Context::defaultCtx().int64();
+  target_infos.push_back(
+      TargetInfo{false, kMIN, bigint_type, nullptr, bigint_ti, null_ti, true, false});
+  target_infos.push_back(
+      TargetInfo{true, kCOUNT, bigint_type, nullptr, bigint_ti, null_ti, true, false});
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 7, 9);
   query_mem_desc.setHasKeylessHash(true);
   // for codegen only
@@ -2079,9 +2110,13 @@ TEST(MoreReduce, OffsetRewrite) {
   SQLTypeInfo bigint_ti(kBIGINT, false);
   SQLTypeInfo real_str_ti(kTEXT, true, kENCODING_NONE);
   SQLTypeInfo null_ti(kNULLT, false);
+  auto bigint_type = hdk::ir::Context::defaultCtx().int64();
+  auto text_type = hdk::ir::Context::defaultCtx().text();
 
-  target_infos.push_back(TargetInfo{false, kMIN, bigint_ti, null_ti, true, false});
-  target_infos.push_back(TargetInfo{true, kSAMPLE, real_str_ti, null_ti, true, false});
+  target_infos.push_back(
+      TargetInfo{false, kMIN, bigint_type, nullptr, bigint_ti, null_ti, true, false});
+  target_infos.push_back(
+      TargetInfo{true, kSAMPLE, text_type, nullptr, real_str_ti, null_ti, true, false});
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 7, 9);
   query_mem_desc.setHasKeylessHash(false);
   // for codegen only

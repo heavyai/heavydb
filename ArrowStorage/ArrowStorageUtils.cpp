@@ -973,6 +973,12 @@ const hdk::ir::Type* getTargetImportType(hdk::ir::Context& ctx,
       return ctx.fp64();
     case Type::STRING:
       return ctx.extDict(ctx.text(), 0);
+    case arrow::Type::DICTIONARY: {
+      const auto& dict_type = static_cast<const arrow::DictionaryType&>(type);
+      if (dict_type.value_type()->id() == Type::STRING) {
+        return ctx.extDict(ctx.text(), 0);
+      }
+    } break;
     case Type::DECIMAL: {
       const auto& decimal_type = static_cast<const arrow::DecimalType&>(type);
       return ctx.decimal64(decimal_type.precision(), decimal_type.scale());

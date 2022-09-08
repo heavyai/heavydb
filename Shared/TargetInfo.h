@@ -26,6 +26,7 @@
 #include "sqltypes.h"
 
 #include "IR/Expr.h"
+#include "IR/TypeUtils.h"
 
 inline const hdk::ir::AggExpr* cast_to_agg_expr(const hdk::ir::Expr* target_expr) {
   return dynamic_cast<const hdk::ir::AggExpr*>(target_expr);
@@ -38,8 +39,10 @@ inline const hdk::ir::AggExpr* cast_to_agg_expr(const hdk::ir::ExprPtr target_ex
 struct TargetInfo {
   bool is_agg;
   SQLAgg agg_kind;
+  const hdk::ir::Type* type;
+  const hdk::ir::Type* agg_arg_type;
   SQLTypeInfo sql_type;
-  SQLTypeInfo agg_arg_type;
+  SQLTypeInfo agg_arg_type_info;
   bool skip_null_val;
   bool is_distinct;
 #ifndef __CUDACC__
@@ -49,7 +52,7 @@ struct TargetInfo {
     result += "is_agg=" + std::string(is_agg ? "true" : "false") + ", ";
     result += "agg_kind=" + ::toString(agg_kind) + ", ";
     result += "sql_type=" + sql_type.to_string() + ", ";
-    result += "agg_arg_type=" + agg_arg_type.to_string() + ", ";
+    result += "agg_arg_type=" + agg_arg_type->toString() + ", ";
     result += "skip_null_val=" + std::string(skip_null_val ? "true" : "false") + ", ";
     result += "is_distinct=" + std::string(is_distinct ? "true" : "false") + ")";
     return result;
@@ -77,12 +80,20 @@ inline bool is_agg_domain_range_equivalent(const SQLAgg& agg_kind) {
 template <class PointerType>
 inline TargetInfo get_target_info(const PointerType target_expr,
                                   const bool bigint_count) {
+  auto& ctx = target_expr->type()->ctx();
   const auto agg_expr = cast_to_agg_expr(target_expr);
-  bool notnull = target_expr->get_type_info().get_notnull();
+  bool nullable = target_expr->type()->nullable();
   if (!agg_expr) {
-    auto target_ti = target_expr ? get_logical_type_info(target_expr->get_type_info())
-                                 : SQLTypeInfo(kBIGINT, notnull);
-    return {false, kMIN, target_ti, SQLTypeInfo(kNULLT, false), false, false};
+    auto target_type = hdk::ir::logicalType(target_expr->type());
+    auto target_ti = get_logical_type_info(target_expr->get_type_info());
+    return {false,
+            kMIN,
+            target_type,
+            nullptr,
+            target_ti,
+            SQLTypeInfo(kNULLT, false),
+            false,
+            false};
   }
   const auto agg_type = agg_expr->get_aggtype();
   const auto agg_arg = agg_expr->get_arg();
@@ -91,12 +102,15 @@ inline TargetInfo get_target_info(const PointerType target_expr,
     CHECK(!agg_expr->get_is_distinct());
     return {true,
             kCOUNT,
-            SQLTypeInfo(bigint_count ? kBIGINT : kINT, notnull),
+            ctx.integer(bigint_count ? 8 : 4, nullable),
+            nullptr,
+            SQLTypeInfo(bigint_count ? kBIGINT : kINT, !nullable),
             SQLTypeInfo(kNULLT, false),
             false,
             false};
   }
 
+  const auto& agg_arg_type = agg_arg->type();
   const auto& agg_arg_ti = agg_arg->get_type_info();
   bool is_distinct{false};
   if (agg_expr->get_aggtype() == kCOUNT) {
@@ -106,20 +120,26 @@ inline TargetInfo get_target_info(const PointerType target_expr,
   if (agg_type == kAVG) {
     // Upcast the target type for AVG, so that the integer argument does not overflow the
     // sum
-    return {true,
-            agg_expr->get_aggtype(),
-            agg_arg_ti.is_integer() ? SQLTypeInfo(kBIGINT, agg_arg_ti.get_notnull())
-                                    : agg_arg_ti,
-            agg_arg_ti,
-            !agg_arg_ti.get_notnull(),
-            is_distinct};
+    return {
+        true,
+        agg_expr->get_aggtype(),
+        agg_arg_type->isInteger() ? ctx.int64(agg_arg_type->nullable()) : agg_arg_type,
+        agg_arg_type,
+        agg_arg_ti.is_integer() ? SQLTypeInfo(kBIGINT, agg_arg_ti.get_notnull())
+                                : agg_arg_ti,
+        agg_arg_ti,
+        !agg_arg_ti.get_notnull(),
+        is_distinct};
   }
 
   return {
       true,
       agg_expr->get_aggtype(),
+      agg_type == kCOUNT ? ctx.integer((is_distinct || bigint_count) ? 8 : 4, nullable)
+                         : agg_expr->type(),
+      agg_arg_type,
       agg_type == kCOUNT
-          ? SQLTypeInfo((is_distinct || bigint_count) ? kBIGINT : kINT, notnull)
+          ? SQLTypeInfo((is_distinct || bigint_count) ? kBIGINT : kINT, !nullable)
           : agg_expr->get_type_info(),
       agg_arg_ti,
       agg_type == kCOUNT && agg_arg_ti.is_varlen() ? false : !agg_arg_ti.get_notnull(),
@@ -135,7 +155,7 @@ inline bool takes_float_argument(const TargetInfo& target_info) {
          (target_info.agg_kind == kAVG || target_info.agg_kind == kSUM ||
           target_info.agg_kind == kMIN || target_info.agg_kind == kMAX ||
           target_info.agg_kind == kSINGLE_VALUE) &&
-         target_info.agg_arg_type.get_type() == kFLOAT;
+         target_info.agg_arg_type->isFp32();
 }
 
 #endif  // QUERYENGINE_TARGETINFO_H

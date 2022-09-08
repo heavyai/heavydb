@@ -172,9 +172,11 @@ ResultSet* ResultSetLogicalValuesBuilder::create(
   std::vector<TargetInfo> target_infos;
   SQLTypeInfo str_ti(kTEXT, true, kENCODING_NONE);
   for (size_t col = 0; col < numCols; col++) {
-    SQLTypeInfo colType = label_infos[col].get_type_info();
-    target_infos.push_back(TargetInfo{false, kSAMPLE, colType, colType, true, false});
-    query_mem_desc.addColSlotInfo({std::make_tuple(colType.get_size(), 8)});
+    auto colType = label_infos[col].type();
+    SQLTypeInfo colTypeInfo = label_infos[col].get_type_info();
+    target_infos.push_back(TargetInfo{
+        false, kSAMPLE, colType, colType, colTypeInfo, colTypeInfo, true, false});
+    query_mem_desc.addColSlotInfo({std::make_tuple(colType->size(), 8)});
   }
 
   std::shared_ptr<RelLogicalValues> rel_logical_values =

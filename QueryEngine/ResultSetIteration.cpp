@@ -50,10 +50,10 @@ TargetValue make_avg_target_value(const int8_t* ptr1,
   CHECK(target_info.agg_kind == kAVG);
   const bool float_argument_input = takes_float_argument(target_info);
   const auto actual_compact_sz1 = float_argument_input ? sizeof(float) : compact_sz1;
-  const auto& agg_ti = target_info.agg_arg_type;
-  if (agg_ti.is_integer() || agg_ti.is_decimal()) {
+  const auto& agg_type = target_info.agg_arg_type;
+  if (agg_type->isInteger() || agg_type->isDecimal()) {
     sum = read_int_from_buff(ptr1, actual_compact_sz1);
-  } else if (agg_ti.is_fp()) {
+  } else if (agg_type->isFloatingPoint()) {
     switch (actual_compact_sz1) {
       case 8: {
         double d = *reinterpret_cast<const double*>(ptr1);

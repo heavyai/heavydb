@@ -2204,7 +2204,7 @@ ExecutorDeviceType Executor::getDeviceTypeForTargets(
     if (!ra_exe_unit.groupby_exprs.empty() &&
         !isArchPascalOrLater(requested_device_type)) {
       if ((agg_info.agg_kind == kAVG || agg_info.agg_kind == kSUM) &&
-          agg_info.agg_arg_type.get_type() == kDOUBLE) {
+          agg_info.agg_arg_type->isFp64()) {
         return ExecutorDeviceType::CPU;
       }
     }

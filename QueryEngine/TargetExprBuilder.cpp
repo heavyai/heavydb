@@ -328,7 +328,7 @@ void TargetExprCodegen::codegenAggregate(
     const auto& arg_type =
         ((arg_expr && arg_expr->get_type_info().get_type() != kNULLT) &&
          !target_info.is_distinct)
-            ? target_info.agg_arg_type
+            ? target_info.agg_arg_type_info
             : target_info.sql_type;
     const bool is_fp_arg =
         !lazy_fetched && arg_type.get_type() != kNULLT && arg_type.is_fp();
@@ -423,7 +423,7 @@ void TargetExprCodegen::codegenAggregate(
       row_func_builder->codegenApproxQuantile(
           target_idx, target_expr, agg_args, query_mem_desc, co.device_type);
     } else {
-      const auto& arg_ti = target_info.agg_arg_type;
+      const auto& arg_ti = target_info.agg_arg_type_info;
       if (need_skip_null) {
         agg_fname += "_skip_val";
       }
