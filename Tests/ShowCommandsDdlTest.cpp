@@ -4243,8 +4243,7 @@ TEST_P(LogsSystemTableTest, MaxLogFiles) {
 
 INSTANTIATE_TEST_SUITE_P(AllLogsSystemTables,
                          LogsSystemTableTest,
-                         testing::Values("request_logs",
-                                         "server_logs"),
+                         testing::Values("request_logs", "server_logs"),
                          [](const auto& param_info) { return param_info.param; });
 
 class GetTableDetailsTest : public DBHandlerTestFixture {

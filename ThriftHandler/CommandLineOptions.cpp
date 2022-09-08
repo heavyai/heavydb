@@ -25,8 +25,8 @@
 using namespace std::string_literals;
 
 #include "CommandLineOptions.h"
-#include "LeafHostInfo.h"
 #include "ImportExport/ForeignDataImporter.h"
+#include "LeafHostInfo.h"
 #include "MapDRelease.h"
 #include "MigrationMgr/MigrationMgr.h"
 #include "QueryEngine/GroupByAndAggregate.h"

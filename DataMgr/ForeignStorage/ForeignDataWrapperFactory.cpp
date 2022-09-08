@@ -102,7 +102,6 @@ create_proxy_fsi_objects(const std::string& copy_from_source,
 
 namespace {
 
-
 bool is_valid_data_wrapper(const std::string& data_wrapper_type) {
   return
 #ifdef ENABLE_IMPORT_PARQUET
@@ -436,6 +435,6 @@ void ForeignDataWrapperFactory::validateDataWrapperType(
   }
 }
 
-std::map<std::string, std::unique_ptr<ForeignDataWrapper> >
+std::map<std::string, std::unique_ptr<ForeignDataWrapper>>
     ForeignDataWrapperFactory::validation_data_wrappers_;
 }  // namespace foreign_storage

@@ -376,8 +376,7 @@ StringDictionary::~StringDictionary() noexcept {
   }
 }
 
-void StringDictionary::update_leaf(const LeafHostInfo& new_host) {
-}
+void StringDictionary::update_leaf(const LeafHostInfo& new_host) {}
 
 int32_t StringDictionary::getOrAdd(const std::string& str) noexcept {
   if (isClient()) {
