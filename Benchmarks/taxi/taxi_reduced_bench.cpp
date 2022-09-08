@@ -14,11 +14,11 @@ static void createTaxiReducedTable() {
   getStorage()->dropTable("trips");
   ArrowStorage::TableOptions to{g_fragment_size};
   createTable("trips",
-              {{"pickup_datetime", SQLTypeInfo(kTIMESTAMP, 0, 0)},
-               {"passenger_count", SQLTypeInfo(kSMALLINT)},
-               {"trip_distance", SQLTypeInfo(kDECIMAL, 14, 2)},
-               {"total_amount", SQLTypeInfo(kDECIMAL, 14, 2)},
-               {"cab_type", SQLTypeInfo(kTEXT, true, kENCODING_DICT)}},
+              {{"pickup_datetime", ctx().timestamp(hdk::ir::TimeUnit::kSecond)},
+               {"passenger_count", ctx().int16()},
+               {"trip_distance", ctx().decimal64(14, 2)},
+               {"total_amount", ctx().decimal64(14, 2)},
+               {"cab_type", ctx().extDict(ctx().text(), 0)}},
               to);
 }
 static void populateTaxiReducedTable() {
