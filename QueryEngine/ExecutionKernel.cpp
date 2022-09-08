@@ -46,10 +46,9 @@ bool need_to_hold_chunk(const Chunk_NS::Chunk* chunk,
                         const RelAlgExecutionUnit& ra_exe_unit,
                         const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
                         const ExecutorDeviceType device_type) {
-  const auto& chunk_ti = chunk->getColumnType();
+  const auto& chunk_type = chunk->columnType();
   if (device_type == ExecutorDeviceType::CPU &&
-      (chunk_ti.is_array() ||
-       (chunk_ti.is_string() && chunk_ti.get_compression() == kENCODING_NONE))) {
+      (chunk_type->isArray() || chunk_type->isString())) {
     for (const auto target_expr : ra_exe_unit.target_exprs) {
       const auto col_var = dynamic_cast<const hdk::ir::ColumnVar*>(target_expr);
       if (col_var && col_var->get_column_id() == chunk->getColumnId() &&

@@ -63,7 +63,7 @@ class Chunk {
 
   int getColumnId() const { return column_info_->column_id; }
 
-  const SQLTypeInfo& getColumnType() const { return column_info_->type_info; }
+  const hdk::ir::Type* columnType() const { return column_info_->type; }
 
   const std::string& getColumnName() const { return column_info_->name; }
 
