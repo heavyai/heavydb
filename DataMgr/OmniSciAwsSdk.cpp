@@ -37,6 +37,7 @@ void omnisci_aws_sdk::init_sdk() {
   global_options.tls_ca_file_path = ssl_config.ca_file;
   arrow::fs::Initialize(global_options);
   arrow::fs::S3GlobalOptions s3_global_options;
+  s3_global_options.log_level = arrow::fs::S3LogLevel::Off;
   auto status = arrow::fs::InitializeS3(s3_global_options);
   CHECK(status.ok()) << "InitializeS3 resulted in an error: " << status.message();
 #ifdef ARROW_HAS_PRIVATE_AWS_SDK
