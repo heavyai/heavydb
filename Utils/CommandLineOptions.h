@@ -116,7 +116,6 @@ class CommandLineOptions {
 
   std::string getNodeIds();
   std::vector<std::string> getNodeIdsArray();
-  static const std::string nodeIds_token;
 
   std::optional<int> parse_command_line(int argc,
                                         char const* const* argv,

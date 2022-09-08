@@ -30,16 +30,11 @@
 #include <io.h>
 #endif
 
-const std::string CommandLineOptions::nodeIds_token = {"node_id"};
-
-extern std::string cluster_command_line_arg;
-
-extern bool g_use_table_device_offset;
+bool g_use_table_device_offset;  // TODO(adb): where did this go?
 extern bool g_cache_string_hash;
 extern int64_t g_large_ndv_threshold;
 extern size_t g_large_ndv_multiplier;
 extern int64_t g_bitmap_memory_limit;
-extern bool g_enable_calcite_ddl_parser;
 extern size_t g_approx_quantile_buffer;
 extern size_t g_approx_quantile_centroids;
 extern size_t g_estimator_failure_max_groupby_size;
@@ -406,12 +401,6 @@ void CommandLineOptions::fillAdvancedOptions() {
       "size of the group by buffer (entry count in Query Memory Descriptor) and "
       "multiplying it by the number of count distinct expression and the size of bitmap "
       "required for each. For approx_count_distinct this is typically 8192 bytes.");
-  developer_desc.add_options()(
-      "enable-calcite-ddl",
-      po::value<bool>(&g_enable_calcite_ddl_parser)
-          ->default_value(g_enable_calcite_ddl_parser)
-          ->implicit_value(true),
-      "Enable using Calcite for supported DDL parsing when available.");
   developer_desc.add_options()(
       "max-log-length",
       po::value<size_t>(&g_max_log_length)->default_value(g_max_log_length),
