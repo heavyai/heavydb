@@ -7,7 +7,7 @@
 # IMPORTED Targets
 # ^^^^^^^^^^^^^^^^
 #
-# This module defines the :prop_tgt:`IMPORTED` target ``GLFW::GLFW``,
+# This module defines the :prop_tgt:`IMPORTED` target ``GLFW3::GLFW3``,
 # if glfw3 has been found.
 #
 # Result Variables
@@ -17,11 +17,11 @@
 #
 # ::
 #
-#   GLFW_INCLUDE_DIRS - include directories for glfw3
-#   GLFW_LIBRARIES - libraries to link against glfw3
-#   GLFW_FOUND - true if glfw3 has been found and can be used
+#   GLFW3_INCLUDE_DIRS - include directories for glfw3
+#   GLFW3_LIBRARIES - libraries to link against glfw3
+#   GLFW3_FOUND - true if glfw3 has been found and can be used
 
-find_library(GLFW_LIBRARY
+find_library(GLFW3_LIBRARY
   NAMES glfw glfw3
   HINTS
   ENV LD_LIBRARY_PATH
@@ -33,12 +33,12 @@ find_library(GLFW_LIBRARY
   /opt/local/lib
 )
 
-get_filename_component(GLFW_LIBRARY_DIR ${GLFW_LIBRARY} DIRECTORY)
+get_filename_component(GLFW3_LIBRARY_DIR ${GLFW3_LIBRARY} DIRECTORY)
 
-find_path(GLFW_INCLUDE_DIR
+find_path(GLFW3_INCLUDE_DIR
   NAMES GLFW/glfw3.h
   HINTS
-  ${GLFW_LIBRARY_DIR}/../include
+  ${GLFW3_LIBRARY_DIR}/../include
   PATHS
   /include
   /usr/include
@@ -48,17 +48,17 @@ find_path(GLFW_INCLUDE_DIR
 )
 
 # Set standard CMake FindPackage variables
-set(GLFW_LIBRARIES ${GLFW_LIBRARY} ${CMAKE_DL_LIBS})
-set(GLFW_INCLUDE_DIRS ${GLFW_INCLUDE_DIR})
+set(GLFW3_LIBRARIES ${GLFW3_LIBRARY} ${CMAKE_DL_LIBS})
+set(GLFW3_INCLUDE_DIRS ${GLFW3_INCLUDE_DIR})
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(GLFW REQUIRED_VARS GLFW_LIBRARY GLFW_INCLUDE_DIR)
+find_package_handle_standard_args(GLFW3 REQUIRED_VARS GLFW3_LIBRARY GLFW3_INCLUDE_DIR)
 
-if (GLFW_FOUND AND NOT TARGET GLFW::GLFW)
-  add_library(GLFW::GLFW UNKNOWN IMPORTED)
-  set_target_properties(GLFW::GLFW PROPERTIES
-    IMPORTED_LOCATION "${GLFW_LIBRARY}"
-    INTERFACE_INCLUDE_DIRECTORIES "${GLFW_INCLUDE_DIRS}")
+if (GLFW3_FOUND AND NOT TARGET GLFW3::GLFW3)
+  add_library(GLFW3::GLFW3 UNKNOWN IMPORTED)
+  set_target_properties(GLFW3::GLFW3 PROPERTIES
+    IMPORTED_LOCATION "${GLFW3_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${GLFW3_INCLUDE_DIRS}")
 endif()
 
-mark_as_advanced(GLFW_INCLUDE_DIR GLFW_LIBRARY)
+mark_as_advanced(GLFW3_INCLUDE_DIR GLFW3_LIBRARY)
