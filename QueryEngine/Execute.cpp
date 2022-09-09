@@ -1423,6 +1423,7 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
         *(results_per_device[i].first->getStorage()), {}, reduction_code, executor_id_);
   }
   reduced_results->addCompilationQueueTime(compilation_queue_time);
+  reduced_results->invalidateCachedRowCount();
   return reduced_results;
 }
 
