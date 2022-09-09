@@ -83,27 +83,27 @@ void ArrowStorage::fetchBuffer(const ChunkKey& key,
   auto col_type =
       getColumnInfo(
           key[CHUNK_KEY_DB_IDX], key[CHUNK_KEY_TABLE_IDX], key[CHUNK_KEY_COLUMN_IDX])
-          ->type_info;
+          ->type;
   dest->reserve(num_bytes);
-  if (!col_type.is_varlen_indeed()) {
+  if (!col_type->isVarLen()) {
     CHECK_EQ(key.size(), (size_t)4);
-    size_t elem_size = col_type.get_size();
+    size_t elem_size = col_type->size();
     fetchFixedLenData(table, frag_idx, col_idx, dest, num_bytes, elem_size);
   } else {
     CHECK_EQ(key.size(), (size_t)5);
     if (key[CHUNK_KEY_VARLEN_IDX] == 1) {
       if (!dest->hasEncoder()) {
-        dest->initEncoder(col_type);
+        dest->initEncoder(col_type->toTypeInfo());
       }
-      if (col_type.is_string()) {
+      if (col_type->isString()) {
         fetchVarLenData(table, frag_idx, col_idx, dest, num_bytes);
       } else {
-        CHECK(col_type.is_varlen_array());
+        CHECK(col_type->isVarLenArray());
         fetchVarLenArrayData(table,
                              frag_idx,
                              col_idx,
                              dest,
-                             col_type.get_elem_type().get_size(),
+                             col_type->as<hdk::ir::ArrayBaseType>()->elemType()->size(),
                              num_bytes);
       }
     } else {
