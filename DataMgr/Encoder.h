@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "ChunkMetadata.h"
+#include "IR/Type.h"
 #include "Shared/DateConverters.h"
 #include "Shared/sqltypes.h"
 #include "Shared/types.h"

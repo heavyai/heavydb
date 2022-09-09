@@ -35,6 +35,7 @@
 #include "AbstractBuffer.h"
 #include "ChunkMetadata.h"
 #include "Encoder.h"
+#include "IR/Context.h"
 
 using Data_Namespace::AbstractBuffer;
 
@@ -167,8 +168,12 @@ class ArrayNoneEncoder : public Encoder {
     if (array.is_null) {
       has_nulls = true;
     }
-    switch (buffer_->getSqlType().get_subtype()) {
-      case kBOOLEAN: {
+    auto elem_type = hdk::ir::Context::defaultCtx()
+                         .fromTypeInfo(buffer_->getSqlType())
+                         ->as<hdk::ir::ArrayBaseType>()
+                         ->elemType();
+    switch (elem_type->id()) {
+      case hdk::ir::Type::kBoolean: {
         if (!initialized) {
           elem_min.boolval = 1;
           elem_max.boolval = 0;
@@ -191,149 +196,162 @@ class ArrayNoneEncoder : public Encoder {
         }
         break;
       }
-      case kINT: {
-        if (!initialized) {
-          elem_min.intval = 1;
-          elem_max.intval = 0;
-        }
-        if (array.is_null || array.length == 0) {
-          break;
-        }
-        const int32_t* int_array = (int32_t*)array.pointer;
-        for (size_t i = 0; i < array.length / sizeof(int32_t); i++) {
-          if (int_array[i] == NULL_INT) {
-            has_nulls = true;
-          } else if (initialized) {
-            elem_min.intval = std::min(elem_min.intval, int_array[i]);
-            elem_max.intval = std::max(elem_max.intval, int_array[i]);
-          } else {
-            elem_min.intval = int_array[i];
-            elem_max.intval = int_array[i];
-            initialized = true;
+      case hdk::ir::Type::kInteger:
+      case hdk::ir::Type::kDecimal:
+      case hdk::ir::Type::kExtDictionary:
+        switch (elem_type->size()) {
+          case 4: {
+            if (!initialized) {
+              elem_min.intval = 1;
+              elem_max.intval = 0;
+            }
+            if (array.is_null || array.length == 0) {
+              break;
+            }
+            const int32_t* int_array = (int32_t*)array.pointer;
+            for (size_t i = 0; i < array.length / sizeof(int32_t); i++) {
+              if (int_array[i] == NULL_INT) {
+                has_nulls = true;
+              } else if (initialized) {
+                elem_min.intval = std::min(elem_min.intval, int_array[i]);
+                elem_max.intval = std::max(elem_max.intval, int_array[i]);
+              } else {
+                elem_min.intval = int_array[i];
+                elem_max.intval = int_array[i];
+                initialized = true;
+              }
+            }
+            break;
           }
+          case 2: {
+            if (!initialized) {
+              elem_min.smallintval = 1;
+              elem_max.smallintval = 0;
+            }
+            if (array.is_null || array.length == 0) {
+              break;
+            }
+            const int16_t* int_array = (int16_t*)array.pointer;
+            for (size_t i = 0; i < array.length / sizeof(int16_t); i++) {
+              if (int_array[i] == NULL_SMALLINT) {
+                has_nulls = true;
+              } else if (initialized) {
+                elem_min.smallintval = std::min(elem_min.smallintval, int_array[i]);
+                elem_max.smallintval = std::max(elem_max.smallintval, int_array[i]);
+              } else {
+                elem_min.smallintval = int_array[i];
+                elem_max.smallintval = int_array[i];
+                initialized = true;
+              }
+            }
+            break;
+          }
+          case 1: {
+            if (!initialized) {
+              elem_min.tinyintval = 1;
+              elem_max.tinyintval = 0;
+            }
+            if (array.is_null || array.length == 0) {
+              break;
+            }
+            const int8_t* int_array = (int8_t*)array.pointer;
+            for (size_t i = 0; i < array.length / sizeof(int8_t); i++) {
+              if (int_array[i] == NULL_TINYINT) {
+                has_nulls = true;
+              } else if (initialized) {
+                elem_min.tinyintval = std::min(elem_min.tinyintval, int_array[i]);
+                elem_max.tinyintval = std::max(elem_max.tinyintval, int_array[i]);
+              } else {
+                elem_min.tinyintval = int_array[i];
+                elem_max.tinyintval = int_array[i];
+                initialized = true;
+              }
+            }
+            break;
+          }
+          case 8: {
+            if (!initialized) {
+              elem_min.bigintval = 1;
+              elem_max.bigintval = 0;
+            }
+            if (array.is_null || array.length == 0) {
+              break;
+            }
+            const int64_t* int_array = (int64_t*)array.pointer;
+            for (size_t i = 0; i < array.length / sizeof(int64_t); i++) {
+              if (int_array[i] == NULL_BIGINT) {
+                has_nulls = true;
+              } else if (initialized) {
+                elem_min.bigintval = std::min(elem_min.bigintval, int_array[i]);
+                elem_max.bigintval = std::max(elem_max.bigintval, int_array[i]);
+              } else {
+                elem_min.bigintval = int_array[i];
+                elem_max.bigintval = int_array[i];
+                initialized = true;
+              }
+            }
+            break;
+          }
+          default:
+            UNREACHABLE();
         }
         break;
-      }
-      case kSMALLINT: {
-        if (!initialized) {
-          elem_min.smallintval = 1;
-          elem_max.smallintval = 0;
-        }
-        if (array.is_null || array.length == 0) {
-          break;
-        }
-        const int16_t* int_array = (int16_t*)array.pointer;
-        for (size_t i = 0; i < array.length / sizeof(int16_t); i++) {
-          if (int_array[i] == NULL_SMALLINT) {
-            has_nulls = true;
-          } else if (initialized) {
-            elem_min.smallintval = std::min(elem_min.smallintval, int_array[i]);
-            elem_max.smallintval = std::max(elem_max.smallintval, int_array[i]);
-          } else {
-            elem_min.smallintval = int_array[i];
-            elem_max.smallintval = int_array[i];
-            initialized = true;
+      case hdk::ir::Type::kFloatingPoint:
+        switch (elem_type->as<hdk::ir::FloatingPointType>()->precision()) {
+          case hdk::ir::FloatingPointType::kFloat: {
+            if (!initialized) {
+              elem_min.floatval = 1.0;
+              elem_max.floatval = 0.0;
+            }
+            if (array.is_null || array.length == 0) {
+              break;
+            }
+            const float* flt_array = (float*)array.pointer;
+            for (size_t i = 0; i < array.length / sizeof(float); i++) {
+              if (flt_array[i] == NULL_FLOAT) {
+                has_nulls = true;
+              } else if (initialized) {
+                elem_min.floatval = std::min(elem_min.floatval, flt_array[i]);
+                elem_max.floatval = std::max(elem_max.floatval, flt_array[i]);
+              } else {
+                elem_min.floatval = flt_array[i];
+                elem_max.floatval = flt_array[i];
+                initialized = true;
+              }
+            }
+            break;
           }
+          case hdk::ir::FloatingPointType::kDouble: {
+            if (!initialized) {
+              elem_min.doubleval = 1.0;
+              elem_max.doubleval = 0.0;
+            }
+            if (array.is_null || array.length == 0) {
+              break;
+            }
+            const double* dbl_array = (double*)array.pointer;
+            for (size_t i = 0; i < array.length / sizeof(double); i++) {
+              if (dbl_array[i] == NULL_DOUBLE) {
+                has_nulls = true;
+              } else if (initialized) {
+                elem_min.doubleval = std::min(elem_min.doubleval, dbl_array[i]);
+                elem_max.doubleval = std::max(elem_max.doubleval, dbl_array[i]);
+              } else {
+                elem_min.doubleval = dbl_array[i];
+                elem_max.doubleval = dbl_array[i];
+                initialized = true;
+              }
+            }
+            break;
+          }
+          default:
+            UNREACHABLE();
         }
         break;
-      }
-      case kTINYINT: {
-        if (!initialized) {
-          elem_min.tinyintval = 1;
-          elem_max.tinyintval = 0;
-        }
-        if (array.is_null || array.length == 0) {
-          break;
-        }
-        const int8_t* int_array = (int8_t*)array.pointer;
-        for (size_t i = 0; i < array.length / sizeof(int8_t); i++) {
-          if (int_array[i] == NULL_TINYINT) {
-            has_nulls = true;
-          } else if (initialized) {
-            elem_min.tinyintval = std::min(elem_min.tinyintval, int_array[i]);
-            elem_max.tinyintval = std::max(elem_max.tinyintval, int_array[i]);
-          } else {
-            elem_min.tinyintval = int_array[i];
-            elem_max.tinyintval = int_array[i];
-            initialized = true;
-          }
-        }
-        break;
-      }
-      case kBIGINT:
-      case kNUMERIC:
-      case kDECIMAL: {
-        if (!initialized) {
-          elem_min.bigintval = 1;
-          elem_max.bigintval = 0;
-        }
-        if (array.is_null || array.length == 0) {
-          break;
-        }
-        const int64_t* int_array = (int64_t*)array.pointer;
-        for (size_t i = 0; i < array.length / sizeof(int64_t); i++) {
-          if (int_array[i] == NULL_BIGINT) {
-            has_nulls = true;
-          } else if (initialized) {
-            elem_min.bigintval = std::min(elem_min.bigintval, int_array[i]);
-            elem_max.bigintval = std::max(elem_max.bigintval, int_array[i]);
-          } else {
-            elem_min.bigintval = int_array[i];
-            elem_max.bigintval = int_array[i];
-            initialized = true;
-          }
-        }
-        break;
-      }
-      case kFLOAT: {
-        if (!initialized) {
-          elem_min.floatval = 1.0;
-          elem_max.floatval = 0.0;
-        }
-        if (array.is_null || array.length == 0) {
-          break;
-        }
-        const float* flt_array = (float*)array.pointer;
-        for (size_t i = 0; i < array.length / sizeof(float); i++) {
-          if (flt_array[i] == NULL_FLOAT) {
-            has_nulls = true;
-          } else if (initialized) {
-            elem_min.floatval = std::min(elem_min.floatval, flt_array[i]);
-            elem_max.floatval = std::max(elem_max.floatval, flt_array[i]);
-          } else {
-            elem_min.floatval = flt_array[i];
-            elem_max.floatval = flt_array[i];
-            initialized = true;
-          }
-        }
-        break;
-      }
-      case kDOUBLE: {
-        if (!initialized) {
-          elem_min.doubleval = 1.0;
-          elem_max.doubleval = 0.0;
-        }
-        if (array.is_null || array.length == 0) {
-          break;
-        }
-        const double* dbl_array = (double*)array.pointer;
-        for (size_t i = 0; i < array.length / sizeof(double); i++) {
-          if (dbl_array[i] == NULL_DOUBLE) {
-            has_nulls = true;
-          } else if (initialized) {
-            elem_min.doubleval = std::min(elem_min.doubleval, dbl_array[i]);
-            elem_max.doubleval = std::max(elem_max.doubleval, dbl_array[i]);
-          } else {
-            elem_min.doubleval = dbl_array[i];
-            elem_max.doubleval = dbl_array[i];
-            initialized = true;
-          }
-        }
-        break;
-      }
-      case kTIME:
-      case kTIMESTAMP:
-      case kDATE: {
+      case hdk::ir::Type::kTime:
+      case hdk::ir::Type::kTimestamp:
+      case hdk::ir::Type::kDate:
+      case hdk::ir::Type::kInterval: {
         if (!initialized) {
           elem_min.bigintval = 1;
           elem_max.bigintval = 0;
@@ -351,32 +369,6 @@ class ArrayNoneEncoder : public Encoder {
           } else {
             elem_min.bigintval = tm_array[i];
             elem_max.bigintval = tm_array[i];
-            initialized = true;
-          }
-        }
-        break;
-      }
-      case kCHAR:
-      case kVARCHAR:
-      case kTEXT: {
-        CHECK_EQ(buffer_->getSqlType().get_compression(), kENCODING_DICT);
-        if (!initialized) {
-          elem_min.intval = 1;
-          elem_max.intval = 0;
-        }
-        if (array.is_null || array.length == 0) {
-          break;
-        }
-        const int32_t* int_array = (int32_t*)array.pointer;
-        for (size_t i = 0; i < array.length / sizeof(int32_t); i++) {
-          if (int_array[i] == NULL_INT) {
-            has_nulls = true;
-          } else if (initialized) {
-            elem_min.intval = std::min(elem_min.intval, int_array[i]);
-            elem_max.intval = std::max(elem_max.intval, int_array[i]);
-          } else {
-            elem_min.intval = int_array[i];
-            elem_max.intval = int_array[i];
             initialized = true;
           }
         }
