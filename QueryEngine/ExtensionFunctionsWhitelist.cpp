@@ -237,7 +237,7 @@ std::string serialize_type(const ExtArgumentType type,
     case ExtArgumentType::TextEncodingNone:
       return (declare ? (byval ? "{i8*, i64}" : "i8*") : "TextEncodingNone");
     case ExtArgumentType::TextEncodingDict:
-      return (declare ? "{i8*, i32}*" : "TextEncodingDict");
+      return (declare ? "{ i32 }" : "TextEncodingDict");
     case ExtArgumentType::Timestamp:
       return (declare ? "{ i64 }" : "Timestamp");
     case ExtArgumentType::ColumnListInt8:
@@ -609,33 +609,40 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
     const bool is_gpu) {
   std::vector<std::string> declarations;
   for (const auto& kv : functions_) {
-    const auto& signatures = kv.second;
-    CHECK(!signatures.empty());
-    for (const auto& signature : kv.second) {
+    const std::vector<ExtensionFunction>& ext_funcs = kv.second;
+    CHECK(!ext_funcs.empty());
+    for (const auto& ext_func : ext_funcs) {
       // If there is a udf function declaration matching an extension function signature
       // do not emit a duplicate declaration.
-      if (!udf_decls.empty() && udf_decls.find(signature.getName()) != udf_decls.end()) {
+      if (!udf_decls.empty() && udf_decls.find(ext_func.getName()) != udf_decls.end()) {
         continue;
       }
 
       std::string decl_prefix;
       std::vector<std::string> arg_strs;
 
-      if (is_ext_arg_type_array(signature.getRet())) {
-        decl_prefix = "declare void @" + signature.getName();
+      if (is_ext_arg_type_array(ext_func.getRet())) {
+        decl_prefix = "declare void @" + ext_func.getName();
         arg_strs.emplace_back(
-            serialize_type(signature.getRet(), /* byval */ true, /* declare */ true));
+            serialize_type(ext_func.getRet(), /* byval */ true, /* declare */ true));
       } else {
         decl_prefix =
             "declare " +
-            serialize_type(signature.getRet(), /* byval */ true, /* declare */ true) +
-            " @" + signature.getName();
+            serialize_type(ext_func.getRet(), /* byval */ true, /* declare */ true) +
+            " @" + ext_func.getName();
       }
-      for (const auto arg : signature.getInputArgs()) {
-        arg_strs.push_back(serialize_type(arg, /* byval */ false, /* declare */ true));
+
+      // if the extension function uses a Row Function Manager, append "i8*" as the first
+      // arg
+      if (ext_func.usesManager()) {
+        arg_strs.emplace_back("i8*");
       }
-      declarations.push_back(decl_prefix + "(" + boost::algorithm::join(arg_strs, ", ") +
-                             ");");
+
+      for (const auto arg : ext_func.getInputArgs()) {
+        arg_strs.emplace_back(serialize_type(arg, /* byval */ false, /* declare */ true));
+      }
+      declarations.emplace_back(decl_prefix + "(" +
+                                boost::algorithm::join(arg_strs, ", ") + ");");
     }
   }
 
@@ -897,7 +904,9 @@ void ExtensionFunctionsWhitelist::addCommon(SignatureMap& signatures,
          ++args_serialized_it) {
       args.push_back(deserialize_type(json_str(*args_serialized_it)));
     }
-    signatures[to_upper(drop_suffix(name))].emplace_back(name, args, ret, is_runtime);
+    const auto uses_manager = json_bool(field(*func_sigs_it, "usesManager"));
+    signatures[to_upper(drop_suffix(name))].emplace_back(
+        name, args, ret, uses_manager, is_runtime);
   }
 }
 

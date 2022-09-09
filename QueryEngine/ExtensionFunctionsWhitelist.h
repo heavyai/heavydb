@@ -117,13 +117,19 @@ class ExtensionFunction {
   ExtensionFunction(const std::string& name,
                     const std::vector<ExtArgumentType>& args,
                     const ExtArgumentType ret,
+                    const bool uses_manager,
                     const bool is_runtime)
-      : name_(name), args_(args), ret_(ret), is_runtime_(is_runtime) {}
+      : name_(name)
+      , args_(args)
+      , ret_(ret)
+      , uses_manager_(uses_manager)
+      , is_runtime_(is_runtime) {}
 
   const std::string getName(bool keep_suffix = true) const;
 
   const std::vector<ExtArgumentType>& getInputArgs() const { return args_; }
   const ExtArgumentType getRet() const { return ret_; }
+  const bool usesManager() const { return uses_manager_; }
 
   std::string toString() const;
   std::string toStringSQL() const;
@@ -143,6 +149,7 @@ class ExtensionFunction {
   const std::string name_;
   const std::vector<ExtArgumentType> args_;
   const ExtArgumentType ret_;
+  const bool uses_manager_;
   const bool is_runtime_;
 };
 

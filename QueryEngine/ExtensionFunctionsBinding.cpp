@@ -434,15 +434,13 @@ static int match_arguments(const SQLTypeInfo& arg_type,
           UNREACHABLE();
       }
     case kTEXT:
-      if (sig_type != ExtArgumentType::TextEncodingNone) {
-        return -1;
-      }
       switch (arg_type.get_compression()) {
         case kENCODING_NONE:
           penalty_score += 1000;
           return 1;
         case kENCODING_DICT:
-          return -1;
+          penalty_score += 1000;
+          return 1;
         default:
           UNREACHABLE();
       }

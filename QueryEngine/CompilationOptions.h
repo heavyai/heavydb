@@ -28,6 +28,10 @@ inline std::ostream& operator<<(std::ostream& os, ExecutorDeviceType const dt) {
   constexpr char const* strings[]{"CPU", "GPU"};
   return os << strings[static_cast<int>(dt)];
 }
+
+inline std::string toString(const ExecutorDeviceType& device_type) {
+  return (device_type == ExecutorDeviceType::CPU) ? "CPU" : "GPU";
+}
 #endif
 
 enum class ExecutorOptLevel { Default, ReductionJIT };

@@ -158,11 +158,11 @@ llvm::Function* row_process(llvm::Module* mod,
 
   func_args.push_back(pi64_type);  // aggregate init values
 
-  func_args.push_back(i64_type);
-  func_args.push_back(pi64_type);
-  func_args.push_back(pi64_type);
+  func_args.push_back(i64_type);   // pos
+  func_args.push_back(pi64_type);  // frag_row_off_ptr
+  func_args.push_back(pi64_type);  // row_count_ptr
   if (hoist_literals) {
-    func_args.push_back(PointerType::get(i8_type, 0));
+    func_args.push_back(PointerType::get(i8_type, 0));  // literals
   }
   FunctionType* func_type = FunctionType::get(
       /*Result=*/i32_type,
@@ -233,20 +233,21 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
   auto ppi64_type = PointerType::get(pi64_type, 0);
 
   std::vector<Type*> query_args;
-  query_args.push_back(ppi8_type);
+  query_args.push_back(ppi8_type);  // byte_stream
   if (hoist_literals) {
-    query_args.push_back(pi8_type);
+    query_args.push_back(pi8_type);  // literals
   }
-  query_args.push_back(pi64_type);
-  query_args.push_back(pi64_type);
-  query_args.push_back(pi32_type);
+  query_args.push_back(pi64_type);  // row_count_ptr
+  query_args.push_back(pi64_type);  // frag_row_off_ptr
+  query_args.push_back(pi32_type);  // max_matched_ptr
 
-  query_args.push_back(pi64_type);
-  query_args.push_back(ppi64_type);
-  query_args.push_back(i32_type);
-  query_args.push_back(pi64_type);
-  query_args.push_back(pi32_type);
-  query_args.push_back(pi32_type);
+  query_args.push_back(pi64_type);   // agg_init_val
+  query_args.push_back(ppi64_type);  // group_by_buffers
+  query_args.push_back(i32_type);    // frag_idx
+  query_args.push_back(pi64_type);   // join_hash_tables
+  query_args.push_back(pi32_type);   // total_matched
+  query_args.push_back(pi32_type);   // error_code
+  query_args.push_back(pi8_type);    // row_func_mgr
 
   FunctionType* query_func_type = FunctionType::get(
       /*Result=*/Type::getVoidTy(mod->getContext()),
@@ -343,6 +344,8 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
   total_matched->setName("total_matched");
   Value* error_code = &*(++query_arg_it);
   error_code->setName("error_code");
+  Value* row_func_mgr = &*(++query_arg_it);
+  row_func_mgr->setName("row_func_mgr");
 
   auto bb_entry = BasicBlock::Create(mod->getContext(), ".entry", query_func_ptr, 0);
   auto bb_preheader =
@@ -623,20 +626,21 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
   auto ppi8_type = PointerType::get(pi8_type, 0);
 
   std::vector<Type*> query_args;
-  query_args.push_back(ppi8_type);
+  query_args.push_back(ppi8_type);  // col_buffers
   if (hoist_literals) {
-    query_args.push_back(pi8_type);
+    query_args.push_back(pi8_type);  // literals
   }
-  query_args.push_back(pi64_type);
-  query_args.push_back(pi64_type);
-  query_args.push_back(pi32_type);
-  query_args.push_back(pi64_type);
+  query_args.push_back(pi64_type);  // num_rows
+  query_args.push_back(pi64_type);  // frag_row_offsets
+  query_args.push_back(pi32_type);  // max_matched
+  query_args.push_back(pi64_type);  // init_agg_value
 
-  query_args.push_back(ppi64_type);
-  query_args.push_back(i32_type);
-  query_args.push_back(pi64_type);
-  query_args.push_back(pi32_type);
-  query_args.push_back(pi32_type);
+  query_args.push_back(ppi64_type);  // out
+  query_args.push_back(i32_type);    // frag_idx
+  query_args.push_back(pi64_type);   // join_hash_tables
+  query_args.push_back(pi32_type);   // total_matched
+  query_args.push_back(pi32_type);   // error_code
+  query_args.push_back(pi8_type);    // row_func_mgr
 
   FunctionType* query_func_type = FunctionType::get(
       /*Result=*/Type::getVoidTy(mod->getContext()),
@@ -750,6 +754,8 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
   total_matched->setName("total_matched");
   Value* error_code = &*(++query_arg_it);
   error_code->setName("error_code");
+  Value* row_func_mgr = &*(++query_arg_it);
+  row_func_mgr->setName("row_func_mgr");
 
   auto bb_entry = BasicBlock::Create(mod->getContext(), ".entry", query_func_ptr, 0);
   auto bb_preheader =

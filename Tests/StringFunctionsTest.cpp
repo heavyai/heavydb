@@ -224,6 +224,12 @@ class StringFunctionTest : public testing::Test {
           insert into numeric_to_string_test values (true, 21, 21, 21, 21, 1.25, 1.25, 1.25, 1.25, '2013-09-10', '2013-09-10 12:43:23', '2013-09-10 12:43:23.123', '12:43:23', 'true', '21', '21', '21', '21', '1.250000', '1.250000', ' 1.25', '      1.2500000000', '2013-09-10', '2013-09-10 12:43:23', '2013-09-10 12:43:23.123', '12:43:23');
           insert into numeric_to_string_test values (false, 127, 32627, 2147483647, 9223372036854775807,  0.78125, 0.78125, 123.45, 12345678.90123456789, '2013-09-11', '2013-09-11 12:43:23', '2013-09-11 12:43:23.123', '00:43:23', 'false', '127', '32627', '2147483647', '9223372036854775807', '0.781250', '0.781250', '123.45', '12345678.9012345672', '2013-09-11', '2013-09-11 12:43:23', '2013-09-11 12:43:23.123', '00:43:23');
           insert into numeric_to_string_test values (null, null, null, null,  null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+          drop table if exists text_enc_test;
+          create table text_enc_test (name text encoding none, short_name text encoding dict(32), code text encoding dict(32));
+          insert into text_enc_test values ('United States', 'USA', '>>US<<');
+          insert into text_enc_test values ('Canada', 'Canada', '>>CA<<');
+          insert into text_enc_test values ('United Kingdom', 'UK', '>>GB<<');
+          insert into text_enc_test values ('Germany', 'Germany', '>>DE<<');
         )"));
       StringFunctionTest::test_data_loaded = true;
     }
@@ -234,6 +240,8 @@ class StringFunctionTest : public testing::Test {
       ASSERT_NO_THROW(multi_sql(R"(
           drop table string_function_test_people;
           drop table string_function_test_countries;
+          drop table numeric_to_string_test;
+          drop tale text_enc_test;
         )"););
     }
   }
@@ -3494,6 +3502,82 @@ TEST_F(StringFunctionTest, TextEncodingNoneLengthUDF) {
     std::vector<std::vector<ScalarTargetValue>> expected_result_set{
         {int64_t(13)}, {int64_t(7)}, {int64_t(6)}, {int64_t(6)}};
     compare_result_set(expected_result_set, result_set);
+  }
+}
+
+TEST_F(StringFunctionTest, TextEncodingDictConcatUDF) {
+  for (auto dt : {ExecutorDeviceType::CPU}) {
+    {
+      auto result_set =
+          sql("select text_encoding_dict_concat(short_name, name) from "
+              "text_enc_test;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"USAUnited States"},
+          {"CanadaCanada"},
+          {"UKUnited Kingdom"},
+          {"GermanyGermany"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      auto result_set =
+          sql("select text_encoding_dict_concat2(name, short_name) from "
+              "text_enc_test;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"United StatesUSA"},
+          {"CanadaCanada"},
+          {"United KingdomUK"},
+          {"GermanyGermany"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      auto result_set =
+          sql("select text_encoding_dict_concat2('short name: ', short_name) from "
+              "text_enc_test;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"short name: USA"},
+          {"short name: Canada"},
+          {"short name: UK"},
+          {"short name: Germany"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, TextEncodingDictCopyUDF) {
+  for (auto dt : {ExecutorDeviceType::CPU}) {
+    auto result_set =
+        sql("select text_encoding_dict_copy(short_name) from "
+            "text_enc_test;",
+            dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+        {"copy: USA"}, {"copy: Canada"}, {"copy: UK"}, {"copy: Germany"}};
+    compare_result_set(expected_result_set, result_set);
+  }
+}
+
+TEST_F(StringFunctionTest, TextEncodingDictCopyFromUDF) {
+  for (auto dt : {ExecutorDeviceType::CPU}) {
+    {
+      auto result_set =
+          sql("select text_encoding_dict_copy_from(short_name, code, 1) from "
+              "text_enc_test;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"copy: USA"}, {"copy: Canada"}, {"copy: UK"}, {"copy: Germany"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      auto result_set =
+          sql("select text_encoding_dict_copy_from(short_name, code, 2) from "
+              "text_enc_test;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"copy: >>US<<"}, {"copy: >>CA<<"}, {"copy: >>GB<<"}, {"copy: >>DE<<"}};
+      compare_result_set(expected_result_set, result_set);
+    }
   }
 }
 

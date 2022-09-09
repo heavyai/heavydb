@@ -1660,6 +1660,8 @@ void set_row_func_argnames(llvm::Function* row_func,
   }
 
   arg_it->setName("join_hash_tables");
+  ++arg_it;
+  arg_it->setName("row_func_mgr");
 }
 
 llvm::Function* create_row_function(const size_t in_col_count,
@@ -1713,6 +1715,9 @@ llvm::Function* create_row_function(const size_t in_col_count,
 
   // join hash table argument
   row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+
+  // row function manager
+  row_process_arg_types.push_back(llvm::Type::getInt8PtrTy(context));
 
   // generate the function
   auto ft =
@@ -2938,6 +2943,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   }
   row_func_args.insert(row_func_args.end(), col_heads.begin(), col_heads.end());
   row_func_args.push_back(get_arg_by_name(query_func, "join_hash_tables"));
+  row_func_args.push_back(get_arg_by_name(query_func, "row_func_mgr"));
   // push hoisted literals arguments, if any
   row_func_args.insert(
       row_func_args.end(), hoisted_literals.begin(), hoisted_literals.end());

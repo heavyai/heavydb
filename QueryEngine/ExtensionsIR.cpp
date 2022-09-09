@@ -93,6 +93,8 @@ llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type,
       return llvm::Type::getFloatTy(ctx);
     case ExtArgumentType::Double:
       return llvm::Type::getDoubleTy(ctx);
+    case ExtArgumentType::TextEncodingDict:
+      return get_int_type(32, ctx);
     case ExtArgumentType::ArrayInt64:
     case ExtArgumentType::ArrayInt32:
     case ExtArgumentType::ArrayInt16:
@@ -202,7 +204,8 @@ bool ext_func_call_requires_nullcheck(const Analyzer::FunctionOper* function_ope
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
     if ((func_ti.is_array() && arg_ti.is_array()) ||
-        (func_ti.is_bytes() && arg_ti.is_bytes())) {
+        (func_ti.is_bytes() && arg_ti.is_bytes()) ||
+        (func_ti.is_text_encoding_dict() && arg_ti.is_text_encoding_dict())) {
       // If the function returns an array and any of the arguments are arrays, allow NULL
       // scalars.
       // TODO: Make this a property of the FunctionOper following `RETURN NULL ON NULL`
@@ -253,7 +256,7 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
 
   const auto& ret_ti = function_oper->get_type_info();
   CHECK(ret_ti.is_integer() || ret_ti.is_fp() || ret_ti.is_boolean() ||
-        ret_ti.is_buffer());
+        ret_ti.is_buffer() || ret_ti.is_text_encoding_dict());
   if (ret_ti.is_buffer() && co.device_type == ExecutorDeviceType::GPU) {
     // TODO: This is not necessary for runtime UDFs because RBC does
     // not generated GPU LLVM IR when the UDF is using Buffer objects.
@@ -361,13 +364,21 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
     args.insert(args.begin(), buffer_ret);
   }
 
+  if (ext_func_sig.usesManager()) {
+    if (co.device_type == ExecutorDeviceType::GPU) {
+      throw QueryMustRunOnCpu();
+    }
+    llvm::Value* row_func_mgr = get_arg_by_name(cgen_state_->row_func_, "row_func_mgr");
+    args.insert(args.begin(), row_func_mgr);
+  }
+
   const auto ext_call = cgen_state_->emitExternalCall(
       ext_func_sig.getName(), ret_ty, args, {}, ret_ti.is_buffer());
   auto ext_call_nullcheck = endArgsNullcheck(
       bbs, ret_ti.is_buffer() ? buffer_ret : ext_call, null_buffer_ptr, function_oper);
 
   // Cast the return of the extension function to match the FunctionOper
-  if (!(ret_ti.is_buffer())) {
+  if (!(ret_ti.is_buffer() || ret_ti.is_text_encoding_dict())) {
     const auto extension_ret_ti = get_sql_type_from_llvm_type(ret_ty);
     if (bbs.args_null_bb &&
         extension_ret_ti.get_type() != function_oper->get_type_info().get_type() &&
@@ -615,6 +626,11 @@ llvm::Value* CodeGenerator::codegenFunctionOperNullArg(
         // TODO: null check dynamically generated geometries
         continue;
       }
+    }
+    if (arg_ti.is_text_encoding_dict()) {
+      one_arg_null = cgen_state_->ir_builder_.CreateOr(
+          one_arg_null, codegenIsNullNumber(orig_arg_lvs[j], arg_ti));
+      continue;
     }
     if (arg_ti.is_buffer() || arg_ti.is_geometry()) {
       // POINT [un]compressed coord check requires custom checker and chunk iterator
@@ -1372,6 +1388,11 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
                         string_size_arg,
                         padding,
                         args);
+    } else if (arg_ti.is_text_encoding_dict()) {
+      CHECK(ext_func_arg == ExtArgumentType::TextEncodingDict)
+          << ::toString(ext_func_arg);
+      arg_lv = orig_arg_lvs[k];
+      args.push_back(arg_lv);
     } else if (arg_ti.is_array()) {
       bool const_arr = (const_arr_size.count(orig_arg_lvs[k]) > 0);
       const auto elem_ti = arg_ti.get_elem_type();

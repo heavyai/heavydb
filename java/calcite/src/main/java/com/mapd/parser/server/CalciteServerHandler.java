@@ -444,7 +444,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         args.add(arg_type);
       }
     }
-    return new ExtensionFunction(args, toExtArgumentType(udf.retType));
+    return new ExtensionFunction(args, toExtArgumentType(udf.retType), udf.usesManager);
   }
 
   private static ExtensionFunction toExtensionFunction(
