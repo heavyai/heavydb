@@ -132,7 +132,7 @@ class ArrayNoneEncoder : public Encoder {
   AbstractBuffer* getIndexBuf() const { return index_buf; }
 
   bool resetChunkStats(const ChunkStats& stats) override {
-    auto elem_type = buffer_->getSqlType().get_elem_type();
+    auto elem_type = buffer_->type()->as<hdk::ir::ArrayBaseType>()->elemType();
     if (initialized && DatumEqual(elem_min, stats.min, elem_type) &&
         DatumEqual(elem_max, stats.max, elem_type) && has_nulls == stats.has_nulls) {
       return false;
@@ -168,10 +168,7 @@ class ArrayNoneEncoder : public Encoder {
     if (array.is_null) {
       has_nulls = true;
     }
-    auto elem_type = hdk::ir::Context::defaultCtx()
-                         .fromTypeInfo(buffer_->getSqlType())
-                         ->as<hdk::ir::ArrayBaseType>()
-                         ->elemType();
+    auto elem_type = buffer_->type()->as<hdk::ir::ArrayBaseType>()->elemType();
     switch (elem_type->id()) {
       case hdk::ir::Type::kBoolean: {
         if (!initialized) {

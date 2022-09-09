@@ -182,10 +182,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
   }
 
   bool resetChunkStats(const ChunkStats& stats) override {
-    auto elem_type = hdk::ir::Context::defaultCtx()
-                         .fromTypeInfo(buffer_->getSqlType())
-                         ->as<hdk::ir::ArrayBaseType>()
-                         ->elemType();
+    auto elem_type = buffer_->type()->as<hdk::ir::ArrayBaseType>()->elemType();
     if (initialized && DatumEqual(elem_min, stats.min, elem_type) &&
         DatumEqual(elem_max, stats.max, elem_type) && has_nulls == stats.has_nulls) {
       return false;
@@ -210,19 +207,13 @@ class FixedLengthArrayNoneEncoder : public Encoder {
   std::mutex EncoderMutex_;
   size_t array_size;
 
-  bool is_null(int8_t* array) {
-    return is_null(hdk::ir::Context::defaultCtx().fromTypeInfo(buffer_->getSqlType()),
-                   array);
-  }
+  bool is_null(int8_t* array) { return is_null(buffer_->type(), array); }
 
   void update_elem_stats(const ArrayDatum& array) {
     if (array.is_null) {
       has_nulls = true;
     }
-    auto elem_type = hdk::ir::Context::defaultCtx()
-                         .fromTypeInfo(buffer_->getSqlType())
-                         ->as<hdk::ir::ArrayBaseType>()
-                         ->elemType();
+    auto elem_type = buffer_->type()->as<hdk::ir::ArrayBaseType>()->elemType();
     switch (elem_type->id()) {
       case hdk::ir::Type::kBoolean: {
         if (!initialized) {

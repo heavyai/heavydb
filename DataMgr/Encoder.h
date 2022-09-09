@@ -147,7 +147,7 @@ class DateDaysOverflowValidator {
 class Encoder {
  public:
   static Encoder* Create(Data_Namespace::AbstractBuffer* buffer,
-                         const SQLTypeInfo sqlType);
+                         const hdk::ir::Type* type);
   Encoder(Data_Namespace::AbstractBuffer* buffer);
   virtual ~Encoder() {}
 

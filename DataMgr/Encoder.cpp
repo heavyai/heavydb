@@ -45,8 +45,7 @@ inline Encoder* createFixedLengthEncoderBySize(Data_Namespace::AbstractBuffer* b
 }  // namespace
 
 Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
-                         const SQLTypeInfo sqlType1) {
-  auto type = hdk::ir::Context::defaultCtx().fromTypeInfo(sqlType1);
+                         const hdk::ir::Type* type) {
   switch (type->id()) {
     case hdk::ir::Type::kBoolean:
     case hdk::ir::Type::kInteger:
@@ -118,11 +117,12 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
 Encoder::Encoder(Data_Namespace::AbstractBuffer* buffer)
     : num_elems_(0)
     , buffer_(buffer)
-    , decimal_overflow_validator_(buffer ? buffer->getSqlType() : SQLTypeInfo())
-    , date_days_overflow_validator_(buffer ? buffer->getSqlType() : SQLTypeInfo()){};
+    , decimal_overflow_validator_(buffer ? buffer->type()->toTypeInfo() : SQLTypeInfo())
+    , date_days_overflow_validator_(buffer ? buffer->type()->toTypeInfo()
+                                           : SQLTypeInfo()){};
 
 void Encoder::getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) {
-  chunkMetadata->sqlType = buffer_->getSqlType();
+  chunkMetadata->sqlType = buffer_->type()->toTypeInfo();
   chunkMetadata->numBytes = buffer_->size();
   chunkMetadata->numElements = num_elems_;
 }

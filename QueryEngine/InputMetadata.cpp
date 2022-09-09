@@ -170,7 +170,7 @@ ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
     // resultset has no valid storage, so we fill dummy metadata and return early
     std::vector<std::unique_ptr<Encoder>> decoders;
     for (size_t i = 0; i < rows->colCount(); ++i) {
-      decoders.emplace_back(Encoder::Create(nullptr, rows->getColType(i)));
+      decoders.emplace_back(Encoder::Create(nullptr, rows->colType(i)));
       const auto it_ok =
           metadata_map.emplace(i, decoders.back()->getMetadata(rows->getColType(i)));
       CHECK(it_ok.second);
@@ -184,8 +184,8 @@ ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
   for (size_t worker_idx = 0; worker_idx < worker_count; ++worker_idx) {
     dummy_encoders.emplace_back();
     for (size_t i = 0; i < rows->colCount(); ++i) {
-      const auto& col_ti = rows->getColType(i);
-      dummy_encoders.back().emplace_back(Encoder::Create(nullptr, col_ti));
+      const auto& col_type = rows->colType(i);
+      dummy_encoders.back().emplace_back(Encoder::Create(nullptr, col_type));
     }
   }
 

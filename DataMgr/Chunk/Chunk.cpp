@@ -156,7 +156,7 @@ void Chunk::unpinBuffer() {
 }
 
 void Chunk::initEncoder() {
-  buffer_->initEncoder(column_info_->type_info);
+  buffer_->initEncoder(column_info_->type);
   if (column_info_->type->isVarLen()) {
     switch (column_info_->type->id()) {
       case hdk::ir::Type::kVarLenArray: {

@@ -93,7 +93,7 @@ void ArrowStorage::fetchBuffer(const ChunkKey& key,
     CHECK_EQ(key.size(), (size_t)5);
     if (key[CHUNK_KEY_VARLEN_IDX] == 1) {
       if (!dest->hasEncoder()) {
-        dest->initEncoder(col_type->toTypeInfo());
+        dest->initEncoder(col_type);
       }
       if (col_type->isString()) {
         fetchVarLenData(table, frag_idx, col_idx, dest, num_bytes);
@@ -868,7 +868,7 @@ void ArrowStorage::computeStats(std::shared_ptr<arrow::ChunkedArray> arr,
                                 ChunkStats& stats) {
   auto elem_type =
       type->isArray() ? type->as<hdk::ir::ArrayBaseType>()->elemType() : type;
-  std::unique_ptr<Encoder> encoder(Encoder::Create(nullptr, elem_type->toTypeInfo()));
+  std::unique_ptr<Encoder> encoder(Encoder::Create(nullptr, elem_type));
   for (auto& chunk : arr->chunks()) {
     if (type->isVarLenArray()) {
       auto elem_size = elem_type->size();

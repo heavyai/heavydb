@@ -31,8 +31,8 @@
 #include "Encoder.h"
 #include "MemoryLevel.h"
 
+#include "IR/Type.h"
 #include "Logger/Logger.h"
-#include "Shared/sqltypes.h"
 #include "Shared/types.h"
 
 namespace Data_Namespace {
@@ -62,13 +62,13 @@ class AbstractBuffer {
       , is_appended_(false)
       , is_updated_(false) {}
 
-  AbstractBuffer(const int device_id, const SQLTypeInfo sql_type)
+  AbstractBuffer(const int device_id, const hdk::ir::Type* type)
       : size_(0)
       , device_id_(device_id)
       , is_dirty_(false)
       , is_appended_(false)
       , is_updated_(false) {
-    initEncoder(sql_type);
+    initEncoder(type);
   }
   virtual ~AbstractBuffer() {}
 
@@ -106,8 +106,7 @@ class AbstractBuffer {
   inline bool isAppended() const { return is_appended_; }
   inline bool isUpdated() const { return is_updated_; }
   inline bool hasEncoder() const { return (encoder_ != nullptr); }
-  inline SQLTypeInfo getSqlType() const { return sql_type_; }
-  inline void setSqlType(const SQLTypeInfo& sql_type) { sql_type_ = sql_type; }
+  inline const hdk::ir::Type* type() const { return type_; }
   inline Encoder* getEncoder() const {
     CHECK(hasEncoder());
     return encoder_.get();
@@ -132,14 +131,14 @@ class AbstractBuffer {
     is_dirty_ = false;
   }
 
-  void initEncoder(const SQLTypeInfo& tmp_sql_type);
+  void initEncoder(const hdk::ir::Type* tmp_type);
   void syncEncoder(const AbstractBuffer* src_buffer);
   void copyTo(AbstractBuffer* destination_buffer, const size_t num_bytes = 0);
   void resetToEmpty();
 
  protected:
   std::unique_ptr<Encoder> encoder_;
-  SQLTypeInfo sql_type_;
+  const hdk::ir::Type* type_;
   size_t size_;
   int device_id_;
 

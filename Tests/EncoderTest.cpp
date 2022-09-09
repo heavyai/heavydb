@@ -37,7 +37,8 @@ using MemoryLevel = Data_Namespace::MemoryLevel;
 
 class TestBuffer : public AbstractBuffer {
  public:
-  TestBuffer(const SQLTypeInfo sql_type) : AbstractBuffer(0, sql_type) {}
+  TestBuffer(const SQLTypeInfo sql_type)
+      : AbstractBuffer(0, hdk::ir::Context::defaultCtx().fromTypeInfo(sql_type)) {}
 
   void read(int8_t* const dst,
             const size_t num_bytes,

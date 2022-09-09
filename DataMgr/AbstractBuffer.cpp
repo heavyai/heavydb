@@ -23,17 +23,17 @@ outside of the header file in order to prevent unnecessary re-compilation.
 
 namespace Data_Namespace {
 
-void AbstractBuffer::initEncoder(const SQLTypeInfo& tmp_sql_type) {
-  sql_type_ = tmp_sql_type;
-  encoder_.reset(Encoder::Create(this, sql_type_));
+void AbstractBuffer::initEncoder(const hdk::ir::Type* tmp_type) {
+  type_ = tmp_type;
+  encoder_.reset(Encoder::Create(this, tmp_type));
   LOG_IF(FATAL, encoder_ == nullptr)
-      << "Failed to create encoder for SQL Type " << sql_type_.get_type_name();
+      << "Failed to create encoder for SQL Type " << type_->toString();
 }
 
 void AbstractBuffer::syncEncoder(const AbstractBuffer* src_buffer) {
   if (src_buffer->hasEncoder()) {
     if (!hasEncoder()) {
-      initEncoder(src_buffer->sql_type_);
+      initEncoder(src_buffer->type_);
     }
     encoder_->copyMetadata(src_buffer->encoder_.get());
   } else {
