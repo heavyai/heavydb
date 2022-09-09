@@ -23,135 +23,96 @@
 #include "NoneEncoder.h"
 #include "StringNoneEncoder.h"
 
+namespace {
+
+inline Encoder* createFixedLengthEncoderBySize(Data_Namespace::AbstractBuffer* buffer,
+                                               int size) {
+  switch (size) {
+    case 1:
+      return new FixedLengthEncoder<int64_t, int8_t>(buffer);
+    case 2:
+      return new FixedLengthEncoder<int64_t, int16_t>(buffer);
+    case 4:
+      return new FixedLengthEncoder<int64_t, int32_t>(buffer);
+    case 8:
+      return new NoneEncoder<int64_t>(buffer);
+    default:
+      CHECK(false) << "Unsupported integer fixed encoder size: " << size;
+  }
+  return nullptr;
+}
+
+}  // namespace
+
 Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
-                         const SQLTypeInfo sqlType) {
-  switch (sqlType.get_compression()) {
-    case kENCODING_NONE: {
-      switch (sqlType.get_type()) {
-        case kBOOLEAN: {
+                         const SQLTypeInfo sqlType1) {
+  auto type = hdk::ir::Context::defaultCtx().fromTypeInfo(sqlType1);
+  switch (type->id()) {
+    case hdk::ir::Type::kBoolean:
+    case hdk::ir::Type::kInteger:
+    case hdk::ir::Type::kDecimal:
+      switch (type->size()) {
+        case 1:
           return new NoneEncoder<int8_t>(buffer);
-          break;
-        }
-        case kTINYINT: {
-          return new NoneEncoder<int8_t>(buffer);
-          break;
-        }
-        case kSMALLINT: {
+        case 2:
           return new NoneEncoder<int16_t>(buffer);
-          break;
-        }
-        case kINT: {
+        case 4:
           return new NoneEncoder<int32_t>(buffer);
-          break;
-        }
-        case kBIGINT:
-        case kNUMERIC:
-        case kDECIMAL: {
+        case 8:
           return new NoneEncoder<int64_t>(buffer);
-          break;
-        }
-        case kFLOAT: {
-          return new NoneEncoder<float>(buffer);
-          break;
-        }
-        case kDOUBLE: {
-          return new NoneEncoder<double>(buffer);
-          break;
-        }
-        case kTEXT:
-        case kVARCHAR:
-        case kCHAR:
-          return new StringNoneEncoder(buffer);
-        case kARRAY: {
-          if (sqlType.get_size() > 0) {
-            return new FixedLengthArrayNoneEncoder(buffer, sqlType.get_size());
-          }
-          return new ArrayNoneEncoder(buffer);
-        }
-        case kTIME:
-        case kTIMESTAMP:
-        case kDATE:
-          return new NoneEncoder<int64_t>(buffer);
-        default: {
-          return 0;
-        }
-      }
-      break;
-    }
-    case kENCODING_DATE_IN_DAYS: {
-      switch (sqlType.get_type()) {
-        case kDATE:
-          switch (sqlType.get_comp_param()) {
-            case 0:
-            case 32:
-              return new DateDaysEncoder<int64_t, int32_t>(buffer);
-              break;
-            case 16:
-              return new DateDaysEncoder<int64_t, int16_t>(buffer);
-              break;
-            default:
-              return 0;
-              break;
-          }
-          break;
         default:
-          return 0;
-          break;
-      }
-    }
-    case kENCODING_FIXED: {
-      switch (sqlType.get_type()) {
-        case kSMALLINT:
-        case kINT:
-        case kBIGINT:
-        case kNUMERIC:
-        case kDECIMAL:
           CHECK(false);
-          break;
-        case kTIME:
-        case kTIMESTAMP:
-        case kDATE:
-          return new FixedLengthEncoder<int64_t, int32_t>(buffer);
-          break;
-        default: {
-          return 0;
-          break;
-        }
-      }  // switch (sqlType)
-      break;
-    }  // Case: kENCODING_FIXED
-    case kENCODING_DICT: {
-      if (sqlType.get_type() == kARRAY) {
-        CHECK(IS_STRING(sqlType.get_subtype()));
-        if (sqlType.get_size() > 0) {
-          return new FixedLengthArrayNoneEncoder(buffer, sqlType.get_size());
-        }
-        return new ArrayNoneEncoder(buffer);
-      } else {
-        CHECK(sqlType.is_string());
-        switch (sqlType.get_size()) {
-          case 1:
-            return new NoneEncoder<uint8_t>(buffer);
-            break;
-          case 2:
-            return new NoneEncoder<uint16_t>(buffer);
-            break;
-          case 4:
-            return new NoneEncoder<int32_t>(buffer);
-            break;
-          default:
-            CHECK(false);
-            break;
-        }
       }
-      break;
-    }
-    default: {
-      return 0;
-      break;
-    }
-  }  // switch (encodingType)
-  return 0;
+    case hdk::ir::Type::kExtDictionary:
+      switch (type->size()) {
+        case 1:
+          return new NoneEncoder<uint8_t>(buffer);
+        case 2:
+          return new NoneEncoder<uint16_t>(buffer);
+        case 4:
+          return new NoneEncoder<int32_t>(buffer);
+        default:
+          CHECK(false);
+      }
+    case hdk::ir::Type::kFloatingPoint:
+      switch (type->as<hdk::ir::FloatingPointType>()->precision()) {
+        case hdk::ir::FloatingPointType::kFloat:
+          return new NoneEncoder<float>(buffer);
+        case hdk::ir::FloatingPointType::kDouble:
+          return new NoneEncoder<double>(buffer);
+        default:
+          CHECK(false);
+      }
+    case hdk::ir::Type::kVarChar:
+    case hdk::ir::Type::kText:
+      return new StringNoneEncoder(buffer);
+    case hdk::ir::Type::kFixedLenArray:
+      return new FixedLengthArrayNoneEncoder(buffer, type->size());
+    case hdk::ir::Type::kVarLenArray:
+      return new ArrayNoneEncoder(buffer);
+    case hdk::ir::Type::kDate:
+      switch (type->as<hdk::ir::DateTimeBaseType>()->unit()) {
+        case hdk::ir::TimeUnit::kDay:
+          switch (type->size()) {
+            case 2:
+              return new DateDaysEncoder<int64_t, int16_t>(buffer);
+            case 4:
+              return new DateDaysEncoder<int64_t, int32_t>(buffer);
+            case 8:
+              return new DateDaysEncoder<int64_t, int64_t>(buffer);
+            default:
+              CHECK(false);
+          }
+        default:
+          return createFixedLengthEncoderBySize(buffer, type->size());
+      }
+    case hdk::ir::Type::kTime:
+    case hdk::ir::Type::kTimestamp:
+      return createFixedLengthEncoderBySize(buffer, type->size());
+    default:
+      CHECK(false);
+  }
+  return nullptr;
 }
 
 Encoder::Encoder(Data_Namespace::AbstractBuffer* buffer)

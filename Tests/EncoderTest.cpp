@@ -276,6 +276,7 @@ struct DateDaysEncoderTraits<int64_t, int16_t> {
   inline static SQLTypeInfo getSqlType() {
     auto sql_type_info = SQLTypeInfo(kDATE, false, kENCODING_DATE_IN_DAYS);
     sql_type_info.set_comp_param(16);
+    sql_type_info.set_size(2);
     return sql_type_info;
   }
 };
