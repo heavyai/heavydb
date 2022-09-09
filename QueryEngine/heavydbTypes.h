@@ -106,6 +106,15 @@ EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_getOrAddTransient(int8_t* m
                                                                        int32_t dict_id,
                                                                        std::string str);
 
+// RowFunctionManager
+RUNTIME_EXPORT NEVER_INLINE HOST std::string
+RowFunctionManager_getString(int8_t* mgr_ptr, int32_t dict_id, int32_t string_id);
+EXTENSION_NOINLINE_HOST int32_t RowFunctionManager_getDictId(int8_t* mgr_ptr,
+                                                             size_t arg_idx);
+EXTENSION_NOINLINE_HOST int32_t RowFunctionManager_getOrAddTransient(int8_t* mgr_ptr,
+                                                                     int32_t dict_id,
+                                                                     std::string str);
+
 // https://www.fluentcpp.com/2018/04/06/strong-types-by-struct/
 struct TextEncodingDict {
   int32_t value;
@@ -1098,6 +1107,24 @@ struct ColumnList<TextEncodingDict> {
 
 #endif
 };
+
+#ifndef __CUDACC__
+struct RowFunctionManager {
+  std::string getString(int32_t dict_id, int32_t string_id) {
+    return RowFunctionManager_getString(
+        reinterpret_cast<int8_t*>(this), dict_id, string_id);
+  }
+
+  int32_t getDictId(size_t arg_idx) {
+    return RowFunctionManager_getDictId(reinterpret_cast<int8_t*>(this), arg_idx);
+  }
+
+  int32_t getOrAddTransient(int32_t dict_id, std::string str) {
+    return RowFunctionManager_getOrAddTransient(
+        reinterpret_cast<int8_t*>(this), dict_id, str);
+  }
+};
+#endif
 
 /*
   This TableFunctionManager struct is a minimal proxy to the

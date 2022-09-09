@@ -130,8 +130,12 @@ class ExtensionFunctionSignatureParser {
     String[] params = cs_param_list.split(",");
     List<ExtensionFunction.ExtArgumentType> args =
             new ArrayList<ExtensionFunction.ExtArgumentType>();
+    boolean usesManager = false;
     for (final String param : params) {
       ExtensionFunction.ExtArgumentType arg_type;
+      if (param.contains("RowFunctionManager")) {
+        usesManager = true;
+      }
       if (has_variable_name) {
         String[] full_param = param.trim().split("\\s+");
         if (full_param.length > 0) {
@@ -152,7 +156,7 @@ class ExtensionFunctionSignatureParser {
       }
     }
     assert is_row_func;
-    return new ExtensionFunction(args, deserializeType(ret));
+    return new ExtensionFunction(args, deserializeType(ret), usesManager);
   }
   private static ExtensionFunction.ExtArgumentType deserializeType(
           final String type_name) {
@@ -231,6 +235,15 @@ class ExtensionFunctionSignatureParser {
     }
     if (type_name.equals("Array<bool>")) {
       return ExtensionFunction.ExtArgumentType.ArrayBool;
+    }
+    if (type_name.equals("TextEncodingDict")) {
+      return ExtensionFunction.ExtArgumentType.TextEncodingDict;
+    }
+    if (type_name.equals("RowFunctionManager")) {
+      // RowFunctionManager is not actually materialized in udfs
+      // return void as a convenience here to not generate a warning
+      // in the line below
+      return ExtensionFunction.ExtArgumentType.Void;
     }
     if (type_name.equals("Timestamp")) {
       return ExtensionFunction.ExtArgumentType.Timestamp;

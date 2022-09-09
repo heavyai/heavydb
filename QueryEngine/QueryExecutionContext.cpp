@@ -22,6 +22,7 @@
 #include "GpuInitGroups.h"
 #include "InPlaceSort.h"
 #include "QueryEngine/QueryEngine.h"
+#include "QueryEngine/RowFunctionManager.h"
 #include "QueryMemoryInitializer.h"
 #include "RelAlgExecutionUnit.h"
 #include "ResultSet.h"
@@ -631,6 +632,9 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
                           query_mem_desc_);
   }
 
+  RowFunctionManager mgr(this->executor_, ra_exe_unit);
+  int8_t* row_func_mgr_ptr = reinterpret_cast<int8_t*>(&mgr);
+
   CHECK(native_code);
   const int64_t* join_hash_tables_ptr =
       join_hash_tables.size() == 1
@@ -650,7 +654,8 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
                                int64_t**,        // out
                                int32_t*,         // error_code
                                const uint32_t*,  // num_tables
-                               const int64_t*);  // join_hash_tables_ptr
+                               const int64_t*,   // join_hash_tables_ptr
+                               const int8_t*);   // row_func_mgr
     if (is_group_by) {
       reinterpret_cast<agg_query>(native_code->func())(
           multifrag_cols_ptr,
@@ -664,7 +669,8 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
           query_buffers_->getGroupByBuffersPtr(),
           error_code,
           &num_tables,
-          join_hash_tables_ptr);
+          join_hash_tables_ptr,
+          row_func_mgr_ptr);
     } else {
       reinterpret_cast<agg_query>(native_code->func())(multifrag_cols_ptr,
                                                        &num_fragments,
@@ -677,7 +683,8 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
                                                        out_vec.data(),
                                                        error_code,
                                                        &num_tables,
-                                                       join_hash_tables_ptr);
+                                                       join_hash_tables_ptr,
+                                                       row_func_mgr_ptr);
     }
   } else {
     using agg_query = void (*)(const int8_t***,  // col_buffers
@@ -872,6 +879,10 @@ std::vector<int8_t*> QueryExecutionContext::prepareKernelParams(
       break;
     }
   }
+
+  // RowFunctionManager is not supported in GPU. We just keep the argument
+  // to avoid diverging from CPU generated code
+  params[ROW_FUNC_MGR] = nullptr;
 
   return params;
 }

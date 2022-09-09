@@ -103,9 +103,12 @@ public class ExtensionFunction {
   }
   ;
 
-  ExtensionFunction(final List<ExtArgumentType> args, final ExtArgumentType ret) {
+  ExtensionFunction(final List<ExtArgumentType> args,
+          final ExtArgumentType ret,
+          final boolean usesManager) {
     this.args = args;
     this.ret = ret;
+    this.usesManager = usesManager;
     this.outs = null;
     this.names = null;
     this.isRowUdf = true;
@@ -123,6 +126,7 @@ public class ExtensionFunction {
     this.outs = outs;
     this.names = names;
     this.isRowUdf = false;
+    this.usesManager = false; // only in UDFs
     this.options = options;
     this.cursor_field_types = cursor_field_types;
   }
@@ -197,6 +201,7 @@ public class ExtensionFunction {
     json_cons.append("{");
     json_cons.append("\"name\":").append(dq(name)).append(",");
     if (isRowUdf) {
+      json_cons.append("\"usesManager\":").append(usesManager).append(",");
       json_cons.append("\"ret\":").append(dq(typeName(ret))).append(",");
     } else {
       json_cons.append("\"outs\":");
@@ -373,6 +378,7 @@ public class ExtensionFunction {
   private final List<String> names;
   private final ExtArgumentType ret; // only used by UDFs
   private final boolean isRowUdf;
+  private final boolean usesManager; // only used by UDFs
   private final Map<String, String> options;
   private final Map<String, List<ExtArgumentType>>
           cursor_field_types; // only used by UDTFs

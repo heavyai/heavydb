@@ -111,6 +111,7 @@ class QueryExecutionContext : boost::noncopyable {
     ERROR_CODE,
     NUM_TABLES,
     JOIN_HASH_TABLES,
+    ROW_FUNC_MGR,
     KERN_PARAM_COUNT,
   };
 

@@ -218,6 +218,7 @@ inline bool is_ext_arg_type_scalar(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::Float:
     case ExtArgumentType::Double:
     case ExtArgumentType::Bool:
+    case ExtArgumentType::TextEncodingDict:
     case ExtArgumentType::TextEncodingNone:
     case ExtArgumentType::Timestamp:
     case ExtArgumentType::DayTimeInterval:
