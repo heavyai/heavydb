@@ -982,6 +982,7 @@ double extract_fp_type_from_datum(const Datum datum, const SQLTypeInfo& ti);
 double extract_fp_type_from_datum(const Datum datum, const hdk::ir::Type* type);
 
 bool DatumEqual(const Datum, const Datum, const SQLTypeInfo& ti);
+bool DatumEqual(const Datum, const Datum, const hdk::ir::Type* type);
 int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
                                        const SQLTypeInfo& type_info,
                                        const SQLTypeInfo& new_type_info);

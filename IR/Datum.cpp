@@ -348,6 +348,54 @@ Datum StringToDatum(std::string_view s, SQLTypeInfo& ti) {
   return StringToDatum(s, hdk::ir::Context::defaultCtx().fromTypeInfo(ti));
 }
 
+bool DatumEqual(const Datum a, const Datum b, const hdk::ir::Type* type) {
+  switch (type->id()) {
+    case hdk::ir::Type::kBoolean:
+      return a.boolval == b.boolval;
+    case hdk::ir::Type::kInteger:
+    case hdk::ir::Type::kDecimal:
+    case hdk::ir::Type::kExtDictionary:
+      switch (type->size()) {
+        case 1:
+          return a.tinyintval == b.tinyintval;
+        case 2:
+          return a.smallintval == b.smallintval;
+        case 4:
+          return a.intval == b.intval;
+        case 8:
+          return a.bigintval == b.bigintval;
+        default:
+          abort();
+      }
+    case hdk::ir::Type::kFloatingPoint:
+      switch (type->as<hdk::ir::FloatingPointType>()->precision()) {
+        case hdk::ir::FloatingPointType::kFloat:
+          return a.floatval == b.floatval;
+        case hdk::ir::FloatingPointType::kDouble:
+          return a.doubleval == b.doubleval;
+        default:
+          abort();
+      }
+    case hdk::ir::Type::kDate:
+    case hdk::ir::Type::kTime:
+    case hdk::ir::Type::kTimestamp:
+    case hdk::ir::Type::kInterval:
+      return a.bigintval == b.bigintval;
+    case hdk::ir::Type::kText:
+    case hdk::ir::Type::kVarChar:
+      if (a.stringval == nullptr && b.stringval == nullptr) {
+        return true;
+      }
+      if (a.stringval == nullptr || b.stringval == nullptr) {
+        return false;
+      }
+      return *a.stringval == *b.stringval;
+    default:
+      return false;
+  }
+  return false;
+}
+
 bool DatumEqual(const Datum a, const Datum b, const SQLTypeInfo& ti) {
   switch (ti.get_type()) {
     case kBOOLEAN:
