@@ -240,12 +240,9 @@ bool needs_dictionary_translation(const hdk::ir::ColumnVar* inner_col,
   CHECK(schema_provider);
   const auto inner_col_info =
       schema_provider->getColumnInfo(*inner_col->get_column_info());
-  const auto& inner_ti = get_column_type(inner_col->get_column_id(),
-                                         inner_col->get_table_id(),
-                                         inner_col_info,
-                                         executor->getTemporaryTables());
+  const auto& inner_type = inner_col->type();
   // Only strings may need dictionary translation.
-  if (!inner_ti.is_string()) {
+  if (!inner_type->isExtDictionary() && !inner_type->isString()) {
     return false;
   }
   const auto outer_col = dynamic_cast<const hdk::ir::ColumnVar*>(outer_col_expr);
@@ -256,20 +253,21 @@ bool needs_dictionary_translation(const hdk::ir::ColumnVar* inner_col,
   if (!inner_col_info || !outer_col_info) {
     return true;
   }
-  const auto& outer_ti = get_column_type(outer_col->get_column_id(),
-                                         outer_col->get_table_id(),
-                                         outer_col_info,
-                                         executor->getTemporaryTables());
-  CHECK_EQ(inner_ti.is_string(), outer_ti.is_string());
+  const auto& outer_type = outer_col->type();
+  CHECK(outer_type->isExtDictionary() || outer_type->isString());
   // If the two columns don't share the dictionary, translation is needed.
-  if (outer_ti.get_comp_param() != inner_ti.get_comp_param()) {
+  if (outer_type->isExtDictionary() != inner_type->isExtDictionary()) {
     return true;
   }
+  CHECK(inner_type->isExtDictionary() && outer_type->isExtDictionary());
+
+  auto inner_dict_id = inner_type->as<hdk::ir::ExtDictionaryType>()->dictId();
+  auto outer_dict_id = outer_type->as<hdk::ir::ExtDictionaryType>()->dictId();
   const auto inner_str_dict_proxy =
-      executor->getStringDictionaryProxy(inner_col->get_comp_param(), true);
+      executor->getStringDictionaryProxy(inner_dict_id, true);
   CHECK(inner_str_dict_proxy);
   const auto outer_str_dict_proxy =
-      executor->getStringDictionaryProxy(inner_col->get_comp_param(), true);
+      executor->getStringDictionaryProxy(outer_dict_id, true);
   CHECK(outer_str_dict_proxy);
 
   return *inner_str_dict_proxy != *outer_str_dict_proxy;

@@ -683,24 +683,22 @@ InnerOuter HashJoin::normalizeColumnPair(const hdk::ir::Expr* lhs,
   // Analyzer always reports nullable as true for inner table columns in left joins.
   const auto inner_col_info =
       schema_provider->getColumnInfo(*inner_col->get_column_info());
-  const auto inner_col_real_ti = get_column_type(inner_col->get_column_id(),
-                                                 inner_col->get_table_id(),
-                                                 inner_col_info,
-                                                 temporary_tables);
+  const auto inner_col_real_type = get_column_type(inner_col->get_column_id(),
+                                                   inner_col->get_table_id(),
+                                                   inner_col_info,
+                                                   temporary_tables);
   const auto& outer_col_ti =
       !(dynamic_cast<const hdk::ir::FunctionOper*>(lhs)) && outer_col
           ? outer_col->get_type_info()
           : outer_ti;
   // Casts from decimal are not supported.
-  if ((inner_col_real_ti.is_decimal() || outer_col_ti.is_decimal()) &&
+  if ((inner_col_real_type->isDecimal() || outer_col_ti.is_decimal()) &&
       (lhs_cast || rhs_cast)) {
     throw HashJoinFail("Cannot use hash join for given expression");
   }
 
-  if (!(inner_col_real_ti.is_integer() || inner_col_real_ti.is_time() ||
-        inner_col_real_ti.is_decimal() ||
-        (inner_col_real_ti.is_string() &&
-         inner_col_real_ti.get_compression() == kENCODING_DICT))) {
+  if (!(inner_col_real_type->isInteger() || inner_col_real_type->isDateTime() ||
+        inner_col_real_type->isDecimal() || inner_col_real_type->isExtDictionary())) {
     throw HashJoinFail(
         "Can only apply hash join to integer-like types and dictionary encoded "
         "strings");

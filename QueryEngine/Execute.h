@@ -149,18 +149,18 @@ inline const TemporaryTable& get_temporary_table(const TemporaryTables* temporar
   return it->second;
 }
 
-inline const SQLTypeInfo get_column_type(const int col_id,
-                                         const int table_id,
-                                         ColumnInfoPtr col_info,
-                                         const TemporaryTables* temporary_tables) {
+inline const hdk::ir::Type* get_column_type(const int col_id,
+                                            const int table_id,
+                                            ColumnInfoPtr col_info,
+                                            const TemporaryTables* temporary_tables) {
   CHECK(col_info || temporary_tables);
   if (col_info) {
     CHECK_EQ(col_id, col_info->column_id);
     CHECK_EQ(table_id, col_info->table_id);
-    return col_info->type_info;
+    return col_info->type;
   }
   const auto& temp = get_temporary_table(temporary_tables, table_id);
-  return temp.getColType(col_id);
+  return temp.colType(col_id);
 }
 
 // TODO(alex): Adjust interfaces downstream and make this not needed.
