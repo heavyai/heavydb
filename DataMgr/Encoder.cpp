@@ -101,59 +101,13 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
     }
     case kENCODING_FIXED: {
       switch (sqlType.get_type()) {
-        case kSMALLINT: {
-          switch (sqlType.get_comp_param()) {
-            case 8:
-              return new FixedLengthEncoder<int16_t, int8_t>(buffer);
-              break;
-            case 16:
-              return new NoneEncoder<int16_t>(buffer);
-              break;
-            default:
-              return 0;
-              break;
-          }
-          break;
-        }
-        case kINT: {
-          switch (sqlType.get_comp_param()) {
-            case 8:
-              return new FixedLengthEncoder<int32_t, int8_t>(buffer);
-              break;
-            case 16:
-              return new FixedLengthEncoder<int32_t, int16_t>(buffer);
-              break;
-            case 32:
-              return new NoneEncoder<int32_t>(buffer);
-              break;
-            default:
-              return 0;
-              break;
-          }
-          break;
-        }
+        case kSMALLINT:
+        case kINT:
         case kBIGINT:
         case kNUMERIC:
-        case kDECIMAL: {
-          switch (sqlType.get_comp_param()) {
-            case 8:
-              return new FixedLengthEncoder<int64_t, int8_t>(buffer);
-              break;
-            case 16:
-              return new FixedLengthEncoder<int64_t, int16_t>(buffer);
-              break;
-            case 32:
-              return new FixedLengthEncoder<int64_t, int32_t>(buffer);
-              break;
-            case 64:
-              return new NoneEncoder<int64_t>(buffer);
-              break;
-            default:
-              return 0;
-              break;
-          }
+        case kDECIMAL:
+          CHECK(false);
           break;
-        }
         case kTIME:
         case kTIMESTAMP:
         case kDATE:
