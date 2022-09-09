@@ -45,8 +45,8 @@ class NoneEncoder : public Encoder {
   }
 
   // Only called from the executor for synthesized meta-information.
-  std::shared_ptr<ChunkMetadata> getMetadata(const SQLTypeInfo& ti) override {
-    auto chunk_metadata = std::make_shared<ChunkMetadata>(ti, 0, 0, ChunkStats{});
+  std::shared_ptr<ChunkMetadata> getMetadata(const hdk::ir::Type* type) override {
+    auto chunk_metadata = std::make_shared<ChunkMetadata>(type, 0, 0, ChunkStats{});
     chunk_metadata->fillChunkStats(dataMin, dataMax, has_nulls);
     return chunk_metadata;
   }
@@ -178,8 +178,8 @@ class NoneEncoder : public Encoder {
     has_nulls = false;
   }
 
-  void fillChunkStats(ChunkStats& stats, const SQLTypeInfo& ti) override {
-    ::fillChunkStats(stats, ti, dataMin, dataMax, has_nulls);
+  void fillChunkStats(ChunkStats& stats, const hdk::ir::Type* type) override {
+    ::fillChunkStats(stats, type, dataMin, dataMax, has_nulls);
   }
 
   T dataMin;

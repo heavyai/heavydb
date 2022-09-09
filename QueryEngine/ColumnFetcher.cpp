@@ -331,7 +331,7 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
             std::make_unique<ColumnarResults>(executor_->row_set_mem_owner_,
                                               col_buffer,
                                               fragment.getNumTuples(),
-                                              chunk_meta_it->second->sqlType,
+                                              chunk_meta_it->second->type->toTypeInfo(),
                                               thread_idx,
                                               executor_));
       }

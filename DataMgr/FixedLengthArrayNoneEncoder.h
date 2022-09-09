@@ -61,9 +61,9 @@ class FixedLengthArrayNoneEncoder : public Encoder {
   }
 
   // Only called from the executor for synthesized meta-information.
-  std::shared_ptr<ChunkMetadata> getMetadata(const SQLTypeInfo& ti) override {
+  std::shared_ptr<ChunkMetadata> getMetadata(const hdk::ir::Type* type) override {
     auto chunk_metadata = std::make_shared<ChunkMetadata>(
-        ti, 0, 0, ChunkStats{elem_min, elem_max, has_nulls});
+        type, 0, 0, ChunkStats{elem_min, elem_max, has_nulls});
     return chunk_metadata;
   }
 

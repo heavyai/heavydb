@@ -537,7 +537,7 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
                             : first_frag_size;
 
                     auto meta = std::make_shared<ChunkMetadata>();
-                    meta->sqlType = col_info->type_info;
+                    meta->type = col_info->type;
                     meta->numElements = frag.row_count;
                     if (col_type->isFixedLenArray()) {
                       meta->numBytes = frag.row_count * col_type->size();
@@ -565,7 +565,7 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
                                       static_cast<size_t>(at->num_rows()) - frag.offset)
                            : first_frag_size;
               auto meta = std::make_shared<ChunkMetadata>();
-              meta->sqlType = col_info->type_info;
+              meta->type = col_info->type;
               meta->numElements = frag.row_count;
               CHECK(col_type->isText());
               meta->numBytes =
@@ -596,7 +596,7 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
       auto& first_frag = fragments.front();
       last_frag.row_count += first_frag.row_count;
       for (size_t col_idx = 0; col_idx < last_frag.metadata.size(); ++col_idx) {
-        auto col_type = getColumnInfo(db_id_, table_id, col_idx + 1)->type_info;
+        auto col_type = getColumnInfo(db_id_, table_id, col_idx + 1)->type;
         last_frag.metadata[col_idx]->numElements +=
             first_frag.metadata[col_idx]->numElements;
         last_frag.metadata[col_idx]->numBytes += first_frag.metadata[col_idx]->numBytes;
@@ -892,7 +892,7 @@ void ArrowStorage::computeStats(std::shared_ptr<arrow::ChunkedArray> arr,
     }
   }
 
-  encoder->fillChunkStats(stats, elem_type->toTypeInfo());
+  encoder->fillChunkStats(stats, elem_type);
 }
 
 std::shared_ptr<arrow::Table> ArrowStorage::parseCsvFile(

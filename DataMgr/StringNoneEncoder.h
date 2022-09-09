@@ -53,12 +53,12 @@ class StringNoneEncoder : public Encoder {
   }
 
   // Only called from the executor for synthesized meta-information.
-  std::shared_ptr<ChunkMetadata> getMetadata(const SQLTypeInfo& ti) override {
+  std::shared_ptr<ChunkMetadata> getMetadata(const hdk::ir::Type* type) override {
     auto chunk_stats = ChunkStats{};
     chunk_stats.min.stringval = nullptr;
     chunk_stats.max.stringval = nullptr;
     chunk_stats.has_nulls = has_nulls;
-    return std::make_shared<ChunkMetadata>(ti, 0, 0, chunk_stats);
+    return std::make_shared<ChunkMetadata>(type, 0, 0, chunk_stats);
   }
 
   void updateStats(const int64_t, const bool) override { CHECK(false); }

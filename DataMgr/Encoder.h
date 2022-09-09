@@ -153,7 +153,7 @@ class Encoder {
 
   virtual void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata);
   // Only called from the executor for synthesized meta-information.
-  virtual std::shared_ptr<ChunkMetadata> getMetadata(const SQLTypeInfo& ti) = 0;
+  virtual std::shared_ptr<ChunkMetadata> getMetadata(const hdk::ir::Type* type) = 0;
   virtual void updateStats(const int64_t val, const bool is_null) = 0;
   virtual void updateStats(const double val, const bool is_null) = 0;
 
@@ -224,7 +224,7 @@ class Encoder {
   /**
    * @brief: Copy current chunk level stats (min, max, nulls) to the output arg.
    */
-  virtual void fillChunkStats(ChunkStats&, const SQLTypeInfo&) {
+  virtual void fillChunkStats(ChunkStats&, const hdk::ir::Type*) {
     UNREACHABLE() << "Attempting to get stats for unsupported type.";
   }
 

@@ -18,6 +18,7 @@
 
 #include <cstddef>
 #include "../Shared/sqltypes.h"
+#include "IR/Type.h"
 #include "Shared/types.h"
 
 #include <map>
@@ -32,156 +33,153 @@ struct ChunkStats {
 
 template <typename T>
 void fillChunkStats(ChunkStats& stats,
-                    const SQLTypeInfo& type,
+                    const hdk::ir::Type* type,
                     const T min,
                     const T max,
                     const bool has_nulls) {
   stats.has_nulls = has_nulls;
-  switch (type.get_type()) {
-    case kBOOLEAN: {
-      stats.min.tinyintval = min;
-      stats.max.tinyintval = max;
+  switch (type->id()) {
+    case hdk::ir::Type::kBoolean:
+    case hdk::ir::Type::kInteger:
+    case hdk::ir::Type::kDecimal:
+      switch (type->size()) {
+        case 1:
+          stats.min.tinyintval = min;
+          stats.max.tinyintval = max;
+          break;
+        case 2:
+          stats.min.smallintval = min;
+          stats.max.smallintval = max;
+          break;
+        case 4:
+          stats.min.intval = min;
+          stats.max.intval = max;
+          break;
+        case 8:
+          stats.min.bigintval = min;
+          stats.max.bigintval = max;
+          break;
+        default:
+          abort();
+      }
       break;
-    }
-    case kTINYINT: {
-      stats.min.tinyintval = min;
-      stats.max.tinyintval = max;
-      break;
-    }
-    case kSMALLINT: {
-      stats.min.smallintval = min;
-      stats.max.smallintval = max;
-      break;
-    }
-    case kINT: {
+    case hdk::ir::Type::kExtDictionary:
       stats.min.intval = min;
       stats.max.intval = max;
       break;
-    }
-    case kBIGINT:
-    case kNUMERIC:
-    case kDECIMAL: {
+    case hdk::ir::Type::kDate:
+    case hdk::ir::Type::kTime:
+    case hdk::ir::Type::kTimestamp:
+    case hdk::ir::Type::kInterval:
       stats.min.bigintval = min;
       stats.max.bigintval = max;
       break;
-    }
-    case kTIME:
-    case kTIMESTAMP:
-    case kDATE: {
-      stats.min.bigintval = min;
-      stats.max.bigintval = max;
-      break;
-    }
-    case kFLOAT: {
-      stats.min.floatval = min;
-      stats.max.floatval = max;
-      break;
-    }
-    case kDOUBLE: {
-      stats.min.doubleval = min;
-      stats.max.doubleval = max;
-      break;
-    }
-    case kVARCHAR:
-    case kCHAR:
-    case kTEXT:
-      if (type.get_compression() == kENCODING_DICT) {
-        stats.min.intval = min;
-        stats.max.intval = max;
+    case hdk::ir::Type::kFloatingPoint:
+      switch (type->as<hdk::ir::FloatingPointType>()->precision()) {
+        case hdk::ir::FloatingPointType::kFloat:
+          stats.min.floatval = min;
+          stats.max.floatval = max;
+          break;
+        case hdk::ir::FloatingPointType::kDouble:
+          stats.min.doubleval = min;
+          stats.max.doubleval = max;
+          break;
+        default:
+          abort();
       }
       break;
-    default: {
+    default:
       break;
-    }
   }
 }
 
-inline void mergeStats(ChunkStats& lhs, const ChunkStats& rhs, const SQLTypeInfo& type) {
+inline void mergeStats(ChunkStats& lhs,
+                       const ChunkStats& rhs,
+                       const hdk::ir::Type* type) {
+  auto elem_type =
+      type->isArray() ? type->as<hdk::ir::ArrayBaseType>()->elemType() : type;
   lhs.has_nulls |= rhs.has_nulls;
-  switch (type.is_array() ? type.get_subtype() : type.get_type()) {
-    case kBOOLEAN: {
-      lhs.min.tinyintval = std::min(lhs.min.tinyintval, rhs.min.tinyintval);
-      lhs.max.tinyintval = std::max(lhs.max.tinyintval, rhs.max.tinyintval);
+  switch (elem_type->id()) {
+    case hdk::ir::Type::kBoolean:
+    case hdk::ir::Type::kInteger:
+    case hdk::ir::Type::kDecimal:
+      switch (elem_type->size()) {
+        case 1:
+          lhs.min.tinyintval = std::min(lhs.min.tinyintval, rhs.min.tinyintval);
+          lhs.max.tinyintval = std::max(lhs.max.tinyintval, rhs.max.tinyintval);
+          break;
+        case 2:
+          lhs.min.smallintval = std::min(lhs.min.smallintval, rhs.min.smallintval);
+          lhs.max.smallintval = std::max(lhs.max.smallintval, rhs.max.smallintval);
+          break;
+        case 4:
+          lhs.min.intval = std::min(lhs.min.intval, rhs.min.intval);
+          lhs.max.intval = std::max(lhs.max.intval, rhs.max.intval);
+          break;
+        case 8:
+          lhs.min.bigintval = std::min(lhs.min.bigintval, rhs.min.bigintval);
+          lhs.max.bigintval = std::max(lhs.max.bigintval, rhs.max.bigintval);
+          break;
+        default:
+          abort();
+      }
       break;
-    }
-    case kTINYINT: {
-      lhs.min.tinyintval = std::min(lhs.min.tinyintval, rhs.min.tinyintval);
-      lhs.max.tinyintval = std::max(lhs.max.tinyintval, rhs.max.tinyintval);
-      break;
-    }
-    case kSMALLINT: {
-      lhs.min.smallintval = std::min(lhs.min.smallintval, rhs.min.smallintval);
-      lhs.max.smallintval = std::max(lhs.max.smallintval, rhs.max.smallintval);
-      break;
-    }
-    case kINT: {
+    case hdk::ir::Type::kExtDictionary:
       lhs.min.intval = std::min(lhs.min.intval, rhs.min.intval);
       lhs.max.intval = std::max(lhs.max.intval, rhs.max.intval);
       break;
-    }
-    case kBIGINT:
-    case kNUMERIC:
-    case kDECIMAL: {
+    case hdk::ir::Type::kDate:
+    case hdk::ir::Type::kTime:
+    case hdk::ir::Type::kTimestamp:
+    case hdk::ir::Type::kInterval:
       lhs.min.bigintval = std::min(lhs.min.bigintval, rhs.min.bigintval);
       lhs.max.bigintval = std::max(lhs.max.bigintval, rhs.max.bigintval);
       break;
-    }
-    case kTIME:
-    case kTIMESTAMP:
-    case kDATE: {
-      lhs.min.bigintval = std::min(lhs.min.bigintval, rhs.min.bigintval);
-      lhs.max.bigintval = std::max(lhs.max.bigintval, rhs.max.bigintval);
-      break;
-    }
-    case kFLOAT: {
-      lhs.min.floatval = std::min(lhs.min.floatval, rhs.min.floatval);
-      lhs.max.floatval = std::max(lhs.max.floatval, rhs.max.floatval);
-      break;
-    }
-    case kDOUBLE: {
-      lhs.min.doubleval = std::min(lhs.min.doubleval, rhs.min.doubleval);
-      lhs.max.doubleval = std::max(lhs.max.doubleval, rhs.max.doubleval);
-      break;
-    }
-    case kVARCHAR:
-    case kCHAR:
-    case kTEXT:
-      if (type.get_compression() == kENCODING_DICT) {
-        lhs.min.intval = std::min(lhs.min.intval, rhs.min.intval);
-        lhs.max.intval = std::max(lhs.max.intval, rhs.max.intval);
+    case hdk::ir::Type::kFloatingPoint:
+      switch (elem_type->as<hdk::ir::FloatingPointType>()->precision()) {
+        case hdk::ir::FloatingPointType::kFloat:
+          lhs.min.floatval = std::min(lhs.min.floatval, rhs.min.floatval);
+          lhs.max.floatval = std::max(lhs.max.floatval, rhs.max.floatval);
+          break;
+        case hdk::ir::FloatingPointType::kDouble:
+          lhs.min.doubleval = std::min(lhs.min.doubleval, rhs.min.doubleval);
+          lhs.max.doubleval = std::max(lhs.max.doubleval, rhs.max.doubleval);
+          break;
+        default:
+          abort();
       }
       break;
-    default: {
+    default:
       break;
-    }
   }
 }
 
 struct ChunkMetadata {
-  SQLTypeInfo sqlType;
+  const hdk::ir::Type* type;
   size_t numBytes;
   size_t numElements;
   ChunkStats chunkStats;
 
 #ifndef __CUDACC__
   std::string dump() const {
-    auto type = sqlType.is_array() ? sqlType.get_elem_type() : sqlType;
+    auto elem_type =
+        type->isArray() ? type->as<hdk::ir::ArrayBaseType>()->elemType() : type;
     // Unencoded strings have no min/max.
-    if (type.is_string() && type.get_compression() == kENCODING_NONE) {
-      return "type: " + sqlType.get_type_name() + " numBytes: " + to_string(numBytes) +
+    if (elem_type->isString()) {
+      return "type: " + type->toString() + " numBytes: " + to_string(numBytes) +
              " numElements " + to_string(numElements) + " min: <invalid>" +
              " max: <invalid>" + " has_nulls: " + to_string(chunkStats.has_nulls);
-    } else if (type.is_string()) {
-      return "type: " + sqlType.get_type_name() + " numBytes: " + to_string(numBytes) +
+    } else if (elem_type->isExtDictionary()) {
+      return "type: " + type->toString() + " numBytes: " + to_string(numBytes) +
              " numElements " + to_string(numElements) +
              " min: " + to_string(chunkStats.min.intval) +
              " max: " + to_string(chunkStats.max.intval) +
              " has_nulls: " + to_string(chunkStats.has_nulls);
     } else {
-      return "type: " + sqlType.get_type_name() + " numBytes: " + to_string(numBytes) +
+      return "type: " + type->toString() + " numBytes: " + to_string(numBytes) +
              " numElements " + to_string(numElements) +
-             " min: " + DatumToString(chunkStats.min, type) +
-             " max: " + DatumToString(chunkStats.max, type) +
+             " min: " + DatumToString(chunkStats.min, elem_type) +
+             " max: " + DatumToString(chunkStats.max, elem_type) +
              " has_nulls: " + to_string(chunkStats.has_nulls);
     }
   }
@@ -189,11 +187,11 @@ struct ChunkMetadata {
   std::string toString() const { return dump(); }
 #endif
 
-  ChunkMetadata(const SQLTypeInfo& sql_type,
+  ChunkMetadata(const hdk::ir::Type* type_,
                 const size_t num_bytes,
                 const size_t num_elements,
                 const ChunkStats& chunk_stats)
-      : sqlType(sql_type)
+      : type(type_)
       , numBytes(num_bytes)
       , numElements(num_elements)
       , chunkStats(chunk_stats) {}
@@ -202,7 +200,7 @@ struct ChunkMetadata {
 
   template <typename T>
   void fillChunkStats(const T min, const T max, const bool has_nulls) {
-    ::fillChunkStats(chunkStats, sqlType, min, max, has_nulls);
+    ::fillChunkStats(chunkStats, type, min, max, has_nulls);
   }
 
   void fillChunkStats(const Datum min, const Datum max, const bool has_nulls) {
@@ -212,14 +210,16 @@ struct ChunkMetadata {
   }
 
   bool operator==(const ChunkMetadata& that) const {
-    return sqlType == that.sqlType && numBytes == that.numBytes &&
+    return type->equal(that.type) && numBytes == that.numBytes &&
            numElements == that.numElements &&
-           DatumEqual(chunkStats.min,
-                      that.chunkStats.min,
-                      sqlType.is_array() ? sqlType.get_elem_type() : sqlType) &&
-           DatumEqual(chunkStats.max,
-                      that.chunkStats.max,
-                      sqlType.is_array() ? sqlType.get_elem_type() : sqlType) &&
+           DatumEqual(
+               chunkStats.min,
+               that.chunkStats.min,
+               type->isArray() ? type->as<hdk::ir::ArrayBaseType>()->elemType() : type) &&
+           DatumEqual(
+               chunkStats.max,
+               that.chunkStats.max,
+               type->isArray() ? type->as<hdk::ir::ArrayBaseType>()->elemType() : type) &&
            chunkStats.has_nulls == that.chunkStats.has_nulls;
   }
 };

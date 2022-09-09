@@ -51,7 +51,7 @@ class TestTableData {
 
     auto col_infos = schema_provider_->listColumns(ref_);
     for (auto& col_info : col_infos) {
-      col_types_[col_info->column_id] = col_info->type_info;
+      col_types_[col_info->column_id] = col_info->type;
     }
   }
 
@@ -76,7 +76,7 @@ class TestTableData {
     }
 
     auto chunk_meta = std::make_shared<ChunkMetadata>();
-    chunk_meta->sqlType = col_types_.at(col_id);
+    chunk_meta->type = col_types_.at(col_id);
     chunk_meta->numBytes = frag_data.size();
     chunk_meta->numElements = vals.size();
 
@@ -103,7 +103,7 @@ class TestTableData {
   TableRef ref_;
   std::vector<std::vector<std::vector<int8_t>>> data_;
   TableFragmentsInfo info_;
-  std::unordered_map<int, SQLTypeInfo> col_types_;
+  std::unordered_map<int, const hdk::ir::Type*> col_types_;
 };
 
 class TestDataProvider : public AbstractDataProvider {

@@ -122,7 +122,7 @@ Encoder::Encoder(Data_Namespace::AbstractBuffer* buffer)
                                            : SQLTypeInfo()){};
 
 void Encoder::getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) {
-  chunkMetadata->sqlType = buffer_->type()->toTypeInfo();
+  chunkMetadata->type = buffer_->type();
   chunkMetadata->numBytes = buffer_->size();
   chunkMetadata->numElements = num_elems_;
 }
