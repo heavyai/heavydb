@@ -243,6 +243,8 @@ class QueryTemplateGenerator {
       const bool check_scan_limit,
       const GpuSharedMemoryContext& gpu_smem_context);
 
+  virtual ~QueryTemplateGenerator() = default;
+
  protected:
   QueryTemplateGenerator(llvm::Module* mod,
                          const bool hoist_literals,
