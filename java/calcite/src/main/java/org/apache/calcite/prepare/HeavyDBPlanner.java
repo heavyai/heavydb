@@ -166,8 +166,9 @@ public class HeavyDBPlanner extends PlannerImpl {
     return new CompletionResult(hints, replaced[0]);
   }
 
-  public static HepPlanner getHepPlanner(HepProgram hepProgram, boolean noDag) {
-    if (noDag) {
+  public static HepPlanner getHepPlanner(
+          HepProgram hepProgram, boolean doNotEliminateSharedNodesInQueryPlanDag) {
+    if (doNotEliminateSharedNodesInQueryPlanDag) {
       return new HepPlanner(
               hepProgram, null, true, Functions.ignore2(), RelOptCostImpl.FACTORY);
     } else {
@@ -235,7 +236,7 @@ public class HeavyDBPlanner extends PlannerImpl {
       }
 
       HepProgram secondOptPhase = secondOptPhaseProgram.build();
-      HepPlanner secondPlanner = HeavyDBPlanner.getHepPlanner(secondOptPhase, false);
+      HepPlanner secondPlanner = HeavyDBPlanner.getHepPlanner(secondOptPhase, true);
       secondPlanner.setRoot(firstOptimizedPlanRoot);
       final RelNode secondOptimizedPlanRoot = secondPlanner.findBestExp();
       if (!filterPushDownInfo.isEmpty()) {
