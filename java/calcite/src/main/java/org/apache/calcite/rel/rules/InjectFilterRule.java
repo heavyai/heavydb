@@ -54,13 +54,14 @@ public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
 
   @Override
   public void onMatch(RelOptRuleCall call) {
-    LogicalTableScan parentNode = call.rel(0);
-    if (visitedMemo.contains(parentNode.toString())) {
+    LogicalTableScan childScanNode = call.rel(0);
+    String scanNodeString = childScanNode.toString();
+    if (visitedMemo.contains(scanNodeString)) {
       return;
     } else {
-      visitedMemo.add(parentNode.toString());
+      visitedMemo.add(scanNodeString);
     }
-    RelOptTable table = parentNode.getTable();
+    RelOptTable table = childScanNode.getTable();
     List<String> qname = table.getQualifiedName();
 
     String query_database = null;
@@ -79,7 +80,7 @@ public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
     ArrayList<RexNode> orList = new ArrayList<RexNode>();
     RelBuilder builder = call.builder();
     RexBuilder rBuilder = builder.getRexBuilder();
-    builder = builder.push(parentNode);
+    builder = builder.push(childScanNode);
     boolean found = false;
     for (Restriction restriction : restrictions) {
       // Match the database name.
@@ -116,7 +117,7 @@ public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
       // Generate the RLS row-level security filter for one Restriction.
       found = true;
       HEAVYDBLOGGER.debug(
-              "Scan is " + parentNode.toString() + " TABLE is " + table.toString());
+              "Scan is " + childScanNode.toString() + " TABLE is " + table.toString());
       HEAVYDBLOGGER.debug("Column " + restriction.getRestrictionColumn()
               + " exists in table " + table.getQualifiedName());
 
