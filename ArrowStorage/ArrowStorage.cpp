@@ -127,13 +127,13 @@ std::unique_ptr<AbstractDataToken> ArrowStorage::getZeroCopyBufferMemory(
   auto col_type =
       getColumnInfo(
           key[CHUNK_KEY_DB_IDX], key[CHUNK_KEY_TABLE_IDX], key[CHUNK_KEY_COLUMN_IDX])
-          ->type_info;
+          ->type;
 
-  if (!col_type.is_varlen_indeed()) {
+  if (!col_type->isVarLen()) {
     size_t col_idx = static_cast<size_t>(key[CHUNK_KEY_COLUMN_IDX] - 1);
     size_t frag_idx = static_cast<size_t>(key[CHUNK_KEY_FRAGMENT_IDX] - 1);
     CHECK_EQ(key.size(), (size_t)4);
-    size_t elem_size = col_type.get_size();
+    size_t elem_size = col_type->size();
     auto& frag = table.fragments[frag_idx];
     size_t rows_to_fetch = num_bytes ? num_bytes / elem_size : frag.row_count;
     const auto* fixed_type =
@@ -764,8 +764,8 @@ void ArrowStorage::dropTable(int table_id, bool throw_if_not_exist) {
   std::unordered_set<int> dicts_to_remove;
   auto col_infos = listColumnsNoLock(db_id_, table_id);
   for (auto& col_info : col_infos) {
-    if (col_info->type_info.is_dict_encoded_string()) {
-      dicts_to_remove.insert(col_info->type_info.get_comp_param());
+    if (col_info->type->isExtDictionary()) {
+      dicts_to_remove.insert(col_info->type->as<hdk::ir::ExtDictionaryType>()->dictId());
     }
   }
 
@@ -773,8 +773,8 @@ void ArrowStorage::dropTable(int table_id, bool throw_if_not_exist) {
   // TODO: clean-up shared dictionaries without a full scan of
   // existing columns.
   for (auto& pr : column_infos_) {
-    if (pr.second->type_info.is_dict_encoded_string()) {
-      dicts_to_remove.erase(pr.second->type_info.get_comp_param());
+    if (pr.second->type->isExtDictionary()) {
+      dicts_to_remove.erase(pr.second->type->as<hdk::ir::ExtDictionaryType>()->dictId());
     }
   }
 
@@ -983,7 +983,7 @@ std::shared_ptr<arrow::Table> ArrowStorage::parseJson(
       fields.emplace_back(
           std::make_shared<arrow::Field>(col_info->name,
                                          getArrowImportType(ctx_, col_info->type),
-                                         !col_info->type_info.get_notnull()));
+                                         col_info->type->nullable()));
     }
   }
   auto schema = std::make_shared<arrow::Schema>(std::move(fields));

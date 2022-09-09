@@ -150,7 +150,7 @@ void checkColumnInfo(ColumnInfoPtr col_info,
   CHECK_EQ(col_info->table_id, table_id);
   CHECK_EQ(col_info->column_id, col_id);
   CHECK_EQ(col_info->name, name);
-  CHECK_EQ(col_info->type_info, type->toTypeInfo());
+  CHECK(col_info->type->equal(type));
   CHECK_EQ(col_info->is_rowid, is_rowid);
 }
 
@@ -1006,16 +1006,22 @@ void Test_ImportCsv_Dict(bool shared_dict,
   if (shared_dict) {
     auto col1_info = storage.getColumnInfo(*tinfo, "col1");
     auto dict1 =
-        storage.getDictMetadata(col1_info->type_info.get_comp_param())->stringDict;
+        storage
+            .getDictMetadata(col1_info->type->as<hdk::ir::ExtDictionaryType>()->dictId())
+            ->stringDict;
     CHECK_EQ(dict1->storageEntryCount(), (size_t)10);
   } else {
     auto col1_info = storage.getColumnInfo(*tinfo, "col1");
     auto dict1 =
-        storage.getDictMetadata(col1_info->type_info.get_comp_param())->stringDict;
+        storage
+            .getDictMetadata(col1_info->type->as<hdk::ir::ExtDictionaryType>()->dictId())
+            ->stringDict;
     CHECK_EQ(dict1->storageEntryCount(), (size_t)5);
     auto col2_info = storage.getColumnInfo(*tinfo, "col2");
     auto dict2 =
-        storage.getDictMetadata(col2_info->type_info.get_comp_param())->stringDict;
+        storage
+            .getDictMetadata(col2_info->type->as<hdk::ir::ExtDictionaryType>()->dictId())
+            ->stringDict;
     CHECK_EQ(dict2->storageEntryCount(), (size_t)5);
   }
 

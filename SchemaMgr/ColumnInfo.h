@@ -60,12 +60,10 @@ struct ColumnInfo : public ColumnRef {
       : ColumnRef(db_id, table_id, column_id)
       , name(name_)
       , type(type_)
-      , type_info(type_->toTypeInfo())
       , is_rowid(is_rowid_) {}
 
   std::string name;
   const hdk::ir::Type* type;
-  SQLTypeInfo type_info;
   // Virtual rowid column.
   bool is_rowid;
 
