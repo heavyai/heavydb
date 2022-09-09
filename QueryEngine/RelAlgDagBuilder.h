@@ -248,30 +248,9 @@ class RelScan : public RelAlgNode {
 
   int32_t getTableId() const { return table_info_->table_id; }
 
-  bool isVirtualColBySpi(int spi) const {
-    CHECK_LE(static_cast<size_t>(spi), column_infos_.size());
-    return column_infos_[spi - 1]->is_rowid;
-  }
-
-  int getColumnIdBySpi(int spi) const {
-    int col_idx = spi - 1;
-
+  bool isVirtualCol(int col_idx) const {
     CHECK_LT(static_cast<size_t>(col_idx), column_infos_.size());
-    return column_infos_[col_idx]->column_id;
-  }
-
-  std::string getColumnNameBySpi(int spi) const {
-    int col_idx = spi - 1;
-
-    CHECK_LT(static_cast<size_t>(col_idx), column_infos_.size());
-    return column_infos_[col_idx]->name;
-  }
-
-  SQLTypeInfo getColumnTypeBySpi(int spi) const {
-    int col_idx = spi - 1;
-
-    CHECK_LT(static_cast<size_t>(col_idx), column_infos_.size());
-    return column_infos_[col_idx]->type_info;
+    return column_infos_[col_idx]->is_rowid;
   }
 
   const hdk::ir::Type* getColumnType(int col_idx) const {
@@ -279,7 +258,10 @@ class RelScan : public RelAlgNode {
     return column_infos_[col_idx]->type;
   }
 
-  ColumnInfoPtr getColumnInfoBySpi(int spi) const { return column_infos_[spi - 1]; }
+  ColumnInfoPtr getColumnInfo(int col_idx) const {
+    CHECK_LT(static_cast<size_t>(col_idx), column_infos_.size());
+    return column_infos_[col_idx];
+  }
 
   std::string toString() const override {
     std::vector<std::string_view> field_names;

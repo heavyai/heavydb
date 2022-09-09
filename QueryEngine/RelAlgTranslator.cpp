@@ -178,7 +178,7 @@ class NormalizerVisitor : public DeepCopyVisitor {
       // We're at leaf (scan) level and not supposed to have input metadata,
       // the name and type information come directly from the catalog.
       CHECK(in_metainfo.empty());
-      auto col_info = scan_source->getColumnInfoBySpi(col_idx + 1);
+      auto col_info = scan_source->getColumnInfo(col_idx);
       auto col_type = col_info->type;
       if (col_type->isVarChar()) {
         col_type = col_type->ctx().text(col_type->nullable());

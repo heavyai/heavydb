@@ -175,7 +175,7 @@ class PhysicalInputsVisitor
       return InputColDescriptorSet{};
     }
 
-    auto col_info = scan->getColumnInfoBySpi(col_ref->getIndex() + 1);
+    auto col_info = scan->getColumnInfo(col_ref->getIndex());
     CHECK_GT(col_info->table_id, 0);
     return {{col_info, 0}};
   }
@@ -216,7 +216,7 @@ class PhysicalColumnInfosNodeVisitor
     ColumnInfoMap res;
 
     for (size_t col_idx = 0; col_idx < scan->size(); ++col_idx) {
-      auto col_info = scan->getColumnInfoBySpi(col_idx + 1);
+      auto col_info = scan->getColumnInfo(col_idx);
       res.insert({*col_info, col_info});
     }
 

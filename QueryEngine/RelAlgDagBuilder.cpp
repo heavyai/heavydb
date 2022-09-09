@@ -3553,7 +3553,7 @@ SQLTypeInfo getColumnType(const RelAlgNode* node, size_t col_idx) {
   // For scans we can use embedded column info.
   const auto scan = dynamic_cast<const RelScan*>(node);
   if (scan) {
-    return scan->getColumnTypeBySpi(col_idx + 1);
+    return scan->getColumnType(col_idx)->toTypeInfo();
   }
 
   // For filter, sort and union we can propagate column type of

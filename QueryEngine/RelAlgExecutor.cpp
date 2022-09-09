@@ -1059,7 +1059,7 @@ void collect_used_input_desc(
       const int nest_level = it->second;
       auto scan = dynamic_cast<const RelScan*>(source);
       ColumnInfoPtr col_info = scan
-                                   ? scan->getColumnInfoBySpi(col_id + 1)
+                                   ? scan->getColumnInfo(col_id)
                                    : std::make_shared<ColumnInfo>(
                                          -1, table_id, col_id, "", col_ref.type(), false);
       input_col_descs_unique.insert(
@@ -2924,7 +2924,7 @@ std::vector<hdk::ir::ExprPtr> synthesize_inputs(
         table_id,
         scan_ra ? input_idx + 1 : input_idx,
         rte_idx,
-        scan_ra ? scan_ra->isVirtualColBySpi(input_idx + 1) : false));
+        scan_ra ? scan_ra->isVirtualCol(input_idx) : false));
     ++input_idx;
   }
   return inputs;
