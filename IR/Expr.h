@@ -1411,6 +1411,11 @@ class CaseExpr : public Expr {
            const std::list<std::pair<ExprPtr, ExprPtr>>& w,
            ExprPtr e)
       : Expr(ti, has_agg), expr_pair_list(w), else_expr(e) {}
+  CaseExpr(const hdk::ir::Type* type,
+           bool has_agg,
+           std::list<std::pair<ExprPtr, ExprPtr>> expr_pairs,
+           ExprPtr e)
+      : Expr(type, has_agg), expr_pair_list(std::move(expr_pairs)), else_expr(e) {}
   const std::list<std::pair<ExprPtr, ExprPtr>>& get_expr_pair_list() const {
     return expr_pair_list;
   }

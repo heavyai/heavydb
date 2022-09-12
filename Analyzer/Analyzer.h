@@ -42,13 +42,10 @@ class Executor;
 
 namespace Analyzer {
 
-SQLTypeInfo analyze_type_info(SQLOps op,
-                              const SQLTypeInfo& left_type,
-                              const SQLTypeInfo& right_type,
-                              SQLTypeInfo* new_left_type,
-                              SQLTypeInfo* new_right_type);
-SQLTypeInfo common_numeric_type(const SQLTypeInfo& type1, const SQLTypeInfo& type2);
-SQLTypeInfo common_string_type(const SQLTypeInfo& type1, const SQLTypeInfo& type2);
+const hdk::ir::Type* common_numeric_type(const hdk::ir::Type* type1,
+                                         const hdk::ir::Type* type2);
+const hdk::ir::Type* common_string_type(const hdk::ir::Type* type1,
+                                        const hdk::ir::Type* type2);
 
 hdk::ir::ExprPtr analyzeIntValue(const int64_t intval);
 

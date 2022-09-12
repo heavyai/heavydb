@@ -24,6 +24,7 @@
 
 #include "Analyzer/Analyzer.h"
 #include "DataProvider/DataProvider.h"
+#include "IR/TypeUtils.h"
 #include "QueryEngine/DateTimeUtils.h"
 #include "QueryEngine/Execute.h"  // TODO: remove
 #include "Shared/DateConverters.h"
@@ -38,7 +39,7 @@
 namespace {
 
 bool expr_is_null(const hdk::ir::Expr* expr) {
-  if (expr->get_type_info().get_type() == kNULLT) {
+  if (expr->type()->isNull()) {
     return true;
   }
   const auto const_expr = dynamic_cast<const hdk::ir::Constant*>(expr);
@@ -121,107 +122,100 @@ void erase_cntl_chars(std::string& like_str, char escape_char) {
   like_str = new_str;
 }
 
+int precisionOrZero(const hdk::ir::Type* type) {
+  return type->isDecimal() ? type->as<hdk::ir::DecimalType>()->precision() : 0;
+}
+
+int scaleOrZero(const hdk::ir::Type* type) {
+  return type->isDecimal() ? type->as<hdk::ir::DecimalType>()->scale() : 0;
+}
+
 }  // namespace
 
 namespace Analyzer {
 
-SQLTypeInfo analyze_type_info(SQLOps op,
-                              const SQLTypeInfo& left_type,
-                              const SQLTypeInfo& right_type,
-                              SQLTypeInfo* new_left_type,
-                              SQLTypeInfo* new_right_type) {
-  SQLTypeInfo result_type;
-  SQLTypeInfo common_type;
+const hdk::ir::Type* analyze_type_info(SQLOps op,
+                                       const hdk::ir::Type* left_type,
+                                       const hdk::ir::Type* right_type,
+                                       const hdk::ir::Type** new_left_type,
+                                       const hdk::ir::Type** new_right_type) {
+  auto& ctx = left_type->ctx();
+  const hdk::ir::Type* result_type;
+  const hdk::ir::Type* common_type;
   *new_left_type = left_type;
   *new_right_type = right_type;
   if (IS_LOGIC(op)) {
-    if (left_type.get_type() != kBOOLEAN || right_type.get_type() != kBOOLEAN) {
+    if (!left_type->isBoolean() || !right_type->isBoolean()) {
       throw std::runtime_error(
           "non-boolean operands cannot be used in logic operations.");
     }
-    result_type = SQLTypeInfo(kBOOLEAN, false);
+    result_type = ctx.boolean();
   } else if (IS_COMPARISON(op)) {
-    if (left_type != right_type) {
-      if (left_type.is_number() && right_type.is_number()) {
+    if (!left_type->equal(right_type)) {
+      if (left_type->isNumber() && right_type->isNumber()) {
         common_type = common_numeric_type(left_type, right_type);
-        *new_left_type = common_type;
-        new_left_type->set_notnull(left_type.get_notnull());
-        *new_right_type = common_type;
-        new_right_type->set_notnull(right_type.get_notnull());
-      } else if (left_type.is_time() && right_type.is_time()) {
-        switch (left_type.get_type()) {
-          case kTIMESTAMP:
-            switch (right_type.get_type()) {
-              case kTIME:
+        *new_left_type = common_type->withNullable(left_type->nullable());
+        *new_right_type = common_type->withNullable(right_type->nullable());
+      } else if (left_type->isDateTime() && right_type->isDateTime()) {
+        switch (left_type->id()) {
+          case hdk::ir::Type::kTimestamp:
+            switch (right_type->id()) {
+              case hdk::ir::Type::kTime:
                 throw std::runtime_error("Cannont compare between TIMESTAMP and TIME.");
                 break;
-              case kDATE:
-                *new_left_type = SQLTypeInfo(left_type.get_type(),
-                                             left_type.get_dimension(),
-                                             0,
-                                             left_type.get_notnull());
-                *new_right_type = *new_left_type;
-                new_right_type->set_notnull(right_type.get_notnull());
+              case hdk::ir::Type::kDate:
+                *new_left_type = left_type;
+                *new_right_type = (*new_left_type)->withNullable(right_type->nullable());
                 break;
-              case kTIMESTAMP:
-                *new_left_type = SQLTypeInfo(
-                    kTIMESTAMP,
-                    std::max(left_type.get_dimension(), right_type.get_dimension()),
-                    0,
-                    left_type.get_notnull());
-                *new_right_type = SQLTypeInfo(
-                    kTIMESTAMP,
-                    std::max(left_type.get_dimension(), right_type.get_dimension()),
-                    0,
-                    right_type.get_notnull());
+              case hdk::ir::Type::kTimestamp:
+                *new_left_type = ctx.timestamp(
+                    std::max(left_type->as<hdk::ir::DateTimeBaseType>()->unit(),
+                             right_type->as<hdk::ir::DateTimeBaseType>()->unit()),
+                    left_type->nullable());
+                *new_right_type = ctx.timestamp(
+                    std::max(left_type->as<hdk::ir::DateTimeBaseType>()->unit(),
+                             right_type->as<hdk::ir::DateTimeBaseType>()->unit()),
+                    right_type->nullable());
                 break;
               default:
                 CHECK(false);
             }
             break;
-          case kTIME:
-            switch (right_type.get_type()) {
-              case kTIMESTAMP:
+          case hdk::ir::Type::kTime:
+            switch (right_type->id()) {
+              case hdk::ir::Type::kTimestamp:
                 throw std::runtime_error("Cannont compare between TIME and TIMESTAMP.");
                 break;
-              case kDATE:
+              case hdk::ir::Type::kDate:
                 throw std::runtime_error("Cannont compare between TIME and DATE.");
                 break;
-              case kTIME:
-                *new_left_type = SQLTypeInfo(
-                    kTIME,
-                    std::max(left_type.get_dimension(), right_type.get_dimension()),
-                    0,
-                    left_type.get_notnull());
-                *new_right_type = SQLTypeInfo(
-                    kTIME,
-                    std::max(left_type.get_dimension(), right_type.get_dimension()),
-                    0,
-                    right_type.get_notnull());
+              case hdk::ir::Type::kTime:
+                *new_left_type = ctx.time64(
+                    std::max(left_type->as<hdk::ir::DateTimeBaseType>()->unit(),
+                             right_type->as<hdk::ir::DateTimeBaseType>()->unit()),
+                    left_type->nullable());
+                *new_right_type = ctx.time64(
+                    std::max(left_type->as<hdk::ir::DateTimeBaseType>()->unit(),
+                             right_type->as<hdk::ir::DateTimeBaseType>()->unit()),
+                    right_type->nullable());
                 break;
               default:
                 CHECK(false);
             }
             break;
-          case kDATE:
-            switch (right_type.get_type()) {
-              case kTIMESTAMP:
-                *new_left_type = SQLTypeInfo(right_type.get_type(),
-                                             right_type.get_dimension(),
-                                             0,
-                                             left_type.get_notnull());
-                *new_right_type = *new_left_type;
-                new_right_type->set_notnull(right_type.get_notnull());
+          case hdk::ir::Type::kDate:
+            switch (right_type->id()) {
+              case hdk::ir::Type::kTimestamp:
+                *new_left_type = right_type->withNullable(left_type->nullable());
+                *new_right_type = right_type;
                 break;
-              case kDATE:
-                *new_left_type = SQLTypeInfo(left_type.get_type(),
-                                             left_type.get_dimension(),
-                                             0,
-                                             left_type.get_notnull());
-                *new_right_type = *new_left_type;
-                new_right_type->set_notnull(right_type.get_notnull());
+              case hdk::ir::Type::kDate:
+                *new_left_type =
+                    ctx.date64(hdk::ir::TimeUnit::kSecond, left_type->nullable());
+                *new_right_type =
+                    ctx.date64(hdk::ir::TimeUnit::kSecond, right_type->nullable());
                 break;
-              case kTIME:
+              case hdk::ir::Type::kTime:
                 throw std::runtime_error("Cannont compare between DATE and TIME.");
                 break;
               default:
@@ -231,339 +225,200 @@ SQLTypeInfo analyze_type_info(SQLOps op,
           default:
             CHECK(false);
         }
-      } else if (left_type.is_string() && right_type.is_time()) {
-        *new_left_type = right_type;
-        new_left_type->set_notnull(left_type.get_notnull());
+      } else if ((left_type->isString() || left_type->isExtDictionary()) &&
+                 right_type->isTime()) {
+        *new_left_type = right_type->withNullable(left_type->nullable());
         *new_right_type = right_type;
-      } else if (left_type.is_time() && right_type.is_string()) {
+      } else if (left_type->isTime() &&
+                 (right_type->isString() || right_type->isExtDictionary())) {
         *new_left_type = left_type;
-        *new_right_type = left_type;
-        new_right_type->set_notnull(right_type.get_notnull());
-      } else if (left_type.is_string() && right_type.is_string()) {
+        *new_right_type = left_type->withNullable(right_type->nullable());
+      } else if ((left_type->isString() || left_type->isExtDictionary()) &&
+                 (right_type->isString() || right_type->isExtDictionary())) {
         *new_left_type = left_type;
         *new_right_type = right_type;
-      } else if (left_type.is_boolean() && right_type.is_boolean()) {
-        const bool notnull = left_type.get_notnull() && right_type.get_notnull();
-        common_type = SQLTypeInfo(kBOOLEAN, notnull);
+      } else if (left_type->isBoolean() && right_type->isBoolean()) {
+        const bool nullable = left_type->nullable() || right_type->nullable();
+        common_type = ctx.boolean(nullable);
         *new_left_type = common_type;
         *new_right_type = common_type;
       } else {
-        throw std::runtime_error("Cannot compare between " + left_type.get_type_name() +
-                                 " and " + right_type.get_type_name());
+        throw std::runtime_error("Cannot compare between " + left_type->toString() +
+                                 " and " + right_type->toString());
       }
     }
-    result_type = SQLTypeInfo(kBOOLEAN, false);
-  } else if (op == kMINUS &&
-             (left_type.get_type() == kDATE || left_type.get_type() == kTIMESTAMP) &&
-             right_type.is_timeinterval()) {
+    result_type = ctx.boolean();
+  } else if (op == kMINUS && (left_type->isDate() || left_type->isTimestamp()) &&
+             right_type->isInterval()) {
     *new_left_type = left_type;
     *new_right_type = right_type;
     result_type = left_type;
   } else if (IS_ARITHMETIC(op)) {
-    if (!(left_type.is_number() || left_type.is_timeinterval()) ||
-        !(right_type.is_number() || right_type.is_timeinterval())) {
+    if (!(left_type->isNumber() || left_type->isInterval()) ||
+        !(right_type->isNumber() || right_type->isInterval())) {
       throw std::runtime_error("non-numeric operands in arithmetic operations.");
     }
-    if (op == kMODULO && (!left_type.is_integer() || !right_type.is_integer())) {
+    if (op == kMODULO && (!left_type->isInteger() || !right_type->isInteger())) {
       throw std::runtime_error("non-integer operands in modulo operation.");
     }
     common_type = common_numeric_type(left_type, right_type);
-    if (common_type.is_decimal()) {
+    if (common_type->isDecimal()) {
       if (op == kMULTIPLY) {
         // Decimal multiplication requires common_type adjustment:
         // dimension and scale of the result should be increased.
-        auto new_dimension = left_type.get_dimension() + right_type.get_dimension();
+        auto left_precision = precisionOrZero(left_type);
+        auto left_scale = scaleOrZero(left_type);
+        auto right_precision = precisionOrZero(right_type);
+        auto right_scale = scaleOrZero(right_type);
+        auto new_precision = left_precision + right_precision;
         // If new dimension is over 20 digits, the result may overflow, or it may not.
         // Rely on the runtime overflow detection rather than a static check here.
-        if (common_type.get_dimension() < new_dimension) {
-          common_type.set_dimension(new_dimension);
-        }
-        common_type.set_scale(left_type.get_scale() + right_type.get_scale());
+        new_precision =
+            std::max(common_type->as<hdk::ir::DecimalType>()->precision(), new_precision);
+        common_type =
+            ctx.decimal(common_type->size(), new_precision, left_scale + right_scale);
       } else if (op == kPLUS || op == kMINUS) {
         // Scale should remain the same but dimension could actually go up
-        common_type.set_dimension(common_type.get_dimension() + 1);
+        common_type =
+            ctx.decimal(common_type->size(),
+                        common_type->as<hdk::ir::DecimalType>()->precision() + 1,
+                        common_type->as<hdk::ir::DecimalType>()->scale());
       }
     }
-    *new_left_type = common_type;
-    new_left_type->set_notnull(left_type.get_notnull());
-    *new_right_type = common_type;
-    new_right_type->set_notnull(right_type.get_notnull());
-    if (common_type.is_decimal() && op == kMULTIPLY) {
-      new_left_type->set_scale(left_type.get_scale());
-      new_right_type->set_scale(right_type.get_scale());
+    *new_left_type = common_type->withNullable(left_type->nullable());
+    *new_right_type = common_type->withNullable(right_type->nullable());
+    if (common_type->isDecimal() && op == kMULTIPLY) {
+      if ((*new_left_type)->isDecimal()) {
+        *new_left_type = ctx.decimal((*new_left_type)->size(),
+                                     precisionOrZero(*new_left_type),
+                                     scaleOrZero(left_type),
+                                     left_type->nullable());
+      }
+      if ((*new_right_type)->isDecimal()) {
+        *new_right_type = ctx.decimal((*new_right_type)->size(),
+                                      precisionOrZero(*new_right_type),
+                                      scaleOrZero(right_type),
+                                      right_type->nullable());
+      }
     }
     result_type = common_type;
   } else {
     throw std::runtime_error("invalid binary operator type.");
   }
-  result_type.set_notnull(left_type.get_notnull() && right_type.get_notnull());
+  result_type =
+      result_type->withNullable(left_type->nullable() || right_type->nullable());
   return result_type;
 }
 
-SQLTypeInfo common_string_type(const SQLTypeInfo& type1, const SQLTypeInfo& type2) {
-  SQLTypeInfo common_type;
-  EncodingType comp = kENCODING_NONE;
-  int comp_param = 0;
-  CHECK(type1.is_string() && type2.is_string());
+const hdk::ir::Type* common_string_type(const hdk::ir::Type* type1,
+                                        const hdk::ir::Type* type2) {
+  auto& ctx = type1->ctx();
+  const hdk::ir::Type* common_type;
+  auto nullable = type1->nullable() || type2->nullable();
+  CHECK(type1->isString() || type1->isExtDictionary());
+  CHECK(type2->isString() || type2->isExtDictionary());
   // if type1 and type2 have the same DICT encoding then keep it
   // otherwise, they must be decompressed
-  if (type1.get_compression() == kENCODING_DICT &&
-      type2.get_compression() == kENCODING_DICT) {
-    if (type1.get_comp_param() == type2.get_comp_param() ||
-        type1.get_comp_param() == TRANSIENT_DICT(type2.get_comp_param())) {
-      comp = kENCODING_DICT;
-      comp_param = std::min(type1.get_comp_param(), type2.get_comp_param());
+  if (type1->isExtDictionary() && type2->isExtDictionary()) {
+    auto dict_id1 = type1->as<hdk::ir::ExtDictionaryType>()->dictId();
+    auto dict_id2 = type2->as<hdk::ir::ExtDictionaryType>()->dictId();
+    if (dict_id1 == dict_id2 || dict_id1 == TRANSIENT_DICT(dict_id2)) {
+      common_type = ctx.extDict(ctx.text(), std::min(dict_id1, dict_id2), 4, nullable);
+    } else {
+      common_type = ctx.text();
     }
-  } else if (type1.get_compression() == kENCODING_DICT &&
-             type2.get_compression() == kENCODING_NONE) {
-    comp_param = type1.get_comp_param();
-  } else if (type1.get_compression() == kENCODING_NONE &&
-             type2.get_compression() == kENCODING_DICT) {
-    comp_param = type2.get_comp_param();
+  } else if (type1->isVarChar() && type2->isVarChar()) {
+    auto length = std::max(type1->as<hdk::ir::VarCharType>()->maxLength(),
+                           type2->as<hdk::ir::VarCharType>()->maxLength());
+    common_type = ctx.varChar(length, nullable);
   } else {
-    comp_param = std::max(type1.get_comp_param(),
-                          type2.get_comp_param());  // preserve previous comp_param if set
+    common_type = ctx.text();
   }
-  const bool notnull = type1.get_notnull() && type2.get_notnull();
-  if (type1.get_type() == kTEXT || type2.get_type() == kTEXT) {
-    common_type = SQLTypeInfo(kTEXT, 0, 0, notnull, comp, comp_param, kNULLT);
-    return common_type;
-  }
-  common_type = SQLTypeInfo(kVARCHAR,
-                            std::max(type1.get_dimension(), type2.get_dimension()),
-                            0,
-                            notnull,
-                            comp,
-                            comp_param,
-                            kNULLT);
+
   return common_type;
 }
 
-SQLTypeInfo common_numeric_type(const SQLTypeInfo& type1, const SQLTypeInfo& type2) {
-  SQLTypeInfo common_type;
-  const bool notnull = type1.get_notnull() && type2.get_notnull();
-  if (type1.get_type() == type2.get_type()) {
-    CHECK(((type1.is_number() || type1.is_timeinterval()) &&
-           (type2.is_number() || type2.is_timeinterval())) ||
-          (type1.is_boolean() && type2.is_boolean()));
-    common_type = SQLTypeInfo(type1.get_type(),
-                              std::max(type1.get_dimension(), type2.get_dimension()),
-                              std::max(type1.get_scale(), type2.get_scale()),
-                              notnull);
-    return common_type;
+const hdk::ir::Type* common_numeric_type(const hdk::ir::Type* type1,
+                                         const hdk::ir::Type* type2) {
+  auto& ctx = type1->ctx();
+  bool nullable = type1->nullable() || type2->nullable();
+  if (type1->id() == type2->id()) {
+    CHECK(((type1->isNumber() || type1->isInterval()) &&
+           (type2->isNumber() || type2->isInterval())) ||
+          (type1->isBoolean() && type2->isBoolean()));
+
+    if (type1->isDecimal()) {
+      auto precision = std::max(type1->as<hdk::ir::DecimalType>()->precision(),
+                                type2->as<hdk::ir::DecimalType>()->precision());
+      auto scale = std::max(type1->as<hdk::ir::DecimalType>()->scale(),
+                            type2->as<hdk::ir::DecimalType>()->scale());
+      return ctx.decimal(
+          std::max(type1->size(), type2->size()), precision, scale, nullable);
+    }
+    if (type1->isInteger()) {
+      return ctx.integer(std::max(type1->size(), type2->size()), nullable);
+    }
+    if (type1->isFloatingPoint()) {
+      if (type1->size() != type2->size()) {
+        return ctx.fp64(nullable);
+      }
+      return type1->withNullable(nullable);
+    }
+    if (type1->isInterval()) {
+      auto unit = std::max(type1->as<hdk::ir::IntervalType>()->unit(),
+                           type2->as<hdk::ir::IntervalType>()->unit());
+      return ctx.interval(std::max(type1->size(), type2->size()), unit);
+    }
+    CHECK(type1->isBoolean());
+    return type1->withNullable(nullable);
   }
   std::string timeinterval_op_error{
       "Operator type not supported for time interval arithmetic: "};
-  if (type1.is_timeinterval()) {
-    if (!type2.is_integer()) {
-      throw std::runtime_error(timeinterval_op_error + type2.get_type_name());
+  if (type1->isInterval()) {
+    if (!type2->isInteger()) {
+      throw std::runtime_error(timeinterval_op_error + type2->toString());
     }
-    return type1;
+    return type1->withNullable(nullable);
   }
-  if (type2.is_timeinterval()) {
-    if (!type1.is_integer()) {
-      throw std::runtime_error(timeinterval_op_error + type1.get_type_name());
+  if (type2->isInterval()) {
+    if (!type1->isInteger()) {
+      throw std::runtime_error(timeinterval_op_error + type1->toString());
     }
-    return type2;
+    return type2->withNullable(nullable);
   }
-  CHECK(type1.is_number() && type2.is_number());
-  switch (type1.get_type()) {
-    case kTINYINT:
-      switch (type2.get_type()) {
-        case kSMALLINT:
-          common_type = SQLTypeInfo(kSMALLINT, notnull);
-          break;
-        case kINT:
-          common_type = SQLTypeInfo(kINT, notnull);
-          break;
-        case kBIGINT:
-          common_type = SQLTypeInfo(kBIGINT, notnull);
-          break;
-        case kFLOAT:
-          common_type = SQLTypeInfo(kFLOAT, notnull);
-          break;
-        case kDOUBLE:
-          common_type = SQLTypeInfo(kDOUBLE, notnull);
-          break;
-        case kNUMERIC:
-        case kDECIMAL:
-          common_type =
-              SQLTypeInfo(kDECIMAL,
-                          std::max(5 + type2.get_scale(), type2.get_dimension()),
-                          type2.get_scale(),
-                          notnull);
-          break;
+  CHECK(type1->isNumber() && type2->isNumber());
+  // Don't allow decimal in type2 to reduce number of option in the following switch.
+  if (type2->isDecimal()) {
+    std::swap(type1, type2);
+  }
+  switch (type1->id()) {
+    case hdk::ir::Type::kInteger:
+      switch (type2->id()) {
+        case hdk::ir::Type::kFloatingPoint:
+          return type2->withNullable(nullable);
         default:
           CHECK(false);
       }
       break;
-    case kSMALLINT:
-      switch (type2.get_type()) {
-        case kTINYINT:
-          common_type = SQLTypeInfo(kSMALLINT, notnull);
-          break;
-        case kINT:
-          common_type = SQLTypeInfo(kINT, notnull);
-          break;
-        case kBIGINT:
-          common_type = SQLTypeInfo(kBIGINT, notnull);
-          break;
-        case kFLOAT:
-          common_type = SQLTypeInfo(kFLOAT, notnull);
-          break;
-        case kDOUBLE:
-          common_type = SQLTypeInfo(kDOUBLE, notnull);
-          break;
-        case kNUMERIC:
-        case kDECIMAL:
-          common_type =
-              SQLTypeInfo(kDECIMAL,
-                          std::max(5 + type2.get_scale(), type2.get_dimension()),
-                          type2.get_scale(),
-                          notnull);
-          break;
-        default:
-          CHECK(false);
-      }
-      break;
-    case kINT:
-      switch (type2.get_type()) {
-        case kTINYINT:
-          common_type = SQLTypeInfo(kINT, notnull);
-          break;
-        case kSMALLINT:
-          common_type = SQLTypeInfo(kINT, notnull);
-          break;
-        case kBIGINT:
-          common_type = SQLTypeInfo(kBIGINT, notnull);
-          break;
-        case kFLOAT:
-          common_type = SQLTypeInfo(kFLOAT, notnull);
-          break;
-        case kDOUBLE:
-          common_type = SQLTypeInfo(kDOUBLE, notnull);
-          break;
-        case kNUMERIC:
-        case kDECIMAL:
-          common_type = SQLTypeInfo(
-              kDECIMAL,
-              std::max(std::min(19, 10 + type2.get_scale()), type2.get_dimension()),
-              type2.get_scale(),
-              notnull);
-          break;
-        default:
-          CHECK(false);
-      }
-      break;
-    case kBIGINT:
-      switch (type2.get_type()) {
-        case kTINYINT:
-          common_type = SQLTypeInfo(kBIGINT, notnull);
-          break;
-        case kSMALLINT:
-          common_type = SQLTypeInfo(kBIGINT, notnull);
-          break;
-        case kINT:
-          common_type = SQLTypeInfo(kBIGINT, notnull);
-          break;
-        case kFLOAT:
-          common_type = SQLTypeInfo(kFLOAT, notnull);
-          break;
-        case kDOUBLE:
-          common_type = SQLTypeInfo(kDOUBLE, notnull);
-          break;
-        case kNUMERIC:
-        case kDECIMAL:
-          common_type = SQLTypeInfo(kDECIMAL, 19, type2.get_scale(), notnull);
-          break;
-        default:
-          CHECK(false);
-      }
-      break;
-    case kFLOAT:
-      switch (type2.get_type()) {
-        case kTINYINT:
-          common_type = SQLTypeInfo(kFLOAT, notnull);
-          break;
-        case kSMALLINT:
-          common_type = SQLTypeInfo(kFLOAT, notnull);
-          break;
-        case kINT:
-          common_type = SQLTypeInfo(kFLOAT, notnull);
-          break;
-        case kBIGINT:
-          common_type = SQLTypeInfo(kFLOAT, notnull);
-          break;
-        case kDOUBLE:
-          common_type = SQLTypeInfo(kDOUBLE, notnull);
-          break;
-        case kNUMERIC:
-        case kDECIMAL:
-          common_type = SQLTypeInfo(kFLOAT, notnull);
-          break;
-        default:
-          CHECK(false);
-      }
-      break;
-    case kDOUBLE:
-      switch (type2.get_type()) {
-        case kTINYINT:
-        case kSMALLINT:
-        case kINT:
-        case kBIGINT:
-        case kFLOAT:
-        case kNUMERIC:
-        case kDECIMAL:
-          common_type = SQLTypeInfo(kDOUBLE, notnull);
-          break;
-        default:
-          CHECK(false);
-      }
-      break;
-    case kNUMERIC:
-    case kDECIMAL:
-      switch (type2.get_type()) {
-        case kTINYINT:
-          common_type =
-              SQLTypeInfo(kDECIMAL,
-                          std::max(3 + type1.get_scale(), type1.get_dimension()),
-                          type1.get_scale(),
-                          notnull);
-          break;
-        case kSMALLINT:
-          common_type =
-              SQLTypeInfo(kDECIMAL,
-                          std::max(5 + type1.get_scale(), type1.get_dimension()),
-                          type1.get_scale(),
-                          notnull);
-          break;
-        case kINT:
-          common_type = SQLTypeInfo(
-              kDECIMAL,
-              std::max(std::min(19, 10 + type1.get_scale()), type2.get_dimension()),
-              type1.get_scale(),
-              notnull);
-          break;
-        case kBIGINT:
-          common_type = SQLTypeInfo(kDECIMAL, 19, type1.get_scale(), notnull);
-          break;
-        case kFLOAT:
-          common_type = SQLTypeInfo(kFLOAT, notnull);
-          break;
-        case kDOUBLE:
-          common_type = SQLTypeInfo(kDOUBLE, notnull);
-          break;
-        case kNUMERIC:
-        case kDECIMAL: {
-          int common_scale = std::max(type1.get_scale(), type2.get_scale());
-          common_type = SQLTypeInfo(kDECIMAL,
-                                    std::max(type1.get_dimension() - type1.get_scale(),
-                                             type2.get_dimension() - type2.get_scale()) +
-                                        common_scale,
-                                    common_scale,
-                                    notnull);
-          break;
+    case hdk::ir::Type::kFloatingPoint:
+      return type1->withNullable(nullable);
+    case hdk::ir::Type::kDecimal:
+      switch (type2->id()) {
+        case hdk::ir::Type::kInteger: {
+          auto precision = type1->as<hdk::ir::DecimalType>()->precision();
+          auto scale = type1->as<hdk::ir::DecimalType>()->scale();
+          if (type2->size() == 8) {
+            precision = 19;
+          } else if (type2->size() == 4) {
+            precision = std::max(std::min(19, 10 + scale), precision);
+          } else {
+            CHECK(type2->size() <= 2);
+            precision = std::max(5 + scale, precision);
+          }
+          return ctx.decimal(type1->size(), precision, scale, nullable);
         }
+        case hdk::ir::Type::kFloatingPoint:
+          return type2->withNullable(nullable);
         default:
           CHECK(false);
       }
@@ -571,8 +426,7 @@ SQLTypeInfo common_numeric_type(const SQLTypeInfo& type1, const SQLTypeInfo& typ
     default:
       CHECK(false);
   }
-  common_type.set_fixed_size();
-  return common_type;
+  return nullptr;
 }
 
 hdk::ir::ExprPtr analyzeIntValue(const int64_t intval) {
@@ -594,19 +448,18 @@ hdk::ir::ExprPtr analyzeIntValue(const int64_t intval) {
 hdk::ir::ExprPtr analyzeFixedPtValue(const int64_t numericval,
                                      const int scale,
                                      const int precision) {
-  SQLTypeInfo ti(kNUMERIC, 0, 0, false);
-  ti.set_scale(scale);
-  ti.set_precision(precision);
+  auto type = hdk::ir::Context::defaultCtx().decimal64(precision, scale);
   Datum d;
   d.bigintval = numericval;
-  return hdk::ir::makeExpr<hdk::ir::Constant>(ti, false, d);
+  return hdk::ir::makeExpr<hdk::ir::Constant>(type, false, d);
 }
 
 hdk::ir::ExprPtr analyzeStringValue(const std::string& stringval) {
-  SQLTypeInfo ti(kVARCHAR, stringval.length(), 0, true);
+  auto type =
+      hdk::ir::Context::defaultCtx().varChar(static_cast<int>(stringval.length()));
   Datum d;
   d.stringval = new std::string(stringval);
-  return hdk::ir::makeExpr<hdk::ir::Constant>(ti, false, d);
+  return hdk::ir::makeExpr<hdk::ir::Constant>(type, false, d);
 }
 
 bool exprs_share_one_and_same_rte_idx(const hdk::ir::ExprPtr& lhs_expr,
@@ -620,54 +473,59 @@ bool exprs_share_one_and_same_rte_idx(const hdk::ir::ExprPtr& lhs_expr,
   return lhs_rte_idx.size() == 1UL && lhs_rte_idx == rhs_rte_idx;
 }
 
-SQLTypeInfo const& get_str_dict_cast_type(const SQLTypeInfo& lhs_type_info,
-                                          const SQLTypeInfo& rhs_type_info,
-                                          const Executor* executor) {
-  CHECK(lhs_type_info.is_string());
-  CHECK(lhs_type_info.get_compression() == kENCODING_DICT);
-  CHECK(rhs_type_info.is_string());
-  CHECK(rhs_type_info.get_compression() == kENCODING_DICT);
-  const auto lhs_comp_param = lhs_type_info.get_comp_param();
-  const auto rhs_comp_param = rhs_type_info.get_comp_param();
-  CHECK_NE(lhs_comp_param, rhs_comp_param);
-  if (lhs_type_info.get_comp_param() == TRANSIENT_DICT_ID) {
-    return rhs_type_info;
+const hdk::ir::Type* get_str_dict_cast_type(const hdk::ir::Type* lhs_type,
+                                            const hdk::ir::Type* rhs_type,
+                                            const Executor* executor) {
+  CHECK(lhs_type->isExtDictionary());
+  CHECK(rhs_type->isExtDictionary());
+  const auto lhs_dict_id = lhs_type->as<hdk::ir::ExtDictionaryType>()->dictId();
+  const auto rhs_dict_id = rhs_type->as<hdk::ir::ExtDictionaryType>()->dictId();
+  CHECK_NE(lhs_dict_id, rhs_dict_id);
+  if (lhs_dict_id == TRANSIENT_DICT_ID) {
+    return rhs_type;
   }
-  if (rhs_type_info.get_comp_param() == TRANSIENT_DICT_ID) {
-    return lhs_type_info;
+  if (rhs_dict_id == TRANSIENT_DICT_ID) {
+    return lhs_type;
   }
   // When translator is used from DAG builder, executor is not available.
   // In this case, simply choose LHS and revise the decision later.
   if (!executor) {
-    return lhs_type_info;
+    return lhs_type;
   }
   // If here then neither lhs or rhs type was transient, we should see which
   // type has the largest dictionary and make that the destination type
-  const auto lhs_sdp = executor->getStringDictionaryProxy(lhs_comp_param, true);
-  const auto rhs_sdp = executor->getStringDictionaryProxy(rhs_comp_param, true);
-  return lhs_sdp->entryCount() >= rhs_sdp->entryCount() ? lhs_type_info : rhs_type_info;
+  const auto lhs_sdp = executor->getStringDictionaryProxy(lhs_dict_id, true);
+  const auto rhs_sdp = executor->getStringDictionaryProxy(rhs_dict_id, true);
+  return lhs_sdp->entryCount() >= rhs_sdp->entryCount() ? lhs_type : rhs_type;
 }
 
-SQLTypeInfo common_string_type(const SQLTypeInfo& lhs_type_info,
-                               const SQLTypeInfo& rhs_type_info,
-                               const Executor* executor) {
-  CHECK(lhs_type_info.is_string());
-  CHECK(rhs_type_info.is_string());
-  const auto lhs_comp_param = lhs_type_info.get_comp_param();
-  const auto rhs_comp_param = rhs_type_info.get_comp_param();
-  if (lhs_type_info.is_dict_encoded_string() && rhs_type_info.is_dict_encoded_string()) {
-    if (lhs_comp_param == rhs_comp_param ||
-        lhs_comp_param == TRANSIENT_DICT(rhs_comp_param)) {
-      return lhs_comp_param <= rhs_comp_param ? lhs_type_info : rhs_type_info;
+const hdk::ir::Type* common_string_type(const hdk::ir::Type* type1,
+                                        const hdk::ir::Type* type2,
+                                        const Executor* executor) {
+  auto& ctx = type1->ctx();
+  const hdk::ir::Type* common_type;
+  auto nullable = type1->nullable() || type2->nullable();
+  CHECK(type1->isString() || type1->isExtDictionary());
+  CHECK(type2->isString() || type2->isExtDictionary());
+  // if type1 and type2 have the same DICT encoding then keep it
+  // otherwise, they must be decompressed
+  if (type1->isExtDictionary() && type2->isExtDictionary()) {
+    auto dict_id1 = type1->as<hdk::ir::ExtDictionaryType>()->dictId();
+    auto dict_id2 = type2->as<hdk::ir::ExtDictionaryType>()->dictId();
+    if (dict_id1 == dict_id2 || dict_id1 == TRANSIENT_DICT(dict_id2)) {
+      common_type = ctx.extDict(ctx.text(), std::min(dict_id1, dict_id2), 4, nullable);
+    } else {
+      common_type = get_str_dict_cast_type(type1, type2, executor);
     }
-    return get_str_dict_cast_type(lhs_type_info, rhs_type_info, executor);
+  } else if (type1->isVarChar() && type2->isVarChar()) {
+    auto length = std::max(type1->as<hdk::ir::VarCharType>()->maxLength(),
+                           type2->as<hdk::ir::VarCharType>()->maxLength());
+    common_type = ctx.varChar(length, nullable);
+  } else {
+    common_type = ctx.text();
   }
-  CHECK(lhs_type_info.is_none_encoded_string() || rhs_type_info.is_none_encoded_string());
-  SQLTypeInfo ret_ti =
-      lhs_type_info.is_none_encoded_string() ? lhs_type_info : rhs_type_info;
-  ret_ti.set_dimension(
-      std::max(lhs_type_info.get_dimension(), rhs_type_info.get_dimension()));
-  return ret_ti;
+
+  return common_type;
 }
 
 hdk::ir::ExprPtr normalizeOperExpr(const SQLOps optype,
@@ -675,30 +533,33 @@ hdk::ir::ExprPtr normalizeOperExpr(const SQLOps optype,
                                    hdk::ir::ExprPtr left_expr,
                                    hdk::ir::ExprPtr right_expr,
                                    const Executor* executor) {
-  if (left_expr->get_type_info().is_date_in_days() ||
-      right_expr->get_type_info().is_date_in_days()) {
+  if ((left_expr->type()->isDate() &&
+       left_expr->type()->as<hdk::ir::DateType>()->unit() == hdk::ir::TimeUnit::kDay) ||
+      (right_expr->type()->isDate() &&
+       right_expr->type()->as<hdk::ir::DateType>()->unit() == hdk::ir::TimeUnit::kDay)) {
     // Do not propogate encoding
     left_expr = left_expr->decompress();
     right_expr = right_expr->decompress();
   }
-  const auto& left_type = left_expr->get_type_info();
-  auto right_type = right_expr->get_type_info();
+  auto left_type = left_expr->type();
+  auto right_type = right_expr->type();
+  auto& ctx = left_type->ctx();
   if (qual != kONE) {
     // subquery not supported yet.
     CHECK(!std::dynamic_pointer_cast<hdk::ir::ScalarSubquery>(right_expr));
-    if (right_type.get_type() != kARRAY) {
+    if (!right_type->isArray()) {
       throw std::runtime_error(
           "Existential or universal qualifiers can only be used in front of a subquery "
           "or an "
           "expression of array type.");
     }
-    right_type = right_type.get_elem_type();
+    right_type = right_type->as<hdk::ir::ArrayBaseType>()->elemType();
   }
-  SQLTypeInfo new_left_type;
-  SQLTypeInfo new_right_type;
+  const hdk::ir::Type* new_left_type;
+  const hdk::ir::Type* new_right_type;
   auto result_type =
       analyze_type_info(optype, left_type, right_type, &new_left_type, &new_right_type);
-  if (result_type.is_timeinterval()) {
+  if (result_type->isInterval()) {
     return hdk::ir::makeExpr<hdk::ir::BinOper>(
         result_type, false, optype, qual, left_expr, right_expr);
   }
@@ -708,14 +569,15 @@ hdk::ir::ExprPtr normalizeOperExpr(const SQLOps optype,
   // increase dimension for decimals on each normalization for arithmetic
   // operations.
   if (executor) {
-    if (left_type != new_left_type) {
+    if (!left_type->equal(new_left_type)) {
       left_expr = left_expr->add_cast(new_left_type);
     }
-    if (right_type != new_right_type) {
+    if (!right_type->equal(new_right_type)) {
       if (qual == kONE) {
         right_expr = right_expr->add_cast(new_right_type);
       } else {
-        right_expr = right_expr->add_cast(new_right_type.get_array_type());
+        right_expr = right_expr->add_cast(
+            ctx.arrayVarLen(new_right_type, 4, new_right_type->nullable()));
       }
     }
   }
@@ -723,9 +585,9 @@ hdk::ir::ExprPtr normalizeOperExpr(const SQLOps optype,
   // No executor means we are building DAG. Skip normalization at this
   // step and perform it later on execution unit build.
   if (IS_COMPARISON(optype) && executor) {
-    if (new_left_type.get_compression() == kENCODING_DICT &&
-        new_right_type.get_compression() == kENCODING_DICT) {
-      if (new_left_type.get_comp_param() != new_right_type.get_comp_param()) {
+    if (new_left_type->isExtDictionary() && new_right_type->isExtDictionary()) {
+      if (new_left_type->as<hdk::ir::ExtDictionaryType>()->dictId() !=
+          new_right_type->as<hdk::ir::ExtDictionaryType>()->dictId()) {
         // Join framework does its own string dictionary translation
         // (at least partly since the rhs table projection does not use
         // the normal runtime execution framework), do if we detect
@@ -737,11 +599,9 @@ hdk::ir::ExprPtr normalizeOperExpr(const SQLOps optype,
           CHECK(executor);
           // Make the type we're casting to the transient dictionary, if it exists,
           // otherwise the largest dictionary in terms of number of entries
-          SQLTypeInfo ti(get_str_dict_cast_type(new_left_type, new_right_type, executor));
-          auto& expr_to_cast = ti == new_left_type ? right_expr : left_expr;
-          ti.set_fixed_size();
-          ti.set_dict_intersection();
-          expr_to_cast = expr_to_cast->add_cast(ti);
+          auto type = get_str_dict_cast_type(new_left_type, new_right_type, executor);
+          auto& expr_to_cast = type->equal(new_left_type) ? right_expr : left_expr;
+          expr_to_cast = expr_to_cast->add_cast(type, true);
         } else {  // Ordered comparison operator
           // We do not currently support ordered (i.e. >, <=) comparisons between
           // dictionary-encoded columns, and need to decompress when translation
@@ -761,20 +621,20 @@ hdk::ir::ExprPtr normalizeOperExpr(const SQLOps optype,
           // effectively integer comparisons in the same dictionary space
         }
       }
-    } else if (new_left_type.get_compression() == kENCODING_DICT &&
-               new_right_type.get_compression() == kENCODING_NONE) {
-      SQLTypeInfo ti(new_right_type);
-      ti.set_compression(new_left_type.get_compression());
-      ti.set_comp_param(new_left_type.get_comp_param());
-      ti.set_fixed_size();
-      right_expr = right_expr->add_cast(ti);
-    } else if (new_right_type.get_compression() == kENCODING_DICT &&
-               new_left_type.get_compression() == kENCODING_NONE) {
-      SQLTypeInfo ti(new_left_type);
-      ti.set_compression(new_right_type.get_compression());
-      ti.set_comp_param(new_right_type.get_comp_param());
-      ti.set_fixed_size();
-      left_expr = left_expr->add_cast(ti);
+    } else if (new_left_type->isExtDictionary() && !new_right_type->isExtDictionary()) {
+      CHECK(new_right_type->isString());
+      auto type = ctx.extDict(new_right_type,
+                              new_left_type->as<hdk::ir::ExtDictionaryType>()->dictId(),
+                              4,
+                              new_right_type->nullable());
+      right_expr = right_expr->add_cast(type);
+    } else if (new_right_type->isExtDictionary() && !new_left_type->isExtDictionary()) {
+      CHECK(new_left_type->isString());
+      auto type = ctx.extDict(new_left_type,
+                              new_right_type->as<hdk::ir::ExtDictionaryType>()->dictId(),
+                              4,
+                              new_left_type->nullable());
+      left_expr = left_expr->add_cast(type);
     } else {
       left_expr = left_expr->decompress();
       right_expr = right_expr->decompress();
@@ -792,7 +652,7 @@ hdk::ir::ExprPtr normalizeCaseExpr(
     const std::list<std::pair<hdk::ir::ExprPtr, hdk::ir::ExprPtr>>& expr_pair_list,
     const hdk::ir::ExprPtr else_e_in,
     const Executor* executor) {
-  SQLTypeInfo ti;
+  const hdk::ir::Type* type = nullptr;
   bool has_agg = false;
   // We need to keep track of whether there was at
   // least one none-encoded string literal expression
@@ -802,40 +662,39 @@ hdk::ir::ExprPtr normalizeCaseExpr(
   // types are either dictionary encoded or none-encoded
   // literals, or kept as none-encoded if all sub-expression
   // types are none-encoded (column or literal)
-  SQLTypeInfo none_encoded_literal_ti;
+  const hdk::ir::Type* none_encoded_literal_type = nullptr;
 
   for (auto& p : expr_pair_list) {
     auto e1 = p.first;
-    CHECK(e1->get_type_info().is_boolean());
+    CHECK(e1->type()->isBoolean());
     auto e2 = p.second;
     if (e2->get_contains_agg()) {
       has_agg = true;
     }
-    const auto& e2_ti = e2->get_type_info();
-    if (e2_ti.is_string() && !e2_ti.is_dict_encoded_string() &&
-        !std::dynamic_pointer_cast<const hdk::ir::ColumnVar>(e2)) {
-      CHECK(e2_ti.is_none_encoded_string());
-      none_encoded_literal_ti =
-          none_encoded_literal_ti.get_type() == kNULLT
-              ? e2_ti
-              : common_string_type(none_encoded_literal_ti, e2_ti, executor);
+    const auto& e2_type = e2->type();
+    if (e2_type->isString() && !std::dynamic_pointer_cast<const hdk::ir::ColumnVar>(e2)) {
+      none_encoded_literal_type =
+          none_encoded_literal_type
+              ? common_string_type(none_encoded_literal_type, e2_type, executor)
+              : e2_type;
       continue;
     }
 
-    if (ti.get_type() == kNULLT) {
-      ti = e2_ti;
-    } else if (e2_ti.get_type() == kNULLT) {
-      ti.set_notnull(false);
-      e2->set_type_info(ti);
-    } else if (ti != e2_ti) {
-      if (ti.is_string() && e2_ti.is_string()) {
+    if (type == nullptr) {
+      type = e2_type;
+    } else if (e2_type->isNull()) {
+      type = type->withNullable(true);
+      e2->set_type_info(type);
+    } else if (!type->equal(e2_type)) {
+      if ((type->isString() || type->isExtDictionary()) &&
+          (e2_type->isString() || e2_type->isExtDictionary())) {
         // Executor is needed to determine which dictionary is the largest
         // in case of two dictionary types with different encodings
-        ti = common_string_type(ti, e2_ti, executor);
-      } else if (ti.is_number() && e2_ti.is_number()) {
-        ti = common_numeric_type(ti, e2_ti);
-      } else if (ti.is_boolean() && e2_ti.is_boolean()) {
-        ti = common_numeric_type(ti, e2_ti);
+        type = common_string_type(type, e2_type, executor);
+      } else if (type->isNumber() && e2_type->isNumber()) {
+        type = common_numeric_type(type, e2_type);
+      } else if (type->isBoolean() && e2_type->isBoolean()) {
+        type = common_numeric_type(type, e2_type);
       } else {
         throw std::runtime_error(
             "expressions in THEN clause must be of the same or compatible types.");
@@ -843,35 +702,35 @@ hdk::ir::ExprPtr normalizeCaseExpr(
     }
   }
   auto else_e = else_e_in;
-  const auto& else_ti = else_e->get_type_info();
   if (else_e) {
+    const auto& else_type = else_e->type();
     if (else_e->get_contains_agg()) {
       has_agg = true;
     }
-    if (else_ti.is_string() && !else_ti.is_dict_encoded_string() &&
+    if (else_type->isString() &&
         !std::dynamic_pointer_cast<const hdk::ir::ColumnVar>(else_e)) {
-      CHECK(else_ti.is_none_encoded_string());
-      none_encoded_literal_ti =
-          none_encoded_literal_ti.get_type() == kNULLT
-              ? else_ti
-              : common_string_type(none_encoded_literal_ti, else_ti, executor);
+      none_encoded_literal_type =
+          none_encoded_literal_type
+              ? common_string_type(none_encoded_literal_type, else_type, executor)
+              : else_type;
     } else {
-      if (ti.get_type() == kNULLT) {
-        ti = else_ti;
+      if (type == nullptr) {
+        type = else_type;
       } else if (expr_is_null(else_e.get())) {
-        ti.set_notnull(false);
-        else_e->set_type_info(ti);
-      } else if (ti != else_ti) {
-        ti.set_notnull(false);
-        if (ti.is_string() && else_ti.is_string()) {
+        type = type->withNullable(true);
+        else_e->set_type_info(type);
+      } else if (!type->equal(else_type)) {
+        type = type->withNullable(true);
+        if ((type->isString() || type->isExtDictionary()) &&
+            (else_type->isString() || else_type->isExtDictionary())) {
           // Executor is needed to determine which dictionary is the largest
           // in case of two dictionary types with different encodings
-          ti = common_string_type(ti, else_ti, executor);
-        } else if (ti.is_number() && else_ti.is_number()) {
-          ti = common_numeric_type(ti, else_ti);
-        } else if (ti.is_boolean() && else_ti.is_boolean()) {
-          ti = common_numeric_type(ti, else_ti);
-        } else if (get_logical_type_info(ti) != get_logical_type_info(else_ti)) {
+          type = common_string_type(type, else_type, executor);
+        } else if (type->isNumber() && else_type->isNumber()) {
+          type = common_numeric_type(type, else_type);
+        } else if (type->isBoolean() && else_type->isBoolean()) {
+          type = common_numeric_type(type, else_type);
+        } else if (!logicalType(type)->equal(logicalType(else_type))) {
           throw std::runtime_error(
               // types differing by encoding will be resolved at decode
               "Expressions in ELSE clause must be of the same or compatible types as "
@@ -879,36 +738,37 @@ hdk::ir::ExprPtr normalizeCaseExpr(
         }
       }
     }
-  } else {
-    ti.set_notnull(false);
+  } else if (type) {
+    type = type->withNullable(true);
   }
 
-  if (ti.get_type() == kNULLT && none_encoded_literal_ti.get_type() != kNULLT) {
+  if ((!type || type->isNull()) && none_encoded_literal_type) {
     // If we haven't set a type so far it's because
     // every case sub-expression has a none-encoded
     // literal output. Make this our output type
-    ti = none_encoded_literal_ti;
+    type = none_encoded_literal_type;
+  }
+
+  if (!type || type->isNull()) {
+    throw std::runtime_error(
+        "Cannot deduce the type for case expressions, all branches null");
   }
 
   std::list<std::pair<hdk::ir::ExprPtr, hdk::ir::ExprPtr>> cast_expr_pair_list;
   for (auto p : expr_pair_list) {
     cast_expr_pair_list.emplace_back(p.first,
-                                     executor ? p.second->add_cast(ti) : p.second);
+                                     executor ? p.second->add_cast(type) : p.second);
   }
   if (else_e != nullptr) {
-    else_e = executor ? else_e->add_cast(ti) : else_e;
+    else_e = executor ? else_e->add_cast(type) : else_e;
   } else {
     Datum d;
     // always create an else expr so that executor doesn't need to worry about it
-    else_e = hdk::ir::makeExpr<hdk::ir::Constant>(ti, true, d);
-  }
-  if (ti.get_type() == kNULLT) {
-    throw std::runtime_error(
-        "Cannot deduce the type for case expressions, all branches null");
+    else_e = hdk::ir::makeExpr<hdk::ir::Constant>(type, true, d);
   }
 
-  auto case_expr =
-      hdk::ir::makeExpr<hdk::ir::CaseExpr>(ti, has_agg, cast_expr_pair_list, else_e);
+  auto case_expr = hdk::ir::makeExpr<hdk::ir::CaseExpr>(
+      type, has_agg, std::move(cast_expr_pair_list), else_e);
   return case_expr;
 }
 
@@ -917,18 +777,15 @@ hdk::ir::ExprPtr getLikeExpr(hdk::ir::ExprPtr arg_expr,
                              hdk::ir::ExprPtr escape_expr,
                              const bool is_ilike,
                              const bool is_not) {
-  if (!arg_expr->get_type_info().is_string()) {
+  if (!arg_expr->type()->isString() && !arg_expr->type()->isExtDictionary()) {
     throw std::runtime_error("expression before LIKE must be of a string type.");
   }
-  if (!like_expr->get_type_info().is_string()) {
+  if (!like_expr->type()->isString() && !like_expr->type()->isExtDictionary()) {
     throw std::runtime_error("expression after LIKE must be of a string type.");
   }
   char escape_char = '\\';
   if (escape_expr != nullptr) {
-    if (!escape_expr->get_type_info().is_string()) {
-      throw std::runtime_error("expression after ESCAPE must be of a string type.");
-    }
-    if (!escape_expr->get_type_info().is_string()) {
+    if (!escape_expr->type()->isString()) {
       throw std::runtime_error("expression after ESCAPE must be of a string type.");
     }
     auto c = std::dynamic_pointer_cast<hdk::ir::Constant>(escape_expr);
@@ -962,18 +819,18 @@ hdk::ir::ExprPtr getRegexpExpr(hdk::ir::ExprPtr arg_expr,
                                hdk::ir::ExprPtr pattern_expr,
                                hdk::ir::ExprPtr escape_expr,
                                const bool is_not) {
-  if (!arg_expr->get_type_info().is_string()) {
+  if (!arg_expr->type()->isString() && !arg_expr->type()->isExtDictionary()) {
     throw std::runtime_error("expression before REGEXP must be of a string type.");
   }
-  if (!pattern_expr->get_type_info().is_string()) {
+  if (!pattern_expr->type()->isString() && !pattern_expr->type()->isExtDictionary()) {
     throw std::runtime_error("expression after REGEXP must be of a string type.");
   }
   char escape_char = '\\';
   if (escape_expr != nullptr) {
-    if (!escape_expr->get_type_info().is_string()) {
+    if (!escape_expr->type()->isString()) {
       throw std::runtime_error("expression after ESCAPE must be of a string type.");
     }
-    if (!escape_expr->get_type_info().is_string()) {
+    if (!escape_expr->type()->isString()) {
       throw std::runtime_error("expression after ESCAPE must be of a string type.");
     }
     auto c = std::dynamic_pointer_cast<hdk::ir::Constant>(escape_expr);
