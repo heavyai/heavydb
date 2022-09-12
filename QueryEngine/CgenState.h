@@ -25,6 +25,7 @@
 #include "../Analyzer/Analyzer.h"
 #include "../Shared/InsertionOrderedMap.h"
 #include "IR/Expr.h"
+#include "QueryEngine/ExtensionModules.h"
 
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/IRBuilder.h>
@@ -40,8 +41,11 @@ struct CgenState {
  public:
   CgenState(const size_t num_query_infos,
             const bool contains_left_deep_outer_join,
+            ExtensionModuleContext* ext_module_context,
             Executor* executor);
-  CgenState(const size_t num_query_infos, const bool contains_left_deep_outer_join);
+  CgenState(const size_t num_query_infos,
+            const bool contains_left_deep_outer_join,
+            ExtensionModuleContext* ext_module_context);
   CgenState(const Config& config, llvm::LLVMContext& context);
 
   size_t getOrAddLiteral(const hdk::ir::Constant* constant,
@@ -301,8 +305,6 @@ struct CgenState {
 
   void replaceFunctionForGpu(const std::string& fcn_to_replace, llvm::Function* fn);
 
-  std::shared_ptr<Executor> getExecutor() const;
-  llvm::LLVMContext& getExecutorContext() const;
   void set_module_shallow_copy(const std::unique_ptr<llvm::Module>& module,
                                bool always_clone = false);
 
@@ -346,6 +348,9 @@ struct CgenState {
   llvm::ValueToValueMapTy vmap_;  // used for cloning the runtime module
   llvm::IRBuilder<> ir_builder_;
   std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;
+
+  ExtensionModuleContext* ext_module_context_;
+
   struct FunctionOperValue {
     const hdk::ir::FunctionOper* foper;
     llvm::Value* lv;

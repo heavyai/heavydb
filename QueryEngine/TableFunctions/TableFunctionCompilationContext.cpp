@@ -223,7 +223,8 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
   auto cgen_state = executor_->getCgenStatePtr();
   CHECK(cgen_state);
   CHECK(cgen_state->module_ == nullptr);
-  cgen_state->set_module_shallow_copy(executor_->get_rt_module(/*is_l0=*/false));
+  cgen_state->set_module_shallow_copy(
+      executor_->getExtensionModuleContext()->getRTModule(/*is_l0=*/false));
 
   entry_point_func_ = generate_entry_point(cgen_state);
 
@@ -239,7 +240,7 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
 bool TableFunctionCompilationContext::passColumnsByValue(
     const TableFunctionExecutionUnit& exe_unit,
     bool is_gpu) {
-  auto mod = executor_->get_rt_udf_module(is_gpu).get();
+  auto mod = executor_->getExtModuleContext()->getRTUdfModule(is_gpu).get();
   if (mod != nullptr) {
     auto* flag = mod->getModuleFlag("pass_column_arguments_by_value");
     if (auto* cnt = llvm::mdconst::extract_or_null<llvm::ConstantInt>(flag)) {
@@ -519,10 +520,11 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
   auto cgen_state = executor_->getCgenStatePtr();
   auto is_gpu = co.device_type == ExecutorDeviceType::GPU;
   if (executor_->has_rt_udf_module(is_gpu)) {
-    CodeGenerator::link_udf_module(executor_->get_rt_udf_module(is_gpu),
-                                   *(cgen_state->module_),
-                                   cgen_state,
-                                   llvm::Linker::Flags::OverrideFromSrc);
+    CodeGenerator::link_udf_module(
+        executor_->getExtModuleContext()->getRTUdfModule(is_gpu),
+        *(cgen_state->module_),
+        cgen_state,
+        llvm::Linker::Flags::OverrideFromSrc);
   }
 
   // Add code to cache?
@@ -536,10 +538,11 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
     target = {executor_->cudaMgr(), executor_->blockSize(), cgen_state, false};
   }
 
-  auto backend = compiler::getBackend(co.device_type,
-                                      executor_->get_extension_modules(),
-                                      /*is_gpu_smem_used=*/false,
-                                      target);
+  auto backend =
+      compiler::getBackend(co.device_type,
+                           executor_->getExtensionModuleContext()->getExtensionModules(),
+                           /*is_gpu_smem_used=*/false,
+                           target);
   auto ctx = backend->generateNativeCode(
       entry_point_func_, kernel_func_, {entry_point_func_, kernel_func_}, co);
 

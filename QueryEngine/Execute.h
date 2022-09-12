@@ -332,7 +332,7 @@ class Executor {
 
   void clearCaches(bool runtime_only = false);
 
-  void reset(bool discard_runtime_modules_only = false);
+  void reset(const bool discard_runtime_modules_only = false);
 
   static void resetAllExecutors(bool discard_runtime_modules_only = false) {
     mapd_unique_lock<mapd_shared_mutex> flush_lock(
@@ -373,27 +373,6 @@ class Executor {
   static std::map<ExtModuleKinds, std::string> extension_module_sources;
   static void initialize_extension_module_sources();
 
-  // Convenience functions for retrieving executor-local extension modules, thread-safe:
-  const std::unique_ptr<llvm::Module>& get_rt_module(bool is_l0) const {
-    return get_extension_module(is_l0 ? ExtModuleKinds::l0_template_module
-                                      : ExtModuleKinds::template_module);
-  }
-  const std::unique_ptr<llvm::Module>& get_udf_module(bool is_gpu = false) const {
-    return get_extension_module(
-        (is_gpu ? ExtModuleKinds::udf_gpu_module : ExtModuleKinds::udf_cpu_module));
-  }
-  const std::unique_ptr<llvm::Module>& get_rt_udf_module(bool is_gpu = false) const {
-    std::shared_lock lock(Executor::register_runtime_extension_functions_mutex_);
-    return get_extension_module(
-        (is_gpu ? ExtModuleKinds::rt_udf_gpu_module : ExtModuleKinds::rt_udf_cpu_module));
-  }
-  const std::unique_ptr<llvm::Module>& get_libdevice_module() const {
-    return get_extension_module(ExtModuleKinds::rt_libdevice_module);
-  }
-
-  bool has_rt_module() const {
-    return has_extension_module(ExtModuleKinds::template_module);
-  }
   bool has_udf_module(bool is_gpu = false) const {
     return has_extension_module(
         (is_gpu ? ExtModuleKinds::udf_gpu_module : ExtModuleKinds::udf_cpu_module));
@@ -406,10 +385,9 @@ class Executor {
     return has_extension_module(ExtModuleKinds::rt_libdevice_module);
   }
 
-  const std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>>& get_extension_modules()
-      const {
-    // todo: thread safety?
-    return extension_modules_;
+  ExtensionModuleContext* getExtensionModuleContext() const {
+    CHECK(extension_module_context_);
+    return extension_module_context_.get();
   }
 
   /**
@@ -1116,20 +1094,17 @@ class Executor {
   ConfigPtr config_;
   std::unique_ptr<CgenState> cgen_state_;
 
-  const std::unique_ptr<llvm::Module>& get_extension_module(ExtModuleKinds kind) const {
-    auto it = extension_modules_.find(kind);
-    if (it != extension_modules_.end()) {
-      return it->second;
-    }
-    static const std::unique_ptr<llvm::Module> empty;
-    return empty;
+  ExtensionModuleContext* getExtModuleContext() const {
+    CHECK(extension_module_context_);
+    return extension_module_context_.get();
   }
 
   bool has_extension_module(ExtModuleKinds kind) const {
-    return extension_modules_.find(kind) != extension_modules_.end();
+    auto& extension_modules = getExtModuleContext()->getExtensionModules();
+    return extension_modules.find(kind) != extension_modules.end();
   }
 
-  std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>> extension_modules_;
+  std::unique_ptr<ExtensionModuleContext> extension_module_context_;
 
   class FetchCacheAnchor {
    public:
@@ -1261,6 +1236,7 @@ class Executor {
   // Runtime extension function registration updates
   // extension_modules_ that needs to be kept blocked from codegen
   // until the update is complete.
+  // TODO(adb): move to ExtensionModuleContext?
   static std::shared_mutex register_runtime_extension_functions_mutex_;
 
   static std::mutex kernel_mutex_;  // TODO: should this be executor-local mutex?
@@ -1286,6 +1262,7 @@ class Executor {
   friend class QueryRewriter;
   friend class PendingExecutionClosure;
   friend class RelAlgExecutor;
+  friend class GpuReductionHelperJIT;  // ExtensionModuleContext
   friend class TableFunctionCompilationContext;
   friend class TableFunctionExecutionContext;
   friend struct TargetExprCodegenBuilder;

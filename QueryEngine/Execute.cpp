@@ -159,7 +159,6 @@ Executor::Executor(const ExecutorId executor_id,
     : executor_id_(executor_id)
     , context_(new llvm::LLVMContext())
     , config_(config)
-    , cgen_state_(new CgenState({}, false, this))
     , block_size_x_(block_size_x)
     , grid_size_x_(grid_size_x)
     , max_gpu_slab_size_(max_gpu_slab_size)
@@ -170,6 +169,10 @@ Executor::Executor(const ExecutorId executor_id,
     , temporary_tables_(nullptr)
     , input_table_info_cache_(this)
     , thread_id_(logger::thread_id()) {
+  extension_module_context_ = std::make_unique<ExtensionModuleContext>();
+  cgen_state_ =
+      std::make_unique<CgenState>(0, false, extension_module_context_.get(), this);
+
   std::call_once(first_init_flag_, [this]() {
     query_plan_dag_cache_ =
         std::make_unique<QueryPlanDagCache>(config_->cache.dag_cache_size);
@@ -207,24 +210,22 @@ void Executor::initialize_extension_module_sources() {
   }
 }
 
-void Executor::reset(bool discard_runtime_modules_only) {
+void Executor::reset(const bool discard_runtime_modules_only) {
   // TODO: keep cached results that do not depend on runtime UDF/UDTFs
   s_code_accessor->clear();
   s_stubs_accessor->clear();
   cpu_code_accessor->clear();
   gpu_code_accessor->clear();
 
+  CHECK(extension_module_context_);
+  extension_module_context_->clear(discard_runtime_modules_only);
+
   if (discard_runtime_modules_only) {
-    extension_modules_.erase(ExtModuleKinds::rt_udf_cpu_module);
-#ifdef HAVE_CUDA
-    extension_modules_.erase(ExtModuleKinds::rt_udf_gpu_module);
-#endif
     cgen_state_->module_ = nullptr;
   } else {
-    extension_modules_.clear();
     cgen_state_.reset();
     context_.reset(new llvm::LLVMContext());
-    cgen_state_.reset(new CgenState({}, false, this));
+    cgen_state_.reset(new CgenState({}, false, getExtensionModuleContext(), this));
   }
 }
 
@@ -261,15 +262,18 @@ void Executor::update_extension_modules(bool update_runtime_modules_only) {
     }
   };
   auto update_module = [&](ExtModuleKinds module_kind, bool erase_not_found = false) {
+    CHECK(extension_module_context_);
+    auto& extension_modules = extension_module_context_->getExtensionModules();
+
     auto it = Executor::extension_module_sources.find(module_kind);
     if (it != Executor::extension_module_sources.end()) {
       auto llvm_module = read_module(module_kind, it->second);
       if (llvm_module) {
-        extension_modules_[module_kind] = std::move(llvm_module);
+        extension_modules[module_kind] = std::move(llvm_module);
       } else if (erase_not_found) {
-        extension_modules_.erase(module_kind);
+        extension_modules.erase(module_kind);
       } else {
-        if (extension_modules_.find(module_kind) == extension_modules_.end()) {
+        if (extension_modules.find(module_kind) == extension_modules.end()) {
           LOG(WARNING) << "Failed to update " << ::toString(module_kind)
                        << " LLVM module. The module will be unavailable.";
         } else {
@@ -279,9 +283,9 @@ void Executor::update_extension_modules(bool update_runtime_modules_only) {
       }
     } else {
       if (erase_not_found) {
-        extension_modules_.erase(module_kind);
+        extension_modules.erase(module_kind);
       } else {
-        if (extension_modules_.find(module_kind) == extension_modules_.end()) {
+        if (extension_modules.find(module_kind) == extension_modules.end()) {
           LOG(WARNING) << "Source of " << ::toString(module_kind)
                        << " LLVM module is unavailable. The module will be unavailable.";
         } else {
@@ -321,7 +325,8 @@ Executor::CgenStateManager::CgenStateManager(Executor& executor)
     , cgen_state_(std::move(executor_.cgen_state_))  // store old CgenState instance
 {
   executor_.compilation_queue_time_ms_ += timer_stop(lock_queue_clock_);
-  executor_.cgen_state_.reset(new CgenState(0, false, &executor));
+  executor_.cgen_state_.reset(
+      new CgenState(0, false, executor.getExtensionModuleContext(), &executor));
 }
 
 Executor::CgenStateManager::CgenStateManager(
@@ -3535,8 +3540,10 @@ void Executor::nukeOldState(const bool allow_lazy_fetch,
                                   [](const JoinCondition& join_condition) {
                                     return join_condition.type == JoinType::LEFT;
                                   }) != ra_exe_unit->join_quals.end();
-  cgen_state_.reset(
-      new CgenState(query_infos.size(), contains_left_deep_outer_join, this));
+  cgen_state_.reset(new CgenState(query_infos.size(),
+                                  contains_left_deep_outer_join,
+                                  getExtensionModuleContext(),
+                                  this));
   plan_state_.reset(new PlanState(
       allow_lazy_fetch && !contains_left_deep_outer_join, query_infos, this));
 }
@@ -4445,6 +4452,13 @@ bool Executor::checkNonKernelTimeInterrupted() const {
   auto flag_it = queries_interrupt_flag_.find(current_query_session_);
   return !current_query_session_.empty() && flag_it != queries_interrupt_flag_.end() &&
          flag_it->second;
+}
+
+const std::unique_ptr<llvm::Module>& ExtensionModuleContext::getRTUdfModule(
+    bool is_gpu) const {
+  std::shared_lock lock(Executor::register_runtime_extension_functions_mutex_);
+  return getExtensionModule(
+      (is_gpu ? ExtModuleKinds::rt_udf_gpu_module : ExtModuleKinds::rt_udf_cpu_module));
 }
 
 std::map<int, std::shared_ptr<Executor>> Executor::executors_;

@@ -591,9 +591,11 @@ ReductionCode ResultSetReductionJIT::codegen() const {
         reinterpret_cast<ReductionCode::FuncPtr>(compilation_context->get()->func());
     return reduction_code;
   }
-  auto cgen_state_ = std::unique_ptr<CgenState>(new CgenState({}, false, executor.get()));
+  auto cgen_state_ = std::unique_ptr<CgenState>(
+      new CgenState({}, false, executor->getExtensionModuleContext(), executor.get()));
   auto cgen_state = reduction_code.cgen_state = cgen_state_.get();
-  cgen_state->set_module_shallow_copy(executor->get_rt_module(/*is_l0=*/false));
+  cgen_state->set_module_shallow_copy(
+      executor->getExtensionModuleContext()->getRTModule(/*is_l0=*/false));
   reduction_code.module = cgen_state->module_;
 
   AUTOMATIC_IR_METADATA(cgen_state);
@@ -1310,10 +1312,12 @@ ReductionCode GpuReductionHelperJIT::codegen() const {
   reduceLoop(reduction_code);
   auto executor = Executor::getExecutorFromMap(executor_id_);
   CHECK(executor) << executor_id_;
-  auto cgen_state_ = std::unique_ptr<CgenState>(new CgenState({}, false, executor.get()));
+  auto cgen_state_ = std::make_unique<CgenState>(
+      0, false, executor->getExtModuleContext(), executor.get());
   auto cgen_state = reduction_code.cgen_state = cgen_state_.get();
   // CHECK(executor->thread_id_ == logger::thread_id());  // do we need compilation mutex?
-  cgen_state->set_module_shallow_copy(executor->get_rt_module(/*is_l0=*/false));
+  cgen_state->set_module_shallow_copy(
+      executor->getExtensionModuleContext()->getRTModule(/*is_l0=*/false));
   reduction_code.module = cgen_state->module_;
 
   AUTOMATIC_IR_METADATA(cgen_state);

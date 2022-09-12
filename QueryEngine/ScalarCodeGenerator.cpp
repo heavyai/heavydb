@@ -93,7 +93,9 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
   auto scalar_expr_func = llvm::Function::Create(
       ft, llvm::Function::ExternalLinkage, "scalar_expr", module_.get());
   auto bb_entry = llvm::BasicBlock::Create(ctx, ".entry", scalar_expr_func, 0);
-  own_cgen_state_ = std::make_unique<CgenState>(g_table_infos.size(), false);
+  // Scalar Code Generator uses the provided module, pass nullptr for extension module
+  own_cgen_state_ = std::make_unique<CgenState>(
+      g_table_infos.size(), false, /*extension_module_context=*/nullptr);
   own_cgen_state_->module_ = module_.get();
   own_cgen_state_->row_func_ = own_cgen_state_->current_func_ = scalar_expr_func;
   own_cgen_state_->ir_builder_.SetInsertPoint(bb_entry);
@@ -194,15 +196,15 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
                           /*.row_func_not_inlined=*/false};
   switch (gpu_mgr_->getPlatform()) {
     case GpuMgrPlatform::CUDA: {
-      auto cuda_context =
-          compiler::CUDABackend::generateNativeGPUCode(executor->get_extension_modules(),
-                                                       func,
-                                                       wrapper_func,
-                                                       {func, wrapper_func},
-                                                       /*is_gpu_smem_used=*/false,
-                                                       co,
-                                                       gpu_target,
-                                                       nvptx_target_machine_.get());
+      auto cuda_context = compiler::CUDABackend::generateNativeGPUCode(
+          executor->getExtensionModuleContext()->getExtensionModules(),
+          func,
+          wrapper_func,
+          {func, wrapper_func},
+          /*is_gpu_smem_used=*/false,
+          co,
+          gpu_target,
+          nvptx_target_machine_.get());
       gpu_compilation_context_ = cuda_context;
       return cuda_context->getNativeFunctionPointers();
     }

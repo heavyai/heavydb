@@ -25,6 +25,7 @@
 
 CgenState::CgenState(const size_t num_query_infos,
                      const bool contains_left_deep_outer_join,
+                     ExtensionModuleContext* ext_module_context,
                      Executor* executor)
     : executor_id_(executor->getExecutorId())
     , module_(nullptr)
@@ -37,19 +38,22 @@ CgenState::CgenState(const size_t num_query_infos,
     , filter_func_call_(nullptr)
     , context_(executor->getContext())
     , ir_builder_(context_)
+    , ext_module_context_(ext_module_context)
     , contains_left_deep_outer_join_(contains_left_deep_outer_join)
     , outer_join_match_found_per_level_(std::max(num_query_infos, size_t(1)) - 1)
     , needs_error_check_(false)
     , automatic_ir_metadata_(executor->getConfig().debug.enable_automatic_ir_metadata)
     , query_func_(nullptr)
-    , query_func_entry_ir_builder_(context_){};
+    , query_func_entry_ir_builder_(context_) {}
 
 // scalar code generator constructor
 CgenState::CgenState(const size_t num_query_infos,
-                     const bool contains_left_deep_outer_join)
+                     const bool contains_left_deep_outer_join,
+                     ExtensionModuleContext* ext_module_context)
     : CgenState(
           num_query_infos,
           contains_left_deep_outer_join,
+          ext_module_context,
           Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get()) {}
 
 CgenState::CgenState(const Config& config, llvm::LLVMContext& context)
@@ -58,6 +62,7 @@ CgenState::CgenState(const Config& config, llvm::LLVMContext& context)
     , row_func_(nullptr)
     , context_(context)
     , ir_builder_(context_)
+    , ext_module_context_(nullptr)
     , contains_left_deep_outer_join_(false)
     , needs_error_check_(false)
     , automatic_ir_metadata_(config.debug.enable_automatic_ir_metadata)
@@ -186,7 +191,7 @@ void CgenState::maybeCloneFunctionRecursive(llvm::Function* fn, bool is_l0) {
   }
 
   // Get the implementation from the runtime module.
-  auto func_impl = getExecutor()->get_rt_module(is_l0)->getFunction(fn->getName());
+  auto func_impl = ext_module_context_->getRTModule(is_l0)->getFunction(fn->getName());
   CHECK(func_impl) << fn->getName().str();
 
   if (func_impl->isDeclaration()) {
@@ -361,17 +366,6 @@ void CgenState::replaceFunctionForGpu(const std::string& fcn_to_replace,
       }
     }
   }
-}
-
-std::shared_ptr<Executor> CgenState::getExecutor() const {
-  CHECK(executor_id_ != Executor::INVALID_EXECUTOR_ID);
-  auto executor = Executor::getExecutorFromMap(executor_id_);
-  CHECK(executor);
-  return executor;
-}
-
-llvm::LLVMContext& CgenState::getExecutorContext() const {
-  return getExecutor()->getContext();
 }
 
 void CgenState::set_module_shallow_copy(const std::unique_ptr<llvm::Module>& llvm_module,

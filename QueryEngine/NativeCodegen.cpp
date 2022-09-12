@@ -1466,19 +1466,23 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
   CHECK(cgen_state_->module_ == nullptr);
-  cgen_state_->set_module_shallow_copy(get_rt_module(is_l0), /*always_clone=*/true);
+  cgen_state_->set_module_shallow_copy(getExtensionModuleContext()->getRTModule(is_l0),
+                                       /*always_clone=*/true);
 
   if (is_gpu) {
     cgen_state_->module_->setDataLayout(compiler::get_gpu_data_layout());
     cgen_state_->module_->setTargetTriple(compiler::get_gpu_target_triple_string());
   }
   if (has_udf_module(/*is_gpu=*/is_gpu)) {
-    CodeGenerator::link_udf_module(
-        get_udf_module(/*is_gpu=*/is_gpu), *cgen_state_->module_, cgen_state_.get());
+    CodeGenerator::link_udf_module(getExtModuleContext()->getUdfModule(/*is_gpu=*/is_gpu),
+                                   *cgen_state_->module_,
+                                   cgen_state_.get());
   }
   if (has_rt_udf_module(/*is_gpu=*/is_gpu)) {
     CodeGenerator::link_udf_module(
-        get_rt_udf_module(/*is_gpu=*/is_gpu), *cgen_state_->module_, cgen_state_.get());
+        getExtModuleContext()->getRTUdfModule(/*is_gpu=*/is_gpu),
+        *cgen_state_->module_,
+        cgen_state_.get());
   }
 
   AUTOMATIC_IR_METADATA(cgen_state_.get());
@@ -1754,7 +1758,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   GPUTarget target{gpu_mgr, blockSize(), cgen_state_.get(), row_func_not_inlined};
   auto backend = compiler::getBackend(co.device_type,
-                                      get_extension_modules(),
+                                      getExtensionModuleContext()->getExtensionModules(),
                                       gpu_smem_context.isSharedMemoryUsed(),
                                       target);
 
