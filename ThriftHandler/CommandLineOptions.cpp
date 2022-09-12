@@ -25,8 +25,8 @@
 using namespace std::string_literals;
 
 #include "CommandLineOptions.h"
-#include "LeafHostInfo.h"
 #include "ImportExport/ForeignDataImporter.h"
+#include "LeafHostInfo.h"
 #include "MapDRelease.h"
 #include "MigrationMgr/MigrationMgr.h"
 #include "QueryEngine/GroupByAndAggregate.h"
@@ -1577,8 +1577,12 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     LOG(INFO) << " Max import threads " << g_max_import_threads;
   }
 
-  LOG(INFO) << " cuda block size " << system_parameters.cuda_block_size;
-  LOG(INFO) << " cuda grid size  " << system_parameters.cuda_grid_size;
+  if (system_parameters.cuda_block_size) {
+    LOG(INFO) << " cuda block size " << system_parameters.cuda_block_size;
+  }
+  if (system_parameters.cuda_grid_size) {
+    LOG(INFO) << " cuda grid size " << system_parameters.cuda_grid_size;
+  }
   LOG(INFO) << " Min CPU buffer pool slab size " << system_parameters.min_cpu_slab_size;
   LOG(INFO) << " Max CPU buffer pool slab size " << system_parameters.max_cpu_slab_size;
   LOG(INFO) << " Min GPU buffer pool slab size " << system_parameters.min_gpu_slab_size;

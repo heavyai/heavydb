@@ -3833,6 +3833,22 @@ unsigned Executor::blockSize() const {
   return block_size_x_ ? block_size_x_ : dev_props.front().maxThreadsPerBlock;
 }
 
+void Executor::setGridSize(unsigned grid_size) {
+  grid_size_x_ = grid_size;
+}
+
+void Executor::resetGridSize() {
+  grid_size_x_ = 0;
+}
+
+void Executor::setBlockSize(unsigned block_size) {
+  block_size_x_ = block_size;
+}
+
+void Executor::resetBlockSize() {
+  block_size_x_ = 0;
+}
+
 size_t Executor::maxGpuSlabSize() const {
   return max_gpu_slab_size_;
 }

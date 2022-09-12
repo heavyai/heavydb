@@ -2421,7 +2421,7 @@ TEST_F(ImportTest, OneParquetFileWithUniqueRowGroups) {
 #ifdef HAVE_AWS_S3
 // s3 parquet test cases
 // FIXME(20220214) Parquet+S3 import is broken
-//TEST_F(ImportTest, S3_One_parquet_file) {
+// TEST_F(ImportTest, S3_One_parquet_file) {
 //  executeLambdaAndAssertException(
 //      [&]() {
 //        EXPECT_TRUE(importTestS3(
@@ -2432,12 +2432,12 @@ TEST_F(ImportTest, OneParquetFileWithUniqueRowGroups) {
 //            {{"REGEX_PATH_FILTER", ".*\\.parquet$"}}));
 //      },
 //      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
-//      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime, "
-//      "OmniSci column: pickup_datetime, Parquet file: "
+//      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime,
+//      " "OmniSci column: pickup_datetime, Parquet file: "
 //      "mapd-parquet-testdata/trip.parquet/"
 //      "part-00000-0284f745-1595-4743-b5c4-3aa0262e4de3-c000.snappy.parquet.");
 //}
-//TEST_F(ImportTest, S3_One_parquet_file_drop) {
+// TEST_F(ImportTest, S3_One_parquet_file_drop) {
 //  executeLambdaAndAssertException(
 //      [&]() {
 //        EXPECT_TRUE(importTestS3(
@@ -2453,19 +2453,19 @@ TEST_F(ImportTest, OneParquetFileWithUniqueRowGroups) {
 //      "mapd-parquet-testdata/trip+1.parquet/"
 //      "part-00000-00496d78-a271-4067-b637-cf955cc1cece-c000.snappy.parquet.");
 //}
-//TEST_F(ImportTest, S3_All_parquet_file) {
+// TEST_F(ImportTest, S3_All_parquet_file) {
 //  executeLambdaAndAssertException(
 //      [&]() {
 //        EXPECT_TRUE(importTestS3(
 //            "trip.parquet", "", 1200, 1.0, {{"REGEX_PATH_FILTER", ".*\\.parquet$"}}));
 //      },
 //      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
-//      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime, "
-//      "OmniSci column: pickup_datetime, Parquet file: "
+//      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime,
+//      " "OmniSci column: pickup_datetime, Parquet file: "
 //      "mapd-parquet-testdata/trip.parquet/"
 //      "part-00000-0284f745-1595-4743-b5c4-3aa0262e4de3-c000.snappy.parquet.");
 //}
-//TEST_F(ImportTest, S3_All_parquet_file_drop) {
+// TEST_F(ImportTest, S3_All_parquet_file_drop) {
 //  executeLambdaAndAssertException(
 //      [&]() {
 //        EXPECT_TRUE(importTestS3(
@@ -2477,7 +2477,7 @@ TEST_F(ImportTest, OneParquetFileWithUniqueRowGroups) {
 //      "mapd-parquet-testdata/trip+1.parquet/"
 //      "part-00000-00496d78-a271-4067-b637-cf955cc1cece-c000.snappy.parquet.");
 //}
-//TEST_F(ImportTest, S3_Regex_path_filter_parquet_match) {
+// TEST_F(ImportTest, S3_Regex_path_filter_parquet_match) {
 //  executeLambdaAndAssertException(
 //      [&]() {
 //        EXPECT_TRUE(importTestS3("trip.parquet",
@@ -2489,8 +2489,8 @@ TEST_F(ImportTest, OneParquetFileWithUniqueRowGroups) {
 //                                   "c000.snappy.parquet$"}}));
 //      },
 //      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
-//      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime, "
-//      "OmniSci column: pickup_datetime, Parquet file: "
+//      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime,
+//      " "OmniSci column: pickup_datetime, Parquet file: "
 //      "mapd-parquet-testdata/trip.parquet/"
 //      "part-00000-9109acad-a559-4a00-b05c-878aeb8bca24-c000.snappy.parquet.");
 //}
@@ -3658,9 +3658,9 @@ class SortedImportTest
     if (file_type_ == "csv") {
       options.emplace("parquet", "false");
     } else {
-// FIXME(20220214) Parquet import is broken
-      //CHECK(file_type_ == "parquet");
-      //options.emplace("parquet", "true");
+      // FIXME(20220214) Parquet import is broken
+      // CHECK(file_type_ == "parquet");
+      // options.emplace("parquet", "true");
     }
 #endif
     options.emplace("HEADER", "true");
@@ -3672,29 +3672,35 @@ class SortedImportTest
   }
 };
 
-INSTANTIATE_TEST_SUITE_P(SortedImportTest,
-                         SortedImportTest,
-                         testing::Combine(testing::Values("local"),
-                                          testing::Values("csv"
-// FIXME(20220214) Parquet import is broken
-//#ifdef ENABLE_IMPORT_PARQUET
-//                                                          ,
-//                                                          "parquet"
-//#endif
-                                                          )));
+INSTANTIATE_TEST_SUITE_P(
+    SortedImportTest,
+    SortedImportTest,
+    testing::Combine(
+        testing::Values("local"),
+        testing::Values(
+            "csv"
+            // FIXME(20220214) Parquet import is broken
+            //#ifdef ENABLE_IMPORT_PARQUET
+            //                                                          ,
+            //                                                          "parquet"
+            //#endif
+            )));
 
 #ifdef HAVE_AWS_S3
-INSTANTIATE_TEST_SUITE_P(S3SortedImportTest,
-                         SortedImportTest,
-                         testing::Combine(testing::Values("s3"),
-                                          testing::Values("csv"
+INSTANTIATE_TEST_SUITE_P(
+    S3SortedImportTest,
+    SortedImportTest,
+    testing::Combine(
+        testing::Values("s3"),
+        testing::Values(
+            "csv"
 
-// FIXME(20220214) Parquet+S3 import is broken
-//#ifdef ENABLE_IMPORT_PARQUET
-//                                                          ,
-//                                                          "parquet"
-//#endif
-                                                          )));
+            // FIXME(20220214) Parquet+S3 import is broken
+            //#ifdef ENABLE_IMPORT_PARQUET
+            //                                                          ,
+            //                                                          "parquet"
+            //#endif
+            )));
 #endif  // HAVE_AWS_S3
 
 TEST_P(SortedImportTest, SortedOnPathname) {

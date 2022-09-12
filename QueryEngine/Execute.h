@@ -603,8 +603,12 @@ class Executor {
 
   int8_t warpSize() const;
   unsigned gridSize() const;
+  void setGridSize(unsigned grid_size);
+  void resetGridSize();
   unsigned numBlocksPerMP() const;
   unsigned blockSize() const;
+  void setBlockSize(unsigned block_size);
+  void resetBlockSize();
   size_t maxGpuSlabSize() const;
 
   ResultSetPtr executeWorkUnit(size_t& max_groups_buffer_entry_guess,
@@ -1304,8 +1308,8 @@ class Executor {
   static const size_t baseline_threshold{
       1000000};  // if a perfect hash needs more entries, use baseline
 
-  const unsigned block_size_x_;
-  const unsigned grid_size_x_;
+  unsigned block_size_x_;
+  unsigned grid_size_x_;
   const size_t max_gpu_slab_size_;
   const std::string debug_dir_;
   const std::string debug_file_;

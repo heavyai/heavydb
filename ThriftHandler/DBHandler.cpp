@@ -6395,8 +6395,7 @@ void DBHandler::execute_rel_alg_with_filter_push_down(
 
 void DBHandler::execute_distributed_copy_statement(
     Parser::CopyTableStmt* copy_stmt,
-    const Catalog_Namespace::SessionInfo& session_info) {
-}
+    const Catalog_Namespace::SessionInfo& session_info) {}
 
 std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
     QueryStateProxy query_state_proxy,

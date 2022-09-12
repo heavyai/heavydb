@@ -2501,6 +2501,43 @@ class RelAlgDag : public boost::noncopyable {
               global_query_hint.aggregate_tree_fanout = aggregate_tree_fanout;
             }
           }
+          break;
+        }
+        case QueryHint::kCudaBlockSize: {
+          CHECK_EQ(1u, target.getListOptions().size());
+          int cuda_block_size = std::stoi(target.getListOptions()[0]);
+          if (cuda_block_size <= 0) {
+            VLOG(1) << "CUDA block size should be larger than zero";
+          } else if (cuda_block_size > 1024) {
+            VLOG(1) << "CUDA block size should be less or equal to 1024";
+          } else {
+            query_hint.registerHint(QueryHint::kCudaBlockSize);
+            query_hint.cuda_block_size = cuda_block_size;
+            if (target.isGlobalHint()) {
+              global_query_hint.registerHint(QueryHint::kCudaBlockSize);
+              global_query_hint.cuda_block_size = cuda_block_size;
+            }
+          }
+          break;
+        }
+        case QueryHint::kCudaGridSize: {
+          CHECK_EQ(1u, target.getListOptions().size());
+          double cuda_grid_size_multiplier = std::stod(target.getListOptions()[0]);
+          double min_grid_size_multiplier{0};
+          double max_grid_size_multiplier{1024};
+          if (cuda_grid_size_multiplier <= min_grid_size_multiplier) {
+            VLOG(1) << "CUDA grid size multiplier should be larger than zero";
+          } else if (cuda_grid_size_multiplier > max_grid_size_multiplier) {
+            VLOG(1) << "CUDA grid size multiplier should be less than 1024";
+          } else {
+            query_hint.registerHint(QueryHint::kCudaGridSize);
+            query_hint.cuda_grid_size_multiplier = cuda_grid_size_multiplier;
+            if (target.isGlobalHint()) {
+              global_query_hint.registerHint(QueryHint::kCudaGridSize);
+              global_query_hint.cuda_grid_size_multiplier = cuda_grid_size_multiplier;
+            }
+          }
+          break;
         }
         default:
           break;

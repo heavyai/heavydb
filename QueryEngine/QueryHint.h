@@ -38,6 +38,8 @@ enum QueryHint {
   kKeepResult,
   kKeepTableFuncResult,
   kAggregateTreeFanout,
+  kCudaBlockSize,
+  kCudaGridSize,
   kHintCount,   // should be at the last elem before INVALID enum value to count #
                 // supported hints correctly
   kInvalidHint  // this should be the last elem of this enum
@@ -54,7 +56,10 @@ static const std::unordered_map<std::string, QueryHint> SupportedQueryHints = {
     {"overlaps_keys_per_bin", QueryHint::kOverlapsKeysPerBin},
     {"keep_result", QueryHint::kKeepResult},
     {"keep_table_function_result", QueryHint::kKeepTableFuncResult},
-    {"aggregate_tree_fanout", QueryHint::kAggregateTreeFanout}};
+    {"aggregate_tree_fanout", QueryHint::kAggregateTreeFanout},
+    {"cuda_block_size", QueryHint::kCudaBlockSize},
+    {"cuda_grid_size_multiplier", QueryHint::kCudaGridSize},
+};
 
 struct HintIdentifier {
   bool global_hint;
@@ -153,6 +158,10 @@ struct RegisteredQueryHint {
       : cpu_mode(false)
       , columnar_output(false)
       , rowwise_output(false)
+      , keep_result(false)
+      , keep_table_function_result(false)
+      , cuda_block_size(0)
+      , cuda_grid_size_multiplier(0.0)
       , aggregate_tree_fanout(8)
       , overlaps_bucket_threshold(std::numeric_limits<double>::max())
       , overlaps_max_size(g_overlaps_max_table_size_bytes)
@@ -182,6 +191,15 @@ struct RegisteredQueryHint {
           }
           case static_cast<int>(QueryHint::kRowwiseOutput): {
             updated_query_hints.rowwise_output = true;
+            break;
+          }
+          case static_cast<int>(QueryHint::kCudaBlockSize): {
+            updated_query_hints.cuda_block_size = global_hints.cuda_block_size;
+            break;
+          }
+          case static_cast<int>(QueryHint::kCudaGridSize): {
+            updated_query_hints.cuda_grid_size_multiplier =
+                global_hints.cuda_grid_size_multiplier;
             break;
           }
           case static_cast<int>(QueryHint::kOverlapsBucketThreshold): {
@@ -231,6 +249,10 @@ struct RegisteredQueryHint {
   bool rowwise_output;
   bool keep_result;
   bool keep_table_function_result;
+
+  // control CUDA behavior
+  size_t cuda_block_size;
+  double cuda_grid_size_multiplier;
 
   // window function framing
   size_t aggregate_tree_fanout;
