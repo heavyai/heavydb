@@ -606,6 +606,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteAggregateOnGroupByColumn(
         if (target_expr && target_expr->get_type_info().get_type() != SQLTypes::kFLOAT) {
           switch (agg_expr->get_aggtype()) {
             case SQLAgg::kCOUNT:
+            case SQLAgg::kCOUNT_IF:
             case SQLAgg::kAPPROX_COUNT_DISTINCT: {
               if (agg_expr->get_aggtype() == SQLAgg::kCOUNT &&
                   !agg_expr->get_is_distinct()) {

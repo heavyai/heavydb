@@ -265,6 +265,12 @@ constexpr std::array<double, N> inversePowersOf(double const a) {
   return inversePowersOfImpl(a, std::make_index_sequence<N>{});
 }
 
+// Return true if value is equal to any of the other (enum) values.
+template <int... values, typename T>
+inline bool is_any(T&& value) {
+  return (... || (values == value));
+}
+
 // Return pow(10,x).  Single-lookup for x < 20.
 inline double power10(unsigned const x) {
   constexpr unsigned N = 20;

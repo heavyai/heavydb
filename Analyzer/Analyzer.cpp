@@ -2898,8 +2898,14 @@ std::string AggExpr::toString() const {
     case kSAMPLE:
       agg = "SAMPLE";
       break;
-    case kINVALID_AGG:
-      UNREACHABLE();
+    case kMODE:
+      agg = "MODE";
+      break;
+    case kCOUNT_IF:
+      agg = "COUNT_IF";
+      break;
+    default:
+      UNREACHABLE() << "Unhandled aggtype: " << aggtype;
       break;
   }
   std::string str{"(" + agg};

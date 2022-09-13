@@ -31,12 +31,10 @@ inline bool window_function_is_value(const SqlWindowFunctionKind kind) {
     case SqlWindowFunctionKind::LAG:
     case SqlWindowFunctionKind::LEAD:
     case SqlWindowFunctionKind::FIRST_VALUE:
-    case SqlWindowFunctionKind::LAST_VALUE: {
+    case SqlWindowFunctionKind::LAST_VALUE:
       return true;
-    }
-    default: {
+    default:
       return false;
-    }
   }
 }
 
@@ -48,12 +46,20 @@ inline bool window_function_is_aggregate(const SqlWindowFunctionKind kind) {
     case SqlWindowFunctionKind::MAX:
     case SqlWindowFunctionKind::SUM:
     case SqlWindowFunctionKind::COUNT:
-    case SqlWindowFunctionKind::SUM_INTERNAL: {
+    case SqlWindowFunctionKind::SUM_INTERNAL:
+    case SqlWindowFunctionKind::COUNT_IF:
       return true;
-    }
-    default: {
+    default:
       return false;
-    }
+  }
+}
+
+inline bool window_function_conditional_aggregate(const SqlWindowFunctionKind kind) {
+  switch (kind) {
+    case SqlWindowFunctionKind::COUNT_IF:
+      return true;
+    default:
+      return false;
   }
 }
 

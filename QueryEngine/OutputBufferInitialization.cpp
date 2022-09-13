@@ -174,6 +174,7 @@ int64_t get_agg_initial_val(const SQLAgg agg,
     }
     case kAVG:
     case kCOUNT:
+    case kCOUNT_IF:
     case kAPPROX_COUNT_DISTINCT:
       return 0;
     case kAPPROX_QUANTILE:

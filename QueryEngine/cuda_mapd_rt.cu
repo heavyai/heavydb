@@ -428,11 +428,21 @@ __device__ double atomicMin(float* address, float val) {
 }
 
 extern "C" __device__ uint64_t agg_count_shared(uint64_t* agg, const int64_t val) {
-  return static_cast<uint64_t>(atomicAdd(reinterpret_cast<uint32_t*>(agg), 1UL));
+  return static_cast<uint64_t>(atomicAdd(reinterpret_cast<uint32_t*>(agg), 1U));
+}
+
+extern "C" __device__ uint64_t agg_count_if_shared(uint64_t* agg, const int64_t cond) {
+  return cond ? static_cast<uint64_t>(atomicAdd(reinterpret_cast<uint32_t*>(agg), 1U))
+              : static_cast<uint64_t>(*(reinterpret_cast<uint32_t*>(agg)));
 }
 
 extern "C" __device__ uint32_t agg_count_int32_shared(uint32_t* agg, const int32_t val) {
-  return atomicAdd(agg, 1UL);
+  return atomicAdd(agg, 1U);
+}
+
+extern "C" __device__ uint32_t agg_count_if_int32_shared(uint32_t* agg,
+                                                         const int32_t cond) {
+  return cond ? atomicAdd(agg, 1U) : *agg;
 }
 
 extern "C" __device__ uint64_t agg_count_double_shared(uint64_t* agg, const double val) {
@@ -833,12 +843,14 @@ extern "C" __device__ int32_t checked_single_agg_id_float_shared(int32_t* agg,
 #define DATA_T int64_t
 #define ADDR_T uint64_t
 DEF_SKIP_AGG(agg_count)
+DEF_SKIP_AGG(agg_count_if)
 #undef DATA_T
 #undef ADDR_T
 
 #define DATA_T int32_t
 #define ADDR_T uint32_t
 DEF_SKIP_AGG(agg_count_int32)
+DEF_SKIP_AGG(agg_count_if_int32)
 #undef DATA_T
 #undef ADDR_T
 

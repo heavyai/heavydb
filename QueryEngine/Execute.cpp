@@ -1151,7 +1151,8 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
         }
       }
       break;
-    case kCOUNT: {
+    case kCOUNT:
+    case kCOUNT_IF: {
       uint64_t agg_result = 0;
       for (size_t i = 0; i < out_vec_sz; ++i) {
         const uint64_t out = static_cast<uint64_t>(out_vec[i]);
@@ -2274,12 +2275,12 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
       }
     }
     const bool float_argument_input = takes_float_argument(agg_info);
-    if (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
+    if (shared::is_any<kCOUNT, kCOUNT_IF, kAPPROX_COUNT_DISTINCT>(agg_info.agg_kind)) {
       entry.push_back(0);
-    } else if (agg_info.agg_kind == kAVG) {
+    } else if (shared::is_any<kAVG>(agg_info.agg_kind)) {
       entry.push_back(0);
       entry.push_back(0);
-    } else if (agg_info.agg_kind == kSINGLE_VALUE || agg_info.agg_kind == kSAMPLE) {
+    } else if (shared::is_any<kSINGLE_VALUE, kSAMPLE>(agg_info.agg_kind)) {
       if (agg_info.sql_type.is_geometry() && !agg_info.is_varlen_projection) {
         for (int i = 0; i < agg_info.sql_type.get_physical_coord_cols() * 2; i++) {
           entry.push_back(0);
@@ -3472,10 +3473,12 @@ int32_t Executor::executePlanWithoutGroupBy(
       for (int i = 0; i < num_iterations; i++) {
         int64_t val1;
         const bool float_argument_input = takes_float_argument(agg_info);
-        if (is_distinct_target(agg_info) || agg_info.agg_kind == kAPPROX_QUANTILE) {
-          CHECK(agg_info.agg_kind == kCOUNT ||
-                agg_info.agg_kind == kAPPROX_COUNT_DISTINCT ||
-                agg_info.agg_kind == kAPPROX_QUANTILE);
+        if (is_distinct_target(agg_info) ||
+            shared::is_any<kAPPROX_QUANTILE, kMODE>(agg_info.agg_kind)) {
+          bool const check = shared::
+              is_any<kCOUNT, kAPPROX_COUNT_DISTINCT, kAPPROX_QUANTILE, kMODE, kCOUNT_IF>(
+                  agg_info.agg_kind);
+          CHECK(check) << agg_info.agg_kind;
           val1 = out_vec[out_vec_idx][0];
           error_code = 0;
         } else {

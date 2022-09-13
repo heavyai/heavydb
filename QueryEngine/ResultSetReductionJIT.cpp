@@ -1128,6 +1128,7 @@ void ResultSetReductionJIT::reduceOneAggregateSlot(Value* this_ptr1,
                                                    Function* ir_reduce_one_entry) const {
   switch (target_info.agg_kind) {
     case kCOUNT:
+    case kCOUNT_IF:
     case kAPPROX_COUNT_DISTINCT: {
       if (is_distinct_target(target_info)) {
         CHECK_EQ(static_cast<size_t>(chosen_bytes), sizeof(int64_t));

@@ -717,7 +717,7 @@ CountDistinctDescriptors init_count_distinct_descriptors(
           !(arg_ti.is_buffer() || arg_ti.is_geometry())) {  // TODO(alex): allow bitmap
                                                             // implementation for arrays
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
-        if (agg_info.agg_kind == kCOUNT) {
+        if (shared::is_any<kCOUNT, kCOUNT_IF>(agg_info.agg_kind)) {
           bitmap_sz_bits = get_bucketed_cardinality_without_nulls(arg_range_info);
           if (bitmap_sz_bits <= 0 || g_bitmap_memory_limit <= bitmap_sz_bits) {
             count_distinct_impl_type = CountDistinctImplType::UnorderedSet;

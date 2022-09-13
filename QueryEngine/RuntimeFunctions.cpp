@@ -1113,6 +1113,11 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint32_t agg_count_int32(uint32_t* agg,
   return (*agg)++;
 }
 
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint32_t agg_count_if_int32(uint32_t* agg,
+                                                                    const int32_t cond) {
+  return cond ? (*agg)++ : *agg;
+}
+
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t agg_sum_int32(int32_t* agg,
                                                               const int32_t val) {
   const auto old = *agg;
@@ -1215,6 +1220,11 @@ agg_sum_int32_skip_val(int32_t* agg, const int32_t val, const int32_t skip_val) 
   return old;
 }
 
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint64_t agg_count_if(uint64_t* agg,
+                                                              const int64_t cond) {
+  return cond ? (*agg)++ : *agg;
+}
+
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint64_t
 agg_count_skip_val(uint64_t* agg, const int64_t val, const int64_t skip_val) {
   if (val != skip_val) {
@@ -1223,10 +1233,26 @@ agg_count_skip_val(uint64_t* agg, const int64_t val, const int64_t skip_val) {
   return *agg;
 }
 
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint64_t
+agg_count_if_skip_val(uint64_t* agg, const int64_t cond, const int64_t skip_val) {
+  if (cond != skip_val) {
+    return agg_count_if(agg, cond);
+  }
+  return *agg;
+}
+
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint32_t
 agg_count_int32_skip_val(uint32_t* agg, const int32_t val, const int32_t skip_val) {
   if (val != skip_val) {
     return agg_count_int32(agg, val);
+  }
+  return *agg;
+}
+
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint32_t
+agg_count_if_int32_skip_val(uint32_t* agg, const int32_t cond, const int32_t skip_val) {
+  if (cond != skip_val) {
+    return agg_count_if_int32(agg, cond);
   }
   return *agg;
 }
@@ -1506,6 +1532,7 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t decimal_ceil(const int64_t x,
       int32_t* agg, const float val, const float skip_val) {}
 
 DEF_SHARED_AGG_RET_STUBS(agg_count)
+DEF_SHARED_AGG_RET_STUBS(agg_count_if)
 DEF_SHARED_AGG_STUBS(agg_max)
 DEF_SHARED_AGG_STUBS(agg_min)
 DEF_SHARED_AGG_STUBS(agg_id)

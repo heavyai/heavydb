@@ -84,8 +84,7 @@ std::vector<int64_t> result_set::initialize_target_values_for_storage(
     const std::vector<TargetInfo>& targets) {
   std::vector<int64_t> target_init_vals;
   for (const auto& target_info : targets) {
-    if (target_info.agg_kind == kCOUNT ||
-        target_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
+    if (shared::is_any<kCOUNT, kCOUNT_IF, kAPPROX_COUNT_DISTINCT>(target_info.agg_kind)) {
       target_init_vals.push_back(0);
       continue;
     }

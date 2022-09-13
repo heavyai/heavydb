@@ -745,9 +745,7 @@ class Executor {
 
   // The AVG window function requires some post-processing: the sum is divided by count
   // and the result is stored back for the current row.
-  void codegenWindowAvgEpilogue(llvm::Value* crt_val,
-                                llvm::Value* window_func_null_val,
-                                llvm::Value* multiplicity_lv);
+  void codegenWindowAvgEpilogue(llvm::Value* crt_val, llvm::Value* window_func_null_val);
 
   // Generates code which loads the current aggregate value for the window context.
   llvm::Value* codegenAggregateWindowState();

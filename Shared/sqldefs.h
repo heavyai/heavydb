@@ -80,6 +80,8 @@ enum SQLAgg {
   kAPPROX_QUANTILE,
   kSAMPLE,
   kSINGLE_VALUE,
+  kMODE,
+  kCOUNT_IF,
   kINVALID_AGG
 };
 
@@ -118,7 +120,6 @@ enum class SqlWindowFunctionKind {
   // set MIN's enum val as one, and we use window function kind's enum vals
   // to classify a behavior of our runtime code for window framing
   // i.e., aggregate_##value_type##_values functions
-  // todo (yoonmin): support FIRST_EXPR, LAST_EXPR, AND NTH_EXPR with framing
   MIN = 1,
   MAX,
   AVG,
@@ -139,6 +140,7 @@ enum class SqlWindowFunctionKind {
   LEAD_IN_FRAME,
   FIRST_VALUE,
   LAST_VALUE,
+  COUNT_IF,
   SUM_INTERNAL,  // For deserialization from Calcite only. Gets rewritten to a regular
                  // SUM.
   INVALID
@@ -215,6 +217,10 @@ inline std::string toString(const SQLAgg& kind) {
       return "SAMPLE";
     case kSINGLE_VALUE:
       return "SINGLE_VALUE";
+    case kMODE:
+      return "MODE";
+    case kCOUNT_IF:
+      return "COUNT_IF";
     case kINVALID_AGG:
       return "INVALID";
   }
@@ -467,6 +473,8 @@ inline std::string toString(const SqlWindowFunctionKind& kind) {
       return "LEAD_IN_FRAME";
     case SqlWindowFunctionKind::LAG_IN_FRAME:
       return "LAG_IN_FRAME";
+    case SqlWindowFunctionKind::COUNT_IF:
+      return "COUNT_IF";
     case SqlWindowFunctionKind::INVALID:
       return "INVALID";
   }
