@@ -132,6 +132,10 @@ void d(const SQLTypes expected_type, const std::string& str) {
       << "String: " << str;
 }
 
+std::string get_import_id(const std::string& copy_from_source) {
+  return boost::filesystem::path(copy_from_source).filename().string();
+}
+
 TEST(Detect, DateTime) {
   d(kDATE, "2016-01-02");
   d(kDATE, "02/01/2016");
@@ -802,7 +806,8 @@ TEST_F(ParquetImportErrorHandling, GreaterThanMaxReject) {
   TQueryResult query;
   sql(query, "SELECT count(*) FROM test_table;");
   assertResultSetEqual({{0L}}, query);  // confirm no data was loaded into table
-  validateImportStatus(file_path, get_copy_from_result_str(copy_from_result), 0, 0, true);
+  validateImportStatus(
+      get_import_id(file_path), get_copy_from_result_str(copy_from_result), 0, 0, true);
 }
 
 TEST_F(ParquetImportErrorHandling, IncreasingMaxRowGroupSizeAcrossFiles) {
@@ -872,7 +877,8 @@ TEST_P(ParquetImportErrorHandlingOfTypes, OneInvalidType) {
       fsi_file_base_dir + "/invalid_parquet/one_invalid_row_" + GetParam() + ".parquet";
   sql(copy_from_result,
       "COPY test_table FROM '" + filename + "' WITH (source_type='parquet_file');");
-  validateImportStatus(filename, get_copy_from_result_str(copy_from_result), 3, 1, false);
+  validateImportStatus(
+      get_import_id(filename), get_copy_from_result_str(copy_from_result), 3, 1, false);
   TQueryResult query;
   sql(query, "SELECT * FROM test_table ORDER BY id;");
   // clang-format off
@@ -1077,6 +1083,9 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
     // strip quotations from `copy_from_source` which will be the `import_id` used by
     // `Importer`
     import_id_ = copy_from_source.substr(1, copy_from_source.size() - 2);
+    if (isFileBased(import_type) && data_source_type == "local") {
+      import_id_ = get_import_id(import_id_);
+    }
 
     EXPECT_NO_THROW(sql(query));
 

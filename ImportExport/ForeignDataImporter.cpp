@@ -64,6 +64,20 @@ ChunkMetadataVector metadata_scan(foreign_storage::ForeignDataWrapper* data_wrap
   return metadata_vector;
 }
 
+std::string get_import_id(const import_export::CopyParams& copy_params,
+                          const std::string& copy_from_source) {
+  if (copy_params.source_type == import_export::SourceType::kDelimitedFile ||
+      copy_params.source_type == import_export::SourceType::kRegexParsedFile
+#ifdef ENABLE_IMPORT_PARQUET
+      || copy_params.source_type == import_export::SourceType::kParquetFile
+#endif
+  ) {
+    return boost::filesystem::path(copy_from_source).filename().string();
+  }
+
+  return copy_from_source;
+}
+
 void validate_copy_params(const import_export::CopyParams& copy_params) {
   if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
     foreign_storage::validate_regex_parser_options(copy_params);
@@ -205,13 +219,15 @@ void load_foreign_data_buffers(
         import_status.load_failed = true;
         import_status.load_msg =
             "Load was cancelled due to max reject rows being reached";
-        import_export::Importer::set_import_status(copy_from_source, import_status);
+        import_export::Importer::set_import_status(
+            get_import_id(copy_params, copy_from_source), import_status);
         std::unique_lock communication_lock(communication_mutex);
         load_failed = true;
         buffers_to_load_condition.notify_all();
         return;
       }
-      import_export::Importer::set_import_status(copy_from_source, import_status);
+      import_export::Importer::set_import_status(
+          get_import_id(copy_params, copy_from_source), import_status);
     } catch (...) {
       {
         std::unique_lock communication_lock(communication_mutex);
