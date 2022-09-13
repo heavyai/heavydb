@@ -41,11 +41,9 @@ struct CgenState {
  public:
   CgenState(const size_t num_query_infos,
             const bool contains_left_deep_outer_join,
+            const bool enable_automatic_ir_metadata,
             ExtensionModuleContext* ext_module_context,
-            Executor* executor);
-  CgenState(const size_t num_query_infos,
-            const bool contains_left_deep_outer_join,
-            ExtensionModuleContext* ext_module_context);
+            llvm::LLVMContext& context);
   CgenState(const Config& config, llvm::LLVMContext& context);
 
   size_t getOrAddLiteral(const hdk::ir::Constant* constant,
@@ -308,7 +306,6 @@ struct CgenState {
   void set_module_shallow_copy(const std::unique_ptr<llvm::Module>& module,
                                bool always_clone = false);
 
-  size_t executor_id_;
   /*
     Quoting https://groups.google.com/g/llvm-dev/c/kuil5XjasUs/m/7PBpOWZFDAAJ :
     """

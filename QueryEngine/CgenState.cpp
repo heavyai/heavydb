@@ -25,10 +25,10 @@
 
 CgenState::CgenState(const size_t num_query_infos,
                      const bool contains_left_deep_outer_join,
+                     const bool enable_automatic_ir_metadata,
                      ExtensionModuleContext* ext_module_context,
-                     Executor* executor)
-    : executor_id_(executor->getExecutorId())
-    , module_(nullptr)
+                     llvm::LLVMContext& context)
+    : module_(nullptr)
     , row_func_(nullptr)
     , filter_func_(nullptr)
     , current_func_(nullptr)
@@ -36,29 +36,18 @@ CgenState::CgenState(const size_t num_query_infos,
     , filter_func_bb_(nullptr)
     , row_func_call_(nullptr)
     , filter_func_call_(nullptr)
-    , context_(executor->getContext())
+    , context_(context)
     , ir_builder_(context_)
     , ext_module_context_(ext_module_context)
     , contains_left_deep_outer_join_(contains_left_deep_outer_join)
     , outer_join_match_found_per_level_(std::max(num_query_infos, size_t(1)) - 1)
     , needs_error_check_(false)
-    , automatic_ir_metadata_(executor->getConfig().debug.enable_automatic_ir_metadata)
+    , automatic_ir_metadata_(enable_automatic_ir_metadata)
     , query_func_(nullptr)
     , query_func_entry_ir_builder_(context_) {}
 
-// scalar code generator constructor
-CgenState::CgenState(const size_t num_query_infos,
-                     const bool contains_left_deep_outer_join,
-                     ExtensionModuleContext* ext_module_context)
-    : CgenState(
-          num_query_infos,
-          contains_left_deep_outer_join,
-          ext_module_context,
-          Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get()) {}
-
 CgenState::CgenState(const Config& config, llvm::LLVMContext& context)
-    : executor_id_(Executor::INVALID_EXECUTOR_ID)
-    , module_(nullptr)
+    : module_(nullptr)
     , row_func_(nullptr)
     , context_(context)
     , ir_builder_(context_)

@@ -333,7 +333,8 @@ struct TestInputData {
 void perform_test_and_verify_results(TestInputData input) {
   auto executor = Executor::getExecutor(0, nullptr, nullptr);
   auto& context = executor->getContext();
-  auto cgen_state = std::unique_ptr<CgenState>(new CgenState({}, false));
+  auto cgen_state = std::unique_ptr<CgenState>(
+      new CgenState({}, false, false, executor->getExtensionModuleContext(), context));
   cgen_state->set_module_shallow_copy(
       executor->getExtensionModuleContext()->getRTModule(/*is_l0=*/false));
   auto module = cgen_state->module_;

@@ -170,8 +170,8 @@ Executor::Executor(const ExecutorId executor_id,
     , input_table_info_cache_(this)
     , thread_id_(logger::thread_id()) {
   extension_module_context_ = std::make_unique<ExtensionModuleContext>();
-  cgen_state_ =
-      std::make_unique<CgenState>(0, false, extension_module_context_.get(), this);
+  cgen_state_ = std::make_unique<CgenState>(
+      0, false, false, extension_module_context_.get(), getContext());
 
   std::call_once(first_init_flag_, [this]() {
     query_plan_dag_cache_ =
@@ -225,7 +225,8 @@ void Executor::reset(const bool discard_runtime_modules_only) {
   } else {
     cgen_state_.reset();
     context_.reset(new llvm::LLVMContext());
-    cgen_state_.reset(new CgenState({}, false, getExtensionModuleContext(), this));
+    cgen_state_.reset(
+        new CgenState({}, false, false, getExtensionModuleContext(), getContext()));
   }
 }
 
@@ -326,7 +327,11 @@ Executor::CgenStateManager::CgenStateManager(Executor& executor)
 {
   executor_.compilation_queue_time_ms_ += timer_stop(lock_queue_clock_);
   executor_.cgen_state_.reset(
-      new CgenState(0, false, executor.getExtensionModuleContext(), &executor));
+      new CgenState(0,
+                    false,
+                    executor.getConfig().debug.enable_automatic_ir_metadata,
+                    executor.getExtensionModuleContext(),
+                    executor.getContext()));
 }
 
 Executor::CgenStateManager::CgenStateManager(
@@ -3542,8 +3547,9 @@ void Executor::nukeOldState(const bool allow_lazy_fetch,
                                   }) != ra_exe_unit->join_quals.end();
   cgen_state_.reset(new CgenState(query_infos.size(),
                                   contains_left_deep_outer_join,
+                                  getConfig().debug.enable_automatic_ir_metadata,
                                   getExtensionModuleContext(),
-                                  this));
+                                  getContext()));
   plan_state_.reset(new PlanState(
       allow_lazy_fetch && !contains_left_deep_outer_join, query_infos, this));
 }
