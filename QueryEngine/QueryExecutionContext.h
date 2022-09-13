@@ -39,7 +39,7 @@ class QueryExecutionContext : boost::noncopyable {
   // TODO(alex): remove device_type
   QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_unit,
                         const QueryMemoryDescriptor&,
-                        const Executor* executor,
+                        Executor* executor,
                         const ExecutorDeviceType device_type,
                         const ExecutorDispatchMode dispatch_mode,
                         const bool use_groupby_buffer_desc,
@@ -137,7 +137,7 @@ class QueryExecutionContext : boost::noncopyable {
 
   // TODO(adb): convert to shared_ptr
   QueryMemoryDescriptor query_mem_desc_;
-  const Executor* executor_;
+  Executor* executor_;
   const ExecutorDeviceType device_type_;
   const ExecutorDispatchMode dispatch_mode_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;

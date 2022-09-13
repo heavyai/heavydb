@@ -65,14 +65,15 @@ class GpuReductionTester : public GpuSharedMemCodeBuilder {
                      const QueryMemoryDescriptor& qmd,
                      const std::vector<TargetInfo>& targets,
                      const std::vector<int64_t>& init_agg_values,
-                     CudaMgr_Namespace::CudaMgr* cuda_mgr)
+                     CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                     Executor* executor)
       : GpuSharedMemCodeBuilder(module,
                                 context,
                                 qmd,
                                 targets,
                                 init_agg_values,
-                                Executor::UNITARY_EXECUTOR_ID,
-                                config)
+                                config,
+                                executor)
       , cuda_mgr_(cuda_mgr) {
     // CHECK(getReductionFunction());
   }

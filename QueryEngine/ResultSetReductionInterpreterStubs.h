@@ -30,11 +30,11 @@ class StubGenerator {
                                                    const void* inputs_handle);
   using InputsType = std::vector<ReductionInterpreter::EvalValue>;
 
-  static Stub generateStub(const size_t executor_id,
-                           const std::string& name,
+  static Stub generateStub(const std::string& name,
                            const std::vector<Type>& arg_types,
                            const Type ret_type,
-                           const bool is_external);
+                           const bool is_external,
+                           const Executor* executor);
 };
 
 bool is_integer_type(const Type type);

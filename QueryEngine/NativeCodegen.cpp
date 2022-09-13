@@ -1642,8 +1642,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                 *query_mem_desc,
                                 getConfig().exec.group_by.bigint_count),
           plan_state_->init_agg_vals_,
-          executor_id_,
-          getConfig());
+          getConfig(),
+          this);
       gpu_smem_code.codegen();
       gpu_smem_code.injectFunctionsInto(query_func);
 

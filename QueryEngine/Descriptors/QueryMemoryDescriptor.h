@@ -120,7 +120,7 @@ class QueryMemoryDescriptor {
 
   std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
       const RelAlgExecutionUnit&,
-      const Executor* executor,
+      Executor* executor,
       const ExecutorDeviceType device_type,
       const ExecutorDispatchMode dispatch_mode,
       const bool use_groupby_buffer_desc,

@@ -632,7 +632,7 @@ bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const
 
 std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionContext(
     const RelAlgExecutionUnit& ra_exe_unit,
-    const Executor* executor,
+    Executor* executor,
     const ExecutorDeviceType device_type,
     const ExecutorDispatchMode dispatch_mode,
     const bool use_groupby_buffer_desc,

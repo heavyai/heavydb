@@ -898,7 +898,8 @@ class ResultSetManager {
  public:
   ResultSet* reduce(std::vector<ResultSet*>&,
                     const size_t executor_id,
-                    const Config& config);
+                    const Config& config,
+                    Executor* executor);
 
   std::shared_ptr<ResultSet> getOwnResultSet();
 

@@ -258,18 +258,17 @@ void perform_reduction_on_cpu(std::vector<std::unique_ptr<ResultSet>>& result_se
                               const ResultSetStorage* cpu_result_storage) {
   CHECK(result_sets.size() > 0);
   Config config;
+  // for codegen only
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr);
   ResultSetReductionJIT reduction_jit(result_sets.front()->getQueryMemDesc(),
                                       result_sets.front()->getTargetInfos(),
                                       result_sets.front()->getTargetInitVals(),
-                                      Executor::UNITARY_EXECUTOR_ID,
-                                      config);
+                                      config,
+                                      executor.get());
   const auto reduction_code = reduction_jit.codegen();
   for (auto& result_set : result_sets) {
-    cpu_result_storage->reduce(*(result_set->getStorage()),
-                               {},
-                               reduction_code,
-                               Executor::UNITARY_EXECUTOR_ID,
-                               config);
+    cpu_result_storage->reduce(
+        *(result_set->getStorage()), {}, reduction_code, config, executor.get());
   }
 }
 
@@ -375,7 +374,8 @@ void perform_test_and_verify_results(TestInputData input) {
                                      query_mem_desc,
                                      input.target_infos,
                                      init_agg_val_vec(input.target_infos, query_mem_desc),
-                                     cuda_mgr.get());
+                                     cuda_mgr.get(),
+                                     executor.get());
   gpu_smem_tester.codegen();  // generate code for gpu reduciton and initialization
   gpu_smem_tester.codegenWrapperKernel();
   gpu_smem_tester.performReductionTest(

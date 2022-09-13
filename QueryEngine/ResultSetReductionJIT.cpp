@@ -511,9 +511,9 @@ extern "C" RUNTIME_EXPORT uint8_t check_interrupt_rt(const size_t sample_seed) {
 ResultSetReductionJIT::ResultSetReductionJIT(const QueryMemoryDescriptor& query_mem_desc,
                                              const std::vector<TargetInfo>& targets,
                                              const std::vector<int64_t>& target_init_vals,
-                                             const size_t executor_id,
-                                             const Config& config)
-    : executor_id_(executor_id)
+                                             const Config& config,
+                                             Executor* executor)
+    : executor_(executor)
     , config_(config)
     , query_mem_desc_(query_mem_desc)
     , targets_(targets)
@@ -581,10 +581,9 @@ ReductionCode ResultSetReductionJIT::codegen() const {
       (!query_mem_desc_.getExecutor() || query_mem_desc_.blocksShareMemory())) {
     return reduction_code;
   }
-  auto executor = Executor::getExecutorFromMap(executor_id_);
-  CHECK(executor) << executor_id_;
+  CHECK(executor_);
   CodeCacheKey key{cacheKey()};
-  std::lock_guard<std::mutex> compilation_lock(executor->compilation_mutex_);
+  std::lock_guard<std::mutex> compilation_lock(executor_->compilation_mutex_);
   const auto compilation_context = Executor::s_code_accessor->get_or_wait(key);
   if (compilation_context) {
     reduction_code.func_ptr =
@@ -594,12 +593,12 @@ ReductionCode ResultSetReductionJIT::codegen() const {
   auto cgen_state_ = std::unique_ptr<CgenState>(
       new CgenState({},
                     false,
-                    executor->getConfig().debug.enable_automatic_ir_metadata,
-                    executor->getExtensionModuleContext(),
-                    executor->getContext()));
+                    executor_->getConfig().debug.enable_automatic_ir_metadata,
+                    executor_->getExtensionModuleContext(),
+                    executor_->getContext()));
   auto cgen_state = reduction_code.cgen_state = cgen_state_.get();
   cgen_state->set_module_shallow_copy(
-      executor->getExtensionModuleContext()->getRTModule(/*is_l0=*/false));
+      executor_->getExtensionModuleContext()->getRTModule(/*is_l0=*/false));
   reduction_code.module = cgen_state->module_;
 
   AUTOMATIC_IR_METADATA(cgen_state);
@@ -1245,8 +1244,6 @@ void ResultSetReductionJIT::finalizeReductionCode(
     const CodeCacheKey& key) const {
   CompilationOptions co{
       ExecutorDeviceType::CPU, false, ExecutorOptLevel::ReductionJIT, false};
-  auto executor = Executor::getExecutorFromMap(executor_id_);
-  CHECK(executor) << executor_id_;
 #ifdef NDEBUG
   LOG(IR) << "Reduction Loop:\n"
           << serialize_llvm_object(reduction_code.llvm_reduce_loop);
@@ -1314,18 +1311,17 @@ ReductionCode GpuReductionHelperJIT::codegen() const {
   reduceOneEntryNoCollisions(reduction_code);
   reduceOneEntryNoCollisionsIdx(reduction_code);
   reduceLoop(reduction_code);
-  auto executor = Executor::getExecutorFromMap(executor_id_);
-  CHECK(executor) << executor_id_;
+  CHECK(executor_);
   auto cgen_state_ = std::make_unique<CgenState>(
       0,
       false,
-      executor->getConfig().debug.enable_automatic_ir_metadata,
-      executor->getExtModuleContext(),
-      executor->getContext());
+      executor_->getConfig().debug.enable_automatic_ir_metadata,
+      executor_->getExtModuleContext(),
+      executor_->getContext());
   auto cgen_state = reduction_code.cgen_state = cgen_state_.get();
   // CHECK(executor->thread_id_ == logger::thread_id());  // do we need compilation mutex?
   cgen_state->set_module_shallow_copy(
-      executor->getExtensionModuleContext()->getRTModule(/*is_l0=*/false));
+      executor_->getExtensionModuleContext()->getRTModule(/*is_l0=*/false));
   reduction_code.module = cgen_state->module_;
 
   AUTOMATIC_IR_METADATA(cgen_state);

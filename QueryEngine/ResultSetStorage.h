@@ -107,8 +107,8 @@ class ResultSetStorage {
   void reduce(const ResultSetStorage& that,
               const std::vector<std::string>& serialized_varlen_buffer,
               const ReductionCode& reduction_code,
-              const size_t executor_id,
-              const Config& config) const;
+              const Config& config,
+              const Executor* executor) const;
 
   void rewriteAggregateBufferOffsets(
       const std::vector<std::string>& serialized_varlen_buffer) const;

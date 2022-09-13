@@ -416,15 +416,6 @@ std::shared_ptr<Executor> Executor::getExecutor(
   return executor;
 }
 
-std::shared_ptr<Executor> Executor::getExecutorFromMap(const ExecutorId executor_id) {
-  mapd_unique_lock<mapd_shared_mutex> write_lock(executors_cache_mutex_);
-  auto it = executors_.find(executor_id);
-  if (it != executors_.end()) {
-    return it->second;
-  }
-  return nullptr;
-}
-
 void Executor::clearMemory(const Data_Namespace::MemoryLevel memory_level,
                            Data_Namespace::DataMgr* data_mgr) {
   switch (memory_level) {
@@ -1170,7 +1161,7 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
     const RelAlgExecutionUnit& ra_exe_unit,
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const QueryMemoryDescriptor& query_mem_desc) const {
+    const QueryMemoryDescriptor& query_mem_desc) {
   auto timer = DEBUG_TIMER(__func__);
   if (ra_exe_unit.estimator) {
     return reduce_estimator_results(ra_exe_unit, results_per_device);
@@ -1201,10 +1192,10 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
 namespace {
 
 ReductionCode get_reduction_code(
-    const size_t executor_id,
     const Config& config,
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
-    int64_t* compilation_queue_time) {
+    int64_t* compilation_queue_time,
+    Executor* executor) {
   auto clock_begin = timer_start();
   // ResultSetReductionJIT::codegen compilation-locks if new code will be generated
   *compilation_queue_time = timer_stop(clock_begin);
@@ -1212,8 +1203,8 @@ ReductionCode get_reduction_code(
   ResultSetReductionJIT reduction_jit(this_result_set->getQueryMemDesc(),
                                       this_result_set->getTargetInfos(),
                                       this_result_set->getTargetInitVals(),
-                                      executor_id,
-                                      config);
+                                      config,
+                                      executor);
   return reduction_jit.codegen();
 };
 
@@ -1235,7 +1226,7 @@ bool couldUseParallelReduce(const QueryMemoryDescriptor& desc) {
 ResultSetPtr Executor::reduceMultiDeviceResultSets(
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const QueryMemoryDescriptor& query_mem_desc) const {
+    const QueryMemoryDescriptor& query_mem_desc) {
   auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<ResultSet> reduced_results;
 
@@ -1282,8 +1273,8 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
   }
 
   int64_t compilation_queue_time = 0;
-  const auto reduction_code = get_reduction_code(
-      executor_id_, getConfig(), results_per_device, &compilation_queue_time);
+  const auto reduction_code =
+      get_reduction_code(getConfig(), results_per_device, &compilation_queue_time, this);
 
   if (couldUseParallelReduce(query_mem_desc)) {
     std::vector<ResultSetStorage*> storages;
@@ -1295,10 +1286,10 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
         (ResultSetStorage*)nullptr,
         [&](auto r, ResultSetStorage* res) {
           for (auto i = r.begin() + 1; i != r.end(); ++i) {
-            (*r.begin())->reduce(**i, {}, reduction_code, executor_id_, getConfig());
+            (*r.begin())->reduce(**i, {}, reduction_code, getConfig(), this);
           }
           if (res) {
-            res->reduce(*(*r.begin()), {}, reduction_code, executor_id_, getConfig());
+            res->reduce(*(*r.begin()), {}, reduction_code, getConfig(), this);
             return res;
           }
           return *r.begin();
@@ -1310,7 +1301,7 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
           if (!rhs) {
             return lhs;
           }
-          lhs->reduce(*rhs, {}, reduction_code, executor_id_, getConfig());
+          lhs->reduce(*rhs, {}, reduction_code, getConfig(), this);
           return lhs;
         });
   } else {
@@ -1318,8 +1309,8 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
       reduced_results->getStorage()->reduce(*(results_per_device[i].first->getStorage()),
                                             {},
                                             reduction_code,
-                                            executor_id_,
-                                            getConfig());
+                                            getConfig(),
+                                            this);
     }
   }
   reduced_results->addCompilationQueueTime(compilation_queue_time);

@@ -130,8 +130,7 @@ inline int64_t get_component(const int8_t* group_by_buffer,
   return ret;
 }
 
-void run_reduction_code(const size_t executor_id,
-                        const ReductionCode& reduction_code,
+void run_reduction_code(const ReductionCode& reduction_code,
                         int8_t* this_buff,
                         const int8_t* that_buff,
                         const int32_t start_entry_index,
@@ -139,7 +138,8 @@ void run_reduction_code(const size_t executor_id,
                         const int32_t that_entry_count,
                         const void* this_qmd,
                         const void* that_qmd,
-                        const void* serialized_varlen_buffer) {
+                        const void* serialized_varlen_buffer,
+                        const Executor* executor) {
   int err = 0;
   if (reduction_code.func_ptr) {
     err = reduction_code.func_ptr(this_buff,
@@ -152,7 +152,6 @@ void run_reduction_code(const size_t executor_id,
                                   serialized_varlen_buffer);
   } else {
     auto ret = ReductionInterpreter::run(
-        executor_id,
         reduction_code.ir_reduce_loop.get(),
         {ReductionInterpreter::MakeEvalValue(this_buff),
          ReductionInterpreter::MakeEvalValue(that_buff),
@@ -161,7 +160,8 @@ void run_reduction_code(const size_t executor_id,
          ReductionInterpreter::MakeEvalValue(that_entry_count),
          ReductionInterpreter::MakeEvalValue(this_qmd),
          ReductionInterpreter::MakeEvalValue(that_qmd),
-         ReductionInterpreter::MakeEvalValue(serialized_varlen_buffer)});
+         ReductionInterpreter::MakeEvalValue(serialized_varlen_buffer)},
+        executor);
     err = ret.int_val;
   }
   if (err) {
@@ -204,8 +204,8 @@ void result_set::fill_empty_key(void* key_ptr,
 void ResultSetStorage::reduce(const ResultSetStorage& that,
                               const std::vector<std::string>& serialized_varlen_buffer,
                               const ReductionCode& reduction_code,
-                              const size_t executor_id,
-                              const Config& config) const {
+                              const Config& config,
+                              const Executor* executor) const {
   auto entry_count = query_mem_desc_.getEntryCount();
   CHECK_GT(entry_count, size_t(0));
   if (query_mem_desc_.didOutputColumnar()) {
@@ -228,6 +228,7 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
   CHECK(this_buff);
   auto that_buff = that.buff_;
   CHECK(that_buff);
+  CHECK(executor);
   if (query_mem_desc_.getQueryDescriptionType() ==
       QueryDescriptionType::GroupByBaselineHash) {
     if (!serialized_varlen_buffer.empty()) {
@@ -242,11 +243,10 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
                                  this_buff,
                                  that_buff,
                                  that_entry_count,
-                                 executor_id,
                                  &reduction_code,
-                                 &that](auto r) {
-                                  run_reduction_code(executor_id,
-                                                     reduction_code,
+                                 &that,
+                                 executor](auto r) {
+                                  run_reduction_code(reduction_code,
                                                      this_buff,
                                                      that_buff,
                                                      r.begin(),
@@ -254,7 +254,8 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
                                                      that_entry_count,
                                                      &query_mem_desc_,
                                                      &that.query_mem_desc_,
-                                                     nullptr);
+                                                     nullptr,
+                                                     executor);
                                 });
       } else {
         threading::parallel_for(
@@ -272,8 +273,7 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
       }
     } else {
       if (reduction_code.ir_reduce_loop) {
-        run_reduction_code(executor_id,
-                           reduction_code,
+        run_reduction_code(reduction_code,
                            this_buff,
                            that_buff,
                            0,
@@ -281,7 +281,8 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
                            that_entry_count,
                            &query_mem_desc_,
                            &that.query_mem_desc_,
-                           nullptr);
+                           nullptr,
+                           executor);
       } else {
         for (size_t i = 0; i < that_entry_count; ++i) {
           reduceOneEntryBaseline(this_buff,
@@ -295,13 +296,11 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
     }
     return;
   }
-  auto executor = Executor::getExecutorFromMap(executor_id);
-  CHECK(executor);
   if (use_multithreaded_reduction(entry_count)) {
     if (query_mem_desc_.didOutputColumnar()) {
       threading::parallel_for(
           threading::blocked_range<size_t>(0, entry_count),
-          [this, this_buff, that_buff, &that, &serialized_varlen_buffer, &executor](
+          [this, this_buff, that_buff, &that, &serialized_varlen_buffer, executor](
               auto r) {
             reduceEntriesNoCollisionsColWise(this_buff,
                                              that_buff,
@@ -309,7 +308,7 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
                                              r.begin(),
                                              r.end(),
                                              serialized_varlen_buffer,
-                                             executor.get());
+                                             executor);
           });
     } else {
       CHECK(reduction_code.ir_reduce_loop);
@@ -318,12 +317,11 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
                                this_buff,
                                that_buff,
                                that_entry_count,
-                               executor_id,
                                &reduction_code,
                                &that,
-                               &serialized_varlen_buffer](auto r) {
-                                run_reduction_code(executor_id,
-                                                   reduction_code,
+                               &serialized_varlen_buffer,
+                               executor](auto r) {
+                                run_reduction_code(reduction_code,
                                                    this_buff,
                                                    that_buff,
                                                    r.begin(),
@@ -331,7 +329,8 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
                                                    that_entry_count,
                                                    &query_mem_desc_,
                                                    &that.query_mem_desc_,
-                                                   &serialized_varlen_buffer);
+                                                   &serialized_varlen_buffer,
+                                                   executor);
                               });
     }
   } else {
@@ -342,11 +341,10 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
                                        0,
                                        query_mem_desc_.getEntryCount(),
                                        serialized_varlen_buffer,
-                                       executor.get());
+                                       executor);
     } else {
       CHECK(reduction_code.ir_reduce_loop);
-      run_reduction_code(executor_id,
-                         reduction_code,
+      run_reduction_code(reduction_code,
                          this_buff,
                          that_buff,
                          0,
@@ -354,7 +352,8 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
                          that_entry_count,
                          &query_mem_desc_,
                          &that.query_mem_desc_,
-                         &serialized_varlen_buffer);
+                         &serialized_varlen_buffer,
+                         executor);
     }
   }
 }
@@ -1008,7 +1007,8 @@ void ResultSet::initializeStorage() const {
 // to take the ownership of the new result set with the bigger underlying buffer.
 ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets,
                                     const size_t executor_id,
-                                    const Config& config) {
+                                    const Config& config,
+                                    Executor* executor) {
   CHECK(!result_sets.empty());
   auto result_rs = result_sets.front();
   CHECK(result_rs->storage_);
@@ -1071,8 +1071,8 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets,
   ResultSetReductionJIT reduction_jit(result_rs->getQueryMemDesc(),
                                       result_rs->getTargetInfos(),
                                       result_rs->getTargetInitVals(),
-                                      executor_id,
-                                      config);
+                                      config,
+                                      executor);
   auto reduction_code = reduction_jit.codegen();
   size_t ctr = 1;
   for (auto result_it = result_sets.begin() + 1; result_it != result_sets.end();
@@ -1081,10 +1081,10 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets,
       result->reduce(*((*result_it)->storage_),
                      serialized_varlen_buffer[ctr++],
                      reduction_code,
-                     executor_id,
-                     config);
+                     config,
+                     executor);
     } else {
-      result->reduce(*((*result_it)->storage_), {}, reduction_code, executor_id, config);
+      result->reduce(*((*result_it)->storage_), {}, reduction_code, config, executor);
     }
   }
   return result_rs;

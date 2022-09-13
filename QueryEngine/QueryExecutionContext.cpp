@@ -31,7 +31,7 @@
 QueryExecutionContext::QueryExecutionContext(
     const RelAlgExecutionUnit& ra_exe_unit,
     const QueryMemoryDescriptor& query_mem_desc,
-    const Executor* executor,
+    Executor* executor,
     const ExecutorDeviceType device_type,
     const ExecutorDispatchMode dispatch_mode,
     bool use_groupby_buffer_desc,

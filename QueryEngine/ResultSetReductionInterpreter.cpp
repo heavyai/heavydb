@@ -55,14 +55,14 @@ size_t get_element_size(const Type element_type) {
 // evaluation when the return value is set.
 class ReductionInterpreterImpl {
  public:
-  ReductionInterpreterImpl(const size_t executor_id,
-                           const std::vector<ReductionInterpreter::EvalValue>& vars)
-      : executor_id_(executor_id), vars_(vars) {}
+  ReductionInterpreterImpl(const std::vector<ReductionInterpreter::EvalValue>& vars,
+                           const Executor* executor)
+      : executor_(executor), vars_(vars) {}
 
   std::optional<ReductionInterpreter::EvalValue> ret() const { return ret_; }
 
  public:
-  size_t getExecutorId() const { return executor_id_; }
+  const Executor* getExecutor() const { return executor_; }
   static void runGetElementPtr(const Instruction* instruction,
                                ReductionInterpreterImpl* interpreter) {
     CHECK(!interpreter->ret_) << "Function has already returned";
@@ -210,20 +210,20 @@ class ReductionInterpreterImpl {
 
   static void runCall(const Instruction* instruction,
                       ReductionInterpreterImpl* interpreter) {
-    auto executor_id = interpreter->getExecutorId();
     CHECK(!interpreter->ret_) << "Function has already returned";
     const auto call = static_cast<const Call*>(instruction);
     if (call->callee()) {
       // Call one of the functions generated to implement reduction.
       const auto inputs = getCallInputs(call, interpreter);
-      auto ret = ReductionInterpreter::run(executor_id, call->callee(), inputs);
+      auto ret =
+          ReductionInterpreter::run(call->callee(), inputs, interpreter->getExecutor());
       if (call->type() != Type::Void) {
         // Assign the returned value.
         interpreter->setVar(call, ret);
       }
     } else {
       // Call an internal runtime function.
-      const auto func_ptr = bindStub(executor_id, call);
+      const auto func_ptr = bindStub(call, interpreter->getExecutor());
       const auto inputs = getCallInputs(call, interpreter);
       ReductionInterpreter::EvalValue ret;
       func_ptr(&ret, &inputs);
@@ -237,12 +237,11 @@ class ReductionInterpreterImpl {
 
   static void runExternalCall(const Instruction* instruction,
                               ReductionInterpreterImpl* interpreter) {
-    auto executor_id = interpreter->getExecutorId();
     CHECK(!interpreter->ret_) << "Function has already returned";
     const auto external_call = static_cast<const ExternalCall*>(instruction);
     const auto& arguments = external_call->arguments();
     const auto argument_types = get_value_types(arguments);
-    const auto func_ptr = bindStub(executor_id, external_call);
+    const auto func_ptr = bindStub(external_call, interpreter->getExecutor());
     const auto inputs = getCallInputs(external_call, interpreter);
     ReductionInterpreter::EvalValue output;
     func_ptr(&output, &inputs);
@@ -292,7 +291,6 @@ class ReductionInterpreterImpl {
 
   static void runFor(const Instruction* instruction,
                      ReductionInterpreterImpl* interpreter) {
-    auto executor_id = interpreter->getExecutorId();
     CHECK(!interpreter->ret_) << "Function has already returned";
     const size_t saved_alloca_count = interpreter->alloca_buffers_.size();
     const auto for_loop = static_cast<const For*>(instruction);
@@ -304,8 +302,8 @@ class ReductionInterpreterImpl {
       // The start and end indices are absolute, but the iteration happens from 0.
       // Subtract the start index before setting the iterator.
       interpreter->vars_[for_loop->iter()->id()].int_val = i - start.int_val;
-      auto ret =
-          ReductionInterpreter::run(executor_id, for_loop->body(), interpreter->vars_);
+      auto ret = ReductionInterpreter::run(
+          for_loop->body(), interpreter->vars_, interpreter->getExecutor());
       if (ret) {
         interpreter->ret_ = *ret;
         break;
@@ -336,22 +334,21 @@ class ReductionInterpreterImpl {
 
   // Bind and cache a stub call.
   template <class Call>
-  static StubGenerator::Stub bindStub(const size_t executor_id, const Call* call) {
+  static StubGenerator::Stub bindStub(const Call* call, const Executor* executor) {
     const auto func_ptr =
         call->cached_callee()
             ? reinterpret_cast<StubGenerator::Stub>(call->cached_callee())
-            : StubGenerator::generateStub(executor_id,
-                                          call->callee_name(),
+            : StubGenerator::generateStub(call->callee_name(),
                                           get_value_types(call->arguments()),
                                           call->type(),
-                                          call->external());
+                                          call->external(),
+                                          executor);
     CHECK(func_ptr);
     call->set_cached_callee(reinterpret_cast<void*>(func_ptr));
     return func_ptr;
   }
 
-  // Holds executor id
-  size_t executor_id_;
+  const Executor* executor_;
   // Holds the evaluated values.
   std::vector<ReductionInterpreter::EvalValue> vars_;
   // Holds buffers allocated by the alloca instruction.
@@ -438,9 +435,9 @@ ReductionInterpreter::EvalValue eval_constant(const Constant* constant) {
 }  // namespace
 
 ReductionInterpreter::EvalValue ReductionInterpreter::run(
-    const size_t executor_id,
     const Function* function,
-    const std::vector<ReductionInterpreter::EvalValue>& inputs) {
+    const std::vector<ReductionInterpreter::EvalValue>& inputs,
+    const Executor* executor) {
   const auto last_id = function->body().back()->id();
   const auto& arg_types = function->arg_types();
   std::vector<ReductionInterpreter::EvalValue> vars(last_id + 1);
@@ -452,16 +449,16 @@ ReductionInterpreter::EvalValue ReductionInterpreter::run(
   for (const auto& constant : function->constants()) {
     vars[constant->id()] = eval_constant(constant.get());
   }
-  const auto maybe_ret = run(executor_id, function->body(), vars);
+  const auto maybe_ret = run(function->body(), vars, executor);
   CHECK(maybe_ret);
   return *maybe_ret;
 }
 
 std::optional<ReductionInterpreter::EvalValue> ReductionInterpreter::run(
-    const size_t executor_id,
     const std::vector<std::unique_ptr<Instruction>>& body,
-    const std::vector<ReductionInterpreter::EvalValue>& vars) {
-  ReductionInterpreterImpl interp_impl(executor_id, vars);
+    const std::vector<ReductionInterpreter::EvalValue>& vars,
+    const Executor* executor) {
+  ReductionInterpreterImpl interp_impl(vars, executor);
   for (const auto& instr : body) {
     instr->run(&interp_impl);
     const auto ret = interp_impl.ret();

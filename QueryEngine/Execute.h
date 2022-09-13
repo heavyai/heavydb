@@ -352,8 +352,6 @@ class Executor {
       const std::string& debug_file = "",
       const SystemParameters& system_parameters = SystemParameters());
 
-  static std::shared_ptr<Executor> getExecutorFromMap(const ExecutorId executor_id);
-
   static void nukeCacheOfExecutors() {
     mapd_unique_lock<mapd_shared_mutex> flush_lock(
         execute_mutex_);  // don't want native code to vanish while executing
@@ -759,11 +757,11 @@ class Executor {
       const RelAlgExecutionUnit&,
       std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& all_fragment_results,
       std::shared_ptr<RowSetMemoryOwner>,
-      const QueryMemoryDescriptor&) const;
+      const QueryMemoryDescriptor&);
   ResultSetPtr reduceMultiDeviceResultSets(
       std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& all_fragment_results,
       std::shared_ptr<RowSetMemoryOwner>,
-      const QueryMemoryDescriptor&) const;
+      const QueryMemoryDescriptor&);
   ResultSetPtr reduceSpeculativeTopN(
       const RelAlgExecutionUnit&,
       std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& all_fragment_results,

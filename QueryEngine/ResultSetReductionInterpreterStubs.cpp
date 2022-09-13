@@ -182,17 +182,16 @@ extern "C" RUNTIME_EXPORT void write_stub_result_int(void* output_handle,
 // NOTE: this is currently thread safe because only one interpreter reduction can run at a
 // time. If the interpreter allows multiple stubs to run at a time we will need to ensure
 // proper ownership of the compilation context.
-StubGenerator::Stub StubGenerator::generateStub(const size_t executor_id,
-                                                const std::string& name,
+StubGenerator::Stub StubGenerator::generateStub(const std::string& name,
                                                 const std::vector<Type>& arg_types,
                                                 const Type ret_type,
-                                                const bool is_external) {
+                                                const bool is_external,
+                                                const Executor* executor) {
   // Multiple executors may trigger the generation of the same
   // stub. We'll use get_or_wait/put methods of code cache accessor to
   // let the first executor to generate the stub while other executors
   // will wait until the stub has been put to the code cache.
 
-  auto executor = Executor::getExecutorFromMap(executor_id);
   CHECK(executor);
   const auto stub_name = name + "_stub";
   CodeCacheKey key{stub_name};
@@ -205,7 +204,8 @@ StubGenerator::Stub StubGenerator::generateStub(const size_t executor_id,
   }
 
   // compilation is locked per executor
-  Executor::CgenStateManager cgenstate_manager(*executor.get());
+  // TODO(adb): fixup const cast
+  Executor::CgenStateManager cgenstate_manager(*(const_cast<Executor*>(executor)));
   auto cgen_state = executor->getCgenStatePtr();
   cgen_state->set_module_shallow_copy(
       executor->getExtensionModuleContext()->getRTModule(/*is_l0=*/false));
