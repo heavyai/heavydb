@@ -20,6 +20,8 @@
 #include <boost/filesystem.hpp>
 #include <boost/process.hpp>
 #include <boost/range/combine.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 #include <boost/version.hpp>
 #include <cerrno>
 #include <cstdio>
@@ -42,6 +44,7 @@
 #include "Shared/StringTransform.h"
 #include "Shared/ThreadController.h"
 #include "Shared/measure.h"
+#include "Shared/scope.h"
 #include "Shared/thread_count.h"
 
 extern bool g_cluster;
@@ -342,31 +345,47 @@ void TableArchiver::dumpTable(const TableDescriptor* td,
   if (td->isView || td->persistenceLevel != Data_Namespace::MemoryLevel::DISK_LEVEL) {
     throw std::runtime_error("Dumping view or temporary table is not supported.");
   }
+  // create a unique uuid for this table dump
+  std::string uuid = boost::uuids::to_string(boost::uuids::random_generator()());
+
   // collect paths of files to archive
   const auto global_file_mgr = cat_->getDataMgr().getGlobalFileMgr();
   std::vector<std::string> file_paths;
-  auto file_writer = [&file_paths, global_file_mgr](const std::string& file_name,
-                                                    const std::string& file_type,
-                                                    const std::string& file_data) {
-    const auto file_path = abs_path(global_file_mgr) + "/" + file_name;
+  auto file_writer = [&file_paths, uuid](const std::string& file_name,
+                                         const std::string& file_type,
+                                         const std::string& file_data) {
     std::unique_ptr<FILE, decltype(simple_file_closer)> fp(
-        std::fopen(file_path.c_str(), "w"), simple_file_closer);
+        std::fopen(file_name.c_str(), "w"), simple_file_closer);
     if (!fp) {
-      throw std::runtime_error("Failed to create " + file_type + " file '" + file_path +
+      throw std::runtime_error("Failed to create " + file_type + " file '" + file_name +
                                "': " + std::strerror(errno));
     }
     if (std::fwrite(file_data.data(), 1, file_data.size(), fp.get()) < file_data.size()) {
-      throw std::runtime_error("Failed to write " + file_type + " file '" + file_path +
+      throw std::runtime_error("Failed to write " + file_type + " file '" + file_name +
                                "': " + std::strerror(errno));
     }
-    file_paths.push_back(file_name);
+    file_paths.push_back(uuid / std::filesystem::path(file_name).filename());
+  };
+
+  const auto file_mgr_dir = std::filesystem::path(abs_path(global_file_mgr));
+  const auto uuid_dir = file_mgr_dir / uuid;
+
+  if (!std::filesystem::create_directory(uuid_dir)) {
+    throw std::runtime_error("Failed to create work directory '" + uuid_dir.string() +
+                             "' while dumping table.");
+  }
+
+  ScopeGuard cleanup_guard = [&] {
+    if (std::filesystem::exists(uuid_dir)) {
+      std::filesystem::remove_all(uuid_dir);
+    }
   };
 
   const auto table_name = td->tableName;
   {
     // - gen schema file
     const auto schema_str = cat_->dumpSchema(td);
-    file_writer(table_schema_filename, "table schema", schema_str);
+    file_writer(uuid_dir / table_schema_filename, "table schema", schema_str);
     // - gen column-old-info file
     const auto cds = cat_->getAllColumnMetadataForTable(td->tableId, true, true, true);
     std::vector<std::string> column_oldinfo;
@@ -378,10 +397,10 @@ void TableArchiver::dumpTable(const TableDescriptor* td,
                             cat_->getColumnDictDirectory(cd);
                    });
     const auto column_oldinfo_str = boost::algorithm::join(column_oldinfo, " ");
-    file_writer(table_oldinfo_filename, "table old info", column_oldinfo_str);
+    file_writer(uuid_dir / table_oldinfo_filename, "table old info", column_oldinfo_str);
     // - gen table epoch
     const auto epoch = cat_->getTableEpoch(cat_->getCurrentDB().dbId, td->tableId);
-    file_writer(table_epoch_filename, "table epoch", std::to_string(epoch));
+    file_writer(uuid_dir / table_epoch_filename, "table epoch", std::to_string(epoch));
     // - collect table data file paths ...
     const auto data_file_dirs = cat_->getTableDataDirectories(td);
     file_paths.insert(file_paths.end(), data_file_dirs.begin(), data_file_dirs.end());
@@ -391,9 +410,10 @@ void TableArchiver::dumpTable(const TableDescriptor* td,
     // tar takes time. release cat lock to yield the cat to concurrent CREATE statements.
   }
   // run tar to archive the files ... this may take a while !!
-  run("tar " + compression + " -cvf " + get_quoted_string(archive_path) + " " +
-          boost::algorithm::join(file_paths, " "),
-      abs_path(global_file_mgr));
+  run("tar " + compression + " --transform=s|" + uuid +
+          std::filesystem::path::preferred_separator + "|| -cvf " +
+          get_quoted_string(archive_path) + " " + boost::algorithm::join(file_paths, " "),
+      file_mgr_dir);
 }
 
 // Restore data and dict files of a table from a tgz archive.
@@ -422,20 +442,28 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
 
   // untar takes time. no grab of cat lock to yield to concurrent CREATE stmts.
   const auto global_file_mgr = cat_->getDataMgr().getGlobalFileMgr();
+
+  // create a unique uuid for this table restore
+  std::string uuid = boost::uuids::to_string(boost::uuids::random_generator()());
+
+  const auto uuid_dir = std::filesystem::path(abs_path(global_file_mgr)) / uuid;
+
+  if (!std::filesystem::create_directory(uuid_dir)) {
+    throw std::runtime_error("Failed to create work directory '" + uuid_dir.string() +
+                             "' while restoring table.");
+  }
+
+  ScopeGuard cleanup_guard = [&] {
+    if (std::filesystem::exists(uuid_dir)) {
+      std::filesystem::remove_all(uuid_dir);
+    }
+  };
+
   // dirs where src files are untarred and dst files are backed up
   constexpr static const auto temp_data_basename = "_data";
   constexpr static const auto temp_back_basename = "_back";
-  const auto temp_data_dir = abs_path(global_file_mgr) + "/" + temp_data_basename;
-  const auto temp_back_dir = abs_path(global_file_mgr) + "/" + temp_back_basename;
-  // clean up tmp dirs and files in any case
-  auto tmp_files_cleaner = [&](void*) {
-    run("rm -rf " + temp_data_dir + " " + temp_back_dir);
-    run("rm -f " + abs_path(global_file_mgr) + "/" + table_schema_filename);
-    run("rm -f " + abs_path(global_file_mgr) + "/" + table_oldinfo_filename);
-    run("rm -f " + abs_path(global_file_mgr) + "/" + table_epoch_filename);
-  };
-  std::unique_ptr<decltype(tmp_files_cleaner), decltype(tmp_files_cleaner)> tfc(
-      &tmp_files_cleaner, tmp_files_cleaner);
+  const auto temp_data_dir = uuid_dir / temp_data_basename;
+  const auto temp_back_dir = uuid_dir / temp_back_basename;
 
   // extract & parse schema
   const auto schema_str = get_table_schema(archive_path, td->tableName, compression);
@@ -529,8 +557,8 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
   VLOG(3) << "was_table_altered = " << was_table_altered;
   // extract all data files to a temp dir. will swap with dst table dir after all set,
   // otherwise will corrupt table in case any bad thing happens in the middle.
-  run("rm -rf " + temp_data_dir);
-  run("mkdir -p " + temp_data_dir);
+  run("rm -rf " + temp_data_dir.string());
+  run("mkdir -p " + temp_data_dir.string());
   run("tar " + compression + " -xvf " + get_quoted_string(archive_path), temp_data_dir);
 
   // if table was ever altered after it was created, update column ids in chunk headers.
@@ -553,12 +581,12 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
              std::back_inserter(both_file_dirs));
   bool backup_completed = false;
   try {
-    run("rm -rf " + temp_back_dir);
-    run("mkdir -p " + temp_back_dir);
+    run("rm -rf " + temp_back_dir.string());
+    run("mkdir -p " + temp_back_dir.string());
     for (const auto& dir : both_file_dirs) {
       const auto dir_full_path = abs_path(global_file_mgr) + "/" + dir;
       if (boost::filesystem::is_directory(dir_full_path)) {
-        run("mv " + dir_full_path + " " + temp_back_dir);
+        run("mv " + dir_full_path + " " + temp_back_dir.string());
       }
     }
     backup_completed = true;
@@ -567,7 +595,7 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
     // Move dictionaries from temp dir to main dir.
     for (const auto& dit : dict_paths_map) {
       if (!dit.first.empty() && !dit.second.empty()) {
-        const auto src_dict_path = temp_data_dir + "/" + dit.first;
+        const auto src_dict_path = temp_data_dir.string() + "/" + dit.first;
         const auto dst_dict_path = abs_path(global_file_mgr) + "/" + dit.second;
         run("mv " + src_dict_path + " " + dst_dict_path);
       }
