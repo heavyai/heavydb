@@ -4941,6 +4941,7 @@ TEST_F(TemporalColumnExportTest, Unquoted) {
 
 static constexpr const char* kPNG = "beach.png";
 static constexpr const char* kGeoTIFF = "USGS_1m_x30y441_OH_Columbus_2019_small.tif";
+static constexpr const char* kGeoTIFFDir = "geotif/";
 static constexpr const char* kGRIB = "hrrr.t00z.wrfsubhf00_small.grib2";
 static constexpr const char* kZARRArchive = "small.zarr.tgz";
 static constexpr const char* kZARRFile = "small.zarr";
@@ -5331,7 +5332,27 @@ class RasterImportTest : public DBHandlerTestFixture {
         extra_with_options + ");");
     sqlAndCompareResult(check_str, expected_result_set);
   }
+
+  void importTestCommonWithDir(
+      const std::string& dirname,
+      const std::string& suffix,
+      const std::string& extra_with_options,
+      const std::string& check_str,
+      const std::vector<std::vector<NullableTargetValue>>& expected_result_set) {
+    auto const abs_file_name =
+        (boost::filesystem::canonical("../../Tests/Import/datafiles/raster/" + dirname) /
+         suffix)
+            .string();
+    sql("COPY raster FROM '" + abs_file_name + "' WITH (source_type='raster_file'" +
+        extra_with_options + ");");
+    sqlAndCompareResult(check_str, expected_result_set);
+  }
 };
+
+TEST_F(RasterImportTest, MissingColumnNameInSecondFile) {
+  ASSERT_NO_THROW(importTestCommonWithDir(
+      kGeoTIFFDir, "*.tif", "", "SELECT count(*) FROM raster;", {{93312L}}));
+}
 
 TEST_F(RasterImportTest, ImportPNGTest) {
   ASSERT_NO_THROW(
