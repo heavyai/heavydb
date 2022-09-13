@@ -4986,6 +4986,17 @@ std::string TTypeInfo_TypeToString(const TDatumType::type& t) {
   return ss.str();
 }
 
+std::string get_mismatch_attr_warning_text(const std::string& table_name,
+                                           const std::string& file_path,
+                                           const std::string& column_name,
+                                           const std::string& attr,
+                                           const std::string& got,
+                                           const std::string& expected) {
+  return "Issue encountered in geo/raster file '" + file_path +
+         "' while appending to table '" + table_name + "'. Column '" + column_name +
+         "' " + attr + " mismatch (got '" + got + "', expected '" + expected + "')";
+}
+
 }  // namespace
 
 #define THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(attr, got, expected)                        \
@@ -5383,7 +5394,17 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
                       << ename << "'";
             rd[rd_index].col_name = ename;
           } else {
-            THROW_COLUMN_ATTR_MISMATCH_EXCEPTION("name", gname, ename);
+            if (is_raster) {
+              LOG(WARNING) << get_mismatch_attr_warning_text(
+                  table_name,
+                  file_path.filename().string(),
+                  cd->columnName,
+                  "name",
+                  gname,
+                  ename);
+            } else {
+              THROW_COLUMN_ATTR_MISMATCH_EXCEPTION("name", gname, ename);
+            }
           }
         }
         rd_index++;
