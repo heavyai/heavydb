@@ -294,6 +294,14 @@ class DBHandlerTestFixture : public testing::Test {
            odbc_wrappers.end();
   }
 
+  static bool isFileBased(const std::string& data_wrapper_type) {
+    static const std::vector<std::string> file_based_wrappers{
+        "regex_parser", "csv", "parquet"};
+    return std::find(file_based_wrappers.begin(),
+                     file_based_wrappers.end(),
+                     data_wrapper_type) != file_based_wrappers.end();
+  }
+
   static std::string getOdbcTableName(const std::string& table_name,
                                       const std::string& data_wrapper_type) {
     CHECK(false);
