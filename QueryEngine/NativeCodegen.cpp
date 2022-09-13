@@ -667,6 +667,10 @@ declare i64 @agg_count_double_shared(i64*, double);
 declare i64 @agg_count_double_skip_val_shared(i64*, double, double);
 declare i32 @agg_count_float_shared(i32*, float);
 declare i32 @agg_count_float_skip_val_shared(i32*, float, float);
+declare i64 @agg_count_if_shared(i64*, i64);
+declare i64 @agg_count_if_skip_val_shared(i64*, i64, i64);
+declare i32 @agg_count_if_int32_shared(i32*, i32);
+declare i32 @agg_count_if_int32_skip_val_shared(i32*, i32, i32);
 declare i64 @agg_sum_shared(i64*, i64);
 declare i64 @agg_sum_skip_val_shared(i64*, i64, i64);
 declare i32 @agg_sum_int32_shared(i32*, i32);
@@ -1786,8 +1790,16 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
       continue;
     }
     const auto agg_type = agg_expr->get_aggtype();
-    const auto& agg_type_info =
-        agg_type != kCOUNT ? agg_expr->get_arg()->get_type_info() : target_type_info;
+    SQLTypeInfo agg_type_info;
+    switch (agg_type) {
+      case kCOUNT:
+      case kCOUNT_IF:
+        agg_type_info = target_type_info;
+        break;
+      default:
+        agg_type_info = agg_expr->get_arg()->get_type_info();
+        break;
+    }
     switch (agg_type) {
       case kAVG: {
         if (!agg_type_info.is_integer() && !agg_type_info.is_decimal() &&
@@ -1837,6 +1849,9 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
       case kCOUNT:
         result.emplace_back(agg_expr->get_is_distinct() ? "agg_count_distinct"
                                                         : "agg_count");
+        break;
+      case kCOUNT_IF:
+        result.emplace_back("agg_count_if");
         break;
       case kSINGLE_VALUE: {
         result.emplace_back(agg_type_info.is_fp() ? "agg_id_double" : "agg_id");
@@ -2532,7 +2547,7 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
     // not a COUNT aggregate
     const auto target_infos =
         target_exprs_to_infos(ra_exe_unit.target_exprs, *query_mem_desc_ptr);
-    std::unordered_set<SQLAgg> supported_aggs{kCOUNT};
+    std::unordered_set<SQLAgg> supported_aggs{kCOUNT, kCOUNT_IF};
     if (std::find_if(target_infos.begin(),
                      target_infos.end(),
                      [&supported_aggs](const TargetInfo& ti) {
@@ -2583,9 +2598,9 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
       // TODO: relax this if necessary
       const auto target_infos =
           target_exprs_to_infos(ra_exe_unit.target_exprs, *query_mem_desc_ptr);
-      std::unordered_set<SQLAgg> supported_aggs{kCOUNT};
+      std::unordered_set<SQLAgg> supported_aggs{kCOUNT, kCOUNT_IF};
       if (g_enable_smem_grouped_non_count_agg) {
-        supported_aggs = {kCOUNT, kMIN, kMAX, kSUM, kAVG};
+        supported_aggs = {kCOUNT, kCOUNT_IF, kMIN, kMAX, kSUM, kAVG};
       }
       if (std::find_if(target_infos.begin(),
                        target_infos.end(),

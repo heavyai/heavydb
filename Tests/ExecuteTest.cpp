@@ -3305,6 +3305,76 @@ TEST(Select, CountDistinct) {
   }
 }
 
+TEST(Select, CountIf) {
+  struct CountIfTestQuery {
+    std::string query;
+    std::string alternative_query;
+  };
+  struct TestColumnInfo {
+    std::string col_name;
+    bool allow_comp;
+  };
+  std::vector<TestColumnInfo> col_names{{"String_dict", false},
+                                        {"Tiny_int", true},
+                                        {"Small_int", true},
+                                        {"Int_", true},
+                                        {"Big_int", true},
+                                        {"Float_", true},
+                                        {"Double_", true},
+                                        {"Decimal_", true},
+                                        {"Timestamp_", false},
+                                        {"Date_", false},
+                                        {"Time_", false},
+                                        {"Boolean_", false}};
+
+  auto run_test = [](const std::vector<CountIfTestQuery>& test_queries) {
+    for (const auto& test_query : test_queries) {
+      for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+        SKIP_NO_GPU();
+        const auto alternative_res = run_simple_agg(test_query.alternative_query, dt);
+        const auto alternative_res_val = v<int64_t>(alternative_res);
+        if (alternative_res_val > 0) {
+          const auto res = run_simple_agg(test_query.query, dt);
+          EXPECT_EQ(v<int64_t>(res), alternative_res_val) << test_query.query;
+        } else {
+          EXPECT_EQ(alternative_res_val, (int64_t)0);
+        }
+      }
+    }
+  };
+  // 1. non-group by
+  {
+    auto gen_query = [](const std::string& cond) -> CountIfTestQuery {
+      return {"SELECT COUNT_IF(" + cond + ") FROM data_types_basic5",
+              "SELECT COUNT(1) FROM data_types_basic5 WHERE " + cond};
+    };
+    std::vector<CountIfTestQuery> test_queries;
+    for (const auto& col_info : col_names) {
+      const std::string count_cond = col_info.col_name + " IS NULL";
+      test_queries.push_back(CountIfTestQuery(gen_query(count_cond)));
+      if (col_info.allow_comp) {
+        const auto count_comp_cond = col_info.col_name + " > 0";
+        test_queries.push_back(CountIfTestQuery(gen_query(count_comp_cond)));
+      }
+    }
+    run_test(test_queries);
+  }
+  // 2. group-by
+  {
+    auto gen_query = [](const std::string& col_name) -> CountIfTestQuery {
+      return {"SELECT CNT FROM (SELECT " + col_name + ", COUNT_IF(" + col_name +
+                  " IS NULL) CNT FROM data_types_basic5 WHERE " + col_name +
+                  " IS NULL GROUP BY " + col_name + ") T",
+              "SELECT COUNT(1) FROM data_types_basic5 WHERE " + col_name + " IS NULL"};
+    };
+    std::vector<CountIfTestQuery> test_queries;
+    for (const auto& col_info : col_names) {
+      test_queries.push_back(CountIfTestQuery(gen_query(col_info.col_name)));
+    }
+    run_test(test_queries);
+  }
+}
+
 TEST(Select, ApproxCountDistinct) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -23580,6 +23650,89 @@ TEST(Select, WindowFunctionFrameNavigationFunctions) {
     const auto query3 = "SELECT oc, " + func_name_on_frame +
                         "(ti, 1) OVER (ORDER BY pc) FROM test_frame_nav";
     EXPECT_ANY_THROW(run_multiple_agg(query1, dt));
+  }
+}
+
+TEST(Select, ConditionalWindowFunction) {
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+
+  const std::string drop_test_table1{"DROP TABLE IF EXISTS TD_RANGE;"};
+  const std::string drop_test_table2{"DROP TABLE IF EXISTS TD_RANGE_NULL;"};
+  const std::vector<std::string> drop_table_ddls{drop_test_table1, drop_test_table2};
+  for (const auto& drop_table_ddl : drop_table_ddls) {
+    run_ddl_statement(drop_table_ddl);
+  }
+  ScopeGuard drop_table_at_end = [&drop_table_ddls]() {
+    for (const auto& drop_table_ddl : drop_table_ddls) {
+      run_ddl_statement(drop_table_ddl);
+    }
+  };
+  std::string columns_definition{
+      "(rid INT, pc INT, ti TIME, tie TIME ENCODING FIXED(32), d32 DATE ENCODING "
+      "DAYS(32), d16 DATE ENCODING DAYS(16), tm0 TIMESTAMP(0), tm0e TIMESTAMP ENCODING "
+      "FIXED(32), tm3 "
+      "TIMESTAMP(3), tm6 TIMESTAMP(6), tm9 TIMESTAMP(9), tm3_ms "
+      "TIMESTAMP(3), tm6_us TIMESTAMP(6), tm6_ms TIMESTAMP(6), tm9_ns TIMESTAMP(9), "
+      "tm9_us TIMESTAMP(9), tm9_ms TIMESTAMP(9))"};
+  auto gen_table_creation_ddl = [&columns_definition](const std::string& table_name) {
+    return "CREATE TABLE " + table_name + " " + columns_definition + ";";
+  };
+  run_ddl_statement(gen_table_creation_ddl("TD_RANGE"));
+  run_ddl_statement(gen_table_creation_ddl("TD_RANGE_NULL"));
+  run_ddl_statement(
+      "copy TD_RANGE from "
+      "'../../Tests/Import/datafiles/window_frame_date_time.csv' with "
+      "(header='true');");
+  run_ddl_statement(
+      "copy TD_RANGE_NULL from "
+      "'../../Tests/Import/datafiles/window_frame_date_time_null.csv' with "
+      "(header='true');");
+  // 1. COUNT_IF
+  // 1.a NON-FRAMED version
+  EXPECT_EQ(3,
+            v<int64_t>(
+                run_simple_agg("SELECT MIN(CNT) FROM (SELECT COUNT_IF(TI IS NULL) OVER "
+                               "(PARTITION BY PC) CNT FROM TD_RANGE_NULL WHERE PC = 1) T",
+                               dt)));
+  EXPECT_EQ(3,
+            v<int64_t>(
+                run_simple_agg("SELECT MAX(CNT) FROM (SELECT COUNT_IF(TI IS NULL) OVER "
+                               "(PARTITION BY PC) CNT FROM TD_RANGE_NULL WHERE PC = 1) T",
+                               dt)));
+  EXPECT_EQ(5,
+            v<int64_t>(
+                run_simple_agg("SELECT MIN(CNT) FROM (SELECT COUNT_IF(RID > 6) OVER "
+                               "(PARTITION BY PC) CNT FROM TD_RANGE_NULL WHERE PC = 1) T",
+                               dt)));
+  EXPECT_EQ(5,
+            v<int64_t>(
+                run_simple_agg("SELECT MAX(CNT) FROM (SELECT COUNT_IF(RID > 6) OVER "
+                               "(PARTITION BY PC) CNT FROM TD_RANGE_NULL WHERE PC = 1) T",
+                               dt)));
+
+  // 1.b FRAMED version
+  {
+    auto q1_res = run_multiple_agg(
+        "SELECT RID, CNT FROM (SELECT RID, COUNT_IF(RID > 8) OVER (PARTITION BY PC ORDER "
+        "BY RID ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) CNT FROM TD_RANGE_NULL WHERE "
+        "PC = 1) T ORDER BY RID;",
+        dt);
+    std::vector<int> q1_ans{0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 2};
+    for (auto val : q1_ans) {
+      const auto row = q1_res->getNextRow(true, true);
+      EXPECT_EQ(val, v<int64_t>(row[1]));
+    }
+
+    auto q2_res = run_multiple_agg(
+        "SELECT RID, CNT FROM (SELECT RID, COUNT_IF(TI IS NULL) OVER (PARTITION BY PC "
+        "ORDER BY RID ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) CNT FROM TD_RANGE_NULL "
+        "WHERE PC = 1) T ORDER BY RID;",
+        dt);
+    std::vector<int> q2_ans{2, 2, 1, 0, 0, 0, 0, 1, 1, 1, 0};
+    for (auto val : q2_ans) {
+      const auto row = q2_res->getNextRow(true, true);
+      EXPECT_EQ(val, v<int64_t>(row[1]));
+    }
   }
 }
 

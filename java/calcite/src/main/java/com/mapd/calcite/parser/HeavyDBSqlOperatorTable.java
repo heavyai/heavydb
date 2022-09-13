@@ -283,6 +283,10 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new Mode());
     addOperator(new Sample());
     addOperator(new LastSample());
+
+    // conditional window aggregate functions
+    addOperator(new CountIf());
+
     addOperator(new HeavyDB_Geo_PolyBoundsPtr());
     addOperator(new HeavyDB_Geo_PolyRenderGroup());
     addOperator(new convert_meters_to_pixel_width());
@@ -2594,6 +2598,26 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   public static class LastSample extends SqlAggFunction {
     public LastSample() {
       super("LAST_SAMPLE",
+              null,
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.ANY,
+              SqlFunctionCategory.SYSTEM,
+              false,
+              false,
+              Optionality.FORBIDDEN);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+  }
+
+  static class CountIf extends SqlAggFunction {
+    CountIf() {
+      super("COUNT_IF",
               null,
               SqlKind.OTHER_FUNCTION,
               null,

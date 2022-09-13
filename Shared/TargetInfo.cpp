@@ -69,7 +69,7 @@ TargetInfo get_target_info_impl(const Analyzer::Expr* target_expr,
   return {
       true,
       agg_expr->get_aggtype(),
-      agg_type == kCOUNT
+      shared::is_any<kCOUNT, kCOUNT_IF>(agg_type)
           ? SQLTypeInfo((is_distinct || bigint_count) ? kBIGINT : kINT, notnull)
           : agg_expr->get_type_info(),
       agg_arg_ti,

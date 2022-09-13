@@ -42,9 +42,10 @@ inline const SQLTypeInfo get_compact_type(const TargetInfo& target) {
   const auto& agg_arg = target.agg_arg_type;
   if (agg_arg.get_type() == kNULLT) {
 #ifdef __CUDACC__
-    CHECK((shared::is_any<kCOUNT, kAPPROX_QUANTILE, kMODE>(agg_type)));
+    CHECK((shared::is_any<kCOUNT, kCOUNT_IF, kAPPROX_QUANTILE, kMODE>(agg_type)));
 #else
-    CHECK((shared::is_any<kCOUNT, kAPPROX_QUANTILE, kMODE>(agg_type))) << agg_type;
+    CHECK((shared::is_any<kCOUNT, kCOUNT_IF, kAPPROX_QUANTILE, kMODE>(agg_type)))
+        << agg_type;
 #endif
     CHECK(!target.is_distinct);
     return target.sql_type;
@@ -65,7 +66,7 @@ inline void set_compact_type(TargetInfo& target, const SQLTypeInfo& new_type) {
   if (target.is_agg) {
     const auto agg_type = target.agg_kind;
     auto& agg_arg = target.agg_arg_type;
-    if (agg_type != kCOUNT || agg_arg.get_type() != kNULLT) {
+    if (!shared::is_any<kCOUNT, kCOUNT_IF>(agg_type) || agg_arg.get_type() != kNULLT) {
       agg_arg = new_type;
       return;
     }

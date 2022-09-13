@@ -42,6 +42,9 @@ class QueryRewriter {
   RelAlgExecutionUnit rewriteAggregateOnGroupByColumn(
       const RelAlgExecutionUnit& ra_exe_unit_in) const;
 
+  RelAlgExecutionUnit rewriteCountIfAggRemoveNonNull(
+      const RelAlgExecutionUnit& ra_exe_unit_in) const;
+
  private:
   RelAlgExecutionUnit rewriteOverlapsJoin(
       const RelAlgExecutionUnit& ra_exe_unit_in) const;

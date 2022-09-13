@@ -68,6 +68,8 @@ std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info,
       return {"agg_sum", "agg_count"};
     case kCOUNT:
       return {target_info.is_distinct ? "agg_count_distinct" : "agg_count"};
+    case kCOUNT_IF:
+      return {"agg_count_if"};
     case kMAX:
       return {"agg_max"};
     case kMIN:
@@ -98,7 +100,8 @@ inline bool is_columnar_projection(const QueryMemoryDescriptor& query_mem_desc) 
 }
 
 bool is_simple_count(const TargetInfo& target_info) {
-  return target_info.is_agg && target_info.agg_kind == kCOUNT && !target_info.is_distinct;
+  return target_info.is_agg && shared::is_any<kCOUNT>(target_info.agg_kind) &&
+         !target_info.is_distinct;
 }
 
 bool target_has_geo(const TargetInfo& target_info) {
