@@ -1242,7 +1242,8 @@ void WindowFunctionContext::computePartitionBuffer(
     case SqlWindowFunctionKind::SUM:
     case SqlWindowFunctionKind::COUNT:
     case SqlWindowFunctionKind::LEAD_IN_FRAME:
-    case SqlWindowFunctionKind::LAG_IN_FRAME: {
+    case SqlWindowFunctionKind::LAG_IN_FRAME:
+    case SqlWindowFunctionKind::COUNT_IF: {
       const auto partition_row_offsets = payload() + offset;
       if (window_function_requires_peer_handling(window_func)) {
         index_to_partition_end(partitionEnd(),
@@ -1271,7 +1272,9 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
     const int64_t* ordered_rowid_buf,
     const SQLTypeInfo& input_col_ti) {
   CHECK(col_buf);
-  if (!input_col_ti.is_number()) {
+  if (!(input_col_ti.is_number() || input_col_ti.is_boolean())) {
+    // todo (yoonmin) : support min / max / count window agg functions over the frame
+    // for date/time/timestamp types
     throw QueryNotSupported("Window aggregate function over frame on a column type " +
                             ::toString(input_col_ti.get_type()) + " is not supported.");
   }
@@ -1287,6 +1290,7 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
             << ", null_range: " << order_col_null_range.first << " ~ "
             << order_col_null_range.second << ")";
     switch (type) {
+      case kBOOLEAN:
       case kTINYINT: {
         const auto segment_tree = std::make_shared<SegmentTree<int8_t, int64_t>>(
             col_buf,
@@ -1427,7 +1431,8 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
   } else {
     // handling a case of an empty partition
     aggregate_trees_depth_[partition_idx] = 0;
-    if (input_col_ti.is_integer() || input_col_ti.is_decimal()) {
+    if (input_col_ti.is_integer() || input_col_ti.is_decimal() ||
+        input_col_ti.is_boolean()) {
       if (agg_type == SqlWindowFunctionKind::AVG) {
         aggregate_trees_.derived_aggregate_tree_for_integer_type_.push_back(nullptr);
       } else {

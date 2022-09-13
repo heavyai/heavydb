@@ -1486,6 +1486,7 @@ void ResultSetStorage::reduceOneSlot(
   } else if (target_info.is_agg && target_info.agg_kind != kSAMPLE) {
     switch (target_info.agg_kind) {
       case kCOUNT:
+      case kCOUNT_IF:
       case kAPPROX_COUNT_DISTINCT: {
         if (is_distinct_target(target_info)) {
           CHECK_EQ(static_cast<size_t>(chosen_bytes), sizeof(int64_t));
@@ -1670,8 +1671,9 @@ bool ResultSetStorage::reduceSingleRow(const int8_t* row_ptr,
       partial_agg_vals[agg_col_idx] = partial_bin_val;
       if (is_distinct_target(agg_info)) {
         CHECK_EQ(int8_t(1), warp_count);
-        CHECK(agg_info.is_agg && (agg_info.agg_kind == kCOUNT ||
-                                  agg_info.agg_kind == kAPPROX_COUNT_DISTINCT));
+        CHECK(agg_info.is_agg &&
+              (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kCOUNT_IF ||
+               agg_info.agg_kind == kAPPROX_COUNT_DISTINCT));
         partial_bin_val = count_distinct_set_size(
             partial_bin_val, query_mem_desc.getCountDistinctDescriptor(target_idx));
         if (replace_bitmap_ptr_with_bitmap_sz) {
@@ -1710,6 +1712,7 @@ bool ResultSetStorage::reduceSingleRow(const int8_t* row_ptr,
         try {
           switch (agg_info.agg_kind) {
             case kCOUNT:
+            case kCOUNT_IF:
             case kAPPROX_COUNT_DISTINCT:
               AGGREGATE_ONE_NULLABLE_COUNT(
                   reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx]),
@@ -1787,7 +1790,8 @@ bool ResultSetStorage::reduceSingleRow(const int8_t* row_ptr,
               break;
             case 4: {
               int32_t ret = *reinterpret_cast<const int32_t*>(&agg_vals[agg_col_idx]);
-              if (!(agg_info.agg_kind == kCOUNT && ret != agg_init_vals[agg_col_idx])) {
+              if (!(shared::is_any<kCOUNT, kCOUNT_IF>(agg_info.agg_kind) &&
+                    ret != agg_init_vals[agg_col_idx])) {
                 agg_vals[agg_col_idx] = static_cast<int64_t>(ret);
               }
               break;

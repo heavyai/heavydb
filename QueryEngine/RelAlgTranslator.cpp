@@ -287,38 +287,56 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
     CHECK_LT(operand, scalar_sources.size());
     CHECK_LE(rex->size(), 2u);
     arg_expr = scalar_sources[operand];
-    if (agg_kind == kAPPROX_COUNT_DISTINCT && rex->size() == 2) {
-      arg1 = std::dynamic_pointer_cast<Analyzer::Constant>(
-          scalar_sources[rex->getOperand(1)]);
-      if (!arg1 || arg1->get_type_info().get_type() != kINT ||
-          arg1->get_constval().intval < 1 || arg1->get_constval().intval > 100) {
-        throw std::runtime_error(
-            "APPROX_COUNT_DISTINCT's second parameter should be SMALLINT literal between "
-            "1 and 100");
-      }
-    } else if (agg_kind == kAPPROX_QUANTILE) {
-      if (g_cluster) {
-        throw std::runtime_error(
-            "APPROX_PERCENTILE/MEDIAN is not supported in distributed mode at this "
-            "time.");
-      }
-      // If second parameter is not given then APPROX_MEDIAN is assumed.
-      if (rex->size() == 2) {
-        arg1 = std::dynamic_pointer_cast<Analyzer::Constant>(
-            std::dynamic_pointer_cast<Analyzer::Constant>(
-                scalar_sources[rex->getOperand(1)])
-                ->add_cast(SQLTypeInfo(kDOUBLE)));
-      } else {
+    switch (agg_kind) {
+      case kAPPROX_COUNT_DISTINCT:
+        if (rex->size() == 2) {
+          arg1 = std::dynamic_pointer_cast<Analyzer::Constant>(
+              scalar_sources[rex->getOperand(1)]);
+          if (!arg1 || arg1->get_type_info().get_type() != kINT ||
+              arg1->get_constval().intval < 1 || arg1->get_constval().intval > 100) {
+            throw std::runtime_error(
+                "APPROX_COUNT_DISTINCT's second parameter should be SMALLINT literal "
+                "between "
+                "1 and 100");
+          }
+        }
+        break;
+      case kAPPROX_QUANTILE:
+        if (g_cluster) {
+          throw std::runtime_error(
+              "APPROX_PERCENTILE/MEDIAN is not supported in distributed mode at this "
+              "time.");
+        }
+        // If second parameter is not given then APPROX_MEDIAN is assumed.
+        if (rex->size() == 2) {
+          arg1 = std::dynamic_pointer_cast<Analyzer::Constant>(
+              std::dynamic_pointer_cast<Analyzer::Constant>(
+                  scalar_sources[rex->getOperand(1)])
+                  ->add_cast(SQLTypeInfo(kDOUBLE)));
+        } else {
 #ifdef _WIN32
-        Datum median;
-        median.doubleval = 0.5;
+          Datum median;
+          median.doubleval = 0.5;
 #else
-        constexpr Datum median{.doubleval = 0.5};
+          constexpr Datum median{.doubleval = 0.5};
 #endif
-        arg1 = std::make_shared<Analyzer::Constant>(kDOUBLE, false, median);
-      }
-    } else if (agg_kind == kMODE && g_cluster) {
-      throw std::runtime_error("MODE is not supported in distributed mode at this time.");
+          arg1 = std::make_shared<Analyzer::Constant>(kDOUBLE, false, median);
+        }
+        break;
+      case kMODE:
+        if (g_cluster) {
+          throw std::runtime_error(
+              "MODE is not supported in distributed mode at this time.");
+        }
+        break;
+      case kCOUNT_IF:
+        if (rex->isDistinct()) {
+          throw std::runtime_error(
+              "Currently, COUNT_IF function does not support DISTINCT qualifier.");
+        }
+        break;
+      default:
+        break;
     }
     const auto& arg_ti = arg_expr->get_type_info();
     if (!is_agg_supported_for_type(agg_kind, arg_ti)) {
@@ -2003,6 +2021,18 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
   if (window_function_is_value(window_func_kind)) {
     CHECK_GE(args.size(), 1u);
     ti = args.front()->get_type_info();
+  } else if (window_function_conditional_aggregate(window_func_kind)) {
+    switch (window_func_kind) {
+      case SqlWindowFunctionKind::COUNT_IF:
+        // count_if should have an input expression having boolean type
+        // but returned value should have the same as a normal count agg expr
+        // so we force to set its type to bigint
+        CHECK(ti.is_boolean());
+        ti = SQLTypeInfo(kBIGINT);
+        break;
+      default:
+        break;
+    }
   }
   auto determine_frame_bound_type =
       [](const RexWindowFunctionOperator::RexWindowBound& bound) {

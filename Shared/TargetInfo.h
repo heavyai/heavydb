@@ -77,7 +77,7 @@ struct TargetInfo {
  * argument. Returns false otherwise.
  */
 inline bool is_agg_domain_range_equivalent(const SQLAgg agg_kind) {
-  return shared::is_any<kMIN, kMAX, kSINGLE_VALUE, kSAMPLE, kMODE>(agg_kind);
+  return shared::is_any<kMIN, kMAX, kSINGLE_VALUE, kSAMPLE, kMODE, kCOUNT_IF>(agg_kind);
 }
 
 namespace target_info {

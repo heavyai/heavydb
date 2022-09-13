@@ -1144,6 +1144,9 @@ SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
   if (name == "COUNT") {
     return SqlWindowFunctionKind::COUNT;
   }
+  if (name == "COUNT_IF") {
+    return SqlWindowFunctionKind::COUNT_IF;
+  }
   if (name == "$SUM0") {
     return SqlWindowFunctionKind::SUM_INTERNAL;
   }
@@ -2519,6 +2522,13 @@ void add_window_function_pre_project(
           for (const auto& order_key : window_expr->getOrderKeys()) {
             auto order_input = dynamic_cast<const RexInput*>(order_key.get());
             if (!order_input) {
+              return true;
+            }
+          }
+          if (window_expr->getKind() == SqlWindowFunctionKind::COUNT_IF) {
+            CHECK_EQ(1u, window_expr->size());
+            auto input_expr = dynamic_cast<const RexInput*>(window_expr->getOperand(0));
+            if (!input_expr) {
               return true;
             }
           }

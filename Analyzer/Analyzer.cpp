@@ -2901,6 +2901,9 @@ std::string AggExpr::toString() const {
     case kMODE:
       agg = "MODE";
       break;
+    case kCOUNT_IF:
+      agg = "COUNT_IF";
+      break;
     default:
       UNREACHABLE() << "Unhandled aggtype: " << aggtype;
       break;
