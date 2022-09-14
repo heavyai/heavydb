@@ -75,7 +75,8 @@ WindowFunctionContext::WindowFunctionContext(
   dummy_payload_ =
       reinterpret_cast<int32_t*>(checked_malloc(elem_count_ * sizeof(int32_t)));
   std::iota(dummy_payload_, dummy_payload_ + elem_count_, int32_t(0));
-  if (window_func_->hasFraming()) {
+  if (window_func_->hasFraming() ||
+      window_func_->getKind() == SqlWindowFunctionKind::NTH_VALUE) {
     // in this case, we consider all rows of the row belong to the same and only
     // existing partition
     partition_start_offset_ =
@@ -399,6 +400,15 @@ void apply_nth_value_to_partition(const int32_t* original_indices,
   const auto target_idx = original_indices[output_for_partition_buff[target_pos]];
   std::fill(
       output_for_partition_buff, output_for_partition_buff + partition_size, target_idx);
+}
+
+void apply_original_index_to_partition(const int32_t* original_indices,
+                                       int64_t* output_for_partition_buff,
+                                       const size_t partition_size) {
+  for (size_t i = 0; i < partition_size; i++) {
+    const auto target_idx = original_indices[output_for_partition_buff[i]];
+    output_for_partition_buff[i] = target_idx;
+  }
 }
 
 void index_to_partition_end(
@@ -1234,6 +1244,25 @@ void WindowFunctionContext::computePartitionBuffer(
       const auto partition_row_offsets = payload() + offset;
       apply_nth_value_to_partition(
           partition_row_offsets, output_for_partition_buff, partition_size, target_idx);
+      break;
+    }
+    case SqlWindowFunctionKind::NTH_VALUE: {
+      auto const n_value_ptr =
+          dynamic_cast<Analyzer::Constant*>(window_func_->getArgs()[1].get());
+      CHECK(n_value_ptr);
+      auto const n_value = static_cast<size_t>(n_value_ptr->get_constval().intval);
+      const auto partition_row_offsets = payload() + offset;
+      if (n_value < partition_size) {
+        apply_nth_value_to_partition(
+            partition_row_offsets, output_for_partition_buff, partition_size, n_value);
+      } else {
+        // when NTH_VALUE of the current row is NULL, we keep the NULL value in the
+        // current row's output storage in the query output buffer, so we assign the
+        // original index of the current row to the corresponding slot in
+        // `output_for_partition_buff`
+        apply_original_index_to_partition(
+            partition_row_offsets, output_for_partition_buff, partition_size);
+      }
       break;
     }
     case SqlWindowFunctionKind::AVG:

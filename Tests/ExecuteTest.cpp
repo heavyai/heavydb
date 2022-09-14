@@ -22315,7 +22315,7 @@ TEST(Select, WindowFunctionLead) {
   }
 }
 
-TEST(Select, WindowFunctionFirstAndLast) {
+TEST(Select, WindowFunctionFirstLastAndNthValues) {
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
     // Both postgres and SQLite apply the default frame bound for first_value and
@@ -22351,6 +22351,24 @@ TEST(Select, WindowFunctionFirstAndLast) {
     EXPECT_EQ(1, v<int64_t>(run_simple_agg(query2_a, dt)));
     EXPECT_EQ(70, v<int64_t>(run_simple_agg(query2_b, dt)));
     EXPECT_EQ(10, v<int64_t>(run_simple_agg(query2_c, dt)));
+
+    // nth_value
+    EXPECT_ANY_THROW(run_multiple_agg(
+        "SELECT NTH_VALUE(X, 0) OVER (PARTITION BY y) FROM " + table_name, dt));
+    EXPECT_ANY_THROW(run_multiple_agg(
+        "SELECT NTH_VALUE(X, -1) OVER (PARTITION BY y) FROM " + table_name, dt));
+    EXPECT_ANY_THROW(run_multiple_agg(
+        "SELECT NTH_VALUE(fn, x) OVER (PARTITION BY y) FROM " + table_name, dt));
+    std::vector<int> q3_ans{1, 1, 6, 6, 6, 6, 6, 6, 6, INT32_MIN, INT32_MIN};
+    auto q3_res = run_multiple_agg(
+        "SELECT x, y, NTH_VALUE(x, 2) OVER (PARTITION BY y ORDER BY x) FROM " +
+            table_name + " ORDER BY y, x",
+        dt);
+    for (const auto val : q3_ans) {
+      const auto crt_row = q3_res->getNextRow(true, true);
+      EXPECT_EQ(crt_row.size(), size_t(3));
+      EXPECT_EQ(val, v<int64_t>(crt_row[2]));
+    }
   }
 }
 
