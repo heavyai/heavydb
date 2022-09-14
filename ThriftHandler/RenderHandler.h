@@ -57,6 +57,7 @@ class RenderHandler {
                          const bool renderer_use_ppll_polys,
                          const bool renderer_prefer_igpu,
                          const uint32_t renderer_vulkan_timeout_ms,
+                         const bool renderer_use_parallel_executors,
                          const SystemParameters system_parameters);
   ~RenderHandler();
 

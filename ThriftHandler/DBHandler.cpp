@@ -166,6 +166,7 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
                      const bool renderer_use_ppll_polys,
                      const bool renderer_prefer_igpu,
                      const unsigned renderer_vulkan_timeout_ms,
+                     const bool renderer_use_parallel_executors,
                      const bool enable_auto_clear_render_mem,
                      const int render_oom_retry_threshold,
                      const size_t render_mem_bytes,
@@ -216,6 +217,7 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
     , renderer_use_ppll_polys_(renderer_use_ppll_polys)
     , renderer_prefer_igpu_(renderer_prefer_igpu)
     , renderer_vulkan_timeout_(renderer_vulkan_timeout_ms)
+    , renderer_use_parallel_executors_(renderer_use_parallel_executors)
     , enable_auto_clear_render_mem_(enable_auto_clear_render_mem)
     , render_oom_retry_threshold_(render_oom_retry_threshold)
     , max_concurrent_render_sessions_(max_concurrent_render_sessions)
@@ -389,6 +391,7 @@ void DBHandler::initialize(const bool is_new_db) {
                                               false,
                                               renderer_prefer_igpu_,
                                               renderer_vulkan_timeout_,
+					      renderer_use_parallel_executors_,
                                               system_parameters_));
     } catch (const std::exception& e) {
       LOG(ERROR) << "Backend rendering disabled: " << e.what();
@@ -1615,6 +1618,12 @@ std::unordered_set<std::string> DBHandler::get_uc_compatible_table_names_by_colu
   return compatible_table_names_by_column;
 }
 
+void DBHandler::dispatch_query_task(std::shared_ptr<QueryDispatchQueue::Task> query_task,
+                                    const bool is_update_delete) {
+  CHECK(dispatch_queue_);
+  dispatch_queue_->submit(std::move(query_task), is_update_delete);
+}
+
 TQueryResult DBHandler::validate_rel_alg(const std::string& query_ra,
                                          QueryStateProxy query_state_proxy) {
   TQueryResult _return;
@@ -1634,8 +1643,7 @@ TQueryResult DBHandler::validate_rel_alg(const std::string& query_ra,
                         ExplainInfo(),
                         executor_index);
       });
-  CHECK(dispatch_queue_);
-  dispatch_queue_->submit(execute_rel_alg_task, /*is_update_delete=*/false);
+  dispatch_query_task(execute_rel_alg_task, /*is_update_delete=*/false);
   auto result_future = execute_rel_alg_task->get_future();
   result_future.get();
   DBHandler::convertData(_return, result, query_state_proxy, true, -1, -1);

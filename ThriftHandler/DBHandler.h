@@ -177,6 +177,7 @@ class DBHandler : public HeavyIf {
             const bool renderer_use_ppll_polys,
             const bool renderer_prefer_igpu,
             const unsigned renderer_vulkan_timeout_ms,
+            const bool renderer_use_parallel_executors,
             const bool enable_auto_clear_render_mem,
             const int render_oom_retry_threshold,
             const size_t render_mem_bytes,
@@ -769,6 +770,9 @@ class DBHandler : public HeavyIf {
 
   TQueryResult validate_rel_alg(const std::string& query_ra, QueryStateProxy);
 
+  void dispatch_query_task(std::shared_ptr<QueryDispatchQueue::Task> query_task,
+                           const bool is_update_delete);
+
   std::vector<PushedDownFilterInfo> execute_rel_alg(
       ExecutionResult& _return,
       QueryStateProxy,
@@ -945,6 +949,7 @@ class DBHandler : public HeavyIf {
   const bool renderer_use_ppll_polys_;
   const bool renderer_prefer_igpu_;
   const unsigned renderer_vulkan_timeout_;
+  const bool renderer_use_parallel_executors_;
   const bool enable_auto_clear_render_mem_;
   const int render_oom_retry_threshold_;
   const size_t max_concurrent_render_sessions_;
