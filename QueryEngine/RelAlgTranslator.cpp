@@ -2282,6 +2282,30 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
       }
       break;
     }
+    case SqlWindowFunctionKind::NTH_VALUE:
+      // todo (yoonmin) : args.size() will be three if we support default value
+      CHECK_EQ(2u, args.size());
+      // NTH_VALUE may return null value even if the argument is non-null column
+      ti.set_notnull(false);
+      if (!args[1]) {
+        throw std::runtime_error(
+            "NTH_VALUE window function must have a positional argument expression.");
+      }
+      if (args[1]->get_type_info().is_integer()) {
+        if (auto* n_value_ptr = dynamic_cast<Analyzer::Constant*>(args[1].get())) {
+          if (0 < n_value_ptr->get_constval().intval) {
+            // i.e., having N larger than the partition size
+            // set the proper N to match the zero-start index pos
+            auto d = n_value_ptr->get_constval();
+            d.intval -= 1;
+            n_value_ptr->set_constval(d);
+            break;
+          }
+        }
+      }
+      throw std::runtime_error(
+          "The positional argument of the NTH_VALUE window function must be a positive "
+          "integer constant.");
     default:
       break;
   }

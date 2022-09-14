@@ -125,9 +125,6 @@ enum class SqlWindowFunctionKind {
   AVG,
   SUM,
   COUNT,
-  FIRST_EXPR,
-  LAST_EXPR,
-  NTH_EXPR,
   ROW_NUMBER,
   RANK,
   DENSE_RANK,
@@ -140,6 +137,7 @@ enum class SqlWindowFunctionKind {
   LEAD_IN_FRAME,
   FIRST_VALUE,
   LAST_VALUE,
+  NTH_VALUE,
   COUNT_IF,
   SUM_INTERNAL,  // For deserialization from Calcite only. Gets rewritten to a regular
                  // SUM.
@@ -451,6 +449,8 @@ inline std::string toString(const SqlWindowFunctionKind& kind) {
       return "FIRST_VALUE";
     case SqlWindowFunctionKind::LAST_VALUE:
       return "LAST_VALUE";
+    case SqlWindowFunctionKind::NTH_VALUE:
+      return "NTH_VALUE";
     case SqlWindowFunctionKind::AVG:
       return "AVG";
     case SqlWindowFunctionKind::MIN:
@@ -463,12 +463,6 @@ inline std::string toString(const SqlWindowFunctionKind& kind) {
       return "COUNT";
     case SqlWindowFunctionKind::SUM_INTERNAL:
       return "SUM_INTERNAL";
-    case SqlWindowFunctionKind::FIRST_EXPR:
-      return "FIRST_EXPR";
-    case SqlWindowFunctionKind::LAST_EXPR:
-      return "LAST_EXPR";
-    case SqlWindowFunctionKind::NTH_EXPR:
-      return "NTH_EXPR";
     case SqlWindowFunctionKind::LEAD_IN_FRAME:
       return "LEAD_IN_FRAME";
     case SqlWindowFunctionKind::LAG_IN_FRAME:

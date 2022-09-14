@@ -47,7 +47,8 @@ llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
     case SqlWindowFunctionKind::LAG:
     case SqlWindowFunctionKind::LEAD:
     case SqlWindowFunctionKind::FIRST_VALUE:
-    case SqlWindowFunctionKind::LAST_VALUE: {
+    case SqlWindowFunctionKind::LAST_VALUE:
+    case SqlWindowFunctionKind::NTH_VALUE: {
       // they are always evaluated on the current frame
       CHECK(WindowProjectNodeContext::get(this));
       const auto& args = window_func->getArgs();

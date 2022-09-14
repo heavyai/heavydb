@@ -1094,6 +1094,9 @@ SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
   if (name == "LAST_VALUE") {
     return SqlWindowFunctionKind::LAST_VALUE;
   }
+  if (name == "NTH_VALUE") {
+    return SqlWindowFunctionKind::NTH_VALUE;
+  }
   if (name == "AVG") {
     return SqlWindowFunctionKind::AVG;
   }

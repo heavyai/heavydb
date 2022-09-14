@@ -32,6 +32,7 @@ inline bool window_function_is_value(const SqlWindowFunctionKind kind) {
     case SqlWindowFunctionKind::LEAD:
     case SqlWindowFunctionKind::FIRST_VALUE:
     case SqlWindowFunctionKind::LAST_VALUE:
+    case SqlWindowFunctionKind::NTH_VALUE:
       return true;
     default:
       return false;
@@ -99,8 +100,8 @@ struct WindowPartitionBufferPtrs {
 // window function kinds and keeps ownership of buffers which contain the results. For
 // rank functions, the code generated for the projection simply reads the values and
 // writes them to the result set. For value and aggregate functions, only the iteration
-// order is written to the buffer, the rest is handled by generating code in a similar way
-// we do for non-window queries.
+// order is written to the buffer, the rest is handled by generating code in a similar
+// way we do for non-window queries.
 class WindowFunctionContext {
  public:
   // non-partitioned version
@@ -308,9 +309,9 @@ class WindowProjectNodeContext {
       const size_t target_index);
 
   // Marks the window function at the given target index as active. This simplifies the
-  // code generation since it's now context sensitive. Each value window function can have
-  // its own iteration order, therefore fetching a column at a given position changes
-  // depending on which window function is active.
+  // code generation since it's now context sensitive. Each value window function can
+  // have its own iteration order, therefore fetching a column at a given position
+  // changes depending on which window function is active.
   const WindowFunctionContext* activateWindowFunctionContext(
       Executor* executor,
       const size_t target_index) const;
