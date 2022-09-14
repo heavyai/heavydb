@@ -6,7 +6,7 @@
 #include "QueryEngine/CodeCacheAccessor.h"
 #include "QueryEngine/NvidiaKernel.h"
 
-inline bool g_query_engine_cuda_streams{true};
+inline bool g_query_engine_cuda_streams{false};
 
 class QueryEngine {
  public:

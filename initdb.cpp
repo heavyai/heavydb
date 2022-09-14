@@ -67,6 +67,7 @@ static void loadGeo(std::string base_path) {
   const bool renderer_use_ppll_polys{false};
   const bool renderer_prefer_igpu{false};
   const unsigned renderer_vulkan_timeout_ms{300000};
+  const bool renderer_use_parallel_executors{false};
   const bool enable_auto_clear_render_mem{false};
   const int render_oom_retry_threshold{0};
   const size_t render_mem_bytes{500000000};
@@ -103,6 +104,7 @@ static void loadGeo(std::string base_path) {
                                                 renderer_use_ppll_polys,
                                                 renderer_prefer_igpu,
                                                 renderer_vulkan_timeout_ms,
+                                                renderer_use_parallel_executors,
                                                 enable_auto_clear_render_mem,
                                                 render_oom_retry_threshold,
                                                 render_mem_bytes,
