@@ -1,0 +1,44 @@
+name: L0 image build
+on:
+  workflow_call:
+    inputs:
+      cuda_compiler_version:
+        type: string
+        default: 'None'
+
+jobs:
+  build:
+    runs-on: [self-hosted, linux]
+    steps:
+      - name: Clean
+        run: |
+            docker stop build.l0 || true
+            docker rm build.l0 || true
+            rm -rf /build_runner/_work/*
+
+      - uses: actions/checkout@v2
+
+      - name: Build docker image
+        run: docker build . --file docker/dev/Dockerfile.l0 --tag build.l0
+
+      - name: Start the container
+        run:  |
+          docker run -id --name build.l0 --network host build.l0:latest
+          docker cp $(pwd) build.l0:/omniscidb
+
+      - name: Configure the project
+        run: |
+          docker exec build.l0 useradd -m --uid 1001 ghrunner
+          docker exec build.l0 chown -R ghrunner:ghrunner /omniscidb
+          docker exec -u ghrunner build.l0 python3 /omniscidb/scripts/conda/make-m2-proxy.py
+          docker exec -u ghrunner build.l0 mkdir -p /omniscidb/build
+          docker exec -u ghrunner build.l0 cmake -B/omniscidb/build -S/omniscidb -DENABLE_L0=on -DENABLE_CUDA=off -DENABLE_TESTS=on
+
+      - name: Build the project
+        run: docker exec -u ghrunner build.l0 cmake --build /omniscidb/build/ --parallel 4
+
+      - name: Stop
+        if: always()
+        run: docker stop build.l0 || true
+
+

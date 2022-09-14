@@ -1,0 +1,87 @@
+name: Docker image build
+on:
+  workflow_call:
+    inputs:
+      cuda_compiler_version:
+        type: string
+        default: None
+      name:
+        type: string
+        default: cpu
+      options:
+        type: string
+        default: -DENABLE_CUDA=off
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set env context
+        run: |
+          echo RUN_STAMP=docker-${{ runner.os }}-${{ inputs.name }} >>$GITHUB_ENV
+          cat docker/dev/Dockerfile docker/dev/Dockerfile.${{ inputs.name }} >Dockerfile
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@master
+
+      - name: Cache Docker layers
+        uses: actions/cache@v2
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ hashFiles('**/Dockerfile') }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+      
+      - name: Build image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          builder: ${{ steps.buildx.outputs.name }}
+          file: Dockerfile
+          push: false
+          load: true
+          tags: build.${{ inputs.name }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new
+      
+        # https://github.com/docker/build-push-action/issues/252
+      -  name: Move cache
+         run: |
+            mv /tmp/.buildx-cache /tmp/.buildx-cache-old
+            mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      - name: Start the container
+        run:  |
+          mkdir build
+          docker run -id --name build.${{ inputs.name }} --network host -v $(pwd):/omniscidb build.${{ inputs.name }}:latest
+
+      - name: Configure the project
+        run: |
+          docker exec -u ghrunner build.${{ inputs.name }} python3 /omniscidb/scripts/conda/make-m2-proxy.py
+          docker exec -u ghrunner build.${{ inputs.name }} cmake -B/omniscidb/build -S/omniscidb -DENABLE_TESTS=on ${{ inputs.options }}
+ 
+      - name: Build the project
+        run: |
+          docker exec -u ghrunner build.${{ inputs.name }} cmake --build /omniscidb/build/ --parallel 2
+          docker exec -u ghrunner build.${{ inputs.name }} tar -zcf /tmp/build.tgz -C /omniscidb .
+          docker cp build.${{ inputs.name }}:/tmp/build.tgz .
+     
+      - name: Upload build and src files
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ env.RUN_STAMP }}-build
+          path: build.tgz
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ env.RUN_STAMP }}-logs
+          path: |
+            build/*.log
+            build/CMakeCache.txt 
+            build/CMakeFiles/*.log
+

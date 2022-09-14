@@ -45,4 +45,22 @@ jobs:
     with:
       is_conda_updated: ${{ needs.build.outputs.is_conda_updated }}
 
+  build-cuda-docker:
+    uses: ./.github/workflows/build-docker.yml
+    with:
+      name: cuda
+      options: ''
+
+#  test-cuda-docker:
+#    needs: build-cuda-docker
+#    uses: ./.github/workflows/test-docker.yml
+#    with:
+#      name: cuda
+
+  build-l0-docker:
+    uses: ./.github/workflows/build-docker.yml
+    with:
+      name: l0
+      options: -DENABLE_L0=on -DENABLE_CUDA=off
+    
 

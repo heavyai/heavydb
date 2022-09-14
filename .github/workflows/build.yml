@@ -71,7 +71,7 @@ jobs:
           path: |
             ~/.m2
           key: ${{ env.RUN_STAMP }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ env.RUN_STAMP }}-maven
+          restore-keys: ${{ env.RUN_STAMP }}-maven-
 
       - name: Build
         env:
@@ -109,6 +109,8 @@ jobs:
           name: ${{ env.RUN_STAMP }}-logs
           path: |
             build/*.log
+            build/CMakeCache.txt 
             build/CMakeFiles/*.log
+
 
 

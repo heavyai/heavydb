@@ -1,0 +1,50 @@
+name: Docker test
+on:
+  workflow_call:
+    inputs:
+      cuda_compiler_version:
+        type: string
+        default: None
+      name:
+        type: string
+        default: cpu
+
+jobs:
+  build:
+    runs-on: [self-hosted, linux]
+    steps:
+      - name: Clean
+        run: |
+            docker stop build.cuda || true
+            docker rm build.cuda || true
+            rm -rf _work/*
+
+      - name: Set env context
+        run: |
+          echo RUN_STAMP=docker-${{ runner.os }}-${{ inputs.name }} >>$GITHUB_ENV
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: ${{ env.RUN_STAMP }}-build
+
+      - name: Unpack build files
+        run: |
+          tar -zxf build.tgz
+
+      - name: Build docker image
+        run: |
+          cat docker/dev/Dockerfile docker/dev/Dockerfile.${{ inputs.name }} >Dockerfile
+          docker build . --tag build.${{ inputs.name }}
+
+      - name: Start the container
+        run:  |
+          docker run -id --name build.${{ inputs.name }} --network host --device /dev/nvidia-caps/nvidia-cap2:/dev/nvidia-caps/nvidia-cap2 --device /dev/nvidia-caps/nvidia-cap1:/dev/nvidia-caps/nvidia-cap1 --device /dev/nvidia-modeset:/dev/nvidia-modeset --device /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools --device /dev/nvidia-uvm:/dev/nvidia-uvm --device /dev/nvidia0:/dev/nvidia0 --device /dev/nvidiactl:/dev/nvidiactl build.cuda:latest
+          docker cp build.tgz build.${{ inputs.name }}:/omniscidb
+
+      - name: Test
+        run: docker exec -u ghrunner build.cuda bash /omniscidb/scripts/conda/test.sh
+
+      - name: Stop the container
+        if: always()
+        run: docker stop build.cuda || true
+
