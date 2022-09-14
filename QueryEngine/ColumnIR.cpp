@@ -298,13 +298,54 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVarInWindow(
     const WindowFunctionContext* window_function_context) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto orig_bb = cgen_state_->ir_builder_.GetInsertBlock();
-  const auto pos_is_valid =
-      cgen_state_->ir_builder_.CreateICmpSGE(pos_arg, cgen_state_->llInt(int64_t(0)));
   const auto pos_valid_bb = llvm::BasicBlock::Create(
       cgen_state_->context_, "window.pos_valid", cgen_state_->current_func_);
   const auto pos_notvalid_bb = llvm::BasicBlock::Create(
       cgen_state_->context_, "window.pos_notvalid", cgen_state_->current_func_);
-  cgen_state_->ir_builder_.CreateCondBr(pos_is_valid, pos_valid_bb, pos_notvalid_bb);
+  const auto pos_is_valid =
+      cgen_state_->ir_builder_.CreateICmpSGE(pos_arg, cgen_state_->llInt(int64_t(0)));
+  if (window_function_context->getWindowFunction()->getKind() ==
+      SqlWindowFunctionKind::NTH_VALUE) {
+    // NTH_VALUE needs to return null if N > partition size
+    // To do this, we store null value to the output buffer of the current row
+    // if following requirements for processing NTH_VALUE are not satisfied
+    // 1. current row is valid
+    // 2. N < partition size that the current row is included
+    const auto window_func_args = window_function_context->getWindowFunction()->getArgs();
+    auto n_value_ptr = dynamic_cast<Analyzer::Constant*>(window_func_args[1].get());
+    auto n_value_lv = cgen_state_->llInt((int64_t)n_value_ptr->get_constval().intval);
+    CHECK(n_value_lv);
+
+    auto partition_index_lv =
+        executor_->codegenCurrentPartitionIndex(window_function_context, pos_arg);
+    // # elems per partition
+    const auto pi32_type =
+        llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
+    const auto partition_count_buf =
+        cgen_state_->llInt(reinterpret_cast<int64_t>(window_function_context->counts()));
+    auto partition_count_buf_ptr_lv =
+        cgen_state_->ir_builder_.CreateIntToPtr(partition_count_buf, pi32_type);
+
+    // # elems of the given partition
+    const auto num_elem_current_partition_ptr =
+        cgen_state_->ir_builder_.CreateGEP(get_int_type(32, cgen_state_->context_),
+                                           partition_count_buf_ptr_lv,
+                                           partition_index_lv);
+    const auto num_elem_current_partition_lv = cgen_state_->castToTypeIn(
+        cgen_state_->ir_builder_.CreateLoad(
+            num_elem_current_partition_ptr->getType()->getPointerElementType(),
+            num_elem_current_partition_ptr),
+        64);
+    auto is_valid_n_value_lv = cgen_state_->ir_builder_.CreateICmpSLT(
+        n_value_lv, num_elem_current_partition_lv, "is_valid_nth_value");
+    auto cond_lv = cgen_state_->ir_builder_.CreateAnd(
+        is_valid_n_value_lv, pos_is_valid, "is_valid_row_for_nth_value");
+    // return the current row value iff 1) it is a valid row and 2) N < partition_size
+    cgen_state_->ir_builder_.CreateCondBr(cond_lv, pos_valid_bb, pos_notvalid_bb);
+  } else {
+    // return the current row value if it is valid
+    cgen_state_->ir_builder_.CreateCondBr(pos_is_valid, pos_valid_bb, pos_notvalid_bb);
+  }
   cgen_state_->ir_builder_.SetInsertPoint(pos_valid_bb);
   const auto fixed_length_column_lv = codegenFixedLengthColVar(
       col_var, col_byte_stream, pos_arg, window_function_context);
