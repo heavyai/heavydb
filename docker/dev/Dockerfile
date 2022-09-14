@@ -44,6 +44,7 @@ RUN apt-get update && apt-get install -y \
     g++-9 \
     openjdk-11-jdk \
     --
+ENV PATH=/usr/lib/llvm-12/bin${PATH:+:${PATH}}
 
 RUN update-alternatives \
     --install /usr/bin/gcc gcc /usr/bin/gcc-9 800 \

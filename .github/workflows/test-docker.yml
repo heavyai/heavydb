@@ -15,8 +15,8 @@ jobs:
     steps:
       - name: Clean
         run: |
-            docker stop build.cuda || true
-            docker rm build.cuda || true
+            docker stop omni-build.${{ inputs.name }} || true
+            docker rm omni-build.${{ inputs.name }} || true
             rm -rf _work/*
 
       - name: Set env context
@@ -34,17 +34,20 @@ jobs:
       - name: Build docker image
         run: |
           cat docker/dev/Dockerfile docker/dev/Dockerfile.${{ inputs.name }} >Dockerfile
-          docker build . --tag build.${{ inputs.name }}
+          docker build . --tag omni-build.${{ inputs.name }}
 
       - name: Start the container
         run:  |
-          docker run -id --name build.${{ inputs.name }} --network host --device /dev/nvidia-caps/nvidia-cap2:/dev/nvidia-caps/nvidia-cap2 --device /dev/nvidia-caps/nvidia-cap1:/dev/nvidia-caps/nvidia-cap1 --device /dev/nvidia-modeset:/dev/nvidia-modeset --device /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools --device /dev/nvidia-uvm:/dev/nvidia-uvm --device /dev/nvidia0:/dev/nvidia0 --device /dev/nvidiactl:/dev/nvidiactl build.cuda:latest
-          docker cp build.tgz build.${{ inputs.name }}:/omniscidb
+          docker run -id --name omni-build.${{ inputs.name }} --network host --device /dev/nvidia-caps/nvidia-cap2:/dev/nvidia-caps/nvidia-cap2 --device /dev/nvidia-caps/nvidia-cap1:/dev/nvidia-caps/nvidia-cap1 --device /dev/nvidia-modeset:/dev/nvidia-modeset --device /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools --device /dev/nvidia-uvm:/dev/nvidia-uvm --device /dev/nvidia0:/dev/nvidia0 --device /dev/nvidiactl:/dev/nvidiactl omni-build.${{ inputs.name }}:latest
+          docker exec omni-build.${{ inputs.name }} mkdir -p /_work/
+          docker cp build.tgz omni-build.${{ inputs.name }}:/_work/
+          docker exec omni-build.${{ inputs.name }} chown -R ghrunner:ghrunner /_work/
+          docker exec -u ghrunner omni-build.${{ inputs.name }} tar -zxf /_work/build.tgz -C /_work/
 
       - name: Test
-        run: docker exec -u ghrunner build.cuda bash /omniscidb/scripts/conda/test.sh
+        run: docker exec -u ghrunner omni-build.${{ inputs.name }} bash /_work/scripts/conda/test.sh
 
       - name: Stop the container
         if: always()
-        run: docker stop build.cuda || true
+        run: docker stop omni-build.${{ inputs.name }} || true
 

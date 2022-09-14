@@ -51,11 +51,11 @@ jobs:
       name: cuda
       options: ''
 
-#  test-cuda-docker:
-#    needs: build-cuda-docker
-#    uses: ./.github/workflows/test-docker.yml
-#    with:
-#      name: cuda
+  test-cuda-docker:
+    needs: build-cuda-docker
+    uses: ./.github/workflows/test-docker.yml
+    with:
+      name: cuda
 
   build-l0-docker:
     uses: ./.github/workflows/build-docker.yml

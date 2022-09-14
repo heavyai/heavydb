@@ -56,17 +56,17 @@ jobs:
       - name: Start the container
         run:  |
           mkdir build
-          docker run -id --name build.${{ inputs.name }} --network host -v $(pwd):/omniscidb build.${{ inputs.name }}:latest
+          docker run -id --name build.${{ inputs.name }} --network host -v $(pwd):/_work build.${{ inputs.name }}:latest
 
       - name: Configure the project
         run: |
-          docker exec -u ghrunner build.${{ inputs.name }} python3 /omniscidb/scripts/conda/make-m2-proxy.py
-          docker exec -u ghrunner build.${{ inputs.name }} cmake -B/omniscidb/build -S/omniscidb -DENABLE_TESTS=on ${{ inputs.options }}
+          docker exec -u ghrunner build.${{ inputs.name }} python3 /_work/scripts/conda/make-m2-proxy.py
+          docker exec -u ghrunner build.${{ inputs.name }} cmake -B/_work/build -S/_work -DENABLE_TESTS=on ${{ inputs.options }}
  
       - name: Build the project
         run: |
-          docker exec -u ghrunner build.${{ inputs.name }} cmake --build /omniscidb/build/ --parallel 2
-          docker exec -u ghrunner build.${{ inputs.name }} tar -zcf /tmp/build.tgz -C /omniscidb .
+          docker exec -u ghrunner build.${{ inputs.name }} cmake --build /_work/build/ --parallel 2
+          docker exec -u ghrunner build.${{ inputs.name }} tar -zcf /tmp/build.tgz -C /_work .
           docker cp build.${{ inputs.name }}:/tmp/build.tgz .
      
       - name: Upload build and src files
