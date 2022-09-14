@@ -57,7 +57,6 @@
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/OutputBufferInitialization.h"
-#include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryEngine/QueryRewrite.h"
 #include "QueryEngine/QueryTemplateGenerator.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
@@ -169,6 +168,10 @@ Executor::Executor(const ExecutorId executor_id,
     , temporary_tables_(nullptr)
     , input_table_info_cache_(this)
     , thread_id_(logger::thread_id()) {
+  if (executor_id_ > INVALID_EXECUTOR_ID - 1) {
+    throw std::runtime_error("Too many executors!");
+  }
+
   extension_module_context_ = std::make_unique<ExtensionModuleContext>();
   cgen_state_ = std::make_unique<CgenState>(
       0, false, false, extension_module_context_.get(), getContext());
@@ -384,7 +387,6 @@ Executor::CgenStateManager::~CgenStateManager() {
 }
 
 std::shared_ptr<Executor> Executor::getExecutor(
-    const ExecutorId executor_id,
     Data_Namespace::DataMgr* data_mgr,
     BufferProvider* buffer_provider,
     ConfigPtr config,
@@ -393,27 +395,19 @@ std::shared_ptr<Executor> Executor::getExecutor(
     const SystemParameters& system_parameters) {
   INJECT_TIMER(getExecutor);
 
-  mapd_unique_lock<mapd_shared_mutex> write_lock(executors_cache_mutex_);
-  auto it = executors_.find(executor_id);
-  if (it != executors_.end()) {
-    return it->second;
-  }
-
   if (!config) {
     config = std::make_shared<Config>();
   }
 
-  auto executor = std::make_shared<Executor>(executor_id,
-                                             data_mgr,
-                                             buffer_provider,
-                                             config,
-                                             system_parameters.cuda_block_size,
-                                             system_parameters.cuda_grid_size,
-                                             system_parameters.max_gpu_slab_size,
-                                             debug_dir,
-                                             debug_file);
-  CHECK(executors_.insert(std::make_pair(executor_id, executor)).second);
-  return executor;
+  return std::make_shared<Executor>(executor_id_ctr_++,
+                                    data_mgr,
+                                    buffer_provider,
+                                    config,
+                                    system_parameters.cuda_block_size,
+                                    system_parameters.cuda_grid_size,
+                                    system_parameters.max_gpu_slab_size,
+                                    debug_dir,
+                                    debug_file);
 }
 
 void Executor::clearMemory(const Data_Namespace::MemoryLevel memory_level,
@@ -4442,9 +4436,6 @@ bool Executor::checkNonKernelTimeInterrupted() const {
   // this function should be called within an executor which is assigned
   // to the specific query thread (that indicates we already enroll the session)
   // check whether this is called from non unitary executor
-  if (executor_id_ == UNITARY_EXECUTOR_ID) {
-    return false;
-  };
   mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
   auto flag_it = queries_interrupt_flag_.find(current_query_session_);
   return !current_query_session_.empty() && flag_it != queries_interrupt_flag_.end() &&
@@ -4458,8 +4449,6 @@ const std::unique_ptr<llvm::Module>& ExtensionModuleContext::getRTUdfModule(
       (is_gpu ? ExtModuleKinds::rt_udf_gpu_module : ExtModuleKinds::rt_udf_cpu_module));
 }
 
-std::map<int, std::shared_ptr<Executor>> Executor::executors_;
-
 // contain the interrupt flag's status per query session
 InterruptFlagMap Executor::queries_interrupt_flag_;
 // contain a list of queries per query session
@@ -4468,7 +4457,6 @@ QuerySessionMap Executor::queries_session_map_;
 mapd_shared_mutex Executor::executor_session_mutex_;
 
 mapd_shared_mutex Executor::execute_mutex_;
-mapd_shared_mutex Executor::executors_cache_mutex_;
 
 std::mutex Executor::gpu_active_modules_mutex_;
 uint32_t Executor::gpu_active_modules_device_mask_{0x0};
@@ -4476,6 +4464,7 @@ void* Executor::gpu_active_modules_[max_gpu_count];
 
 std::shared_mutex Executor::register_runtime_extension_functions_mutex_;
 std::mutex Executor::kernel_mutex_;
+std::atomic<size_t> Executor::executor_id_ctr_{0};
 
 std::unique_ptr<QueryPlanDagCache> Executor::query_plan_dag_cache_;
 std::once_flag Executor::first_init_flag_;

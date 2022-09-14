@@ -146,7 +146,6 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
   query_dag_->resetQueryExecutionState();
   const auto& ra = query_dag_->getRootNode();
 
-  auto lock = executor_->acquireExecuteMutex();
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
   const auto col_descs = get_physical_inputs(&ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
@@ -284,19 +283,6 @@ void RelAlgExecutor::prepareStreamingExecution(const CompilationOptions& co,
   if (config_.exec.watchdog.enable_dynamic) {
     executor_->resetInterrupt();
   }
-  // so it should do cleanup session info after finishing its execution
-  //  ScopeGuard clearQuerySessionInfo =
-  //      [this, &query_session, &interruptable, &query_submitted_time] {
-  //        // reset the runtime query interrupt status after the end of query execution
-  //        if (interruptable) {
-  //          // cleanup running session's info
-  //          executor_->clearQuerySessionStatus(query_session, query_submitted_time);
-  //        }
-  //      };
-
-  // now we acquire executor lock in here to make sure that this executor holds
-  // all necessary resources and at the same time protect them against other executor
-  auto lock = executor_->acquireExecuteMutex();
 
   //  ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
   const auto col_descs = get_physical_inputs(&ra);
@@ -402,14 +388,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   if (config_.exec.watchdog.enable_dynamic) {
     executor_->resetInterrupt();
   }
-
-  auto acquire_execute_mutex = [](Executor * executor) -> auto {
-    auto ret = executor->acquireExecuteMutex();
-    return ret;
-  };
-  // now we acquire executor lock in here to make sure that this executor holds
-  // all necessary resources and at the same time protect them against other executor
-  auto lock = acquire_execute_mutex(executor_);
 
   int64_t queue_time_ms = timer_stop(clock_begin);
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };

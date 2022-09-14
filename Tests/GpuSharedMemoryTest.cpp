@@ -259,7 +259,7 @@ void perform_reduction_on_cpu(std::vector<std::unique_ptr<ResultSet>>& result_se
   CHECK(result_sets.size() > 0);
   Config config;
   // for codegen only
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr);
+  auto executor = Executor::getExecutor(nullptr, nullptr);
   ResultSetReductionJIT reduction_jit(result_sets.front()->getQueryMemDesc(),
                                       result_sets.front()->getTargetInfos(),
                                       result_sets.front()->getTargetInitVals(),
@@ -330,7 +330,7 @@ struct TestInputData {
 };
 
 void perform_test_and_verify_results(TestInputData input) {
-  auto executor = Executor::getExecutor(0, nullptr, nullptr);
+  auto executor = Executor::getExecutor(nullptr, nullptr);
   auto& context = executor->getContext();
   auto cgen_state = std::unique_ptr<CgenState>(
       new CgenState({}, false, false, executor->getExtensionModuleContext(), context));

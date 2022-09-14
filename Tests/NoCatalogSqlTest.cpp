@@ -158,8 +158,7 @@ class NoCatalogSqlTest : public ::testing::Test {
     ps_mgr->registerDataProvider(TEST_SCHEMA_ID,
                                  std::make_shared<TestDataProvider>(schema_provider_));
 
-    executor_ = Executor::getExecutor(0,
-                                      data_mgr_.get(),
+    executor_ = Executor::getExecutor(data_mgr_.get(),
                                       data_mgr_->getBufferProvider(),
                                       config_,
                                       "",
@@ -180,20 +179,20 @@ class NoCatalogSqlTest : public ::testing::Test {
     calcite_.reset();
   }
 
-  ExecutionResult runRAQuery(const std::string& query_ra) {
+  ExecutionResult runRAQuery(const std::string& query_ra, Executor* executor) {
     auto dag = std::make_unique<RelAlgDagBuilder>(
         query_ra, TEST_DB_ID, schema_provider_, config_);
     auto ra_executor = RelAlgExecutor(
-        executor_.get(), schema_provider_, data_mgr_->getDataProvider(), std::move(dag));
+        executor, schema_provider_, data_mgr_->getDataProvider(), std::move(dag));
 
     auto co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
     co.use_groupby_buffer_desc = use_groupby_buffer_desc;
     return ra_executor.executeRelAlgQuery(co, ExecutionOptions(), false);
   }
 
-  ExecutionResult runSqlQuery(const std::string& sql) {
+  ExecutionResult runSqlQuery(const std::string& sql, Executor* executor) {
     const auto query_ra = calcite_->process("test_db", pg_shim(sql));
-    return runRAQuery(query_ra);
+    return runRAQuery(query_ra, executor);
   }
 
   RelAlgExecutor getExecutor(const std::string& sql) {
@@ -225,12 +224,12 @@ std::shared_ptr<Executor> NoCatalogSqlTest::executor_;
 std::shared_ptr<CalciteJNI> NoCatalogSqlTest::calcite_;
 
 TEST_F(NoCatalogSqlTest, SelectSingleColumn) {
-  auto res = runSqlQuery("SELECT col_i FROM test1;");
+  auto res = runSqlQuery("SELECT col_i FROM test1;", executor_.get());
   compare_res_data(res, std::vector<int>({10, 20, 30, 40, 50}));
 }
 
 TEST_F(NoCatalogSqlTest, SelectAllColumns) {
-  auto res = runSqlQuery("SELECT * FROM test1;");
+  auto res = runSqlQuery("SELECT * FROM test1;", executor_.get());
   compare_res_data(res,
                    std::vector<int64_t>({1, 2, 3, 4, 5}),
                    std::vector<int>({10, 20, 30, 40, 50}),
@@ -239,7 +238,7 @@ TEST_F(NoCatalogSqlTest, SelectAllColumns) {
 }
 
 TEST_F(NoCatalogSqlTest, SelectAllColumnsMultiFrag) {
-  auto res = runSqlQuery("SELECT * FROM test2;");
+  auto res = runSqlQuery("SELECT * FROM test2;", executor_.get());
   compare_res_data(
       res,
       std::vector<int64_t>({1, 2, 3, 4, 5, 6, 7, 8, 9}),
@@ -252,7 +251,8 @@ TEST_F(NoCatalogSqlTest, SelectAllColumnsMultiFrag) {
 TEST_F(NoCatalogSqlTest, GroupBySingleColumn) {
   auto res = runSqlQuery(
       "SELECT id, COUNT(*), COUNT(val), SUM(val), AVG(val) FROM test_agg GROUP BY id "
-      "ORDER BY id;");
+      "ORDER BY id;",
+      executor_.get());
   compare_res_data(res,
                    std::vector<int32_t>({1, 2, 3}),
                    std::vector<int32_t>({5, 3, 2}),
@@ -319,24 +319,31 @@ TEST_F(NoCatalogSqlTest, StreamingFilter) {
 }
 
 TEST_F(NoCatalogSqlTest, MultipleCalciteMultipleThreads) {
-  constexpr int TEST_NTHREADS = 100;
+  constexpr size_t TEST_NTHREADS = 100;
   std::vector<ExecutionResult> res;
   std::vector<std::future<void>> threads;
   res.resize(TEST_NTHREADS);
   threads.resize(TEST_NTHREADS);
-  for (int i = 0; i < TEST_NTHREADS; ++i) {
-    threads[i] = std::async(std::launch::async, [this, i, &res]() {
+  std::vector<std::shared_ptr<Executor>> executors;
+  for (size_t i = 0; i < TEST_NTHREADS; ++i) {
+    executors.push_back(
+        Executor::getExecutor(data_mgr_.get(), data_mgr_->getBufferProvider(), config_));
+    threads[i] = std::async(std::launch::async, [this, i, &res, &executors]() {
       auto calcite = std::make_unique<CalciteJNI>(schema_provider_, config_);
       auto query_ra = calcite->process(
           "test_db", "SELECT col_bi + " + std::to_string(i) + " FROM test1;");
-      res[i] = runRAQuery(query_ra);
+      CHECK(i < executors.size() && executors[i]);
+      res[i] = runRAQuery(query_ra, executors[i].get());
     });
   }
-  for (int i = 0; i < TEST_NTHREADS; ++i) {
+  for (size_t i = 0; i < TEST_NTHREADS; ++i) {
     threads[i].wait();
   }
-  for (int i = 0; i < TEST_NTHREADS; ++i) {
-    compare_res_data(res[i], std::vector<int64_t>({1 + i, 2 + i, 3 + i, 4 + i, 5 + i}));
+  for (size_t i = 0; i < TEST_NTHREADS; ++i) {
+    const auto i_int = static_cast<int64_t>(i);
+    compare_res_data(
+        res[i],
+        std::vector<int64_t>({1 + i_int, 2 + i_int, 3 + i_int, 4 + i_int, 5 + i_int}));
   }
 }
 

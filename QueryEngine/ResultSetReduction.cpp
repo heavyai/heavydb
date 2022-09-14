@@ -1006,7 +1006,6 @@ void ResultSet::initializeStorage() const {
 // layout, which can have collisions, cannot be done in place and something needs
 // to take the ownership of the new result set with the bigger underlying buffer.
 ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets,
-                                    const size_t executor_id,
                                     const Config& config,
                                     Executor* executor) {
   CHECK(!result_sets.empty());

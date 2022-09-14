@@ -365,14 +365,12 @@ class ArrowSQLRunnerImpl {
     auto* ps_mgr = data_mgr_->getPersistentStorageMgr();
     ps_mgr->registerDataProvider(TEST_SCHEMA_ID, storage_);
 
-    executor_ = Executor::getExecutor(
-        /*executor_id=*/0,
-        data_mgr_.get(),
-        data_mgr_->getBufferProvider(),
-        config_,
-        "",
-        "",
-        system_parameters);
+    executor_ = Executor::getExecutor(data_mgr_.get(),
+                                      data_mgr_->getBufferProvider(),
+                                      config_,
+                                      "",
+                                      "",
+                                      system_parameters);
     executor_->setSchemaProvider(storage_);
 
     if (config_->debug.use_ra_cache.empty() || !config_->debug.build_ra_cache.empty()) {

@@ -70,9 +70,8 @@ int deviceCount(const ExecutorDeviceType device_type) {
 std::shared_ptr<HashJoin> buildPerfect(std::string_view table1,
                                        std::string_view column1,
                                        std::string_view table2,
-                                       std::string_view column2) {
-  auto executor = Executor::getExecutor(
-      Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+                                       std::string_view column2,
+                                       Executor* executor) {
   CHECK(executor);
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
@@ -95,12 +94,11 @@ std::shared_ptr<HashJoin> buildPerfect(std::string_view table1,
                                         device_count,
                                         getDataMgr()->getDataProvider(),
                                         column_cache,
-                                        executor.get());
+                                        executor);
 }
 
-std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<hdk::ir::BinOper> op) {
-  auto executor =
-      Executor::getExecutor(TEST_DB_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<hdk::ir::BinOper> op,
+                                     Executor* executor) {
   CHECK(executor);
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
@@ -119,13 +117,12 @@ std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<hdk::ir::BinOper> op) {
                                         device_count,
                                         getDataMgr()->getDataProvider(),
                                         column_cache,
-                                        executor.get());
+                                        executor);
 }
 
 std::pair<std::string, std::shared_ptr<HashJoin>> checkProperQualDetection(
     std::vector<std::shared_ptr<hdk::ir::BinOper>> quals) {
-  auto executor =
-      Executor::getExecutor(TEST_DB_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
   CHECK(executor);
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
@@ -148,6 +145,8 @@ std::pair<std::string, std::shared_ptr<HashJoin>> checkProperQualDetection(
 }
 
 TEST(Build, PerfectOneToOne1) {
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     g_device_type = dt;
@@ -172,7 +171,7 @@ TEST(Build, PerfectOneToOne1) {
     createTable("table2", {{"nums2", SQLTypeInfo(kINT)}});
     insertCsvValues("table2", "0\n1\n2\n3\n4\n5\n6\n7\n8\n9");
 
-    auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2");
+    auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2", executor.get());
     EXPECT_EQ(hash_table->getHashType(), HashType::OneToOne);
 
     auto s2 = hash_table->toSet(g_device_type, 0);
@@ -185,6 +184,8 @@ TEST(Build, PerfectOneToOne1) {
 }
 
 TEST(Build, PerfectOneToOne2) {
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     g_device_type = dt;
@@ -207,7 +208,7 @@ TEST(Build, PerfectOneToOne2) {
     createTable("table2", {{"nums2", SQLTypeInfo(kINT)}});
     insertCsvValues("table2", "0\n1\n2\n4\n5\n6\n7\n9");
 
-    auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2");
+    auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2", executor.get());
     EXPECT_EQ(hash_table->getHashType(), HashType::OneToOne);
 
     auto s2 = hash_table->toSet(g_device_type, 0);
@@ -220,6 +221,8 @@ TEST(Build, PerfectOneToOne2) {
 }
 
 TEST(Build, PerfectOneToMany1) {
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     g_device_type = dt;
@@ -237,7 +240,7 @@ TEST(Build, PerfectOneToMany1) {
     createTable("table2", {{"nums2", SQLTypeInfo(kINT)}});
     insertCsvValues("table2", "0\n1\n2\n3\n4\n0\n1\n2\n3\n4");
 
-    auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2");
+    auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2", executor.get());
     EXPECT_EQ(hash_table->getHashType(), HashType::OneToMany);
 
     auto s2 = hash_table->toSet(g_device_type, 0);
@@ -250,6 +253,8 @@ TEST(Build, PerfectOneToMany1) {
 }
 
 TEST(Build, PerfectOneToMany2) {
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     g_device_type = dt;
@@ -267,7 +272,7 @@ TEST(Build, PerfectOneToMany2) {
     createTable("table2", {{"nums2", SQLTypeInfo(kINT)}});
     insertCsvValues("table2", "0\n2\n3\n4\n0\n2\n3\n4");
 
-    auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2");
+    auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2", executor.get());
     EXPECT_EQ(hash_table->getHashType(), HashType::OneToMany);
 
     auto s2 = hash_table->toSet(g_device_type, 0);
@@ -280,9 +285,7 @@ TEST(Build, PerfectOneToMany2) {
 }
 
 TEST(Build, detectProperJoinQual) {
-  auto executor =
-      Executor::getExecutor(TEST_DB_ID, getDataMgr(), getDataMgr()->getBufferProvider())
-          .get();
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
   CHECK(executor);
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
@@ -313,30 +316,30 @@ TEST(Build, detectProperJoinQual) {
     // case 2: 1 = t12 AND t11 = t21
     // case 3: t22 = 1 AND t11 = t21
     // case 4: 1 = t22 AND t11 = t21
-    auto t11 = getSyntheticColumnVar(TEST_DB_ID, "table1", "t11", 0, executor);
-    auto t21 = getSyntheticColumnVar(TEST_DB_ID, "table2", "t21", 1, executor);
+    auto t11 = getSyntheticColumnVar(TEST_DB_ID, "table1", "t11", 0, executor.get());
+    auto t21 = getSyntheticColumnVar(TEST_DB_ID, "table2", "t21", 1, executor.get());
     auto qual2 = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, t11, t21);
     auto create_join_qual = [&c, &executor](int case_num) {
       std::shared_ptr<hdk::ir::ColumnVar> q1_lhs;
       std::shared_ptr<hdk::ir::BinOper> qual1;
       switch (case_num) {
         case 1: {
-          q1_lhs = getSyntheticColumnVar(TEST_DB_ID, "table1", "t12", 0, executor);
+          q1_lhs = getSyntheticColumnVar(TEST_DB_ID, "table1", "t12", 0, executor.get());
           qual1 = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, c, q1_lhs);
           break;
         }
         case 2: {
-          q1_lhs = getSyntheticColumnVar(TEST_DB_ID, "table1", "t12", 0, executor);
+          q1_lhs = getSyntheticColumnVar(TEST_DB_ID, "table1", "t12", 0, executor.get());
           qual1 = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, q1_lhs, c);
           break;
         }
         case 3: {
-          q1_lhs = getSyntheticColumnVar(TEST_DB_ID, "table2", "t22", 1, executor);
+          q1_lhs = getSyntheticColumnVar(TEST_DB_ID, "table2", "t22", 1, executor.get());
           qual1 = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, c, q1_lhs);
           break;
         }
         case 4: {
-          q1_lhs = getSyntheticColumnVar(TEST_DB_ID, "table2", "t22", 1, executor);
+          q1_lhs = getSyntheticColumnVar(TEST_DB_ID, "table2", "t22", 1, executor.get());
           qual1 = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, q1_lhs, c);
           break;
         }
@@ -365,8 +368,7 @@ TEST(Build, detectProperJoinQual) {
 }
 
 TEST(Build, KeyedOneToOne) {
-  auto executor =
-      Executor::getExecutor(TEST_DB_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
   CHECK(executor);
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
@@ -396,7 +398,7 @@ TEST(Build, KeyedOneToOne) {
 
     // a1 = b and a2 = b
     auto op = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
-    auto hash_table = buildKeyed(op);
+    auto hash_table = buildKeyed(op, executor.get());
 
     EXPECT_EQ(hash_table->getHashType(), HashType::OneToOne);
 
@@ -410,8 +412,7 @@ TEST(Build, KeyedOneToOne) {
 }
 
 TEST(Build, KeyedOneToMany) {
-  auto executor =
-      Executor::getExecutor(TEST_DB_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
   CHECK(executor);
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
@@ -442,7 +443,7 @@ TEST(Build, KeyedOneToMany) {
 
     // a1 = b and a2 = b
     auto op = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
-    auto hash_table = buildKeyed(op);
+    auto hash_table = buildKeyed(op, executor.get());
 
     EXPECT_EQ(hash_table->getHashType(), HashType::OneToMany);
 
@@ -456,6 +457,8 @@ TEST(Build, KeyedOneToMany) {
 }
 
 TEST(MultiFragment, PerfectOneToOne) {
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     g_device_type = dt;
@@ -474,10 +477,10 @@ TEST(MultiFragment, PerfectOneToOne) {
     createTable("table4", {{"nums4", SQLTypeInfo(kINT)}}, {3});
     insertCsvValues("table4", "0\n1\n2\n3\n4\n5\n6\n7\n8\n9");
 
-    auto hash_table1 = buildPerfect("table1", "nums1", "table2", "nums2");
+    auto hash_table1 = buildPerfect("table1", "nums1", "table2", "nums2", executor.get());
     EXPECT_EQ(hash_table1->getHashType(), HashType::OneToOne);
 
-    auto hash_table2 = buildPerfect("table3", "nums3", "table4", "nums4");
+    auto hash_table2 = buildPerfect("table3", "nums3", "table4", "nums4", executor.get());
     EXPECT_EQ(hash_table2->getHashType(), HashType::OneToOne);
 
     // | perfect one-to-one | payloads 0 1 2 3 4 5 6 7 8 9 |
@@ -493,6 +496,8 @@ TEST(MultiFragment, PerfectOneToOne) {
 }
 
 TEST(MultiFragment, PerfectOneToMany) {
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     g_device_type = dt;
@@ -511,10 +516,10 @@ TEST(MultiFragment, PerfectOneToMany) {
     createTable("table4", {{"nums4", SQLTypeInfo(kINT)}}, {3});
     insertCsvValues("table4", "0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n9");
 
-    auto hash_table1 = buildPerfect("table1", "nums1", "table2", "nums2");
+    auto hash_table1 = buildPerfect("table1", "nums1", "table2", "nums2", executor.get());
     EXPECT_EQ(hash_table1->getHashType(), HashType::OneToMany);
 
-    auto hash_table2 = buildPerfect("table3", "nums3", "table4", "nums4");
+    auto hash_table2 = buildPerfect("table3", "nums3", "table4", "nums4", executor.get());
     EXPECT_EQ(hash_table2->getHashType(), HashType::OneToMany);
 
     // | perfect one-to-many | offsets 0 1 2 3 4 5 6 7 8 9 | counts 1 1 1 1 1 1 1 1 1 2 |
@@ -531,8 +536,7 @@ TEST(MultiFragment, PerfectOneToMany) {
 }
 
 TEST(MultiFragment, KeyedOneToOne) {
-  auto executor =
-      Executor::getExecutor(TEST_DB_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
   CHECK(executor);
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
@@ -559,7 +563,7 @@ TEST(MultiFragment, KeyedOneToOne) {
 
     // a1 = b and a2 = b
     auto op = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
-    auto hash_table1 = buildKeyed(op);
+    auto hash_table1 = buildKeyed(op, executor.get());
     auto baseline = std::dynamic_pointer_cast<BaselineJoinHashTable>(hash_table1);
     CHECK(baseline);
     EXPECT_EQ(hash_table1->getHashType(), HashType::OneToOne);
@@ -579,7 +583,7 @@ TEST(MultiFragment, KeyedOneToOne) {
 
     // a1 = b and a2 = b
     op = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
-    auto hash_table2 = buildKeyed(op);
+    auto hash_table2 = buildKeyed(op, executor.get());
     EXPECT_EQ(hash_table2->getHashType(), HashType::OneToOne);
 
     //
@@ -596,8 +600,7 @@ TEST(MultiFragment, KeyedOneToOne) {
 }
 
 TEST(MultiFragment, KeyedOneToMany) {
-  auto executor =
-      Executor::getExecutor(TEST_DB_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
   CHECK(executor);
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
@@ -624,7 +627,7 @@ TEST(MultiFragment, KeyedOneToMany) {
 
     // a1 = b and a2 = b
     auto op = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
-    auto hash_table1 = buildKeyed(op);
+    auto hash_table1 = buildKeyed(op, executor.get());
     EXPECT_EQ(hash_table1->getHashType(), HashType::OneToMany);
 
     createTable("table3", {{"a1", SQLTypeInfo(kINT)}, {"a2", SQLTypeInfo(kINT)}}, {1});
@@ -643,7 +646,7 @@ TEST(MultiFragment, KeyedOneToMany) {
 
     // a1 = b and a2 = b
     op = std::make_shared<hdk::ir::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
-    auto hash_table2 = buildKeyed(op);
+    auto hash_table2 = buildKeyed(op, executor.get());
     EXPECT_EQ(hash_table2->getHashType(), HashType::OneToMany);
 
     //

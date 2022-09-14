@@ -1056,10 +1056,7 @@ TEST(DataRecycler, Hashtable_For_Dict_Encoded_Column) {
   createTable("TT1", {{"c1", dictType()}, {"id1", SQLTypeInfo(kINT)}});
   createTable("TT2", {{"c2", dictType()}, {"id2", SQLTypeInfo(kINT)}});
   auto data_mgr = getDataMgr();
-  auto executor =
-      Executor::getExecutor(
-          Executor::UNITARY_EXECUTOR_ID, data_mgr, data_mgr->getBufferProvider())
-          .get();
+  auto executor = Executor::getExecutor(data_mgr, data_mgr->getBufferProvider()).get();
   auto clear_caches = [&executor, data_mgr](ExecutorDeviceType dt) {
     auto memory_level =
         dt == ExecutorDeviceType::CPU ? MemoryLevel::CPU_LEVEL : MemoryLevel::GPU_LEVEL;

@@ -1006,8 +1006,7 @@ void run_reduction(const std::vector<TargetInfo>& target_infos,
   const ResultSetStorage* storage1{nullptr};
   const ResultSetStorage* storage2{nullptr};
   // for codegen only
-  auto executor = Executor::getExecutor(
-      Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
   const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
       g_data_provider.get(), Executor::getArenaBlockSize());
   row_set_mem_owner->addStringDict(g_sd, 1, g_sd->storageEntryCount());
@@ -1035,7 +1034,7 @@ void run_reduction(const std::vector<TargetInfo>& target_infos,
       storage2->getUnderlyingBuffer(), target_infos, query_mem_desc, generator2, step);
   ResultSetManager rs_manager;
   std::vector<ResultSet*> storage_set{rs1.get(), rs2.get()};
-  rs_manager.reduce(storage_set, Executor::UNITARY_EXECUTOR_ID, config(), executor.get());
+  rs_manager.reduce(storage_set, config(), executor.get());
 }
 
 void test_reduce(const std::vector<TargetInfo>& target_infos,
@@ -1047,8 +1046,7 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
   const ResultSetStorage* storage1{nullptr};
   const ResultSetStorage* storage2{nullptr};
   // for codegen only
-  auto executor = Executor::getExecutor(
-      Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
   const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
       g_data_provider.get(), Executor::getArenaBlockSize());
   row_set_mem_owner->addStringDict(g_sd, 1, g_sd->storageEntryCount());
@@ -1076,8 +1074,7 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
       storage2->getUnderlyingBuffer(), target_infos, query_mem_desc, generator2, step);
   ResultSetManager rs_manager;
   std::vector<ResultSet*> storage_set{rs1.get(), rs2.get()};
-  auto result_rs = rs_manager.reduce(
-      storage_set, Executor::UNITARY_EXECUTOR_ID, config(), executor.get());
+  auto result_rs = rs_manager.reduce(storage_set, config(), executor.get());
 
   if (sort) {
     std::list<hdk::ir::OrderEntry> order_entries;
@@ -1156,8 +1153,7 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
   std::unique_ptr<ResultSet> rs1;
   std::unique_ptr<ResultSet> rs2;
   // for codegen only
-  auto executor = Executor::getExecutor(
-      Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
   const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
       g_data_provider.get(), Executor::getArenaBlockSize());
   switch (query_mem_desc.getQueryDescriptionType()) {
@@ -1223,8 +1219,7 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
 
   ResultSetManager rs_manager;
   std::vector<ResultSet*> storage_set{rs1.get(), rs2.get()};
-  auto result_rs = rs_manager.reduce(
-      storage_set, Executor::UNITARY_EXECUTOR_ID, config(), executor.get());
+  auto result_rs = rs_manager.reduce(storage_set, config(), executor.get());
   std::queue<std::vector<int64_t>> ref_table = rse->getReferenceTable();
   std::vector<bool> ref_group_map = rse->getReferenceGroupMap();
   const auto result = get_rows_sorted_by_col(*result_rs, 0);
@@ -1936,8 +1931,7 @@ TEST(MoreReduce, MissingValues) {
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 7, 9);
   query_mem_desc.setHasKeylessHash(false);
   // for codegen only
-  auto executor = Executor::getExecutor(
-      Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
   const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
       g_data_provider.get(), Executor::getArenaBlockSize());
   const auto rs1 = std::make_unique<ResultSet>(target_infos,
@@ -2016,8 +2010,7 @@ TEST(MoreReduce, MissingValuesKeyless) {
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 7, 9);
   query_mem_desc.setHasKeylessHash(true);
   // for codegen only
-  auto executor = Executor::getExecutor(
-      Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
   const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
       g_data_provider.get(), Executor::getArenaBlockSize());
   const auto rs1 = std::make_unique<ResultSet>(target_infos,
@@ -2092,8 +2085,7 @@ TEST(MoreReduce, OffsetRewrite) {
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 7, 9);
   query_mem_desc.setHasKeylessHash(false);
   // for codegen only
-  auto executor = Executor::getExecutor(
-      Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
   const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
       g_data_provider.get(), Executor::getArenaBlockSize());
 

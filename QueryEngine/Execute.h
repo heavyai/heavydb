@@ -315,7 +315,6 @@ class Executor {
 
  public:
   using ExecutorId = size_t;
-  static const ExecutorId UNITARY_EXECUTOR_ID = 0;
   static const ExecutorId INVALID_EXECUTOR_ID = SIZE_MAX;
 
   // NOTE: Executor should always be initialized through getExecutor to ensure the
@@ -334,30 +333,13 @@ class Executor {
 
   void reset(const bool discard_runtime_modules_only = false);
 
-  static void resetAllExecutors(bool discard_runtime_modules_only = false) {
-    mapd_unique_lock<mapd_shared_mutex> flush_lock(
-        execute_mutex_);  // don't want native code to vanish while executing
-    mapd_unique_lock<mapd_shared_mutex> lock(executors_cache_mutex_);
-    for (auto& executor_item : Executor::executors_) {
-      executor_item.second->reset(discard_runtime_modules_only);
-    }
-  }
-
   static std::shared_ptr<Executor> getExecutor(
-      const ExecutorId id,
       Data_Namespace::DataMgr* data_mgr,
       BufferProvider* buffer_provider,
       ConfigPtr config = nullptr,
       const std::string& debug_dir = "",
       const std::string& debug_file = "",
       const SystemParameters& system_parameters = SystemParameters());
-
-  static void nukeCacheOfExecutors() {
-    mapd_unique_lock<mapd_shared_mutex> flush_lock(
-        execute_mutex_);  // don't want native code to vanish while executing
-    mapd_unique_lock<mapd_shared_mutex> lock(executors_cache_mutex_);
-    (decltype(executors_){}).swap(executors_);
-  }
 
   // runs clear memory routines under the executor lock to prevent flushing pages in use
   static void clearMemory(const Data_Namespace::MemoryLevel memory_level,
@@ -1045,12 +1027,6 @@ class Executor {
   llvm::LLVMContext& getContext() { return *context_.get(); }
   void update_extension_modules(bool update_runtime_modules_only = false);
 
-  static void update_after_registration(bool update_runtime_modules_only = false) {
-    for (auto executor_item : Executor::executors_) {
-      executor_item.second->update_extension_modules(update_runtime_modules_only);
-    }
-  }
-
  private:
   std::vector<int8_t> serializeLiterals(
       const std::unordered_map<int, CgenState::LiteralValues>& literals,
@@ -1173,28 +1149,9 @@ class Executor {
   static InterruptFlagMap queries_interrupt_flag_;
   // a pair of <QuerySessionId, query_session_status>
   static QuerySessionMap queries_session_map_;
-  static std::map<int, std::shared_ptr<Executor>> executors_;
 
-  // SQL queries take a shared lock, exclusive options (cache clear, memory clear) take
-  // a write lock
+  // for blocking executors for clear memory, etc
   static mapd_shared_mutex execute_mutex_;
-
-  struct ExecutorMutexHolder {
-    mapd_shared_lock<mapd_shared_mutex> shared_lock;
-    mapd_unique_lock<mapd_shared_mutex> unique_lock;
-  };
-  inline ExecutorMutexHolder acquireExecuteMutex() {
-    ExecutorMutexHolder ret;
-    if (executor_id_ == Executor::UNITARY_EXECUTOR_ID) {
-      // Only one unitary executor can run at a time
-      ret.unique_lock = mapd_unique_lock<mapd_shared_mutex>(execute_mutex_);
-    } else {
-      ret.shared_lock = mapd_shared_lock<mapd_shared_mutex>(execute_mutex_);
-    }
-    return ret;
-  }
-
-  static mapd_shared_mutex executors_cache_mutex_;
 
   static std::unique_ptr<QueryPlanDagCache> query_plan_dag_cache_;
   static std::once_flag first_init_flag_;
@@ -1238,6 +1195,8 @@ class Executor {
   static std::shared_mutex register_runtime_extension_functions_mutex_;
 
   static std::mutex kernel_mutex_;  // TODO: should this be executor-local mutex?
+
+  static std::atomic<size_t> executor_id_ctr_;
 
   friend class BaselineJoinHashTable;
   friend class CodeGenerator;

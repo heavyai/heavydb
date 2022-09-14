@@ -57,8 +57,7 @@ class HighCardinalityStringEnv : public ::testing::Test {
 
 TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
   // make our own executor with a custom col ranges cache
-  auto executor = Executor::getExecutor(
-      Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
 
@@ -153,8 +152,7 @@ std::unordered_set<InputColDescriptor> setup_str_col_caching(
 
 TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
   // make our own executor with a custom col ranges cache
-  auto executor = Executor::getExecutor(
-      Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
 
@@ -241,8 +239,7 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
 
 TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
   // make our own executor with a custom col ranges cache
-  auto executor = Executor::getExecutor(
-      Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  auto executor = Executor::getExecutor(getDataMgr(), getDataMgr()->getBufferProvider());
   auto storage = getStorage();
   executor->setSchemaProvider(storage);
 
