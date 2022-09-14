@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "Shared/funcannotations.h"
 #include "Shared/sqltypes.h"
 
 #include <string>
@@ -43,42 +44,44 @@ class Type {
 
   Context& ctx() const { return const_cast<Context&>(ctx_); }
 
-  Id id() const { return id_; }
+  HOST DEVICE Id id() const { return id_; }
 
   // Size in bytes. -1 for varlen types.
-  int size() const { return size_; }
+  HOST DEVICE int size() const { return size_; }
 
-  bool nullable() const { return nullable_; }
+  HOST DEVICE bool nullable() const { return nullable_; }
 
-  bool isNull() const { return id_ == kNull; }
-  bool isBoolean() const { return id_ == kBoolean; }
-  bool isInteger() const { return id_ == kInteger; }
-  bool isFloatingPoint() const { return id_ == kFloatingPoint; }
-  bool isDecimal() const { return id_ == kDecimal; }
-  bool isVarChar() const { return id_ == kVarChar; }
-  bool isText() const { return id_ == kText; }
-  bool isDate() const { return id_ == kDate; }
-  bool isTime() const { return id_ == kTime; }
-  bool isTimestamp() const { return id_ == kTimestamp; }
-  bool isInterval() const { return id_ == kInterval; }
-  bool isFixedLenArray() const { return id_ == kFixedLenArray; }
-  bool isVarLenArray() const { return id_ == kVarLenArray; }
-  bool isExtDictionary() const { return id_ == kExtDictionary; }
-  bool isColumn() const { return id_ == kColumn; }
-  bool isColumnList() const { return id_ == kColumnList; }
+  HOST DEVICE bool isNull() const { return id_ == kNull; }
+  HOST DEVICE bool isBoolean() const { return id_ == kBoolean; }
+  HOST DEVICE bool isInteger() const { return id_ == kInteger; }
+  HOST DEVICE bool isFloatingPoint() const { return id_ == kFloatingPoint; }
+  HOST DEVICE bool isDecimal() const { return id_ == kDecimal; }
+  HOST DEVICE bool isVarChar() const { return id_ == kVarChar; }
+  HOST DEVICE bool isText() const { return id_ == kText; }
+  HOST DEVICE bool isDate() const { return id_ == kDate; }
+  HOST DEVICE bool isTime() const { return id_ == kTime; }
+  HOST DEVICE bool isTimestamp() const { return id_ == kTimestamp; }
+  HOST DEVICE bool isInterval() const { return id_ == kInterval; }
+  HOST DEVICE bool isFixedLenArray() const { return id_ == kFixedLenArray; }
+  HOST DEVICE bool isVarLenArray() const { return id_ == kVarLenArray; }
+  HOST DEVICE bool isExtDictionary() const { return id_ == kExtDictionary; }
+  HOST DEVICE bool isColumn() const { return id_ == kColumn; }
+  HOST DEVICE bool isColumnList() const { return id_ == kColumnList; }
 
-  bool isInt8() const { return isInteger() && size_ == 1; }
-  bool isInt16() const { return isInteger() && size_ == 2; }
-  bool isInt32() const { return isInteger() && size_ == 4; }
-  bool isInt64() const { return isInteger() && size_ == 8; }
-  bool isFp32() const { return isFloatingPoint() && size_ == 4; }
-  bool isFp64() const { return isFloatingPoint() && size_ == 8; }
+  HOST DEVICE bool isInt8() const { return isInteger() && size_ == 1; }
+  HOST DEVICE bool isInt16() const { return isInteger() && size_ == 2; }
+  HOST DEVICE bool isInt32() const { return isInteger() && size_ == 4; }
+  HOST DEVICE bool isInt64() const { return isInteger() && size_ == 8; }
+  HOST DEVICE bool isFp32() const { return isFloatingPoint() && size_ == 4; }
+  HOST DEVICE bool isFp64() const { return isFloatingPoint() && size_ == 8; }
 
-  bool isNumber() const { return isFloatingPoint() || isInteger() || isDecimal(); }
-  bool isString() const { return isVarChar() || isText(); }
-  bool isDateTime() const { return isDate() || isTime() || isTimestamp(); }
-  bool isArray() const { return isFixedLenArray() || isVarLenArray(); }
-  bool isVarLen() const { return isString() || isVarLenArray(); }
+  HOST DEVICE bool isNumber() const {
+    return isFloatingPoint() || isInteger() || isDecimal();
+  }
+  HOST DEVICE bool isString() const { return isVarChar() || isText(); }
+  HOST DEVICE bool isDateTime() const { return isDate() || isTime() || isTimestamp(); }
+  HOST DEVICE bool isArray() const { return isFixedLenArray() || isVarLenArray(); }
+  HOST DEVICE bool isVarLen() const { return isString() || isVarLenArray(); }
 
   // Return the same type created in a specified context.
   const Type* copyTo(Context& ctx) const;
