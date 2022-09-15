@@ -540,10 +540,6 @@ hdk::ir::ExprPtr CodeGenerator::hashJoinLhs(const hdk::ir::ColumnVar* rhs) const
         if (!eq_left_op) {
           eq_left_op = tautological_eq->get_left_operand();
         }
-        if (is_constructed_point(eq_left_op)) {
-          // skip cast for a constructed point lhs
-          return nullptr;
-        }
         const auto eq_left_op_col = dynamic_cast<const hdk::ir::ColumnVar*>(eq_left_op);
         CHECK(eq_left_op_col);
         if (eq_left_op_col->get_rte_idx() != 0) {

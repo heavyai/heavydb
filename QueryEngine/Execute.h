@@ -361,9 +361,6 @@ class Executor {
     return has_extension_module(
         (is_gpu ? ExtModuleKinds::rt_udf_gpu_module : ExtModuleKinds::rt_udf_cpu_module));
   }
-  bool has_libdevice_module() const {
-    return has_extension_module(ExtModuleKinds::rt_libdevice_module);
-  }
 
   ExtensionModuleContext* getExtensionModuleContext() const {
     CHECK(extension_module_context_);
@@ -950,22 +947,8 @@ class Executor {
 
   QuerySessionId& getCurrentQuerySession(mapd_shared_lock<mapd_shared_mutex>& read_lock);
 
-  QuerySessionStatus::QueryStatus getQuerySessionStatus(
-      const QuerySessionId& candidate_query_session,
-      mapd_shared_lock<mapd_shared_mutex>& read_lock);
-
   bool checkCurrentQuerySession(const std::string& candidate_query_session,
                                 mapd_shared_lock<mapd_shared_mutex>& read_lock);
-  void invalidateRunningQuerySession(mapd_unique_lock<mapd_shared_mutex>& write_lock);
-  bool addToQuerySessionList(const QuerySessionId& query_session,
-                             const std::string& query_str,
-                             const std::string& submitted,
-                             const size_t executor_id,
-                             const QuerySessionStatus::QueryStatus query_status,
-                             mapd_unique_lock<mapd_shared_mutex>& write_lock);
-  bool removeFromQuerySessionList(const QuerySessionId& query_session,
-                                  const std::string& submitted_time_str,
-                                  mapd_unique_lock<mapd_shared_mutex>& write_lock);
   void setQuerySessionAsInterrupted(const QuerySessionId& query_session,
                                     mapd_unique_lock<mapd_shared_mutex>& write_lock);
   bool checkIsQuerySessionInterrupted(const std::string& query_session,
@@ -977,35 +960,10 @@ class Executor {
       const std::string& submitted_time_str,
       const QuerySessionStatus::QueryStatus updated_query_status,
       mapd_unique_lock<mapd_shared_mutex>& write_lock);
-  bool updateQuerySessionExecutorAssignment(
-      const QuerySessionId& query_session,
-      const std::string& submitted_time_str,
-      const size_t executor_id,
-      mapd_unique_lock<mapd_shared_mutex>& write_lock);
-  std::vector<QuerySessionStatus> getQuerySessionInfo(
-      const QuerySessionId& query_session,
-      mapd_shared_lock<mapd_shared_mutex>& read_lock);
 
-  mapd_shared_mutex& getSessionLock();
-  CurrentQueryStatus attachExecutorToQuerySession(
-      const QuerySessionId& query_session_id,
-      const std::string& query_str,
-      const std::string& query_submitted_time);
-  void checkPendingQueryStatus(const QuerySessionId& query_session);
-  void clearQuerySessionStatus(const QuerySessionId& query_session,
-                               const std::string& submitted_time_str);
   void updateQuerySessionStatus(const QuerySessionId& query_session,
                                 const std::string& submitted_time_str,
                                 const QuerySessionStatus::QueryStatus new_query_status);
-  void enrollQuerySession(const QuerySessionId& query_session,
-                          const std::string& query_str,
-                          const std::string& submitted_time_str,
-                          const size_t executor_id,
-                          const QuerySessionStatus::QueryStatus query_session_status);
-  // get a set of executor ids that a given session has fired regardless of
-  // each executor's status: pending or running
-  const std::vector<size_t> getExecutorIdsRunningQuery(
-      const QuerySessionId& interrupt_session) const;
   // check whether the current session that this executor manages is interrupted
   // while performing non-kernel time task
   bool checkNonKernelTimeInterrupted() const;
@@ -1022,7 +980,6 @@ class Executor {
                                      bool extract_only_col_id);
 
   CgenState* getCgenStatePtr() const { return cgen_state_.get(); }
-  PlanState* getPlanStatePtr() const { return plan_state_.get(); }
 
   llvm::LLVMContext& getContext() { return *context_.get(); }
   void update_extension_modules(bool update_runtime_modules_only = false);
@@ -1248,22 +1205,9 @@ inline bool is_unnest(const hdk::ir::Expr* expr) {
          static_cast<const hdk::ir::UOper*>(expr)->get_optype() == kUNNEST;
 }
 
-inline bool is_constructed_point(const hdk::ir::Expr* expr) {
-  auto uoper = dynamic_cast<const hdk::ir::UOper*>(expr);
-  auto oper = (uoper && uoper->get_optype() == kCAST) ? uoper->get_operand() : expr;
-  auto arr = dynamic_cast<const hdk::ir::ArrayExpr*>(oper);
-  return (arr && arr->isLocalAlloc() && arr->get_type_info().is_fixlen_array());
-}
-
 bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos,
                           const RelAlgExecutionUnit& ra_exe_unit,
                           unsigned trivial_loop_join_threshold);
-
-std::unordered_set<int> get_available_gpus(const Data_Namespace::DataMgr* data_mgr);
-
-size_t get_context_count(const ExecutorDeviceType device_type,
-                         const size_t cpu_count,
-                         const size_t gpu_count);
 
 extern "C" RUNTIME_EXPORT void register_buffer_with_executor_rsm(int64_t exec,
                                                                  int8_t* buffer);

@@ -1338,6 +1338,8 @@ ResultSetPtr Executor::reduceSpeculativeTopN(
   return m.asRows(ra_exe_unit, row_set_mem_owner, query_mem_desc, this, top_n, desc);
 }
 
+namespace {
+
 std::unordered_set<int> get_available_gpus(const Data_Namespace::DataMgr* data_mgr) {
   CHECK(data_mgr);
   std::unordered_set<int> available_gpus;
@@ -1351,15 +1353,6 @@ std::unordered_set<int> get_available_gpus(const Data_Namespace::DataMgr* data_m
   }
   return available_gpus;
 }
-
-size_t get_context_count(const ExecutorDeviceType device_type,
-                         const size_t cpu_count,
-                         const size_t gpu_count) {
-  return device_type == ExecutorDeviceType::GPU ? gpu_count
-                                                : static_cast<size_t>(cpu_count);
-}
-
-namespace {
 
 // Compute a very conservative entry count for the output buffer entry count using no
 // other information than the number of tuples in each table and multiplying them
@@ -4094,10 +4087,6 @@ JoinColumnsInfo Executor::getJoinColumnsInfo(const hdk::ir::Expr* join_expr,
       join_expr, target_side, extract_only_col_id);
 }
 
-mapd_shared_mutex& Executor::getSessionLock() {
-  return executor_session_mutex_;
-}
-
 QuerySessionId& Executor::getCurrentQuerySession(
     mapd_shared_lock<mapd_shared_mutex>& read_lock) {
   return current_query_session_;
@@ -4109,81 +4098,6 @@ bool Executor::checkCurrentQuerySession(const QuerySessionId& candidate_query_se
   // or it is empty session we consider
   return !candidate_query_session.empty() &&
          (current_query_session_ == candidate_query_session);
-}
-
-// used only for testing
-QuerySessionStatus::QueryStatus Executor::getQuerySessionStatus(
-    const QuerySessionId& candidate_query_session,
-    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
-  if (queries_session_map_.count(candidate_query_session) &&
-      !queries_session_map_.at(candidate_query_session).empty()) {
-    return queries_session_map_.at(candidate_query_session)
-        .begin()
-        ->second.getQueryStatus();
-  }
-  return QuerySessionStatus::QueryStatus::UNDEFINED;
-}
-
-void Executor::invalidateRunningQuerySession(
-    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
-  current_query_session_ = "";
-}
-
-CurrentQueryStatus Executor::attachExecutorToQuerySession(
-    const QuerySessionId& query_session_id,
-    const std::string& query_str,
-    const std::string& query_submitted_time) {
-  if (!query_session_id.empty()) {
-    // if session is valid, do update 1) the exact executor id and 2) query status
-    mapd_unique_lock<mapd_shared_mutex> write_lock(executor_session_mutex_);
-    updateQuerySessionExecutorAssignment(
-        query_session_id, query_submitted_time, executor_id_, write_lock);
-    updateQuerySessionStatusWithLock(query_session_id,
-                                     query_submitted_time,
-                                     QuerySessionStatus::QueryStatus::PENDING_EXECUTOR,
-                                     write_lock);
-  }
-  return {query_session_id, query_str};
-}
-
-void Executor::checkPendingQueryStatus(const QuerySessionId& query_session) {
-  // check whether we are okay to execute the "pending" query
-  // i.e., before running the query check if this query session is "ALREADY" interrupted
-  mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
-  if (query_session.empty()) {
-    return;
-  }
-  if (queries_interrupt_flag_.find(query_session) == queries_interrupt_flag_.end()) {
-    // something goes wrong since we assume this is caller's responsibility
-    // (call this function only for enrolled query session)
-    if (!queries_session_map_.count(query_session)) {
-      VLOG(1) << "Interrupting pending query is not available since the query session is "
-                 "not enrolled";
-    } else {
-      // here the query session is enrolled but the interrupt flag is not registered
-      VLOG(1)
-          << "Interrupting pending query is not available since its interrupt flag is "
-             "not registered";
-    }
-    return;
-  }
-  if (queries_interrupt_flag_[query_session]) {
-    throw QueryExecutionError(Executor::ERR_INTERRUPTED);
-  }
-}
-
-void Executor::clearQuerySessionStatus(const QuerySessionId& query_session,
-                                       const std::string& submitted_time_str) {
-  mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor_session_mutex_);
-  // clear the interrupt-related info for a finished query
-  if (query_session.empty()) {
-    return;
-  }
-  removeFromQuerySessionList(query_session, submitted_time_str, session_write_lock);
-  if (query_session.compare(current_query_session_) == 0) {
-    invalidateRunningQuerySession(session_write_lock);
-    resetInterrupt();
-  }
 }
 
 void Executor::updateQuerySessionStatus(
@@ -4200,67 +4114,6 @@ void Executor::updateQuerySessionStatus(
   }
   updateQuerySessionStatusWithLock(
       query_session, submitted_time_str, new_query_status, session_write_lock);
-}
-
-void Executor::enrollQuerySession(
-    const QuerySessionId& query_session,
-    const std::string& query_str,
-    const std::string& submitted_time_str,
-    const size_t executor_id,
-    const QuerySessionStatus::QueryStatus query_session_status) {
-  // enroll the query session into the Executor's session map
-  mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor_session_mutex_);
-  if (query_session.empty()) {
-    return;
-  }
-
-  addToQuerySessionList(query_session,
-                        query_str,
-                        submitted_time_str,
-                        executor_id,
-                        query_session_status,
-                        session_write_lock);
-
-  if (query_session_status == QuerySessionStatus::QueryStatus::RUNNING_QUERY_KERNEL) {
-    current_query_session_ = query_session;
-  }
-}
-
-bool Executor::addToQuerySessionList(const QuerySessionId& query_session,
-                                     const std::string& query_str,
-                                     const std::string& submitted_time_str,
-                                     const size_t executor_id,
-                                     const QuerySessionStatus::QueryStatus query_status,
-                                     mapd_unique_lock<mapd_shared_mutex>& write_lock) {
-  // an internal API that enrolls the query session into the Executor's session map
-  if (queries_session_map_.count(query_session)) {
-    if (queries_session_map_.at(query_session).count(submitted_time_str)) {
-      queries_session_map_.at(query_session).erase(submitted_time_str);
-      queries_session_map_.at(query_session)
-          .emplace(submitted_time_str,
-                   QuerySessionStatus(query_session,
-                                      executor_id,
-                                      query_str,
-                                      submitted_time_str,
-                                      query_status));
-    } else {
-      queries_session_map_.at(query_session)
-          .emplace(submitted_time_str,
-                   QuerySessionStatus(query_session,
-                                      executor_id,
-                                      query_str,
-                                      submitted_time_str,
-                                      query_status));
-    }
-  } else {
-    std::map<std::string, QuerySessionStatus> executor_per_query_map;
-    executor_per_query_map.emplace(
-        submitted_time_str,
-        QuerySessionStatus(
-            query_session, executor_id, query_str, submitted_time_str, query_status));
-    queries_session_map_.emplace(query_session, executor_per_query_map);
-  }
-  return queries_interrupt_flag_.emplace(query_session, false).second;
 }
 
 bool Executor::updateQuerySessionStatusWithLock(
@@ -4284,65 +4137,6 @@ bool Executor::updateQuerySessionStatusWithLock(
         query_status.second.setQueryStatus(updated_query_status);
         return true;
       }
-    }
-  }
-  return false;
-}
-
-bool Executor::updateQuerySessionExecutorAssignment(
-    const QuerySessionId& query_session,
-    const std::string& submitted_time_str,
-    const size_t executor_id,
-    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
-  // update the executor id of the query session
-  if (query_session.empty()) {
-    return false;
-  }
-  if (queries_session_map_.count(query_session)) {
-    auto storage = queries_session_map_.at(query_session);
-    for (auto it = storage.begin(); it != storage.end(); it++) {
-      auto target_submitted_t_str = it->second.getQuerySubmittedTime();
-      // no time difference --> found the target query status
-      if (submitted_time_str.compare(target_submitted_t_str) == 0) {
-        queries_session_map_.at(query_session)
-            .at(submitted_time_str)
-            .setExecutorId(executor_id);
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-bool Executor::removeFromQuerySessionList(
-    const QuerySessionId& query_session,
-    const std::string& submitted_time_str,
-    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
-  if (query_session.empty()) {
-    return false;
-  }
-  if (queries_session_map_.count(query_session)) {
-    auto& storage = queries_session_map_.at(query_session);
-    if (storage.size() > 1) {
-      // in this case we only remove query executor info
-      for (auto it = storage.begin(); it != storage.end(); it++) {
-        auto target_submitted_t_str = it->second.getQuerySubmittedTime();
-        // no time difference && have the same executor id--> found the target query
-        if (it->second.getExecutorId() == executor_id_ &&
-            submitted_time_str.compare(target_submitted_t_str) == 0) {
-          storage.erase(it);
-          return true;
-        }
-      }
-    } else if (storage.size() == 1) {
-      // here this session only has a single query executor
-      // so we clear both executor info and its interrupt flag
-      queries_session_map_.erase(query_session);
-      queries_interrupt_flag_.erase(query_session);
-      if (interrupted_.load()) {
-        interrupted_.store(false);
-      }
-      return true;
     }
   }
   return false;
@@ -4396,40 +4190,6 @@ Executor::CachedCardinality Executor::getCachedCardinality(const std::string& ca
     return {true, cardinality_cache_[cache_key]};
   }
   return {false, -1};
-}
-
-std::vector<QuerySessionStatus> Executor::getQuerySessionInfo(
-    const QuerySessionId& query_session,
-    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
-  if (!queries_session_map_.empty() && queries_session_map_.count(query_session)) {
-    auto& query_infos = queries_session_map_.at(query_session);
-    std::vector<QuerySessionStatus> ret;
-    for (auto& info : query_infos) {
-      ret.push_back(QuerySessionStatus(query_session,
-                                       info.second.getExecutorId(),
-                                       info.second.getQueryStr(),
-                                       info.second.getQuerySubmittedTime(),
-                                       info.second.getQueryStatus()));
-    }
-    return ret;
-  }
-  return {};
-}
-
-const std::vector<size_t> Executor::getExecutorIdsRunningQuery(
-    const QuerySessionId& interrupt_session) const {
-  std::vector<size_t> res;
-  mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
-  auto it = queries_session_map_.find(interrupt_session);
-  if (it != queries_session_map_.end()) {
-    for (auto& kv : it->second) {
-      if (kv.second.getQueryStatus() ==
-          QuerySessionStatus::QueryStatus::RUNNING_QUERY_KERNEL) {
-        res.push_back(kv.second.getExecutorId());
-      }
-    }
-  }
-  return res;
 }
 
 bool Executor::checkNonKernelTimeInterrupted() const {
