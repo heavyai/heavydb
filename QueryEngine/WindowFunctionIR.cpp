@@ -943,44 +943,28 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
     // prepare null values and aggregate_tree getter and searcher depending on
     // a type of the ordering column
     auto agg_expr_ti = args.front()->get_type_info();
-    switch (agg_expr_ti.get_type()) {
-      case SQLTypes::kBOOLEAN:
-      case SQLTypes::kTINYINT:
-      case SQLTypes::kSMALLINT:
-      case SQLTypes::kINT:
-      case SQLTypes::kBIGINT:
-      case SQLTypes::kNUMERIC:
-      case SQLTypes::kDECIMAL: {
-        if (window_func->getKind() == SqlWindowFunctionKind::MIN) {
-          invalid_val_lv = cgen_state_->llInt(std::numeric_limits<int64_t>::max());
-        } else if (window_func->getKind() == SqlWindowFunctionKind::MAX) {
-          invalid_val_lv = cgen_state_->llInt(std::numeric_limits<int64_t>::lowest());
-        } else {
-          invalid_val_lv = cgen_state_->llInt((int64_t)0);
-        }
-        null_val_lv = cgen_state_->llInt(inline_int_null_value<int64_t>());
-        aggregation_tree_search_func_name += "int64_t";
-        aggregation_tree_getter_func_name += "integer";
-        break;
+    if (agg_expr_ti.is_fp()) {
+      if (window_func->getKind() == SqlWindowFunctionKind::MIN) {
+        invalid_val_lv = cgen_state_->llFp(std::numeric_limits<double>::max());
+      } else if (window_func->getKind() == SqlWindowFunctionKind::MAX) {
+        invalid_val_lv = cgen_state_->llFp(std::numeric_limits<double>::lowest());
+      } else {
+        invalid_val_lv = cgen_state_->llFp((double)0);
       }
-      case SQLTypes::kFLOAT:
-      case SQLTypes::kDOUBLE: {
-        if (window_func->getKind() == SqlWindowFunctionKind::MIN) {
-          invalid_val_lv = cgen_state_->llFp(std::numeric_limits<double>::max());
-        } else if (window_func->getKind() == SqlWindowFunctionKind::MAX) {
-          invalid_val_lv = cgen_state_->llFp(std::numeric_limits<double>::lowest());
-        } else {
-          invalid_val_lv = cgen_state_->llFp((double)0);
-        }
-        null_val_lv = cgen_state_->inlineFpNull(SQLTypeInfo(kDOUBLE));
-        aggregation_tree_search_func_name += "double";
-        aggregation_tree_getter_func_name += "double";
-        break;
+      null_val_lv = cgen_state_->inlineFpNull(SQLTypeInfo(kDOUBLE));
+      aggregation_tree_search_func_name += "double";
+      aggregation_tree_getter_func_name += "double";
+    } else {
+      if (window_func->getKind() == SqlWindowFunctionKind::MIN) {
+        invalid_val_lv = cgen_state_->llInt(std::numeric_limits<int64_t>::max());
+      } else if (window_func->getKind() == SqlWindowFunctionKind::MAX) {
+        invalid_val_lv = cgen_state_->llInt(std::numeric_limits<int64_t>::lowest());
+      } else {
+        invalid_val_lv = cgen_state_->llInt((int64_t)0);
       }
-      default: {
-        CHECK(false);
-        break;
-      }
+      null_val_lv = cgen_state_->llInt(inline_int_null_value<int64_t>());
+      aggregation_tree_search_func_name += "int64_t";
+      aggregation_tree_getter_func_name += "integer";
     }
 
     // derived aggregation has a different code path
