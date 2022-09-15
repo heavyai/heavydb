@@ -44,43 +44,11 @@ void Executor::unregisterActiveModule(void* llvm_module, const int device_id) co
 #endif
 }
 
-void Executor::interrupt(const std::string& query_session,
-                         const std::string& interrupt_session) {
+void Executor::interrupt() {
   const auto allow_interrupt =
       config_->exec.interrupt.enable_runtime_query_interrupt ||
       config_->exec.interrupt.enable_non_kernel_time_query_interrupt;
   if (allow_interrupt) {
-    bool is_running_query = false;
-    {
-      // here we validate the requested query session is valid (is already enrolled)
-      // if not, we skip the interrupt request
-      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
-      if (!checkIsQuerySessionEnrolled(query_session, session_read_lock)) {
-        VLOG(1) << "Skip the interrupt request (no query has been submitted from the "
-                   "given query session)";
-        return;
-      }
-      if (checkIsQuerySessionInterrupted(query_session, session_read_lock)) {
-        VLOG(1) << "Skip the interrupt request (already interrupted query session)";
-        return;
-      }
-      // if a query is pending query, we just need to turn interrupt flag for the session
-      // on (not sending interrupt signal to "RUNNING" kernel, see the below code)
-      is_running_query = checkCurrentQuerySession(query_session, session_read_lock);
-    }
-    {
-      // We have to cover interrupt request from *any* session because we don't know
-      // whether the request is for the running query or pending query
-      // or for non-kernel time interrupt
-      // (or just false alarm that indicates unregistered session in a queue).
-      // So we try to set a session has been interrupted once we confirm
-      // the session has been enrolled and is not interrupted at this moment
-      mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor_session_mutex_);
-      setQuerySessionAsInterrupted(query_session, session_write_lock);
-    }
-    if (!is_running_query) {
-      return;
-    }
     // mark the interrupted status of this executor
     interrupted_.store(true);
   }

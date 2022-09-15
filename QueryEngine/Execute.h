@@ -85,76 +85,6 @@
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;
 class QueryMemoryDescriptor;
 using QueryMemoryDescriptorOwned = std::unique_ptr<QueryMemoryDescriptor>;
-using QuerySessionId = std::string;
-using CurrentQueryStatus = std::pair<QuerySessionId, std::string>;
-using InterruptFlagMap = std::map<QuerySessionId, bool>;
-class QuerySessionStatus {
-  // A class that is used to describe the query session's info
- public:
-  /* todo(yoonmin): support more query status
-   * i.e., RUNNING_SORT, RUNNING_CARD_EST, CLEANUP, ... */
-  enum QueryStatus {
-    UNDEFINED = 0,
-    PENDING_QUEUE,
-    PENDING_EXECUTOR,
-    RUNNING_QUERY_KERNEL,
-    RUNNING_REDUCTION,
-    RUNNING_IMPORTER
-  };
-
-  QuerySessionStatus(const QuerySessionId& query_session,
-                     const std::string& query_str,
-                     const std::string& submitted_time)
-      : query_session_(query_session)
-      , executor_id_(0)
-      , query_str_(query_str)
-      , submitted_time_(submitted_time)
-      , query_status_(QueryStatus::UNDEFINED) {}
-  QuerySessionStatus(const QuerySessionId& query_session,
-                     const size_t executor_id,
-                     const std::string& query_str,
-                     const std::string& submitted_time)
-      : query_session_(query_session)
-      , executor_id_(executor_id)
-      , query_str_(query_str)
-      , submitted_time_(submitted_time)
-      , query_status_(QueryStatus::UNDEFINED) {}
-  QuerySessionStatus(const QuerySessionId& query_session,
-                     const size_t executor_id,
-                     const std::string& query_str,
-                     const std::string& submitted_time,
-                     const QuerySessionStatus::QueryStatus& query_status)
-      : query_session_(query_session)
-      , executor_id_(executor_id)
-      , query_str_(query_str)
-      , submitted_time_(submitted_time)
-      , query_status_(query_status) {}
-
-  const QuerySessionId getQuerySession() { return query_session_; }
-  const std::string getQueryStr() { return query_str_; }
-  const size_t getExecutorId() { return executor_id_; }
-  const std::string& getQuerySubmittedTime() { return submitted_time_; }
-  const QuerySessionStatus::QueryStatus getQueryStatus() { return query_status_; }
-  void setQueryStatus(const QuerySessionStatus::QueryStatus& status) {
-    query_status_ = status;
-  }
-  void setExecutorId(const size_t executor_id) { executor_id_ = executor_id; }
-
- private:
-  const QuerySessionId query_session_;
-  size_t executor_id_;
-  const std::string query_str_;
-  const std::string submitted_time_;
-  // Currently we use three query status:
-  // 1) PENDING_IN_QUEUE: a task is submitted to the dispatch_queue but hangs due to no
-  // existing worker (= executor) 2) PENDING_IN_EXECUTOR: a task is assigned to the
-  // specific executor but waits to get the resource to run 3) RUNNING: a task is assigned
-  // to the specific executor and its execution has been successfully started
-  // 4) RUNNING_REDUCTION: a task is in the reduction phase
-  QuerySessionStatus::QueryStatus query_status_;
-};
-using QuerySessionMap =
-    std::map<const QuerySessionId, std::map<std::string, QuerySessionStatus>>;
 
 class ColumnFetcher;
 
@@ -447,8 +377,7 @@ class Executor {
 
   void registerActiveModule(void* module, const int device_id) const;
   void unregisterActiveModule(void* module, const int device_id) const;
-  void interrupt(const QuerySessionId& query_session = "",
-                 const QuerySessionId& interrupt_session = "");
+  void interrupt();
   void resetInterrupt();
 
   static const size_t high_scan_limit{32000000};
@@ -945,25 +874,6 @@ class Executor {
 
   ExecutorId getExecutorId() const { return executor_id_; };
 
-  QuerySessionId& getCurrentQuerySession(mapd_shared_lock<mapd_shared_mutex>& read_lock);
-
-  bool checkCurrentQuerySession(const std::string& candidate_query_session,
-                                mapd_shared_lock<mapd_shared_mutex>& read_lock);
-  void setQuerySessionAsInterrupted(const QuerySessionId& query_session,
-                                    mapd_unique_lock<mapd_shared_mutex>& write_lock);
-  bool checkIsQuerySessionInterrupted(const std::string& query_session,
-                                      mapd_shared_lock<mapd_shared_mutex>& read_lock);
-  bool checkIsQuerySessionEnrolled(const QuerySessionId& query_session,
-                                   mapd_shared_lock<mapd_shared_mutex>& read_lock);
-  bool updateQuerySessionStatusWithLock(
-      const QuerySessionId& query_session,
-      const std::string& submitted_time_str,
-      const QuerySessionStatus::QueryStatus updated_query_status,
-      mapd_unique_lock<mapd_shared_mutex>& write_lock);
-
-  void updateQuerySessionStatus(const QuerySessionId& query_session,
-                                const std::string& submitted_time_str,
-                                const QuerySessionStatus::QueryStatus new_query_status);
   // check whether the current session that this executor manages is interrupted
   // while performing non-kernel time task
   bool checkNonKernelTimeInterrupted() const;
@@ -1060,7 +970,7 @@ class Executor {
   static uint32_t gpu_active_modules_device_mask_;
   static void* gpu_active_modules_[max_gpu_count];
   // indicates whether this executor has been interrupted
-  std::atomic<bool> interrupted_;
+  std::atomic<bool> interrupted_{false};
 
   mutable std::mutex str_dict_mutex_;
 
@@ -1099,13 +1009,6 @@ class Executor {
   mutable InputTableInfoCache input_table_info_cache_;
   AggregatedColRange agg_col_range_cache_;
   TableGenerations table_generations_;
-  static mapd_shared_mutex executor_session_mutex_;
-  // a query session that this executor manages
-  QuerySessionId current_query_session_;
-  // a pair of <QuerySessionId, interrupted_flag>
-  static InterruptFlagMap queries_interrupt_flag_;
-  // a pair of <QuerySessionId, query_session_status>
-  static QuerySessionMap queries_session_map_;
 
   // for blocking executors for clear memory, etc
   static mapd_shared_mutex execute_mutex_;

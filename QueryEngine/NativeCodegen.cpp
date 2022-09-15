@@ -866,14 +866,6 @@ void Executor::createErrorCheckControlFlow(
     run_with_allowing_runtime_interrupt = false;
   }
 
-  {
-    // disable injecting query interrupt checker if the session info is invalid
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
-    if (current_query_session_.empty()) {
-      run_with_allowing_runtime_interrupt = false;
-    }
-  }
-
   llvm::Value* row_count = nullptr;
   if ((run_with_dynamic_watchdog || run_with_allowing_runtime_interrupt) &&
       device_type == ExecutorDeviceType::GPU) {
