@@ -756,139 +756,134 @@ void WindowFunctionContext::compute(
   }
 }
 
+namespace {
+struct FindNullRange {
+  Analyzer::OrderEntry collation;
+  int32_t const* original_col_idx_buf;
+  int64_t const* ordered_col_idx_buf;
+  int32_t const partition_size;
+  int64_t null_bit_pattern = -1;
+
+  template <typename T>
+  IndexPair find_null_range_int(int8_t const* order_col_buf) const {
+    IndexPair null_range{std::numeric_limits<int64_t>::max(),
+                         std::numeric_limits<int64_t>::min()};
+    auto const null_val = inline_int_null_value<T>();
+    auto const casted_order_col_buf = reinterpret_cast<T const*>(order_col_buf);
+    if (collation.nulls_first &&
+        casted_order_col_buf[original_col_idx_buf[ordered_col_idx_buf[0]]] == null_val) {
+      int64_t null_range_max = 1;
+      while (null_range_max < partition_size &&
+             casted_order_col_buf
+                     [original_col_idx_buf[ordered_col_idx_buf[null_range_max]]] ==
+                 null_val) {
+        null_range_max++;
+      }
+      null_range.first = 0;
+      null_range.second = null_range_max - 1;
+    } else if (!collation.nulls_first &&
+               casted_order_col_buf
+                       [original_col_idx_buf[ordered_col_idx_buf[partition_size - 1]]] ==
+                   null_val) {
+      int64_t null_range_min = partition_size - 2;
+      while (null_range_min >= 0 &&
+             casted_order_col_buf
+                     [original_col_idx_buf[ordered_col_idx_buf[null_range_min]]] ==
+                 null_val) {
+        null_range_min--;
+      }
+      null_range.first = null_range_min + 1;
+      null_range.second = partition_size - 1;
+    }
+    return null_range;
+  }
+
+  template <typename COL_TYPE,
+            typename NULL_TYPE =
+                std::conditional_t<sizeof(COL_TYPE) == sizeof(int32_t), int32_t, int64_t>>
+  IndexPair find_null_range_fp(int8_t const* order_col_buf) const {
+    IndexPair null_range{std::numeric_limits<int64_t>::max(),
+                         std::numeric_limits<int64_t>::min()};
+    auto const casted_order_col_buf = reinterpret_cast<COL_TYPE const*>(order_col_buf);
+    auto check_null_val = [&casted_order_col_buf, this](size_t idx) {
+      return *reinterpret_cast<NULL_TYPE const*>(
+                 may_alias_ptr(&casted_order_col_buf
+                                   [original_col_idx_buf[ordered_col_idx_buf[idx]]])) ==
+             null_bit_pattern;
+    };
+    if (collation.nulls_first && check_null_val(0)) {
+      int64_t null_range_max = 1;
+      while (null_range_max < partition_size && check_null_val(null_range_max)) {
+        null_range_max++;
+      }
+      null_range.first = 0;
+      null_range.second = null_range_max - 1;
+    } else if (!collation.nulls_first && check_null_val(partition_size - 1)) {
+      int64_t null_range_min = partition_size - 2;
+      while (null_range_min >= 0 && check_null_val(null_range_min)) {
+        null_range_min--;
+      }
+      null_range.first = null_range_min + 1;
+      null_range.second = partition_size - 1;
+    }
+    return null_range;
+  }
+};
+}  // namespace
+
 void WindowFunctionContext::computeNullRangeOfSortedPartition(
     const SQLTypeInfo& order_col_ti,
     size_t partition_idx,
     const int32_t* original_col_idx_buf,
     const int64_t* ordered_col_idx_buf) {
-  IndexPair null_range{std::numeric_limits<int64_t>::max(),
-                       std::numeric_limits<int64_t>::min()};
+  IndexPair null_range;
   const auto& collation = window_func_->getCollation().front();
   const auto partition_size = counts()[partition_idx];
-  if (partition_size > 0 && (order_col_ti.is_integer() || order_col_ti.is_decimal() ||
-                             order_col_ti.is_time() || order_col_ti.is_boolean())) {
-    auto find_null_range_int = [&null_range,
-                                &collation,
-                                &original_col_idx_buf,
-                                &ordered_col_idx_buf,
-                                &partition_size](const auto order_col_buf,
-                                                 const auto null_val) {
-      if (collation.nulls_first &&
-          order_col_buf[original_col_idx_buf[ordered_col_idx_buf[0]]] == null_val) {
-        int64_t null_range_max = 1;
-        while (null_range_max < partition_size &&
-               order_col_buf[original_col_idx_buf[ordered_col_idx_buf[null_range_max]]] ==
-                   null_val) {
-          null_range_max++;
-        }
-        null_range.first = 0;
-        null_range.second = null_range_max - 1;
-      } else if (!collation.nulls_first &&
-                 order_col_buf[original_col_idx_buf[ordered_col_idx_buf[partition_size -
-                                                                        1]]] ==
-                     null_val) {
-        int64_t null_range_min = partition_size - 2;
-        while (null_range_min >= 0 &&
-               order_col_buf[original_col_idx_buf[ordered_col_idx_buf[null_range_min]]] ==
-                   null_val) {
-          null_range_min--;
-        }
-        null_range.first = null_range_min + 1;
-        null_range.second = partition_size - 1;
+  if (partition_size > 0) {
+    if (order_col_ti.is_integer() || order_col_ti.is_decimal() ||
+        order_col_ti.is_time_or_date() || order_col_ti.is_boolean()) {
+      FindNullRange const null_range_info{
+          collation, original_col_idx_buf, ordered_col_idx_buf, partition_size};
+      switch (order_col_ti.get_size()) {
+        case 8:
+          null_range =
+              null_range_info.find_null_range_int<int64_t>(order_columns_.front());
+          break;
+        case 4:
+          null_range =
+              null_range_info.find_null_range_int<int32_t>(order_columns_.front());
+          break;
+        case 2:
+          null_range =
+              null_range_info.find_null_range_int<int16_t>(order_columns_.front());
+          break;
+        case 1:
+          null_range =
+              null_range_info.find_null_range_int<int8_t>(order_columns_.front());
+          break;
+        default:
+          LOG(FATAL) << "Invalid type size: " << order_col_ti.get_size();
       }
-    };
-    switch (order_col_ti.get_size()) {
-      case 8: {
-        const auto order_col_buf =
-            reinterpret_cast<const int64_t*>(order_columns_.front());
-        find_null_range_int(order_col_buf, inline_int_null_value<int64_t>());
-        break;
+    } else if (order_col_ti.is_fp()) {
+      const auto null_bit_pattern =
+          null_val_bit_pattern(order_col_ti, order_col_ti.get_type() == kFLOAT);
+      FindNullRange const null_range_info{collation,
+                                          original_col_idx_buf,
+                                          ordered_col_idx_buf,
+                                          partition_size,
+                                          null_bit_pattern};
+      switch (order_col_ti.get_type()) {
+        case kFLOAT:
+          null_range = null_range_info.find_null_range_fp<float>(order_columns_.front());
+          break;
+        case kDOUBLE:
+          null_range = null_range_info.find_null_range_fp<double>(order_columns_.front());
+          break;
+        default:
+          LOG(FATAL) << "Invalid float type";
       }
-      case 4: {
-        const auto order_col_buf =
-            reinterpret_cast<const int32_t*>(order_columns_.front());
-        find_null_range_int(order_col_buf, inline_int_null_value<int32_t>());
-        break;
-      }
-      case 2: {
-        const auto order_col_buf =
-            reinterpret_cast<const int16_t*>(order_columns_.front());
-        find_null_range_int(order_col_buf, inline_int_null_value<int16_t>());
-        break;
-      }
-      case 1: {
-        const auto order_col_buf =
-            reinterpret_cast<const int8_t*>(order_columns_.front());
-        find_null_range_int(order_col_buf, inline_int_null_value<int8_t>());
-        break;
-      }
-      default: {
-        LOG(FATAL) << "Invalid type size: " << order_col_ti.get_size();
-      }
-    }
-  }
-  if (partition_size > 0 && order_col_ti.is_fp()) {
-    const auto null_bit_pattern =
-        null_val_bit_pattern(order_col_ti, order_col_ti.get_type() == kFLOAT);
-    switch (order_col_ti.get_type()) {
-      case kFLOAT: {
-        const auto order_col_buf = reinterpret_cast<const float*>(order_columns_.front());
-        auto check_null_val = [&null_bit_pattern,
-                               &order_col_buf,
-                               &original_col_idx_buf,
-                               &ordered_col_idx_buf](size_t idx) {
-          return *reinterpret_cast<const int32_t*>(may_alias_ptr(
-                     &order_col_buf[original_col_idx_buf[ordered_col_idx_buf[idx]]])) ==
-                 null_bit_pattern;
-        };
-        if (collation.nulls_first && check_null_val(0)) {
-          int64_t null_range_max = 1;
-          while (null_range_max < partition_size && check_null_val(null_range_max)) {
-            null_range_max++;
-          }
-          null_range.first = 0;
-          null_range.second = null_range_max - 1;
-        } else if (!collation.nulls_first && check_null_val(partition_size - 1)) {
-          int64_t null_range_min = partition_size - 2;
-          while (null_range_min >= 0 && check_null_val(null_range_min)) {
-            null_range_min--;
-          }
-          null_range.first = null_range_min + 1;
-          null_range.second = partition_size - 1;
-        }
-        break;
-      }
-      case kDOUBLE: {
-        const auto order_col_buf =
-            reinterpret_cast<const double*>(order_columns_.front());
-        auto check_null_val = [&null_bit_pattern,
-                               &order_col_buf,
-                               &original_col_idx_buf,
-                               &ordered_col_idx_buf](size_t idx) {
-          return *reinterpret_cast<const int64_t*>(may_alias_ptr(
-                     &order_col_buf[original_col_idx_buf[ordered_col_idx_buf[idx]]])) ==
-                 null_bit_pattern;
-        };
-        if (collation.nulls_first && check_null_val(0)) {
-          int64_t null_range_max = 1;
-          while (null_range_max < partition_size && check_null_val(null_range_max)) {
-            null_range_max++;
-          }
-          null_range.first = 0;
-          null_range.second = null_range_max - 1;
-        } else if (!collation.nulls_first && check_null_val(partition_size - 1)) {
-          int64_t null_range_min = partition_size - 2;
-          while (null_range_min >= 0 && check_null_val(null_range_min)) {
-            null_range_min--;
-          }
-          null_range.first = null_range_min + 1;
-          null_range.second = partition_size - 1;
-        }
-        break;
-      }
-      default: {
-        LOG(FATAL) << "Invalid float type";
-      }
+    } else {
+      LOG(FATAL) << "Invalid column type for window aggregation over the frame";
     }
   }
   ordered_partition_null_start_pos_[partition_idx] = null_range.first;
@@ -1301,14 +1296,24 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
     const int64_t* ordered_rowid_buf,
     const SQLTypeInfo& input_col_ti) {
   CHECK(col_buf);
-  if (!(input_col_ti.is_number() || input_col_ti.is_boolean())) {
-    // todo (yoonmin) : support min / max / count window agg functions over the frame
-    // for date/time/timestamp types
+  if (!(input_col_ti.is_number() || input_col_ti.is_boolean() ||
+        input_col_ti.is_time_or_date())) {
     throw QueryNotSupported("Window aggregate function over frame on a column type " +
                             ::toString(input_col_ti.get_type()) + " is not supported.");
   }
-  const auto type = input_col_ti.is_decimal() ? decimal_to_int_type(input_col_ti)
-                                              : input_col_ti.get_type();
+  if (input_col_ti.is_time_or_date() && !(agg_type == SqlWindowFunctionKind::MIN ||
+                                          agg_type == SqlWindowFunctionKind::MAX ||
+                                          agg_type == SqlWindowFunctionKind::COUNT)) {
+    throw QueryNotSupported(
+        "Aggregation over a window frame for a column type " +
+        ::toString(input_col_ti.get_type()) +
+        " must use one of the following window aggregate function: MIN / MAX / COUNT");
+  }
+  const auto type = input_col_ti.is_decimal()
+                        ? decimal_to_int_type(input_col_ti)
+                        : input_col_ti.is_time_or_date()
+                              ? get_int_type_by_size(input_col_ti.get_size())
+                              : input_col_ti.get_type();
   if (partition_size > 0) {
     IndexPair order_col_null_range{ordered_partition_null_start_pos_[partition_idx],
                                    ordered_partition_null_end_pos_[partition_idx]};
@@ -1461,7 +1466,7 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
     // handling a case of an empty partition
     aggregate_trees_depth_[partition_idx] = 0;
     if (input_col_ti.is_integer() || input_col_ti.is_decimal() ||
-        input_col_ti.is_boolean()) {
+        input_col_ti.is_boolean() || input_col_ti.is_time_or_date()) {
       if (agg_type == SqlWindowFunctionKind::AVG) {
         aggregate_trees_.derived_aggregate_tree_for_integer_type_.push_back(nullptr);
       } else {
