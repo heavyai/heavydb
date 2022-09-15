@@ -983,6 +983,10 @@ class SQLTypeInfo {
 
   inline bool is_date() const { return type == kDATE; }
 
+  inline bool is_time_or_date() const {
+    return type == kDATE || type == kTIME || type == kTIMESTAMP;
+  }
+
   inline bool is_high_precision_timestamp() const {
     if (type == kTIMESTAMP) {
       const auto dimension = get_dimension();

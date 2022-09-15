@@ -23305,7 +23305,22 @@ TEST(Select, WindowFunctionFramingWithDateAndTimeColumn) {
     }
   }
 
-  // check 3. exceptions
+  // test 3. MIN / MAX / COUNT over DATE / TIME / TIMESTAMP expressions
+  for (const std::string col_name : {"ti", "tie", "d16", "d32", "tm0", "tm0e"}) {
+    for (const std::string op : {"MIN", "MAX", "COUNT"}) {
+      const std::string query =
+          "SELECT " + op + "(" + col_name +
+          ") OVER (PARTITION BY pc ORDER BY rid ROWS BETWEEN 12 PRECEDING AND 12 "
+          "FOLLOWING) FROM TD_RANGE_NULL WHERE pc = 1 LIMIT 1";
+      const std::string alternative_query =
+          "SELECT " + op + "(" + col_name + ") FROM TD_RANGE_NULL WHERE pc = 1";
+      const auto res = v<int64_t>(run_simple_agg(query, dt));
+      const auto ans = v<int64_t>(run_simple_agg(alternative_query, dt));
+      EXPECT_EQ(res, ans);
+    }
+  }
+
+  // test 4. exceptions
   EXPECT_ANY_THROW(
       run_simple_agg("SELECT SUM(rid) OVER (ORDER BY tm3 RANGE BETWEEN INTERVAL -3 "
                      "MILLISECOND PRECEDING AND CURRENT ROW) FROM TD_RANGE",
@@ -23314,6 +23329,22 @@ TEST(Select, WindowFunctionFramingWithDateAndTimeColumn) {
       run_simple_agg("SELECT SUM(rid) OVER (ORDER BY tm3 RANGE BETWEEN INTERVAL 3.3 "
                      "MILLISECOND PRECEDING AND CURRENT ROW) FROM TD_RANGE",
                      dt));
+  EXPECT_ANY_THROW(run_simple_agg(
+      "SELECT AVG(ti) OVER (PARTITION BY pc ORDER BY rid ROWS BETWEEN 12 PRECEDING AND "
+      "12 FOLLOWING) FROM TD_RANGE_NULL WHERE pc = 1 LIMIT 1",
+      dt));
+  EXPECT_ANY_THROW(run_simple_agg(
+      "SELECT SUM(ti) OVER (PARTITION BY pc ORDER BY rid ROWS BETWEEN 12 PRECEDING AND "
+      "12 FOLLOWING) FROM TD_RANGE_NULL WHERE pc = 1 LIMIT 1",
+      dt));
+  EXPECT_ANY_THROW(run_simple_agg(
+      "SELECT AVG(d16) OVER (PARTITION BY pc ORDER BY rid ROWS BETWEEN 12 PRECEDING AND "
+      "12 FOLLOWING) FROM TD_RANGE_NULL WHERE pc = 1 LIMIT 1",
+      dt));
+  EXPECT_ANY_THROW(run_simple_agg(
+      "SELECT AVG(tm0) OVER (PARTITION BY pc ORDER BY rid ROWS BETWEEN 12 PRECEDING AND "
+      "12 FOLLOWING) FROM TD_RANGE_NULL WHERE pc = 1 LIMIT 1",
+      dt));
 }
 
 TEST(Select, WindowFunctionFrameNavigationFunctions) {
