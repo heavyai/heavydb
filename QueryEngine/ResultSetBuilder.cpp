@@ -131,7 +131,7 @@ ResultSet* ResultSetLogicalValuesBuilder::build() {
 
           } else {
             // Initialize the entire 8-byte slot
-            *reinterpret_cast<int64_t*>(ptr) = EMPTY_KEY_64;
+            std::memset(ptr, 0, 8);
 
             const auto sz = ti.get_size();
             CHECK_GE(sz, int(0));

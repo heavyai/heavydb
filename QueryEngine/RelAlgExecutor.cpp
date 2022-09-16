@@ -2021,6 +2021,8 @@ std::vector<TargetMetaInfo> get_targets_meta(
     return get_targets_meta(input, target_exprs);
   } else if (auto const* input = dynamic_cast<RelScan const*>(input0)) {
     return get_targets_meta(input, target_exprs);
+  } else if (auto const* input = dynamic_cast<RelLogicalValues const*>(input0)) {
+    return get_targets_meta(input, target_exprs);
   }
   UNREACHABLE() << "Unhandled node type: "
                 << input0->toString(RelRexToStringConfig::defaults());
@@ -2770,9 +2772,6 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
   auto tuple_type = logical_values->getTupleType();
   for (size_t i = 0; i < tuple_type.size(); ++i) {
     auto& target_meta_info = tuple_type[i];
-    if (target_meta_info.get_type_info().is_varlen()) {
-      throw std::runtime_error("Variable length types not supported in VALUES yet.");
-    }
     if (target_meta_info.get_type_info().get_type() == kNULLT) {
       // replace w/ bigint
       tuple_type[i] =
@@ -5039,6 +5038,9 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
     logical_union->setOutputMetainfo(
         get_targets_meta(node, rewritten_exe_unit.target_exprs));
   } else if (auto const* node = dynamic_cast<const RelFilter*>(input0)) {
+    logical_union->setOutputMetainfo(
+        get_targets_meta(node, rewritten_exe_unit.target_exprs));
+  } else if (auto const* node = dynamic_cast<const RelLogicalValues*>(input0)) {
     logical_union->setOutputMetainfo(
         get_targets_meta(node, rewritten_exe_unit.target_exprs));
   } else if (dynamic_cast<const RelSort*>(input0)) {

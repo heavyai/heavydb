@@ -25416,6 +25416,92 @@ TEST(Select, ProjectMoreThan1MVarlenTypeColumn) {
   }
 }
 
+class ValuesTest : public ::testing::Test {
+ protected:
+  static void check_result_set(std::shared_ptr<ResultSet> rs,
+                               std::vector<std::vector<int>> values) {
+    std::vector<std::vector<int>> values2;
+
+    auto it = rs->rowIterator(true, true);
+    for (size_t row_idx = 0; row_idx < values.size(); ++row_idx) {
+      const auto crt_row = g_use_row_iterator ? *it++ : rs->getNextRow(true, true);
+      CHECK(!crt_row.empty());
+
+      values2.push_back({});
+      for (size_t col_idx = 0; col_idx < values[row_idx].size(); ++col_idx) {
+        const auto omnisci_variant = crt_row[col_idx];
+        const auto scalar_omnisci_variant =
+            boost::get<ScalarTargetValue>(&omnisci_variant);
+        CHECK(scalar_omnisci_variant);
+        auto omnisci_ti = rs->getColType(col_idx);
+        const auto omnisci_type = omnisci_ti.get_type();
+        ASSERT_EQ(omnisci_type, kINT);
+
+        const auto omnisci_as_int_p = boost::get<int64_t>(scalar_omnisci_variant);
+        CHECK_NE(omnisci_as_int_p, nullptr);
+        const auto omnisci_val = *omnisci_as_int_p;
+        values2[row_idx].push_back(omnisci_val);
+      }
+    }
+
+    std::sort(values.begin(), values.end());
+    std::sort(values2.begin(), values2.end());
+    EXPECT_EQ(values, values2);
+  }
+
+  static std::string make_values_string(std::vector<std::vector<int>> values) {
+    std::string sqltext{"VALUES "};
+    bool first1{true};
+    for (auto const& v : values) {
+      if (!first1) {
+        sqltext += ", ";
+      } else {
+        first1 = false;
+      }
+      sqltext += "(";
+      bool first2{true};
+      for (auto const& i : v) {
+        if (!first2) {
+          sqltext += ", ";
+        } else {
+          first2 = false;
+        }
+        sqltext += std::to_string(i);
+      }
+      sqltext += ")";
+    }
+    return sqltext;
+  }
+};  // ValuesTest
+
+TEST_F(ValuesTest, Values) {
+  {
+    std::vector<std::vector<int>> values{{{1, 2}}};
+    std::string sqltext{make_values_string(values) + ";"};
+    auto rs = run_multiple_agg(sqltext, ExecutorDeviceType::CPU);
+    check_result_set(rs, values);
+  }
+
+  {
+    std::vector<std::vector<int>> values{{{1, 2}, {3, 4}}};
+    std::string sqltext{make_values_string(values) + ";"};
+    auto rs = run_multiple_agg(sqltext, ExecutorDeviceType::CPU);
+    check_result_set(rs, values);
+  }
+
+  {
+    std::vector<std::vector<int>> values1{{{1, 2, 3}}};
+    std::vector<std::vector<int>> values2{{{4, 5, 6}}};
+    std::string sqltext{make_values_string(values1) + " UNION ALL " +
+                        make_values_string(values2) + ";"};
+    auto rs = run_multiple_agg(sqltext, ExecutorDeviceType::CPU);
+    std::vector<std::vector<int>> values3;
+    values3.insert(values3.end(), values1.begin(), values1.end());
+    values3.insert(values3.end(), values2.begin(), values2.end());
+    check_result_set(rs, values3);
+  }
+}
+
 namespace {
 int create_sharded_join_table(const std::string& table_name,
                               size_t fragment_size,

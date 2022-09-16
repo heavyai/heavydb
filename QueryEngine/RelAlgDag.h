@@ -2396,6 +2396,11 @@ class RelLogicalValues : public RelAlgNode {
     return *hash_;
   }
 
+  std::string getFieldName(const size_t col_idx) const {
+    CHECK_LT(col_idx, size());
+    return tuple_type_[col_idx].get_resname();
+  }
+
   const RexScalar* getValueAt(const size_t row_idx, const size_t col_idx) const {
     CHECK_LT(row_idx, values_.size());
     const auto& row = values_[row_idx];
