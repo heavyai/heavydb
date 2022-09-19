@@ -71,6 +71,13 @@ struct AggregateTreeForWindowFraming {
   std::vector<double*> aggregate_tree_for_double_type_;
   std::vector<SumAndCountPair<int64_t>*> derived_aggregate_tree_for_integer_type_;
   std::vector<SumAndCountPair<double>*> derived_aggregate_tree_for_double_type_;
+
+  void resizeStorageForWindowFraming(size_t partition_count) {
+    aggregate_tree_for_integer_type_.resize(partition_count);
+    aggregate_tree_for_double_type_.resize(partition_count);
+    derived_aggregate_tree_for_integer_type_.resize(partition_count);
+    derived_aggregate_tree_for_double_type_.resize(partition_count);
+  }
 };
 
 struct WindowFrameBoundFuncArgs {
@@ -251,6 +258,8 @@ class WindowFunctionContext {
   void fillPartitionStart();
 
   void fillPartitionEnd();
+
+  void resizeStorageForWindowFraming();
 
   const Analyzer::WindowFunction* window_func_;
   QueryPlanHash partition_cache_key_;
