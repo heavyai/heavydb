@@ -652,6 +652,7 @@ void WindowFunctionContext::compute(
       }
     };
     auto partition_count = partitionCount();
+
     if (should_parallelize) {
       auto partition_compuation_timer =
           DEBUG_TIMER("Window Function Ordered-Partition Null-Range Compute");
@@ -685,6 +686,7 @@ void WindowFunctionContext::compute(
               window_func_->getArgs().front()->get_type_info());
         }
       };
+      resizeStorageForWindowFraming();
       if (should_parallelize) {
         auto partition_compuation_timer =
             DEBUG_TIMER("Window Function Build Segment Tree for Partitions");
@@ -1287,6 +1289,12 @@ void WindowFunctionContext::computePartitionBuffer(
   }
 }
 
+void WindowFunctionContext::resizeStorageForWindowFraming() {
+  auto const partition_count = partitionCount();
+  aggregate_trees_.resizeStorageForWindowFraming(partition_count);
+  segment_trees_owned_.resize(partition_count);
+}
+
 void WindowFunctionContext::buildAggregationTreeForPartition(
     SqlWindowFunctionKind agg_type,
     size_t partition_idx,
@@ -1338,13 +1346,13 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
         aggregate_trees_depth_[partition_idx] =
             segment_tree ? segment_tree->getLeafDepth() : 0;
         if (agg_type == SqlWindowFunctionKind::AVG) {
-          aggregate_trees_.derived_aggregate_tree_for_integer_type_.push_back(
-              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr);
+          aggregate_trees_.derived_aggregate_tree_for_integer_type_[partition_idx] =
+              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr;
         } else {
-          aggregate_trees_.aggregate_tree_for_integer_type_.push_back(
-              segment_tree ? segment_tree->getAggregatedValues() : nullptr);
+          aggregate_trees_.aggregate_tree_for_integer_type_[partition_idx] =
+              segment_tree ? segment_tree->getAggregatedValues() : nullptr;
         }
-        segment_trees_owned_.emplace_back(std::move(segment_tree));
+        segment_trees_owned_[partition_idx] = std::move(segment_tree);
         break;
       }
       case kSMALLINT: {
@@ -1360,13 +1368,13 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
         aggregate_trees_depth_[partition_idx] =
             segment_tree ? segment_tree->getLeafDepth() : 0;
         if (agg_type == SqlWindowFunctionKind::AVG) {
-          aggregate_trees_.derived_aggregate_tree_for_integer_type_.push_back(
-              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr);
+          aggregate_trees_.derived_aggregate_tree_for_integer_type_[partition_idx] =
+              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr;
         } else {
-          aggregate_trees_.aggregate_tree_for_integer_type_.push_back(
-              segment_tree ? segment_tree->getAggregatedValues() : nullptr);
+          aggregate_trees_.aggregate_tree_for_integer_type_[partition_idx] =
+              segment_tree ? segment_tree->getAggregatedValues() : nullptr;
         }
-        segment_trees_owned_.emplace_back(std::move(segment_tree));
+        segment_trees_owned_[partition_idx] = std::move(segment_tree);
         break;
       }
       case kINT: {
@@ -1382,13 +1390,13 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
         aggregate_trees_depth_[partition_idx] =
             segment_tree ? segment_tree->getLeafDepth() : 0;
         if (agg_type == SqlWindowFunctionKind::AVG) {
-          aggregate_trees_.derived_aggregate_tree_for_integer_type_.push_back(
-              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr);
+          aggregate_trees_.derived_aggregate_tree_for_integer_type_[partition_idx] =
+              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr;
         } else {
-          aggregate_trees_.aggregate_tree_for_integer_type_.push_back(
-              segment_tree ? segment_tree->getAggregatedValues() : nullptr);
+          aggregate_trees_.aggregate_tree_for_integer_type_[partition_idx] =
+              segment_tree ? segment_tree->getAggregatedValues() : nullptr;
         }
-        segment_trees_owned_.emplace_back(std::move(segment_tree));
+        segment_trees_owned_[partition_idx] = std::move(segment_tree);
         break;
       }
       case kDECIMAL:
@@ -1406,13 +1414,13 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
         aggregate_trees_depth_[partition_idx] =
             segment_tree ? segment_tree->getLeafDepth() : 0;
         if (agg_type == SqlWindowFunctionKind::AVG) {
-          aggregate_trees_.derived_aggregate_tree_for_integer_type_.push_back(
-              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr);
+          aggregate_trees_.derived_aggregate_tree_for_integer_type_[partition_idx] =
+              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr;
         } else {
-          aggregate_trees_.aggregate_tree_for_integer_type_.push_back(
-              segment_tree ? segment_tree->getAggregatedValues() : nullptr);
+          aggregate_trees_.aggregate_tree_for_integer_type_[partition_idx] =
+              segment_tree ? segment_tree->getAggregatedValues() : nullptr;
         }
-        segment_trees_owned_.emplace_back(std::move(segment_tree));
+        segment_trees_owned_[partition_idx] = std::move(segment_tree);
         break;
       }
       case kFLOAT: {
@@ -1428,13 +1436,13 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
         aggregate_trees_depth_[partition_idx] =
             segment_tree ? segment_tree->getLeafDepth() : 0;
         if (agg_type == SqlWindowFunctionKind::AVG) {
-          aggregate_trees_.derived_aggregate_tree_for_double_type_.push_back(
-              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr);
+          aggregate_trees_.derived_aggregate_tree_for_double_type_[partition_idx] =
+              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr;
         } else {
-          aggregate_trees_.aggregate_tree_for_double_type_.push_back(
-              segment_tree ? segment_tree->getAggregatedValues() : nullptr);
+          aggregate_trees_.aggregate_tree_for_double_type_[partition_idx] =
+              segment_tree ? segment_tree->getAggregatedValues() : nullptr;
         }
-        segment_trees_owned_.emplace_back(std::move(segment_tree));
+        segment_trees_owned_[partition_idx] = std::move(segment_tree);
         break;
       }
       case kDOUBLE: {
@@ -1450,13 +1458,13 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
         aggregate_trees_depth_[partition_idx] =
             segment_tree ? segment_tree->getLeafDepth() : 0;
         if (agg_type == SqlWindowFunctionKind::AVG) {
-          aggregate_trees_.derived_aggregate_tree_for_double_type_.push_back(
-              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr);
+          aggregate_trees_.derived_aggregate_tree_for_double_type_[partition_idx] =
+              segment_tree ? segment_tree->getDerivedAggregatedValues() : nullptr;
         } else {
-          aggregate_trees_.aggregate_tree_for_double_type_.push_back(
-              segment_tree ? segment_tree->getAggregatedValues() : nullptr);
+          aggregate_trees_.aggregate_tree_for_double_type_[partition_idx] =
+              segment_tree ? segment_tree->getAggregatedValues() : nullptr;
         }
-        segment_trees_owned_.emplace_back(std::move(segment_tree));
+        segment_trees_owned_[partition_idx] = std::move(segment_tree);
         break;
       }
       default:
@@ -1468,16 +1476,17 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
     if (input_col_ti.is_integer() || input_col_ti.is_decimal() ||
         input_col_ti.is_boolean() || input_col_ti.is_time_or_date()) {
       if (agg_type == SqlWindowFunctionKind::AVG) {
-        aggregate_trees_.derived_aggregate_tree_for_integer_type_.push_back(nullptr);
+        aggregate_trees_.derived_aggregate_tree_for_integer_type_[partition_idx] =
+            nullptr;
       } else {
-        aggregate_trees_.aggregate_tree_for_integer_type_.push_back(nullptr);
+        aggregate_trees_.aggregate_tree_for_integer_type_[partition_idx] = nullptr;
       }
     } else {
       CHECK(input_col_ti.is_fp());
       if (agg_type == SqlWindowFunctionKind::AVG) {
-        aggregate_trees_.derived_aggregate_tree_for_double_type_.push_back(nullptr);
+        aggregate_trees_.derived_aggregate_tree_for_double_type_[partition_idx] = nullptr;
       } else {
-        aggregate_trees_.aggregate_tree_for_double_type_.push_back(nullptr);
+        aggregate_trees_.aggregate_tree_for_double_type_[partition_idx] = nullptr;
       }
     }
   }

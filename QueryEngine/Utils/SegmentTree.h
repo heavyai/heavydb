@@ -91,7 +91,7 @@ class SegmentTree {
       build(0, 0);
     }
 #ifndef __CUDACC__
-    VLOG(1) << "tree size: " << getTreeSize() << ", tree fanout: " << getTreeFanout()
+    VLOG(2) << "tree size: " << getTreeSize() << ", tree fanout: " << getTreeFanout()
             << ", leaf depth: " << getLeafDepth()
             << ", leaf range: " << getLeafRange().first << " ~ " << getLeafRange().second
             << ", leaf size: " << getLeafSize();

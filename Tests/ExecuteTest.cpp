@@ -23209,6 +23209,38 @@ TEST(Select, WindowFunctionFraming) {
         CompilationOptions::defaults(dt),
         eo);
   }
+
+  // test when building numerous aggregate trees
+  {
+    // do not need to test this in dist
+    SKIP_ALL_ON_AGGREGATOR();
+    run_ddl_statement("DROP TABLE IF EXISTS agg_tree_build_test;");
+    run_ddl_statement("CREATE TABLE agg_tree_build_test (v1 INT, v2 INT, v3 INT);");
+    const auto file_path =
+        boost::filesystem::path("../../Tests/Import/datafiles/agg_tree_build_test.csv");
+    if (boost::filesystem::exists(file_path)) {
+      boost::filesystem::remove(file_path);
+    }
+    std::ofstream file_out(file_path.string());
+    for (int i = 0; i < 1000000; i++) {
+      if (file_out.is_open()) {
+        file_out << rand() % 10000 << "," << i << "," << rand() % 100000 << "\n";
+      }
+    }
+    file_out.close();
+
+    std::string import_data_ddl{
+        "COPY agg_tree_build_test FROM "
+        "'../../Tests/Import/datafiles/agg_tree_build_test.csv' WITH "
+        "(header='false')"};
+    run_ddl_statement(import_data_ddl);
+    EXPECT_NO_THROW(run_multiple_agg(
+        "SELECT MAX(v1) OVER (PARTITION BY v2 ORDER BY v3 RANGE BETWEEN 23 PRECEDING "
+        "AND CURRENT ROW) FROM agg_tree_build_test;",
+        dt));
+    boost::filesystem::remove(file_path);
+    run_ddl_statement("DROP TABLE IF EXISTS agg_tree_build_test;");
+  }
 }
 
 TEST(Select, WindowFunctionFramingWithDateAndTimeColumn) {
