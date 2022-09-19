@@ -572,10 +572,12 @@ size_t Executor::getOrderKeySize(WindowFunctionContext* window_func_context) con
 
 const std::string Executor::getOrderKeyTypeName(
     WindowFunctionContext* window_func_context) const {
-  const auto order_key_size = getOrderKeySize(window_func_context);
-  return get_col_type_name_by_size(
-      order_key_size,
-      window_func_context->getOrderKeyColumnBufferTypes().front().is_fp());
+  auto const order_key_size = getOrderKeySize(window_func_context);
+  auto const order_key_ptr =
+      window_func_context->getWindowFunction()->getOrderKeys().front();
+  CHECK(order_key_ptr);
+  return get_col_type_name_by_size(order_key_size,
+                                   order_key_ptr->get_type_info().is_fp());
 }
 
 llvm::Value* Executor::codegenLoadCurrentValueFromColBuf(
@@ -586,10 +588,15 @@ llvm::Value* Executor::codegenLoadCurrentValueFromColBuf(
   auto rowid_in_partition_lv =
       code_generator.codegenWindowPosition(window_func_context, cur_row_pos_lv);
   const auto order_key_size_in_byte = getOrderKeySize(window_func_context) * 8;
+  auto const order_key_ptr =
+      window_func_context->getWindowFunction()->getOrderKeys().front();
+  CHECK(order_key_ptr);
+  auto const order_col_ti = order_key_ptr->get_type_info();
+  auto const order_col_llvm_type =
+      order_col_ti.is_fp() ? get_fp_type(order_key_size_in_byte, cgen_state_->context_)
+                           : get_int_type(order_key_size_in_byte, cgen_state_->context_);
   auto current_col_value_ptr_lv = cgen_state_->ir_builder_.CreateGEP(
-      get_int_type(order_key_size_in_byte, cgen_state_->context_),
-      order_key_buf_ptr_lv,
-      rowid_in_partition_lv);
+      order_col_llvm_type, order_key_buf_ptr_lv, rowid_in_partition_lv);
   return cgen_state_->ir_builder_.CreateLoad(
       current_col_value_ptr_lv->getType()->getPointerElementType(),
       current_col_value_ptr_lv,
@@ -700,21 +707,21 @@ std::pair<llvm::Value*, llvm::Value*> Executor::codegenFrameNullRange(
 
 std::pair<std::string, llvm::Value*> Executor::codegenLoadOrderKeyBufPtr(
     WindowFunctionContext* window_func_context) const {
-  const auto order_key_ti =
+  auto const order_key_ti =
       window_func_context->getWindowFunction()->getOrderKeys().front()->get_type_info();
-  const auto order_key_size = order_key_ti.get_size();
-  const auto order_col_type_name = get_col_type_name_by_size(
+  auto const order_key_size = order_key_ti.get_size();
+  auto const order_col_type_name = get_col_type_name_by_size(
       order_key_size,
       window_func_context->getOrderKeyColumnBufferTypes().front().is_fp());
   size_t order_key_size_in_byte = order_key_size * 8;
-
-  const auto order_key_buf_type = llvm::PointerType::get(
-      get_int_type(order_key_size_in_byte, cgen_state_->context_), 0);
-  const auto order_key_buf = cgen_state_->llInt(
+  auto const order_key_type =
+      order_key_ti.is_fp() ? get_fp_type(order_key_size_in_byte, cgen_state_->context_)
+                           : get_int_type(order_key_size_in_byte, cgen_state_->context_);
+  auto const order_key_buf_type = llvm::PointerType::get(order_key_type, 0);
+  auto const order_key_buf = cgen_state_->llInt(
       reinterpret_cast<int64_t>(window_func_context->getOrderKeyColumnBuffers().front()));
-  auto order_key_buf_ptr_lv =
+  auto const order_key_buf_ptr_lv =
       cgen_state_->ir_builder_.CreateIntToPtr(order_key_buf, order_key_buf_type);
-
   return std::make_pair(order_col_type_name, order_key_buf_ptr_lv);
 }
 
@@ -1083,7 +1090,7 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
     }
     return res_lv;
   } else {
-    const auto agg_name = get_window_agg_name(window_func->getKind(), window_func_ti);
+    auto agg_name = get_window_agg_name(window_func->getKind(), window_func_ti);
     if (window_func->getKind() == SqlWindowFunctionKind::COUNT_IF) {
       // compute the condition; and it will have zero if the condition is not satisfied
       // otherwise, it will have non-zero value, and we use it to do conditional count
@@ -1091,32 +1098,32 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
       cgen_state_->emitCall(
           agg_name, {aggregate_state, cgen_state_->castToTypeIn(arg_lvs.front(), 64)});
     } else {
-      llvm::Value* crt_val;
+      Analyzer::Expr* arg_target_expr;
+      std::vector<llvm::Value*> agg_func_args{aggregate_state};
       if (args.empty()) {
         CHECK(window_func->getKind() == SqlWindowFunctionKind::COUNT);
-        crt_val = cgen_state_->llInt(int64_t(1));
+        agg_func_args.push_back(cgen_state_->llInt(int64_t(1)));
       } else {
-        const auto arg_lvs = code_generator.codegen(args.front().get(), true, co);
+        arg_target_expr = args.front().get();
+        const auto arg_lvs = code_generator.codegen(arg_target_expr, true, co);
         CHECK_EQ(arg_lvs.size(), size_t(1));
+        auto crt_val = arg_lvs.front();
         if (window_func->getKind() == SqlWindowFunctionKind::SUM &&
             !window_func_ti.is_fp()) {
           crt_val = code_generator.codegenCastBetweenIntTypes(
               arg_lvs.front(), args.front()->get_type_info(), window_func_ti, false);
-        } else {
-          crt_val = window_func_ti.get_type() == kFLOAT
-                        ? arg_lvs.front()
-                        : cgen_state_->castToTypeIn(arg_lvs.front(), 64);
         }
+        agg_func_args.push_back(window_func_ti.get_type() == kFLOAT
+                                    ? crt_val
+                                    : cgen_state_->castToTypeIn(crt_val, 64));
+        agg_name += "_skip_val";
+        agg_func_args.push_back(window_func_ti.is_integer()
+                                    ? cgen_state_->castToTypeIn(window_func_null_val, 64)
+                                    : window_func_null_val);
       }
-      CHECK(crt_val);
-      if (args.empty()) {
-        cgen_state_->emitCall(agg_name, {aggregate_state, crt_val});
-      } else {
-        cgen_state_->emitCall(agg_name + "_skip_val",
-                              {aggregate_state, crt_val, window_func_null_val});
-      }
+      cgen_state_->emitCall(agg_name, agg_func_args);
       if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
-        codegenWindowAvgEpilogue(crt_val, window_func_null_val);
+        codegenWindowAvgEpilogue(agg_func_args[1], window_func_null_val);
       }
     }
     return codegenAggregateWindowState();

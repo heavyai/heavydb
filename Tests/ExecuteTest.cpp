@@ -22540,6 +22540,14 @@ TEST(Select, WindowFunctionAggregate) {
       c(query, query, dt);
     }
   }
+  for (std::string col_name : {"x", "w", "y", "z", "t", "fn", "dn"}) {
+    for (std::string agg_op : {"SUM", "MIN", "MAX", "AVG", "COUNT"}) {
+      std::string query = "SELECT " + agg_op + "(" + col_name +
+                          ") OVER (PARTITION BY x) FROM test GROUP BY x, " + col_name +
+                          " ORDER BY x, " + col_name + " ASC";
+      c(query, query, dt);
+    }
+  }
 }
 
 TEST(Select, WindowFunctionAggregateNoOrder) {
@@ -23210,8 +23218,27 @@ TEST(Select, WindowFunctionFraming) {
         eo);
   }
 
-  // test when building numerous aggregate trees
   {
+    for (std::string col_name : {"x", "w", "y", "z", "t", "fn", "dn"}) {
+      for (std::string agg_op : {"SUM", "MIN", "MAX", "AVG", "COUNT"}) {
+        std::string query = "SELECT " + agg_op + "(" + col_name +
+                            ") OVER (PARTITION BY x ORDER BY x RANGE BETWEEN 1 PRECEDING "
+                            "AND CURRENT ROW) FROM test GROUP BY x, " +
+                            col_name + " ORDER BY x, " + col_name + " ASC";
+        c(query, query, dt);
+      }
+    }
+
+    // check allowing fp-type ordering col
+    for (std::string col_name : {"f", "d", "fn", "dn"}) {
+      std::string query =
+          "SELECT SUM(x) OVER (PARTITION BY t ORDER BY " + col_name +
+          " RANGE BETWEEN 1 PRECEDING AND 3 FOLLOWING) res FROM test ORDER BY res ASC";
+      c(query, query, dt);
+    }
+  }
+
+  {  // test when building numerous aggregate trees
     // do not need to test this in dist
     SKIP_ALL_ON_AGGREGATOR();
     run_ddl_statement("DROP TABLE IF EXISTS agg_tree_build_test;");
