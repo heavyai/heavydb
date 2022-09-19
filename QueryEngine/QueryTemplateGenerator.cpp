@@ -241,7 +241,8 @@ class QueryTemplateGenerator {
       const QueryMemoryDescriptor& query_mem_desc,
       const ExecutorDeviceType device_type,
       const bool check_scan_limit,
-      const GpuSharedMemoryContext& gpu_smem_context);
+      const GpuSharedMemoryContext& gpu_smem_context,
+      const compiler::CodegenTraits& traits);
 
   virtual ~QueryTemplateGenerator() = default;
 
@@ -250,7 +251,8 @@ class QueryTemplateGenerator {
                          const bool hoist_literals,
                          const QueryMemoryDescriptor& query_mem_desc,
                          const ExecutorDeviceType device_type,
-                         const GpuSharedMemoryContext& gpu_smem_context)
+                         const GpuSharedMemoryContext& gpu_smem_context,
+                         const compiler::CodegenTraits& traits)
       : mod(mod)
       , hoist_literals(hoist_literals)
       , query_mem_desc(query_mem_desc)
@@ -495,14 +497,16 @@ class GroupByQueryTemplateGenerator : public QueryTemplateGenerator {
       const QueryMemoryDescriptor& query_mem_desc,
       const ExecutorDeviceType device_type,
       const bool check_scan_limit,
-      const GpuSharedMemoryContext& gpu_smem_context) {
+      const GpuSharedMemoryContext& gpu_smem_context,
+      const compiler::CodegenTraits& traits) {
     return std::unique_ptr<GroupByQueryTemplateGenerator>(
         new GroupByQueryTemplateGenerator(mod,
                                           hoist_literals,
                                           query_mem_desc,
                                           device_type,
                                           check_scan_limit,
-                                          gpu_smem_context));
+                                          gpu_smem_context,
+                                          traits));
   }
 
  protected:
@@ -511,12 +515,14 @@ class GroupByQueryTemplateGenerator : public QueryTemplateGenerator {
                                 const QueryMemoryDescriptor& query_mem_desc,
                                 const ExecutorDeviceType device_type,
                                 const bool check_scan_limit,
-                                const GpuSharedMemoryContext& gpu_smem_context)
+                                const GpuSharedMemoryContext& gpu_smem_context,
+                                const compiler::CodegenTraits& traits)
       : QueryTemplateGenerator(mod,
                                hoist_literals,
                                query_mem_desc,
                                device_type,
-                               gpu_smem_context)
+                               gpu_smem_context,
+                               traits)
       , check_scan_limit(check_scan_limit)
       , row_func_call_args(std::make_unique<RowFuncCallGenerator>()) {
     const bool is_group_by = query_mem_desc.isGroupBy();
@@ -772,7 +778,8 @@ class NonGroupedQueryTemplateGenerator : public QueryTemplateGenerator {
       const bool is_estimate_query,
       const QueryMemoryDescriptor& query_mem_desc,
       const ExecutorDeviceType device_type,
-      const GpuSharedMemoryContext& gpu_smem_context) {
+      const GpuSharedMemoryContext& gpu_smem_context,
+      const compiler::CodegenTraits& traits) {
     return std::unique_ptr<NonGroupedQueryTemplateGenerator>(
         new NonGroupedQueryTemplateGenerator(mod,
                                              aggr_col_count,
@@ -780,7 +787,8 @@ class NonGroupedQueryTemplateGenerator : public QueryTemplateGenerator {
                                              is_estimate_query,
                                              query_mem_desc,
                                              device_type,
-                                             gpu_smem_context));
+                                             gpu_smem_context,
+                                             traits));
   }
 
  protected:
@@ -790,12 +798,14 @@ class NonGroupedQueryTemplateGenerator : public QueryTemplateGenerator {
                                    const bool is_estimate_query,
                                    const QueryMemoryDescriptor& query_mem_desc,
                                    const ExecutorDeviceType device_type,
-                                   const GpuSharedMemoryContext& gpu_smem_context)
+                                   const GpuSharedMemoryContext& gpu_smem_context,
+                                   const compiler::CodegenTraits& traits)
       : QueryTemplateGenerator(mod,
                                hoist_literals,
                                query_mem_desc,
                                device_type,
-                               gpu_smem_context)
+                               gpu_smem_context,
+                               traits)
       , aggr_col_count(aggr_col_count)
       , is_estimate_query(is_estimate_query) {
     const bool is_group_by = query_mem_desc.isGroupBy();
@@ -1060,7 +1070,8 @@ std::tuple<llvm::Function*, llvm::CallInst*> QueryTemplateGenerator::generate(
     const QueryMemoryDescriptor& query_mem_desc,
     const ExecutorDeviceType device_type,
     const bool check_scan_limit,
-    const GpuSharedMemoryContext& gpu_smem_context) {
+    const GpuSharedMemoryContext& gpu_smem_context,
+    const compiler::CodegenTraits& traits) {
   const bool is_group_by = query_mem_desc.isGroupBy();
   auto query_template = is_group_by
                             ? GroupByQueryTemplateGenerator::build(mod,
@@ -1068,14 +1079,16 @@ std::tuple<llvm::Function*, llvm::CallInst*> QueryTemplateGenerator::generate(
                                                                    query_mem_desc,
                                                                    device_type,
                                                                    check_scan_limit,
-                                                                   gpu_smem_context)
+                                                                   gpu_smem_context,
+                                                                   traits)
                             : NonGroupedQueryTemplateGenerator::build(mod,
                                                                       aggr_col_count,
                                                                       hoist_literals,
                                                                       is_estimate_query,
                                                                       query_mem_desc,
                                                                       device_type,
-                                                                      gpu_smem_context);
+                                                                      gpu_smem_context,
+                                                                      traits);
   CHECK(query_template);
   query_template->generateEntryBlock();
   query_template->generateLoopPreheaderBlock();
@@ -1096,7 +1109,8 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
     const QueryMemoryDescriptor& query_mem_desc,
     const ExecutorDeviceType device_type,
     const bool check_scan_limit,
-    const GpuSharedMemoryContext& gpu_smem_context) {
+    const GpuSharedMemoryContext& gpu_smem_context,
+    const compiler::CodegenTraits& traits) {
   return QueryTemplateGenerator::generate(mod,
                                           aggr_col_count,
                                           hoist_literals,
@@ -1104,5 +1118,6 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
                                           query_mem_desc,
                                           device_type,
                                           check_scan_limit,
-                                          gpu_smem_context);
+                                          gpu_smem_context,
+                                          traits);
 }

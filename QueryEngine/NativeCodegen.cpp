@@ -1461,6 +1461,14 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   cgen_state_->set_module_shallow_copy(getExtensionModuleContext()->getRTModule(is_l0),
                                        /*always_clone=*/true);
 
+  bool row_func_not_inlined = false;
+  GPUTarget target{gpu_mgr, blockSize(), cgen_state_.get(), row_func_not_inlined};
+  auto backend = compiler::getBackend(co.device_type,
+                                      getExtensionModuleContext()->getExtensionModules(),
+                                      gpu_smem_context.isSharedMemoryUsed(),
+                                      target);
+  auto traits = backend->traits();
+
   if (is_gpu) {
     cgen_state_->module_->setDataLayout(compiler::get_gpu_data_layout());
     cgen_state_->module_->setTargetTriple(compiler::get_gpu_target_triple_string());
@@ -1491,7 +1499,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                                     *query_mem_desc,
                                                     co.device_type,
                                                     ra_exe_unit.scan_limit,
-                                                    gpu_smem_context);
+                                                    gpu_smem_context,
+                                                    traits);
 
   bind_pos_placeholders("pos_start", true, query_func, cgen_state_->module_);
   bind_pos_placeholders("group_buff_idx", false, query_func, cgen_state_->module_);
@@ -1730,7 +1739,6 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
     compiler::verify_function_ir(cgen_state_->filter_func_);
   }
 
-  bool row_func_not_inlined = false;
   if (is_group_by || ra_exe_unit.estimator) {
     for (auto it = llvm::inst_begin(cgen_state_->row_func_),
               e = llvm::inst_end(cgen_state_->row_func_);
@@ -1747,12 +1755,6 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       }
     }
   }
-
-  GPUTarget target{gpu_mgr, blockSize(), cgen_state_.get(), row_func_not_inlined};
-  auto backend = compiler::getBackend(co.device_type,
-                                      getExtensionModuleContext()->getExtensionModules(),
-                                      gpu_smem_context.isSharedMemoryUsed(),
-                                      target);
 
   // Generate final native code from the LLVM IR.
   return std::make_tuple(

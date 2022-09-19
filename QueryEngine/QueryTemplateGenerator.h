@@ -27,6 +27,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
     const QueryMemoryDescriptor& query_mem_desc,
     const ExecutorDeviceType device_type,
     const bool check_scan_limit,
-    const GpuSharedMemoryContext& gpu_smem_context);
+    const GpuSharedMemoryContext& gpu_smem_context,
+    const compiler::CodegenTraits& traits);
 
 #endif  // QUERYENGINE_QUERYTEMPLATEGENERATOR_H
