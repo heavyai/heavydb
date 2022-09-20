@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// OmniSci JSON
+// Heavy.AI's thin JSON library wrapper.
 
 // EXAMPLE #1
 //
@@ -24,7 +24,7 @@
 //   json["item1"] = "abc";
 //   json["item2"] = 123;
 //   std::cout << json.stringify() << std::endl;
-//   std::cout << static_cast<int>(json["item2"]) << std::endl;
+//   std::cout << json["item2"].str() << std::endl;
 //
 // OUTPUT: {"item1":"abc","item2":123}
 // OUTPUT: 123
@@ -94,24 +94,29 @@ class JSON final {
   // to scan the string for the null terminator.
   JSON(const char* json, size_t len) : JSON() { parse(json, len); }
 
+  // parse(): Loads JSON from std::string to make a new document.
   void parse(const std::string& json) {
-    if (doc_->Parse(json).HasParseError()) {
+    if (doc_->Parse(json.c_str()).HasParseError()) {
       throw std::runtime_error("failed to parse json");
     }
   }
 
+  // parse(): Loads JSON from C-style string to make a new document.
   void parse(const char* json) {
     if (doc_->Parse(json).HasParseError()) {
       throw std::runtime_error("failed to parse json");
     }
   }
 
+  // parse(): Loads JSON from C-style string plus a length to make a new document without
+  // having to scan the string for the null terminator.
   void parse(const char* json, size_t len) {
     if (doc_->Parse(json, len).HasParseError()) {
       throw std::runtime_error("failed to parse json");
     }
   }
 
+  // stringify(): Outputs the JSON as a string, even if it had some non-string JSON type.
   std::string stringify() const {
     rapidjson::StringBuffer buf;
     rapidjson::Writer<rapidjson::StringBuffer> wr(buf);
@@ -119,7 +124,30 @@ class JSON final {
     return buf.GetString();
   }
 
-  [[deprecated]] std::string getType() const { return kTypeNames[vptr_->GetType()]; }
+  // Convienence functions for dynamically retrieving a JSON value as some C++ type.
+  // Will throw an exception if the JSON type doesn't match the requested C++ type.
+  // You can also assign a JSON object to a C++ value or static_cast<>() to a C++ type.
+
+  std::string str() const { return static_cast<std::string>(*this); }
+
+  bool b1() const { return static_cast<bool>(*this); }
+
+  uint64_t u64() const { return static_cast<uint64_t>(*this); }
+  int64_t i64() const { return static_cast<int64_t>(*this); }
+
+  uint32_t u32() const { return static_cast<uint32_t>(*this); }
+  int32_t i32() const { return static_cast<int32_t>(*this); }
+
+  uint16_t u16() const { return static_cast<uint16_t>(*this); }
+  int16_t i16() const { return static_cast<int16_t>(*this); }
+
+  uint8_t u8() const { return static_cast<uint8_t>(*this); }
+  int8_t i8() const { return static_cast<int8_t>(*this); }
+
+  double d64() const { return static_cast<double>(*this); }
+  float f32() const { return static_cast<float>(*this); }
+
+  // Functions for detecting a particular JSON type.
 
   bool isString() const { return vptr_->IsString(); }
   bool isNumber() const { return vptr_->IsNumber(); }
@@ -128,7 +156,12 @@ class JSON final {
   bool isArray() const { return vptr_->IsArray(); }
   bool isNull() const { return vptr_->IsNull(); }
 
-  bool hasMember(const std::string& name) const { return vptr_->HasMember(name); }
+  // A function for checking member name existence.
+
+  bool hasMember(const std::string& name) const { return vptr_->HasMember(name.c_str()); }
+
+  // Conversion operators for dynamically retrieving a JSON value as some C++ type via
+  // an assignment, passing to a function call, a static_cast<>(), etc.
 
   operator std::string() const {
     if (!vptr_->IsString()) {
@@ -148,53 +181,97 @@ class JSON final {
     return vptr_->GetBool();
   }
 
-  template <typename T>
-  operator T() const {
-    static_assert((std::is_integral_v<T> && !std::is_same_v<bool, std::remove_cv_t<T>>) ||
-                  (std::is_floating_point_v<T>));
-    if constexpr (std::is_integral_v<T>) {                // NOLINT
-      if constexpr (std::numeric_limits<T>::is_signed) {  // NOLINT
-        if constexpr (sizeof(T) < 8) {                    // NOLINT
-          if (!vptr_->IsInt()) {
-            throw std::runtime_error("can't convert JSON field '" + name_ +
-                                     "' to be signed integer from [" +
-                                     kTypeNames[vptr_->GetType()] + "]");
-          }
-          return vptr_->GetInt();
-        } else {
-          if (!vptr_->IsInt64()) {
-            throw std::runtime_error("can't convert JSON field '" + name_ +
-                                     "' to be signed 64-bit integer from [" +
-                                     kTypeNames[vptr_->GetType()] + "]");
-          }
-          return vptr_->GetInt64();
-        }
-      } else {
-        if constexpr (sizeof(T) < 8) {  // NOLINT
-          if (!vptr_->IsUint()) {
-            throw std::runtime_error("can't convert JSON field '" + name_ +
-                                     "' to be unsigned integer from [" +
-                                     kTypeNames[vptr_->GetType()] + "]");
-          }
-          return vptr_->GetUint();
-        } else {
-          if (!vptr_->IsUint64()) {
-            throw std::runtime_error("can't convert JSON field '" + name_ +
-                                     "' to be unsigned 64-bit integer from [" +
-                                     kTypeNames[vptr_->GetType()] + "]");
-          }
-          return vptr_->GetUint64();
-        }
-      }
-    } else if constexpr (std::is_floating_point_v<T>) {  // NOLINT
-      if (!vptr_->IsDouble()) {
-        throw std::runtime_error("can't convert JSON field '" + name_ +
-                                 "' to be floating point number from [" +
-                                 kTypeNames[vptr_->GetType()] + "]");
-      }
-      return vptr_->GetDouble();
+  operator uint64_t() const {
+    if (!vptr_->IsUint64()) {
+      throw std::runtime_error("can't convert JSON field '" + name_ +
+                               "' to be unsigned 64-bit integer from [" +
+                               kTypeNames[vptr_->GetType()] + "]");
     }
+    return vptr_->GetUint64();
   }
+
+  operator int64_t() const {
+    if (!vptr_->IsInt64()) {
+      throw std::runtime_error("can't convert JSON field '" + name_ +
+                               "' to be signed 64-bit integer from [" +
+                               kTypeNames[vptr_->GetType()] + "]");
+    }
+    return vptr_->GetInt64();
+  }
+
+  operator uint32_t() const {
+    if (!vptr_->IsUint()) {
+      throw std::runtime_error("can't convert JSON field '" + name_ +
+                               "' to be unsigned 32-bit integer from [" +
+                               kTypeNames[vptr_->GetType()] + "]");
+    }
+    return vptr_->GetUint();
+  }
+
+  operator int32_t() const {
+    if (!vptr_->IsInt()) {
+      throw std::runtime_error("can't convert JSON field '" + name_ +
+                               "' to be signed 32-bit integer from [" +
+                               kTypeNames[vptr_->GetType()] + "]");
+    }
+    return vptr_->GetInt();
+  }
+
+  operator uint16_t() const {
+    if (!vptr_->IsUint()) {
+      throw std::runtime_error("can't convert JSON field '" + name_ +
+                               "' to be unsigned 16-bit integer from [" +
+                               kTypeNames[vptr_->GetType()] + "]");
+    }
+    return vptr_->GetUint();
+  }
+
+  operator int16_t() const {
+    if (!vptr_->IsInt()) {
+      throw std::runtime_error("can't convert JSON field '" + name_ +
+                               "' to be signed 16-bit integer from [" +
+                               kTypeNames[vptr_->GetType()] + "]");
+    }
+    return vptr_->GetInt();
+  }
+
+  operator uint8_t() const {
+    if (!vptr_->IsUint()) {
+      throw std::runtime_error("can't convert JSON field '" + name_ +
+                               "' to be unsigned 8-bit integer from [" +
+                               kTypeNames[vptr_->GetType()] + "]");
+    }
+    return vptr_->GetUint();
+  }
+
+  operator int8_t() const {
+    if (!vptr_->IsInt()) {
+      throw std::runtime_error("can't convert JSON field '" + name_ +
+                               "' to be signed 8-bit integer from [" +
+                               kTypeNames[vptr_->GetType()] + "]");
+    }
+    return vptr_->GetInt();
+  }
+
+  operator double() const {
+    if (!vptr_->IsDouble()) {
+      throw std::runtime_error("can't convert JSON field '" + name_ +
+                               "' to be floating point number from [" +
+                               kTypeNames[vptr_->GetType()] + "]");
+    }
+    return vptr_->GetDouble();
+  }
+
+  operator float() const {
+    if (!vptr_->IsDouble()) {
+      throw std::runtime_error("can't convert JSON field '" + name_ +
+                               "' to be floating point number from [" +
+                               kTypeNames[vptr_->GetType()] + "]");
+    }
+    return static_cast<float>(vptr_->GetDouble());
+  }
+
+  // Assignment operators.
 
   JSON& operator=(const JSON& peer) {
     vptr_->CopyFrom(*peer.vptr_, allo_);
@@ -202,7 +279,7 @@ class JSON final {
   }
 
   JSON& operator=(const std::string& item) {
-    *vptr_ = rapidjson::Value().SetString(item, allo_);
+    *vptr_ = rapidjson::Value().SetString(item.c_str(), allo_);
     return *this;
   }
 
@@ -235,6 +312,8 @@ class JSON final {
     vptr_->SetUint64(item);
     return *this;
   }
+
+  // Array operators.
 
   JSON operator[](const std::string& name) { return (*this)[name.c_str()]; }
   JSON operator[](const char* name) {
