@@ -32,6 +32,7 @@ TEST(JSON, Types) {
   JSON json1(text1);
   EXPECT_TRUE(json1.isBoolean());
   EXPECT_EQ(static_cast<bool>(json1), false);
+  EXPECT_EQ(json1.b1(), false);
 
   //////////
 
@@ -42,6 +43,7 @@ TEST(JSON, Types) {
   JSON json2(text2);
   EXPECT_TRUE(json2.isBoolean());
   EXPECT_EQ(static_cast<bool>(json2), true);
+  EXPECT_EQ(json2.b1(), true);
 
   //////////
 
@@ -52,6 +54,8 @@ TEST(JSON, Types) {
   JSON json3(text3);
   EXPECT_TRUE(json3.isNumber());
   EXPECT_EQ(static_cast<uint64_t>(json3), 12345U);
+  EXPECT_EQ(static_cast<size_t>(json3), 12345U);
+  EXPECT_EQ(json3.u64(), 12345U);
 
   //////////
 
@@ -62,7 +66,9 @@ TEST(JSON, Types) {
   JSON json4(text4);
   EXPECT_TRUE(json4.isNumber());
   EXPECT_FLOAT_EQ(static_cast<float>(json4), 12345.67890F);
+  EXPECT_FLOAT_EQ(json4.f32(), 12345.67890F);
   EXPECT_DOUBLE_EQ(static_cast<double>(json4), 12345.67890);
+  EXPECT_DOUBLE_EQ(json4.d64(), 12345.67890);
 
   //////////
 
@@ -73,6 +79,7 @@ TEST(JSON, Types) {
   JSON json5(text5);
   EXPECT_TRUE(json5.isString());
   EXPECT_EQ(static_cast<std::string>(json5), "somestring");
+  EXPECT_EQ(json5.str(), "somestring");
 }
 
 TEST(JSON, Objects) {
@@ -104,9 +111,12 @@ TEST(JSON, Objects) {
   )text2";
 
   JSON json2(text2);
-  EXPECT_EQ((std::string)json2["menu"]["id"], "file");
+  EXPECT_EQ(static_cast<std::string>(json2["menu"]["id"]), "file");
+  EXPECT_EQ(json2["menu"]["id"].str(), "file");
   EXPECT_EQ(json2["menu"]["popup"]["menuitem"].isArray(), true);
-  EXPECT_EQ((std::string)json2["menu"]["popup"]["menuitem"][2]["value"], "Close");
+  EXPECT_EQ(static_cast<std::string>(json2["menu"]["popup"]["menuitem"][2]["value"]),
+            "Close");
+  EXPECT_EQ(json2["menu"]["popup"]["menuitem"][2]["value"].str(), "Close");
   EXPECT_TRUE(json2.hasMember("menu"));
   EXPECT_FALSE(json2.hasMember("notamember"));
   EXPECT_TRUE(json2["menu"].hasMember("id"));
@@ -141,7 +151,8 @@ TEST(JSON, Copying) {
   JSON json1("{\"asdf\":\"1234\"}");
 
   JSON json2(json1);
-  EXPECT_EQ((std::string)json2["asdf"], "1234");
+  EXPECT_EQ(static_cast<std::string>(json2["asdf"]), "1234");
+  EXPECT_EQ(json2["asdf"].str(), "1234");
 
   json2["asdf"] = JSON("[1, 2, 3]");
   EXPECT_EQ((int32_t)json2["asdf"][0], 1);
