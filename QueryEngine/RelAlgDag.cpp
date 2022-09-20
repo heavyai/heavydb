@@ -2069,14 +2069,16 @@ void coalesce_nodes(
 class WindowFunctionCollector : public RexVisitor<void*> {
  public:
   WindowFunctionCollector(
-      std::unordered_map<size_t, const RexScalar*>& collected_window_func)
-      : collected_window_func_(collected_window_func) {}
+      std::unordered_map<size_t, const RexScalar*>& collected_window_func,
+      bool only_add_window_expr)
+      : collected_window_func_(collected_window_func)
+      , only_add_window_expr_(only_add_window_expr) {}
 
  protected:
   // Detect embedded window function expressions in operators
   void* visitOperator(const RexOperator* rex_operator) const final {
     if (is_window_function_operator(rex_operator)) {
-      collected_window_func_.emplace(rex_operator->toHash(), rex_operator);
+      tryAddWindowExpr(rex_operator);
     }
     const size_t operand_count = rex_operator->size();
     for (size_t i = 0; i < operand_count; ++i) {
@@ -2084,7 +2086,7 @@ class WindowFunctionCollector : public RexVisitor<void*> {
       if (is_window_function_operator(operand)) {
         // Handle both RexWindowFunctionOperators and window functions built up from
         // multiple RexScalar objects (e.g. AVG)
-        collected_window_func_.emplace(operand->toHash(), operand);
+        tryAddWindowExpr(operand);
       } else {
         visit(operand);
       }
@@ -2098,20 +2100,22 @@ class WindowFunctionCollector : public RexVisitor<void*> {
   // is_window_function_operator helper to detect complete window function expressions.
   void* visitCase(const RexCase* rex_case) const final {
     if (is_window_function_operator(rex_case)) {
-      collected_window_func_.emplace(rex_case->toHash(), rex_case);
-      return nullptr;
+      tryAddWindowExpr(rex_case);
+      if (!only_add_window_expr_) {
+        return nullptr;
+      }
     }
 
     for (size_t i = 0; i < rex_case->branchCount(); ++i) {
       const auto when = rex_case->getWhen(i);
       if (is_window_function_operator(when)) {
-        collected_window_func_.emplace(when->toHash(), when);
+        tryAddWindowExpr(when);
       } else {
         visit(when);
       }
       const auto then = rex_case->getThen(i);
       if (is_window_function_operator(then)) {
-        collected_window_func_.emplace(then->toHash(), then);
+        tryAddWindowExpr(then);
       } else {
         visit(then);
       }
@@ -2119,7 +2123,7 @@ class WindowFunctionCollector : public RexVisitor<void*> {
     if (rex_case->getElse()) {
       auto else_expr = rex_case->getElse();
       if (is_window_function_operator(else_expr)) {
-        collected_window_func_.emplace(else_expr->toHash(), else_expr);
+        tryAddWindowExpr(else_expr);
       } else {
         visit(else_expr);
       }
@@ -2127,10 +2131,21 @@ class WindowFunctionCollector : public RexVisitor<void*> {
     return defaultResult();
   }
 
+  void tryAddWindowExpr(RexScalar const* expr) const {
+    if (!only_add_window_expr_) {
+      collected_window_func_.emplace(expr->toHash(), expr);
+    } else {
+      if (auto window_expr = dynamic_cast<RexWindowFunctionOperator const*>(expr)) {
+        collected_window_func_.emplace(window_expr->toHash(), window_expr);
+      }
+    }
+  }
+
   void* defaultResult() const final { return nullptr; }
 
  private:
   std::unordered_map<size_t, const RexScalar*>& collected_window_func_;
+  bool only_add_window_expr_;
 };
 
 class RexWindowFuncReplacementVisitor : public RexDeepCopyVisitor {
@@ -2330,7 +2345,7 @@ void separate_window_function_expressions(
 
     // map scalar expression index in the project node to window function ptr
     std::unordered_map<size_t, const RexScalar*> collected_window_func;
-    WindowFunctionCollector collector(collected_window_func);
+    WindowFunctionCollector collector(collected_window_func, false);
     // Iterate the target exprs of the project node and check for window function
     // expressions. If an embedded expression exists, collect it
     for (size_t i = 0; i < window_func_project_node->size(); i++) {
@@ -2443,6 +2458,58 @@ class RexInputCollector : public RexVisitor<RexInputSet> {
   }
 };
 
+namespace {
+bool find_generic_expr_in_window_func(RexWindowFunctionOperator const* window_expr,
+                                      bool& has_generic_expr_in_window_func) {
+  for (auto const& partition_key : window_expr->getPartitionKeys()) {
+    auto partition_input = dynamic_cast<RexInput const*>(partition_key.get());
+    if (!partition_input) {
+      return true;
+    }
+  }
+  for (auto const& order_key : window_expr->getOrderKeys()) {
+    auto order_input = dynamic_cast<RexInput const*>(order_key.get());
+    if (!order_input) {
+      return true;
+    }
+  }
+  for (size_t k = 0; k < window_expr->size(); k++) {
+    auto input_expr = dynamic_cast<RexInput const*>(window_expr->getOperand(k));
+    if (!input_expr) {
+      has_generic_expr_in_window_func = true;
+      return true;
+    }
+  }
+  return false;
+}
+
+std::pair<bool, bool> need_pushdown_generic_expr(
+    RelProject const* window_func_project_node) {
+  bool has_generic_expr_in_window_func = false;
+  bool res = false;
+  for (size_t i = 0; i < window_func_project_node->size(); ++i) {
+    auto const projected_target = window_func_project_node->getProjectAt(i);
+    if (auto const* window_expr =
+            dynamic_cast<RexWindowFunctionOperator const*>(projected_target)) {
+      res =
+          find_generic_expr_in_window_func(window_expr, has_generic_expr_in_window_func);
+    } else if (auto const* case_expr = dynamic_cast<RexCase const*>(projected_target)) {
+      std::unordered_map<size_t, const RexScalar*> collected_window_func;
+      WindowFunctionCollector collector(collected_window_func, true);
+      collector.visit(case_expr);
+      for (auto const& kv : collected_window_func) {
+        auto const* candidate_window_expr =
+            dynamic_cast<RexWindowFunctionOperator const*>(kv.second);
+        CHECK(candidate_window_expr);
+        res = find_generic_expr_in_window_func(candidate_window_expr,
+                                               has_generic_expr_in_window_func);
+      }
+    }
+  }
+  return std::make_pair(has_generic_expr_in_window_func, res);
+}
+};  // namespace
+
 /**
  * Inserts a simple project before any project containing a window function node. Forces
  * all window function inputs into a single contiguous buffer for centralized processing
@@ -2476,35 +2543,6 @@ void add_window_function_pre_project(
       continue;
     }
 
-    auto need_pushdown_generic_expr = [&window_func_project_node]() {
-      for (size_t i = 0; i < window_func_project_node->size(); ++i) {
-        const auto projected_target = window_func_project_node->getProjectAt(i);
-        if (auto window_expr =
-                dynamic_cast<const RexWindowFunctionOperator*>(projected_target)) {
-          for (const auto& partition_key : window_expr->getPartitionKeys()) {
-            auto partition_input = dynamic_cast<const RexInput*>(partition_key.get());
-            if (!partition_input) {
-              return true;
-            }
-          }
-          for (const auto& order_key : window_expr->getOrderKeys()) {
-            auto order_input = dynamic_cast<const RexInput*>(order_key.get());
-            if (!order_input) {
-              return true;
-            }
-          }
-          if (window_expr->getKind() == SqlWindowFunctionKind::COUNT_IF) {
-            CHECK_EQ(1u, window_expr->size());
-            auto input_expr = dynamic_cast<const RexInput*>(window_expr->getOperand(0));
-            if (!input_expr) {
-              return true;
-            }
-          }
-        }
-      }
-      return false;
-    };
-
     const auto prev_node_itr = std::prev(node_itr);
     const auto prev_node = *prev_node_itr;
     CHECK(prev_node);
@@ -2516,7 +2554,8 @@ void add_window_function_pre_project(
     const bool has_multi_fragment_scan_input =
         (scan_node &&
          (scan_node->getNumShards() > 0 || scan_node->getNumFragments() > 1));
-    const bool needs_expr_pushdown = need_pushdown_generic_expr();
+    auto const [has_generic_expr_in_window_func, needs_expr_pushdown] =
+        need_pushdown_generic_expr(window_func_project_node.get());
 
     // We currently add a preceding project node in one of two conditions:
     // 1. always_add_project_if_first_project_is_window_expr = true, which
@@ -2582,20 +2621,22 @@ void add_window_function_pre_project(
       if (aggregate) {
         has_groupby = aggregate->getGroupByCount() > 0;
       }
+      // force rowwise output to prevent computing incorrect query result
       if (has_groupby && visitor.hasPartitionExpression()) {
         // we currently may compute incorrect result with columnar output when
         // 1) the window function has partition expression, and
         // 2) a parent node of the window function projection node has group by expression
-        // so we force rowwise output (only) for the newly injected projection node
-        // to prevent computing incorrect query result
         // todo (yoonmin) : relax this
         VLOG(1)
             << "Query output overridden to row-wise format due to presence of a window "
                "function with partition expression and group-by expression.";
         new_project->forceRowwiseOutput();
-      }
-      if (visitor.hasCaseExprAsWindowOperand()) {
-        // force rowwise output
+      } else if (has_generic_expr_in_window_func) {
+        VLOG(1) << "Query output overridden to row-wise format due to presence of a "
+                   "generic expression as an input expression of the window "
+                   "function.";
+        new_project->forceRowwiseOutput();
+      } else if (visitor.hasCaseExprAsWindowOperand()) {
         VLOG(1)
             << "Query output overridden to row-wise format due to presence of a window "
                "function with a case statement as its operand.";
