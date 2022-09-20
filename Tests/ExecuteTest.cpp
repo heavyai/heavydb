@@ -22358,7 +22358,7 @@ TEST(Select, WindowFunctionFirstLastAndNthValues) {
     EXPECT_ANY_THROW(run_multiple_agg(
         "SELECT NTH_VALUE(X, -1) OVER (PARTITION BY y) FROM " + table_name, dt));
     EXPECT_ANY_THROW(run_multiple_agg(
-        "SELECT NTH_VALUE(fn, x) OVER (PARTITION BY y) FROM " + table_name, dt));
+        "SELECT NTH_VALUE(f, x) OVER (PARTITION BY y) FROM " + table_name, dt));
     std::vector<int> q3_ans{1, 1, 6, 6, 6, 6, 6, 6, 6, INT32_MIN, INT32_MIN};
     auto q3_res = run_multiple_agg(
         "SELECT x, y, NTH_VALUE(x, 2) OVER (PARTITION BY y ORDER BY x) FROM " +
@@ -22548,6 +22548,8 @@ TEST(Select, WindowFunctionAggregate) {
       c(query, query, dt);
     }
   }
+  // generic expression in the window function
+  c("SELECT MIN(x+y+z) OVER (PARTITION BY x) res FROM test ORDER BY res ASC;", dt);
 }
 
 TEST(Select, WindowFunctionAggregateNoOrder) {
@@ -23192,7 +23194,7 @@ TEST(Select, WindowFunctionFraming) {
     }
   }
 
-  // 8. throw an exception when using non literal expression as window framing found
+  // 7. throw an exception when using non literal expression as window framing found
   EXPECT_ANY_THROW(
       run_multiple_agg("SELECT oc, SUM(i) OVER (RANGE BETWEEN pc * 2 PRECEDING AND 1 "
                        "FOLLOWING) FROM test_window_framing ORDER BY oc;",
@@ -23268,6 +23270,11 @@ TEST(Select, WindowFunctionFraming) {
     boost::filesystem::remove(file_path);
     run_ddl_statement("DROP TABLE IF EXISTS agg_tree_build_test;");
   }
+
+  // generic expression in the window function
+  c("SELECT SUM(x+y+z) OVER (PARTITION BY x ORDER BY t ROWS BETWEEN 10 PRECEDING "
+    "AND 10 FOLLOWING) res FROM test ORDER BY res ASC;",
+    dt);
 }
 
 TEST(Select, WindowFunctionFramingWithDateAndTimeColumn) {
