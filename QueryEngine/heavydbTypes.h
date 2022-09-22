@@ -106,10 +106,16 @@ EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_getOrAddTransient(int8_t* m
                                                                        int32_t dict_id,
                                                                        std::string str);
 
-// RowFunctionManager
+/*
+  Row function management functions and macros:
+ */
+
+#define GET_DICT_ID(mgr, arg_idx) (mgr.getDictId(__func__, arg_idx))
+
 RUNTIME_EXPORT NEVER_INLINE HOST std::string
 RowFunctionManager_getString(int8_t* mgr_ptr, int32_t dict_id, int32_t string_id);
 EXTENSION_NOINLINE_HOST int32_t RowFunctionManager_getDictId(int8_t* mgr_ptr,
+                                                             const char* func_name,
                                                              size_t arg_idx);
 EXTENSION_NOINLINE_HOST int32_t RowFunctionManager_getOrAddTransient(int8_t* mgr_ptr,
                                                                      int32_t dict_id,
@@ -129,6 +135,10 @@ struct TextEncodingDict {
   TextEncodingDict operator=(const int32_t other) {
     value = other;
     return *this;
+  }
+
+  DEVICE ALWAYS_INLINE bool isNull() const {
+    return value == inline_int_null_value<int32_t>();
   }
 
   DEVICE ALWAYS_INLINE bool operator==(const TextEncodingDict& other) const {
@@ -1115,8 +1125,9 @@ struct RowFunctionManager {
         reinterpret_cast<int8_t*>(this), dict_id, string_id);
   }
 
-  int32_t getDictId(size_t arg_idx) {
-    return RowFunctionManager_getDictId(reinterpret_cast<int8_t*>(this), arg_idx);
+  int32_t getDictId(const char* func_name, size_t arg_idx) {
+    return RowFunctionManager_getDictId(
+        reinterpret_cast<int8_t*>(this), func_name, arg_idx);
   }
 
   int32_t getOrAddTransient(int32_t dict_id, std::string str) {

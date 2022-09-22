@@ -88,6 +88,7 @@ const char* array_ext_ops_schema = R"(
         arrf FLOAT[],
         arri1 BOOLEAN[],
         arrstr TEXT[],
+        arrdict TEXT[] ENCODING DICT(32),
         farri64 BIGINT[2]
     );
 )";
@@ -115,6 +116,7 @@ class ArrayExtOpsEnv : public ::testing::Test {
                          "{1, 2}",
                          "{'true', 'false'}",
                          "{'a', 'b'}",
+                         "{'a', 'b'}",
                          "{1, 2}"),
                      ExecutorDeviceType::CPU);
     run_multiple_agg(gen(1,
@@ -125,6 +127,7 @@ class ArrayExtOpsEnv : public ::testing::Test {
                          1,
                          "'false'",
                          "'a'",
+                         "{}",
                          "{}",
                          "{}",
                          "{}",
@@ -151,6 +154,7 @@ class ArrayExtOpsEnv : public ::testing::Test {
                          "{-1}",
                          "{'true'}",
                          "{'z'}",
+                         "{'x', 'y', 'z'}",
                          "{1, 2}"),
                      ExecutorDeviceType::CPU);
     run_multiple_agg(gen(0,
@@ -161,6 +165,7 @@ class ArrayExtOpsEnv : public ::testing::Test {
                          0,
                          "'false'",
                          "'a'",
+                         "NULL",
                          "NULL",
                          "NULL",
                          "NULL",
@@ -187,9 +192,11 @@ class ArrayExtOpsEnv : public ::testing::Test {
                          "{4, 5}",
                          "{'false', 'true'}",
                          "{'d', 'e'}",
+                         "{'d', 'e'}",
                          "{4, 5}"),
                      ExecutorDeviceType::CPU);
     run_multiple_agg(gen("NULL",
+                         "NULL",
                          "NULL",
                          "NULL",
                          "NULL",
@@ -270,6 +277,60 @@ TEST_F(ArrayExtOpsEnv, ArrayAppendInteger) {
       const auto rows = run_multiple_agg(
           "SELECT array_append(arri64, i8) FROM array_ext_ops_test;", dt);
       check_entire_integer_result(rows, inline_int_null_value<int64_t>());
+    }
+  }
+}
+
+TEST_F(ArrayExtOpsEnv, ArrayAppendString) {
+  for (auto dt : {ExecutorDeviceType::CPU, /* ExecutorDeviceType::GPU */}) {
+    SKIP_NO_GPU();
+
+    auto check_row_result = [](const auto& row, const auto& expected) {
+      auto array_tv = boost::get<ArrayTargetValue>(&row);
+      CHECK(array_tv);
+      if (!array_tv->is_initialized()) {
+        ASSERT_EQ(size_t(0), expected.size());
+        return;
+      }
+      const auto& scalar_tv_vector = array_tv->get();
+      ASSERT_EQ(scalar_tv_vector.size(), expected.size());
+      size_t ctr = 0;
+      for (const ScalarTargetValue& scalar_tv : scalar_tv_vector) {
+        auto ns = boost::get<NullableString>(&scalar_tv);
+        CHECK(ns);
+        if (boost::get<std::string>(ns)) {
+          auto str = boost::get<std::string>(ns);
+          ASSERT_TRUE(*str == expected[ctr++]);
+        } else {
+          // null string
+          ASSERT_EQ(expected[ctr++].size(), size_t(0));
+        }
+      }
+    };
+
+    auto check_entire_string_result =
+        [&check_row_result](const auto& rows, const auto& expected_result_set) {
+          ASSERT_EQ(rows->rowCount(), size_t(6));
+
+          for (size_t i = 0; i < expected_result_set.size(); i++) {
+            auto row = rows->getNextRow(true, false)[0];
+            check_row_result(row, expected_result_set[i]);
+          }
+        };
+
+    // TextEncodingDict
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT tarray_append(arrdict, str) from array_ext_ops_test;", dt);
+      std::vector<std::vector<std::string>> expected_result_set{
+          {"a", "b", "c"},
+          {"a"},
+          {"x", "y", "z", "a"},
+          {"a"},
+          {"d", "e", ""},
+          {""},
+      };
+      check_entire_string_result(rows, expected_result_set);
     }
   }
 }

@@ -26,11 +26,11 @@ DEVICE RUNTIME_EXPORT std::string RowFunctionManager_getString(int8_t* mgr_ptr,
   return mgr->getString(dict_id, string_id);
 }
 
-extern "C" DEVICE RUNTIME_EXPORT int32_t RowFunctionManager_getDictId(int8_t* mgr_ptr,
-                                                                      size_t index) {
+extern "C" DEVICE RUNTIME_EXPORT int32_t
+RowFunctionManager_getDictId(int8_t* mgr_ptr, const char* func_name, size_t index) {
   auto mgr = reinterpret_cast<RowFunctionManager*>(mgr_ptr);
   CHECK(mgr);
-  return mgr->getDictId(index);
+  return mgr->getDictId(std::string(func_name), index);
 }
 
 extern "C" DEVICE RUNTIME_EXPORT int32_t

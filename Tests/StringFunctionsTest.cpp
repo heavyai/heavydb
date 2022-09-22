@@ -194,6 +194,39 @@ void compare_result_sets(const std::shared_ptr<ResultSet>& result_set_1,
   }
 }
 
+void compare_array_columns(
+    const std::vector<std::vector<std::string>> expected_result_set,
+    const std::shared_ptr<ResultSet>& actual_result_set) {
+  auto check_row_result = [](const auto& row, const auto& expected) {
+    auto array_tv = boost::get<ArrayTargetValue>(&row);
+    CHECK(array_tv);
+    if (!array_tv->is_initialized()) {
+      ASSERT_EQ(size_t(0), expected.size());
+      return;
+    }
+    const auto& scalar_tv_vector = array_tv->get();
+    ASSERT_EQ(scalar_tv_vector.size(), expected.size());
+    size_t ctr = 0;
+    for (const ScalarTargetValue& scalar_tv : scalar_tv_vector) {
+      auto ns = boost::get<NullableString>(&scalar_tv);
+      CHECK(ns);
+      if (boost::get<std::string>(ns)) {
+        auto str = boost::get<std::string>(ns);
+        ASSERT_TRUE(*str == expected[ctr++]);
+      } else {
+        // null string
+        ASSERT_EQ(expected[ctr++].size(), size_t(0));
+      }
+    }
+  };
+
+  ASSERT_EQ(actual_result_set->rowCount(), size_t(expected_result_set.size()));
+  for (size_t i = 0; i < expected_result_set.size(); i++) {
+    auto row = actual_result_set->getNextRow(true, false)[0];
+    check_row_result(row, expected_result_set[i]);
+  }
+}
+
 }  // namespace
 
 // begin string function tests
@@ -226,10 +259,10 @@ class StringFunctionTest : public testing::Test {
           insert into numeric_to_string_test values (null, null, null, null,  null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
           drop table if exists text_enc_test;
           create table text_enc_test (name text encoding none, short_name text encoding dict(32), code text encoding dict(32));
-          insert into text_enc_test values ('United States', 'USA', '>>US<<');
-          insert into text_enc_test values ('Canada', 'Canada', '>>CA<<');
-          insert into text_enc_test values ('United Kingdom', 'UK', '>>GB<<');
-          insert into text_enc_test values ('Germany', 'Germany', '>>DE<<');
+          insert into text_enc_test values ('United States', 'USA', '>>US USA<<');
+          insert into text_enc_test values ('Canada', 'Canada', '>>CA CAN<<');
+          insert into text_enc_test values ('United Kingdom', 'UK', '>>GB GBR<<');
+          insert into text_enc_test values ('Germany', 'Germany', '>>DE DEN<<');
         )"));
       StringFunctionTest::test_data_loaded = true;
     }
@@ -3466,6 +3499,62 @@ TEST_F(StringFunctionTest, ucase) {
   }
 }
 
+TEST_F(StringFunctionTest, StrtokToArrayCommonCases) {
+  for (auto dt : {ExecutorDeviceType::CPU, /* ExecutorDeviceType::GPU */}) {
+    SKIP_NO_GPU();
+    {
+      const auto result_set = sql("select strtok_to_array('a.b.c', '.');", dt);
+      auto crt_row = result_set->getNextRow(true, true);
+      auto result = std::vector<std::string>{"a", "b", "c"};
+      compare_array(crt_row[0], result);
+    }
+    {
+      const auto result_set = sql("select strtok_to_array('hello@world.com', '.@');", dt);
+      auto crt_row = result_set->getNextRow(true, true);
+      auto result = std::vector<std::string>{"hello", "world", "com"};
+      compare_array(crt_row[0], result);
+    }
+    {
+      /* empty text */
+      const auto result_set = sql("select strtok_to_array('', '.@');", dt);
+      auto crt_row = result_set->getNextRow(true, true);
+      auto result = std::vector<std::string>{};
+      compare_array(crt_row[0], result);
+    }
+    {
+      /* empty delimiters */
+      const auto result_set = sql("select strtok_to_array('hello.world', '');", dt);
+      auto crt_row = result_set->getNextRow(true, true);
+      auto result = std::vector<std::string>{};
+      compare_array(crt_row[0], result);
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, StrtokToArrayTextEncodingNone) {
+  for (auto dt : {ExecutorDeviceType::CPU, /* ExecutorDeviceType::GPU */}) {
+    SKIP_NO_GPU();
+
+    const auto result_set =
+        sql("select strtok_to_array(name, ' ') from text_enc_test;", dt);
+    auto expected_result_set = std::vector<std::vector<std::string>>{
+        {"United", "States"}, {"Canada"}, {"United", "Kingdom"}, {"Germany"}};
+    compare_array_columns(expected_result_set, result_set);
+  }
+}
+
+TEST_F(StringFunctionTest, StrtokToArrayTextEncodingDict) {
+  for (auto dt : {ExecutorDeviceType::CPU, /* ExecutorDeviceType::GPU */}) {
+    SKIP_NO_GPU();
+
+    const auto result_set =
+        sql("select strtok_to_array(code, '> <') from text_enc_test;", dt);
+    auto expected_result_set = std::vector<std::vector<std::string>>{
+        {"US", "USA"}, {"CA", "CAN"}, {"GB", "GBR"}, {"DE", "DEN"}};
+    compare_array_columns(expected_result_set, result_set);
+  }
+}
+
 TEST_F(StringFunctionTest, TextEncodingNoneCopyUDF) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -3575,7 +3664,10 @@ TEST_F(StringFunctionTest, TextEncodingDictCopyFromUDF) {
               "text_enc_test;",
               dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
-          {"copy: >>US<<"}, {"copy: >>CA<<"}, {"copy: >>GB<<"}, {"copy: >>DE<<"}};
+          {"copy: >>US USA<<"},
+          {"copy: >>CA CAN<<"},
+          {"copy: >>GB GBR<<"},
+          {"copy: >>DE DEN<<"}};
       compare_result_set(expected_result_set, result_set);
     }
   }

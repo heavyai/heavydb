@@ -102,6 +102,7 @@ llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type,
     case ExtArgumentType::ArrayInt8:
     case ExtArgumentType::ArrayDouble:
     case ExtArgumentType::ArrayFloat:
+    case ExtArgumentType::ArrayTextEncodingDict:
     case ExtArgumentType::ColumnInt64:
     case ExtArgumentType::ColumnInt32:
     case ExtArgumentType::ColumnInt16:
@@ -178,6 +179,10 @@ inline llvm::Type* get_llvm_type_from_sql_array_type(const SQLTypeInfo ti,
     }
   }
 
+  if (elem_ti.is_text_encoding_dict()) {
+    return llvm::Type::getInt32PtrTy(ctx);
+  }
+
   if (elem_ti.is_boolean()) {
     return llvm::Type::getInt8PtrTy(ctx);
   }
@@ -205,7 +210,8 @@ bool ext_func_call_requires_nullcheck(const Analyzer::FunctionOper* function_ope
     const auto& arg_ti = arg->get_type_info();
     if ((func_ti.is_array() && arg_ti.is_array()) ||
         (func_ti.is_bytes() && arg_ti.is_bytes()) ||
-        (func_ti.is_text_encoding_dict() && arg_ti.is_text_encoding_dict())) {
+        (func_ti.is_text_encoding_dict() && arg_ti.is_text_encoding_dict()) ||
+        (func_ti.is_text_encoding_dict_array() && arg_ti.is_text_encoding_dict())) {
       // If the function returns an array and any of the arguments are arrays, allow NULL
       // scalars.
       // TODO: Make this a property of the FunctionOper following `RETURN NULL ON NULL`
@@ -323,6 +329,9 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
       for (size_t j = 0; j < arg_lvs.size(); j++) {
         orig_arg_lvs.push_back(arg_lvs[j]);
       }
+    } else if (arg_ti.is_text_encoding_dict()) {
+      CHECK_EQ(size_t(1), arg_lvs.size());
+      orig_arg_lvs.push_back(arg_lvs[0]);
     } else {
       if (arg_lvs.size() > 1) {
         CHECK(arg_ti.is_array());
@@ -350,6 +359,14 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
   auto args = codegenFunctionOperCastArgs(
       function_oper, &ext_func_sig, orig_arg_lvs, orig_arg_lvs_index, const_arr_size, co);
 
+  if (ext_func_sig.usesManager()) {
+    if (co.device_type == ExecutorDeviceType::GPU) {
+      throw QueryMustRunOnCpu();
+    }
+    llvm::Value* row_func_mgr = get_arg_by_name(cgen_state_->row_func_, "row_func_mgr");
+    args.insert(args.begin(), row_func_mgr);
+  }
+
   llvm::Value* buffer_ret{nullptr};
   if (ret_ti.is_buffer()) {
     // codegen buffer return as first arg
@@ -362,14 +379,6 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
         get_llvm_type_from_sql_array_type(ret_ti, cgen_state_->context_));
     buffer_ret = cgen_state_->ir_builder_.CreateAlloca(struct_ty);
     args.insert(args.begin(), buffer_ret);
-  }
-
-  if (ext_func_sig.usesManager()) {
-    if (co.device_type == ExecutorDeviceType::GPU) {
-      throw QueryMustRunOnCpu();
-    }
-    llvm::Value* row_func_mgr = get_arg_by_name(cgen_state_->row_func_, "row_func_mgr");
-    args.insert(args.begin(), row_func_mgr);
   }
 
   const auto ext_call = cgen_state_->emitExternalCall(

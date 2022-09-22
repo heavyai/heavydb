@@ -3094,8 +3094,7 @@ TEST_F(TableFunctions, ColumnArraySplit) {
     COLUMNARRAYSPLIT(larr, int64_t);
     COLUMNARRAYSPLIT(farr, float);
     COLUMNARRAYSPLIT(darr, double);
-    // UDFs with Array<TextEncodingDict> argument is not supported yet:
-    // COLUMNARRAYSPLIT(tarr, int32_t);
+    COLUMNARRAYSPLIT(tarr, int32_t);
   }
 }
 
