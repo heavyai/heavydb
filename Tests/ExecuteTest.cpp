@@ -10369,6 +10369,137 @@ void import_test_table_with_various_data_types() {
       "'../../Tests/Import/datafiles/data_types_basic3.tab' WITH (DELIMITER=\'\\t\');");
 }
 
+void import_test_frame_nav() {
+  run_ddl_statement("DROP TABLE IF EXISTS test_frame_nav;");
+  g_sqlite_comparator.query("DROP TABLE IF EXISTS test_frame_nav;");
+  auto create_test_table = [&]() {
+    std::string heavy_ddl{"CREATE TABLE test_frame_nav("};
+    heavy_ddl +=
+        "  rid INTEGER,"
+        "  pc INTEGER,"
+        "  oc INTEGER,"
+        "  ti TINYINT,"
+        "  si SMALLINT,"
+        "  si8 SMALLINT ENCODING FIXED(8),"
+        "  i INTEGER,"
+        "  i8 INTEGER ENCODING FIXED(8),"
+        "  i16 INTEGER ENCODING FIXED(16),"
+        "  bi BIGINT,"
+        "  bi8 BIGINT ENCODING FIXED(8),"
+        "  bi16 BIGINT ENCODING FIXED(16),"
+        "  bi32 BIGINT ENCODING FIXED(32),"
+        "  f FLOAT,"
+        "  d DOUBLE,"
+        "  dc5 DECIMAL(5,4),"
+        "  dc9 DECIMAL(9,8),"
+        "  dc15 DECIMAL(15,14),"
+        "  str TEXT ENCODING DICT(32),"
+        "  dt DATE,"
+        "  dt16 DATE ENCODING DAYS(16),"
+        "  dt32 DATE ENCODING DAYS(32),"
+        "  tm TIME,"
+        "  tme TIME ENCODING FIXED(32),"
+        "  t0 TIMESTAMP(0),"
+        "  t0e TIMESTAMP(0) ENCODING FIXED(32),"
+        "  t3 TIMESTAMP(3),"
+        "  t6 TIMESTAMP(6),"
+        "  t9 TIMESTAMP(9));";
+    run_ddl_statement(heavy_ddl);
+    std::string sqlite_ddl{"CREATE TABLE test_frame_nav("};
+    sqlite_ddl +=
+        "  rid INTEGER,"
+        "  pc INTEGER,"
+        "  oc INTEGER,"
+        "  ti TINYINT,"
+        "  si SMALLINT,"
+        "  si8 SMALLINT,"
+        "  i INTEGER,"
+        "  i8 INTEGER,"
+        "  i16 INTEGER,"
+        "  bi BIGINT,"
+        "  bi8 BIGINT,"
+        "  bi16 BIGINT,"
+        "  bi32 BIGINT,"
+        "  f FLOAT,"
+        "  d DOUBLE,"
+        "  dc5 DECIMAL(5,4),"
+        "  dc9 DECIMAL(9,8),"
+        "  dc15 DECIMAL(15,14),"
+        "  str TEXT ENCODING DICT(32),"
+        "  dt DATE,"
+        "  dt16 DATE,"
+        "  dt32 DATE,"
+        "  tm TIME,"
+        "  tme TIME,"
+        "  t0 TIMESTAMP(0),"
+        "  t0e TIMESTAMP(0),"
+        "  t3 TIMESTAMP(3),"
+        "  t6 TIMESTAMP(6),"
+        "  t9 TIMESTAMP(9));";
+    g_sqlite_comparator.query(sqlite_ddl);
+  };
+  create_test_table();
+  const std::string null_val{"NULL"};
+  auto row_insert_ddl_gen = [](const std::string& int_val,
+                               const std::string& fp_val,
+                               const std::string& str_val,
+                               const std::string& date_val,
+                               const std::string& time_val,
+                               const std::string& timestamp_val) {
+    std::ostringstream insert_row_ddl;
+    for (int n = 0; n < 10; n++) {
+      insert_row_ddl << int_val << ", ";
+    }
+    for (int n = 0; n < 5; n++) {
+      insert_row_ddl << fp_val << ", ";
+    }
+    insert_row_ddl << str_val << ", ";
+    for (int n = 0; n < 3; n++) {
+      insert_row_ddl << date_val << ", ";
+    }
+    for (int n = 0; n < 2; n++) {
+      insert_row_ddl << time_val << ", ";
+    }
+    for (int n = 0; n < 4; n++) {
+      insert_row_ddl << timestamp_val << ", ";
+    }
+    insert_row_ddl << timestamp_val << ");";
+    return insert_row_ddl.str();
+  };
+  std::vector<std::string> insert_row_ddls;
+  size_t pc_idx = 1;
+  for (size_t i = 1; i <= 21; i++) {
+    std::string rid = ::toString(i);
+    auto pc_val = ::toString(pc_idx);
+    auto val = i % 7;
+    if (val == 0) {
+      pc_idx++;
+      val = 7;
+    }
+    std::ostringstream insert_row_ddl;
+    insert_row_ddl << "INSERT INTO test_frame_nav VALUES (";
+    insert_row_ddl << rid << ", " << pc_val << ", " << val << ", ";
+    if (val == 2 || val == 5) {
+      insert_row_ddl << row_insert_ddl_gen(
+          null_val, null_val, null_val, null_val, null_val, null_val);
+    } else {
+      std::string int_val = ::toString(val);
+      std::string fp_val = int_val + "." + int_val;
+      std::string str_val = "\'" + int_val + "\'";
+      std::string date_val = "\'2022-08-0" + int_val + "\'";
+      std::string time_val = "\'12:00:0" + int_val + "\'";
+      std::string timestamp_val = "\'2022-08-0" + int_val + " 12:00:0" + int_val + "\'";
+      insert_row_ddl << row_insert_ddl_gen(
+          int_val, fp_val, str_val, date_val, time_val, timestamp_val);
+    }
+    insert_row_ddls.emplace_back(insert_row_ddl.str());
+  }
+  for (const auto& insert_row_ddl : insert_row_ddls) {
+    run_multiple_agg(insert_row_ddl, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_row_ddl);
+  }
+}
+
 }  // namespace
 
 TEST(Select, ArrayUnnest) {
@@ -23275,6 +23406,15 @@ TEST(Select, WindowFunctionFraming) {
   c("SELECT SUM(x+y+z) OVER (PARTITION BY x ORDER BY t ROWS BETWEEN 10 PRECEDING "
     "AND 10 FOLLOWING) res FROM test ORDER BY res ASC;",
     dt);
+
+  // handle COUNT(*) and COUNT(1)
+  c("SELECT COUNT(*) OVER (PARTITION BY pc ORDER BY rid RANGE BETWEEN 2 PRECEDING AND 2 "
+    "FOLLOWING) res FROM test_frame_nav WHERE pc = 1 ORDER BY res NULLS LAST",
+    dt);
+
+  c("SELECT COUNT(1) OVER (PARTITION BY pc ORDER BY rid RANGE BETWEEN 2 PRECEDING AND 2 "
+    "FOLLOWING) res FROM test_frame_nav WHERE pc = 1 ORDER BY res NULLS LAST",
+    dt);
 }
 
 TEST(Select, WindowFunctionFramingWithDateAndTimeColumn) {
@@ -23548,156 +23688,6 @@ TEST(Select, WindowFunctionFramingWithDateAndTimeColumn) {
 
 TEST(Select, WindowFunctionFrameNavigationFunctions) {
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
-  auto drop_test_table_ddl_gen = [&](const std::string& tbl_name) {
-    std::string ddl{"DROP TABLE IF EXISTS "};
-    ddl += tbl_name;
-    ddl += ";";
-    return ddl;
-  };
-  auto drop_test_table = [drop_test_table_ddl_gen] {
-    run_ddl_statement(drop_test_table_ddl_gen("test_frame_nav"));
-    g_sqlite_comparator.query(drop_test_table_ddl_gen("test_frame_nav_ans"));
-  };
-  auto create_test_table = [&]() {
-    std::string heavy_ddl{"CREATE TABLE test_frame_nav("};
-    heavy_ddl +=
-        "  rid INTEGER,"
-        "  pc INTEGER,"
-        "  oc INTEGER,"
-        "  ti TINYINT,"
-        "  si SMALLINT,"
-        "  si8 SMALLINT ENCODING FIXED(8),"
-        "  i INTEGER,"
-        "  i8 INTEGER ENCODING FIXED(8),"
-        "  i16 INTEGER ENCODING FIXED(16),"
-        "  bi BIGINT,"
-        "  bi8 BIGINT ENCODING FIXED(8),"
-        "  bi16 BIGINT ENCODING FIXED(16),"
-        "  bi32 BIGINT ENCODING FIXED(32),"
-        "  f FLOAT,"
-        "  d DOUBLE,"
-        "  dc5 DECIMAL(5,4),"
-        "  dc9 DECIMAL(9,8),"
-        "  dc15 DECIMAL(15,14),"
-        "  str TEXT ENCODING DICT(32),"
-        "  dt DATE,"
-        "  dt16 DATE ENCODING DAYS(16),"
-        "  dt32 DATE ENCODING DAYS(32),"
-        "  tm TIME,"
-        "  tme TIME ENCODING FIXED(32),"
-        "  t0 TIMESTAMP(0),"
-        "  t0e TIMESTAMP(0) ENCODING FIXED(32),"
-        "  t3 TIMESTAMP(3),"
-        "  t6 TIMESTAMP(6),"
-        "  t9 TIMESTAMP(9));";
-    run_ddl_statement(heavy_ddl);
-    std::string sqlite_ddl{"CREATE TABLE test_frame_nav_ans("};
-    sqlite_ddl +=
-        "  rid INTEGER,"
-        "  pc INTEGER,"
-        "  oc INTEGER,"
-        "  ti TINYINT,"
-        "  si SMALLINT,"
-        "  si8 SMALLINT,"
-        "  i INTEGER,"
-        "  i8 INTEGER,"
-        "  i16 INTEGER,"
-        "  bi BIGINT,"
-        "  bi8 BIGINT,"
-        "  bi16 BIGINT,"
-        "  bi32 BIGINT,"
-        "  f FLOAT,"
-        "  d DOUBLE,"
-        "  dc5 DECIMAL(5,4),"
-        "  dc9 DECIMAL(9,8),"
-        "  dc15 DECIMAL(15,14),"
-        "  str TEXT ENCODING DICT(32),"
-        "  dt DATE,"
-        "  dt16 DATE,"
-        "  dt32 DATE,"
-        "  tm TIME,"
-        "  tme TIME,"
-        "  t0 TIMESTAMP(0),"
-        "  t0e TIMESTAMP(0),"
-        "  t3 TIMESTAMP(3),"
-        "  t6 TIMESTAMP(6),"
-        "  t9 TIMESTAMP(9));";
-    g_sqlite_comparator.query(sqlite_ddl);
-  };
-  std::vector<std::string> test_tbl_names{"test_frame_nav", "test_frame_nav_ans"};
-  ScopeGuard remove_test_table = [drop_test_table]() { drop_test_table(); };
-  drop_test_table();
-  create_test_table();
-
-  const std::string null_val{"NULL"};
-  auto row_insert_ddl_gen = [](const std::string& int_val,
-                               const std::string& fp_val,
-                               const std::string& str_val,
-                               const std::string& date_val,
-                               const std::string& time_val,
-                               const std::string& timestamp_val) {
-    std::ostringstream insert_row_ddl;
-    for (int n = 0; n < 10; n++) {
-      insert_row_ddl << int_val << ", ";
-    }
-    for (int n = 0; n < 5; n++) {
-      insert_row_ddl << fp_val << ", ";
-    }
-    insert_row_ddl << str_val << ", ";
-    for (int n = 0; n < 3; n++) {
-      insert_row_ddl << date_val << ", ";
-    }
-    for (int n = 0; n < 2; n++) {
-      insert_row_ddl << time_val << ", ";
-    }
-    for (int n = 0; n < 4; n++) {
-      insert_row_ddl << timestamp_val << ", ";
-    }
-    insert_row_ddl << timestamp_val << ");";
-    return insert_row_ddl.str();
-  };
-  for (const auto& tbl_name : test_tbl_names) {
-    std::vector<std::string> insert_row_ddls;
-    size_t pc_idx = 1;
-    for (size_t i = 1; i <= 21; i++) {
-      std::string rid = ::toString(i);
-      auto pc_val = ::toString(pc_idx);
-      auto val = i % 7;
-      if (val == 0) {
-        pc_idx++;
-        val = 7;
-      }
-      std::ostringstream insert_row_ddl;
-      insert_row_ddl << "INSERT INTO " << tbl_name << " VALUES (";
-      insert_row_ddl << rid << ", " << pc_val << ", " << val << ", ";
-      if (val == 2 || val == 5) {
-        insert_row_ddl << row_insert_ddl_gen(
-            null_val, null_val, null_val, null_val, null_val, null_val);
-      } else {
-        std::string int_val = ::toString(val);
-        std::string fp_val = int_val + "." + int_val;
-        std::string str_val = "\'" + int_val + "\'";
-        std::string date_val = "\'2022-08-0" + int_val + "\'";
-        std::string time_val = "\'12:00:0" + int_val + "\'";
-        std::string timestamp_val = "\'2022-08-0" + int_val + " 12:00:0" + int_val + "\'";
-        insert_row_ddl << row_insert_ddl_gen(
-            int_val, fp_val, str_val, date_val, time_val, timestamp_val);
-      }
-      insert_row_ddls.emplace_back(insert_row_ddl.str());
-    }
-    std::random_device rd;
-    std::mt19937 g(rd());
-    std::shuffle(insert_row_ddls.begin(), insert_row_ddls.end(), g);
-    if (tbl_name.compare("test_frame_nav") == 0) {
-      for (const auto& insert_row_ddl : insert_row_ddls) {
-        run_multiple_agg(insert_row_ddl, dt);
-      }
-    } else {
-      for (const auto& insert_row_ddl : insert_row_ddls) {
-        g_sqlite_comparator.query(insert_row_ddl);
-      }
-    }
-  }
   std::vector<std::string> test_col1{"ti",   "si",   "si8",  "i",    "i8",   "i16", "bi",
                                      "bi8",  "bi16", "bi32", "f",    "d",    "dc5", "dc9",
                                      "dc15", "str",  "dt",   "dt16", "dt32", "tm",  "tme",
@@ -23714,7 +23704,7 @@ TEST(Select, WindowFunctionFrameNavigationFunctions) {
             << "SELECT rid, " << func_name_on_partition << "(" << col_name << ", "
             << offset
             << ") OVER (PARTITION BY pc ORDER BY oc ASC NULLS LAST) AS res FROM "
-               "test_frame_nav_ans WHERE pc = 2 ORDER BY rid";
+               "test_frame_nav WHERE pc = 2 ORDER BY rid";
         const auto sqlite_query = non_frame_query.str();
         for (auto is_row_mode : {true, false}) {
           std::ostringstream frame_query;
@@ -23739,7 +23729,7 @@ TEST(Select, WindowFunctionFrameNavigationFunctions) {
             << "SELECT rid, " << func_name_on_partition << "(" << col_name << ", "
             << offset
             << ") OVER (PARTITION BY pc ORDER BY oc ASC NULLS LAST) AS res FROM "
-               "test_frame_nav_ans WHERE pc = 2 ORDER BY rid";
+               "test_frame_nav WHERE pc = 2 ORDER BY rid";
         const auto sqlite_query = non_frame_query.str();
         for (auto is_row_mode : {true, false}) {
           std::ostringstream frame_query;
@@ -26935,6 +26925,11 @@ int create_and_populate_tables(const bool use_temporary_tables,
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'data_types_basic*'";
   }
+  try {
+    import_test_frame_nav();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_frame_nav'";
+  }
   {
     std::string insert_query{"INSERT INTO test_in_bitmap VALUES('a');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
@@ -27221,6 +27216,9 @@ void drop_tables() {
       "DROP TABLE test_window_func_large_multi_frag;"};
   run_ddl_statement(drop_test_window_func_large_multi_frag);
   g_sqlite_comparator.query(drop_test_window_func_large_multi_frag);
+  const std::string drop_test_frame_nav{"DROP TABLE test_frame_nav;"};
+  run_ddl_statement(drop_test_frame_nav);
+  g_sqlite_comparator.query(drop_test_frame_nav);
   const std::string drop_test_current_user{"DROP TABLE test_current_user;"};
   run_ddl_statement(drop_test_current_user);
 }

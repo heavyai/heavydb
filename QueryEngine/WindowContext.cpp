@@ -675,15 +675,19 @@ void WindowFunctionContext::compute(
           // build a segment tree for the partition
           // todo (yoonmin) : support generic window function expression
           // i.e., when window_func_expr_columns_.size() > 1
+          SQLTypeInfo const input_col_ti =
+              window_func_->getArgs().front()->get_type_info();
+          int8_t const* input_col_buf = !window_func_expr_columns_.empty()
+                                            ? window_func_expr_columns_.front()
+                                            : nullptr;
           const auto partition_size = counts()[partition_idx];
-          buildAggregationTreeForPartition(
-              window_func_->getKind(),
-              partition_idx,
-              partition_size,
-              window_func_expr_columns_.front(),
-              payload() + offsets()[partition_idx],
-              intermediate_output_buffer,
-              window_func_->getArgs().front()->get_type_info());
+          buildAggregationTreeForPartition(window_func_->getKind(),
+                                           partition_idx,
+                                           partition_size,
+                                           input_col_buf,
+                                           payload() + offsets()[partition_idx],
+                                           intermediate_output_buffer,
+                                           input_col_ti);
         }
       };
       resizeStorageForWindowFraming();
@@ -1303,7 +1307,6 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
     const int32_t* original_rowid_buf,
     const int64_t* ordered_rowid_buf,
     const SQLTypeInfo& input_col_ti) {
-  CHECK(col_buf);
   if (!(input_col_ti.is_number() || input_col_ti.is_boolean() ||
         input_col_ti.is_time_or_date())) {
     throw QueryNotSupported("Window aggregate function over frame on a column type " +
