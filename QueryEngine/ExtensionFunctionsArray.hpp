@@ -67,6 +67,7 @@ template struct Array<int32_t>;
 template struct Array<int64_t>;
 template struct Array<float>;
 template struct Array<double>;
+template struct Array<TextEncodingDict>;
 #endif
 
 EXTENSION_NOINLINE Array<int64_t> array_append(const Array<int64_t>& in_arr,
@@ -128,6 +129,30 @@ EXTENSION_NOINLINE Array<float> array_append__4(const Array<float>& in_arr,
   return Array<float>(0, true);
 #endif
 }
+
+#ifndef __CUDACC__
+EXTENSION_NOINLINE Array<TextEncodingDict> tarray_append(
+    RowFunctionManager& mgr,
+    const Array<TextEncodingDict>& in_arr,
+    const TextEncodingDict val) {
+  Array<TextEncodingDict> out_arr(in_arr.getSize() + 1);
+  for (int64_t i = 0; i < in_arr.getSize(); i++) {
+    if (in_arr.isNull(i)) {
+      out_arr[i] = in_arr[i];
+    } else {
+      std::string str = mgr.getString(GET_DICT_ID(mgr, 0), in_arr[i]);
+      out_arr[i] = mgr.getOrAddTransient(TRANSIENT_DICT_ID, str);
+    }
+  }
+  if (val.isNull()) {
+    out_arr[in_arr.getSize()] = val;
+  } else {
+    std::string str = mgr.getString(GET_DICT_ID(mgr, 1), val);
+    out_arr[in_arr.getSize()] = mgr.getOrAddTransient(TRANSIENT_DICT_ID, str);
+  }
+  return out_arr;
+}
+#endif
 
 /*
   Overloading UDFs works for types in the same SQL family.  BOOLEAN
@@ -271,32 +296,37 @@ EXTENSION_NOINLINE Array<double> array_second_half__f64(const Array<double>& in_
 #endif
 }
 
-// UDFs with Array<TextEncodingDict> argument is not supported yet:
-/*
 #ifdef _WIN32
 template struct Array<TextEncodingDict>;
 #endif
 
-EXTENSION_NOINLINE Array<TextEncodingDict> array_first_half__t32(
-    const Array<TextEncodingDict>& in_arr) {
 #ifndef __CUDACC__
-  return array_first_half_impl(in_arr);
-#else
-  assert(false);
-  return Array<TextEncodingDict>(0, true);
-#endif
+EXTENSION_NOINLINE
+Array<TextEncodingDict> array_first_half__t32(RowFunctionManager& mgr,
+                                              const Array<TextEncodingDict>& in_arr) {
+  Array<TextEncodingDict> out_arr = array_first_half_impl(in_arr);
+  for (int64_t i = 0; i < out_arr.getSize(); i++) {
+    if (!out_arr.isNull(i)) {
+      std::string str = mgr.getString(GET_DICT_ID(mgr, 0), out_arr[i]);
+      out_arr[i] = mgr.getOrAddTransient(TRANSIENT_DICT_ID, str);
+    }
+  }
+  return out_arr;
 }
 
-EXTENSION_NOINLINE Array<TextEncodingDict> array_second_half__t32(
-    const Array<TextEncodingDict>& in_arr) {
-#ifndef __CUDACC__
-  return array_second_half_impl(in_arr);
-#else
-  assert(false);
-  return Array<TextEncodingDict>(0, true);
-#endif
+EXTENSION_NOINLINE
+Array<TextEncodingDict> array_second_half__t32(RowFunctionManager& mgr,
+                                               const Array<TextEncodingDict>& in_arr) {
+  Array<TextEncodingDict> out_arr = array_second_half_impl(in_arr);
+  for (int64_t i = 0; i < out_arr.getSize(); i++) {
+    if (!out_arr.isNull(i)) {
+      std::string str = mgr.getString(GET_DICT_ID(mgr, 0), out_arr[i]);
+      out_arr[i] = mgr.getOrAddTransient(TRANSIENT_DICT_ID, str);
+    }
+  }
+  return out_arr;
 }
-*/
+#endif
 
 #if defined(__clang__)
 #pragma clang diagnostic pop

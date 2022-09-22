@@ -16,7 +16,22 @@
 
 #pragma once
 
+#include <boost/algorithm/string/predicate.hpp>
 #include "QueryEngine/Execute.h"
+
+// copied from TableFunctionsFactory.cpp
+namespace {
+
+std::string drop_suffix_impl(const std::string& str) {
+  const auto idx = str.find("__");
+  if (idx == std::string::npos) {
+    return str;
+  }
+  CHECK_GT(idx, std::string::size_type(0));
+  return str.substr(0, idx);
+}
+
+}  // namespace
 
 struct RowFunctionManager {
   RowFunctionManager(const Executor* executor, const RelAlgExecutionUnit& ra_exe_unit)
@@ -28,15 +43,25 @@ struct RowFunctionManager {
     return proxy->getString(string_id);
   }
 
-  inline int32_t getDictId(size_t arg_idx) {
-    const Analyzer::FunctionOper* function_oper =
-        dynamic_cast<Analyzer::FunctionOper*>(ra_exe_unit_.target_exprs[0]);
+  inline int32_t getDictId(const std::string& func_name, size_t arg_idx) {
+    std::string func_name_wo_suffix =
+        boost::algorithm::to_lower_copy(drop_suffix_impl(func_name));
 
-    CHECK(function_oper);
-    CHECK_LT(arg_idx, function_oper->getArity());
-    const SQLTypeInfo typ = function_oper->getArg(arg_idx)->get_type_info();
-    CHECK(typ.is_text_encoding_dict());
-    return typ.get_comp_param();
+    for (const auto& expr : ra_exe_unit_.target_exprs) {
+      if (const Analyzer::FunctionOper* function_oper =
+              dynamic_cast<Analyzer::FunctionOper*>(expr)) {
+        std::string func_oper_name = drop_suffix_impl(function_oper->getName());
+        boost::algorithm::to_lower(func_oper_name);
+        if (func_name_wo_suffix == func_oper_name) {
+          CHECK_LT(arg_idx, function_oper->getArity());
+          const SQLTypeInfo typ = function_oper->getArg(arg_idx)->get_type_info();
+          CHECK(typ.is_text_encoding_dict() || typ.is_text_encoding_dict_array());
+          return typ.get_comp_param();
+        }
+      }
+    }
+    UNREACHABLE();
+    return 0;
   }
 
   inline int32_t getOrAddTransient(int32_t dict_id, std::string str) {

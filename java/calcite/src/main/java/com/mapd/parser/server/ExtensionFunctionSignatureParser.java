@@ -236,6 +236,9 @@ class ExtensionFunctionSignatureParser {
     if (type_name.equals("Array<bool>")) {
       return ExtensionFunction.ExtArgumentType.ArrayBool;
     }
+    if (type_name.equals("Array<TextEncodingDict>")) {
+      return ExtensionFunction.ExtArgumentType.ArrayTextEncodingDict;
+    }
     if (type_name.equals("TextEncodingDict")) {
       return ExtensionFunction.ExtArgumentType.TextEncodingDict;
     }
