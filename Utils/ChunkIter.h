@@ -31,7 +31,11 @@ class Type;
 
 class ChunkIter {
  public:
-  const hdk::ir::Type* type;
+  int type_id;
+  int type_size;
+  bool type_nullable;
+  int elem_type_id;
+  int elem_type_size;
   int8_t* second_buf;
   int8_t* current_pos;
   int8_t* start_pos;

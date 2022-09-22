@@ -1065,7 +1065,11 @@ ChunkIter ColumnFetcher::prepareChunkIter(AbstractBuffer* merged_data_buf,
   merged_chunk_iter.num_elems = total_num_tuples;
   merged_chunk_iter.skip = chunk_iter.skip;
   merged_chunk_iter.skip_size = chunk_iter.skip_size;
-  merged_chunk_iter.type = chunk_iter.type;
+  merged_chunk_iter.type_id = chunk_iter.type_id;
+  merged_chunk_iter.type_size = chunk_iter.type_size;
+  merged_chunk_iter.type_nullable = chunk_iter.type_nullable;
+  merged_chunk_iter.elem_type_id = chunk_iter.elem_type_id;
+  merged_chunk_iter.elem_type_size = chunk_iter.elem_type_size;
   return merged_chunk_iter;
 }
 

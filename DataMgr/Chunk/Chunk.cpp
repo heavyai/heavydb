@@ -182,7 +182,17 @@ ChunkIter Chunk::begin_iterator(const std::shared_ptr<ChunkMetadata>& chunk_meta
                                 int start_idx,
                                 int skip) const {
   ChunkIter it;
-  it.type = column_info_->type;
+  it.type_id = column_info_->type->id();
+  it.type_size = column_info_->type->size();
+  it.type_nullable = column_info_->type->nullable();
+  it.elem_type_id =
+      column_info_->type->isArray()
+          ? column_info_->type->as<hdk::ir::ArrayBaseType>()->elemType()->id()
+          : hdk::ir::Type::kNull;
+  it.elem_type_size =
+      column_info_->type->isArray()
+          ? column_info_->type->as<hdk::ir::ArrayBaseType>()->elemType()->size()
+          : 0;
   it.skip = skip;
   it.skip_size = column_info_->type->size();
   if (it.skip_size < 0) {  // if it's variable length

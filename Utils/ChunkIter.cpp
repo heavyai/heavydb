@@ -25,18 +25,18 @@
 
 #include <cstdlib>
 
-HOST DEVICE inline bool isNull(const int8_t* val, const hdk::ir::Type* type) {
-  if (type->id() == hdk::ir::Type::kFloatingPoint) {
-    switch (type->as<hdk::ir::FloatingPointType>()->precision()) {
-      case hdk::ir::FloatingPointType::kFloat:
+HOST DEVICE inline bool isNull(const int8_t* val, const ChunkIter* it) {
+  if (it->type_id == hdk::ir::Type::kFloatingPoint) {
+    switch (it->type_size) {
+      case 4:
         return *(float*)val == inline_null_value<float>();
-      case hdk::ir::FloatingPointType::kDouble:
+      case 8:
         return *(double*)val == inline_null_value<double>();
       default:
         assert(false);
     }
   }
-  switch (type->size()) {
+  switch (it->type_size) {
     case 0:
       // For Null type.
       return true;
@@ -56,21 +56,21 @@ HOST DEVICE inline bool isNull(const int8_t* val, const hdk::ir::Type* type) {
 
 HOST DEVICE inline bool isNullFixedLenArray(const int8_t* val,
                                             int array_size,
-                                            const hdk::ir::Type* type) {
+                                            const ChunkIter* it) {
   // Check if fixed length array has a NULL_ARRAY sentinel as the first element
-  if (type->isFixedLenArray() && val && array_size > 0 && array_size == type->size()) {
-    auto elem_type = type->as<hdk::ir::FixedLenArrayType>()->elemType();
-    if (elem_type->id() == hdk::ir::Type::kFloatingPoint) {
-      switch (elem_type->as<hdk::ir::FloatingPointType>()->precision()) {
-        case hdk::ir::FloatingPointType::kFloat:
+  if (it->type_id == hdk::ir::Type::kFixedLenArray && val && array_size > 0 &&
+      array_size == it->type_size) {
+    if (it->elem_type_id == hdk::ir::Type::kFloatingPoint) {
+      switch (it->elem_type_size) {
+        case 4:
           return *(float*)val == inline_null_array_value<float>();
-        case hdk::ir::FloatingPointType::kDouble:
+        case 8:
           return *(double*)val == inline_null_array_value<double>();
         default:
           assert(false);
       }
     }
-    switch (elem_type->size()) {
+    switch (it->elem_type_size) {
       case 1:
         return *val == inline_null_array_value<int8_t>();
       case 2:
@@ -86,24 +86,26 @@ HOST DEVICE inline bool isNullFixedLenArray(const int8_t* val,
   return false;
 }
 
-DEVICE static bool needDecompression(const hdk::ir::Type* type) {
-  if (type->isDateTime() && type->size() != 8) {
+DEVICE static bool needDecompression(const ChunkIter* it) {
+  if ((it->type_id == hdk::ir::Type::kDate || it->type_id == hdk::ir::Type::kTimestamp ||
+       it->type_id == hdk::ir::Type::kTime) &&
+      it->type_size != 8) {
     return true;
   }
   return false;
 }
 
-DEVICE static void decompress(const hdk::ir::Type* type,
+DEVICE static void decompress(const ChunkIter* it,
                               int8_t* compressed,
                               VarlenDatum* result,
                               Datum* datum) {
-  switch (type->id()) {
+  switch (it->type_id) {
     case hdk::ir::Type::kDate:
     case hdk::ir::Type::kTime:
     case hdk::ir::Type::kTimestamp: {
       result->length = sizeof(int64_t);
       result->pointer = (int8_t*)&datum->bigintval;
-      switch (type->size()) {
+      switch (it->type_size) {
         case 1:
           datum->bigintval = (int64_t) * (int8_t*)compressed;
           break;
@@ -142,12 +144,12 @@ DEVICE void ChunkIter_get_next(ChunkIter* it,
 
   if (it->skip_size > 0) {
     // for fixed-size
-    if (uncompress && needDecompression(it->type)) {
-      decompress(it->type, it->current_pos, result, &it->datum);
+    if (uncompress && needDecompression(it)) {
+      decompress(it, it->current_pos, result, &it->datum);
     } else {
       result->length = static_cast<size_t>(it->skip_size);
       result->pointer = it->current_pos;
-      result->is_null = isNull(result->pointer, it->type);
+      result->is_null = isNull(result->pointer, it);
     }
     it->current_pos += it->skip * it->skip_size;
   } else {
@@ -178,12 +180,12 @@ DEVICE void ChunkIter_get_nth(ChunkIter* it,
   if (it->skip_size > 0) {
     // for fixed-size
     int8_t* current_pos = it->start_pos + n * it->skip_size;
-    if (uncompress && needDecompression(it->type)) {
-      decompress(it->type, current_pos, result, &it->datum);
+    if (uncompress && needDecompression(it)) {
+      decompress(it, current_pos, result, &it->datum);
     } else {
       result->length = static_cast<size_t>(it->skip_size);
       result->pointer = current_pos;
-      result->is_null = isNull(result->pointer, it->type);
+      result->is_null = isNull(result->pointer, it);
     }
   } else {
     int8_t* current_pos = it->start_pos + n * sizeof(StringOffsetT);
@@ -212,9 +214,9 @@ DEVICE void ChunkIter_get_nth(ChunkIter* it, int n, ArrayDatum* result, bool* is
     result->length = static_cast<size_t>(it->skip_size);
     result->pointer = current_pos;
     bool is_null = false;
-    if (it->type->nullable()) {
+    if (it->type_nullable) {
       // Nulls can only be recognized when iterating over a nullable-typed chunk
-      is_null = isNullFixedLenArray(result->pointer, result->length, it->type);
+      is_null = isNullFixedLenArray(result->pointer, result->length, it);
     }
     result->is_null = is_null;
   } else {
