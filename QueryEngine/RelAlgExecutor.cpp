@@ -2660,9 +2660,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
       if (!order_col) {
         throw std::runtime_error("Only order by columns supported for now");
       }
-      const int8_t* column;
-      size_t join_col_elem_count;
-      std::tie(column, join_col_elem_count) =
+      auto const [column, col_elem_count] =
           ColumnFetcher::getOneColumnFragment(executor_,
                                               *order_col,
                                               query_infos.front().info.fragments.front(),
@@ -2673,7 +2671,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
                                               chunks_owner,
                                               column_cache_map);
 
-      CHECK_EQ(join_col_elem_count, elem_count);
+      CHECK_EQ(col_elem_count, elem_count);
       context->addOrderColumn(column, order_col->get_type_info(), chunks_owner);
     }
   }
@@ -2686,7 +2684,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
     for (auto& expr : window_function_expression_args) {
       if (const auto arg_col_var =
               std::dynamic_pointer_cast<const Analyzer::ColumnVar>(expr)) {
-        auto const [column, join_col_elem_count] = ColumnFetcher::getOneColumnFragment(
+        auto const [column, col_elem_count] = ColumnFetcher::getOneColumnFragment(
             executor_,
             *arg_col_var,
             query_infos.front().info.fragments.front(),
@@ -2697,7 +2695,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
             chunks_owner,
             column_cache_map);
 
-        CHECK_EQ(join_col_elem_count, elem_count);
+        CHECK_EQ(col_elem_count, elem_count);
         context->addColumnBufferForWindowFunctionExpression(column, chunks_owner);
       }
     }

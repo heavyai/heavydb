@@ -2315,6 +2315,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
     frame_start_bound_expr = nullptr;
     frame_end_bound_expr = nullptr;
   }
+  if (window_func_kind == SqlWindowFunctionKind::COUNT && has_framing_clause &&
+      args.empty()) {
+    args.push_back(makeExpr<Analyzer::Constant>(g_bigint_count ? kBIGINT : kINT, true));
+  }
   return makeExpr<Analyzer::WindowFunction>(
       ti,
       rex_window_function->getKind(),

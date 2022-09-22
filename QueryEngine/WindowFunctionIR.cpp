@@ -346,6 +346,11 @@ llvm::Value* Executor::codegenWindowFunctionOnFrame(const CompilationOptions& co
       WindowProjectNodeContext::getActiveWindowFunctionContext(this);
   const auto window_func = window_func_context->getWindowFunction();
   const auto window_func_kind = window_func->getKind();
+  // currently, we only support below two window functions on frame
+  // todo (yonnmin): remove this when supporting more window functions on frame
+  CHECK(window_func_kind == SqlWindowFunctionKind::LEAD_IN_FRAME ||
+        window_func_kind == SqlWindowFunctionKind::LAG_IN_FRAME);
+  bool is_lag_in_frame = window_func_kind == SqlWindowFunctionKind::LAG_IN_FRAME;
   const auto& args = window_func->getArgs();
   CHECK(args.size() >= 1 && args.size() <= 3);
   CodeGenerator code_generator(this);
@@ -358,16 +363,10 @@ llvm::Value* Executor::codegenWindowFunctionOnFrame(const CompilationOptions& co
   auto current_row_pos_lv = code_generator.posArg(nullptr);
   auto partition_index_lv =
       codegenCurrentPartitionIndex(window_func_context, current_row_pos_lv);
-
   llvm::Value* res_lv{nullptr};
-  // currently, we only support below two window functions on frame
-  // todo (yonnmin): remove this when supporting more window functions on frame
-  CHECK(window_func_kind == SqlWindowFunctionKind::LEAD_IN_FRAME ||
-        window_func_kind == SqlWindowFunctionKind::LAG_IN_FRAME);
-  bool is_lag_in_frame = window_func_kind == SqlWindowFunctionKind::LAG_IN_FRAME;
 
   // ordering column buffer
-  const auto target_col_ti = window_func->getArgs().front()->get_type_info();
+  const auto target_col_ti = args.front()->get_type_info();
   const auto target_col_size = target_col_ti.get_size();
   const auto target_col_type_name =
       get_col_type_name_by_size(target_col_size, target_col_ti.is_fp());
@@ -882,7 +881,7 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
         codegenCurrentPartitionIndex(window_func_context, current_row_pos_lv);
 
     // ordering column buffer
-    const auto target_col_ti = window_func->getArgs().front()->get_type_info();
+    const auto target_col_ti = args.front()->get_type_info();
     const auto target_col_size = target_col_ti.get_size();
     const auto col_type_name =
         get_col_type_name_by_size(target_col_size, target_col_ti.is_fp());
