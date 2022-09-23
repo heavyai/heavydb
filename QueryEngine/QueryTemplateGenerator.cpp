@@ -553,14 +553,25 @@ class GroupByQueryTemplateGenerator : public QueryTemplateGenerator {
                            bb_entry);
 
     auto crt_matched_uncasted_ptr =
-        new llvm::AllocaInst(i32_type, 0, "crt_matched.uncasted", bb_entry);
-    crt_matched_ptr = new llvm::AddrSpaceCastInst(
-        crt_matched_uncasted_ptr, pi32_type, "crt_matched", bb_entry);
+        new llvm::AllocaInst(i32_type, 0, "crt_matched", bb_entry);
+    if (crt_matched_uncasted_ptr->getType() != pi32_type) {
+      crt_matched_ptr = new llvm::AddrSpaceCastInst(
+          crt_matched_uncasted_ptr, pi32_type, "crt_matched.casted", bb_entry);
+    } else {
+      crt_matched_ptr = crt_matched_uncasted_ptr;
+    }
     CHECK(row_func_call_args && !row_func_call_args->old_total_matched_ptr);
     auto old_total_matched_uncasted_ptr =
-        new llvm::AllocaInst(i32_type, 0, "old_total_matched.uncasted", bb_entry);
-    row_func_call_args->old_total_matched_ptr = new llvm::AddrSpaceCastInst(
-        old_total_matched_uncasted_ptr, pi32_type, "old_total_matched", bb_entry);
+        new llvm::AllocaInst(i32_type, 0, "old_total_matched", bb_entry);
+    if (old_total_matched_uncasted_ptr->getType() != pi32_type) {
+      row_func_call_args->old_total_matched_ptr =
+          new llvm::AddrSpaceCastInst(old_total_matched_uncasted_ptr,
+                                      pi32_type,
+                                      "old_total_matched.casted",
+                                      bb_entry);
+    } else {
+      row_func_call_args->old_total_matched_ptr = old_total_matched_uncasted_ptr;
+    }
 
     auto func_pos_start = pos_start<llvm::AttributeList>(mod);
     CHECK(func_pos_start);
@@ -770,7 +781,7 @@ class GroupByQueryTemplateGenerator : public QueryTemplateGenerator {
   std::unique_ptr<RowFuncCallGenerator> row_func_call_args;
 
   // group by member vars
-  llvm::AddrSpaceCastInst* crt_matched_ptr{nullptr};
+  llvm::Value* crt_matched_ptr{nullptr};
   llvm::Function* func_init_shared_mem{nullptr};
   llvm::Function* func_write_back{nullptr};
   llvm::CallInst* result_buffer{nullptr};
@@ -828,9 +839,13 @@ class NonGroupedQueryTemplateGenerator : public QueryTemplateGenerator {
       for (size_t i = 0; i < aggr_col_count; ++i) {
         auto result_ptr = new llvm::AllocaInst(i64_type, 0, "result", bb_entry);
         result_ptr->setAlignment(LLVM_ALIGN(8));
-        auto result_cast_ptr =
-            new llvm::AddrSpaceCastInst(result_ptr, pi64_type, "result.casted", bb_entry);
-        result_ptr_vec.push_back(result_cast_ptr);
+        if (result_ptr->getType() != pi64_type) {
+          auto result_cast_ptr = new llvm::AddrSpaceCastInst(
+              result_ptr, pi64_type, "result.casted", bb_entry);
+          result_ptr_vec.push_back(result_cast_ptr);
+        } else {
+          result_ptr_vec.push_back(result_ptr);
+        }
       }
       if (gpu_smem_context.isSharedMemoryUsed()) {
         auto init_smem_func = mod->getFunction("init_shared_mem");
