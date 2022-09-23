@@ -566,7 +566,7 @@ TEMPLATE_NOINLINE int32_t tf_raster_graph_shortest_slope_weighted_path__cpu_temp
   // Check that origin and dest bin fall inside raster early
   // to avoid needless work if we're out of bounds
   const auto origin_x_bin = geo_raster.get_x_bin(origin_x);
-  const auto origin_y_bin = geo_raster.get_y_bin(origin_x);
+  const auto origin_y_bin = geo_raster.get_y_bin(origin_y);
   const auto dest_x_bin = geo_raster.get_x_bin(dest_x);
   const auto dest_y_bin = geo_raster.get_y_bin(dest_y);
   if (geo_raster.is_bin_out_of_bounds(origin_x_bin, origin_y_bin)) {
