@@ -106,6 +106,36 @@ std::filesystem::path copy_catalog_if_read_only(std::filesystem::path base_data_
     std::filesystem::copy(normal_catalog_path,
                           temporary_catalog_path,
                           std::filesystem::copy_options::recursive);
+
+    // Create a temporary empty directory structure similar to how initheavy would.
+    // Not expected to be used. Created just in case any code tries to access them.
+    try {
+      std::filesystem::create_directories(catalog_base_data_path /
+                                          shared::kDataDirectoryName);
+    } catch (...) {
+    }
+    try {
+      std::filesystem::create_directories(catalog_base_data_path /
+                                          shared::kDefaultExportDirName);
+    } catch (...) {
+    }
+    try {
+      std::filesystem::create_directories(catalog_base_data_path /
+                                          shared::kLockfilesDirectoryName);
+    } catch (...) {
+    }
+    try {
+      std::filesystem::create_directories(catalog_base_data_path /
+                                          shared::kLockfilesDirectoryName /
+                                          shared::kCatalogDirectoryName);
+    } catch (...) {
+    }
+    try {
+      std::filesystem::create_directories(catalog_base_data_path /
+                                          shared::kLockfilesDirectoryName /
+                                          shared::kDataDirectoryName);
+    } catch (...) {
+    }
   }
 
   return catalog_base_data_path;
