@@ -1075,7 +1075,8 @@ bool QueryMemoryDescriptor::interleavedBins(const ExecutorDeviceType device_type
 // TODO(Saman): an implementation detail, so move this out of QMD
 bool QueryMemoryDescriptor::isWarpSyncRequired(
     const ExecutorDeviceType device_type) const {
-  if (device_type == ExecutorDeviceType::GPU) {
+  if (device_type == ExecutorDeviceType::GPU &&
+      executor_->gpuMgr()->getPlatform() == GpuMgrPlatform::CUDA) {
     return executor_->cudaMgr()->isArchVoltaOrGreaterForAll();
   }
   return false;

@@ -454,7 +454,9 @@ class Executor {
 
   bool isArchPascalOrLater(const ExecutorDeviceType dt) const {
     if (dt == ExecutorDeviceType::GPU) {
-      return cudaMgr()->isArchPascalOrLater();
+      return gpuMgr()->getPlatform() == GpuMgrPlatform::CUDA
+                 ? cudaMgr()->isArchPascalOrLater()
+                 : false;
     }
     return false;
   }

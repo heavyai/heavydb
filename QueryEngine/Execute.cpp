@@ -3590,6 +3590,9 @@ size_t Executor::maxGpuSlabSize() const {
 }
 
 int64_t Executor::deviceCycles(int milliseconds) const {
+  if (gpuMgr()->getPlatform() != GpuMgrPlatform::CUDA) {
+    return 0;
+  }
   const auto& dev_props = cudaMgr()->getAllDeviceProperties();
   return static_cast<int64_t>(dev_props.front().clockKhz) * milliseconds;
 }

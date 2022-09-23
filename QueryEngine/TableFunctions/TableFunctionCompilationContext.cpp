@@ -535,7 +535,7 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
   if (is_gpu) {
     LOG(IR) << "Table Function Kernel IR\n" << serialize_llvm_object(kernel_func_);
     CHECK(executor_);
-    target = {executor_->cudaMgr(), executor_->blockSize(), cgen_state, false};
+    target = {executor_->gpuMgr(), executor_->blockSize(), cgen_state, false};
   }
 
   auto backend =
