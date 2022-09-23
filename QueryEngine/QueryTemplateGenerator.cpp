@@ -122,15 +122,16 @@ llvm::Function* pos_step(llvm::Module* mod) {
 template <class Attributes>
 llvm::Function* row_process(llvm::Module* mod,
                             const size_t aggr_col_count,
-                            const bool hoist_literals) {
+                            const bool hoist_literals,
+                            const compiler::CodegenTraits& traits) {
   using namespace llvm;
 
   std::vector<Type*> func_args;
   auto i8_type = IntegerType::get(mod->getContext(), 8);
   auto i32_type = IntegerType::get(mod->getContext(), 32);
   auto i64_type = IntegerType::get(mod->getContext(), 64);
-  auto pi32_type = PointerType::get(i32_type, 0);
-  auto pi64_type = PointerType::get(i64_type, 0);
+  auto pi32_type = traits.localPointerType(i32_type);
+  auto pi64_type = traits.localPointerType(i64_type);
 
   if (aggr_col_count) {
     for (size_t i = 0; i < aggr_col_count; ++i) {
@@ -151,7 +152,7 @@ llvm::Function* row_process(llvm::Module* mod,
   func_args.push_back(pi64_type);
   func_args.push_back(pi64_type);
   if (hoist_literals) {
-    func_args.push_back(PointerType::get(i8_type, 0));
+    func_args.push_back(traits.localPointerType(i8_type));
   }
   FunctionType* func_type = FunctionType::get(
       /*Result=*/i32_type,
@@ -167,7 +168,7 @@ llvm::Function* row_process(llvm::Module* mod,
         /*Linkage=*/GlobalValue::ExternalLinkage,
         /*Name=*/func_name,
         mod);  // (external, no body)
-    func_ptr->setCallingConv(CallingConv::C);
+    func_ptr->setCallingConv(traits.callingConv());
 
     Attributes func_pal;
     {
@@ -257,7 +258,8 @@ class QueryTemplateGenerator {
       , hoist_literals(hoist_literals)
       , query_mem_desc(query_mem_desc)
       , device_type(device_type)
-      , gpu_smem_context(gpu_smem_context) {
+      , gpu_smem_context(gpu_smem_context)
+      , codegen_traits(traits) {
     // sanity checks
     if (gpu_smem_context.isSharedMemoryUsed()) {
       CHECK(device_type == ExecutorDeviceType::GPU);
@@ -268,11 +270,11 @@ class QueryTemplateGenerator {
     i8_type = llvm::IntegerType::get(mod->getContext(), 8);
     i32_type = llvm::IntegerType::get(mod->getContext(), 32);
     i64_type = llvm::IntegerType::get(mod->getContext(), 64);
-    pi8_type = llvm::PointerType::get(i8_type, 0);
-    pi32_type = llvm::PointerType::get(i32_type, 0);
-    pi64_type = llvm::PointerType::get(i64_type, 0);
-    ppi8_type = llvm::PointerType::get(pi8_type, 0);
-    ppi64_type = llvm::PointerType::get(pi64_type, 0);
+    pi8_type = traits.localPointerType(i8_type);
+    pi32_type = traits.localPointerType(i32_type);
+    pi64_type = traits.localPointerType(i64_type);
+    ppi8_type = traits.localPointerType(pi8_type);
+    ppi64_type = traits.localPointerType(pi64_type);
 
     // initialize query template function and set attributes
     std::vector<llvm::Type*> query_args;
@@ -304,7 +306,7 @@ class QueryTemplateGenerator {
     query_func_ptr = llvm::Function::Create(
         query_func_type, llvm::GlobalValue::ExternalLinkage, query_template_name, mod);
 
-    query_func_ptr->setCallingConv(llvm::CallingConv::C);
+    query_func_ptr->setCallingConv(traits.callingConv());
 
     llvm::AttributeList query_func_pal;
     {
@@ -443,6 +445,7 @@ class QueryTemplateGenerator {
   const QueryMemoryDescriptor& query_mem_desc;
   const ExecutorDeviceType device_type;
   const GpuSharedMemoryContext& gpu_smem_context;
+  const compiler::CodegenTraits& codegen_traits;
 
   // types
   llvm::IntegerType* i8_type{nullptr};
@@ -549,15 +552,20 @@ class GroupByQueryTemplateGenerator : public QueryTemplateGenerator {
                            LLVM_ALIGN(8),
                            bb_entry);
 
-    crt_matched_ptr = new llvm::AllocaInst(i32_type, 0, "crt_matched", bb_entry);
+    auto crt_matched_uncasted_ptr =
+        new llvm::AllocaInst(i32_type, 0, "crt_matched.uncasted", bb_entry);
+    crt_matched_ptr = new llvm::AddrSpaceCastInst(
+        crt_matched_uncasted_ptr, pi32_type, "crt_matched", bb_entry);
     CHECK(row_func_call_args && !row_func_call_args->old_total_matched_ptr);
-    row_func_call_args->old_total_matched_ptr =
-        new llvm::AllocaInst(i32_type, 0, "old_total_matched", bb_entry);
+    auto old_total_matched_uncasted_ptr =
+        new llvm::AllocaInst(i32_type, 0, "old_total_matched.uncasted", bb_entry);
+    row_func_call_args->old_total_matched_ptr = new llvm::AddrSpaceCastInst(
+        old_total_matched_uncasted_ptr, pi32_type, "old_total_matched", bb_entry);
 
     auto func_pos_start = pos_start<llvm::AttributeList>(mod);
     CHECK(func_pos_start);
     llvm::CallInst* pos_start = llvm::CallInst::Create(func_pos_start, "", bb_entry);
-    pos_start->setCallingConv(llvm::CallingConv::C);
+    pos_start->setCallingConv(codegen_traits.callingConv());
     pos_start->setTailCall(true);
     llvm::AttributeList pos_start_pal;
     pos_start->setAttributes(pos_start_pal);
@@ -565,7 +573,7 @@ class GroupByQueryTemplateGenerator : public QueryTemplateGenerator {
     auto func_pos_step = ::pos_step<llvm::AttributeList>(mod);
     CHECK(func_pos_step);
     pos_step = llvm::CallInst::Create(func_pos_step, "", bb_entry);
-    pos_step->setCallingConv(llvm::CallingConv::C);
+    pos_step->setCallingConv(codegen_traits.callingConv());
     pos_step->setTailCall(true);
     llvm::AttributeList pos_step_pal;
     pos_step->setAttributes(pos_step_pal);
@@ -574,7 +582,7 @@ class GroupByQueryTemplateGenerator : public QueryTemplateGenerator {
     CHECK(func_group_buff_idx);
     llvm::CallInst* group_buff_idx_call =
         llvm::CallInst::Create(func_group_buff_idx, "", bb_entry);
-    group_buff_idx_call->setCallingConv(llvm::CallingConv::C);
+    group_buff_idx_call->setCallingConv(codegen_traits.callingConv());
     group_buff_idx_call->setTailCall(true);
     llvm::AttributeList group_buff_idx_pal;
     group_buff_idx_call->setAttributes(group_buff_idx_pal);
@@ -668,11 +676,12 @@ class GroupByQueryTemplateGenerator : public QueryTemplateGenerator {
           crt_matched_ptr,
           bb_forbody);
     }
-    auto func_row_process = ::row_process<llvm::AttributeList>(mod, 0, hoist_literals);
+    auto func_row_process =
+        ::row_process<llvm::AttributeList>(mod, 0, hoist_literals, codegen_traits);
     CHECK(func_row_process);
     row_process =
         llvm::CallInst::Create(func_row_process, row_process_params, "", bb_forbody);
-    row_process->setCallingConv(llvm::CallingConv::C);
+    row_process->setCallingConv(codegen_traits.callingConv());
     row_process->setTailCall(true);
     llvm::AttributeList row_process_pal;
     row_process->setAttributes(row_process_pal);
@@ -761,7 +770,7 @@ class GroupByQueryTemplateGenerator : public QueryTemplateGenerator {
   std::unique_ptr<RowFuncCallGenerator> row_func_call_args;
 
   // group by member vars
-  llvm::AllocaInst* crt_matched_ptr{nullptr};
+  llvm::AddrSpaceCastInst* crt_matched_ptr{nullptr};
   llvm::Function* func_init_shared_mem{nullptr};
   llvm::Function* func_write_back{nullptr};
   llvm::CallInst* result_buffer{nullptr};
@@ -819,7 +828,9 @@ class NonGroupedQueryTemplateGenerator : public QueryTemplateGenerator {
       for (size_t i = 0; i < aggr_col_count; ++i) {
         auto result_ptr = new llvm::AllocaInst(i64_type, 0, "result", bb_entry);
         result_ptr->setAlignment(LLVM_ALIGN(8));
-        result_ptr_vec.push_back(result_ptr);
+        auto result_cast_ptr =
+            new llvm::AddrSpaceCastInst(result_ptr, pi64_type, "result.casted", bb_entry);
+        result_ptr_vec.push_back(result_cast_ptr);
       }
       if (gpu_smem_context.isSharedMemoryUsed()) {
         auto init_smem_func = mod->getFunction("init_shared_mem");
@@ -857,7 +868,7 @@ class NonGroupedQueryTemplateGenerator : public QueryTemplateGenerator {
     auto func_pos_start = pos_start<llvm::AttributeList>(mod);
     CHECK(func_pos_start);
     auto pos_start = llvm::CallInst::Create(func_pos_start, "pos_start", bb_entry);
-    pos_start->setCallingConv(llvm::CallingConv::C);
+    pos_start->setCallingConv(codegen_traits.callingConv());
     pos_start->setTailCall(true);
     llvm::AttributeList pos_start_pal;
     pos_start->setAttributes(pos_start_pal);
@@ -865,7 +876,7 @@ class NonGroupedQueryTemplateGenerator : public QueryTemplateGenerator {
     auto func_pos_step = ::pos_step<llvm::AttributeList>(mod);
     CHECK(func_pos_step);
     pos_step = llvm::CallInst::Create(func_pos_step, "pos_step", bb_entry);
-    pos_step->setCallingConv(llvm::CallingConv::C);
+    pos_step->setCallingConv(codegen_traits.callingConv());
     pos_step->setTailCall(true);
     llvm::AttributeList pos_step_pal;
     pos_step->setAttributes(pos_step_pal);
@@ -876,7 +887,7 @@ class NonGroupedQueryTemplateGenerator : public QueryTemplateGenerator {
       CHECK(func_group_buff_idx);
       group_buff_idx =
           llvm::CallInst::Create(func_group_buff_idx, "group_buff_idx", bb_entry);
-      group_buff_idx->setCallingConv(llvm::CallingConv::C);
+      group_buff_idx->setCallingConv(codegen_traits.callingConv());
       group_buff_idx->setTailCall(true);
       llvm::AttributeList group_buff_idx_pal;
       group_buff_idx->setAttributes(group_buff_idx_pal);
@@ -914,11 +925,11 @@ class NonGroupedQueryTemplateGenerator : public QueryTemplateGenerator {
       row_process_params.push_back(literals);
     }
     auto func_row_process = ::row_process<llvm::AttributeList>(
-        mod, is_estimate_query ? 1 : aggr_col_count, hoist_literals);
+        mod, is_estimate_query ? 1 : aggr_col_count, hoist_literals, codegen_traits);
     CHECK(func_row_process);
     row_process =
         llvm::CallInst::Create(func_row_process, row_process_params, "", bb_forbody);
-    row_process->setCallingConv(llvm::CallingConv::C);
+    row_process->setCallingConv(codegen_traits.callingConv());
     row_process->setTailCall(false);
     llvm::AttributeList row_process_pal;
     row_process->setAttributes(row_process_pal);

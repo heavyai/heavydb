@@ -62,9 +62,9 @@ void run_test_kernel(DeviceFuncPtr func, std::vector<void*>& params, GpuMgr* mgr
 
 compiler::CodegenTraits get_traits() {
 #ifdef HAVE_L0
-  return compiler::CodegenTraits::get(4, 1);
+  return compiler::CodegenTraits::get(4, 1, llvm::CallingConv::SPIR_FUNC);
 #else
-  return compiler::CodegenTraits::get(0, 0);
+  return compiler::CodegenTraits::get(0, 0, llvm::CallingConv::C);
 #endif
 }
 }  // namespace

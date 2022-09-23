@@ -595,6 +595,7 @@ void set_row_func_argnames(llvm::Function* row_func,
 llvm::Function* create_row_function(const size_t in_col_count,
                                     const size_t agg_col_count,
                                     const bool hoist_literals,
+                                    const compiler::CodegenTraits& traits,
                                     llvm::Module* llvm_module,
                                     llvm::LLVMContext& context) {
   std::vector<llvm::Type*> row_process_arg_types;
@@ -602,47 +603,59 @@ llvm::Function* create_row_function(const size_t in_col_count,
   if (agg_col_count) {
     // output (aggregate) arguments
     for (size_t i = 0; i < agg_col_count; ++i) {
-      row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+      row_process_arg_types.push_back(
+          traits.localPointerType(llvm::Type::getInt64Ty(context)));
     }
   } else {
     // group by buffer
-    row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+    row_process_arg_types.push_back(
+        traits.localPointerType(llvm::Type::getInt64Ty(context)));
     // varlen output buffer
-    row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+    row_process_arg_types.push_back(
+        traits.localPointerType(llvm::Type::getInt64Ty(context)));
     // current match count
-    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+    row_process_arg_types.push_back(
+        traits.localPointerType(llvm::Type::getInt32Ty(context)));
     // total match count passed from the caller
-    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+    row_process_arg_types.push_back(
+        traits.localPointerType(llvm::Type::getInt32Ty(context)));
     // old total match count returned to the caller
-    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+    row_process_arg_types.push_back(
+        traits.localPointerType(llvm::Type::getInt32Ty(context)));
     // max matched (total number of slots in the output buffer)
     row_process_arg_types.push_back(llvm::Type::getInt32Ty(context));
   }
 
   // aggregate init values
-  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+  row_process_arg_types.push_back(
+      traits.localPointerType(llvm::Type::getInt64Ty(context)));
 
   // position argument
   row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
 
   // fragment row offset argument
-  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+  row_process_arg_types.push_back(
+      traits.localPointerType(llvm::Type::getInt64Ty(context)));
 
   // number of rows for each scan
-  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+  row_process_arg_types.push_back(
+      traits.localPointerType(llvm::Type::getInt64Ty(context)));
 
   // literals buffer argument
   if (hoist_literals) {
-    row_process_arg_types.push_back(llvm::Type::getInt8PtrTy(context));
+    row_process_arg_types.push_back(
+        traits.localPointerType(llvm::Type::getInt8Ty(context)));
   }
 
   // column buffer arguments
   for (size_t i = 0; i < in_col_count; ++i) {
-    row_process_arg_types.emplace_back(llvm::Type::getInt8PtrTy(context));
+    row_process_arg_types.emplace_back(
+        traits.localPointerType(llvm::Type::getInt8Ty(context)));
   }
 
   // join hash table argument
-  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+  row_process_arg_types.push_back(
+      traits.localPointerType(llvm::Type::getInt64Ty(context)));
 
   // generate the function
   auto ft =
@@ -1526,6 +1539,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   cgen_state_->row_func_ = create_row_function(ra_exe_unit.input_col_descs.size(),
                                                is_group_by ? 0 : agg_slot_count,
                                                co.hoist_literals,
+                                               traits,
                                                cgen_state_->module_,
                                                cgen_state_->context_);
   CHECK(cgen_state_->row_func_);
