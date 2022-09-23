@@ -1185,6 +1185,11 @@ void CommandLineOptions::validate() {
     LOG(INFO) << " Multiple servers per --data directory is " << g_multi_instance
               << " (--multi-instance)";
   }
+  if (g_read_only && g_multi_instance) {
+    throw std::runtime_error(
+        "You may not use the --read-only and --multi-instance configuration flags "
+        "simultaneously.");
+  }
   if (g_allow_invalid_literal_buffer_reads) {
     LOG(WARNING) << " Allowing invalid reads from the literal buffer. May cause invalid "
                     "query results! (--allow-invalid-literal-buffer-reads)";

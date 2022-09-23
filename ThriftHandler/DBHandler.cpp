@@ -6442,8 +6442,10 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
     // query, confirming the tables exist, checking the user's permissions, and finally
     // locking the individual tables. The catalog lock can be released once the query
     // begins running. The table locks will protect the running query.
-    auto cat_lock =
-        std::shared_lock<heavyai::DistributedSharedMutex>(*cat->dcatalogMutex_);
+    std::shared_lock<heavyai::DistributedSharedMutex> cat_lock;
+    if (g_multi_instance) {
+      cat_lock = std::shared_lock<heavyai::DistributedSharedMutex>(*cat->dcatalogMutex_);
+    }
     auto session_cleanup_handler = [&](const auto& session_id) {
       removeInMemoryCalciteSession(session_id);
     };
