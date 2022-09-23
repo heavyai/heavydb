@@ -1677,7 +1677,7 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void linear_probabilistic_count(
   reinterpret_cast<GENERIC_ADDR_SPACE uint32_t*>(bitmap)[word_idx] |= 1 << bit_idx;
 }
 
-extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub_hoisted_literals(
+extern "C" RUNTIME_EXPORT NOREMOVE NEVER_INLINE void query_stub_hoisted_literals(
     const int8_t GENERIC_ADDR_SPACE* GENERIC_ADDR_SPACE* col_buffers,
     GENERIC_ADDR_SPACE const int8_t* literals,
     GENERIC_ADDR_SPACE const int64_t* num_rows,
@@ -1734,7 +1734,7 @@ extern "C" RUNTIME_EXPORT void multifrag_query_hoisted_literals(
   }
 }
 
-extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub(
+extern "C" RUNTIME_EXPORT NOREMOVE NEVER_INLINE void query_stub(
     const int8_t GENERIC_ADDR_SPACE* GENERIC_ADDR_SPACE* col_buffers,
     GENERIC_ADDR_SPACE const int64_t* num_rows,
     GENERIC_ADDR_SPACE const uint64_t* frag_row_offsets,
