@@ -230,7 +230,8 @@ struct Concat : public StringOp {
 
   NullableStrType operator()(const std::string& str) const override;
 
-  NullableStrType operator()(const std::string& str1, const std::string& str2) const;
+  NullableStrType operator()(const std::string& str1,
+                             const std::string& str2) const override;
 
   const std::string str_literal_;
   const bool reverse_order_;
@@ -534,7 +535,7 @@ struct NullOp : public StringOp {
          const SqlStringOpKind op_kind)
       : StringOp(SqlStringOpKind::INVALID, var_str_optional_literal), op_kind_(op_kind) {}
 
-  NullableStrType operator()(const std::string& str) const {
+  NullableStrType operator()(const std::string& str) const override {
     return NullableStrType();  // null string
   }
 
