@@ -3977,7 +3977,7 @@ class LogsSystemTableTest : public SystemTablesTest,
     }
   }
 
-  void SetUp() {
+  void SetUp() override {
     default_max_files_count_ = g_logs_system_tables_max_files_count;
     table_name_ = GetParam();
     if (isDistributedMode() && table_name_ == "server_logs") {
@@ -3988,7 +3988,7 @@ class LogsSystemTableTest : public SystemTablesTest,
     deleteFilesInLogDir();
   }
 
-  void TearDown() {
+  void TearDown() override {
     deleteFilesInLogDir();
     g_logs_system_tables_max_files_count = default_max_files_count_;
   }

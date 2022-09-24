@@ -502,6 +502,8 @@ inline void load_construct_data(boost::archive::text_iarchive& ar,
   const TableDescriptor* td{nullptr};
   if (!table_name.empty()) {
     td = cat.getMetadataForTable(table_name, false);
+    CHECK(td) << "Table metadata not found for table: " << table_name
+              << " in catalog: " << cat.name();
   }
   construct_catalog_rel_alg_node(node, cat, td);
 }
