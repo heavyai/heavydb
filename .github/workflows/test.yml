@@ -36,20 +36,10 @@ jobs:
         run: |
           tar -zxf build.tgz
 
-      - name: Download new Conda
-        if: ${{ inputs.is_conda_updated == 'true' }}
+      - name: Download conda env
         uses: actions/download-artifact@v3
         with:
           name: ${{ env.RUN_STAMP }}-conda
-
-      - name: Download old Conda
-        if: ${{ inputs.is_conda_updated != 'true' }}
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          workflow: main.yml
-          workflow_conclusion: success
-          name: ${{ env.RUN_STAMP }}-conda
-          search_artifacts: true
 
       - name: Unpack Conda
         run: |
