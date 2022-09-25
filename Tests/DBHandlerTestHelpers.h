@@ -575,12 +575,6 @@ class DBHandlerTestFixture : public testing::Test {
     return schema_stream.str();
   }
 
-  static void createODBCSourceTable(const std::string& table_name,
-                                    const std::string& table_schema,
-                                    const std::string& src_file,
-                                    const std::string& data_wrapper_type,
-                                    const bool is_odbc_geo = false) {}
-
   static const std::vector<LeafHostInfo>& getDbLeaves() { return db_leaves_; }
 
   template <typename Lambda>
