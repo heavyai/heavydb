@@ -1465,6 +1465,21 @@ TEST_F(TableFunctions, DictionaryReadAccess) {
     }
 
     {
+      // Test Transient Dictionary Input
+      const auto rows = run_multiple_agg(
+          "SELECT string, string_length FROM TABLE(ct_binding_str_length(cursor(SELECT "
+          "t1 || ' | ' || t2 FROM "
+          "sd_test))) ORDER BY string;",
+          dt);
+      const std::vector<std::string> expected_result_set{"California | California",
+                                                         "New York | Indiana",
+                                                         "New York | New York",
+                                                         "New York | Ohio",
+                                                         "Ohio | Ohio"};
+      len_test(rows, expected_result_set);
+    }
+
+    {
       // Test ability to equality check between strings
       const auto rows = run_multiple_agg(
           "SELECT string_if_equal, strings_are_equal FROM "
