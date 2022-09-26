@@ -303,6 +303,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                         block_size_y,
                         block_size_z,
                         shared_memory_size,
+                        LITERALS,
                         hoist_literals};
 
     if (executor_->getConfig().exec.watchdog.enable_dynamic || allow_runtime_interrupt) {
@@ -452,6 +453,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                         block_size_y,
                         block_size_z,
                         shared_memory_size,
+                        LITERALS,
                         hoist_literals};
 
     if (executor_->getConfig().exec.watchdog.enable_dynamic ||

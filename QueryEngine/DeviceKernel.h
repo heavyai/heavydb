@@ -38,6 +38,7 @@ struct KernelOptions {
   unsigned int blockDimY = 1;
   unsigned int blockDimZ = 1;
   unsigned int sharedMemBytes = 0;
+  unsigned int literalsOffset = 0;
   bool hoistLiterals = true;
 };
 

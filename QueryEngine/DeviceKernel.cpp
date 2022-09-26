@@ -57,7 +57,7 @@ class NvidiaKernel : public DeviceKernel {
       param_ptrs.push_back(&param);
     }
     if (ko.hoistLiterals) {
-      checkCudaErrors(cuLaunchKernel(cu_func,
+      checkCudaErrors(cuLaunchKernel(function_ptr,
                                      ko.gridDimX,
                                      ko.gridDimY,
                                      ko.gridDimZ,
@@ -69,8 +69,8 @@ class NvidiaKernel : public DeviceKernel {
                                      &param_ptrs[0],
                                      nullptr));
     } else {
-      param_ptrs.erase(param_ptrs.begin() + LITERALS);  // TODO(alex): remove
-      checkCudaErrors(cuLaunchKernel(cu_func,
+      param_ptrs.erase(param_ptrs.begin() + ko.literalsOffset);  // TODO(alex): remove
+      checkCudaErrors(cuLaunchKernel(function_ptr,
                                      ko.gridDimX,
                                      ko.gridDimY,
                                      ko.gridDimZ,
