@@ -1379,7 +1379,7 @@ inline auto generate_column_type(const SQLTypeInfo& elem_ti) {
                 // for extension functions
       }
     case kTEXT:
-      if (c == kENCODING_DICT && p != 0) {
+      if (c == kENCODING_DICT) {
         break;
       }
     case kTIMESTAMP:
