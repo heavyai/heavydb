@@ -296,6 +296,15 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
 
     kernel_params[GROUPBY_BUF] = gpu_group_by_buffers.ptrs;
 
+    KernelOptions ko = {grid_size_x,
+                        grid_size_y,
+                        grid_size_z,
+                        block_size_x,
+                        block_size_y,
+                        block_size_z,
+                        shared_memory_size,
+                        hoist_literals};
+
     if (executor_->getConfig().exec.watchdog.enable_dynamic || allow_runtime_interrupt) {
       auto prepare_time = prepareClock->stop();
       VLOG(1) << "Device " << std::to_string(device_id)
@@ -303,14 +312,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
               << " ms";
       launchClock->start();
     }
-    kernel->launch(grid_size_x,
-                   grid_size_y,
-                   grid_size_z,
-                   block_size_x,
-                   block_size_y,
-                   block_size_z,
-                   shared_memory_size,
-                   kernel_params);
+    kernel->launch(ko, kernel_params);
 
     if (executor_->getConfig().exec.watchdog.enable_dynamic || allow_runtime_interrupt) {
       auto launch_time = launchClock->stop();
@@ -443,6 +445,15 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       param_ptrs.push_back(&param);
     }
 
+    KernelOptions ko = {grid_size_x,
+                        grid_size_y,
+                        grid_size_z,
+                        block_size_x,
+                        block_size_y,
+                        block_size_z,
+                        shared_memory_size,
+                        hoist_literals};
+
     if (executor_->getConfig().exec.watchdog.enable_dynamic ||
         (allow_runtime_interrupt)) {
       auto prepare_time = prepareClock->stop();
@@ -451,14 +462,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       launchClock->start();
     }
 
-    kernel->launch(grid_size_x,
-                   grid_size_y,
-                   grid_size_z,
-                   block_size_x,
-                   block_size_y,
-                   block_size_z,
-                   shared_memory_size,
-                   kernel_params);
+    kernel->launch(ko, kernel_params);
 
     if (executor_->getConfig().exec.watchdog.enable_dynamic || allow_runtime_interrupt) {
       auto launch_time = launchClock->stop();

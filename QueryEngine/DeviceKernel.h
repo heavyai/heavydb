@@ -30,16 +30,20 @@ class DeviceClock {
   virtual ~DeviceClock() = default;
 };
 
+struct KernelOptions {
+  unsigned int gridDimX = 1;
+  unsigned int gridDimY = 1;
+  unsigned int gridDimZ = 1;
+  unsigned int blockDimX = 1;
+  unsigned int blockDimY = 1;
+  unsigned int blockDimZ = 1;
+  unsigned int sharedMemBytes = 0;
+  bool hoistLiterals = true;
+};
+
 class DeviceKernel {
  public:
-  virtual void launch(unsigned int gridDimX,
-                      unsigned int gridDimY,
-                      unsigned int gridDimZ,
-                      unsigned int blockDimX,
-                      unsigned int blockDimY,
-                      unsigned int blockDimZ,
-                      unsigned int sharedMemBytes,
-                      std::vector<int8_t*>& kernelParams) = 0;
+  virtual void launch(const KernelOptions& ko, std::vector<int8_t*>& kernelParams) = 0;
 
   virtual void initializeDynamicWatchdog(bool could_interrupt,
                                          uint64_t cycle_budget,

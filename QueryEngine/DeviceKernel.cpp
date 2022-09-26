@@ -51,29 +51,37 @@ class NvidiaKernel : public DeviceKernel {
     module_ptr = static_cast<CUmodule>(native_code.second);
   }
 
-  void launch(unsigned int gridDimX,
-              unsigned int gridDimY,
-              unsigned int gridDimZ,
-              unsigned int blockDimX,
-              unsigned int blockDimY,
-              unsigned int blockDimZ,
-              unsigned int sharedMemBytes,
-              std::vector<int8_t*>& kernelParams) override {
+  void launch(const KernelOptions& ko, std::vector<int8_t*>& kernelParams) override {
     std::vector<void*> param_ptrs;
     for (auto& param : kernelParams) {
       param_ptrs.push_back(&param);
     }
-    checkCudaErrors(cuLaunchKernel(function_ptr,
-                                   gridDimX,
-                                   gridDimY,
-                                   gridDimZ,
-                                   blockDimX,
-                                   blockDimY,
-                                   blockDimZ,
-                                   sharedMemBytes,
-                                   nullptr,
-                                   &param_ptrs[0],
-                                   nullptr));
+    if (ko.hoistLiterals) {
+      checkCudaErrors(cuLaunchKernel(cu_func,
+                                     ko.gridDimX,
+                                     ko.gridDimY,
+                                     ko.gridDimZ,
+                                     ko.blockDimX,
+                                     ko.blockDimY,
+                                     ko.blockDimZ,
+                                     ko.sharedMemBytes,
+                                     nullptr,
+                                     &param_ptrs[0],
+                                     nullptr));
+    } else {
+      param_ptrs.erase(param_ptrs.begin() + LITERALS);  // TODO(alex): remove
+      checkCudaErrors(cuLaunchKernel(cu_func,
+                                     ko.gridDimX,
+                                     ko.gridDimY,
+                                     ko.gridDimZ,
+                                     ko.blockDimX,
+                                     ko.blockDimY,
+                                     ko.blockDimZ,
+                                     ko.sharedMemBytes,
+                                     nullptr,
+                                     &param_ptrs[0],
+                                     nullptr));
+    }
   }
 
   void initializeDynamicWatchdog(bool could_interrupt,
@@ -181,14 +189,7 @@ class L0Kernel : public DeviceKernel {
     device = l0_ctx->getDevice(device_id);
   }
 
-  void launch(unsigned int gridDimX,
-              unsigned int gridDimY,
-              unsigned int gridDimZ,
-              unsigned int blockDimX,
-              unsigned int blockDimY,
-              unsigned int blockDimZ,
-              unsigned int sharedMemBytes,
-              std::vector<int8_t*>& kernelParams) override {
+  void launch(const KernelOptions& ko, std::vector<int8_t*>& kernelParams) override {
     CHECK(kernel);
     CHECK(device);
 
@@ -196,7 +197,7 @@ class L0Kernel : public DeviceKernel {
 
     auto q = device->command_queue();
     auto q_list = device->create_command_list();
-    kernel->group_size() = {gridDimX, gridDimY, gridDimZ};
+    kernel->group_size() = {ko.gridDimX, ko.gridDimY, ko.gridDimZ};
     q_list->launch(kernel, kernelParams);
     q_list->submit(*q.get());
   }
