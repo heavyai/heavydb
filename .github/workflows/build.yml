@@ -5,9 +5,10 @@ on:
       cuda_compiler_version:
         type: string
         default: None
+
     outputs:
-      is_conda_updated:
-        value: ${{ jobs.build.outputs.is_conda_updated }}
+      cache-suffix:
+        value: ${{ jobs.build.outputs.cache-suffix }}
 
 jobs:
   build:
@@ -19,7 +20,7 @@ jobs:
       CONDA_ENV: omnisci-dev
 
     outputs:
-      is_conda_updated: ${{ env.is_conda_updated }}
+      cache-suffix: ${{ env.DATE }}
 
     steps:
       - uses: actions/checkout@v2
@@ -29,39 +30,26 @@ jobs:
           echo CONDA_PATH=$CONDA >>$GITHUB_ENV
           echo RUN_STAMP=${{ runner.os }}-${{ (env.cuda_compiler_version != 'None') && format('cuda{0}', env.cuda_compiler_version) || 'CPU' }} >>$GITHUB_ENV
           echo CONDA_ENV_PATH=$CONDA/envs/${{ env.CONDA_ENV }} >>$GITHUB_ENV
+          echo "DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
 
-      - name: Download Conda
-        uses: dawidd6/action-download-artifact@v2
+      - name: Restore Conda env cache
+        id: conda-conda
+        uses: actions/cache@v3
         with:
-          workflow: main.yml
-          branch: ${{ github.ref_name }}
-          workflow_conclusion: success
-          name: ${{ env.RUN_STAMP }}-conda
-          search_artifacts: true
-        continue-on-error: true
+          path: |
+            ${{ env.CONDA_ENV_PATH }}
+          key: ${{ env.RUN_STAMP }}-conda-${{ hashFiles('scripts/mapd-deps-conda-dev-env.yml') }}-${{ env.DATE }}
+          restore-keys: |
+            ${{ env.RUN_STAMP }}-conda-${{ hashFiles('scripts/mapd-deps-conda-dev-env.yml') }}-
 
-      - name: Unpack Conda
+      - name: Update Conda env
+        if: steps.conda-cache.cache-hit != 'true'
         run: |
-          test -f conda.tgz || exit 0
-          mkdir -p ${{ env.CONDA_ENV_PATH }}
-          tar -zxf conda.tgz -C ${{ env.CONDA_ENV_PATH }}
-
-      - name: Update Conda
-        run: |
-          touch timestamp
           conda update conda
           conda env update -f scripts/mapd-deps-conda-dev-env.yml
-          test timestamp -nt ${{ env.CONDA_ENV_PATH }}/conda-meta/history && exit 0
-          echo is_conda_updated=true >>$GITHUB_ENV
-
-      - name: Create Conda archive
-        if: ${{ env.is_conda_updated }}
-        run: |
-          cd ${{ env.CONDA_ENV_PATH }}
-          tar -zcf /tmp/conda.tgz .
 
       - name: Install cudatoolkit-dev
-        if: ${{ env.cuda_compiler_version != 'None' }}
+        if: env.cuda_compiler_version != 'None'
         run: |
           conda install -n ${{ env.CONDA_ENV }} -c conda-forge cudatoolkit-dev arrow-cpp-proc=3.0.0=cuda
 
@@ -80,6 +68,8 @@ jobs:
         run: |
           mkdir -p ${{ env.PREFIX }}
           rm -rf build
+          conda info
+          conda list -n ${{ env.CONDA_ENV }}
           $CONDA/bin/conda run -n ${{ env.CONDA_ENV }} bash scripts/conda/build-install-all.sh
           tar -zcf /tmp/build.tgz .
 
@@ -95,13 +85,6 @@ jobs:
           name: ${{ env.RUN_STAMP }}-build
           path: /tmp/build.tgz
 
-      - name: Commit Conda environment
-        if: ${{ env.is_conda_updated }}
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ env.RUN_STAMP }}-conda
-          path: /tmp/conda.tgz
-
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v2
@@ -111,6 +94,4 @@ jobs:
             build/*.log
             build/CMakeCache.txt 
             build/CMakeFiles/*.log
-
-
 

@@ -37,13 +37,13 @@ jobs:
     needs: build
     uses: ./.github/workflows/test.yml
     with:
-      is_conda_updated: ${{ needs.build.outputs.is_conda_updated }}
+      cache-suffix: ${{ needs.build.outputs.cache-suffix }}
 
   perf:
     needs: build
     uses: ./.github/workflows/perf.yml
     with:
-      is_conda_updated: ${{ needs.build.outputs.is_conda_updated }}
+      cache-suffix: ${{ needs.build.outputs.cache-suffix }}
 
   build-cuda-docker:
     uses: ./.github/workflows/build-docker.yml
@@ -62,5 +62,4 @@ jobs:
     with:
       name: l0
       options: -DENABLE_L0=on -DENABLE_CUDA=off
-    
 

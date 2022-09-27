@@ -1,12 +1,13 @@
 name: Reusable perf test action
 on:
-  workflow_call: 
+  workflow_call:
     inputs:
       cuda_compiler_version:
         type: string
         default: 'None'
-      is_conda_updated:
+      cache-suffix:
         type: string
+        required: true
 
 jobs:
   test:
@@ -36,25 +37,12 @@ jobs:
         run: |
           tar -zxf build.tgz
 
-      - name: Download new Conda
-        if: ${{ inputs.is_conda_updated == 'true' }}
-        uses: actions/download-artifact@v3
+      - name: Restore Conda env cache
+        uses: actions/cache@v3
         with:
-          name: ${{ env.RUN_STAMP }}-conda
-
-      - name: Download old Conda
-        if: ${{ inputs.is_conda_updated != 'true' }}
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          workflow: main.yml
-          workflow_conclusion: success
-          name: ${{ env.RUN_STAMP }}-conda
-          search_artifacts: true
-
-      - name: Unpack Conda
-        run: |
-          mkdir -p ${{ env.CONDA_ENV_PATH }}
-          tar -zxf conda.tgz -C ${{ env.CONDA_ENV_PATH }}
+          path: |
+            ${{ env.CONDA_ENV_PATH }}
+          key: ${{ env.RUN_STAMP }}-conda-${{ hashFiles('scripts/mapd-deps-conda-dev-env.yml') }}-${{ inputs.cache-suffix }}
 
       - name: Download perf results
         uses: dawidd6/action-download-artifact@v2
@@ -69,7 +57,7 @@ jobs:
       - name: Run tests and process results
         run: |
           rm -rf data/.git
-          
+
           $CONDA/bin/conda run -n omnisci-dev pip install matplotlib
           $CONDA/bin/conda run -n omnisci-dev python3 .github/workflows/scripts/run-perf.py 3x build/bin/taxi_reduced --data data
 
