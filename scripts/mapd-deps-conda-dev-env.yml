@@ -50,3 +50,4 @@ dependencies:
   - llvm-spirv 12.0.*
   - folly 2022.04.25.00
   - snappy  1.1.8 # 20220830 Currently required < 1.1.9 for proper linking with folly
+
