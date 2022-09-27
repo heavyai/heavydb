@@ -341,15 +341,22 @@ QueryId query_id();
 //  * When it goes out of scope, g_query_id is set back to its previous value prev_id_.
 class QidScopeGuard {
   QueryId prev_id_;
+#ifndef NDEBUG
   QueryId id_;
+#endif
   bool enabled_;
 
   QidScopeGuard(QidScopeGuard const&) = default;
   QidScopeGuard& operator=(QidScopeGuard const&) = default;
 
  public:
+#ifndef NDEBUG
   QidScopeGuard(QueryId const prev_id, QueryId const id)
       : prev_id_(prev_id), id_(id), enabled_(true) {}
+#else
+  QidScopeGuard(QueryId const prev_id) : prev_id_(prev_id), enabled_(true) {}
+#endif
+
   QidScopeGuard(QidScopeGuard&& rhs) : QidScopeGuard(rhs) { rhs.enabled_ = false; }
   QidScopeGuard& operator=(QidScopeGuard&& rhs) {
     *this = rhs;

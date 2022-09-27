@@ -486,7 +486,11 @@ QidScopeGuard::~QidScopeGuard() {
 QidScopeGuard set_thread_local_query_id(QueryId const query_id) {
   QueryId const prev_id = g_query_id;
   g_query_id = query_id;
+#ifndef NDEBUG
   return QidScopeGuard(prev_id, query_id);
+#else
+  return QidScopeGuard(prev_id);
+#endif
 }
 
 boost::log::record_ostream& Logger::stream(char const* file, int line) {

@@ -1396,7 +1396,9 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
         foreign_table_,
         user_mapping_,
         parser,
-        [this] { return ""; },
+        [] {
+       	  return "";
+        },
         num_rows_,
         append_start_offset_);
   }
@@ -1511,7 +1513,7 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
   if (foreign_table_->isAppendMode()) {
     chunk_encoder_buffers_ = std::move(multi_threading_params.chunk_encoder_buffers);
   }
-}
+}  // namespace foreign_storage
 
 void AbstractTextFileDataWrapper::iterativeFileScan(
     ChunkMetadataVector& chunk_metadata_vector,
@@ -1545,7 +1547,9 @@ void AbstractTextFileDataWrapper::iterativeFileScan(
         foreign_table_,
         user_mapping_,
         parser,
-        [this] { return ""; },
+        [] {
+	  return "";
+        },
         num_rows_,
         append_start_offset_);
   }
