@@ -36,22 +36,22 @@ struct get_mapped;
 
 template <>
 struct get_mapped<int32_t> {
-  typedef int32_t type;
+  using type = int32_t;
 };
 
 template <>
 struct get_mapped<int64_t> {
-  typedef int64_t type;
+  using type = int64_t;
 };
 
 template <>
 struct get_mapped<TextEncodingDict> {
-  typedef int32_t type;
+  using type = int32_t;
 };
 
 template <typename T>
 struct AttrIdxMap {
-  typedef typename get_mapped<T>::type T2;
+  using T2 = typename get_mapped<T>::type;
   bool must_be_unique;
   std::vector<T2> idx_to_attr_map;
   using AttrMap = robin_hood::unordered_flat_map<T2, int32_t>;
@@ -147,13 +147,12 @@ struct TerminalNodes {
 
 template <typename N, typename D>
 struct GraphTraversalResults {
-  typedef boost::adjacency_list<boost::listS,
-                                boost::vecS,
-                                boost::directedS,
-                                boost::no_property,
-                                boost::property<boost::edge_weight_t, int32_t>>
-      graph_t;
-  typedef boost::graph_traits<graph_t>::vertex_descriptor vertex_descriptor;
+  using graph_t = boost::adjacency_list<boost::listS,
+                                        boost::vecS,
+                                        boost::directedS,
+                                        boost::no_property,
+                                        boost::property<boost::edge_weight_t, int32_t>>;
+  using vertex_descriptor = boost::graph_traits<graph_t>::vertex_descriptor;
   AttrIdxMap<N> attr_idx_map;
   int32_t start_node_idx, end_node_idx;
   graph_t edge_graph;
@@ -185,14 +184,12 @@ GraphTraversalResults<N, D> graph_shortest_path_impl(
     const Column<D>& distance,
     const TerminalNodes<S>& terminal_nodes) {
   auto func_timer = DEBUG_TIMER(__func__);
-  typedef boost::adjacency_list<boost::listS,
-                                boost::vecS,
-                                boost::directedS,
-                                boost::no_property,
-                                boost::property<boost::edge_weight_t, int32_t>>
-      graph_t;
-  typedef boost::graph_traits<graph_t>::vertex_descriptor vertex_descriptor;
-  typedef std::pair<int32_t, int32_t> Edge;
+  using graph_t = boost::adjacency_list<boost::listS,
+                                        boost::vecS,
+                                        boost::directedS,
+                                        boost::no_property,
+                                        boost::property<boost::edge_weight_t, int32_t>>;
+  using vertex_descriptor = boost::graph_traits<graph_t>::vertex_descriptor;
   const int64_t num_edges = node1.size();
   auto new_node2 = Column<N>(node2);
   std::vector<N> translated_node2_data;
