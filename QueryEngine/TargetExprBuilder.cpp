@@ -76,6 +76,8 @@ std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info,
       return {"agg_min"};
     case kSUM:
       return {"agg_sum"};
+    case kSUM_IF:
+      return {"agg_sum_if"};
     case kAPPROX_COUNT_DISTINCT:
       return {"agg_approximate_count_distinct"};
     case kAPPROX_QUANTILE:
@@ -555,18 +557,25 @@ void TargetExprCodegen::codegenAggregate(
           (need_skip_null && !arg_ti.is_geometry())) {
         llvm::Value* null_in_lv{nullptr};
         if (arg_ti.is_fp()) {
-          null_in_lv =
-              static_cast<llvm::Value*>(executor->cgen_state_->inlineFpNull(arg_ti));
+          null_in_lv = executor->cgen_state_->inlineFpNull(arg_ti);
         } else {
-          null_in_lv = static_cast<llvm::Value*>(executor->cgen_state_->inlineIntNull(
+          null_in_lv = executor->cgen_state_->inlineIntNull(
               is_agg_domain_range_equivalent(target_info.agg_kind)
                   ? arg_ti
-                  : target_info.sql_type));
+                  : target_info.sql_type);
         }
         CHECK(null_in_lv);
         auto null_lv =
             executor->cgen_state_->castToTypeIn(null_in_lv, (agg_chosen_bytes << 3));
         agg_args.push_back(null_lv);
+      }
+      if (target_info.agg_kind == kSUM_IF) {
+        const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
+        auto cond_expr_lv =
+            code_generator.codegen(agg_expr->get_arg1().get(), true, co).front();
+        auto cond_lv = executor->codegenConditionalAggregateCondValSelector(
+            cond_expr_lv, kSUM_IF, co);
+        agg_args.push_back(cond_lv);
       }
       if (!target_info.is_distinct) {
         if (co.device_type == ExecutorDeviceType::GPU &&

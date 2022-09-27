@@ -1974,7 +1974,8 @@ bool is_agg(const Analyzer::Expr* expr) {
   if (agg_expr && agg_expr->get_contains_agg()) {
     auto agg_type = agg_expr->get_aggtype();
     if (agg_type == SQLAgg::kMIN || agg_type == SQLAgg::kMAX ||
-        agg_type == SQLAgg::kSUM || agg_type == SQLAgg::kAVG) {
+        agg_type == SQLAgg::kSUM || agg_type == SQLAgg::kSUM_IF ||
+        agg_type == SQLAgg::kAVG) {
       return true;
     }
   }
@@ -2694,7 +2695,6 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
             /*thread_idx=*/0,
             chunks_owner,
             column_cache_map);
-
         CHECK_EQ(col_elem_count, elem_count);
         context->addColumnBufferForWindowFunctionExpression(column, chunks_owner);
       }
@@ -3585,9 +3585,12 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
     const auto sub_bitmap_count =
         get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit, device_type);
     int64_t approx_bitmap_sz_bits{0};
-    const auto error_rate = static_cast<Analyzer::AggExpr*>(target_expr)->get_arg1();
-    if (error_rate) {
-      CHECK(error_rate->get_type_info().get_type() == kINT);
+    const auto error_rate_expr = static_cast<Analyzer::AggExpr*>(target_expr)->get_arg1();
+    if (error_rate_expr) {
+      CHECK(error_rate_expr->get_type_info().get_type() == kINT);
+      auto const error_rate =
+          dynamic_cast<Analyzer::Constant const*>(error_rate_expr.get());
+      CHECK(error_rate);
       CHECK_GE(error_rate->get_constval().intval, 1);
       approx_bitmap_sz_bits = hll_size_for_rate(error_rate->get_constval().intval);
     } else {

@@ -469,6 +469,41 @@ extern "C" __device__ void agg_sum_double_shared(int64_t* agg, const double val)
   atomicAdd(reinterpret_cast<double*>(agg), val);
 }
 
+extern "C" __device__ int64_t agg_sum_if_shared(int64_t* agg,
+                                                const int64_t val,
+                                                const int8_t cond) {
+  static_assert(sizeof(int64_t) == sizeof(unsigned long long));
+  if (cond) {
+    return atomicAdd(reinterpret_cast<unsigned long long*>(agg), val);
+  }
+  return *agg;
+}
+
+extern "C" __device__ int32_t agg_sum_if_int32_shared(int32_t* agg,
+                                                      const int32_t val,
+                                                      const int8_t cond) {
+  if (cond) {
+    return atomicAdd(agg, val);
+  }
+  return *agg;
+}
+
+extern "C" __device__ void agg_sum_if_float_shared(int32_t* agg,
+                                                   const float val,
+                                                   const int8_t cond) {
+  if (cond) {
+    atomicAdd(reinterpret_cast<float*>(agg), val);
+  }
+}
+
+extern "C" __device__ void agg_sum_if_double_shared(int64_t* agg,
+                                                    const double val,
+                                                    const int8_t cond) {
+  if (cond) {
+    atomicAdd(reinterpret_cast<double*>(agg), val);
+  }
+}
+
 extern "C" __device__ void agg_max_shared(int64_t* agg, const int64_t val) {
   atomicMax64(agg, val);
 }
@@ -929,6 +964,13 @@ extern "C" __device__ int32_t agg_sum_int32_skip_val_shared(int32_t* agg,
   return 0;
 }
 
+extern "C" __device__ int32_t agg_sum_if_int32_skip_val_shared(int32_t* agg,
+                                                               const int32_t val,
+                                                               const int32_t skip_val,
+                                                               const int8_t cond) {
+  return cond ? agg_sum_int32_skip_val_shared(agg, val, skip_val) : *agg;
+}
+
 __device__ int64_t atomicSum64SkipVal(int64_t* address,
                                       const int64_t val,
                                       const int64_t skip_val) {
@@ -945,6 +987,13 @@ extern "C" __device__ int64_t agg_sum_skip_val_shared(int64_t* agg,
     return atomicSum64SkipVal(agg, val, skip_val);
   }
   return 0;
+}
+
+extern "C" __device__ int64_t agg_sum_if_skip_val_shared(int64_t* agg,
+                                                         const int64_t val,
+                                                         const int64_t skip_val,
+                                                         const int8_t cond) {
+  return cond ? agg_sum_skip_val_shared(agg, val, skip_val) : *agg;
 }
 
 __device__ int64_t atomicMin64SkipVal(int64_t* address,
@@ -1060,6 +1109,15 @@ extern "C" __device__ void agg_sum_float_skip_val_shared(int32_t* agg,
   }
 }
 
+extern "C" __device__ void agg_sum_if_float_skip_val_shared(int32_t* agg,
+                                                            const float val,
+                                                            const float skip_val,
+                                                            const int8_t cond) {
+  if (cond) {
+    agg_sum_float_skip_val_shared(agg, val, skip_val);
+  }
+}
+
 __device__ void atomicSumDblSkipVal(double* address,
                                     const double val,
                                     const double skip_val) {
@@ -1075,6 +1133,15 @@ extern "C" __device__ void agg_sum_double_skip_val_shared(int64_t* agg,
                                                           const double skip_val) {
   if (__double_as_longlong(val) != __double_as_longlong(skip_val)) {
     atomicSumDblSkipVal(reinterpret_cast<double*>(agg), val, skip_val);
+  }
+}
+
+extern "C" __device__ void agg_sum_if_double_skip_val_shared(int64_t* agg,
+                                                             const double val,
+                                                             const double skip_val,
+                                                             const int8_t cond) {
+  if (cond) {
+    agg_sum_double_skip_val_shared(agg, val, skip_val);
   }
 }
 

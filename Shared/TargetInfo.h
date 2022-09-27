@@ -101,7 +101,7 @@ inline bool is_distinct_target(const TargetInfo& target_info) {
 
 inline bool takes_float_argument(const TargetInfo& target_info) {
   return target_info.is_agg && target_info.agg_arg_type.get_type() == kFLOAT &&
-         shared::is_any<kAVG, kSUM, kMIN, kMAX, kSINGLE_VALUE, kMODE>(
+         shared::is_any<kAVG, kSUM, kSUM_IF, kMIN, kMAX, kSINGLE_VALUE, kMODE>(
              target_info.agg_kind);
 }
 

@@ -679,6 +679,14 @@ declare void @agg_sum_double_shared(i64*, double);
 declare void @agg_sum_double_skip_val_shared(i64*, double, double);
 declare void @agg_sum_float_shared(i32*, float);
 declare void @agg_sum_float_skip_val_shared(i32*, float, float);
+declare i64 @agg_sum_if_shared(i64*, i64, i8);
+declare i64 @agg_sum_if_skip_val_shared(i64*, i64, i64, i8);
+declare i32 @agg_sum_if_int32_shared(i32*, i32, i8);
+declare i32 @agg_sum_if_int32_skip_val_shared(i32*, i32, i32, i8);
+declare void @agg_sum_if_double_shared(i64*, double, i8);
+declare void @agg_sum_if_double_skip_val_shared(i64*, double, double, i8);
+declare void @agg_sum_if_float_shared(i32*, float, i8);
+declare void @agg_sum_if_float_skip_val_shared(i32*, float, float, i8);
 declare void @agg_max_shared(i64*, i64);
 declare void @agg_max_skip_val_shared(i64*, i64, i64);
 declare void @agg_max_int32_shared(i32*, i32);
@@ -1836,14 +1844,20 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
                                 : "agg_max_double");
         break;
       }
-      case kSUM: {
+      case kSUM:
+      case kSUM_IF: {
         if (!agg_type_info.is_integer() && !agg_type_info.is_decimal() &&
             !agg_type_info.is_fp()) {
-          throw std::runtime_error("SUM is only valid on integer and floating point");
+          throw std::runtime_error(
+              "SUM and SUM_IF is only valid on integer and floating point");
         }
-        result.emplace_back((agg_type_info.is_integer() || agg_type_info.is_time())
-                                ? "agg_sum"
-                                : "agg_sum_double");
+        std::string func_name = (agg_type_info.is_integer() || agg_type_info.is_time())
+                                    ? "agg_sum"
+                                    : "agg_sum_double";
+        if (agg_type == kSUM_IF) {
+          func_name += "_if";
+        }
+        result.emplace_back(func_name);
         break;
       }
       case kCOUNT:
@@ -2600,7 +2614,7 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
           target_exprs_to_infos(ra_exe_unit.target_exprs, *query_mem_desc_ptr);
       std::unordered_set<SQLAgg> supported_aggs{kCOUNT, kCOUNT_IF};
       if (g_enable_smem_grouped_non_count_agg) {
-        supported_aggs = {kCOUNT, kCOUNT_IF, kMIN, kMAX, kSUM, kAVG};
+        supported_aggs = {kCOUNT, kCOUNT_IF, kMIN, kMAX, kSUM, kSUM_IF, kAVG};
       }
       if (std::find_if(target_infos.begin(),
                        target_infos.end(),

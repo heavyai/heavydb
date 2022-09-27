@@ -37,48 +37,38 @@
 template <typename INPUT_TYPE, typename AGG_TYPE>
 class SegmentTree {
  public:
-  SegmentTree(const int8_t* input_col_buf,
-              const SQLTypeInfo& input_col_ti,
-              const int32_t* original_input_col_idx_buf,
-              const int64_t* ordered_input_col_idx_buf,
-              IndexPair order_col_null_range,
+  SegmentTree(std::vector<const int8_t*> const& input_col_bufs,
+              SQLTypeInfo const& input_col_ti,
+              int32_t const* original_input_col_idx_buf,
+              int64_t const* ordered_input_col_idx_buf,
               int64_t num_elems,
               SqlWindowFunctionKind agg_type,
               size_t fan_out)
-      : input_col_buf_(input_col_buf ? reinterpret_cast<const INPUT_TYPE*>(input_col_buf)
-                                     : nullptr)
+      : input_col_buf_(!input_col_bufs.empty()
+                           ? reinterpret_cast<const INPUT_TYPE*>(input_col_bufs.front())
+                           : nullptr)
+      , cond_col_buf_(input_col_bufs.size() == 2 ? input_col_bufs[1] : nullptr)
       , input_col_ti_(input_col_ti)
       , original_input_col_idx_buf_(original_input_col_idx_buf)
       , ordered_input_col_idx_buf_(ordered_input_col_idx_buf)
       , num_elems_(num_elems)
       , fan_out_(fan_out)
       , agg_type_(agg_type)
-      , null_range_(order_col_null_range) {
+      , is_conditional_agg_(agg_type == SqlWindowFunctionKind::SUM_IF)
+      , input_type_null_val_(inline_null_value<INPUT_TYPE>())
+      , null_val_(inline_null_value<AGG_TYPE>())
+      , invalid_val_(agg_type_ == SqlWindowFunctionKind::MIN
+                         ? std::numeric_limits<INPUT_TYPE>::max()
+                         : agg_type_ == SqlWindowFunctionKind::MAX
+                               ? std::numeric_limits<INPUT_TYPE>::min()
+                               : 0) {
     CHECK_GT(num_elems_, (int64_t)0);
     auto max_tree_height_and_leaf_range = findMaxTreeHeight(num_elems_, fan_out_);
     leaf_depth_ = max_tree_height_and_leaf_range.first;
     leaf_range_ = max_tree_height_and_leaf_range.second;
-    // since the input column is ordered we can know the exact range of null values
-    // and can use this information to elaborate a query range to do better finding
-    // of lower and upper bounds while computing the aggregate operation
-    null_range_.first = std::numeric_limits<int64_t>::max();
-    null_range_.second = std::numeric_limits<int64_t>::min();
     // the index of the last elem of the leaf level is the same as the tree's size
     tree_size_ = leaf_range_.second;
     leaf_size_ = leaf_range_.second - leaf_range_.first;
-    // invalid_val is required to fill an empty node for a correct aggregation
-    if (agg_type_ == SqlWindowFunctionKind::MIN) {
-      invalid_val_ = std::numeric_limits<INPUT_TYPE>::max();
-    } else if (agg_type_ == SqlWindowFunctionKind::MAX) {
-      invalid_val_ = std::numeric_limits<INPUT_TYPE>::min();
-    } else {
-      invalid_val_ = 0;
-    }
-    // sometimes, we need to fill the null value to internal nodes
-    null_val_ = inline_null_value<AGG_TYPE>();
-    // and we also need to know the null value of the input column type
-    // to recognize it while building a segment tree
-    input_type_null_val_ = inline_null_value<INPUT_TYPE>();
     // for derived aggregate, we maintain both "sum" aggregates and element counts
     // to compute the value correctly
     if (agg_type_ == SqlWindowFunctionKind::AVG) {
@@ -89,7 +79,9 @@ class SegmentTree {
       // we can use an array as a segment tree for the rest of aggregates
       aggregated_values_ =
           reinterpret_cast<AGG_TYPE*>(checked_malloc(tree_size_ * sizeof(AGG_TYPE)));
-      agg_type_ == SqlWindowFunctionKind::COUNT ? buildForCount(0, 0) : build(0, 0);
+      agg_type_ == SqlWindowFunctionKind::COUNT
+          ? buildForCount(0, 0)
+          : is_conditional_agg_ ? buildForCondAgg(0, 0) : build(0, 0);
     }
 #ifndef __CUDACC__
     VLOG(2) << "tree size: " << getTreeSize() << ", tree fanout: " << getTreeFanout()
@@ -167,9 +159,27 @@ class SegmentTree {
 
  private:
   // build a segment tree for a given aggregate function recursively
+  inline AGG_TYPE fetch_col_for_count(size_t const idx) {
+    return input_col_buf_ && input_col_buf_[idx] == input_type_null_val_ ? null_val_ : 1;
+  }
+
+  inline AGG_TYPE fetch_col_for_non_cond_agg(size_t const idx) {
+    auto const col_val = input_col_buf_[idx];
+    return col_val != input_type_null_val_ ? col_val : null_val_;
+  }
+
+  inline AGG_TYPE fetch_col_for_cond_agg(size_t const idx) {
+    AGG_TYPE res{null_val_};
+    if (cond_col_buf_[idx] == 1) {
+      auto const col_val = input_col_buf_[idx];
+      res = col_val != input_type_null_val_ ? col_val : null_val_;
+    }
+    return res;
+  }
+
   AGG_TYPE build(int64_t cur_node_idx, size_t cur_node_depth) {
-    if (cur_node_idx >= leaf_range_.first && cur_node_idx <= leaf_range_.second) {
-      // arrive at leafs, so try to put a corresponding input column value
+    if (cur_node_idx >= leaf_range_.first && cur_node_idx < leaf_range_.second) {
+      // arrive at leaf level, so try to put a corresponding input column value
       int64_t input_col_idx = cur_node_idx - leaf_range_.first;
       if (input_col_idx >= num_elems_) {
         // fill an invalid value
@@ -180,9 +190,8 @@ class SegmentTree {
       const auto input_col_idx_ordered = ordered_input_col_idx_buf_[input_col_idx];
       const auto refined_input_col_idx =
           original_input_col_idx_buf_[input_col_idx_ordered];
-      const auto col_val = input_col_buf_[refined_input_col_idx];
       aggregated_values_[cur_node_idx] =
-          col_val != input_type_null_val_ ? col_val : null_val_;
+          fetch_col_for_non_cond_agg(refined_input_col_idx);
       // return the current value to fill a parent node
       return aggregated_values_[cur_node_idx];
     }
@@ -191,6 +200,36 @@ class SegmentTree {
     // and we compute an aggregated value from its child nodes
     std::vector<AGG_TYPE> child_vals =
         prepareChildValuesforAggregation(cur_node_idx, cur_node_depth);
+
+    // compute the new aggregated value
+    aggregated_values_[cur_node_idx] = aggregateValue(child_vals);
+
+    // return the value for the upper-level aggregation
+    return aggregated_values_[cur_node_idx];
+  }
+
+  AGG_TYPE buildForCondAgg(int64_t cur_node_idx, size_t cur_node_depth) {
+    if (cur_node_idx >= leaf_range_.first && cur_node_idx < leaf_range_.second) {
+      // arrive at leaf level, so try to put a corresponding input column value
+      int64_t input_col_idx = cur_node_idx - leaf_range_.first;
+      if (input_col_idx >= num_elems_) {
+        // fill an invalid value
+        aggregated_values_[cur_node_idx] = invalid_val_;
+        return invalid_val_;
+      }
+      // try to get the current row's column value
+      const auto input_col_idx_ordered = ordered_input_col_idx_buf_[input_col_idx];
+      const auto refined_input_col_idx =
+          original_input_col_idx_buf_[input_col_idx_ordered];
+      aggregated_values_[cur_node_idx] = fetch_col_for_cond_agg(refined_input_col_idx);
+      // return the current value to fill a parent node
+      return aggregated_values_[cur_node_idx];
+    }
+
+    // when reaching here, we need to take care of a node having child nodes,
+    // and we compute an aggregated value from its child nodes
+    std::vector<AGG_TYPE> child_vals =
+        prepareChildValuesforConditionalAggregation(cur_node_idx, cur_node_depth);
 
     // compute the new aggregated value
     aggregated_values_[cur_node_idx] = aggregateValue(child_vals);
@@ -212,12 +251,7 @@ class SegmentTree {
       const auto input_col_idx_ordered = ordered_input_col_idx_buf_[input_col_idx];
       const auto refined_input_col_idx =
           original_input_col_idx_buf_[input_col_idx_ordered];
-      if (input_col_buf_) {
-        aggregated_values_[cur_node_idx] =
-            input_col_buf_[refined_input_col_idx] != input_type_null_val_ ? 1 : null_val_;
-      } else {
-        aggregated_values_[cur_node_idx] = 1;
-      }
+      aggregated_values_[cur_node_idx] = fetch_col_for_count(refined_input_col_idx);
       // return the current value to fill a parent node
       return aggregated_values_[cur_node_idx];
     }
@@ -276,6 +310,25 @@ class SegmentTree {
       int64_t cur_depth_start_offset = parent_idx * fan_out_ + 1;
       for (size_t i = 0; i < fan_out_; ++i) {
         child_vals[i] = build(cur_depth_start_offset + i, next_node_depth);
+      }
+    }
+    return child_vals;
+  }
+
+  // gather aggregated values of each child node
+  std::vector<AGG_TYPE> prepareChildValuesforConditionalAggregation(
+      int64_t parent_idx,
+      size_t cur_node_depth) {
+    std::vector<AGG_TYPE> child_vals(fan_out_);
+    size_t next_node_depth = cur_node_depth + 1;
+    if (cur_node_depth == 0) {
+      for (size_t i = 0; i < fan_out_; ++i) {
+        child_vals[i] = buildForCondAgg(i + 1, next_node_depth);
+      }
+    } else {
+      int64_t cur_depth_start_offset = parent_idx * fan_out_ + 1;
+      for (size_t i = 0; i < fan_out_; ++i) {
+        child_vals[i] = buildForCondAgg(cur_depth_start_offset + i, next_node_depth);
       }
     }
     return child_vals;
@@ -585,8 +638,10 @@ class SegmentTree {
   }
 
   // agg input column buffer and its type info
-  const INPUT_TYPE* input_col_buf_;
-  const SQLTypeInfo input_col_ti_;
+  const INPUT_TYPE* const input_col_buf_;
+  // to deal with conditional aggregate function
+  const int8_t* const cond_col_buf_;
+  SQLTypeInfo const input_col_ti_;
   // the following two idx buffers are for accessing the sorted input column
   // based on our current window function context (i.e., indirect column access)
   // i-th row -> get indirect idx 'i_idx' from `ordered_input_col_idx_buf_`
@@ -594,23 +649,26 @@ class SegmentTree {
   // and use `t_idx` to get i-th row of the sorted column
   // otherwise, we can access the column when it keeps sorted values
   // original index (i.e., row_id) to access input_col_buf
-  const int32_t* original_input_col_idx_buf_;
+  const int32_t* const original_input_col_idx_buf_;
   // ordered index to access sorted input_col_buf
-  const int64_t* ordered_input_col_idx_buf_;
+  const int64_t* const ordered_input_col_idx_buf_;
   // # input elements
-  int64_t num_elems_;
+  int64_t const num_elems_;
   // tree fanout
-  size_t fan_out_;
+  size_t const fan_out_;
+  // a type of aggregate function
+  SqlWindowFunctionKind const agg_type_;
+  bool const is_conditional_agg_;
+  INPUT_TYPE const input_type_null_val_;
+  AGG_TYPE const null_val_;
+  // invalid_val is required to fill an empty node for a correct aggregation
+  INPUT_TYPE const invalid_val_;
   // # nodes in the leaf level
   size_t leaf_size_;
-  // a type of aggregate function
-  SqlWindowFunctionKind agg_type_;
   // level of the leaf
   size_t leaf_depth_;
   // start ~ end indexes of the leaf level
   IndexPair leaf_range_;
-  // index range of null value if exists
-  IndexPair null_range_;
   // total number of nodes in the tree
   size_t tree_size_;
   // depending on aggregate function, we use different aggregation logic
@@ -618,9 +676,4 @@ class SegmentTree {
   SumAndCountPair<AGG_TYPE>* derived_aggregated_;
   // 2) rest of aggregate functions can use a vector of elements
   AGG_TYPE* aggregated_values_;
-  // invalid value is different depending on 1) a type of window expression (i.e., sum,
-  // avg, count, ...) and 2) a type of the expression, i.e., tinyint, double, float, ...
-  INPUT_TYPE invalid_val_;
-  INPUT_TYPE input_type_null_val_;
-  AGG_TYPE null_val_;
 };

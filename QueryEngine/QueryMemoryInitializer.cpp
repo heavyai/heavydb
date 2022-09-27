@@ -815,7 +815,10 @@ QueryMemoryInitializer::allocateTDigests(const QueryMemoryDescriptor& query_mem_
         CHECK_LT(agg_col_idx, slot_count);
         CHECK_EQ(static_cast<int8_t>(sizeof(int64_t)),
                  query_mem_desc.getLogicalSlotWidthBytes(agg_col_idx));
-        auto const q = agg_expr->get_arg1()->get_constval().doubleval;
+        auto const q_expr =
+            dynamic_cast<Analyzer::Constant const*>(agg_expr->get_arg1().get());
+        CHECK(q_expr);
+        auto const q = q_expr->get_constval().doubleval;
         if (deferred) {
           quantile_params[agg_col_idx] = q;
         } else {

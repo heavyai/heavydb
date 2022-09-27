@@ -1504,7 +1504,8 @@ void ResultSetStorage::reduceOneSlot(
                             query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx));
       }
       // fall thru
-      case kSUM: {
+      case kSUM:
+      case kSUM_IF: {
         AGGREGATE_ONE_NULLABLE_VALUE(
             sum, this_ptr1, that_ptr1, init_val, chosen_bytes, target_info);
         break;
@@ -1730,6 +1731,7 @@ bool ResultSetStorage::reduceSingleRow(const int8_t* row_ptr,
                   query_mem_desc.getPaddedSlotWidthBytes(agg_col_idx));
             // fall thru
             case kSUM:
+            case kSUM_IF:
               AGGREGATE_ONE_NULLABLE_VALUE(
                   sum,
                   reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx]),

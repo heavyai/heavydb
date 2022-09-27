@@ -61,6 +61,7 @@ llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
     case SqlWindowFunctionKind::MIN:
     case SqlWindowFunctionKind::MAX:
     case SqlWindowFunctionKind::SUM:
+    case SqlWindowFunctionKind::SUM_IF:
     case SqlWindowFunctionKind::COUNT:
     case SqlWindowFunctionKind::COUNT_IF: {
       // they are always evaluated on the current frame
@@ -102,6 +103,10 @@ std::string get_window_agg_name(const SqlWindowFunctionKind kind,
     }
     case SqlWindowFunctionKind::COUNT_IF: {
       agg_name = "agg_count_if";
+      break;
+    }
+    case SqlWindowFunctionKind::SUM_IF: {
+      agg_name = "agg_sum_if";
       break;
     }
     default: {
@@ -1090,40 +1095,66 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
     return res_lv;
   } else {
     auto agg_name = get_window_agg_name(window_func->getKind(), window_func_ti);
-    if (window_func->getKind() == SqlWindowFunctionKind::COUNT_IF) {
-      // compute the condition; and it will have zero if the condition is not satisfied
-      // otherwise, it will have non-zero value, and we use it to do conditional count
-      const auto arg_lvs = code_generator.codegen(args.front().get(), true, co);
-      cgen_state_->emitCall(
-          agg_name, {aggregate_state, cgen_state_->castToTypeIn(arg_lvs.front(), 64)});
+    Analyzer::Expr* arg_target_expr;
+    std::vector<llvm::Value*> agg_func_args{aggregate_state};
+    auto modified_window_func_null_val = window_func_null_val;
+    if (args.empty() ||
+        (window_func->getKind() == SqlWindowFunctionKind::COUNT &&
+         dynamic_cast<Analyzer::Constant*>(args.front().get()) != nullptr)) {
+      // a count aggregation without an expression: COUNT(1) or COUNT(*)
+      agg_func_args.push_back(cgen_state_->llInt(int64_t(1)));
     } else {
-      Analyzer::Expr* arg_target_expr;
-      std::vector<llvm::Value*> agg_func_args{aggregate_state};
-      if (args.empty()) {
-        CHECK(window_func->getKind() == SqlWindowFunctionKind::COUNT);
-        agg_func_args.push_back(cgen_state_->llInt(int64_t(1)));
-      } else {
-        arg_target_expr = args.front().get();
-        const auto arg_lvs = code_generator.codegen(arg_target_expr, true, co);
-        CHECK_EQ(arg_lvs.size(), size_t(1));
-        auto crt_val = arg_lvs.front();
-        if (window_func->getKind() == SqlWindowFunctionKind::SUM &&
-            !window_func_ti.is_fp()) {
-          crt_val = code_generator.codegenCastBetweenIntTypes(
-              arg_lvs.front(), args.front()->get_type_info(), window_func_ti, false);
+      // we use #base_agg_func_name##_skip_val agg function
+      // i.e.,int64_t agg_sum_skip_val(int64_t* agg, int64_t val, int64_t skip_val)
+      arg_target_expr = args.front().get();
+      const auto arg_lvs = code_generator.codegen(arg_target_expr, true, co);
+      CHECK_EQ(arg_lvs.size(), size_t(1));
+      // handling current row's value
+      auto crt_val = arg_lvs.front();
+      if ((window_func->getKind() == SqlWindowFunctionKind::SUM ||
+           window_func->getKind() == SqlWindowFunctionKind::SUM_IF) &&
+          !window_func_ti.is_fp()) {
+        crt_val = code_generator.codegenCastBetweenIntTypes(
+            arg_lvs.front(), args.front()->get_type_info(), window_func_ti, false);
+      }
+      agg_func_args.push_back(window_func_ti.get_type() == kFLOAT
+                                  ? crt_val
+                                  : cgen_state_->castToTypeIn(crt_val, 64));
+      // handle null value and conditional value for conditional aggregates if necessary
+      llvm::Value* cond_lv{nullptr};
+      if (window_function_conditional_aggregate(window_func->getKind())) {
+        switch (window_func->getKind()) {
+          case SqlWindowFunctionKind::COUNT_IF:
+            // COUNT_IF has a single condition expr which is always bool type
+            modified_window_func_null_val = cgen_state_->castToTypeIn(
+                cgen_state_->inlineNull(SQLTypeInfo(kTINYINT)), 64);
+            break;
+          case SqlWindowFunctionKind::SUM_IF: {
+            // FP type input col uses its own null value depending on the type
+            // otherwise (integer type input col), we use 8-byte type
+            if (args.front()->get_type_info().is_integer()) {
+              agg_func_args[1] = cgen_state_->castToTypeIn(agg_func_args[1], 64);
+              // keep the null value but casting its type to 8-byte
+              modified_window_func_null_val =
+                  cgen_state_->castToTypeIn(window_func_null_val, 64);
+            }
+            auto cond_expr_lv = code_generator.codegen(args[1].get(), true, co).front();
+            cond_lv =
+                codegenConditionalAggregateCondValSelector(cond_expr_lv, kSUM_IF, co);
+          }
+          default:
+            break;
         }
-        agg_func_args.push_back(window_func_ti.get_type() == kFLOAT
-                                    ? crt_val
-                                    : cgen_state_->castToTypeIn(crt_val, 64));
-        agg_name += "_skip_val";
-        agg_func_args.push_back(window_func_ti.is_integer()
-                                    ? cgen_state_->castToTypeIn(window_func_null_val, 64)
-                                    : window_func_null_val);
       }
-      cgen_state_->emitCall(agg_name, agg_func_args);
-      if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
-        codegenWindowAvgEpilogue(agg_func_args[1], window_func_null_val);
+      agg_name += "_skip_val";
+      agg_func_args.push_back(modified_window_func_null_val);
+      if (cond_lv) {
+        agg_func_args.push_back(cond_lv);
       }
+    }
+    cgen_state_->emitCall(agg_name, agg_func_args);
+    if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
+      codegenWindowAvgEpilogue(agg_func_args[1], window_func_null_val);
     }
     return codegenAggregateWindowState();
   }
@@ -1223,4 +1254,33 @@ llvm::Value* Executor::codegenAggregateWindowState() {
           aggregate_state->getType()->getPointerElementType(), aggregate_state);
     }
   }
+}
+
+llvm::Value* Executor::codegenConditionalAggregateCondValSelector(
+    llvm::Value* cond_lv,
+    SQLAgg const aggKind,
+    CompilationOptions const& co) const {
+  llvm::Value* res_cond_lv{nullptr};
+  switch (aggKind) {
+    case kSUM_IF:
+      if (cond_lv->getType()->isIntegerTy(1)) {
+        // cond_expr returns i1 type val, just need to cast to i8 type
+        // i.e., cond_expr IS NULL
+        res_cond_lv = cgen_state_->castToTypeIn(cond_lv, 8);
+      } else {
+        CHECK(cond_lv->getType()->isIntegerTy(8));
+        // cond_expr may have null value instead of upcasted bool (i1-type) value
+        // so we have to correctly set true condition
+        // i.e., i8 @gt_int32_t_nullable_lhs(..., i64 -2147483648, i8 -128)
+        // has one of the following i8-type values: 1, 0, -128
+        auto true_cond_lv =
+            cgen_state_->ir_builder_.CreateICmpEQ(cond_lv, cgen_state_->llInt((int8_t)1));
+        res_cond_lv = cgen_state_->ir_builder_.CreateSelect(
+            true_cond_lv, cgen_state_->llInt((int8_t)1), cgen_state_->llInt((int8_t)0));
+      }
+      break;
+    default:
+      break;
+  }
+  return res_cond_lv;
 }
