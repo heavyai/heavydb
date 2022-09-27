@@ -89,6 +89,7 @@ inline TAggKind::type agg_kind_to_thrift(const SQLAgg agg) {
     THRIFT_AGGKIND_CASE(SAMPLE)
     THRIFT_AGGKIND_CASE(SINGLE_VALUE)
     THRIFT_AGGKIND_CASE(COUNT_IF)
+    THRIFT_AGGKIND_CASE(SUM_IF)
     default:
       CHECK(false) << static_cast<int>(agg);
   }
@@ -112,6 +113,7 @@ inline SQLAgg agg_kind_from_thrift(const TAggKind::type agg) {
     UNTHRIFT_AGGKIND_CASE(SAMPLE)
     UNTHRIFT_AGGKIND_CASE(SINGLE_VALUE)
     UNTHRIFT_AGGKIND_CASE(COUNT_IF)
+    UNTHRIFT_AGGKIND_CASE(SUM_IF)
     default:
       CHECK(false) << static_cast<int>(agg);
   }

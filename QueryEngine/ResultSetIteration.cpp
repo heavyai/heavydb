@@ -1915,8 +1915,8 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
     }
     if (target_info.is_agg &&
         (target_info.agg_kind == kAVG || target_info.agg_kind == kSUM ||
-         target_info.agg_kind == kMIN || target_info.agg_kind == kMAX ||
-         target_info.agg_kind == kSINGLE_VALUE)) {
+         target_info.agg_kind == kSUM_IF || target_info.agg_kind == kMIN ||
+         target_info.agg_kind == kMAX || target_info.agg_kind == kSINGLE_VALUE)) {
       // The above listed aggregates use two floats in a single 8-byte slot. Set the
       // padded size to 4 bytes to properly read each value.
       actual_compact_sz = sizeof(float);
@@ -2007,7 +2007,8 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
     if (decimal_to_double) {
       if (target_info.is_agg &&
           (target_info.agg_kind == kAVG || target_info.agg_kind == kSUM ||
-           target_info.agg_kind == kMIN || target_info.agg_kind == kMAX) &&
+           target_info.agg_kind == kSUM_IF || target_info.agg_kind == kMIN ||
+           target_info.agg_kind == kMAX) &&
           ival == inline_int_null_val(SQLTypeInfo(kBIGINT, false))) {
         return NULL_DOUBLE;
       }

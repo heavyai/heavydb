@@ -1050,6 +1050,12 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t agg_sum(int64_t* agg, const int6
   return old;
 }
 
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t agg_sum_if(int64_t* agg,
+                                                           const int64_t val,
+                                                           const int8_t cond) {
+  return cond ? agg_sum(agg, val) : *agg;
+}
+
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_max(int64_t* agg, const int64_t val) {
   *agg = std::max(*agg, val);
 }
@@ -1123,6 +1129,12 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t agg_sum_int32(int32_t* agg,
   const auto old = *agg;
   *agg += val;
   return old;
+}
+
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t agg_sum_if_int32(int32_t* agg,
+                                                                 const int32_t val,
+                                                                 const int8_t cond) {
+  return cond ? agg_sum_int32(agg, val) : *agg;
 }
 
 #define DEF_AGG_MAX_INT(n)                                                            \
@@ -1220,6 +1232,22 @@ agg_sum_int32_skip_val(int32_t* agg, const int32_t val, const int32_t skip_val) 
   return old;
 }
 
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t
+agg_sum_if_skip_val(int64_t* agg,
+                    const int64_t val,
+                    const int64_t skip_val,
+                    const int8_t cond) {
+  return cond ? agg_sum_skip_val(agg, val, skip_val) : *agg;
+}
+
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t
+agg_sum_if_int32_skip_val(int32_t* agg,
+                          const int32_t val,
+                          const int32_t skip_val,
+                          const int8_t cond) {
+  return cond ? agg_sum_int32_skip_val(agg, val, skip_val) : *agg;
+}
+
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint64_t agg_count_if(uint64_t* agg,
                                                               const int64_t cond) {
   return cond ? (*agg)++ : *agg;
@@ -1314,6 +1342,14 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_sum_double(int64_t* agg,
   *agg = *reinterpret_cast<const int64_t*>(may_alias_ptr(&r));
 }
 
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_sum_if_double(int64_t* agg,
+                                                               const double val,
+                                                               const int8_t cond) {
+  if (cond) {
+    agg_sum_double(agg, val);
+  }
+}
+
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_max_double(int64_t* agg,
                                                             const double val) {
   const auto r = std::max(*reinterpret_cast<const double*>(agg), val);
@@ -1357,6 +1393,14 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_sum_float(int32_t* agg,
                                                            const float val) {
   const auto r = *reinterpret_cast<const float*>(agg) + val;
   *agg = *reinterpret_cast<const int32_t*>(may_alias_ptr(&r));
+}
+
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_if_sum_float(int32_t* agg,
+                                                              const float val,
+                                                              const int8_t cond) {
+  if (cond) {
+    agg_sum_float(agg, val);
+  }
 }
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_max_float(int32_t* agg,
@@ -1408,14 +1452,6 @@ agg_count_float_skip_val(uint32_t* agg, const float val, const float skip_val) {
   return *agg;
 }
 
-#define DEF_SKIP_AGG_ADD(base_agg_func)                                  \
-  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void base_agg_func##_skip_val( \
-      ADDR_T* agg, const DATA_T val, const DATA_T skip_val) {            \
-    if (val != skip_val) {                                               \
-      base_agg_func(agg, val);                                           \
-    }                                                                    \
-  }
-
 #define DEF_SKIP_AGG(base_agg_func)                                                \
   extern "C" RUNTIME_EXPORT ALWAYS_INLINE void base_agg_func##_skip_val(           \
       ADDR_T* agg, const DATA_T val, const DATA_T skip_val) {                      \
@@ -1429,9 +1465,18 @@ agg_count_float_skip_val(uint32_t* agg, const float val, const float skip_val) {
     }                                                                              \
   }
 
+#define DEF_SKIP_IF_AGG(skip_agg_func, base_agg_func)                            \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE void skip_agg_func##_skip_val(         \
+      ADDR_T* agg, const DATA_T val, const DATA_T skip_val, const int8_t cond) { \
+    if (cond) {                                                                  \
+      base_agg_func##_skip_val(agg, val, skip_val);                              \
+    }                                                                            \
+  }
+
 #define DATA_T double
 #define ADDR_T int64_t
 DEF_SKIP_AGG(agg_sum_double)
+DEF_SKIP_IF_AGG(agg_sum_if_double, agg_sum_double)
 DEF_SKIP_AGG(agg_max_double)
 DEF_SKIP_AGG(agg_min_double)
 #undef ADDR_T
@@ -1440,13 +1485,14 @@ DEF_SKIP_AGG(agg_min_double)
 #define DATA_T float
 #define ADDR_T int32_t
 DEF_SKIP_AGG(agg_sum_float)
+DEF_SKIP_IF_AGG(agg_sum_if_float, agg_sum_float)
 DEF_SKIP_AGG(agg_max_float)
 DEF_SKIP_AGG(agg_min_float)
 #undef ADDR_T
 #undef DATA_T
 
-#undef DEF_SKIP_AGG_ADD
 #undef DEF_SKIP_AGG
+#undef DEF_SKIP_IF_AGG
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t decimal_floor(const int64_t x,
                                                               const int64_t scale) {
@@ -1603,9 +1649,22 @@ extern "C" GPU_RT_STUB int64_t agg_sum_shared(int64_t* agg, const int64_t val) {
   return 0;
 }
 
+extern "C" GPU_RT_STUB int64_t agg_sum_if_shared(int64_t* agg,
+                                                 const int64_t val,
+                                                 const int8_t cond) {
+  return 0;
+}
+
 extern "C" GPU_RT_STUB int64_t agg_sum_skip_val_shared(int64_t* agg,
                                                        const int64_t val,
                                                        const int64_t skip_val) {
+  return 0;
+}
+
+extern "C" GPU_RT_STUB int64_t agg_sum_if_skip_val_shared(int64_t* agg,
+                                                          const int64_t val,
+                                                          const int64_t skip_val,
+                                                          const int8_t cond) {
   return 0;
 }
 extern "C" GPU_RT_STUB int32_t agg_sum_int32_shared(int32_t* agg, const int32_t val) {
@@ -1628,6 +1687,36 @@ extern "C" GPU_RT_STUB void agg_sum_float_shared(int32_t* agg, const float val) 
 extern "C" GPU_RT_STUB void agg_sum_float_skip_val_shared(int32_t* agg,
                                                           const float val,
                                                           const float skip_val) {}
+
+extern "C" GPU_RT_STUB int32_t agg_sum_if_int32_shared(int32_t* agg,
+                                                       const int32_t val,
+                                                       const int8_t cond) {
+  return 0;
+}
+
+extern "C" GPU_RT_STUB int32_t agg_sum_if_int32_skip_val_shared(int32_t* agg,
+                                                                const int32_t val,
+                                                                const int32_t skip_val,
+                                                                const int8_t cond) {
+  return 0;
+}
+
+extern "C" GPU_RT_STUB void agg_sum_if_double_shared(int64_t* agg,
+                                                     const double val,
+                                                     const int8_t cond) {}
+
+extern "C" GPU_RT_STUB void agg_sum_if_double_skip_val_shared(int64_t* agg,
+                                                              const double val,
+                                                              const double skip_val,
+                                                              const int8_t cond) {}
+extern "C" GPU_RT_STUB void agg_sum_if_float_shared(int32_t* agg,
+                                                    const float val,
+                                                    const int8_t cond) {}
+
+extern "C" GPU_RT_STUB void agg_sum_if_float_skip_val_shared(int32_t* agg,
+                                                             const float val,
+                                                             const float skip_val,
+                                                             const int8_t cond) {}
 
 extern "C" GPU_RT_STUB void force_sync() {}
 

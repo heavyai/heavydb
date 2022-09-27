@@ -32,6 +32,7 @@ SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const Analyzer::Expr* arg_expr) 
     case kMAX:
       return arg_expr->get_type_info();
     case kSUM:
+    case kSUM_IF:
       return arg_expr->get_type_info().is_integer() ? SQLTypeInfo(kBIGINT, false)
                                                     : arg_expr->get_type_info();
     case kAVG:

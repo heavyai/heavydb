@@ -27,11 +27,19 @@
 
 extern "C" RUNTIME_EXPORT int64_t agg_sum(int64_t* agg, const int64_t val);
 
+extern "C" RUNTIME_EXPORT int64_t agg_sum_if(int64_t* agg,
+                                             const int64_t val,
+                                             const int8_t cond);
+
 extern "C" RUNTIME_EXPORT void agg_max(int64_t* agg, const int64_t val);
 
 extern "C" RUNTIME_EXPORT void agg_min(int64_t* agg, const int64_t val);
 
 extern "C" RUNTIME_EXPORT void agg_sum_double(int64_t* agg, const double val);
+
+extern "C" RUNTIME_EXPORT void agg_sum_if_double(int64_t* agg,
+                                                 const double val,
+                                                 const int8_t cond);
 
 extern "C" RUNTIME_EXPORT void agg_max_double(int64_t* agg, const double val);
 
@@ -44,6 +52,16 @@ extern "C" RUNTIME_EXPORT int32_t agg_sum_int32_skip_val(int32_t* agg,
 extern "C" RUNTIME_EXPORT int64_t agg_sum_skip_val(int64_t* agg,
                                                    const int64_t val,
                                                    const int64_t skip_val);
+
+extern "C" RUNTIME_EXPORT int32_t agg_sum_if_int32_skip_val(int32_t* agg,
+                                                            const int32_t val,
+                                                            const int32_t skip_val,
+                                                            const int8_t cond);
+
+extern "C" RUNTIME_EXPORT int64_t agg_sum_if_skip_val(int64_t* agg,
+                                                      const int64_t val,
+                                                      const int64_t skip_val,
+                                                      const int8_t cond);
 
 extern "C" RUNTIME_EXPORT void agg_max_skip_val(int64_t* agg,
                                                 const int64_t val,
@@ -61,6 +79,16 @@ extern "C" RUNTIME_EXPORT void agg_sum_double_skip_val(int64_t* agg,
                                                        const double val,
                                                        const double skip_val);
 
+extern "C" RUNTIME_EXPORT void agg_sum_if_float_skip_val(int32_t* agg,
+                                                         const float val,
+                                                         const float skip_val,
+                                                         const int8_t cond);
+
+extern "C" RUNTIME_EXPORT void agg_sum_if_double_skip_val(int64_t* agg,
+                                                          const double val,
+                                                          const double skip_val,
+                                                          const int8_t cond);
+
 extern "C" RUNTIME_EXPORT void agg_max_double_skip_val(int64_t* agg,
                                                        const double val,
                                                        const double skip_val);
@@ -71,6 +99,10 @@ extern "C" RUNTIME_EXPORT void agg_min_double_skip_val(int64_t* agg,
 
 extern "C" RUNTIME_EXPORT int32_t agg_sum_int32(int32_t* agg, const int32_t val);
 
+extern "C" RUNTIME_EXPORT int32_t agg_sum_if_int32(int32_t* agg,
+                                                   const int32_t val,
+                                                   const int8_t cond);
+
 extern "C" RUNTIME_EXPORT void agg_max_int32(int32_t* agg, const int32_t val);
 extern "C" RUNTIME_EXPORT void agg_max_int16(int16_t* agg, const int16_t val);
 extern "C" RUNTIME_EXPORT void agg_max_int8(int8_t* agg, const int8_t val);
@@ -80,6 +112,10 @@ extern "C" RUNTIME_EXPORT void agg_min_int16(int16_t* agg, const int16_t val);
 extern "C" RUNTIME_EXPORT void agg_min_int8(int8_t* agg, const int8_t val);
 
 extern "C" RUNTIME_EXPORT void agg_sum_float(int32_t* agg, const float val);
+
+extern "C" RUNTIME_EXPORT void agg_sum_if_float(int32_t* agg,
+                                                const float val,
+                                                const int8_t cond);
 
 extern "C" RUNTIME_EXPORT void agg_max_float(int32_t* agg, const float val);
 

@@ -677,14 +677,10 @@ void WindowFunctionContext::compute(
           // i.e., when window_func_expr_columns_.size() > 1
           SQLTypeInfo const input_col_ti =
               window_func_->getArgs().front()->get_type_info();
-          int8_t const* input_col_buf = !window_func_expr_columns_.empty()
-                                            ? window_func_expr_columns_.front()
-                                            : nullptr;
           const auto partition_size = counts()[partition_idx];
           buildAggregationTreeForPartition(window_func_->getKind(),
                                            partition_idx,
                                            partition_size,
-                                           input_col_buf,
                                            payload() + offsets()[partition_idx],
                                            intermediate_output_buffer,
                                            input_col_ti);
@@ -1273,7 +1269,8 @@ void WindowFunctionContext::computePartitionBuffer(
     case SqlWindowFunctionKind::COUNT:
     case SqlWindowFunctionKind::LEAD_IN_FRAME:
     case SqlWindowFunctionKind::LAG_IN_FRAME:
-    case SqlWindowFunctionKind::COUNT_IF: {
+    case SqlWindowFunctionKind::COUNT_IF:
+    case SqlWindowFunctionKind::SUM_IF: {
       const auto partition_row_offsets = payload() + offset;
       if (window_function_requires_peer_handling(window_func)) {
         index_to_partition_end(partitionEnd(),
@@ -1303,7 +1300,6 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
     SqlWindowFunctionKind agg_type,
     size_t partition_idx,
     size_t partition_size,
-    const int8_t* col_buf,
     const int32_t* original_rowid_buf,
     const int64_t* ordered_rowid_buf,
     const SQLTypeInfo& input_col_ti) {
@@ -1338,11 +1334,10 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
       case kBOOLEAN:
       case kTINYINT: {
         const auto segment_tree = std::make_shared<SegmentTree<int8_t, int64_t>>(
-            col_buf,
+            window_func_expr_columns_,
             input_col_ti,
             original_rowid_buf,
             ordered_rowid_buf_for_partition,
-            order_col_null_range,
             partition_size,
             agg_type,
             aggregate_trees_fan_out_);
@@ -1360,11 +1355,10 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
       }
       case kSMALLINT: {
         const auto segment_tree = std::make_shared<SegmentTree<int16_t, int64_t>>(
-            col_buf,
+            window_func_expr_columns_,
             input_col_ti,
             original_rowid_buf,
             ordered_rowid_buf_for_partition,
-            order_col_null_range,
             partition_size,
             agg_type,
             aggregate_trees_fan_out_);
@@ -1382,11 +1376,10 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
       }
       case kINT: {
         const auto segment_tree = std::make_shared<SegmentTree<int32_t, int64_t>>(
-            col_buf,
+            window_func_expr_columns_,
             input_col_ti,
             original_rowid_buf,
             ordered_rowid_buf_for_partition,
-            order_col_null_range,
             partition_size,
             agg_type,
             aggregate_trees_fan_out_);
@@ -1406,11 +1399,10 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
       case kNUMERIC:
       case kBIGINT: {
         const auto segment_tree = std::make_shared<SegmentTree<int64_t, int64_t>>(
-            col_buf,
+            window_func_expr_columns_,
             input_col_ti,
             original_rowid_buf,
             ordered_rowid_buf_for_partition,
-            order_col_null_range,
             partition_size,
             agg_type,
             aggregate_trees_fan_out_);
@@ -1428,11 +1420,10 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
       }
       case kFLOAT: {
         const auto segment_tree =
-            std::make_shared<SegmentTree<float, double>>(col_buf,
+            std::make_shared<SegmentTree<float, double>>(window_func_expr_columns_,
                                                          input_col_ti,
                                                          original_rowid_buf,
                                                          ordered_rowid_buf_for_partition,
-                                                         order_col_null_range,
                                                          partition_size,
                                                          agg_type,
                                                          aggregate_trees_fan_out_);
@@ -1450,11 +1441,10 @@ void WindowFunctionContext::buildAggregationTreeForPartition(
       }
       case kDOUBLE: {
         const auto segment_tree =
-            std::make_shared<SegmentTree<double, double>>(col_buf,
+            std::make_shared<SegmentTree<double, double>>(window_func_expr_columns_,
                                                           input_col_ti,
                                                           original_rowid_buf,
                                                           ordered_rowid_buf_for_partition,
-                                                          order_col_null_range,
                                                           partition_size,
                                                           agg_type,
                                                           aggregate_trees_fan_out_);

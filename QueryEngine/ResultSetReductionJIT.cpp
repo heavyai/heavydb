@@ -129,7 +129,7 @@ void emit_aggregate_one_nullable_value(SQLAgg const sql_agg,
                                        const size_t chosen_bytes,
                                        const TargetInfo& agg_info,
                                        Function* ir_reduce_one_entry) {
-  const std::string agg_kind = to_lower(toString(sql_agg));
+  const std::string agg_kind = to_lower(toString(get_non_conditional_agg_type(sql_agg)));
   const auto dest_name = agg_kind + "_dest";
   if (agg_info.skip_null_val) {
     const auto sql_type = get_compact_type(agg_info);
@@ -140,9 +140,8 @@ void emit_aggregate_one_nullable_value(SQLAgg const sql_agg,
         const auto val = emit_load(other_ptr, Type::FloatPtr, ir_reduce_one_entry);
         const auto init_val_lv = ir_reduce_one_entry->addConstant<ConstantFP>(
             *reinterpret_cast<const float*>(may_alias_ptr(&init_val)), Type::Float);
-        ir_reduce_one_entry->add<Call>("agg_" + agg_kind + "_float_skip_val",
-                                       std::vector<const Value*>{agg, val, init_val_lv},
-                                       "");
+        std::vector<const Value*> args{agg, val, init_val_lv};
+        ir_reduce_one_entry->add<Call>("agg_" + agg_kind + "_float_skip_val", args, "");
       } else {
         CHECK_EQ(chosen_bytes, sizeof(double));
         const auto agg = ir_reduce_one_entry->add<Cast>(
@@ -1171,6 +1170,9 @@ void ResultSetReductionJIT::reduceOneAggregateSlot(Value* this_ptr1,
     case kSUM:
     case kMIN:
     case kMAX:
+    // for conditional aggregation, we already "conditionally" aggregate value for each
+    // resultset, so reduction just can use the non-conditional aggregation logic
+    case kSUM_IF:
       emit_aggregate_one_nullable_value(agg_kind,
                                         this_ptr1,
                                         that_ptr1,

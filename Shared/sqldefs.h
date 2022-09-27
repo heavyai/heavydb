@@ -82,6 +82,7 @@ enum SQLAgg {
   kSINGLE_VALUE,
   kMODE,
   kCOUNT_IF,
+  kSUM_IF,
   kINVALID_AGG
 };
 
@@ -139,6 +140,7 @@ enum class SqlWindowFunctionKind {
   LAST_VALUE,
   NTH_VALUE,
   COUNT_IF,
+  SUM_IF,
   SUM_INTERNAL,  // For deserialization from Calcite only. Gets rewritten to a regular
                  // SUM.
   INVALID
@@ -219,11 +221,24 @@ inline std::string toString(const SQLAgg& kind) {
       return "MODE";
     case kCOUNT_IF:
       return "COUNT_IF";
+    case kSUM_IF:
+      return "SUM_IF";
     case kINVALID_AGG:
       return "INVALID";
     default:
       UNREACHABLE() << "Invalid aggregate kind: " << kind;
       return {};
+  }
+}
+
+inline SQLAgg get_non_conditional_agg_type(SQLAgg const agg_type) {
+  switch (agg_type) {
+    case kCOUNT_IF:
+      return kCOUNT;
+    case kSUM_IF:
+      return kSUM;
+    default:
+      return agg_type;
   }
 }
 
@@ -470,6 +485,8 @@ inline std::string toString(const SqlWindowFunctionKind& kind) {
       return "LAG_IN_FRAME";
     case SqlWindowFunctionKind::COUNT_IF:
       return "COUNT_IF";
+    case SqlWindowFunctionKind::SUM_IF:
+      return "SUM_IF";
     case SqlWindowFunctionKind::INVALID:
       return "INVALID";
   }

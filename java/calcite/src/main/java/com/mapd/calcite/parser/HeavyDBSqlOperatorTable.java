@@ -286,6 +286,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
 
     // conditional window aggregate functions
     addOperator(new CountIf());
+    addOperator(new SumIf());
 
     addOperator(new HeavyDB_Geo_PolyBoundsPtr());
     addOperator(new HeavyDB_Geo_PolyRenderGroup());
@@ -2627,6 +2628,22 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
               false,
               false,
               Optionality.FORBIDDEN);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+  }
+
+  static class SumIf extends SqlAggFunction {
+    SumIf() {
+      super("SUM_IF",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.NUMERIC, SqlTypeFamily.BOOLEAN),
+              SqlFunctionCategory.SYSTEM);
     }
 
     @Override

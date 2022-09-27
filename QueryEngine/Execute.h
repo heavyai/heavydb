@@ -653,6 +653,11 @@ class Executor {
   llvm::Value* codegenWindowFunction(const size_t target_index,
                                      const CompilationOptions& co);
 
+  llvm::Value* codegenConditionalAggregateCondValSelector(
+      llvm::Value* cond_lv,
+      SQLAgg const aggKind,
+      CompilationOptions const& co) const;
+
   // Generate code for an aggregate window function target.
   llvm::Value* codegenWindowFunctionAggregate(const CompilationOptions& co);
 

@@ -281,7 +281,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
   const bool is_distinct = rex->isDistinct();
   const bool takes_arg{rex->size() > 0};
   std::shared_ptr<Analyzer::Expr> arg_expr;
-  std::shared_ptr<Analyzer::Constant> arg1;  // 2nd aggregate parameter
+  std::shared_ptr<Analyzer::Expr> arg1;  // 2nd aggregate parameter
   if (takes_arg) {
     const auto operand = rex->getOperand(0);
     CHECK_LT(operand, scalar_sources.size());
@@ -290,15 +290,17 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
     switch (agg_kind) {
       case kAPPROX_COUNT_DISTINCT:
         if (rex->size() == 2) {
-          arg1 = std::dynamic_pointer_cast<Analyzer::Constant>(
+          auto const const_arg1 = std::dynamic_pointer_cast<Analyzer::Constant>(
               scalar_sources[rex->getOperand(1)]);
-          if (!arg1 || arg1->get_type_info().get_type() != kINT ||
-              arg1->get_constval().intval < 1 || arg1->get_constval().intval > 100) {
+          if (!const_arg1 || const_arg1->get_type_info().get_type() != kINT ||
+              const_arg1->get_constval().intval < 1 ||
+              const_arg1->get_constval().intval > 100) {
             throw std::runtime_error(
                 "APPROX_COUNT_DISTINCT's second parameter should be SMALLINT literal "
                 "between "
                 "1 and 100");
           }
+          arg1 = scalar_sources[rex->getOperand(1)];
         }
         break;
       case kAPPROX_QUANTILE:
@@ -333,6 +335,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
         if (rex->isDistinct()) {
           throw std::runtime_error(
               "Currently, COUNT_IF function does not support DISTINCT qualifier.");
+        }
+        break;
+      case kSUM_IF:
+        arg1 = scalar_sources[rex->getOperand(1)];
+        if (arg1->get_type_info().get_type() != kBOOLEAN) {
+          throw std::runtime_error("Conditional argument must be a boolean expression.");
         }
         break;
       default:

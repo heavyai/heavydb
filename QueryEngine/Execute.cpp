@@ -1078,6 +1078,7 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
   switch (agg) {
     case kAVG:
     case kSUM:
+    case kSUM_IF:
       if (0 != agg_init_val) {
         if (ti.is_integer() || ti.is_decimal() || ti.is_time() || ti.is_boolean()) {
           int64_t agg_result = agg_init_val;
@@ -2212,7 +2213,8 @@ ExecutorDeviceType Executor::getDeviceTypeForTargets(
     const auto agg_info = get_target_info(target_expr, g_bigint_count);
     if (!ra_exe_unit.groupby_exprs.empty() &&
         !isArchPascalOrLater(requested_device_type)) {
-      if ((agg_info.agg_kind == kAVG || agg_info.agg_kind == kSUM) &&
+      if ((agg_info.agg_kind == kAVG || agg_info.agg_kind == kSUM ||
+           agg_info.agg_kind == kSUM_IF) &&
           agg_info.agg_arg_type.get_type() == kDOUBLE) {
         return ExecutorDeviceType::CPU;
       }

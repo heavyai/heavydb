@@ -136,7 +136,8 @@ int64_t get_agg_initial_val(const SQLAgg agg,
   CHECK(ti.get_logical_size() < 0 ||
         byte_width >= static_cast<unsigned>(ti.get_logical_size()));
   switch (agg) {
-    case kSUM: {
+    case kSUM:
+    case kSUM_IF: {
       if (!ti.get_notnull()) {
         if (ti.is_fp()) {
           switch (byte_width) {
@@ -280,7 +281,7 @@ std::vector<int64_t> init_agg_val_vec(
       if (query_mem_desc.getQueryDescriptionType() ==
               QueryDescriptionType::NonGroupedAggregate &&
           target.is_agg &&
-          shared::is_any<kMIN, kMAX, kSUM, kAVG, kAPPROX_QUANTILE, kMODE>(
+          shared::is_any<kMIN, kMAX, kSUM, kSUM_IF, kAVG, kAPPROX_QUANTILE, kMODE>(
               target.agg_kind)) {
         set_notnull(target, false);
       } else if (constrained_not_null(arg_expr, quals)) {

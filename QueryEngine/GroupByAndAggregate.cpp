@@ -692,9 +692,12 @@ CountDistinctDescriptors init_count_distinct_descriptors(
       CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::UnorderedSet};
       int64_t bitmap_sz_bits{0};
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
-        const auto error_rate = agg_expr->get_arg1();
-        if (error_rate) {
-          CHECK(error_rate->get_type_info().get_type() == kINT);
+        const auto error_rate_expr = agg_expr->get_arg1();
+        if (error_rate_expr) {
+          CHECK(error_rate_expr->get_type_info().get_type() == kINT);
+          auto const error_rate =
+              dynamic_cast<Analyzer::Constant const*>(error_rate_expr.get());
+          CHECK(error_rate);
           CHECK_GE(error_rate->get_constval().intval, 1);
           bitmap_sz_bits = hll_size_for_rate(error_rate->get_constval().smallintval);
         } else {

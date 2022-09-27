@@ -1186,13 +1186,13 @@ class AggExpr : public Expr {
           SQLAgg a,
           std::shared_ptr<Analyzer::Expr> g,
           bool d,
-          std::shared_ptr<Analyzer::Constant> e)
+          std::shared_ptr<Analyzer::Expr> e)
       : Expr(ti, true), aggtype(a), arg(g), is_distinct(d), arg1(e) {}
   AggExpr(SQLTypes t,
           SQLAgg a,
           Expr* g,
           bool d,
-          std::shared_ptr<Analyzer::Constant> e,
+          std::shared_ptr<Analyzer::Expr> e,
           int idx)
       : Expr(SQLTypeInfo(t, g == nullptr ? true : g->get_type_info().get_notnull()), true)
       , aggtype(a)
@@ -1203,7 +1203,7 @@ class AggExpr : public Expr {
   Expr* get_arg() const { return arg.get(); }
   std::shared_ptr<Analyzer::Expr> get_own_arg() const { return arg; }
   bool get_is_distinct() const { return is_distinct; }
-  std::shared_ptr<Analyzer::Constant> get_arg1() const { return arg1; }
+  std::shared_ptr<Analyzer::Expr> get_arg1() const { return arg1; }
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
   void group_predicates(std::list<const Expr*>& scan_predicates,
                         std::list<const Expr*>& join_predicates,
@@ -1237,7 +1237,7 @@ class AggExpr : public Expr {
   std::shared_ptr<Analyzer::Expr> arg;  // argument to aggregate
   bool is_distinct;                     // true only if it is for COUNT(DISTINCT x)
   // APPROX_COUNT_DISTINCT error_rate, APPROX_QUANTILE quantile
-  std::shared_ptr<Analyzer::Constant> arg1;
+  std::shared_ptr<Analyzer::Expr> arg1;
 };
 
 /*
@@ -2515,8 +2515,9 @@ class WindowFrame : public Expr {
 class WindowFunction : public Expr {
  public:
   enum class FrameBoundType { NONE, ROW, RANGE };
-  static constexpr std::array<SqlWindowFunctionKind, 9> FRAMING_ALLOWED_WINDOW_FUNCS{
+  static constexpr std::array<SqlWindowFunctionKind, 10> FRAMING_ALLOWED_WINDOW_FUNCS{
       SqlWindowFunctionKind::SUM,
+      SqlWindowFunctionKind::SUM_IF,
       SqlWindowFunctionKind::SUM_INTERNAL,
       SqlWindowFunctionKind::AVG,
       SqlWindowFunctionKind::MIN,
@@ -2525,9 +2526,10 @@ class WindowFunction : public Expr {
       SqlWindowFunctionKind::COUNT_IF,
       SqlWindowFunctionKind::LAG_IN_FRAME,
       SqlWindowFunctionKind::LEAD_IN_FRAME};
-  static constexpr std::array<SqlWindowFunctionKind, 7>
+  static constexpr std::array<SqlWindowFunctionKind, 8>
       AGGREGATION_TREE_REQUIRED_WINDOW_FUNCS_FOR_FRAMING{
           SqlWindowFunctionKind::SUM,
+          SqlWindowFunctionKind::SUM_IF,
           SqlWindowFunctionKind::SUM_INTERNAL,
           SqlWindowFunctionKind::AVG,
           SqlWindowFunctionKind::MIN,

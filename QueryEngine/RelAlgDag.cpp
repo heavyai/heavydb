@@ -1150,6 +1150,9 @@ SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
   if (name == "COUNT_IF") {
     return SqlWindowFunctionKind::COUNT_IF;
   }
+  if (name == "SUM_IF") {
+    return SqlWindowFunctionKind::SUM_IF;
+  }
   if (name == "$SUM0") {
     return SqlWindowFunctionKind::SUM_INTERNAL;
   }
@@ -1341,8 +1344,9 @@ std::unique_ptr<const RexAgg> parse_aggregate_expr(const rapidjson::Value& expr)
   const auto distinct = json_bool(field(expr, "distinct"));
   const auto agg_ti = parse_type(field(expr, "type"));
   const auto operands = indices_from_json_array(field(expr, "operands"));
-  if (operands.size() > 1 && (operands.size() != 2 || (agg != kAPPROX_COUNT_DISTINCT &&
-                                                       agg != kAPPROX_QUANTILE))) {
+  bool const allow_multiple_args =
+      shared::is_any<kAPPROX_COUNT_DISTINCT, kAPPROX_QUANTILE, kSUM_IF>(agg);
+  if (operands.size() > 1 && (operands.size() != 2 || !allow_multiple_args)) {
     throw QueryNotSupported("Multiple arguments for aggregates aren't supported");
   }
   return std::unique_ptr<const RexAgg>(new RexAgg(agg, distinct, agg_ti, operands));
@@ -2544,7 +2548,6 @@ std::pair<bool, bool> need_pushdown_generic_expr(
   return std::make_pair(has_generic_expr_in_window_func, res);
 }
 };  // namespace
-
 /**
  * Inserts a simple project before any project containing a window function node. Forces
  * all window function inputs into a single contiguous buffer for centralized processing

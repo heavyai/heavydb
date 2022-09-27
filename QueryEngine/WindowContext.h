@@ -49,6 +49,7 @@ inline bool window_function_is_aggregate(const SqlWindowFunctionKind kind) {
     case SqlWindowFunctionKind::COUNT:
     case SqlWindowFunctionKind::SUM_INTERNAL:
     case SqlWindowFunctionKind::COUNT_IF:
+    case SqlWindowFunctionKind::SUM_IF:
       return true;
     default:
       return false;
@@ -58,6 +59,7 @@ inline bool window_function_is_aggregate(const SqlWindowFunctionKind kind) {
 inline bool window_function_conditional_aggregate(const SqlWindowFunctionKind kind) {
   switch (kind) {
     case SqlWindowFunctionKind::COUNT_IF:
+    case SqlWindowFunctionKind::SUM_IF:
       return true;
     default:
       return false;
@@ -250,7 +252,6 @@ class WindowFunctionContext {
   void buildAggregationTreeForPartition(SqlWindowFunctionKind agg_type,
                                         size_t partition_idx,
                                         size_t partition_size,
-                                        const int8_t* col_buf,
                                         const int32_t* original_rowid_buf,
                                         const int64_t* ordered_rowid_buf,
                                         const SQLTypeInfo& input_col_ti);

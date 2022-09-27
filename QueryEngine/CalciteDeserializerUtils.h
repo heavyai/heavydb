@@ -130,6 +130,9 @@ inline SQLAgg to_agg_kind(const std::string& agg_name) {
   if (agg_name == "COUNT_IF") {
     return kCOUNT_IF;
   }
+  if (agg_name == "SUM_IF") {
+    return kSUM_IF;
+  }
   throw std::runtime_error("Aggregate function " + agg_name + " not supported");
 }
 
