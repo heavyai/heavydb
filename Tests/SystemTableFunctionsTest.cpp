@@ -41,10 +41,6 @@ using QR = QueryRunner::QueryRunner;
 extern bool g_enable_table_functions;
 namespace {
 
-inline void run_ddl_statement(const std::string& stmt) {
-  QR::get()->runDDLStatement(stmt);
-}
-
 std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
                                             const ExecutorDeviceType device_type) {
   return QR::get()->runSQL(query_str, device_type, false, false);

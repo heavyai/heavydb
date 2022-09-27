@@ -1425,7 +1425,7 @@ TEST_P(Ctas, LiteralStringTest) {
       "end) as txt FROM CTAS_SOURCE;";
   sql(ddl);
 
-  auto check = [this](int id, std::string txt) {
+  auto check = [](int id, std::string txt) {
     TQueryResult result;
     std::string query =
         "SELECT txt FROM CTAS_TARGET WHERE id=" + std::to_string(id) + ";";
@@ -1631,7 +1631,7 @@ TEST_F(Itas, DifferentColumnNames) {
   sql("INSERT INTO ITAS_SOURCE VALUES(2,20); ");
   sql("INSERT INTO ITAS_SOURCE VALUES(3,30); ");
 
-  auto check = [this](int id, int64_t val) {
+  auto check = [](int id, int64_t val) {
     TQueryResult result;
     std::string query =
         "SELECT target_val FROM ITAS_TARGET WHERE target_id=" + std::to_string(id) + ";";

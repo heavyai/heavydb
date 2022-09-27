@@ -391,7 +391,7 @@ void DBHandler::initialize(const bool is_new_db) {
                                               false,
                                               renderer_prefer_igpu_,
                                               renderer_vulkan_timeout_,
-					      renderer_use_parallel_executors_,
+                                              renderer_use_parallel_executors_,
                                               system_parameters_));
     } catch (const std::exception& e) {
       LOG(ERROR) << "Backend rendering disabled: " << e.what();

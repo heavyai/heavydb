@@ -1396,9 +1396,7 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
         foreign_table_,
         user_mapping_,
         parser,
-        [] {
-       	  return "";
-        },
+        [] { return ""; },
         num_rows_,
         append_start_offset_);
   }
@@ -1547,9 +1545,7 @@ void AbstractTextFileDataWrapper::iterativeFileScan(
         foreign_table_,
         user_mapping_,
         parser,
-        [] {
-	  return "";
-        },
+        [] { return ""; },
         num_rows_,
         append_start_offset_);
   }
