@@ -337,13 +337,12 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
         std::async(std::launch::async,
                    &RangeJoinHashTable::reifyForDevice,
                    this,
-                   /* columns_for_device     */ columns_per_device[device_id],
-                   /* layout_type            */ layout,
-                   /* entry_count            */ entry_count,
-                   /* emitted_keys_count     */ emitted_keys_count,
-                   /* device_id              */ device_id,
-                   /* query_id               */ logger::query_id(),
-                   /* parent_thread_id       */ logger::thread_id()));
+                   /* columns_for_device      */ columns_per_device[device_id],
+                   /* layout_type             */ layout,
+                   /* entry_count             */ entry_count,
+                   /* emitted_keys_count      */ emitted_keys_count,
+                   /* device_id               */ device_id,
+                   /* parent_thread_local_ids */ logger::thread_local_ids()));
   }
   for (auto& init_thread : init_threads) {
     init_thread.wait();
@@ -353,15 +352,15 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
   }
 }
 
-void RangeJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_device,
-                                        const HashType layout,
-                                        const size_t entry_count,
-                                        const size_t emitted_keys_count,
-                                        const int device_id,
-                                        const logger::QueryId query_id,
-                                        const logger::ThreadId parent_thread_id) {
-  logger::QidScopeGuard qsg = logger::set_thread_local_query_id(query_id);
-  DEBUG_TIMER_NEW_THREAD(parent_thread_id);
+void RangeJoinHashTable::reifyForDevice(
+    const ColumnsForDevice& columns_for_device,
+    const HashType layout,
+    const size_t entry_count,
+    const size_t emitted_keys_count,
+    const int device_id,
+    const logger::ThreadLocalIds parent_thread_local_ids) {
+  logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+  DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
   CHECK_EQ(getKeyComponentWidth(), size_t(8));
   CHECK(layoutRequiresAdditionalBuffers(layout));
 

@@ -43,6 +43,7 @@
 
 #include <memory>
 #include <set>
+#include <type_traits>
 
 #endif
 
@@ -124,6 +125,64 @@ static_assert(Severity::_NSEVERITIES == SeverityNames.size(),
               "Size of SeverityNames must equal number of Severity levels.");
 static_assert(Severity::_NSEVERITIES == SeveritySymbols.size(),
               "Size of SeveritySymbols must equal number of Severity levels.");
+
+using RequestId = uint64_t;
+using ThreadId = uint64_t;
+
+class LocalIdsScopeGuard;
+
+struct ThreadLocalIds {
+  RequestId request_id_;
+  ThreadId thread_id_;
+  ThreadLocalIds() = default;
+  ThreadLocalIds(RequestId const request_id, ThreadId const thread_id)
+      : request_id_(request_id), thread_id_(thread_id) {}
+  // Call to assign a new thread_id.
+  // The return value MUST be held otherwise g_thread_local_ids will immediately revert.
+  LocalIdsScopeGuard setNewThreadId() const;
+};
+
+static_assert(std::is_standard_layout<ThreadLocalIds>::value);
+static_assert(std::is_trivial<ThreadLocalIds>::value);
+
+// On destruction, reset g_thread_local_ids to original value.
+// May be needed by thread managers that recycle threads, such as TBB.
+class [[nodiscard]] LocalIdsScopeGuard {
+  ThreadLocalIds prev_local_ids_;
+  ThreadLocalIds thread_local_ids_;
+  bool enabled_;  // Reset g_thread_local_ids iff enabled_.
+
+  // Used by move constructor + assignment operator.
+  // OK since all member variables are PODs.
+  LocalIdsScopeGuard(LocalIdsScopeGuard const&) = default;
+  LocalIdsScopeGuard& operator=(LocalIdsScopeGuard const&) = default;
+
+ public:
+  LocalIdsScopeGuard(ThreadLocalIds const prev_local_ids,
+                     ThreadLocalIds const thread_local_ids)
+      : prev_local_ids_(prev_local_ids)
+      , thread_local_ids_(thread_local_ids)
+      , enabled_(true) {}
+  // clang-format off
+  LocalIdsScopeGuard(LocalIdsScopeGuard&& rhs) : LocalIdsScopeGuard(rhs) {
+    // clang-format on
+    rhs.enabled_ = false;
+  }
+  LocalIdsScopeGuard& operator=(LocalIdsScopeGuard&& rhs) {
+    *this = rhs;
+    rhs.enabled_ = false;
+    return *this;
+  }
+  ~LocalIdsScopeGuard();
+};
+
+RequestId request_id();
+ThreadId thread_id();
+ThreadLocalIds thread_local_ids();
+// Assign new request_id and return it.
+// Assign new thread_id iff current thread_id is 0.
+RequestId set_new_request_id();
+void set_request_id(RequestId);
 
 #if !(defined(__CUDACC__) || defined(NO_BOOST))
 
@@ -332,50 +391,9 @@ class DebugTimer {
   std::string stopAndGetJson();
 };
 
-using QueryId = uint64_t;
-QueryId query_id();
-
-// Usage: QidScopeGuard qsg = set_thread_local_query_id(parent_query_id);
-// This does two things:
-//  * Sets the thread_local g_query_id value to parent_query_id.
-//  * When it goes out of scope, g_query_id is set back to its previous value prev_id_.
-class QidScopeGuard {
-  QueryId prev_id_;
-#ifndef NDEBUG
-  QueryId id_;
-#endif
-  bool enabled_;
-
-  QidScopeGuard(QidScopeGuard const&) = default;
-  QidScopeGuard& operator=(QidScopeGuard const&) = default;
-
- public:
-#ifndef NDEBUG
-  QidScopeGuard(QueryId const prev_id, QueryId const id)
-      : prev_id_(prev_id), id_(id), enabled_(true) {}
-#else
-  QidScopeGuard(QueryId const prev_id) : prev_id_(prev_id), enabled_(true) {}
-#endif
-
-  QidScopeGuard(QidScopeGuard&& rhs) : QidScopeGuard(rhs) { rhs.enabled_ = false; }
-  QidScopeGuard& operator=(QidScopeGuard&& rhs) {
-    *this = rhs;
-    rhs.enabled_ = false;
-    return *this;
-  }
-  ~QidScopeGuard();
-};
-
 boost::filesystem::path get_log_dir_path();
 
-// Set logger::g_query_id based on given parameter.
-QidScopeGuard set_thread_local_query_id(QueryId const);
-
-using ThreadId = uint64_t;
-
-void debug_timer_new_thread(ThreadId parent_thread_id);
-
-ThreadId thread_id();
+void debug_timer_new_thread(ThreadId const parent_thread_id);
 
 // Typical usage: auto timer = DEBUG_TIMER(__func__);
 #define DEBUG_TIMER(name) logger::DebugTimer(logger::INFO, __FILE__, __LINE__, name)

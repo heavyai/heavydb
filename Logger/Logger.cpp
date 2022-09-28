@@ -412,6 +412,11 @@ std::ostream& operator<<(std::ostream& out, Severity const& sev) {
 }
 
 namespace {
+std::atomic<RequestId> g_next_request_id{1};
+std::atomic<ThreadId> g_next_thread_id{1};
+
+thread_local ThreadLocalIds g_thread_local_ids(0, 0);
+
 ChannelLogger& get_channel_logger(Channel const channel) {
   switch (channel) {
     default:
@@ -468,34 +473,28 @@ Logger::operator bool() const {
   return static_cast<bool>(stream_);
 }
 
-thread_local QueryId g_query_id{0};
-
-QueryId query_id() {
-  return g_query_id;
+// Assume *this is from the parent thread. Set current g_thread_local_ids.
+// The new thread is assumed to have the same request_id as the parent thread.
+LocalIdsScopeGuard ThreadLocalIds::setNewThreadId() const {
+  ThreadLocalIds const prev_thread_local_ids = g_thread_local_ids;
+  g_thread_local_ids = ThreadLocalIds(request_id_, g_next_thread_id++);
+  return {prev_thread_local_ids, g_thread_local_ids};
 }
 
-QidScopeGuard::~QidScopeGuard() {
+LocalIdsScopeGuard::~LocalIdsScopeGuard() {
   if (enabled_) {
 #ifndef NDEBUG
-    CHECK_EQ(id_, g_query_id);
+    CHECK_EQ(thread_local_ids_.request_id_, g_thread_local_ids.request_id_);
+    CHECK_EQ(thread_local_ids_.thread_id_, g_thread_local_ids.thread_id_);
 #endif
-    g_query_id = prev_id_;
+    g_thread_local_ids = prev_local_ids_;
   }
 }
 
-QidScopeGuard set_thread_local_query_id(QueryId const query_id) {
-  QueryId const prev_id = g_query_id;
-  g_query_id = query_id;
-#ifndef NDEBUG
-  return QidScopeGuard(prev_id, query_id);
-#else
-  return QidScopeGuard(prev_id);
-#endif
-}
-
 boost::log::record_ostream& Logger::stream(char const* file, int line) {
-  return *stream_ << query_id() << ' ' << thread_id() << ' ' << filename(file) << ':'
-                  << line << ' ';
+  return *stream_ << g_thread_local_ids.request_id_ << ' '
+                  << g_thread_local_ids.thread_id_ << ' ' << filename(file) << ':' << line
+                  << ' ';
 }
 
 // DebugTimer-related classes and functions.
@@ -598,16 +597,15 @@ using DurationTreeMap = std::unordered_map<ThreadId, std::unique_ptr<DurationTre
 
 std::mutex g_duration_tree_map_mutex;
 DurationTreeMap g_duration_tree_map;
-std::atomic<ThreadId> g_next_thread_id{0};
-thread_local ThreadId g_thread_id = g_next_thread_id++;
 
 template <typename... Ts>
 Duration* newDuration(Severity severity, Ts&&... args) {
   if (g_enable_debug_timer) {
     std::lock_guard<std::mutex> lock_guard(g_duration_tree_map_mutex);
-    auto& duration_tree_ptr = g_duration_tree_map[g_thread_id];
+    auto& duration_tree_ptr = g_duration_tree_map[g_thread_local_ids.thread_id_];
     if (!duration_tree_ptr) {
-      duration_tree_ptr = std::make_unique<DurationTree>(g_thread_id, 0);
+      duration_tree_ptr =
+          std::make_unique<DurationTree>(g_thread_local_ids.thread_id_, 0);
     }
     return duration_tree_ptr->newDuration(severity, std::forward<Ts>(args)...);
   }
@@ -749,7 +747,8 @@ struct EraseDurationTrees : boost::static_visitor<> {
 
 void logAndEraseDurationTree(std::string* json_str) {
   std::lock_guard<std::mutex> lock_guard(g_duration_tree_map_mutex);
-  DurationTreeMap::const_iterator const itr = g_duration_tree_map.find(g_thread_id);
+  DurationTreeMap::const_iterator const itr =
+      g_duration_tree_map.find(g_thread_local_ids.thread_id_);
   CHECK(itr != g_duration_tree_map.cend());
   auto const& root_duration = itr->second->rootDuration();
   if (auto log = Logger(root_duration.severity_)) {
@@ -795,33 +794,48 @@ std::string DebugTimer::stopAndGetJson() {
 
 /// Call this when a new thread is spawned that will have timers that need to be
 /// associated with timers on the parent thread.
-void debug_timer_new_thread(ThreadId parent_thread_id) {
+/// Required: g_thread_local_ids.thread_id_ is not yet in g_duration_tree_map.
+void debug_timer_new_thread(ThreadId const parent_thread_id) {
   std::lock_guard<std::mutex> lock_guard(g_duration_tree_map_mutex);
-  auto parent_itr = g_duration_tree_map.find(parent_thread_id);
+  auto const parent_itr = g_duration_tree_map.find(parent_thread_id);
   CHECK(parent_itr != g_duration_tree_map.end()) << parent_thread_id;
   auto const current_depth = parent_itr->second->currentDepth();
-  auto& duration_tree_ptr = g_duration_tree_map[g_thread_id];
-  if (!duration_tree_ptr) {
-    duration_tree_ptr = std::make_unique<DurationTree>(g_thread_id, current_depth + 1);
-    parent_itr->second->pushDurationTree(*duration_tree_ptr);
-  } else if (parent_thread_id == g_thread_id) {
-    // DEBUG_TIMER_NEW_THREAD() was called but this is actually the same thread as the
-    // parent, so nothing will be done. TBB does this.
-  } else {
-    // This appears to be a recycled thread, so g_thread_id is updated manually.
-    // It is assumed the prior thread that was using this g_thread_id has completed,
-    // but we need to use a different value since the old value still exists as a
-    // key in g_duration_tree_map.
-    g_thread_id = g_next_thread_id++;
-    auto const insert = g_duration_tree_map.insert(
-        {g_thread_id, std::make_unique<DurationTree>(g_thread_id, current_depth + 1)});
-    CHECK(insert.second) << parent_thread_id << " -> " << g_thread_id;
-    parent_itr->second->pushDurationTree(*insert.first->second);
-  }
+  auto const emplaced = g_duration_tree_map.emplace(
+      g_thread_local_ids.thread_id_,
+      std::make_unique<DurationTree>(g_thread_local_ids.thread_id_, current_depth + 1));
+  CHECK(emplaced.second) << "ThreadId " << g_thread_local_ids.thread_id_
+                         << " already in map.";
+  parent_itr->second->pushDurationTree(*emplaced.first->second);
 }
 
+RequestId request_id() {
+  return g_thread_local_ids.request_id_;
+}
 ThreadId thread_id() {
-  return g_thread_id;
+  return g_thread_local_ids.thread_id_;
+}
+ThreadLocalIds thread_local_ids() {
+  return g_thread_local_ids;
+}
+
+// For example KafkaMgr::sql_execute() calls
+//  1. db_handler_->internal_connect()
+//  2. db_handler_->sql_execute()
+//  3. db_handler_->disconnect()
+// sequentially on the same thread. The thread_id is assigned only on the first call.
+RequestId set_new_request_id() {
+  if (g_thread_local_ids.thread_id_ == 0) {
+    g_thread_local_ids.thread_id_ = g_next_thread_id++;
+  }
+  g_thread_local_ids.request_id_ = g_next_request_id++;
+  return g_thread_local_ids.request_id_;
+}
+
+void set_request_id(RequestId const request_id) {
+  if (g_thread_local_ids.thread_id_ == 0) {
+    g_thread_local_ids.thread_id_ = g_next_thread_id++;
+  }
+  g_thread_local_ids.request_id_ = request_id;
 }
 
 boost::filesystem::path get_log_dir_path() {

@@ -1453,16 +1453,7 @@ class Executor {
   // Although compilation is Executor-local, an executor may trigger
   // threaded compilations (see executeWorkUnitPerFragment) that share
   // executor cgen_state and LLVM context, for instance.
-  //
-  // Rule of thumb: when `executor->thread_id_ != logger::thread_id()`
-  // and executor LLVM Context is being modified (modules are cloned,
-  // etc), one should protect such a code with
-  //
-  //  std::lock_guard<std::mutex> compilation_lock(executor->compilation_mutex_);
-  //
-  // to ensure thread safety.
   std::mutex compilation_mutex_;
-  const logger::ThreadId thread_id_;
 
   // Runtime extension function registration updates
   // extension_modules_ that needs to be kept blocked from codegen
