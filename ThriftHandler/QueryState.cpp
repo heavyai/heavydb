@@ -59,14 +59,10 @@ SessionData::SessionData(
     , user_name(session_info->get_currentUser().userLoggable())
     , public_session_id(session_info->get_public_session_id()) {}
 
-// The id to be given to the next QueryState.
-std::atomic<logger::QueryId> QueryState::s_next_id{1};
-
 QueryState::QueryState(
     std::shared_ptr<Catalog_Namespace::SessionInfo const> const& session_info,
     std::string query_str)
-    : id_(s_next_id++)
-    , session_data_(session_info ? boost::make_optional<SessionData>(session_info)
+    : session_data_(session_info ? boost::make_optional<SessionData>(session_info)
                                  : boost::none)
     , query_str_(std::move(query_str))
     , logged_(false)
@@ -105,11 +101,6 @@ void QueryState::setQuerySubmittedTime(const std::string& t) {
 const std::string QueryState::getQuerySubmittedTime() const {
   std::lock_guard<std::mutex> lock(events_mutex_);
   return submitted_;
-}
-
-// Changes g_query_id to id_ only if it was previously 0. Otherwise no effect.
-logger::QidScopeGuard QueryState::setThreadLocalQueryId() const {
-  return logger::set_thread_local_query_id(id_);
 }
 
 // Assumes query_state_ is not null, and events_mutex_ is locked for this.
@@ -224,7 +215,8 @@ logger::Severity StdLog::stdlogBeginSeverity(char const* func) {
 void StdLog::log(logger::Severity severity, char const* label) {
   if (logger::fast_logging_check(severity)) {
     std::stringstream ss;
-    ss << logger::query_id() << ' ' << logger::thread_id() << ' ' << file_ << ':' << line_
+    logger::ThreadLocalIds const tlids = logger::thread_local_ids();
+    ss << tlids.request_id_ << ' ' << tlids.thread_id_ << ' ' << file_ << ':' << line_
        << ' ' << label << ' ' << func_ << ' ' << match_ << ' '
        << duration<std::chrono::milliseconds>() << ' ';
     if (session_info_) {
@@ -261,7 +253,8 @@ void StdLog::log(logger::Severity severity, char const* label) {
 void StdLog::logCallStack(logger::Severity severity, char const* label) {
   if (logger::fast_logging_check(severity) && query_state_) {
     std::stringstream ss;
-    ss << logger::query_id() << ' ' << logger::thread_id() << ' ' << file_ << ':' << line_
+    logger::ThreadLocalIds const tlids = logger::thread_local_ids();
+    ss << tlids.request_id_ << ' ' << tlids.thread_id_ << ' ' << file_ << ':' << line_
        << ' ' << label << ' ' << func_ << ' ' << match_ << " total time "
        << duration<std::chrono::milliseconds>() << " ms";
     query_state_->logCallStack(ss);

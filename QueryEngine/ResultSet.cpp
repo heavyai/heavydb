@@ -630,17 +630,17 @@ size_t ResultSet::binSearchRowCount() const {
 
 size_t ResultSet::parallelRowCount() const {
   using namespace threading;
-  auto execute_parallel_row_count = [this, query_id = logger::query_id()](
-                                        const blocked_range<size_t>& r,
-                                        size_t row_count) {
-    auto qid_scope_guard = logger::set_thread_local_query_id(query_id);
-    for (size_t i = r.begin(); i < r.end(); ++i) {
-      if (!isRowAtEmpty(i)) {
-        ++row_count;
-      }
-    }
-    return row_count;
-  };
+  auto execute_parallel_row_count =
+      [this, parent_thread_local_ids = logger::thread_local_ids()](
+          const blocked_range<size_t>& r, size_t row_count) {
+        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+        for (size_t i = r.begin(); i < r.end(); ++i) {
+          if (!isRowAtEmpty(i)) {
+            ++row_count;
+          }
+        }
+        return row_count;
+      };
   const auto row_count = parallel_reduce(blocked_range<size_t>(0, entryCount()),
                                          size_t(0),
                                          execute_parallel_row_count,
@@ -881,9 +881,9 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
                           &permutation_views,
                           top_n,
                           executor,
-                          query_id = logger::query_id(),
+                          parent_thread_local_ids = logger::thread_local_ids(),
                           interval] {
-      auto qid_scope_guard = logger::set_thread_local_query_id(query_id);
+      logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
       PermutationView pv(permutation_.data() + interval.begin, 0, interval.size());
       pv = initPermutationBuffer(pv, interval.begin, interval.end);
       const auto compare = createComparator(order_entries, pv, executor, true);
@@ -1006,9 +1006,9 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeCountDistinctCo
       result_set_->query_mem_desc_.getCountDistinctDescriptor(order_entry.tle_no - 1);
   const size_t num_non_empty_entries = permutation_.size();
 
-  const auto work = [&, query_id = logger::query_id()](const size_t start,
-                                                       const size_t end) {
-    auto qid_scope_guard = logger::set_thread_local_query_id(query_id);
+  const auto work = [&, parent_thread_local_ids = logger::thread_local_ids()](
+                        const size_t start, const size_t end) {
+    logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
     for (size_t i = start; i < end; ++i) {
       const PermutationIdx permuted_idx = permutation_[i];
       const auto storage_lookup_result = result_set_->findStorage(permuted_idx);
@@ -1049,9 +1049,9 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeApproxQuantileC
   ResultSet::ApproxQuantileBuffers::value_type materialized_buffer(
       result_set_->query_mem_desc_.getEntryCount());
   const size_t size = permutation_.size();
-  const auto work = [&, query_id = logger::query_id()](const size_t start,
-                                                       const size_t end) {
-    auto qid_scope_guard = logger::set_thread_local_query_id(query_id);
+  const auto work = [&, parent_thread_local_ids = logger::thread_local_ids()](
+                        const size_t start, const size_t end) {
+    logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
     for (size_t i = start; i < end; ++i) {
       const PermutationIdx permuted_idx = permutation_[i];
       const auto storage_lookup_result = result_set_->findStorage(permuted_idx);
@@ -1092,13 +1092,13 @@ using ModeBlockedRange = tbb::blocked_range<size_t>;
 
 template <typename BUFFER_ITERATOR_TYPE>
 struct ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::ModeScatter {
-  logger::QueryId const query_id_;
+  logger::ThreadLocalIds const parent_thread_local_ids_;
   ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE> const* const rsc_;
   Analyzer::OrderEntry const& order_entry_;
   ResultSet::ModeBuffers::value_type& materialized_buffer_;
 
   void operator()(ModeBlockedRange const& r) const {
-    auto qid_scope_guard = logger::set_thread_local_query_id(query_id_);
+    logger::LocalIdsScopeGuard lisg = parent_thread_local_ids_.setNewThreadId();
     for (size_t i = r.begin(); i != r.end(); ++i) {
       PermutationIdx const permuted_idx = rsc_->permutation_[i];
       auto const storage_lookup_result = rsc_->result_set_->findStorage(permuted_idx);
@@ -1117,9 +1117,10 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeModeColumn(
     const Analyzer::OrderEntry& order_entry) const {
   ResultSet::ModeBuffers::value_type materialized_buffer(
       result_set_->query_mem_desc_.getEntryCount());
-  ModeScatter mode_scatter{logger::query_id(), this, order_entry, materialized_buffer};
+  ModeScatter mode_scatter{
+      logger::thread_local_ids(), this, order_entry, materialized_buffer};
   if (single_threaded_) {
-    mode_scatter(ModeBlockedRange(0, permutation_.size()));
+    mode_scatter(ModeBlockedRange(0, permutation_.size()));  // Still has new thread_id.
   } else {
     tbb::parallel_for(ModeBlockedRange(0, permutation_.size()), mode_scatter);
   }

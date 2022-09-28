@@ -1229,8 +1229,7 @@ void OverlapsJoinHashTable::reifyImpl(std::vector<ColumnsForDevice>& columns_per
                                       emitted_keys_count,
                                       skip_hashtable_caching,
                                       device_id,
-                                      logger::query_id(),
-                                      logger::thread_id()));
+                                      logger::thread_local_ids()));
   }
   for (auto& init_thread : init_threads) {
     init_thread.wait();
@@ -1240,16 +1239,16 @@ void OverlapsJoinHashTable::reifyImpl(std::vector<ColumnsForDevice>& columns_per
   }
 }
 
-void OverlapsJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_device,
-                                           const HashType layout,
-                                           const size_t entry_count,
-                                           const size_t emitted_keys_count,
-                                           const bool skip_hashtable_caching,
-                                           const int device_id,
-                                           const logger::QueryId query_id,
-                                           const logger::ThreadId parent_thread_id) {
-  logger::QidScopeGuard qsg = logger::set_thread_local_query_id(query_id);
-  DEBUG_TIMER_NEW_THREAD(parent_thread_id);
+void OverlapsJoinHashTable::reifyForDevice(
+    const ColumnsForDevice& columns_for_device,
+    const HashType layout,
+    const size_t entry_count,
+    const size_t emitted_keys_count,
+    const bool skip_hashtable_caching,
+    const int device_id,
+    const logger::ThreadLocalIds parent_thread_local_ids) {
+  logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+  DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
   CHECK_EQ(getKeyComponentWidth(), size_t(8));
   CHECK(layoutRequiresAdditionalBuffers(layout));
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);

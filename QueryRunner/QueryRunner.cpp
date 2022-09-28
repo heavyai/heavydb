@@ -688,8 +688,9 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
        &query_state,
        &result,
        &running_query_check_freq,
-       &pending_query_check_freq](const size_t worker_id) {
-        logger::QidScopeGuard qsg = query_state->setThreadLocalQueryId();
+       &pending_query_check_freq,
+       parent_thread_local_ids = logger::thread_local_ids()](const size_t worker_id) {
+        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
         auto executor = Executor::getExecutor(worker_id);
         CompilationOptions co = CompilationOptions::defaults(device_type);
 
@@ -859,9 +860,14 @@ std::shared_ptr<ResultSet> QueryRunner::getCalcitePlan(const std::string& query_
 
   std::shared_ptr<ResultSet> result;
   auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
-      [&cat, &query_str, &enable_watchdog, &as_json_str, &query_state, &result](
-          const size_t worker_id) {
-        logger::QidScopeGuard qsg = query_state->setThreadLocalQueryId();
+      [&cat,
+       &query_str,
+       &enable_watchdog,
+       &as_json_str,
+       &query_state,
+       &result,
+       parent_thread_local_ids = logger::thread_local_ids()](const size_t worker_id) {
+        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
         auto executor = Executor::getExecutor(worker_id);
         auto calcite_mgr = cat.getCalciteMgr();
         const auto calciteQueryParsingOption =
@@ -905,15 +911,16 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
   auto& cat = session_info_->getCatalog();
 
   std::shared_ptr<ExecutionResult> result;
-  auto query_launch_task =
-      std::make_shared<QueryDispatchQueue::Task>([&cat,
-                                                  &query_str,
-                                                  &co,
-                                                  explain_type = this->explain_type_,
-                                                  &eo,
-                                                  &query_state,
-                                                  &result](const size_t worker_id) {
-        logger::QidScopeGuard qsg = query_state->setThreadLocalQueryId();
+  auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
+      [&cat,
+       &query_str,
+       &co,
+       explain_type = this->explain_type_,
+       &eo,
+       &query_state,
+       &result,
+       parent_thread_local_ids = logger::thread_local_ids()](const size_t worker_id) {
+        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
         auto executor = Executor::getExecutor(worker_id);
         // TODO The next line should be deleted since it overwrites co, but then
         // NycTaxiTest.RunSelectsEncodingDictWhereGreater fails due to co not getting
@@ -973,8 +980,12 @@ std::unique_ptr<RelAlgDag> QueryRunner::getRelAlgDag(const std::string& query_st
 
   std::unique_ptr<RelAlgDag> rel_alg_dag;
   auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
-      [&cat, &query_str, &query_state, &rel_alg_dag](const size_t worker_id) {
-        logger::QidScopeGuard qsg = query_state->setThreadLocalQueryId();
+      [&cat,
+       &query_str,
+       &query_state,
+       &rel_alg_dag,
+       parent_thread_local_ids = logger::thread_local_ids()](const size_t worker_id) {
+        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
         auto executor = Executor::getExecutor(worker_id);
         auto eo = ExecutionOptions::defaults();
         auto calcite_mgr = cat.getCalciteMgr();

@@ -657,7 +657,7 @@ class DBHandler : public HeavyIf {
   }
 
   // Exactly one immutable SessionInfo copy should be taken by a typical request.
-  Catalog_Namespace::SessionInfo get_session_copy(const TSessionId& session);
+  Catalog_Namespace::SessionInfo get_session_copy(const TSessionId& session_id);
 
   void get_tables_meta_impl(std::vector<TTableMeta>& _return,
                             QueryStateProxy query_state_proxy,
@@ -688,8 +688,6 @@ class DBHandler : public HeavyIf {
                     std::shared_ptr<Catalog_Namespace::Catalog> cat,
                     query_state::StdLog& stdlog);
   void disconnect_impl(Catalog_Namespace::SessionInfoPtr& session_ptr);
-  void check_table_load_privileges(const TSessionId& session,
-                                   const std::string& table_name);
   void check_table_load_privileges(const Catalog_Namespace::SessionInfo& session_info,
                                    const std::string& table_name);
   void get_tables_impl(std::vector<std::string>& table_names,
@@ -705,7 +703,6 @@ class DBHandler : public HeavyIf {
   void getAllRolesForUserImpl(
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr,
       std::vector<std::string>& roles,
-      const TSessionId& sessionId,
       const std::string& granteeName,
       bool effective);
   void check_read_only(const std::string& str);
@@ -767,6 +764,14 @@ class DBHandler : public HeavyIf {
   void execute_distributed_copy_statement(
       Parser::CopyTableStmt*,
       const Catalog_Namespace::SessionInfo& session_info);
+
+  TPlanResult processCalciteRequest(
+      QueryStateProxy,
+      const std::shared_ptr<Catalog_Namespace::Catalog>& cat,
+      const std::string& query_str,
+      const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+      const SystemParameters& system_parameters,
+      const bool check_privileges);
 
   TQueryResult validate_rel_alg(const std::string& query_ra, QueryStateProxy);
 
@@ -937,7 +942,9 @@ class DBHandler : public HeavyIf {
   query_state::QueryStates query_states_;
   std::unique_ptr<Catalog_Namespace::SessionsStore> sessions_store_;
   std::unordered_map<std::string, Catalog_Namespace::SessionInfoPtr> calcite_sessions_;
-  heavyai::shared_mutex calcite_sessions_mtx_;
+  mutable heavyai::shared_mutex calcite_sessions_mtx_;
+
+  Catalog_Namespace::SessionInfoPtr findCalciteSession(TSessionId const&) const;
 
   bool super_user_rights_;           // default is "false"; setting to "true"
                                      // ignores passwd checks in "connect(..)"

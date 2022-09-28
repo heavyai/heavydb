@@ -260,8 +260,7 @@ Executor::Executor(const ExecutorId executor_id,
     , catalog_(nullptr)
     , data_mgr_(data_mgr)
     , temporary_tables_(nullptr)
-    , input_table_info_cache_(this)
-    , thread_id_(logger::thread_id()) {
+    , input_table_info_cache_(this) {
   Executor::initialize_extension_module_sources();
   update_extension_modules();
 }
@@ -2692,11 +2691,10 @@ void Executor::launchKernels(SharedKernelContext& shared_context,
     tg.run([this,
             &kernel,
             &shared_context,
-            query_id = logger::query_id(),
-            parent_thread_id = logger::thread_id(),
+            parent_thread_local_ids = logger::thread_local_ids(),
             crt_kernel_idx = kernel_idx++] {
-      logger::QidScopeGuard qsg = logger::set_thread_local_query_id(query_id);
-      DEBUG_TIMER_NEW_THREAD(parent_thread_id);
+      logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+      DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
       const size_t thread_i = crt_kernel_idx % cpu_threads();
       kernel->run(this, thread_i, shared_context);
     });

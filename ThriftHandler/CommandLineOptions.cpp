@@ -68,6 +68,7 @@ extern bool g_enable_system_tables;
 extern bool g_allow_system_dashboard_update;
 extern bool g_enable_logs_system_tables;
 extern size_t g_logs_system_tables_max_files_count;
+extern bool g_uniform_request_ids_per_thrift_call;
 #ifdef ENABLE_MEMKIND
 extern std::string g_pmem_path;
 #endif
@@ -436,6 +437,14 @@ void CommandLineOptions::fillOptions() {
                               ->implicit_value(1000),
                           "The maximum number of rows in the inner table of a loop join "
                           "considered to be trivially small.");
+  help_desc.add_options()(
+      "uniform-request-ids-per-thrift-call",
+      po::value<bool>(&g_uniform_request_ids_per_thrift_call)
+          ->default_value(g_uniform_request_ids_per_thrift_call)
+          ->implicit_value(true),
+      "If true (default) then assign the same request_id to thrift calls that were "
+      "initiated by the same external thrift call.  If false then assign different "
+      "request_ids and log the parent/child relationships.");
   help_desc.add_options()("verbose",
                           po::value<bool>(&verbose_logging)
                               ->default_value(verbose_logging)
