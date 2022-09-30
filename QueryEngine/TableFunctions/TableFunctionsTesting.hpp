@@ -2401,6 +2401,7 @@ NEVER_INLINE HOST int32_t tf_metadata_getter_bad__cpu_template(TableFunctionMana
 /*
   UDTF: ct_overload_scalar_test__cpu_template(T scalar) -> Column<T>, T=[Timestamp, int64_t]
   UDTF: ct_overload_column_test__cpu_template(Column<T>) -> Column<T>, T=[Timestamp, TextEncodingDict, int64_t]
+  UDTF: ct_overload_column_test__cpu_template(Column<Array<T>>) -> Column<Array<T>>, T=[TextEncodingDict, int64_t]
   UDTF: ct_overload_column_list_test__cpu_template(Cursor<Column<K> first_col, ColumnList<T> col_list, Column<K> last_col>) -> Column<K>, K=[int64_t], T=[int64_t, double]
   UDTF: ct_overload_column_list_test2__cpu_template(Cursor<Column<K> first_col, ColumnList<K> col_list1, ColumnList<T> col_list2, Column<T> last_col>) -> Column<K>, K=[int64_t], T=[int64_t, double]
 */

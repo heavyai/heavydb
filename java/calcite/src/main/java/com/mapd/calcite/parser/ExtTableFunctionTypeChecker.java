@@ -193,6 +193,10 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
         }
         iActual += colListSize - 1;
       } else if (formalType == SqlTypeName.ARRAY) {
+        if (actualType != SqlTypeName.ARRAY) {
+          return false;
+        }
+
         SqlTypeName formalArraySubtype =
                 toSqlTypeName(getValueType(getValueType(extType)));
         SqlTypeName actualArraySubtype = actualFieldList.get(iActual)
