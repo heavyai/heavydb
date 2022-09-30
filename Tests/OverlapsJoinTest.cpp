@@ -1698,8 +1698,6 @@ const auto setup_stmts = {
     "CREATE TABLE t1 ( p1 GEOMETRY(POINT, 4326) ENCODING NONE );",
     "CREATE TABLE t2 ( p1 GEOMETRY(POINT, 4326) ENCODING NONE );",
     "CREATE TABLE t1_coord (x FLOAT, y FLOAT)",
-    "GEOMETRY(POINT) ENCODING NONE, pt4326 GEOMETRY(POINT, 4326) ENCODING NONE, pt900913 "
-    "GEOMETRY(POINT, 900913), x float, y float);",
 };
 
 const auto insert_data_stmts = {
@@ -1739,6 +1737,7 @@ const auto cleanup_stmts = {
     "DROP TABLE IF EXISTS t1;",
     "DROP TABLE IF EXISTS t2;",
     "DROP TABLE IF EXISTS t1_coord;",
+    "DROP TABLE IF EXISTS t3_nonpt",
 };
 
 }  // namespace range_join
@@ -2190,6 +2189,7 @@ const auto setup_stmts = {
     "CREATE TABLE TEST_GEOPT (ptc4326 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32), pt "
     "GEOMETRY(POINT) ENCODING NONE, pt4326 GEOMETRY(POINT, 4326) ENCODING NONE, pt900913 "
     "GEOMETRY(POINT, 900913), x float, y float);",
+    "CREATE TABLE TEST_GEOPT2 (ls GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32));",
 };
 
 const auto insert_data_stmts = {
@@ -2201,49 +2201,42 @@ const auto insert_data_stmts = {
     "'point(2.123 0.123)', 'point(2.123 0.123)', 2.123, 0.123 );",
     "INSERT INTO TEST_GEOPT VALUES ('point(3.123 0.123)', 'point(3.123 0.123)', "
     "'point(3.123 0.123)', 'point(3.123 0.123)', 3.123, 0.123 );",
+    "INSERT INTO TEST_GEOPT2 VALUES ( 'linestring(0.123 0.123, 1.123 0.123, 2.123 "
+    "2.123)' );",
+    "INSERT INTO TEST_GEOPT2 VALUES ( 'linestring(0.123 0.123, 1.123 0.123, 2.123 "
+    "2.123)' );",
 };
 
 const auto cleanup_stmts = {
-    "DROP TABLE IF EXISTS TEST_GEOPT",
+    "DROP TABLE IF EXISTS TEST_GEOPT;",
+    "DROP TABLE IF EXISTS TEST_GEOPT2;",
 };
 }  // namespace OverlapsJoinRewriter
 
 class OverlapsJoinRewriteTest : public ::testing::Test {
  protected:
-  static void SetUpTestSuite() {
+  void SetUp() override {
     for (const auto& stmt : OverlapsJoinRewriter::cleanup_stmts) {
-      QR::get()->runDDLStatement(stmt);
-    }
-    for (const auto& stmt : cleanup_stmts) {
       QR::get()->runDDLStatement(stmt);
     }
 
     for (const auto& stmt : OverlapsJoinRewriter::setup_stmts) {
       QR::get()->runDDLStatement(stmt);
     }
-    for (const auto& stmt : init_stmts_ddl) {
-      QR::get()->runDDLStatement(stmt);
-    }
 
     for (const auto& stmt : OverlapsJoinRewriter::insert_data_stmts) {
       QR::get()->runSQL(stmt, ExecutorDeviceType::CPU);
     }
-    for (const auto& stmt : init_stmts_dml) {
-      QR::get()->runDDLStatement(stmt);
-    }
   }
 
-  static void TearDownTestSuite() {
+  void TearDown() override {
     for (const auto& stmt : OverlapsJoinRewriter::cleanup_stmts) {
-      QR::get()->runDDLStatement(stmt);
-    }
-    for (const auto& stmt : cleanup_stmts) {
       QR::get()->runDDLStatement(stmt);
     }
   }
 };
 
-TEST(OverlapsJoinRewriteTest, VariousHashKeyExpressionsForP2PSTDistanceJoin) {
+TEST_F(OverlapsJoinRewriteTest, VariousHashKeyExpressionsForP2PSTDistanceJoin) {
   std::vector<int64_t> answer_sheet;
   std::array<std::string, 11> queries{
       "SELECT COUNT(1) FROM TEST_GEOPT a, TEST_GEOPT b WHERE ST_DISTANCE(a.pt4326, "
@@ -2287,6 +2280,33 @@ TEST(OverlapsJoinRewriteTest, VariousHashKeyExpressionsForP2PSTDistanceJoin) {
                                                  CacheItemType::OVERLAPS_HT),
                 size_t(0))
           << "Query does not exploit overlaps hash join: " << queries[i];
+    }
+  }
+}
+
+TEST_F(OverlapsJoinRewriteTest, P2PDistanceJoinGeoTypeChecking) {
+  std::array<std::string, 5> queries{
+      "SELECT COUNT(1) FROM TEST_GEOPT R, TEST_GEOPT2 S WHERE ST_DISTANCE(R.pt4326, "
+      "S.ls) < 0.1;",
+      "SELECT COUNT(1) FROM TEST_GEOPT R, TEST_GEOPT2 S WHERE ST_DISTANCE(S.ls, "
+      "R.pt4326) < 0.1;",
+      "SELECT COUNT(1) FROM TEST_GEOPT2 R, TEST_GEOPT S WHERE ST_DISTANCE(S.pt4326, "
+      "R.ls) < 0.1;",
+      "SELECT COUNT(1) FROM TEST_GEOPT2 R, TEST_GEOPT S WHERE ST_DISTANCE(R.ls, "
+      "S.pt4326) < 0.1;",
+      "SELECT COUNT(1) FROM TEST_GEOPT2 R, TEST_GEOPT2 S WHERE ST_DISTANCE(R.ls, S.ls) < "
+      "0.1;",
+  };
+  ScopeGuard reset_flag = [orig = g_from_table_reordering,
+                           orig2 = g_trivial_loop_join_threshold] {
+    g_from_table_reordering = orig;
+    g_trivial_loop_join_threshold = orig2;
+  };
+  g_trivial_loop_join_threshold = 1;
+  for (const std::string& query : queries) {
+    for (bool const table_reordering : {true, false}) {
+      g_from_table_reordering = table_reordering;
+      EXPECT_ANY_THROW(execSQL(query, ExecutorDeviceType::CPU));
     }
   }
 }

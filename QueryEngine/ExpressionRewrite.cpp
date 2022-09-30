@@ -841,6 +841,7 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
     if (OverlapsJoinSupportedFunction::is_range_join_rewrite_target_func(func_name)) {
       CHECK_EQ(lhs->size(), size_t(2));
       auto l_arg = lhs->getOperand(0);
+      // we try to build an overlaps join hash table based on the rhs
       auto r_arg = lhs->getOperand(1);
       const bool is_geography = l_arg->get_type_info().get_subtype() == kGEOGRAPHY ||
                                 r_arg->get_type_info().get_subtype() == kGEOGRAPHY;
@@ -856,16 +857,6 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
       Analyzer::Expr* bin_oper_arg = l_arg;
       auto invalid_range_join_qual =
           has_invalid_join_col_order(bin_oper_arg, range_join_arg);
-      if (invalid_range_join_qual.second &&
-          collect_table_cardinality(range_join_arg, bin_oper_arg, executor).first > 0 &&
-          lhs->getOperand(0)->get_type_info().get_type() == kPOINT) {
-        r_arg = lhs->getOperand(0);
-        l_arg = lhs->getOperand(1);
-        VLOG(1) << "Swap range join qual's input arguments to exploit overlaps "
-                   "hash join framework";
-        invalid_range_join_qual.first = false;
-      }
-
       if (invalid_range_join_qual.first) {
         LOG(INFO) << "Unable to rewrite " << func_name
                   << " to overlaps conjunction. Cannot build hash table over LHS type. "
@@ -873,11 +864,44 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
                   << range_join_expr->toString();
         return nullptr;
       }
+      // swapping rule for range join argument
+      //    lhs    | rhs
+      // 1. pt     | pt     : swap if |lhs| < |rhs| or has invalid rte values
+      // 2. pt     | non-pt : return nullptr
+      // 3. non-pt | pt     : return nullptr
+      // 4. non-pt | non-pt : return nullptr
+      // todo (yoonmin) : improve logic for cases 2 and 3
+      bool lhs_is_point{l_arg->get_type_info().get_type() == kPOINT};
+      bool rhs_is_point{r_arg->get_type_info().get_type() == kPOINT};
+      if (!lhs_is_point || !rhs_is_point) {
+        // case 2 ~ 4
+        VLOG(1) << "Currently, we only support range hash join for Point-to-Point "
+                   "distance query: fallback to a loop join";
+        return nullptr;
+      }
+
+      bool swap_args = false;
+      auto const card_info =
+          collect_table_cardinality(range_join_arg, bin_oper_arg, executor);
+      if (invalid_range_join_qual.second && card_info.first > 0 && lhs_is_point) {
+        swap_args = true;
+      } else if (card_info.first >= 0 && card_info.first < card_info.second) {
+        swap_args = true;
+      }
+
+      if (swap_args) {
+        // to exploit range hash join, we need to assign point geometry to rhs
+        r_arg = lhs->getOperand(0);
+        l_arg = lhs->getOperand(1);
+        VLOG(1) << "Swap range join qual's input arguments to exploit overlaps "
+                   "hash join framework";
+        invalid_range_join_qual.first = false;
+      }
 
       const bool inclusive = range_join_expr->get_optype() == kLE;
       auto range_expr = makeExpr<Analyzer::RangeOper>(
           inclusive, inclusive, r_arg->deep_copy(), rhs->deep_copy());
-      VLOG(1) << "Successfully converted to overlaps join";
+      VLOG(1) << "Successfully converted to range hash join";
       return makeExpr<Analyzer::BinOper>(
           kBOOLEAN, kOVERLAPS, kONE, l_arg->deep_copy(), range_expr);
     }
