@@ -45,7 +45,7 @@
 #include <mutex>
 #include <stdexcept>
 
-struct HashEntryInfo;
+struct BucketizedHashEntryInfo;
 
 class PerfectJoinHashTable : public HashJoin {
  public:
@@ -136,6 +136,12 @@ class PerfectJoinHashTable : public HashJoin {
 
   const RegisteredQueryHint& getRegisteredQueryHint() { return query_hints_; }
 
+  BucketizedHashEntryInfo getHashEntryInfo() const { return hash_entry_info_; }
+
+  size_t getNormalizedHashEntryCount() const {
+    return hash_entry_info_.getNormalizedHashEntryCount();
+  }
+
   virtual ~PerfectJoinHashTable() {}
 
  private:
@@ -175,6 +181,7 @@ class PerfectJoinHashTable : public HashJoin {
                        const HashType preferred_hash_type,
                        const ExpressionRange& col_range,
                        const ExpressionRange& rhs_source_col_range,
+                       const BucketizedHashEntryInfo hash_entry_info,
                        ColumnCacheMap& column_cache,
                        Executor* executor,
                        const int device_count,
@@ -190,6 +197,7 @@ class PerfectJoinHashTable : public HashJoin {
       , hash_type_(preferred_hash_type)
       , col_range_(col_range)
       , rhs_source_col_range_(rhs_source_col_range)
+      , hash_entry_info_(hash_entry_info)
       , executor_(executor)
       , column_cache_(column_cache)
       , device_count_(device_count)
@@ -277,6 +285,7 @@ class PerfectJoinHashTable : public HashJoin {
   const StringDictionaryProxy::IdMap* str_proxy_translation_map_{nullptr};
   ExpressionRange col_range_;
   ExpressionRange rhs_source_col_range_;
+  mutable BucketizedHashEntryInfo hash_entry_info_;
   Executor* executor_;
   ColumnCacheMap& column_cache_;
   const int device_count_;

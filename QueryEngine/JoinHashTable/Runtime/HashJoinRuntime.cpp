@@ -177,8 +177,12 @@ DEVICE int SUFFIX(fill_hash_join_buff_bucketized)(
   auto filling_func = for_semi_join ? SUFFIX(fill_hashtable_for_semi_join)
                                     : SUFFIX(fill_one_to_one_hashtable);
   auto hashtable_filling_func = [&](auto elem, size_t index) {
-    auto entry_ptr = SUFFIX(get_bucketized_hash_slot)(
-        buff, elem, type_info.min_val, bucket_normalization);
+    auto entry_ptr =
+        SUFFIX(get_bucketized_hash_slot)(buff,
+                                         elem,
+                                         type_info.min_val / bucket_normalization,
+                                         type_info.translated_null_val,
+                                         bucket_normalization);
     return filling_func(index, entry_ptr, invalid_slot_val);
   };
 
@@ -287,15 +291,16 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded_bucketized)(
   auto filling_func = for_semi_join ? SUFFIX(fill_hashtable_for_semi_join)
                                     : SUFFIX(fill_one_to_one_hashtable);
   auto hashtable_filling_func = [&](auto elem, auto shard, size_t index) {
-    auto entry_ptr =
-        SUFFIX(get_bucketized_hash_slot_sharded_opt)(buff,
-                                                     elem,
-                                                     type_info.min_val,
-                                                     shard_info.entry_count_per_shard,
-                                                     shard,
-                                                     shard_info.num_shards,
-                                                     shard_info.device_count,
-                                                     bucket_normalization);
+    auto entry_ptr = SUFFIX(get_bucketized_hash_slot_sharded_opt)(
+        buff,
+        elem,
+        type_info.min_val / bucket_normalization,
+        type_info.translated_null_val,
+        shard_info.entry_count_per_shard,
+        shard,
+        shard_info.num_shards,
+        shard_info.device_count,
+        bucket_normalization);
     return filling_func(index, entry_ptr, invalid_slot_val);
   };
 
@@ -743,8 +748,11 @@ GLOBAL void SUFFIX(count_matches_bucketized)(
     ,
     const int64_t bucket_normalization) {
   auto slot_sel = [bucket_normalization, &type_info](auto count_buff, auto elem) {
-    return SUFFIX(get_bucketized_hash_slot)(
-        count_buff, elem, type_info.min_val, bucket_normalization);
+    return SUFFIX(get_bucketized_hash_slot)(count_buff,
+                                            elem,
+                                            type_info.min_val / bucket_normalization,
+                                            type_info.translated_null_val,
+                                            bucket_normalization);
   };
   count_matches_impl(count_buff,
                      join_column,
@@ -993,8 +1001,11 @@ GLOBAL void SUFFIX(fill_row_ids_bucketized)(
     ,
     const int64_t bucket_normalization) {
   auto slot_sel = [&type_info, bucket_normalization](auto pos_buff, auto elem) {
-    return SUFFIX(get_bucketized_hash_slot)(
-        pos_buff, elem, type_info.min_val, bucket_normalization);
+    return SUFFIX(get_bucketized_hash_slot)(pos_buff,
+                                            elem,
+                                            type_info.min_val / bucket_normalization,
+                                            type_info.translated_null_val,
+                                            bucket_normalization);
   };
   fill_row_ids_impl(buff,
                     hash_entry_count,
@@ -1124,13 +1135,15 @@ GLOBAL void SUFFIX(fill_row_ids_sharded_bucketized)(
     const int64_t bucket_normalization) {
   auto slot_sel = [&shard_info, &type_info, bucket_normalization](auto pos_buff,
                                                                   auto elem) {
-    return SUFFIX(get_bucketized_hash_slot_sharded)(pos_buff,
-                                                    elem,
-                                                    type_info.min_val,
-                                                    shard_info.entry_count_per_shard,
-                                                    shard_info.num_shards,
-                                                    shard_info.device_count,
-                                                    bucket_normalization);
+    return SUFFIX(get_bucketized_hash_slot_sharded)(
+        pos_buff,
+        elem,
+        type_info.min_val / bucket_normalization,
+        type_info.translated_null_val,
+        shard_info.entry_count_per_shard,
+        shard_info.num_shards,
+        shard_info.device_count,
+        bucket_normalization);
   };
 
   fill_row_ids_impl(buff,
@@ -1456,48 +1469,48 @@ void fill_one_to_many_hash_table_impl(int32_t* buff,
 }
 
 void fill_one_to_many_hash_table(int32_t* buff,
-                                 const HashEntryInfo hash_entry_info,
+                                 const BucketizedHashEntryInfo hash_entry_info,
                                  const JoinColumn& join_column,
                                  const JoinColumnTypeInfo& type_info,
                                  const int32_t* sd_inner_to_outer_translation_map,
                                  const int32_t min_inner_elem,
                                  const unsigned cpu_thread_count) {
   auto timer = DEBUG_TIMER(__func__);
-  auto launch_count_matches = [count_buff = buff + hash_entry_info.hash_entry_count,
-                               &join_column,
-                               &type_info,
-                               sd_inner_to_outer_translation_map,
-                               min_inner_elem](auto cpu_thread_idx,
-                                               auto cpu_thread_count) {
-    SUFFIX(count_matches)
-    (count_buff,
-     join_column,
-     type_info,
-     sd_inner_to_outer_translation_map,
-     min_inner_elem,
-     cpu_thread_idx,
-     cpu_thread_count);
-  };
-  auto launch_fill_row_ids = [hash_entry_count = hash_entry_info.hash_entry_count,
-                              buff,
-                              &join_column,
-                              &type_info,
-                              sd_inner_to_outer_translation_map,
-                              min_inner_elem](auto cpu_thread_idx,
-                                              auto cpu_thread_count) {
-    SUFFIX(fill_row_ids)
-    (buff,
-     hash_entry_count,
-     join_column,
-     type_info,
-     sd_inner_to_outer_translation_map,
-     min_inner_elem,
-     cpu_thread_idx,
-     cpu_thread_count);
-  };
+  auto launch_count_matches =
+      [count_buff = buff + hash_entry_info.bucketized_hash_entry_count,
+       &join_column,
+       &type_info,
+       sd_inner_to_outer_translation_map,
+       min_inner_elem](auto cpu_thread_idx, auto cpu_thread_count) {
+        SUFFIX(count_matches)
+        (count_buff,
+         join_column,
+         type_info,
+         sd_inner_to_outer_translation_map,
+         min_inner_elem,
+         cpu_thread_idx,
+         cpu_thread_count);
+      };
+  auto launch_fill_row_ids =
+      [hash_entry_count = hash_entry_info.bucketized_hash_entry_count,
+       buff,
+       &join_column,
+       &type_info,
+       sd_inner_to_outer_translation_map,
+       min_inner_elem](auto cpu_thread_idx, auto cpu_thread_count) {
+        SUFFIX(fill_row_ids)
+        (buff,
+         hash_entry_count,
+         join_column,
+         type_info,
+         sd_inner_to_outer_translation_map,
+         min_inner_elem,
+         cpu_thread_idx,
+         cpu_thread_count);
+      };
 
   fill_one_to_many_hash_table_impl(buff,
-                                   hash_entry_info.hash_entry_count,
+                                   hash_entry_info.bucketized_hash_entry_count,
                                    join_column,
                                    type_info,
                                    sd_inner_to_outer_translation_map,
@@ -1509,7 +1522,7 @@ void fill_one_to_many_hash_table(int32_t* buff,
 
 void fill_one_to_many_hash_table_bucketized(
     int32_t* buff,
-    const HashEntryInfo hash_entry_info,
+    const BucketizedHashEntryInfo hash_entry_info,
     const JoinColumn& join_column,
     const JoinColumnTypeInfo& type_info,
     const int32_t* sd_inner_to_outer_translation_map,

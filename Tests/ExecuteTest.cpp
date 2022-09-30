@@ -22981,6 +22981,20 @@ TEST(Select, WindowFunctionAggregate) {
   }
   // generic expression in the window function
   c("SELECT MIN(x+y+z) OVER (PARTITION BY x) res FROM test ORDER BY res ASC;", dt);
+
+  // see bucketization logic works well when building a hash table for a window function
+  c("SELECT MIN(dt16) OVER (PARTITION BY dt16) res FROM test_frame_nav ORDER BY res ASC "
+    "NULLS LAST",
+    dt);
+  c("SELECT dt16, MIN(dt16) OVER (PARTITION BY dt16) res FROM test_frame_nav GROUP BY "
+    "dt16 ORDER BY dt16 ASC NULLS LAST, res ASC NULLS LAST",
+    dt);
+  c("SELECT MIN(dt32) OVER (PARTITION BY dt32) res FROM test_frame_nav ORDER BY res ASC "
+    "NULLS LAST",
+    dt);
+  c("SELECT dt32, MIN(dt32) OVER (PARTITION BY dt32) res FROM test_frame_nav GROUP BY "
+    "dt32 ORDER BY dt32 ASC NULLS LAST, res ASC NULLS LAST",
+    dt);
 }
 
 TEST(Select, WindowFunctionAggregateNoOrder) {
