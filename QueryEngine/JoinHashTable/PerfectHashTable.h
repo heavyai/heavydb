@@ -84,13 +84,13 @@ class PerfectHashTable : public HashTable {
 
   size_t getEmittedKeysCount() const override { return emitted_keys_count_; }
 
-  void setHashEntryInfo(HashEntryInfo& hash_entry_info) {
+  void setHashEntryInfo(BucketizedHashEntryInfo& hash_entry_info) {
     hash_entry_info_ = hash_entry_info;
   }
 
   void setColumnNumElems(size_t elem) { column_num_elems_ = elem; }
 
-  HashEntryInfo getHashEntryInfo() const { return hash_entry_info_; }
+  BucketizedHashEntryInfo getHashEntryInfo() const { return hash_entry_info_; }
 
   size_t getColumnNumElems() const { return column_num_elems_; }
 
@@ -104,6 +104,6 @@ class PerfectHashTable : public HashTable {
   size_t entry_count_;         // number of keys in the hash table
   size_t emitted_keys_count_;  // number of keys emitted across all rows
 
-  HashEntryInfo hash_entry_info_;
+  BucketizedHashEntryInfo hash_entry_info_;
   size_t column_num_elems_;
 };

@@ -245,10 +245,10 @@ void fill_one_to_many_hash_table_on_device_impl(int32_t* buff,
 }
 
 void fill_one_to_many_hash_table_on_device(int32_t* buff,
-                                           const HashEntryInfo hash_entry_info,
+                                           const BucketizedHashEntryInfo hash_entry_info,
                                            const JoinColumn& join_column,
                                            const JoinColumnTypeInfo& type_info) {
-  auto hash_entry_count = hash_entry_info.hash_entry_count;
+  auto hash_entry_count = hash_entry_info.bucketized_hash_entry_count;
   auto count_matches_func = [count_buff = buff + hash_entry_count,
                              join_column,
                              type_info] {
@@ -270,7 +270,7 @@ void fill_one_to_many_hash_table_on_device(int32_t* buff,
 
 void fill_one_to_many_hash_table_on_device_bucketized(
     int32_t* buff,
-    const HashEntryInfo hash_entry_info,
+    const BucketizedHashEntryInfo hash_entry_info,
     const JoinColumn& join_column,
     const JoinColumnTypeInfo& type_info) {
   auto hash_entry_count = hash_entry_info.getNormalizedHashEntryCount();
@@ -308,12 +308,13 @@ void fill_one_to_many_hash_table_on_device_bucketized(
                                              fill_row_ids_func);
 }
 
-void fill_one_to_many_hash_table_on_device_sharded(int32_t* buff,
-                                                   const HashEntryInfo hash_entry_info,
-                                                   const JoinColumn& join_column,
-                                                   const JoinColumnTypeInfo& type_info,
-                                                   const ShardInfo& shard_info) {
-  auto hash_entry_count = hash_entry_info.hash_entry_count;
+void fill_one_to_many_hash_table_on_device_sharded(
+    int32_t* buff,
+    const BucketizedHashEntryInfo hash_entry_info,
+    const JoinColumn& join_column,
+    const JoinColumnTypeInfo& type_info,
+    const ShardInfo& shard_info) {
+  auto hash_entry_count = hash_entry_info.bucketized_hash_entry_count;
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
   auto qe_cuda_stream = getQueryEngineCudaStream();

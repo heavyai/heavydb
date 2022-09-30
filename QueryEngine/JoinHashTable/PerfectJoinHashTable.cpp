@@ -47,9 +47,9 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> get_cols(
   return HashJoin::normalizeColumnPair(lhs, rhs, cat, temporary_tables);
 }
 
-HashEntryInfo get_bucketized_hash_entry_info(SQLTypeInfo const& context_ti,
-                                             ExpressionRange const& col_range,
-                                             bool const is_bw_eq) {
+BucketizedHashEntryInfo get_bucketized_hash_entry_info(SQLTypeInfo const& context_ti,
+                                                       ExpressionRange const& col_range,
+                                                       bool const is_bw_eq) {
   using EmptyRangeSize = boost::optional<size_t>;
   auto empty_range_check = [](ExpressionRange const& col_range,
                               bool const is_bw_eq) -> EmptyRangeSize {
@@ -72,7 +72,9 @@ HashEntryInfo get_bucketized_hash_entry_info(SQLTypeInfo const& context_ti,
   int64_t bucket_normalization =
       context_ti.get_type() == kDATE ? col_range.getBucket() : 1;
   CHECK_GT(bucket_normalization, 0);
-  return {size_t(col_range.getIntMax() - col_range.getIntMin() + 1 + (is_bw_eq ? 1 : 0)),
+  auto const normalized_max = col_range.getIntMax() / bucket_normalization;
+  auto const normalized_min = col_range.getIntMin() / bucket_normalization;
+  return {size_t(normalized_max - normalized_min + 1 + (is_bw_eq ? 1 : 0)),
           bucket_normalization};
 }
 
@@ -201,7 +203,6 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
   auto bucketized_entry_count_info = get_bucketized_hash_entry_info(
       ti, col_range, qual_bin_oper->get_optype() == kBW_EQ);
   auto bucketized_entry_count = bucketized_entry_count_info.getNormalizedHashEntryCount();
-
   if (bucketized_entry_count > max_hash_entry_count) {
     throw TooManyHashEntries();
   }
@@ -224,6 +225,7 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
                                preferred_hash_type,
                                col_range,
                                rhs_source_col_range,
+                               bucketized_entry_count_info,
                                column_cache,
                                executor,
                                device_count,
@@ -517,11 +519,17 @@ void PerfectJoinHashTable::reify() {
     std::unique_lock<std::mutex> str_proxy_translation_lock(str_proxy_translation_mutex_);
     if (needs_dict_translation_ && !str_proxy_translation_map_) {
       CHECK_GE(inner_outer_pairs_.size(), 1UL);
+      auto const copied_col_range = col_range_;
       str_proxy_translation_map_ =
           HashJoin::translateInnerToOuterStrDictProxies(inner_outer_pairs_.front(),
                                                         inner_outer_string_op_infos_,
                                                         col_range_,
                                                         executor_);
+      // update hash entry info if necessary
+      if (!(col_range_ == copied_col_range)) {
+        hash_entry_info_ = get_bucketized_hash_entry_info(
+            inner_col->get_type_info(), col_range_, isBitwiseEq());
+      }
     }
   }
 
@@ -733,14 +741,13 @@ int PerfectJoinHashTable::initHashTableForDevice(
   auto timer = DEBUG_TIMER(__func__);
   const auto inner_col = cols.first;
   CHECK(inner_col);
-
-  auto hash_entry_info = get_bucketized_hash_entry_info(
-      inner_col->get_type_info(), col_range_, isBitwiseEq());
-  if (!hash_entry_info && layout == HashType::OneToOne) {
-    // TODO: what is this for?
+  if (hash_entry_info_.bucketized_hash_entry_count == 0 && layout == HashType::OneToOne) {
+    // the reason of why checking the layout is OneToOne is we start to build a hash table
+    // with OneToOne layout
+    VLOG(1) << "Stop building a hash table based on a column " << inner_col->toString()
+            << ": it is from an empty table";
     return 0;
   }
-
 #ifndef HAVE_CUDA
   CHECK_EQ(Data_Namespace::CPU_LEVEL, effective_memory_level);
 #endif
@@ -763,7 +770,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
       hashtable_layout = hash_type_;
     }
   }
-  const auto entry_count = hash_entry_info.getNormalizedHashEntryCount();
+  const auto entry_count = getNormalizedHashEntryCount();
   const auto hash_table_entry_count = hashtable_layout == HashType::OneToOne
                                           ? entry_count
                                           : 2 * entry_count + join_column.num_elems;
@@ -788,7 +795,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
                                            str_proxy_translation_map_,
                                            join_type_,
                                            hashtable_layout,
-                                           hash_entry_info,
+                                           hash_entry_info_,
                                            hash_join_invalid_val,
                                            executor_);
         hash_table = builder.getHashTable();
@@ -798,7 +805,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
                                             isBitwiseEq(),
                                             cols,
                                             str_proxy_translation_map_,
-                                            hash_entry_info,
+                                            hash_entry_info_,
                                             hash_join_invalid_val,
                                             executor_);
         hash_table = builder.getHashTable();
@@ -806,7 +813,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
       ts2 = std::chrono::steady_clock::now();
       auto build_time =
           std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
-      hash_table->setHashEntryInfo(hash_entry_info);
+      hash_table->setHashEntryInfo(hash_entry_info_);
       hash_table->setColumnNumElems(join_column.num_elems);
       if (allow_hashtable_recycling && hash_table) {
         // add ht-related items to cache iff we have a valid hashtable
@@ -846,7 +853,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
     CHECK_EQ(Data_Namespace::GPU_LEVEL, effective_memory_level);
     builder.allocateDeviceMemory(join_column,
                                  hashtable_layout,
-                                 hash_entry_info,
+                                 hash_entry_info_,
                                  shardCount(),
                                  device_id,
                                  device_count_,
@@ -858,7 +865,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
                                cols,
                                join_type_,
                                hashtable_layout,
-                               hash_entry_info,
+                               hash_entry_info_,
                                shardCount(),
                                hash_join_invalid_val,
                                device_id,
@@ -973,8 +980,6 @@ std::vector<llvm::Value*> PerfectJoinHashTable::getHashJoinArgs(
   //                        ? key_lvs[0]
   //                        : code_generator.codegen(key_col, true, co)[0];
   auto const& key_col_ti = key_col->get_type_info();
-  auto hash_entry_info =
-      get_bucketized_hash_entry_info(key_col_ti, col_range_, isBitwiseEq());
 
   std::vector<llvm::Value*> hash_join_idx_args{
       hash_ptr,
@@ -1000,7 +1005,7 @@ std::vector<llvm::Value*> PerfectJoinHashTable::getHashJoinArgs(
   if (isBitwiseEq()) {
     if (special_date_bucketization_case) {
       hash_join_idx_args.push_back(executor_->cgen_state_->llInt(
-          col_range_.getIntMax() / hash_entry_info.bucket_normalization + 1));
+          col_range_.getIntMax() / hash_entry_info_.bucket_normalization + 1));
     } else {
       hash_join_idx_args.push_back(
           executor_->cgen_state_->llInt(col_range_.getIntMax() + 1));
@@ -1009,7 +1014,7 @@ std::vector<llvm::Value*> PerfectJoinHashTable::getHashJoinArgs(
 
   if (special_date_bucketization_case) {
     hash_join_idx_args.emplace_back(
-        executor_->cgen_state_->llInt(hash_entry_info.bucket_normalization));
+        executor_->cgen_state_->llInt(hash_entry_info_.bucket_normalization));
   }
 
   return hash_join_idx_args;

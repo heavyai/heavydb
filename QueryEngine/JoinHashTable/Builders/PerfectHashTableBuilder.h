@@ -27,7 +27,7 @@ class PerfectJoinHashTableBuilder {
 
   void allocateDeviceMemory(const size_t num_column_elems,
                             const HashType layout,
-                            HashEntryInfo hash_entry_info,
+                            BucketizedHashEntryInfo hash_entry_info,
                             const size_t shard_count,
                             const int device_id,
                             const int device_count,
@@ -37,8 +37,8 @@ class PerfectJoinHashTableBuilder {
       const auto shards_per_device = (shard_count + device_count - 1) / device_count;
       CHECK_GT(shards_per_device, 0u);
       const size_t entries_per_shard =
-          get_entries_per_shard(hash_entry_info.hash_entry_count, shard_count);
-      hash_entry_info.hash_entry_count = entries_per_shard * shards_per_device;
+          get_entries_per_shard(hash_entry_info.bucketized_hash_entry_count, shard_count);
+      hash_entry_info.bucketized_hash_entry_count = entries_per_shard * shards_per_device;
     }
     const size_t total_count =
         layout == HashType::OneToOne
@@ -59,7 +59,7 @@ class PerfectJoinHashTableBuilder {
 
   void allocateDeviceMemory(const JoinColumn& join_column,
                             const HashType layout,
-                            HashEntryInfo& hash_entry_info,
+                            BucketizedHashEntryInfo& hash_entry_info,
                             const size_t shard_count,
                             const int device_id,
                             const int device_count,
@@ -81,7 +81,7 @@ class PerfectJoinHashTableBuilder {
                           const InnerOuter& cols,
                           const JoinType join_type,
                           const HashType layout,
-                          const HashEntryInfo hash_entry_info,
+                          const BucketizedHashEntryInfo hash_entry_info,
                           const size_t shard_count,
                           const int32_t hash_join_invalid_val,
                           const int device_id,
@@ -116,18 +116,21 @@ class PerfectJoinHashTableBuilder {
     const auto inner_col = cols.first;
     CHECK(inner_col);
     const auto& ti = inner_col->get_type_info();
-
+    auto translated_null_val = col_range.getIntMax() + 1;
+    if (col_range.getIntMax() < col_range.getIntMin()) {
+      translated_null_val = col_range.getIntMin() - 1;
+    }
     JoinColumnTypeInfo type_info{static_cast<size_t>(ti.get_size()),
                                  col_range.getIntMin(),
                                  col_range.getIntMax(),
                                  inline_fixed_encoding_null_val(ti),
                                  is_bitwise_eq,
-                                 col_range.getIntMax() + 1,
+                                 translated_null_val,
                                  get_join_column_type_kind(ti)};
     auto use_bucketization = inner_col->get_type_info().get_type() == kDATE;
     if (shard_count) {
       const size_t entries_per_shard =
-          get_entries_per_shard(hash_entry_info.hash_entry_count, shard_count);
+          get_entries_per_shard(hash_entry_info.bucketized_hash_entry_count, shard_count);
       CHECK_GT(device_count, 0);
       for (size_t shard = device_id; shard < shard_count; shard += device_count) {
         ShardInfo shard_info{shard, entries_per_shard, shard_count, device_count};
@@ -196,7 +199,7 @@ class PerfectJoinHashTableBuilder {
       const StringDictionaryProxy::IdMap* str_proxy_translation_map,
       const JoinType join_type,
       const HashType hash_type,
-      const HashEntryInfo hash_entry_info,
+      const BucketizedHashEntryInfo hash_entry_info,
       const int32_t hash_join_invalid_val,
       const Executor* executor) {
     auto timer = DEBUG_TIMER(__func__);
@@ -260,6 +263,10 @@ class PerfectJoinHashTableBuilder {
                                             &for_semi_join,
                                             cpu_hash_table_buff,
                                             hash_entry_info] {
+          auto translated_null_val = col_range.getIntMax() + 1;
+          if (col_range.getIntMax() < col_range.getIntMin()) {
+            translated_null_val = col_range.getIntMin() - 1;
+          }
           int partial_err = fill_hash_join_buff_bucketized(
               cpu_hash_table_buff,
               hash_join_invalid_val,
@@ -270,7 +277,7 @@ class PerfectJoinHashTableBuilder {
                col_range.getIntMax(),
                inline_fixed_encoding_null_val(ti),
                is_bitwise_eq,
-               col_range.getIntMax() + 1,
+               translated_null_val,
                get_join_column_type_kind(ti)},
               str_proxy_translation_map ? str_proxy_translation_map->data() : nullptr,
               str_proxy_translation_map ? str_proxy_translation_map->domainStart()
@@ -299,7 +306,7 @@ class PerfectJoinHashTableBuilder {
       const bool is_bitwise_eq,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
       const StringDictionaryProxy::IdMap* str_proxy_translation_map,
-      const HashEntryInfo hash_entry_info,
+      const BucketizedHashEntryInfo hash_entry_info,
       const int32_t hash_join_invalid_val,
       const Executor* executor) {
     auto timer = DEBUG_TIMER(__func__);
@@ -346,6 +353,10 @@ class PerfectJoinHashTableBuilder {
     {
       auto timer_fill = DEBUG_TIMER(
           "CPU One-To-Many Perfect Hash Table Builder: fill_hash_join_buff_bucketized");
+      auto translated_null_val = col_range.getIntMax() + 1;
+      if (col_range.getIntMax() < col_range.getIntMin()) {
+        translated_null_val = col_range.getIntMin() - 1;
+      }
       if (ti.get_type() == kDATE) {
         fill_one_to_many_hash_table_bucketized(
             cpu_hash_table_buff,
@@ -356,7 +367,7 @@ class PerfectJoinHashTableBuilder {
              col_range.getIntMax(),
              inline_fixed_encoding_null_val(ti),
              is_bitwise_eq,
-             col_range.getIntMax() + 1,
+             translated_null_val,
              get_join_column_type_kind(ti)},
             str_proxy_translation_map ? str_proxy_translation_map->data() : nullptr,
             str_proxy_translation_map ? str_proxy_translation_map->domainStart()
@@ -372,7 +383,7 @@ class PerfectJoinHashTableBuilder {
              col_range.getIntMax(),
              inline_fixed_encoding_null_val(ti),
              is_bitwise_eq,
-             col_range.getIntMax() + 1,
+             translated_null_val,
              get_join_column_type_kind(ti)},
             str_proxy_translation_map ? str_proxy_translation_map->data() : nullptr,
             str_proxy_translation_map ? str_proxy_translation_map->domainStart()

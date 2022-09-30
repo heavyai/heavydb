@@ -40,21 +40,13 @@ struct GenericKeyHandler;
 struct OverlapsKeyHandler;
 struct RangeKeyHandler;
 
-struct HashEntryInfo {
-  alignas(sizeof(int64_t)) size_t hash_entry_count;
+struct BucketizedHashEntryInfo {
+  alignas(sizeof(int64_t)) size_t bucketized_hash_entry_count;
   alignas(sizeof(int64_t)) int64_t bucket_normalization;
 
   inline size_t getNormalizedHashEntryCount() const {
-    CHECK_GT(bucket_normalization, 0);
-    auto modulo_res = hash_entry_count % static_cast<size_t>(bucket_normalization);
-    auto entry_count = hash_entry_count / static_cast<size_t>(bucket_normalization);
-    if (modulo_res) {
-      return entry_count + 1;
-    }
-    return entry_count;
+    return bucketized_hash_entry_count;
   }
-
-  bool operator!() const { return !(this->getNormalizedHashEntryCount()); }
 };
 
 const size_t g_maximum_conditions_to_coalesce{8};
@@ -226,7 +218,7 @@ void fill_hash_join_buff_on_device_sharded_bucketized(int32_t* buff,
                                                       const int64_t bucket_normalization);
 
 void fill_one_to_many_hash_table(int32_t* buff,
-                                 const HashEntryInfo hash_entry_info,
+                                 const BucketizedHashEntryInfo hash_entry_info,
                                  const JoinColumn& join_column,
                                  const JoinColumnTypeInfo& type_info,
                                  const int32_t* sd_inner_to_outer_translation_map,
@@ -235,7 +227,7 @@ void fill_one_to_many_hash_table(int32_t* buff,
 
 void fill_one_to_many_hash_table_bucketized(
     int32_t* buff,
-    const HashEntryInfo hash_entry_info,
+    const BucketizedHashEntryInfo hash_entry_info,
     const JoinColumn& join_column,
     const JoinColumnTypeInfo& type_info,
     const int32_t* sd_inner_to_outer_translation_map,
@@ -244,7 +236,7 @@ void fill_one_to_many_hash_table_bucketized(
 
 void fill_one_to_many_hash_table_sharded_bucketized(
     int32_t* buff,
-    const HashEntryInfo hash_entry_info,
+    const BucketizedHashEntryInfo hash_entry_info,
     const int32_t invalid_slot_val,
     const JoinColumn& join_column,
     const JoinColumnTypeInfo& type_info,
@@ -254,21 +246,22 @@ void fill_one_to_many_hash_table_sharded_bucketized(
     const unsigned cpu_thread_count);
 
 void fill_one_to_many_hash_table_on_device(int32_t* buff,
-                                           const HashEntryInfo hash_entry_info,
+                                           const BucketizedHashEntryInfo hash_entry_info,
                                            const JoinColumn& join_column,
                                            const JoinColumnTypeInfo& type_info);
 
 void fill_one_to_many_hash_table_on_device_bucketized(
     int32_t* buff,
-    const HashEntryInfo hash_entry_info,
+    const BucketizedHashEntryInfo hash_entry_info,
     const JoinColumn& join_column,
     const JoinColumnTypeInfo& type_info);
 
-void fill_one_to_many_hash_table_on_device_sharded(int32_t* buff,
-                                                   const HashEntryInfo hash_entry_info,
-                                                   const JoinColumn& join_column,
-                                                   const JoinColumnTypeInfo& type_info,
-                                                   const ShardInfo& shard_info);
+void fill_one_to_many_hash_table_on_device_sharded(
+    int32_t* buff,
+    const BucketizedHashEntryInfo hash_entry_info,
+    const JoinColumn& join_column,
+    const JoinColumnTypeInfo& type_info,
+    const ShardInfo& shard_info);
 
 int fill_baseline_hash_join_buff_32(int8_t* hash_buff,
                                     const int64_t entry_count,

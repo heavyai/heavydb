@@ -67,8 +67,10 @@ extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_bucketized_hash_slot)(
     int32_t* buff,
     const int64_t key,
     const int64_t min_key,
+    const int64_t translated_null_val,
     const int64_t bucket_normalization) {
-  return buff + (key - min_key) / bucket_normalization;
+  auto hash_slot = key / bucket_normalization - min_key + (key == translated_null_val);
+  return buff + hash_slot;
 }
 
 extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_hash_slot)(int32_t* buff,
@@ -81,6 +83,7 @@ extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_bucketized_hash_slot_sharded
     int32_t* buff,
     const int64_t key,
     const int64_t min_key,
+    const int64_t translated_null_val,
     const uint32_t entry_count_per_shard,
     const uint32_t num_shards,
     const uint32_t device_count,
@@ -89,7 +92,9 @@ extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_bucketized_hash_slot_sharded
   const uint32_t shard_buffer_index =
       shard / device_count;  // shard sub-buffer index within `buff`
   int32_t* shard_buffer = buff + shard_buffer_index * entry_count_per_shard;
-  return shard_buffer + (key - min_key) / bucket_normalization / num_shards;
+  auto hash_slot = ((key / bucket_normalization) - min_key) / num_shards +
+                   (key == translated_null_val);
+  return shard_buffer + hash_slot;
 }
 
 extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_hash_slot_sharded)(
@@ -110,6 +115,7 @@ extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_bucketized_hash_slot_sharded
     int32_t* buff,
     const int64_t key,
     const int64_t min_key,
+    const int64_t translated_null_val,
     const uint32_t entry_count_per_shard,
     const uint32_t shard,
     const uint32_t num_shards,
@@ -118,7 +124,9 @@ extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_bucketized_hash_slot_sharded
   const uint32_t shard_buffer_index =
       shard / device_count;  // shard sub-buffer index within `buff`
   int32_t* shard_buffer = buff + shard_buffer_index * entry_count_per_shard;
-  return shard_buffer + (key - min_key) / bucket_normalization / num_shards;
+  int64_t hash_slot = ((key / bucket_normalization) - min_key) / num_shards +
+                      (key == translated_null_val);
+  return shard_buffer + hash_slot;
 }
 
 extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_hash_slot_sharded_opt)(

@@ -231,6 +231,7 @@ extern "C" RUNTIME_EXPORT int32_t* get_bucketized_hash_slot(
     int32_t* buff,
     const int64_t key,
     const int64_t min_key,
+    const int64_t translated_null_val,
     const int64_t bucket_normalization = 1);
 
 extern "C" RUNTIME_EXPORT int32_t* get_hash_slot(int32_t* buff,
@@ -249,6 +250,7 @@ extern "C" RUNTIME_EXPORT int32_t* get_bucketized_hash_slot_sharded(
     int32_t* buff,
     const int64_t key,
     const int64_t min_key,
+    const int64_t translated_null_val,
     const uint32_t entry_count_per_shard,
     const uint32_t num_shards,
     const uint32_t device_count,
@@ -267,6 +269,7 @@ extern "C" RUNTIME_EXPORT int32_t* get_bucketized_hash_slot_sharded_opt(
     int32_t* buff,
     const int64_t key,
     const int64_t min_key,
+    const int64_t translated_null_val,
     const uint32_t entry_count_per_shard,
     const uint32_t shard,
     const uint32_t num_shards,
