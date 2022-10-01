@@ -1431,10 +1431,20 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
         auto& builder = cgen_state_->ir_builder_;
         auto array_size_arg =
             builder.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_));
-        auto array_null_arg =
-            cgen_state_->emitExternalCall("array_is_null",
-                                          get_int_type(1, cgen_state_->context_),
-                                          {orig_arg_lvs[k], posArg(arg)});
+        llvm::Value* array_null_arg = nullptr;
+        if (auto gep = llvm::dyn_cast<llvm::GetElementPtrInst>(ptr_lv)) {
+          CHECK(gep->getSourceElementType()->isArrayTy());
+          // gep has the form
+          // %17 = getelementptr [9 x i32], [9 x i32]* %7, i32 0
+          // and was created by passing a const array to the UDF function:
+          // select array_append({11, 22, 33}, 4);
+          array_null_arg = ll_bool(false, cgen_state_->context_);
+        } else {
+          array_null_arg =
+              cgen_state_->emitExternalCall("array_is_null",
+                                            get_int_type(1, cgen_state_->context_),
+                                            {orig_arg_lvs[k], posArg(arg)});
+        }
         codegenBufferArgs(ext_func_sig->getName(),
                           ij + dj,
                           array_buf_arg,

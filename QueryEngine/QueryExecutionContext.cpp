@@ -697,7 +697,8 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
                                int64_t**,        // out
                                int32_t*,         // error_code
                                const uint32_t*,  // num_tables
-                               const int64_t*);  // join_hash_tables_ptr
+                               const int64_t*,   // join_hash_tables_ptr
+                               const int8_t*);   // row_func_mgr
     if (is_group_by) {
       reinterpret_cast<agg_query>(native_code->func())(
           multifrag_cols_ptr,
@@ -710,7 +711,8 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
           query_buffers_->getGroupByBuffersPtr(),
           error_code,
           &num_tables,
-          join_hash_tables_ptr);
+          join_hash_tables_ptr,
+          row_func_mgr_ptr);
     } else {
       reinterpret_cast<agg_query>(native_code->func())(multifrag_cols_ptr,
                                                        &num_fragments,
@@ -722,7 +724,8 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
                                                        out_vec.data(),
                                                        error_code,
                                                        &num_tables,
-                                                       join_hash_tables_ptr);
+                                                       join_hash_tables_ptr,
+                                                       row_func_mgr_ptr);
     }
   }
 
