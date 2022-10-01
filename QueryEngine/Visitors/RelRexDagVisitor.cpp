@@ -66,9 +66,11 @@ void RelRexDagVisitor::castAndVisit(RelAlgNode const* rel_alg_node) {
 }
 
 void RelRexDagVisitor::visit(RelAlgNode const* rel_alg_node) {
-  castAndVisit(rel_alg_node);
-  for (size_t i = 0; i < rel_alg_node->inputCount(); ++i) {
-    visit(rel_alg_node->getInput(i));
+  if (cache_.emplace(static_cast<Cache::value_type>(rel_alg_node)).second) {
+    castAndVisit(rel_alg_node);
+    for (size_t i = 0; i < rel_alg_node->inputCount(); ++i) {
+      visit(rel_alg_node->getInput(i));
+    }
   }
 }
 
@@ -140,14 +142,16 @@ void RelRexDagVisitor::visit(RexScalar const* rex_scalar) {
                                              RexSubQuery,
                                              RexWindowFunctionOperator>();
   static_assert(std::is_trivially_destructible_v<decltype(handlers)>);
-  // Will throw std::bad_typeid if rex_scalar == nullptr.
-  auto const& type_index = std::type_index(typeid(*rex_scalar));
-  auto const itr = std::lower_bound(handlers.cbegin(), handlers.cend(), type_index);
-  if (itr != handlers.cend() && itr->type_index == type_index) {
-    (this->*itr->handler)(rex_scalar);
-  } else {
-    LOG(FATAL) << "Unhandled RexScalar type: "
-               << rex_scalar->toString(RelRexToStringConfig::defaults());
+  if (cache_.emplace(static_cast<Cache::value_type>(rex_scalar)).second) {
+    // Will throw std::bad_typeid if rex_scalar == nullptr.
+    auto const& type_index = std::type_index(typeid(*rex_scalar));
+    auto const itr = std::lower_bound(handlers.cbegin(), handlers.cend(), type_index);
+    if (itr != handlers.cend() && itr->type_index == type_index) {
+      (this->*itr->handler)(rex_scalar);
+    } else {
+      LOG(FATAL) << "Unhandled RexScalar type: "
+                 << rex_scalar->toString(RelRexToStringConfig::defaults());
+    }
   }
 }
 

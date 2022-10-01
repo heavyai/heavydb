@@ -27,8 +27,10 @@
 
 #pragma once
 
-#include "../RelAlgDag.h"
+#include "QueryEngine/RelAlgDag.h"
 #include "TypeHandler.h"
+
+#include "ThirdParty/robin_hood/robin_hood.h"
 
 #include <array>
 
@@ -66,6 +68,9 @@ class RelRexDagVisitor {
   void castAndVisit(RelAlgNode const*);
 
  private:
+  using Cache = robin_hood::unordered_set<void const*>;
+  Cache cache_;  // Don't visit nodes more than once
+
   template <typename T, typename U>
   void cast(T const* node) {
     visit(dynamic_cast<U const*>(node));
