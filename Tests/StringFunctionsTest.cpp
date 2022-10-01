@@ -3555,6 +3555,26 @@ TEST_F(StringFunctionTest, StrtokToArrayTextEncodingDict) {
   }
 }
 
+TEST_F(StringFunctionTest, AlterTable_RuntimeFunction) {
+  for (auto dt : {ExecutorDeviceType::CPU, /* ExecutorDeviceType::GPU */}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("drop table if exists alter_column_test;");
+    run_ddl_statement("create table alter_column_test (code TEXT ENCODING NONE);");
+    run_ddl_statement("insert into alter_column_test values ('US USA');");
+    run_ddl_statement("insert into alter_column_test values ('CA CAN');");
+    run_ddl_statement("insert into alter_column_test values ('GB GBR');");
+    run_ddl_statement("insert into alter_column_test values ('DE DEN');");
+    run_ddl_statement(
+        "alter table alter_column_test add column tokenized_text TEXT[] ENCODING "
+        "DICT(32);");
+    sql("update alter_column_test set tokenized_text = strtok_to_array(code, ' ');", dt);
+    const auto result_set = sql("select tokenized_text from alter_column_test;");
+    auto expected_result_set = std::vector<std::vector<std::string>>{
+        {"US", "USA"}, {"CA", "CAN"}, {"GB", "GBR"}, {"DE", "DEN"}};
+    compare_array_columns(expected_result_set, result_set);
+  }
+}
+
 TEST_F(StringFunctionTest, TextEncodingNoneCopyUDF) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

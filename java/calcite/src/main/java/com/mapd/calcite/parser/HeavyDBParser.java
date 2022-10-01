@@ -102,6 +102,8 @@ public final class HeavyDBParser {
   private static final EnumSet<SqlKind> IN = EnumSet.of(SqlKind.IN);
   private static final EnumSet<SqlKind> ARRAY_VALUE =
           EnumSet.of(SqlKind.ARRAY_VALUE_CONSTRUCTOR);
+  private static final EnumSet<SqlKind> OTHER_FUNCTION =
+          EnumSet.of(SqlKind.OTHER_FUNCTION);
 
   final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(HeavyDBParser.class);
 
@@ -816,7 +818,12 @@ public final class HeavyDBParser {
       if (applyRexCast && idx + 1 < project.getProjects().size()) {
         RelDataType expectedFieldType =
                 targetTableType.getField(fields.get(idx), false, false).getType();
-        if (!exp.getType().equals(expectedFieldType) && !exp.isA(ARRAY_VALUE)) {
+        boolean is_array_kind = exp.isA(ARRAY_VALUE);
+        boolean is_func_kind = exp.isA(OTHER_FUNCTION);
+        // runtime functions have expression kind == OTHER_FUNCTION, even if they
+        // return an array
+        if (!exp.getType().equals(expectedFieldType)
+                && !(is_array_kind || is_func_kind)) {
           exp = builder.makeCast(expectedFieldType, exp);
         }
       }

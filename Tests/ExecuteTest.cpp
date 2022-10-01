@@ -11630,6 +11630,22 @@ TEST(Alter, AfterAlterColumnName) {
   run_ddl_statement("drop table alter_column_test;");
 }
 
+TEST(Alter, AfterAlterTable_RuntimeFunction) {
+  run_ddl_statement("create table alter_column_test (f4 float);");
+  run_multiple_agg("insert into alter_column_test values(1.5);", ExecutorDeviceType::CPU);
+  run_multiple_agg("insert into alter_column_test values(2.5);", ExecutorDeviceType::CPU);
+  ASSERT_EQ(float(4.0),
+            v<float>(run_simple_agg("SELECT SUM(f4) FROM alter_column_test;",
+                                    ExecutorDeviceType::CPU)));
+  run_ddl_statement("alter table alter_column_test add column f8 double;");
+  run_multiple_agg("update alter_column_test set f8 = floor(f4);",
+                   ExecutorDeviceType::CPU);
+  ASSERT_EQ(double(3.0),
+            v<double>(run_simple_agg("SELECT SUM(f8) FROM alter_column_test;",
+                                     ExecutorDeviceType::CPU)));
+  run_ddl_statement("drop table alter_column_test;");
+}
+
 TEST(Alter, AfterAlterGeoColumnName) {
   static const std::vector<std::string> geo_types = {
       "point", "linestring", "polygon", "multipolygon"};

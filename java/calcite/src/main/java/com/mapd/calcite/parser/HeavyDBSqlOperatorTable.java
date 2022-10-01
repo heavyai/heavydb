@@ -2660,7 +2660,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
               null,
               OperandTypes.family(sig.toSqlSignature()),
               SqlFunctionCategory.SYSTEM);
-      ret = sig.getSqlRet();
+      this.sig = sig;
       arg_names = sig.getArgNames();
     }
 
@@ -2672,10 +2672,21 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createTypeWithNullability(typeFactory.createSqlType(ret), true);
+      if (ExtensionFunction.isArrayType(sig.getRet())) {
+        SqlTypeName valueType =
+                toSqlTypeName(ExtensionFunction.getValueType(sig.getRet()));
+        RelDataType subType = typeFactory.createSqlType(valueType, -1);
+        RelDataType arr = typeFactory.createArrayType(subType, -1);
+        // should the return type nullable property be true?
+        return arr;
+      } else {
+        SqlTypeName ret = sig.getSqlRet();
+        return typeFactory.createTypeWithNullability(
+                typeFactory.createSqlType(ret), true);
+      }
     }
 
-    private final SqlTypeName ret;
+    private final ExtensionFunction sig;
     private final List<String> arg_names;
   }
 

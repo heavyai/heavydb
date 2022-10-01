@@ -2348,7 +2348,8 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub(const int8_t** col_buffer
                                                        const int8_t* row_func_mgr) {
 #ifndef _WIN32
   assert(col_buffers || num_rows || frag_row_offsets || max_matched || init_agg_value ||
-         out || frag_idx || error_code || join_hash_tables || total_matched);
+         out || frag_idx || error_code || join_hash_tables || total_matched ||
+         row_func_mgr);
 #endif
 }
 
