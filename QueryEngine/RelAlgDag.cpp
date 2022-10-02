@@ -2513,8 +2513,8 @@ bool find_generic_expr_in_window_func(RexWindowFunctionOperator const* window_ex
     }
   }
   for (size_t k = 0; k < window_expr->size(); k++) {
-    auto input_expr = dynamic_cast<RexInput const*>(window_expr->getOperand(k));
-    if (!input_expr) {
+    if (!shared::dynamic_castable_to_any<RexInput, RexLiteral>(
+            window_expr->getOperand(k))) {
       has_generic_expr_in_window_func = true;
       return true;
     }
