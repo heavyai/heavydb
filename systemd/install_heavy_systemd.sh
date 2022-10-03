@@ -54,10 +54,13 @@ fi
 
 sudo chown -R ${vars['HEAVYAI_USER']}:${vars['HEAVYAI_GROUP']} "${vars['HEAVYAI_STORAGE']}"
 sudo chown -R ${vars['HEAVYAI_USER']}:${vars['HEAVYAI_GROUP']} "${vars['HEAVYAI_BASE']}"
-
+MACHINE_ARCH=$(uname -m)
 for i in "/etc/xdg" "/etc" "/usr/local/share" "/usr/share"; do
   if [ -f "$i/vulkan/icd.d/nvidia_icd.json" ]; then
     icd_path="$i/vulkan/icd.d/nvidia_icd.json"
+    break
+  elif [ -f $i/vulkan/icd.d/nvidia_icd.$MACHINE_ARCH.json ]; then
+    icd_path=$i/vulkan/icd.d/nvidia_icd.$MACHINE_ARCH.json
     break
   fi
 done
