@@ -102,9 +102,13 @@ else
     unset LEGACY
 fi
 
+MACHINE_ARCH=$(uname -m)
 for i in "/etc/xdg" "/etc" "/usr/local/share" "/usr/share"; do
   if [ -f "$i/vulkan/icd.d/nvidia_icd.json" ]; then
     icd_path="$i/vulkan/icd.d/nvidia_icd.json"
+    break
+  elif [ -f $i/vulkan/icd.d/nvidia_icd.$MACHINE_ARCH.json ]; then
+    icd_path=$i/vulkan/icd.d/nvidia_icd.$MACHINE_ARCH.json
     break
   fi
 done
