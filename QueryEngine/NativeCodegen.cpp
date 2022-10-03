@@ -3059,39 +3059,39 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   AUTOMATIC_IR_METADATA_DONE();
 #endif
 
+  auto const device_str = co.device_type == ExecutorDeviceType::CPU ? "CPU:\n" : "GPU:\n";
   // Serialize the important LLVM IR functions to text for SQL EXPLAIN.
-  std::string llvm_ir;
-  if (eo.just_explain) {
-    if (co.explain_type == ExecutorExplainType::Optimized) {
+  std::string llvm_ir =
+      serialize_llvm_object(multifrag_query_func) + serialize_llvm_object(query_func) +
+      serialize_llvm_object(cgen_state_->row_func_) +
+      (cgen_state_->filter_func_ ? serialize_llvm_object(cgen_state_->filter_func_) : "");
+  VLOG(3) << "Unoptimized IR for the " << device_str << "\n" << llvm_ir << "\nEnd of IR";
+  if (eo.just_explain && co.explain_type == ExecutorExplainType::Optimized) {
 #ifdef WITH_JIT_DEBUG
-      throw std::runtime_error(
-          "Explain optimized not available when JIT runtime debug symbols are enabled");
+    throw std::runtime_error(
+        "Explain optimized not available when JIT runtime debug symbols are enabled");
 #else
-      // Note that we don't run the NVVM reflect pass here. Use LOG(IR) to get the
-      // optimized IR after NVVM reflect
-      llvm::legacy::PassManager pass_manager;
-      optimize_ir(query_func,
-                  cgen_state_->module_,
-                  pass_manager,
-                  live_funcs,
-                  gpu_smem_context.isSharedMemoryUsed(),
-                  co);
+    // Note that we don't run the NVVM reflect pass here. Use LOG(IR) to get the
+    // optimized IR after NVVM reflect
+    llvm::legacy::PassManager pass_manager;
+    optimize_ir(query_func,
+                cgen_state_->module_,
+                pass_manager,
+                live_funcs,
+                gpu_smem_context.isSharedMemoryUsed(),
+                co);
 #endif  // WITH_JIT_DEBUG
-    }
     llvm_ir =
         serialize_llvm_object(multifrag_query_func) + serialize_llvm_object(query_func) +
         serialize_llvm_object(cgen_state_->row_func_) +
         (cgen_state_->filter_func_ ? serialize_llvm_object(cgen_state_->filter_func_)
                                    : "");
-
 #ifndef NDEBUG
     llvm_ir += serialize_llvm_metadata_footnotes(query_func, cgen_state_.get());
 #endif
   }
-
   LOG(IR) << "\n\n" << query_mem_desc->toString() << "\n";
-  LOG(IR) << "IR for the "
-          << (co.device_type == ExecutorDeviceType::CPU ? "CPU:\n" : "GPU:\n");
+  LOG(IR) << "IR for the " << device_str;
 #ifdef NDEBUG
   LOG(IR) << serialize_llvm_object(query_func)
           << serialize_llvm_object(cgen_state_->row_func_)
