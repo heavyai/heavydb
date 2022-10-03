@@ -329,38 +329,41 @@ class BaselineJoinHashTableBuilder {
       }
 #else   // #ifdef HAVE_TBB
       for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-        init_cpu_buff_threads.emplace_back(
-            std::async(std::launch::async,
-                       [keyspace_entry_count,
-                        key_component_count,
-                        key_component_width,
-                        thread_idx,
-                        thread_count,
-                        cpu_hash_table_ptr,
-                        layout] {
-                         switch (key_component_width) {
-                           case 4:
-                             init_baseline_hash_join_buff_32(cpu_hash_table_ptr,
-                                                             keyspace_entry_count,
-                                                             key_component_count,
-                                                             layout == HashType::OneToOne,
-                                                             -1,
-                                                             thread_idx,
-                                                             thread_count);
-                             break;
-                           case 8:
-                             init_baseline_hash_join_buff_64(cpu_hash_table_ptr,
-                                                             keyspace_entry_count,
-                                                             key_component_count,
-                                                             layout == HashType::OneToOne,
-                                                             -1,
-                                                             thread_idx,
-                                                             thread_count);
-                             break;
-                           default:
-                             CHECK(false);
-                         }
-                       }));
+        init_cpu_buff_threads.emplace_back(std::async(
+            std::launch::async,
+            [keyspace_entry_count,
+             key_component_count,
+             key_component_width,
+             thread_idx,
+             thread_count,
+             cpu_hash_table_ptr,
+             layout,
+             parent_thread_local_ids = logger::thread_local_ids()] {
+              logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+              DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
+              switch (key_component_width) {
+                case 4:
+                  init_baseline_hash_join_buff_32(cpu_hash_table_ptr,
+                                                  keyspace_entry_count,
+                                                  key_component_count,
+                                                  layout == HashType::OneToOne,
+                                                  -1,
+                                                  thread_idx,
+                                                  thread_count);
+                  break;
+                case 8:
+                  init_baseline_hash_join_buff_64(cpu_hash_table_ptr,
+                                                  keyspace_entry_count,
+                                                  key_component_count,
+                                                  layout == HashType::OneToOne,
+                                                  -1,
+                                                  thread_idx,
+                                                  thread_count);
+                  break;
+                default:
+                  UNREACHABLE();
+              }
+            }));
       }
       for (auto& child : init_cpu_buff_threads) {
         child.get();
@@ -380,7 +383,10 @@ class BaselineJoinHashTableBuilder {
            thread_idx,
            cpu_hash_table_ptr,
            thread_count,
-           for_semi_join] {
+           for_semi_join,
+           parent_thread_local_ids = logger::thread_local_ids()] {
+            logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+            DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
             switch (key_component_width) {
               case 4: {
                 return fill_baseline_hash_join_buff<int32_t>(cpu_hash_table_ptr,
